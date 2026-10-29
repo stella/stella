@@ -1,3 +1,6 @@
+import { panic } from "better-result";
+
+import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
 import { READER_ANNOTATION_VISIBILITIES } from "@stll/api-contract/legal-reader-annotations";
 import {
   READER_ANSWER_ERROR_CODES,
@@ -5,6 +8,8 @@ import {
   READER_ANSWER_MESSAGE_ROLES,
   READER_ANSWER_MESSAGE_STATUSES,
   type ReaderAnswerCitation,
+  type ReaderAnswerErrorCode,
+  type ReaderAnswerSpan,
   type ReaderAnswerUsage,
 } from "@stll/api-contract/reader-answers";
 
@@ -31,6 +36,31 @@ const sqlValues = (values: readonly string[]) =>
     sql`, `,
   );
 
+const LEGACY_ADMISSION_UNAVAILABLE = "action_admission_unavailable";
+const STORED_READER_ANSWER_ERROR_CODES = [
+  ...READER_ANSWER_ERROR_CODES,
+  LEGACY_ADMISSION_UNAVAILABLE,
+] as const;
+
+const readerAnswerErrorCode = p.customType<{
+  data: ReaderAnswerErrorCode;
+  driverData: string;
+}>({
+  dataType: () => "text",
+  fromDriver: (value) => {
+    // Legacy admission unavailability reads as the retryable store outage.
+    // Retire this mapping after legacy rows and old writers have been retired.
+    const normalized =
+      value === LEGACY_ADMISSION_UNAVAILABLE
+        ? ACTION_ADMISSION_CODES.storeUnavailable
+        : value;
+    return (
+      READER_ANSWER_ERROR_CODES.find((code) => code === normalized) ??
+      panic("Unknown persisted reader answer error code")
+    );
+  },
+});
+
 /** Corpus IDs deliberately have no FK: the public corpus can live separately. */
 export const legalReaderAnswers = p.pgTable(
   "legal_reader_answers",
@@ -53,6 +83,11 @@ export const legalReaderAnswers = p.pgTable(
     quote: p.text("quote").notNull(),
     startOffset: p.integer("start_offset").notNull(),
     endOffset: p.integer("end_offset").notNull(),
+    /** The selection's spans after the first, one per further paragraph in reading order. */
+    continuationSpans: jsonb("continuation_spans")
+      .$type<ReaderAnswerSpan[]>()
+      .notNull()
+      .default([]),
     createdAt: timestamptz("created_at").defaultNow().notNull(),
     updatedAt: timestamptz("updated_at").defaultNow().notNull(),
     deletedAt: timestamptz("deleted_at"),
@@ -113,7 +148,7 @@ export const legalReaderAnswerMessages = p.pgTable(
       .text("status", { enum: READER_ANSWER_MESSAGE_STATUSES })
       .notNull(),
     /** Stable failure code preserved when the reader reloads a message. */
-    errorCode: p.text("error_code", { enum: READER_ANSWER_ERROR_CODES }),
+    errorCode: readerAnswerErrorCode("error_code"),
     /** Number of generated citations withheld by validation. */
     invalidCitationCount: p
       .integer("invalid_citation_count")
@@ -151,7 +186,7 @@ export const legalReaderAnswerMessages = p.pgTable(
     ),
     p.check(
       "legal_reader_answer_messages_error_code_values",
-      sql`${t.errorCode} IS NULL OR ${t.errorCode} IN (${sqlValues(READER_ANSWER_ERROR_CODES)})`,
+      sql`${t.errorCode} IS NULL OR ${t.errorCode} IN (${sqlValues(STORED_READER_ANSWER_ERROR_CODES)})`,
     ),
     p.check(
       "legal_reader_answer_messages_invalid_citation_count_nonnegative",

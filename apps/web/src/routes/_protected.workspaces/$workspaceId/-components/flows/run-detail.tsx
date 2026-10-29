@@ -1,7 +1,8 @@
 import { useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useFormatter, useTranslations } from "use-intl";
+import { useRouter } from "@tanstack/react-router";
+import { useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
 import {
@@ -22,8 +23,8 @@ import { stellaToast } from "@stll/ui/toast";
 import { MessageResponse } from "@/components/ai-elements/message";
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import {
-  FlowStepStatusBadge,
   FlowStatusBadge,
+  FlowStepStatusBadge,
 } from "@/components/flows/flow-badges";
 import {
   FLOW_STEP_KIND_ICONS,
@@ -31,6 +32,7 @@ import {
   isTerminalFlowRunStatus,
 } from "@/components/flows/flow-meta";
 import { usePermissions } from "@/hooks/use-permissions";
+import { useFormatter } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
@@ -41,6 +43,7 @@ import {
   flowRunDetailOptions,
   flowRunsKeys,
 } from "@/lib/workspaces/queries/flow-runs";
+import { getCurrentWorkspaceDocument } from "@/lib/workspaces/use-workspace-view-params";
 import type {
   FlowRunDetail as FlowRunDetailData,
   FlowRunStepRun,
@@ -67,7 +70,7 @@ export const RunDetail = ({ workspaceId, runId, onBack }: RunDetailProps) => {
     );
   }
 
-  // The Eden response type for this endpoint can also resolve to a raw
+  // The API client's response type for this endpoint can also resolve to a raw
   // `Response` (see flow-run-types.ts); guard it the same way sibling flow
   // queries do so `query.data` narrows to `FlowRunDetailData` below. Success
   // data is always defined here (isPending/isError already handled), so no
@@ -295,6 +298,7 @@ const StepRunOutput = ({
   workspaceId: string;
 }) => {
   const t = useTranslations();
+  const router = useRouter();
 
   if (!output) {
     return null;
@@ -313,11 +317,14 @@ const StepRunOutput = ({
       <Button
         onClick={() => {
           detached(
-            openEntityInInspector(
-              output.entityId,
-              t("flows.runs.createdDocument"),
+            openEntityInInspector({
+              documentOnScreen: getCurrentWorkspaceDocument(
+                router.state.matches,
+              ),
+              entityId: output.entityId,
+              label: t("flows.runs.createdDocument"),
               workspaceId,
-            ),
+            }),
             "run-detail.open-entity-in-inspector",
           );
         }}

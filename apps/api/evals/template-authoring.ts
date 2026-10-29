@@ -130,8 +130,8 @@ import {
 } from "@/api/lib/tanstack-ai-generate";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import {
-  fieldConfigurationIssuePath,
   type FieldConfigurationIssue,
+  fieldConfigurationIssuePath,
 } from "@/api/lib/templates/configure-field-input";
 import { configureTemplateDocument } from "@/api/lib/templates/configure-template-document";
 import {
@@ -1454,7 +1454,7 @@ const createAuthoringTools = ({
     // taken as real base64, so a client that does hold the file still works.
     const writtenDocx = written.get(ref.trim());
     const outcome = await createTemplateInMemory(
-      writtenDocx?.toString("base64") ?? ref,
+      writtenDocx?.toBase64() ?? ref,
     );
     await recordAttempt({ outcome, overlay: [], step: "create" });
     if (outcome.status === "invalid-docx") {
@@ -2423,6 +2423,7 @@ const resolveModels = async (
     modelIds.map(async (id) => ({
       id,
       model: await resolveTanStackTextModel({
+        userId: null,
         modelId: id,
         orgAIConfig: null,
         dataClass: "customer",

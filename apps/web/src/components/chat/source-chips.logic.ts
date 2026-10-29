@@ -1,4 +1,8 @@
+import { Result } from "better-result";
+
 import { isBusinessRegistrySlug } from "@stll/api-contract";
+import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
+import type { CourtTierLabel } from "@stll/api-contract/case-law-court-tiers";
 import {
   isCaseLawDecisionId,
   parseCaseLawDecisionPath,
@@ -6,7 +10,14 @@ import {
 import { parseStatutePath } from "@stll/api-contract/statute-route";
 import { unwrapUntrustedContentFence } from "@stll/api-contract/untrusted-content-fence";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
+import { Temporal } from "@stll/time";
 
+import {
+  chatAnswerCitationHrefs,
+  chatAnswerDecisionTargets,
+  chatAnswerMarkdownDocuments,
+  citationUrlKey,
+} from "@/components/chat/chat-decision-citations.logic";
 import type { ChatToolCallPart } from "@/components/chat/chat-ui-tools";
 import type {
   BusinessRegistrySourceReference,
@@ -14,6 +25,7 @@ import type {
   ExternalSourceReference,
 } from "@/components/chat/external-source-store";
 import { decisionCitationCourtLabel } from "@/components/references/decision-citation-chip.logic";
+import { entityReferenceHref } from "@/components/references/reference.logic";
 import type { ChatMessage, ChatSourceDocument } from "@/lib/api-contract";
 
 export type SourceDocumentEntry = {
@@ -21,7 +33,63 @@ export type SourceDocumentEntry = {
   id?: string | undefined;
 };
 
-export type ExternalSourceEntry = ExternalSourceReference;
+type CaseLawSourceMetadata = {
+  caseNumber: string;
+  court: string;
+  courtShortCode: string;
+  decisionDate?: string | null | undefined;
+  decisionId?: string | undefined;
+  holding?: string | undefined;
+  tier: CourtTierLabel;
+};
+
+export type ExternalSourceEntry = ExternalSourceReference & {
+  caseLaw?: CaseLawSourceMetadata | undefined;
+};
+
+export type SourceChipEntry =
+  | {
+      relation: "cited" | "consulted";
+      type: "document";
+      source: SourceDocumentEntry;
+    }
+  | {
+      relation: "cited" | "consulted";
+      type: "external";
+      source: ExternalSourceEntry;
+    }
+  | {
+      relation: "cited" | "consulted";
+      type: "case-law";
+      source: ExternalSourceEntry;
+      caseLaw: CaseLawSourceMetadata;
+    };
+
+const CZECH_COURT_TIER_BY_SHORT_CODE = {
+  ÚS: "constitutional",
+  NS: "supreme",
+  NSS: "supreme",
+  VS: "regional",
+  KS: "regional",
+  MS: "other",
+  OS: "other",
+} as const satisfies Readonly<Record<string, CourtTierLabel>>;
+
+const czechCourtTiers: ReadonlyMap<string, CourtTierLabel> = new Map(
+  Object.entries(CZECH_COURT_TIER_BY_SHORT_CODE),
+);
+
+export const courtTierForSource = (courtShortCode: string): CourtTierLabel =>
+  czechCourtTiers.get(courtShortCode) ?? "other";
+
+const isCourtTierLabel = (value: unknown): value is CourtTierLabel =>
+  typeof value === "string" && COURT_TIER_LABELS.some((tier) => tier === value);
+
+export const sortCourtTiers = (tiers: readonly CourtTierLabel[]) =>
+  tiers.toSorted(
+    (left, right) =>
+      COURT_TIER_LABELS.indexOf(left) - COURT_TIER_LABELS.indexOf(right),
+  );
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
@@ -92,6 +160,25 @@ const getStringField = (
     }
   }
   return undefined;
+};
+
+const getDateField = (
+  value: Record<string, unknown>,
+  fields: readonly string[],
+): string | undefined => {
+  const date = getStringField(value, fields);
+  if (date === undefined) {
+    return undefined;
+  }
+  // The row formats through `Date`, which rejects annotated Temporal forms
+  // ("2026-01-02[u-ca=iso8601]"), so a valid date is kept in its plain ISO
+  // form and anything else is dropped.
+  const plainDate = Result.try(() => Temporal.PlainDate.from(date));
+  if (Result.isOk(plainDate)) {
+    return plainDate.value.toString({ calendarName: "never" });
+  }
+  const instant = Result.try(() => Temporal.Instant.from(date));
+  return Result.isOk(instant) ? instant.value.toString() : undefined;
 };
 
 const getTextField = (
@@ -313,7 +400,42 @@ export const collectExternalSources = (
   if (isHttpUrl(url)) {
     const safeUrl = sanitizeHref(url);
     if (safeUrl) {
+      const caseNumber = getStringField(value, ["caseNumber"]);
+      const court = getStringField(value, ["court"]);
+      const courtShortCode =
+        getStringField(value, ["courtAbbreviation", "courtCode"]) ??
+        (court === undefined
+          ? undefined
+          : decisionCitationCourtLabel({
+              court,
+              country: getStringField(value, ["country"]) ?? "",
+              courtAbbreviation: undefined,
+              ecli: getStringField(value, ["ecli"]) ?? null,
+            }));
+      const holding = getTextField(value, [
+        "headnote",
+        "legalSentence",
+        "summary",
+        "abstract",
+      ]);
       sources.push({
+        ...(caseNumber !== undefined &&
+        court !== undefined &&
+        courtShortCode !== undefined
+          ? {
+              caseLaw: {
+                caseNumber,
+                court,
+                courtShortCode,
+                decisionDate: getDateField(value, ["decisionDate", "date"]),
+                decisionId: getStringField(value, ["decisionId"]),
+                holding,
+                tier: isCourtTierLabel(value["courtTier"])
+                  ? value["courtTier"]
+                  : courtTierForSource(courtShortCode),
+              },
+            }
+          : {}),
         sourceUrl:
           publisherUrl !== undefined && isHttpUrl(publisherUrl)
             ? sanitizeHref(publisherUrl)
@@ -356,6 +478,20 @@ export const dedupeExternalSources = (
   const sourcesByUrl = new Map<string, ExternalSourceEntry>();
   for (const source of sources) {
     const existing = sourcesByUrl.get(source.url);
+    let caseLaw = source.caseLaw;
+    if (caseLaw === undefined) {
+      caseLaw = existing?.caseLaw;
+    } else if (existing?.caseLaw !== undefined) {
+      // A later hit for the same decision may omit what an earlier one
+      // carried; every optional field keeps the value it already had.
+      caseLaw = {
+        ...existing.caseLaw,
+        ...caseLaw,
+        decisionDate: caseLaw.decisionDate ?? existing.caseLaw.decisionDate,
+        decisionId: caseLaw.decisionId ?? existing.caseLaw.decisionId,
+        holding: caseLaw.holding ?? existing.caseLaw.holding,
+      };
+    }
     sourcesByUrl.set(
       source.url,
       existing
@@ -364,6 +500,7 @@ export const dedupeExternalSources = (
             businessRegistry:
               source.businessRegistry ?? existing.businessRegistry,
             caseLawDecision: source.caseLawDecision ?? existing.caseLawDecision,
+            caseLaw,
             connectorSlug: source.connectorSlug ?? existing.connectorSlug,
             iconHref: source.iconHref ?? existing.iconHref,
             provider: source.provider ?? existing.provider,
@@ -407,12 +544,17 @@ const getMcpToolInfo = (part: ChatToolCallPart): McpToolInfo | null => {
 };
 
 export const collectSourceChipEntries = ({
+  appOrigins,
   parts,
   sourceDocuments = [],
 }: {
+  /** Origins whose links are Stella pages; relative answer links resolve
+   *  against them, so a cited in-app route is matched to its source. */
+  appOrigins: ReadonlySet<string>;
   parts: ChatMessage["parts"];
   sourceDocuments?: readonly ChatSourceDocument[] | undefined;
 }): {
+  entries: SourceChipEntry[];
   uniqueExternalSources: ExternalSourceEntry[];
   uniqueSources: SourceDocumentEntry[];
 } => {
@@ -426,7 +568,6 @@ export const collectSourceChipEntries = ({
     if (part.type !== "tool-call") {
       continue;
     }
-
     const toolOutput = getToolOutput(part);
     collectSourceDocuments(toolOutput, sources);
     const mcpToolInfo = getMcpToolInfo(part);
@@ -452,8 +593,69 @@ export const collectSourceChipEntries = ({
     seen.add(key);
     return true;
   });
+  const uniqueExternalSources = dedupeExternalSources(externalSources);
+  const markdownDocuments = chatAnswerMarkdownDocuments({ parts });
+  const hrefs = new Set(markdownDocuments.flatMap(chatAnswerCitationHrefs));
+  const decisionIds = new Set(
+    chatAnswerDecisionTargets({
+      markdownDocuments,
+      sources: uniqueExternalSources,
+      appOrigins,
+    }).flatMap((target) => (target.type === "id" ? [target.decisionId] : [])),
+  );
+  const isLinked = (urls: readonly (string | undefined)[]) =>
+    urls.some(
+      (url) =>
+        url !== undefined &&
+        [...hrefs].some(
+          (href) =>
+            citationUrlKey(url, appOrigins) ===
+            citationUrlKey(href, appOrigins),
+        ),
+    );
+  const entries: SourceChipEntry[] = [];
+  for (const source of uniqueSources) {
+    const canonicalHref =
+      source.data.workspaceId === null
+        ? undefined
+        : entityReferenceHref({
+            entityId: source.data.entityId,
+            matterId: source.data.workspaceId,
+          });
+    entries.push({
+      relation: isLinked([
+        canonicalHref,
+        source.data.entityRef,
+        source.data.mention,
+      ])
+        ? "cited"
+        : "consulted",
+      type: "document",
+      source,
+    });
+  }
+  for (const source of uniqueExternalSources) {
+    const relation =
+      isLinked([source.url, source.sourceUrl]) ||
+      [source.caseLaw?.decisionId, source.caseLawDecision?.decisionId].some(
+        (decisionId) => decisionId !== undefined && decisionIds.has(decisionId),
+      )
+        ? "cited"
+        : "consulted";
+    if (source.caseLaw !== undefined) {
+      entries.push({
+        relation,
+        type: "case-law",
+        source,
+        caseLaw: source.caseLaw,
+      });
+    } else {
+      entries.push({ relation, type: "external", source });
+    }
+  }
   return {
-    uniqueExternalSources: dedupeExternalSources(externalSources),
+    entries,
+    uniqueExternalSources,
     uniqueSources,
   };
 };

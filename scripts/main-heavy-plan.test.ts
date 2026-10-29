@@ -8,6 +8,7 @@ import * as v from "valibot";
 import eventPolicies from "../.github/ci-event-policy.json" with { type: "json" };
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
 import { ciExpressionContext, modelledEvent } from "./ci-expression-context";
+import { renderResultInputs } from "./ci-result-inputs";
 import serviceImages from "./ci-service-images.json" with { type: "json" };
 import {
   contextFromNested,
@@ -16,6 +17,7 @@ import {
   UNKNOWN,
 } from "./github-expression";
 import {
+  heavyProofJobScopes,
   mainHeavyJobs,
   MERGE_GROUP_EXCEPTIONS,
   prDepthJobs,
@@ -143,10 +145,20 @@ const context = (
     "marketing-release": {
       outputs: { required: plan["marketing_screenshots_required"] ?? "false" },
     },
+    suites: {
+      outputs: {
+        heavy_proof:
+          plan["heavy_proof"] ??
+          String(plan["run_required"] !== "false" && event !== "pull_request"),
+      },
+    },
+    // Unarmed pull requests and merge groups without armed proof.
     "completed-depth": {
       outputs: {
+        armed: plan["armed"] ?? "false",
+        armed_proof: plan["armed_proof"] ?? "",
         run_required: plan["run_required"] ?? "true",
-        pr_heavy_suites: "run",
+        pr_heavy_suites: plan["pr_heavy_suites"] ?? "run",
       },
     },
   };
@@ -199,6 +211,10 @@ const heavyPlan = {
 
 const heavyEvents = ["push", "schedule", "workflow_dispatch"] as const;
 
+test("main heavy suites include the Windows desktop dry run", () => {
+  expect(heavy).toContain("desktop-windows-dry-run");
+});
+
 test("dedicated query recording dispatch schedules one measurement job", () => {
   const parsed = v.parse(
     v.object({ on: v.record(v.string(), v.unknown()) }),
@@ -250,16 +266,14 @@ test("dedicated query recording dispatch schedules one measurement job", () => {
     ),
   ).toBe(postgres.source);
   const steps = queryWorkflow.jobs["query-perf"]?.steps ?? [];
-  const recording =
-    steps.find(({ name }) => name === "Run query performance suite")?.env?.[
-      "QUERY_PERF_BASELINE_MODE"
-    ] ?? panic("Missing recording mode");
+  // Budgets are absolute: nothing is recorded or compared with a base.
+  expect(
+    steps
+      .map(({ name }) => name)
+      .filter((name) => /baseline|allowance/iu.test(name ?? "")),
+  ).toEqual([]);
   const value = {
     cancelled: () => false,
-    steps: {
-      measurements: { outputs: { baseline_recorded: "true" } },
-      validation: { outcome: "success" },
-    },
     github: {
       event_name: "workflow_dispatch",
       ref: "refs/heads/main",
@@ -268,9 +282,6 @@ test("dedicated query recording dispatch schedules one measurement job", () => {
         "stella/stella/.github/workflows/query-perf.yml@refs/heads/test",
     },
   };
-  expect(evaluateExpression(recording, contextFromNested(value))).toBe(
-    "record",
-  );
   expect(selected(queryWorkflow.jobs["query-perf"]?.if ?? "true", value)).toBe(
     true,
   );
@@ -280,29 +291,11 @@ test("dedicated query recording dispatch schedules one measurement job", () => {
       github: { ...value.github, ref: "refs/heads/feature/test" },
     }),
   ).toBe(false);
-  for (const step of steps.filter(
-    ({ name }) =>
-      name === "Validate recorded baseline" ||
-      name === "Upload recorded baseline",
-  )) {
-    expect(selected(step.if ?? "true", value)).toBe(true);
-  }
 });
 
-test("query budgets select affected changes and explicit recordings", () => {
+test("query budgets select affected pull request and merge group changes", () => {
   const condition =
     workflow.jobs["query-perf"]?.if ?? panic("Missing query performance job");
-  const steps =
-    queryWorkflow.jobs["query-perf"]?.steps ??
-    panic("Missing query performance steps");
-  const recording =
-    steps.find(({ name }) => name === "Run query performance suite")?.env?.[
-      "QUERY_PERF_BASELINE_MODE"
-    ] ?? panic("Missing query recording mode");
-  const validation =
-    steps.find(({ name }) => name === "Validate recorded baseline") ??
-    panic("Missing recording validation");
-  expect(validation.run).toBe("bun scripts/query-perf-baseline.ts --validate");
   for (const event of [
     "pull_request",
     "merge_group",
@@ -311,81 +304,26 @@ test("query budgets select affected changes and explicit recordings", () => {
     "workflow_dispatch",
   ]) {
     for (const required of ["true", "false"]) {
-      for (const mode of ["compare", "record"]) {
-        const value = {
-          ...context(event, false, {
-            ...heavyPlan,
-            query_perf_required: required,
-          }),
-          inputs: {
-            heavy_only: false,
-            pr_depth_only: false,
-            query_perf_mode: mode,
-          },
-        };
-        expect(selected(condition, value), `${event}/${required}/${mode}`).toBe(
-          (event === "pull_request" || event === "merge_group") &&
-            required === "true",
-        );
-        const called = {
-          ...value,
-          steps: {
-            ...value.steps,
-            measurements: { outputs: { baseline_recorded: "false" } },
-          },
-          github: {
-            ...value.github,
-            repository: "stella/stella",
-            workflow_ref:
-              "stella/stella/.github/workflows/ci.yml@refs/heads/test",
-          },
-        };
-        expect(evaluateExpression(recording, contextFromNested(called))).toBe(
-          "compare",
-        );
-        expect(selected(validation.if ?? "true", called)).toBe(false);
-        const reused = {
-          ...context(event, false, {
-            ...heavyPlan,
-            run_required: "false",
-            query_perf_required: required,
-          }),
-          inputs: value.inputs,
-        };
-        expect(selected(condition, reused)).toBe(false);
-      }
-    }
-  }
-});
-
-test("missing-baseline artifacts survive failed measurements only after validation", () => {
-  const steps = queryWorkflow.jobs["query-perf"]?.steps ?? [];
-  const validation =
-    steps.find(({ name }) => name === "Validate recorded baseline") ??
-    panic("Missing recording validator");
-  const upload =
-    steps.find(({ name }) => name === "Upload recorded baseline") ??
-    panic("Missing recording upload");
-  for (const recorded of ["true", "false"]) {
-    for (const validationOutcome of ["success", "failure", "skipped"]) {
       const value = {
-        cancelled: () => false,
-        success: () => false,
-        failure: () => true,
-        steps: {
-          measurements: {
-            outcome: "failure",
-            outputs: { baseline_recorded: recorded },
-          },
-          validation: { outcome: validationOutcome },
-        },
+        ...context(event, false, {
+          ...heavyPlan,
+          query_perf_required: required,
+        }),
+        inputs: { heavy_only: false, pr_depth_only: false },
       };
-      expect(selected(validation.if ?? "true", value)).toBe(
-        recorded === "true",
+      expect(selected(condition, value), `${event}/${required}`).toBe(
+        (event === "pull_request" || event === "merge_group") &&
+          required === "true",
       );
-      expect(selected(upload.if ?? "true", value)).toBe(
-        recorded === "true" && validationOutcome === "success",
-      );
+      const reused = {
+        ...context(event, false, {
+          ...heavyPlan,
+          run_required: "false",
+          query_perf_required: required,
+        }),
+        inputs: value.inputs,
+      };
+      expect(selected(condition, reused)).toBe(false);
     }
   }
 });
@@ -428,6 +366,26 @@ test("main heavy scheduling equals the gated jobs minus thin checks", () => {
   expect(planner?.run).toContain(
     'git show "$WORKFLOW_SHA:scripts/main-heavy-plan.ts"',
   );
+  // The copied planner runs from packages/scripts, so every script it reaches
+  // through a relative import must be copied beside it.
+  const pending = ["main-heavy-plan"];
+  for (const seen = new Set<string>(); pending.length > 0;) {
+    const name = pending.pop() ?? "";
+    if (seen.has(name)) {
+      continue;
+    }
+    seen.add(name);
+    const script = readFileSync(
+      path.resolve(import.meta.dirname, `${name}.ts`),
+      "utf-8",
+    );
+    for (const [, imported = ""] of script.matchAll(/from "\.\/([\w.-]+)"/gu)) {
+      expect(planner?.run).toContain(
+        `git show "$WORKFLOW_SHA:scripts/${imported}.ts" > packages/scripts/${imported}.ts`,
+      );
+      pending.push(imported);
+    }
+  }
   expect(planner?.env?.["WORKFLOW_SHA"]).toBe(`\${{ github.workflow_sha }}`);
 });
 
@@ -608,6 +566,11 @@ test("heavy planning rejects gate drift instead of omitting a job", () => {
 });
 
 test("heavy event policies exclude pull requests and preserve existing full certification", () => {
+  // The pull request quick-check carrier is the only fast-tier route into
+  // the heavy gate; the standalone quick checks keep their queue policy, so
+  // the queue exclusion below still removes them from pull requests.
+  expect(eventPolicies.jobs["ci.yml/pr-heavy-gate"]).toBe("pr-fast");
+  expect(eventPolicies.jobs["ci.yml/ci-quick-checks"]).toBe("queue");
   let compared = 0;
   for (const event of ["pull_request", "merge_group", "workflow_dispatch"]) {
     for (const depth of ["fast", "full"]) {
@@ -623,7 +586,13 @@ test("heavy event policies exclude pull requests and preserve existing full cert
         plan["docker_checks_pr_required"] = required;
         // Queue policies intentionally remove PR execution. Existing non-PR
         // certification stays unchanged except for the added queue route smoke.
-        for (const [job, body] of Object.entries(original.jobs)) {
+        // The current workflow is also compared as its own baseline: that is
+        // what this test sees once a pull request lands, so an expectation
+        // that only holds while a change is unmerged fails before the merge.
+        for (const [job, body] of [
+          ...Object.entries(original.jobs),
+          ...Object.entries(workflow.jobs),
+        ]) {
           const current = workflow.jobs[job]?.if;
           if (current?.includes("inputs.heavy_only") !== true) {
             continue;
@@ -636,7 +605,7 @@ test("heavy event policies exclude pull requests and preserve existing full cert
           const queueJob = Object.entries(eventPolicies.jobs).some(
             ([key, policy]) =>
               key === `ci.yml/${job}` &&
-              (policy === "queue" || policy === "main"),
+              (policy === "queue" || policy === "main" || policy === "armed"),
           );
           if (event === "pull_request" && queueJob) {
             expected = false;
@@ -666,6 +635,21 @@ test("heavy event policies exclude pull requests and preserve existing full cert
           // Selected production e2e specs run on pull requests when planned.
           if (event === "pull_request" && job === "e2e-production-shard") {
             expected = required === "true";
+          }
+          // Pull request quick checks run in the heavy-suite gate, so the gate
+          // runs on every ready pull request and nowhere else. State this
+          // without the baseline: once the gate change is on main, the
+          // baseline quick checks no longer run on pull requests.
+          if (job === "pr-heavy-gate") {
+            expected =
+              event === "pull_request" &&
+              selected(
+                "github.event.pull_request.draft != true && github.event.action != 'enqueued'",
+                context(event, false, plan),
+              );
+          }
+          if (job === "ci-quick-checks" && event === "pull_request") {
+            expected = false;
           }
           expect(
             selected(current, context(event, false, plan)),
@@ -730,7 +714,11 @@ const evaluate = ({
     panic(`Missing scoped job: ${jobName}`);
   }
   job.result = result;
-  const run = Bun.spawnSync(["bash", "-e", "-c", outcome.run ?? "exit 2"], {
+  const script = renderResultInputs(outcome.run ?? "exit 2", {
+    needs: JSON.stringify(needs),
+    plan: JSON.stringify({ ...heavyPlan, [scope]: String(isPlanned) }),
+  });
+  const run = Bun.spawnSync(["bash", "-e", "-c", script], {
     cwd: root,
     env: {
       ...process.env,
@@ -740,11 +728,6 @@ const evaluate = ({
       HEAVY_JOBS: JSON.stringify(heavy),
       QUEUE_DEPTH: "full",
       THIN_JOBS: JSON.stringify(THIN_JOBS),
-      NEEDS: JSON.stringify(needs),
-      PLAN: JSON.stringify({
-        ...heavyPlan,
-        [scope]: String(isPlanned),
-      }),
       PLAN_RESULT: planResult,
       TRUSTED: "true",
       SUITE_DEPTH: "full",
@@ -1198,5 +1181,23 @@ test("heavy classification uses passing evidence from any matching-tree run", as
       ).toBe(hasQueuePass);
       expect(warnings).toEqual([]);
     }
+  }
+});
+
+test("armed proof cannot replace independent folded suite coverage", () => {
+  const folded = v.parse(
+    v.record(v.string(), v.unknown()),
+    JSON.parse(outcomeEnv["FOLDED_SUITES"] ?? ""),
+  );
+  for (const name of Object.keys(folded)) {
+    const mutated = structuredClone(workflow);
+    const job = mutated.jobs[name];
+    if (!job?.if) {
+      panic(`Missing folded job: ${name}`);
+    }
+    job.if = `needs.ci-plan.outputs.heavy_proof == 'true' && (${job.if})`;
+    expect(() => heavyProofJobScopes(mutated)).toThrow(
+      `Folded suites require queued coverage: ${name}`,
+    );
   }
 });

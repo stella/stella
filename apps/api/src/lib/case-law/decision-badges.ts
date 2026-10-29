@@ -5,7 +5,7 @@ import type { CourtTierLabel } from "@stll/api-contract/case-law-court-tiers";
 import type { CaseLawDecisionLanguageAlternate } from "@stll/api-contract/case-law-decision-route";
 import { isPublicCaseLawPageCountry } from "@stll/api-contract/case-law-launch-readiness";
 
-import { publishedCaseLawDecisions, caseLawSources } from "@/api/db/schema";
+import { caseLawSources, publishedCaseLawDecisions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";

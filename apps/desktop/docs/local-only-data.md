@@ -61,6 +61,18 @@ local-only feature follows every rule below and adds one entry to
 - `tests/window-capabilities.test.ts`: each window's capability grants what
   its page invokes.
 
+## Calls
+
+While recording, the activity sampler also asks the system which apps capture
+microphone input: CoreAudio's per-process objects on macOS 14 and later, the
+microphone consent store on Windows. Only a catalog of call apps and browsers
+counts (`activity_calls.rs`); a browser must hold the microphone for about
+fifteen seconds. Call time is recorded as a call segment for that app, whatever
+is in front and however long the user only listens, and it ends at the last
+sample that saw the call. Audio is never read. Excluded apps stay unrecorded,
+window titles follow the same detail opt-ins, and the user can turn call
+detection off in Activity settings.
+
 ## Activity account ownership
 
 Activity days, settings and welcome consent belong to the linked account.
@@ -129,12 +141,14 @@ the browser while browsing privately. Known private markers suppress details
 before truncation even after browser consent. Browser URLs are never captured.
 
 Titles and document filenames appear only in the activity window; the full
-local path appears on hover. Proposed blocks group by document when present
-and require at least three minutes of actual span. Shorter spans still appear
-in the raw list and contribute to the day's active total. Explicit Copy summary
-may include document filenames. Draft narratives are prefilled locally from
-recorded document names, opted-in window titles, or app names; the user can edit
-them, and they are sent only after confirmation.
+local path appears on hover. Proposed blocks group segments per matter using a
+manual assignment, an open Stella edit session, or a unique matter reference or
+name in the recorded details. Unmatched time stays in its own group; recorded
+time not yet drafted counts toward its group's duration, and each group is
+rounded up to the next six minutes. Explicit Copy summary may include document filenames. Draft
+narratives are prefilled locally from recorded document names, opted-in window
+titles, or app names; the user can edit them, and they are sent only after
+confirmation.
 Titles, paths and documents never enter telemetry, logs or error reports.
 Platform wrappers are listed with the feature's native modules so the same
 network and fixed-code guards cover them.

@@ -24,7 +24,6 @@
       "@stll/template-conditions": [
         "../../packages/template-conditions/src/index.ts"
       ],
-      "@stll/time": ["../../packages/time/src/index.ts"],
       "@stll/ui/*": ["../../packages/ui/src/*"]
     }
   },
@@ -32,6 +31,7 @@
   "include": [
     "src",
     "tests",
+    "public/handoff-init.js",
     "vite.config.ts",
     "vite.config.test.ts",
     "../../types"

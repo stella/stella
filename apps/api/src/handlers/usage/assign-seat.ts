@@ -1,13 +1,13 @@
 import { panic, Result } from "better-result";
 import { and, count, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { member } from "@/api/db/auth-schema";
 import { usageEntitlements, usageSeatAssignments } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { tUserId } from "@/api/lib/custom-schema";
+import { userIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { lockAssignmentCapacity } from "@/api/lib/usage/assignment-capacity";
 
@@ -23,9 +23,7 @@ const config = {
   permissions: { organizationSettings: ["update"] },
   accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "hosted_billing" },
-  body: t.Object({
-    userId: tUserId,
-  }),
+  body: v.object({ userId: userIdSchema }),
 } satisfies HandlerConfig;
 
 const assignSeat = createSafeRootHandler(

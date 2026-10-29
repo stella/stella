@@ -6,22 +6,31 @@
  * organization's settings row present.
  */
 
-import { Result } from "better-result";
-import { afterAll, describe, expect, test } from "bun:test";
+import { panic } from "better-result";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  setDefaultTimeout,
+  test,
+} from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
 import { member, organization } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
-  organizationSettings,
-  organizationAccessStates,
   ORGANIZATION_ACCESS_STATE,
-  usagePolicies,
+  organizationAccessStates,
+  organizationSettings,
   usageEntitlements,
+  usagePolicies,
   usageSeatAssignments,
 } from "@/api/db/schema";
 import { createMembershipScopedDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
+import readAIAvailability from "@/api/handlers/organization-settings/ai-availability/get";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { encryptAIConfig } from "@/api/lib/ai-config-crypto";
 import {
@@ -31,10 +40,16 @@ import {
   loadOrgSettingsForAuth,
 } from "@/api/lib/ai-config-loader";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import {
+  AI_CONFIG_UNREADABLE_ERROR_CODE,
+  AI_MEMBER_ASSIGNMENT_REQUIRED_ERROR_CODE,
+} from "@/api/lib/ai-config-response";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { encryptContent } from "@/api/lib/content-encryption";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
   loadWebSearchKeys,
   loadWebSearchProvidersForOrg,
@@ -44,6 +59,19 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import {
+  createTestHandlerContext,
+  NO_AUDIT,
+  NO_DB,
+} from "@/api/tests/helpers/handler-context";
+import {
+  installRecordingAnalytics,
+  installRecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
+import type {
+  RecordingAnalytics,
+  RecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
 import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -53,6 +81,9 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
+
+// timeout: Boot the shared PGlite engine and complete schema before assertions.
+setDefaultTimeout(120_000);
 
 const testState = createTestState({ file: import.meta.path, config: env });
 
@@ -83,6 +114,23 @@ let ids: TestIds;
 const corruptOrgId = mintAuthProviderId<"organization">();
 /** An organization with no settings row at all. */
 const unsetOrgId = mintAuthProviderId<"organization">();
+const seededOrgId = mintAuthProviderId<"organization">();
+const unreadableMarker = "fake-provider-key-must-not-escape";
+const unreadableFixtures = [
+  {
+    name: "ciphertext only",
+    organizationId: mintAuthProviderId<"organization">(),
+  },
+  { name: "IV only", organizationId: mintAuthProviderId<"organization">() },
+  {
+    name: "invalid JSON",
+    organizationId: mintAuthProviderId<"organization">(),
+  },
+  {
+    name: "schema-invalid JSON",
+    organizationId: mintAuthProviderId<"organization">(),
+  },
+] as const;
 
 /** The request scope authentication builds for a member of `organizationId`. */
 const requestScope = (
@@ -160,37 +208,91 @@ testState.beforeAll(async () => {
       createdAt: new Date(),
     },
     {
+      id: seededOrgId,
+      name: "Seeded settings",
+      slug: `seeded-settings-${seededOrgId}`,
+      createdAt: new Date(),
+    },
+    {
       id: unsetOrgId,
       name: "No settings",
       slug: `no-settings-${unsetOrgId}`,
       createdAt: new Date(),
     },
+    ...unreadableFixtures.map(({ name, organizationId }) => ({
+      id: organizationId,
+      name: `Unreadable settings: ${name}`,
+      slug: `unreadable-settings-${organizationId}`,
+      createdAt: new Date(),
+    })),
   ]);
-  // userA1 joins both, so each scope below is built for a real member.
+  // Each scope below belongs to a current organization member.
   await testDb.insert(member).values(
-    [corruptOrgId, unsetOrgId].map((organizationId) => ({
+    [
+      corruptOrgId,
+      unsetOrgId,
+      seededOrgId,
+      ...unreadableFixtures.map(({ organizationId }) => organizationId),
+    ].map((organizationId) => ({
       id: mintAuthProviderIdValue(),
       organizationId,
       userId: ids.userA1,
-      role: "member",
+      role: organizationId === seededOrgId ? "owner" : "member",
       createdAt: new Date(),
     })),
   );
+  await testDb.insert(organizationSettings).values({
+    organizationId: seededOrgId,
+    practiceJurisdictions: [{ countryCode: "CZ", isPrimary: true }],
+  });
   await testDb.insert(organizationSettings).values({
     organizationId: corruptOrgId,
     aiConfigEncrypted: Buffer.from("{not an encrypted config"),
     aiConfigIv: Buffer.alloc(12, 7),
     promptCachingEnabled: false,
+    managedAIResidency: "us",
   });
+  const invalidJson = await encryptContent(
+    unreadableFixtures[2].organizationId,
+    `{"apiKey":"${unreadableMarker}"`,
+  );
+  const invalidSchema = await encryptContent(
+    unreadableFixtures[3].organizationId,
+    JSON.stringify({ providers: [{ apiKey: unreadableMarker }] }),
+  );
+  await testDb.insert(organizationSettings).values([
+    {
+      organizationId: unreadableFixtures[0].organizationId,
+      aiConfigEncrypted: Buffer.from(unreadableMarker),
+    },
+    {
+      organizationId: unreadableFixtures[1].organizationId,
+      aiConfigIv: Buffer.from(unreadableMarker),
+    },
+    {
+      organizationId: unreadableFixtures[2].organizationId,
+      aiConfigEncrypted: invalidJson.ciphertext,
+      aiConfigIv: invalidJson.iv,
+    },
+    {
+      organizationId: unreadableFixtures[3].organizationId,
+      aiConfigEncrypted: invalidSchema.ciphertext,
+      aiConfigIv: invalidSchema.iv,
+    },
+  ]);
 });
 
 afterAll(async () => {
   await testDb
-    .delete(member)
-    .where(inArray(member.organizationId, [corruptOrgId, unsetOrgId]));
-  await testDb
     .delete(organization)
-    .where(inArray(organization.id, [corruptOrgId, unsetOrgId]));
+    .where(
+      inArray(organization.id, [
+        corruptOrgId,
+        unsetOrgId,
+        seededOrgId,
+        ...unreadableFixtures.map(({ organizationId }) => organizationId),
+      ]),
+    );
   await releaseTestDb();
 });
 
@@ -226,29 +328,28 @@ describe("organization settings under the request scope", () => {
       ),
     ).toEqual(["model-a-key"]);
     expect(
-      (
-        await scope(
-          async (tx) =>
-            await loadOrgAIConfig(tx, {
-              organizationId: ids.orgB,
-              userId: ids.userA1,
-            }),
-        )
-      ).unwrap(),
-    ).toBeNull();
+      await scope(
+        async (tx) =>
+          await loadOrgAIConfig(tx, {
+            organizationId: ids.orgB,
+            userId: ids.userA1,
+          }),
+      ),
+    ).toMatchObject({
+      status: "error",
+      error: { code: AI_MEMBER_ASSIGNMENT_REQUIRED_ERROR_CODE },
+    });
   });
 
-  test("another organization's prompt-caching preference reads as the default", async () => {
+  test("another organization's AI settings are refused", async () => {
     const scope = requestScope(ids.orgB, ids.userB1);
 
-    // orgB stores `true`; orgA stores `false`. Under orgB's scope the orgA row
-    // is invisible, so the read falls back to the default rather than false.
     const own = (
       await scope(
         async (tx) =>
           await loadOrgAISettings(tx, {
             organizationId: ids.orgB,
-            userId: ids.userA1,
+            userId: ids.userB1,
           }),
       )
     ).unwrap();
@@ -256,19 +357,16 @@ describe("organization settings under the request scope", () => {
     expect(own.promptCachingEnabled).toBe(true);
     expect(own.managedAIResidency).toBe("eu");
     expect(
-      (
-        await scope(
-          async (tx) =>
-            await loadOrgAISettings(tx, {
-              organizationId: ids.orgA,
-              userId: ids.userA1,
-            }),
-        )
-      ).unwrap(),
-    ).toEqual({
-      orgAIConfig: null,
-      promptCachingEnabled: true,
-      managedAIResidency: "eu",
+      await scope(
+        async (tx) =>
+          await loadOrgAISettings(tx, {
+            organizationId: ids.orgA,
+            userId: ids.userA1,
+          }),
+      ),
+    ).toMatchObject({
+      status: "error",
+      error: { code: AI_MEMBER_ASSIGNMENT_REQUIRED_ERROR_CODE },
     });
   });
 
@@ -285,7 +383,7 @@ describe("organization settings under the request scope", () => {
     expect(unset).toBe("eu");
   });
 
-  test("loadOrgAISettings reads both values in one select", async () => {
+  test("loadOrgAISettings reads config and preferences together", async () => {
     const scope = requestScope(ids.orgA, ids.userA1);
 
     const own = (
@@ -301,19 +399,16 @@ describe("organization settings under the request scope", () => {
     expect(own.promptCachingEnabled).toBe(false);
     expect(own.managedAIResidency).toBe("us");
     expect(
-      (
-        await scope(
-          async (tx) =>
-            await loadOrgAISettings(tx, {
-              organizationId: ids.orgB,
-              userId: ids.userA1,
-            }),
-        )
-      ).unwrap(),
-    ).toEqual({
-      orgAIConfig: null,
-      promptCachingEnabled: true,
-      managedAIResidency: "eu",
+      await scope(
+        async (tx) =>
+          await loadOrgAISettings(tx, {
+            organizationId: ids.orgB,
+            userId: ids.userA1,
+          }),
+      ),
+    ).toMatchObject({
+      status: "error",
+      error: { code: AI_MEMBER_ASSIGNMENT_REQUIRED_ERROR_CODE },
     });
   });
 
@@ -341,7 +436,7 @@ describe("organization settings under the request scope", () => {
       ),
     ).toEqual({
       orgAIConfig: null,
-      orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+      orgAIConfigStatus: ORG_AI_CONFIG_STATUS.memberAssignmentRequired,
       managedAIResidency: "eu",
       promptCachingEnabled: true,
     });
@@ -384,7 +479,60 @@ describe("organization settings under the request scope", () => {
   });
 });
 
+test("a jurisdiction-only settings row keeps the default chat provider available", async () => {
+  testState.patchConfig({
+    AI_PROVIDER: "openrouter",
+    OPENROUTER_API_KEY: "test-instance-key",
+    REQUIRE_PERSONAL_AI_KEY: false,
+    FEATURE_ORG_ACCESS_STATE: false,
+  });
+  const settings = await loadOrgSettingsForAuth(testDb, {
+    organizationId: seededOrgId,
+    userId: ids.userA1,
+  });
+  expect(settings).toEqual({
+    orgAIConfig: null,
+    orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+    managedAIResidency: "eu",
+    promptCachingEnabled: true,
+  });
+  if (settings.orgAIConfigStatus !== ORG_AI_CONFIG_STATUS.ok) {
+    panic("Seeded settings must be readable");
+  }
+  const availability = await readAIAvailability.handler(
+    createTestHandlerContext<Parameters<typeof readAIAvailability.handler>[0]>({
+      ...settings,
+      audit: NO_AUDIT,
+      safeDb: NO_DB,
+      scopedDb: NO_DB,
+      memberRole: sessionMemberRole("owner"),
+      session: { activeOrganizationId: seededOrgId },
+      user: { id: ids.userA1, email: "seed@example.test" },
+    }),
+  );
+  expect(availability).toMatchObject({
+    available: true,
+    instanceProvisioned: true,
+    orgConfigured: false,
+    unavailableReason: null,
+    providerConfiguration: "allowed",
+  });
+});
+
 describe("absent and unreadable settings", () => {
+  let analytics: RecordingAnalytics;
+  let logs: RecordingLogger;
+
+  beforeEach(() => {
+    analytics = installRecordingAnalytics();
+    logs = installRecordingLogger();
+  });
+
+  afterEach(() => {
+    analytics.restore();
+    logs.restore();
+  });
+
   test("an organization with no settings row reads as defaults", async () => {
     const scope = requestScope(unsetOrgId, ids.userA1);
 
@@ -422,7 +570,7 @@ describe("absent and unreadable settings", () => {
     ).toEqual({ searchApiKey: null, fetchApiKey: null });
   });
 
-  test("the auth read reports an unreadable config instead of throwing", async () => {
+  test("the auth read keeps an unreadable provider unavailable", async () => {
     const scope = requestScope(corruptOrgId, ids.userA1);
 
     expect(
@@ -436,38 +584,87 @@ describe("absent and unreadable settings", () => {
     ).toEqual({
       orgAIConfig: null,
       orgAIConfigStatus: ORG_AI_CONFIG_STATUS.unreadable,
-      managedAIResidency: "eu",
-      promptCachingEnabled: false,
+      managedAIResidency: null,
+      promptCachingEnabled: null,
     });
   });
 
-  test("the AI-call reads throw on an unreadable config", async () => {
+  test.each(
+    Object.entries({ config: loadOrgAIConfig, settings: loadOrgAISettings }),
+  )("%s reads refuse unreadable provider settings", async (_name, load) => {
     const scope = requestScope(corruptOrgId, ids.userA1);
-
-    const config = await Result.tryPromise(
-      async () =>
-        await scope(
-          async (tx) =>
-            await loadOrgAIConfig(tx, {
-              organizationId: corruptOrgId,
-              userId: ids.userA1,
-            }),
-        ),
+    const outcome = await scope(
+      async (tx) =>
+        await load(tx, {
+          organizationId: corruptOrgId,
+          userId: ids.userA1,
+        }),
     );
-    const settings = await Result.tryPromise(
-      async () =>
-        await scope(
-          async (tx) =>
-            await loadOrgAISettings(tx, {
-              organizationId: corruptOrgId,
-              userId: ids.userA1,
-            }),
-        ),
-    );
-
-    expect(Result.isError(config)).toBe(true);
-    expect(Result.isError(settings)).toBe(true);
+    expect(outcome).toMatchObject({
+      status: "error",
+      error: { status: 503, code: AI_CONFIG_UNREADABLE_ERROR_CODE },
+    });
   });
+
+  test.each(unreadableFixtures)(
+    "$name remains content-free through every settings reader",
+    async ({ organizationId }) => {
+      const scope = requestScope(organizationId, ids.userA1);
+      const reader = { organizationId, userId: ids.userA1 };
+      const [config, settings, auth] = await scope(
+        async (tx) =>
+          await Promise.all([
+            loadOrgAIConfig(tx, reader),
+            loadOrgAISettings(tx, reader),
+            loadOrgSettingsForAuth(tx, reader),
+          ]),
+      );
+
+      for (const result of [config, settings]) {
+        expect(result).toMatchObject({
+          status: "error",
+          error: { status: 503, code: AI_CONFIG_UNREADABLE_ERROR_CODE },
+        });
+      }
+      expect(auth).toEqual({
+        orgAIConfig: null,
+        orgAIConfigStatus: ORG_AI_CONFIG_STATUS.unreadable,
+        managedAIResidency: null,
+        promptCachingEnabled: null,
+      });
+      expect(
+        JSON.stringify({
+          capturedErrors: analytics.exceptions(),
+          logRecords: logs.records,
+          responseBodies: [config, settings, auth],
+        }),
+      ).not.toContain(unreadableMarker);
+    },
+  );
+});
+
+test("auth settings reads leave the database reusable for later transactions", async () => {
+  const organizationId = ids.orgA;
+  const userId = ids.userA1;
+  for (let iteration = 0; iteration < 2; iteration += 1) {
+    const settings = await loadOrgSettingsForAuth(testDb, {
+      organizationId,
+      userId,
+    });
+    expect(settings.orgAIConfigStatus).toBe(ORG_AI_CONFIG_STATUS.ok);
+    expect(providerKeys(settings.orgAIConfig)).toEqual(["model-a-key"]);
+    const members = await withAggregateTransaction(
+      testDb,
+      async (tx) =>
+        await tx
+          .select({ userId: member.userId })
+          .from(member)
+          .where(eq(member.organizationId, organizationId)),
+    );
+    expect(members.map(({ userId: memberUserId }) => memberUserId)).toContain(
+      userId,
+    );
+  }
 });
 
 test("strict configuration readers expose settings only for admitted actors", async () => {

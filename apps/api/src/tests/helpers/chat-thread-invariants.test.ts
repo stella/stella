@@ -24,8 +24,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import {
   offeredInteractionsOf,
   readThreadInvariantSnapshot,
-  threadInvariantViolationsOf,
   type ThreadInvariantSnapshot,
+  threadInvariantViolationsOf,
 } from "@/api/tests/helpers/chat-thread-invariants";
 import { createTestMutantDirectory } from "@/api/tests/helpers/test-mutants";
 import {

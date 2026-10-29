@@ -14,6 +14,7 @@ export const MCP_APP_CONSUMED_FIELDS = {
     "headnotes",
     ...decisionFields.map((field) => `results[].${field}`),
     "results[].snippet",
+    "results[].match",
     "results[].headnote.type",
     "results[].headnote.text",
     "results[].headnote.truncated",

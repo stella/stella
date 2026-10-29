@@ -5,7 +5,7 @@ import { distance } from "@stll/fuzzy-search";
 
 import type { AliasQuality, EntityType, SanctionsEntry } from "../entry";
 import { nameReading } from "../normalise";
-import type { NameToken, NameReading } from "../normalise";
+import type { NameReading, NameToken } from "../normalise";
 
 // One budget covers vocabulary lookups, postings and scoring across readings.
 export const MAX_SCREENING_WORK = 2_000_000;
@@ -1134,4 +1134,98 @@ export const matchNames = ({
     truncated:
       work.selection === "partial" || selected.length < candidates.length,
   };
+};
+
+// Exhaust every vocabulary spelling and alias independently of the production
+// candidate generator, retaining the captured scoring and IDF contract.
+export const bruteForceNameMatches = (
+  index: NameIndex,
+  reading: NameReading,
+) => {
+  const lookup = (vocabulary: Vocabulary, text: string) => {
+    const matches = new Map<number, number>();
+    for (const [id, candidate] of vocabulary.strings.entries()) {
+      const shorter = Math.min(
+        Array.from(text).length,
+        Array.from(candidate).length,
+      );
+      const edits = distance(text, candidate, METRIC);
+      if (edits <= editBudget(shorter)) {
+        matches.set(
+          id,
+          1 -
+            edits /
+              Math.max(Array.from(text).length, Array.from(candidate).length),
+        );
+      }
+    }
+    return matches;
+  };
+  const initials = reading.tokens.map(isInitial);
+  const units: QueryUnit[] = [];
+  const singles = new Map<number, QueryUnit>();
+  for (const positions of [
+    ...reading.tokens.map((_token, position) => [position]),
+    ...reading.adjacent,
+  ]) {
+    if (positions.some((position) => initials[position])) {
+      continue;
+    }
+    const queryUnit = {
+      positions,
+      folded: lookup(
+        index.folded,
+        positions
+          .map(
+            (position) =>
+              reading.tokens.at(position)?.folded ??
+              panic("Missing oracle token"),
+          )
+          .join(""),
+      ),
+      raw: lookup(
+        index.raw,
+        positions
+          .map(
+            (position) =>
+              reading.tokens.at(position)?.raw ?? panic("Missing oracle token"),
+          )
+          .join(""),
+      ),
+    };
+    units.push(queryUnit);
+    if (positions.length === 1) {
+      singles.set(
+        positions.at(0) ?? panic("Missing oracle position"),
+        queryUnit,
+      );
+    }
+  }
+  const weights = initials.map((initial, position) => {
+    if (initial) {
+      return INITIAL_WEIGHT;
+    }
+    let weight = index.maxWeight;
+    let best = -1;
+    for (const [id, similarity] of singles.get(position)?.folded ?? []) {
+      if (
+        similarity > best &&
+        (index.folded.postings.at(id)?.length ?? 0) > 0
+      ) {
+        best = similarity;
+        weight = index.weights.at(id) ?? panic("Missing oracle weight");
+      }
+    }
+    return weight;
+  });
+  const query = { tokens: reading.tokens, weights, initials, units };
+  const matches = new Map<number, NameMatch>();
+  for (const alias of index.aliases) {
+    const score = scoreAlias(index, alias, query);
+    const previous = matches.get(alias.entry);
+    if (score > 0 && (previous === undefined || score > previous.score)) {
+      matches.set(alias.entry, { score, name: alias.name });
+    }
+  }
+  return matches;
 };

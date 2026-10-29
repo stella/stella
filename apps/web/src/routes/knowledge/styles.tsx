@@ -3,17 +3,17 @@ import type { PropsWithChildren, ReactNode } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
 import { Button } from "@stll/ui/button";
 import { DestructiveConfirmDialog } from "@stll/ui/destructive-confirm-dialog";
 import {
   Dialog,
-  DialogFormState,
   DialogClose,
   DialogDescription,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
@@ -41,6 +41,7 @@ import {
   styleSetsOptions,
 } from "@/features/style-sets/style-set-queries";
 import { usePermissions } from "@/hooks/use-permissions";
+import { useFormatter } from "@/i18n/formatting-context";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -48,10 +49,12 @@ import { isDocxFile } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
+import { pageTitle } from "@/lib/page-title";
 import { prefetchRouteQuery } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
+import { routePresentation } from "@/routes/-route-presentation";
 import { KnowledgeMemberOnly } from "@/routes/knowledge/-knowledge-member-only";
 
 const UNEXPECTED_ERROR_TRANSLATION_KEY = "common.unexpectedError";
@@ -92,7 +95,7 @@ const StyleSetsPage = () => {
 
   const replace = async (target: StyleSetItem, file: File) => {
     if (!isDocxFile(file)) {
-      notifyUserError(undefined, t("templates.invalidFileType"));
+      notifyUserProblem(t("templates.invalidFileType"));
       return;
     }
     setBusy(true);
@@ -354,7 +357,14 @@ export const Route = createFileRoute("/knowledge/styles")({
     }
     const organizationId = context.user.activeOrganizationId;
     const onPrefetchError = (error: unknown) => {
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "knowledge.styles.loader.onPrefetchError:failure",
+        scope: {
+          type: "request",
+          method: "GET",
+          routeTemplate: "/knowledge/styles",
+        },
+      });
     };
 
     detached(
@@ -366,6 +376,14 @@ export const Route = createFileRoute("/knowledge/styles")({
       "knowledge-styles.prefetch",
     );
   },
+  staticData: {
+    presentation: routePresentation({
+      type: "label",
+      labelKey: "styleSets.title",
+      to: "/knowledge/styles",
+    }),
+  },
+  head: () => ({ meta: [{ title: pageTitle("styleSets.title") }] }),
   component: GuardedStyleSetsPage,
 });
 

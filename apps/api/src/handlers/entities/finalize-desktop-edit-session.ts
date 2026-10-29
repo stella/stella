@@ -1,9 +1,8 @@
 import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
-import { status, t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { safeDbFromScoped } from "@/api/db/safe-db";
@@ -13,6 +12,7 @@ import {
   fields,
   workspaces,
 } from "@/api/db/schema";
+import { status } from "@/api/http/status";
 import { captureError } from "@/api/lib/analytics/capture";
 import {
   AUDIT_ACTION,
@@ -27,7 +27,7 @@ import {
   reserveObjectCleanupIntent,
   retirePublishedObjectCleanupIntentsInTransaction,
 } from "@/api/lib/buffer-intent-reconciliation";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { desktopEditMimeTypeForFileType } from "@/api/lib/desktop-edit-file-types";
 import { closeSessionConnections } from "@/api/lib/desktop-edit-session-notifications";
@@ -61,6 +61,7 @@ import {
 } from "@/api/lib/files/organization-file-usage";
 import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
 import { createFileKey } from "@/api/lib/files/utils";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
@@ -86,16 +87,16 @@ export const hashFinalizedDesktopEditBytes = (
   storedBytes: Uint8Array,
 ): string => hashSha256Hex(storedBytes);
 
-export const finalizeDesktopEditSessionParamsSchema = t.Object({
-  sessionId: tSafeId("desktopEditSession"),
+export const finalizeDesktopEditSessionParamsSchema = v.object({
+  sessionId: resourceIdSchema("desktopEditSession"),
 });
 
-export const finalizeDesktopEditSessionBodySchema = t.Object({
-  sessionToken: t.String({ minLength: 64, maxLength: 64 }),
+export const finalizeDesktopEditSessionBodySchema = v.object({
+  sessionToken: v.pipe(v.string(), v.minLength(64), v.maxLength(64)),
 });
 
 type FinalizeDesktopEditSessionHandlerProps = {
-  body: Static<typeof finalizeDesktopEditSessionBodySchema>;
+  body: v.InferOutput<typeof finalizeDesktopEditSessionBodySchema>;
   sessionId: SafeId<"desktopEditSession">;
   request: Request;
   server: Parameters<typeof createAuditRecorder>[0]["server"];
@@ -183,10 +184,13 @@ export const finalizeDesktopEditSessionHandler = async ({
       }),
     );
     if (Result.isError(result)) {
-      captureError(result.error, {
-        checkpointKey,
-        sessionId,
-      });
+      captureError(
+        result.error,
+        handlerErrorContext("entities.deleteCheckpointKey.result_error", {
+          checkpointKey,
+          sessionId,
+        }),
+      );
     }
   };
 
@@ -214,10 +218,13 @@ export const finalizeDesktopEditSessionHandler = async ({
       }),
     );
     if (Result.isError(result)) {
-      captureError(result.error, {
-        rollbackKey: uploadedKey,
-        sessionId,
-      });
+      captureError(
+        result.error,
+        handlerErrorContext("entities.deleteUploadedKey.result_error", {
+          rollbackKey: uploadedKey,
+          sessionId,
+        }),
+      );
     }
     return Result.isOk(result);
   };
@@ -748,9 +755,12 @@ export const finalizeDesktopEditSessionHandler = async ({
 
     if (result.outcome === "finalized") {
       await processExtraction(result.entityId).catch((error: unknown) => {
-        captureError(error, {
-          entityId: result.entityId,
-        });
+        captureError(
+          error,
+          handlerErrorContext("desktopEdit.processExtraction", {
+            entityId: result.entityId,
+          }),
+        );
       });
 
       enqueuePdfDerivativeOrMarkFailed({
@@ -764,11 +774,14 @@ export const finalizeDesktopEditSessionHandler = async ({
         userId: brandPersistedUserId(authorizedSession.value.userId),
         workspaceId: authorizedSession.value.workspaceId,
       }).catch((error: unknown) => {
-        captureError(error, {
-          entityId: result.entityId,
-          fieldId: result.fieldId,
-          mimeType: desktopEditMimeTypeForFileType(result.fileType),
-        });
+        captureError(
+          error,
+          handlerErrorContext("desktopEdit.enqueuePdfDerivative", {
+            entityId: result.entityId,
+            fieldId: result.fieldId,
+            mimeType: desktopEditMimeTypeForFileType(result.fileType),
+          }),
+        );
       });
 
       if (result.fileType === "docx") {
@@ -779,7 +792,12 @@ export const finalizeDesktopEditSessionHandler = async ({
           workspaceId: authorizedSession.value.workspaceId,
           organizationId: authorizedSession.value.organizationId,
         }).catch((error: unknown) => {
-          captureError(error, { versionId: result.versionId });
+          captureError(
+            error,
+            handlerErrorContext("desktopEdit.computeVersionDiff", {
+              versionId: result.versionId,
+            }),
+          );
         });
       }
     }

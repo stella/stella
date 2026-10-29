@@ -4,6 +4,59 @@
  * owns what a response means, so the mapping is testable without a session.
  */
 
+import { panic } from "better-result";
+
+import type { APIError } from "@/lib/errors/api";
+
+/**
+ * What a checkpoint did with the bytes it was handed, with the cause when it
+ * could not save them. Two are not failures to report: `released` (the lock
+ * moved to another tab mid-save, and the released session already says so)
+ * and `noSession` (no session is open yet, or any more, so there is nothing
+ * to write the bytes to and nothing of the user's is lost).
+ */
+export type CheckpointOutcome =
+  | { type: "saved" }
+  | { type: "released" }
+  | { type: "noSession" }
+  | { type: "refused"; error: APIError }
+  | { type: "unreachable"; error: unknown };
+
+/** What leaving the editor does once its final checkpoint has settled. */
+export type CheckpointLeaveAction =
+  | { type: "finalize" }
+  | { type: "close" }
+  | { type: "stay" }
+  | { type: "report"; error: unknown };
+
+/**
+ * `close` leaves without a word, and only when no session means nothing was
+ * lost: the user typed nothing here. A session can also vanish because a
+ * concurrent checkpoint was taken over while this one serialized; the user's
+ * edits then live only on screen, so the document `stay`s behind the released
+ * banner, which already explains itself. Only a checkpoint with a cause is
+ * reported.
+ */
+export const checkpointLeaveAction = (
+  outcome: CheckpointOutcome,
+  { userEdited }: { userEdited: boolean },
+): CheckpointLeaveAction => {
+  switch (outcome.type) {
+    case "saved":
+      return { type: "finalize" };
+    case "noSession":
+      return userEdited ? { type: "stay" } : { type: "close" };
+    case "released":
+      return { type: "stay" };
+    case "refused":
+    case "unreachable":
+      return { type: "report", error: outcome.error };
+    default:
+      outcome satisfies never;
+      return panic("Unhandled checkpoint outcome");
+  }
+};
+
 export type EditSessionState =
   | { status: "idle" }
   | { status: "opening" }
@@ -34,10 +87,7 @@ export type EditSessionState =
     };
 
 export type EditSessionErrorReason =
-  | "authRequired"
-  | "permissionDenied"
-  | "downloadFailed"
-  | "unknown";
+  "authRequired" | "permissionDenied" | "downloadFailed" | "unknown";
 
 type EditSessionErrorSource = "open" | "download" | "finalize";
 

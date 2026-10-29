@@ -2,18 +2,20 @@ import { describe, expect, test } from "bun:test";
 
 import {
   GLOBAL_SEARCH_RESULT_TYPES,
-  resourceRef,
   RESOURCE_TYPE,
+  resourceRef,
   toResourceName,
 } from "@stll/api-contract";
 import { GLOBAL_SEARCH_RESULT_LIMIT } from "@stll/api-contract/search";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
+import { SEARCH_SCOPES } from "@/components/search-scope";
 import type {
   GlobalSearchHit,
   GlobalSearchResultType,
 } from "@/lib/api-contract";
 import { toSafeId } from "@/lib/safe-id";
+import { DEFAULT_WORKSPACE_VIEW_ID } from "@/lib/workspaces/view-params.logic";
 
 import {
   canUseAskAIShortcut,
@@ -24,14 +26,16 @@ import {
   getCompanySearchQuery,
   getEntityLocation,
   getRecentFileLocation,
-  getRecentFileRoute,
   getRecentFilePreviewDateVisibility,
   getRecentFilePreviewHit,
+  getRecentFileRoute,
   isLazySearchGroupActive,
-  resolveRegistryResultsPane,
+  isSearchTypeInScope,
   rememberSelectedFacetLabels,
-  resolveEntityDocumentRoute,
   resolveEagerSearchTypes,
+  resolveEntityDocumentRoute,
+  resolveRegistryResultsPane,
+  resolveSearchScope,
   toAskAIMessageHtml,
 } from "./search-dialog.logic";
 
@@ -40,7 +44,7 @@ type ChatGlobalSearchHit = Extract<GlobalSearchHit, { type: "chat" }>;
 
 describe("lazy search groups", () => {
   test("gives the results pane to an expanded registry group only in All scope", () => {
-    for (const scope of ["all", "matters", "registries"] as const) {
+    for (const scope of SEARCH_SCOPES) {
       for (const expanded of [false, true]) {
         const visible = true;
         expect(
@@ -76,7 +80,7 @@ describe("lazy search groups", () => {
 
   test("defers only case law in All browse searches while preserving every other type and its order", () => {
     const modes = ["browse", "pick"] as const;
-    const scopes = ["all", "matters", "registries"] as const;
+    const scopes = SEARCH_SCOPES;
     const inputs = [
       [],
       [...GLOBAL_SEARCH_RESULT_TYPES],
@@ -109,7 +113,7 @@ describe("lazy search groups", () => {
 
   test("only starts an expanded group in an open All browse search", () => {
     const modes = ["browse", "pick"] as const;
-    const scopes = ["all", "matters", "registries"] as const;
+    const scopes = SEARCH_SCOPES;
     const queries = ["", " ", "\t\n", "\u00a0", "ALZA", " 27082440 ", "عقد"];
     let activeStates = 0;
     for (const open of [false, true]) {
@@ -142,6 +146,39 @@ describe("lazy search groups", () => {
       }
     }
     expect(activeStates).toBe(3);
+  });
+});
+
+describe("search scope types", () => {
+  test("Case law scope reaches only case law and Matters never does", () => {
+    for (const type of GLOBAL_SEARCH_RESULT_TYPES) {
+      expect(isSearchTypeInScope(type, "case-law")).toBe(type === "case-law");
+      expect(isSearchTypeInScope(type, "matters")).toBe(
+        type !== "case-law" && type !== "contact",
+      );
+      expect(isSearchTypeInScope(type, "all")).toBe(true);
+    }
+  });
+
+  test("falls back to All only when Case law is picked but unavailable", () => {
+    for (const scope of SEARCH_SCOPES) {
+      expect(resolveSearchScope(scope, true)).toBe(scope);
+      expect(resolveSearchScope(scope, false)).toBe(
+        scope === "case-law" ? "all" : scope,
+      );
+    }
+  });
+
+  test("Case law scope searches case law eagerly in browse", () => {
+    expect(
+      resolveEagerSearchTypes({
+        mode: "browse",
+        scope: "case-law",
+        types: GLOBAL_SEARCH_RESULT_TYPES.filter((type) =>
+          isSearchTypeInScope(type, "case-law"),
+        ),
+      }),
+    ).toEqual(["case-law"]);
   });
 });
 
@@ -388,9 +425,12 @@ describe("search facet labels", () => {
 });
 
 describe("document routes", () => {
+  const filesView = { workspaceId: "workspace-1", viewId: "files-view" };
+
   test("re-resolves a live search file immediately before navigation", async () => {
     expect(
       await resolveEntityDocumentRoute({
+        currentView: undefined,
         hit: {
           entityId: "entity-1",
           fileFieldId: "stale-field",
@@ -402,15 +442,19 @@ describe("document routes", () => {
       fileFieldId: "current-field",
       route: {
         to: "/workspaces/$workspaceId/$viewId/document",
-        params: { workspaceId: "workspace-1", viewId: "all" },
+        params: {
+          workspaceId: "workspace-1",
+          viewId: DEFAULT_WORKSPACE_VIEW_ID,
+        },
         search: { entity: "entity-1", field: "current-field" },
       },
     });
   });
 
-  test("opens the all view when current resolution finds no file field", async () => {
+  test("opens the default view when current resolution finds no file field", async () => {
     expect(
       await resolveEntityDocumentRoute({
+        currentView: undefined,
         hit: {
           entityId: "entity-1",
           fileFieldId: "stale-field",
@@ -422,8 +466,48 @@ describe("document routes", () => {
       fileFieldId: null,
       route: {
         to: "/workspaces/$workspaceId/$viewId",
-        params: { workspaceId: "workspace-1", viewId: "all" },
+        params: {
+          workspaceId: "workspace-1",
+          viewId: DEFAULT_WORKSPACE_VIEW_ID,
+        },
       },
+    });
+  });
+
+  test("a hit in the matter on screen opens under the view on screen", async () => {
+    const routes = await Promise.all(
+      [null, "current-field"].map(
+        async (fileFieldId) =>
+          await resolveEntityDocumentRoute({
+            currentView: filesView,
+            hit: {
+              entityId: "entity-1",
+              fileFieldId: "stale-field",
+              workspaceId: "workspace-1",
+            },
+            resolveCurrentFileFieldId: async () => fileFieldId,
+          }),
+      ),
+    );
+    expect(routes.map(({ route }) => route.params)).toEqual([
+      filesView,
+      filesView,
+    ]);
+  });
+
+  test("a hit in another matter opens under that matter's default view", async () => {
+    const { route } = await resolveEntityDocumentRoute({
+      currentView: filesView,
+      hit: {
+        entityId: "entity-1",
+        fileFieldId: "field-1",
+        workspaceId: "workspace-2",
+      },
+      resolveCurrentFileFieldId: async () => "field-1",
+    });
+    expect(route.params).toEqual({
+      workspaceId: "workspace-2",
+      viewId: DEFAULT_WORKSPACE_VIEW_ID,
     });
   });
 
@@ -475,15 +559,24 @@ describe("document routes", () => {
   test("opens a recent file directly when its field id was persisted", () => {
     expect(
       getRecentFileRoute({
+        currentView: undefined,
         entityId: "entity-1",
         fileFieldId: "field-1",
         workspaceId: "workspace-1",
       }),
     ).toEqual({
       to: "/workspaces/$workspaceId/$viewId/document",
-      params: { workspaceId: "workspace-1", viewId: "all" },
+      params: { workspaceId: "workspace-1", viewId: DEFAULT_WORKSPACE_VIEW_ID },
       search: { entity: "entity-1", field: "field-1" },
     });
+    expect(
+      getRecentFileRoute({
+        currentView: filesView,
+        entityId: "entity-1",
+        fileFieldId: "field-1",
+        workspaceId: "workspace-1",
+      }).params,
+    ).toEqual(filesView);
   });
 
   test("locates a recent file by its own tree row", () => {

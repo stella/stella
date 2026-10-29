@@ -20,21 +20,27 @@ const assertLightweightPush = (config: unknown) => {
       "cli-contract": {
         run: "bun scripts/check-cli-contract-changeset.ts --base origin/main",
       },
+      typecheck: {
+        run: "bun scripts/pre-push-typecheck.ts --base origin/main",
+      },
       secrets: { use_stdin: true, run: "bun run secrets:check:pushed" },
       "ai-skills": { run: "bash scripts/check-ai-skill-sources.sh" },
       lockfiles: { run: "bun run check:standalone-lockfiles" },
+      "job-classification": {
+        run: "bun scripts/check-ci-job-classification.ts --pre-push",
+      },
     },
   });
 };
 
-test("every push keeps compiler work in CI regardless of changed paths or host memory", () => {
+test("every push limits compiler work to touched TypeScript packages", () => {
   assertLightweightPush(readYaml("../lefthook.yml"));
 });
 
 test.each([
   "bun scripts/typecheck-baseline.ts --check-delta base.json",
   "bun run typecheck",
-  "bun run format:check",
+  "bun run lint",
   "bun run verify",
 ])("adding %s to pre-push violates its lightweight policy", (run) => {
   const config = readYaml("../lefthook.yml");

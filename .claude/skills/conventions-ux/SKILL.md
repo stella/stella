@@ -14,7 +14,10 @@ Visual inspiration: glass-like surfaces. Clean, translucent, precise.
 
 Default palette: clean neutral grays on white. Accent palettes
 (Nord, Flexoki) available as user preferences; brand stays
-monochrome with the Stella § mark.
+monochrome with the Stella symbol (`StellaMark` from
+`@stll/ui/stella-mark`). Never substitute a letter or a section-sign glyph
+for the symbol; static markup uses the official
+`apps/landing/public/brand/stella-symbol.svg` asset.
 
 Brand colours (reference, not for hard-coding):
 
@@ -42,6 +45,8 @@ rather than raw colour values.
   professional.
 
 ## Core Beliefs
+
+- Number content only when order is meaningful, and only through the Steps component.
 
 - Users notice the little things
 - Every interaction should feel smooth
@@ -74,7 +79,7 @@ Small, almost invisible touches. Linear is a good reference.
   Legal cliché is decoration every product in the category already
   uses; name the concept instead — a court is `Landmark`, a decision
   `FileText` (`Library` for a collection of them), and the case-law
-  section is `CaseLawIcon`. `no-legal-cliche-glyph` enforces it.
+  section is `CaseLawIcon`. `no-banned-glyph` enforces it.
 
 ## Review chrome
 
@@ -110,6 +115,7 @@ through Folio gains one it does not have.
 
 ## Typography Polish
 
+- Do not style one heading word differently for decoration; emphasis inside a heading must communicate meaning or interaction.
 - `-webkit-font-smoothing: antialiased` on macOS for crisper
   text on light backgrounds. Apply globally in the base stylesheet.
 - `font-variant-numeric: tabular-nums` on any element whose
@@ -415,6 +421,8 @@ composition (edges, spacing, holes), typography, colour, detail
 after three rounds and say plainly what still falls short.
 
 ## Anti-Patterns
+
+Keep narrative prose below 80 characters per line through the Prose component; code, tables, editors and other task-shaped surfaces are exempt.
 
 Explicit list of patterns that AI agents tend to generate and
 that do not belong in a professional legal workspace. Each began as a

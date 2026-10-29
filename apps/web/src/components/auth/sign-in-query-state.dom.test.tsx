@@ -3,8 +3,14 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { sleep } from "@stll/concurrency/sleep";
 
+import {
+  otpSearchSchema,
+  otpSessionNavigation,
+} from "@/routes/auth/-otp.logic";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
+import { SIGN_IN_MODE } from "./sign-in-mode";
+import type { SignInMode } from "./sign-in-mode";
 import type { AuthCapabilities } from "./sign-in-panel.logic";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/auth/sign-in" });
@@ -40,10 +46,10 @@ const capabilities = {
   localPassword: false,
   reviewPasswordSignIn: false,
   bootstrap: false,
-  social: { google: false, microsoft: false },
+  social: { google: false, microsoft: false, apple: false },
 } satisfies AuthCapabilities;
 
-const mount = async () => {
+const mount = async (mode: SignInMode = SIGN_IN_MODE.signIn) => {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
@@ -52,11 +58,31 @@ const mount = async () => {
   const route = router.createRoute({
     getParentRoute: () => root,
     path: "/auth/sign-in",
-    component: () => <SignInPanel redirectTo="/" />,
+    component: () => <SignInPanel mode={mode} redirectTo="/account" />,
+  });
+  const otpRoute = router.createRoute({
+    getParentRoute: () => root,
+    path: "/auth/otp",
+    validateSearch: otpSearchSchema,
+    beforeLoad: ({ search }) => {
+      const navigation = otpSessionNavigation({
+        ...search,
+        session: "present",
+      });
+      if (navigation) {
+        throw router.redirect(navigation);
+      }
+    },
+    component: () => <div data-testid="otp-challenge" />,
+  });
+  const organizationRoute = router.createRoute({
+    getParentRoute: () => root,
+    path: "/auth/organization",
+    component: () => <div data-testid="existing-session" />,
   });
   const appRouter = router.createRouter({
     history: router.createMemoryHistory({ initialEntries: ["/auth/sign-in"] }),
-    routeTree: root.addChildren([route]),
+    routeTree: root.addChildren([route, otpRoute, organizationRoute]),
     isServer: false,
   });
   await appRouter.load();
@@ -67,7 +93,7 @@ const mount = async () => {
       </IntlProvider>
     </QueryClientProvider>,
   );
-  return { client, ui };
+  return { client, ui, appRouter };
 };
 
 test("sign-in capability failures offer retry without an invented email sign-in option", async () => {
@@ -133,3 +159,46 @@ test("a capability refetch failure keeps the confirmed sign-in options beside re
     ui.queryAllByRole("alert").map((alert) => alert.textContent),
   ).not.toContain(messages.common.somethingWentWrong);
 });
+
+for (const mode of Object.values(SIGN_IN_MODE)) {
+  test(`${mode} email entry carries its mode to the OTP route with an existing session`, async () => {
+    const sent: unknown[] = [];
+    globalThis.fetch = Object.assign(
+      async (input: string | URL | Request, init?: RequestInit) => {
+        const url = input instanceof Request ? input.url : input.toString();
+        if (url.includes("capabilities")) {
+          return Response.json(capabilities);
+        }
+        if (url.includes("send-verification-otp")) {
+          sent.push(init?.body);
+          return Response.json({ success: true });
+        }
+        return Response.json(null);
+      },
+      { preconnect: () => undefined },
+    );
+    const { ui, appRouter } = await mount(mode);
+    const email = await ui.findByPlaceholderText(
+      messages.auth.emailPlaceholder,
+    );
+    fireEvent.change(email, { target: { value: "reader@example.test" } });
+    fireEvent.click(
+      ui.getByRole("button", {
+        name: messages.auth.continueWithEmail,
+      }),
+    );
+    await waitFor(() => expect(sent).toHaveLength(1));
+    await ui.findByTestId(
+      mode === SIGN_IN_MODE.reauthenticate
+        ? "otp-challenge"
+        : "existing-session",
+    );
+    if (mode === SIGN_IN_MODE.reauthenticate) {
+      expect(appRouter.state.location.search).toEqual({
+        email: "reader@example.test",
+        redirectTo: "/account",
+        mode: SIGN_IN_MODE.reauthenticate,
+      });
+    }
+  });
+}

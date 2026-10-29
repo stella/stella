@@ -19,11 +19,13 @@ import { DOCUMENT_REVIEW_LIMITS } from "@stll/api-contract";
 import { prepareReferenceProposal } from "@/api/handlers/document-reviews/prepare-proposal";
 import { streamReferenceProposal } from "@/api/handlers/document-reviews/reference-positions";
 import { proposeReviewPositionsBodySchema } from "@/api/handlers/document-reviews/schemas";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { pinProposedPositions } from "@/api/lib/document-review/reference-passages";
 import { startExecutionAdmission } from "@/api/lib/rate-limit/execution-admission";
-import { sseResponse } from "@/api/lib/sse";
+import { memberSessionStreamBinding, sseResponse } from "@/api/lib/sse";
 
 const config = {
   contract: "patch",
@@ -70,6 +72,10 @@ const proposePositionsStream = createSafeHandler(
     user,
     workspaceId,
   }) {
+    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+      return Result.err(storedAIConfigUnreadableError());
+    }
+
     const organizationId = session.activeOrganizationId;
     const prepared = yield* yield* prepareReferenceProposal({
       body,
@@ -206,7 +212,9 @@ const proposePositionsStream = createSafeHandler(
       },
     });
 
-    return Result.ok(sseResponse(sse));
+    return Result.ok(
+      sseResponse(sse, memberSessionStreamBinding({ session, user })),
+    );
   },
 );
 

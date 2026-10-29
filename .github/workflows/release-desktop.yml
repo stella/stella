@@ -1,6 +1,7 @@
 name: Release Desktop App
-# The desktop release canary finds a tag's in-flight run by this name.
-run-name: Release Desktop App ${{ github.event.workflow_run.head_branch || inputs.release_ref }}
+# The desktop release canary finds a tag's in-flight run by this name. A run
+# started by Release Artifacts borrows that run's name, which carries the tag.
+run-name: Desktop ${{ inputs.release_ref && format('Release Artifacts {0}', inputs.release_ref) || github.event.workflow_run.display_title }}
 
 # release-chain-alert
 defaults:
@@ -8,8 +9,8 @@ defaults:
     shell: bash
 
 # Build, sign, and publish the Tauri desktop app for each release tag.
-# Runs after release.yml succeeds so the GitHub Release object already
-# exists; this workflow only adds desktop installers + the updater
+# Runs after release.yml's production promotion succeeds, including a run
+# with failed publication jobs; adds desktop installers + the updater
 # manifest to it. Skipped automatically (for STABLE tags as well as
 # prereleases) when nothing the desktop actually ships changed since
 # the previous same-channel release, so backend-only releases don't
@@ -41,31 +42,21 @@ on:
 permissions: {}
 
 concurrency:
-  group: release-desktop-${{ github.event.workflow_run.head_branch || inputs.release_ref }}
+  group: release-desktop-${{ inputs.release_ref && format('Release Artifacts {0}', inputs.release_ref) || github.event.workflow_run.display_title }}
   cancel-in-progress: false
 
 jobs:
   resolve:
-    # Only a successful Release Artifacts run may trigger the desktop
-    # publication path. Release Artifacts publishes the GitHub Release only
-    # after production promotion is verified, so a failed run leaves a draft;
-    # accepting `failure` here would attach installers to that draft and
-    # reach the CDN publication steps below. Manual dispatch remains
-    # available for recovery, but its stable path is gated by the post-build
-    # production verification job.
-    #
-    # Skip `cancelled` (a newer release.yml run replaced it; that newer run
-    # will trigger us instead) and `skipped` (release.yml never actually ran,
-    # so there's nothing for us to release).
-    #
+    # A successful production promotion authorizes this ref even when another
+    # publication job failed. The resolve step verifies the upstream job receipt.
     # A workflow_run trigger is accepted only from this repository's own
-    # release workflow, started by a tag push or a manual dispatch. Signing
-    # builds restore no caches.
+    # release workflow, started by a tag push or a manual dispatch. The tag
+    # comes from that run's release manifest, never its head branch (a
+    # dispatched run reports main). Signing builds restore no caches.
     if: >-
-      github.event_name == 'workflow_dispatch'
-      || (github.event.workflow_run.conclusion == 'success'
-      && startsWith(github.event.workflow_run.head_branch, 'v')
-      && github.event.workflow_run.head_repository.full_name == github.repository
+      (github.event_name == 'workflow_dispatch'
+      && github.ref == 'refs/heads/main')
+      || (github.event.workflow_run.head_repository.full_name == github.repository
       && github.event.workflow_run.path == '.github/workflows/release.yml'
       && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event))
     runs-on: ubuntu-24.04
@@ -118,29 +109,16 @@ jobs:
           persist-credentials: false
 
       - name: Resolve release ref
+        timeout-minutes: 5
         id: ref
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
           RELEASE_INPUT: ${{ inputs.release_ref }}
-          UPSTREAM_EVENT: ${{ github.event.workflow_run.event }}
           UPSTREAM_RUN_ID: ${{ github.event.workflow_run.id }}
         run: |
-          if [[ -n "$RELEASE_INPUT" ]]; then
-            REF="$RELEASE_INPUT"
-          elif [[ "$HEAD_BRANCH" == v* ]]; then
-            REF="$HEAD_BRANCH"
-          elif [[ "$UPSTREAM_EVENT" == "workflow_dispatch" ]]; then
-            manifest_artifact=$(
-              bash "$GH_RETRY_SCRIPT" api "repos/${GITHUB_REPOSITORY}/actions/runs/$UPSTREAM_RUN_ID/artifacts" \
-                --jq '.artifacts[].name | select(startswith("release-manifest-v"))' \
-                | head -n 1
-            )
-            REF="${manifest_artifact#release-manifest-}"
-          else
-            REF="$HEAD_BRANCH"
-          fi
+          cp scripts/check-release-publication-source.sh "$RUNNER_TEMP/check-release-publication-source.sh"
+          REF=$(bash scripts/desktop-release-ref.sh "$RELEASE_INPUT" "$UPSTREAM_RUN_ID")
 
           # Pattern must stay aligned with scripts/release-channel.sh
           # and .github/workflows/release.yml — all three gate on the
@@ -185,10 +163,17 @@ jobs:
             exit 1
           fi
 
-          git fetch --no-tags origin "refs/tags/${REF}:refs/tags/${REF}" main:refs/remotes/origin/main
-          if ! git merge-base --is-ancestor "$RELEASE_SHA" origin/main; then
-            echo "::error::Release tag $REF is not reachable from protected main"
-            exit 1
+          bash "${GITHUB_WORKSPACE}/scripts/retry.sh" git fetch --no-tags origin "refs/tags/${REF}:refs/tags/${REF}"
+          if [[ -n "$UPSTREAM_RUN_ID" ]]; then
+            if ! bash "$RUNNER_TEMP/check-release-publication-source.sh" "$UPSTREAM_RUN_ID" "$REF" "$RELEASE_SHA"; then
+              echo "::notice::No production promotion receipt for $REF; no desktop publication."
+              exit 0
+            fi
+          else
+            [[ "$REF" != *-* ]] || { echo 'Desktop publication requires a stable promoted ref' >&2; exit 1; }
+            # Manual recovery must target the commit production currently serves.
+            served=$(bash scripts/retry.sh curl --fail --silent --show-error https://api.stll.app/ready | jq -er '.commit')
+            [[ "$served" == "$RELEASE_SHA" ]] || { echo 'Production is not serving the requested release' >&2; exit 1; }
           fi
 
           if ! bash "$GH_RETRY_SCRIPT" release view "$REF" >/dev/null; then
@@ -210,6 +195,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Checkout
+        if: steps.ref.outputs.value != ''
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Pin to the resolved commit SHA to eliminate tag/branch
@@ -220,21 +206,15 @@ jobs:
           persist-credentials: false
 
       - name: Decide whether desktop changed since previous tag
+        if: steps.ref.outputs.value != ''
         id: diff
         env:
           CURRENT_TAG: ${{ steps.ref.outputs.value }}
           EVENT_NAME: ${{ github.event_name }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Manual dispatch is the rebuild escape hatch (e.g. re-running
-          # a release whose signing job failed), so it never skips.
-          # Mirrors ci.yml's dispatch-forces-checks behaviour.
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
-            echo "Manual dispatch; forcing a desktop build."
-            {
-              echo "should_build=true"
-              echo "previous_tag="
-            } >> "$GITHUB_OUTPUT"
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -263,8 +243,10 @@ jobs:
             runner: windows-latest
             target: x86_64-pc-windows-msvc
             rust_targets: x86_64-pc-windows-msvc
+            install_timeout_minutes: 30
           - os: macos
             runner: macos-14
+            install_timeout_minutes: 5
             # Tauri builds a universal binary by lipoing the two
             # native-arch outputs together; rustup needs the two real
             # archs as targets, not the synthetic "universal" name.
@@ -317,7 +299,11 @@ jobs:
           no-cache: true
 
       - name: Install dependencies
-        timeout-minutes: 5
+        # Sized per runner OS like every fetching step: three attempts at the
+        # measured worst install plus backoff. An uncached install takes about
+        # 30 s on macOS but up to 9 min on Windows, where a shared 5 min
+        # deadline ends the first attempt before retry.sh can start another.
+        timeout-minutes: ${{ matrix.install_timeout_minutes }}
         # The pinned release checkout may predate retry.sh; the workflow
         # revision's copy is kept with the other release tooling.
         run: bash "$RELEASE_TOOLING/scripts/retry.sh" bun ci --ignore-scripts
@@ -335,6 +321,21 @@ jobs:
         with:
           toolchain: 1.99.0
           targets: ${{ matrix.rust_targets }}
+
+      # The locked crates for every target download once, retried as a unit;
+      # the builds below compile with CARGO_NET_OFFLINE and never reach the
+      # registry themselves.
+      - name: Fetch Rust dependencies
+        timeout-minutes: 10
+        env:
+          RUST_TARGETS: ${{ matrix.rust_targets }}
+        run: |
+          targets=()
+          IFS=, read -ra names <<<"$RUST_TARGETS"
+          for name in "${names[@]}"; do
+            targets+=(--target "$name")
+          done
+          bash "$RELEASE_TOOLING/scripts/retry.sh" cargo fetch --manifest-path apps/desktop/src-tauri/Cargo.toml --locked "${targets[@]}"
 
       # The updater endpoint is baked into the binary per channel so prerelease
       # installations never poll or overwrite the production update feed.
@@ -385,6 +386,7 @@ jobs:
         if: matrix.os == 'macos'
         working-directory: apps/desktop
         env:
+          CARGO_NET_OFFLINE: "true"
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           # Tauri's bundler uses notarytool with API-key auth when
@@ -616,8 +618,9 @@ jobs:
         run: |
           echo "::add-mask::$BUCKET"
           echo "::add-mask::$DIST_ID"
-          account_id="$(printf '%s' "$BUCKET" | grep -oE '[0-9]{12}' | head -n1 || true)"
-          [ -n "$account_id" ] && echo "::add-mask::$account_id"
+          if [[ "$BUCKET" =~ [0-9]{12} ]]; then
+            echo "::add-mask::${BASH_REMATCH[0]}"
+          fi
 
       - name: Mirror latest.json to downloads CDN
         env:

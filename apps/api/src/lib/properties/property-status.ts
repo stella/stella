@@ -1,7 +1,7 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, notExists, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
-import { properties } from "@/api/db/schema";
+import { fields, properties } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 
 type MarkPropertiesFreshParams = {
@@ -30,6 +30,18 @@ export const markPropertiesFresh = async ({
       and(
         eq(properties.workspaceId, workspaceId),
         inArray(properties.id, [...propertyIds]),
+        notExists(
+          tx
+            .select({ one: sql`1` })
+            .from(fields)
+            .where(
+              and(
+                eq(fields.workspaceId, workspaceId),
+                eq(fields.propertyId, properties.id),
+                sql`${fields.content}->>'type' = 'pending'`,
+              ),
+            ),
+        ),
       ),
     );
 };

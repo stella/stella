@@ -46,10 +46,7 @@ export type StatuteRowData = {
  * through a `TableRowHost`.
  */
 export type TableRowData =
-  | TableTreeNode
-  | DecisionRowData
-  | StatuteRowData
-  | EntityViewRow;
+  TableTreeNode | DecisionRowData | StatuteRowData | EntityViewRow;
 
 // Keep the feature-set generic centralized so table consumers cannot drift from
 // the capabilities registered in `table-features.ts`.

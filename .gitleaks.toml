@@ -3,6 +3,13 @@ title = "Stella Gitleaks Configuration"
 [extend]
 useDefault = true
 
+[[rules]]
+id = "stella-synthetic-key"
+description = "Stella synthetic key"
+regex = '''stl_syn_[A-Za-z0-9_-]{43}'''
+secretGroup = 0
+keywords = ["stl_syn_"]
+
 [allowlist]
 description = "Generated CycloneDX SBOM import metadata for Astro APIRoute symbols."
 condition = "AND"

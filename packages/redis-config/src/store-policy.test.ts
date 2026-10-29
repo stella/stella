@@ -3,8 +3,8 @@ import { expect, test } from "bun:test";
 
 import {
   createStorePolicy,
-  StoreUnavailableError,
   type StorePolicyStatus,
+  StoreUnavailableError,
 } from "./store-policy";
 
 for (const reported of [

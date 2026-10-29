@@ -14,8 +14,8 @@ import {
 } from "@stll/anonymize-chat";
 import {
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
-  CHAT_TURN_INTENT,
   CHAT_TURN_ID_HEADER,
+  CHAT_TURN_INTENT,
 } from "@stll/api-contract";
 import {
   ACTION_ADMISSION_CODES,
@@ -42,23 +42,23 @@ import {
 import { chatToolGrantsOptions } from "@/features/chat/chat-tool-grants";
 import {
   applyChatModelChange,
+  type ChatThreadFetched,
   chatThreadOptions,
   chatThreadTitleOptions,
   fileChatThreadOptions,
   groupedChatThreadsOptions,
-  invalidateGroupedChatThreads,
   invalidateChatThreadLists,
+  invalidateGroupedChatThreads,
   listChatHistoryItems,
   matchesChatThread,
   matchesChatThreadAcrossScopes,
   mergeGroupedChatThreadPages,
-  type ChatThreadFetched,
 } from "@/features/chat/queries";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
-import { APIError } from "@/lib/errors/api";
-import { toSafeId, type SafeId } from "@/lib/safe-id";
+import { APIError, chatRefusal } from "@/lib/errors/api";
+import { type SafeId, toSafeId } from "@/lib/safe-id";
 import { workspaceActivityOptions } from "@/lib/workspaces/queries";
 
 const createMessage = (id = "message-A"): PersistedChatMessage => ({
@@ -3001,6 +3001,9 @@ describe("chat runtime", () => {
       const refusal = {
         code,
         ...metadata,
+        ...(code === ACTION_ADMISSION_CODES.concurrencyBusy
+          ? { retryAfterMs: 1250 }
+          : {}),
         contactUrl: "https://example.test/contact",
       };
       const stored = {
@@ -3316,6 +3319,63 @@ describe("acquireChatRuntime reconcile", () => {
       },
     },
   ];
+
+  test("shows a rejected native approval continuation as the thread error", async () => {
+    const requests: unknown[] = [];
+    globalThis.fetch = createFetchMock(async (_input, init) => {
+      requests.push(parseJsonRequestBody(init));
+      if (requests.length === 1) {
+        return createSseResponse(
+          createApprovalSseChunks(parseChatRequestRunId(init)),
+        );
+      }
+      return Response.json(
+        {
+          code: CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+          message: "Chat continuation does not match its awaited interaction",
+        },
+        { status: 400 },
+      );
+    });
+    const runtime = acquireChatRuntime({
+      activeOrganizationId,
+      context: { allowMissingThread: true },
+      data: buildThreadData(),
+      key: threadRef,
+      queryClient: new QueryClient(),
+    });
+    const started = await runtime.startRouteHandoffMessage(
+      createOutgoingMessage("22222222-2222-4222-8222-2222222222c4"),
+    );
+    await started.stream;
+    expect(runtime.getSnapshot().messages.at(-1)?.parts).toContainEqual(
+      expect.objectContaining({
+        type: "tool-call",
+        state: "approval-requested",
+      }),
+    );
+    await runtime.resolveToolApproval({
+      approved: true,
+      id: "approval_tool-A",
+    });
+    expect(requests).toHaveLength(2);
+    expect(requests.at(1)).toMatchObject({
+      parentRunId: chatRequestRunId(requests.at(0)),
+      resume: [
+        {
+          interruptId: "approval_tool-A",
+          payload: { approved: true },
+          status: "resolved",
+        },
+      ],
+      threadId,
+    });
+    expect(chatRefusal(runtime.getSnapshot().error)).toMatchObject({
+      status: 400,
+      code: CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+    });
+    expect(runtime.getSnapshot().isLoading).toBe(false);
+  });
 
   test("reattaches to the same runtime when the freshness signal is unchanged", () => {
     const queryClient = new QueryClient();
@@ -3690,6 +3750,57 @@ describe("acquireChatRuntime reconcile", () => {
     });
 
     expect(reattached).toBe(runtime);
+  });
+
+  test("keeps a route handoff's turn streaming while its only view remounts", async () => {
+    const queryClient = new QueryClient();
+    const responseRequested = Promise.withResolvers<undefined>();
+    const releaseResponse = Promise.withResolvers<undefined>();
+    globalThis.fetch = createFetchMock(async (_input, init) => {
+      responseRequested.resolve(undefined);
+      await releaseResponse.promise;
+      return createSseResponse(
+        createApprovalSseChunks(parseChatRequestRunId(init)),
+      );
+    });
+    const context = { allowMissingThread: true };
+    const preSendData = buildThreadData();
+    const runtime = acquireChatRuntime({
+      activeOrganizationId,
+      context,
+      data: preSendData,
+      key: threadRef,
+      queryClient,
+    });
+    const started = await runtime.startRouteHandoffMessage(
+      createOutgoingMessage("22222222-2222-4222-8222-2222222222c5"),
+    );
+    await responseRequested.promise;
+
+    // The destination page mounts, unmounts and mounts again (StrictMode,
+    // a move between surfaces) while the first turn is still running.
+    runtime.subscribe(() => undefined)();
+    const unsubscribe = runtime.subscribe(() => undefined);
+    try {
+      releaseResponse.resolve(undefined);
+      await started.stream;
+
+      expect(runtime.getSnapshot().messages.at(-1)?.parts.at(0)).toMatchObject({
+        state: "approval-requested",
+        type: "tool-call",
+      });
+      expect(
+        acquireChatRuntime({
+          activeOrganizationId,
+          context,
+          data: preSendData,
+          key: threadRef,
+          queryClient,
+        }),
+      ).toBe(runtime);
+    } finally {
+      unsubscribe();
+    }
   });
 
   test("keeps a resolved continuation while acknowledged approval data is stale", async () => {

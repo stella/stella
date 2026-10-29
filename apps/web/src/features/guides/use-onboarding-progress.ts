@@ -15,10 +15,11 @@ import {
 } from "@/features/guides/guide-types";
 import { api } from "@/lib/api";
 import { sessionOptions } from "@/lib/auth-queries";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { queryView } from "@/lib/query-view.logic";
 import { readStoredJson } from "@/lib/stored-json";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 // Progress is the source of truth in the DB: it rides the `["session"]` query
 // (`user.guideProgress`, a serialized JSON map), so reads add no request and it
@@ -82,8 +83,8 @@ export const useOnboardingProgress = (
   const queryClient = useQueryClient();
   const t = useTranslations();
   const dataQuery = useQuery(sessionOptions);
-  const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  const dataView = queryView(dataQuery);
+  useQueryViewError(dataView, "useOnboardingProgress:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
 
   const stored = useMemo(
@@ -102,7 +103,7 @@ export const useOnboardingProgress = (
         tourId,
         status,
       });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: ({ guideProgress }) => {
       queryClient.setQueryData(sessionOptions.queryKey, (current) =>

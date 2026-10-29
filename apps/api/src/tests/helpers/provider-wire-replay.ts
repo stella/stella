@@ -11,6 +11,7 @@ import type {
   ProviderWireCassette,
   ProviderWireExchange,
 } from "@/api/tests/helpers/provider-wire-cassette";
+import type { ReplayGate } from "@/api/tests/helpers/provider-wire-gate";
 
 /** A request the replay would not answer. */
 class ProviderWireRefusal extends TaggedError("ProviderWireRefusal")<{
@@ -199,6 +200,26 @@ type ServeOptions = {
   holdAfterBytes?: number | undefined;
 };
 
+/** Where an answer goes quiet until `gate` releases the label: before the
+ *  byte at `atByte`. */
+type PausePoints = {
+  gate: ReplayGate;
+  points: readonly { atByte: number; label: string }[];
+};
+
+/**
+ * One model call of a two-way transcript: the request the app must send
+ * (`vet` returns why a request is not that one, or null), and the answer
+ * served to it, with its pause points.
+ */
+export type TranscriptStep = {
+  exchange: ProviderWireExchange;
+  /** Names the step in findings. */
+  label: string;
+  pauses?: PausePoints | undefined;
+  vet: (request: ReplayedRequest) => string | null;
+};
+
 /** A request the replay answered or refused. */
 export type ReplayedRequest = {
   /** The body the SDK sent, as text. */
@@ -280,12 +301,28 @@ const responseFor = (
   signal: AbortSignal | null,
   holdAfterBytes: number | undefined,
   chunking: Chunking = DEFAULT_CHUNKING,
+  pauses?: PausePoints,
 ): Response => {
   const bytes = bodyBytesOf(exchange.response.body);
   const limit = holdAfterBytes ?? bytes.length;
-  const ends = readEnds(bytes.length, chunking);
+  // A read never crosses a pause point: it ends there, and the next one
+  // waits for the gate.
+  const pending = (pauses?.points ?? []).toSorted(
+    (left, right) => left.atByte - right.atByte,
+  );
+  const ends = [
+    ...new Set([
+      ...readEnds(bytes.length, chunking),
+      ...pending.map(({ atByte }) => atByte),
+    ]),
+  ]
+    .filter((end) => end > 0 && end <= bytes.length)
+    .toSorted((left, right) => left - right);
   let offset = 0;
   let onAbort: (() => void) | undefined;
+  // Read through a call so a check after an await is not narrowed by the
+  // one before it.
+  const isAborted = () => signal?.aborted === true;
   const body = new ReadableStream<Uint8Array>({
     start(controller) {
       onAbort = () => {
@@ -302,6 +339,15 @@ const responseFor = (
       await Promise.resolve();
       if (signal?.aborted === true) {
         controller.error(abortError());
+        return;
+      }
+      const due = pending[0];
+      if (pauses !== undefined && due !== undefined && due.atByte <= offset) {
+        pending.shift();
+        await pauses.gate.pause(due.label, signal);
+        if (isAborted()) {
+          controller.error(abortError());
+        }
         return;
       }
       if (offset >= limit && limit < bytes.length) {
@@ -366,7 +412,15 @@ export const installProviderWireReplay = ({
   retryAfterMs?: number | undefined;
 } = {}) => {
   const originalFetch = globalThis.fetch;
-  let queue: { exchange: ProviderWireExchange; served: number }[] = [];
+  let queue: {
+    exchange: ProviderWireExchange;
+    served: number;
+    /** A two-way transcript's step: kept across `takeFindings` until a
+     *  request takes it or `takeTranscriptRemainder` reports it. */
+    step?: TranscriptStep | undefined;
+  }[] = [];
+  /** How many transcript steps requests have taken since `play`. */
+  let transcriptTaken = 0;
   let cursor = 0;
   let model: string | null = null;
   let sideAnswer: ProviderWireExchange | undefined;
@@ -460,7 +514,11 @@ export const installProviderWireReplay = ({
           ? { entry: previous, index: cursor - 1 }
           : { entry: queue[cursor], index: cursor };
       if (current.entry === undefined) {
-        return refuse("no exchange left to answer it");
+        return refuse(
+          transcriptTaken > 0
+            ? `the transcript ran out after ${String(transcriptTaken)} model calls`
+            : "no exchange left to answer it",
+        );
       }
       if (current.entry.exchange.request.path !== path) {
         return refuse(`expected ${current.entry.exchange.request.path}`);
@@ -470,6 +528,24 @@ export const installProviderWireReplay = ({
       }
       if (model !== null && requestModel !== null && requestModel !== model) {
         return refuse(`expected model ${model}, got ${requestModel}`);
+      }
+      const { step } = current.entry;
+      if (step !== undefined) {
+        const mismatch = step.vet({
+          body: bodyText,
+          exchange: current.index,
+          headers,
+          method,
+          model: requestModel,
+          path,
+          url: url.toString(),
+        });
+        if (mismatch !== null) {
+          return refuse(
+            `not the request the transcript expects at ${step.label}: ${mismatch}`,
+          );
+        }
+        transcriptTaken += 1;
       }
       if (current.index === cursor) {
         cursor += 1;
@@ -497,6 +573,7 @@ export const installProviderWireReplay = ({
           ? options.holdAfterBytes
           : undefined,
         options.chunking,
+        step?.pauses,
       );
       if (
         retryAfterMs !== undefined &&
@@ -540,6 +617,33 @@ export const installProviderWireReplay = ({
       );
       model = cassette.model;
     },
+    /**
+     * Queues a two-way transcript's model calls after anything queued, on
+     * `model`. Each request must be the one its step expects, or it is
+     * refused; the steps outlive `takeFindings`, since a conversation's
+     * checks run between its model calls.
+     */
+    play: (transcriptModel: string, steps: readonly TranscriptStep[]) => {
+      queue.push(
+        ...steps.map((step) => ({
+          exchange: step.exchange,
+          served: 0,
+          step,
+        })),
+      );
+      model = transcriptModel;
+      transcriptTaken = 0;
+    },
+    /** The transcript steps no request took, cleared on read. */
+    takeTranscriptRemainder: (): string[] => {
+      const remainder = queue
+        .slice(cursor)
+        .flatMap(({ step }) => (step === undefined ? [] : [step.label]));
+      queue = queue
+        .slice(0, cursor)
+        .concat(queue.slice(cursor).filter(({ step }) => step === undefined));
+      return remainder;
+    },
     /** Answers requests for any other model (a thread title, a summary)
      *  with `exchange`, outside the queue. */
     answerSideCalls: (exchange: ProviderWireExchange | undefined) => {
@@ -557,16 +661,18 @@ export const installProviderWireReplay = ({
     takeRequests: (): ProviderRequest[] => transcripts.splice(0),
     /** Findings since the last call, cleared on read. */
     takeFindings: (): ProviderWireReplayFindings => {
+      const pending = queue.slice(cursor);
       const findings = {
-        unconsumed: queue
-          .slice(cursor)
+        unconsumed: pending
+          .filter(({ step }) => step === undefined)
           .map(
             ({ exchange }) =>
               `${exchange.request.method} ${exchange.request.path}`,
           ),
         unexpected,
       };
-      queue = [];
+      // A transcript's later model calls wait for their requests.
+      queue = pending.filter(({ step }) => step !== undefined);
       cursor = 0;
       unexpected = [];
       requests = [];

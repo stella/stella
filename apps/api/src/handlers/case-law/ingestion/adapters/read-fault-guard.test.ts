@@ -42,11 +42,11 @@ import {
   isStoredReadAbsence,
   isStoredReadUnavailable,
   READ_OUTCOME_METADATA_KEY,
-  storedReadUnavailable,
-  UNAVAILABLE_CYCLES_BEFORE_MARKING,
   type ReadOutcome,
   type ReadRefusal,
   type ReadUnavailableCause,
+  storedReadUnavailable,
+  UNAVAILABLE_CYCLES_BEFORE_MARKING,
 } from "@/api/lib/errors/read-outcome";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
@@ -57,7 +57,9 @@ import {
   czNsFixture,
   czNssFixture,
   czRegionalFixture,
+  czUohsFixture,
   czUsFixture,
+  type EnrolledAdapterFixture,
   euEcjFixture,
   huBhgyFixture,
   plCourtsFixture,
@@ -71,21 +73,22 @@ import {
   plUokikFixture,
   skCourtsFixture,
   skUsFixture,
-  type EnrolledAdapterFixture,
+  ukFclFixture,
 } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 import {
   buildWithFault,
   changedPaths,
   classifyFaultedBuild,
   classifyRefusedBuild,
+  type FaultOutcome,
   flattenBuilt,
   READ_FAULTS,
   READ_REFUSALS,
   recordFetchStages,
-  type FaultOutcome,
   type RefusalOutcome,
 } from "@/api/tests/helpers/read-fault-drivers";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 import { readPublisherText } from "./publisher-read";
 
@@ -98,6 +101,7 @@ const READ_FAULT_COVERAGE = {
   [ADAPTER_KEYS.CZ_NSS]: czNssFixture,
   [ADAPTER_KEYS.CZ_US]: czUsFixture,
   [ADAPTER_KEYS.CZ_REGIONAL]: czRegionalFixture,
+  [ADAPTER_KEYS.CZ_UOHS]: czUohsFixture,
   [ADAPTER_KEYS.SK_COURTS]: skCourtsFixture,
   [ADAPTER_KEYS.SK_US]: skUsFixture,
   [ADAPTER_KEYS.PL_COURTS]: plCourtsFixture,
@@ -120,6 +124,7 @@ const READ_FAULT_COVERAGE = {
   [ADAPTER_KEYS.AT_FINDOK]: atFindokFixture,
   [ADAPTER_KEYS.EU_ECJ]: euEcjFixture,
   [ADAPTER_KEYS.HU_BHGY]: huBhgyFixture,
+  [ADAPTER_KEYS.UK_FCL]: ukFclFixture,
   [ADAPTER_KEYS.PL_KIS]: plKisFixture,
   [ADAPTER_KEYS.PL_UODO]: plUodoFixture,
   [ADAPTER_KEYS.PL_UOKIK]: plUokikFixture,
@@ -330,7 +335,7 @@ test("a read through readPublisherText surfaces every fault", async () => {
     const outcome = await readPublisherText(PUBLISHER, {
       adapterKey: ADAPTER_KEYS.CZ_NSS,
       fetchStage: "listing",
-      timeoutMs: 1000,
+      timeoutMs: HAPPY_PATH_TIMEOUT_MS,
     });
     return outcome.type === "present"
       ? { fulltext: outcome.value }
@@ -366,7 +371,7 @@ const servedDocumentAndNotice = () => {
 const readInit = {
   adapterKey: ADAPTER_KEYS.CZ_NSS,
   fetchStage: "listing",
-  timeoutMs: 1000,
+  timeoutMs: HAPPY_PATH_TIMEOUT_MS,
 } as const;
 
 const refusalOutcomes = async (

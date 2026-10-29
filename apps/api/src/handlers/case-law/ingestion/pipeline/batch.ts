@@ -1,4 +1,4 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { isNotNull } from "drizzle-orm";
 
 import { sanitizeErrorAttributesForOutput } from "@stll/errors";
@@ -22,8 +22,8 @@ import {
 import type {
   AdmittedDecisions,
   BoundedCaseLawIngestionBatch,
-  CaseLawIngestionBatchRecord,
   CaseLawBatchFailureReason,
+  CaseLawIngestionBatchRecord,
   RejectedCaseLawIngestionRecord,
 } from "@/api/handlers/case-law/ingestion/pipeline/batch-types";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
@@ -55,6 +55,7 @@ import type {
   CorpusPackBatch,
   CorpusPackBatchOutcomes,
 } from "@/api/lib/legal-search/corpus-pack-batch";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink, gradeFailure } from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
 import { logger } from "@/api/lib/observability/logger";
@@ -367,11 +368,14 @@ const rejectDecision = ({
       consecutiveFailures: tally.failureStreak,
     }),
   );
-  captureError(error, {
-    adapterKey,
-    caseNumber: input.caseNumber,
-    cursor: cursor ?? "",
-  });
+  captureError(
+    error,
+    handlerErrorContext("pipeline.rejectDecision", {
+      adapterKey,
+      caseNumber: input.caseNumber,
+      cursor: cursor ?? "",
+    }),
+  );
 
   if (error instanceof TimeoutError) {
     tally.settlements.push({
@@ -491,10 +495,13 @@ const settlePack = ({
         "error.detail": wrappedErrorDetail(flushed.error),
       }),
     );
-    captureError(flushed.error, {
-      adapterKey,
-      step: "applyDecisionBatch.corpusPackFlush",
-    });
+    captureError(
+      flushed.error,
+      handlerErrorContext("pipeline.settlePack.flushed_error", {
+        adapterKey,
+        step: "applyDecisionBatch.corpusPackFlush",
+      }),
+    );
     for (const indexes of queued.values()) {
       for (const index of indexes) {
         unsettlePayload(tally, index);

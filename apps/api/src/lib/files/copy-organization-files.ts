@@ -3,11 +3,11 @@ import { Panic, panic, Result } from "better-result";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import {
-  commitOrganizationFilesBytes,
-  OrganizationFileUsageError,
-  ORGANIZATION_FILE_ACCOUNTING_BATCH_LIMIT,
-  releaseOrganizationFilesBytes,
   authorizeOrganizationFileBatch,
+  commitOrganizationFilesBytes,
+  ORGANIZATION_FILE_ACCOUNTING_BATCH_LIMIT,
+  OrganizationFileUsageError,
+  releaseOrganizationFilesBytes,
   runCheckedStorageOperation,
 } from "@/api/lib/files/organization-file-usage";
 import type {
@@ -86,8 +86,7 @@ export const copyOrganizationFiles = async <T, E, Source>(
       const committed: FileUsageReservation[] = [];
       const released: FileUsageReservation[] = [];
       let uncertainFailure:
-        | { error: E | OrganizationFileUsageError }
-        | undefined;
+        { error: E | OrganizationFileUsageError } | undefined;
       for (const [index, copied] of roundCopies.entries()) {
         const reservation = proof.input.value.reservations.at(index);
         const input = proof.input.value.operation.at(index);

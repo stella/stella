@@ -11,16 +11,19 @@ use std::{collections::HashSet, num::NonZeroUsize, sync::RwLock};
 pub enum DesktopFeature {
   ActivityTimeline,
   TimeBilling,
+  LocalAgents,
 }
 
 impl DesktopFeature {
-  pub const ALL: &'static [Self] = &[Self::ActivityTimeline, Self::TimeBilling];
+  pub const ALL: &'static [Self] =
+    &[Self::ActivityTimeline, Self::TimeBilling, Self::LocalAgents];
 
   /// The identifier the feature-access contract uses.
   pub const fn id(self) -> &'static str {
     match self {
       Self::ActivityTimeline => "activity-timeline",
       Self::TimeBilling => "time-billing",
+      Self::LocalAgents => "local-agents",
     }
   }
 
@@ -45,12 +48,21 @@ struct GateState {
   namespace: Option<String>,
   expires_at: Option<chrono::DateTime<chrono::Utc>>,
   enabled: HashSet<DesktopFeature>,
+  /// Off by managed policy, whatever the server decides.
+  blocked: HashSet<DesktopFeature>,
 }
 
 #[derive(Default)]
 pub struct FeatureGates(RwLock<GateState>);
 
 impl FeatureGates {
+  pub fn blocking(blocked: HashSet<DesktopFeature>) -> Self {
+    Self(RwLock::new(GateState {
+      blocked,
+      ..GateState::default()
+    }))
+  }
+
   /// Off whenever the decision cannot be read or its account expired.
   pub fn is_enabled(&self, feature: DesktopFeature) -> bool {
     self.0.read().is_ok_and(|state| {
@@ -124,6 +136,9 @@ impl FeatureGates {
       && expires_at.is_some_and(|expires| expires > chrono::Utc::now())
     {
       enabled
+        .into_iter()
+        .filter(|feature| !state.blocked.contains(feature))
+        .collect()
     } else {
       HashSet::new()
     };
@@ -135,6 +150,7 @@ impl FeatureGates {
     state.namespace = namespace;
     state.expires_at = expires_at;
     state.enabled = enabled;
+    drop(state);
     Some(changed)
   }
 
@@ -225,6 +241,24 @@ mod tests {
       [DesktopFeature::ActivityTimeline]
     );
     assert!(!gates.is_enabled(DesktopFeature::ActivityTimeline));
+  }
+
+  #[test]
+  fn a_blocked_feature_stays_off_when_the_server_enables_it() {
+    let gates =
+      FeatureGates::blocking(HashSet::from([DesktopFeature::ActivityTimeline]));
+    let changed = gates.replace(HashSet::from([
+      DesktopFeature::ActivityTimeline,
+      DesktopFeature::TimeBilling,
+    ]));
+    assert_eq!(changed, [DesktopFeature::TimeBilling]);
+    assert!(!gates.is_enabled(DesktopFeature::ActivityTimeline));
+    assert!(
+      gates
+        .account_binding(DesktopFeature::ActivityTimeline)
+        .is_none()
+    );
+    assert!(gates.is_enabled(DesktopFeature::TimeBilling));
   }
 
   #[tokio::test]

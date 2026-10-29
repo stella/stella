@@ -13,6 +13,13 @@
  * it as unmapped.
  */
 
+import { Result } from "better-result";
+
+import {
+  replaceXmlElements,
+  type XmlScanError,
+} from "@/api/lib/files/xml-scan";
+
 import type { FieldMeta, InputType } from "./types";
 
 export type FieldSuggestion = {
@@ -35,22 +42,22 @@ const escapeXml = (value: string): string =>
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;");
 
-const W_T_RE = /(?<open><w:t[^>]*>)(?<content>[\s\S]*?)(?<close><\/w:t>)/gu;
-
 /** Replace `literal` with `replacement` only inside `<w:t>` text content. */
 const replaceInTextNodes = (
   xml: string,
   literal: string,
   replacement: string,
-): string => {
+): Result<string, XmlScanError> => {
   const escapedLiteral = escapeXml(literal);
   if (escapedLiteral.length === 0) {
-    return xml;
+    return Result.ok(xml);
   }
-  return xml.replace(
-    W_T_RE,
-    (_match, open: string, content: string, close: string) =>
-      open + content.split(escapedLiteral).join(escapeXml(replacement)) + close,
+  return replaceXmlElements(xml, "w:t", (match, content) =>
+    match.selfClosing
+      ? match.openTag
+      : match.openTag +
+        content.split(escapedLiteral).join(escapeXml(replacement)) +
+        match.closeTag,
   );
 };
 
@@ -64,7 +71,7 @@ export type ApplyFieldSuggestionsResult = {
 export const applyFieldSuggestions = (
   docXml: string,
   suggestions: readonly FieldSuggestion[],
-): ApplyFieldSuggestionsResult => {
+): Result<ApplyFieldSuggestionsResult, XmlScanError> => {
   let xml = docXml;
 
   // Replace longest literals first so a shorter literal cannot match inside a
@@ -78,11 +85,15 @@ export const applyFieldSuggestions = (
       continue;
     }
     const before = xml;
-    xml = replaceInTextNodes(
+    const replaced = replaceInTextNodes(
       xml,
       suggestion.literalText,
       `{{${suggestion.fieldPath}}}`,
     );
+    if (replaced.isErr()) {
+      return replaced;
+    }
+    xml = replaced.value;
     if (xml !== before) {
       applied.add(suggestion);
     }
@@ -115,5 +126,5 @@ export const applyFieldSuggestions = (
     }
   }
 
-  return { xml, fields, unapplied };
+  return Result.ok({ xml, fields, unapplied });
 };

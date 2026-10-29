@@ -5,6 +5,7 @@ import react from "@vitejs/plugin-react";
 import { panic } from "better-result";
 import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { homedir } from "node:os";
 import path from "node:path";
 import { visualizer } from "rollup-plugin-visualizer";
@@ -17,15 +18,17 @@ import {
 
 import stllAhoCorasickWasm from "@stll/aho-corasick-wasm/vite";
 import stllAnonymizeWasm from "@stll/anonymize-wasm/vite";
+import { STELLA_LOGO_FILE_NAME } from "@stll/api-contract/stella-logo";
 import stllRegexSetWasm from "@stll/regex-set-wasm/vite";
 import {
-  REACT_COMPILER_OPTIONS,
   REACT_COMPILER_EXCLUDE as REACT_PLUGIN_EXCLUDE,
+  REACT_COMPILER_OPTIONS,
 } from "@stll/scripts/src/react-compiler-options";
 
 import { chatRuntimeBuildGuard } from "./chat-runtime-build-guard.ts";
 import { devRouteBuildGuard } from "./dev-route-build-guard.ts";
 import { routeTreeOptions } from "./route-tree.config.ts";
+import { routeTemplateManifestPlugin } from "./scripts/route-template-manifest.ts";
 
 export { REACT_COMPILER_EXCLUDE as REACT_PLUGIN_EXCLUDE } from "@stll/scripts/src/react-compiler-options";
 
@@ -77,6 +80,7 @@ const readCommitSha = () => {
 
   try {
     return execFileSync("git", ["rev-parse", "HEAD"], {
+      maxBuffer: 2 ** 30,
       cwd: path.resolve(APP_ROOT, "../.."),
       encoding: "utf-8",
     }).trim();
@@ -100,6 +104,36 @@ const versionManifestPlugin = (): Plugin => ({
         commit: APP_COMMIT_SHA,
         version: APP_VERSION,
       }),
+    });
+  },
+});
+
+// Publish the canonical stella logo from @stll/api-contract at
+// `/stella-logo-512.png`, the URL MCP metadata advertises. The package owns the
+// only copy; the API serves the same bytes as its favicon.
+const readStellaLogo = () =>
+  readFileSync(
+    createRequire(import.meta.url).resolve(
+      "@stll/api-contract/stella-logo-512.png",
+    ),
+  );
+
+const stellaLogoPlugin = (): Plugin => ({
+  name: "stella-logo",
+  configureServer(server) {
+    server.middlewares.use(
+      `/${STELLA_LOGO_FILE_NAME}`,
+      (_request, response) => {
+        response.setHeader("Content-Type", "image/png");
+        response.end(readStellaLogo());
+      },
+    );
+  },
+  generateBundle() {
+    this.emitFile({
+      type: "asset",
+      fileName: STELLA_LOGO_FILE_NAME,
+      source: readStellaLogo(),
     });
   },
 });
@@ -325,6 +359,7 @@ export default defineConfig(({ mode, command }) => {
       "@tanstack/devtools-vite",
     ),
     versionManifestPlugin(),
+    stellaLogoPlugin(),
     devRouteBuildGuard(),
     chatRuntimeBuildGuard(),
     // Emits @stll/anonymize-wasm's binding + glue as build assets and
@@ -344,13 +379,21 @@ export default defineConfig(({ mode, command }) => {
           routesDirectory: routeOptions.routesDirectory,
           generatedRouteTree: routeOptions.generatedRouteTree,
           routeFileIgnorePattern: routeOptions.routeFileIgnorePattern,
+          plugins: [
+            routeTemplateManifestPlugin(
+              path.join(
+                APP_ROOT,
+                routeOptions.srcDirectory,
+                routeOptions.generatedRouteTree,
+              ),
+            ),
+          ],
           codeSplittingOptions: {
-            defaultBehavior: [
-              ["component"],
-              ["errorComponent"],
-              ["notFoundComponent"],
-              ["pendingComponent"],
-            ],
+            // Recovery UI must stay in the entry graph. When a deployment
+            // removes an old route chunk, a split error or pending component
+            // would fail to load from that same old graph and leave the route
+            // blank instead of presenting recovery.
+            defaultBehavior: [["component"]],
           },
         },
       }),
@@ -469,12 +512,10 @@ export default defineConfig(({ mode, command }) => {
             if (id.includes("node_modules/@stll/anonymize-data/")) {
               return "vendor-anonymize-data";
             }
-            if (id.includes("node_modules/@stll/") && id.includes("-wasm")) {
-              return "wasm-vendor";
-            }
-            if (id.includes("node_modules/@napi-rs/wasm-runtime")) {
-              return "wasm-vendor";
-            }
+            // The browser uses some WASM packages directly (for example the
+            // outline and key-term matchers). Let those stay with their lazy
+            // callers: `wasm-vendor` is reserved for the anonymization worker
+            // and must never become a main-thread shared chunk.
             if (id.includes("node_modules/cytoscape")) {
               return "vendor-graphs";
             }
@@ -611,13 +652,13 @@ export default defineConfig(({ mode, command }) => {
         "@stll/folio-core/utils/findReplace",
         "@streamdown/cjk",
         "@streamdown/math",
-        "@streamdown/mermaid",
         "@tanstack/react-table",
         "@tanstack/react-table/static-functions",
         "@tiptap/extension-heading",
         "@tiptap/extension-italic",
         "@tiptap/extension-list",
         "diff",
+        "pele/lazy",
         "y-prosemirror",
         "yjs",
       ],
@@ -640,6 +681,10 @@ export default defineConfig(({ mode, command }) => {
         "@stll/aho-corasick-wasm",
         "@stll/fuzzy-search-wasm",
         "@stll/regex-set-wasm",
+        // Pre-bundling would inline its `temporal-polyfill/full` import
+        // without running temporalRuntimePlugin, so the browser would load the
+        // polyfill implementation even when native Temporal exists.
+        "@stll/time",
       ],
     },
     resolve: {

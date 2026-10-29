@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  VISUAL_GESTURE_WINDOW_MS,
   captureGestureEventReader,
   createVisualGestureGate,
   type GestureEventFields,
+  VISUAL_GESTURE_WINDOW_MS,
 } from "./guest-gesture";
 
 type TestEvent = {

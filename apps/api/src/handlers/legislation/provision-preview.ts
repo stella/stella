@@ -1,12 +1,13 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { status, t } from "elysia";
+import * as v from "valibot";
 
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import {
   projectProvisionPreview,
   provisionPreviewSuccessResponseSchema,
 } from "@/api/handlers/legislation/reader-response";
+import { status } from "@/api/http/status";
 import {
   ACCOUNT_ACCESS,
   createSafeBoundedPublicHandler,
@@ -14,7 +15,7 @@ import {
 } from "@/api/lib/api-handlers";
 import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import {
   buildProvisionPreview,
   previewVersionColumns,
@@ -42,16 +43,14 @@ const config = {
   // through `read_statute_provisions`, which is where the MCP contract lives.
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "public_indexing" },
-  params: t.Object({
-    documentId: tSafeId("legislationDocument"),
-    anchor: t.String({ minLength: 1, maxLength: 256 }),
+  params: v.object({
+    documentId: resourceIdSchema("legislationDocument"),
+    anchor: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
   }),
-  query: t.Object({
-    /**
-     * The subdivision the citation named (`par_1729-odst_1`), when it named
-     * one. The preview then shows that block instead of the whole provision.
-     */
-    citedAnchor: t.Optional(t.String({ minLength: 1, maxLength: 256 })),
+  query: v.object({
+    citedAnchor: v.optional(
+      v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
+    ),
   }),
 } satisfies PublicHandlerConfig;
 
@@ -116,8 +115,11 @@ export const readProvisionPreviewHandler = async ({
     return status(404, { message: "Provision not found" });
   }
 
-  return {
-    ...projectProvisionPreview(preview),
+  return projectProvisionPreview({
+    ...preview,
+    // The publisher's anchor grammar is the country's: a client reads the
+    // blocks' list nesting off their anchors through it.
+    country: version.country,
     url: buildLegislationDocumentAppUrl({
       country: version.country,
       documentId: version.id,
@@ -126,7 +128,7 @@ export const readProvisionPreviewHandler = async ({
       version: version.versionValidFrom,
       anchor: citedAnchor ?? anchor,
     }),
-  };
+  });
 };
 
 const readProvisionPreview = createSafeBoundedPublicHandler(

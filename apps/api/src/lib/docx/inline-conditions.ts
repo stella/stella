@@ -61,15 +61,15 @@ import type * as slimdom from "slimdom";
 import {
   assertNever,
   blockDirectiveLinePattern,
+  clauseSlotKey,
   evaluateCondition,
+  type FilterCall,
   hasBlockDirectivePattern,
   LOOP_PROPERTIES,
-  type FilterCall,
   type LoopProperty,
   type NamedCondition,
   resolvePath,
   scanMarkers,
-  clauseSlotKey,
 } from "@stll/template-conditions";
 import { escapeRegExp } from "@stll/text-normalize";
 
@@ -80,8 +80,8 @@ import {
   createDirectiveProcessingContext,
   type DirectiveProcessingContext,
   eachKey,
-  registerLoopItemPatchValues,
   loopContext,
+  registerLoopItemPatchValues,
   rewriteEachPlaceholdersInText,
   scopeIterationNumberingInText,
 } from "./block-directives";

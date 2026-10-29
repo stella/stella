@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -8,12 +8,10 @@ import { LIMITS } from "@/api/lib/limits";
 import { readSearchPreview } from "@/api/lib/search/preview";
 import { GLOBAL_SEARCH_RESULT_TYPES } from "@/api/lib/search/types";
 
-export const searchPreviewBodySchema = t.Object({
-  query: t.String({
-    maxLength: LIMITS.searchQueryMaxLength,
-  }),
-  resultId: t.String({ format: "uuid" }),
-  type: t.UnionEnum(GLOBAL_SEARCH_RESULT_TYPES),
+export const searchPreviewBodySchema = v.object({
+  query: v.pipe(v.string(), v.maxLength(LIMITS.searchQueryMaxLength)),
+  resultId: v.pipe(v.string(), v.uuid()),
+  type: v.picklist(GLOBAL_SEARCH_RESULT_TYPES),
 });
 
 const config = {

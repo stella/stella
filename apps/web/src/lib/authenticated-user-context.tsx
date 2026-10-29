@@ -1,7 +1,8 @@
 import { createContext, use } from "react";
 import type { PropsWithChildren } from "react";
 
-import { panic } from "better-result";
+import { useRequiredRouteProvider } from "@/components/route-provider-scope/route-provider-scope";
+import { PROVIDER_SCOPE } from "@/routes/-app-frame-scope";
 
 export type AuthenticatedUser = {
   activeOrganizationId: string;
@@ -23,15 +24,13 @@ export const AuthenticatedUserProvider = ({
   <AuthenticatedUserContext value={user}>{children}</AuthenticatedUserContext>
 );
 
-export const useAuthenticatedUser = (): AuthenticatedUser => {
-  const user = use(AuthenticatedUserContext);
-  if (!user) {
-    panic(
+export const useAuthenticatedUser = (): AuthenticatedUser =>
+  useRequiredRouteProvider({
+    context: AuthenticatedUserContext,
+    scope: PROVIDER_SCOPE.auth,
+    missingMessage:
       "useAuthenticatedUser must be used within AuthenticatedUserProvider.",
-    );
-  }
-  return user;
-};
+  });
 
 /**
  * Like useAuthenticatedUser, but returns null outside the provider.

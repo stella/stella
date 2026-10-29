@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import ts from "typescript";
+import ts from "typescript6";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
@@ -37,7 +37,7 @@ export const SOLO_TEST_PATHS: ReadonlySet<string> = new Set([
   // sharing with monitoring-drain peaked at 2633 MB against the 2560 MB cap.
   "src/lib/lists/sanctions/refresh-event-loop.db.test.ts",
   // Sets the deployment's public address before the environment is read.
-  "src/lib/oauth-cli-client-document.db.test.ts",
+  "src/lib/oauth-native-client-documents.db.test.ts",
   // Owns the CIMD transport module and the AS JWKS fetch for the whole process.
   "src/lib/oauth-cimd-private-key-jwt.db.test.ts",
 ]);

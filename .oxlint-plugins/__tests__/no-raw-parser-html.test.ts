@@ -71,11 +71,22 @@ describe.serial("HTML parser helper ownership", () => {
       '$("table").find("tr");',
       'const tag = "p"; tag !== "style";',
     ];
-    for (const ownerModule of ownerModules) {
-      expect(matches(includeGlobs, ownerModule)).toBe(true);
-      expect(matches(excludeGlobs, ownerModule)).toBe(false);
-      expect(await lint(bannedHtml, ownerModule)).toEqual([3, 4, 5]);
-    }
+    const results = await Promise.all(
+      [...ownerModules].map(async (lintCase, index) => {
+        const ownerModule = lintCase;
+        expect(matches(includeGlobs, ownerModule)).toBe(true);
+        expect(matches(excludeGlobs, ownerModule)).toBe(false);
+
+        return {
+          label: `case ${index + 1}: ${JSON.stringify(lintCase)}`,
+          result: await lint(bannedHtml, ownerModule),
+          expected: [3, 4, 5],
+        };
+      }),
+    );
+    expect(results.map(({ label, result }) => ({ label, result }))).toEqual(
+      results.map(({ label, expected }) => ({ label, result: expected })),
+    );
   });
 
   test("rejects raw text reads through load aliases, selection aliases and typed parameters", async () => {

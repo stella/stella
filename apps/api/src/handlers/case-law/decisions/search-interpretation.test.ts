@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import type { Static } from "elysia";
+import type * as v from "valibot";
 
 import { parseDecisionQuery } from "@stll/api-contract/decision-query-intent";
+import { CASE_LAW_SEARCH_FACET_NAMES } from "@stll/api-contract/search";
 
 import {
   interpretDecisionQuery,
@@ -12,7 +13,7 @@ import type { searchDecisionsBodySchema } from "@/api/handlers/case-law/decision
 import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import { corpusFreeTextClause } from "@/api/lib/legal-search/corpus-query";
 
-type SearchDecisionsBody = Static<typeof searchDecisionsBodySchema>;
+type SearchDecisionsBody = v.InferOutput<typeof searchDecisionsBodySchema>;
 
 /** The question that returned nothing: nine words, five of them grammar. */
 const QUESTION = "jak velký musí být dluh na nájemném pro výpověď z nájmu";
@@ -192,6 +193,21 @@ describe("narrowingFilters", () => {
     ).toEqual([]);
   });
 
+  test.each([
+    { facets: [] },
+    ...CASE_LAW_SEARCH_FACET_NAMES.map((facet) => ({ facets: [facet] })),
+  ])(
+    "facet summaries do not narrow or reinterpret the search (%j)",
+    ({ facets }) => {
+      const body = request({ court: "Nejvyšší soud" });
+      const withFacets = { ...body, facets: [...facets] };
+
+      expect(narrowingFilters(withFacets)).toEqual(["court"]);
+      expect(interpret(withFacets)).toEqual(interpret(body));
+      expect(clauseOf(withFacets)).toBe(clauseOf(body));
+    },
+  );
+
   test("country is not a filter a reader can drop", () => {
     expect(narrowingFilters(request())).toEqual([]);
   });
@@ -247,6 +263,20 @@ describe("searchAnswer", () => {
 
   test("a strict page with hits carries no warning at all", () => {
     expect(answerFor(request({ strict: true }), 3).warnings).toEqual([]);
+  });
+
+  test("a page containing relaxed corpus matches reports the fallback", () => {
+    const body = request();
+    const interpretation = interpret(body);
+    expect(
+      searchAnswer({
+        body,
+        interpretation,
+        hitCount: 2,
+        partialHitCount: 2,
+        countsResultSet: true,
+      }).warnings.map(({ code }) => code),
+    ).toContain("partial_matches_appended");
   });
 });
 

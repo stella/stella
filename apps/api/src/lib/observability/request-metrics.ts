@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 
 import type { AIProvider, TanStackAIProvider } from "@stll/ai-catalog";
+import type { SanctionsSource } from "@stll/sanctions";
 import { Temporal } from "@stll/time";
 
 import type { VerificationRunErrorCode } from "@/api/lib/lists/verification/contract";
@@ -58,10 +59,7 @@ const REQUEST_STAGE_FAMILY = {
 } as const satisfies Record<RequestStage, keyof typeof REQUEST_STAGE_FAMILIES>;
 
 export type RequestStageOutcome =
-  | "completed"
-  | "failed"
-  | "refused"
-  | "cancelled";
+  "completed" | "failed" | "refused" | "cancelled";
 
 type RequestStageRecordInput = {
   route: string;
@@ -270,6 +268,84 @@ export const emitSanctionsScreeningWorkMetric = ({
   });
 };
 
+const SANCTIONS_SCREENING_COMPLETION_METRIC =
+  "SanctionsScreeningListCompletion";
+
+/** One complete or incomplete result per source; subjects never become dimensions. */
+export const emitSanctionsScreeningCompletionMetric = ({
+  source,
+  outcome,
+}: {
+  source: SanctionsSource;
+  outcome: "complete" | "incomplete";
+}): void => {
+  writeMetricLine({
+    _aws: {
+      Timestamp: Temporal.Now.instant().epochMilliseconds,
+      CloudWatchMetrics: [
+        {
+          Namespace: METRIC_NAMESPACE,
+          Dimensions: [["source", "outcome"]],
+          Metrics: [
+            { Name: SANCTIONS_SCREENING_COMPLETION_METRIC, Unit: "Count" },
+          ],
+        },
+      ],
+    },
+    source,
+    outcome,
+    [SANCTIONS_SCREENING_COMPLETION_METRIC]: 1,
+  });
+};
+
+const DATA_INVARIANT_METRIC = "DataInvariantUnhealthy";
+
+type DataInvariantMetricInput = {
+  /** A stable id from `DATA_INVARIANT_ID`: a closed set, so a safe dimension. */
+  invariant: string;
+  owner: string;
+  severity: string;
+  status: "held" | "violated" | "errored";
+  checked: number;
+  findings: number;
+};
+
+/**
+ * One evaluated data invariant: 0 when it held, 1 when it was violated or
+ * could not be checked. Emitted on every run, so an alarm can also treat a
+ * missing datapoint as breaching: a runner that stopped is not a healthy one.
+ */
+export const emitDataInvariantMetric = ({
+  invariant,
+  owner,
+  severity,
+  status,
+  checked,
+  findings,
+}: DataInvariantMetricInput): void => {
+  writeMetricLine({
+    _aws: {
+      Timestamp: Temporal.Now.instant().epochMilliseconds,
+      CloudWatchMetrics: [
+        {
+          Namespace: METRIC_NAMESPACE,
+          Dimensions: [["invariant", "severity"]],
+          Metrics: [{ Name: DATA_INVARIANT_METRIC, Unit: "Count" }],
+        },
+      ],
+    },
+    event: "data_invariant.evaluated",
+    invariant,
+    severity,
+    // Plain log properties; deliberately absent from the dimensions.
+    owner,
+    status,
+    checked,
+    findings,
+    [DATA_INVARIANT_METRIC]: status === "held" ? 0 : 1,
+  });
+};
+
 const EVENT_LOOP_DELAY_METRIC = {
   max: "EventLoopDelayMax",
   p99: "EventLoopDelayP99",
@@ -284,15 +360,36 @@ export type ProcessMemoryReport = {
   rssBytes: number;
   heapUsedBytes: number;
   arrayBuffersBytes: number;
-  uploadFinalizeInFlightBytes: number;
+  workPools: Record<
+    string,
+    {
+      inFlight: number;
+      queued: number;
+      bytesInFlight: number;
+      refusedBusy: number;
+      refusedMemory: number;
+      deadlineCancelled: number;
+    }
+  >;
 };
 
 /** Log-only: memory diagnostics must not create billable custom metrics. */
 export const emitProcessMemoryLog = (memory: ProcessMemoryReport): void => {
+  const poolFields = Object.fromEntries(
+    Object.entries(memory.workPools).flatMap(([pool, metrics]) =>
+      Object.entries(metrics).map(([field, value]) => [
+        `work_pool.${pool}.${field}`,
+        value,
+      ]),
+    ),
+  );
   writeMetricLine({
     severity: "INFO",
     message: "runtime.process_memory",
-    ...memory,
+    rssBytes: memory.rssBytes,
+    heapUsedBytes: memory.heapUsedBytes,
+    arrayBuffersBytes: memory.arrayBuffersBytes,
+    ...poolFields,
   });
 };
 
@@ -345,7 +442,7 @@ export const resetMetricLineSinkForTesting = (): void => {
   metricLineSink = null;
 };
 
-const writeMetricLine = (record: object): void => {
+export const writeMetricLine = (record: object): void => {
   const line = JSON.stringify(record);
   if (metricLineSink !== null) {
     metricLineSink(line);
@@ -359,6 +456,76 @@ const writeMetricLine = (record: object): void => {
   }
   process.stdout.write(`${line}\n`);
 };
+
+export const CASE_LAW_FRESHNESS_METRIC = {
+  projectionBacklogItems: "CaseLawProjectionBacklogItems",
+  oldestUnpublishedAgeSeconds: "CaseLawOldestUnpublishedAgeSeconds",
+  sourceSyncAgeSeconds: "CaseLawSourceSyncAgeSeconds",
+  projectionConvergence: "CaseLawProjectionConvergence",
+} as const satisfies Record<string, string>;
+
+const buildCaseLawMetricRecord = ({
+  dimensions,
+  name,
+  unit,
+  value,
+}: {
+  dimensions: readonly string[];
+  name: (typeof CASE_LAW_FRESHNESS_METRIC)[keyof typeof CASE_LAW_FRESHNESS_METRIC];
+  unit: "Count" | "Seconds";
+  value: number;
+}) => ({
+  _aws: {
+    Timestamp: Temporal.Now.instant().epochMilliseconds,
+    CloudWatchMetrics: [
+      {
+        Namespace: METRIC_NAMESPACE,
+        Dimensions: [[...dimensions]],
+        Metrics: [{ Name: name, Unit: unit }],
+      },
+    ],
+  },
+  [name]: value,
+});
+
+export const buildCaseLawProjectionBacklogMetric = (value: number) =>
+  buildCaseLawMetricRecord({
+    dimensions: [],
+    name: CASE_LAW_FRESHNESS_METRIC.projectionBacklogItems,
+    unit: "Count",
+    value,
+  });
+
+export const buildCaseLawOldestUnpublishedAgeMetric = (value: number) =>
+  buildCaseLawMetricRecord({
+    dimensions: [],
+    name: CASE_LAW_FRESHNESS_METRIC.oldestUnpublishedAgeSeconds,
+    unit: "Seconds",
+    value,
+  });
+
+export const buildCaseLawSourceSyncAgeMetric = (
+  source: string,
+  value: number,
+) => ({
+  ...buildCaseLawMetricRecord({
+    dimensions: ["source"],
+    name: CASE_LAW_FRESHNESS_METRIC.sourceSyncAgeSeconds,
+    unit: "Seconds",
+    value,
+  }),
+  source,
+});
+
+export const buildCaseLawProjectionConvergenceMetric = (status: string) => ({
+  ...buildCaseLawMetricRecord({
+    dimensions: ["status"],
+    name: CASE_LAW_FRESHNESS_METRIC.projectionConvergence,
+    unit: "Count",
+    value: 1,
+  }),
+  status,
+});
 
 export const REQUEST_CLASSES = [
   "ai",

@@ -1,13 +1,22 @@
 import { panic, Result } from "better-result";
 import path from "node:path";
 import { stripVTControlCharacters } from "node:util";
-import ts from "typescript";
 import * as v from "valibot";
 
 import {
-  DOC_SOURCE_FILE,
-  ZERO_AGE_OVERRIDE,
+  type CallExpression,
+  type Node,
+  type ObjectExpression,
+  type ParsedSource,
+  parseSource,
+  type VariableDeclarator,
+  walk,
+} from "../packages/scripts/src/syntax-tree";
+import {
   type DatedWaiver,
+  DOC_SOURCE_FILE,
+  type ProbeKind,
+  ZERO_AGE_OVERRIDE,
 } from "./dated-waivers";
 import {
   parseRegistry,
@@ -23,93 +32,99 @@ import { parseLedger } from "./suppression-waivers";
 
 export type RemovalChange = { source: string; before: string; after: string };
 
+export const AUTOMATIC_REMOVAL_ALLOWED = {
+  "no-llms-txt": true,
+  "release-age-exclusion": true,
+  "release-age-exception": true,
+  "dependency-audit": true,
+  "quarantined-test": true,
+  "flaky-test-quarantine": true,
+  "suppression-waiver": true,
+  "pending-contract-migration": false,
+} as const satisfies Record<ProbeKind, boolean>;
+
 // Offsets must come from a parseable owner, never from regex over source text.
-const parseOwner = (source: string, file: string): ts.SourceFile => {
-  const diagnostics =
-    ts.transpileModule(source, {
-      fileName: file,
-      reportDiagnostics: true,
-      compilerOptions: {
-        target: ts.ScriptTarget.Latest,
-        jsx: ts.JsxEmit.Preserve,
-      },
-    }).diagnostics ?? [];
-  if (
-    diagnostics.some(({ category }) => category === ts.DiagnosticCategory.Error)
-  ) {
-    panic(`Dated waiver owner does not parse: ${file}`);
+const parseOwner = (source: string, file: string) => parseSource(file, source);
+
+const nextTokenOffset = (ast: ParsedSource, offset: number): number => {
+  let next = offset;
+  for (;;) {
+    while (
+      /\s/u.test(ast.sourceText.charAt(next)) &&
+      next < ast.sourceText.length
+    ) {
+      next += 1;
+    }
+    const commentStart = next;
+    const comment = ast.comments.find(
+      (candidate) => candidate.start === commentStart,
+    );
+    if (!comment) {
+      return next;
+    }
+    next = comment.end;
   }
-  return ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
 };
 
-const removeNode = (
-  source: string,
-  ast: ts.SourceFile,
-  node: ts.Node,
-): string => {
-  const scanner = ts.createScanner(
-    ts.ScriptTarget.Latest,
-    true,
-    ts.LanguageVariant.Standard,
-    source,
-  );
-  scanner.resetTokenState(node.end);
-  const token = scanner.scan();
-  const end =
-    token === ts.SyntaxKind.CommaToken ? scanner.getTokenEnd() : node.end;
-  return source.slice(0, node.getStart(ast)) + source.slice(end);
+const removeNode = (source: string, ast: ParsedSource, node: Node): string => {
+  const next = nextTokenOffset(ast, node.end);
+  const end = source.charAt(next) === "," ? next + 1 : node.end;
+  return source.slice(0, node.start) + source.slice(end);
 };
 
 const removeDocumentation = (source: string, entry: DatedWaiver): string => {
   const ast = parseOwner(source, DOC_SOURCE_FILE);
-  let owner: ts.VariableDeclaration | undefined;
-  let registry: ts.ObjectLiteralExpression | undefined;
-  const visit = (node: ts.Node): void => {
-    if (ts.isVariableDeclaration(node)) {
-      if (node.name.getText(ast) === "DOC_SOURCE_EXCLUSIONS") {
-        owner = node;
+  let owner: VariableDeclarator | undefined;
+  let registry: ObjectExpression | undefined;
+  walk(ast.program, (node) => {
+    if (node.type !== "VariableDeclarator" || node.id.type !== "Identifier") {
+      return;
+    }
+    if (node.id.name === "DOC_SOURCE_EXCLUSIONS") {
+      owner = node;
+    }
+    if (node.id.name === "DOC_SOURCES" && node.init) {
+      let value = node.init;
+      while (
+        value.type === "TSSatisfiesExpression" ||
+        value.type === "TSAsExpression"
+      ) {
+        value = value.expression;
       }
-      if (node.name.getText(ast) === "DOC_SOURCES" && node.initializer) {
-        let value = node.initializer;
-        while (ts.isSatisfiesExpression(value) || ts.isAsExpression(value)) {
-          value = value.expression;
-        }
-        if (ts.isObjectLiteralExpression(value)) {
-          registry = value;
-        }
+      if (value.type === "ObjectExpression") {
+        registry = value;
       }
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(ast);
+  });
   if (!owner || !registry) {
     panic("Documentation waiver owner missing");
   }
-  const matches: ts.Node[] = [];
-  const find = (node: ts.Node): void => {
+  const matches: Node[] = [];
+  walk(owner, (node) => {
     if (
-      ts.isObjectLiteralExpression(node) &&
+      node.type === "ObjectExpression" &&
       node.properties.some(
         (property) =>
-          ts.isPropertyAssignment(property) &&
-          property.name.getText(ast) === "dependency" &&
-          ts.isStringLiteral(property.initializer) &&
-          property.initializer.text === entry.id,
+          property.type === "Property" &&
+          !property.method &&
+          !property.shorthand &&
+          source.slice(property.key.start, property.key.end) === "dependency" &&
+          property.value.type === "Literal" &&
+          property.value.value === entry.id,
       )
     ) {
       matches.push(node);
-      return;
+      return "skip-children";
     }
-    if (ts.isArrayLiteralExpression(node)) {
+    if (node.type === "ArrayExpression") {
       for (const element of node.elements) {
-        if (ts.isStringLiteral(element) && element.text === entry.id) {
+        if (element?.type === "Literal" && element.value === entry.id) {
           matches.push(element);
         }
       }
     }
-    ts.forEachChild(node, find);
-  };
-  find(owner);
+    return undefined;
+  });
   const target = matches.at(0);
   if (matches.length !== 1 || !target) {
     panic(`Documentation waiver anchor is not unique: ${entry.id}`);
@@ -118,16 +133,16 @@ const removeDocumentation = (source: string, entry: DatedWaiver): string => {
   if (!url || !url.startsWith("https://")) {
     panic(`Documentation waiver has no canonical llms.txt URL: ${entry.id}`);
   }
-  const separator =
-    registry.properties.length > 0 && !registry.properties.hasTrailingComma
-      ? ","
-      : "";
+  const lastProperty = registry.properties.at(-1);
+  const next = nextTokenOffset(ast, lastProperty?.end ?? registry.start + 1);
+  const trailingComma = source.charAt(next) === ",";
+  const insertion = trailingComma
+    ? next + 1
+    : (lastProperty?.end ?? registry.start + 1);
+  const separator = registry.properties.length > 0 && !trailingComma ? "," : "";
   // Insert first: registry precedes exclusions, so original removal offsets hold.
   const removed = removeNode(source, ast, target);
-  const updated = `${removed.slice(
-    0,
-    registry.properties.end,
-  )}${separator}\n  ${JSON.stringify(entry.id)}: { dependencies: [${JSON.stringify(entry.id)}], url: ${JSON.stringify(url)} },\n${removed.slice(registry.properties.end)}`;
+  const updated = `${removed.slice(0, insertion)}${separator}\n  ${JSON.stringify(entry.id)}: { dependencies: [${JSON.stringify(entry.id)}], url: ${JSON.stringify(url)} },\n${removed.slice(insertion)}`;
   parseOwner(updated, DOC_SOURCE_FILE);
   return updated;
 };
@@ -183,10 +198,22 @@ const removeReleaseAgeException = (
   return lines.join("\n");
 };
 
+const leadingComments = (ast: ParsedSource, node: Node) =>
+  ast.comments.filter(
+    (comment) =>
+      comment.end <= node.start &&
+      /^(?:\s|\/\*[\s\S]*?\*\/|\/\/[^\n]*(?:\n|$))*$/u.test(
+        ast.sourceText.slice(comment.end, node.start),
+      ),
+  );
+
 export const removeWaiver = (
   entry: DatedWaiver,
   read: (file: string) => string,
 ): RemovalChange[] => {
+  if (!AUTOMATIC_REMOVAL_ALLOWED[entry.kind]) {
+    return panic(`Automatic removal is disabled for ${entry.kind}`);
+  }
   const before = read(entry.source);
   let after: string;
   switch (entry.kind) {
@@ -195,52 +222,51 @@ export const removeWaiver = (
       break;
     case "quarantined-test": {
       const ast = parseOwner(before, entry.source);
-      const matches: ts.CallExpression[] = [];
-      const visit = (node: ts.Node): void => {
+      const matches: CallExpression[] = [];
+      walk(ast.program, (node) => {
         if (
-          ts.isCallExpression(node) &&
-          ts.isPropertyAccessExpression(node.expression) &&
-          node.expression.name.text === "skip" &&
-          ["test", "it"].includes(node.expression.expression.getText(ast))
+          node.type !== "CallExpression" ||
+          node.callee.type !== "MemberExpression" ||
+          node.callee.computed ||
+          node.callee.property.type !== "Identifier" ||
+          node.callee.property.name !== "skip" ||
+          !["test", "it"].includes(
+            before.slice(node.callee.object.start, node.callee.object.end),
+          )
         ) {
-          const title = node.arguments.at(0);
-          if (
-            title &&
-            ts.isStringLiteral(title) &&
-            title.text === entry.id &&
-            before
-              .slice(node.getFullStart(), node.getStart(ast))
-              .includes(`test-quarantine-expires: ${entry.expiresAt}`)
-          ) {
-            matches.push(node);
-          }
+          return;
         }
-        ts.forEachChild(node, visit);
-      };
-      visit(ast);
+        const title = node.arguments.at(0);
+        if (
+          title?.type === "Literal" &&
+          title.value === entry.id &&
+          leadingComments(ast, node).some((comment) =>
+            comment.value.includes(
+              `test-quarantine-expires: ${entry.expiresAt}`,
+            ),
+          )
+        ) {
+          matches.push(node);
+        }
+      });
       const call = matches.at(0);
       if (
         matches.length !== 1 ||
         !call ||
-        !ts.isPropertyAccessExpression(call.expression)
+        call.callee.type !== "MemberExpression"
       ) {
         panic(`Test quarantine anchor is not unique: ${entry.id}`);
       }
       after =
-        before.slice(0, call.expression.expression.end) +
-        before.slice(call.expression.end);
-      const marker = ts
-        .getLeadingCommentRanges(before, call.getFullStart())
-        ?.find((range) =>
-          before
-            .slice(range.pos, range.end)
-            .includes(`test-quarantine-expires: ${entry.expiresAt}`),
-        );
+        before.slice(0, call.callee.object.end) + before.slice(call.callee.end);
+      const marker = leadingComments(ast, call).find((comment) =>
+        comment.value.includes(`test-quarantine-expires: ${entry.expiresAt}`),
+      );
       if (!marker) {
         panic(`Test quarantine comment anchor missing: ${entry.id}`);
       }
       // The marker precedes the edited call, so its original offsets still hold.
-      after = after.slice(0, marker.pos) + after.slice(marker.end);
+      after = after.slice(0, marker.start) + after.slice(marker.end);
       parseOwner(after, entry.source);
       break;
     }
@@ -370,6 +396,8 @@ export const removeWaiver = (
       });
       break;
     }
+    case "pending-contract-migration":
+      return panic(`Automatic removal is disabled for ${entry.kind}`);
     default:
       entry.kind satisfies never;
       return panic("Unhandled dated waiver kind");
@@ -446,6 +474,7 @@ const receiptSelector = (
     case "release-age-exception":
     case "dependency-audit":
     case "suppression-waiver":
+    case "pending-contract-migration":
       return undefined;
     default:
       entry.kind satisfies never;

@@ -1,6 +1,5 @@
 import { panic } from "better-result";
 import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
-import type { MaybePromise } from "elysia";
 
 import type { Transaction } from "@/api/db/root";
 import type {
@@ -27,6 +26,8 @@ import type {
   AuditAction,
   AuditResourceType,
 } from "../audit-log.constants";
+
+type MaybePromise<T> = T | Promise<T>;
 
 export { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "../audit-log.constants";
 export type { AuditAction, AuditResourceType } from "../audit-log.constants";
@@ -283,8 +284,7 @@ const workspaceActivityCategory = (event: AuditEvent): AuditActivityCategory =>
     : "matter";
 
 type AuditActivityCategoryResolver =
-  | AuditActivityCategory
-  | ((event: AuditEvent) => AuditActivityCategory);
+  AuditActivityCategory | ((event: AuditEvent) => AuditActivityCategory);
 
 const AUDIT_ACTIVITY_CATEGORY_BY_RESOURCE_TYPE = {
   service_oauth_client: "team",
@@ -327,6 +327,7 @@ const AUDIT_ACTIVITY_CATEGORY_BY_RESOURCE_TYPE = {
   clause_variant: "other",
   contact: "other",
   contact_directory: "other",
+  document_annotation: "documents",
   document_type: "other",
   file_comparison: "documents",
   usage_allocation: "other",
@@ -348,6 +349,8 @@ const AUDIT_ACTIVITY_CATEGORY_BY_RESOURCE_TYPE = {
   legal_list_item: "other",
   mcp_connection: "other",
   mcp_gateway_tool: "other",
+  mcp_web_handoff: "other",
+  organization_access_state: "other",
   organization_settings: "other",
   property: "other",
   rate_entry: "other",

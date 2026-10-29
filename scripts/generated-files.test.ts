@@ -12,7 +12,7 @@ import {
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
 import { pathToFileURL } from "node:url";
-import ts from "typescript";
+import * as ts from "tsrs/unstable/ast";
 import * as v from "valibot";
 
 import { generateCapabilityRuntime } from "../apps/api/scripts/generate-capability-runtime";
@@ -20,15 +20,24 @@ import { pinnedParserInputs } from "../packages/catalogue/scripts/pinned-content
 import { repoRelativePath } from "../packages/portable-path/src/index";
 import { API_TYPECHECK_REGENERATION_COMMANDS } from "../packages/scripts/src/api-typecheck-regenerate";
 import { ciGeneratedFiles } from "../packages/scripts/src/generated-file-inventory";
+import { parseSource } from "../packages/scripts/src/syntax-tree";
+import { createProgram } from "../packages/scripts/src/typescript-program";
 import { CHECK_POOL_JOBS } from "./ci-check-pool-registry";
 import {
-  GENERATORS,
+  computeChangedFileScope,
+  DEFAULT_DETECTORS,
+  MODEL_CATALOG_DRIFT_INPUTS,
+  ROUTE_TREE_INPUTS,
+  type ScopeOutput,
+} from "./ci-plan-scope";
+import {
+  allowedOutputs,
   CI_GENERATED_FILES,
   CI_GENERATED_OUTPUTS,
-  allowedOutputs,
-  GUARD_A_EXCLUSIONS,
   derivedPrerequisites,
+  GENERATORS,
   generatorsForFiles,
+  GUARD_A_EXCLUSIONS,
   matchesGeneratedGlob,
   orderGenerators,
   runGenerators,
@@ -48,79 +57,85 @@ const generator = (id: string) => {
   return found ?? panic(`Missing generator ${id}`);
 };
 
-test("Generator output kinds remain literal discriminators after export widening", () => {
+test("Generator output kinds remain literal discriminators after export widening", async () => {
   const file = nodePath.resolve(import.meta.dirname, "generator-type-probe.ts");
-  const declaration = ts.createSourceFile(
-    file,
+  const declaration = parseSource(
+    "generated-files.ts",
     readFileSync(
       nodePath.resolve(import.meta.dirname, "generated-files.ts"),
       "utf-8",
     ),
-    ts.ScriptTarget.Latest,
-    true,
   );
-  const definitions = declaration.statements
+  const definitions = declaration.program.body
     .filter(
       (statement) =>
-        ts.isTypeAliasDeclaration(statement) &&
-        ["Generator", "GeneratorCheck"].includes(statement.name.text),
+        (statement.type === "TSTypeAliasDeclaration" &&
+          ["Generator", "GeneratorCheck"].includes(statement.id.name)) ||
+        (statement.type === "ExportNamedDeclaration" &&
+          statement.declaration?.type === "TSTypeAliasDeclaration" &&
+          ["Generator", "GeneratorCheck"].includes(
+            statement.declaration.id.name,
+          )),
     )
-    .map((statement) => statement.getText(declaration))
+    .map((statement) =>
+      declaration.sourceText.slice(statement.start, statement.end),
+    )
     .join("\n");
-  const options = { strict: true, noEmit: true, skipLibCheck: true, types: [] };
-  const host = ts.createCompilerHost(options);
-  const sourceFile = host.getSourceFile;
-  host.getSourceFile = (
-    name,
-    languageVersion,
-    onError,
-    shouldCreateNewSourceFile,
-  ) =>
-    name === file
-      ? ts.createSourceFile(name, definitions, ts.ScriptTarget.Latest, true)
-      : sourceFile(name, languageVersion, onError, shouldCreateNewSourceFile);
-  const program = ts.createProgram([file], options, host);
-  const probe = program.getSourceFile(file);
-  if (probe === undefined) {
-    throw new Error("Missing generator type probe");
-  }
-  const generatorType = probe.statements.find(
-    (statement) =>
-      ts.isTypeAliasDeclaration(statement) &&
-      statement.name.text === "Generator",
-  );
-  if (
-    generatorType === undefined ||
-    !ts.isTypeAliasDeclaration(generatorType)
-  ) {
-    throw new Error("Missing Generator declaration");
-  }
-  const checker = program.getTypeChecker();
-  const generatorUnion = checker.getTypeAtLocation(generatorType);
-  if (!generatorUnion.isUnion()) {
-    throw new Error("Generator must be a discriminated union");
-  }
-  const kinds = new Set<string>();
-  for (const branch of generatorUnion.types) {
-    const discriminator = checker.getPropertyOfType(branch, "outputKind");
-    if (discriminator === undefined) {
-      throw new Error("Generator branch has no outputKind");
-    }
-    const kind = checker.getTypeOfSymbolAtLocation(
-      discriminator,
-      generatorType,
+  const opened = await createProgram({
+    rootNames: [file],
+    virtualFiles: new Map([[file, definitions]]),
+    compilerOptions: {
+      strict: true,
+      noEmit: true,
+      skipLibCheck: true,
+      types: [],
+    },
+  });
+  try {
+    const probe =
+      (await opened.program.getSourceFile(file)) ??
+      panic("Missing generator type probe");
+    const generatorType = probe.statements.find(
+      (statement) =>
+        ts.isTypeAliasDeclaration(statement) &&
+        statement.name.text === "Generator",
     );
-    // A union-valued property recreates TS1360 even if another field forms a union.
-    if (!kind.isStringLiteral()) {
-      throw new Error(
-        "Every Generator branch must retain a literal outputKind",
-      );
+    if (
+      generatorType === undefined ||
+      !ts.isTypeAliasDeclaration(generatorType)
+    ) {
+      panic("Missing Generator declaration");
     }
-    kinds.add(kind.value);
+    const { checker } = opened;
+    const generatorUnion = await checker.getTypeAtLocation(generatorType);
+    if (!generatorUnion.isUnionType()) {
+      panic("Generator must be a discriminated union");
+    }
+    const kinds = new Set<string>();
+    for (const branch of await generatorUnion.getTypes()) {
+      const discriminator = await checker.getPropertyOfType(
+        branch,
+        "outputKind",
+      );
+      if (discriminator === undefined) {
+        panic("Generator branch has no outputKind");
+      }
+      const kind = await checker.getTypeOfSymbolAtLocation(
+        discriminator,
+        generatorType,
+      );
+      // A union-valued property recreates TS1360 even if another field forms a union.
+      if (!kind.isStringLiteralType()) {
+        panic("Every Generator branch must retain a literal outputKind");
+      }
+      kinds.add(kind.value);
+    }
+    expect(kinds).toEqual(
+      new Set(GENERATORS.map(({ outputKind }) => outputKind)),
+    );
+  } finally {
+    await opened.close();
   }
-  expect(kinds).toEqual(
-    new Set(GENERATORS.map(({ outputKind }) => outputKind)),
-  );
 });
 
 test("generation owners have unique identifiers", () => {
@@ -571,7 +586,26 @@ test("the route generator guard rejects missing script and direct pin", async ()
   }
 });
 
+test("visual sandbox regeneration follows its shared error metadata owner", () => {
+  for (const file of [
+    "packages/errors/src/fingerprint-fields.ts",
+    "packages/errors/src/exception-cause-chain.ts",
+    "apps/api/src/handlers/visual-sandbox/prepare.ts",
+    "apps/api/src/handlers/visual-sandbox/sanitize.ts",
+  ]) {
+    expect(
+      generatorsForFiles([file]).map(({ id }) => id),
+      file,
+    ).toContain("visual-sandbox-bundle");
+  }
+});
+
 test("autofix selects only owners of changed inputs and preserves dependencies", () => {
+  expect(
+    generatorsForFiles([
+      "packages/api-contract/src/document-version-upload.ts",
+    ]).map(({ id }) => id),
+  ).toContain("cli-registry");
   const requiredIds = [
     "capability-catalog",
     "capability-runtime",
@@ -583,7 +617,7 @@ test("autofix selects only owners of changed inputs and preserves dependencies",
     generatorsForFiles(["apps/web/src/routes/law/index.tsx"]).map(
       ({ id }) => id,
     ),
-  ).toEqual(["module-ownership", "route-tree"]);
+  ).toEqual(["tailwind-class-cache", "module-ownership", "route-tree"]);
   // api-typecheck-projects declares the derived CLI and capability runtimes,
   // which a clean checkout lacks, so they are planned with it.
   expect(
@@ -601,7 +635,7 @@ test("autofix selects only owners of changed inputs and preserves dependencies",
   );
   for (const file of [
     "apps/api/src/lib/format.ts",
-    "packages/time/src/format.ts",
+    "packages/agent-input/src/format.ts",
   ]) {
     const selected = new Set(generatorsForFiles([file]).map(({ id }) => id));
     for (const id of requiredIds) {
@@ -629,7 +663,7 @@ test("autofix selection closes over generated outputs and ordering dependencies"
     .filter(Boolean);
   const changedPaths = [
     [
-      ".oxfmtrc.json",
+      "bunfig.toml",
       "capability-catalog",
       "capability-runtime",
       "cli-registry",
@@ -678,7 +712,7 @@ test("autofix selection closes over generated outputs and ordering dependencies"
 
 test("the planned allowlist is exactly the selected committed output union", () => {
   for (const paths of [
-    ".oxfmtrc.json\n",
+    "bunfig.toml\n",
     "packages/api-contract/src/mcp-tool.ts\n",
     "docs/unrelated.md\n",
   ]) {
@@ -710,6 +744,19 @@ test("manifest paths and named guards resolve against tracked files and CI", asy
     .decode(Bun.spawnSync(["git", "ls-files", "-z"], { stdout: "pipe" }).stdout)
     .split("\0")
     .filter(Boolean);
+  // Local skill sources must affect the generation input contract, including a skill
+  // added after the generator's other inputs were last reviewed.
+  const instructions = generator("ai-instructions");
+  const localSkills = tracked.filter((file) =>
+    file.startsWith(".ai/local-skills/"),
+  );
+  expect(localSkills.length).toBeGreaterThan(0);
+  for (const file of localSkills) {
+    expect(
+      instructions.inputs.some((glob) => matchesGeneratedGlob(glob, file)),
+      `ai-instructions: ${file}`,
+    ).toBe(true);
+  }
   // Pooled checks are steps of their job, so resolve names through them.
   const workflow: unknown = Bun.YAML.parse(ci);
   const steps = new Set([
@@ -845,34 +892,39 @@ const ciGeneratedStepRun = (name: string): string => {
   return run;
 };
 
-const casePatternsAfter = (marker: string) => {
-  const section = ci.slice(ci.indexOf(marker));
-  const match = /case "\$file" in\n\s+([^\n]+)\)/u.exec(section);
-  expect(match, marker).not.toBeNull();
-  return (match?.[1] ?? "").split("|");
-};
+const scopedOutput = (file: string, output: ScopeOutput) =>
+  computeChangedFileScope(
+    {
+      changedFiles: [file],
+      comparisonBase: "base",
+      scopeUnknown: false,
+      eventName: "pull_request",
+      suiteDepth: "fast",
+      heavyOnly: false,
+      prTitle: "",
+    },
+    {
+      ...DEFAULT_DETECTORS,
+      packageChecks: () => true,
+      landingBuild: () => false,
+      landingDeploy: () => false,
+      desktopBrowser: () => false,
+    },
+  )[output];
 
 test("route-tree CI scope covers every manifest input and output", () => {
   const routeTree = generator("route-tree");
   const paths = [...routeTree.inputs, ...routeTree.outputs].map((glob) =>
     glob.replace(/\/\*\*$/u, "/*"),
   );
-  expect(
-    casePatternsAfter(
-      "# The route-tree generator reads the web package script",
-    ).toSorted(),
-  ).toEqual(paths.toSorted());
+  expect(paths.toSorted()).toEqual([...ROUTE_TREE_INPUTS].toSorted());
 });
 
 test("CI rate snapshot scope stays pinned to the manifest", () => {
   const inputs = generator("model-rates").inputs.map((glob) =>
     glob.replace(/\/\*\*$/u, "/*"),
   );
-  expect(
-    casePatternsAfter(
-      "# The committed rate and capability snapshots",
-    ).toSorted(),
-  ).toEqual(inputs.toSorted());
+  expect(inputs.toSorted()).toEqual([...MODEL_CATALOG_DRIFT_INPUTS].toSorted());
 });
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -900,12 +952,26 @@ const generationInputs = (name: string) => {
 };
 
 test("CI determinism selectors cover the cached generators' input contracts", () => {
-  for (const [name, marker] of [
-    ["generate:api-types", "# The web API types"],
-    ["generate:route-tree", "# The route-tree generator"],
+  for (const [name, output] of [
+    ["generate:api-types", "web_api_types_required"],
+    ["generate:route-tree", "route_tree_required"],
   ] as const) {
-    const selectors = casePatternsAfter(marker);
-    for (const glob of generationInputs(name)) {
+    // Turbo accepts brace sets; each alternative must be covered on its own.
+    const expandBraces = (glob: string): string[] => {
+      const match = /\{([^{}]+)\}/u.exec(glob);
+      if (match === null) {
+        return [glob];
+      }
+      const [set, alternatives = ""] = match;
+      return alternatives
+        .split(",")
+        .flatMap((alternative) =>
+          expandBraces(
+            `${glob.slice(0, match.index)}${alternative}${glob.slice(match.index + set.length)}`,
+          ),
+        );
+    };
+    for (const glob of generationInputs(name).flatMap(expandBraces)) {
       const rooted = glob.startsWith("$TURBO_ROOT$/")
         ? glob.replace("$TURBO_ROOT$/", "")
         : `apps/web/${glob}`;
@@ -915,13 +981,20 @@ test("CI determinism selectors cover the cached generators' input contracts", ()
         .replace(/\*/gu, "fixture")
         .replace(/\?/gu, "x");
       expect(
-        selectors.some((selector) =>
-          new Bun.Glob(selector.replace(/\*+/gu, "**")).match(sample),
-        ),
+        scopedOutput(sample, output),
         `${name} CI selector covers ${rooted}`,
-      ).toBe(true);
+      ).toBe("true");
     }
   }
+});
+
+test.each([
+  "apps/api/src/mcp/web-handoff-link-contract.ts",
+  "apps/api/src/mcp/write-result-omission.ts",
+])("app contracts follow their advertised output owner %s", (file) => {
+  expect(generatorsForFiles([file]).map(({ id }) => id)).toContain(
+    "mcp-app-contracts",
+  );
 });
 
 test("CI diff path guards stay pinned to manifest outputs", () => {
@@ -1002,7 +1075,10 @@ test("route tree has one derived owner and a cache producer for every consumer",
   const ignored = Bun.spawnSync(["git", "check-ignore", "--no-index", output]);
   expect(ignored.exitCode).toBe(0);
   const producer = config.tasks["@stll/web#generate:route-tree"];
-  expect(producer?.outputs).toEqual(["src/routeTree.gen.ts"]);
+  expect(producer?.outputs).toEqual([
+    "src/routeTree.gen.ts",
+    "src/route-templates.gen.ts",
+  ]);
   expect(
     generationInputs("generate:route-tree")
       .map((input) =>
@@ -1124,6 +1200,7 @@ test("web messages have one derived owner and are generated wherever the route t
 
 // Runs in a copy of the tracked files the checks read, never by deleting the
 // checkout's declarations: other test files read them concurrently.
+// Measured p95 is 19.8 s; this test must run the real web catalog checker in that copy.
 test("web catalog checks pass without the derived message declarations", async () => {
   const repo = new URL("..", import.meta.url).pathname;
   const tracked = Bun.spawnSync(
@@ -1179,7 +1256,7 @@ test("web catalog checks pass without the derived message declarations", async (
   } finally {
     await rm(copy, { recursive: true, force: true });
   }
-}, 60_000);
+}, 40_000);
 
 test("long optional runs accept dispatch only", () => {
   for (const file of [
@@ -1313,6 +1390,13 @@ test("cloud setup has one generator owner and checks shared policy output", () =
       "scripts/generate-cloud-setup.ts",
       "scripts/generated-artifacts.ts",
     ],
+    checkInputs: [
+      "bunfig.toml",
+      ".prettierrc.yml",
+      "packages/portable-path/src/index.ts",
+      "packages/scripts/src/child-exit-status.ts",
+      "packages/scripts/src/generated-artifact-format.ts",
+    ],
     write: ["bun", "scripts/generate-cloud-setup.ts", "--write"],
     check: ["bun", "scripts/generate-cloud-setup.ts"],
     autofix: true,
@@ -1332,9 +1416,15 @@ test("every plan builds the derived outputs its generators read before running t
   const witness = (glob: string) =>
     glob.replaceAll("**", "example/generated.ts").replaceAll("*", "example");
   const problems: string[] = [];
+  const planByGlob = new Map(
+    GENERATORS.flatMap((entry) => [...entry.inputs, ...entry.outputs]).map(
+      (glob) =>
+        [glob, orderGenerators(generatorsForFiles([witness(glob)]))] as const,
+    ),
+  );
   for (const start of GENERATORS) {
     for (const glob of [...start.inputs, ...start.outputs]) {
-      const plan = orderGenerators(generatorsForFiles([witness(glob)]));
+      const plan = planByGlob.get(glob) ?? [];
       const position = new Map(plan.map(({ id }, index) => [id, index]));
       for (const planned of plan) {
         for (const prerequisite of derivedPrerequisites(planned)) {

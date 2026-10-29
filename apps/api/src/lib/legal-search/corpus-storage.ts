@@ -4,9 +4,8 @@ import type { Column, SQL } from "drizzle-orm";
 import * as v from "valibot";
 
 import {
-  persistedAstDegradations,
-  persistedDocumentAstSchema,
   type DocumentAst,
+  persistedAstDegradations,
 } from "@stll/legal-ast/document-ast";
 
 import { CASE_LAW_CORPUS_MIRROR_STATUS } from "@/api/db/schema";
@@ -26,6 +25,10 @@ import {
   StoredAstDegradedError,
 } from "@/api/lib/errors/tagged-errors";
 import {
+  persistedCorpusAstSchema,
+  prepareCorpusAst,
+} from "@/api/lib/legal-search/corpus-ast";
+import {
   corpusContentHash,
   EMPTY_CORPUS_CONTENT_HASHES,
 } from "@/api/lib/legal-search/corpus-content-hash";
@@ -39,22 +42,20 @@ import type {
   PackedCorpusLocation,
 } from "@/api/lib/legal-search/corpus-location";
 import {
-  packJurisdictionPrefix,
   corpusMemberDigest,
+  packJurisdictionPrefix,
 } from "@/api/lib/legal-search/corpus-pack";
 import type {
   CorpusTombstoneReader,
   CorpusTombstoneWriter,
 } from "@/api/lib/legal-search/corpus-tombstones";
-import {
-  emptyAstSchema,
-  persistedDecisionSectionsSchema,
-} from "@/api/lib/legal-search/document-types";
+import { persistedDecisionSectionsSchema } from "@/api/lib/legal-search/document-types";
 import type {
   DecisionSection,
   EmptyAst,
 } from "@/api/lib/legal-search/document-types";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
   deleteCorpusS3ObjectWithSignal,
   isMissingCorpusObjectError,
@@ -96,10 +97,6 @@ const PAYLOAD_MAX_BYTES = LIMITS.corpusPayloadMaxDecompressedBytes;
  */
 export const CORPUS_TRANSFER_MAX_BYTES = zstdCompressBound(PAYLOAD_MAX_BYTES);
 
-const persistedCorpusAstSchema = v.nullable(
-  v.union([persistedDocumentAstSchema, emptyAstSchema]),
-);
-
 export const parsePersistedCorpusSections = (
   value: unknown,
 ): DecisionSection[] | null => v.parse(persistedDecisionSectionsSchema, value);
@@ -122,7 +119,9 @@ export const parsePersistedCorpusAst = (
         message: "Stored document AST carries undeclared vocabulary",
         degradations,
       }),
-      { step: "corpus-storage.parsePersistedCorpusAst" },
+      handlerErrorContext("legalsearch.parsePersistedCorpusAst", {
+        step: "corpus-storage.parsePersistedCorpusAst",
+      }),
     );
   }
   return parsed;
@@ -551,9 +550,13 @@ export const corpusPayloadDisposition = ({
  * planning rule above is shared by every one of them.
  */
 export const writeCorpusDocument = async (
-  input: WriteCorpusInput,
+  uncheckedInput: WriteCorpusInput,
   { signal, s3Policy }: CorpusIoOptions = {},
 ): Promise<CorpusWriteOutcome> => {
+  const input = {
+    ...uncheckedInput,
+    ast: prepareCorpusAst({ ast: uncheckedInput.ast }).ast,
+  };
   const plan = planCorpusDocumentWrite(input);
   if (plan.type !== "put") {
     return plan;
@@ -964,7 +967,13 @@ export const readCorpusPayloadOrFallback = async <T>({
         });
   }
 
-  captureError(payload.error, { documentId, step });
+  captureError(
+    payload.error,
+    handlerErrorContext(
+      "legalsearch.readCorpusPayloadOrFallback.payload_error",
+      { documentId, step },
+    ),
+  );
   return postgresCopy;
 };
 

@@ -1,6 +1,7 @@
 import { panic } from "better-result";
+import { existsSync, realpathSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
+import { API } from "tsrs/unstable/async";
 
 import { isPathInside, repoRelativePath } from "@stll/portable-path";
 
@@ -15,7 +16,7 @@ export const missingApiTypecheckGeneratedSources = (root: string) =>
   [
     ...CI_GENERATED_OUTPUTS.capabilityRuntime,
     ...CI_GENERATED_OUTPUTS.cliRuntime,
-  ].filter((file) => !ts.sys.fileExists(path.join(root, file)));
+  ].filter((file) => !existsSync(path.join(root, file)));
 
 export const requireApiTypecheckGeneratedSources = (root: string) => {
   const missing = missingApiTypecheckGeneratedSources(root);
@@ -31,11 +32,11 @@ export const nativeProgramSpansWorkspaces = (
   root: string,
 ) => {
   const workspaces = new Set<string>();
-  const directory = ts.sys.realpath?.(root) ?? root;
+  const directory = realpathSync(root);
   for (const file of files) {
     const relative = repoRelativePath(
       directory,
-      ts.sys.realpath?.(file) ?? file,
+      existsSync(file) ? realpathSync(file) : file,
     );
     const workspace = /^(?:apps|packages)[/\\][^/\\]+(?=[/\\])/u.exec(
       relative,
@@ -68,17 +69,17 @@ export const nativeTypecheckProgramFiles = (project: string) => {
     .toString()
     .split(/\r?\n/u)
     .filter((file) => path.isAbsolute(file))
-    .map((file) => ts.sys.realpath?.(file) ?? file);
+    .map((file) => (existsSync(file) ? realpathSync(file) : file));
 };
 
 // Cover whole workspace roots so adding or moving a file does not rewrite Turbo.
-export const apiProgramTypecheckInputs = (
+export const apiProgramTypecheckInputs = async (
   project: string,
   nativeFiles: readonly string[],
 ) => {
   const config = path.resolve(project);
   const directory = path.dirname(config);
-  const api = ts.sys.realpath?.(directory) ?? directory;
+  const api = realpathSync(directory);
   const root = path.resolve(api, "../..");
   const roots = new Set(["**"]);
   for (const file of nativeFiles) {
@@ -100,81 +101,82 @@ export const apiProgramTypecheckInputs = (
       );
     }
   }
-  const read = ts.readConfigFile(config, (file) => ts.sys.readFile(file));
-  const parsed = ts.parseJsonConfigFileContent(
-    read.config,
-    ts.sys,
-    api,
-    undefined,
-    config,
-  );
-  if (
-    parsed.options.noCheck &&
-    parsed.options.emitDeclarationOnly &&
-    usesGeneratedApiConfig(config)
-  ) {
-    for (const consumer of apiDeclarationConsumers(config)) {
-      for (const file of consumer.fileNames) {
-        const relative = repoRelativePath(root, file);
-        if (
-          relative.startsWith("../") ||
-          /(?:^|\/)(?:node_modules|\.cache|\.turbo)(?:\/|$)/u.test(relative)
-        ) {
-          continue;
-        }
-        const workspace = /^(?:apps|packages)\/[^/]+(?=\/)/u.exec(
-          relative,
-        )?.[0];
-        if (workspace === "apps/api") {
-          continue;
-        }
-        const covering = workspace ?? relative.split("/").at(0);
-        if (covering) {
-          roots.add(
-            `$TURBO_ROOT$/${covering}${relative.includes("/") ? "/**" : ""}`,
-          );
+  const compiler = new API({ cwd: api });
+  try {
+    const parsed = await compiler.parseConfigFile(config);
+    if (
+      parsed.options.noCheck &&
+      parsed.options.emitDeclarationOnly &&
+      usesGeneratedApiConfig(config)
+    ) {
+      for (const consumer of await apiDeclarationConsumers(config)) {
+        for (const file of consumer.fileNames) {
+          const relative = repoRelativePath(root, file);
+          if (
+            relative.startsWith("../") ||
+            /(?:^|\/)(?:node_modules|\.cache|\.turbo)(?:\/|$)/u.test(relative)
+          ) {
+            continue;
+          }
+          const workspace = /^(?:apps|packages)\/[^/]+(?=\/)/u.exec(
+            relative,
+          )?.[0];
+          if (workspace === "apps/api") {
+            continue;
+          }
+          const covering = workspace ?? relative.split("/").at(0);
+          if (covering) {
+            roots.add(
+              `$TURBO_ROOT$/${covering}${relative.includes("/") ? "/**" : ""}`,
+            );
+          }
         }
       }
     }
+    const outputs = [
+      parsed.options.outDir,
+      parsed.options.declarationDir,
+    ].flatMap((output) =>
+      output ? [`!${repoRelativePath(api, path.resolve(output))}/**`] : [],
+    );
+    return [
+      ...new Set([
+        ...[...roots].toSorted(),
+        "$TURBO_ROOT$/.npmrc",
+        "$TURBO_ROOT$/bunfig.toml",
+        "$TURBO_ROOT$/package.json",
+        ...(nativeProgramSpansWorkspaces(nativeFiles, root)
+          ? ["$TURBO_ROOT$/bun.lock"]
+          : []),
+        "$TURBO_ROOT$/patches/**",
+        "$TURBO_ROOT$/types/**",
+        "$TURBO_ROOT$/packages/typescript-config/**",
+        "$TURBO_ROOT$/packages/scripts/src/generated-files.ts",
+        "$TURBO_ROOT$/packages/scripts/src/{api-typecheck-*,tsc-native,child-exit-status,turbo-typecheck-inputs}.ts",
+        "$TURBO_ROOT$/{apps,packages}/**/package.json",
+        "$TURBO_ROOT$/tsconfig*.json",
+        "$TURBO_ROOT$/{apps,packages}/*/tsconfig*.json",
+        "!$TURBO_ROOT$/{apps,packages}/**/node_modules/**",
+        "!$TURBO_ROOT$/{apps,packages}/**/.cache/**",
+        "!$TURBO_ROOT$/{apps,packages}/**/.turbo/**",
+        "!node_modules/**",
+        "!.cache/**",
+        "!.turbo/**",
+        ...outputs,
+        "package.json",
+        "tsconfig*.json",
+      ]),
+    ];
+  } finally {
+    await compiler.close();
   }
-  const outputs = [
-    parsed.options.outDir,
-    parsed.options.declarationDir,
-  ].flatMap((output) =>
-    output ? [`!${repoRelativePath(api, path.resolve(output))}/**`] : [],
-  );
-  return [
-    ...new Set([
-      ...[...roots].toSorted(),
-      "$TURBO_ROOT$/.npmrc",
-      "$TURBO_ROOT$/bunfig.toml",
-      "$TURBO_ROOT$/package.json",
-      ...(nativeProgramSpansWorkspaces(nativeFiles, root)
-        ? ["$TURBO_ROOT$/bun.lock"]
-        : []),
-      "$TURBO_ROOT$/patches/**",
-      "$TURBO_ROOT$/types/**",
-      "$TURBO_ROOT$/packages/typescript-config/**",
-      "$TURBO_ROOT$/packages/scripts/src/generated-files.ts",
-      "$TURBO_ROOT$/packages/scripts/src/{api-typecheck-*,tsc-native,tsgo-compiler-options,child-exit-status,turbo-typecheck-inputs}.ts",
-      "$TURBO_ROOT$/{apps,packages}/**/package.json",
-      "$TURBO_ROOT$/tsconfig*.json",
-      "$TURBO_ROOT$/{apps,packages}/*/tsconfig*.json",
-      "!$TURBO_ROOT$/{apps,packages}/**/node_modules/**",
-      "!$TURBO_ROOT$/{apps,packages}/**/.cache/**",
-      "!$TURBO_ROOT$/{apps,packages}/**/.turbo/**",
-      "!node_modules/**",
-      "!.cache/**",
-      "!.turbo/**",
-      ...outputs,
-      "package.json",
-      "tsconfig*.json",
-    ]),
-  ];
 };
 
-export const apiResolvedTypecheckInputs = (project: string) =>
-  apiProgramTypecheckInputs(project, nativeTypecheckProgramFiles(project));
+export const apiResolvedTypecheckInputs = async (project: string) =>
+  await apiProgramTypecheckInputs(
+    project,
+    nativeTypecheckProgramFiles(project),
+  );
 
 type ApiTypecheckCoverageOptions = {
   files: readonly string[];
@@ -188,7 +190,7 @@ export const uncoveredApiTypecheckFiles = ({
   project,
 }: ApiTypecheckCoverageOptions) => {
   const directory = path.dirname(path.resolve(project));
-  const api = ts.sys.realpath?.(directory) ?? directory;
+  const api = realpathSync(directory);
   const root = path.resolve(api, "../..");
   const patterns = inputs.map((input) => {
     const excluded = input.startsWith("!");
@@ -200,7 +202,7 @@ export const uncoveredApiTypecheckFiles = ({
     };
   });
   return files.filter((file) => {
-    const resolved = ts.sys.realpath?.(file) ?? file;
+    const resolved = existsSync(file) ? realpathSync(file) : file;
     const matches = patterns.filter(
       (pattern) =>
         isPathInside(pattern.directory, resolved) &&

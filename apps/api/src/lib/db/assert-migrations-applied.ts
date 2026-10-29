@@ -97,14 +97,26 @@ export const assertMigrationsApplied = async (): Promise<void> => {
         },
         query: async (query, params = []) =>
           await connection.unsafe(query, [...params]),
-        release: () => connection.release(),
+        release: async () => {
+          await connection.release();
+        },
       };
     },
   });
-  if (onlineReport.pending.length > 0) {
-    logger.warn("startup.online_migrations_pending", {
-      newestAppliedMigration: onlineReport.newestAppliedMigration,
-      steps: onlineReport.pending,
-    });
+  switch (onlineReport.type) {
+    case "migrator_active":
+      logger.warn("startup.online_validation_left_to_migrator");
+      return;
+    case "validated":
+      if (onlineReport.report.pending.length > 0) {
+        logger.warn("startup.online_migrations_pending", {
+          newestAppliedMigration: onlineReport.report.newestAppliedMigration,
+          steps: onlineReport.report.pending,
+        });
+      }
+      return;
+    default:
+      onlineReport satisfies never;
+      return panic("Unknown online validation outcome");
   }
 };

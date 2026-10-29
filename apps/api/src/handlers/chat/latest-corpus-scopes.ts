@@ -3,9 +3,9 @@ import { gfmFromMarkdown } from "mdast-util-gfm";
 import { gfm } from "micromark-extension-gfm";
 
 import {
+  type ChatCorpusScope,
   formatChatCorpusId,
   parseChatCorpusHref,
-  type ChatCorpusScope,
 } from "@stll/api-contract";
 import { isChatPastedTextPart } from "@stll/api-contract/chat";
 

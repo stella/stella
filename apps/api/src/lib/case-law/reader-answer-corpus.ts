@@ -1,6 +1,6 @@
 import { panic, Result, TaggedError } from "better-result";
 
-import { plainTextOf } from "@stll/legal-ast/document-ast";
+import { visibleReaderAnchorPiecesOf } from "@stll/legal-ast/case-law-reader";
 
 import { readDecisionReaderSource } from "@/api/handlers/case-law/decisions/reader";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -160,16 +160,13 @@ export const readReaderAnswerDecision = async (
         decisionId: read.decision.id,
         court: read.decision.court,
         decisionDate: read.decision.decisionDate,
-        paragraphs: read.ast.blocks.flatMap((block) =>
-          block.type === "paragraph"
-            ? [
-                {
-                  paragraphId: block.anchorId,
-                  text: plainTextOf(block.inlines),
-                },
-              ]
-            : [],
-        ),
+        // Exactly the pieces the reader shows, headings and table cells
+        // included: an Explain over any of them resolves, and the model
+        // never reads or cites text the reader hides.
+        paragraphs: visibleReaderAnchorPiecesOf(
+          read.ast,
+          read.decision.caseNumberType,
+        ).map(({ anchorId, text }) => ({ paragraphId: anchorId, text })),
       };
     },
     catch: (cause) =>

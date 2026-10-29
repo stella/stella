@@ -4,11 +4,13 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import * as v from "valibot";
 
-import type { FileTab } from "../../src/components/inspector/file-tab";
 import {
-  inspectorMinimizedStorageKey,
-  inspectorStateStorageKey,
-} from "../../src/components/inspector/inspector-storage-keys";
+  INSPECTOR_STORAGE,
+  inspectorStorageBaseKey,
+  ownerStorageKey,
+} from "@stll/api-contract/browser-storage";
+
+import type { FileTab } from "../../src/components/inspector/file-tab";
 import { apiDelete, apiPut, apiUploadTemplate, E2E_API_ORIGIN } from "./api";
 import {
   dockedChatFileThreadPage,
@@ -143,24 +145,51 @@ export const restoreGeometryInspector = async (
     organizationId: world.session.session.activeOrganizationId,
   };
   await page.addInitScript(
-    ({ stateKey, minimizedKey, fileTab, mode }) => {
+    ({
+      stateKey,
+      minimizedKey,
+      fileTab,
+      mode,
+      stateVersion,
+      minimizedVersion,
+    }) => {
       localStorage.setItem(
         stateKey,
         JSON.stringify({
-          tabs: mode === "inspector" ? [fileTab] : [],
-          groups: [],
-          groupAssignments: {},
-          activeId: mode === "inspector" ? fileTab.id : null,
-          collapsedGroupIds: [],
+          version: stateVersion,
+          value: {
+            tabs: mode === "inspector" ? [fileTab] : [],
+            groups: [],
+            groupAssignments: {},
+            activeId: mode === "inspector" ? fileTab.id : null,
+            collapsedGroupIds: [],
+          },
         }),
       );
-      localStorage.setItem(minimizedKey, mode === "inspector" ? "0" : "1");
+      localStorage.setItem(
+        minimizedKey,
+        JSON.stringify({
+          version: minimizedVersion,
+          value: mode !== "inspector",
+        }),
+      );
     },
     {
-      stateKey: inspectorStateStorageKey(scope),
-      minimizedKey: inspectorMinimizedStorageKey(scope),
+      stateKey: ownerStorageKey(
+        inspectorStorageBaseKey(INSPECTOR_STORAGE.state, scope.organizationId),
+        { kind: "user", userId: scope.userId },
+      ),
+      minimizedKey: ownerStorageKey(
+        inspectorStorageBaseKey(
+          INSPECTOR_STORAGE.minimized,
+          scope.organizationId,
+        ),
+        { kind: "user", userId: scope.userId },
+      ),
       fileTab: world.fileTab,
       mode: presentation,
+      stateVersion: INSPECTOR_STORAGE.state.version,
+      minimizedVersion: INSPECTOR_STORAGE.minimized.version,
     },
   );
 };

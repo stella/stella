@@ -19,11 +19,12 @@ import type {
   AIRequestPolicy,
 } from "@/api/lib/chat/ai-data-policy";
 import { MANAGED_AI_RESIDENCIES } from "@/api/lib/chat/ai-data-policy";
+import type { ManagedOpenRouterCredential } from "@/api/lib/chat/openrouter-credential";
 import {
-  MANAGED_PROVIDER_UNAVAILABLE_CODE,
-  PROVIDER_DATA_POLICY,
   assertManagedOpenRouterModel,
   isManagedProviderAvailable,
+  MANAGED_PROVIDER_UNAVAILABLE_CODE,
+  PROVIDER_DATA_POLICY,
 } from "@/api/lib/chat/provider-data-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { failureSink, gradeFailure } from "@/api/lib/observability/failure";
@@ -33,8 +34,8 @@ import {
 } from "@/api/lib/observability/failure-evidence";
 import {
   createTanStackTextAdapterFactory,
-  getTanStackTextModelById,
   getStructuredOutputFallbackModelId,
+  getTanStackTextModelById,
   getTanStackTextModelForTask,
   getTanStackTextModelInfoById,
   getTanStackTextModelInfoForTask,
@@ -51,6 +52,12 @@ const testState = createTestState({ file: import.meta.path, config: env });
 
 const REQUEST_TEXT = "Reply with OK.";
 const REQUEST_API_KEY = "test-request-key";
+// Managed requests carry the credential their tier resolved; the factory
+// never reads one from the environment.
+const MANAGED_CREDENTIAL = {
+  type: "static",
+  apiKey: REQUEST_API_KEY,
+} as const satisfies ManagedOpenRouterCredential;
 
 const ORIGINAL_REQUESTS = {
   openai: (model: string) => ({
@@ -237,9 +244,17 @@ describe("provider request policy", () => {
                 dataClass === "customer"
                   ? { dataClass, managedAIResidency }
                   : { dataClass };
+              // The managed path serves only the credential its tier hands
+              // in; the factory never reads a key from the environment.
               const result = Result.try({
                 try: () =>
-                  createTanStackTextAdapterFactory({ provider, ...policy }),
+                  createTanStackTextAdapterFactory({
+                    provider,
+                    ...policy,
+                    ...(provider === "openrouter"
+                      ? { managedOpenRouterCredential: MANAGED_CREDENTIAL }
+                      : {}),
+                  }),
                 catch: (error) => error,
               });
               if (dataClass === "customer" && provider !== "openrouter") {
@@ -264,6 +279,18 @@ describe("provider request policy", () => {
           }
         }
       }
+      const withoutCredential = Result.try({
+        try: () =>
+          createTanStackTextAdapterFactory({
+            provider: "openrouter",
+            dataClass: "customer",
+            managedAIResidency: MANAGED_AI_RESIDENCIES[0],
+          }),
+        catch: (error) => error,
+      });
+      expect(
+        Result.isError(withoutCredential) && withoutCredential.error,
+      ).toMatchObject({ status: 503, code: MANAGED_PROVIDER_UNAVAILABLE_CODE });
     } finally {
       Object.assign(env, previous);
     }
@@ -322,6 +349,7 @@ describe("provider request policy", () => {
             const options = {
               organizationId: null,
               modelTier: MANAGED_MODEL_TIER.standard,
+              managedOpenRouterCredential: MANAGED_CREDENTIAL,
               ...policy,
             };
             if (!available) {
@@ -373,6 +401,7 @@ describe("provider request policy", () => {
             provider,
             dataClass: "customer" as const,
             managedAIResidency,
+            managedOpenRouterCredential: MANAGED_CREDENTIAL,
           };
           if (provider === "openrouter") {
             expect(
@@ -492,6 +521,9 @@ describe("provider request policy", () => {
         const baseline = createTanStackTextAdapterFactory({
           provider,
           dataClass: "public_corpus",
+          ...(provider === "openrouter"
+            ? { managedOpenRouterCredential: MANAGED_CREDENTIAL }
+            : {}),
         })(model);
         for await (const _chunk of baseline.chatStream(chatOptions)) {
           /* consume stream */
@@ -581,6 +613,7 @@ describe("provider request policy", () => {
           organizationId: null,
           task: "chat",
           modelTier: MANAGED_MODEL_TIER.standard,
+          managedOpenRouterCredential: MANAGED_CREDENTIAL,
           ...policy,
         });
         expect(model.provider).toBe("openrouter");
@@ -625,6 +658,7 @@ describe("provider request policy", () => {
               : { dataClass };
           const factory = createTanStackTextAdapterFactory({
             provider: "openrouter",
+            managedOpenRouterCredential: MANAGED_CREDENTIAL,
             ...policy,
           });
           for (const modelId of [
@@ -726,6 +760,7 @@ describe("provider request policy", () => {
           const model = "google/gemini-3.8-flash";
           const adapter = createTanStackTextAdapterFactory({
             provider: "openrouter",
+            managedOpenRouterCredential: MANAGED_CREDENTIAL,
             ...policy,
           })(model);
           for (const invalidModel of [
@@ -937,10 +972,17 @@ describe("provider request policy", () => {
             const model = scenario.strict
               ? "google/gemini-3.8-flash"
               : "google/gemini-3.8-flash:online";
-            const adapter = createTanStackTextAdapterFactory({
-              provider: "openrouter",
-              ...scenario.options,
-            })(model);
+            // A customer key serves its own request; managed requests carry
+            // the tier's credential.
+            const adapter = createTanStackTextAdapterFactory(
+              "apiKey" in scenario.options
+                ? { provider: "openrouter", ...scenario.options }
+                : {
+                    provider: "openrouter",
+                    managedOpenRouterCredential: MANAGED_CREDENTIAL,
+                    ...scenario.options,
+                  },
+            )(model);
             const chatOptions = {
               model,
               logger: resolveDebugOption(false),

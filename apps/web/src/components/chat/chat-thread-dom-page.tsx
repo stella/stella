@@ -1,5 +1,5 @@
-import { Profiler, Suspense } from "react";
-import type { ProfilerOnRenderCallback } from "react";
+import { Profiler, StrictMode, Suspense } from "react";
+import type { ProfilerOnRenderCallback, ReactNode } from "react";
 
 import {
   QueryClient,
@@ -14,6 +14,8 @@ import { ChatEditorProvider } from "@/components/chat-editor-provider";
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
+import type { ChatRouteHandoffMessage } from "@/features/chat/chat-runtime";
+import { acquireChatRuntime } from "@/features/chat/chat-runtime-registry";
 import { chatToolGrantsOptions } from "@/features/chat/chat-tool-grants";
 import type { ChatToolGrantsResponse } from "@/features/chat/chat-tool-grants";
 import { useChatSession } from "@/features/chat/hooks/use-chat-session";
@@ -61,13 +63,48 @@ const threadQueryOptions = (organizationId: string, threadId: string) =>
     key: threadRefOf(threadId),
   });
 
+/**
+ * Sends `message` as the new-chat route does (`routes/_protected.chat/
+ * index.tsx`): the thread query read once, the runtime acquired under the
+ * context the thread page acquires it with, the stream started before the
+ * page exists.
+ */
+const startRouteHandoff = async ({
+  message,
+  organizationId,
+  queryClient,
+  threadId,
+}: {
+  message: ChatRouteHandoffMessage;
+  organizationId: string;
+  queryClient: QueryClient;
+  threadId: string;
+}) => {
+  const data = await queryClient.query({
+    ...threadQueryOptions(organizationId, threadId),
+    staleTime: "static",
+  });
+  const chat = acquireChatRuntime({
+    activeOrganizationId: organizationId,
+    context: CHAT_THREAD_CONTEXT,
+    data,
+    key: threadRefOf(threadId),
+    queryClient,
+  });
+  await chat.startRouteHandoffMessage(message, {
+    timingSurface: "chat-thread",
+  });
+};
+
 /** The thread page's chat, wired as `ChatThreadPage` wires it. */
 const ChatThreadDomPage = ({
   onSession,
+  renderComposer,
   organizationId,
   threadId,
 }: {
   onSession: (session: ChatThreadDomSession) => void;
+  renderComposer?: ((session: ChatThreadDomSession) => ReactNode) | undefined;
   organizationId: string;
   threadId: string;
 }) => {
@@ -82,7 +119,9 @@ const ChatThreadDomPage = ({
     key: threadRef,
   });
   const session = useChatSession({
+    exceptionScope: { type: "handler", handlerId: "chat-session.dom-page" },
     chat,
+    timingSurface: "chat-thread",
     conversationId: threadId,
     initialOlderCursor: data.olderCursor,
     playbookPane: "on-request",
@@ -107,6 +146,8 @@ const ChatThreadDomPage = ({
           handleDeny: session.handleDeny,
           handleRequestSecret: session.handleRequestSecret,
           continueRequestSecret: session.continueRequestSecret,
+          handleConnectConnector: session.handleConnectConnector,
+          continueConnectConnector: session.continueConnectConnector,
           resolveSecretTarget: session.resolveSecretTarget,
           secretAvailabilityKey: session.secretAvailabilityKey,
         }}
@@ -114,6 +155,7 @@ const ChatThreadDomPage = ({
         {/* The selection bar quotes into the composer through the editor
             manager, as on the real page. */}
         <ChatEditorProvider>
+          {renderComposer?.(session)}
           <ChatThreadMessages
             activitySession={session.activitySession}
             approvalPendingMessageId={session.approvalPendingMessageId}
@@ -153,11 +195,20 @@ const ChatThreadDomPage = ({
 export const openChatThreadDomPage = async ({
   onRender,
   organizationId,
+  routeHandoff,
   threadId,
   toolGrants = [],
+  renderComposer,
 }: {
+  renderComposer?: ((session: ChatThreadDomSession) => ReactNode) | undefined;
   onRender?: ProfilerOnRenderCallback | undefined;
   organizationId: string;
+  /**
+   * A first message sent the way the new-chat route sends it: through the
+   * runtime registry, before the page mounts, so the page adopts a runtime
+   * whose turn is already streaming.
+   */
+  routeHandoff?: ChatRouteHandoffMessage | undefined;
   threadId: string;
   /** Stored tool approvals the API holds for this conversation. */
   toolGrants?: ChatToolGrantsResponse["grants"];
@@ -184,6 +235,14 @@ export const openChatThreadDomPage = async ({
     workspacesNavigationOptions({ organizationId, userId }).queryKey,
     { workspaces: [], features: { timeBilling: false } },
   );
+  if (routeHandoff !== undefined) {
+    await startRouteHandoff({
+      message: routeHandoff,
+      organizationId,
+      queryClient,
+      threadId,
+    });
+  }
   // The thread route's loader fills a cold thread query before the page
   // mounts, so the page renders its messages on first paint instead of
   // suspending on them.
@@ -192,42 +251,47 @@ export const openChatThreadDomPage = async ({
     threadQueryOptions(organizationId, threadId),
   );
   let session: ChatThreadDomSession | undefined;
+  // StrictMode as in `client.tsx`: the dev app mounts every effect twice,
+  // so the page's runtime subscription drops to no viewer once on mount.
   const view = render(
-    <Profiler
-      id="chat-thread-dom-page"
-      onRender={onRender ?? (() => undefined)}
-    >
-      <ChatThreadTestRouter>
-        <QueryClientProvider client={queryClient}>
-          <IntlProvider locale="en" messages={messages} timeZone="UTC">
-            <FormattingProvider locale="en" timeZone="UTC">
-              <AuthenticatedUserProvider
-                user={{
-                  activeOrganizationId: organizationId,
-                  email: "user@example.com",
-                  id: userId,
-                  image: null,
-                  name: "User",
-                  preferredName: null,
-                  timezoneId: "UTC",
-                  wordEditShortcut: null,
-                }}
-              >
-                <Suspense fallback={<p>{SUSPENDED}</p>}>
-                  <ChatThreadDomPage
-                    onSession={(next) => {
-                      session = next;
-                    }}
-                    organizationId={organizationId}
-                    threadId={threadId}
-                  />
-                </Suspense>
-              </AuthenticatedUserProvider>
-            </FormattingProvider>
-          </IntlProvider>
-        </QueryClientProvider>
-      </ChatThreadTestRouter>
-    </Profiler>,
+    <StrictMode>
+      <Profiler
+        id="chat-thread-dom-page"
+        onRender={onRender ?? (() => undefined)}
+      >
+        <ChatThreadTestRouter>
+          <QueryClientProvider client={queryClient}>
+            <IntlProvider locale="en" messages={messages} timeZone="UTC">
+              <FormattingProvider locale="en" timeZone="UTC">
+                <AuthenticatedUserProvider
+                  user={{
+                    activeOrganizationId: organizationId,
+                    email: "user@example.com",
+                    id: userId,
+                    image: null,
+                    name: "User",
+                    preferredName: null,
+                    timezoneId: "UTC",
+                    wordEditShortcut: null,
+                  }}
+                >
+                  <Suspense fallback={<p>{SUSPENDED}</p>}>
+                    <ChatThreadDomPage
+                      renderComposer={renderComposer}
+                      onSession={(next) => {
+                        session = next;
+                      }}
+                      organizationId={organizationId}
+                      threadId={threadId}
+                    />
+                  </Suspense>
+                </AuthenticatedUserProvider>
+              </FormattingProvider>
+            </IntlProvider>
+          </QueryClientProvider>
+        </ChatThreadTestRouter>
+      </Profiler>
+    </StrictMode>,
   );
   await waitFor(() => {
     if (session === undefined || isThreadPageSuspended(view.container)) {

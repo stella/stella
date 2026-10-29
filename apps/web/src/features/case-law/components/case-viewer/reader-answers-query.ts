@@ -11,7 +11,7 @@ import { fetchWithTimeout } from "@stll/fetch";
 import { api } from "@/lib/api";
 import { getApiRequestHeaders } from "@/lib/api-request-context";
 import { apiUrl } from "@/lib/api-url";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { APIError, toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { readQueryResult } from "@/lib/errors/query-result";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -33,21 +33,49 @@ export const readerAnswersOptions = ({
   queryOptions({
     queryKey: ["reader-answers", organizationId, userId, decisionId],
     queryFn: async ({ signal }): Promise<ReaderAnswer[]> => {
+      const queryDecisionId = toSafeId<"caseLawDecision">(decisionId);
       const answers: ReaderAnswer[] = [];
       const cursors = new Set<string>();
       let cursor: string | undefined;
       do {
-        const page = unwrapEden(
-          // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- The next page cursor is known only after the preceding response.
-          await api.reader.answers.get({
-            query: {
-              decisionId: toSafeId<"caseLawDecision">(decisionId),
-              limit: 50,
-              ...(cursor === undefined ? {} : { cursor }),
-            },
-            fetch: { signal },
-          }),
+        const pageRequest = {
+          query: {
+            decisionId: queryDecisionId,
+            limit: 50,
+            ...(cursor === undefined ? {} : { cursor }),
+          },
+          fetch: { signal },
+        };
+        const fetched = await Result.tryPromise(async () =>
+          unwrapApiResponse(
+            // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- The next page cursor is known only after the preceding response.
+            await api.reader.answers.get(pageRequest),
+          ),
         );
+        if (fetched.isErr()) {
+          // Preserve refused responses and programming failures; only the
+          // typed network branch becomes this query's request failure.
+          const { cause } = fetched.error;
+          const requestCause =
+            APIError.is(cause) && cause.transportKind === "network"
+              ? cause.cause
+              : cause;
+          const failure =
+            requestCause instanceof Error &&
+            !(
+              APIError.is(cause) &&
+              cause.transportKind === "network" &&
+              requestCause instanceof TypeError
+            )
+              ? requestCause
+              : new ReaderAnswerFailure({
+                  kind: "request",
+                  message: "Reader answer request failed",
+                  cause: requestCause,
+                });
+          return readQueryResult(Result.err(failure));
+        }
+        const page = fetched.value;
         answers.push(...page.items);
         cursor = page.nextCursor ?? undefined;
         if (cursor !== undefined) {
@@ -138,7 +166,7 @@ export const deleteReaderAnswer = async (
   answerId: string,
   signal: AbortSignal,
 ) =>
-  unwrapEden(
+  unwrapApiResponse(
     await api.reader
       .answers({ answerId: toSafeId<"legalReaderAnswer">(answerId) })
       .delete({ fetch: { signal } }),
@@ -148,7 +176,7 @@ export const changeReaderAnswerVisibility = async (
   visibility: ReaderAnswer["visibility"],
   signal: AbortSignal,
 ) =>
-  unwrapEden(
+  unwrapApiResponse(
     await api.reader
       .answers({ answerId: toSafeId<"legalReaderAnswer">(answerId) })
       .patch({ visibility }, { fetch: { signal } }),

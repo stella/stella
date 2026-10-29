@@ -18,6 +18,9 @@ pub fn enable(app: &AppHandle) -> Result<(), String> {
 }
 
 #[cfg(target_os = "macos")]
+pub use launch_agent::plist_path as launch_agent_path;
+
+#[cfg(target_os = "macos")]
 mod launch_agent {
   use std::path::PathBuf;
 
@@ -47,7 +50,7 @@ mod launch_agent {
 
   // Mirrors the autostart plugin's launch agent location:
   // `~/Library/LaunchAgents/<package name>.plist`.
-  fn plist_path(app: &AppHandle) -> Result<PathBuf, String> {
+  pub fn plist_path(app: &AppHandle) -> Result<PathBuf, String> {
     let home = dirs::home_dir().ok_or("home directory unavailable")?;
     Ok(
       home

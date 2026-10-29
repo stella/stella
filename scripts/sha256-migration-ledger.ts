@@ -2,11 +2,11 @@ import { panic } from "better-result";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import ts from "typescript";
 import * as v from "valibot";
 
 import { repoRelativePath } from "@stll/portable-path";
 
+import { parseSource } from "../packages/scripts/src/syntax-tree";
 import {
   parseReasonedLedger,
   runLedgerMembershipGuard,
@@ -90,38 +90,54 @@ export const migrationLedger = (files: readonly string[]) =>
   files.map((id) => ({ id, reason: "migrates in a follow-up" }));
 
 export const parseOwnerLedger = (text: string, label: string): string[] => {
-  const source = ts.createSourceFile(label, text, ts.ScriptTarget.Latest, true);
-  for (const statement of source.statements) {
-    if (!ts.isVariableStatement(statement)) {
+  // The owners ledger is TypeScript whatever its label is.
+  const { program } = parseSource(
+    /\.[cm]?ts$/u.test(label) ? label : `${label}.ts`,
+    text,
+  );
+  for (const topLevel of program.body) {
+    // `export const` wraps the declaration it exports.
+    const statement =
+      topLevel.type === "ExportNamedDeclaration"
+        ? topLevel.declaration
+        : topLevel;
+    if (statement?.type !== "VariableDeclaration") {
       continue;
     }
-    for (const declaration of statement.declarationList.declarations) {
+    for (const declaration of statement.declarations) {
       if (
-        !ts.isIdentifier(declaration.name) ||
-        declaration.name.text !== "SHA256_OWNERS"
+        declaration.id.type !== "Identifier" ||
+        declaration.id.name !== "SHA256_OWNERS"
       ) {
         continue;
       }
-      let value = declaration.initializer;
+      let value = declaration.init;
       while (
         value &&
-        (ts.isAsExpression(value) || ts.isSatisfiesExpression(value))
+        (value.type === "TSAsExpression" ||
+          value.type === "TSSatisfiesExpression")
       ) {
         value = value.expression;
       }
-      if (!value || !ts.isObjectLiteralExpression(value)) {
+      if (value?.type !== "ObjectExpression") {
         panic(`${label}: owners must be a literal reasoned map`);
       }
       return value.properties.map((property) => {
         if (
-          !ts.isPropertyAssignment(property) ||
-          !ts.isStringLiteral(property.name) ||
-          !ts.isStringLiteral(property.initializer) ||
-          property.initializer.text.trim().length === 0
+          property.type !== "Property" ||
+          property.kind !== "init" ||
+          property.method ||
+          property.shorthand ||
+          property.computed ||
+          property.key.type !== "Literal" ||
+          typeof property.key.value !== "string" ||
+          property.value.type !== "Literal" ||
+          typeof property.value.value !== "string" ||
+          property.value.value.trim().length === 0
         ) {
           panic(`${label}: every owner needs a literal path and reason`);
         }
-        return property.name.text;
+        return property.key.value;
       });
     }
   }

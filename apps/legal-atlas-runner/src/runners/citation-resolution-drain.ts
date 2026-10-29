@@ -27,12 +27,95 @@ import { panic } from "better-result";
 
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
 
-import type { CitationResolutionCounts } from "@/api/handlers/case-law/citation-resolution";
+import type {
+  CitationResolutionBatch,
+  CitationResolutionCounts,
+} from "@/api/handlers/case-law/citation-resolution";
 import {
   CITATION_RESOLUTION_RULES,
   countsByRule,
 } from "@/api/handlers/case-law/citation-resolution-status";
 import { pgErrorFields } from "@/api/lib/pg-error";
+
+export type CitationBatchOutcome =
+  | { type: "settled"; counts: CitationResolutionCounts }
+  | { type: "busy" }
+  | { type: "aborted"; counts: CitationResolutionCounts };
+
+type TryResolveCitationBatchOptions = {
+  limit: number;
+  signal?: AbortSignal | undefined;
+  resolveBatch: (limit: number) => Promise<CitationResolutionBatch | null>;
+};
+
+const emptyCitationCounts = (): CitationResolutionCounts => ({
+  scanned: 0,
+  resolved: 0,
+  resolvedByRule: countsByRule(() => 0),
+  unmatched: 0,
+  ambiguous: 0,
+  jurisdictionBlocked: 0,
+  undeclaredJurisdiction: 0,
+});
+
+const addCitationCounts = (
+  target: CitationResolutionCounts,
+  counts: CitationResolutionCounts,
+): void => {
+  target.scanned += counts.scanned;
+  target.resolved += counts.resolved;
+  target.unmatched += counts.unmatched;
+  target.ambiguous += counts.ambiguous;
+  target.jurisdictionBlocked += counts.jurisdictionBlocked;
+  target.undeclaredJurisdiction += counts.undeclaredJurisdiction;
+  for (const rule of CITATION_RESOLUTION_RULES) {
+    target.resolvedByRule[rule] += counts.resolvedByRule[rule];
+  }
+};
+
+/** Bounds work committed after cancellation to at most one chunk. */
+const CITATION_ABORT_CHUNK = 25;
+
+/** Resolve independently committed chunks so cancellation preserves progress. */
+export const tryResolveCitationBatch = async ({
+  limit,
+  resolveBatch,
+  signal,
+}: TryResolveCitationBatchOptions): Promise<CitationBatchOutcome> => {
+  if (signal === undefined) {
+    const batch = await resolveBatch(limit);
+    if (batch === null) {
+      return { type: "busy" };
+    }
+    const counts = emptyCitationCounts();
+    addCitationCounts(counts, batch);
+    return { type: "settled", counts };
+  }
+
+  const counts = emptyCitationCounts();
+
+  for (
+    let remaining = limit;
+    remaining > 0;
+    remaining -= CITATION_ABORT_CHUNK
+  ) {
+    if (signal.aborted) {
+      return { type: "aborted", counts };
+    }
+    const chunkSize = Math.min(remaining, CITATION_ABORT_CHUNK);
+    const batch = await resolveBatch(chunkSize);
+    if (batch === null) {
+      return counts.scanned === 0
+        ? { type: "busy" }
+        : { type: "settled", counts };
+    }
+    addCitationCounts(counts, batch);
+    if (batch.scanned < chunkSize) {
+      break;
+    }
+  }
+  return { type: "settled", counts };
+};
 
 /** How one turn ended. */
 export const CITATION_RESOLUTION_STEP = {

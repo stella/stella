@@ -12,7 +12,7 @@ import {
 import { sql, TransactionRollbackError } from "drizzle-orm";
 import fc from "fast-check";
 
-import { assertProperty } from "@stll/property-testing";
+import { assertProperty, propertyConfig } from "@stll/property-testing";
 
 import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -27,6 +27,7 @@ import {
 } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { envBase } from "@/api/env-base";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -49,6 +50,13 @@ import type {
 
 import { copyFileObject, resolveEntityName } from "./copy-utils";
 import { createDuplicateEntity } from "./duplicate";
+
+beforeEach(() => {
+  enqueueDocumentProcessingRunMock.mockClear();
+  enqueueEntitySearchRepairsMock.mockClear();
+  flushEntitySearchRepairsMock.mockClear();
+  requestNativeExtractionRunsMock.mockClear();
+});
 
 const requestNativeExtractionRunsMock = mock(
   async ({ requests }: { requests: readonly unknown[] }) =>
@@ -251,7 +259,7 @@ const createContext = ({
     memberRole: sessionMemberRole("owner"),
     body,
     request: recorderBindings.request,
-    route: "/v1/entities/:workspaceId/duplicate",
+    route: "/v1/entities/:workspaceId/duplicate" satisfies ApiRoutePath,
     safeDb,
     recordAuditEvent: createAuditRecorder(recorderBindings),
     createAuditRecorder: () => createAuditRecorder(recorderBindings),
@@ -603,6 +611,7 @@ describe("duplicate name collisions", () => {
           });
         },
       ),
+      propertyConfig({ numRuns: 24 }),
     );
   });
 });
@@ -1061,19 +1070,23 @@ describe("duplicate entity", () => {
     expect(nestedDuplicate.kind).toBe("folder");
     expect(nestedDuplicate.name).toBe("Nested");
     expect(nestedDuplicate.parentId).toBe(rootDuplicate.id);
-    // The DOCX copy is indexed by the extraction run that reads it; the two
-    // folder copies have no such run, so their marks are written inside the
-    // copy transaction and only flushed afterwards.
+    // Every copy is marked for immediate name indexing. Native extraction
+    // independently adds content to the same source-fenced projection.
     expect(requestNativeExtractionRunsMock).toHaveBeenCalledTimes(1);
     expect(enqueueDocumentProcessingRunMock.mock.calls).toEqual([
       [toSafeId<"documentProcessingRun">("run_0")],
       [toSafeId<"documentProcessingRun">("run_1")],
     ]);
     expect(enqueueEntitySearchRepairsMock).toHaveBeenCalledTimes(1);
-    expect(enqueueEntitySearchRepairsMock.mock.calls.at(0)?.at(1)).toEqual([
-      rootDuplicate.id,
-      nestedDuplicate.id,
-    ]);
+    const markedIds = enqueueEntitySearchRepairsMock.mock.calls.at(0)?.at(1);
+    if (!Array.isArray(markedIds)) {
+      throw new TypeError("Expected copied entity search marks");
+    }
+    expect(markedIds).toBeArray();
+    expect(markedIds).toHaveLength(insertedEntities.length);
+    expect(markedIds).toEqual(
+      expect.arrayContaining(insertedEntities.map(({ id }) => id)),
+    );
     expect(flushEntitySearchRepairsMock).toHaveBeenCalledTimes(1);
   });
 

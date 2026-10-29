@@ -25,7 +25,7 @@ import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 
 import { deriveManifestFromDocx } from "./derived-manifest";
-import { isFieldMeta, type FieldMeta } from "./types";
+import { type FieldMeta, isFieldMeta } from "./types";
 import { writeFieldFilters } from "./write-field-filters";
 
 const WRAP = (body: string) =>

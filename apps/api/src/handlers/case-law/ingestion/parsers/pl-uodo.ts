@@ -28,7 +28,8 @@ import type {
   ParagraphRole,
 } from "@stll/legal-ast/document-ast";
 
-import { ParseXmlError } from "@/api/lib/errors/tagged-errors";
+// parser-output-unchanged: keeps the same tagged XML rejection in the parser-owned pure module.
+import { ParseXmlError } from "@/api/handlers/case-law/ingestion/parsers/parse-xml-error";
 import {
   buildValidationHtml,
   validateAndLog,
@@ -127,6 +128,24 @@ const nextId = (state: ParseState): number => {
   return state.counter;
 };
 
+/**
+ * What an `xGlossRef` prints, raised: the label of the footnote it points at,
+ * or, where it names no footnote, its reference itself. The portal sets an
+ * article's superscript index this way (`art. 22<xGlossRef xRef="1"/>` is
+ * art. 22¹), and its own text rendition prints both readings. Undefined only
+ * for a mark that states nothing to print.
+ */
+const glossRefMark = (
+  glossLabels: ReadonlyMap<string, string>,
+  ref: Element,
+): string | undefined => {
+  const target = collapse(ref.attribs["xRef"] ?? "").trim();
+  if (target === "") {
+    return undefined;
+  }
+  return glossLabels.get(target) ?? target;
+};
+
 /** The inline run of one `xText`, with links and footnote marks kept. */
 const inlinesOf = (state: ParseState, node: AnyNode): Inline[] => {
   const inlines: Inline[] = [];
@@ -168,13 +187,15 @@ const inlinesOf = (state: ParseState, node: AnyNode): Inline[] => {
         return;
       }
       case "xGlossRef": {
-        const label = state.glossLabels.get(current.attribs["xRef"] ?? "");
-        if (label !== undefined) {
-          target.push({
-            type: "superscript",
-            children: [{ type: "text", text: label }],
-          });
+        const mark = glossRefMark(state.glossLabels, current);
+        if (mark === undefined) {
+          state.unmapped.add(current.tagName);
+          return;
         }
+        target.push({
+          type: "superscript",
+          children: [{ type: "text", text: mark }],
+        });
         return;
       }
       default: {

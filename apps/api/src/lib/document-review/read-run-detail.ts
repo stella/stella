@@ -19,9 +19,9 @@ import { and, asc, eq, sql } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import {
-  docxSuggestions,
   documentReviewFindings,
   documentReviewRuns,
+  docxSuggestions,
   playbookDefinitions,
   playbookDefinitionVersions,
 } from "@/api/db/schema";

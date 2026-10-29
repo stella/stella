@@ -1,35 +1,17 @@
-import Elysia from "elysia";
-
 import autocompleteStream from "@/api/handlers/ai-autocomplete/stream";
-import { authMacro, permissionMacro } from "@/api/lib/auth";
+import { routes } from "@/api/http/route";
+import { localDevelopmentGate } from "@/api/lib/deployment-feature-route";
 import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
 import { createStandardApiRateLimitOptions } from "@/api/lib/rate-limit/standard-api";
-import { isLocalDevOpen } from "@/api/runtime-mode";
 
-// Mounted at `/v1/ai-autocomplete` directly at the root rather
-// than inside the `.group("/v1", ...)` chain in
-// `apps/api/src/index.ts`. Folding one more `.use()` into that
-// group tips Elysia's already-substantial inferred type past
-// TypeScript's complexity threshold and ripples `implicit any`
-// errors onto the surrounding `onError` / `onAfterHandle`
-// handler parameters. Mounting at the root keeps the inference
-// shallow and matches the same pattern `mcpRoute` already uses.
-export const aiAutocompleteRoute = new Elysia({
-  prefix: "/v1/ai-autocomplete",
-})
-  .use(rateLimit(createStandardApiRateLimitOptions()))
-  .use(authMacro)
-  .use(permissionMacro)
-  .guard({
-    validateAuth: true,
-    beforeHandle: () => {
-      if (isLocalDevOpen()) {
-        return undefined;
-      }
-      return new Response("Not available", { status: 404 });
-    },
-  })
-  .post("/stream", autocompleteStream.handler, {
-    body: autocompleteStream.config.body,
-    permissions: autocompleteStream.config.permissions,
-  });
+// Local development only: elsewhere the route answers like an absent one.
+export const aiAutocompleteRoute = routes(
+  { "/stream": { POST: autocompleteStream } },
+  {
+    prefix: "/v1/ai-autocomplete",
+    middleware: [
+      rateLimit(createStandardApiRateLimitOptions()),
+      localDevelopmentGate,
+    ],
+  },
+);

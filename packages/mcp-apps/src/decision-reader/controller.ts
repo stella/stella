@@ -40,8 +40,7 @@ export const createReaderController = (
   let previewGeneration = 0;
   let received: OpenDecision | undefined;
   let lastProvision:
-    | ReaderPager["provisionAnchors"][number]["provision"]
-    | undefined;
+    ReaderPager["provisionAnchors"][number]["provision"] | undefined;
   let snapshot = createReaderSnapshot();
   const publish = () => {
     for (const listener of listeners) {
@@ -196,9 +195,12 @@ export const createReaderController = (
           : createReaderPager(received.metadata),
     };
     publish();
-    bridge.detached(bridge.requestFullscreen(), "request reader display mode");
+    bridge.detached(
+      bridge.requestFullscreen(),
+      "decisionReader.requestFullscreen",
+    );
     if (received.status !== "unavailable") {
-      bridge.detached(loadNext(), "load decision blocks");
+      bridge.detached(loadNext(), "decisionReader.loadBlocks");
     }
   });
   return {

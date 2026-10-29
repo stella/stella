@@ -2,8 +2,8 @@ import { panic, Result } from "better-result";
 import { eq, isNotNull } from "drizzle-orm";
 
 import {
-  PLAYBOOK_DEFINITIONS_ORG_STARTER_ID_UIDX,
   onlineUniqueIndexTarget,
+  PLAYBOOK_DEFINITIONS_ORG_STARTER_ID_UIDX,
 } from "@/api/db/online-unique-indexes";
 import { resultTx } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -50,8 +50,7 @@ export type CreatePlaybookDefinitionResult = {
 };
 
 export type CreatePlaybookDefinitionOrigin =
-  | { type: "authored" }
-  | { type: "starter"; starterId: StarterPlaybookId };
+  { type: "authored" } | { type: "starter"; starterId: StarterPlaybookId };
 
 type CreatePlaybookDefinitionArgs = {
   /** Admits the save's ask derivations; see `deriveAutoAsks`. */
@@ -61,9 +60,9 @@ type CreatePlaybookDefinitionArgs = {
   /** Matters the caller can access; a newly added source must be in one. */
   accessibleWorkspaceIds: readonly SafeId<"workspace">[];
   orgAIConfig: OrgAIConfig | null;
-  managedAIResidency: ManagedAIResidency;
+  managedAIResidency: ManagedAIResidency | null;
   orgAIConfigStatus: OrgAIConfigStatus;
-  promptCachingEnabled: boolean;
+  promptCachingEnabled: boolean | null;
   recordAuditEvent: AuditRecorder;
   body: CreatePlaybookDefinitionBody;
   origin: CreatePlaybookDefinitionOrigin;

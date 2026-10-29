@@ -1,0 +1,5 @@
+{
+  "metric": "throw-outside-boundary",
+  "delta": 1,
+  "reason": "The auth adapter's create hook refuses an OAuth token write whose grant lost its authority by throwing APIError, which is the provider adapter contract; the same hook already refuses an unavailable client this way."
+}

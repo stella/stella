@@ -1,12 +1,13 @@
 import { panic } from "better-result";
-import { readFileSync, readdirSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 
+import type { OnlineStepIntroduction } from "../apps/api/src/db/online-migration-connection";
 import {
-  onlineIndexColumnTarget,
-  ONLINE_UNIQUE_INDEX_VALIDATION_DEFINITIONS,
   ONLINE_UNIQUE_INDEX_NAMES,
+  ONLINE_UNIQUE_INDEX_VALIDATION_DEFINITIONS,
+  onlineIndexColumnTarget,
 } from "../apps/api/src/db/online-unique-indexes";
 
 const ROOT = path.resolve(import.meta.dir, "..");
@@ -15,7 +16,7 @@ const OWNER = "apps/api/src/db/online-unique-indexes.ts";
 type UniqueIndex = {
   name: string;
   definitionBody: string;
-  introducedBy: string;
+  introducedBy: OnlineStepIntroduction;
   tableName: string;
 };
 type OnlineIndexDependency = {

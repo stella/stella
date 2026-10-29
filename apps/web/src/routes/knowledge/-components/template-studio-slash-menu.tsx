@@ -44,13 +44,14 @@ import {
   clausesOptions as clauseLibraryOptions,
   invalidateTemplateClauseSources,
 } from "@/lib/knowledge/queries";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { inputTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
 import {
   clauseSlotMarker,
-  conditionOpenTag,
   CONDITION_CLOSE_TAG,
+  conditionOpenTag,
   fieldMarker,
 } from "@/routes/knowledge/-components/template-markers";
 import { slugify } from "@/routes/knowledge/-components/template-studio-model";
@@ -60,8 +61,8 @@ import {
   type SlashRootItem,
 } from "@/routes/knowledge/-components/template-studio-search.logic";
 import {
-  useTemplateStudioStore,
   type StudioField,
+  useTemplateStudioStore,
 } from "@/routes/knowledge/-components/template-studio-store";
 
 // Marker shapes the menu shows as a hint badge or a preview: document
@@ -271,8 +272,8 @@ export const useTemplateStudioSlashMenu = ({
     }),
     enabled: slashClausesEnabled,
   });
-  const slashClauseDataView = useQueryView(slashClauseDataQuery);
-  useQueryViewError(slashClauseDataView);
+  const slashClauseDataView = queryView(slashClauseDataQuery);
+  useQueryViewError(slashClauseDataView, "useTemplateStudioSlashMenu:query");
   const slashClauseData =
     slashClauseDataView.type === "items"
       ? slashClauseDataView.items

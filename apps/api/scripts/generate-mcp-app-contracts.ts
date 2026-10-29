@@ -9,25 +9,31 @@ import { jsonSchemaToType } from "../src/lib/json-schema/json-schema-to-type";
 import { toJsonSchema } from "../src/lib/json-schema/valibot-to-json-schema";
 import {
   APP_CITATION_PAGE_SCHEMA,
-  APP_PROVISION_HISTORY_SCHEMA,
-  APP_SEARCH_SCHEMA,
-  APP_RESOLVE_SCHEMA,
-  APP_OPEN_DECISION_SCHEMA,
   APP_DECISION_BLOCKS_SCHEMA,
+  APP_OPEN_DECISION_SCHEMA,
+  APP_PROVISION_HISTORY_SCHEMA,
   APP_PROVISION_PREVIEW_SCHEMA,
+  APP_RESOLVE_SCHEMA,
+  APP_SEARCH_SCHEMA,
 } from "../src/mcp/app-browser-contracts";
-import { MCP_APP_OUTPUT_SCHEMAS } from "../src/mcp/app-contracts";
+import { MCP_APP_OUTPUT_CONTRACTS } from "../src/mcp/app-contracts";
 import { defineChatProjectionMcpToolOutput } from "../src/mcp/valibot-tool-definition";
+import { advertisedMcpOutputSchema } from "../src/mcp/write-result-omission";
 
 const outputRoot = path.resolve(
   import.meta.dirname,
   "../../../packages/mcp-apps/src/shared/generated",
 );
 const schemas = Object.fromEntries(
-  Object.entries(MCP_APP_OUTPUT_SCHEMAS).map(([name, schema]) => [
-    name,
-    defineChatProjectionMcpToolOutput(schema).outputSchema,
-  ]),
+  Object.entries(MCP_APP_OUTPUT_CONTRACTS).map(
+    ([name, { access, outputSchemaSource }]) => [
+      name,
+      advertisedMcpOutputSchema({
+        access,
+        contract: defineChatProjectionMcpToolOutput(outputSchemaSource),
+      }),
+    ],
+  ),
 );
 
 // Bun emits source comments relative to cwd; pin the generator boundary so

@@ -1,8 +1,8 @@
 import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
+import { apiDateSchema } from "@stll/api-contract/api-date";
 import type { PermissionInput } from "@stll/permissions";
 import { Temporal } from "@stll/time";
 
@@ -11,14 +11,15 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { cellMetadata, entities, fields } from "@/api/db/schema";
 import { currencyCodeSchema } from "@/api/db/schema-validators";
 import type { CellMetadata } from "@/api/db/schema-validators";
-import { captureError } from "@/api/lib/analytics/capture";
+import { createErrorCapture } from "@/api/lib/analytics/capture";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditAction, AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { acquireCellLock } from "@/api/lib/cell-lock";
-import { tUserId } from "@/api/lib/custom-schema";
+import { userIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
@@ -38,90 +39,99 @@ export const FIELD_VALUE_WRITE_PERMISSIONS = {
   entity: ["create", "update"],
 } satisfies PermissionInput;
 
-export const upsertFieldContentSchema = t.Union(
-  [
-    t.Object({
-      version: t.Literal(1),
-      type: t.Literal("text", {
-        description: "Value type; must match the property's value type",
-      }),
-      value: t.String(),
+export const upsertFieldContentSchema = v.pipe(
+  v.union([
+    v.object({
+      version: v.literal(1),
+      type: v.pipe(
+        v.literal("text"),
+        v.description("Value type; must match the property's value type"),
+      ),
+      value: v.string(),
     }),
-    t.Object({
-      version: t.Literal(1),
-      type: t.Literal("single-select", {
-        description: "Value type; must match the property's value type",
-      }),
-      value: t.Nullable(t.String()),
+    v.object({
+      version: v.literal(1),
+      type: v.pipe(
+        v.literal("single-select"),
+        v.description("Value type; must match the property's value type"),
+      ),
+      value: v.nullable(v.string()),
     }),
-    t.Object({
-      version: t.Literal(1),
-      type: t.Literal("multi-select", {
-        description: "Value type; must match the property's value type",
-      }),
-      value: t.Array(t.String({ minLength: 1 })),
+    v.object({
+      version: v.literal(1),
+      type: v.pipe(
+        v.literal("multi-select"),
+        v.description("Value type; must match the property's value type"),
+      ),
+      value: v.array(v.pipe(v.string(), v.minLength(1))),
     }),
-    t.Object({
-      version: t.Literal(1),
-      type: t.Literal("date", {
-        description: "Value type; must match the property's value type",
-      }),
-      value: t.Nullable(t.String({ format: "date" })),
+    v.object({
+      version: v.literal(1),
+      type: v.pipe(
+        v.literal("date"),
+        v.description("Value type; must match the property's value type"),
+      ),
+      value: v.nullable(apiDateSchema),
     }),
-    t.Object({
-      version: t.Literal(1),
-      type: t.Literal("int", {
-        description: "Value type; must match the property's value type",
-      }),
-      value: t.Integer(),
-      currency: t.Nullable(
+    v.object({
+      version: v.literal(1),
+      type: v.pipe(
+        v.literal("int"),
+        v.description("Value type; must match the property's value type"),
+      ),
+      value: v.pipe(v.number(), v.integer()),
+      currency: v.nullable(
         currencyCodeSchema(
           "For int values only: 3-letter ISO currency code, or null",
         ),
       ),
     }),
-    t.Object({
-      version: t.Literal(1),
-      type: t.Literal("money", {
-        description: "Value type; must match the property's value type",
-      }),
-      amountCents: t.Integer({
-        description: "Amount in the currency's minor units",
-      }),
+    v.object({
+      version: v.literal(1),
+      type: v.pipe(
+        v.literal("money"),
+        v.description("Value type; must match the property's value type"),
+      ),
+      amountCents: v.pipe(
+        v.pipe(v.number(), v.integer()),
+        v.description("Amount in the currency's minor units"),
+      ),
       currency: currencyCodeSchema("3-letter ISO currency code"),
     }),
-    t.Object({
-      version: t.Literal(1),
-      type: t.Literal("person", {
-        description: "Empty person sentinel that clears the property value",
-      }),
-      userId: t.Null(),
-      name: t.Literal(""),
-      image: t.Null(),
+    v.object({
+      version: v.literal(1),
+      type: v.pipe(
+        v.literal("person"),
+        v.description("Empty person sentinel that clears the property value"),
+      ),
+      userId: v.null(),
+      name: v.literal(""),
+      image: v.null(),
     }),
-    t.Object({
-      version: t.Literal(1),
-      type: t.Literal("person", {
-        description: "Value type; must match the property's value type",
-      }),
-      userId: t.Nullable(tUserId),
-      name: t.String({ minLength: 1, maxLength: 256 }),
-      image: t.Nullable(t.String({ maxLength: 2048 })),
+    v.object({
+      version: v.literal(1),
+      type: v.pipe(
+        v.literal("person"),
+        v.description("Value type; must match the property's value type"),
+      ),
+      userId: v.nullable(userIdSchema),
+      name: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
+      image: v.nullable(v.pipe(v.string(), v.maxLength(2048))),
     }),
-    t.Object({
-      version: t.Literal(1),
-      type: t.Literal("clip"),
-      url: t.String({ maxLength: 2048 }),
-      snippet: t.Optional(t.String({ maxLength: 10_000 })),
-      citation: t.Optional(t.String({ maxLength: 1000 })),
-      jurisdiction: t.Optional(t.String({ maxLength: 128 })),
-      sourceType: t.Optional(t.String({ maxLength: 64 })),
+    v.object({
+      version: v.literal(1),
+      type: v.literal("clip"),
+      url: v.pipe(v.string(), v.maxLength(2048)),
+      snippet: v.exactOptional(v.pipe(v.string(), v.maxLength(10_000))),
+      citation: v.exactOptional(v.pipe(v.string(), v.maxLength(1000))),
+      jurisdiction: v.exactOptional(v.pipe(v.string(), v.maxLength(128))),
+      sourceType: v.exactOptional(v.pipe(v.string(), v.maxLength(64))),
     }),
-  ],
-  { description: "The value to set; 'type' must match the property." },
+  ]),
+  v.description("The value to set; 'type' must match the property."),
 );
 
-export type FieldWriteContent = Static<typeof upsertFieldContentSchema>;
+export type FieldWriteContent = v.InferOutput<typeof upsertFieldContentSchema>;
 
 type LockCellArgs = {
   tx: Transaction;
@@ -219,6 +229,11 @@ const isEmptyContent = (content: FieldWriteContent): boolean => {
   }
 };
 
+const isCalendarDate = (value: string): boolean => {
+  const parsed = Result.try(() => Temporal.PlainDate.from(value));
+  return Result.isOk(parsed) && parsed.value.toString() === value;
+};
+
 export type WriteFieldValueProps = {
   safeDb: SafeDb;
   /** The caller's effective authority (role plus credential attenuation). */
@@ -286,6 +301,16 @@ export const writeFieldValue = async function* ({
         status: 400,
         message: "Property content type mismatch",
       }),
+    );
+  }
+
+  if (
+    content?.type === "date" &&
+    content.value !== null &&
+    !isCalendarDate(content.value)
+  ) {
+    return Result.err(
+      new HandlerError({ status: 400, message: "Invalid calendar date" }),
     );
   }
 
@@ -424,7 +449,11 @@ export const writeFieldValue = async function* ({
   }
 
   if (flushSearchRepairs) {
-    flushEntitySearchRepairs([entityId]).catch(captureError);
+    flushEntitySearchRepairs([entityId]).catch(
+      createErrorCapture(
+        handlerErrorContext("writeFieldValue.flushEntitySearchRepairs"),
+      ),
+    );
   }
   return Result.ok({});
 };

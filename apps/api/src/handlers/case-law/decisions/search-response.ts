@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import type { Static } from "elysia";
+import type * as v from "valibot";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { DECISION_TYPE_KINDS } from "@stll/api-contract/case-law-decision-types";
@@ -10,15 +10,17 @@ import type { DecisionHeadnoteMaxChars } from "@/api/lib/case-law/decision-headn
 import { CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
 import { LIMITS } from "@/api/lib/limits";
 import {
-  truncateHeadlineBytes,
   nullableText,
+  truncateHeadlineBytes,
   truncateTextBytes,
 } from "@/api/lib/search/response-text-bounds";
 
 import { CASE_SEARCH_TEXT_BYTES as bytes } from "./search-response-limits";
 import type { searchDecisionsSuccessResponseSchema } from "./search-schema";
 
-type SearchResponse = Static<typeof searchDecisionsSuccessResponseSchema>;
+type SearchResponse = v.InferOutput<
+  typeof searchDecisionsSuccessResponseSchema
+>;
 type SearchHit = SearchResponse["hits"][number];
 // The headnote's keywords branch is the readonly contract type; the
 // standalone field reads the same shape mutably, so accept the wider one.
@@ -111,6 +113,7 @@ const projectHit = (hit: SearchHit, headnoteMaxChars: number): SearchHit => ({
   citationCount: hit.citationCount,
   citationAuthority: hit.citationAuthority,
   matchingPassages: hit.matchingPassages,
+  match: hit.match,
   createdAt: truncateTextBytes(hit.createdAt, bytes.date),
 });
 
@@ -165,6 +168,7 @@ export const projectCaseLawSearchResponse = (
             .map(projectBucket),
         },
   total: response.total,
+  relaxedHitCount: response.relaxedHitCount,
   nextCursor: nullableText(
     response.nextCursor,
     CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,

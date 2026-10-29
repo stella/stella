@@ -15,8 +15,8 @@ import { readConstraintCompletion } from "./online-constraint-completion";
 import { validateOnlineConstraints } from "./online-ddl";
 import type { OnlineConstraintValidation } from "./online-ddl";
 import type {
+  MigrationOwnedOnlineRepair,
   OnlineMigrationConnection,
-  OnlineRepair,
 } from "./online-migration-connection";
 import { CHAT_CONTENT_V3_BACKFILL_OUTCOMES } from "./schema/chat";
 import type { chatContentV3BackfillReceipts } from "./schema/chat";
@@ -267,7 +267,7 @@ export const backfillChatContentV3Batch = async ({
   return { cursor: last, done: rows.length === 0, value: receipts };
 };
 
-export const readChatContentV3Completion: OnlineRepair["readCompletion"] =
+export const readChatContentV3Completion: MigrationOwnedOnlineRepair["readCompletion"] =
   async (connection) => {
     for (const { table } of Object.values(CHAT_CONTENT_V3_SOURCES)) {
       const constraint = await readConstraintCompletion({
@@ -309,7 +309,7 @@ type RepairOptions = {
 };
 export const createChatContentV3Repair = (
   options: RepairOptions = {},
-): OnlineRepair => ({
+): MigrationOwnedOnlineRepair => ({
   introducedBy: "20261015050000_agent_skill_invocation",
   name: "chat-content-v3",
   readCompletion: readChatContentV3Completion,

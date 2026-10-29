@@ -4,8 +4,8 @@ import { drizzle } from "drizzle-orm/pg-proxy";
 
 import {
   CHAT_TURNS_ORG_RUN_ID_UIDX,
-  onlineUniqueIndexTarget,
   onlineIndexColumnTarget,
+  onlineUniqueIndexTarget,
 } from "../apps/api/src/db/online-unique-indexes";
 import { checkOnlineIndexDependencySource } from "./check-online-index-dependencies";
 

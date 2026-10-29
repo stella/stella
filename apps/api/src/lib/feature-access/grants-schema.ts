@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { emailAddressSchema } from "@/api/lib/email/normalized-email";
 import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
 import type { FeatureRegistry } from "@/api/lib/feature-access/registry";
 import { AUTH_PROVIDER_ID_PATTERN } from "@/api/lib/safe-id-boundaries";
@@ -16,10 +17,7 @@ const featureGrantSchema = v.variant("type", [
     type: v.literal("member"),
     organizationId: organizationIdSchema,
     email: v.pipe(
-      v.string(),
-      v.trim(),
-      v.toLowerCase(),
-      v.email(),
+      emailAddressSchema,
       v.check((email) => !email.includes("*")),
     ),
   }),

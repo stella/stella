@@ -1,4 +1,7 @@
+// parser-output-unchanged: the ÚOHS adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: Known-gap declarations serve coverage reads only; manifest parser policies and parsed decision output are unchanged.
+// parser-output-unchanged: known gaps now come from the coverage slice ledger; removing the static declarations changes coverage reads only.
+// parser-output-unchanged: the common courts' thesis placeholders are read only by the pl-courts and pl-ncourt text fields, whose versions are bumped; other adapters read their own patterns.
 import { panic } from "better-result";
 
 import {
@@ -22,8 +25,6 @@ import {
   IMPORT_SOURCE_KEYS,
   type ImportSourceKey,
 } from "@/api/lib/legal-search/ingestion-constants";
-
-const UNKNOWN_KNOWN_GAPS = { type: "unknown" } as const;
 
 type SourcePlaceholderPattern = {
   readonly type: "exact";
@@ -112,18 +113,6 @@ type AdapterManifest<TKey extends string> = {
   /** See {@link STATED_ECLI_IDENTITY}. */
   readonly statedEcliIdentity: StatedEcliIdentity;
   readonly placeholderPatterns: readonly SourcePlaceholderPattern[];
-  readonly knownGaps:
-    | { readonly type: "unknown" }
-    | { readonly type: "none-recorded" }
-    | {
-        readonly type: "known";
-        readonly gaps: readonly {
-          readonly from: string;
-          readonly to: string;
-          readonly reason: string;
-          readonly evidenceRef: string;
-        }[];
-      };
   readonly dateRange: AdapterDateRange;
 } & AdapterJurisdictionDeclaration;
 
@@ -133,6 +122,14 @@ type AdapterManifestMap = {
 
 const NO_DECLARED_ECLI_COURT_CODES = {} as const;
 const NO_PLACEHOLDER_PATTERNS = [] as const;
+/**
+ * What a common court's record prints in its thesis field when the judgment
+ * has no thesis: "nietezowane" (not given a thesis) or "brak" (none).
+ */
+const PL_COMMON_COURT_THESIS_PLACEHOLDERS = [
+  { type: "exact", text: "nietezowane" },
+  { type: "exact", text: "brak" },
+] as const;
 const OPEN_RANGE = { type: "open" } as const;
 const ADAPTER_JURISDICTIONS = {
   AUT: {
@@ -146,6 +143,10 @@ const ADAPTER_JURISDICTIONS = {
   EU: {
     country: "EU",
     identifierGrammar: DECISION_DOCKET_GRAMMARS.EU,
+  },
+  GBR: {
+    country: "GBR",
+    identifierGrammar: DECISION_DOCKET_GRAMMARS.GBR,
   },
   HUN: {
     country: "HUN",
@@ -183,7 +184,6 @@ export const decisionDocketGrammarForCountry = (
 export const ADAPTER_MANIFESTS = {
   [ADAPTER_KEYS.CZ_REGIONAL]: {
     key: ADAPTER_KEYS.CZ_REGIONAL,
-    knownGaps: UNKNOWN_KNOWN_GAPS,
     documentStage: "inline",
     name: "Czech Regional Courts",
     publisher: "Okresní, krajské a vrchní soudy",
@@ -200,7 +200,6 @@ export const ADAPTER_MANIFESTS = {
   },
   [ADAPTER_KEYS.CZ_NS]: {
     key: ADAPTER_KEYS.CZ_NS,
-    knownGaps: UNKNOWN_KNOWN_GAPS,
     documentStage: "inline",
     name: "Czech Supreme Court",
     publisher: "Nejvyšší soud",
@@ -217,7 +216,6 @@ export const ADAPTER_MANIFESTS = {
   },
   [ADAPTER_KEYS.CZ_NSS]: {
     key: ADAPTER_KEYS.CZ_NSS,
-    knownGaps: UNKNOWN_KNOWN_GAPS,
     documentStage: "inline",
     name: "Czech Supreme Administrative Court",
     publisher: "Nejvyšší správní soud",
@@ -239,7 +237,6 @@ export const ADAPTER_MANIFESTS = {
   },
   [ADAPTER_KEYS.CZ_US]: {
     key: ADAPTER_KEYS.CZ_US,
-    knownGaps: UNKNOWN_KNOWN_GAPS,
     documentStage: "inline",
     name: "Czech Constitutional Court",
     publisher: "Ústavní soud",
@@ -259,7 +256,6 @@ export const ADAPTER_MANIFESTS = {
   },
   [ADAPTER_KEYS.SK_COURTS]: {
     key: ADAPTER_KEYS.SK_COURTS,
-    knownGaps: UNKNOWN_KNOWN_GAPS,
     documentStage: "deferred",
     name: "Slovak Courts",
     publisher: "Súdy Slovenskej republiky",
@@ -278,7 +274,6 @@ export const ADAPTER_MANIFESTS = {
   },
   [ADAPTER_KEYS.SK_US]: {
     key: ADAPTER_KEYS.SK_US,
-    knownGaps: UNKNOWN_KNOWN_GAPS,
     documentStage: "inline",
     name: "Slovak Constitutional Court",
     publisher: "Ústavný súd Slovenskej republiky",
@@ -295,7 +290,6 @@ export const ADAPTER_MANIFESTS = {
   },
   [ADAPTER_KEYS.PL_COURTS]: {
     key: ADAPTER_KEYS.PL_COURTS,
-    knownGaps: UNKNOWN_KNOWN_GAPS,
     documentStage: "inline",
     name: "Polish Courts (SAOS)",
     publisher: "Sądy powszechne (SAOS)",
@@ -303,7 +297,8 @@ export const ADAPTER_MANIFESTS = {
     ...ADAPTER_JURISDICTIONS.POL,
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
     statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
-    placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
+    // SAOS copies the courts' thesis into its summary, markers and all.
+    placeholderPatterns: PL_COMMON_COURT_THESIS_PLACEHOLDERS,
     dateRange: {
       type: "decision-date",
       fromInclusive: "1986-05-28",
@@ -312,7 +307,6 @@ export const ADAPTER_MANIFESTS = {
   },
   [ADAPTER_KEYS.PL_SN]: {
     key: ADAPTER_KEYS.PL_SN,
-    knownGaps: UNKNOWN_KNOWN_GAPS,
     documentStage: "inline",
     name: "Polish Supreme Court (Sąd Najwyższy)",
     publisher: "Sąd Najwyższy",
@@ -336,7 +330,6 @@ export const ADAPTER_MANIFESTS = {
   },
   [ADAPTER_KEYS.PL_KIO]: {
     key: ADAPTER_KEYS.PL_KIO,
-    knownGaps: UNKNOWN_KNOWN_GAPS,
     documentStage: "inline",
     name: "Polish Procurement Appeals (UZP)",
     publisher: "Urząd Zamówień Publicznych",
@@ -356,7 +349,6 @@ export const ADAPTER_MANIFESTS = {
   },
   [ADAPTER_KEYS.PL_TK]: {
     key: ADAPTER_KEYS.PL_TK,
-    knownGaps: UNKNOWN_KNOWN_GAPS,
     documentStage: "inline",
     name: "Polish Constitutional Tribunal (Trybunał Konstytucyjny)",
     publisher: "Trybunał Konstytucyjny",
@@ -374,7 +366,6 @@ export const ADAPTER_MANIFESTS = {
   },
   [ADAPTER_KEYS.PL_NSA]: {
     key: ADAPTER_KEYS.PL_NSA,
-    knownGaps: UNKNOWN_KNOWN_GAPS,
     documentStage: "inline",
     name: "Polish Administrative Courts (Hugging Face dataset)",
     publisher:
@@ -396,7 +387,6 @@ export const ADAPTER_MANIFESTS = {
   },
   [ADAPTER_KEYS.PL_NCOURT]: {
     key: ADAPTER_KEYS.PL_NCOURT,
-    knownGaps: UNKNOWN_KNOWN_GAPS,
     documentStage: "inline",
     name: "Polish Common Courts (Ministry of Justice)",
     publisher: "Ministerstwo Sprawiedliwości",
@@ -404,7 +394,7 @@ export const ADAPTER_MANIFESTS = {
     ...ADAPTER_JURISDICTIONS.POL,
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
     statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
-    placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
+    placeholderPatterns: PL_COMMON_COURT_THESIS_PLACEHOLDERS,
     dateRange: {
       type: "decision-date",
       // The oldest judgment date the listing answers with, sorted by date.
@@ -414,7 +404,6 @@ export const ADAPTER_MANIFESTS = {
   },
   [ADAPTER_KEYS.AT_COURTS]: {
     key: ADAPTER_KEYS.AT_COURTS,
-    knownGaps: UNKNOWN_KNOWN_GAPS,
     documentStage: "inline",
     name: "Austrian Courts (RIS Justiz)",
     publisher: "Gerichte (RIS Justiz)",
@@ -431,7 +420,6 @@ export const ADAPTER_MANIFESTS = {
   },
   [ADAPTER_KEYS.AT_VFGH]: {
     key: ADAPTER_KEYS.AT_VFGH,
-    knownGaps: UNKNOWN_KNOWN_GAPS,
     documentStage: "inline",
     name: "Austrian Constitutional Court (RIS VfGH)",
     publisher: "Verfassungsgerichtshof",
@@ -448,7 +436,6 @@ export const ADAPTER_MANIFESTS = {
   },
   [ADAPTER_KEYS.AT_VWGH]: {
     key: ADAPTER_KEYS.AT_VWGH,
-    knownGaps: UNKNOWN_KNOWN_GAPS,
     documentStage: "inline",
     name: "Austrian Administrative Court (RIS VwGH)",
     publisher: "Verwaltungsgerichtshof",
@@ -465,7 +452,6 @@ export const ADAPTER_MANIFESTS = {
   },
   [ADAPTER_KEYS.AT_BVWG]: {
     key: ADAPTER_KEYS.AT_BVWG,
-    knownGaps: UNKNOWN_KNOWN_GAPS,
     documentStage: "inline",
     name: "Austrian Federal Administrative Court (RIS BVwG)",
     publisher: "Bundesverwaltungsgericht",
@@ -482,7 +468,6 @@ export const ADAPTER_MANIFESTS = {
   },
   [ADAPTER_KEYS.AT_LVWG]: {
     key: ADAPTER_KEYS.AT_LVWG,
-    knownGaps: UNKNOWN_KNOWN_GAPS,
     documentStage: "inline",
     name: "Austrian State Administrative Courts (RIS LVwG)",
     publisher: "Landesverwaltungsgerichte",
@@ -499,7 +484,6 @@ export const ADAPTER_MANIFESTS = {
   },
   [ADAPTER_KEYS.AT_ASYLGH]: {
     key: ADAPTER_KEYS.AT_ASYLGH,
-    knownGaps: UNKNOWN_KNOWN_GAPS,
     documentStage: "inline",
     name: "Austrian Asylum Court (RIS AsylGH)",
     publisher: "Asylgerichtshof",
@@ -516,7 +500,6 @@ export const ADAPTER_MANIFESTS = {
   },
   [ADAPTER_KEYS.AT_UBAS]: {
     key: ADAPTER_KEYS.AT_UBAS,
-    knownGaps: UNKNOWN_KNOWN_GAPS,
     documentStage: "inline",
     name: "Austrian Federal Asylum Senate (RIS UBAS)",
     publisher: "Unabhängiger Bundesasylsenat",
@@ -533,7 +516,6 @@ export const ADAPTER_MANIFESTS = {
   },
   [ADAPTER_KEYS.AT_UVS]: {
     key: ADAPTER_KEYS.AT_UVS,
-    knownGaps: UNKNOWN_KNOWN_GAPS,
     documentStage: "inline",
     name: "Austrian Independent Administrative Senates (RIS UVS)",
     publisher: "Unabhängige Verwaltungssenate",
@@ -550,7 +532,6 @@ export const ADAPTER_MANIFESTS = {
   },
   [ADAPTER_KEYS.AT_VERG]: {
     key: ADAPTER_KEYS.AT_VERG,
-    knownGaps: UNKNOWN_KNOWN_GAPS,
     documentStage: "inline",
     name: "Austrian Procurement Review Bodies (RIS Verg)",
     publisher: "Vergabekontrollbehörden",
@@ -567,7 +548,6 @@ export const ADAPTER_MANIFESTS = {
   },
   [ADAPTER_KEYS.AT_UMSE]: {
     key: ADAPTER_KEYS.AT_UMSE,
-    knownGaps: UNKNOWN_KNOWN_GAPS,
     documentStage: "inline",
     name: "Austrian Environmental Senate (RIS Umweltsenat)",
     publisher: "Umweltsenat",
@@ -584,7 +564,6 @@ export const ADAPTER_MANIFESTS = {
   },
   [ADAPTER_KEYS.AT_BKS]: {
     key: ADAPTER_KEYS.AT_BKS,
-    knownGaps: UNKNOWN_KNOWN_GAPS,
     documentStage: "inline",
     name: "Austrian Federal Communications Senate (RIS BKS)",
     publisher: "Bundeskommunikationssenat",
@@ -601,7 +580,6 @@ export const ADAPTER_MANIFESTS = {
   },
   [ADAPTER_KEYS.AT_FINDOK]: {
     key: ADAPTER_KEYS.AT_FINDOK,
-    knownGaps: UNKNOWN_KNOWN_GAPS,
     documentStage: "inline",
     name: "Austrian Fiscal Courts (Findok BFG and UFS)",
     publisher: "Bundesfinanzgericht und UFS (Findok)",
@@ -616,9 +594,24 @@ export const ADAPTER_MANIFESTS = {
       through: OPEN_RANGE,
     },
   },
+  [ADAPTER_KEYS.UK_FCL]: {
+    key: ADAPTER_KEYS.UK_FCL,
+    documentStage: "inline",
+    name: "Find Case Law",
+    publisher: "Find Case Law",
+    publicHomeUrl: "https://caselaw.nationalarchives.gov.uk",
+    ...ADAPTER_JURISDICTIONS.GBR,
+    ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
+    statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
+    placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
+    dateRange: {
+      type: "decision-date",
+      fromInclusive: "2001-01-01",
+      through: OPEN_RANGE,
+    },
+  },
   [ADAPTER_KEYS.HU_BHGY]: {
     key: ADAPTER_KEYS.HU_BHGY,
-    knownGaps: UNKNOWN_KNOWN_GAPS,
     documentStage: "inline",
     name: "Hungarian Courts (Bírósági Határozatok Gyűjteménye)",
     publisher: "Bírósági Határozatok Gyűjteménye",
@@ -641,7 +634,6 @@ export const ADAPTER_MANIFESTS = {
   },
   [ADAPTER_KEYS.PL_KIS]: {
     key: ADAPTER_KEYS.PL_KIS,
-    knownGaps: UNKNOWN_KNOWN_GAPS,
     documentStage: "inline",
     name: "Polish Tax Interpretations and Rulings (EUREKA)",
     publisher: "System Informacji Skarbowej EUREKA",
@@ -660,7 +652,6 @@ export const ADAPTER_MANIFESTS = {
   },
   [ADAPTER_KEYS.PL_UODO]: {
     key: ADAPTER_KEYS.PL_UODO,
-    knownGaps: UNKNOWN_KNOWN_GAPS,
     documentStage: "inline",
     name: "Polish Data Protection Authority (Prezes UODO)",
     publisher: "Prezes Urzędu Ochrony Danych Osobowych",
@@ -681,7 +672,6 @@ export const ADAPTER_MANIFESTS = {
   },
   [ADAPTER_KEYS.PL_UOKIK]: {
     key: ADAPTER_KEYS.PL_UOKIK,
-    knownGaps: UNKNOWN_KNOWN_GAPS,
     documentStage: "inline",
     name: "Polish Competition and Consumer Protection Authority (Prezes UOKiK)",
     publisher: "Prezes Urzędu Ochrony Konkurencji i Konsumentów",
@@ -698,9 +688,25 @@ export const ADAPTER_MANIFESTS = {
       through: OPEN_RANGE,
     },
   },
+  [ADAPTER_KEYS.CZ_UOHS]: {
+    key: ADAPTER_KEYS.CZ_UOHS,
+    documentStage: "inline",
+    name: "Czech Office for the Protection of Competition Decisions",
+    publisher: "Úřad pro ochranu hospodářské soutěže",
+    publicHomeUrl:
+      "https://uohs.gov.cz/cs/informacni-centrum/sbirky-rozhodnuti.html",
+    ...ADAPTER_JURISDICTIONS.CZE,
+    ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
+    statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
+    placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
+    dateRange: {
+      type: "decision-date",
+      fromInclusive: "1991-01-01",
+      through: OPEN_RANGE,
+    },
+  },
   [ADAPTER_KEYS.EU_ECJ]: {
     key: ADAPTER_KEYS.EU_ECJ,
-    knownGaps: UNKNOWN_KNOWN_GAPS,
     documentStage: "inline",
     name: "Court of Justice of the EU (CJEU)",
     publisher: "Court of Justice of the European Union",
@@ -721,7 +727,6 @@ export const ADAPTER_MANIFESTS = {
 export const IMPORT_SOURCE_MANIFESTS = {
   [IMPORT_SOURCE_KEYS.COURTLISTENER]: {
     key: IMPORT_SOURCE_KEYS.COURTLISTENER,
-    knownGaps: UNKNOWN_KNOWN_GAPS,
     documentStage: "inline",
     name: "CourtListener bulk opinion records",
     publisher: "Free Law Project, CourtListener",
@@ -799,9 +804,11 @@ export const SOURCE_APP_READER_TEXT = {
   [ADAPTER_KEYS.AT_FINDOK]: APP_READER_TEXT.FULL,
   [ADAPTER_KEYS.EU_ECJ]: APP_READER_TEXT.FULL,
   [ADAPTER_KEYS.HU_BHGY]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.UK_FCL]: APP_READER_TEXT.FULL,
   [ADAPTER_KEYS.PL_KIS]: APP_READER_TEXT.FULL,
   [ADAPTER_KEYS.PL_UODO]: APP_READER_TEXT.FULL,
   [ADAPTER_KEYS.PL_UOKIK]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.CZ_UOHS]: APP_READER_TEXT.FULL,
   [IMPORT_SOURCE_KEYS.COURTLISTENER]: APP_READER_TEXT.FULL,
   ...FIXTURE_SOURCE_APP_READER_TEXT,
 } as const satisfies Record<

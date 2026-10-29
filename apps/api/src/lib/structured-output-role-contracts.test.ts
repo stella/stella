@@ -18,10 +18,10 @@ import {
   tanStackModelOptionsForTask,
 } from "@/api/lib/tanstack-ai-models";
 import {
-  cassetteFor,
-  loadProviderWireCassettes,
-} from "@/api/tests/helpers/provider-wire-cassette";
-import { EXPECTED_TEXT } from "@/api/tests/helpers/provider-wire-contract";
+  recordedScenarioBody,
+  streamCarrying,
+} from "@/api/tests/helpers/provider-wire-answer";
+import { loadProviderWireCassettes } from "@/api/tests/helpers/provider-wire-cassette";
 import {
   STRUCTURED_OUTPUT_ENTRY_POINTS,
   STRUCTURED_OUTPUT_PASSTHROUGHS,
@@ -151,52 +151,8 @@ describe("structured-output role registry", () => {
 
 const cassettes = loadProviderWireCassettes();
 
-const recordedTextBody = (provider: ProviderModel["provider"]) => {
-  const cassette = cassetteFor(cassettes, provider, "text");
-  const exchange = cassette.exchanges.at(0);
-  if (exchange?.response.body.encoding !== "text") {
-    return panic(`The ${provider} text cassette has no text body`);
-  }
-  return {
-    body: exchange.response.body.text,
-    headers: exchange.response.headers,
-  };
-};
-
-/** The recorded sentence's pieces as each provider streamed them. */
-const RECORDED_PIECES = new Set(["The", " cassette", " plays", "."]);
-
-/**
- * The provider's recorded text stream with its sentence replaced by `answer`:
- * the whole sentence where the provider sent it whole, the first piece where
- * it streamed pieces, and the rest of the pieces emptied.
- */
-const streamCarrying = (sse: string, answer: string): string => {
-  const replace = (value: unknown): unknown => {
-    if (typeof value === "string") {
-      if (value === EXPECTED_TEXT || value === "The") {
-        return answer;
-      }
-      return RECORDED_PIECES.has(value) ? "" : value;
-    }
-    if (Array.isArray(value)) {
-      return value.map(replace);
-    }
-    if (typeof value === "object" && value !== null) {
-      return Object.fromEntries(
-        Object.entries(value).map(([key, entry]) => [key, replace(entry)]),
-      );
-    }
-    return value;
-  };
-  return sse.replace(/^data: (.+)$/gmu, (line, data: string) => {
-    if (data.trim() === "[DONE]") {
-      return line;
-    }
-    const event: unknown = JSON.parse(data);
-    return `data: ${JSON.stringify(replace(event))}`;
-  });
-};
+const recordedTextBody = (provider: ProviderModel["provider"]) =>
+  recordedScenarioBody(cassettes, provider, "text");
 
 const realFetch = globalThis.fetch;
 /** The answer the provider gives the round trip under way. */
@@ -255,6 +211,7 @@ const objectOptions = (
     dataClass: "customer",
     managedAIResidency: "eu",
     organizationId: null,
+    userId: null,
     orgAIConfig: null,
     outputSchema: fixture.schema,
     prompt: "Answer from the attached material.",

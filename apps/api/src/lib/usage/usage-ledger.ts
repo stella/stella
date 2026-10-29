@@ -35,24 +35,24 @@ import type { ModelTask } from "@stll/ai-catalog";
 import { Temporal } from "@stll/time";
 
 import {
-  USAGE_EVENTS_ORG_IDEMPOTENCY_KEY_UIDX,
   onlineUniqueIndexTarget,
+  USAGE_EVENTS_ORG_IDEMPOTENCY_KEY_UIDX,
 } from "@/api/db/online-unique-indexes";
 import type { Transaction } from "@/api/db/root";
 import {
   USAGE_ENTITLEMENT_STATUSES,
-  usageEvents,
   usageAllocations,
   usageEntitlements,
+  usageEvents,
   workspaces,
 } from "@/api/db/schema";
 import type {
   UsageActionType,
   UsageAllocationReason,
   UsageAllocationSource,
+  UsageEntitlementStatus,
   UsageEventLane,
   UsageServiceTier,
-  UsageEntitlementStatus,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
@@ -70,8 +70,7 @@ import { allowsInstanceModels } from "@/api/lib/usage/organization-access-state"
 const UNRECOGNIZED_STATUS = "unrecognized" as const;
 
 type ReadEntitlementStatus =
-  | UsageEntitlementStatus
-  | typeof UNRECOGNIZED_STATUS;
+  UsageEntitlementStatus | typeof UNRECOGNIZED_STATUS;
 
 const storedEntitlementStatusSchema = v.picklist(USAGE_ENTITLEMENT_STATUSES);
 

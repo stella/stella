@@ -81,14 +81,23 @@ describe.serial("legislation revision write ownership", () => {
   }
 
   test("accepts the existing partial owners' production writes", async () => {
-    for (const owner of Object.keys(LEGISLATION_PARTIAL_WRITERS)) {
-      const source = readFileSync(
-        path.resolve(import.meta.dir, "../..", owner),
-        "utf-8",
-      );
-      expect(await lintSingleRule(RULE, source, { sourcePath: owner })).toEqual(
-        [],
-      );
-    }
+    const results = await Promise.all(
+      Object.keys(LEGISLATION_PARTIAL_WRITERS).map(async (lintCase, index) => {
+        const owner = lintCase;
+        const source = readFileSync(
+          path.resolve(import.meta.dir, "../..", owner),
+          "utf-8",
+        );
+
+        return {
+          label: `case ${index + 1}: ${JSON.stringify(lintCase)}`,
+          result: await lintSingleRule(RULE, source, { sourcePath: owner }),
+          expected: [],
+        };
+      }),
+    );
+    expect(results.map(({ label, result }) => ({ label, result }))).toEqual(
+      results.map(({ label, expected }) => ({ label, result: expected })),
+    );
   });
 });

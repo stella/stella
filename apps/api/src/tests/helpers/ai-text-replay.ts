@@ -2,10 +2,12 @@ import { panic, Result } from "better-result";
 import { afterAll } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
+import * as ts from "tsrs/unstable/ast";
+import type { Symbol as CompilerSymbol } from "tsrs/unstable/async";
 
 import type { AIErrorKind } from "@stll/api-contract";
 import { repoRelativePath } from "@stll/portable-path";
+import { createProgram } from "@stll/scripts/src/typescript-program";
 
 import { classifyAIError } from "@/api/lib/ai-error";
 import type { TanStackTextFinishReason } from "@/api/lib/chat/tanstack-chat-runtime";
@@ -304,6 +306,19 @@ const sourceFiles = (dir: string): string[] =>
       : [];
   });
 
+const childrenAsync = async (
+  node: ts.Node,
+  visit: (child: ts.Node) => Promise<void>,
+): Promise<void> => {
+  const children: ts.Node[] = [];
+  node.forEachChild((child) => {
+    children.push(child);
+  });
+  for (const child of children) {
+    await visit(child);
+  }
+};
+
 /** Whether `node` sits in an import, a re-export or a type. */
 const isOutsideRuntimeCode = (node: ts.Node): boolean => {
   for (let current = node.parent; ; current = current.parent) {
@@ -321,90 +336,92 @@ const isOutsideRuntimeCode = (node: ts.Node): boolean => {
 };
 
 /** How many runtime references `source` makes to imported exports in `names`. */
-export const runtimeReferences = (
+export const runtimeReferences = async (
   file: string,
   source: string,
   names: ReadonlySet<string>,
-): number => {
-  const sourceFile = ts.createSourceFile(
-    file,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-  );
-  const compilerHost = ts.createCompilerHost({ noResolve: true });
-  compilerHost.getSourceFile = (requestedFile) =>
-    requestedFile === file ? sourceFile : undefined;
-  const checker = ts
-    .createProgram([file], { noResolve: true }, compilerHost)
-    .getTypeChecker();
-  const importedBindings = new Set<ts.Symbol>();
-  const namespaceBindings = new Set<ts.Symbol>();
+): Promise<number> => {
+  const absolute = path.resolve(file);
+  const opened = await createProgram({
+    rootNames: [absolute],
+    compilerOptions: { noLib: true, noResolve: true, types: [] },
+    virtualFiles: new Map([[absolute, source]]),
+  });
+  try {
+    const { checker, program } = opened;
+    const sourceFile =
+      (await program.getSourceFile(absolute)) ??
+      panic(`Missing runtime reference source: ${file}`);
+    const importedBindings = new Set<CompilerSymbol>();
+    const namespaceBindings = new Set<CompilerSymbol>();
 
-  // The seam by its path alias, or by a relative path from this file.
-  const isSeamModule = (specifier: string) =>
-    specifier === GENERATION_SEAM_MODULE ||
-    (specifier.startsWith(".") &&
-      path.resolve(path.dirname(file), specifier.replace(/\.tsx?$/u, "")) ===
-        GENERATION_SEAM_PATH);
-  for (const statement of sourceFile.statements) {
-    if (
-      !ts.isImportDeclaration(statement) ||
-      !ts.isStringLiteral(statement.moduleSpecifier) ||
-      !isSeamModule(statement.moduleSpecifier.text)
-    ) {
-      continue;
-    }
-    const bindings = statement.importClause?.namedBindings;
-    if (bindings === undefined) {
-      continue;
-    }
-    if (ts.isNamespaceImport(bindings)) {
-      const symbol = checker.getSymbolAtLocation(bindings.name);
-      if (symbol !== undefined) {
-        namespaceBindings.add(symbol);
-      }
-      continue;
-    }
-    for (const element of bindings.elements) {
-      const importedName = element.propertyName?.text ?? element.name.text;
-      if (!names.has(importedName)) {
+    // The seam by its path alias, or by a relative path from this file.
+    const isSeamModule = (specifier: string) =>
+      specifier === GENERATION_SEAM_MODULE ||
+      (specifier.startsWith(".") &&
+        path.resolve(path.dirname(file), specifier.replace(/\.tsx?$/u, "")) ===
+          GENERATION_SEAM_PATH);
+    for (const statement of sourceFile.statements) {
+      if (
+        !ts.isImportDeclaration(statement) ||
+        !ts.isStringLiteral(statement.moduleSpecifier) ||
+        !isSeamModule(statement.moduleSpecifier.text)
+      ) {
         continue;
       }
-      const symbol = checker.getSymbolAtLocation(element.name);
-      if (symbol !== undefined) {
-        importedBindings.add(symbol);
+      const bindings = statement.importClause?.namedBindings;
+      if (bindings === undefined) {
+        continue;
+      }
+      if (ts.isNamespaceImport(bindings)) {
+        const symbol = await checker.getSymbolAtLocation(bindings.name);
+        if (symbol !== undefined) {
+          namespaceBindings.add(symbol);
+        }
+        continue;
+      }
+      for (const element of bindings.elements) {
+        const importedName = element.propertyName?.text ?? element.name.text;
+        if (!names.has(importedName)) {
+          continue;
+        }
+        const symbol = await checker.getSymbolAtLocation(element.name);
+        if (symbol !== undefined) {
+          importedBindings.add(symbol);
+        }
       }
     }
-  }
 
-  let count = 0;
-  const visit = (node: ts.Node): void => {
-    if (ts.isIdentifier(node) && !isOutsideRuntimeCode(node)) {
-      // `{ generate }` names its property; the value is the imported binding.
-      const symbol =
-        ts.isShorthandPropertyAssignment(node.parent) &&
-        node.parent.name === node
-          ? checker.getShorthandAssignmentValueSymbol(node.parent)
-          : checker.getSymbolAtLocation(node);
-      if (symbol !== undefined && importedBindings.has(symbol)) {
-        count += 1;
+    let count = 0;
+    const visit = async (node: ts.Node): Promise<void> => {
+      if (ts.isIdentifier(node) && !isOutsideRuntimeCode(node)) {
+        // `{ generate }` names its property; the value is the imported binding.
+        const symbol =
+          ts.isShorthandPropertyAssignment(node.parent) &&
+          node.parent.name === node
+            ? await checker.getShorthandAssignmentValueSymbol(node.parent)
+            : await checker.getSymbolAtLocation(node);
+        if (symbol !== undefined && importedBindings.has(symbol)) {
+          count += 1;
+        }
       }
-    }
-    if (
-      ts.isPropertyAccessExpression(node) &&
-      names.has(node.name.text) &&
-      !isOutsideRuntimeCode(node)
-    ) {
-      const symbol = checker.getSymbolAtLocation(node.expression);
-      if (symbol !== undefined && namespaceBindings.has(symbol)) {
-        count += 1;
+      if (
+        ts.isPropertyAccessExpression(node) &&
+        names.has(node.name.text) &&
+        !isOutsideRuntimeCode(node)
+      ) {
+        const symbol = await checker.getSymbolAtLocation(node.expression);
+        if (symbol !== undefined && namespaceBindings.has(symbol)) {
+          count += 1;
+        }
       }
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
-  return count;
+      await childrenAsync(node, visit);
+    };
+    await visit(sourceFile);
+    return count;
+  } finally {
+    await opened.close();
+  }
 };
 
 /**
@@ -412,7 +429,7 @@ export const runtimeReferences = (
  * many runtime references it makes: a call, or a default an injectable
  * parameter takes.
  */
-export const discoverTextCallSites = (): Map<string, number> => {
+export const discoverTextCallSites = async (): Promise<Map<string, number>> => {
   const names = new Set(seamExportsOf("text"));
   const sites = new Map<string, number>();
   for (const file of sourceFiles(SOURCE_ROOT)) {
@@ -424,7 +441,7 @@ export const discoverTextCallSites = (): Map<string, number> => {
     if (![...names].some((name) => source.includes(name))) {
       continue;
     }
-    const references = runtimeReferences(file, source, names);
+    const references = await runtimeReferences(file, source, names);
     if (references > 0) {
       sites.set(relative, references);
     }

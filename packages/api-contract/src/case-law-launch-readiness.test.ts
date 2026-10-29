@@ -2,8 +2,11 @@ import { describe, expect, test } from "bun:test";
 
 import {
   CASE_LAW_BROWSER_COUNTRIES,
+  CASE_LAW_EXPLICIT_LAUNCH_COUNTRIES,
+  CASE_LAW_EXPLICIT_LAUNCHES,
   CASE_LAW_REGION_BY_COUNTRY,
   parseCaseLawLaunchReadiness,
+  PUBLIC_CASE_LAW_COUNTRIES,
   publicCaseLawCountry,
 } from "./case-law-launch-readiness";
 
@@ -13,6 +16,31 @@ const readyRow = {
   lastCensusDate: "2026-01-01",
   lastCensusGreen: true,
 } as const;
+
+describe("explicit case-law launches", () => {
+  test("the explicit launch set is EU, Hungary, Poland and Slovakia", () => {
+    expect(CASE_LAW_EXPLICIT_LAUNCH_COUNTRIES).toEqual([
+      "EU",
+      "HUN",
+      "POL",
+      "SVK",
+    ]);
+    for (const country of CASE_LAW_EXPLICIT_LAUNCH_COUNTRIES) {
+      expect(CASE_LAW_EXPLICIT_LAUNCHES[country]?.decidedOn).toMatch(
+        /^\d{4}-\d{2}-\d{2}$/u,
+      );
+    }
+  });
+
+  test.each(CASE_LAW_EXPLICIT_LAUNCH_COUNTRIES)(
+    "explicitly launched %s is admitted to search",
+    (launched) => {
+      expect(
+        PUBLIC_CASE_LAW_COUNTRIES.some((country) => country === launched),
+      ).toBe(true);
+    },
+  );
+});
 
 describe("case-law launch readiness", () => {
   test.each(CASE_LAW_BROWSER_COUNTRIES)(
@@ -36,6 +64,15 @@ describe("case-law launch readiness", () => {
       parseCaseLawLaunchReadiness([{ ...readyRow, extra: true }]),
     ).toThrow("Launch readiness must contain only complete entries");
   });
+
+  test.each(["2026-02-30", "1900-02-29", "0000-01-01"])(
+    "requires an existing CE census day %s",
+    (lastCensusDate) => {
+      expect(() =>
+        parseCaseLawLaunchReadiness([{ ...readyRow, lastCensusDate }]),
+      ).toThrow("Launch readiness must contain only complete entries");
+    },
+  );
 
   test("requires canonical, sorted, unique countries and ISO dates", () => {
     expect(() =>

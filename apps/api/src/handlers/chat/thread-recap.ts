@@ -1,15 +1,17 @@
 import { Temporal } from "@stll/time";
 
+import { cleanRecapText } from "@/api/handlers/chat/thread-recap-text";
 import {
   buildRecapTranscript,
   type RecapMessage,
 } from "@/api/handlers/chat/thread-recap-transcript";
-import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
+import { type OrgAIConfig, resolveCaching } from "@/api/lib/ai-config";
 import { isUnanticipatedAIFailure } from "@/api/lib/ai-error";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
 
@@ -17,7 +19,7 @@ import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
  * Bump when the recap prompt or output shape changes so cached
  * recaps with an older version regenerate on the next stale revisit.
  */
-export const RECAP_PROMPT_VERSION = 1;
+export const RECAP_PROMPT_VERSION = 2;
 
 /**
  * A thread counts as a "revisit" worth recapping once its latest
@@ -31,52 +33,21 @@ const RECAP_STALENESS_THRESHOLD_MS = 4 * 60 * 60 * 1000;
 /** Minimum messages before a thread has enough to recap. */
 export const RECAP_MIN_MESSAGE_COUNT = 2;
 
-const RECAP_MAX_OUTPUT_TOKENS = 256;
+// Room for four sentences in languages that tokenize densely, such as Czech
+// with statute citations; a run that still hits it is rejected, not shown cut.
+const RECAP_MAX_OUTPUT_TOKENS = 512;
 const RECAP_GENERATION_TIMEOUT_MS = 20_000;
-const RECAP_MAX_LENGTH = 700;
 
 const RECAP_SYSTEM_PROMPT = `You write a brief "where you left off" recap for someone returning to an earlier conversation with a legal assistant after a break.
 
 Write 2 to 4 sentences of plain prose: no markdown, no headings, no bullet points, no greeting. First state what was discussed or accomplished, then what still remains open — unanswered questions, next steps, or unfinished work. If nothing remains open, only summarise what was covered.
 
-Write in the same language as the conversation. Be specific: name the actual topics, documents, and decisions rather than describing the conversation in the abstract. You may address the reader directly ("You were…"), but never write in the assistant's first person ("I…") and do not describe the assistant as a person. Do not invent anything that is not in the transcript. Reply with the recap text only.`;
+Write in the language the user writes their messages in, even when the transcript labels, these instructions, cited titles or notes in parentheses are in English. Never switch to English for a conversation held in another language. Be specific: name the actual topics, documents, and decisions rather than describing the conversation in the abstract. You may address the reader in the second person, but never write in the assistant's first person and do not describe the assistant as a person. Do not invent anything that is not in the transcript. Reply with the recap text only.`;
 
 /** Whether the latest message is old enough to count as a revisit. */
 export const isThreadStaleForRecap = (lastMessageCreatedAt: Date): boolean =>
   Temporal.Now.instant().epochMilliseconds - lastMessageCreatedAt.getTime() >
   RECAP_STALENESS_THRESHOLD_MS;
-
-const stripRecapPrefix = (value: string): string => {
-  const prefix = "recap:";
-  if (value.slice(0, prefix.length).toLowerCase() !== prefix) {
-    return value;
-  }
-
-  return value.slice(prefix.length).trimStart();
-};
-
-const isWrappingQuote = (char: string): boolean => char === '"' || char === "'";
-
-const trimWrappingQuotes = (value: string): string => {
-  let start = 0;
-  let end = value.length;
-
-  while (start < end && isWrappingQuote(value.charAt(start))) {
-    start += 1;
-  }
-  while (end > start && isWrappingQuote(value.charAt(end - 1))) {
-    end -= 1;
-  }
-
-  return value.slice(start, end);
-};
-
-const cleanRecapText = (text: string): string | null => {
-  const withoutLabel = stripRecapPrefix(text.trim());
-  const unquoted = trimWrappingQuotes(withoutLabel).trim();
-  const capped = unquoted.slice(0, RECAP_MAX_LENGTH).trim();
-  return capped.length > 0 ? capped : null;
-};
 
 type GenerateThreadRecapTextArgs = {
   admission: ModelDispatchAdmission;
@@ -122,9 +93,10 @@ export const generateThreadRecapText = async ({
 
   try {
     const text = await generateTanStackTextForTask({
+      userId: admission.userId,
       dataClass: "customer",
       deadlineMs: RECAP_GENERATION_TIMEOUT_MS,
-      finishPolicy: "allow-incomplete",
+      finishPolicy: "require-complete",
       maxOutputTokens: RECAP_MAX_OUTPUT_TOKENS,
       task: "short-text",
       serviceTier: "standard",
@@ -148,7 +120,13 @@ export const generateThreadRecapText = async ({
   } catch (error) {
     aiAnalytics.captureError(error);
     if (isUnanticipatedAIFailure(error)) {
-      captureError(error, { threadId, feature: "chat.thread_recap" });
+      captureError(
+        error,
+        handlerErrorContext("chat.generateThreadRecapText", {
+          threadId,
+          feature: "chat.thread_recap",
+        }),
+      );
     }
     return null;
   }

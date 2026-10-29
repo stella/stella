@@ -37,7 +37,6 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 import type { FoldHandlers } from "../packages/conditions/src/fold.ts";
 import {
   type AstNode,
-  type ScopeContext,
   filenameForContext,
   getPropertyName,
   isAstNode,
@@ -45,6 +44,7 @@ import {
   isImportedFrom,
   isSingleAssignment,
   resolveVariable,
+  type ScopeContext,
   stableInitializer,
   staticStringValue,
   unwrapExpression,

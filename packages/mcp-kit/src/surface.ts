@@ -19,9 +19,10 @@ import {
   closestNames,
   didYouMean,
   failure,
+  jsonSuccess,
   KIT_ERROR_CODES,
   KIT_INTERNAL_MESSAGE,
-  jsonSuccess,
+  MAX_TOOL_NAME_CHARS,
   success,
   toCallResult,
   validationError,
@@ -29,8 +30,8 @@ import {
 import { assertToolInputSchema, readToolInput } from "./input";
 import { compactSchema } from "./schema";
 import type {
-  McpJsonSchema,
   ListedTool,
+  McpJsonSchema,
   ToolCallResult,
   ToolDefinition,
   ToolOutcome,
@@ -61,7 +62,7 @@ const LIST_SCHEMA = {
 const DESCRIBE_SCHEMA = {
   type: "object",
   properties: {
-    capability: { type: "string" },
+    capability: { type: "string", maxLength: MAX_TOOL_NAME_CHARS },
     detail: { type: "string", enum: ["compact", "full"] },
   },
   required: ["capability"],
@@ -70,7 +71,7 @@ const DESCRIBE_SCHEMA = {
 const INVOKE_SCHEMA = {
   type: "object",
   properties: {
-    capability: { type: "string" },
+    capability: { type: "string", maxLength: MAX_TOOL_NAME_CHARS },
     input: { type: "object" },
     validate_only: { type: "boolean" },
   },
@@ -514,7 +515,7 @@ const buildRegistry = <Context>(tools: readonly ToolDefinition<Context>[]) => {
     if (tool.name.length === 0) {
       panic("Tool names must not be empty.");
     }
-    if (new TextEncoder().encode(tool.name).length > 128) {
+    if (new TextEncoder().encode(tool.name).length > MAX_TOOL_NAME_CHARS) {
       panic("Tool names must fit in 128 UTF-8 bytes.");
     }
     if (byName.has(tool.name) || reserved.has(tool.name)) {

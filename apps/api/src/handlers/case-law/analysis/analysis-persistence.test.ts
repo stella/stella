@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { analysisSentinel } from "@/api/lib/case-law/stored-analysis";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 
 import { persistGeneratedAnalysis } from "./analysis-persistence";
@@ -23,6 +24,10 @@ describe("persisting a generated case-law analysis", () => {
     try {
       await persistGeneratedAnalysis({
         analysis,
+        sentinel: analysisSentinel(
+          analysis.inputFingerprint,
+          new Date("2026-10-09T00:00:00.000Z"),
+        ),
         contentHash: "content-hash",
         decisionId: toSafeId<"caseLawDecision">(
           "0199c95c-2e80-7000-8000-000000000001",

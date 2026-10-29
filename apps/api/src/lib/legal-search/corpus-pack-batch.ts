@@ -11,13 +11,14 @@ import type {
   CaseLawCorpusUploadReservationInput,
   CaseLawCorpusUploadReservations,
 } from "@/api/lib/legal-search/case-law-corpus-upload-intents";
+import { prepareCorpusAst } from "@/api/lib/legal-search/corpus-ast";
 import {
   formatCorpusLocation,
   parseCorpusLocation,
 } from "@/api/lib/legal-search/corpus-location";
 import {
-  corpusPackMemberWeight,
   CORPUS_PACK_MAX_BYTES,
+  corpusPackMemberWeight,
   planCorpusPacks,
   putCorpusPacks,
 } from "@/api/lib/legal-search/corpus-pack-writer";
@@ -519,7 +520,13 @@ export const openCorpusPackBatch = ({
 
   return {
     enqueue: (entry) => {
-      entries.push(entry);
+      entries.push({
+        ...entry,
+        payload: {
+          ...entry.payload,
+          ast: prepareCorpusAst({ ast: entry.payload.ast }).ast,
+        },
+      });
     },
     flush: async () =>
       await Result.tryPromise({

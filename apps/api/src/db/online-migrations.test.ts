@@ -16,27 +16,30 @@ import {
 } from "./decision-date-ceiling-repair";
 import type { MigrationTimingRecord } from "./migration-timing";
 import type { OnlineIndexDeclaration } from "./online-ddl";
+import { declaresOnlineBuild } from "./online-ddl";
 import { createOnlineIndexHold } from "./online-index-gate";
 import type { OnlineIndexGateOptions } from "./online-index-gate";
 import type {
+  OnlineMigrationConnection,
   OnlineRepair,
   OnlineRepairCompletion,
 } from "./online-migration-connection";
 import {
-  reportOnlineMigrations,
+  ensureOnlineIndexValid,
   ONLINE_CONSTRAINT_VALIDATIONS,
   ONLINE_INDEX_REPLACEMENTS,
   ONLINE_MIGRATION_INDEX_CUTOVERS,
   ONLINE_MIGRATION_INDEXES,
   ONLINE_MIGRATION_REPAIRS,
-  runOnlineMigrations as runOnlineMigrationsWithGate,
   type OnlineRepairOptions,
+  reportOnlineMigrations as reportOnlineMigrationsWithOwnership,
+  runOnlineMigrations as runOnlineMigrationsWithGate,
 } from "./online-migrations";
 import {
   EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES,
+  type ExecutableOnlineUniqueIndexName,
   ONLINE_UNIQUE_INDEX_VALIDATION_DEFINITIONS,
   onlineUniqueIndexDefinition,
-  type ExecutableOnlineUniqueIndexName,
 } from "./online-unique-indexes";
 import { SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS } from "./sanctions-monitoring-constraint-validation";
 
@@ -74,6 +77,28 @@ const heldIndexGate = {
     }),
   },
 } satisfies OnlineIndexGateOptions;
+const reserveHealthyObserver =
+  async (): Promise<OnlineMigrationConnection> => ({
+    execute: async () => undefined,
+    query: async (query) => {
+      if (query.includes("pg_blocking_pids")) {
+        return [];
+      }
+      if (query.includes("pg_backend_pid() AS pid")) {
+        return [{ pid: 2, database: "test" }];
+      }
+      if (query.includes('"stateAgeMs"')) {
+        return [];
+      }
+      if (query.includes("ageMs")) {
+        return [{ ageMs: 0, observedAt: new Date(testClock()).toISOString() }];
+      }
+      return [
+        { active: false, observedAt: new Date(testClock()).toISOString() },
+      ];
+    },
+    release: () => undefined,
+  });
 const runOnlineMigrations = async (
   pool: Parameters<typeof runOnlineMigrationsWithGate>[0],
   options: Partial<OnlineRepairOptions> = {},
@@ -82,24 +107,23 @@ const runOnlineMigrations = async (
     indexGate: healthyIndexGate,
     timing: { clock: () => 0, emit: () => undefined },
     ...options,
-    reserveObserver: async () => ({
-      execute: async () => undefined,
-      query: async (query) => {
-        if (query.includes("pg_backend_pid() AS pid")) {
-          return [{ pid: 2, database: "test" }];
-        }
-        if (query.includes("ageMs")) {
-          return [
-            { ageMs: 0, observedAt: new Date(testClock()).toISOString() },
-          ];
-        }
-        return [
-          { active: false, observedAt: new Date(testClock()).toISOString() },
-        ];
-      },
-      release: () => undefined,
-    }),
+    reserveObserver: reserveHealthyObserver,
   });
+
+const reportOnlineMigrations = async (
+  ...args: Parameters<typeof reportOnlineMigrationsWithOwnership>
+) => {
+  const outcome = await reportOnlineMigrationsWithOwnership(...args);
+  switch (outcome.type) {
+    case "validated":
+      return outcome.report;
+    case "migrator_active":
+      throw new TypeError("Expected startup validation ownership");
+    default:
+      outcome satisfies never;
+      throw new TypeError("Unknown validation ownership");
+  }
+};
 
 const CREATE_INDEX_FRAGMENT = "CREATE INDEX CONCURRENTLY";
 const DROP_INDEX_FRAGMENT = "DROP INDEX CONCURRENTLY";
@@ -126,6 +150,9 @@ const VALIDATE_CONSTRAINT_FRAGMENT = `VALIDATE CONSTRAINT "${DECISION_DATE_CONST
 const DELETE_RECEIPT_CONSTRAINT =
   "corpus_index_projection_intents_delete_receipt_paired";
 const VALIDATE_DELETE_RECEIPT_FRAGMENT = `VALIDATE CONSTRAINT "${DELETE_RECEIPT_CONSTRAINT}"`;
+/** A pooled session's own timeout, not the role default. */
+const SESSION_STATEMENT_TIMEOUT = "30s";
+const RESTORED_SESSION_TIMEOUT = `SELECT set_config('statement_timeout', $1, false)\n-- params ${JSON.stringify([SESSION_STATEMENT_TIMEOUT])}`;
 const CLEANUP_STALL_CONSTRAINTS = [
   "corpus_index_projection_intents_status_values",
   "corpus_index_projection_intents_status_shape",
@@ -160,6 +187,11 @@ describe("online migrations", () => {
     throw new TypeError("Expected startup fixture index");
   }
 
+  const startupMigration = startupIndex.introducedBy;
+  if (typeof startupMigration !== "string") {
+    throw new TypeError("Expected migration-owned startup fixture");
+  }
+
   test.each([
     { label: "missing", state: undefined },
     { label: "invalid", state: false },
@@ -168,16 +200,16 @@ describe("online migrations", () => {
     "reports a newest-set $label index and rejects the same older step",
     async ({ state }) => {
       const pendingNewest = createHarness({
-        newestAppliedMigration: startupIndex.introducedBy,
+        newestAppliedMigration: startupMigration,
         indexStates: { [startupIndex.name]: [state] },
       });
       expect(await reportOnlineMigrations(pendingNewest.pool)).toEqual({
-        newestAppliedMigration: startupIndex.introducedBy,
+        newestAppliedMigration: startupMigration,
         pending: [
           {
             kind: "index",
             name: startupIndex.name,
-            introducedBy: startupIndex.introducedBy,
+            introducedBy: startupMigration,
           },
         ],
       });
@@ -201,7 +233,7 @@ describe("online migrations", () => {
         await rejectionOf(reportOnlineMigrations(pendingOlder.pool)),
       ).toMatchObject({
         message: expect.stringContaining(
-          `Online index ${startupIndex.name} introduced by ${startupIndex.introducedBy} is not complete`,
+          `Online index ${startupIndex.name} introduced by ${startupMigration} is not complete`,
         ),
       });
     },
@@ -211,7 +243,7 @@ describe("online migrations", () => {
     "rejects a definition mismatch even for the newest set (valid=%s)",
     async (isValid) => {
       const harness = createHarness({
-        newestAppliedMigration: startupIndex.introducedBy,
+        newestAppliedMigration: startupMigration,
         indexStates: {
           [startupIndex.name]: [
             {
@@ -238,7 +270,7 @@ describe("online migrations", () => {
         [startupIndex.name]: [{ name: `${startupIndex.name}_ccnew`, isValid }],
       };
       const newest = createHarness({
-        newestAppliedMigration: startupIndex.introducedBy,
+        newestAppliedMigration: startupMigration,
         artifacts,
       });
       if (isValid) {
@@ -252,7 +284,7 @@ describe("online migrations", () => {
           {
             kind: "index",
             name: startupIndex.name,
-            introducedBy: startupIndex.introducedBy,
+            introducedBy: startupMigration,
           },
         ]);
       }
@@ -263,7 +295,7 @@ describe("online migrations", () => {
         message: expect.stringContaining(
           isValid
             ? "has a valid reindex artifact"
-            : `introduced by ${startupIndex.introducedBy} is not complete`,
+            : `introduced by ${startupMigration} is not complete`,
         ),
       });
     },
@@ -272,7 +304,7 @@ describe("online migrations", () => {
   test.each(["pending", "incomplete"] as const)(
     "reports newest-set repair %s and rejects the older step",
     async (type) => {
-      const introducedBy = startupIndex.introducedBy;
+      const introducedBy = startupMigration;
       const completion: OnlineRepairCompletion =
         type === "pending"
           ? {
@@ -307,6 +339,55 @@ describe("online migrations", () => {
       });
     },
   );
+
+  test("code-owned repair completion is required independently of the newest migration", async () => {
+    const introducedBy = {
+      type: "code",
+      owner: "src/db/better-auth-oauth-resource-repair.ts",
+    } as const;
+    const repair = {
+      name: "code-owned-fixture",
+      introducedBy,
+      readCompletion: async () => ({ type: "complete" }) as const,
+      repair: async () => {
+        throw new TypeError("Startup must never repair");
+      },
+    } satisfies OnlineRepair;
+    const complete = createHarness();
+    expect(
+      (await reportOnlineMigrations(complete.pool, { repairs: [repair] }))
+        .pending,
+    ).toEqual([]);
+    const incomplete = {
+      ...repair,
+      readCompletion: async () =>
+        ({ type: "incomplete", reason: "live postcondition remains" }) as const,
+    } satisfies OnlineRepair;
+    expect(
+      await rejectionOf(
+        reportOnlineMigrations(createHarness().pool, { repairs: [incomplete] }),
+      ),
+    ).toMatchObject({
+      message: expect.stringContaining(
+        "owned by src/db/better-auth-oauth-resource-repair.ts is not complete",
+      ),
+    });
+    const wrongMigration = {
+      ...incomplete,
+      introducedBy: "missing-migration",
+    } satisfies OnlineRepair;
+    expect(
+      await rejectionOf(
+        reportOnlineMigrations(createHarness().pool, {
+          repairs: [wrongMigration],
+        }),
+      ),
+    ).toMatchObject({
+      message: expect.stringContaining(
+        "introduced by missing-migration is not complete",
+      ),
+    });
+  });
 
   test("reports a newest-set cutover and rejects its older pending state", async () => {
     const cutover = FILTER_INDEX_CUTOVER;
@@ -454,6 +535,41 @@ describe("online migrations", () => {
     ).toEqual([]);
   });
 
+  test("startup validation never waits on the online lock and bounds its own statements", async () => {
+    const harness = createHarness();
+    expect(await reportOnlineMigrations(harness.pool)).toEqual({
+      newestAppliedMigration: "99999999999999_later_release",
+      pending: [],
+    });
+    expect(harness.statements.at(1)).toBe("SET statement_timeout = '5s'");
+    expect(harness.statements.at(-1)).toBe(RESTORED_SESSION_TIMEOUT);
+    expect(
+      harness.statements.filter((statement) =>
+        statement.includes("SELECT pg_advisory_lock("),
+      ),
+    ).toEqual([]);
+    expect(harness.released()).toBe(true);
+  });
+
+  test("startup leaves the online phase to a migrate run that holds the lock", async () => {
+    const harness = createHarness({
+      missingIndexes: ONLINE_MIGRATION_INDEXES.map(({ name }) => name),
+      onlineLockHeld: true,
+    });
+    expect(await reportOnlineMigrationsWithOwnership(harness.pool)).toEqual({
+      type: "migrator_active",
+    });
+    expect(
+      harness.statements.filter(
+        (statement) =>
+          statement.includes("pg_catalog") ||
+          statement.includes("pg_advisory_unlock"),
+      ),
+    ).toEqual([]);
+    expect(harness.statements.at(-1)).toBe(RESTORED_SESSION_TIMEOUT);
+    expect(harness.released()).toBe(true);
+  });
+
   test.each(SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS)(
     "validates monitoring constraint $name once and rejects incomplete startup",
     async ({ name }) => {
@@ -556,6 +672,7 @@ describe("online migrations", () => {
     );
     for (const step of steps) {
       expect(step.durationMs, step.name).toBe(5);
+      expect(step.retriesSpent, step.name).toBe(0);
       expect(step.outcome, step.name).toBe("complete");
     }
   });
@@ -595,21 +712,60 @@ describe("online migrations", () => {
       kind: "index",
       name: REPORT_EXPORT_INDEX,
       durationMs: 0,
+      retriesSpent: 0,
       outcome: "deferred",
     });
   });
 
   test("creates a missing index online and verifies completion", async () => {
+    for (const { name } of ONLINE_MIGRATION_INDEXES.filter(
+      declaresOnlineBuild,
+    )) {
+      const harness = createHarness({ missingIndexes: [name] });
+
+      await runOnlineMigrations(harness.pool);
+
+      expect(
+        indexOfStatement(harness.statements, `INDEX CONCURRENTLY "${name}"`),
+        name,
+      ).toBeGreaterThan(-1);
+      expect(harness.released()).toBe(true);
+    }
+  });
+
+  test("refuses an online build without a declared create statement", async () => {
+    const declared = ONLINE_MIGRATION_INDEXES.find(
+      ({ name }) => name === REPORT_EXPORT_INDEX,
+    );
+    if (!declared) {
+      throw new TypeError("Expected the report export index declaration");
+    }
+    const index = {
+      definitionBody: declared.definitionBody,
+      isUnique: declared.isUnique,
+      name: declared.name,
+      tableName: declared.tableName,
+    };
     const harness = createHarness({
-      missingIndexes: [REPORT_EXPORT_INDEX],
+      indexStates: { [REPORT_EXPORT_INDEX]: [false, undefined] },
     });
+    const connection = await harness.pool.reserve();
 
-    await runOnlineMigrations(harness.pool);
+    const rejection = await rejectionOf(
+      ensureOnlineIndexValid({
+        connection,
+        gate: healthyIndexGate,
+        index,
+        reserveObserver: reserveHealthyObserver,
+      }),
+    );
 
-    expect(
-      indexOfStatement(harness.statements, CREATE_INDEX_FRAGMENT),
-    ).toBeGreaterThan(-1);
-    expect(harness.released()).toBe(true);
+    expect(String(rejection)).toContain(
+      `Required migration index ${REPORT_EXPORT_INDEX} is missing`,
+    );
+    expect(indexOfStatement(harness.statements, CREATE_INDEX_FRAGMENT)).toBe(
+      -1,
+    );
   });
 
   /**
@@ -1083,6 +1239,7 @@ describe("online migrations", () => {
       kind: "replacement_drop",
       name: firstLegacy,
       durationMs: 0,
+      retriesSpent: 0,
       outcome: "deferred",
     });
     expect(indexOfStatement(harness.statements, DROP_INDEX_FRAGMENT)).toBe(-1);
@@ -1136,6 +1293,7 @@ describe("online migrations", () => {
         kind: "repair",
         name,
         durationMs: 0,
+        retriesSpent: 0,
         outcome: "deferred",
       });
       expect(
@@ -1485,6 +1643,7 @@ describe("online migrations", () => {
       kind: "repair",
       name: "probe-repair",
       durationMs: 0,
+      retriesSpent: 0,
       outcome: "failed",
     });
   });
@@ -1729,6 +1888,8 @@ type HarnessOptions = {
   missingIndexes?: readonly string[];
   /** Replaced indexes already gone; the rest are present until dropped. */
   retiredIndexes?: readonly string[];
+  /** Another session (a migrate run) holds the online lock. */
+  onlineLockHeld?: boolean;
 };
 
 const POSTGRES_IDENTIFIER_MAX_LENGTH = 63;
@@ -1747,6 +1908,7 @@ const createHarness = ({
   retiredIndexes = ONLINE_INDEX_REPLACEMENTS.map(
     ({ legacyName }) => legacyName,
   ),
+  onlineLockHeld = false,
 }: HarnessOptions = {}) => {
   const statements: string[] = [];
   const legacyIndexes = new Set(
@@ -1787,6 +1949,97 @@ const createHarness = ({
     ...ONLINE_MIGRATION_INDEX_CUTOVERS.map(({ final }) => final),
   ];
 
+  const queryBackfillCheckpoint = (
+    query: string,
+    params: readonly unknown[],
+  ) => {
+    if (query.startsWith("INSERT")) {
+      const serialized = params.at(2);
+      if (typeof serialized !== "string") {
+        throw new TypeError("Expected checkpoint JSON");
+      }
+      const batch: unknown = JSON.parse(serialized);
+      if (!backfillStates.has(params.at(0))) {
+        backfillStates.set(params.at(0), {
+          cursor: params.at(1),
+          batch,
+        });
+      }
+      return [];
+    }
+    if (query.startsWith("UPDATE")) {
+      const serialized = params.at(2);
+      if (typeof serialized !== "string") {
+        throw new TypeError("Expected checkpoint JSON");
+      }
+      const batch: unknown = JSON.parse(serialized);
+      backfillStates.set(params.at(0), { cursor: params.at(1), batch });
+      return [];
+    }
+    return [backfillStates.get(params.at(0))];
+  };
+
+  const queryIndexArtifacts = (params: readonly unknown[]) => {
+    const newPrefix = params.at(2);
+    const oldPrefix = params.at(3);
+    const index = managedIndexes.find(
+      ({ name }) =>
+        artifactPrefix(name, "_ccnew") === newPrefix &&
+        artifactPrefix(name, "_ccold") === oldPrefix,
+    );
+    if (!index) {
+      throw new TypeError("Expected managed index artifact prefixes");
+    }
+    return (remainingArtifacts.get(index.name) ?? []).map(({ isValid, name }) =>
+      indexRow(index, isValid, name),
+    );
+  };
+
+  const queryIndexState = (params: readonly unknown[]) => {
+    const indexName = params.at(1);
+    if (typeof indexName !== "string") {
+      throw new TypeError("Expected index name query parameter");
+    }
+    if (legacyIndexes.has(indexName)) {
+      return droppedLegacyIndexes.has(indexName)
+        ? []
+        : [
+            {
+              definition: `CREATE INDEX ${indexName} ON public.${String(params.at(2))} USING btree (id)`,
+              isReady: true,
+              isUnique: false,
+              isValid: true,
+              name: indexName,
+            },
+          ];
+    }
+    const index = managedIndexes.find(({ name }) => name === indexName);
+    if (!index) {
+      throw new TypeError("Expected managed index name");
+    }
+    if (pendingIndexes.has(indexName)) {
+      return [];
+    }
+    const offset = indexOffsets.get(indexName) ?? 0;
+    const states = indexStates[indexName];
+    let state: IndexState =
+      indexName === FILTER_INDEX_REPLACEMENT ? undefined : true;
+    if (states) {
+      state = offset < states.length ? states.at(offset) : states.at(-1);
+    }
+    indexOffsets.set(indexName, offset + 1);
+    if (state === undefined) {
+      return [];
+    }
+    if (typeof state === "boolean") {
+      return [indexRow(index, state)];
+    }
+    if ("isReady" in state) {
+      return [{ ...indexRow(index, state.isValid), isReady: state.isReady }];
+    }
+    return [indexRow(index, state.isValid, index.name, state.definitionBody)];
+  };
+
   return {
     pool: {
       reserve: async () => ({
@@ -1825,11 +2078,31 @@ const createHarness = ({
           if (query.includes("FROM drizzle.__drizzle_migrations")) {
             return [{ name: newestAppliedMigration }];
           }
+          if (
+            query.includes('AS "uniquePresent"') &&
+            query.includes('AS "foreignReady"')
+          ) {
+            return [
+              {
+                indexReady: true,
+                uniquePresent: true,
+                uniqueReady: true,
+                foreignPresent: true,
+                foreignReady: true,
+              },
+            ];
+          }
           if (query.includes("pg_backend_pid() AS pid")) {
             return [{ pid: 1, database: "test" }];
           }
           if (query.includes("pg_advisory_xact_lock")) {
             return [];
+          }
+          if (query.includes("pg_try_advisory_lock(hashtext('stella-online")) {
+            return [{ acquired: !onlineLockHeld }];
+          }
+          if (query.includes("current_setting('statement_timeout')")) {
+            return [{ timeout: SESSION_STATEMENT_TIMEOUT }];
           }
           if (
             query.includes(" AS acquired") ||
@@ -1842,6 +2115,11 @@ const createHarness = ({
           if (query.startsWith("SELECT set_config(")) {
             return [];
           }
+          // The contact VAT ID repair's movable-contact probe: none left, so
+          // its completion holds and the phase skips it.
+          if (query.startsWith('SELECT 1 FROM public."contacts"')) {
+            return [];
+          }
           if (query.startsWith("SELECT 1 FROM public.")) {
             return emptyRepairTables ? [] : [{ present: 1 }];
           }
@@ -1852,35 +2130,12 @@ const createHarness = ({
           }
           if (
             query.trim() ===
-            "SELECT to_regprocedure('public.entity_feature_gate_finish()') IS NOT NULL AS installed"
+            "SELECT to_regproc('public.entity_feature_gate_finish') IS NOT NULL AS installed"
           ) {
             return [{ installed: false }];
           }
           if (query.includes("database_backfill_states")) {
-            if (query.startsWith("INSERT")) {
-              const serialized = params.at(2);
-              if (typeof serialized !== "string") {
-                throw new TypeError("Expected checkpoint JSON");
-              }
-              const batch: unknown = JSON.parse(serialized);
-              if (!backfillStates.has(params.at(0))) {
-                backfillStates.set(params.at(0), {
-                  cursor: params.at(1),
-                  batch,
-                });
-              }
-              return [];
-            }
-            if (query.startsWith("UPDATE")) {
-              const serialized = params.at(2);
-              if (typeof serialized !== "string") {
-                throw new TypeError("Expected checkpoint JSON");
-              }
-              const batch: unknown = JSON.parse(serialized);
-              backfillStates.set(params.at(0), { cursor: params.at(1), batch });
-              return [];
-            }
-            return [backfillStates.get(params.at(0))];
+            return queryBackfillCheckpoint(query, params);
           }
           if (query.includes("pg_constraint")) {
             const constraintName = params.at(2);
@@ -1888,6 +2143,19 @@ const createHarness = ({
               throw new TypeError("Expected constraint name query parameter");
             }
             return [{ isValidated: !pendingConstraints.has(constraintName) }];
+          }
+          // This harness starts with invoice clients already backfilled.
+          if (
+            query.includes("FROM public.invoices i JOIN public.workspaces w")
+          ) {
+            return [];
+          }
+          // ...and with its invoices' sent markers and settling payments.
+          if (
+            query.includes("i.sent_at IS NULL") ||
+            query.includes("FROM public.invoice_payments p")
+          ) {
+            return [];
           }
           // The decision-date repair's selection: nothing left to repair.
           if (query.includes("corrupt AS MATERIALIZED")) {
@@ -1921,6 +2189,11 @@ const createHarness = ({
           }
           // Its resource seed and its client walk: nothing stored yet, and no
           // registration to link, so both converge on the first pass.
+          // The finding decision backfill's probe: no decided finding is
+          // without history, so its completion holds.
+          if (query.includes("document_review_finding_decisions event")) {
+            return [];
+          }
           if (
             query.includes("oauth_resource") ||
             query.includes("oauth_client")
@@ -1928,57 +2201,10 @@ const createHarness = ({
             return [];
           }
           if (query.includes("starts_with")) {
-            const newPrefix = params.at(2);
-            const oldPrefix = params.at(3);
-            const index = managedIndexes.find(
-              ({ name }) =>
-                artifactPrefix(name, "_ccnew") === newPrefix &&
-                artifactPrefix(name, "_ccold") === oldPrefix,
-            );
-            if (!index) {
-              throw new TypeError("Expected managed index artifact prefixes");
-            }
-            return (remainingArtifacts.get(index.name) ?? []).map(
-              ({ isValid, name }) => indexRow(index, isValid, name),
-            );
+            return queryIndexArtifacts(params);
           }
 
-          const indexName = params.at(1);
-          if (typeof indexName !== "string") {
-            throw new TypeError("Expected index name query parameter");
-          }
-          if (droppedLegacyIndexes.has(indexName)) {
-            return [];
-          }
-          const index = managedIndexes.find(({ name }) => name === indexName);
-          if (!index) {
-            throw new TypeError("Expected managed index name");
-          }
-          if (pendingIndexes.has(indexName)) {
-            return [];
-          }
-          const offset = indexOffsets.get(indexName) ?? 0;
-          const states = indexStates[indexName];
-          let state: IndexState =
-            indexName === FILTER_INDEX_REPLACEMENT ? undefined : true;
-          if (states) {
-            state = offset < states.length ? states.at(offset) : states.at(-1);
-          }
-          indexOffsets.set(indexName, offset + 1);
-          if (state === undefined) {
-            return [];
-          }
-          if (typeof state === "boolean") {
-            return [indexRow(index, state)];
-          }
-          if ("isReady" in state) {
-            return [
-              { ...indexRow(index, state.isValid), isReady: state.isReady },
-            ];
-          }
-          return [
-            indexRow(index, state.isValid, index.name, state.definitionBody),
-          ];
+          return queryIndexState(params);
         },
         terminate: async () => undefined,
         release: () => {

@@ -1,3 +1,4 @@
+import { skCourtsDocumentFetch } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
 /**
  * Complete document processors for adapters whose manifests declare a
  * `deferred` document stage. Each owns validation, parsing, telemetry and
@@ -6,8 +7,6 @@
  * Kept apart from `adapter-registry.ts` so the public read path reaches
  * only the deferred adapters, not every adapter module.
  */
-
-import { skCourtsDocumentFetch } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
 import {
   DEFERRED_DOCUMENT_ADAPTER_KEYS,
   type DeferredDocumentAdapterKey,
@@ -15,9 +14,10 @@ import {
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import {
   type DecisionDocumentOutcome,
-  type FetchDecisionDocumentOptions,
   fetchDecisionDocument,
+  type FetchDecisionDocumentOptions,
 } from "@/api/lib/legal-search/sk-document-backfill";
+import { withExceptionScope } from "@/api/lib/observability/exception-scope";
 
 type DeferredDocumentProcessor = (
   options: Omit<FetchDecisionDocumentOptions, "fetchDocument">,
@@ -25,10 +25,14 @@ type DeferredDocumentProcessor = (
 
 export const DEFERRED_DOCUMENT_PROCESSORS = {
   [ADAPTER_KEYS.SK_COURTS]: async (options) =>
-    await fetchDecisionDocument({
-      ...options,
-      fetchDocument: skCourtsDocumentFetch,
-    }),
+    await withExceptionScope(
+      { type: "ingestion", adapterKey: ADAPTER_KEYS.SK_COURTS },
+      async () =>
+        await fetchDecisionDocument({
+          ...options,
+          fetchDocument: skCourtsDocumentFetch,
+        }),
+    ),
 } as const satisfies Record<
   DeferredDocumentAdapterKey,
   DeferredDocumentProcessor

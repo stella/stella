@@ -3,9 +3,9 @@ import { and, eq, isNull } from "drizzle-orm";
 
 import type { CorrespondenceOriginalSignature } from "@stll/api-contract/correspondence";
 import {
+  type EMAIL_MIME_TYPES,
   EML_MIME_TYPE,
   MSG_MIME_TYPE,
-  type EMAIL_MIME_TYPES,
 } from "@stll/api-contract/email-mime-types";
 
 import { member, user } from "@/api/db/auth-schema";
@@ -19,9 +19,10 @@ import { verifyOriginalSignature } from "@/api/lib/email/inbound/authentication"
 import { PARSE_DROP_REASON } from "@/api/lib/email/inbound/ingest";
 import {
   correspondenceFromMessage,
-  parseEmailFile,
   type EmailFileFormat,
+  parseEmailFile,
 } from "@/api/lib/email/inbound/message";
+import { normalizeEmail } from "@/api/lib/email/normalized-email";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { logger } from "@/api/lib/observability/logger";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
@@ -262,7 +263,7 @@ export const fileUploadedMail = async ({
           verifyOriginal,
         }),
       },
-      sender: file.uploaderEmail.toLowerCase(),
+      sender: normalizeEmail(file.uploaderEmail),
       receivedAt: file.createdAt.toISOString(),
     }),
     attachments: [],

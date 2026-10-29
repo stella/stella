@@ -1,12 +1,20 @@
-import { QueryClient, QueryObserver } from "@tanstack/react-query";
+import {
+  CancelledError,
+  QueryClient,
+  QueryObserver,
+} from "@tanstack/react-query";
 import type { FetchStatus } from "@tanstack/react-query";
 import { Result } from "better-result";
-import { describe, expect, mock, test } from "bun:test";
+import { beforeEach, describe, expect, mock, test } from "bun:test";
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
 
 import { queryView, queryViewError } from "./query-view.logic";
+
+beforeEach(() => {
+  refetch.mockClear();
+});
 
 const FETCH_STATUSES: readonly FetchStatus[] = ["idle", "fetching", "paused"];
 const readError = new Error("Read failed");
@@ -15,6 +23,27 @@ const refetch = mock(async () => {
 });
 
 describe("query view states", () => {
+  test("cancelled reads stay pending or retain cached data without an error", () => {
+    for (const fetchStatus of FETCH_STATUSES) {
+      for (const data of [undefined, [], [1]]) {
+        const view = queryView({
+          status: "error",
+          fetchStatus,
+          isPlaceholderData: false,
+          data,
+          error: new CancelledError({ revert: false }),
+          refetch,
+        });
+        expect(view).toEqual(
+          data === undefined
+            ? { type: "pending" }
+            : { type: "items", items: data, retry: refetch },
+        );
+        expect(queryViewError(view)).toBeUndefined();
+      }
+    }
+  });
+
   test("keeps empty placeholder data pending until a response succeeds", async () => {
     const client = new QueryClient();
     const observer = new QueryObserver(client, {

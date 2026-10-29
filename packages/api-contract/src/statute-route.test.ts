@@ -64,6 +64,21 @@ describe("statute public slugs", () => {
     ).toBe("40-1964-zz-obciansky-zakonnik");
   });
 
+  test("a title letter NFKD cannot strip stays a separator, so a Work keeps one slug", () => {
+    expect(
+      createStatuteSlug({
+        eli: "/eli/pl/du/1994/83",
+        title: "Ustawa o prawie autorskim i prawach pokrewnych, Łódź",
+      }),
+    ).toBe("83-1994-du-ustawa-o-prawie-autorskim-i-prawach-pokrewnych-odz");
+    expect(
+      createStatuteSlug({
+        eli: "/eli/de/bgbl/2003/310",
+        title: "Straßenverkehrsgesetz",
+      }),
+    ).toBe("310-2003-bgbl-stra-enverkehrsgesetz");
+  });
+
   test("an ELI without a citation tail carries no slug", () => {
     expect(
       createStatuteSlug({ eli: "/eli/cz/sb", title: "Sbírka zákonů" }),

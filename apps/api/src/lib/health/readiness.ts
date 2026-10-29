@@ -29,8 +29,7 @@ export const API_READINESS_DEPENDENCIES = Object.values(READINESS_DEPENDENCY);
 type ReadinessProbe = (signal: AbortSignal) => Promise<void>;
 export type ReadinessProbes = Record<ReadinessDependency, ReadinessProbe>;
 export type ReadinessOutcome =
-  | { status: "ready" }
-  | { status: "not-ready"; failed: ReadinessDependency[] };
+  { status: "ready" } | { status: "not-ready"; failed: ReadinessDependency[] };
 
 const PROBE_TIMEOUT_MS = 5000;
 // Written with the temporary-upload tag, so readiness also proves the task may

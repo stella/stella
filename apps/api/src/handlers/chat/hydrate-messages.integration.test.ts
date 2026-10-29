@@ -20,12 +20,12 @@ import { createChatAttachmentPart } from "@/api/handlers/chat/chat-message-parts
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createUserFileKey } from "@/api/lib/file-key";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { toUserFileUrl } from "@/api/lib/user-files/types";
 import { XLSX_MIME_TYPE } from "@/api/mime-types";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
-import { testFileKey } from "@/api/tests/helpers/file-key";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -98,6 +98,27 @@ beforeAll(async () => {
     createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
   );
 
+  const ownFileKey = createUserFileKey({
+    fileId: ownFileId,
+    mimeType: TEXT_PLAIN_MIME_TYPE,
+    organizationId: ids.orgA,
+  });
+  const ownXlsxFileKey = createUserFileKey({
+    fileId: ownXlsxFileId,
+    mimeType: XLSX_MIME_TYPE,
+    organizationId: ids.orgA,
+  });
+  const secondOwnXlsxFileKey = createUserFileKey({
+    fileId: secondOwnXlsxFileId,
+    mimeType: XLSX_MIME_TYPE,
+    organizationId: ids.orgA,
+  });
+  const foreignFileKey = createUserFileKey({
+    fileId: foreignFileId,
+    mimeType: TEXT_PLAIN_MIME_TYPE,
+    organizationId: ids.orgB,
+  });
+
   await testDb.insert(userFiles).values([
     {
       id: ownFileId,
@@ -106,7 +127,7 @@ beforeAll(async () => {
       mimeType: TEXT_PLAIN_MIME_TYPE,
       sizeBytes: attachmentBytes.byteLength,
       sha256Hex: "a".repeat(64),
-      s3Key: testFileKey(`chat/${ids.userA1}/${ownFileId}`),
+      s3Key: ownFileKey,
       threadId: ids.chatThreadWorkspaceA1,
     },
     {
@@ -116,7 +137,7 @@ beforeAll(async () => {
       mimeType: XLSX_MIME_TYPE,
       sizeBytes: xlsxBytes.byteLength,
       sha256Hex: "c".repeat(64),
-      s3Key: testFileKey(`chat/${ids.userA1}/${ownXlsxFileId}.xlsx`),
+      s3Key: ownXlsxFileKey,
       threadId: ids.chatThreadWorkspaceA1,
     },
     {
@@ -126,7 +147,7 @@ beforeAll(async () => {
       mimeType: XLSX_MIME_TYPE,
       sizeBytes: xlsxBytes.byteLength,
       sha256Hex: "d".repeat(64),
-      s3Key: testFileKey(`chat/${ids.userA1}/${secondOwnXlsxFileId}.xlsx`),
+      s3Key: secondOwnXlsxFileKey,
       threadId: ids.chatThreadWorkspaceA1,
     },
     {
@@ -136,17 +157,17 @@ beforeAll(async () => {
       mimeType: TEXT_PLAIN_MIME_TYPE,
       sizeBytes: attachmentBytes.byteLength,
       sha256Hex: "b".repeat(64),
-      s3Key: testFileKey(`chat/${ids.userB1}/${foreignFileId}`),
+      s3Key: foreignFileKey,
       threadId: ids.chatThreadWorkspaceB1,
     },
   ]);
 
   // Every row above is hydrated from its own stored object, so the store holds
   // exactly what `user_files.s3_key` names.
-  fake.put(bucket, `chat/${ids.userA1}/${ownFileId}`, attachmentBytes);
-  fake.put(bucket, `chat/${ids.userA1}/${ownXlsxFileId}.xlsx`, xlsxBytes);
-  fake.put(bucket, `chat/${ids.userA1}/${secondOwnXlsxFileId}.xlsx`, xlsxBytes);
-  fake.put(bucket, `chat/${ids.userB1}/${foreignFileId}`, attachmentBytes);
+  fake.put(bucket, ownFileKey, attachmentBytes);
+  fake.put(bucket, ownXlsxFileKey, xlsxBytes);
+  fake.put(bucket, secondOwnXlsxFileKey, xlsxBytes);
+  fake.put(bucket, foreignFileKey, attachmentBytes);
 });
 
 afterAll(async () => {

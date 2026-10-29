@@ -42,9 +42,9 @@ import { validateOnlineConstraints } from "./online-ddl";
 import type { OnlineConstraintValidation, OnlineTableGate } from "./online-ddl";
 import { onlineMigrationParams } from "./online-migration-connection";
 import type {
+  MigrationOwnedOnlineRepair,
   OnlineMigrationConnection,
   OnlineMigrationOutcome,
-  OnlineRepair,
 } from "./online-migration-connection";
 
 const REPAIR_NAME = "decision-date-ceiling";
@@ -185,7 +185,7 @@ type RepairRuntimeOptions = {
 
 export const createDecisionDateCeilingRepair = (
   options: RepairRuntimeOptions = {},
-): OnlineRepair => ({
+): MigrationOwnedOnlineRepair => ({
   introducedBy: "20260902100000_case_law_decision_date_ceiling",
   name: REPAIR_NAME,
   readCompletion: async (connection) =>

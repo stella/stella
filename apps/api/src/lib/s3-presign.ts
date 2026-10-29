@@ -37,16 +37,36 @@ import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import { envBase } from "@/api/env-base";
+import { PRIVATE_CACHE_CONTROL } from "@/api/http/cache";
 import { detached } from "@/api/lib/analytics/capture";
 import { contentDisposition } from "@/api/lib/content-disposition";
 import { markContentDeliveryIntent } from "@/api/lib/files/content-delivery";
-import { resolveS3Credentials, TEMP_UPLOAD_TAGGING } from "@/api/lib/s3";
+import {
+  isMissingS3ObjectError,
+  resolveS3Credentials,
+  TEMP_UPLOAD_TAGGING,
+} from "@/api/lib/s3";
 import { createS3CredentialGuard } from "@/api/lib/s3/credential-guard";
-import { PRIVATE_CACHE_CONTROL } from "@/api/lib/security-headers";
+import {
+  issueSessionBoundCredentialTtl,
+  requireSessionCredentialIssuer,
+} from "@/api/lib/synthetic-principal/credential-policy";
+import type { SyntheticSessionAuthorityReader } from "@/api/lib/synthetic-principal/session-authority";
 
 export class S3PresignError extends TaggedError("S3PresignError")<{
   message: string;
   cause?: unknown;
+}> {}
+
+/**
+ * The store confirmed the key holds no object. Every other read failure
+ * (timeout, throttling, refused credentials) stays an `S3PresignError`,
+ * which says nothing about the key, so a caller cannot record absence for a
+ * store that did not answer.
+ */
+export class S3ObjectMissingError extends TaggedError("S3ObjectMissingError")<{
+  message: string;
+  cause: unknown;
 }> {}
 
 /**
@@ -64,6 +84,7 @@ export type PresignedUploadHeaders = {
 };
 
 export type PresignUploadOptions = {
+  userId: string | null;
   /** Final S3 key the client will write to. */
   key: string;
   /** Lifetime of the signed URL in seconds. Keep short — finalize is fast. */
@@ -863,6 +884,7 @@ export const putPresignedUpload = async ({
  * S3 reject the upload with `403 SignatureDoesNotMatch`.
  */
 export const presignUploadUrl = async ({
+  userId,
   key,
   expiresIn,
   contentType,
@@ -872,8 +894,12 @@ export const presignUploadUrl = async ({
   tagAsTemporaryUpload = false,
 }: PresignUploadOptions): Promise<
   Result<PresignUploadResult, S3PresignError>
-> =>
-  await Result.tryPromise({
+> => {
+  requireSessionCredentialIssuer("signedUpload", {
+    userId,
+    organizationId: scope?.organizationId,
+  });
+  return await Result.tryPromise({
     try: async () => {
       const client = await getPresignClient({
         expiresIn,
@@ -942,21 +968,73 @@ export const presignUploadUrl = async ({
         cause,
       }),
   });
+};
+
+export type SignedDownloadSource =
+  | { kind: "request"; sessionId: string }
+  | { kind: "background"; reason: string };
+
+/**
+ * The source of a download a caller asked for: bound to their browser session,
+ * or, for a credential that has none (an MCP session), not bound to a session.
+ */
+export const callerDownloadSource = (session: {
+  readonly id: string | null;
+}): SignedDownloadSource =>
+  session.id === null
+    ? {
+        kind: "background",
+        reason: "requested with a credential that has no browser session",
+      }
+    : { kind: "request", sessionId: session.id };
 
 export type PresignDownloadOptions = {
+  userId: string | null;
+  organizationId?: string | null;
+  email?: string;
   expiresIn: number;
+  source: SignedDownloadSource;
+  readSessionAuthority: SyntheticSessionAuthorityReader;
   fileName?: string;
   scope?: S3SigningScope;
 };
 
+const refuseBackgroundSessionAuthority: SyntheticSessionAuthorityReader =
+  async () => await Promise.resolve(null);
+
 export const presignDownloadUrl = async (
   key: string,
-  { expiresIn, fileName, scope }: PresignDownloadOptions,
+  {
+    userId,
+    email,
+    scope,
+    organizationId = scope?.organizationId,
+    expiresIn,
+    source,
+    readSessionAuthority,
+    fileName,
+  }: PresignDownloadOptions,
 ): Promise<string> => {
+  const issuedExpiresIn = await issueSessionBoundCredentialTtl(
+    "signedDownload",
+    {
+      userId,
+      email,
+      organizationId,
+      fileOrganizationId: scope?.organizationId,
+      requestedTtlSeconds: expiresIn,
+      now: new Date(Temporal.Now.instant().epochMilliseconds),
+      sessionId: source.kind === "request" ? source.sessionId : null,
+      readSessionAuthority:
+        source.kind === "request"
+          ? readSessionAuthority
+          : refuseBackgroundSessionAuthority,
+    },
+  );
   const result = await Result.tryPromise({
     try: async () => {
       const client = await getPresignClient({
-        expiresIn,
+        expiresIn: issuedExpiresIn,
         key,
         scope,
         actions: ["s3:GetObject"],
@@ -971,7 +1049,7 @@ export const presignDownloadUrl = async (
             ? { ResponseContentDisposition: contentDisposition(fileName) }
             : {}),
         }),
-        { expiresIn },
+        { expiresIn: issuedExpiresIn },
       );
     },
     catch: (cause) =>
@@ -1003,10 +1081,12 @@ export type HeadObjectResult = {
  * said they would. The checksum is only present when the upload
  * was made with `x-amz-checksum-sha256` and the client requested
  * checksum mode — both of which the presign helper above enforces.
+ * Fails with `S3ObjectMissingError` only when the store confirms the key is
+ * empty; any other failure is an `S3PresignError`.
  */
 export const headObject = async (
   key: string,
-): Promise<Result<HeadObjectResult, S3PresignError>> =>
+): Promise<Result<HeadObjectResult, S3ObjectMissingError | S3PresignError>> =>
   await Result.tryPromise({
     try: async () => {
       const client = await getAwsS3Client();
@@ -1025,10 +1105,12 @@ export const headObject = async (
       };
     },
     catch: (cause) =>
-      new S3PresignError({
-        message: "Failed to head object",
-        cause,
-      }),
+      isMissingS3ObjectError(cause)
+        ? new S3ObjectMissingError({ message: "Object not found", cause })
+        : new S3PresignError({
+            message: "Failed to head object",
+            cause,
+          }),
   });
 
 /**

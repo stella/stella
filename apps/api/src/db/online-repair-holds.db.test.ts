@@ -2,12 +2,13 @@ import type { ReservedSQL, SQL } from "bun";
 import { describe, expect, test } from "bun:test";
 import { getTableName } from "drizzle-orm";
 import {
+  type AnyPgColumn,
   getTableConfig,
   PgDialect,
-  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 
 import { defaultConfig, type Verdict } from "@stll/db-load-gate/health";
+import { waitForExternalState } from "@stll/property-testing/external-state";
 import { Temporal } from "@stll/time";
 
 import { readOnlineIndexConfig } from "../env-online-index";
@@ -17,11 +18,11 @@ import { createCorpusProjectionDeleteReceiptRepair } from "./corpus-projection-d
 import { createDecisionDateCeilingRepair } from "./decision-date-ceiling-repair";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
 import {
-  reportOnlineMigrations,
   ONLINE_MIGRATION_INDEX_CUTOVERS,
   ONLINE_MIGRATION_INDEXES,
-  runOnlineMigrations,
   type OnlineRepairOptions,
+  reportOnlineMigrations as reportOnlineMigrationsWithOwnership,
+  runOnlineMigrations,
 } from "./online-migrations";
 import { APPLICATION_RLS_ROLE_NAME } from "./role-names";
 import {
@@ -31,6 +32,21 @@ import {
   corpusIndexProjectionIntents,
 } from "./schema";
 import { terminateReserved } from "./sql-close";
+
+const reportOnlineMigrations = async (
+  ...args: Parameters<typeof reportOnlineMigrationsWithOwnership>
+) => {
+  const outcome = await reportOnlineMigrationsWithOwnership(...args);
+  switch (outcome.type) {
+    case "validated":
+      return outcome.report;
+    case "migrator_active":
+      throw new TypeError("Expected startup validation ownership");
+    default:
+      outcome satisfies never;
+      throw new TypeError("Unknown validation ownership");
+  }
+};
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -71,7 +87,9 @@ const repairConnection = (
     }
     return await connection.unsafe(statement, [...parameters]);
   },
-  release: () => connection.release(),
+  release: async () => {
+    await connection.release();
+  },
   terminate: async () => {
     await terminateReserved(connection);
   },
@@ -292,6 +310,9 @@ describe.skipIf(!enabled)(
               },
               pollMs: 1,
               retryMs: 7,
+              // The writer this test holds is the wait under test.
+              idleHolderMs: 3_600_000,
+              longHolderMs: 3_600_000,
             };
             const outcome = await runOnlineMigrations(
               { reserve: async () => connection },
@@ -327,24 +348,18 @@ describe.skipIf(!enabled)(
                     },
                   },
                   wait: async () => {
-                    for (let attempt = 0; attempt < 400; attempt += 1) {
-                      const progress = await observer.unsafe<
-                        { phase: string }[]
-                      >(
-                        "SELECT phase FROM pg_stat_progress_create_index WHERE pid = $1",
-                        [pid],
-                      );
-                      if (
-                        progress.at(0)?.phase ===
-                        "waiting for writers before build"
-                      ) {
-                        return;
-                      }
-                      await Bun.sleep(5);
-                    }
-                    throw new TypeError(
-                      "Staged index did not reach its writer barrier",
-                    );
+                    await waitForExternalState({
+                      description:
+                        "the staged index reaches its writer barrier",
+                      intervalMs: 5,
+                      read: async () =>
+                        (
+                          await observer.unsafe<{ phase: string }[]>(
+                            "SELECT phase FROM pg_stat_progress_create_index WHERE pid = $1",
+                            [pid],
+                          )
+                        ).at(0)?.phase === "waiting for writers before build",
+                    });
                   },
                 },
                 reserveObserver: async () => ({
@@ -388,15 +403,15 @@ describe.skipIf(!enabled)(
               "SELECT i.indisvalid AS valid FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid WHERE c.relname = $1",
               [staged.name],
             );
-            expect(stageState).toEqual(
+            expect([...stageState]).toEqual(
               reason === "cancel" ? [{ valid: false }] : [],
             );
             expect(readings).toBe(reason === "cancel" ? 3 : 1);
           } finally {
             await blocker.unsafe("ROLLBACK");
-            blocker.release();
-            observer.release();
-            builder.release();
+            await blocker.release();
+            await observer.release();
+            await builder.release();
           }
         });
       });
@@ -466,7 +481,9 @@ describe.skipIf(!enabled)(
                 },
                 query: async (statement, parameters = []) =>
                   await observer.unsafe(statement, [...parameters]),
-                release: () => observer.release(),
+                release: async () => {
+                  await observer.release();
+                },
               };
             },
             log: (record: unknown) => {

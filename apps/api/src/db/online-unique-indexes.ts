@@ -3,10 +3,11 @@ import { getColumns, getTableName } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
 import {
-  REWRITTEN_MIGRATION_INDEXES,
   type IntroducedMigrationIndex,
+  REWRITTEN_MIGRATION_INDEXES,
 } from "../lib/db/migration-history";
 import type { OnlineIndexDeclaration } from "./online-ddl";
+import type { OnlineStepIntroduction } from "./online-migration-connection";
 
 export const CONTACTS_ORG_ID_UNIQUE = "contacts_org_id_unique";
 export const SESSION_PRIOR_TOKEN_HASH_IDX = "session_priorTokenHash_idx";
@@ -70,8 +71,82 @@ export const EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES = {
   CORRESPONDENCE_WS_SOURCE_ENTITY_UIDX,
 } as const;
 
+/** The original-invoice tenant reference uses this online-built covering key. */
+export const INVOICE_TENANT_UNIQUE_INDEX = {
+  introducedBy: { type: "code", owner: "src/db/online-unique-indexes.ts" },
+  createSql:
+    'CREATE UNIQUE INDEX CONCURRENTLY "invoices_id_org_unique" ON public."invoices" USING btree (id, organization_id)',
+  definitionBody: "ON public.invoices USING btree (id, organization_id)",
+  isUnique: true,
+  name: "invoices_id_org_unique",
+  tableName: "invoices",
+} as const satisfies OnlineIndexDeclaration & {
+  introducedBy: OnlineStepIntroduction;
+};
+
+const INVOICES_CLIENT_NUMBER_INDEX = {
+  createSql:
+    'CREATE UNIQUE INDEX CONCURRENTLY "invoices_client_number_uidx" ON public."invoices" USING btree (organization_id, client_id, invoice_number) WHERE workspace_id IS NULL',
+  definitionBody:
+    "ON public.invoices USING btree (organization_id, client_id, invoice_number) WHERE (workspace_id IS NULL)",
+  introducedBy: { type: "code", owner: "src/db/online-unique-indexes.ts" },
+  isUnique: true,
+  name: "invoices_client_number_uidx",
+  tableName: "invoices",
+} as const satisfies OnlineIndexDeclaration & {
+  introducedBy: OnlineStepIntroduction;
+};
+
+export const CLIENT_INVOICE_UNIQUE_INDEXES = [
+  INVOICE_TENANT_UNIQUE_INDEX,
+  INVOICES_CLIENT_NUMBER_INDEX,
+] as const;
+
+export const LEGISLATION_UNIQUE_INDEXES = [
+  {
+    introducedBy: "20261019091000_legislation_publisher_identity",
+    createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "legislation_documents_publisher_identity_idx" ON public."legislation_documents" (source_id, eli, language, publisher_expression_id) WHERE identity_mode = \'publisher-expression\'',
+    definitionBody:
+      "ON public.legislation_documents USING btree (source_id, eli, language, publisher_expression_id) WHERE ((identity_mode)::text = 'publisher-expression'::text)",
+    isUnique: true,
+    name: "legislation_documents_publisher_identity_idx",
+    tableName: "legislation_documents",
+  },
+  {
+    introducedBy: "20261019091000_legislation_publisher_identity",
+    createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "legislation_documents_legacy_version_lang_idx" ON public."legislation_documents" (source_id, eli, version_valid_from, language) WHERE identity_mode = \'legacy-window\' AND version_valid_from IS NOT NULL',
+    definitionBody:
+      "ON public.legislation_documents USING btree (source_id, eli, version_valid_from, language) WHERE (((identity_mode)::text = 'legacy-window'::text) AND (version_valid_from IS NOT NULL))",
+    isUnique: true,
+    name: "legislation_documents_legacy_version_lang_idx",
+    tableName: "legislation_documents",
+  },
+  {
+    introducedBy: "20261019091000_legislation_publisher_identity",
+    createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "legislation_documents_legacy_current_lang_idx" ON public."legislation_documents" (source_id, eli, language) WHERE identity_mode = \'legacy-window\' AND version_valid_from IS NULL',
+    definitionBody:
+      "ON public.legislation_documents USING btree (source_id, eli, language) WHERE (((identity_mode)::text = 'legacy-window'::text) AND (version_valid_from IS NULL))",
+    isUnique: true,
+    name: "legislation_documents_legacy_current_lang_idx",
+    tableName: "legislation_documents",
+  },
+] as const satisfies readonly (OnlineIndexDeclaration & {
+  introducedBy: OnlineStepIntroduction;
+})[];
+
 export const ONLINE_UNIQUE_INDEX_NAMES = {
   ...EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES,
+  LEGISLATION_DOCUMENTS_PUBLISHER_IDENTITY_IDX:
+    LEGISLATION_UNIQUE_INDEXES[0].name,
+  LEGISLATION_DOCUMENTS_LEGACY_VERSION_LANG_IDX:
+    LEGISLATION_UNIQUE_INDEXES[1].name,
+  LEGISLATION_DOCUMENTS_LEGACY_CURRENT_LANG_IDX:
+    LEGISLATION_UNIQUE_INDEXES[2].name,
+  INVOICES_ID_ORG_UNIQUE: INVOICE_TENANT_UNIQUE_INDEX.name,
+  INVOICES_CLIENT_NUMBER_UIDX: INVOICES_CLIENT_NUMBER_INDEX.name,
   CASE_LAW_DECISIONS_SLUG_UIDX,
   ACCOUNT_CREDENTIAL_SINGLETON_UIDX,
   PROPERTIES_WS_DOCUMENT_TYPE_CLASSIFIER_UNQ,
@@ -266,11 +341,15 @@ const EXECUTABLE_ONLINE_UNIQUE_INDEXES = [
   },
 ] as const satisfies readonly ExecutableOnlineUniqueIndex[];
 
-export const ONLINE_UNIQUE_INDEX_VALIDATION_DEFINITIONS: readonly IntroducedMigrationIndex[] =
-  [
-    ...EXECUTABLE_ONLINE_UNIQUE_INDEXES,
-    ...REWRITTEN_MIGRATION_INDEXES.filter(({ isUnique }) => isUnique),
-  ];
+export const ONLINE_UNIQUE_INDEX_VALIDATION_DEFINITIONS: readonly (Omit<
+  IntroducedMigrationIndex,
+  "introducedBy"
+> & { introducedBy: OnlineStepIntroduction })[] = [
+  ...EXECUTABLE_ONLINE_UNIQUE_INDEXES,
+  ...CLIENT_INVOICE_UNIQUE_INDEXES,
+  ...LEGISLATION_UNIQUE_INDEXES,
+  ...REWRITTEN_MIGRATION_INDEXES.filter(({ isUnique }) => isUnique),
+];
 
 // PostgreSQL infers a unique index from its column target and optional predicate.
 // Keep conflict targets attached to the same definition used by online validation.

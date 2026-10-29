@@ -79,8 +79,7 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
 
   const fixture = async (
     tokenEndpointAuthMethod:
-      | "client_secret_post"
-      | "none" = "client_secret_post",
+      "client_secret_post" | "none" = "client_secret_post",
   ) => {
     const browser = await signInHuman(
       `rotation-${Bun.randomUUIDv7()}@example.test`,

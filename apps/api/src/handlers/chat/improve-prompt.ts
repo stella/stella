@@ -1,11 +1,13 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { CHAT_PROMPT_IMPROVEMENT_STRATEGIES } from "@stll/api-contract/chat";
 
 import { buildPromptImprovementModelInput } from "@/api/handlers/chat/improve-prompt-instructions";
 import { resolveCaching } from "@/api/lib/ai-config";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
@@ -23,12 +25,12 @@ const config = {
   permissions: { chat: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "assistant_chat" },
-  body: t.Object({
-    prompt: t.String({ minLength: 1, maxLength: 12_000 }),
-    strategy: t.UnionEnum(CHAT_PROMPT_IMPROVEMENT_STRATEGIES),
-    sendMode: t.Union([
-      t.Literal(CHAT_SEND_MODE.anonymized),
-      t.Literal(CHAT_SEND_MODE.rawOverride),
+  body: v.object({
+    prompt: v.pipe(v.string(), v.minLength(1), v.maxLength(12_000)),
+    strategy: v.picklist(CHAT_PROMPT_IMPROVEMENT_STRATEGIES),
+    sendMode: v.union([
+      v.literal(CHAT_SEND_MODE.anonymized),
+      v.literal(CHAT_SEND_MODE.rawOverride),
     ]),
   }),
   requiresUsage: { actionType: "chat", modelTask: "short-text" },
@@ -40,6 +42,7 @@ const IMPROVE_PROMPT_MAX_OUTPUT_TOKENS = 4096;
 const improvePrompt = createSafeRootHandler(
   config,
   async function* ({
+    orgAIConfigStatus,
     actionSignal,
     body,
     orgAIConfig,
@@ -51,6 +54,10 @@ const improvePrompt = createSafeRootHandler(
     session,
     user,
   }) {
+    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+      return Result.err(storedAIConfigUnreadableError());
+    }
+
     if (body.sendMode === CHAT_SEND_MODE.anonymized) {
       return Result.err(
         new HandlerError({
@@ -96,6 +103,7 @@ const improvePrompt = createSafeRootHandler(
             body.strategy,
           );
           return await generateTanStackTextForTask({
+            userId: user.id,
             dataClass: "customer",
             abortSignal: actionSignal ?? request.signal,
             deadlineMs: IMPROVE_PROMPT_TIMEOUT_MS,
@@ -134,7 +142,11 @@ const improvePrompt = createSafeRootHandler(
     )).trim();
     if (improvedPrompt.length === 0) {
       return Result.err(
-        new HandlerError({ status: 502, message: "Empty improved prompt" }),
+        new HandlerError({
+          status: 502,
+          code: "internal_error",
+          message: "Empty improved prompt",
+        }),
       );
     }
 

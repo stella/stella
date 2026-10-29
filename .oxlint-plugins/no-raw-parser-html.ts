@@ -19,8 +19,10 @@ import {
 } from "./utils.ts";
 
 const RULE_NAME = "no-raw-parser-html";
-const OWNER =
-  "apps/api/src/handlers/case-law/ingestion/parsers/shared-inlines.ts";
+const OWNERS = [
+  "apps/api/src/handlers/case-law/ingestion/parsers/shared-inlines.ts",
+  "apps/api/src/lib/legal-search/parsers/visible-html-text.ts",
+];
 const CHEERIO_TYPES = new Set(["Cheerio", "CheerioAPI"]);
 const SELECTION_METHODS = new Set([
   "add",
@@ -533,7 +535,9 @@ export default eslintCompatPlugin({
         return {
           before() {
             const filename = filenameForContext(context);
-            enabled = filename !== OWNER && !filename.endsWith(`/${OWNER}`);
+            enabled = !OWNERS.some(
+              (owner) => filename === owner || filename.endsWith(`/${owner}`),
+            );
           },
           Program(node) {
             provenance.readProgram(node);

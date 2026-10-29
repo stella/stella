@@ -1,10 +1,11 @@
 import { Result, UnhandledException } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
+import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   BUFFER_OBJECT_CLEANUP_INTENT_STATUS,
@@ -25,7 +26,7 @@ import {
   retirePublishedObjectCleanupIntentsInTransaction,
   settleObjectCleanupIntentsAfterWriter,
 } from "@/api/lib/buffer-intent-reconciliation";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import {
   presignDocxDownloadFromFileId,
@@ -47,14 +48,17 @@ import {
   FOLIO_COLLAB_SNAPSHOT_MAX_BYTES,
 } from "@/api/lib/folio-collab-room-contract";
 import { loadFolioCollabSnapshot } from "@/api/lib/folio-collab-rooms";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
   S3_OBJECT_WRITE_CERTAINTY,
   writeS3ObjectWithRetry,
 } from "@/api/lib/s3";
 import type {
-  S3ObjectWriteOwnership,
   S3ObjectWriteCertainty,
+  S3ObjectWriteOwnership,
 } from "@/api/lib/s3";
+import { callerDownloadSource } from "@/api/lib/s3-presign";
+import type { SyntheticSessionAuthorityReader } from "@/api/lib/synthetic-principal/session-authority";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 export const hashFolioCollabCheckpoint = (
@@ -63,10 +67,10 @@ export const hashFolioCollabCheckpoint = (
 
 const CHECKPOINT_CLEANUP_GRACE_MS = 60_000;
 
-const checkpointFolioCollabRoomBodySchema = t.Object({
-  expectedGeneration: t.Integer({ minimum: 0 }),
-  expectedSnapshotRevision: t.Integer({ minimum: 0 }),
-  roomId: tSafeId("folioCollabRoom"),
+const checkpointFolioCollabRoomBodySchema = v.object({
+  expectedGeneration: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  expectedSnapshotRevision: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  roomId: resourceIdSchema("folioCollabRoom"),
 });
 
 type FolioCollabSnapshotCut = {
@@ -146,287 +150,61 @@ export const writeFolioCollabCheckpointObject = async ({
         organizationFileUsageHandlerError,
       );
 
-const checkpointFolioCollabRoom = createSafeHandler(
+const checkpointFolioCollabRoomConfig = {
+  contract: "patch",
+  contentDelivery: {
+    type: "none",
+    reason: "Processes collaboration content without returning stored files.",
+  },
+  body: checkpointFolioCollabRoomBodySchema,
+  permissions: { entity: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  mcp: { type: "internal", reason: "session_token_exchange" },
+} satisfies WorkspaceHandlerConfig;
+
+type CheckpointFolioCollabRoomResult = {
+  checkpointedAt: string;
+  downloadUrl: string;
+  generation: number;
+  sha256Hex: string;
+};
+
+type CheckpointFolioCollabRoomHandler = Parameters<
+  typeof createSafeHandler<
+    typeof checkpointFolioCollabRoomConfig,
+    CheckpointFolioCollabRoomResult
+  >
+>[1];
+
+type CheckpointFolioCollabRoomContext =
+  Parameters<CheckpointFolioCollabRoomHandler>[0];
+
+const checkpointFolioCollabRoomHandler = async function* (
   {
-    contract: "patch",
-    contentDelivery: {
-      type: "none",
-      reason: "Processes collaboration content without returning stored files.",
-    },
-    body: checkpointFolioCollabRoomBodySchema,
-    permissions: { entity: ["update"] },
-    accountAccess: ACCOUNT_ACCESS.sandbox,
-    mcp: { type: "internal", reason: "session_token_exchange" },
-  } satisfies WorkspaceHandlerConfig,
-  async function* ({
     body: { expectedGeneration, expectedSnapshotRevision, roomId },
     recordAuditEvent,
     request,
     safeDb,
     session,
+    user,
     workspaceId,
-  }) {
-    const target = yield* Result.await(
-      safeDb(async (tx) => {
-        const rooms = await tx
-          .select({
-            baseVersionId: folioCollabRooms.baseVersionId,
-            sourceVersionId: folioCollabRooms.sourceVersionId,
-            entityId: folioCollabRooms.entityId,
-            fileName: folioCollabRooms.fileName,
-            generation: folioCollabRooms.generation,
-            propertyId: folioCollabRooms.propertyId,
-            seedState: folioCollabRooms.seedState,
-            snapshotFileId: folioCollabRooms.yjsSnapshotFileId,
-            snapshotRevision: folioCollabRooms.yjsSnapshotRevision,
-            snapshotSizeBytes: folioCollabRooms.yjsSnapshotSizeBytes,
-            snapshotUpdatedAt: folioCollabRooms.yjsSnapshotUpdatedAt,
-          })
-          .from(folioCollabRooms)
-          .where(
-            and(
-              eq(folioCollabRooms.id, roomId),
-              eq(folioCollabRooms.workspaceId, workspaceId),
-            ),
-          )
-          .limit(1);
-        const room = rooms.at(0);
-        if (!room) {
-          return null;
-        }
-        const sourceFile = await readVersionDocxTarget({
-          entityVersionId: room.sourceVersionId,
-          propertyId: room.propertyId,
-          tx,
-          workspaceId,
-        });
-        return { room, sourceFile };
-      }),
-    );
-
-    if (!target) {
-      return Result.err(
-        new HandlerError({
-          status: 404,
-          message: "Collaborative editing room not found.",
-        }),
-      );
-    }
-    if (target.room.generation !== expectedGeneration) {
-      return Result.err(
-        new HandlerError({
-          code: "folio_collab_generation_changed",
-          status: 409,
-          message: "Collaborative room generation changed.",
-        }),
-      );
-    }
-    if (target.room.snapshotRevision !== expectedSnapshotRevision) {
-      return Result.err(
-        new HandlerError({
-          code: "folio_collab_snapshot_revision_changed",
-          status: 428,
-          message: "Collaborative snapshot revision changed.",
-        }),
-      );
-    }
-    if (
-      target.room.seedState !== "seeded" ||
-      target.room.snapshotUpdatedAt === null ||
-      target.room.snapshotSizeBytes === null
-    ) {
-      return Result.err(
-        new HandlerError({
-          status: 409,
-          message: "Collaborative room has no durable document snapshot.",
-        }),
-      );
-    }
-    if (!target.sourceFile) {
-      return Result.err(
-        new HandlerError({
-          status: 409,
-          message: "Collaborative room source file is no longer available.",
-        }),
-      );
-    }
-    if (target.room.snapshotSizeBytes > FOLIO_COLLAB_SNAPSHOT_MAX_BYTES) {
-      return Result.err(
-        new HandlerError({
-          status: 413,
-          message: "Collaborative snapshot is too large.",
-        }),
-      );
-    }
-
-    const sourceKey = createFileKey({
-      fileId: target.sourceFile.id,
-      mimeType: DOCX_MIME_TYPE,
-      organizationId: session.activeOrganizationId,
-      workspaceId,
-    });
-    const snapshotScopedDb: ScopedDb = async (operation) => {
-      const result = await safeDb(operation);
-      return result.unwrap("Folio collaboration snapshot read failed");
-    };
-    const [sourceDocx, snapshotResult] = await Promise.all([
-      readStoredFile({
-        key: sourceKey,
-        mimeType: DOCX_MIME_TYPE,
-        signal: request.signal,
-      }),
-      loadFolioCollabSnapshot({
-        organizationId: session.activeOrganizationId,
-        roomId,
-        scopedDb: snapshotScopedDb,
-        workspaceId,
-      }),
-    ]);
-    if (Result.isError(snapshotResult)) {
-      return Result.err(snapshotResult.error);
-    }
-    const persisted = snapshotResult.value;
-    if (
-      persisted === null ||
-      persisted.snapshot.loadOutcome === "rematerialize-from-docx" ||
-      persisted.snapshot.snapshotBase64 === null
-    ) {
-      return Result.err(
-        new HandlerError({
-          code: "folio_collab_generation_changed",
-          status: 409,
-          message: "Collaborative room is reopening from its saved document.",
-        }),
-      );
-    }
-    const materialized = await materializeYjsOverScannedDocx({
-      source: sourceDocx,
-      yjsUpdate: Buffer.from(persisted.snapshot.snapshotBase64, "base64"),
-    });
-    if (materialized.byteLength > FOLIO_COLLAB_CHECKPOINT_MAX_BYTES) {
-      return Result.err(
-        new HandlerError({
-          status: 413,
-          message: "Materialized collaboration checkpoint is too large.",
-        }),
-      );
-    }
-
-    const validation = await validateDesktopEditFileBuffer({
-      buffer: materialized,
-      fileType: "docx",
-    });
-    if (!validation.valid) {
-      return Result.err(
-        new HandlerError({
-          status: 422,
-          message: `File validation failed: ${validation.error}`,
-        }),
-      );
-    }
-    const scanResult = await scanFile({
-      buffer: new Uint8Array(materialized),
-      declaredMimeType: DOCX_MIME_TYPE,
-      fileName: target.room.fileName,
-    });
-    if (Result.isError(scanResult)) {
-      return Result.err(
-        new HandlerError({
-          status: 422,
-          message: "File security scan failed.",
-        }),
-      );
-    }
-    if (scanResult.value.verdict === "reject") {
-      return Result.err(
-        new HandlerError({
-          status: 422,
-          message: "File security scan rejected the checkpoint.",
-        }),
-      );
-    }
-    const scanWarnings =
-      scanResult.value.verdict === "warn"
-        ? scanResult.value.findings
-            .filter(({ severity }) => severity === "warn")
-            .map(({ message }) => message)
-        : null;
-    const checkpointBytes = new Uint8Array(materialized);
-    const sha256Hex = hashFolioCollabCheckpoint(checkpointBytes);
-    const nextFileId = createSafeId<"userFile">();
-    const checkpointKey = createFileKey({
-      fileId: nextFileId,
-      mimeType: DOCX_MIME_TYPE,
-      organizationId: session.activeOrganizationId,
-      workspaceId,
-    });
-    const cleanupIntentId = yield* Result.await(
-      reserveObjectCleanupIntent({
-        objectKey: checkpointKey,
-        organizationId: session.activeOrganizationId,
-        safeDb,
-        workspaceId,
-      }),
-    );
-    const discardCheckpoint = async (
-      writeCertainty: S3ObjectWriteCertainty,
-    ): Promise<void> => {
-      const cleanup = Result.flatten(
-        await Result.tryPromise({
-          try: async () =>
-            await deleteOrganizationFileWithSignal(
-              checkpointKey,
-              AbortSignal.timeout(10_000),
-            ),
-          catch: (cause) => cause,
-        }),
-      );
-      if (Result.isError(cleanup)) {
-        captureError(cleanup.error, { roomId, storageKey: checkpointKey });
-      }
-      const settlement = await settleObjectCleanupIntentsAfterWriter({
-        intentIds: [cleanupIntentId],
-        objectState: objectWriterSettlementAfterCleanup({
-          cleanupSucceeded: Result.isOk(cleanup),
-          writeState: writeCertainty,
-        }),
-        safeDb,
-      });
-      if (Result.isError(settlement)) {
-        captureError(settlement.error, {
-          roomId,
-          storageKey: checkpointKey,
-        });
-      }
-    };
-    const written = await writeFolioCollabCheckpointObject({
-      ownership: { type: "cleanup-intent", intent: cleanupIntentId },
-      checkpointBytes,
-      checkpointKey,
-      organizationId: session.activeOrganizationId,
-    });
-    if (Result.isError(written)) {
-      await discardCheckpoint(S3_OBJECT_WRITE_CERTAINTY.UNCERTAIN);
-      return Result.err(written.error);
-    }
-    const writeCertainty = written.value;
-
-    const checkpointedAt = new Date();
-    const storedResult = await safeDb(async (tx) => {
-      await lockActiveWorkspaceForBufferIntent({
-        tx,
-        workspaceId,
-        mode: "share",
-      });
+  }: CheckpointFolioCollabRoomContext,
+  readSessionAuthority: SyntheticSessionAuthorityReader,
+) {
+  const target = yield* Result.await(
+    safeDb(async (tx) => {
       const rooms = await tx
         .select({
           baseVersionId: folioCollabRooms.baseVersionId,
-          checkpointFileId: folioCollabRooms.docxCheckpointFileId,
-          checkpointSha256Hex: folioCollabRooms.docxCheckpointSha256Hex,
-          checkpointUpdatedAt: folioCollabRooms.docxCheckpointUpdatedAt,
+          sourceVersionId: folioCollabRooms.sourceVersionId,
+          entityId: folioCollabRooms.entityId,
+          fileName: folioCollabRooms.fileName,
           generation: folioCollabRooms.generation,
+          propertyId: folioCollabRooms.propertyId,
+          seedState: folioCollabRooms.seedState,
           snapshotFileId: folioCollabRooms.yjsSnapshotFileId,
           snapshotRevision: folioCollabRooms.yjsSnapshotRevision,
+          snapshotSizeBytes: folioCollabRooms.yjsSnapshotSizeBytes,
           snapshotUpdatedAt: folioCollabRooms.yjsSnapshotUpdatedAt,
         })
         .from(folioCollabRooms)
@@ -436,104 +214,384 @@ const checkpointFolioCollabRoom = createSafeHandler(
             eq(folioCollabRooms.workspaceId, workspaceId),
           ),
         )
-        .limit(1)
-        .for("update");
+        .limit(1);
       const room = rooms.at(0);
-      if (
-        !room ||
-        !matchesFolioCollabSnapshotCut({
-          current: room,
-          materialized: target.room,
-        })
-      ) {
-        return false;
+      if (!room) {
+        return null;
       }
-      await lockObjectCleanupIntentsForWriter(tx, [cleanupIntentId]);
-
-      await tx
-        .update(folioCollabRooms)
-        .set({
-          docxCheckpointFileId: nextFileId,
-          docxCheckpointScanWarnings: scanWarnings,
-          docxCheckpointSha256Hex: sha256Hex,
-          docxCheckpointSnapshotSha256Hex: persisted.rawSnapshotSha256Hex,
-          docxCheckpointSizeBytes: checkpointBytes.byteLength,
-          docxCheckpointUpdatedAt: checkpointedAt,
-        })
-        .where(
-          and(
-            eq(folioCollabRooms.id, roomId),
-            eq(folioCollabRooms.workspaceId, workspaceId),
-            eq(folioCollabRooms.generation, expectedGeneration),
-            eq(folioCollabRooms.yjsSnapshotRevision, expectedSnapshotRevision),
-          ),
-        );
-      if (room.checkpointUpdatedAt !== null) {
-        await tx.insert(bufferObjectCleanupIntents).values({
-          id: createSafeId<"pendingUpload">(),
-          nextAttemptAt: new Date(
-            Temporal.Now.instant().epochMilliseconds +
-              CHECKPOINT_CLEANUP_GRACE_MS,
-          ),
-          objectKey: createFileKey({
-            fileId: room.checkpointFileId,
-            mimeType: DOCX_MIME_TYPE,
-            organizationId: session.activeOrganizationId,
-            workspaceId,
-          }),
-          organizationId: session.activeOrganizationId,
-          status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.ORPHANED,
-          workspaceId,
-        });
-      }
-      await retirePublishedObjectCleanupIntentsInTransaction({
-        intentIds: [cleanupIntentId],
+      const sourceFile = await readVersionDocxTarget({
+        entityVersionId: room.sourceVersionId,
+        propertyId: room.propertyId,
         tx,
+        workspaceId,
       });
-      await recordAuditEvent(tx, {
-        action: AUDIT_ACTION.UPDATE,
-        resourceType: AUDIT_RESOURCE_TYPE.FOLIO_COLLAB_ROOM,
-        resourceId: roomId,
-        changes: {
-          checkpointSha256Hex: {
-            old: room.checkpointSha256Hex,
-            new: sha256Hex,
-          },
-        },
-      });
-      return true;
-    });
-    if (Result.isError(storedResult)) {
-      await discardCheckpoint(writeCertainty);
-      return Result.err(storedResult.error);
-    }
-    const stored = storedResult.value;
+      return { room, sourceFile };
+    }),
+  );
 
-    if (!stored) {
-      await discardCheckpoint(writeCertainty);
-      return Result.err(
-        new HandlerError({
-          code: "folio_collab_checkpoint_changed",
-          status: 409,
-          message:
-            "Collaborative document changed while its checkpoint was created.",
+  if (!target) {
+    return Result.err(
+      new HandlerError({
+        status: 404,
+        message: "Collaborative editing room not found.",
+      }),
+    );
+  }
+  if (target.room.generation !== expectedGeneration) {
+    return Result.err(
+      new HandlerError({
+        code: "folio_collab_generation_changed",
+        status: 409,
+        message: "Collaborative room generation changed.",
+      }),
+    );
+  }
+  if (target.room.snapshotRevision !== expectedSnapshotRevision) {
+    return Result.err(
+      new HandlerError({
+        code: "folio_collab_snapshot_revision_changed",
+        status: 428,
+        message: "Collaborative snapshot revision changed.",
+      }),
+    );
+  }
+  if (
+    target.room.seedState !== "seeded" ||
+    target.room.snapshotUpdatedAt === null ||
+    target.room.snapshotSizeBytes === null
+  ) {
+    return Result.err(
+      new HandlerError({
+        status: 409,
+        message: "Collaborative room has no durable document snapshot.",
+      }),
+    );
+  }
+  if (!target.sourceFile) {
+    return Result.err(
+      new HandlerError({
+        status: 409,
+        message: "Collaborative room source file is no longer available.",
+      }),
+    );
+  }
+  if (target.room.snapshotSizeBytes > FOLIO_COLLAB_SNAPSHOT_MAX_BYTES) {
+    return Result.err(
+      new HandlerError({
+        status: 413,
+        message: "Collaborative snapshot is too large.",
+      }),
+    );
+  }
+
+  const sourceKey = createFileKey({
+    fileId: target.sourceFile.id,
+    mimeType: DOCX_MIME_TYPE,
+    organizationId: session.activeOrganizationId,
+    workspaceId,
+  });
+  const snapshotScopedDb: ScopedDb = async (operation) => {
+    const result = await safeDb(operation);
+    return result.unwrap("Folio collaboration snapshot read failed");
+  };
+  const [sourceDocx, snapshotResult] = await Promise.all([
+    readStoredFile({
+      key: sourceKey,
+      mimeType: DOCX_MIME_TYPE,
+      signal: request.signal,
+    }),
+    loadFolioCollabSnapshot({
+      organizationId: session.activeOrganizationId,
+      roomId,
+      scopedDb: snapshotScopedDb,
+      workspaceId,
+    }),
+  ]);
+  if (Result.isError(snapshotResult)) {
+    return Result.err(snapshotResult.error);
+  }
+  const persisted = snapshotResult.value;
+  if (
+    persisted === null ||
+    persisted.snapshot.loadOutcome === "rematerialize-from-docx" ||
+    persisted.snapshot.snapshotBase64 === null
+  ) {
+    return Result.err(
+      new HandlerError({
+        code: "folio_collab_generation_changed",
+        status: 409,
+        message: "Collaborative room is reopening from its saved document.",
+      }),
+    );
+  }
+  const materialized = await materializeYjsOverScannedDocx({
+    source: sourceDocx,
+    yjsUpdate: Buffer.from(persisted.snapshot.snapshotBase64, "base64"),
+  });
+  if (materialized.byteLength > FOLIO_COLLAB_CHECKPOINT_MAX_BYTES) {
+    return Result.err(
+      new HandlerError({
+        status: 413,
+        message: "Materialized collaboration checkpoint is too large.",
+      }),
+    );
+  }
+
+  const validation = await validateDesktopEditFileBuffer({
+    buffer: materialized,
+    fileType: "docx",
+  });
+  if (!validation.valid) {
+    return Result.err(
+      new HandlerError({
+        status: 422,
+        message: `File validation failed: ${validation.error}`,
+      }),
+    );
+  }
+  const scanResult = await scanFile({
+    buffer: new Uint8Array(materialized),
+    declaredMimeType: DOCX_MIME_TYPE,
+    fileName: target.room.fileName,
+  });
+  if (Result.isError(scanResult)) {
+    return Result.err(
+      new HandlerError({
+        status: 422,
+        message: "File security scan failed.",
+      }),
+    );
+  }
+  if (scanResult.value.verdict === "reject") {
+    return Result.err(
+      new HandlerError({
+        status: 422,
+        message: "File security scan rejected the checkpoint.",
+      }),
+    );
+  }
+  const scanWarnings =
+    scanResult.value.verdict === "warn"
+      ? scanResult.value.findings
+          .filter(({ severity }) => severity === "warn")
+          .map(({ message }) => message)
+      : null;
+  const checkpointBytes = new Uint8Array(materialized);
+  const sha256Hex = hashFolioCollabCheckpoint(checkpointBytes);
+  const nextFileId = createSafeId<"userFile">();
+  const checkpointKey = createFileKey({
+    fileId: nextFileId,
+    mimeType: DOCX_MIME_TYPE,
+    organizationId: session.activeOrganizationId,
+    workspaceId,
+  });
+  const cleanupIntentId = yield* Result.await(
+    reserveObjectCleanupIntent({
+      objectKey: checkpointKey,
+      organizationId: session.activeOrganizationId,
+      safeDb,
+      workspaceId,
+    }),
+  );
+  const discardCheckpoint = async (
+    writeCertainty: S3ObjectWriteCertainty,
+  ): Promise<void> => {
+    const cleanup = Result.flatten(
+      await Result.tryPromise({
+        try: async () =>
+          await deleteOrganizationFileWithSignal(
+            checkpointKey,
+            AbortSignal.timeout(10_000),
+          ),
+        catch: (cause) => cause,
+      }),
+    );
+    if (Result.isError(cleanup)) {
+      captureError(
+        cleanup.error,
+        handlerErrorContext("entities.discardCheckpoint.cleanup_error", {
+          roomId,
+          storageKey: checkpointKey,
         }),
       );
     }
+    const settlement = await settleObjectCleanupIntentsAfterWriter({
+      intentIds: [cleanupIntentId],
+      objectState: objectWriterSettlementAfterCleanup({
+        cleanupSucceeded: Result.isOk(cleanup),
+        writeState: writeCertainty,
+      }),
+      safeDb,
+    });
+    if (Result.isError(settlement)) {
+      captureError(
+        settlement.error,
+        handlerErrorContext("entities.discardCheckpoint.settlement_error", {
+          roomId,
+          storageKey: checkpointKey,
+        }),
+      );
+    }
+  };
+  const written = await writeFolioCollabCheckpointObject({
+    ownership: { type: "cleanup-intent", intent: cleanupIntentId },
+    checkpointBytes,
+    checkpointKey,
+    organizationId: session.activeOrganizationId,
+  });
+  if (Result.isError(written)) {
+    await discardCheckpoint(S3_OBJECT_WRITE_CERTAINTY.UNCERTAIN);
+    return Result.err(written.error);
+  }
+  const writeCertainty = written.value;
 
-    const downloadUrl = await presignDocxDownloadFromFileId({
-      fileId: nextFileId,
-      fileName: target.room.fileName,
-      organizationId: session.activeOrganizationId,
+  const checkpointedAt = new Date();
+  const storedResult = await safeDb(async (tx) => {
+    await lockActiveWorkspaceForBufferIntent({
+      tx,
       workspaceId,
+      mode: "share",
     });
-    return Result.ok({
-      checkpointedAt: checkpointedAt.toISOString(),
-      downloadUrl,
-      generation: expectedGeneration,
-      sha256Hex,
+    const rooms = await tx
+      .select({
+        baseVersionId: folioCollabRooms.baseVersionId,
+        checkpointFileId: folioCollabRooms.docxCheckpointFileId,
+        checkpointSha256Hex: folioCollabRooms.docxCheckpointSha256Hex,
+        checkpointUpdatedAt: folioCollabRooms.docxCheckpointUpdatedAt,
+        generation: folioCollabRooms.generation,
+        snapshotFileId: folioCollabRooms.yjsSnapshotFileId,
+        snapshotRevision: folioCollabRooms.yjsSnapshotRevision,
+        snapshotUpdatedAt: folioCollabRooms.yjsSnapshotUpdatedAt,
+      })
+      .from(folioCollabRooms)
+      .where(
+        and(
+          eq(folioCollabRooms.id, roomId),
+          eq(folioCollabRooms.workspaceId, workspaceId),
+        ),
+      )
+      .limit(1)
+      .for("update");
+    const room = rooms.at(0);
+    if (
+      !room ||
+      !matchesFolioCollabSnapshotCut({
+        current: room,
+        materialized: target.room,
+      })
+    ) {
+      return false;
+    }
+    await lockObjectCleanupIntentsForWriter(tx, [cleanupIntentId]);
+
+    await tx
+      .update(folioCollabRooms)
+      .set({
+        docxCheckpointFileId: nextFileId,
+        docxCheckpointScanWarnings: scanWarnings,
+        docxCheckpointSha256Hex: sha256Hex,
+        docxCheckpointSnapshotSha256Hex: persisted.rawSnapshotSha256Hex,
+        docxCheckpointSizeBytes: checkpointBytes.byteLength,
+        docxCheckpointUpdatedAt: checkpointedAt,
+      })
+      .where(
+        and(
+          eq(folioCollabRooms.id, roomId),
+          eq(folioCollabRooms.workspaceId, workspaceId),
+          eq(folioCollabRooms.generation, expectedGeneration),
+          eq(folioCollabRooms.yjsSnapshotRevision, expectedSnapshotRevision),
+        ),
+      );
+    if (room.checkpointUpdatedAt !== null) {
+      await tx.insert(bufferObjectCleanupIntents).values({
+        id: createSafeId<"pendingUpload">(),
+        nextAttemptAt: new Date(
+          Temporal.Now.instant().epochMilliseconds +
+            CHECKPOINT_CLEANUP_GRACE_MS,
+        ),
+        objectKey: createFileKey({
+          fileId: room.checkpointFileId,
+          mimeType: DOCX_MIME_TYPE,
+          organizationId: session.activeOrganizationId,
+          workspaceId,
+        }),
+        organizationId: session.activeOrganizationId,
+        status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.ORPHANED,
+        workspaceId,
+      });
+    }
+    await retirePublishedObjectCleanupIntentsInTransaction({
+      intentIds: [cleanupIntentId],
+      tx,
     });
-  },
+    await recordAuditEvent(tx, {
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.FOLIO_COLLAB_ROOM,
+      resourceId: roomId,
+      changes: {
+        checkpointSha256Hex: {
+          old: room.checkpointSha256Hex,
+          new: sha256Hex,
+        },
+      },
+    });
+    return true;
+  });
+  if (Result.isError(storedResult)) {
+    await discardCheckpoint(writeCertainty);
+    return Result.err(storedResult.error);
+  }
+  const stored = storedResult.value;
+
+  if (!stored) {
+    await discardCheckpoint(writeCertainty);
+    return Result.err(
+      new HandlerError({
+        code: "folio_collab_checkpoint_changed",
+        status: 409,
+        message:
+          "Collaborative document changed while its checkpoint was created.",
+      }),
+    );
+  }
+
+  const downloadUrl = yield* Result.await(
+    safeDb(
+      async () =>
+        await presignDocxDownloadFromFileId({
+          readSessionAuthority,
+          source: callerDownloadSource(session),
+          userId: user.id,
+          fileId: nextFileId,
+          fileName: target.room.fileName,
+          organizationId: session.activeOrganizationId,
+          workspaceId,
+        }),
+    ),
+  );
+  return Result.ok({
+    checkpointedAt: checkpointedAt.toISOString(),
+    downloadUrl,
+    generation: expectedGeneration,
+    sha256Hex,
+  });
+};
+
+export const createCheckpointFolioCollabRoom = (
+  readSessionAuthority: SyntheticSessionAuthorityReader,
+) =>
+  createSafeHandler(
+    checkpointFolioCollabRoomConfig,
+    async function* (context): ReturnType<CheckpointFolioCollabRoomHandler> {
+      return yield* checkpointFolioCollabRoomHandler(
+        context,
+        readSessionAuthority,
+      );
+    },
+  );
+
+const checkpointFolioCollabRoom = createCheckpointFolioCollabRoom(
+  ownerSyntheticSessionAuthorityReader,
 );
 
 export default checkpointFolioCollabRoom;

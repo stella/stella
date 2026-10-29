@@ -15,12 +15,14 @@ concurrency:
 permissions: {}
 
 jobs:
-  # The current VERSION must be tagged before another versioning pass.
-  # Open release pull requests also own their pending changesets.
+  # Open release pull requests own their pending changesets. An untagged
+  # VERSION does not block: a tag may only name its version commit, so the
+  # next version commit supersedes it.
   gate:
     name: Check release versioning state
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     permissions:
       contents: read
       pull-requests: read
@@ -34,10 +36,9 @@ jobs:
           sparse-checkout: |
             scripts/gh-retry.sh
             scripts/release-pull-requests.sh
-            scripts/release-pending.sh
           sparse-checkout-cone-mode: false
 
-      - name: Check pending tags and open release pull requests
+      - name: Check open release pull requests
         # The title alone is contributor-controlled text, which would make this
         # an unauthenticated switch for suppressing versioning. A release is
         # recognized only as a ready pull request into main whose head branch
@@ -48,14 +49,6 @@ jobs:
           REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
-          pending=$(bash scripts/release-pending.sh --repo "$REPOSITORY")
-          version_state=$(sed -n 's/^version_state=//p' <<<"$pending")
-          if [[ "$version_state" == "pending" ]]; then
-            version=$(sed -n 's/^version=//p' <<<"$pending")
-            echo "may-version=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Release v$version on main awaits its tag; skipping versioning."
-            exit 0
-          fi
           open=$(bash scripts/release-pull-requests.sh --repo "$REPOSITORY" \
             | sed -n 's/^open_other=//p')
           if [[ "$open" == "0" ]]; then
@@ -67,7 +60,7 @@ jobs:
 
   version:
     needs: gate
-    if: needs.gate.outputs.may-version == 'true' && vars.STELLA_MERGE_HOLD == ''
+    if: needs.gate.outputs.may-version == 'true'
     name: Maintain Version Packages PR
     permissions:
       contents: read

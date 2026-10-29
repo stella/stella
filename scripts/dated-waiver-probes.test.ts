@@ -2,24 +2,24 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import ts from "typescript";
 
+import { parseSource } from "../packages/scripts/src/syntax-tree";
 import {
-  removeWaiver,
-  runWaiverProbe,
-  probeDocUrl,
   createProbeBudget,
   PROBE_PHASE_BUDGET_MS,
   PROBE_TIMEOUT_MS,
+  probeDocUrl,
+  removeWaiver,
+  runWaiverProbe,
 } from "./dated-waiver-probes";
 import {
+  type DatedWaiver,
   readTestQuarantines,
   ZERO_AGE_OVERRIDE,
-  type DatedWaiver,
 } from "./dated-waivers";
 import {
-  serializeRegistry,
   type QuarantineEntry,
+  serializeRegistry,
 } from "./flaky-test-quarantine";
 
 const waiver = (
@@ -103,13 +103,7 @@ test("AST docs edits preserve comments, unrelated objects, separators and remain
     expect(changed).toContain('expiresAt: "2026-10-06T00:00:00.000Z"');
     expect(changed).not.toContain('expiresAt: "2026-10-05T00:00:00.000Z"');
     expect(changed).toContain('url: "https://example.com/llms.txt"');
-    expect(
-      ts
-        .transpileModule(changed, { reportDiagnostics: true })
-        .diagnostics?.filter(
-          ({ category }) => category === ts.DiagnosticCategory.Error,
-        ) ?? [],
-    ).toEqual([]);
+    expect(parseSource("doc-sources.ts", changed).program.type).toBe("Program");
   }
   expect(() =>
     removeWaiver(

@@ -1,5 +1,6 @@
 import { panic, Result } from "better-result";
 import { getColumns } from "drizzle-orm";
+import { QueryPromise } from "drizzle-orm/query-promise";
 
 import { member, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -7,8 +8,8 @@ import type { SafeDb, SafeDbRetryConfig, ScopedDb } from "@/api/db/safe-db";
 import {
   entities,
   entityVersions,
-  fields,
   featureEnrolments,
+  fields,
 } from "@/api/db/schema";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -24,6 +25,14 @@ export const toSafeDbMock =
     return result;
   };
 
+type DocumentProcessingRunFindFirst =
+  Transaction["query"]["documentProcessingRuns"]["findFirst"];
+
+export const findNoDocumentProcessingRun = async (
+  _input?: Parameters<DocumentProcessingRunFindFirst>[0],
+): Promise<Awaited<ReturnType<DocumentProcessingRunFindFirst>>> =>
+  await Promise.resolve(undefined);
+
 type FeatureAccessMockOptions = {
   identity: Pick<typeof user.$inferSelect, "email" | "emailVerified"> | null;
   enrolments?: Pick<
@@ -33,6 +42,7 @@ type FeatureAccessMockOptions = {
 };
 
 type ScopedDbMockOptions = {
+  authorizedWorkspaceIds?: readonly string[];
   siblingRows?: { name: string; parentId: string | null }[];
   featureAccess?: FeatureAccessMockOptions;
   visibleResources?: {
@@ -42,14 +52,26 @@ type ScopedDbMockOptions = {
   };
 };
 
+class FixtureQuery<TRow> extends QueryPromise<TRow[]> {
+  private readonly rows: TRow[];
+
+  constructor(rows: TRow[]) {
+    super();
+    this.rows = rows;
+  }
+
+  async execute() {
+    return await Promise.resolve(this.rows);
+  }
+}
+
 // Query fixtures provide the rows matching their select boundary. Keep the
 // awaitable builder shape intact for locking and bounded reads.
 export const createSelectQueryMock = <TRow>(rows: TRow[]) => {
   let rowOffset = 0;
-  // oxlint-disable-next-line typescript/promise-function-async -- async would wrap the query promise and discard its for method
   const limit = (count: number) => {
     const selected = rows.slice(rowOffset, rowOffset + count);
-    return Object.assign(Promise.resolve(selected), {
+    return Object.assign(new FixtureQuery(selected), {
       for: async () => await Promise.resolve(selected),
     });
   };
@@ -57,21 +79,25 @@ export const createSelectQueryMock = <TRow>(rows: TRow[]) => {
     rowOffset = count;
     return { limit };
   };
-  // oxlint-disable-next-line typescript/promise-function-async -- async would wrap the query promise and discard its query methods
   const where = () =>
-    Object.assign(Promise.resolve(rows), {
+    Object.assign(new FixtureQuery(rows), {
       limit,
       offset,
       for: async () => await Promise.resolve(rows),
       orderBy: () => ({ limit, offset }),
     });
-  return {
-    from: () => ({
-      where,
-      innerJoin: () => ({ where }),
-      leftJoin: () => ({ where }),
-    }),
+  type JoinedQuery = FixtureQuery<TRow> & {
+    where: typeof where;
+    innerJoin: () => JoinedQuery;
+    leftJoin: () => JoinedQuery;
   };
+  const from = (): JoinedQuery =>
+    Object.assign(new FixtureQuery(rows), {
+      where,
+      innerJoin: from,
+      leftJoin: from,
+    });
+  return { from };
 };
 
 const fixtureSelect =
@@ -190,11 +216,40 @@ export const createScopedDbMock = (
   ) => {
     callCount += 1;
     // Tests provide only the transaction members touched by the handler.
+    const providedQuery =
+      typeof tx === "object" &&
+      tx !== null &&
+      "query" in tx &&
+      typeof tx.query === "object" &&
+      tx.query !== null
+        ? tx.query
+        : {};
+    const providedDocumentProcessingRuns =
+      "documentProcessingRuns" in providedQuery &&
+      typeof providedQuery.documentProcessingRuns === "object" &&
+      providedQuery.documentProcessingRuns !== null
+        ? providedQuery.documentProcessingRuns
+        : {};
     const transaction = {
       execute: async () => {
         await Promise.resolve();
       },
+      ...(options?.authorizedWorkspaceIds === undefined
+        ? {}
+        : {
+            selectDistinct: () =>
+              createSelectQueryMock(
+                options.authorizedWorkspaceIds?.map((id) => ({ id })) ?? [],
+              ),
+          }),
       ...(typeof tx === "object" && tx !== null ? tx : {}),
+      query: {
+        ...providedQuery,
+        documentProcessingRuns: {
+          findFirst: findNoDocumentProcessingRun,
+          ...providedDocumentProcessingRuns,
+        },
+      },
       select: fixtureSelect(tx, options),
     };
     return await callback(asTestRaw<Transaction>(transaction));

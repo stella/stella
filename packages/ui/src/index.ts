@@ -46,6 +46,7 @@ export * from "./components/pagination";
 export * from "./components/popover";
 export * from "./components/preview-card";
 export * from "./components/preview-pane";
+export * from "./components/prose";
 export * from "./components/scroll-area";
 export * from "./components/scroll-to-top";
 export * from "./components/secret-input";

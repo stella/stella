@@ -8,17 +8,17 @@ import { useState } from "react";
  */
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useNavigate, useParams } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
-  DialogFormState,
   DialogClose,
   DialogDescription,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
@@ -30,16 +30,17 @@ import { stellaToast } from "@stll/ui/toast";
 
 import { DocumentLanguagePicker } from "@/components/document-language-picker";
 import { defaultLanguagePair } from "@/components/document-language-picker.logic";
-import { useLocale } from "@/i18n/formatting-context";
+import { useMessageLocale } from "@/i18n/message-locale";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { DeepLTargetLanguageCode } from "@/lib/deepl/languages";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
+import { useWorkspaceViewParams } from "@/lib/workspaces/use-workspace-view-params";
 
 type BilingualDocumentDialogProps = {
   workspaceId: string;
@@ -56,15 +57,12 @@ export const BilingualDocumentDialog = ({
   disabled = false,
 }: BilingualDocumentDialogProps) => {
   const t = useTranslations();
-  const locale = useLocale();
+  const locale = useMessageLocale();
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   // The dialogs live on the document route; the view stays, the document changes.
-  const viewId = useParams({
-    strict: false,
-    select: (params) => params.viewId ?? "all",
-  });
+  const { viewId } = useWorkspaceViewParams(workspaceId);
 
   const [open, setOpen] = useState(false);
   const [sourceLang, setSourceLang] = useState<DeepLTargetLanguageCode>(
@@ -85,7 +83,7 @@ export const BilingualDocumentDialog = ({
           targetLang,
           borders: "none",
         });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: async (data) => {
       stellaToast.add({
@@ -117,7 +115,13 @@ export const BilingualDocumentDialog = ({
       setOpen(false);
     },
     onError: (error: unknown) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "BilingualDocumentDialog:failure",
+        scope: {
+          type: "handler",
+          handlerId: "BilingualDocumentDialog:failure",
+        },
+      });
       notifyUserError(error, t("bilingual.error.title"), {
         description: userErrorFromThrown(error, t("errors.actionFailed")),
       });

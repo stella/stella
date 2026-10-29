@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/case-law/sitemap-shard-refresh.ts",
+  "delta": 1,
+  "reason": "The sitemap refresh counts each public country in its own snapshot and stages it before the next starts, stopping at a country boundary when the run budget is spent; the countries are sequential by design, so one await per country stays in the loop."
+}

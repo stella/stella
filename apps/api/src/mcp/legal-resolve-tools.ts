@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import { AGENT_INPUT_NORMALIZATION_KIND } from "@stll/agent-input";
+import { API_CALENDAR_DATE_CHECK } from "@stll/api-contract/api-date";
 import { legalResolveResponseSchema } from "@stll/api-contract/legal-resolve";
 import { CASE_LAW_RESULTS_RESOURCE_URI } from "@stll/mcp-apps/resource-uri";
 
@@ -16,9 +17,9 @@ import type { TypedMcpToolHandler } from "./tool-types";
 import {
   countryInputSchema,
   countryNormalization,
+  featureDisabledHint,
   nullAsAbsent,
   structuredErrorResult,
-  featureDisabledHint,
   toolDataResult,
   validationErrorResult,
 } from "./tool-utils";
@@ -26,6 +27,7 @@ import {
   defineMcpToolOutput,
   defineValibotMcpTool,
 } from "./valibot-tool-definition";
+import { openMcpRead } from "./write-tool-authority";
 
 type AdmissionFailure = Extract<
   ReturnType<typeof admitLawRead>,
@@ -120,6 +122,7 @@ const resolveLawArgsSchema = nullAsAbsent(
       v.pipe(
         v.string(),
         v.isoDate(),
+        API_CALENDAR_DATE_CHECK,
         v.description(
           "Expression date YYYY-MM-DD; omit for the current expression.",
         ),
@@ -131,6 +134,7 @@ const resolveLawArgsSchema = nullAsAbsent(
 const common = {
   consumesServices: false,
   access: "read",
+  permissions: openMcpRead("public law corpus"),
   readClass: "public",
   anonymized: { exposure: "passthrough" },
   feature: "FEATURE_PUBLIC_LAW",

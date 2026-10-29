@@ -7,8 +7,8 @@
     "path": "/responses"
   },
   "source": {
-    "retrievedAt": "2026-10-09",
-    "sha256": "64e3492c07eec3ea653a6289f83d46de3d007d15c893fdd44265c48cca721612",
+    "retrievedAt": "2026-10-22",
+    "sha256": "4e0eee3097b729670098d1b7e335457975a20cc60f82d47abcc8b56b37416271",
     "url": "https://raw.githubusercontent.com/openai/openai-openapi/main/openapi.yaml"
   }
 }

@@ -14,6 +14,7 @@ import path from "node:path";
 import { parseDocx } from "@stll/folio-core/server";
 import { type DocumentAst, isDocumentAst } from "@stll/legal-ast/document-ast";
 
+import { parseCzUohsDocumentPdf } from "@/api/handlers/case-law/ingestion/adapters/cz-uohs";
 import { assemblePlNsaDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa";
 import { PL_NSA_SNAPSHOT } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
 import { parseFindokDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/at-findok";
@@ -33,6 +34,7 @@ import {
   readPlTkRuling,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-tk";
 import { parseSkUsDocumentXhtml } from "@/api/handlers/case-law/ingestion/parsers/sk-us";
+import { parseUkFclDecision } from "@/api/handlers/case-law/ingestion/parsers/uk-fcl";
 import { loadDocxArchive } from "@/api/lib/docx-archive";
 import { decodeSourceRawEnvelope } from "@/api/lib/legal-search/ingestion-types";
 import type { ProcessedFieldSourceKey } from "@/api/lib/legal-search/processed-field-inventory";
@@ -96,6 +98,16 @@ const readCzNs: EvidenceReader = async (fixture) =>
       }).documentAst,
     };
   });
+
+const readCzUohs: EvidenceReader = async (fixture) => [
+  {
+    id: fixture,
+    ast: await parseCzUohsDocumentPdf(await bytesOf(fixture), {
+      caseNumber: path.basename(fixture),
+      sourceUrl: fixture,
+    }),
+  },
+];
 
 const readCzNss: EvidenceReader = async (fixture) => [
   {
@@ -352,6 +364,7 @@ export const PROCESSED_FIELD_EVIDENCE_READERS = {
   "cz-ns": readCzNs,
   "cz-nss": readCzNss,
   "cz-us": readCzUs,
+  "cz-uohs": readCzUohs,
   "sk-courts": null,
   "sk-us": readSkUs,
   "pl-courts": null,
@@ -374,6 +387,17 @@ export const PROCESSED_FIELD_EVIDENCE_READERS = {
   "at-findok": readAtFindok,
   "eu-ecj": readEuEcj,
   "hu-bhgy": readHuBhgy,
+  "uk-fcl": async (fixture) => [
+    {
+      id: fixture,
+      ast: parseUkFclDecision({
+        xml: await textOf(fixture),
+        documentId: "d-00000000-0000-4000-8000-000000000001",
+        sourceUrl:
+          "https://caselaw.nationalarchives.gov.uk/d-00000000-0000-4000-8000-000000000001",
+      }).unwrap().documentAst,
+    },
+  ],
   "pl-kis": null,
   "pl-uodo": null,
   "pl-uokik": null,
