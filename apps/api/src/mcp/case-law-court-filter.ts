@@ -130,7 +130,9 @@ const courtVocabulary = (
     aliases: [
       ...others,
       ...registeredCourts.flatMap((court) =>
-        court.name === value ? (court.citationAliases ?? []) : [],
+        court.name === value && court.citationAliases !== undefined
+          ? court.citationAliases
+          : [],
       ),
       ...(abbreviation === undefined ? [] : apexCourtAliases(abbreviation)),
     ],

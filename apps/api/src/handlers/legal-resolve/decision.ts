@@ -1,7 +1,10 @@
 import { panic } from "better-result";
 
 import { normalizeCountry } from "@stll/agent-input";
-import { ECLI_COURT_REGISTRY } from "@stll/api-contract/case-law-courts";
+import {
+  ECLI_COURT_REGISTRY,
+  type RegisteredCourt,
+} from "@stll/api-contract/case-law-courts";
 import {
   exactDecisionMatches,
   parseDecisionQuery,
@@ -321,7 +324,7 @@ export const resolveDecision = async ({
   )?.[1];
   const identities = storedCourtIdentities(country, [
     ...new Set([
-      ...Object.values(registry ?? {}).map(({ name }) => name),
+      ...Object.values<RegisteredCourt>(registry ?? {}).map(({ name }) => name),
       ...rows.map(({ court }) => court),
     ]),
   ]);
