@@ -3,7 +3,6 @@ import * as v from "valibot";
 
 import type { AUTHORED_DOCUMENT_PROPERTY_KEYS } from "@stll/api-contract";
 
-import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
 import { readDocumentProperties } from "@/api/handlers/files/document-properties";
 import emailAttachmentEndpoint from "@/api/handlers/files/email-attachment";
 import saveEmailAttachmentEndpoint from "@/api/handlers/files/email-attachment/create";
@@ -24,6 +23,7 @@ import { updateDocumentProperties } from "@/api/handlers/files/update-document-p
 import { routes } from "@/api/http/route";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
+import { ownerSyntheticSessionAuthorityReader } from "@/api/lib/auth";
 import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { readFileHandler } from "@/api/lib/files/read-file";
