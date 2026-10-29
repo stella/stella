@@ -3005,6 +3005,7 @@ jobs:
         run: nproc; free -g
 
       - name: Test API or rest
+        id: test-api-or-rest
         if: >-
           !cancelled()
           && needs.ci-plan.outputs.package_checks_required == 'true'
@@ -3041,6 +3042,8 @@ jobs:
           set -o pipefail
           plan="$RUNNER_TEMP/test-plan-$SHARD.json"
           output="$RUNNER_TEMP/test-output-$SHARD.log"
+          # The upload step reads this path; the rest-web leg writes the rest shard's file.
+          echo "output=$output" >> "$GITHUB_OUTPUT"
           bun run test -- --concurrency=2 "${args[@]}" "${shard_args[@]}" --dry=json > "$plan"
           # On failure the log ends with the failing tests and their errors.
           bun run test -- --concurrency=2 --output-logs=full --log-order=stream "${args[@]}" "${shard_args[@]}" 2>&1 | tee "$output" || {
@@ -3049,6 +3052,15 @@ jobs:
             exit "$status"
           }
           bun scripts/test-shards.ts --verify-output "$SHARD" "$plan" "$output"
+
+      - name: Upload failed API or rest test output
+        if: failure() && steps.test-api-or-rest.outcome == 'failure'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-output-${{ matrix.shard }}
+          path: ${{ steps.test-api-or-rest.outputs.output }}
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Upload API test timings
         if: always() && startsWith(matrix.shard, 'api-')
@@ -3060,6 +3072,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Test web
+        id: test-web
         if: >-
           !cancelled()
           && needs.ci-plan.outputs.package_checks_required == 'true'
@@ -3082,6 +3095,8 @@ jobs:
           set -o pipefail
           plan="$RUNNER_TEMP/test-plan-$SHARD.json"
           output="$RUNNER_TEMP/test-output-$SHARD.log"
+          # The upload step reads this path; the rest-web leg writes the rest shard's file.
+          echo "output=$output" >> "$GITHUB_OUTPUT"
           bun run test -- --concurrency=2 "${args[@]}" "${shard_args[@]}" --dry=json > "$plan"
           # On failure the log ends with the failing tests and their errors.
           bun run test -- --concurrency=2 --output-logs=full --log-order=stream "${args[@]}" "${shard_args[@]}" 2>&1 | tee "$output" || {
@@ -3090,6 +3105,15 @@ jobs:
             exit "$status"
           }
           bun scripts/test-shards.ts --verify-output "$SHARD" "$plan" "$output"
+
+      - name: Upload failed web test output
+        if: failure() && steps.test-web.outcome == 'failure'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-output-web
+          path: ${{ steps.test-web.outputs.output }}
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Repeat changed tests
         if: >-
