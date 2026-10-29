@@ -13,7 +13,7 @@ const decisionsArbitrary = fc.array(
   })),
 );
 
-const idsOf = (rows: readonly { decisionId: string }[]) =>
+const idsOf = <T extends string>(rows: readonly { decisionId: T }[]) =>
   rows.map((row) => row.decisionId);
 
 describe("orderCitingDecisions", () => {

@@ -11,7 +11,6 @@ export {
   isProvisionViewPayload,
   PROVISION_VIEW,
   provisionTabId,
-  provisionTabLabel,
 } from "@/features/statutes/provision-inspector-contract";
 export type { ProvisionViewPayload } from "@/features/statutes/provision-inspector-contract";
 

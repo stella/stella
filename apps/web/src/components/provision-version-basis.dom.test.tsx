@@ -31,7 +31,7 @@ const { ProvisionsCited } =
 const { ProvisionVersionBasisLabel } =
   await import("./provision-version-basis");
 const { CitingDecisionItem } =
-  await import("@/features/statutes/components/provision-citing-decisions");
+  await import("@/features/statutes/components/citing-decision-item");
 const { decisionProvisionsInfiniteOptions } =
   await import("@/features/case-law/queries/provisions");
 const en = (await import("@/i18n/langs/en.json")).default;
