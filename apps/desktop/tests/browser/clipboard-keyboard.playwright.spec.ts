@@ -743,7 +743,9 @@ for (const {
           node.addEventListener(
             "scroll",
             (event) => event.stopImmediatePropagation(),
-            { capture: true },
+            {
+              capture: true,
+            },
           );
           node.scrollTo({ behavior: "instant", left: toward * 2400 });
           const bounds = node.getBoundingClientRect();
@@ -903,7 +905,9 @@ test("formatted clips expose copy variants and reversible app exclusions", async
     .click();
   expect(
     await lastInvocationArgs(page, "clipboard_exclude_item_source_app"),
-  ).toEqual({ id: "clip-1" });
+  ).toEqual({
+    id: "clip-1",
+  });
 
   await page.getByRole("button", { name: "More options" }).click();
   await page.getByRole("menuitem", { name: "Excluded applications" }).hover();
@@ -914,7 +918,9 @@ test("formatted clips expose copy variants and reversible app exclusions", async
     .click();
   expect(
     await lastInvocationArgs(page, "clipboard_remove_source_app_exclusion"),
-  ).toEqual({ identifier: "com.example.editor" });
+  ).toEqual({
+    identifier: "com.example.editor",
+  });
 });
 
 test("formatted clips advertise and execute both keyboard paste formats", async ({
@@ -1134,6 +1140,37 @@ test("source application names stay isolated inside RTL actions", async ({
   await expect(
     page.getByRole("menuitem", { name: restoreLabel }).locator("bdi[dir=auto]"),
   ).toHaveText("Example Editor");
+});
+
+test("search options narrow clip matches and hand focus back to the field", async ({
+  page,
+}) => {
+  await openClipboard(page, { language: "en" });
+  const search = page.getByRole("searchbox");
+  await search.fill("item 1");
+  // Every word anywhere: "1" also matches inside "10".
+  await expect(page.locator('[data-clipboard-id="clip-10"]')).toBeVisible();
+
+  const options = page.getByRole("button", {
+    name: enMessages.clipboard.searchOptions,
+    exact: true,
+  });
+  await options.click();
+  await page
+    .getByRole("menuitemcheckbox", {
+      name: enMessages.clipboard.searchOptionWholeWords,
+    })
+    .click();
+  await page.keyboard.press("Escape");
+
+  await expect(search).toBeFocused();
+  await expect(search).toHaveValue("item 1");
+  await expect(options).toHaveAttribute("data-active", "");
+  await expect(page.locator('[data-clipboard-id="clip-10"]')).toHaveCount(0);
+  await expect(page.locator("[data-clipboard-card-trigger]")).toHaveCount(1);
+  await expect(
+    page.locator('[data-clipboard-id="clip-1"] mark').first(),
+  ).toHaveText("item");
 });
 
 test("inline clip naming uses the full footer width", async ({ page }) => {

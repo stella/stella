@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  activeClipboardSearchOptionCount,
   adjacentClipboardIndex,
   adjacentClipboardScope,
   CLIPBOARD_CARD_PREVIEW_MAX_CHARACTERS,
@@ -21,6 +22,7 @@ import {
   clipboardSourceTintIndex,
   clipboardTimelineKeyAction,
   clipboardUntitledName,
+  DEFAULT_CLIPBOARD_SEARCH_OPTIONS,
   filterClipboardItems,
   formatClipboardAge,
   hasClipboardPrimaryModifier,
@@ -283,6 +285,87 @@ describe("diacritic-insensitive search", () => {
       { match: false, start: 0, text: "Karel " },
       { match: true, start: 6, text: "Čapek" },
     ]);
+  });
+});
+
+describe("clipboard search options", () => {
+  const ENTITY_ITEM = {
+    copiedAt: "2026-08-23T10:03:00Z",
+    groupId: null,
+    groupedAt: null,
+    id: "four",
+    name: null,
+    plainText: "ČEZ ESCO, a.s., se sídlem Duhová 1444/2, Praha 4",
+    sourceApp: null,
+    type: "text",
+  } satisfies ClipboardItem;
+  const PREFIX_ITEM = {
+    ...ENTITY_ITEM,
+    id: "five",
+    plainText: "Čezký dodavatel, Praha",
+  } satisfies ClipboardItem;
+  const items = [ENTITY_ITEM, PREFIX_ITEM];
+  const search = (
+    query: string,
+    options: Partial<typeof DEFAULT_CLIPBOARD_SEARCH_OPTIONS>,
+  ) =>
+    filterClipboardItems(items, query, null, {
+      ...DEFAULT_CLIPBOARD_SEARCH_OPTIONS,
+      ...options,
+    }).map(({ id }) => id);
+
+  test("an exact phrase needs the words together and in order", () => {
+    expect(search("praha čez", {})).toEqual(["four", "five"]);
+    expect(search("praha čez", { exactPhrase: true })).toEqual([]);
+    expect(search("duhová 1444", { exactPhrase: true })).toEqual(["four"]);
+  });
+
+  test("whole words drops a match inside a longer word", () => {
+    expect(search("čez", { wholeWords: true })).toEqual(["four"]);
+    expect(search("čez praha", { wholeWords: true })).toEqual(["four"]);
+  });
+
+  test("match case and match diacritics narrow the folds", () => {
+    expect(search("čez", { matchCase: true })).toEqual([]);
+    expect(search("ČEZ", { matchCase: true })).toEqual(["four"]);
+    expect(search("cez", { matchDiacritics: true })).toEqual([]);
+    expect(search("čez", { matchDiacritics: true })).toEqual(["four", "five"]);
+  });
+
+  test("switching options re-folds a cached clip", () => {
+    expect(search("cez", {})).toEqual(["four", "five"]);
+    expect(search("cez", { matchDiacritics: true })).toEqual([]);
+    expect(search("cez", {})).toEqual(["four", "five"]);
+  });
+
+  test("highlights and previews follow the options", () => {
+    const options = {
+      ...DEFAULT_CLIPBOARD_SEARCH_OPTIONS,
+      wholeWords: true,
+    };
+    expect(
+      highlightClipboardText("Čezký ČEZ", "čez", options).filter(
+        ({ match }) => match,
+      ),
+    ).toEqual([{ match: true, start: 6, text: "ČEZ" }]);
+    const plainText = `${"čezký ".repeat(30)}ČEZ`;
+    expect(clipboardSearchPreviewText({ plainText }, "čez", options)).toEqual({
+      text: `${"čezký ".repeat(3)}ČEZ`,
+      truncated: true,
+    });
+  });
+
+  test("counts the active options for the toggle badge", () => {
+    expect(
+      activeClipboardSearchOptionCount(DEFAULT_CLIPBOARD_SEARCH_OPTIONS),
+    ).toBe(0);
+    expect(
+      activeClipboardSearchOptionCount({
+        ...DEFAULT_CLIPBOARD_SEARCH_OPTIONS,
+        matchCase: true,
+        wholeWords: true,
+      }),
+    ).toBe(2);
   });
 });
 
@@ -1051,7 +1134,10 @@ describe("clipboard editor name ownership", () => {
       for (const externalName of ["Timeline rename", null]) {
         expect(
           refreshClipboardEditorName({ type: "edited", value }, externalName),
-        ).toEqual({ type: "edited", value });
+        ).toEqual({
+          type: "edited",
+          value,
+        });
       }
     }
   });

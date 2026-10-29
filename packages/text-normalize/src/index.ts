@@ -1,4 +1,5 @@
 // parser-output-unchanged: Unicode owner migration retains native normalization forms, mark classes and operation order; no folding is added.
+// parser-output-unchanged: exports the opt-in search match options; default folds are unchanged.
 export {
   applyArabicFolds,
   applyArabicFoldsWithOffsets,
@@ -16,8 +17,14 @@ export {
   findSearchMatchRanges,
   foldSearchMatchText,
   foldSearchMatchTextWithOffsets,
+  hasFoldedSearchMatch,
 } from "./search-match.js";
-export type { FoldedSearchText, SearchMatchRange } from "./search-match.js";
+export type {
+  FoldedSearchText,
+  SearchFoldOptions,
+  SearchMatchOptions,
+  SearchMatchRange,
+} from "./search-match.js";
 export {
   collapseSpacedLetters,
   spacedLetterRunRegex,

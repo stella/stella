@@ -691,9 +691,12 @@ export const RegistrySearch = ({
                     inline: "nearest",
                   });
                 }}
-                className="focus-visible:ring-ring min-h-0 flex-1 overflow-y-auto px-4 py-3 text-start outline-none focus-visible:ring-2 focus-visible:ring-inset"
+                className="focus-visible:ring-ring flex min-h-0 flex-1 flex-col justify-start overflow-y-auto px-4 py-3 text-start outline-none focus-visible:ring-2 focus-visible:ring-inset"
               >
-                <h2 className="truncate text-sm font-semibold" dir="auto">
+                <h2
+                  className="shrink-0 truncate text-sm font-semibold"
+                  dir="auto"
+                >
                   {card.name}
                 </h2>
                 <p
