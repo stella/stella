@@ -12,9 +12,15 @@ import {
  * access, so nothing here is a secret and nothing may be read dynamically.
  */
 
-/** A build may name its server; otherwise the person types it at sign-in. */
-export const PREFILLED_SERVER_URL: string =
-  process.env.EXPO_PUBLIC_STELLA_SERVER_URL ?? "";
+/** stella's own service, which every build signs in to unless told otherwise. */
+const STELLA_SERVER_URL = "https://api.stll.app";
+
+/**
+ * The server sign-in uses: stella's own, or the one a build names (a local
+ * stack on a simulator). Another server is a sign-in option, never the ask.
+ */
+export const DEFAULT_SERVER_URL: string =
+  process.env.EXPO_PUBLIC_STELLA_SERVER_URL ?? STELLA_SERVER_URL;
 
 /**
  * Which build this is (`app.config.ts`), which decides its redirect. A build

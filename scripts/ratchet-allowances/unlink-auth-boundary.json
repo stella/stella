@@ -1,0 +1,5 @@
+{
+  "metric": "throw-outside-boundary",
+  "delta": 3,
+  "reason": "Better Auth boundaries reject unauthenticated confirmation delivery, propagate delivery failures and propagate unlink confirmation failures through APIError, matching the existing auth endpoint contract."
+}

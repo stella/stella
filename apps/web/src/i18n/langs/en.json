@@ -547,6 +547,14 @@
     },
     "approve": "Approve",
     "approveSelected": "Approve selected",
+    "arrangement": {
+      "alertThreshold": "Alert threshold (%)",
+      "amountCap": "Amount cap",
+      "flatFee": "Flat fee",
+      "invalidCap": "Enter positive caps and an alert threshold between 0.01% and 100%.",
+      "minuteCap": "Time cap (minutes)",
+      "title": "Billing arrangement"
+    },
     "batchActions": "Batch actions",
     "billable": "Billable",
     "billedAmount": "Billed amount",
@@ -1576,6 +1584,12 @@
     "loadEarlierMessagesError": "Couldn't load earlier messages",
     "loadingEarlierMessages": "Loading earlier messages…",
     "maxAttachmentsReached": "Maximum {count} files per message",
+    "mcpReconnect": {
+      "additional": "{count, plural, one {+# more} other {+# more}}",
+      "dismiss": "Dismiss connection notice",
+      "stoppedWorking": "Your connection to <name>{server}</name> stopped working.",
+      "waitingApproval": "Your connection to <name>{server}</name> is waiting for approval."
+    },
     "mention": {
       "category": {
         "entities": "In this matter",
@@ -5062,6 +5076,16 @@
       "preferredNamePlaceholder": "Your name",
       "profileDescription": "Manage your personal preferences",
       "sendOtpCode": "Send verification code",
+      "signInMethods": {
+        "confirmDescription": "Enter a fresh code sent to your email to disconnect this sign-in method.",
+        "confirmTitle": "Disconnect {provider}?",
+        "description": "Connect accounts that use the same verified email address.",
+        "emailCode": "Email code",
+        "emailCodeDescription": "You can always sign in with a code sent to your email.",
+        "lastMethod": "Connect another account before disconnecting this one.",
+        "title": "Sign-in methods",
+        "unavailable": "Email delivery must be configured to disconnect sign-in methods."
+      },
       "timezone": "Timezone",
       "timezoneDescription": "Used for timestamps in notifications and emails",
       "timezoneSaved": "Timezone updated",

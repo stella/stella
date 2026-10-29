@@ -47,6 +47,11 @@ type TestFetchMock =
   | ((input: string | URL | Request) => Promise<Response>)
   | ((input: string | URL | Request, init?: RequestInit) => Promise<Response>);
 
+// Keep native static methods complete when a test captures another fetch fake.
+const FETCH_MOCK_PROPERTIES = {
+  preconnect: () => undefined,
+} satisfies Pick<typeof fetch, keyof typeof fetch>;
+
 /**
  * Cast a test fetch mock to the global `fetch` signature.
  *
@@ -62,7 +67,7 @@ export const asFetchMock = (fn: TestFetchMock): typeof fetch =>
   // pass to real `fetch`; the test asserts on that exact input.
   // Absent fetch overloads are not exercised at runtime.
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-  Object.assign(fn, { preconnect: () => undefined }) as unknown as typeof fetch;
+  Object.assign(fn, FETCH_MOCK_PROPERTIES) as unknown as typeof fetch;
 
 /**
  * Narrow an `unknown` raw value to a caller-declared test shape.

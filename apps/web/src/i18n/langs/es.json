@@ -547,6 +547,14 @@
     },
     "approve": "Aprobar",
     "approveSelected": "Aprobar seleccionados",
+    "arrangement": {
+      "alertThreshold": "Umbral de aviso (%)",
+      "amountCap": "Límite de honorarios",
+      "flatFee": "Honorarios fijos",
+      "invalidCap": "Introduzca límites positivos y un umbral de aviso entre el 0,01 % y el 100 %.",
+      "minuteCap": "Límite de tiempo (minutos)",
+      "title": "Acuerdo de honorarios"
+    },
     "batchActions": "Acciones en lote",
     "billable": "Facturable",
     "billedAmount": "Importe facturado",
@@ -1576,6 +1584,12 @@
     "loadEarlierMessagesError": "No se pudieron cargar los mensajes anteriores",
     "loadingEarlierMessages": "Cargando mensajes anteriores…",
     "maxAttachmentsReached": "Máximo {count} archivos por mensaje",
+    "mcpReconnect": {
+      "additional": "{count, plural, one {+# más} many {+# más} other {+# más}}",
+      "dismiss": "Ocultar aviso de conexión",
+      "stoppedWorking": "Tu conexión con <name>{server}</name> ha dejado de funcionar.",
+      "waitingApproval": "Tu conexión con <name>{server}</name> está pendiente de aprobación."
+    },
     "mention": {
       "category": {
         "entities": "En este asunto",
@@ -5062,6 +5076,16 @@
       "preferredNamePlaceholder": "Tu nombre",
       "profileDescription": "Gestiona tus preferencias personales",
       "sendOtpCode": "Enviar código de verificación",
+      "signInMethods": {
+        "confirmDescription": "Introduce un código nuevo enviado a tu correo electrónico para desconectar este método de inicio de sesión.",
+        "confirmTitle": "¿Desconectar {provider}?",
+        "description": "Conecta cuentas que usen la misma dirección de correo electrónico verificada.",
+        "emailCode": "Código por correo electrónico",
+        "emailCodeDescription": "Siempre puedes iniciar sesión con un código enviado a tu correo electrónico.",
+        "lastMethod": "Conecta otra cuenta antes de desconectar esta.",
+        "title": "Métodos de inicio de sesión",
+        "unavailable": "Debe configurarse el envío de correo electrónico para desconectar métodos de inicio de sesión."
+      },
       "timezone": "Zona horaria",
       "timezoneDescription": "Se usa para las marcas de tiempo en notificaciones y correos",
       "timezoneSaved": "Zona horaria actualizada",
