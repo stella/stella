@@ -46,7 +46,7 @@ const mount = () => {
   let currentClientId: string | null = MOVE.previousClientId;
   const calls: Call[] = [];
   const client = new QueryClient();
-  const context = { client };
+  const context = { client, meta: undefined };
   const { result } = renderHook(
     () =>
       useMatterClientDropState({
