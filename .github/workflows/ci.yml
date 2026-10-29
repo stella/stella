@@ -2981,6 +2981,7 @@ jobs:
         run: nproc; free -g
 
       - name: Test API or rest
+        id: test-api-or-rest
         if: >-
           !cancelled()
           && needs.ci-plan.outputs.package_checks_required == 'true'
@@ -3030,6 +3031,15 @@ jobs:
           }
           bun scripts/test-shards.ts --verify-output "$SHARD" "$plan" "$output"
 
+      - name: Upload failed API or rest test output
+        if: failure() && steps.test-api-or-rest.outcome == 'failure'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-output-${{ matrix.shard }}
+          path: ${{ runner.temp }}/test-output-${{ matrix.shard }}.log
+          retention-days: 7
+          if-no-files-found: ignore
+
       - name: Upload API test timings
         if: always() && startsWith(matrix.shard, 'api-')
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -3040,6 +3050,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Test web
+        id: test-web
         if: >-
           !cancelled()
           && needs.ci-plan.outputs.package_checks_required == 'true'
@@ -3072,6 +3083,15 @@ jobs:
             exit "$status"
           }
           bun scripts/test-shards.ts --verify-output "$SHARD" "$plan" "$output"
+
+      - name: Upload failed web test output
+        if: failure() && steps.test-web.outcome == 'failure'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-output-web
+          path: ${{ runner.temp }}/test-output-web.log
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Repeat changed tests
         if: >-
