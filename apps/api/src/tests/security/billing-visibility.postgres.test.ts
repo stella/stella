@@ -443,10 +443,10 @@ const assertActorVisibility = async ({
     rateAtEntry: monetary ? RATE : null,
   });
   const queue = await listApprovalQueue.handler(asTestRaw(base));
-  expect(isRecord(queue) && Array.isArray(queue["items"])).toBe(true);
-  if (isRecord(queue) && Array.isArray(queue["items"])) {
-    expect(queue["items"].length).toBeGreaterThan(0);
-    for (const item of queue["items"]) {
+  expect(isRecord(queue) && Array.isArray(queue.items)).toBe(true);
+  if (isRecord(queue) && Array.isArray(queue.items)) {
+    expect(queue.items.length).toBeGreaterThan(0);
+    for (const item of queue.items) {
       expect(item, actor.role).toMatchObject({
         rateAtEntry: monetary ? RATE : null,
       });
