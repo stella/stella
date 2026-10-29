@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 4,
+  "reason": "@stll/ui's React Native renderers declare react-native, uniwind, react-native-svg and lucide-react-native as optional peer dependencies. The mobile app already installs all four; web and desktop installs of @stll/ui never resolve them."
+}
