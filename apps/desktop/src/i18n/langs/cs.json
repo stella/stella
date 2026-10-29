@@ -618,5 +618,46 @@
       "fullDiskAccess": "Plný přístup k disku",
       "administrator": "Oprávnění správce"
     }
+  },
+  "agentSubscriptions": {
+    "title": "Předplatné AI",
+    "chatGpt": "ChatGPT",
+    "description": "Používejte svůj tarif ChatGPT pro požadavky na AI ve stelle. Využití se započítává do tarifu ChatGPT, odděleně od předplatného stelly.",
+    "continueWithChatGpt": "Pokračovat s ChatGPT",
+    "continueAs": "Pokračovat jako {email}",
+    "useDifferentAccount": "Použít jiný účet",
+    "signingIn": "Dokončete přihlášení v prohlížeči.",
+    "cancel": "Zrušit",
+    "pasteDescription": "Pokud prohlížeč po přihlášení zobrazí chybovou stránku, zkopírujte její adresu a vložte ji sem.",
+    "pasteSubmit": "Dokončit přihlášení",
+    "connected": "ChatGPT připojen",
+    "connectedAs": "ChatGPT připojen · {email}",
+    "manageUsage": "Spravovat využití",
+    "disconnect": "Odpojit",
+    "needsReconnect": "Připojení k ChatGPT vypršelo. Přihlaste se znovu, abyste mohli tarif dál používat.",
+    "notice": {
+      "actionFailed": "Nepodařilo se to. Zkuste to znovu.",
+      "pasteRejected": "Tato adresa nepatří k aktuálnímu přihlášení. Zkopírujte celou adresu z karty prohlížeče, která se otevřela.",
+      "revocationUnconfirmed": "Odpojeno v tomto počítači, ale ChatGPT to nepotvrdil. Stellu můžete odebrat také v nastavení ChatGPT."
+    },
+    "failure": {
+      "declined": "Přihlášení bylo v prohlížeči odmítnuto.",
+      "planUsageNotGranted": "Stella nedostala povolení používat váš tarif ChatGPT. Přihlaste se znovu a povolte to.",
+      "differentAccount": "Přihlásili jste se jiným účtem ChatGPT. Uložené připojení zůstalo beze změny.",
+      "stateMismatch": "Přihlášení se nepodařilo ověřit. Zkuste to znovu.",
+      "timedOut": "Přihlášení trvalo příliš dlouho. Zkuste to znovu.",
+      "browserUnavailable": "Prohlížeč se nepodařilo otevřít. Zkuste to znovu.",
+      "callbackUnavailable": "Přihlášení se v tomto počítači nepodařilo připravit. Zkuste to znovu.",
+      "registrationIncomplete": "ChatGPT nedokončil připojení stelly. Zkuste to znovu.",
+      "codeExpired": "Platnost přihlášení vypršela dřív, než se dokončilo. Zkuste to znovu.",
+      "verification": "Odpověď ChatGPT se nepodařilo ověřit. Zkuste to znovu.",
+      "clientRejected": "ChatGPT toto připojení už nepřijímá. Připojte se znovu jiným účtem.",
+      "unreachable": "Přihlášení k ChatGPT není dostupné. Zkontrolujte připojení k internetu a zkuste to znovu.",
+      "storage": "Připojení se v tomto počítači nepodařilo načíst ani uložit."
+    },
+    "callbackConnectedTitle": "ChatGPT je připojen",
+    "callbackConnectedBody": "Tuto kartu můžete zavřít a vrátit se do stelly.",
+    "callbackNotConnectedTitle": "ChatGPT se nepřipojil",
+    "callbackNotConnectedBody": "Vraťte se do stelly, zjistěte, co se stalo, a zkuste to znovu."
   }
 }

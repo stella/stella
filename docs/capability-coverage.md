@@ -15,7 +15,7 @@ covered by one, or through `read_capability` or
 A capability id is its handler path under `apps/api/src/handlers/`, joined
 with `.`: `<domain>[.<resource>…].<action>`. The action is one word:
 a canonical verb (`list`, `get`, `create`, `update`, `delete`)
-or a domain verb (`add`, `approve`, `archive`, `cancel`, `check`, `clear`, `clip`, `clone`, `compare`, `confirm`, `convert`, `copy`, `count`, `diff`, `discover`, `discard`, `download`, `duplicate`, `export`, `fill`, `generate`, `import`, `install`, `link`, `lookup`, `move`, `pause`, `prefill`, `prepare`, `preview`, `remove`, `rename`, `reorder`, `replace`, `resolve`, `return`, `restore`, `resume`, `retry`, `revert`, `review`, `revoke`, `rewrite`, `run`, `search`, `split`, `start`, `stop`, `suggest`, `summarize`, `sync`, `transition`, `unarchive`, `unlink`, `upload`, `upsert`).
+or a domain verb (`add`, `approve`, `archive`, `cancel`, `check`, `clear`, `clip`, `clone`, `compare`, `confirm`, `convert`, `copy`, `count`, `diff`, `discover`, `discard`, `download`, `duplicate`, `export`, `fill`, `generate`, `import`, `install`, `link`, `lookup`, `move`, `pause`, `prefill`, `prepare`, `preview`, `remove`, `rename`, `reorder`, `replace`, `resolve`, `return`, `restore`, `resume`, `retry`, `revert`, `review`, `revoke`, `rewrite`, `run`, `search`, `split`, `start`, `stop`, `suggest`, `summarize`, `sync`, `transition`, `unarchive`, `unlink`, `upload`, `upsert`, `void`).
 A compound action is a nested resource: `clauses.categories.create`, not
 `clauses.categories-create`.
 
@@ -248,6 +248,9 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `invoices.lines.delete` | write, destructive | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices lines-delete` |
 | `invoices.lines.update` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices lines-update` |
 | `invoices.list` | read | stella:read | FEATURE_TIME_BILLING | curated tool `list_invoices` |
+| `invoices.payments.create` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices payments-create` |
+| `invoices.payments.list` | read | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices payments-list` |
+| `invoices.payments.void` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices payments-void` |
 | `invoices.pdf.export` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices pdf-export` |
 | `invoices.prefill` | read | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices prefill` |
 | `invoices.sends.create` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices sends-create` |
@@ -555,6 +558,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `tasks.entity-links.delete` | write, destructive | stella:matters_write | — | covered by `save_task` |
 | `tasks.entity-links.list` | read | stella:read | — | covered by `list_tasks` |
 | `tasks.get` | read | stella:read | — | covered by `list_tasks` |
+| `tasks.list` | read | stella:read | — | covered by `list_tasks` |
 | `tasks.update` | write | stella:matters_write | — | covered by `save_task` |
 
 ## template-packs
@@ -726,9 +730,9 @@ mechanics, and similar), not gaps in coverage.
 | --- | --- |
 | account_lifecycle | 4 |
 | assistant_chat | 15 |
-| auth_plumbing | 35 |
+| auth_plumbing | 36 |
 | billing_ui | 1 |
-| chat_thread_ui | 17 |
+| chat_thread_ui | 18 |
 | compound_consent | 1 |
 | deploy_mechanics | 1 |
 | document_processing | 26 |

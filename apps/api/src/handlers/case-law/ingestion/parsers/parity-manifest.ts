@@ -9,6 +9,10 @@ type ParserParitySpec = {
 /** Stored, full-decision captures whose adapter path can be replayed offline. */
 export const PARSER_PARITY_MANIFEST = [
   {
+    adapterKey: ADAPTER_KEYS.UK_FCL,
+    fixture: "parsers/__fixtures__/uk-fcl.xml",
+  },
+  {
     adapterKey: ADAPTER_KEYS.EU_ECJ,
     fixture: "parsers/__fixtures__/eu-ecj/62022CJ0128.en.html.gz",
   },

@@ -1,4 +1,8 @@
 import type { invoiceSends } from "@/api/db/schema";
+import type {
+  UnbackedProjectionKeys,
+  UnprojectedColumns,
+} from "@/api/lib/projection-totality";
 
 type InvoiceSendRow = Pick<
   typeof invoiceSends.$inferSelect,
@@ -51,3 +55,37 @@ export const projectInvoiceSend = (
   revokedAt: row.revokedAt?.toISOString() ?? null,
   firstViewedAt: row.firstViewedAt?.toISOString() ?? null,
 });
+
+type InvoiceSendTableRow = typeof invoiceSends.$inferSelect;
+type InvoiceSendOutput = ReturnType<typeof projectInvoiceSend>;
+type InvoiceSendDirectProjection = Omit<
+  InvoiceSendOutput,
+  "linkStatus" | "sentBy"
+>;
+
+const UNPROJECTED_INVOICE_SEND_COLUMNS = [
+  // Tenant and invoice scope are established by the authorized route.
+  "organizationId",
+  "invoiceId",
+  // Sender attribution is joined to the current member and projected as a name.
+  "sentByUserId",
+  // Link credentials and revocation actor are never client data.
+  "tokenHash",
+  "revokedByUserId",
+] as const satisfies readonly (keyof InvoiceSendTableRow)[];
+
+type MissingInvoiceSendProjectionColumn = UnprojectedColumns<
+  InvoiceSendTableRow,
+  InvoiceSendDirectProjection,
+  (typeof UNPROJECTED_INVOICE_SEND_COLUMNS)[number]
+>;
+type UnexpectedInvoiceSendProjectionColumn = UnbackedProjectionKeys<
+  InvoiceSendTableRow,
+  InvoiceSendDirectProjection,
+  (typeof UNPROJECTED_INVOICE_SEND_COLUMNS)[number]
+>;
+
+true satisfies MissingInvoiceSendProjectionColumn extends never ? true : never;
+true satisfies UnexpectedInvoiceSendProjectionColumn extends never
+  ? true
+  : never;

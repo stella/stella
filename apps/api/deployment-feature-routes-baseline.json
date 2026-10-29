@@ -208,14 +208,6 @@
     "reason": "pending gate classification"
   },
   {
-    "key": "unclassified-route:DELETE /v1/tasks/:workspaceId/assignees",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "unclassified-route:DELETE /v1/tasks/:workspaceId/links",
-    "reason": "pending gate classification"
-  },
-  {
     "key": "unclassified-route:DELETE /v1/template-categories/:categoryId",
     "reason": "pending gate classification"
   },
@@ -856,14 +848,6 @@
     "reason": "pending gate classification"
   },
   {
-    "key": "unclassified-route:GET /v1/tasks/:workspaceId/:taskId",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "unclassified-route:GET /v1/tasks/:workspaceId/:taskId/links",
-    "reason": "pending gate classification"
-  },
-  {
     "key": "unclassified-route:GET /v1/template-categories",
     "reason": "pending gate classification"
   },
@@ -1245,10 +1229,6 @@
   },
   {
     "key": "unclassified-route:PATCH /v1/skills/:skillId/resources",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "unclassified-route:PATCH /v1/tasks/:workspaceId",
     "reason": "pending gate classification"
   },
   {
@@ -2000,22 +1980,6 @@
     "reason": "pending gate classification"
   },
   {
-    "key": "unclassified-route:POST /v1/tasks/:workspaceId/assignees",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "unclassified-route:POST /v1/tasks/:workspaceId/assignees/move",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "unclassified-route:POST /v1/tasks/:workspaceId/calendar",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "unclassified-route:POST /v1/tasks/:workspaceId/links",
-    "reason": "pending gate classification"
-  },
-  {
     "key": "unclassified-route:POST /v1/template-categories/:categoryId",
     "reason": "pending gate classification"
   },
@@ -2317,10 +2281,6 @@
   },
   {
     "key": "unclassified-route:PUT /v1/style-sets/editor",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "unclassified-route:PUT /v1/tasks/:workspaceId",
     "reason": "pending gate classification"
   },
   {

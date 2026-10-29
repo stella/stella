@@ -1,6 +1,7 @@
 {
   "account": {
     "sessions": {
+      "activeNow": "Now",
       "currentSession": "Current",
       "device": "Device",
       "deviceOnOs": "{browser} on {os}",
@@ -81,6 +82,8 @@
   },
   "aiColumns": {
     "countSummary": "{columns} columns × {rows} rows = {answers, plural, one {# answer} other {# answers}}. Answers spend budget.",
+    "modelRefused": "The model refused to answer",
+    "nothingFound": "Nothing found",
     "refusedBudget": "Not run: answer budget unavailable",
     "rerunAllPage": "Rerun all (this page)",
     "rerunColumnPage": "Rerun column (this page)",
@@ -129,6 +132,7 @@
     "checkSpamHint": "If you don't see it, check your spam folder.",
     "chooseOrganization": "Choose which organization to work in",
     "codeSentAgain": "We sent a new code.",
+    "continueWithApple": "Continue with Apple",
     "continueWithEmail": "Continue",
     "continueWithGoogle": "Continue with Google",
     "continueWithMicrosoft": "Continue with Microsoft",
@@ -527,6 +531,16 @@
         "wrongStatus": "This entry is no longer a draft. Refresh the list."
       },
       "returnComment": "Reason for returning",
+      "returnRefusals": {
+        "invalidEntry": "Check the entry's work date, then return it.",
+        "notApprover": "Only the entry's assigned approver or an administrator can return it.",
+        "notFound": "This entry no longer exists, so it cannot be returned. Refresh the list.",
+        "notSubmitted": "This draft was never submitted, so there is nothing to return.",
+        "runningTimer": "Stop the running timer before returning this entry.",
+        "timePeriodLocked": "This month is locked, so the entry cannot be returned. Ask an administrator to unlock it.",
+        "wrongStatus": "Billed or written-off time cannot be returned to its timekeeper."
+      },
+      "returnSelected": "Return {count, plural, one {# selected entry} other {# selected entries}}",
       "selectEntry": "Select entry",
       "timeEntries": "Time entries",
       "title": "Approvals"
@@ -697,11 +711,30 @@
       },
       "linkedExpenses": "Linked expenses",
       "linkedTimeEntries": "Linked time entries",
-      "markPaid": "Mark paid",
       "markSent": "Mark as sent",
       "noEntries": "No entries linked to this invoice",
       "noInvoices": "No invoices yet",
       "paidAt": "Paid at",
+      "payments": {
+        "amountTooHigh": "The amount is more than the outstanding {amount}.",
+        "confirmVoid": "The payment stays on record as voided and no longer counts towards this invoice.",
+        "empty": "No payments recorded yet",
+        "method": "Payment method",
+        "methods": {
+          "bank_transfer": "Bank transfer",
+          "card": "Card",
+          "cash": "Cash",
+          "other": "Other method"
+        },
+        "outstandingAmount": "Outstanding {amount}",
+        "paidOn": "Payment date",
+        "partiallyPaid": "Partially paid",
+        "record": "Record payment",
+        "summary": "Paid {paid}, outstanding {outstanding}",
+        "title": "Payments",
+        "void": "Void payment",
+        "voided": "Voided"
+      },
       "removeEntries": "Remove entries",
       "send": "Send",
       "sendByEmail": "Send by email",
@@ -755,6 +788,7 @@
     "markNonBillableSelected": "Mark non-billable",
     "matterRequired": "Please select a matter",
     "minutes": "Minutes",
+    "moveEntryHint": "Saving moves the entry to this matter and prices it with this matter's rates.",
     "narrative": "Narrative",
     "narrativePlaceholder": "Describe the work performed...",
     "noActiveTimer": "No active timer",
@@ -918,6 +952,7 @@
     "aiMissing": "AI is not configured.",
     "availabilityUnknown": "Availability could not be confirmed.",
     "deeplMissing": "DeepL is not configured.",
+    "deeplPdfRequired": "Translating PDFs requires DeepL.",
     "desktopUnavailable": "Connect or update stella desktop.",
     "featureUnavailable": "This feature is unavailable.",
     "ocrUnavailable": "OCR is unavailable.",
@@ -1023,12 +1058,15 @@
       "supreme": "Supreme courts"
     },
     "coverage": {
+      "allCurrent": "All sources up to date",
       "completeness": "Completeness",
+      "completenessHelp": "Stored decisions compared with the publisher’s own count, its listing or a recorded total.",
+      "countryNavigation": "Browse countries",
       "courtsHeading": "By court",
       "decisionYears": "Decision years",
+      "decisionsAcross": "decisions across {count, plural, one {# jurisdiction} other {# jurisdictions}}",
       "description": "How much case law the corpus holds, per country and per court, and how fresh each source is.",
       "generatedAt": "Figures from {date}",
-      "globeLabel": "Countries whose case law the corpus holds, on a globe",
       "healthCurrent": "Up to date",
       "healthDelayed": "Delayed",
       "healthDisabled": "Switched off",
@@ -1038,10 +1076,10 @@
       "lastSync": "Last sync",
       "notCountedYet": "Not counted yet",
       "notMeasuredYet": "Not measured yet",
-      "reportedByListing": "Counted from the publisher's listing",
-      "reportedByOperator": "Recorded by hand",
-      "reportedByPublisher": "Publisher's own count",
       "searchable": "Searchable",
+      "sourceExceptions": "{count, plural, one {# source needs attention} other {# sources need attention}}",
+      "sourcesCurrent": "Sources up to date",
+      "syncedAt": "Synced {time}",
       "title": "Case-law coverage",
       "totalFrom": "Total from {date}",
       "unavailable": "Coverage figures are unavailable right now."
@@ -1212,7 +1250,7 @@
       "searchEveryWord": "Search every word"
     },
     "seo": {
-      "collectionName": "Stella case law",
+      "collectionName": "stella case law",
       "description": "Public case-law database with indexable court decisions and legal source materials.",
       "homeDescription": "Public legal database: court decisions and consolidated statutes, searchable by identifier or by words.",
       "scopedDescription": "Public case-law database for {scope}, with indexable court decisions and legal source materials."
@@ -1232,6 +1270,7 @@
       "appliedVersionStatedAmendmentCompact": "Stated: <reference>{amendment}</reference>",
       "appliedVersionStatedDate": "{relation, select, on {Wording effective on {date}} until {Wording effective through {date}} from {Wording effective from {date}} other {Wording effective on {date}}}",
       "appliedVersionStatedDateCompact": "{relation, select, on {Stated: {date}} until {Stated: until {date}} from {Stated: from {date}} other {Stated: {date}}}",
+      "caseFileDocuments": "Documents in this case file",
       "caseFileMayHoldOthers": "This case file may contain other decisions as well.",
       "citedBy": "Cited by",
       "citedDecisionPassage": "Passage in the decision",
@@ -1458,6 +1497,17 @@
         "webSearch": "Turn on web search to use this skill"
       }
     },
+    "connectConnector": {
+      "checkAction": "Check connection",
+      "description": "The assistant asks to connect {connector} to use its tools in this conversation.",
+      "error": "Could not start connecting. Try again.",
+      "notConnected": "Not connected yet. Finish signing in, then check again.",
+      "openTools": "Open tools",
+      "scopes": "Requested access: {scopes}",
+      "title": "Connect a connector",
+      "tokenRequired": "{connector} needs an access token. Add it on the tools page, then check the connection.",
+      "waiting": "Finish signing in in the window that opened."
+    },
     "contextMeter": {
       "attachments": "Attached documents",
       "autoCompact": "At 100% stella automatically summarizes older messages to free space.",
@@ -1532,7 +1582,7 @@
     },
     "historyContext": {
       "overflow": "+{count, number}",
-      "unnamed": "{count, plural, one {and # more} other {and # more}}"
+      "unnamed": "{count, plural, one {# more} other {# more}}"
     },
     "historyTrimmed": "Earlier messages could not be summarized, so this answer only took the most recent part of the conversation into account.",
     "improvePrompt": "Improve prompt",
@@ -1773,6 +1823,7 @@
       "business_registry_lookup": "Searching business registry",
       "compare_versions": "Comparing versions",
       "configure_template_fields": "Configure template fields",
+      "connect_connector": "Asking to connect a connector",
       "counterparty_check": "Checking counterparty",
       "create-document": "Preparing document",
       "create_matter_document": "Creating document",
@@ -2060,6 +2111,7 @@
     "confirm": "Confirm",
     "confirmAction": "Are you sure?",
     "connect": "Connect",
+    "connected": "Connected",
     "connectionLost": "Connection lost",
     "connectionLostDescription": "We lost the connection to the server. Retrying automatically.",
     "convertTo": "Convert to",
@@ -2220,6 +2272,7 @@
     "moveDown": "Move down",
     "moveUp": "Move up",
     "name": "Name",
+    "networkError": "Network error. Please check your internet connection and try again.",
     "newMatter": "New matter",
     "newRow": "New row",
     "next": "Next",
@@ -2228,6 +2281,8 @@
     "noResults": "No results",
     "noVersions": "No version history",
     "none": "None",
+    "notConnected": "Not connected",
+    "notNow": "Not now",
     "notStated": "Not stated",
     "notes": "Notes",
     "open": "Open",
@@ -2460,6 +2515,8 @@
       "aresNotFound": "No company found for this IČO.",
       "aresTitle": "Czech registry (ARES)",
       "contactName": "Contact name",
+      "displayNameOrganizationHint": "Optional override; otherwise generated from the organization name.",
+      "displayNamePersonHint": "Optional override; otherwise generated from the first and last name.",
       "icoPlaceholder": "IČO",
       "invalidIco": "Enter an 8-digit IČO."
     },
@@ -2476,10 +2533,10 @@
       "value": "Field value"
     },
     "datePrecision": "Date precision",
-    "deleteContact": "Delete client",
+    "deleteContact": "Delete contact",
     "deleteContactBlockedByMatters": "This contact is still assigned as a client on matters. Reassign or delete those matters before deleting the contact.",
     "deleteContactConfirmDescription": "Are you sure you want to delete this contact? This action cannot be undone.",
-    "editContact": "Edit client",
+    "editContact": "Edit contact",
     "emailTypes": {
       "other": "Other",
       "personal": "Personal",
@@ -2492,7 +2549,7 @@
     "extractProcuracao": {
       "dropZone": "Drop a power of attorney (.docx) here, or click to choose a file",
       "extracting": "Extracting grantor(s)…",
-      "fileHint": "Stella reads the document and finds the grantor(s) — not the lawyer — automatically. Review the results before confirming.",
+      "fileHint": "stella reads the document and finds the grantor(s) — not the lawyer — automatically. Review the results before confirming.",
       "fileTooLarge": "The power-of-attorney file must be 50 MB or smaller.",
       "invalidFileType": "Please choose a .docx file.",
       "noOutorganteFound": "No grantor could be identified in this document.",
@@ -2537,6 +2594,7 @@
       "rowLabel": "Client {index}",
       "skippedDuplicateContactId": "Skipped: duplicate contact ID",
       "skippedDuplicateTaxId": "Skipped: duplicate tax ID",
+      "skippedInFileDuplicate": "Skipped: repeats an earlier row in the file",
       "skippedInvalidRow": "Skipped: the row failed the import rules",
       "skippedInvalidTaxId": "Skipped: invalid tax ID",
       "skippedLimitReached": "Skipped: contacts limit reached"
@@ -2578,6 +2636,7 @@
       "issue": {
         "address_line_required": "Address line 1 is required when an address is present.",
         "display_name_required": "A display name could not be created.",
+        "in_file_duplicate": "Duplicate of an earlier row in this file",
         "invalid_email": "The e-mail address is invalid.",
         "invalid_phone": "The phone number is invalid.",
         "invalid_tags": "Tags must be text values.",
@@ -2606,7 +2665,11 @@
       "taxIdSchemeBrCpfCnpj": "Brazilian CPF/CNPJ (checksum)",
       "taxIdSchemeNone": "No tax-ID validation",
       "title": "Import contacts",
-      "validateFailed": "Couldn't check these contacts."
+      "validateFailed": "Couldn't check these contacts.",
+      "warning": {
+        "ignored_populated_column": "Column “{column}” contains data but is ignored.",
+        "possible_in_file_duplicate": "Possible duplicate of row {row}; matching name only."
+      }
     },
     "invalidDateOfBirth": "Enter a valid date of birth.",
     "invalidNationalityCodes": "Enter valid nationality codes.",
@@ -2766,12 +2829,15 @@
   },
   "errors": {
     "actionAdmission": {
-      "admissionUnavailable": "This action is temporarily paused. Please try again shortly.",
       "concurrencyBusy": "Other work is in progress. Please try again shortly.",
+      "configurationIncomplete": "This action is not fully configured. Contact your administrator.",
       "contact": "Contact us",
       "featureDisabled": "This feature is temporarily turned off.",
+      "leaseLost": "The action reservation expired. Please try again.",
       "notEnabled": "This action is not enabled for your organization.",
-      "periodExhausted": "This action is paused for your organization."
+      "organizationStateUnreadable": "Organization access could not be checked. Please try again shortly.",
+      "periodExhausted": "This action is paused for your organization.",
+      "storeUnavailable": "The service is temporarily unavailable. Please try again shortly."
     },
     "actionFailed": "That didn't work. Try again, or reload the page if it keeps happening.",
     "api": {
@@ -3303,7 +3369,6 @@
       "simple": "Simple Markup"
     },
     "moreFormatting": "More formatting",
-    "networkError": "Network error. Please check your internet connection and try again.",
     "nextChange": "Next Change",
     "numberedList": "Numbered List",
     "parseError": "The document could not be parsed. It may be corrupted or in an unsupported format.",
@@ -4661,7 +4726,6 @@
       "selectAtLeastOneRole": "Select at least one role for this key.",
       "selectModelForEachRole": "Add a provider and select a model for each category.",
       "selectedProvider": "{provider}",
-      "title": "AI configuration",
       "usingDefaults": "Using defaults"
     },
     "invitations": {
@@ -5089,7 +5153,7 @@
         "title": "Two-factor authentication"
       },
       "wordEditIdentitySaved": "Word edit identity updated",
-      "wordEditShortcut": "Word edit shortcut",
+      "wordEditShortcut": "Initials for Word edits",
       "wordEditShortcutDescription": "Short tag for your initials on Word edits.",
       "wordEditShortcutPlaceholder": "e.g. JK"
     },
@@ -5100,7 +5164,6 @@
       "cliInstallLabel": "Install",
       "cliLoginLabel": "Log in",
       "cliTitle": "Command-line interface",
-      "connected": "Connected",
       "connectedAgo": "Connected {time}",
       "connectedAppsDescription": "Apps you have signed in to stella with. Disconnect any you no longer use.",
       "connectedAppsEmpty": "Nothing yet. Set up Claude or ChatGPT above and it will appear here.",
@@ -5123,7 +5186,6 @@
       "mcpTitle": "MCP server",
       "mcpUrlLabel": "Server URL",
       "noMatches": "No connections match “{query}”",
-      "notConnected": "Not connected",
       "permissionCount": "{count, plural, one {# permission} other {# permissions}}",
       "privateCredentialOnly": "Private credential only",
       "searchPlaceholder": "Search connections",
@@ -5183,7 +5245,7 @@
       "documentTypes": {
         "addPlaceholder": "Add a document type (e.g. Employment Agreement)",
         "deleteFailed": "Couldn't delete document type",
-        "description": "Define the document types your organisation reviews. Playbooks scope to these, and the AI classifier sorts documents into them.",
+        "description": "Define the document types your organization reviews. Playbooks scope to these, and the AI classifier sorts documents into them.",
         "labelAria": "Document type name",
         "reorder": "Reorder document type",
         "title": "Document types"
@@ -5229,16 +5291,15 @@
         "updated": "Time zone updated"
       },
       "usage": "Usage",
-      "usageDescription": "Usage limits and entitlement state for this organisation",
-      "usageEmptyDescription": "Configure a usage entitlement to enable metered AI features for this organisation.",
+      "usageDescription": "Usage limits and entitlement state for this organization",
+      "usageEmptyDescription": "Configure a usage entitlement to enable metered AI features for this organization.",
       "usageEmptyTitle": "No usage entitlement",
       "usageEndsOnTemplate": "Ends on {date}",
       "usageLimitAvailable": "Available",
-      "usageLimitDescriptionEntitlementInactive": "The organisation's usage entitlement is paused or inactive. Review hosted usage management or contact an operator.",
-      "usageLimitDescriptionNoEntitlement": "AI features need an active usage entitlement for this organisation.",
-      "usageLimitDescriptionUsageLimitExceeded": "This action cannot run with the organisation's current usage state.",
+      "usageLimitDescriptionEntitlementInactive": "The organization's usage entitlement is paused or inactive. Review hosted usage management or contact an operator.",
+      "usageLimitDescriptionNoEntitlement": "AI features need an active usage entitlement for this organization.",
+      "usageLimitDescriptionUsageLimitExceeded": "This action cannot run with the organization's current usage state.",
       "usageLimitNeeded": "Needed",
-      "usageLimitNotNow": "Not now",
       "usageLimitTitleEntitlementInactive": "Usage entitlement is not active",
       "usageLimitTitleNoEntitlement": "Usage entitlement required",
       "usageLimitTitleUsageLimitExceeded": "AI usage limit reached",
@@ -5407,7 +5468,7 @@
     "description": "Reusable document formatting for templates and new documents",
     "editor": {
       "bodyText": "Body text",
-      "createFromStella": "Stella Style variant",
+      "createFromStella": "stella Style variant",
       "createTitle": "Create style set",
       "description": "Adjust the document system and review the result before saving.",
       "double": "Double",
@@ -5478,17 +5539,17 @@
     "saveFailed": "Style set could not be saved",
     "savedDescription": "Saved style set",
     "sourceDocument": "Source DOCX",
-    "stellaDescription": "Stella's complete, neutral legal document formatting",
-    "stellaStyle": "Stella Style",
+    "stellaDescription": "stella's complete, neutral legal document formatting",
+    "stellaStyle": "stella Style",
     "title": "Style Sets",
     "untitledDocument": "Untitled document"
   },
   "success": {
     "aiConfigDeleted": "AI configuration removed",
     "aiConfigUpdated": "AI configuration updated",
-    "clientUpdated": "Client updated",
-    "contactCreated": "Client created",
-    "contactDeleted": "Client deleted",
+    "clientUpdated": "Contact updated",
+    "contactCreated": "Contact created",
+    "contactDeleted": "Contact deleted",
     "documentCreated": "Document created",
     "folderCreated": "Folder created",
     "invitationCanceled": "Invitation canceled",
@@ -5994,7 +6055,7 @@
       "description": "Create a translated copy of the open document. The original is unchanged; tracked changes use the Final view.",
       "docxOnly": "stella AI translation is currently available for DOCX files only.",
       "noLanguagesFound": "No languages found",
-      "notConfigured": "DeepL is not configured for this organisation. Add a DeepL API key in organisation settings to enable translation.",
+      "notConfigured": "DeepL is not configured for this organization. Add a DeepL API key in organization settings to enable translation.",
       "outputLabel": "Translation type",
       "progressCount": "{completed} of {total} completed",
       "providerUnavailable": "The translation service is unavailable. Try again later or contact your administrator.",
@@ -6024,7 +6085,11 @@
       "title": "Translation ready"
     }
   },
+  "transportErrors": {
+    "timeout": "The request took too long. Try again."
+  },
   "validation": {
+    "invalidEmail": "Enter a valid email address.",
     "organizationNameRequired": "Organization name is required",
     "slugFormat": "Slug must be lowercase letters, numbers, and hyphens",
     "slugRequired": "Slug is required"
@@ -6220,20 +6285,18 @@
         "notOpeningConnect": "Not opening? Connect stella desktop",
         "notPickedUpDescription": "stella desktop may not be running or connected to this account. Connect it, then retry.",
         "notPickedUpTitle": "stella desktop did not open the PDF",
+        "placementAttachmentsOnly": "This view shows the PDF's attachments, so the stamp can't go here. Sign without a stamp instead.",
         "placementBox": "Stamp position",
-        "placementConfirm": "Open stella desktop",
-        "placementDescription": "Choose how the signature appears in the PDF.",
+        "placementDrawTooLarge": "Too large for a stamp. Let go to use the largest size.",
+        "placementDrawTooSmall": "Too small for a stamp. Let go to use the smallest size.",
         "placementHint": "Drag the stamp to move it, or drag its corner to resize it. With the stamp selected, arrow keys move it and Shift with an arrow key resizes it.",
-        "placementInvisible": "Invisible signature",
-        "placementInvisibleDescription": "The signature is stored in the file without a mark on any page.",
-        "placementPageLabel": "Stamp page",
-        "placementPageOption": "Page {page, number} of {count, number}",
-        "placementPreview": "Preview of page {page, number}",
-        "placementPreviewFailed": "The page preview could not be loaded.",
+        "placementModeHint": "Drag on a page to draw the stamp, or click to place it.",
+        "placementPlaceOnLastPage": "Place on last page",
+        "placementRedrawHint": "Drag the stamp to adjust it, or draw a new one on any page.",
+        "placementSignInvisible": "Sign without stamp",
+        "placementSignVisible": "Sign with stamp",
         "placementTitle": "Sign PDF",
         "placementTooSmall": "This page is too small for a stamp. Choose another page.",
-        "placementVisible": "Visible stamp",
-        "placementVisibleDescription": "A box on the page shows who signed and when.",
         "preparingDescription": "Preparing the PDF for stella desktop.",
         "readOnlyDescription": "This document is read-only.",
         "signedDescription": "The signature was saved as version {versionNumber, number}.",

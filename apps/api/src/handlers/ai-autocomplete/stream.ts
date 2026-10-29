@@ -2,7 +2,11 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import { resolveCaching } from "@/api/lib/ai-config";
-import { memberAIAccessError } from "@/api/lib/ai-config-response";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import {
+  memberAIAccessError,
+  storedAIConfigUnreadableError,
+} from "@/api/lib/ai-config-response";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { applicationErrorMessage } from "@/api/lib/errors/application-error-message";
@@ -121,6 +125,10 @@ const autocompleteStream = createSafeRootHandler(
     request,
     user,
   }) {
+    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+      return Result.err(storedAIConfigUnreadableError(undefined));
+    }
+
     const accessError = memberAIAccessError(orgAIConfigStatus);
     if (accessError) {
       return Result.err(accessError);

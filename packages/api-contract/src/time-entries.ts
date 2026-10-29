@@ -496,6 +496,22 @@ export const TIME_APPROVAL_REFUSALS = [
 
 export type TimeApprovalRefusal = (typeof TIME_APPROVAL_REFUSALS)[number];
 
+/**
+ * Why the API refuses to return one time entry to draft: the approval
+ * refusals a return can reach. Returning never prices, so never `unpriced`.
+ */
+export const TIME_RETURN_REFUSALS = [
+  "not_found",
+  "not_approver",
+  "not_submitted",
+  "wrong_status",
+  "running_timer",
+  "time_period_locked",
+  "invalid_entry",
+] as const satisfies readonly TimeApprovalRefusal[];
+
+export type TimeReturnRefusal = (typeof TIME_RETURN_REFUSALS)[number];
+
 const timeApprovalBatchSchema = v.object({
   results: v.array(
     v.variant("status", [
@@ -550,7 +566,21 @@ export const parseTimeSubmitBatch = (input: unknown) => {
   return parsed.success ? parsed.output : null;
 };
 
-export const parseTimeEntryReturnResponse = (input: unknown) =>
-  isRecord(input) && typeof input.id === "string" && input.status === "draft"
-    ? { id: input.id, status: input.status }
-    : null;
+const timeReturnBatchSchema = v.object({
+  results: v.array(
+    v.variant("status", [
+      v.object({ id: v.string(), status: v.literal("returned") }),
+      v.object({
+        id: v.string(),
+        status: v.literal("refused"),
+        reason: v.picklist(TIME_RETURN_REFUSALS),
+      }),
+    ]),
+  ),
+});
+
+/** One outcome per requested id: returned to draft, or refused with its reason. */
+export const parseTimeReturnBatch = (input: unknown) => {
+  const parsed = v.safeParse(timeReturnBatchSchema, input);
+  return parsed.success ? parsed.output : null;
+};

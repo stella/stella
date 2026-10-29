@@ -9,7 +9,53 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type {
+  UnbackedProjectionKeys,
+  UnprojectedColumns,
+} from "@/api/lib/projection-totality";
+
+type InvoiceSendTableRow = typeof invoiceSends.$inferSelect;
+
+const UNPROJECTED_INVOICE_SEND_COLUMNS = [
+  // Tenant and invoice scope are established by the authorized route.
+  "organizationId",
+  "invoiceId",
+  // Sender attribution is joined to the current member and projected as a name.
+  "sentByUserId",
+  // Link credentials and revocation actor are never client data.
+  "tokenHash",
+  "revokedByUserId",
+] as const satisfies readonly (keyof InvoiceSendTableRow)[];
+
+const INVOICE_SEND_SELECTION = {
+  id: invoiceSends.id,
+  recipients: invoiceSends.recipients,
+  failedRecipients: invoiceSends.failedRecipients,
+  message: invoiceSends.message,
+  replyTo: invoiceSends.replyTo,
+  language: invoiceSends.language,
+  deliveryStatus: invoiceSends.deliveryStatus,
+  expiresAt: invoiceSends.expiresAt,
+  revokedAt: invoiceSends.revokedAt,
+  firstViewedAt: invoiceSends.firstViewedAt,
+  createdAt: invoiceSends.createdAt,
+} as const;
+
+type MissingInvoiceSendColumn = UnprojectedColumns<
+  InvoiceSendTableRow,
+  typeof INVOICE_SEND_SELECTION,
+  (typeof UNPROJECTED_INVOICE_SEND_COLUMNS)[number]
+>;
+type UnexpectedInvoiceSendColumn = UnbackedProjectionKeys<
+  InvoiceSendTableRow,
+  typeof INVOICE_SEND_SELECTION,
+  (typeof UNPROJECTED_INVOICE_SEND_COLUMNS)[number]
+>;
+
+true satisfies MissingInvoiceSendColumn extends never ? true : never;
+true satisfies UnexpectedInvoiceSendColumn extends never ? true : never;
 
 /** The client's addresses a send starts from: primary first, each once. */
 const defaultRecipientsOf = (
@@ -79,35 +125,27 @@ const listInvoiceSends = createSafeHandler(
                 where: { id: { eq: invoice.sellerProfileId } },
                 columns: { email: true },
               });
-        const sends = await tx
-          .select({
-            id: invoiceSends.id,
-            recipients: invoiceSends.recipients,
-            failedRecipients: invoiceSends.failedRecipients,
-            message: invoiceSends.message,
-            replyTo: invoiceSends.replyTo,
-            language: invoiceSends.language,
-            deliveryStatus: invoiceSends.deliveryStatus,
-            expiresAt: invoiceSends.expiresAt,
-            revokedAt: invoiceSends.revokedAt,
-            firstViewedAt: invoiceSends.firstViewedAt,
-            createdAt: invoiceSends.createdAt,
-            sentById: authUser.id,
-            sentByName: authUser.name,
-          })
-          .from(invoiceSends)
-          // A sender is named while still a member of this organization.
-          .leftJoin(
-            member,
-            and(
-              eq(member.userId, invoiceSends.sentByUserId),
-              eq(member.organizationId, invoiceSends.organizationId),
-            ),
-          )
-          .leftJoin(authUser, eq(authUser.id, member.userId))
-          .where(eq(invoiceSends.invoiceId, invoice.id))
-          .orderBy(desc(invoiceSends.createdAt), desc(invoiceSends.id))
-          .limit(MAX_LISTED_SENDS);
+        const sends = await readBounded(
+          tx
+            .select({
+              ...INVOICE_SEND_SELECTION,
+              sentById: authUser.id,
+              sentByName: authUser.name,
+            })
+            .from(invoiceSends)
+            // A sender is named while still a member of this organization.
+            .leftJoin(
+              member,
+              and(
+                eq(member.userId, invoiceSends.sentByUserId),
+                eq(member.organizationId, invoiceSends.organizationId),
+              ),
+            )
+            .leftJoin(authUser, eq(authUser.id, member.userId))
+            .where(eq(invoiceSends.invoiceId, invoice.id))
+            .orderBy(desc(invoiceSends.createdAt), desc(invoiceSends.id)),
+          MAX_LISTED_SENDS,
+        );
         return {
           sends,
           clientEmails: client?.emails ?? null,
@@ -120,11 +158,19 @@ const listInvoiceSends = createSafeHandler(
         new HandlerError({ status: 404, message: "Invoice not found" }),
       );
     }
+    if (loaded.sends.type === "overflow") {
+      return Result.err(
+        new HandlerError({
+          status: 409,
+          message: "Invoice send history exceeds the read limit",
+        }),
+      );
+    }
     const now = new Date();
     return Result.ok({
       defaultRecipients: defaultRecipientsOf(loaded.clientEmails),
       replyTo: loaded.sellerEmail ?? user.email,
-      sends: loaded.sends.map(({ sentById, sentByName, ...row }) =>
+      sends: loaded.sends.rows.map(({ sentById, sentByName, ...row }) =>
         projectInvoiceSend(
           {
             ...row,

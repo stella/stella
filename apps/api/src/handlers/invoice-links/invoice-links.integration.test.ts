@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import {
   afterAll,
   beforeAll,
@@ -458,6 +458,31 @@ describe("sending an invoice by link", () => {
     });
   });
 
+  test("sending a zero-total invoice settles it and resending preserves its first sent time", async () => {
+    const invoiceId = await seedInvoice({ status: INVOICE_STATUS.FINALIZED });
+    await testDb
+      .update(invoices)
+      .set({ netAmount: cents(0), totalAmount: cents(0) })
+      .where(eq(invoices.id, invoiceId));
+    expect(await send(invoiceId, ["zero@example.test"])).toMatchObject({
+      invoiceStatus: INVOICE_STATUS.PAID,
+      deliveryStatus: "delivered",
+    });
+    const first = await testDb.query.invoices.findFirst({
+      where: { id: { eq: invoiceId } },
+    });
+    expect(first?.status).toBe(INVOICE_STATUS.PAID);
+    expect(first?.sentAt).toBeInstanceOf(Date);
+    expect(await send(invoiceId, ["zero-again@example.test"])).toMatchObject({
+      invoiceStatus: INVOICE_STATUS.PAID,
+    });
+    const again = await testDb.query.invoices.findFirst({
+      where: { id: { eq: invoiceId } },
+    });
+    expect(again?.sentAt).toEqual(first?.sentAt);
+    expect(await sendRows(invoiceId)).toHaveLength(2);
+  });
+
   test("never sends a draft or a void invoice", async () => {
     for (const status of [INVOICE_STATUS.DRAFT, INVOICE_STATUS.VOID]) {
       const invoiceId = await seedInvoice({ status });
@@ -594,6 +619,45 @@ describe("sending an invoice by link", () => {
 });
 
 describe("invoice send row security", () => {
+  test("the app role cannot insert or update an organization A send to reference an organization B invoice", async () => {
+    const ownInvoice = await seedInvoice({ status: INVOICE_STATUS.FINALIZED });
+    const foreignInvoice = await seedInvoice({
+      tenant: "B",
+      status: INVOICE_STATUS.FINALIZED,
+    });
+    await send(ownInvoice, ["tenant-fence@example.test"]);
+    const [existing] = await sendRows(ownInvoice);
+    expect(existing).toBeDefined();
+    if (existing === undefined) {
+      return panic("Expected the recorded invoice send");
+    }
+    const own = createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1);
+    const inserted = await own(
+      async (tx) =>
+        await tx.insert(invoiceSends).values({
+          id: createSafeId<"invoiceSend">(),
+          organizationId: ids.orgA,
+          invoiceId: foreignInvoice,
+          recipients: ["foreign@example.test"],
+          language: "cs",
+          replyTo: "billing@firm.example.test",
+          tokenHash: sha256Hex(createSafeId<"invoiceSend">()),
+          expiresAt: existing.expiresAt,
+        }),
+    );
+    expect(inserted.isErr()).toBe(true);
+    const updated = await own(
+      async (tx) =>
+        await tx
+          .update(invoiceSends)
+          .set({ invoiceId: foreignInvoice })
+          .where(eq(invoiceSends.id, existing.id)),
+    );
+    expect(updated.isErr()).toBe(true);
+    expect(await sendRows(foreignInvoice)).toEqual([]);
+    expect(await sendRows(ownInvoice)).toHaveLength(1);
+  });
+
   test("a send is visible only with its invoice, and the app role cannot delete one", async () => {
     const invoiceId = await seedInvoice({ status: INVOICE_STATUS.FINALIZED });
     await send(invoiceId, ["rls@example.test"]);

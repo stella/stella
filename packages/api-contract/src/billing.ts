@@ -180,6 +180,22 @@ type MissingInvoiceLineSource = Exclude<
 
 true satisfies MissingInvoiceLineSource extends never ? true : never;
 
+/** How a client settled (part of) an invoice. */
+export const INVOICE_PAYMENT_METHODS = [
+  "bank_transfer",
+  "card",
+  "cash",
+  "other",
+] as const;
+
+export type InvoicePaymentMethod = (typeof INVOICE_PAYMENT_METHODS)[number];
+
+/** Persisted payment text bounds shared by HTTP schemas and the payment form. */
+export const INVOICE_PAYMENT_INPUT_LIMITS = {
+  referenceMaxChars: 140,
+  noteMaxChars: 1000,
+} as const;
+
 /** Payment terms the invoice composer offers as one-click choices. */
 export const INVOICE_DUE_DAY_PRESETS = [7, 14, 30] as const;
 

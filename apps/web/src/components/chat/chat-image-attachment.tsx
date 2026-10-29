@@ -2,7 +2,13 @@ import { useState } from "react";
 
 import { useTranslations } from "use-intl";
 
-import { Dialog, DialogPanel, DialogPopup, DialogTitle } from "@stll/ui/dialog";
+import {
+  Dialog,
+  DIALOG_MOBILE_LAYOUT,
+  DialogPanel,
+  DialogPopup,
+  DialogTitle,
+} from "@stll/ui/dialog";
 
 type ChatImageAttachmentProps = {
   alt: string;
@@ -38,7 +44,10 @@ export const ChatImageAttachment = ({
         />
       </button>
       <Dialog onOpenChange={setOpen} open={open}>
-        <DialogPopup bottomStickOnMobile={false} className="max-w-4xl">
+        <DialogPopup
+          mobileLayout={DIALOG_MOBILE_LAYOUT.centered}
+          className="max-w-4xl"
+        >
           <DialogTitle className="sr-only">{alt}</DialogTitle>
           <DialogPanel className="flex justify-center p-2">
             <img

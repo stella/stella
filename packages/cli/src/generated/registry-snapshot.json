@@ -3164,8 +3164,7 @@
                     },
                     "year": {
                       "type": "integer",
-                      "minimum": 1000,
-                      "maximum": 9999
+                      "minimum": 1900
                     }
                   },
                   "required": ["precision", "year"],
@@ -3180,8 +3179,7 @@
                     },
                     "year": {
                       "type": "integer",
-                      "minimum": 1000,
-                      "maximum": 9999
+                      "minimum": 1900
                     },
                     "month": {
                       "type": "integer",
@@ -3201,8 +3199,7 @@
                     },
                     "year": {
                       "type": "integer",
-                      "minimum": 1000,
-                      "maximum": 9999
+                      "minimum": 1900
                     },
                     "month": {
                       "type": "integer",
@@ -3498,8 +3495,7 @@
                         },
                         "year": {
                           "type": "integer",
-                          "minimum": 1000,
-                          "maximum": 9999
+                          "minimum": 1900
                         }
                       },
                       "required": ["precision", "year"],
@@ -3514,8 +3510,7 @@
                         },
                         "year": {
                           "type": "integer",
-                          "minimum": 1000,
-                          "maximum": 9999
+                          "minimum": 1900
                         },
                         "month": {
                           "type": "integer",
@@ -3535,8 +3530,7 @@
                         },
                         "year": {
                           "type": "integer",
-                          "minimum": 1000,
-                          "maximum": 9999
+                          "minimum": 1900
                         },
                         "month": {
                           "type": "integer",

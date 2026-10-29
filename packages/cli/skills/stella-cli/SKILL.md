@@ -239,7 +239,7 @@ are omitted here. Input union keys are required unless marked `?`.
 - `stella contact save`
   - optional: --contact-id, --type (person|organization), --display-name, --first-name, --last-name, --organization-name, --notes, --nationality-codes
   - via `--input` only: date_of_birth
-  - date_of_birth: precision="year": year:integer; precision="month": year:integer, month:integer; precision="day": year:integer, month:integer, day:integer. Example: `--input '{"date_of_birth":{"precision":"year","year":1000}}'`
+  - date_of_birth: precision="year": year:integer; precision="month": year:integer, month:integer; precision="day": year:integer, month:integer, day:integer. Example: `--input '{"date_of_birth":{"precision":"year","year":1900}}'`
 - `stella document compare`
   - `--base-tracked-changes` — Tracked changes the base version already carries: accept compares its final text, keep leaves them in place, reject compares its original text. (enum: keep, accept, reject)
   - `--target-tracked-changes` — Tracked changes the target version already carries: accept compares its final text, keep leaves them in place, reject compares its original text. (enum: keep, accept, reject)
@@ -412,7 +412,7 @@ code (no envelope) still maps to 5; anything else falls to 4.
 
 ## Capability commands (full surface)
 
-Beyond the curated commands above, the CLI generates 435
+Beyond the curated commands above, the CLI generates 439
 capability commands from the server's capability catalog: every safe handler
 that is not a curated tool, reached through `read_capability` or `write_capability`
 paths. Every generated command lives at `stella capability <domain> <action>`;

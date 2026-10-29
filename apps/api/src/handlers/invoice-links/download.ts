@@ -23,6 +23,7 @@ import { ACCOUNT_ACCESS, createSafeTokenHandler } from "@/api/lib/api-handlers";
 import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { isInvoiceLinkTokenShape } from "@/api/lib/billing/invoice-links";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { TokenScopedDatabase } from "@/api/lib/root-scoped-db";
@@ -229,4 +230,10 @@ export const createDownloadInvoiceLinkFile = ({
     },
   );
 
-export default createDownloadInvoiceLinkFile();
+const handler = createDownloadInvoiceLinkFile();
+declareAggregateMutation(handler, {
+  type: "independent",
+  reason:
+    "Reads a token-scoped invoice and records access; the first-view timestamp is a conditional idempotent update without changing invoice state.",
+});
+export default handler;

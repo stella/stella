@@ -29,6 +29,7 @@ import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { lockInvoiceInStatus } from "@/api/lib/db/aggregate-lock";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   isTransactionalEmailConfigured,
@@ -439,10 +440,10 @@ const recordDelivery = async (
     .update(invoiceSends)
     .set(delivery)
     .where(eq(invoiceSends.id, options.prepared.sendId));
-  if (sent?.isOk() === true) {
-    return Result.ok({ status: INVOICE_STATUS.SENT });
+  if (sent?.isErr() === true) {
+    return Result.err(sent.error);
   }
-  // Another write moved the invoice meanwhile; report where it stands.
+  // Sending may settle the invoice; report the status stored by the owner.
   const [after] = await tx
     .select({ status: invoices.status })
     .from(invoices)
@@ -564,5 +565,9 @@ export const createSendInvoice = ({
   );
 
 const sendInvoice = createSendInvoice();
+declareAggregateMutation(sendInvoice, {
+  type: "aggregate",
+  aggregates: ["workspace"],
+});
 
 export default sendInvoice;

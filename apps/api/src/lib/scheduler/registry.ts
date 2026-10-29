@@ -38,6 +38,10 @@ import {
   backfillCaseLawProvisionState,
 } from "@/api/lib/scheduler/tasks/case-law-provision-state-backfill";
 import {
+  RECONCILE_PUBLISHER_REMOVALS_TASK,
+  reconcilePublisherRemovalsTask,
+} from "@/api/lib/scheduler/tasks/case-law-publisher-removals";
+import {
   CENSUS_CASE_LAW_RAW_OBJECTS_TASK,
   censusCaseLawRawObjectsTask,
   RECONCILE_CASE_LAW_RAW_ROWS_TASK,
@@ -233,6 +237,7 @@ const noopTask: SchedulerTask = ({ logger }) => {
 };
 
 const SCHEDULER_TASKS = {
+  [RECONCILE_PUBLISHER_REMOVALS_TASK]: reconcilePublisherRemovalsTask,
   [AUDIT_SCHEDULER_PAUSES_TASK]: auditSchedulerPauses,
   [REDACT_HOSTED_USAGE_WEBHOOK_EVENTS_TASK]: redactHostedUsageWebhookEvents,
   [BACKFILL_AGENT_CLIENT_STORAGE_TASK]: backfillAgentClientStorage,

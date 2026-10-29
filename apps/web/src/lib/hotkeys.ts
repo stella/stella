@@ -82,6 +82,7 @@ type ShortcutDescriptorShape = {
   readonly binding: ShortcutBinding;
   readonly labelKey: ShortcutLabelKey;
   readonly contexts: readonly ShortcutContext[];
+  readonly capability?: "timeBilling";
 };
 
 type ShortcutGroupShape = {
@@ -135,6 +136,7 @@ export const SHORTCUT_GROUPS = [
         binding: { type: "hotkey", hotkey: HOTKEYS.LOG_TIME },
         labelKey: "common.logTime",
         contexts: ["global"],
+        capability: "timeBilling",
       },
       {
         id: "newChat",
@@ -224,6 +226,21 @@ export type ShortcutGroup = {
   readonly categoryKey: ShortcutCategoryKey;
   readonly shortcuts: readonly ShortcutDescriptor[];
 };
+
+export type ShortcutCapabilities = { readonly timeBilling: boolean };
+
+/** The same capability projection is consumed by help, palettes, and binders. */
+export const availableShortcutGroups = (
+  groups: readonly ShortcutGroup[],
+  capabilities: ShortcutCapabilities,
+): ShortcutGroup[] =>
+  groups.map((group) => ({
+    ...group,
+    shortcuts: group.shortcuts.filter(
+      (shortcut) =>
+        shortcut.capability === undefined || capabilities[shortcut.capability],
+    ),
+  }));
 
 export type HotkeyPlatform = ReturnType<typeof detectPlatform>;
 

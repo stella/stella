@@ -1946,15 +1946,57 @@ export const invoicePolicies = (table: InvoicePolicyColumns) => {
   ];
 };
 
-export const invoiceLineVisibilityPolicy = (table: {
-  invoiceId: p.AnyPgColumn;
-}) =>
-  p.pgPolicy("invoice_lines_complete_invoice", {
+/**
+ * A row that belongs to one invoice (a line, a payment) is visible and
+ * writable only while its invoice is: the invoice's own policy decides
+ * whole-invoice access, so a caller never sees part of an invoice it cannot open.
+ */
+export const completeInvoiceVisibilityPolicy = (
+  tableName: "invoice_lines" | "invoice_payments" | "invoice_sends",
+  table: { invoiceId: p.AnyPgColumn },
+) =>
+  p.pgPolicy(`${tableName}_complete_invoice`, {
     as: "restrictive",
     for: "all",
     to: stella,
     using: sql`EXISTS (SELECT 1 FROM public.invoices i WHERE i.id = ${table.invoiceId})`,
     withCheck: sql`EXISTS (SELECT 1 FROM public.invoices i WHERE i.id = ${table.invoiceId})`,
+  });
+
+const INVOICE_PAYMENTS_OWNER = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.invoice_payments'::regclass)`;
+
+/**
+ * FORCE RLS applies to the table owner, which runs the online backfill that
+ * records the settlement of invoices marked paid before payment records
+ * existed. It reads every payment (so a repaired invoice leaves its selection)
+ * and inserts only legacy-origin, recorder-less settlements; it never updates or deletes.
+ */
+export const invoicePaymentOwnerBackfillPolicies = (
+  table: { origin: p.AnyPgColumn; recordedBy: p.AnyPgColumn },
+  legacyOrigin: SQL,
+) => [
+  p.pgPolicy("invoice_payments_owner_select", {
+    for: "select",
+    to: "public",
+    using: INVOICE_PAYMENTS_OWNER,
+  }),
+  p.pgPolicy("invoice_payments_owner_backfill_insert", {
+    for: "insert",
+    to: "public",
+    withCheck: sql`${INVOICE_PAYMENTS_OWNER} AND ${table.origin} = ${legacyOrigin} AND ${table.recordedBy} IS NULL`,
+  }),
+];
+
+/**
+ * Payments are reversed by voiding, never removed: the request role cannot
+ * delete one. The organization's own deletion still cascades.
+ */
+export const invoicePaymentNoDeletePolicy = () =>
+  p.pgPolicy("invoice_payments_no_delete", {
+    as: "restrictive",
+    for: "delete",
+    to: stella,
+    using: sql`false`,
   });
 
 // FORCE RLS applies to the table owner, which runs the SECURITY DEFINER

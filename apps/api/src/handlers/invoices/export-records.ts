@@ -10,6 +10,7 @@ import type {
 } from "@stll/invoicing";
 import type { CentsAmount } from "@stll/money";
 import { Temporal, todayFor } from "@stll/time";
+import type { TimeZoneId } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
 import { INVOICE_STATUS } from "@/api/db/schema";
@@ -27,6 +28,43 @@ import { selectTimekeeperNames } from "@/api/lib/billing/timekeeper-names";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { readOrganizationTimeZone } from "@/api/lib/organization-time-zone";
+
+/**
+ * The day an invoice was settled: the date of the latest payment still
+ * counted, which is the one that reached its total. An invoice marked paid
+ * before payments were recorded carries only the moment it was marked.
+ */
+export const exportPaidDate = (
+  invoice: {
+    status: string;
+    paidAt: Date | null;
+    payments: readonly { paidOn: string; voidedAt: Date | null }[];
+  },
+  timeZone: TimeZoneId,
+): string | null => {
+  if (invoice.status !== INVOICE_STATUS.PAID) {
+    return null;
+  }
+  let settledOn: string | null = null;
+  for (const payment of invoice.payments) {
+    // ISO dates order as text.
+    if (
+      payment.voidedAt === null &&
+      (settledOn === null || payment.paidOn > settledOn)
+    ) {
+      settledOn = payment.paidOn;
+    }
+  }
+  if (settledOn !== null) {
+    return settledOn;
+  }
+  return invoice.paidAt === null
+    ? null
+    : todayFor(
+        timeZone,
+        Temporal.Instant.fromEpochMilliseconds(invoice.paidAt.getTime()),
+      ).toString();
+};
 
 /**
  * The most invoices one export holds. Every line is built in memory before
@@ -418,13 +456,7 @@ export const toExportRecords = (
       issueDate: invoice.invoiceDate,
       taxableSupplyDate: invoice.taxableSupplyDate,
       dueDate: invoice.dueDate,
-      paidDate:
-        invoice.paidAt === null
-          ? null
-          : todayFor(
-              loaded.timeZone,
-              Temporal.Instant.fromEpochMilliseconds(invoice.paidAt.getTime()),
-            ).toString(),
+      paidDate: exportPaidDate(invoice, loaded.timeZone),
       currency: invoice.currency,
       reference: invoice.reference,
       notes: invoice.notes,

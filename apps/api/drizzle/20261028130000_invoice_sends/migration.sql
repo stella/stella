@@ -31,7 +31,9 @@ CREATE TABLE "invoice_sends" (
 ALTER TABLE "invoice_sends" ADD CONSTRAINT "invoice_sends_organization_id_organization_id_fk" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE;--> statement-breakpoint
 -- A send goes with its invoice: deleting the invoice (a draft, or the review
 -- reset's billing stage) removes its delivery history in the same statement.
-ALTER TABLE "invoice_sends" ADD CONSTRAINT "invoice_sends_invoice_organization_fk" FOREIGN KEY ("invoice_id","organization_id") REFERENCES "invoices"("id","organization_id") ON DELETE CASCADE;--> statement-breakpoint
+-- The invoice tenant key is installed by the later online phase. Row security
+-- and token-scoped joins enforce the organization boundary.
+ALTER TABLE "invoice_sends" ADD CONSTRAINT "invoice_sends_invoice_id_invoices_id_fk" FOREIGN KEY ("invoice_id") REFERENCES "invoices"("id") ON DELETE CASCADE;--> statement-breakpoint
 -- The history outlives the people in it: a deleted account leaves a null.
 ALTER TABLE "invoice_sends" ADD CONSTRAINT "invoice_sends_sent_by_user_id_user_id_fk" FOREIGN KEY ("sent_by_user_id") REFERENCES "user"("id") ON DELETE SET NULL;--> statement-breakpoint
 ALTER TABLE "invoice_sends" ADD CONSTRAINT "invoice_sends_revoked_by_user_id_user_id_fk" FOREIGN KEY ("revoked_by_user_id") REFERENCES "user"("id") ON DELETE SET NULL;--> statement-breakpoint

@@ -20,6 +20,7 @@ import {
   selectTimekeeperNames,
   timekeeperIdsOf,
 } from "@/api/lib/billing/timekeeper-names";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import { LIMITS } from "@/api/lib/limits";
 import { readOrganizationTimeZone } from "@/api/lib/organization-time-zone";
 
@@ -42,78 +43,89 @@ export const loadLinkedInvoiceData = async (
     .from(
       sql`public.invoice_link_seller(${caller.tokenHash}) AS seller_profiles`,
     );
-  const lines = await tx
-    .select({
-      id: invoiceLines.id,
-      workspaceId: invoiceLines.workspaceId,
-      position: invoiceLines.position,
-      recordedDescription: invoiceLines.recordedDescription,
-      recordedQuantity: invoiceLines.recordedQuantity,
-      recordedUnit: invoiceLines.recordedUnit,
-      recordedUnitPrice: invoiceLines.recordedUnitPrice,
-      recordedNetAmount: invoiceLines.recordedNetAmount,
-      description: invoiceLines.description,
-      quantity: invoiceLines.quantity,
-      unit: invoiceLines.unit,
-      unitPrice: invoiceLines.unitPrice,
-      vatRateBps: invoiceLines.vatRateBps,
-      vatTreatment: invoiceLines.vatTreatment,
-      exemptionReason: invoiceLines.exemptionReason,
-      netAmount: invoiceLines.netAmount,
-      vatAmount: invoiceLines.vatAmount,
-      grossAmount: invoiceLines.grossAmount,
-      source: invoiceLines.source,
-      billingPurpose: invoiceLines.billingPurpose,
-      timeEntryId: invoiceLines.timeEntryId,
-      expenseId: invoiceLines.expenseId,
-      releasedAt: invoiceLines.releasedAt,
-    } satisfies Record<keyof typeof INVOICE_LINE_COLUMNS, unknown>)
-    .from(sql`public.invoice_link_lines(${caller.tokenHash}) AS invoice_lines`)
-    .orderBy(asc(invoiceLines.position), asc(invoiceLines.id))
-    .limit(LIMITS.invoiceLinesPerInvoice + 1);
-  const time = await tx
-    .select({
-      id: timeEntries.id,
-      workspaceId: timeEntries.workspaceId,
-      dateWorked: timeEntries.dateWorked,
-      billedMinutes: timeEntries.billedMinutes,
-      rateAtEntry: timeEntries.rateAtEntry,
-      currency: timeEntries.currency,
-      narrative: timeEntries.narrative,
-      invoiceNarrative: timeEntries.invoiceNarrative,
-      noCharge: timeEntries.noCharge,
-      status: timeEntries.status,
-      invoiceAttachment: timeEntries.invoiceAttachment,
-      userId: timeEntries.userId,
-      taskCode: timeEntries.taskCode,
-      activityCode: timeEntries.activityCode,
-    })
-    .from(sql`public.invoice_link_time(${caller.tokenHash}) AS time_entries`)
-    .orderBy(asc(timeEntries.dateWorked), asc(timeEntries.id))
-    .limit(LIMITS.invoiceSourceItemsPerKind + 1);
-  const linkedExpenses = await tx
-    .select({
-      id: expenses.id,
-      workspaceId: expenses.workspaceId,
-      dateIncurred: expenses.dateIncurred,
-      amount: expenses.amount,
-      currency: expenses.currency,
-      category: expenses.category,
-      description: expenses.description,
-      invoiceDescription: expenses.invoiceDescription,
-      billable: expenses.billable,
-      markup: expenses.markup,
-    })
-    .from(sql`public.invoice_link_expenses(${caller.tokenHash}) AS expenses`)
-    .orderBy(asc(expenses.dateIncurred), asc(expenses.id))
-    .limit(LIMITS.invoiceSourceItemsPerKind + 1);
+  const lineRead = await readBounded(
+    tx
+      .select({
+        id: invoiceLines.id,
+        workspaceId: invoiceLines.workspaceId,
+        position: invoiceLines.position,
+        recordedDescription: invoiceLines.recordedDescription,
+        recordedQuantity: invoiceLines.recordedQuantity,
+        recordedUnit: invoiceLines.recordedUnit,
+        recordedUnitPrice: invoiceLines.recordedUnitPrice,
+        recordedNetAmount: invoiceLines.recordedNetAmount,
+        description: invoiceLines.description,
+        quantity: invoiceLines.quantity,
+        unit: invoiceLines.unit,
+        unitPrice: invoiceLines.unitPrice,
+        vatRateBps: invoiceLines.vatRateBps,
+        vatTreatment: invoiceLines.vatTreatment,
+        exemptionReason: invoiceLines.exemptionReason,
+        netAmount: invoiceLines.netAmount,
+        vatAmount: invoiceLines.vatAmount,
+        grossAmount: invoiceLines.grossAmount,
+        source: invoiceLines.source,
+        billingPurpose: invoiceLines.billingPurpose,
+        timeEntryId: invoiceLines.timeEntryId,
+        expenseId: invoiceLines.expenseId,
+        releasedAt: invoiceLines.releasedAt,
+      } satisfies Record<keyof typeof INVOICE_LINE_COLUMNS, unknown>)
+      .from(
+        sql`public.invoice_link_lines(${caller.tokenHash}) AS invoice_lines`,
+      )
+      .orderBy(asc(invoiceLines.position), asc(invoiceLines.id)),
+    LIMITS.invoiceLinesPerInvoice,
+  );
+  const timeRead = await readBounded(
+    tx
+      .select({
+        id: timeEntries.id,
+        workspaceId: timeEntries.workspaceId,
+        dateWorked: timeEntries.dateWorked,
+        billedMinutes: timeEntries.billedMinutes,
+        rateAtEntry: timeEntries.rateAtEntry,
+        currency: timeEntries.currency,
+        narrative: timeEntries.narrative,
+        invoiceNarrative: timeEntries.invoiceNarrative,
+        noCharge: timeEntries.noCharge,
+        status: timeEntries.status,
+        invoiceAttachment: timeEntries.invoiceAttachment,
+        userId: timeEntries.userId,
+        taskCode: timeEntries.taskCode,
+        activityCode: timeEntries.activityCode,
+      })
+      .from(sql`public.invoice_link_time(${caller.tokenHash}) AS time_entries`)
+      .orderBy(asc(timeEntries.dateWorked), asc(timeEntries.id)),
+    LIMITS.invoiceSourceItemsPerKind,
+  );
+  const expenseRead = await readBounded(
+    tx
+      .select({
+        id: expenses.id,
+        workspaceId: expenses.workspaceId,
+        dateIncurred: expenses.dateIncurred,
+        amount: expenses.amount,
+        currency: expenses.currency,
+        category: expenses.category,
+        description: expenses.description,
+        invoiceDescription: expenses.invoiceDescription,
+        billable: expenses.billable,
+        markup: expenses.markup,
+      })
+      .from(sql`public.invoice_link_expenses(${caller.tokenHash}) AS expenses`)
+      .orderBy(asc(expenses.dateIncurred), asc(expenses.id)),
+    LIMITS.invoiceSourceItemsPerKind,
+  );
   if (
-    lines.length > LIMITS.invoiceLinesPerInvoice ||
-    time.length > LIMITS.invoiceSourceItemsPerKind ||
-    linkedExpenses.length > LIMITS.invoiceSourceItemsPerKind
+    lineRead.type === "overflow" ||
+    timeRead.type === "overflow" ||
+    expenseRead.type === "overflow"
   ) {
     panic("Invoice document exceeds its bounded line or source limit");
   }
+  const lines = lineRead.rows;
+  const time = timeRead.rows;
+  const linkedExpenses = expenseRead.rows;
   const matters = await tx
     .select({
       id: workspaces.id,
