@@ -989,9 +989,9 @@ export const emitAnonymizationRefusalMetric = (
 };
 
 const ACTION_RESPONSE_OVERSIZE_METRIC = "ActionResponseOversize";
-const TRANSCRIPTION_DURATION_CAPPED_METRIC = "TranscriptionDurationCapped";
+const TRANSCRIPTION_DURATION_MISMATCH_METRIC = "TranscriptionDurationMismatch";
 
-export const emitTranscriptionDurationCappedMetric = (
+export const emitTranscriptionDurationMismatchMetric = (
   modelId: TranscriptionModelId,
 ): void => {
   writeMetricLine({
@@ -1002,14 +1002,14 @@ export const emitTranscriptionDurationCappedMetric = (
           Namespace: METRIC_NAMESPACE,
           Dimensions: [[]],
           Metrics: [
-            { Name: TRANSCRIPTION_DURATION_CAPPED_METRIC, Unit: "Count" },
+            { Name: TRANSCRIPTION_DURATION_MISMATCH_METRIC, Unit: "Count" },
           ],
         },
       ],
     },
-    event: "transcription.duration_capped",
+    event: "transcription.duration_mismatch",
     modelId,
-    [TRANSCRIPTION_DURATION_CAPPED_METRIC]: 1,
+    [TRANSCRIPTION_DURATION_MISMATCH_METRIC]: 1,
   });
 };
 

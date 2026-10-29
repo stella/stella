@@ -147,7 +147,9 @@ export const dictationScalingScenario = {
     const endpoint = createDictationTranscribeEndpoint({
       transcribe: async () => {
         providerRequests += 1;
-        return await Promise.resolve(Result.ok(RESPONSE));
+        return await Promise.resolve(
+          Result.ok({ transcript: RESPONSE, admittedDurationMs: DURATION_MS }),
+        );
       },
       credential: async () =>
         await Promise.resolve(

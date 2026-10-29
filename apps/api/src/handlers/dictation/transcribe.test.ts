@@ -12,10 +12,11 @@ import {
   MAX_TRANSCRIPTION_AUDIO_SECONDS,
   MAX_TRANSCRIPTION_VOCABULARY_TERM_LENGTH,
   MAX_TRANSCRIPTION_VOCABULARY_TERMS,
+  TRANSCRIPTION_DURATION_TOLERANCE_MS,
 } from "@stll/api-contract/transcription";
 import { assertProperty } from "@stll/property-testing";
 
-import { makeWavAudioBytes } from "@/api/handlers/dictation/audio-fixtures.test-helper";
+import { makeM4aAudioBytes } from "@/api/handlers/dictation/audio-fixtures.test-helper";
 import { transcribeAudio } from "@/api/handlers/dictation/provider";
 import type { TranscriptionResult } from "@/api/handlers/dictation/provider";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
@@ -46,16 +47,22 @@ const TEXT = "K návrhu Žofie Černé a Ľubomíra Kováča.";
 const VOCABULARY = ["Žofia Černá", "Ľubomír Kováč"];
 const MODEL = "mistralai/voxtral-mini-transcribe";
 
-const wav = () =>
-  new File([makeWavAudioBytes()], "hlas.wav", { type: "audio/wav" });
+const audioChunk = (durationMs = 1234) =>
+  new File([makeM4aAudioBytes(durationMs)], "hlas.m4a", { type: "audio/mp4" });
 
-const fixture = (durationMs = 1234) => {
+const fixture = (
+  durationMs = 1234,
+  admittedDurationMs = Math.min(
+    durationMs,
+    MAX_TRANSCRIPTION_AUDIO_SECONDS * 1000,
+  ),
+) => {
   const context = createTestHandlerContext<DictationContext>({
     audit: NO_AUDIT,
     safeDb: NO_DB,
     scopedDb: NO_DB,
     body: {
-      file: wav(),
+      file: audioChunk(admittedDurationMs),
       modelId: MODEL,
       language: "cs",
       vocabulary: VOCABULARY,
@@ -255,22 +262,34 @@ describe("dictation operation request matrix", () => {
     1,
     MAX_TRANSCRIPTION_AUDIO_SECONDS * 1000,
     MAX_TRANSCRIPTION_AUDIO_SECONDS * 1000 + 1,
+    MAX_TRANSCRIPTION_AUDIO_SECONDS * 1000 +
+      TRANSCRIPTION_DURATION_TOLERANCE_MS,
+    MAX_TRANSCRIPTION_AUDIO_SECONDS * 1000 +
+      TRANSCRIPTION_DURATION_TOLERANCE_MS +
+      1,
+    1_000_000,
     Number.MAX_SAFE_INTEGER,
   ])(
-    "settles the bounded duration while returning the full transcript for %s milliseconds",
+    "settles the reported duration against admitted media while returning the full transcript for %s milliseconds",
     async (durationMs) => {
       const f = fixture(durationMs);
       const result = await executeDictation(f.context, {
         ...f.dependencies,
         transcribe: async () =>
           Result.ok({
-            text: TEXT,
-            segments: [],
-            durationMs,
-            detectedLanguage: "cs",
-            modelId: MODEL,
-            vocabulary: "not-supported",
-          } satisfies TranscriptionResult),
+            transcript: {
+              text: TEXT,
+              segments: [],
+              durationMs,
+              detectedLanguage: "cs",
+              modelId: MODEL,
+              vocabulary: "not-supported",
+            } satisfies TranscriptionResult,
+            admittedDurationMs: Math.min(
+              durationMs,
+              MAX_TRANSCRIPTION_AUDIO_SECONDS * 1000,
+            ),
+          }),
       });
       expect(result.isOk()).toBe(true);
       if (result.isErr()) {
@@ -278,12 +297,14 @@ describe("dictation operation request matrix", () => {
       }
       expect(result.value.text).toBe(TEXT);
       expect(result.value.durationMs).toBe(durationMs);
+      const maximumDurationMs = MAX_TRANSCRIPTION_AUDIO_SECONDS * 1000;
+      expect(result.value).not.toHaveProperty("admittedDurationMs");
       expect(f.settlements.at(0)?.result).toEqual({
         modelId: MODEL,
-        durationMs: Math.min(
-          durationMs,
-          MAX_TRANSCRIPTION_AUDIO_SECONDS * 1000,
-        ),
+        durationMs:
+          durationMs > maximumDurationMs + TRANSCRIPTION_DURATION_TOLERANCE_MS
+            ? durationMs
+            : Math.min(durationMs, maximumDurationMs),
       });
       expect(f.preflightRequirements).toEqual([
         transcriptionUsageUnits({
@@ -296,36 +317,41 @@ describe("dictation operation request matrix", () => {
     },
   );
 
-  test("duration cap emits catalog metadata only for overbound clips", async () => {
+  test("duration mismatch emits catalog metadata only beyond the admitted timing tolerance", async () => {
     const lines: string[] = [];
     setMetricLineSinkForTesting((line) => {
       lines.push(line);
     });
     try {
-      for (const durationMs of [1234, MAX_TRANSCRIPTION_AUDIO_SECONDS * 1000]) {
+      for (const durationMs of [
+        1234,
+        MAX_TRANSCRIPTION_AUDIO_SECONDS * 1000,
+        MAX_TRANSCRIPTION_AUDIO_SECONDS * 1000 +
+          TRANSCRIPTION_DURATION_TOLERANCE_MS,
+      ]) {
         const f = fixture(durationMs);
         expect((await executeDictation(f.context, f.dependencies)).isOk()).toBe(
           true,
         );
       }
       expect(lines).toEqual([]);
-      const f = fixture(MAX_TRANSCRIPTION_AUDIO_SECONDS * 1000 + 1);
+      const f = fixture(1234, 1000);
       expect((await executeDictation(f.context, f.dependencies)).isOk()).toBe(
         true,
       );
       expect(lines).toHaveLength(1);
       const line = lines.at(0);
       if (line === undefined) {
-        throw new TypeError("Expected duration cap metric");
+        throw new TypeError("Expected duration mismatch metric");
       }
       const record: unknown = JSON.parse(line);
       expect(record).toEqual({
         _aws: expect.any(Object),
-        event: "transcription.duration_capped",
+        event: "transcription.duration_mismatch",
         modelId: MODEL,
-        TranscriptionDurationCapped: 1,
+        TranscriptionDurationMismatch: 1,
       });
-      for (const content of [TEXT, ...VOCABULARY, "hlas.wav"]) {
+      for (const content of [TEXT, ...VOCABULARY, "hlas.m4a"]) {
         expect(line).not.toContain(content);
       }
     } finally {
@@ -333,13 +359,23 @@ describe("dictation operation request matrix", () => {
     }
   });
 
-  test("dictation settlement cost is monotone and bounded by preflight for every available model", async () => {
+  test("honest media timing keeps settlement monotone and within preflight for every available model", async () => {
     await assertProperty(
-      "dictation settlement cost is monotone and bounded by preflight for every available model",
+      "honest media timing keeps settlement monotone and within preflight for every available model",
       fc.asyncProperty(
         fc.tuple(
-          fc.integer({ min: 1, max: MAX_TRANSCRIPTION_AUDIO_SECONDS * 10_000 }),
-          fc.integer({ min: 1, max: MAX_TRANSCRIPTION_AUDIO_SECONDS * 10_000 }),
+          fc.integer({
+            min: 1,
+            max:
+              MAX_TRANSCRIPTION_AUDIO_SECONDS * 1000 +
+              TRANSCRIPTION_DURATION_TOLERANCE_MS,
+          }),
+          fc.integer({
+            min: 1,
+            max:
+              MAX_TRANSCRIPTION_AUDIO_SECONDS * 1000 +
+              TRANSCRIPTION_DURATION_TOLERANCE_MS,
+          }),
         ),
         async ([a, b]) => {
           let exercised = 0;
@@ -363,7 +399,7 @@ describe("dictation operation request matrix", () => {
                 const context = {
                   ...f.context,
                   managedAIResidency: residency,
-                  body: { ...f.context.body, modelId },
+                  body: { ...f.context.body, modelId, vocabulary: undefined },
                 } satisfies DictationContext;
                 const result = await executeDictation(context, f.dependencies);
                 expect(result.isOk()).toBe(true);
@@ -536,7 +572,7 @@ describe("dictation input boundary", () => {
     for (const language of ["cs", "sk"]) {
       expect(
         v.safeParse(dictationBodySchema, {
-          file: wav(),
+          file: audioChunk(),
           modelId: MODEL,
           language,
           vocabulary: JSON.stringify(VOCABULARY),
@@ -575,7 +611,7 @@ describe("dictation input boundary", () => {
     ]) {
       expect(
         v.safeParse(dictationBodySchema, {
-          file: wav(),
+          file: audioChunk(),
           modelId: MODEL,
           ...patch,
         }).success,

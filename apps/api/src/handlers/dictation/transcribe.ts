@@ -10,6 +10,7 @@ import {
   MAX_TRANSCRIPTION_AUDIO_SECONDS,
   MAX_TRANSCRIPTION_MULTIPART_BYTES,
   TRANSCRIPTION_AUDIO_MEDIA_TYPES,
+  TRANSCRIPTION_DURATION_TOLERANCE_MS,
 } from "@stll/api-contract/transcription";
 import { classifyFailure } from "@stll/errors";
 
@@ -37,7 +38,7 @@ import { getManagedOpenRouterCredential } from "@/api/lib/chat/openrouter-creden
 import { managedProviderUnavailable } from "@/api/lib/chat/provider-data-policy";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { emitTranscriptionDurationCappedMetric } from "@/api/lib/observability/request-metrics";
+import { emitTranscriptionDurationMismatchMetric } from "@/api/lib/observability/request-metrics";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 import { transcriptionUsageUnits } from "@/api/lib/usage/unit-model";
@@ -302,7 +303,7 @@ export const executeDictation = async (
       ownKey === undefined
         ? yield* Result.await(dependencies.credential(admission.modelTier))
         : { apiKey: ownKey };
-    const result = yield* Result.await(
+    const { transcript: result, admittedDurationMs } = yield* Result.await(
       dependencies.transcribe({
         audio: body.file,
         modelId: body.modelId,
@@ -318,15 +319,20 @@ export const executeDictation = async (
         signal: ctx.request.signal,
       }),
     );
-    if (result.durationMs > maximumDurationMs) {
-      emitTranscriptionDurationCappedMetric(body.modelId);
+    const durationMismatch =
+      result.durationMs >
+      admittedDurationMs + TRANSCRIPTION_DURATION_TOLERANCE_MS;
+    if (durationMismatch) {
+      emitTranscriptionDurationMismatchMetric(body.modelId);
     }
     yield* Result.await(
       dependencies.settle({
         caller: usageCaller,
         result: {
           modelId: result.modelId,
-          durationMs: Math.min(result.durationMs, maximumDurationMs),
+          durationMs: durationMismatch
+            ? result.durationMs
+            : Math.min(result.durationMs, maximumDurationMs),
         },
         workspaceId,
         isByok,

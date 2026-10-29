@@ -318,7 +318,12 @@ type TranscribeAudioOptions = {
   scheduleTimeout?: WithTimeoutScheduler | undefined;
 };
 
-type TranscribeAudioResult = Result<TranscriptionResult, HandlerError>;
+export type AdmittedTranscription = {
+  transcript: TranscriptionResult;
+  admittedDurationMs: number;
+};
+
+type TranscribeAudioResult = Result<AdmittedTranscription, HandlerError>;
 
 export const transcribeAudio = async ({
   audio,
@@ -441,5 +446,11 @@ export const transcribeAudio = async ({
   if (fetched.isErr()) {
     return Result.err(fetched.error);
   }
-  return fetched.value;
+  if (fetched.value.isErr()) {
+    return Result.err(fetched.value.error);
+  }
+  return Result.ok({
+    transcript: fetched.value.value,
+    admittedDurationMs: duration.value,
+  });
 };

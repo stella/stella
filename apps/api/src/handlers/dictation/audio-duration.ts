@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import {
@@ -129,11 +129,22 @@ const readWavDuration = (
   return boundedDuration(Math.ceil((dataSize * 1000) / format.byteRate));
 };
 
-type Container = {
-  start: number;
-  end: number;
-  kind: "root" | "moov" | "trak" | "mdia";
+const MP4_CONTAINER_KINDS = ["moov", "trak", "mdia", "minf", "stbl"] as const;
+type Mp4ContainerKind = (typeof MP4_CONTAINER_KINDS)[number];
+type Mp4Duration = { durationMs: number; scale: bigint; ticks: bigint };
+type SampleTiming = { ticks: bigint; sampleCount: bigint; entries: number };
+type TrackMetadata = {
+  header?: Mp4Duration;
+  handler?: "soun" | "vide";
+  timing?: SampleTiming;
+  sampleCount?: bigint;
 };
+type Container = { start: number; end: number } & (
+  | { kind: "root" | "moov" | "trak" }
+  | { kind: "mdia" | "minf" | "stbl"; track: TrackMetadata }
+);
+const isMp4ContainerKind = (kind: string): kind is Mp4ContainerKind =>
+  MP4_CONTAINER_KINDS.some((candidate) => candidate === kind);
 type Mp4Box = { kind: string; payload: number; end: number };
 
 type ReadBoxOptions = {
@@ -174,10 +185,25 @@ const readBox = ({
     : Result.ok({ kind, payload: start + 16, end: start + parsed.value });
 };
 
+type DurationTicksOptions = { ticks: bigint; scale: bigint };
+const durationFromTicks = ({
+  ticks,
+  scale,
+}: DurationTicksOptions): Result<number, HandlerError<422>> => {
+  const millis = (ticks * 1000n + scale - 1n) / scale;
+  if (millis > BigInt(MAX_DURATION_MS)) {
+    return Result.err(tooLong());
+  }
+  const parsed = parseIntegerToken(millis.toString(), { sign: "unsigned" });
+  return parsed.isErr()
+    ? Result.err(createUnreadableAudioError())
+    : boundedDuration(parsed.value);
+};
+
 const readMp4DurationField = (
   bytes: Uint8Array,
   { kind, payload, end }: Mp4Box,
-): Result<number, HandlerError<422>> => {
+): Result<Mp4Duration, HandlerError<422>> => {
   const version = bytes.at(payload);
   if (version !== 0 && version !== 1) {
     return Result.err(createUnreadableAudioError());
@@ -204,44 +230,297 @@ const readMp4DurationField = (
   ) {
     return Result.err(createUnreadableAudioError());
   }
-  const millis = (ticks * 1000n + scale - 1n) / scale;
-  if (millis > BigInt(MAX_DURATION_MS)) {
-    return Result.err(tooLong());
+  return durationFromTicks({ ticks, scale }).map((durationMs) => ({
+    durationMs,
+    ticks,
+    scale,
+  }));
+};
+
+type ReadSampleTimingOptions = {
+  bytes: Uint8Array;
+  box: Mp4Box;
+  remainingEntries: number;
+};
+const readSampleTiming = ({
+  bytes,
+  box: { payload, end },
+  remainingEntries,
+}: ReadSampleTimingOptions): Result<SampleTiming, HandlerError<422>> => {
+  if (end - payload < 8) {
+    return Result.err(createUnreadableAudioError());
   }
-  const parsed = parseIntegerToken(millis.toString(), { sign: "unsigned" });
-  return parsed.isErr()
-    ? Result.err(createUnreadableAudioError())
-    : boundedDuration(parsed.value);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const entries = view.getUint32(payload + 4);
+  if (
+    view.getUint32(payload) !== 0 ||
+    entries === 0 ||
+    entries > remainingEntries ||
+    end - payload !== 8 + entries * 8
+  ) {
+    return Result.err(createUnreadableAudioError());
+  }
+  let ticks = 0n;
+  let sampleCount = 0n;
+  const maximum = BigInt(Number.MAX_SAFE_INTEGER);
+  // STTS entries contain sample count and decode delta in the MDHD timescale.
+  // https://developer.apple.com/documentation/quicktime-file-format/time-to-sample_atom
+  for (let index = 0; index < entries; index++) {
+    const offset = payload + 8 + index * 8;
+    const count = BigInt(view.getUint32(offset));
+    const delta = BigInt(view.getUint32(offset + 4));
+    if (count === 0n || delta === 0n) {
+      return Result.err(createUnreadableAudioError());
+    }
+    ticks += count * delta;
+    sampleCount += count;
+    if (ticks > maximum || sampleCount > maximum) {
+      return Result.err(createUnreadableAudioError());
+    }
+  }
+  return Result.ok({ ticks, sampleCount, entries });
+};
+
+type ReadSampleSizesOptions = {
+  bytes: Uint8Array;
+  box: Mp4Box;
+  mediaBytes: number;
+};
+const readSampleSizes = ({
+  bytes,
+  box: { kind, payload, end },
+  mediaBytes,
+}: ReadSampleSizesOptions): Result<bigint, HandlerError<422>> => {
+  if (end - payload < 12) {
+    return Result.err(createUnreadableAudioError());
+  }
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const count = view.getUint32(payload + 8);
+  if (view.getUint32(payload) !== 0 || count === 0 || count > mediaBytes) {
+    return Result.err(createUnreadableAudioError());
+  }
+  if (kind === "stsz") {
+    const size = view.getUint32(payload + 4);
+    const expectedBytes = size === 0 ? 12 + count * 4 : 12;
+    if (
+      end - payload !== expectedBytes ||
+      BigInt(size) * BigInt(count) > BigInt(mediaBytes)
+    ) {
+      return Result.err(createUnreadableAudioError());
+    }
+    return Result.ok(BigInt(count));
+  }
+  const fieldSize = view.getUint32(payload + 4);
+  if (
+    ![4, 8, 16].includes(fieldSize) ||
+    end - payload !== 12 + Math.ceil((count * fieldSize) / 8)
+  ) {
+    return Result.err(createUnreadableAudioError());
+  }
+  return Result.ok(BigInt(count));
 };
 
 const validFileType = (bytes: Uint8Array, box: Mp4Box) =>
   box.end - box.payload >= 8 &&
   (box.end - box.payload - 8) % 4 === 0 &&
   M4A_BRANDS.has(tagAt(bytes, box.payload));
+const readHandler = (
+  bytes: Uint8Array,
+  { payload, end }: Mp4Box,
+): Result<"soun" | "vide", HandlerError<422>> => {
+  if (
+    end - payload < 24 ||
+    new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(
+      payload,
+    ) !== 0
+  ) {
+    return Result.err(createUnreadableAudioError());
+  }
+  const handler = tagAt(bytes, payload + 8);
+  return handler === "soun" || handler === "vide"
+    ? Result.ok(handler)
+    : Result.err(createUnreadableAudioError());
+};
 
 type Mp4ScanState = {
   containers: Container[];
+  tracks: TrackMetadata[];
   hasFtyp: boolean;
   hasMoov: boolean;
-  hasMedia: boolean;
+  mediaBytes: number;
   maximum: number;
   chunks: number;
+  sampleEntries: number;
 };
-
-type ReadM4aContainerOptions = {
+type Mp4ReadOptions = {
   bytes: Uint8Array;
   container: Container;
   state: Mp4ScanState;
+};
+type ReadMp4LeafOptions = Mp4ReadOptions & { box: Mp4Box };
+const readMp4Leaf = ({
+  bytes,
+  container,
+  state,
+  box,
+}: ReadMp4LeafOptions): Result<void, HandlerError<422>> => {
+  switch (box.kind) {
+    case "ftyp":
+      if (
+        container.kind !== "root" ||
+        state.hasFtyp ||
+        !validFileType(bytes, box)
+      ) {
+        return Result.err(createUnreadableAudioError());
+      }
+      state.hasFtyp = true;
+      return Result.ok(undefined);
+    case "mdat":
+      if (container.kind !== "root" || box.end === box.payload) {
+        return Result.err(createUnreadableAudioError());
+      }
+      state.mediaBytes += box.end - box.payload;
+      return Result.ok(undefined);
+    case "mvhd": {
+      if (container.kind !== "moov") {
+        return Result.err(createUnreadableAudioError());
+      }
+      const duration = readMp4DurationField(bytes, box);
+      if (duration.isErr()) {
+        return Result.err(duration.error);
+      }
+      state.maximum = Math.max(state.maximum, duration.value.durationMs);
+      return Result.ok(undefined);
+    }
+    case "mdhd": {
+      if (container.kind !== "mdia" || container.track.header !== undefined) {
+        return Result.err(createUnreadableAudioError());
+      }
+      const duration = readMp4DurationField(bytes, box);
+      if (duration.isErr()) {
+        return Result.err(duration.error);
+      }
+      container.track.header = duration.value;
+      state.maximum = Math.max(state.maximum, duration.value.durationMs);
+      return Result.ok(undefined);
+    }
+    case "hdlr": {
+      if (container.kind !== "mdia" || container.track.handler !== undefined) {
+        return Result.err(createUnreadableAudioError());
+      }
+      const handler = readHandler(bytes, box);
+      if (handler.isErr()) {
+        return Result.err(handler.error);
+      }
+      container.track.handler = handler.value;
+      return Result.ok(undefined);
+    }
+    case "stts": {
+      if (container.kind !== "stbl" || container.track.timing !== undefined) {
+        return Result.err(createUnreadableAudioError());
+      }
+      const timing = readSampleTiming({
+        bytes,
+        box,
+        remainingEntries: MAX_CHUNKS - state.sampleEntries,
+      });
+      if (timing.isErr()) {
+        return Result.err(timing.error);
+      }
+      container.track.timing = timing.value;
+      state.sampleEntries += timing.value.entries;
+      return Result.ok(undefined);
+    }
+    case "stsz":
+    case "stz2": {
+      if (
+        container.kind !== "stbl" ||
+        container.track.sampleCount !== undefined
+      ) {
+        return Result.err(createUnreadableAudioError());
+      }
+      const count = readSampleSizes({
+        bytes,
+        box,
+        mediaBytes: state.mediaBytes,
+      });
+      if (count.isErr()) {
+        return Result.err(count.error);
+      }
+      container.track.sampleCount = count.value;
+      return Result.ok(undefined);
+    }
+    case "moof":
+    case "mvex":
+      return Result.err(createUnreadableAudioError());
+    default:
+      return Result.ok(undefined);
+  }
+};
+
+type QueueContainerOptions = Mp4ReadOptions & {
+  box: Mp4Box;
+  kind: Mp4ContainerKind;
+};
+const queueContainer = ({
+  container,
+  state,
+  box,
+  kind,
+}: QueueContainerOptions): Result<void, HandlerError<422>> => {
+  if (box.payload === box.end) {
+    return Result.err(createUnreadableAudioError());
+  }
+  const span = { start: box.payload, end: box.end };
+  switch (kind) {
+    case "moov":
+      if (container.kind !== "root" || state.hasMoov) {
+        return Result.err(createUnreadableAudioError());
+      }
+      state.hasMoov = true;
+      state.containers.push({ ...span, kind });
+      return Result.ok(undefined);
+    case "trak":
+      if (container.kind !== "moov") {
+        return Result.err(createUnreadableAudioError());
+      }
+      state.containers.push({ ...span, kind });
+      return Result.ok(undefined);
+    case "mdia": {
+      if (container.kind !== "trak") {
+        return Result.err(createUnreadableAudioError());
+      }
+      const track: TrackMetadata = {};
+      state.tracks.push(track);
+      state.containers.push({ ...span, kind, track });
+      return Result.ok(undefined);
+    }
+    case "minf":
+      if (container.kind !== "mdia") {
+        return Result.err(createUnreadableAudioError());
+      }
+      state.containers.push({ ...span, kind, track: container.track });
+      return Result.ok(undefined);
+    case "stbl":
+      if (container.kind !== "minf") {
+        return Result.err(createUnreadableAudioError());
+      }
+      state.containers.push({ ...span, kind, track: container.track });
+      return Result.ok(undefined);
+    default:
+      kind satisfies never;
+      return panic("Unhandled M4A container kind");
+  }
 };
 
 const readM4aContainer = ({
   bytes,
   container,
   state,
-}: ReadM4aContainerOptions): Result<void, HandlerError<422>> => {
+}: Mp4ReadOptions): Result<void, HandlerError<422>> => {
   let offset = container.start;
-  let durationFields = 0;
-  let mediaContainers = 0;
+  let childContainers = 0;
+  let movieHeaders = 0;
   while (offset < container.end) {
     if (++state.chunks > MAX_CHUNKS) {
       return Result.err(createUnreadableAudioError());
@@ -251,76 +530,72 @@ const readM4aContainer = ({
       return Result.err(parsed.error);
     }
     const box = parsed.value;
-    if (box.kind === "moof" || box.kind === "mvex") {
+    if (box.kind === "mvhd" && ++movieHeaders > 1) {
       return Result.err(createUnreadableAudioError());
     }
-    if (box.kind === "ftyp") {
-      if (
-        container.kind !== "root" ||
-        state.hasFtyp ||
-        !validFileType(bytes, box)
-      ) {
-        return Result.err(createUnreadableAudioError());
-      }
-      state.hasFtyp = true;
+    const read = isMp4ContainerKind(box.kind)
+      ? queueContainer({ bytes, container, state, box, kind: box.kind })
+      : readMp4Leaf({ bytes, container, state, box });
+    if (read.isErr()) {
+      return Result.err(read.error);
     }
-    if (
-      box.kind === "mdat" &&
-      container.kind === "root" &&
-      box.end > box.payload
-    ) {
-      state.hasMedia = true;
-    }
-    if (box.kind === "moov" || box.kind === "trak" || box.kind === "mdia") {
-      const expectedParent = {
-        moov: "root",
-        trak: "moov",
-        mdia: "trak",
-      } as const;
-      if (
-        container.kind !== expectedParent[box.kind] ||
-        box.payload === box.end ||
-        (box.kind === "moov" && state.hasMoov)
-      ) {
-        return Result.err(createUnreadableAudioError());
-      }
-      if (box.kind === "moov") {
-        state.hasMoov = true;
-      }
-      if (box.kind === "mdia") {
-        mediaContainers++;
-      }
-      state.containers.push({
-        start: box.payload,
-        end: box.end,
-        kind: box.kind,
-      });
-    }
-    if (box.kind === "mvhd" || box.kind === "mdhd") {
-      if (
-        container.kind !== (box.kind === "mvhd" ? "moov" : "mdia") ||
-        ++durationFields > 1
-      ) {
-        return Result.err(createUnreadableAudioError());
-      }
-      const duration = readMp4DurationField(bytes, box);
-      if (duration.isErr()) {
-        return Result.err(duration.error);
-      }
-      state.maximum = Math.max(state.maximum, duration.value);
+    if (isMp4ContainerKind(box.kind)) {
+      childContainers++;
     }
     offset = box.end;
   }
   const complete = {
     root: true,
     moov: true,
-    trak: mediaContainers === 1,
-    mdia: durationFields === 1,
+    trak: childContainers === 1,
+    mdia: childContainers <= 1,
+    minf: childContainers === 1,
+    stbl: childContainers === 0,
   } as const satisfies Record<Container["kind"], boolean>;
-  if (!complete[container.kind]) {
+  return complete[container.kind]
+    ? Result.ok(undefined)
+    : Result.err(createUnreadableAudioError());
+};
+
+const readAudioTrackDuration = (
+  tracks: readonly TrackMetadata[],
+): Result<number, HandlerError<422>> => {
+  let audio: TrackMetadata | undefined;
+  for (const track of tracks) {
+    if (track.header === undefined || track.handler === undefined) {
+      return Result.err(createUnreadableAudioError());
+    }
+    if (track.handler !== "soun") {
+      continue;
+    }
+    if (audio !== undefined) {
+      return Result.err(createUnreadableAudioError());
+    }
+    audio = track;
+  }
+  if (
+    audio?.header === undefined ||
+    audio.timing === undefined ||
+    audio.sampleCount === undefined
+  ) {
     return Result.err(createUnreadableAudioError());
   }
-  return Result.ok(undefined);
+  const { ticks, scale } = audio.header;
+  const duration = durationFromTicks({ ticks: audio.timing.ticks, scale });
+  if (duration.isErr()) {
+    return Result.err(duration.error);
+  }
+  const difference =
+    ticks >= audio.timing.ticks
+      ? ticks - audio.timing.ticks
+      : audio.timing.ticks - ticks;
+  if (
+    audio.sampleCount !== audio.timing.sampleCount ||
+    difference * 1000n > BigInt(TRANSCRIPTION_DURATION_TOLERANCE_MS) * scale
+  ) {
+    return Result.err(createUnreadableAudioError());
+  }
+  return duration;
 };
 
 const readM4aDuration = (
@@ -328,11 +603,13 @@ const readM4aDuration = (
 ): Result<number, HandlerError<422>> => {
   const state: Mp4ScanState = {
     containers: [{ start: 0, end: bytes.length, kind: "root" }],
+    tracks: [],
     hasFtyp: false,
     hasMoov: false,
-    hasMedia: false,
+    mediaBytes: 0,
     maximum: 0,
     chunks: 0,
+    sampleEntries: 0,
   };
   for (
     let container = state.containers.pop();
@@ -344,9 +621,13 @@ const readM4aDuration = (
       return Result.err(read.error);
     }
   }
-  return !state.hasFtyp || !state.hasMoov || !state.hasMedia
-    ? Result.err(createUnreadableAudioError())
-    : boundedDuration(state.maximum);
+  if (!state.hasFtyp || !state.hasMoov || state.mediaBytes === 0) {
+    return Result.err(createUnreadableAudioError());
+  }
+  const duration = readAudioTrackDuration(state.tracks);
+  return duration.isErr()
+    ? Result.err(duration.error)
+    : boundedDuration(Math.max(state.maximum, duration.value));
 };
 
 export const readAdmissibleAudioDuration = (

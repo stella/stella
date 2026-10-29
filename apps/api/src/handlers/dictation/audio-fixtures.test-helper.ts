@@ -40,7 +40,41 @@ export const makeWavAudioBytes = (durationMs = 1234) => {
 type M4aFixtureOptions = {
   movieDurationMs?: number;
   trackDurationMs?: number;
+  sampleDurationMs?: number;
+  sttsEntries?: readonly M4aSampleTimingEntry[];
   version?: 0 | 1;
+};
+
+export type M4aSampleTimingEntry = {
+  sampleCount: number;
+  sampleDelta: number;
+};
+
+export const makeM4aSttsBox = (entries: readonly M4aSampleTimingEntry[]) => {
+  const payload = new Uint8Array(8 + entries.length * 8);
+  const view = new DataView(payload.buffer);
+  view.setUint32(4, entries.length);
+  let offset = 8;
+  for (const { sampleCount, sampleDelta } of entries) {
+    view.setUint32(offset, sampleCount);
+    view.setUint32(offset + 4, sampleDelta);
+    offset += 8;
+  }
+  return makeAudioBox("stts", payload);
+};
+
+export const makeM4aStszBox = (sampleCount: number) => {
+  const payload = new Uint8Array(12);
+  const view = new DataView(payload.buffer);
+  view.setUint32(4, 6);
+  view.setUint32(8, sampleCount);
+  return makeAudioBox("stsz", payload);
+};
+
+export const makeM4aHandlerBox = (handler = "soun") => {
+  const payload = new Uint8Array(25);
+  payload.set(new TextEncoder().encode(handler), 8);
+  return makeAudioBox("hdlr", payload);
 };
 
 type M4aDurationBoxOptions = {
@@ -82,6 +116,47 @@ export const makeM4aDurationBox = ({
   return makeAudioBox(type, payload);
 };
 
+type M4aTrackBoxOptions = {
+  durationMs: number;
+  handler?: "soun" | "vide";
+  sampleDurationMs?: number | undefined;
+  sttsEntries?: readonly M4aSampleTimingEntry[] | undefined;
+  version?: 0 | 1 | undefined;
+};
+
+export const makeM4aTrackBox = ({
+  durationMs,
+  handler = "soun",
+  sampleDurationMs = durationMs,
+  sttsEntries = [{ sampleCount: 1, sampleDelta: sampleDurationMs }],
+  version,
+}: M4aTrackBoxOptions) =>
+  makeAudioBox(
+    "trak",
+    makeAudioBox(
+      "mdia",
+      joinAudioBytes([
+        makeM4aDurationBox({ type: "mdhd", durationMs, version }),
+        makeM4aHandlerBox(handler),
+        makeAudioBox(
+          "minf",
+          makeAudioBox(
+            "stbl",
+            joinAudioBytes([
+              makeM4aSttsBox(sttsEntries),
+              makeM4aStszBox(
+                sttsEntries.reduce(
+                  (total, entry) => total + entry.sampleCount,
+                  0,
+                ),
+              ),
+            ]),
+          ),
+        ),
+      ]),
+    ),
+  );
+
 /** Container metadata fixtures; duration tests do not decode AAC payloads. */
 export const makeM4aAudioBytes = (
   durationMs = 1234,
@@ -90,6 +165,15 @@ export const makeM4aAudioBytes = (
   const brand = new Uint8Array(16);
   brand.set(new TextEncoder().encode("M4A "));
   brand.set(new TextEncoder().encode("isomM4A "), 8);
+  const sampleCount =
+    options.sttsEntries?.reduce(
+      (total, entry) => total + entry.sampleCount,
+      0,
+    ) ?? 1;
+  const media = new Uint8Array(Math.min(sampleCount, 4096) * 6);
+  if (media.length >= 6) {
+    media.set([0x21, 0x10, 0x04, 0x60, 0x8c, 0x1c]);
+  }
   return joinAudioBytes([
     makeAudioBox("ftyp", brand),
     makeAudioBox(
@@ -100,19 +184,14 @@ export const makeM4aAudioBytes = (
           durationMs: options.movieDurationMs ?? durationMs,
           version: options.version,
         }),
-        makeAudioBox(
-          "trak",
-          makeAudioBox(
-            "mdia",
-            makeM4aDurationBox({
-              type: "mdhd",
-              durationMs: options.trackDurationMs ?? durationMs,
-              version: options.version,
-            }),
-          ),
-        ),
+        makeM4aTrackBox({
+          durationMs: options.trackDurationMs ?? durationMs,
+          sampleDurationMs: options.sampleDurationMs,
+          sttsEntries: options.sttsEntries,
+          version: options.version,
+        }),
       ]),
     ),
-    makeAudioBox("mdat", new Uint8Array([0x21, 0x10, 0x04, 0x60, 0x8c, 0x1c])),
+    makeAudioBox("mdat", media),
   ]);
 };

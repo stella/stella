@@ -29,7 +29,7 @@ import {
   emitChatRunLogMetric,
   emitPromptCacheMetric,
   emitReasoningReplayDroppedMetric,
-  emitTranscriptionDurationCappedMetric,
+  emitTranscriptionDurationMismatchMetric,
   emitVerificationRunFailureMetric,
   REQUEST_CLASSES,
   resetMetricLineSinkForTesting,
@@ -391,7 +391,7 @@ test("cost drop metrics count observations rather than failed batches", () => {
   }
 });
 
-test("transcription duration caps emit an extractable count with catalog metadata only", () => {
+test("transcription duration mismatches emit an extractable count with catalog metadata only", () => {
   const lines: string[] = [];
   setMetricLineSinkForTesting((line) => {
     lines.push(line);
@@ -401,7 +401,7 @@ test("transcription duration caps emit an extractable count with catalog metadat
       isTranscriptionModelId,
     );
     for (const modelId of modelIds) {
-      emitTranscriptionDurationCappedMetric(modelId);
+      emitTranscriptionDurationMismatchMetric(modelId);
       const record: unknown = JSON.parse(lines.at(-1) ?? "null");
       expect(record).toEqual({
         _aws: {
@@ -410,13 +410,15 @@ test("transcription duration caps emit an extractable count with catalog metadat
             {
               Namespace: "Stella/Api",
               Dimensions: [[]],
-              Metrics: [{ Name: "TranscriptionDurationCapped", Unit: "Count" }],
+              Metrics: [
+                { Name: "TranscriptionDurationMismatch", Unit: "Count" },
+              ],
             },
           ],
         },
-        event: "transcription.duration_capped",
+        event: "transcription.duration_mismatch",
         modelId,
-        TranscriptionDurationCapped: 1,
+        TranscriptionDurationMismatch: 1,
       });
     }
     expect(lines).toHaveLength(modelIds.length);

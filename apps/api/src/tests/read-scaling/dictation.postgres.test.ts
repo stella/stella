@@ -115,6 +115,8 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
         type: "refused",
         remainingDelta: -1,
         durationMs: 1234,
+        admittedDurationMs: 1234,
+        expectedDurationMs: 1234,
         credentials: "managed",
       },
       {
@@ -122,6 +124,8 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
         type: "settled",
         remainingDelta: 1,
         durationMs: 1234,
+        admittedDurationMs: 1234,
+        expectedDurationMs: 1234,
         credentials: "managed",
       },
       {
@@ -129,6 +133,19 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
         type: "settled",
         remainingDelta: 1,
         durationMs: 1_000_000,
+        admittedDurationMs: MAX_TRANSCRIPTION_AUDIO_SECONDS * 1000,
+        expectedDurationMs: 1_000_000,
+        credentials: "managed",
+      },
+      {
+        name: "above the maximum cost with tolerated duration rounding",
+        type: "settled",
+        remainingDelta: 1,
+        durationMs:
+          MAX_TRANSCRIPTION_AUDIO_SECONDS * 1000 +
+          TRANSCRIPTION_DURATION_TOLERANCE_MS,
+        admittedDurationMs: MAX_TRANSCRIPTION_AUDIO_SECONDS * 1000,
+        expectedDurationMs: MAX_TRANSCRIPTION_AUDIO_SECONDS * 1000,
         credentials: "managed",
       },
       {
@@ -136,6 +153,8 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
         type: "settled",
         remainingDelta: 0,
         durationMs: 1_000_000,
+        admittedDurationMs: MAX_TRANSCRIPTION_AUDIO_SECONDS * 1000,
+        expectedDurationMs: 1_000_000,
         credentials: "organization",
       },
     ] as const)(
@@ -181,7 +200,12 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
             const endpoint = createDictationTranscribeEndpoint({
               transcribe: async () => {
                 providerRequests += 1;
-                return await Promise.resolve(Result.ok(transcript));
+                return await Promise.resolve(
+                  Result.ok({
+                    transcript,
+                    admittedDurationMs: scenario.admittedDurationMs,
+                  }),
+                );
               },
               credential: async () => {
                 credentialRequests += 1;
@@ -258,10 +282,7 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
                 expect(response.text).toBe(transcript.text);
                 expect(providerRequests).toBe(1);
                 expect(credentialRequests).toBe(isByok ? 0 : 1);
-                const durationMs = Math.min(
-                  scenario.durationMs,
-                  maximumDurationMs,
-                );
+                const durationMs = scenario.expectedDurationMs;
                 const measured = transcriptionUsageUnits({
                   modelId,
                   residency: "eu",
@@ -275,13 +296,19 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
                   modelId,
                   durationMs,
                 });
-                if (scenario.durationMs > maximumDurationMs) {
-                  expect(measured.rawUsageMicroUnits).toBe(
+                if (durationMs > maximumDurationMs) {
+                  expect(measured.rawUsageMicroUnits).toBeGreaterThan(
                     maximumCost.rawUsageMicroUnits,
                   );
-                  expect(measured.unitsConsumed).toBe(
-                    isByok ? 0 : maximumCost.unitsConsumed,
-                  );
+                  if (isByok) {
+                    expect(measured.unitsConsumed).toBe(0);
+                  } else {
+                    expect(measured.unitsConsumed).toBeGreaterThan(
+                      maximumCost.unitsConsumed,
+                    );
+                  }
+                } else if (durationMs === maximumDurationMs) {
+                  expect(measured).toEqual(maximumCost);
                 } else {
                   expect(measured.unitsConsumed).toBeLessThan(
                     maximumCost.unitsConsumed,
@@ -328,6 +355,15 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
                   1,
               ),
             ],
+            "hlas.m4a",
+            { type: "audio/mp4" },
+          ),
+      },
+      {
+        name: "M4A sample timing beyond its container duration",
+        audio: () =>
+          new File(
+            [makeM4aAudioBytes(59_000, { sampleDurationMs: 61_000 })],
             "hlas.m4a",
             { type: "audio/mp4" },
           ),
@@ -424,8 +460,7 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
             if (!(response instanceof HttpStatusResponse)) {
               panic("Invalid audio must return an HTTP refusal");
             }
-            expect(response.code).toBeGreaterThanOrEqual(400);
-            expect(response.code).toBeLessThan(500);
+            expect(response.code).toBe(422);
             expect(credentialRequests).toBe(1);
             expect(upstreamRequests).toBe(0);
             const recorded = await db

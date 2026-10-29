@@ -289,12 +289,15 @@ describe("transcription request contract", () => {
     });
     expect(requests).toBe(1);
     expect(result.unwrap()).toEqual({
-      text: TEXT,
-      segments: [],
-      detectedLanguage: null,
-      durationMs: 6400,
-      modelId: MODEL_ID,
-      vocabulary: "not-supported",
+      transcript: {
+        text: TEXT,
+        segments: [],
+        detectedLanguage: null,
+        durationMs: 6400,
+        modelId: MODEL_ID,
+        vocabulary: "not-supported",
+      },
+      admittedDurationMs: 1234,
     });
   });
 
@@ -524,6 +527,7 @@ describe("transcription failure isolation", () => {
         },
       });
       expect(result.isOk()).toBe(true);
+      expect(result.unwrap().admittedDurationMs).toBe(1234);
       expect(calls).toBe(1);
     }
   });
@@ -549,6 +553,7 @@ describe("transcription failure isolation", () => {
           },
         });
         expect(result.isOk()).toBe(true);
+        expect(result.unwrap().admittedDurationMs).toBe(durationMs);
         expect(calls).toBe(1);
       }
       let calls = 0;
@@ -621,6 +626,40 @@ describe("transcription failure isolation", () => {
       expect(result.error.code).toBe("audio_unreadable");
       expect(result.error.cause).toBeUndefined();
       expect(JSON.stringify(result.error)).not.toContain(TEXT);
+    }
+  });
+
+  test("M4A sample timing governs admission before provider dispatch", async () => {
+    const cases = [
+      {
+        bytes: makeM4aAudioBytes(59_000, { sampleDurationMs: 61_000 }),
+        code: "audio_too_long",
+      },
+      {
+        bytes: makeM4aAudioBytes(1000, {
+          sttsEntries: [
+            { sampleCount: 0xff_ff_ff_ff, sampleDelta: 0xff_ff_ff_ff },
+          ],
+        }),
+        code: "audio_unreadable",
+      },
+    ];
+    for (const { bytes, code } of cases) {
+      let calls = 0;
+      const result = await transcribeAudio({
+        ...input(),
+        audio: new File([bytes], "diktát.m4a", { type: "audio/mp4" }),
+        fetch: async () => {
+          calls += 1;
+          return Response.json({ text: TEXT, usage: { seconds: 1 } });
+        },
+      });
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error.code).toBe(code);
+        expect(result.error.cause).toBeUndefined();
+      }
+      expect(calls).toBe(0);
     }
   });
 
