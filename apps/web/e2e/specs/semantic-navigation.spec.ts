@@ -83,7 +83,7 @@ test.describe("focus target detector", () => {
     await page.setContent(`
     <button id="visible">Visible action</button>
     <span id="anchor" role="button" tabindex="0"
-      style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)"></span>
+      style="position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)"></span>
   `);
     await page.locator("#visible").focus();
     expect(await focusedElementProblems(page)).toEqual([]);
