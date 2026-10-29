@@ -421,6 +421,7 @@ export const TAGGED_FAILURE_REASON = {
   SourceReportedTotalError: "tagged_failure",
   SourceStoredTotalAdmissionExpired: "tagged_failure",
   SsrDocumentAssertionError: "tagged_failure",
+  StaleCorrespondenceAttachmentError: "tagged_failure",
   StartRuntimeError: "tagged_failure",
   StatuteSlugPageError: "tagged_failure",
   StoreUnavailableError: "tagged_failure",

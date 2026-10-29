@@ -44,7 +44,10 @@ import {
   type EmailFileFormat,
   parseEmailFile,
 } from "@/api/lib/email/inbound/message";
-import { finishCorrespondenceAttachments } from "@/api/lib/email/inbound/persistence";
+import {
+  finishCorrespondenceAttachments,
+  StaleCorrespondenceAttachmentError,
+} from "@/api/lib/email/inbound/persistence";
 import { normalizeEmail } from "@/api/lib/email/normalized-email";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -498,10 +501,10 @@ const fileUploadedDataBoxMessage = async ({
     recordAuditEvent,
   });
   const outcome = filingOutcome(created);
-  if (outcome.isErr() || outcome.value.status === "skipped") {
+  if (created.type !== "ok") {
     return outcome;
   }
-  const { correspondenceId } = outcome.value;
+  const correspondenceId = created.id;
   const parentId = await Result.tryPromise({
     try: async () => await readSourceFolder(filing),
     catch: unavailable,
@@ -521,7 +524,19 @@ const fileUploadedDataBoxMessage = async ({
     recordAuditEvent,
     createDocument,
     parentId: parentId.value,
+    generation: {
+      type: "upload",
+      sourceEntityId: scope.entityId,
+      sourceVersionId: filing.expectedSourceVersionId,
+      contentHash: created.contentHash,
+    },
   });
+  if (
+    finished.isErr() &&
+    StaleCorrespondenceAttachmentError.is(finished.error)
+  ) {
+    return skipped("source_changed");
+  }
   return finished.isErr() ? Result.err(unavailable(finished.error)) : outcome;
 };
 

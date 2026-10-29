@@ -521,7 +521,7 @@ const replacementScenarios = [
 ] as const;
 
 test.each(replacementScenarios)(
-  "a new source version replaces its message with $oldSources old source and $target target",
+  "a new source version preserves surviving old sources with $oldSources old source and $target target",
   async (scenario) => {
     const sourceId = createSafeId<"entity">();
     const retainedSourceId = createSafeId<"entity">();
@@ -581,6 +581,21 @@ test.each(replacementScenarios)(
       .where(eq(correspondenceAttachments.correspondenceId, old.id));
     expect(oldFilers).toHaveLength(1);
     expect(oldAttachments).toHaveLength(1);
+    await testDb
+      .update(correspondence)
+      .set({ handlingState: "handled", assigneeId: ids.userA1 })
+      .where(eq(correspondence.id, old.id));
+    const oldRecordWithUserState = await testDb
+      .select({
+        messageId: correspondence.messageId,
+        contentHash: correspondence.contentHash,
+        handlingState: correspondence.handlingState,
+        assigneeId: correspondence.assigneeId,
+        subject: correspondence.subject,
+        bodyText: correspondence.bodyText,
+      })
+      .from(correspondence)
+      .where(eq(correspondence.id, old.id));
     const newParsed = await parsedDataBoxFixture({
       entityId: sourceId,
       messageId: scenario.newMessageId,
@@ -610,7 +625,7 @@ test.each(replacementScenarios)(
       entityId: sourceId,
       attachmentId: replacementAttachmentId,
     };
-    if (existingTarget !== null) {
+    if (existingTarget !== null && scenario.oldSources === "last") {
       const beforeOld = await testDb
         .select()
         .from(correspondence)
@@ -703,7 +718,14 @@ test.each(replacementScenarios)(
       return;
     }
     const replacement = await fileCopy(replacementOptions);
-    expect(replacement.id).toBe(old.id);
+    const splits = scenario.oldSources === "copy";
+    if (existingTarget !== null) {
+      expect(replacement.id).toBe(existingTarget.id);
+    } else if (splits) {
+      expect(replacement.id).not.toBe(old.id);
+    } else {
+      expect(replacement.id).toBe(old.id);
+    }
     expect(
       await testDb
         .select({ correspondenceId: correspondenceSources.correspondenceId })
@@ -727,17 +749,49 @@ test.each(replacementScenarios)(
       .from(correspondenceAttachments)
       .where(eq(correspondenceAttachments.correspondenceId, old.id));
     expect(remainingOld).toHaveLength(1);
+    let expectedRemainingOldSources = [sourceId];
+    if (splits) {
+      expectedRemainingOldSources = [retainedSourceId];
+    }
     expect(
       remainingOldSources.map(({ entityId }) => entityId).toSorted(),
-    ).toEqual(
-      (scenario.oldSources === "copy"
-        ? [retainedSourceId, sourceId]
-        : [sourceId]
-      ).toSorted(),
-    );
+    ).toEqual(expectedRemainingOldSources.toSorted());
+    const oldRecordAfterReplacement = await testDb
+      .select({
+        messageId: correspondence.messageId,
+        contentHash: correspondence.contentHash,
+        handlingState: correspondence.handlingState,
+        assigneeId: correspondence.assigneeId,
+      })
+      .from(correspondence)
+      .where(eq(correspondence.id, old.id));
+    expect(oldRecordAfterReplacement).toEqual([
+      {
+        ...(splits
+          ? {
+              messageId: scenario.oldMessageId,
+              contentHash: oldParsed.contentHash,
+            }
+          : {
+              messageId: scenario.newMessageId,
+              contentHash: newParsed.contentHash,
+            }),
+        handlingState: "handled",
+        assigneeId: ids.userA1,
+      },
+    ]);
+    expect(
+      await testDb
+        .select({ messageId: correspondence.messageId })
+        .from(correspondence)
+        .where(eq(correspondence.id, replacement.id)),
+    ).toEqual([{ messageId: scenario.newMessageId }]);
+    expect(oldRecordWithUserState).toEqual([
+      expect.objectContaining({ messageId: scenario.oldMessageId }),
+    ]);
     expect(remainingOldFilers).toEqual(oldFilers);
     expect(remainingOldAttachments.map(({ entityId }) => entityId)).toEqual([
-      replacementAttachmentId,
+      splits ? oldAttachmentId : replacementAttachmentId,
     ]);
     const sourcesAfterReplacement = await testDb
       .select()
@@ -747,9 +801,9 @@ test.each(replacementScenarios)(
     expect(
       sourcesAfterReplacement.map(({ entityId }) => entityId).toSorted(),
     ).toEqual(
-      (scenario.oldSources === "copy"
-        ? [retainedSourceId, sourceId]
-        : [sourceId]
+      (existingTarget === null
+        ? [sourceId]
+        : [targetSourceId, sourceId]
       ).toSorted(),
     );
     const targetFilers = await testDb
@@ -762,7 +816,7 @@ test.each(replacementScenarios)(
       .where(eq(correspondenceAttachments.correspondenceId, replacement.id));
     expect(targetFilers).toHaveLength(1);
     expect(targetAttachments.map(({ entityId }) => entityId)).toEqual([
-      replacementAttachmentId,
+      existingTarget === null ? replacementAttachmentId : targetAttachmentId,
     ]);
     expect((await fileCopy(replacementOptions)).id).toBe(replacement.id);
     expect(
@@ -1124,23 +1178,35 @@ test.each(sourceTransitions)(
     }
     expect(await association()).toEqual(expectedAssociation);
     if (oldId !== null) {
+      let expectedOldSourceIds = [entityId];
+      if (oldCopies === "retained") {
+        expectedOldSourceIds = [entityId, retainedSourceId];
+        if (replacementParsed !== null) {
+          expectedOldSourceIds = [retainedSourceId];
+        }
+      }
       expect(
         await testDb
           .select({ sourceEntityId: correspondence.sourceEntityId })
           .from(correspondence)
           .where(eq(correspondence.id, oldId)),
-      ).toEqual([{ sourceEntityId: entityId }]);
+      ).toEqual([
+        {
+          sourceEntityId:
+            oldCopies === "retained" && replacementParsed !== null
+              ? retainedSourceId
+              : entityId,
+        },
+      ]);
       expect(
         await testDb
           .select({ entityId: correspondenceSources.entityId })
           .from(correspondenceSources)
           .where(eq(correspondenceSources.correspondenceId, oldId)),
       ).toEqual(
-        oldCopies === "retained"
-          ? [entityId, retainedSourceId]
-              .toSorted()
-              .map((sourceEntityId) => ({ entityId: sourceEntityId }))
-          : [{ entityId }],
+        expectedOldSourceIds
+          .toSorted()
+          .map((sourceEntityId) => ({ entityId: sourceEntityId })),
       );
       const attachmentsAfterTransition = await testDb
         .select({ entityId: correspondenceAttachments.entityId })
@@ -1217,6 +1283,41 @@ test.each(sourceTransitions)(
       entityId,
       versionNumber: 3,
     });
+    if (oldCopies === "retained" && replacementParsed !== null) {
+      if (initialParsed === null || oldId === null || replacementId === null) {
+        throw new Error("A retained-copy conflict requires both records");
+      }
+      expect(
+        await rejectionOf(
+          fileCopy({
+            workspaceId: ids.wsA1,
+            entityId,
+            parsed: initialParsed,
+            attachmentId,
+          }),
+        ),
+      ).toMatchObject({
+        status: 409,
+        message:
+          "The source update conflicts with another correspondence record",
+      });
+      expect(await association()).toEqual([
+        { correspondenceId: replacementId },
+      ]);
+      expect(
+        await testDb
+          .select({ messageId: correspondence.messageId })
+          .from(correspondence)
+          .where(eq(correspondence.id, oldId)),
+      ).toEqual([{ messageId: initialParsed.messageId }]);
+      expect(
+        await testDb
+          .select({ messageId: correspondence.messageId })
+          .from(correspondence)
+          .where(eq(correspondence.id, replacementId)),
+      ).toEqual([{ messageId: replacementParsed.messageId }]);
+      return;
+    }
     const roundtrip =
       initialParsed === null
         ? await retireSourceFixture({

@@ -148,9 +148,11 @@ created while attachment completion retries.
   file. A content-changing replacement updates the derived message columns in
   place, preserving the record identity, handling state, assignee and filer history.
 
-A changed source generation refreshes its derived attachment links without
-removing the underlying matter documents or their user-authored metadata and
-annotations. Retirement, deduplication and source-link maintenance never delete
+When other source copies retain the previous message, a changed copy moves to
+its new or existing matching record. The surviving copies keep their original
+record and user state. A sole-source replacement refreshes its derived attachment
+links without removing the underlying matter documents or their user-authored
+metadata and annotations. Retirement, deduplication and source-link maintenance never delete
 correspondence. A replacement that would collide with another record is refused
 with a conflict, preserving both records and their independent user state.
 Existing uploaded email records are found through their indexed source pointer;
@@ -180,6 +182,9 @@ over the message XML, takes the same path and files a `data_box` record.
 - Each file of the message is scanned before anything is written, then stored
   as a document in the `.zfo` file's folder and linked as an attachment. A
   rejected file refuses the whole message; a replay resumes missing ordinals.
+  Each attachment write rechecks the source version and record content hash
+  inside the document transaction, so an older completion cannot claim ordinals
+  after a source refresh.
 - The message ID keys the record in the matter: another file of the same
   message, in a batch or later, adds its uploader as a filer and stores no
   second set of documents. `correspondence_sources` retains every source copy.

@@ -4,6 +4,7 @@ import { asc, eq } from "drizzle-orm";
 
 import { DATA_BOX_MESSAGE_MIME_TYPE } from "@stll/api-contract/data-box";
 import { compareCodeUnit } from "@stll/collation";
+import { sha256Hex } from "@stll/sha256/bun";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
@@ -23,7 +24,13 @@ import type { createEntityFromBuffer } from "@/api/lib/entities/create-from-buff
 import { fileSecurityRejection } from "@/api/lib/file-scan/rejection";
 import { FileScanRejectedError } from "@/api/lib/file-scan/scan-upload";
 import type { scanUpload } from "@/api/lib/file-scan/scan-upload";
-import { FIXTURE_MESSAGE, zfoFile } from "@/api/tests/fixtures/zfo";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
+import {
+  FIXTURE_MESSAGE,
+  messageXml,
+  sealContent,
+  zfoFile,
+} from "@/api/tests/fixtures/zfo";
 import {
   type GatedTestDb,
   openGatedTestDatabase,
@@ -242,6 +249,10 @@ if (!databaseUrl || !runPostgresTests) {
         name: "Data-box uploads",
         slug: `data-box-uploads-${organizationId}`,
         createdAt: new Date(),
+      });
+      await recordNewOrganizationAccessState(db, {
+        organizationId,
+        now: new Date(),
       });
       await db.insert(member).values([
         {
@@ -483,6 +494,45 @@ if (!databaseUrl || !runPostgresTests) {
 
       const replayed = await processUpload({ entityId, bytes });
       expect(replayed.isOk() && replayed.value.status).toBe("duplicate");
+      expect(
+        (await attachmentsOf(record.id)).map(({ ordinal }) => ordinal),
+      ).toEqual([0, 1]);
+    });
+
+    test("a copy resumes missing ordinals across distinct exports of one message", async () => {
+      const firstExport = await zfoFile();
+      const secondExport = await sealContent(
+        new TextEncoder().encode(messageXml().replaceAll("><", ">\n<")),
+      );
+      expect(sha256Hex(firstExport)).not.toBe(sha256Hex(secondExport));
+      const first = await storeZfoFile({ createdBy: uploaderId });
+      const copy = await storeZfoFile({ createdBy: uploaderId });
+      const failed = await processUpload({
+        entityId: first,
+        bytes: firstExport,
+        writes: { failAfter: 1, written: 0 },
+      });
+      expect(failed.isErr()).toBe(true);
+      const [record] = await records();
+      if (record === undefined) {
+        throw new Error("expected the partially filed record");
+      }
+      expect(
+        (await attachmentsOf(record.id)).map(({ ordinal }) => ordinal),
+      ).toEqual([0]);
+
+      const resumed = await processUpload({
+        entityId: copy,
+        bytes: secondExport,
+      });
+      expect(resumed.isOk() && resumed.value.status).toBe("duplicate");
+      const replayedCopy = await processUpload({
+        entityId: copy,
+        bytes: secondExport,
+      });
+      expect(replayedCopy.isOk() && replayedCopy.value.status).toBe(
+        "duplicate",
+      );
       expect(
         (await attachmentsOf(record.id)).map(({ ordinal }) => ordinal),
       ).toEqual([0, 1]);

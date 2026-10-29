@@ -122,6 +122,62 @@ type PersistContentOptions = {
   recordAuditEvent: AuditRecorder;
 };
 
+type FindSourceContentOptions = Pick<
+  PersistContentOptions,
+  "tx" | "organizationId" | "workspaceId" | "content"
+>;
+
+const findSourceContent = async ({
+  tx,
+  organizationId,
+  workspaceId,
+  content,
+}: FindSourceContentOptions) =>
+  content.sourceEntityId === null
+    ? []
+    : await tx
+        .select({
+          id: correspondence.id,
+          contentHash: correspondence.contentHash,
+          dedupKey: correspondence.dedupKey,
+        })
+        .from(correspondenceSources)
+        .innerJoin(
+          correspondence,
+          and(
+            eq(correspondence.id, correspondenceSources.correspondenceId),
+            eq(correspondence.workspaceId, correspondenceSources.workspaceId),
+            eq(
+              correspondence.organizationId,
+              correspondenceSources.organizationId,
+            ),
+          ),
+        )
+        .where(
+          and(
+            eq(correspondenceSources.organizationId, organizationId),
+            eq(correspondenceSources.workspaceId, workspaceId),
+            eq(correspondenceSources.entityId, content.sourceEntityId),
+          ),
+        )
+        .unionAll(
+          tx
+            .select({
+              id: correspondence.id,
+              contentHash: correspondence.contentHash,
+              dedupKey: correspondence.dedupKey,
+            })
+            .from(correspondence)
+            .where(
+              and(
+                eq(correspondence.organizationId, organizationId),
+                eq(correspondence.workspaceId, workspaceId),
+                eq(correspondence.sourceEntityId, content.sourceEntityId),
+              ),
+            ),
+        )
+        .limit(1);
+
 /** The caller holds the matter and current source generation through this write. */
 export const persistCorrespondenceContent = async ({
   tx,
@@ -130,51 +186,62 @@ export const persistCorrespondenceContent = async ({
   content,
   recordAuditEvent,
 }: PersistContentOptions) => {
-  const [previous] =
-    content.sourceEntityId === null
-      ? []
-      : await tx
-          .select({
-            id: correspondence.id,
-            contentHash: correspondence.contentHash,
-            dedupKey: correspondence.dedupKey,
-          })
-          .from(correspondenceSources)
-          .innerJoin(
-            correspondence,
-            and(
-              eq(correspondence.id, correspondenceSources.correspondenceId),
-              eq(correspondence.workspaceId, correspondenceSources.workspaceId),
-              eq(
-                correspondence.organizationId,
-                correspondenceSources.organizationId,
-              ),
-            ),
-          )
-          .where(
-            and(
-              eq(correspondenceSources.organizationId, organizationId),
-              eq(correspondenceSources.workspaceId, workspaceId),
-              eq(correspondenceSources.entityId, content.sourceEntityId),
-            ),
-          )
-          .unionAll(
-            tx
-              .select({
-                id: correspondence.id,
-                contentHash: correspondence.contentHash,
-                dedupKey: correspondence.dedupKey,
-              })
-              .from(correspondence)
-              .where(
-                and(
-                  eq(correspondence.organizationId, organizationId),
-                  eq(correspondence.workspaceId, workspaceId),
-                  eq(correspondence.sourceEntityId, content.sourceEntityId),
-                ),
-              ),
-          )
-          .limit(1);
+  let [previous] = await findSourceContent({
+    tx,
+    organizationId,
+    workspaceId,
+    content,
+  });
+  if (
+    previous !== undefined &&
+    content.sourceEntityId !== null &&
+    (previous.contentHash !== content.contentHash ||
+      previous.dedupKey !== content.dedupKey)
+  ) {
+    const [survivor] = await tx
+      .select({ entityId: correspondenceSources.entityId })
+      .from(correspondenceSources)
+      .where(
+        and(
+          eq(correspondenceSources.organizationId, organizationId),
+          eq(correspondenceSources.workspaceId, workspaceId),
+          eq(correspondenceSources.correspondenceId, previous.id),
+          ne(correspondenceSources.entityId, content.sourceEntityId),
+        ),
+      )
+      .limit(1);
+    if (survivor !== undefined) {
+      if (previous.dedupKey === content.dedupKey) {
+        // Export bytes can differ for the same system-issued message ID.
+        // Surviving copies retain the record's established content generation.
+        return Result.ok({
+          id: previous.id,
+          contentHash: previous.contentHash,
+          status: "existing" as const,
+        });
+      }
+      // The remaining copies still own their original message and workflow.
+      // The deletion trigger repoints the primary source without deleting it.
+      await tx
+        .delete(correspondenceSources)
+        .where(
+          and(
+            eq(correspondenceSources.organizationId, organizationId),
+            eq(correspondenceSources.workspaceId, workspaceId),
+            eq(correspondenceSources.correspondenceId, previous.id),
+            eq(correspondenceSources.entityId, content.sourceEntityId),
+          ),
+        );
+      await recordAuditEvent(tx, {
+        action: AUDIT_ACTION.UPDATE,
+        resourceType: AUDIT_RESOURCE_TYPE.CORRESPONDENCE,
+        resourceId: previous.id,
+        workspaceId,
+        metadata: { sourceRemoved: true },
+      });
+      previous = undefined;
+    }
+  }
   if (previous !== undefined) {
     const refreshed =
       previous.contentHash !== content.contentHash ||
@@ -258,6 +325,7 @@ export const persistCorrespondenceContent = async ({
     }
     return Result.ok({
       id: previous.id,
+      contentHash: content.contentHash,
       status: refreshed ? ("refreshed" as const) : ("existing" as const),
     });
   }
@@ -276,10 +344,14 @@ export const persistCorrespondenceContent = async ({
       workspaceId,
       metadata: { subject: content.subject },
     });
-    return Result.ok({ id: inserted.id, status: "created" as const });
+    return Result.ok({
+      id: inserted.id,
+      contentHash: content.contentHash,
+      status: "created" as const,
+    });
   }
   const [existing] = await tx
-    .select({ id: correspondence.id })
+    .select({ id: correspondence.id, contentHash: correspondence.contentHash })
     .from(correspondence)
     .where(
       and(
@@ -291,5 +363,9 @@ export const persistCorrespondenceContent = async ({
   if (existing === undefined) {
     return panic("Correspondence insert has no conflicting record");
   }
-  return Result.ok({ id: existing.id, status: "existing" as const });
+  return Result.ok({
+    id: existing.id,
+    contentHash: existing.contentHash,
+    status: "existing" as const,
+  });
 };

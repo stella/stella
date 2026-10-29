@@ -411,6 +411,7 @@ export const FAILURE_TAGS = [
   "SourceReportedTotalError",
   "SourceStoredTotalAdmissionExpired",
   "SsrDocumentAssertionError",
+  "StaleCorrespondenceAttachmentError",
   "StartRuntimeError",
   "StatuteSlugPageError",
   "StoreUnavailableError",

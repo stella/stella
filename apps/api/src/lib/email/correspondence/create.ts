@@ -409,6 +409,7 @@ export const createCorrespondence = async ({
     return Result.ok({
       type: "ok" as const,
       id: correspondenceId,
+      contentHash: persisted.value.contentHash,
       created,
       filerAdded: filers.length > 0,
     });
