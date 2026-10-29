@@ -23,7 +23,7 @@ import { sleep } from "@stll/concurrency/sleep";
 import type { Block } from "@stll/legal-ast/document-ast";
 
 import { organization, user } from "@/api/db/auth-schema";
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { legalReaderAnswerMessages, legalReaderAnswers } from "@/api/db/schema";
 import { createSafeDb, createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { deleteReaderAnswerHandler } from "@/api/handlers/legal-reader/answers/delete";
@@ -1480,7 +1480,6 @@ describe("reader answer turn lifecycle", () => {
       (
         await database
           .select({
-            id: user.id,
             readerAnswerLanguage: user.readerAnswerLanguage,
           })
           .from(user)
@@ -1497,14 +1496,11 @@ describe("reader answer turn lifecycle", () => {
     const request = readerAnswerRequest(
       {
         session: { activeOrganizationId: organizationId },
-        user: reader,
+        user: { id: userId, readerAnswerLanguage: reader.readerAnswerLanguage },
         safeDb,
         recordAuditEvent,
-        scopedDb: createScopedDb(
-          markRlsDatabase(database),
-          [],
-          organizationId,
-          userId,
+        scopedDb: asTestRaw<ScopedDb>(
+          createScopedDb(markRlsDatabase(database), [], organizationId, userId),
         ),
         orgAIConfig: {
           providers: [{ provider: "openai", apiKey: "fixture-key" }],
