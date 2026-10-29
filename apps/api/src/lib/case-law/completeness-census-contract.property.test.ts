@@ -201,12 +201,16 @@ test("census-text-threshold-exact-safe-integers", () => {
 });
 
 test("unproven court identity cannot establish a missing decision or completeness", () => {
-  const observation = slice({
+  const observation = {
+    slice: "2026",
+    year: 2026,
     outcome: "identity-unproven",
     publisher: 1,
     stored: 0,
     withText: 0,
-  });
+    observedAt: "2026-10-16T00:00:00Z",
+    evidenceRef: "https://publisher.example/count",
+  } as const satisfies CensusSlice;
   expect(
     censusVerdict({
       slices: [observation],
