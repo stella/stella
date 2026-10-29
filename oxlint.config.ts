@@ -449,6 +449,9 @@ const fixtureRuleOverrides = [
     "no-raw-file-input/no-raw-file-input",
   ]),
   fixtureRuleOverride("no-native-ui.fixture.tsx", NO_NATIVE_UI_RULE_IDS),
+  fixtureRuleOverride("plain-button-placement-only.fixture.tsx", [
+    "plain-button-placement-only/plain-button-placement-only",
+  ]),
   fixtureRuleOverride("no-person-select.fixture.tsx", [
     "no-person-select/no-person-select",
   ]),
@@ -1808,6 +1811,7 @@ const config = defineConfig({
     "@stll/oxlint-config/no-raw-colors",
     "./.oxlint-plugins/no-raw-date-input.ts",
     "./.oxlint-plugins/no-native-ui.ts",
+    "./.oxlint-plugins/plain-button-placement-only.ts",
     "./.oxlint-plugins/no-raw-date-parsing.ts",
     "./.oxlint-plugins/prefer-temporal.ts",
     "./.oxlint-plugins/no-raw-locale-format.ts",
@@ -6753,6 +6757,21 @@ const config = defineConfig({
       rules: Object.fromEntries(
         NO_NATIVE_UI_RULE_IDS.map((rule) => [rule, "error"] as const),
       ),
+    },
+    {
+      // A plain Button draws no box, so its className only places it; the
+      // look belongs to its content or to a variant. Its own scope: the
+      // design pass (oxlint.design.config.ts) copies the scope above, and
+      // this rule carries no backlog to measure there.
+      files: [...DESIGN_SYSTEM_CONSUMER_FILES],
+      excludeFiles: [
+        "**/*.{test,spec}.{ts,tsx}",
+        "**/__tests__/**",
+        "**/__fixtures__/**",
+      ],
+      rules: {
+        "plain-button-placement-only/plain-button-placement-only": "error",
+      },
     },
     {
       // `shadcn/no-restyle` judges a className by reading its classes. An
