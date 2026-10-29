@@ -1,9 +1,21 @@
 import { describe, expect, test } from "bun:test";
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
 import { loadChangesetPolicy } from "./changeset-guard";
 import { publishedPackageNames } from "./check-published-package-lists";
+import { readNpmReleaseGraph } from "./generate-npm-release-jobs";
 import {
   changedPathsCommand,
+  expandPublishPackages,
   selectPublishPackages,
 } from "./publish-package-selection";
 import { ALL_PACKAGE_ORDER } from "./publish-packages";
@@ -187,10 +199,162 @@ describe("publish package selection", () => {
     expect(workflow).toContain(
       'elif [[ "$EVENT_NAME" == "workflow_dispatch" && "$MANUAL_PACKAGE" != "all" ]]; then',
     );
-    expect(workflow).toContain('pkgs=("$MANUAL_PACKAGE")');
     expect(workflow).toContain(
-      "Recovery is\n          # always one named non-CLI package",
+      'selection="$(bun .pack-tooling/scripts/publish-package-selection.ts "$EVENT_NAME" "$MANUAL_PACKAGE" "$GITHUB_WORKSPACE")"',
     );
+    for (const script of [
+      "publish-package-selection",
+      "publish-packages",
+      "generate-npm-release-jobs",
+    ]) {
+      expect(workflow).toContain(`            scripts/${script}.ts`);
+    }
+  });
+
+  test("a named CLI dispatch includes exactly its transitive workspace dependencies first", async () => {
+    const selection = selectPublishPackages({
+      eventName: "workflow_dispatch",
+      manualPackage: "cli",
+      changedPaths: [],
+    });
+    const expected = new Set(["cli"]);
+    const pending = ["cli"];
+    while (pending.length > 0) {
+      const directory = pending.pop();
+      if (directory === undefined) {
+        break;
+      }
+      const dependencies = manifestDependencies(
+        await packageManifest(directory),
+      )
+        .filter((name) =>
+          ALL_PACKAGE_ORDER.some((known) => name === `@stll/${known}`),
+        )
+        .map((name) => name.slice("@stll/".length));
+      for (const dependency of dependencies) {
+        expect(selection.indexOf(dependency)).toBeGreaterThanOrEqual(0);
+        expect(selection.indexOf(dependency)).toBeLessThan(
+          selection.indexOf(directory),
+        );
+        if (!expected.has(dependency)) {
+          expected.add(dependency);
+          pending.push(dependency);
+        }
+      }
+    }
+    expect(selection.toSorted()).toEqual([...expected].toSorted());
+    expect(selection).toContain("agent-input");
+    expect(selection).toContain("stable-stringify");
+    expect(new Set(selection).size).toBe(selection.length);
+    expect(
+      selectPublishPackages({
+        eventName: "workflow_dispatch",
+        manualPackage: "cli",
+        changedPaths: [],
+      }),
+    ).toEqual(selection);
+  });
+
+  test("a leaf dispatch selects only itself and all retains its inventory", () => {
+    expect(
+      selectPublishPackages({
+        eventName: "workflow_dispatch",
+        manualPackage: "stable-stringify",
+        changedPaths: [],
+      }),
+    ).toEqual(["stable-stringify"]);
+    expect(
+      selectPublishPackages({
+        eventName: "workflow_dispatch",
+        manualPackage: "all",
+        changedPaths: [],
+      }),
+    ).toEqual(ALL_PACKAGE_ORDER);
+  });
+
+  test("unknown named selections panic", () => {
+    expect(() =>
+      selectPublishPackages({
+        eventName: "workflow_dispatch",
+        manualPackage: "unknown",
+        changedPaths: [],
+      }),
+    ).toThrow("Unknown package 'unknown'");
+    expect(() =>
+      expandPublishPackages({ selected: ["unknown"], graph: [] }),
+    ).toThrow("Unknown package 'unknown'");
+  });
+
+  test("current tooling without installed dependencies follows historical source manifests", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "publish-source-"));
+    try {
+      const tooling = path.join(root, "tooling", "scripts");
+      const source = path.join(root, "source");
+      mkdirSync(tooling, { recursive: true });
+      for (const script of [
+        "publish-package-selection",
+        "publish-packages",
+        "generate-npm-release-jobs",
+      ]) {
+        copyFileSync(
+          new URL(`${script}.ts`, import.meta.url),
+          path.join(tooling, `${script}.ts`),
+        );
+      }
+      for (const directory of ALL_PACKAGE_ORDER) {
+        const manifestDir = path.join(source, "packages", directory);
+        mkdirSync(manifestDir, { recursive: true });
+        writeFileSync(
+          path.join(manifestDir, "package.json"),
+          JSON.stringify({
+            name: `@stll/${directory}`,
+            ...(directory === "cli"
+              ? {
+                  optionalDependencies: {
+                    "@stll/agent-input": "workspace:*",
+                    "@stll/stable-stringify": "workspace:*",
+                  },
+                }
+              : {}),
+            ...(directory === "agent-input"
+              ? {
+                  peerDependencies: {
+                    "@stll/auth-model": "workspace:*",
+                    "@stll/stable-stringify": "workspace:*",
+                  },
+                }
+              : {}),
+          }),
+        );
+      }
+      const currentGraph = readNpmReleaseGraph({
+        readManifest: (directory) =>
+          readFileSync(
+            new URL(`../packages/${directory}/package.json`, import.meta.url),
+            "utf-8",
+          ),
+      });
+      expect(
+        expandPublishPackages({ selected: ["cli"], graph: currentGraph }),
+      ).not.toContain("auth-model");
+      const result = Bun.spawnSync(
+        [
+          process.execPath,
+          path.join(tooling, "publish-package-selection.ts"),
+          "workflow_dispatch",
+          "cli",
+          source,
+        ],
+        { cwd: root, stdout: "pipe", stderr: "pipe" },
+      );
+      expect(new TextDecoder().decode(result.stderr)).toBe("");
+      expect(result.exitCode).toBe(0);
+      expect(
+        new TextDecoder().decode(result.stdout).trim().split("\n"),
+      ).toEqual(["stable-stringify", "auth-model", "agent-input", "cli"]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   // A merge-queue batch pushes several commits at once; the version commit
