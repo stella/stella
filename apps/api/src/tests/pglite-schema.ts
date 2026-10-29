@@ -960,20 +960,24 @@ export const installPgliteServiceClientCredentialCascade = async (
   }
 };
 
-/** Install the summary reader and its privileges from the committed migration. */
+const CASE_LAW_COVERAGE_SUMMARY_MIGRATIONS = [
+  "20261027160000_case_law_coverage_summary",
+  "20261029141500_case_law_coverage_snapshot_freshness",
+] as const;
+
+/** Install the summary reader and its privileges from the committed migrations, in order. */
 export const installPgliteCaseLawCoverageSummary = async (
   db: PgliteSchemaDb,
 ): Promise<void> => {
-  const statements = readMigrationStatements(
-    nodePath.join(
-      DRIZZLE_DIR,
-      "20261027160000_case_law_coverage_summary",
-      "migration.sql",
+  const statements = CASE_LAW_COVERAGE_SUMMARY_MIGRATIONS.flatMap((migration) =>
+    readMigrationStatements(
+      nodePath.join(DRIZZLE_DIR, migration, "migration.sql"),
     ),
   ).filter((statement) => {
     const source = executableSql(statement);
     return (
       source.startsWith("CREATE FUNCTION") ||
+      source.startsWith("CREATE OR REPLACE FUNCTION") ||
       source.startsWith("REVOKE ALL ON FUNCTION") ||
       source.startsWith("GRANT EXECUTE ON FUNCTION") ||
       source.startsWith('ALTER TABLE "case_law_coverage_summaries" FORCE')

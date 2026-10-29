@@ -8,6 +8,7 @@ import type { SchedulerPayload, SchedulerSchedule } from "@/api/db/schema";
 import { schedulerJobs } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
+import { CASE_LAW_COVERAGE_REFRESH_INTERVAL_MS } from "@/api/lib/case-law/coverage-freshness";
 import { SOURCE_ARRIVALS_REFRESH_INTERVAL_MS } from "@/api/lib/case-law/source-arrivals-window";
 import type { ScheduledJobReads } from "@/api/lib/db/read-budgets";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
@@ -290,7 +291,10 @@ export const DECLARED_SCHEDULER_JOBS = [
     id: SCHEDULER_BACKFILL_IDS.coverage,
     firstRun: "on-registration",
     mode: "recurring",
-    schedule: { type: "interval", everyMs: 5 * 60_000 },
+    schedule: {
+      type: "interval",
+      everyMs: CASE_LAW_COVERAGE_REFRESH_INTERVAL_MS,
+    },
     task: REFRESH_CASE_LAW_COVERAGE_TASK,
     reads: "load-governed",
   },
