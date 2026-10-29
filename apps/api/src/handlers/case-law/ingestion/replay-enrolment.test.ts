@@ -8,10 +8,26 @@ import {
   validateReplayEnrolment,
 } from "./replay-enrolment";
 
-test("the committed registry previews only the Constitutional Court and enrolment validates its budget and reviewed dry run", () => {
+test("the committed registry previews only the Constitutional Court and the Austrian sources, and enrolment validates its budget and reviewed dry run", () => {
   expect(
     Object.entries(REPLAY_ENROLMENT).filter(([, { mode }]) => mode !== "off"),
-  ).toEqual([[ADAPTER_KEYS.CZ_US, { mode: "dry-run", dailyBudget: 10_000 }]]);
+  ).toEqual(
+    [
+      ADAPTER_KEYS.CZ_US,
+      ADAPTER_KEYS.AT_COURTS,
+      ADAPTER_KEYS.AT_VFGH,
+      ADAPTER_KEYS.AT_VWGH,
+      ADAPTER_KEYS.AT_BVWG,
+      ADAPTER_KEYS.AT_LVWG,
+      ADAPTER_KEYS.AT_ASYLGH,
+      ADAPTER_KEYS.AT_UBAS,
+      ADAPTER_KEYS.AT_UVS,
+      ADAPTER_KEYS.AT_VERG,
+      ADAPTER_KEYS.AT_UMSE,
+      ADAPTER_KEYS.AT_BKS,
+      ADAPTER_KEYS.AT_FINDOK,
+    ].map((key) => [key, { mode: "dry-run", dailyBudget: 10_000 }]),
+  );
   for (const policy of Object.values(REPLAY_ENROLMENT)) {
     validateReplayEnrolment(policy);
   }
