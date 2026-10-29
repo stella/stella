@@ -663,14 +663,14 @@ export const selectGeometrySpecs = (
     return inventory.specs;
   }
   const compiler = webCompilerInputs(root);
-  if ([...changed].some((file) => compiler.files.has(file))) {
+  if (
+    !compiler.complete ||
+    [...changed].some((file) => compiler.files.has(file))
+  ) {
     return inventory.specs;
   }
   if (![...changed].some(isWebOrPackage)) {
     return [];
-  }
-  if (!compiler.complete) {
-    return inventory.specs;
   }
   // Only source and stylesheet imports are traced. Any other file a page can
   // reach (an image, a font, an asset a stylesheet references with url())

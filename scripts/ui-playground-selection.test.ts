@@ -254,6 +254,27 @@ test.each([
   }
 });
 
+test("a removed compiler base remains a shared build input", () => {
+  const { root, write } = createSelectionFixture();
+  try {
+    write("apps/web/src/routes/dev/fixture.ts", "export {};\n");
+    write(
+      "apps/web/e2e/ui-playground/other.geometry.spec.ts",
+      'const url = "/dev?visual=fixture";\n',
+    );
+    write(
+      "apps/web/tsconfig.json",
+      '{ "extends": "../../config/removed.json" }',
+    );
+    expect(selectGeometrySpecs(["config/removed.json"], root)).toEqual([
+      "apps/web/e2e/ui-playground/fixture.geometry.spec.ts",
+      "apps/web/e2e/ui-playground/other.geometry.spec.ts",
+    ]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("an incomplete visual mapping fails closed", () => {
   const root = mkdtempSync(path.join(tmpdir(), "ui-playground-selection-"));
   try {
