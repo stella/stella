@@ -134,6 +134,7 @@ export const loadProtectedContext = async ({
       image: authContext.user.image,
       preferredName: authContext.user.preferredName,
       timezoneId: authContext.user.timezoneId,
+      readerAnswerLanguage: authContext.user.readerAnswerLanguage,
       wordEditShortcut: authContext.user.wordEditShortcut,
     },
   };

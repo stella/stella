@@ -11,6 +11,7 @@ export const READER_ANSWER_CONSTRAINTS = [
 ] as const satisfies readonly OnlineConstraintValidation[];
 
 export const READER_ANSWER_CONSTRAINT_VALIDATION = {
+  introducedBy: "20261028130100_reader_answer_admission_outcomes",
   name: CONSTRAINT_NAME,
   readCompletion: async (connection) =>
     await readConstraintCompletion({

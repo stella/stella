@@ -25,6 +25,8 @@ import {
 // committed source: no network, secrets, clock, randomness, or untracked
 // machine state. Each entry names what was checked.
 const PURE_AUTOFIX = {
+  "withdrawn-decision-labels":
+    "apps/web/scripts/sync-withdrawn-decision-labels.ts",
   // Runs local Oxlint against committed web and Tailwind sources; cache keys and
   // contents use content hashes and never consult the network, clock, or env.
   "tailwind-class-cache": "scripts/generate-tailwind-classes.ts",
@@ -38,6 +40,9 @@ const PURE_AUTOFIX = {
   // Parses schema source without opening a database connection.
   "status-tables": "apps/api/scripts/generate-status-tables.ts",
   "account-export-tables": "apps/api/scripts/generate-account-export-tables.ts",
+  // Reads declaration syntax and committed migration inventory; writes only its owner block.
+  "online-unique-index-names":
+    "apps/api/scripts/generate-online-unique-index-names.ts",
   "schema-index": "apps/api/scripts/generate-schema-index.ts",
   // Renders the versioned transition spec into its existing migration;
   // directory discovery chooses exactly one committed version-one migration.
@@ -57,8 +62,9 @@ const PURE_AUTOFIX = {
   // Resolves the committed web theme against the lockfile-pinned Tailwind
   // palette with lightningcss; no network, clock or environment.
   "mobile-ui-theme": "scripts/generate-mobile-ui-theme.ts",
-  // Rewrites the web's icon module and wordmark for lucide's native build;
-  // reads only those committed files.
+  // Rewrites the web's icon module and wordmark for lucide's native build,
+  // and copies lucide-static's outlines, pinned by the lockfile, into the
+  // app's asset catalog folder; reads only committed and installed files.
   "mobile-icons": "scripts/generate-mobile-icons.ts",
   // The committed release policy renders package names inside fixed markers.
   "published-package-list": "scripts/check-published-package-lists.ts",

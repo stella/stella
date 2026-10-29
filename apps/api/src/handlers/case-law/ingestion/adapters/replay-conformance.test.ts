@@ -7,6 +7,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { TEXT_FIELD_TYPE } from "@stll/api-contract/case-law-text-field";
+import { headMatterPrecedesBody } from "@stll/legal-ast/document-ast";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
@@ -110,6 +111,14 @@ describe("every case-law adapter is replay safe", () => {
       const originalFetch = globalThis.fetch;
       const first = await buildCaseLawFixture(fixture());
       const replay = await buildCaseLawFixture(fixture());
+      for (const decision of [first, replay]) {
+        if ("blocks" in decision.documentAst) {
+          expect(
+            headMatterPrecedesBody(decision.documentAst.blocks),
+            `${adapter.key}: head matter follows the decision body`,
+          ).toBe(true);
+        }
+      }
       expect(globalThis.fetch).toBe(originalFetch);
 
       expect(identityOf(replay), "replay changed the durable identity").toBe(

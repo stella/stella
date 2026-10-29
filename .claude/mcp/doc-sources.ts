@@ -148,6 +148,7 @@ export const DOC_SOURCES = {
     dependencies: [
       "@expo-google-fonts/dm-sans",
       "@expo/fingerprint",
+      "@expo/ui",
       "@expo/vector-icons",
       "expo",
       "expo-constants",
@@ -155,6 +156,7 @@ export const DOC_SOURCES = {
       "expo-dev-client",
       "expo-doctor",
       "expo-font",
+      "expo-notifications",
       "expo-linking",
       "expo-router",
       "expo-secure-store",
@@ -162,6 +164,7 @@ export const DOC_SOURCES = {
       "expo-system-ui",
       "expo-updates",
       "expo-web-browser",
+      "expo-widgets",
       "react-native-safe-area-context",
       "react-native-screens",
       "react-native-svg",

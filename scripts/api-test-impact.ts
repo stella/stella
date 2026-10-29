@@ -36,7 +36,7 @@ export const API_ALL_RULES = {
   database: /^apps\/api\/src\/db\//u,
   runner: /^apps\/api\/scripts\//u,
   selector:
-    /^scripts\/(?:test-scope|test-shards|api-test-impact|ci-api-test-plan|ci-postgres-test-plan|ci-postgres-selector-miss)\.(?:test\.)?ts$/u,
+    /^(?:scripts\/(?:test-scope|test-shards|api-test-impact|ci-api-test-plan|ci-postgres-test-plan|ci-postgres-shard-plan|ci-postgres-selector-miss)\.(?:test\.)?ts|packages\/scripts\/src\/test-shard-planning\.ts)$/u,
   environment: /^apps\/api\/\.env/u,
   postgres: /^docker\/postgres\//u,
   data: /^(?:apps\/api|packages)\/(?!.*\.(?:[cm]?[jt]s|[jt]sx)$)/u,
