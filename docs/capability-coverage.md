@@ -739,7 +739,7 @@ mechanics, and similar), not gaps in coverage.
 | mcp_transport | 12 |
 | native_tool_ui | 8 |
 | provider_secret | 34 |
-| public_indexing | 8 |
+| public_indexing | 9 |
 | realtime_stream | 9 |
 | search_ui | 19 |
 | session_token_exchange | 21 |
