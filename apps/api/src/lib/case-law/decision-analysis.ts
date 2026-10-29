@@ -8,8 +8,9 @@ import { corpusStorageMode } from "@/api/env-base";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import {
-  persistedAstOrAbsent,
+  parsePersistedCorpusAst,
   readCorpusAst,
+  readCorpusForRecovery,
   readCorpusPayloadOrFallback,
 } from "@/api/lib/legal-search/corpus-storage";
 import type { CorpusTombstoneReader } from "@/api/lib/legal-search/corpus-tombstones";
@@ -86,24 +87,26 @@ type DecisionAstPointers = {
 export const readDecisionAnalysisAst = async (
   { astS3Key, contentHash, documentAst, id }: DecisionAstPointers,
   readTombstones: CorpusTombstoneReader,
-): Promise<DocumentAst | null> => {
-  if (
-    corpusStorageMode === "off" ||
-    astS3Key === null ||
-    contentHash === null
-  ) {
-    return parseCaseLawDecisionAst(documentAst);
-  }
-  const stored = await readCorpusPayloadOrFallback({
-    documentId: id,
-    key: astS3Key,
-    step: "analysis.readDecisionAst",
-    read: async () =>
-      persistedAstOrAbsent(
-        await readCorpusAst(astS3Key, { readTombstones }),
-        "analysis.readDecisionAst",
-      ),
-    fallback: async () => await Promise.resolve(documentAst),
-  });
-  return parseCaseLawDecisionAst(stored);
-};
+): Promise<DocumentAst | null> =>
+  (
+    await readCorpusForRecovery({
+      documentId: id,
+      read: async () => {
+        if (
+          corpusStorageMode === "off" ||
+          astS3Key === null ||
+          contentHash === null
+        ) {
+          return parseCaseLawDecisionAst(parsePersistedCorpusAst(documentAst));
+        }
+        const stored = await readCorpusPayloadOrFallback({
+          documentId: id,
+          key: astS3Key,
+          step: "analysis.readDecisionAst",
+          read: async () => await readCorpusAst(astS3Key, { readTombstones }),
+          fallback: () => parsePersistedCorpusAst(documentAst),
+        });
+        return parseCaseLawDecisionAst(stored);
+      },
+    })
+  ).unwrapOr(null);

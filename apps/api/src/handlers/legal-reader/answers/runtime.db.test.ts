@@ -36,6 +36,7 @@ import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { readReaderAnswerDecision } from "@/api/lib/case-law/reader-answer-corpus";
+import { WithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-projection";
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
@@ -85,6 +86,8 @@ afterAll(releaseTestDb);
 afterEach(() => setSystemTime());
 
 const scope = (activeDatabase = database) => ({
+  readCopies: async () =>
+    new WithdrawnCopyProjection([], "Withdrawn by publisher"),
   organizationId,
   userId,
   recordAuditEvent: async () => undefined,
@@ -229,6 +232,7 @@ describe("reader answer turn lifecycle", () => {
             : Result.err(
                 new HandlerError({
                   status: 502,
+                  code: "internal_error",
                   message: "Provider unavailable",
                 }),
               ),
@@ -665,9 +669,18 @@ describe("reader answer turn lifecycle", () => {
     { reason: "busy", code: ACTION_ADMISSION_CODES.concurrencyBusy },
     { reason: "not_enabled", code: ACTION_ADMISSION_CODES.notEnabled },
     {
-      reason: "unavailable",
-      code: ACTION_ADMISSION_CODES.admissionUnavailable,
+      reason: "store_unavailable",
+      code: ACTION_ADMISSION_CODES.storeUnavailable,
     },
+    {
+      reason: "configuration_incomplete",
+      code: ACTION_ADMISSION_CODES.configurationIncomplete,
+    },
+    {
+      reason: "organization_state_unreadable",
+      code: ACTION_ADMISSION_CODES.organizationStateUnreadable,
+    },
+    { reason: "lease_lost", code: ACTION_ADMISSION_CODES.leaseLost },
   ] as const)(
     "admission $reason persists its precise recovery code on stream and reload",
     async ({ reason, code }) => {
@@ -714,12 +727,38 @@ describe("reader answer turn lifecycle", () => {
     },
   );
 
+  test("an unclassified admission failure persists an internal error without claiming a store outage", async () => {
+    const prepared = await create();
+    const { text } = await complete(prepared, {
+      admitModelAction: async () => {
+        throw new HandlerError({
+          status: 500,
+          code: "internal_error",
+          message: "Admission failed",
+        });
+      },
+    });
+    expect(terminalEvents(text).at(0)?.errorCode).toBe("internal");
+    expect(await message(prepared)).toMatchObject({
+      status: "failed",
+      errorCode: "internal",
+    });
+    expect(await reload(prepared)).toMatchObject({
+      status: "failed",
+      errorCode: "internal",
+    });
+  });
+
   test("model failures settle streaming messages as failed", async () => {
     const prepared = await create();
     const { text } = await complete(prepared, {
       runModel: async () =>
         Result.err(
-          new HandlerError({ status: 502, message: "Provider unavailable" }),
+          new HandlerError({
+            status: 502,
+            code: "internal_error",
+            message: "Provider unavailable",
+          }),
         ),
     });
     expect(text).toContain('"type":"failed"');
@@ -830,7 +869,11 @@ describe("reader answer turn lifecycle", () => {
           `Related [[${relatedId}#p-7]]. Invented [[${relatedId}#p-99]].`,
         );
         return Result.err(
-          new HandlerError({ status: 502, message: "Provider interrupted" }),
+          new HandlerError({
+            status: 502,
+            code: "internal_error",
+            message: "Provider interrupted",
+          }),
         );
       },
     });
@@ -877,7 +920,11 @@ describe("reader answer turn lifecycle", () => {
     await complete(first, {
       runModel: async () =>
         Result.err(
-          new HandlerError({ status: 502, message: "Provider unavailable" }),
+          new HandlerError({
+            status: 502,
+            code: "internal_error",
+            message: "Provider unavailable",
+          }),
         ),
     });
     const regenerated = await prepare({
@@ -959,6 +1006,7 @@ describe("reader answer turn lifecycle", () => {
           return Result.err(
             new HandlerError({
               status: 502,
+              code: "internal_error",
               message: "Expired fixture generation",
             }),
           );

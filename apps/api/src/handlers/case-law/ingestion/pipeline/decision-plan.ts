@@ -61,7 +61,6 @@ import {
 import {
   corpusMirrorColumns,
   corpusPayloadDisposition,
-  persistedAstOrAbsent,
   planCorpusDocumentWrite,
   readCorpusAst,
   storedCorpusWrite,
@@ -122,21 +121,16 @@ const storedScopeState = async ({
   s3Policy,
 }: StoredScopeStateOptions) => {
   const row = await storedScopeRow(decisionId, scopedDb);
-  // A stored AST no reader can read is reported and answered as absent, so
-  // verifying the stored citation scopes against it is a typed rejection.
   const ast = row?.astS3Key
-    ? persistedAstOrAbsent(
-        await readCorpusAst(row.astS3Key, {
-          ...corpus.readBytes,
-          ...(signal === undefined ? {} : { signal }),
-          ...(s3Policy === undefined ? {} : { s3Policy }),
-          readTombstones: async (locations) =>
-            await scopedDb(
-              async (tx) => await corpusTombstoneReaderForTx(tx)(locations),
-            ),
-        }),
-        "decisionPlan.storedScopeAst",
-      )
+    ? await readCorpusAst(row.astS3Key, {
+        ...corpus.readBytes,
+        ...(signal === undefined ? {} : { signal }),
+        ...(s3Policy === undefined ? {} : { s3Policy }),
+        readTombstones: async (locations) =>
+          await scopedDb(
+            async (tx) => await corpusTombstoneReaderForTx(tx)(locations),
+          ),
+      })
     : row?.documentAst;
   return { row, ast };
 };
@@ -159,6 +153,11 @@ const verifyStoredCitationScopes = async ({
   signal,
   s3Policy,
 }: VerifyStoredCitationScopesOptions) => {
+  // Opinion scopes address the structure being discarded; the row CAS below
+  // still protects a concurrently replaced envelope.
+  if (pendingMirrorPayload?.astStatus === "text-only") {
+    return Result.ok(false);
+  }
   if (existing === undefined || reusedCitationScopeEnvelope === undefined) {
     return Result.ok(false);
   }
@@ -420,14 +419,18 @@ const planCorpusPayload = ({
   // replays it is fenced on the observation that stored it, so the row
   // already holds exactly this payload. Writing it back would copy the
   // whole document into a new row version to say the same thing.
-  const postgresPayload =
-    pendingMirrorPayload === null
-      ? {
-          fulltext: corpusPayload.text,
-          sections: corpusPayload.sections,
-          documentAst: corpusPayload.ast,
-        }
+  const postgresPayload = (() => {
+    if (pendingMirrorPayload === null) {
+      return {
+        fulltext: corpusPayload.text,
+        sections: corpusPayload.sections,
+        documentAst: corpusPayload.ast,
+      };
+    }
+    return pendingMirrorPayload.astStatus === "text-only"
+      ? { documentAst: pendingMirrorPayload.ast }
       : {};
+  })();
 
   const payloadColumns = (() => {
     switch (corpusPlan.type) {

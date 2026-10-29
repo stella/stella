@@ -1,4 +1,3 @@
-// parser-output-unchanged: adds the typed refusal for a stored AST the persisted reader cannot read; no parser constructs it.
 // parser-output-unchanged: registers typed error fingerprint dimensions without changing error payloads or parser results.
 // parser-output-unchanged: [pl-courts] ParseXmlError moved to its parser module; successful parser output is identical.
 // parser-output-unchanged: [pl-sn] ParseXmlError moved to its parser module; successful parser output is identical.
@@ -194,7 +193,14 @@ type HandlerErrorBaseProps<
 
 export type HandlerErrorProps<
   TStatus extends HandlerErrorStatusCode = HandlerErrorStatusCode,
-> = HandlerErrorBaseProps<TStatus> & HandlerErrorRetryAdvice;
+> = HandlerErrorBaseProps<TStatus> &
+  HandlerErrorRetryAdvice &
+  // Gateway/availability statuses must state their semantics; the status alone
+  // cannot distinguish an upstream outage from configuration or output defects.
+  (
+    | { status: Exclude<HandlerErrorStatusCode, 502 | 503> }
+    | { code: HandlerErrorCode }
+  );
 
 // TaggedError(...) cannot reference the class type parameter in the base
 // expression, so the base uses the wide props type and the subclass narrows
@@ -426,18 +432,15 @@ export class StoredAstDegradedError extends TaggedError(
   degradations: readonly PersistedAstDegradation[];
 }> {}
 
-/**
- * A stored document AST that is not an AST the persisted reader can read,
- * even degraded: a declared node missing a field it requires, or a value of
- * the wrong kind. A reader serves the decision without it (its text from the
- * stored fulltext, else a typed failed-read state), so one malformed row costs
- * its structure, never the read. `issues` names the paths that failed.
- */
-export class StoredAstUnreadableError extends TaggedError(
-  "StoredAstUnreadableError",
+export const STORED_CORPUS_VALIDATION_CODE = "stored_corpus_invalid";
+
+/** Stored JSON failed its reader contract; contains diagnostics only, never payloads. */
+export class StoredCorpusValidationError extends TaggedError(
+  "StoredCorpusValidationError",
 )<{
   message: string;
-  issues: readonly string[];
+  code: typeof STORED_CORPUS_VALIDATION_CODE;
+  paths: readonly string[];
 }> {}
 
 /** Validation/domain-layer errors: no valid inputs, invalid config. */

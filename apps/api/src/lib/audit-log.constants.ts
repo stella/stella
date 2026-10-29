@@ -43,6 +43,7 @@ export const AUDIT_RESOURCE_TYPE = {
   CONTACT: "contact",
   CONTACT_DIRECTORY: "contact_directory",
   CORRESPONDENCE: "correspondence",
+  DOCUMENT_ANNOTATION: "document_annotation",
   DOCUMENT_TYPE: "document_type",
   USAGE_ALLOCATION: "usage_allocation",
   USAGE_ENTITLEMENT: "usage_entitlement",
@@ -71,6 +72,7 @@ export const AUDIT_RESOURCE_TYPE = {
   LEGAL_LIST_VERIFICATION: "legal_list_verification",
   MCP_CONNECTION: "mcp_connection",
   MCP_GATEWAY_TOOL: "mcp_gateway_tool",
+  ORGANIZATION_ACCESS_STATE: "organization_access_state",
   ORGANIZATION_SETTINGS: "organization_settings",
   PDF_SIGNING_SESSION: "pdf_signing_session",
   PLAYBOOK: "playbook",
@@ -103,12 +105,13 @@ export const AUDIT_RESOURCE_TYPE = {
 export type AuditResourceType =
   (typeof AUDIT_RESOURCE_TYPE)[keyof typeof AUDIT_RESOURCE_TYPE];
 
-/** Account events describe the export lifecycle without carrying export contents. */
+/** Account events record lifecycle changes without carrying private contents. */
 export const ACCOUNT_AUDIT_EVENT_TYPES = [
   "account.data_export.requested",
   "account.data_export.ready",
   "account.data_export.downloaded",
   "account.data_export.expired",
+  "account.sign_in_method.disconnected",
 ] as const;
 
 export type AccountAuditEventType = (typeof ACCOUNT_AUDIT_EVENT_TYPES)[number];

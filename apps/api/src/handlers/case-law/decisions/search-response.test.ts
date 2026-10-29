@@ -64,6 +64,7 @@ const responseWithText = (text: string): SearchResponse => {
     anchorId: text,
     citationCount: Number.MAX_VALUE,
     citationAuthority: -Number.MAX_VALUE,
+    textAvailability: "available",
     matchingPassages: Number.MAX_SAFE_INTEGER,
     match: "all_terms",
     createdAt: text,

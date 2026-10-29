@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 
 import { useForm, useSelector } from "@tanstack/react-form";
 import { useMutation, useQuery, useSuspenseQuery } from "@tanstack/react-query";
@@ -10,6 +10,7 @@ import {
   currencyCodeSchema,
 } from "@stll/api-contract/currency-code";
 import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
+import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
 import { tryToMinorUnits } from "@stll/money";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
@@ -30,6 +31,7 @@ import {
 
 import { formatCurrencyAmount } from "@/components/billing/format-currency";
 import { DatePickerPopover } from "@/components/date-picker-popover";
+import { MEMBER_CHOICE, MemberCombobox } from "@/components/member-combobox";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { UserIdentity } from "@/components/user-avatar";
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -41,17 +43,20 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import { localISODate } from "@/lib/local-iso-date";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { organizationOptions } from "@/lib/organization/queries";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
 import {
   requiredTrimmedStringSchema,
   schemaFormOptions,
   toFormErrors,
 } from "@/lib/schema";
-import { useQueryView } from "@/lib/use-query-view";
+import { billingCodesOptions } from "@/lib/workspaces/queries/billing-codes";
 import {
   rateEntriesOptions,
   rateTablesOptions,
 } from "@/lib/workspaces/queries/rates";
+
+import { BillingArrangementEditor } from "./billing-arrangement-editor";
 
 type RateManagementDialogProps = {
   open: boolean;
@@ -239,6 +244,8 @@ const RateTablesView = ({
           {t("billing.rates.createRateTable")}
         </Button>
       </div>
+
+      <BillingArrangementEditor workspaceId={workspaceId} />
 
       {showForm && (
         <CreateRateTableForm
@@ -455,7 +462,7 @@ const RateEntriesView = ({
 
   const { data: tables } = useSuspenseQuery(rateTablesOptions(workspaceId));
   const entriesQuery = useQuery(rateEntriesOptions(workspaceId, rateTableId));
-  const entriesView = useQueryView(entriesQuery);
+  const entriesView = queryView(entriesQuery);
   const entries = entriesView.type === "items" ? entriesView.items : undefined;
   const { data: org } = useSuspenseQuery(
     organizationOptions(activeOrganizationId),
@@ -473,17 +480,25 @@ const RateEntriesView = ({
       workspaceId: string;
       rateTableId: string;
       userId?: string | null;
+      role?: (typeof ORGANIZATION_ROLE_NAMES)[number] | null;
+      activityCodeId?: string | null;
       hourlyRate: number;
       effectiveFrom: string;
       effectiveTo?: string | null;
     }) => {
-      const { userId, ...restBody } = body;
+      const { userId, activityCodeId, ...restBody } = body;
       const response = await api
         .rates({ workspaceId: toSafeId<"workspace">(ws) })({
           rateTableId: toSafeId<"rateTable">(rtId),
         })
         .entries.put({
           ...restBody,
+          ...(activityCodeId !== undefined && {
+            activityCodeId:
+              activityCodeId === null
+                ? null
+                : toSafeId<"billingCode">(activityCodeId),
+          }),
           ...(userId !== undefined && {
             userId: userId === null ? null : toSafeId<"user">(userId),
           }),
@@ -577,6 +592,7 @@ const RateEntriesView = ({
       {showForm && (
         <CreateRateEntryForm
           currency={table?.currency ?? "USD"}
+          workspaceId={workspaceId}
           members={members}
           onCancel={() => setShowForm(false)}
           onSubmit={(values) => {
@@ -601,43 +617,10 @@ const RateEntriesView = ({
               className="group flex items-center gap-3 rounded-md border px-3 py-2"
               key={entry.id}
             >
-              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                {entry.userId ? (
-                  <div className="flex items-center gap-2">
-                    <UserIdentity
-                      avatarClassName="size-7 shrink-0 text-3xs"
-                      image={entry.userImage}
-                      name={entry.userName}
-                    />
-                    <span className="text-sm tabular-nums">
-                      {formatCurrencyAmount(
-                        entry.hourlyRate,
-                        table?.currency ?? "USD",
-                      )}
-                      {t("billing.rates.perHour")}
-                    </span>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium">
-                      {t("billing.rates.defaultRate")}
-                    </span>
-                    <span className="text-sm tabular-nums">
-                      {formatCurrencyAmount(
-                        entry.hourlyRate,
-                        table?.currency ?? "USD",
-                      )}
-                      {t("billing.rates.perHour")}
-                    </span>
-                  </div>
-                )}
-                <span className="text-muted-foreground text-xs">
-                  {entry.effectiveFrom}
-                  {entry.effectiveTo
-                    ? ` — ${entry.effectiveTo}`
-                    : ` — ${t("billing.rates.ongoing")}`}
-                </span>
-              </div>
+              <RateEntryDetails
+                entry={entry}
+                currency={table?.currency ?? "USD"}
+              />
 
               <Button
                 aria-label={t("common.delete")}
@@ -674,15 +657,19 @@ type Member = {
 const CreateRateEntryForm = ({
   members,
   currency,
+  workspaceId,
   today,
   onSubmit,
   onCancel,
 }: {
   members: Member[];
+  workspaceId: string;
   currency: string;
   today: string;
   onSubmit: (values: {
     userId?: string | null;
+    role?: (typeof ORGANIZATION_ROLE_NAMES)[number] | null;
+    activityCodeId?: string | null;
     hourlyRate: number;
     effectiveFrom: string;
     effectiveTo?: string | null;
@@ -690,13 +677,26 @@ const CreateRateEntryForm = ({
   onCancel: () => void;
 }) => {
   const t = useTranslations();
+  const userFieldId = useId();
+  const activityView = queryView(
+    useQuery(billingCodesOptions(workspaceId, "activity")),
+  );
+  const memberOptions = members.map((member) => ({
+    email: member.user.email,
+    image: member.user.image ?? null,
+    name: member.user.name,
+    userId: member.userId,
+  }));
   const schema = v.strictObject({
     userId: v.pipe(
       v.string(),
       v.transform((value) => value || null),
     ),
-    // The typed text is scaled directly rather than through a parsed float,
-    // which would lose the cent that 1.005 should round to in USD.
+    role: v.nullable(v.picklist(ORGANIZATION_ROLE_NAMES)),
+    activityCodeId: v.pipe(
+      v.string(),
+      v.transform((value) => value || null),
+    ),
     hourlyRate: v.pipe(
       v.string(),
       v.rawTransform(({ addIssue, dataset, NEVER }) => {
@@ -724,6 +724,8 @@ const CreateRateEntryForm = ({
       submitValues: "schema-output",
       defaultValues: {
         userId: "",
+        role: null,
+        activityCodeId: "",
         hourlyRate: "",
         effectiveFrom: today,
         effectiveTo: "",
@@ -751,61 +753,55 @@ const CreateRateEntryForm = ({
       }}
     >
       <div className="flex flex-col gap-1.5">
-        <Label>{t("common.user")}</Label>
+        <Label htmlFor={userFieldId}>{t("common.user")}</Label>
         <form.Field name="userId">
           {(field) => (
-            <Select
-              onValueChange={(val) => field.handleChange(val ?? "")}
-              value={field.state.value}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder={t("billing.rates.defaultRate")}>
-                  {(current) => {
-                    if (typeof current !== "string" || current.length === 0) {
-                      return t("billing.rates.defaultRate");
-                    }
-
-                    const selectedMember = members.find(
-                      (member) => member.userId === current,
-                    );
-
-                    if (!selectedMember) {
-                      return t("billing.rates.defaultRate");
-                    }
-
-                    return (
-                      <UserIdentity
-                        avatarClassName="size-7 shrink-0 text-3xs"
-                        className="min-w-0"
-                        image={selectedMember.user.image}
-                        name={selectedMember.user.name}
-                        secondaryText={selectedMember.user.email}
-                      />
-                    );
-                  }}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectPopup>
-                <SelectItem value="">
-                  {t("billing.rates.defaultRate")}
-                </SelectItem>
-                {members.map((member) => (
-                  <SelectItem key={member.userId} value={member.userId}>
-                    <UserIdentity
-                      avatarClassName="size-7 shrink-0 text-3xs"
-                      className="min-w-0"
-                      image={member.user.image}
-                      name={member.user.name}
-                      secondaryText={member.user.email}
-                    />
-                  </SelectItem>
-                ))}
-              </SelectPopup>
-            </Select>
+            <MemberCombobox
+              choice={{
+                type: MEMBER_CHOICE.memberOrNone,
+                noneLabel: t("billing.rates.defaultRate"),
+              }}
+              id={userFieldId}
+              label={t("common.user")}
+              members={memberOptions}
+              onValueChange={(userId) => {
+                field.handleChange(userId ?? "");
+                if (userId) {
+                  form.setFieldValue("role", null);
+                }
+              }}
+              placeholder={t("billing.rates.defaultRate")}
+              value={field.state.value || null}
+            />
           )}
         </form.Field>
       </div>
 
+      <form.Field name="role">
+        {(field) => (
+          <RateRoleSelect
+            value={field.state.value}
+            onChange={(role) => {
+              field.handleChange(role);
+              if (role) {
+                form.setFieldValue("userId", "");
+              }
+            }}
+          />
+        )}
+      </form.Field>
+      <QueryViewFeedback view={activityView} />
+      <form.Field name="activityCodeId">
+        {(field) => (
+          <RateActivitySelect
+            value={field.state.value}
+            onChange={field.handleChange}
+            codes={
+              activityView.type === "items" ? activityView.items : undefined
+            }
+          />
+        )}
+      </form.Field>
       <div className="flex gap-3">
         <div className="flex flex-1 flex-col gap-1.5">
           <form.Field name="hourlyRate">
@@ -861,5 +857,138 @@ const CreateRateEntryForm = ({
         </Button>
       </div>
     </Form>
+  );
+};
+
+const RateRoleSelect = ({
+  value,
+  onChange,
+}: {
+  value: (typeof ORGANIZATION_ROLE_NAMES)[number] | null;
+  onChange: (value: (typeof ORGANIZATION_ROLE_NAMES)[number] | null) => void;
+}) => {
+  const t = useTranslations();
+  return (
+    <Field name="role">
+      <FieldLabel>{t("common.role")}</FieldLabel>
+      <Select
+        value={value ?? "none"}
+        onValueChange={(selected) =>
+          onChange(
+            ORGANIZATION_ROLE_NAMES.find(
+              (candidate) => candidate === selected,
+            ) ?? null,
+          )
+        }
+      >
+        <SelectTrigger>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectPopup>
+          <SelectItem value="none">{t("common.none")}</SelectItem>
+          {ORGANIZATION_ROLE_NAMES.map((role) => (
+            <SelectItem key={role} value={role}>
+              {t(`organization.roles.${role}`)}
+            </SelectItem>
+          ))}
+        </SelectPopup>
+      </Select>
+    </Field>
+  );
+};
+
+const RateActivitySelect = ({
+  value,
+  onChange,
+  codes,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  codes: { id: string; code: string; label: string }[] | undefined;
+}) => {
+  const t = useTranslations();
+  return (
+    <Field name="activityCodeId">
+      <FieldLabel>{t("billing.codes.activityCode")}</FieldLabel>
+      <Select
+        value={value || "none"}
+        onValueChange={(selected) =>
+          onChange(selected === "none" || selected === null ? "" : selected)
+        }
+      >
+        <SelectTrigger>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectPopup>
+          <SelectItem value="none">{t("common.none")}</SelectItem>
+          {codes?.map((code) => (
+            <SelectItem
+              key={code.id}
+              value={code.id}
+            >{`${code.code}: ${code.label}`}</SelectItem>
+          ))}
+        </SelectPopup>
+      </Select>
+    </Field>
+  );
+};
+
+const RateEntryDetails = ({
+  entry,
+  currency,
+}: {
+  entry: {
+    userId: string | null;
+    role: (typeof ORGANIZATION_ROLE_NAMES)[number] | null;
+    userImage: string | null;
+    userName: string | null;
+    hourlyRate: number;
+    activityCode: string | null;
+    activityLabel: string | null;
+    effectiveFrom: string;
+    effectiveTo: string | null;
+  };
+  currency: string;
+}) => {
+  const t = useTranslations();
+  return (
+    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+      {entry.userId ? (
+        <div className="flex items-center gap-2">
+          <UserIdentity
+            avatarClassName="size-7 shrink-0 text-3xs"
+            image={entry.userImage}
+            name={entry.userName}
+          />
+          <span className="text-sm tabular-nums">
+            {formatCurrencyAmount(entry.hourlyRate, currency)}
+            {t("billing.rates.perHour")}
+          </span>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium">
+            {entry.role
+              ? t(`organization.roles.${entry.role}`)
+              : t("billing.rates.defaultRate")}
+          </span>
+          <span className="text-sm tabular-nums">
+            {formatCurrencyAmount(entry.hourlyRate, currency)}
+            {t("billing.rates.perHour")}
+          </span>
+        </div>
+      )}
+      {entry.activityCode && (
+        <span className="text-muted-foreground text-xs">
+          <bdi>{entry.activityCode}</bdi>: {entry.activityLabel}
+        </span>
+      )}
+      <span className="text-muted-foreground text-xs">
+        {entry.effectiveFrom}
+        {entry.effectiveTo
+          ? ` — ${entry.effectiveTo}`
+          : ` — ${t("billing.rates.ongoing")}`}
+      </span>
+    </div>
   );
 };

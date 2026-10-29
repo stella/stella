@@ -4,6 +4,8 @@ import { eq, sql, TransactionRollbackError } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
+import { waitForExternalState } from "@stll/property-testing/external-state";
+
 import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import { safeDbFromScoped } from "@/api/db/safe-db";
@@ -220,18 +222,17 @@ const observeBlocked = async (
   waiterPid: number,
   holderPid: number,
 ) => {
-  for (let attempt = 0; attempt < 500; attempt += 1) {
-    const rows = await observer
-      .select({
-        blocked: sql<boolean>`${holderPid}::int = ANY(pg_blocking_pids(${waiterPid}::int))`,
-      })
-      .from(sql`(SELECT 1) AS lock_observation`);
-    if (rows.at(0)?.blocked) {
-      return;
-    }
-    await Bun.sleep(10);
-  }
-  panic("The second reparent never waited on the first one's tree lock");
+  await waitForExternalState({
+    description: "the second reparent waits on the first one's tree lock",
+    read: async () =>
+      (
+        await observer
+          .select({
+            blocked: sql<boolean>`${holderPid}::int = ANY(pg_blocking_pids(${waiterPid}::int))`,
+          })
+          .from(sql`(SELECT 1) AS lock_observation`)
+      ).at(0)?.blocked === true,
+  });
 };
 
 const ids = () => ({

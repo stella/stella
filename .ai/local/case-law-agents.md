@@ -151,10 +151,16 @@ Individual adapters should NOT sanitize. The pipeline applies
 chars) to ALL fields including `sourceRaw`. This ensures
 consistency and prevents PostgreSQL text column rejections.
 
-### 6. Validate every parser with validateAndLog
+### 6. Keep text-retention validation in the ingestion pipeline
 
-Every parser MUST call `validateAndLog()` after producing
-blocks. The validator checks:
+Text-retention validation belongs to the ingestion pipeline. New parsers and
+adapters do not import or call `validateAndLog()` or `validateAst()`.
+`no-parser-validator-calls` enforces this boundary; legacy imports and calls
+remain in the shrinking `scripts/parser-validator-call-ledger.json` ledger.
+Do not add ledger entries for new parsers. Focused tests may exercise the shared
+validator on parser output.
+
+The pipeline validator checks:
 
 - Content retention (>90% of source text preserved)
 - Missing meaningful words (<15 allowed)
@@ -232,7 +238,7 @@ still walked for content.
 A decision shown with a flat structure is visibly imperfect and a user
 can still read and cite it. A decision missing a paragraph looks
 complete and is wrong, and neither the reader nor the AI pipeline has
-any way to know. `validateAndLog`'s CONTENT_LOSS and MISSING_WORDS are
+any way to know. The pipeline validator's CONTENT_LOSS and MISSING_WORDS are
 the completeness guard and must be treated as errors; heading levels
 and section boundaries are fidelity and may carry a known tail.
 
@@ -715,20 +721,15 @@ and nowhere else. Writers validate against the strict schema; the
 persisted reader degrades vocabulary it does not declare instead of
 failing the document — a role becomes the declared fallback, an unknown
 inline kind collapses to the text its children carried, an unknown block
-kind is dropped, a block `id` or `anchorId` an earlier block holds is
-re-keyed — and reports each one through `StoredAstDegradedError`.
-Writers re-key repeated identities by the same rule
-(`withUniqueBlockIdentities`, applied in `sanitizeResult`) before the
-strict schema checks them. A stored value that is not an AST even so is
-read through `readPersistedCorpusAst` (and `readCorpusAst` for an object)
-as a typed `unreadable` answer, never thrown, and reported through
-`reportUnreadableStoredAst`. The decision read serves the decision from
-its fulltext, or as `documentReadFailed`; other readers answer it
-through `persistedAstOrAbsent`, which reads it as absent so the text
-serves instead. A write or index path (the corpus index projection, EU
-completion) uses `persistedAstOrTextFallback`: absent only beside usable
-text, and otherwise the typed refusal fails the write as an unreadable
-payload, so an empty document is never recorded as done.
+kind is dropped, and repeated block identities are re-keyed by
+`withUniqueBlockIdentities`, reporting each degradation through
+`StoredAstDegradedError`. The same persisted schema is used by the writer's
+`prepareCorpusAst` owner, so a repaired document reads as it was written.
+Malformed stored payloads retain `StoredCorpusValidationError` with its stable
+code and path-only diagnostics. A reader chooses recovery through the typed
+`readCorpusForRecovery` result after trying its usable row copy. A write or
+index path may recover absent structure only beside usable text; otherwise
+it propagates the validation failure.
 
 ## Decision analysis
 
@@ -759,7 +760,7 @@ When adding a new country adapter:
 4. **Extract ALL metadata** — every field the API exposes goes
    into `IngestionResult.metadata`
 5. **Write a parser** (if HTML/JSON structure allows) — produce
-   `DocumentAst` blocks; call `validateAndLog()`
+   `DocumentAst` blocks; text-retention validation belongs to the ingestion pipeline
 6. **Register** in `adapters/index.ts` and
    `adapter-registry-lazy.ts`
 7. **Add adapter key** to `consts.ts` `ADAPTER_KEYS`

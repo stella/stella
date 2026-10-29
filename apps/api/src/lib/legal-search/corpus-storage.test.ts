@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { randomFillSync } from "node:crypto";
+import * as v from "valibot";
+
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import { persistedDocumentAstSchema } from "@stll/legal-ast/document-ast";
 
 import { CASE_LAW_CORPUS_MIRROR_STATUS } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -13,7 +17,7 @@ import {
   CorpusMemberDigestMismatchError,
   CorpusMemberTombstonedError,
   CorpusPayloadUnavailableError,
-  StoredAstUnreadableError,
+  StoredCorpusValidationError,
   TimeoutError,
 } from "@/api/lib/errors/tagged-errors";
 import {
@@ -30,17 +34,16 @@ import {
   corpusPayloadDisposition,
   deleteCorpusDocument,
   EMPTY_CORPUS_CONTENT_HASHES,
+  parsePersistedCorpusAst,
   parsePersistedCorpusSections,
-  persistedAstOrAbsent,
   planCorpusDocumentWrite,
-  readCorpusAst,
   readCorpusAtAuthoritativePointer,
   readCorpusBytesAt,
   readCorpusPayloadOrFallback,
   readCorpusText,
-  readPersistedCorpusAst,
   storedCorpusWrite,
   TRIMMED_CORPUS_PAYLOAD_COLUMNS,
+  writeCorpusDocument,
 } from "@/api/lib/legal-search/corpus-storage";
 import type {
   CorpusPayload,
@@ -55,15 +58,6 @@ import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 /** Nothing erased: the denial list a read consults when the case is not it. */
 const noTombstones = async (): Promise<ReadonlySet<string>> =>
   await Promise.resolve(new Set<string>());
-
-/** A stored AST value as read, for a test of one that must read. */
-const readAstOf = (value: unknown) => {
-  const read = readPersistedCorpusAst(value);
-  if (read.type === "unreadable") {
-    throw read.error;
-  }
-  return read.ast;
-};
 
 describe("corpus mirror state columns", () => {
   test("partition pending and settled pointer states", () => {
@@ -307,51 +301,19 @@ describe("persisted corpus JSON validation", () => {
         { index: "0", type: "header", title: null, text: "Rozsudok" },
       ]),
     ).toThrow('Invalid type: Expected number but received "0"');
-    for (const claim of [
-      { version: 1, blocks: [{ type: "paragraph" }] },
-      [],
-      { unexpected: true },
-    ]) {
-      const read = readPersistedCorpusAst(claim);
-      expect(read.type).toBe("unreadable");
-      expect(read.type === "unreadable" ? read.error : null).toBeInstanceOf(
-        StoredAstUnreadableError,
-      );
-      expect(
-        read.type === "unreadable" ? read.error.issues.length : 0,
-      ).toBeGreaterThan(0);
-      expect(persistedAstOrAbsent(read, "test.unreadable")).toBeNull();
-    }
-  });
-
-  test("answers a stored object that is not an AST, or not JSON, as unreadable", async () => {
-    for (const body of [
-      JSON.stringify({ version: 1, blocks: [{ type: "paragraph" }] }),
-      "{",
-    ]) {
-      const read = await readCorpusAst("legal-corpus/bad/ast.zst", {
-        readObject: async () => await Promise.resolve(zstdCompress(body)),
-        readTombstones: noTombstones,
-      });
-      expect(read.type).toBe("unreadable");
-    }
-    const read = await readCorpusAst("legal-corpus/ok/ast.zst", {
-      readObject: async () =>
-        await Promise.resolve(
-          zstdCompress(JSON.stringify({ version: 1, blocks: [] })),
-        ),
-      readTombstones: noTombstones,
-    });
-    expect(read.type).toBe("read");
-  });
-
-  test("answers absent and empty stored ASTs as read, not unreadable", () => {
-    expect(readPersistedCorpusAst(null)).toEqual({ type: "read", ast: null });
-    expect(readPersistedCorpusAst({})).toEqual({ type: "read", ast: {} });
+    expect(() =>
+      parsePersistedCorpusAst({ version: 1, blocks: [{ type: "paragraph" }] }),
+    ).toThrow(StoredCorpusValidationError);
+    expect(() => parsePersistedCorpusAst([])).toThrow(
+      StoredCorpusValidationError,
+    );
+    expect(() => parsePersistedCorpusAst({ unexpected: true })).toThrow(
+      StoredCorpusValidationError,
+    );
   });
 
   test("serves a stored AST whose block role this reader does not declare", () => {
-    const parsed = readAstOf({
+    const parsed = parsePersistedCorpusAst({
       version: 1,
       blocks: [
         {
@@ -369,7 +331,7 @@ describe("persisted corpus JSON validation", () => {
   });
 
   test("serves a stored AST around a block kind this reader cannot render", () => {
-    const parsed = readAstOf({
+    const parsed = parsePersistedCorpusAst({
       version: 1,
       blocks: [
         { id: "s1", anchorId: "s-1", type: "sidebar", body: "aside" },
@@ -945,4 +907,79 @@ describe("deleteCorpusDocument", () => {
     // deleted object would outlive the key it names.
     expect(erasure.tombstoned).toEqual([[]]);
   });
+});
+
+test("standalone writes repair repeated identities before comparing the stored payload", async () => {
+  const invalidAst = {
+    version: 1,
+    source: {
+      system: "synthetic",
+      documentId: "synthetic",
+      webUrl: "",
+      printUrl: "",
+    },
+    metadata: {
+      caseNumber: null,
+      ecli: null,
+      court: null,
+      decisionDate: null,
+      decisionType: null,
+      keywords: [],
+      statutes: [],
+    },
+    blocks: [
+      {
+        id: "p1",
+        anchorId: "p1",
+        type: "paragraph",
+        inlines: [{ type: "text", text: "Body." }],
+        plainText: "Body.",
+      },
+      {
+        id: "p2",
+        anchorId: "p1",
+        type: "paragraph",
+        inlines: [{ type: "text", text: "Body." }],
+        plainText: "Body.",
+      },
+    ],
+  } satisfies DocumentAst;
+  const repaired = v.parse(persistedDocumentAstSchema, invalidAst);
+  expect(repaired).not.toEqual(invalidAst);
+  expect(
+    repaired.blocks.map(({ anchorId, plainText }) => [anchorId, plainText]),
+  ).toEqual([
+    ["p1", "Body."],
+    ["p1-2", "Body."],
+  ]);
+  const payload = {
+    text: "Synthetic decision.",
+    sections: null,
+    ast: repaired,
+  };
+  expect(corpusContentHash({ ...payload, ast: invalidAst })).not.toBe(
+    corpusContentHash(payload),
+  );
+  const plan = planCorpusDocumentWrite({
+    ...payload,
+    documentId: "synthetic",
+    jurisdiction: "SVK",
+    stored: null,
+  });
+  if (plan.type !== "put") {
+    expect.unreachable("Fixture must carry text");
+  }
+  // The repaired AST must converge to the already stored document. The
+  // aborted signal makes any unintended transfer fail before reaching S3.
+  const outcome = await writeCorpusDocument(
+    {
+      ...payload,
+      ast: invalidAst,
+      documentId: "synthetic",
+      jurisdiction: "SVK",
+      stored: plan.written,
+    },
+    { signal: AbortSignal.abort() },
+  );
+  expect(outcome).toEqual({ type: "skipped-unchanged", written: plan.written });
 });

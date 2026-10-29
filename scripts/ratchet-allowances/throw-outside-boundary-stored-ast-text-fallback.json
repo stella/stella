@@ -1,5 +1,0 @@
-{
-  "metric": "throw-outside-boundary",
-  "delta": 1,
-  "reason": "persistedAstOrTextFallback raises the typed StoredAstUnreadableError on a write or index path that has no usable text to stand in for an unreadable stored AST. Both callers already read corpus payloads inside a rejection boundary (the projection payload read's Result.tryPromise, EU completion's legacyOperation) that classifies a raised payload error as an unreadable payload, so the refusal takes the same typed path as any other payload read failure instead of being recorded as an empty document."
-}

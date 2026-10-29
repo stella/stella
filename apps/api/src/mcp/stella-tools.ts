@@ -23,6 +23,7 @@ import {
 import { parseDecisionQuery } from "@stll/api-contract/decision-query-intent";
 import { publicCountryUnavailable } from "@stll/api-contract/public-country-capability";
 import {
+  CASE_LAW_SEARCH_FACET_NAMES,
   DEFAULT_SEARCH_SORT,
   SEARCH_PAGE_END,
   SEARCH_PAGINATION_COMPLETE,
@@ -36,9 +37,15 @@ import { mapWithConcurrency } from "@stll/concurrency";
 import { COUNTRY_CODES } from "@stll/country-codes";
 import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
-import { locateEuProvisionCitations } from "@stll/legal-atlas/eu-provision-citations";
+import {
+  euProvisionAnchor,
+  locateEuProvisionCitations,
+} from "@stll/legal-atlas/eu-provision-citations";
 import { provisionCitationProfileFor } from "@stll/legal-atlas/provision-citation-profiles";
-import { resolveProvisionCitation } from "@stll/legal-atlas/provision-citation-resolve";
+import {
+  renderProvisionAnchor,
+  resolveProvisionCitation,
+} from "@stll/legal-atlas/provision-citation-resolve";
 import {
   CASE_LAW_RESULTS_RESOURCE_URI,
   CITATION_GRAPH_RESOURCE_URI,
@@ -73,7 +80,6 @@ import type { readWorkspaceHandler } from "@/api/handlers/workspaces/get";
 import type { readOverviewHandler } from "@/api/handlers/workspaces/read-overview";
 import type { readWorkspaceContactsHandler } from "@/api/handlers/workspaces/workspace-contacts-read";
 import type { readWorkspaceMembersHandler } from "@/api/handlers/workspaces/workspace-members-read";
-import { captureError } from "@/api/lib/analytics/capture";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
@@ -85,8 +91,10 @@ import { DECISION_READ_STATUS } from "@/api/lib/case-law/decision-read-vocabular
 import { DOCTRINAL_TREATMENTS } from "@/api/lib/case-law/doctrine";
 import {
   type CaseLawProvisionFilter,
+  caseLawProvisionFilterOf,
   type CaseLawProvisionScope,
   readCaseLawProvisionScope,
+  readProvisionWorkLinked,
 } from "@/api/lib/case-law/provision-filter";
 import type { CaseLawSearchGuidanceMode } from "@/api/lib/case-law/search-guidance-mode";
 import {
@@ -122,11 +130,13 @@ import { createFileKey } from "@/api/lib/files/utils";
 import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import { tokenizeCorpusFreeText } from "@/api/lib/legal-search/corpus-query";
 import { CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
+import { storedCorpusValidationFailure } from "@/api/lib/legal-search/corpus-storage";
 import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
 import { isSearchIndexUnavailable } from "@/api/lib/legal-search/search-index-unavailable";
 import { LIMITS } from "@/api/lib/limits";
 import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
-import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   createCursorPage,
   decodePaginationCursor,
@@ -731,6 +741,14 @@ const SEARCH_CASE_LAW_TEXTS = searchCaseLawTexts(
 
 const searchCaseLawArgsSchema = nullAsAbsent(
   v.strictObject({
+    facets: v.optional(
+      v.pipe(
+        v.array(v.picklist(CASE_LAW_SEARCH_FACET_NAMES)),
+        v.maxLength(CASE_LAW_SEARCH_FACET_NAMES.length),
+        v.description("Opt-in facet names; first phrasing, page one only."),
+      ),
+      [],
+    ),
     queries: v.optional(
       v.pipe(
         v.array(
@@ -841,7 +859,7 @@ const searchCaseLawArgsSchema = nullAsAbsent(
       v.pipe(
         v.picklist(SEARCH_SORTS),
         v.description(
-          `Result order; defaults to '${DEFAULT_SEARCH_SORT}'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date and returns only dated decisions. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option.`,
+          `Result order; defaults to '${DEFAULT_SEARCH_SORT}'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date, undated decisions last. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option.`,
         ),
       ),
     ),
@@ -2244,23 +2262,16 @@ const resolveSearchProvision = (
         'Pass one complete EU provision per search, for example "Article 6(1)(a) GDPR"; search enumerated provisions separately.',
       );
     }
-    const reference = euCitation.reference;
+    const { reference } = euCitation;
     return {
       type: "resolved",
-      provision: {
+      provision: caseLawProvisionFilterOf({
         jurisdiction: "EU",
         work: euCitation.act.celex,
-        unit: reference.unit,
-        section: reference.section,
-        ...(reference.sectionSuffix === null
-          ? {}
-          : { sectionSuffix: reference.sectionSuffix }),
-        ...(reference.subsection === null
-          ? {}
-          : { subsection: reference.subsection }),
-        ...(reference.letter === null ? {} : { letter: reference.letter }),
-        ...(reference.point === null ? {} : { point: reference.point }),
-      },
+        path: reference,
+        anchorOf: (named) =>
+          euProvisionAnchor({ ...named, openEnded: false, sentence: null }),
+      }),
     };
   }
   const profile = provisionCitationProfileFor(country);
@@ -2279,17 +2290,11 @@ const resolveSearchProvision = (
     case "resolved":
       return {
         type: "resolved",
-        provision: {
+        provision: caseLawProvisionFilterOf({
           work: read.workIdentifier,
-          unit: read.unit,
-          section: read.section,
-          ...(read.sectionSuffix === null
-            ? {}
-            : { sectionSuffix: read.sectionSuffix }),
-          ...(read.subsection === null ? {} : { subsection: read.subsection }),
-          ...(read.letter === null ? {} : { letter: read.letter }),
-          ...(read.point === null ? {} : { point: read.point }),
-        },
+          path: read,
+          anchorOf: (path) => renderProvisionAnchor(profile, path),
+        }),
       };
     case "no_provision":
       return provisionRefusal(
@@ -2514,6 +2519,7 @@ const caseLawSearchResult = ({
     ecli: hit.ecli,
     language: hit.language,
     matchingPassages: hit.matchingPassages,
+    textAvailability: hit.textAvailability,
     match,
     ...(hit.textWithheldReason === null
       ? {
@@ -2589,6 +2595,24 @@ const readSearchProvision = async ({
     return resolved;
   }
   const { provision } = resolved;
+  // An act no recorded link names would read as an exact 0 ("nothing cites
+  // it") when its citations were never extracted; the caller is told so and
+  // sent to the text search, which reads the decisions themselves.
+  const readWorkLinked =
+    context.testDependencies?.readProvisionWorkLinked ??
+    (async (scope) =>
+      await caseLawPublicReadDb(
+        async (tx) => await readProvisionWorkLinked(tx, scope),
+      ));
+  if (!(await readWorkLinked({ jurisdiction: country, provision }))) {
+    return {
+      type: "refused",
+      result: notFoundResult(
+        `The case-law corpus records no provision links to ${provision.work} yet, so it cannot list the decisions citing ${text}`,
+        `Search for the provision as text instead: omit provision and pass queries, for example ${JSON.stringify([text])}.`,
+      ),
+    };
+  }
   // A provision-only list is complete by construction: no set to read.
   if (args.queries === undefined) {
     return { type: "read", body: { provision }, warnings: [] };
@@ -2665,6 +2689,7 @@ const listSearchCaseLawProvision = async ({
       body: {
         // The list ranks no text; the provision as written is what it reads.
         query: provisionText,
+        facets: args.facets,
         sentenceAlignedExcerpt: true,
         headnotePresentation: "expanded",
         limit: normalizePage(args.limit ?? DEFAULT_SEARCH_LIMIT),
@@ -2841,6 +2866,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
     const subCursor = resolved.cursors[index];
     const body = {
       query,
+      facets: index === 0 ? parsed.output.facets : [],
       sentenceAlignedExcerpt: true,
       headnotePresentation: "expanded" as const,
       limit: perQueryLimit,
@@ -2875,6 +2901,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
           body,
           caseLawDb: caseLawPublicReadDb,
           observer,
+          signal: context.request?.signal,
         }),
       };
     },
@@ -3003,6 +3030,11 @@ const decisionNotFoundItem = (decisionId: string): DecisionItemResult => ({
   message:
     "No decision the public may read has this id. Find one with search_case_law and pass its decisionId.",
   status: DECISION_READ_STATUS.notFound,
+});
+
+const DECISION_BATCH_ENTRY_FAILURE = failureSink({
+  event: "case_law.decision.batch_entry_failed",
+  expected: [],
 });
 
 const decisionReadFailedItem = (decisionId: string): DecisionItemResult => ({
@@ -3607,13 +3639,12 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
     if (Result.isOk(outcome)) {
       return { type: "read", value: outcome.value };
     }
-    captureError(
-      outcome.error,
-      handlerErrorContext("mcp.readCaseLawDecision.entry", {
-        decisionId,
-        step,
-      }),
-    );
+    if (storedCorpusValidationFailure(outcome.error) === null) {
+      observeFailure(outcome.error, {
+        sink: DECISION_BATCH_ENTRY_FAILURE,
+        ctx: { decisionId, step },
+      });
+    }
     failedIds.add(decisionId);
     return { type: "failed" };
   };

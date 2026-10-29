@@ -10,6 +10,7 @@ import type { Transaction } from "@/api/db/root";
 import { corpusIndexProjectionStates } from "@/api/db/schema";
 import { PayloadBudgetError } from "@/api/lib/compression";
 import { settleBoth } from "@/api/lib/corpus-index/core";
+import type { StoredCorpusValidationError } from "@/api/lib/errors/tagged-errors";
 import { errorFingerprint } from "@/api/lib/errors/utils";
 import {
   CORPUS_INDEX_AGGREGATION_TIMEOUT_MS,
@@ -66,10 +67,9 @@ import {
   readCorpusText,
 } from "@/api/lib/legal-search/corpus-reads";
 import {
-  persistedAstOrTextFallback,
   readCorpusAtAuthoritativePointer,
+  readCorpusForRecovery,
 } from "@/api/lib/legal-search/corpus-storage";
-import type { PersistedCorpusAstRead } from "@/api/lib/legal-search/corpus-storage";
 import { logger } from "@/api/lib/observability/logger";
 import type { IngestionTransactionRunner } from "@/api/lib/replay-safe-ingestion";
 import { S3ObjectBudgetError } from "@/api/lib/s3";
@@ -389,20 +389,20 @@ const rereadMaterial = async (
   return current.ready.at(0) ?? null;
 };
 
-/**
- * The AST a projection indexes, read beside the document's text. An AST no
- * reader can read is indexed as absent only when the text can stand in for
- * it; otherwise the typed refusal fails the payload read, which the executor
- * records as `payload_unavailable` instead of applying an empty document.
- */
-export const projectionAstOf = (
-  astRead: PersistedCorpusAstRead,
+/** Indexing can recover structure only beside usable document text. */
+export const projectionAstOf = <T>(
+  astRead: Result<T, StoredCorpusValidationError>,
   text: string,
-) =>
-  persistedAstOrTextFallback(astRead, {
-    fallbackText: text,
-    step: "corpusIndex.projectionAst",
-  });
+): T | null => {
+  if (Result.isOk(astRead)) {
+    return astRead.value;
+  }
+  if (text.trim().length === 0) {
+    const { error } = astRead;
+    throw error;
+  }
+  return null;
+};
 
 const loadCorpusProjectionPayload = async (
   runInTransaction: ProjectionTransactionRunner,
@@ -423,13 +423,17 @@ const loadCorpusProjectionPayload = async (
   }
   const storedAstPointer = material.astS3Key;
   const loadAst = async () =>
-    await readCorpusAtAuthoritativePointer({
-      storedKey: storedAstPointer,
-      read: readCorpusAst,
-      rereadStoredKey: async () => {
-        const replacement = await current();
-        return replacement?.astS3Key ?? null;
-      },
+    await readCorpusForRecovery({
+      documentId: material.lease.entityId,
+      read: async () =>
+        await readCorpusAtAuthoritativePointer({
+          storedKey: storedAstPointer,
+          read: readCorpusAst,
+          rereadStoredKey: async () => {
+            const replacement = await current();
+            return replacement?.astS3Key ?? null;
+          },
+        }),
     });
   if (material.family === "case_law") {
     const [text, astRead] = await settleBoth(textPromise, loadAst());

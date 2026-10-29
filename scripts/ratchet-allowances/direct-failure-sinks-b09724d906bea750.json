@@ -1,6 +1,0 @@
-{
-  "metric": "direct-failure-sinks",
-  "file": "apps/api/src/lib/legal-search/corpus-storage.ts",
-  "delta": 1,
-  "reason": "reportUnreadableStoredAst is the one sink for a stored AST no reader can read. Every reader of persisted ASTs reports through it, so the unreadable row is visible for repair while the read serves the document's text or a typed failed read."
-}

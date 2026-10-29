@@ -8,7 +8,6 @@ import type {
 } from "@stll/folio-core";
 import { Temporal } from "@stll/time";
 
-import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { documentVersionRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
@@ -20,6 +19,7 @@ import type {
 } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { ownerSyntheticSessionAuthorityReader } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import type { DocumentSource } from "@/api/lib/document-source";

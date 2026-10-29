@@ -77,9 +77,9 @@ import {
 } from "@/api/lib/legal-search/corpus-source";
 import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-source";
 import {
-  persistedAstOrAbsent,
+  parsePersistedCorpusAst,
+  readCorpusForRecovery,
   readCorpusPayloadOrFallback,
-  readPersistedCorpusAst,
 } from "@/api/lib/legal-search/corpus-storage";
 import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
@@ -740,23 +740,19 @@ const readStoredPayload = async <T>({
 const readDecisionBlocks = async (
   decision: ResearchDecisionRow,
 ): Promise<readonly Block[] | null> => {
-  const stored = await readStoredPayload({
-    decision,
-    key: decision.astS3Key,
-    step: "researchAnswers.corpusAst",
-    // An AST no reader can read is reported and answered as absent: the
-    // passages then come from the decision's fulltext.
-    read: async (key) =>
-      persistedAstOrAbsent(
-        await readCorpusAst(key),
-        "researchAnswers.corpusAst",
-      ),
-    fallback: () =>
-      persistedAstOrAbsent(
-        readPersistedCorpusAst(decision.documentAst),
-        "researchAnswers.rowAst",
-      ),
-  });
+  const stored = (
+    await readCorpusForRecovery({
+      documentId: decision.id,
+      read: async () =>
+        await readStoredPayload({
+          decision,
+          key: decision.astS3Key,
+          step: "researchAnswers.corpusAst",
+          read: readCorpusAst,
+          fallback: () => parsePersistedCorpusAst(decision.documentAst),
+        }),
+    })
+  ).unwrapOr(null);
   const ast = stored === null ? null : parseCaseLawDecisionAst(stored);
   return ast === null ? null : ast.blocks;
 };

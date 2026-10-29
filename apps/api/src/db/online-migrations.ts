@@ -2,7 +2,16 @@ import { panic, Result } from "better-result";
 
 import { sleep } from "@stll/concurrency/sleep";
 
-import { CASE_LAW_COVERAGE_INDEX } from "@/api/lib/case-law/coverage-index";
+import {
+  INVOICE_LEGACY_PAYMENT_BACKFILL,
+  INVOICE_SENT_AT_BACKFILL,
+} from "@/api/lib/billing/invoice-payment-backfill";
+import { CASE_LAW_COURT_DATE_PUBLISHED_INDEX } from "@/api/lib/case-law/court-date-index";
+import {
+  CASE_LAW_COVERAGE_COURT_INDEX,
+  CASE_LAW_COVERAGE_FILING_DATE_INDEX,
+  CASE_LAW_COVERAGE_INDEX,
+} from "@/api/lib/case-law/coverage-index";
 import {
   publishedCaseLawDecisionIndexDefinitionPredicateSql,
   publishedCaseLawDecisionIndexPredicateSql,
@@ -19,11 +28,19 @@ import {
 } from "../lib/db/migration-history";
 import { isRecord } from "../lib/type-guards";
 import {
+  ACCOUNT_AUDIT_CONSTRAINT,
+  ACCOUNT_AUDIT_CONSTRAINT_VALIDATION,
+} from "./account-audit-constraint-validation";
+import {
   AGENT_SKILL_BINDING_CONSTRAINT_VALIDATIONS,
   AGENT_SKILL_BINDING_CONSTRAINTS,
 } from "./agent-skill-binding-constraint-validation";
 import { BackfillHeldError } from "./backfill-runtime";
 import { BETTER_AUTH_OAUTH_RESOURCE_REPAIR } from "./better-auth-oauth-resource-repair";
+import {
+  BILLING_ACTIVITY_HOUR_CAP_CONSTRAINT_VALIDATIONS,
+  BILLING_ACTIVITY_HOUR_CAP_CONSTRAINTS,
+} from "./billing-activity-hour-cap-constraint-validation";
 import {
   CASE_LAW_PARSE_PENDING_INDEX,
   CASE_LAW_PARSED_SOURCE_CONSTRAINT,
@@ -34,6 +51,13 @@ import {
   CHAT_CONTENT_V3_REPAIR,
   CHAT_CONTENT_V3_SOURCES,
 } from "./chat-content-v3-backfill";
+import { CHAT_RUN_TEXT_BOUNDARIES } from "./chat-run-text-boundaries";
+import {
+  CLIENT_INVOICE_BACKFILL,
+  CLIENT_INVOICE_CONSTRAINT_VALIDATIONS,
+  CLIENT_INVOICE_CONSTRAINTS,
+  CLIENT_INVOICE_TENANT_KEY,
+} from "./client-invoice-backfill";
 import { CONTACT_VAT_ID_REPAIR } from "./contact-vat-id-repair";
 import {
   CORPUS_PROJECTION_CLEANUP_STALL_CONSTRAINTS,
@@ -47,6 +71,11 @@ import {
   DECISION_DATE_CEILING_CONSTRAINTS,
   DECISION_DATE_CEILING_REPAIR,
 } from "./decision-date-ceiling-repair";
+import { DOCUMENT_REVIEW_FINDING_DECISION_BACKFILL } from "./document-review-finding-decision-backfill";
+import {
+  EMAIL_UNDELIVERABLE_CONSTRAINT_VALIDATION,
+  EMAIL_UNDELIVERABLE_CONSTRAINTS,
+} from "./email-undeliverable-constraint-validation";
 import { ENTITY_FEATURE_GATE_REPAIR } from "./entity-feature-gate-repair";
 import {
   INVOICE_LANGUAGE_CONSTRAINT_VALIDATIONS,
@@ -56,6 +85,10 @@ import {
   LIST_VERIFICATION_CONSTRAINT_VALIDATION,
   LIST_VERIFICATION_CONSTRAINTS,
 } from "./list-verification-constraint-validation";
+import {
+  MATTER_TIME_EXPENSE_RETENTION_CONSTRAINTS,
+  MATTER_TIME_EXPENSE_RETENTION_VALIDATIONS,
+} from "./matter-time-expense-retention-validation";
 import { DEFAULT_MIGRATION_TIMING, timed } from "./migration-timing";
 import type { MigrationTiming } from "./migration-timing";
 import {
@@ -63,6 +96,7 @@ import {
   createOnlineTableGate,
   declaresOnlineBuild,
   dropIndexConcurrently,
+  INVOICE_TENANT_UNIQUE_INDEX,
   reindexIndexConcurrently,
   renameIndex,
   runGatedTableWork,
@@ -81,17 +115,25 @@ import type {
   OnlineRepairCompletion,
 } from "./online-migration-connection";
 import {
-  ORGANIZATION_ACCESS_STATE_CONSTRAINT_VALIDATION,
+  ORGANIZATION_ACCESS_STATE_CONSTRAINT_VALIDATIONS,
   ORGANIZATION_ACCESS_STATE_CONSTRAINTS,
 } from "./organization-access-state-constraint-validation";
 import {
-  READER_ANNOTATION_CLAIM_CONSTRAINT_VALIDATIONS,
-  READER_ANNOTATION_CLAIM_CONSTRAINTS,
-} from "./reader-annotation-claim-constraint-validation";
+  READER_ANNOTATION_CONSTRAINT_VALIDATIONS,
+  READER_ANNOTATION_CONSTRAINTS,
+} from "./reader-annotation-constraint-validation";
+import {
+  READER_ANSWER_CONSTRAINT_VALIDATION,
+  READER_ANSWER_CONSTRAINTS,
+} from "./reader-answer-constraint-validation";
 import {
   SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS,
   SANCTIONS_MONITORING_CONSTRAINTS,
 } from "./sanctions-monitoring-constraint-validation";
+import {
+  TIME_ENTRY_SUBMITTED_CONSTRAINT_VALIDATION,
+  TIME_ENTRY_SUBMITTED_CONSTRAINTS,
+} from "./time-entry-submitted-constraint-validation";
 
 // Catalog work keeps a short lock budget; every statement that locks a table
 // runs through the gate in `online-ddl.ts`, which lifts it and watches the
@@ -198,6 +240,43 @@ const PUBLISHED_CASE_LAW_DECISION_INDEX_DEFINITION =
   publishedCaseLawDecisionIndexDefinitionPredicateSql();
 
 export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
+  {
+    name: "chat_run_log_entries_message_snapshot_idx",
+    tableName: "chat_run_log_entries",
+    isUnique: false,
+    createSql:
+      "CREATE INDEX CONCURRENTLY \"chat_run_log_entries_message_snapshot_idx\" ON public.chat_run_log_entries (organization_id, run_id, seq) WHERE chunk->>'type' = 'MESSAGES_SNAPSHOT'",
+    definitionBody:
+      "ON public.chat_run_log_entries USING btree (organization_id, run_id, seq) WHERE ((chunk ->> 'type'::text) = 'MESSAGES_SNAPSHOT'::text)",
+  },
+  {
+    name: "chat_run_log_entries_text_start_idx",
+    tableName: "chat_run_log_entries",
+    isUnique: false,
+    createSql:
+      "CREATE INDEX CONCURRENTLY \"chat_run_log_entries_text_start_idx\" ON public.chat_run_log_entries (organization_id, run_id, seq) WHERE (chunk->>'type' = 'TEXT_MESSAGE_START' OR (chunk->>'type' = 'TEXT_MESSAGE_CHUNK' AND chunk ? 'role'))",
+    definitionBody:
+      "ON public.chat_run_log_entries USING btree (organization_id, run_id, seq) WHERE (((chunk ->> 'type'::text) = 'TEXT_MESSAGE_START'::text) OR (((chunk ->> 'type'::text) = 'TEXT_MESSAGE_CHUNK'::text) AND (chunk ? 'role'::text)))",
+  },
+  {
+    name: "chat_run_log_entries_text_open_idx",
+    tableName: "chat_run_log_entries",
+    isUnique: false,
+    createSql:
+      "CREATE INDEX CONCURRENTLY \"chat_run_log_entries_text_open_idx\" ON public.chat_run_log_entries (organization_id, run_id, text_boundary_initialization, text_message_end_seq, seq) WHERE (chunk->>'type' = 'TEXT_MESSAGE_START' OR (chunk->>'type' = 'TEXT_MESSAGE_CHUNK' AND chunk ? 'role'))",
+    definitionBody:
+      "ON public.chat_run_log_entries USING btree (organization_id, run_id, text_boundary_initialization, text_message_end_seq, seq) WHERE (((chunk ->> 'type'::text) = 'TEXT_MESSAGE_START'::text) OR (((chunk ->> 'type'::text) = 'TEXT_MESSAGE_CHUNK'::text) AND (chunk ? 'role'::text)))",
+  },
+  {
+    name: "chat_run_log_entries_text_boundary_id_idx",
+    tableName: "chat_run_log_entries",
+    isUnique: false,
+    createSql:
+      "CREATE INDEX CONCURRENTLY \"chat_run_log_entries_text_boundary_id_idx\" ON public.chat_run_log_entries (organization_id, run_id, md5(chunk->>'messageId'), seq) WHERE (chunk->>'type' = 'TEXT_MESSAGE_START' OR (chunk->>'type' = 'TEXT_MESSAGE_CHUNK' AND chunk ? 'role') OR chunk->>'type' = 'TEXT_MESSAGE_END')",
+    definitionBody:
+      "ON public.chat_run_log_entries USING btree (organization_id, run_id, md5((chunk ->> 'messageId'::text)), seq) WHERE (((chunk ->> 'type'::text) = 'TEXT_MESSAGE_START'::text) OR (((chunk ->> 'type'::text) = 'TEXT_MESSAGE_CHUNK'::text) AND (chunk ? 'role'::text)) OR ((chunk ->> 'type'::text) = 'TEXT_MESSAGE_END'::text))",
+  },
+
   CASE_LAW_PARSE_PENDING_INDEX,
   {
     createSql:
@@ -264,6 +343,17 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     name: "legal_reader_annotations_verification_claim_idx",
     tableName: "legal_reader_annotations",
   },
+  {
+    // Lists a matter document's marks and serves the document cleanup
+    // trigger; both still work, by a scan, until it exists.
+    createSql:
+      'CREATE INDEX CONCURRENTLY "legal_reader_annotations_matter_document_idx" ON public."legal_reader_annotations" (workspace_id, entity_id, created_at, id) WHERE entity_id IS NOT NULL',
+    definitionBody:
+      "ON public.legal_reader_annotations USING btree (workspace_id, entity_id, created_at, id) WHERE (entity_id IS NOT NULL)",
+    isUnique: false,
+    name: "legal_reader_annotations_matter_document_idx",
+    tableName: "legal_reader_annotations",
+  },
   ...MONITORING_SESSION_INDEXES,
   ...Object.values(CHAT_CONTENT_V3_SOURCES).map(({ table: tableName }) => ({
     createSql: `CREATE INDEX CONCURRENTLY "${tableName}_content_v3_pending_idx" ON public."${tableName}" (id) WHERE (content -> 'version') IS DISTINCT FROM '3'::jsonb`,
@@ -273,6 +363,8 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     tableName,
   })),
   CASE_LAW_COVERAGE_INDEX,
+  CASE_LAW_COVERAGE_FILING_DATE_INDEX,
+  CASE_LAW_COVERAGE_COURT_INDEX,
   // Reviewed doctrine per cited decision: few rows carry a finding.
   {
     createSql: `CREATE INDEX CONCURRENTLY "case_law_citations_doctrine_cited_idx" ON public."case_law_citations" USING btree ("cited_decision_id") WHERE "doctrinal_treatment" IN ('distinguishes', 'limits')`,
@@ -283,20 +375,23 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     tableName: "case_law_citations",
   },
   // A provision's subtree of citing rows as one byte-ordered anchor range.
+  // The trailing date, decision and span let the cited-by page group a
+  // subtree per decision, with its earliest mention's offset, from the index
+  // alone.
   {
-    createSql: `CREATE INDEX CONCURRENTLY "case_law_provision_citations_work_subtree_idx" ON public."case_law_provision_citations" USING btree ("jurisdiction", "work_identifier", "anchor" COLLATE "C")`,
+    createSql: `CREATE INDEX CONCURRENTLY "case_law_provision_citations_work_citing_idx" ON public."case_law_provision_citations" USING btree ("jurisdiction", "work_identifier", "anchor" COLLATE "C", "decision_date", "decision_id", "span_start")`,
     definitionBody:
-      'ON public.case_law_provision_citations USING btree (jurisdiction, work_identifier, anchor COLLATE "C")',
+      'ON public.case_law_provision_citations USING btree (jurisdiction, work_identifier, anchor COLLATE "C", decision_date, decision_id, span_start)',
     isUnique: false,
-    name: "case_law_provision_citations_work_subtree_idx",
+    name: "case_law_provision_citations_work_citing_idx",
     tableName: "case_law_provision_citations",
   },
   {
-    createSql: `CREATE INDEX CONCURRENTLY "case_law_provision_citations_eli_subtree_idx" ON public."case_law_provision_citations" USING btree ("jurisdiction", "work_eli", "anchor" COLLATE "C") WHERE "work_eli" IS NOT NULL`,
+    createSql: `CREATE INDEX CONCURRENTLY "case_law_provision_citations_eli_citing_idx" ON public."case_law_provision_citations" USING btree ("jurisdiction", "work_eli", "anchor" COLLATE "C", "decision_date", "decision_id", "span_start") WHERE "work_eli" IS NOT NULL`,
     definitionBody:
-      'ON public.case_law_provision_citations USING btree (jurisdiction, work_eli, anchor COLLATE "C") WHERE (work_eli IS NOT NULL)',
+      'ON public.case_law_provision_citations USING btree (jurisdiction, work_eli, anchor COLLATE "C", decision_date, decision_id, span_start) WHERE (work_eli IS NOT NULL)',
     isUnique: false,
-    name: "case_law_provision_citations_eli_subtree_idx",
+    name: "case_law_provision_citations_eli_citing_idx",
     tableName: "case_law_provision_citations",
   },
   // Bounded cross-publisher ruling lookup before a decision insert.
@@ -333,11 +428,19 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     name: "sanctions_contact_matches_org_open_cursor_idx",
     tableName: "sanctions_contact_matches",
   },
+  CASE_LAW_COURT_DATE_PUBLISHED_INDEX,
   {
     createSql: `CREATE INDEX CONCURRENTLY "case_law_decisions_country_date_published_idx" ON public."case_law_decisions" USING btree ("country", coalesce("decision_date", '-infinity'::date), "id") WHERE ${PUBLISHED_CASE_LAW_DECISION_INDEX_PREDICATE}`,
     definitionBody: `ON public.case_law_decisions USING btree (country, COALESCE(decision_date, '-infinity'::date), id) WHERE ${PUBLISHED_CASE_LAW_DECISION_INDEX_DEFINITION}`,
     isUnique: false,
     name: "case_law_decisions_country_date_published_idx",
+    tableName: "case_law_decisions",
+  },
+  {
+    createSql: `CREATE INDEX CONCURRENTLY "case_law_decisions_country_language_date_published_idx" ON public."case_law_decisions" USING btree ("country", "language", coalesce("decision_date", '-infinity'::date), "id") WHERE ${PUBLISHED_CASE_LAW_DECISION_INDEX_PREDICATE}`,
+    definitionBody: `ON public.case_law_decisions USING btree (country, language, COALESCE(decision_date, '-infinity'::date), id) WHERE ${PUBLISHED_CASE_LAW_DECISION_INDEX_DEFINITION}`,
+    isUnique: false,
+    name: "case_law_decisions_country_language_date_published_idx",
     tableName: "case_law_decisions",
   },
   {
@@ -419,6 +522,52 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     isUnique: false,
     name: "time_entries_approval_queue_idx",
     tableName: "time_entries",
+  },
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "time_entries_submitted_queue_idx" ON public."time_entries" USING btree ("organization_id", "approver_user_id", "date_worked", "id") WHERE "status" = \'submitted\'',
+    definitionBody:
+      "ON public.time_entries USING btree (organization_id, approver_user_id, date_worked, id) WHERE (status = 'submitted'::text)",
+    isUnique: false,
+    name: "time_entries_submitted_queue_idx",
+    tableName: "time_entries",
+  },
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "invoice_lines_workspace_organization_idx" ON public."invoice_lines" USING btree (workspace_id, organization_id)',
+    definitionBody:
+      "ON public.invoice_lines USING btree (workspace_id, organization_id)",
+    isUnique: false,
+    name: "invoice_lines_workspace_organization_idx",
+    tableName: "invoice_lines",
+  },
+  INVOICE_TENANT_UNIQUE_INDEX,
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "invoices_org_client_created_idx" ON public."invoices" USING btree (organization_id, client_id, created_at, id)',
+    definitionBody:
+      "ON public.invoices USING btree (organization_id, client_id, created_at, id)",
+    isUnique: false,
+    name: "invoices_org_client_created_idx",
+    tableName: "invoices",
+  },
+  {
+    createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "invoices_client_number_uidx" ON public."invoices" USING btree (organization_id, client_id, invoice_number) WHERE workspace_id IS NULL',
+    definitionBody:
+      "ON public.invoices USING btree (organization_id, client_id, invoice_number) WHERE (workspace_id IS NULL)",
+    isUnique: true,
+    name: "invoices_client_number_uidx",
+    tableName: "invoices",
+  },
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "invoices_client_backfill_idx" ON public."invoices" USING btree (id) WHERE client_id IS NULL AND workspace_id IS NOT NULL',
+    definitionBody:
+      "ON public.invoices USING btree (id) WHERE ((client_id IS NULL) AND (workspace_id IS NOT NULL))",
+    isUnique: false,
+    name: "invoices_client_backfill_idx",
+    tableName: "invoices",
   },
   {
     createSql:
@@ -791,11 +940,20 @@ export const ONLINE_INDEX_REPLACEMENTS: readonly OnlineIndexReplacement[] = [
   // walks cannot seek under the database collation.
   {
     legacyName: "case_law_provision_citations_work_anchor_idx",
-    replacementNames: ["case_law_provision_citations_work_subtree_idx"],
+    replacementNames: ["case_law_provision_citations_work_citing_idx"],
   },
   {
     legacyName: "case_law_provision_citations_eli_anchor_idx",
-    replacementNames: ["case_law_provision_citations_eli_subtree_idx"],
+    replacementNames: ["case_law_provision_citations_eli_citing_idx"],
+  },
+  // The subtree ranges, now carrying the cited-by page's grouping keys.
+  {
+    legacyName: "case_law_provision_citations_work_subtree_idx",
+    replacementNames: ["case_law_provision_citations_work_citing_idx"],
+  },
+  {
+    legacyName: "case_law_provision_citations_eli_subtree_idx",
+    replacementNames: ["case_law_provision_citations_eli_citing_idx"],
   },
   // Better Auth 1.7.3 stopped writing `issuer`, so the account identity key is
   // (provider_id, account_id): the pair the library links accounts by. The
@@ -833,6 +991,12 @@ export const ONLINE_VALIDATED_INDEX_NAMES: ReadonlySet<string> = new Set([
  * skips the ones already complete, and validates their completion.
  */
 export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
+  CHAT_RUN_TEXT_BOUNDARIES,
+  ACCOUNT_AUDIT_CONSTRAINT_VALIDATION,
+  CLIENT_INVOICE_TENANT_KEY,
+  CLIENT_INVOICE_BACKFILL,
+  ...CLIENT_INVOICE_CONSTRAINT_VALIDATIONS,
+  ...MATTER_TIME_EXPENSE_RETENTION_VALIDATIONS,
   CASE_LAW_PARSED_SOURCE_VALIDATION,
   ...AGENT_SKILL_BINDING_CONSTRAINT_VALIDATIONS,
   CHAT_CONTENT_V3_REPAIR,
@@ -840,10 +1004,16 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
   CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR,
   ...SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS,
   LIST_VERIFICATION_CONSTRAINT_VALIDATION,
-  ORGANIZATION_ACCESS_STATE_CONSTRAINT_VALIDATION,
-  ...READER_ANNOTATION_CLAIM_CONSTRAINT_VALIDATIONS,
+  ...ORGANIZATION_ACCESS_STATE_CONSTRAINT_VALIDATIONS,
+  ...READER_ANNOTATION_CONSTRAINT_VALIDATIONS,
+  READER_ANSWER_CONSTRAINT_VALIDATION,
   ...INVOICE_LANGUAGE_CONSTRAINT_VALIDATIONS,
+  ...BILLING_ACTIVITY_HOUR_CAP_CONSTRAINT_VALIDATIONS,
+  EMAIL_UNDELIVERABLE_CONSTRAINT_VALIDATION,
+  TIME_ENTRY_SUBMITTED_CONSTRAINT_VALIDATION,
   CONTACT_VAT_ID_REPAIR,
+  INVOICE_SENT_AT_BACKFILL,
+  INVOICE_LEGACY_PAYMENT_BACKFILL,
   ENTITY_FEATURE_GATE_REPAIR,
   CORPUS_PROJECTION_CLEANUP_STALL_REPAIR,
   // Not behind one migration: the OAuth resource set is derived from the MCP
@@ -852,6 +1022,7 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
   // widens the audience set is the one that reconciles them, without an
   // operator step.
   BETTER_AUTH_OAUTH_RESOURCE_REPAIR,
+  DOCUMENT_REVIEW_FINDING_DECISION_BACKFILL,
 ];
 
 /**
@@ -861,6 +1032,9 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
  */
 export const ONLINE_CONSTRAINT_VALIDATIONS: readonly OnlineConstraintValidation[] =
   [
+    ACCOUNT_AUDIT_CONSTRAINT,
+    ...CLIENT_INVOICE_CONSTRAINTS,
+    ...MATTER_TIME_EXPENSE_RETENTION_CONSTRAINTS,
     CASE_LAW_PARSED_SOURCE_CONSTRAINT,
     ...AGENT_SKILL_BINDING_CONSTRAINTS,
     ...CHAT_CONTENT_V3_CONSTRAINTS,
@@ -869,8 +1043,12 @@ export const ONLINE_CONSTRAINT_VALIDATIONS: readonly OnlineConstraintValidation[
     ...SANCTIONS_MONITORING_CONSTRAINTS,
     ...LIST_VERIFICATION_CONSTRAINTS,
     ...ORGANIZATION_ACCESS_STATE_CONSTRAINTS,
-    ...READER_ANNOTATION_CLAIM_CONSTRAINTS,
+    ...READER_ANNOTATION_CONSTRAINTS,
+    ...READER_ANSWER_CONSTRAINTS,
     ...INVOICE_LANGUAGE_CONSTRAINTS,
+    ...BILLING_ACTIVITY_HOUR_CAP_CONSTRAINTS,
+    ...EMAIL_UNDELIVERABLE_CONSTRAINTS,
+    ...TIME_ENTRY_SUBMITTED_CONSTRAINTS,
     ...CORPUS_PROJECTION_CLEANUP_STALL_CONSTRAINTS,
   ];
 

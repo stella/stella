@@ -11,6 +11,7 @@ import type {
   CaseLawCorpusUploadReservationInput,
   CaseLawCorpusUploadReservations,
 } from "@/api/lib/legal-search/case-law-corpus-upload-intents";
+import { prepareCorpusAst } from "@/api/lib/legal-search/corpus-ast";
 import {
   formatCorpusLocation,
   parseCorpusLocation,
@@ -519,7 +520,16 @@ export const openCorpusPackBatch = ({
 
   return {
     enqueue: (entry) => {
-      entries.push(entry);
+      entries.push({
+        ...entry,
+        payload: {
+          ...entry.payload,
+          ast: prepareCorpusAst({
+            ast: entry.payload.ast,
+            fallbackText: entry.payload.text,
+          }).ast,
+        },
+      });
     },
     flush: async () =>
       await Result.tryPromise({

@@ -12,11 +12,11 @@ import type {
 import { Temporal } from "@stll/time";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useLocale } from "@/i18n/formatting-context";
+import { useMessageLocale } from "@/i18n/message-locale";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { APIError } from "@/lib/errors/api";
-import { readQueryResult } from "@/lib/errors/query-result";
+import { captureQueryError, readQueryResult } from "@/lib/errors/query-result";
 import { toSafeId } from "@/lib/safe-id";
 
 import {
@@ -531,7 +531,7 @@ const readerAnswersRecoveryOptions = ({
       if (context.signal.aborted || runtime.isCancelled()) {
         return readQueryResult(fetched);
       }
-      getAnalytics().captureError(fetched.error, {
+      captureQueryError(fetched.error, {
         fingerprintKey: "readerAnswersRecoveryOptions.queryFn:failure",
         scope: {
           type: "handler",
@@ -563,7 +563,7 @@ export const useReaderAnswers = ({
   generationMode,
 }: UseReaderAnswersOptions) => {
   const user = useMaybeAuthenticatedUser();
-  const locale = useLocale();
+  const locale = useMessageLocale();
   const queryClient = useQueryClient();
   const options = readerAnswersOptions({
     decisionId,

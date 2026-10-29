@@ -1,4 +1,4 @@
-// parser-output-unchanged: adds withUniqueBlockIdentities and re-keys repeated identities in the persisted reader. sk-courts and sk-us, whose parsers can repeat one, carry their own version bumps; every other enrolled fixture output repeats none (replay conformance asserts it).
+// parser-output-unchanged: adds withUniqueBlockIdentities and re-keys repeated identities in the persisted reader. sk-us carries its parser version bump; main already gives sk-courts unique identities; every other enrolled fixture output repeats none (replay conformance asserts it).
 import { panic } from "better-result";
 /**
  * Canonical legal-document AST shared by legal corpus readers and parsers.
@@ -1059,15 +1059,20 @@ export const withUniqueBlockIdentities = <TBlock extends BlockIdentities>(
     id: new Set<string>(),
     anchorId: new Set<string>(),
   } satisfies Record<BlockIdentityField, Set<string>>;
+  const nextSuffix = {
+    id: new Map<string, number>(),
+    anchorId: new Map<string, number>(),
+  };
   const claim = (field: BlockIdentityField, value: string): string => {
     if (!claimed[field].has(value)) {
       claimed[field].add(value);
       return value;
     }
-    let suffix = 2;
+    let suffix = nextSuffix[field].get(value) ?? 2;
     while (held[field].has(`${value}-${String(suffix)}`)) {
       suffix += 1;
     }
+    nextSuffix[field].set(value, suffix + 1);
     const fresh = `${value}-${String(suffix)}`;
     held[field].add(fresh);
     claimed[field].add(fresh);

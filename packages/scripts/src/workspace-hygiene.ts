@@ -9,6 +9,8 @@ import {
   missingPreparedApiTypecheckConfigs,
   validateApiTypecheckProjects,
 } from "./api-typecheck-projects";
+import { childExitStatus } from "./child-exit-status";
+import { INSTALL_OWNED_IGNORED_GENERATED_OUTPUTS } from "./generated-files";
 import { validateWorkspaceAppBoundaries } from "./workspace-app-boundaries";
 import type { AppBoundaryOptions } from "./workspace-app-boundaries";
 
@@ -56,6 +58,21 @@ const DENIED_TEST_RUNNER_DEPENDENCIES = new Set([
   "@types/jest",
   "@types/vitest",
   "@types/mocha",
+]);
+// Packages the API replaced with its own small fetch clients. Each entry names
+// the replacement, so the failure says where the behaviour lives now.
+const POSTHOG_CLIENT = "apps/api/src/lib/analytics/posthog-client.ts";
+const OTLP_LOG_EXPORTER = "apps/api/src/lib/observability/otlp-log-exporter.ts";
+const REPLACED_NPM_DEPENDENCIES: ReadonlyMap<string, string> = new Map([
+  ["posthog-node", `replaced by the fetch client in ${POSTHOG_CLIENT}`],
+  ["@opentelemetry/api", `replaced by the log types in ${OTLP_LOG_EXPORTER}`],
+  ["@opentelemetry/api-logs", `replaced by ${OTLP_LOG_EXPORTER}`],
+  [
+    "@opentelemetry/exporter-logs-otlp-http",
+    `replaced by the fetch client in ${OTLP_LOG_EXPORTER}`,
+  ],
+  ["@opentelemetry/resources", `replaced by ${OTLP_LOG_EXPORTER}`],
+  ["@opentelemetry/sdk-logs", `replaced by ${OTLP_LOG_EXPORTER}`],
 ]);
 const DENIED_CARGO_DEPENDENCIES = new Set([
   "strsim",
@@ -116,7 +133,6 @@ const TYPESCRIPT_TOOLCHAIN = {
 // declares it so a filtered install links it.
 const TYPESCRIPT6_API_PACKAGE_PATHS: ReadonlySet<string> = new Set([
   "apps/api/package.json",
-  "packages/scripts/package.json",
 ]);
 const TYPESCRIPT6_COMPATIBILITY = {
   astro: {
@@ -129,11 +145,11 @@ const TYPESCRIPT6_COMPATIBILITY = {
   astroCheck: {
     dependency: "@astrojs/check",
     packagePath: "apps/landing/package.json",
-    specifier: "^0.9.9",
+    specifier: "^0.9.11",
   },
   compilerApi: {
     dependency: "typescript6",
-    packagePath: "packages/scripts/package.json",
+    packagePath: "apps/api/package.json",
     specifier: "catalog:",
   },
 } as const;
@@ -143,6 +159,34 @@ export type WorkspaceParentDir = (typeof WORKSPACE_PARENT_DIRS)[number];
 export type WorkspaceIssue = {
   message: string;
   path: string;
+};
+
+export const regenerateInstallOwnedIgnoredGeneratedOutputs = (
+  rootDir: string,
+  runCommand: (command: readonly string[], cwd: string) => number = (
+    command,
+    cwd,
+  ) =>
+    childExitStatus(
+      Bun.spawnSync([...command], {
+        cwd,
+        // Output streams straight to the install log; the limit only binds piped output.
+        maxBuffer: 2 ** 30,
+        stderr: "inherit",
+        stdout: "inherit",
+      }),
+    ),
+) => {
+  for (const { command, outputs } of INSTALL_OWNED_IGNORED_GENERATED_OUTPUTS) {
+    if (outputs.some((output) => !existsSync(path.join(rootDir, output)))) {
+      continue;
+    }
+    const status = runCommand(command, rootDir);
+    if (status !== 0) {
+      return status;
+    }
+  }
+  return 0;
 };
 
 type WorkspacePackageReadResult =
@@ -227,6 +271,14 @@ const validateDeniedNpmDependencies = (
       if (DENIED_TEST_RUNNER_DEPENDENCIES.has(actualName)) {
         issues.push({
           message: `${actualName} is blocked; tests run on bun test`,
+          path: packageJsonPath,
+        });
+        continue;
+      }
+      const replacement = REPLACED_NPM_DEPENDENCIES.get(actualName);
+      if (replacement !== undefined) {
+        issues.push({
+          message: `${actualName} is blocked; ${replacement}`,
           path: packageJsonPath,
         });
         continue;
@@ -631,7 +683,7 @@ const validateTypeScriptToolchain = (rootDir: string): WorkspaceIssue[] => {
       ) {
         issues.push({
           message:
-            "The TypeScript 6 compiler API is compatibility-only and may only be declared by apps/api and packages/scripts (and the root)",
+            "The TypeScript 6 compiler API is compatibility-only and may only be declared by apps/api (and the root)",
           path: relativePackagePath,
         });
       }
@@ -1028,6 +1080,14 @@ if (import.meta.main) {
   // CI runs this as a verification step (STELLA_VERIFY=check) after it has
   // generated the API typecheck configs; the install-time postinstall has not.
   const requirePreparedApiTypecheck = process.env["STELLA_VERIFY"] === "check";
+  if (!requirePreparedApiTypecheck) {
+    const regenerationStatus = regenerateInstallOwnedIgnoredGeneratedOutputs(
+      process.cwd(),
+    );
+    if (regenerationStatus !== 0) {
+      process.exit(regenerationStatus);
+    }
+  }
   const unprepared = missingPreparedApiTypecheckConfigs(process.cwd());
   if (unprepared.length > 0 && !requirePreparedApiTypecheck) {
     console.log(

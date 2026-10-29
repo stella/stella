@@ -37,8 +37,9 @@ import { readBounded } from "@/api/lib/db/read-bounded";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import {
   type CorpusByteSourceSeams,
-  persistedAstOrTextFallback,
+  parsePersistedCorpusAst,
   readCorpusAst,
+  readCorpusForRecovery,
   readCorpusText,
 } from "@/api/lib/legal-search/corpus-storage";
 import { corpusTombstoneReaderForTx } from "@/api/lib/legal-search/corpus-tombstones";
@@ -963,17 +964,23 @@ const hydrateCompletionStatements = async ({
       );
     }
     yield* Result.await(ensure());
-    const ast = await legacyOperation(async () =>
-      row.astS3Key !== null
-        ? // An AST no reader can read is absent only beside usable text,
-          // which the check below turns into a review; with no text it is a
-          // storage failure, as any payload this run cannot read.
-          persistedAstOrTextFallback(
-            await readCorpusAst(row.astS3Key, readOptions),
-            { fallbackText: text.value, step: "euCompletion.storedAst" },
-          )
-        : row.documentAst,
-    );
+    const ast = await legacyOperation(async () => {
+      const stored = await readCorpusForRecovery({
+        documentId: row.id,
+        read: async () =>
+          row.astS3Key !== null
+            ? await readCorpusAst(row.astS3Key, readOptions)
+            : parsePersistedCorpusAst(row.documentAst),
+      });
+      if (
+        !Result.isOk(stored) &&
+        (text.value === null || text.value.trim().length === 0)
+      ) {
+        const { error } = stored;
+        throw error;
+      }
+      return stored.unwrapOr(null);
+    });
     if (ast.isErr() && signal.aborted) {
       return Result.err(
         new EuCompletionStop({

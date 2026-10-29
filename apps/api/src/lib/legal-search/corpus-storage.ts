@@ -1,5 +1,4 @@
-// parser-output-unchanged: a stored AST the persisted reader cannot read is answered as a typed refusal instead of a validation throw; parsed values are unchanged.
-import { panic, Result } from "better-result";
+import { panic, Result, UnhandledException } from "better-result";
 import { sql } from "drizzle-orm";
 import type { Column, SQL } from "drizzle-orm";
 import * as v from "valibot";
@@ -7,7 +6,6 @@ import * as v from "valibot";
 import {
   type DocumentAst,
   persistedAstDegradations,
-  persistedDocumentAstSchema,
 } from "@stll/legal-ast/document-ast";
 
 import { CASE_LAW_CORPUS_MIRROR_STATUS } from "@/api/db/schema";
@@ -24,9 +22,14 @@ import {
   CorpusMemberDigestMismatchError,
   CorpusMemberTombstonedError,
   CorpusPayloadUnavailableError,
+  STORED_CORPUS_VALIDATION_CODE,
   StoredAstDegradedError,
-  StoredAstUnreadableError,
+  StoredCorpusValidationError,
 } from "@/api/lib/errors/tagged-errors";
+import {
+  persistedCorpusAstSchema,
+  prepareCorpusAst,
+} from "@/api/lib/legal-search/corpus-ast";
 import {
   corpusContentHash,
   EMPTY_CORPUS_CONTENT_HASHES,
@@ -48,16 +51,15 @@ import type {
   CorpusTombstoneReader,
   CorpusTombstoneWriter,
 } from "@/api/lib/legal-search/corpus-tombstones";
-import {
-  emptyAstSchema,
-  persistedDecisionSectionsSchema,
-} from "@/api/lib/legal-search/document-types";
+import { persistedDecisionSectionsSchema } from "@/api/lib/legal-search/document-types";
 import type {
   DecisionSection,
   EmptyAst,
 } from "@/api/lib/legal-search/document-types";
 import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   deleteCorpusS3ObjectWithSignal,
   isMissingCorpusObjectError,
@@ -99,52 +101,78 @@ const PAYLOAD_MAX_BYTES = LIMITS.corpusPayloadMaxDecompressedBytes;
  */
 export const CORPUS_TRANSFER_MAX_BYTES = zstdCompressBound(PAYLOAD_MAX_BYTES);
 
-const persistedCorpusAstSchema = v.nullable(
-  v.union([persistedDocumentAstSchema, emptyAstSchema]),
-);
-
 export const parsePersistedCorpusSections = (
   value: unknown,
 ): DecisionSection[] | null => v.parse(persistedDecisionSectionsSchema, value);
 
-/** At most this many failing paths travel on an unreadable AST's error. */
-const UNREADABLE_AST_ISSUE_LIMIT = 5;
+const dotPath = (path: readonly v.IssuePathItem[]): string | null => {
+  const keys: string[] = [];
+  for (const item of path) {
+    if (typeof item.key !== "string" && typeof item.key !== "number") {
+      return null;
+    }
+    keys.push(String(item.key));
+  }
+  return keys.length === 0 ? null : keys.join(".");
+};
+
+/** A validator issue without a path points at the validation root. */
+const ROOT_VALIDATOR_ISSUE_PATH: readonly v.IssuePathItem[] = [];
+
+const validatorIssuePath = (
+  issue: v.BaseIssue<unknown>,
+): readonly v.IssuePathItem[] => {
+  if (issue.path === undefined) {
+    return ROOT_VALIDATOR_ISSUE_PATH;
+  }
+  return issue.path;
+};
 
 /**
- * What one stored AST value reads as: the AST (or its empty or absent
- * forms), or a typed refusal naming why the value is not one.
+ * Dot paths of every issue, nested union issues included. A union's
+ * sub-issues carry paths relative to the union's own input, so each is
+ * joined to its parent's path. Issue messages and rejected values may
+ * contain decision text, so only paths leave here.
  */
-export type PersistedCorpusAstRead =
-  | { type: "read"; ast: DocumentAst | EmptyAst | null }
-  | { type: "unreadable"; error: StoredAstUnreadableError };
+const issueDotPaths = (
+  issues: readonly v.BaseIssue<unknown>[],
+  parent: readonly v.IssuePathItem[],
+): string[] =>
+  issues.flatMap((issue) => {
+    const path = [...parent, ...validatorIssuePath(issue)];
+    const own = dotPath(path);
+    const nested =
+      issue.issues === undefined ? [] : issueDotPaths(issue.issues, path);
+    return own === null ? nested : [own, ...nested];
+  });
 
 /**
- * The one reader of a stored AST value, from a row column or an object.
+ * Malformed stored ASTs raise a classified failure without retaining the payload.
+ * Undeclared vocabulary is recoverable: the schema
+ * keeps what carries text and degrades the rest, and each degradation is
+ * reported here so the row stays visible without costing the reader the
+ * document.
  *
- * Vocabulary this reader does not declare, and identities an older writer
- * repeated, are not failures: the schema keeps what carries text and
- * degrades the rest, and each degradation is reported here so the row stays
- * visible without costing the reader the document. A value that is not an
- * AST even so is answered as `unreadable`, never thrown as a validation
- * error: a caller decides what a decision without its structure serves.
+ * Given `documentId`, this parser is the one reporter of the failure. A
+ * `readCorpusPayloadOrFallback` read parses without it, because that
+ * function reports a failed read itself.
  */
-export const readPersistedCorpusAst = (
+export const parsePersistedCorpusAst = (
   value: unknown,
-): PersistedCorpusAstRead => {
+  documentId?: string,
+): DocumentAst | EmptyAst | null => {
   const parsed = v.safeParse(persistedCorpusAstSchema, value);
   if (!parsed.success) {
-    return {
-      type: "unreadable",
-      error: new StoredAstUnreadableError({
-        message: "Stored document AST is not one the persisted reader reads",
-        issues: parsed.issues
-          .slice(0, UNREADABLE_AST_ISSUE_LIMIT)
-          .map(
-            (issue) =>
-              `${v.getDotPath(issue) ?? "(root)"}: expected ${issue.expected ?? issue.type}`,
-          ),
-      }),
-    };
+    const paths = new Set(issueDotPaths(parsed.issues, []));
+    const error = new StoredCorpusValidationError({
+      message: "Stored document AST failed validation",
+      code: STORED_CORPUS_VALIDATION_CODE,
+      paths: paths.size === 0 ? ["$"] : [...paths],
+    });
+    if (documentId !== undefined) {
+      reportStoredCorpusValidation(error, documentId);
+    }
+    throw error;
   }
   const degradations = persistedAstDegradations(value);
   if (degradations.length > 0) {
@@ -153,74 +181,28 @@ export const readPersistedCorpusAst = (
         message: "Stored document AST carries undeclared vocabulary",
         degradations,
       }),
-      handlerErrorContext("legalsearch.readPersistedCorpusAst", {
-        step: "corpus-storage.readPersistedCorpusAst",
+      handlerErrorContext("legalsearch.parsePersistedCorpusAst", {
+        step: "corpus-storage.parsePersistedCorpusAst",
       }),
     );
   }
-  return { type: "read", ast: parsed.output };
+  return parsed.output;
 };
 
-/**
- * Report a stored AST no reader can read, under the step that met it, so the
- * row is visible for repair. The one sink for every reader of stored ASTs.
- */
-export const reportUnreadableStoredAst = (
-  error: StoredAstUnreadableError,
-  context: { step: string; decisionId?: string },
+const STORED_CORPUS_VALIDATION_SINK = failureSink({
+  event: "case_law.decision.stored_payload_invalid",
+  expected: [],
+});
+
+/** Correlate a rejected payload without logging its values or validator messages. */
+const reportStoredCorpusValidation = (
+  error: StoredCorpusValidationError,
+  documentId: string,
 ): void => {
-  captureError(
-    error,
-    handlerErrorContext("legalsearch.storedAstUnreadable", context),
-  );
-};
-
-/**
- * The AST a read yields, for a reader whose answer to a stored AST no reader
- * can read is the same as to no AST: the document is served from its text,
- * or shown as unreadable. The unreadable value is reported under `step`, so
- * the row is visible for repair; it is never thrown.
- *
- * A write or index path uses {@link persistedAstOrTextFallback} instead:
- * there an absent AST is a result that gets stored, so it may stand only
- * where text stands in for it.
- */
-export const persistedAstOrAbsent = (
-  read: PersistedCorpusAstRead,
-  step: string,
-): DocumentAst | EmptyAst | null => {
-  if (read.type === "read") {
-    return read.ast;
-  }
-  reportUnreadableStoredAst(read.error, { step });
-  return null;
-};
-
-/** Text that can stand in for a document's structure: any non-blank text. */
-const isUsableFallbackText = (text: string | null): text is string =>
-  text !== null && text.trim().length > 0;
-
-/**
- * The AST a read yields, for a write or index path. An unreadable AST reads
- * as absent only when `fallbackText` is usable, so what gets written is the
- * document's text; the unreadable value is reported under `step`. With no
- * usable text there is nothing to write in its place, so the typed
- * `StoredAstUnreadableError` is raised and the caller fails the write as it
- * does for any payload it cannot read, rather than recording an empty
- * document as done.
- */
-export const persistedAstOrTextFallback = (
-  read: PersistedCorpusAstRead,
-  { fallbackText, step }: { fallbackText: string | null; step: string },
-): DocumentAst | EmptyAst | null => {
-  if (read.type === "read") {
-    return read.ast;
-  }
-  if (!isUsableFallbackText(fallbackText)) {
-    throw read.error;
-  }
-  reportUnreadableStoredAst(read.error, { step });
-  return null;
+  observeFailure(error, {
+    sink: STORED_CORPUS_VALIDATION_SINK,
+    ctx: { decisionId: documentId },
+  });
 };
 
 /**
@@ -646,9 +628,16 @@ export const corpusPayloadDisposition = ({
  * planning rule above is shared by every one of them.
  */
 export const writeCorpusDocument = async (
-  input: WriteCorpusInput,
+  uncheckedInput: WriteCorpusInput,
   { signal, s3Policy }: CorpusIoOptions = {},
 ): Promise<CorpusWriteOutcome> => {
+  const input = {
+    ...uncheckedInput,
+    ast: prepareCorpusAst({
+      ast: uncheckedInput.ast,
+      fallbackText: uncheckedInput.text,
+    }).ast,
+  };
   const plan = planCorpusDocumentWrite(input);
   if (plan.type !== "put") {
     return plan;
@@ -951,31 +940,10 @@ export type SizedCorpusAst = {
   decodedLength: number;
 };
 
-/** A stored AST object as read, with the decoded length of its JSON. */
-export type SizedPersistedCorpusAstRead = {
-  read: PersistedCorpusAstRead;
-  decodedLength: number;
-};
-
-/** A decoded object that is not JSON reads as unreadable, like any value
- * that is not an AST. */
-const parseStoredJson = (decoded: string): PersistedCorpusAstRead => {
-  const json = Result.try((): unknown => JSON.parse(decoded));
-  return Result.isOk(json)
-    ? readPersistedCorpusAst(json.value)
-    : {
-        type: "unreadable",
-        error: new StoredAstUnreadableError({
-          message: "Stored document AST is not JSON",
-          issues: ["(root): expected JSON"],
-        }),
-      };
-};
-
 export const readSizedCorpusAst = async (
   storedKey: string,
   { signal, ...seams }: CorpusByteSourceSeams,
-): Promise<SizedPersistedCorpusAstRead> => {
+): Promise<SizedCorpusAst> => {
   const bytes = await boundedCorpusIo(
     "corpus-read-ast",
     async (requestSignal) =>
@@ -987,19 +955,26 @@ export const readSizedCorpusAst = async (
     { ...(signal === undefined ? {} : { signal }) },
   );
   const decoded = await zstdDecompressToStringBounded(bytes, PAYLOAD_MAX_BYTES);
-  return { read: parseStoredJson(decoded), decodedLength: decoded.length };
+  const parsed = Result.try((): unknown => JSON.parse(decoded));
+  if (!Result.isOk(parsed)) {
+    const error = new StoredCorpusValidationError({
+      message: "Stored document AST failed validation",
+      code: STORED_CORPUS_VALIDATION_CODE,
+      paths: ["$"],
+    });
+    throw error;
+  }
+  return {
+    ast: parsePersistedCorpusAst(parsed.value),
+    decodedLength: decoded.length,
+  };
 };
 
-/**
- * A stored AST object, read through {@link readPersistedCorpusAst}: an object
- * no reader can read is answered as `unreadable`, never thrown. Only an
- * object-storage failure raises.
- */
 export const readCorpusAst = async (
   storedKey: string,
   seams: CorpusByteSourceSeams,
-): Promise<PersistedCorpusAstRead> =>
-  (await readSizedCorpusAst(storedKey, seams)).read;
+): Promise<DocumentAst | EmptyAst | null> =>
+  (await readSizedCorpusAst(storedKey, seams)).ast;
 
 type ReadCorpusAtAuthoritativePointerOptions<T> = {
   storedKey: string;
@@ -1031,6 +1006,58 @@ export const readCorpusAtAuthoritativePointer = async <T>({
     throw first.error;
   }
   return await read(replacement);
+};
+
+/** `Result.tryPromise` reports a rejection as an `UnhandledException` carrying it. */
+const rejectionCause = (error: unknown): unknown =>
+  error instanceof UnhandledException ? error.cause : error;
+
+/**
+ * The validation failure behind a corpus read error: raised directly by a
+ * row parse, or the cause of the unavailable payload an invalid stored
+ * object left. Its reporter has already recorded it (the parser given a
+ * document id, or `readCorpusPayloadOrFallback`), so a caller that contains
+ * the read must not report it again.
+ */
+export const storedCorpusValidationFailure = (
+  error: unknown,
+): StoredCorpusValidationError | null => {
+  const raised = rejectionCause(error);
+  if (StoredCorpusValidationError.is(raised)) {
+    return raised;
+  }
+  if (!CorpusPayloadUnavailableError.is(raised)) {
+    return null;
+  }
+  const cause = rejectionCause(raised.cause);
+  return StoredCorpusValidationError.is(cause) ? cause : null;
+};
+
+type RecoverableCorpusReadOptions<T> = {
+  documentId: string;
+  read: () => Promise<T>;
+};
+
+/** Classified validation failures are recoverable; other read failures propagate. */
+export const readCorpusForRecovery = async <T>({
+  documentId,
+  read,
+}: RecoverableCorpusReadOptions<T>): Promise<
+  Result<T, StoredCorpusValidationError>
+> => {
+  const outcome = await Result.tryPromise(read);
+  if (Result.isOk(outcome)) {
+    return Result.ok(outcome.value);
+  }
+  const raised = rejectionCause(outcome.error);
+  const invalid = storedCorpusValidationFailure(raised);
+  if (invalid === null) {
+    throw raised;
+  }
+  if (StoredCorpusValidationError.is(raised)) {
+    reportStoredCorpusValidation(invalid, documentId);
+  }
+  return Result.err(invalid);
 };
 
 type CorpusReadWithFallbackInput<T> = {
@@ -1066,6 +1093,13 @@ export const readCorpusPayloadOrFallback = async <T>({
   if (Result.isOk(payload)) {
     return payload.value;
   }
+  // This function is the one reporter of a stored copy that failed
+  // validation, whether or not a Postgres copy then serves the read.
+  const raised = rejectionCause(payload.error);
+  const invalid = StoredCorpusValidationError.is(raised);
+  if (invalid) {
+    reportStoredCorpusValidation(raised, documentId);
+  }
   // An erased member is not an outage, so it has no fallback: degrading to
   // another copy of the payload is exactly what the tombstone prevents.
   const erased = payload.error instanceof CorpusMemberTombstonedError;
@@ -1081,13 +1115,15 @@ export const readCorpusPayloadOrFallback = async <T>({
         });
   }
 
-  captureError(
-    payload.error,
-    handlerErrorContext(
-      "legalsearch.readCorpusPayloadOrFallback.payload_error",
-      { documentId, step },
-    ),
-  );
+  if (!invalid) {
+    captureError(
+      payload.error,
+      handlerErrorContext(
+        "legalsearch.readCorpusPayloadOrFallback.payload_error",
+        { documentId, step },
+      ),
+    );
+  }
   return postgresCopy;
 };
 

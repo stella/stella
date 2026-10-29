@@ -29,6 +29,12 @@ import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
+beforeEach(() => {
+  anonymizeTextFieldsMock.mockReset();
+  loadAllowlistByWorkspaceMock.mockReset();
+  loadGazetteerByWorkspaceMock.mockReset();
+});
+
 const anonymizeTextFieldsMock = mock();
 const loadGazetteerByWorkspaceMock = mock();
 const loadAllowlistByWorkspaceMock = mock();

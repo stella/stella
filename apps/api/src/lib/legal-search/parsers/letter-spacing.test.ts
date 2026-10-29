@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import { collapseLetterSpacing } from "./letter-spacing";
 
@@ -12,6 +13,82 @@ const spaceOut = (words: readonly string[]): string =>
 const czechWord = fc.stringMatching(
   /^[A-Za-zÁČĎÉĚÍŇÓŘŠŤÚŮÝŽáčďéěíňóřšťúůýž]{2,12}$/u,
 );
+
+test("attested uneven chunks retain ordinary word boundaries", () => {
+  const options = {
+    setApart: true,
+    attestedWords: new Set(["vylúčený", "dokonca", "avzoski"]),
+    spacedWords: new Set(["rozhodol", "odôvodnenie", "poučenie"]),
+  };
+  expect(collapseLetterSpacing("vy l ú čen ý", options)).toBe("vylúčený");
+  expect(collapseLetterSpacing("rozh od ol :", options)).toBe("rozhodol:");
+  expect(collapseLetterSpacing("O d ôvod n eni e:", options)).toBe(
+    "Odôvodnenie:",
+  );
+  expect(collapseLetterSpacing("Pou čen i e:", options)).toBe("Poučenie:");
+  for (const text of [
+    "a v z o s k i",
+    "do konca",
+    "v znení",
+    "a i",
+    "o s",
+    "k i",
+    "vy l ú čen á",
+  ]) {
+    expect(collapseLetterSpacing(text, options)).toBe(text);
+  }
+});
+
+test("uneven attested spacing ignores chunk and Unicode boundaries", () => {
+  assertProperty(
+    "uneven attested spacing ignores chunk and Unicode boundaries",
+    fc.property(
+      fc.array(fc.boolean(), { minLength: 6, maxLength: 6 }),
+      fc.constantFrom("NFC", "NFD"),
+      (cuts, normalization) => {
+        const letters = Array.from("vylúčen");
+        let spaced = "";
+        for (const [index, letter] of letters.entries()) {
+          spaced += letter + (cuts[index] === true ? " " : "");
+        }
+        spaced = normalizeUnicode(`${spaced.trimEnd()} ý`, normalization);
+        const options = {
+          setApart: true,
+          attestedWords: new Set(["vylúčený"]),
+        };
+        const result = collapseLetterSpacing(spaced, options);
+        expect(normalizeUnicode(result, "NFC")).toBe("vylúčený");
+        expect(collapseLetterSpacing(result, options)).toBe(result);
+      },
+    ),
+  );
+});
+
+test("ordinary one-letter words retain every separator and punctuation", () => {
+  assertProperty(
+    "ordinary one-letter words retain every separator and punctuation",
+    fc.property(
+      fc.array(fc.constantFrom("a", "v", "z", "o", "s", "k", "i"), {
+        minLength: 2,
+        maxLength: 12,
+      }),
+      fc.constantFrom(" ", "  ", "\u00a0"),
+      fc.constantFrom("", ".", ":", "!"),
+      (words, gap, punctuation) => {
+        const text = words.join(gap) + punctuation;
+        expect(
+          collapseLetterSpacing(text, {
+            setApart: true,
+            attestedWords: new Set([words.join("")]),
+          }),
+        ).toBe(text);
+        expect(
+          collapseLetterSpacing(`n i e   ${text}`, { setApart: true }),
+        ).toBe(`nie ${text}`);
+      },
+    ),
+  );
+});
 
 describe("letter-spaced emphasis", () => {
   test.each([
@@ -34,6 +111,15 @@ describe("letter-spaced emphasis", () => {
     ["t a k t o:", "takto:"],
     ["z těchto d ů v o d ů:", "z těchto důvodů:"],
     ["O d ů v o d n ě n í :", "Odůvodnění:"],
+    // Verbatim from NSS 2 Afs 180/2004 and 2 Afs 154/2005.
+    [
+      "sp. zn. 31 Ca 51/2004, s e   z r u š u j e   a věc   s e   mu   v r a c í   k dalšímu řízení.",
+      "sp. zn. 31 Ca 51/2004, se zrušuje a věc se mu vrací k dalšímu řízení.",
+    ],
+    [
+      "P o u č e n í : Proti tomuto rozsudku   n e j s o u   opravné prostředky přípustné.",
+      "Poučení: Proti tomuto rozsudku nejsou opravné prostředky přípustné.",
+    ],
   ])("reads %j as %j", (spaced, words) => {
     expect(collapseLetterSpacing(spaced)).toBe(words);
   });
@@ -61,8 +147,18 @@ describe("letter-spaced emphasis", () => {
     "A. M., bytem SRN, a O. M., bytem, SRN",
     "společnosti s r. o. a a. s.",
     "Ústavní  soud  České  republiky",
+    // A spaced word elsewhere is no evidence for the prose around it.
+    "Soud rozhodoval   i o   nákladech řízení, protože žalobce uspěl.",
   ])("leaves ordinary text %j as it is", (text) => {
     expect(collapseLetterSpacing(text)).toBe(text);
+  });
+
+  test("reads the spaced words of mixed prose and emphasis, and only them", () => {
+    expect(
+      collapseLetterSpacing(
+        "Soud rozhodoval   i o   nákladech; návrh se z a m í t á .",
+      ),
+    ).toBe("Soud rozhodoval   i o   nákladech; návrh se zamítá.");
   });
 
   test("is idempotent", () => {
@@ -97,4 +193,39 @@ describe("letter-spaced emphasis", () => {
       { numRuns: 200 },
     );
   });
+
+  describe("short words set apart (setApart)", () => {
+    test.each([
+      // Verbatim from PL. ÚS 15/98 and PL. ÚS 1/2021.
+      [
+        "zákonov   n i e   j e   v súlade s čl. 26",
+        "zákonov nie je v súlade s čl. 26",
+      ],
+      ["zákona  n i e  sú   v  súlade", "zákona nie sú   v  súlade"],
+    ])("reads %j as %j", (spaced, words) => {
+      expect(collapseLetterSpacing(spaced, { setApart: true })).toBe(words);
+      // Off by default: the Czech court spaces no word this short alone.
+      expect(collapseLetterSpacing(spaced)).toBe(spaced);
+    });
+
+    test.each([
+      // A row of one-letter words, an initial, an abbreviation.
+      "slobôd  a v  súlade",
+      "úrad   v L.   o podanie",
+      "zákona   a č.   2",
+    ])("leaves %j as it is", (text) => {
+      expect(collapseLetterSpacing(text, { setApart: true })).toBe(text);
+    });
+  });
+});
+
+test("ordinary one-letter words beside spaced emphasis remain separate", () => {
+  expect(collapseLetterSpacing("rozhodl   i o   z a m í t á")).toBe(
+    "rozhodl   i o zamítá",
+  );
+  expect(collapseLetterSpacing("s e   mu   v r a c í")).toBe("se mu vrací");
+});
+
+test("a wholly spaced phrase retains the unambiguous emphasis context", () => {
+  expect(collapseLetterSpacing("a i   v e r d i k t")).toBe("ai verdikt");
 });

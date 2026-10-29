@@ -1,4 +1,3 @@
-// parser-output-unchanged: Repeated block identities are re-keyed before the guard instead of the AST being dropped. sk-courts and sk-us, whose parsers can repeat one, carry their own version bumps; every other enrolled fixture output repeats none (replay conformance asserts it).
 import { panic } from "better-result";
 
 import { storedDecisionDocketOf } from "@stll/api-contract/decision-docket-grammar";
@@ -10,9 +9,8 @@ import {
   isDecisionIdentifier,
 } from "@stll/legal-ast/decision-identifier";
 import {
-  isDocumentAst,
+  type DocumentAst,
   withProjectedPlainText,
-  withUniqueBlockIdentities,
 } from "@stll/legal-ast/document-ast";
 import { collapseSpacedLetters } from "@stll/text-normalize";
 
@@ -33,6 +31,7 @@ import {
   UNPERSISTABLE_DECISION_FIELDS,
   UnpersistableDecisionFieldError,
 } from "@/api/lib/errors/tagged-errors";
+import { prepareCorpusAst } from "@/api/lib/legal-search/corpus-ast";
 import {
   DANGEROUS_CHARS,
   sanitizeMetadata,
@@ -265,6 +264,10 @@ export const storedCaseNumberOf = (
     : result.caseNumber.replace(DANGEROUS_CHARS, "");
 };
 
+const isPreparedDocumentAst = (
+  ast: ReturnType<typeof prepareCorpusAst>["ast"],
+): ast is DocumentAst => ast !== null && Array.isArray(ast.blocks);
+
 /**
  * Sanitize text fields before DB insertion. Postgres rejects null bytes in
  * text columns. Keeping this at the ingestion boundary means adapters and
@@ -320,21 +323,15 @@ export const sanitizeResult = (
   // field entirely. It runs after `deepSanitize` because sanitization
   // rewrites inline text (no-break spaces become spaces), which can turn a
   // run into a collapsible one.
-  //
-  // Block identities are made unique first, by the rule the persisted reader
-  // applies to rows stored before the guard checked them: a parser that
-  // reads one title over two lines as two title headings still stores its
-  // document instead of losing it to the guard below.
-  const sanitizedDocumentAst = deepSanitize(
-    "blocks" in result.documentAst
-      ? {
-          ...result.documentAst,
-          blocks: withUniqueBlockIdentities(result.documentAst.blocks),
-        }
-      : result.documentAst,
-  );
-  const documentAst = isDocumentAst(sanitizedDocumentAst)
-    ? withProjectedPlainText(sanitizedDocumentAst)
+  const sanitizedDocumentAst = deepSanitize(result.documentAst);
+  const preparedAst = prepareCorpusAst({
+    ast: sanitizedDocumentAst,
+    fallbackText: result.fulltext,
+    parserVersion: result.parserVersion,
+  });
+  const readableAst = preparedAst.ast;
+  const documentAst = isPreparedDocumentAst(readableAst)
+    ? withProjectedPlainText(readableAst)
     : EMPTY_AST;
 
   const identifiers = sanitizeDecisionIdentifiers(result.identifiers);
@@ -465,6 +462,7 @@ export const sanitizeResult = (
         ?.map((url) => strip(url))
         .filter((url): url is string => url !== undefined),
       legacyEcli: strip(result.legacyEcli),
+      legacyCaseNumber: strip(result.legacyCaseNumber),
       sheetNumber: strip(result.sheetNumber),
       fulltext: result.fulltext
         ? collapseSpacedLetters(strip(result.fulltext) ?? "")
@@ -486,6 +484,8 @@ export const sanitizeResult = (
         text: collapseSpacedLetters(strip(section.text) ?? ""),
       })),
       documentAst,
+      citationScopes:
+        preparedAst.type === "text-only" ? undefined : result.citationScopes,
       sourceRaw: strip(result.sourceRaw),
     },
     metadataUrlSchema,

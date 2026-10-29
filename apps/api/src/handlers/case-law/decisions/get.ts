@@ -3,6 +3,7 @@ import { eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import type { DecisionJudgeRole } from "@stll/api-contract/case-law-judges";
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import {
   hasUsableAst,
   omitDerivablePlainText,
@@ -16,6 +17,10 @@ import {
   publishedCaseLawDecisions,
 } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
+import {
+  isCaseFileCursor,
+  listCaseFileDocuments,
+} from "@/api/handlers/case-law/decisions/case-file";
 import {
   listIncomingDecisionCitations,
   listOutgoingDecisionCitations,
@@ -54,12 +59,14 @@ import {
   readCorpusAst,
   readCorpusPayloadOrFallback,
   readCorpusText,
+  storedCorpusValidationFailure,
 } from "@/api/lib/legal-search/corpus-storage";
 import {
   corpusTombstoneReaderForTx,
   prefetchCorpusTombstones,
 } from "@/api/lib/legal-search/corpus-tombstones";
 import type { CorpusTombstoneReader } from "@/api/lib/legal-search/corpus-tombstones";
+import type { EmptyAst } from "@/api/lib/legal-search/document-types";
 import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
@@ -98,6 +105,12 @@ export const readDecisionTextColumnWritten = definePublicLawSharedQuery(
 );
 
 export const readDecisionQuerySchema = v.object({
+  caseFileCursor: v.optional(
+    v.pipe(
+      paginationCursorSchema(),
+      v.check(isCaseFileCursor, "Invalid cursor"),
+    ),
+  ),
   citationsCursor: v.optional(
     v.pipe(
       paginationCursorSchema(),
@@ -110,6 +123,7 @@ export const readDecisionQuerySchema = v.object({
 });
 
 type ReadDecisionOptions = {
+  caseFileCursor?: string | null | undefined;
   citationsCursor?: string | null | undefined;
   /**
    * The court registry the chip beside the court's name is drawn from. The
@@ -321,6 +335,7 @@ export const decisionRecordQuery = (
   tx
     .select({
       id: publishedCaseLawDecisions.id,
+      sourceId: publishedCaseLawDecisions.sourceId,
       caseNumber: publishedCaseLawDecisions.caseNumber,
       caseNumberType: publishedCaseLawDecisions.caseNumberType,
       slug: publishedCaseLawDecisions.slug,
@@ -377,6 +392,7 @@ export const readDecisionHandler = definePublicLawSharedQuery(
   PUBLIC_LAW_SHARED_QUERY.caseLawDecisionRead,
   async ({
     citationsCursor,
+    caseFileCursor,
     readCourtWeights,
     subject,
   }: ReadDecisionOptions) => {
@@ -409,6 +425,7 @@ export const readDecisionHandler = definePublicLawSharedQuery(
       judges,
       citationsFromPage,
       citationsToPage,
+      caseFile,
     ] = await Promise.all([
       // Bounded and degraded to no badge: a slow registry read must cost the
       // decision its chip, not the reader its decision.
@@ -435,8 +452,12 @@ export const readDecisionHandler = definePublicLawSharedQuery(
             decisionId,
             countries: subject.countries,
           }),
+      listCaseFileDocuments({ tx, decision, cursor: caseFileCursor }),
     ]);
 
+    if (caseFile === false) {
+      return status(400, { message: "Invalid cursor" });
+    }
     if (!("items" in citationsFromPage)) {
       return citationsFromPage;
     }
@@ -475,13 +496,9 @@ export const readDecisionHandler = definePublicLawSharedQuery(
       ? omitDerivablePlainText(storedAst)
       : storedAst;
 
-    // Only fetch fulltext if no usable documentAst (fallback). A stored AST
-    // no reader can read counts as a payload that could not be read: the
-    // decision is served from its fulltext when it has one, and as a failed
-    // read when it has none, never as a document still to fetch, because a
-    // publisher fetch cannot repair a row whose payload is already stored.
+    // Only fetch fulltext if no usable documentAst (fallback).
     let fulltext: string | null = null;
-    let corpusPayloadUnavailable = astRead.unavailable || astRead.unreadable;
+    let corpusPayloadUnavailable = astRead.unavailable;
     if (!astIsUsable) {
       const textRead = await resolveFulltext({
         textS3Key: decision.textS3Key,
@@ -596,6 +613,7 @@ export const readDecisionHandler = definePublicLawSharedQuery(
       citationsTo: citationsToPage.items,
       citationsNextCursor,
       languageAlternates,
+      caseFile,
       fulltext,
     };
   },
@@ -620,10 +638,10 @@ type CorpusReadOutcome<TPayload> = {
 };
 
 /**
- * Contain an object-storage refusal, and only that. Anything else is a
+ * Contain an unavailable or invalid stored payload. Anything else is a
  * defect in the read and still fails it.
  */
-const containPayloadUnavailable = async <TPayload>(
+export const containPayloadUnavailable = async <TPayload>(
   read: () => Promise<TPayload | null>,
   decisionId: SafeId<"caseLawDecision">,
 ): Promise<CorpusReadOutcome<TPayload>> => {
@@ -638,10 +656,12 @@ const containPayloadUnavailable = async <TPayload>(
     outcome.error instanceof UnhandledException
       ? outcome.error.cause
       : outcome.error;
-  // Not the containable refusal. `readCorpusPayloadOrFallback` raises only
-  // `CorpusPayloadUnavailableError`, so anything else is the defect this
-  // helper's contract already names: it fails the read, carrying the original
-  // as its cause.
+  // An invalid stored payload uses the same visible read-failed state as an
+  // unavailable object; neither means the source published no text. Corpus
+  // storage reported it with its issue paths, so it is not reported here.
+  if (storedCorpusValidationFailure(raised) !== null) {
+    return { payload: null, unavailable: true };
+  }
   if (!CorpusPayloadUnavailableError.is(raised)) {
     return panic(
       "Corpus read failed for a reason this read cannot contain",
@@ -662,8 +682,7 @@ const containPayloadUnavailable = async <TPayload>(
 type ResolveAstInput = {
   astS3Key: string | null;
   contentHash: string | null;
-  /** The row's `document_ast` column as stored; see `readServedDecisionAst`. */
-  pgAst: unknown;
+  pgAst: DocumentAst | EmptyAst | null;
   decisionId: SafeId<"caseLawDecision">;
   readTombstones: CorpusTombstoneReader;
 };
@@ -685,7 +704,7 @@ const resolveAst = async ({
         corpusReadEnabled: corpusReadEnabled(),
         readStore: async () =>
           astS3Key === null
-            ? { type: "read", ast: null }
+            ? null
             : await readCorpusAst(astS3Key, { readTombstones }),
       }),
     decisionId,
@@ -695,7 +714,6 @@ const resolveAst = async ({
     source: read.payload?.source ?? null,
     projectionDigest: read.payload?.projectionDigest ?? null,
     unavailable: read.unavailable,
-    unreadable: read.payload?.unreadable ?? false,
   };
 };
 
@@ -703,8 +721,7 @@ export type ResolveDocumentStateInput = {
   /** Whether the read resolved something a reader can actually read. */
   hasReadableDocument: boolean;
   /**
-   * Whether object storage refused a payload this row is served from, or
-   * the stored payload is one no reader can read.
+   * Whether object storage refused a payload this row is served from.
    * A trimmed canonical row has no Postgres copy to fall back to, so
    * there is nothing readable and nothing that says the source had
    * nothing either.

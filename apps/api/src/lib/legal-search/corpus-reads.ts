@@ -1,3 +1,5 @@
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
+
 import {
   readCorpusAst as readAstWithDenial,
   readCorpusSections as readSectionsWithDenial,
@@ -6,15 +8,17 @@ import {
 } from "@/api/lib/legal-search/corpus-storage";
 import type {
   CorpusByteSourceSeams,
-  PersistedCorpusAstRead,
-  SizedPersistedCorpusAstRead,
+  SizedCorpusAst,
 } from "@/api/lib/legal-search/corpus-storage";
 import {
   packedAddresses,
   selectCorpusTombstones,
 } from "@/api/lib/legal-search/corpus-tombstones";
 import type { CorpusTombstoneReader } from "@/api/lib/legal-search/corpus-tombstones";
-import type { DecisionSection } from "@/api/lib/legal-search/document-types";
+import type {
+  DecisionSection,
+  EmptyAst,
+} from "@/api/lib/legal-search/document-types";
 import { publicLawReadDb } from "@/api/lib/public-law-read-db";
 
 /**
@@ -74,7 +78,7 @@ export const readCorpusSections = async (
 export const readCorpusAst = async (
   storedKey: string,
   options: BoundReadOptions = {},
-): Promise<PersistedCorpusAstRead> =>
+): Promise<DocumentAst | EmptyAst | null> =>
   await readAstWithDenial(storedKey, {
     readTombstones: readCorpusTombstones,
     ...options,
@@ -83,7 +87,7 @@ export const readCorpusAst = async (
 export const readSizedCorpusAst = async (
   storedKey: string,
   options: BoundReadOptions = {},
-): Promise<SizedPersistedCorpusAstRead> =>
+): Promise<SizedCorpusAst> =>
   await readSizedAstWithDenial(storedKey, {
     readTombstones: readCorpusTombstones,
     ...options,

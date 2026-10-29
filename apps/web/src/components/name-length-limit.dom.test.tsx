@@ -1,10 +1,15 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
+import { afterAll, afterEach, expect, mock, spyOn, test } from "bun:test";
 
 import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
 
 import messages from "@/i18n/langs/en.json";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
+
+// Spies created in a test stay attached if it fails before restoring them.
+afterEach(() => {
+  mock.restore();
+});
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 

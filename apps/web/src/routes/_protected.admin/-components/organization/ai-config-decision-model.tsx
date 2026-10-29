@@ -29,6 +29,7 @@ import type {
   DecisionProviderValue,
   StoredDecisionModel,
 } from "@/components/ai-config-role-models.logic";
+import { matchesComboboxItem } from "@/components/combobox-filter.logic";
 import { SecretInput } from "@/components/secret-input";
 
 const DEFAULT_SELECTION = "default";
@@ -128,6 +129,7 @@ export const AIConfigDecisionModel = ({
       </Select>
       <Combobox
         disabled={disabled || draft === null}
+        filter={matchesComboboxItem}
         items={modelOptions}
         value={draft?.modelId ?? null}
         inputValue={draft?.modelId ?? ""}

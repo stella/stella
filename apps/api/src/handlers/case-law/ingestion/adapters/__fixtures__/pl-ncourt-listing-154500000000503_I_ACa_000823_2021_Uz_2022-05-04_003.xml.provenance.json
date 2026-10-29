@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "199d816d5928c94428919e99b893f777442575a11f4535ca0908571723383abb",
+  "sourceUrl": "https://apiorzeczenia.wroclaw.sa.gov.pl/ncourt-api/judgements?signature=I+ACa+823%2F21&court=15450000&sort=signature-asc",
+  "capturedAt": "2026-10-25T20:38:05.000Z",
+  "note": "one signature at one court: the listed row of a recorded document"
+}

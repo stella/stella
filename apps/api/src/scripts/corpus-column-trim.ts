@@ -295,18 +295,12 @@ const trimColumnRow = async ({
       checkCorpusObject(
         {
           key: row.astS3Key,
-          // An object no reader can read matches nothing, so its column is
-          // never trimmed away.
-          matchesColumn: async () => {
-            if (row.astS3Key === null) {
-              return false;
-            }
-            const stored = await readCorpusAst(row.astS3Key);
-            return (
-              stored.type === "read" &&
-              Bun.deepEquals(stored.ast, row.documentAst ?? null)
-            );
-          },
+          matchesColumn: async () =>
+            row.astS3Key !== null &&
+            Bun.deepEquals(
+              await readCorpusAst(row.astS3Key),
+              row.documentAst ?? null,
+            ),
         },
         compareContent,
       ),

@@ -21,6 +21,7 @@ import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
 import { GLOBAL_SEARCH_RESULT_TYPES } from "@stll/api-contract";
+import { GLOBAL_SEARCH_RANK_WORK_LIMIT_CODE } from "@stll/api-contract/search";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -36,8 +37,14 @@ import {
   CommandInput,
   CommandList,
 } from "@stll/ui/command";
+import { DIALOG_MOBILE_LAYOUT } from "@stll/ui/dialog";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
-import { AiActionIcon, ChevronRightIcon, PanelRightIcon } from "@stll/ui/icons";
+import {
+  AiActionIcon,
+  ChevronRightIcon,
+  PanelRightIcon,
+  XIcon,
+} from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import { MenuSection } from "@stll/ui/menu-section";
 import { ScrollArea } from "@stll/ui/scroll-area";
@@ -138,7 +145,7 @@ import {
   isPublicLawPreviewEnabled,
   usePublicLawPreviewEnabled,
 } from "@/hooks/use-public-law-preview";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import { useI18nStore } from "@/i18n/i18n-store";
 import {
   useOwnerScopedState,
@@ -152,7 +159,7 @@ import { getChatSendMode } from "@/lib/chat-anonymized-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { createChatThreadId } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
-import { unwrapApiResponse } from "@/lib/errors/api";
+import { APIError, unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { FILE_OPEN_TARGET, resolveFileOpenTarget } from "@/lib/file-open.logic";
 import {
@@ -184,6 +191,10 @@ import {
   shouldShowSearchPreview,
 } from "@/lib/search.logic";
 import { navigateToWorkspaceReveal } from "@/lib/workspaces/reveal-navigation";
+import {
+  getCurrentWorkspaceDocument,
+  useCurrentWorkspaceView,
+} from "@/lib/workspaces/use-workspace-view-params";
 
 type SearchSummaryCitation = {
   id: string;
@@ -319,6 +330,7 @@ type SearchResultsStatus =
   | { type: "hidden" }
   | { type: "unavailable" }
   | { type: "error" }
+  | { type: "refine" }
   | { type: "loading" }
   | { query: string | null; type: "empty" }
   | { type: "results" };
@@ -517,6 +529,7 @@ const resolveSearchResultsStatus = ({
   isBlockingSearchError,
   isLoading,
   searchQuery,
+  searchError,
 }: {
   hasActiveSearch: boolean;
   hasQuery: boolean;
@@ -526,6 +539,7 @@ const resolveSearchResultsStatus = ({
   isBlockingSearchError: boolean;
   isLoading: boolean;
   searchQuery: string;
+  searchError: unknown;
 }): SearchResultsStatus => {
   if (!hasVisibleSearch) {
     return { type: "hidden" };
@@ -534,6 +548,12 @@ const resolveSearchResultsStatus = ({
     return { type: "unavailable" };
   }
   if (hasActiveSearch && isBlockingSearchError) {
+    if (
+      APIError.is(searchError) &&
+      searchError.code === GLOBAL_SEARCH_RANK_WORK_LIMIT_CODE
+    ) {
+      return { type: "refine" };
+    }
     return { type: "error" };
   }
   if (
@@ -579,12 +599,13 @@ export const SearchDialog = ({
   mode = BROWSE_MODE,
 }: SearchDialogProps) => {
   const t = useTranslations();
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   // The AI search API caps locale at 16 chars; send the base language, not the
   // formatting locale (which may carry a region and -u- extensions).
   const apiLocale = useI18nStore((s) => s.loadedLang);
   const navigate = useNavigate();
   const router = useRouter();
+  const currentView = useCurrentWorkspaceView();
   const queryClient = useQueryClient();
   const user = useAuthenticatedUser();
   const isMobile = useIsMobile();
@@ -1265,8 +1286,8 @@ export const SearchDialog = ({
         }
         await navigate(options);
       },
-      pathname: router.state.location.pathname,
       queryClient,
+      router,
       targetWorkspaceId: location.workspaceId,
     });
   };
@@ -1291,7 +1312,12 @@ export const SearchDialog = ({
     if (!isSearchRecentsScopeCurrent(searchRecentsScope)) {
       return;
     }
-    await openEntityInInspector(entityId, label, workspaceId);
+    await openEntityInInspector({
+      documentOnScreen: getCurrentWorkspaceDocument(router.state.matches),
+      entityId,
+      label,
+      workspaceId,
+    });
   };
 
   const openRecentFile = (file: RecentFileWithIdentity) => {
@@ -1337,7 +1363,7 @@ export const SearchDialog = ({
         await openEntityLocation(location);
         return;
       }
-      await navigate(getRecentFileRoute({ ...file, fileFieldId }));
+      await navigate(getRecentFileRoute({ ...file, currentView, fileFieldId }));
     });
   };
 
@@ -1364,6 +1390,7 @@ export const SearchDialog = ({
       }
       navigateAfterClose(async () => {
         const { fileFieldId } = await resolveEntityDocumentRoute({
+          currentView,
           hit,
           resolveCurrentFileFieldId: async () =>
             await queryClient.query(
@@ -1482,6 +1509,7 @@ export const SearchDialog = ({
       }
       navigateAfterClose(async () => {
         const { fileFieldId, route } = await resolveEntityDocumentRoute({
+          currentView,
           hit,
           resolveCurrentFileFieldId: async () =>
             await queryClient.query(
@@ -1554,6 +1582,7 @@ export const SearchDialog = ({
     isBlockingSearchError,
     isLoading,
     searchQuery,
+    searchError,
   });
   const filterEditorIdsKey = filters.editedByUserIds.join("|");
 
@@ -1741,9 +1770,14 @@ export const SearchDialog = ({
         }}
         open={open}
       >
+        {/* A phone gets the whole screen rather than the bottom sheet: search
+            needs the height for results, and a sheet starting below the top
+            edge left the page (and an open sidebar) showing above it while
+            its last rows ran under the browser toolbar. */}
         <CommandDialogPopup
+          mobileLayout={DIALOG_MOBILE_LAYOUT.fullscreen}
           className={cn(
-            "flex h-[calc(100dvh-32px)] w-[calc(100vw-16px)] max-w-none flex-col overflow-clip sm:h-[min(720px,calc(100dvh-96px))]",
+            "flex h-full w-full max-w-none flex-col overflow-clip sm:h-[min(720px,calc(100dvh-96px))]",
             showPreview
               ? "sm:w-[min(1120px,calc(100vw-32px))] xl:w-[min(1280px,calc(100vw-48px))]"
               : "sm:w-[min(960px,calc(100vw-32px))]",
@@ -1909,6 +1943,17 @@ export const SearchDialog = ({
                     {t("common.reset")}
                   </Button>
                 )}
+                {/* Full screen on a phone leaves no backdrop to tap. */}
+                <Button
+                  aria-label={t("common.close")}
+                  className="shrink-0 sm:hidden"
+                  onClick={() => onOpenChange(false)}
+                  size="icon-lg"
+                  title={t("common.close")}
+                  variant="ghost"
+                >
+                  <XIcon className="size-4" />
+                </Button>
               </div>
 
               {/* Content area */}
@@ -2561,6 +2606,14 @@ const SearchResultsContent = ({
         <div className="flex h-full items-center justify-center px-4 py-8">
           <p className="text-muted-foreground text-sm">
             {t("common.comingSoon")}
+          </p>
+        </div>
+      );
+    case "refine":
+      return (
+        <div className="flex h-full items-center justify-center px-4 py-8">
+          <p className="text-muted-foreground text-sm">
+            {t("caseLaw.pagination.refineForMore")}
           </p>
         </div>
       );

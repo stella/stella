@@ -43,7 +43,7 @@ import {
 } from "drizzle-orm";
 
 import { sanitizeErrorForOutput } from "@stll/errors";
-import { type DocumentAst, isDocumentAst } from "@stll/legal-ast/document-ast";
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import {
   DOCUMENT_FETCH_OUTCOME,
   type DocumentFetchOutcome,
@@ -80,6 +80,7 @@ import { declaredMimeMatchesMagic } from "@/api/lib/file-scan/magic";
 import type { DeferredDocumentAdapterKey } from "@/api/lib/legal-search/adapter-manifest";
 import { settleReservedCaseLawCorpusUpload } from "@/api/lib/legal-search/case-law-corpus-upload-intents";
 import { indexDecision } from "@/api/lib/legal-search/case-law-search-index";
+import { prepareCorpusAst } from "@/api/lib/legal-search/corpus-ast";
 import {
   type ActiveCorpusProjectionSourceLock,
   lockActiveCorpusProjectionSourceTx,
@@ -112,6 +113,7 @@ import {
   recordDocumentStageError,
   withDocumentStageObserver,
 } from "@/api/lib/legal-search/document-stage-observation";
+import type { EmptyAst } from "@/api/lib/legal-search/document-types";
 import {
   ADAPTER_KEYS,
   PARSER_VERSIONS,
@@ -427,7 +429,7 @@ const publisherStatusPdf = (status: number): PdfFetchResult => {
 
 export type BackfilledDocument = {
   fulltext: string;
-  documentAst: DocumentAst;
+  documentAst: DocumentAst | EmptyAst;
   sections: ReturnType<typeof segmentDecision>;
 };
 
@@ -467,10 +469,8 @@ export const parsePendingDocument = async (
   });
 
   const fulltext = sanitized.fulltext ?? "";
-  // `sanitizeResult` drops an AST it cannot round-trip, so a sanitized
-  // document that lost its blocks is treated as unparseable rather
-  // than stored half-formed.
-  if (fulltext === "" || !isDocumentAst(sanitized.documentAst)) {
+  // Text remains readable even when the reader rejects its structure.
+  if (fulltext === "") {
     return undefined;
   }
 
@@ -1088,7 +1088,7 @@ const storedForCorpusOutcome = (
  */
 const storeBackfilledDocumentOwned = async ({
   decision,
-  document,
+  document: uncheckedDocument,
   transfer = corpusBackfillTransfer(),
   mode = corpusStorageMode,
   fence,
@@ -1096,6 +1096,15 @@ const storeBackfilledDocumentOwned = async ({
   fence: DeferredDocumentSourceFence;
 }): Promise<"stored" | "superseded"> => {
   const { scopedDb } = fence;
+  const document = {
+    ...uncheckedDocument,
+    documentAst: prepareCorpusAst({
+      ast: uncheckedDocument.documentAst,
+      fallbackText: uncheckedDocument.fulltext,
+      parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS],
+      source: ADAPTER_KEYS.SK_COURTS,
+    }).ast,
+  };
   const sections = document.sections.length > 0 ? document.sections : null;
   const ownerPredicate = and(
     eq(caseLawDecisions.id, decision.id),
