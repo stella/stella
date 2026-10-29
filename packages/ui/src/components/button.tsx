@@ -166,7 +166,7 @@ const buttonVariants = cva(
  * says it is unavailable.
  */
 const BUTTON_PLAIN_CLASS =
-  "focus-visible:ring-ring focus-visible:ring-offset-background inline-block cursor-pointer text-start outline-none focus-visible:ring-2 focus-visible:ring-offset-1 disabled:cursor-default";
+  "focus-visible:ring-ring focus-visible:ring-offset-background relative inline-block cursor-pointer text-start outline-none focus-visible:ring-2 focus-visible:ring-offset-1 disabled:cursor-default";
 
 /**
  * The outline a plain button's focus ring follows, matching its content:
