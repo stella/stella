@@ -1,6 +1,0 @@
-{
-  "metric": "direct-failure-sinks",
-  "file": "apps/api/src/lib/legal-search/corpus-storage.ts",
-  "delta": 1,
-  "reason": "The shared stored-payload validation reporter correlates schema failures with document ids and issue paths without retaining rejected values. One capture owner serves row, analysis and object-storage reads; the server log preserves paths independently of analytics context filtering."
-}

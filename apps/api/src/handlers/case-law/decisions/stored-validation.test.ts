@@ -51,10 +51,25 @@ const validationFailureOf = (
 /** Record both reporting channels, silenced, for one test. */
 const recordReports = () => ({
   logged: spyOn(logger, "error").mockImplementation(() => undefined),
-  captured: spyOn(captureModule, "captureError").mockImplementation(
+  captured: spyOn(captureModule, "captureObservedError").mockImplementation(
     () => undefined,
   ),
 });
+
+const expectStoredValidationLog = (
+  logged: ReturnType<typeof recordReports>["logged"],
+): void => {
+  expect(logged).toHaveBeenCalledTimes(1);
+  expect(logged).toHaveBeenCalledWith(
+    "case_law.decision.stored_payload_invalid",
+    expect.objectContaining({
+      decisionId,
+      "error.code": "stored_corpus_invalid",
+      "error.type": "StoredCorpusValidationError",
+      "failure.sink": "case_law.decision.stored_payload_invalid",
+    }),
+  );
+};
 
 afterEach(() => {
   mock.restore();
@@ -88,11 +103,7 @@ describe("invalid stored decision payloads", () => {
   test("reports a row parse once with the paths the error carries", () => {
     const { logged, captured } = recordReports();
     const error = validationFailureOf(missingBlockFields, decisionId);
-    expect(logged).toHaveBeenCalledTimes(1);
-    expect(logged).toHaveBeenCalledWith(
-      "case_law.decision.stored_payload_invalid",
-      { decisionId, code: "stored_corpus_invalid", paths: error.paths },
-    );
+    expectStoredValidationLog(logged);
     expect(captured).toHaveBeenCalledTimes(1);
     expect(captured.mock.calls[0]?.[0]).toBe(error);
   });
@@ -115,11 +126,7 @@ describe("invalid stored decision payloads", () => {
         parsePersistedCorpusAst({ version: 1, blocks: [] }, decisionId),
     });
     expect(served).toMatchObject({ version: 1, blocks: [] });
-    expect(logged).toHaveBeenCalledTimes(1);
-    expect(logged).toHaveBeenCalledWith(
-      "case_law.decision.stored_payload_invalid",
-      { decisionId, code: "stored_corpus_invalid", paths: ["$"] },
-    );
+    expectStoredValidationLog(logged);
     expect(captured).toHaveBeenCalledTimes(1);
     expect(captured.mock.calls[0]?.[0]).toBeInstanceOf(
       StoredCorpusValidationError,
@@ -174,11 +181,7 @@ describe("invalid stored decision payloads", () => {
         return "read";
       }, decisionId);
       expect(outcome).toEqual({ payload: null, unavailable: true });
-      expect(logged).toHaveBeenCalledTimes(1);
-      expect(logged).toHaveBeenCalledWith(
-        "case_law.decision.stored_payload_invalid",
-        { decisionId, code: "stored_corpus_invalid", paths: ["$"] },
-      );
+      expectStoredValidationLog(logged);
       expect(captured).toHaveBeenCalledTimes(1);
       expect(captured.mock.calls[0]?.[0]).toBeInstanceOf(
         StoredCorpusValidationError,

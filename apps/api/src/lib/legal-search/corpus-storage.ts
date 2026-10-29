@@ -3,7 +3,6 @@ import { sql } from "drizzle-orm";
 import type { Column, SQL } from "drizzle-orm";
 import * as v from "valibot";
 
-import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 import {
   type DocumentAst,
   persistedAstDegradations,
@@ -59,7 +58,8 @@ import type {
 } from "@/api/lib/legal-search/document-types";
 import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
-import { logger } from "@/api/lib/observability/logger";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   deleteCorpusS3ObjectWithSignal,
   isMissingCorpusObjectError,
@@ -116,6 +116,18 @@ const dotPath = (path: readonly v.IssuePathItem[]): string | null => {
   return keys.length === 0 ? null : keys.join(".");
 };
 
+/** A validator issue without a path points at the validation root. */
+const ROOT_VALIDATOR_ISSUE_PATH: readonly v.IssuePathItem[] = [];
+
+const validatorIssuePath = (
+  issue: v.BaseIssue<unknown>,
+): readonly v.IssuePathItem[] => {
+  if (issue.path === undefined) {
+    return ROOT_VALIDATOR_ISSUE_PATH;
+  }
+  return issue.path;
+};
+
 /**
  * Dot paths of every issue, nested union issues included. A union's
  * sub-issues carry paths relative to the union's own input, so each is
@@ -127,7 +139,7 @@ const issueDotPaths = (
   parent: readonly v.IssuePathItem[],
 ): string[] =>
   issues.flatMap((issue) => {
-    const path = [...parent, ...(issue.path ?? [])];
+    const path = [...parent, ...validatorIssuePath(issue)];
     const own = dotPath(path);
     const nested =
       issue.issues === undefined ? [] : issueDotPaths(issue.issues, path);
@@ -177,27 +189,20 @@ export const parsePersistedCorpusAst = (
   return parsed.output;
 };
 
+const STORED_CORPUS_VALIDATION_SINK = failureSink({
+  event: "case_law.decision.stored_payload_invalid",
+  expected: [],
+});
+
 /** Correlate a rejected payload without logging its values or validator messages. */
 const reportStoredCorpusValidation = (
   error: StoredCorpusValidationError,
   documentId: string,
 ): void => {
-  logger.error(
-    "case_law.decision.stored_payload_invalid",
-    sanitizeErrorAttributesForOutput({
-      decisionId: documentId,
-      code: error.code,
-      paths: error.paths,
-    }),
-  );
-  captureError(
-    error,
-    handlerErrorContext("corpus.storedPayloadInvalid", {
-      documentId,
-      code: error.code,
-      paths: error.paths.join(","),
-    }),
-  );
+  observeFailure(error, {
+    sink: STORED_CORPUS_VALIDATION_SINK,
+    ctx: { decisionId: documentId },
+  });
 };
 
 /**
