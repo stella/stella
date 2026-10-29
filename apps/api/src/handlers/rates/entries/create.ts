@@ -26,6 +26,7 @@ import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { validateOrgUserId } from "@/api/lib/validated-org-user-id";
 
 const createRateEntryBodySchema = v.object({
+  activityCodeId: v.optional(v.nullable(resourceIdSchema("billingCode"))),
   userId: v.optional(v.nullable(userIdSchema)),
   // The canonical role tuple, so adding a role cannot silently omit it here.
   role: v.optional(v.nullable(v.picklist(ORGANIZATION_ROLE_NAMES))),
@@ -59,6 +60,7 @@ export const createRateEntryHandler = async function* ({
 }: CreateRateEntryHandlerProps) {
   const selectedUserId = body.userId ?? null;
   const selectedRole = body.role ?? null;
+  const selectedActivityCodeId = body.activityCodeId ?? null;
   if (selectedUserId !== null && selectedRole !== null) {
     return Result.err(
       new HandlerError({
@@ -136,6 +138,9 @@ export const createRateEntryHandler = async function* ({
     selectedRole === null
       ? isNull(rateEntries.role)
       : eq(rateEntries.role, selectedRole),
+    selectedActivityCodeId === null
+      ? isNull(rateEntries.activityCodeId)
+      : eq(rateEntries.activityCodeId, selectedActivityCodeId),
     overlapToCondition,
   ];
   if (overlapFromCondition) {
@@ -147,6 +152,23 @@ export const createRateEntryHandler = async function* ({
       await tx.execute(
         sql`SELECT pg_advisory_xact_lock(hashtext(${params.rateTableId}))`,
       );
+
+      if (selectedActivityCodeId !== null) {
+        const activity = await tx.query.billingCodes.findFirst({
+          where: {
+            id: { eq: selectedActivityCodeId },
+            workspaceId: { eq: workspaceId },
+            type: { eq: "activity" },
+          },
+          columns: { id: true },
+        });
+        if (!activity) {
+          throw new HandlerError({
+            status: 400,
+            message: "Activity code not found in this matter",
+          });
+        }
+      }
 
       const totalEntries = await tx.$count(
         rateEntries,
@@ -182,6 +204,7 @@ export const createRateEntryHandler = async function* ({
           rateTableId: params.rateTableId,
           userId: body.userId ?? null,
           role: body.role ?? null,
+          activityCodeId: body.activityCodeId ?? null,
           hourlyRate: cents(body.hourlyRate),
           effectiveFrom: body.effectiveFrom,
           effectiveTo: body.effectiveTo ?? null,
@@ -206,6 +229,7 @@ export const createRateEntryHandler = async function* ({
               rateTableId: params.rateTableId,
               userId: body.userId ?? null,
               role: body.role ?? null,
+              activityCodeId: body.activityCodeId ?? null,
               hourlyRate: cents(body.hourlyRate),
               effectiveFrom: body.effectiveFrom,
               effectiveTo: body.effectiveTo ?? null,
@@ -228,7 +252,8 @@ const createRateEntry = createSafeHandler(
       "Add one rate line to a rate table: an hourly rate in integer minor " +
       "currency units, effective from a date and optionally until another. " +
       "Pass userId for a person-specific rate, role for an organization-role rate, " +
-      "or omit both for the table fallback. Set at most one selector. " +
+      "or omit both for the table fallback. Set at most one person or role; " +
+      "optionally pass activityCodeId for an activity-only or person/role plus activity rate. " +
       "Refused when dates overlap a line for the same selector or userId is not an organization member, " +
       "or when the table is at its line limit.",
     permissions: { rate: ["create"] },

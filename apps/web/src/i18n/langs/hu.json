@@ -547,6 +547,14 @@
     },
     "approve": "Jóváhagy",
     "approveSelected": "Kijelöltek jóváhagyása",
+    "arrangement": {
+      "alertThreshold": "Értesítési küszöb (%)",
+      "amountCap": "Díjkorlát",
+      "flatFee": "Átalánydíj",
+      "invalidCap": "Adjon meg pozitív korlátokat és 0,01% és 100% közötti értesítési küszöböt.",
+      "minuteCap": "Időkorlát (perc)",
+      "title": "Díjmegállapodás"
+    },
     "batchActions": "Tömeges műveletek",
     "billable": "Számlázható",
     "billedAmount": "Számlázott összeg",

@@ -4,6 +4,7 @@ import * as v from "valibot";
 
 import { TIME_ENTRY_STATUSES } from "@stll/api-contract";
 import { apiDateSchema } from "@stll/api-contract/api-date";
+import { BILLING_CODE_MAX_LENGTH } from "@stll/api-contract/billing";
 import { roles } from "@stll/permissions";
 
 import { member, user } from "@/api/db/auth-schema";
@@ -1279,6 +1280,13 @@ const handleDeleteTimeEntryTool: TypedMcpToolHandler<
 const resolveRateArgsSchema = nullAsAbsent(
   v.strictObject({
     matter_id: uuidInputSchema("Matter ID to resolve the rate in."),
+    activity_code: v.optional(
+      v.pipe(
+        v.string(),
+        v.maxLength(BILLING_CODE_MAX_LENGTH),
+        v.description("Activity code to price."),
+      ),
+    ),
     user_id: v.pipe(
       v.string(),
       v.minLength(1),
@@ -1337,6 +1345,7 @@ const handleResolveRateTool: McpToolHandler<
       workspaceId,
       userId: validatedUserId,
       dateWorked: parsed.output.date,
+      activityCode: parsed.output.activity_code,
     });
     return Result.ok(rate);
   });
@@ -1828,8 +1837,8 @@ export const BILLING_TOOL_DEFINITIONS = [
     },
     description:
       "Resolve the effective hourly rate for a user on a given date in a " +
-      "matter, using its default rate table (user-specific rate first, " +
-      "then the table default). Returns the hourly rate in integer " +
+      "matter, using its default rate table: user plus activity, role plus activity, " +
+      "activity, user, role, then table default. Effective dates apply throughout. Returns the hourly rate in integer " +
       "minor currency units (e.g. cents) and the currency, or nulls when no " +
       "rate applies.",
     inputSchema: resolveRateArgsSchema,
