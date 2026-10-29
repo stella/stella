@@ -786,7 +786,7 @@ if (args[0] === "api") {
         {
           env: {
             ...process.env,
-            PATH: `${directory}:${process.env["PATH"]}`,
+            PATH: `${directory}:${process.env["PATH"] ?? ""}`,
             GH_TOKEN: "",
             GITHUB_REPOSITORY: "test-owner/public-app",
           },

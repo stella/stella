@@ -29,6 +29,7 @@ concurrency:
 jobs:
   window:
     name: Post-release window
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     environment: release-app
