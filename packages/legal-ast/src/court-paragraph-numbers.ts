@@ -520,6 +520,47 @@ const bridgeScope = ({
   }
 };
 
+type ScopeReading = Walk & {
+  readonly scopeIndex: number;
+  readonly style: CourtParagraphMarkerStyle;
+  readonly start: ScopeStart;
+};
+
+/** A short opinion needs corroboration from the run it actually continues. */
+const corroboratedReadings = (
+  readings: readonly ScopeReading[],
+): ScopeReading[] => {
+  const groups: ScopeReading[][] = [];
+  for (const reading of readings) {
+    const group = groups.at(-1);
+    const previous = group?.at(-1);
+    const continuesPrevious =
+      reading.start.type === "continuation" &&
+      reading.accepted.at(0)?.number === reading.start.startingAt;
+    if (
+      group !== undefined &&
+      previous !== undefined &&
+      previous.scopeIndex + 1 === reading.scopeIndex &&
+      continuesPrevious
+    ) {
+      group.push(reading);
+      continue;
+    }
+    groups.push([reading]);
+  }
+  return groups.flatMap((group) => {
+    const count = group.reduce(
+      (total, reading) => total + reading.accepted.length,
+      0,
+    );
+    return group.filter(
+      (reading) =>
+        reading.accepted.at(0)?.source === "structured" ||
+        count >= COURT_PARAGRAPH_NUMBERING_LIMITS.minParagraphs[reading.style],
+    );
+  });
+};
+
 const readNumbering = (blocks: readonly Block[]): Reading => {
   const limits = COURT_PARAGRAPH_NUMBERING_LIMITS;
   const body = bodyOf(blocks);
@@ -531,6 +572,7 @@ const readNumbering = (blocks: readonly Block[]): Reading => {
   );
   let style: CourtParagraphMarkerStyle = "bracket";
   let previousScopeLast = 0;
+  const readings: ScopeReading[] = [];
   for (const [index, from] of starts.entries()) {
     const to = starts[index + 1] ?? body.paragraphs.length;
     // Keep existing numbers as anchors. Raw markers in this scope need the
@@ -543,33 +585,41 @@ const readNumbering = (blocks: readonly Block[]): Reading => {
       });
     if (firstStructuredIndex !== undefined) {
       const previousLast = previousScopeLast;
+      const accepted: Candidate[] = [];
       for (const [position, blockIndex] of body.paragraphs
         .slice(from, to)
         .entries()) {
         const block = blocks[blockIndex];
-        if (block?.type === "paragraph" && block.number !== undefined) {
-          if (blockIndex === firstStructuredIndex) {
-            scopes.push({
-              type:
-                previousLast > 0 && block.number === previousLast + 1
-                  ? "continuation"
-                  : "fresh-start",
-              blockIndex,
-            });
-          }
-          previousScopeLast = block.number;
-          numbers.set(blockIndex, {
-            style,
-            candidate: {
-              bodyIndex: from + position,
-              blockIndex,
-              number: block.number,
-              source: "structured",
-              marker: "",
-            },
-          });
+        if (block?.type !== "paragraph" || block.number === undefined) {
+          continue;
         }
+        previousScopeLast = block.number;
+        accepted.push({
+          bodyIndex: from + position,
+          blockIndex,
+          number: block.number,
+          source: "structured",
+          marker: "",
+        });
       }
+      const firstNumber = accepted.at(0)?.number;
+      const start =
+        previousLast > 0 && firstNumber === previousLast + 1
+          ? ({
+              type: "continuation",
+              startingAt: firstNumber,
+            } as const satisfies ScopeStart)
+          : ({
+              type: "fresh-start",
+              startingAt: 1,
+            } as const satisfies ScopeStart);
+      readings.push({
+        scopeIndex: index,
+        style,
+        start,
+        accepted,
+        unassigned: [],
+      });
       continue;
     }
     const freshStart = {
@@ -617,11 +667,7 @@ const readNumbering = (blocks: readonly Block[]): Reading => {
       )
       .at(0);
     const first = best?.accepted.at(0);
-    if (
-      best === undefined ||
-      first === undefined ||
-      best.accepted.length < limits.minParagraphs[best.style]
-    ) {
+    if (best === undefined || first === undefined) {
       continue;
     }
     const span = body.paragraphs
@@ -638,11 +684,25 @@ const readNumbering = (blocks: readonly Block[]): Reading => {
       continue;
     }
     style = best.style;
-    scopes.push({ type: best.start.type, blockIndex: first.blockIndex });
     previousScopeLast = best.accepted.at(-1)?.number ?? previousScopeLast;
+    readings.push({
+      scopeIndex: index,
+      style: best.style,
+      start: best.start,
+      accepted: best.accepted,
+      unassigned: best.unassigned,
+    });
+  }
+  for (const reading of corroboratedReadings(readings)) {
+    const first = reading.accepted.at(0);
+    if (first === undefined) {
+      continue;
+    }
+    style = reading.style;
+    scopes.push({ type: reading.start.type, blockIndex: first.blockIndex });
     const seen = new Map<number, number>();
-    for (const candidate of best.accepted) {
-      numbers.set(candidate.blockIndex, { candidate, style: best.style });
+    for (const candidate of reading.accepted) {
+      numbers.set(candidate.blockIndex, { candidate, style: reading.style });
       const previousBlockIndex = seen.get(candidate.number);
       if (previousBlockIndex !== undefined) {
         evidence.push({
@@ -662,7 +722,7 @@ const readNumbering = (blocks: readonly Block[]): Reading => {
         });
       }
     }
-    for (const candidate of best.unassigned) {
+    for (const candidate of reading.unassigned) {
       evidence.push({
         type: "unassigned",
         blockIndex: candidate.blockIndex,

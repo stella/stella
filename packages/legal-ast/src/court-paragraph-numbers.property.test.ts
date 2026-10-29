@@ -603,3 +603,109 @@ test("each separate opinion may start a fresh numbering after a longer majority"
     ),
   );
 });
+
+test("short separate opinions share evidence only when their printed run continues", () => {
+  assertProperty(
+    "short separate opinions share evidence only when their printed run continues",
+    fc.property(
+      fc.record({
+        majorityLength: fc.constantFrom(1, 10),
+        majorityStyle: fc.constantFrom("dot", "paren"),
+        opinionStyle: fc.constantFrom("dot", "paren"),
+        continuation: fc.boolean(),
+        preamble: fc.boolean(),
+      }),
+      ({
+        majorityLength,
+        majorityStyle,
+        opinionStyle,
+        continuation,
+        preamble,
+      }) => {
+        const majority = Array.from({ length: majorityLength }, (_, index) =>
+          printedParagraph(index, MARKERS[majorityStyle](index + 1)),
+        );
+        const heading: Block = {
+          type: "heading",
+          id: "opinion",
+          anchorId: "opinion",
+          level: 2,
+          plainText: "Odlišné stanovisko soudce",
+          inlines: [{ type: "text", text: "Odlišné stanovisko soudce" }],
+        };
+        const introduction = preamble
+          ? [
+              {
+                ...printedParagraph(majorityLength + 1, ""),
+                role: "dissent" as const,
+              },
+            ]
+          : [];
+        const opinionStart = majorityLength + 1 + (preamble ? 1 : 0);
+        const printedNumber = continuation ? majorityLength + 1 : 1;
+        const opinion = {
+          ...printedParagraph(
+            opinionStart,
+            MARKERS[opinionStyle](printedNumber),
+          ),
+          role: "dissent" as const,
+        };
+        const result = extractCourtParagraphNumbers([
+          ...majority,
+          heading,
+          ...introduction,
+          opinion,
+        ]);
+        expect(labelsOf(result.blocks)).toEqual([
+          ...Array.from({ length: majorityLength }, (_, index) =>
+            continuation || majorityLength > 1 ? index + 1 : undefined,
+          ),
+          undefined,
+          ...(preamble ? [undefined] : []),
+          continuation ? printedNumber : undefined,
+        ]);
+        if (continuation) {
+          expect(result).toMatchObject({
+            type: "numbered",
+            scopes: [
+              { type: "fresh-start", blockIndex: 0 },
+              { type: "continuation", blockIndex: opinionStart },
+            ],
+          });
+        }
+        expect(extractCourtParagraphNumbers(result.blocks).blocks).toEqual(
+          result.blocks,
+        );
+      },
+    ),
+  );
+});
+
+test("a lone dot marker without corroboration stays text", () => {
+  const blocks = [printedParagraph(0, "1. ")];
+  expect(extractCourtParagraphNumbers(blocks)).toEqual({
+    type: "unnumbered",
+    blocks,
+  });
+});
+
+test("a sparse short scope cannot corroborate a later opinion's marker", () => {
+  const majority = [
+    printedParagraph(0, "1. "),
+    ...Array.from({ length: 4 }, (_, index) => printedParagraph(index + 1, "")),
+  ];
+  const heading: Block = {
+    type: "heading",
+    id: "opinion",
+    anchorId: "opinion",
+    level: 2,
+    plainText: "Odlišné stanovisko soudce",
+    inlines: [{ type: "text", text: "Odlišné stanovisko soudce" }],
+  };
+  const dissent = { ...printedParagraph(6, "2. "), role: "dissent" as const };
+  const blocks = [...majority, heading, dissent];
+  expect(extractCourtParagraphNumbers(blocks)).toEqual({
+    type: "unnumbered",
+    blocks,
+  });
+});
