@@ -286,8 +286,9 @@ describe("access tokens", () => {
         read: async () => {
           throw new Error("The keychain is locked");
         },
-        clear: async () => {
+        clear: async (generation) => {
           cleared = true;
+          return { type: "committed", generation };
         },
       },
     });
@@ -655,11 +656,13 @@ describe("access tokens", () => {
 test("a delayed cleanup read preserves a replacement session", async () => {
   const reached = Promise.withResolvers<undefined>();
   const resume = Promise.withResolvers<undefined>();
-  let stored: StoredSession | null | undefined = null;
+  const persistence: { stored: StoredSession | null | undefined } = {
+    stored: null,
+  };
   let reads = 0;
   const store = createSessionStore({
     read: async () => {
-      const observed = stored;
+      const observed = persistence.stored;
       if (++reads === 1) {
         reached.resolve(undefined);
         await resume.promise;
@@ -667,13 +670,13 @@ test("a delayed cleanup read preserves a replacement session", async () => {
       return observed;
     },
     write: async (session) => {
-      stored = session;
+      persistence.stored = session;
     },
     prepareClear: async () => {
-      stored = null;
+      persistence.stored = null;
     },
     clear: async () => {
-      stored = undefined;
+      persistence.stored = undefined;
     },
   });
   const restoring = store.read(store.generation());
@@ -686,7 +689,7 @@ test("a delayed cleanup read preserves a replacement session", async () => {
   await store.begin().write(replacement);
   resume.resolve(undefined);
   expect(await restoring).toBeUndefined();
-  expect(stored).toEqual(replacement);
+  expect(persistence.stored).toEqual(replacement);
 });
 
 test("cleanup checks the persisted value again inside its queue", async () => {
