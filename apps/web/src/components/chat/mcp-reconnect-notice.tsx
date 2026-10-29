@@ -30,7 +30,8 @@ import {
   mcpConnectorsOptions,
   type McpConnectorsResponse,
 } from "@/lib/knowledge/queries";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 const COMPOSER_MATCH_DELAY_MS = 250;
 const dismissedSchema = v.array(v.string());
@@ -76,10 +77,10 @@ export const McpReconnectNotice = ({ editor }: { editor: Editor | null }) => {
     ...mcpConnectorsOptions(activeOrganizationId),
     enabled,
   });
-  const connectionsView = useQueryView(connectionsQuery);
-  const connectorsView = useQueryView(connectorsQuery);
-  useQueryViewError(connectionsView);
-  useQueryViewError(connectorsView);
+  const connectionsView = queryView(connectionsQuery);
+  const connectorsView = queryView(connectorsQuery);
+  useQueryViewError(connectionsView, "McpReconnectNotice:connections");
+  useQueryViewError(connectorsView, "McpReconnectNotice:connectors");
   const connectors =
     connectorsView.type === "items" ? connectorsView.items.connectors : [];
   const connectorsBySlug = new Map(
