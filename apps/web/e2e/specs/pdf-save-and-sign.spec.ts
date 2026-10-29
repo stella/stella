@@ -77,6 +77,18 @@ const releaseHandoff = async (route: Route) => {
   });
 };
 
+const viewerSignControl = (page: Page) =>
+  page
+    .getByRole("button", { name: "Edit pages" })
+    .locator("..")
+    .getByRole("button", { name: SIGN_LABEL });
+
+const organizerSignControl = (page: Page) =>
+  page
+    .getByRole("list", { name: "PDF pages" })
+    .locator("xpath=ancestor::div[footer]")
+    .getByRole("button", { name: SIGN_LABEL });
+
 test.describe("PDF save and sign on the document route", () => {
   let workspace: TestWorkspace | null = null;
 
@@ -124,7 +136,7 @@ test.describe("PDF save and sign on the document route", () => {
     await expect(page.locator("[data-text-layer]").first()).toBeVisible({
       timeout: 45_000,
     });
-    await expect(page.getByRole("button", { name: SIGN_LABEL })).toBeVisible({
+    await expect(viewerSignControl(page)).toBeVisible({
       timeout: 45_000,
     });
     return { originalFieldId: uploaded.fieldId };
@@ -160,7 +172,7 @@ test.describe("PDF save and sign on the document route", () => {
 
     await openOrganizer(page);
     await rotateFirstPage(page);
-    await page.getByRole("button", { name: SIGN_LABEL }).click();
+    await organizerSignControl(page).click();
 
     await expect(page.getByRole("list", { name: "PDF pages" })).toBeHidden();
     await expect(
@@ -191,7 +203,7 @@ test.describe("PDF save and sign on the document route", () => {
     await expect(page.getByRole("list", { name: "PDF pages" })).toBeHidden();
 
     const handoffs = await holdHandoffs(page);
-    await page.getByRole("button", { name: SIGN_LABEL }).click();
+    await viewerSignControl(page).click();
     await placeAndConfirm(page);
     await expect.poll(() => handoffs.routes.length).toBe(1);
 
@@ -213,7 +225,7 @@ test.describe("PDF save and sign on the document route", () => {
     const { originalFieldId } = await openDocument(page, request);
     const handoffs = await holdHandoffs(page);
 
-    await page.getByRole("button", { name: SIGN_LABEL }).click();
+    await viewerSignControl(page).click();
     await placeAndConfirm(page);
 
     await expect.poll(() => handoffs.requests.length).toBe(1);
