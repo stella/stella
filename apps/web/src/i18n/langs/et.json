@@ -547,6 +547,14 @@
     },
     "approve": "Kinnita",
     "approveSelected": "Kinnita valitud",
+    "arrangement": {
+      "alertThreshold": "Hoiatuse lävend (%)",
+      "amountCap": "Tasu ülempiir",
+      "flatFee": "Kindel tasu",
+      "invalidCap": "Sisestage positiivsed ülempiirid ja hoiatuse lävend vahemikus 0,01% kuni 100%.",
+      "minuteCap": "Ajalimiit (minutites)",
+      "title": "Tasustamise kokkulepe"
+    },
     "batchActions": "Partiiaktsioonid",
     "billable": "Arveldatav",
     "billedAmount": "Arveldatud summa",
@@ -1572,6 +1580,12 @@
     "loadEarlierMessagesError": "Varasemate sõnumite laadimine ebaõnnestus",
     "loadingEarlierMessages": "Varasemate sõnumite laadimine…",
     "maxAttachmentsReached": "Maksimaalselt {count} faili sõnumi kohta",
+    "mcpReconnect": {
+      "additional": "{count, plural, one {+# veel} other {+# veel}}",
+      "dismiss": "Peida ühenduse teade",
+      "stoppedWorking": "Teie ühendus teenusega <name>{server}</name> lakkas töötamast.",
+      "waitingApproval": "Teie ühendus teenusega <name>{server}</name> ootab kinnitamist."
+    },
     "mention": {
       "category": {
         "entities": "Selles toimikus",
@@ -5058,6 +5072,16 @@
       "preferredNamePlaceholder": "Teie nimi",
       "profileDescription": "Hallake oma isiklikke eelistusi",
       "sendOtpCode": "Saada kinnituskood",
+      "signInMethods": {
+        "confirmDescription": "Selle sisselogimisviisi ühenduse katkestamiseks sisesta uus e-postiga saadetud kood.",
+        "confirmTitle": "Kas katkestada {provider} ühendus?",
+        "description": "Ühenda kontod, mis kasutavad sama kinnitatud e-posti aadressi.",
+        "emailCode": "E-posti kood",
+        "emailCodeDescription": "Saad alati sisse logida e-postiga saadetud koodi abil.",
+        "lastMethod": "Enne selle konto lahtiühendamist ühenda teine konto.",
+        "title": "Sisselogimisviisid",
+        "unavailable": "Sisselogimisviiside ühenduse katkestamiseks peab e-posti saatmine olema seadistatud."
+      },
       "timezone": "Ajavöönd",
       "timezoneDescription": "Kasutatakse teadete ja e-kirjade ajatemplite jaoks",
       "timezoneSaved": "Ajavöönd uuendatud",

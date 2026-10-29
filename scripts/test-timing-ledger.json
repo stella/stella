@@ -3981,7 +3981,7 @@
   },
   {
     "id": "no-unreasoned-timeout::packages/scripts/src/ci-job-classification.test.ts::<module>::test timeout",
-    "count": 19,
+    "count": 18,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {

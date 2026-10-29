@@ -48,24 +48,24 @@
     "fingerprint": "a90a9f5ee054351283f7e8e0a6a45dd32a697c18c7f5b620a3974153f2325667"
   },
   "cz-ns": {
-    "version": 19,
-    "fingerprint": "cb487990b5c0f433bb1b0340492d22caae59ad3749b2ae6e7f9b0f2764ab23fd"
+    "version": 20,
+    "fingerprint": "3a0f8470c2ac0d6956044da67c5c5ca3deb98666df4fee69629853915f4d0cb5"
   },
   "cz-nss": {
-    "version": 21,
-    "fingerprint": "962583f751c0fbd09bad9f7b0e720ff90c1cdab3f794acdd3bcf2be132e6bf8c"
+    "version": 23,
+    "fingerprint": "b943858802f49931ceb4938d2aded88819871ad6f108a01a1dfb3db7d27a2e88"
   },
   "cz-regional": {
-    "version": 14,
-    "fingerprint": "26861c8c1add3b7aae0edebc426764322242de3ea0b70c3418c99c806df6777a"
+    "version": 15,
+    "fingerprint": "b35709dd6974764f44509c0fb360696d55a5eee44b18fefab5079b47c602661a"
   },
   "cz-uohs": {
-    "version": 3,
-    "fingerprint": "ba7029c215f921bbc02ac457cd600b0f5634e9b7082cd973b3806df4142215e7"
+    "version": 4,
+    "fingerprint": "f6b52594d6e99c3542ebf447e75fe093e73608b9c05f5fe1a15b1a7352d1493f"
   },
   "cz-us": {
-    "version": 30,
-    "fingerprint": "970fffc634424e821a97b3384e0be55f6dfd65072b1693dc2c62c6c9a8c12bca"
+    "version": 31,
+    "fingerprint": "a7b8080b873c91052b46eabc60b261de1a1ad80cd93f8e5badd25ea730fbcbd2"
   },
   "eu-ecj": {
     "version": 17,
@@ -100,8 +100,8 @@
     "fingerprint": "37ee41dce95062d554c6423f96f62f287feec466530b517fde8e6834a4705353"
   },
   "pl-tk": {
-    "version": 8,
-    "fingerprint": "4eed7ece5a881d701ba9dfcbc9c2ddc053053181b2a3b25f46c96610152ff0bb"
+    "version": 9,
+    "fingerprint": "6c298112b7c4f7d913e1f6f7d2827d580b67d2c2abbe4c7d2c8c209f291a593f"
   },
   "pl-uodo": {
     "version": 14,
@@ -116,8 +116,8 @@
     "fingerprint": "5c31398f632c1f8a3941e28c7483141b3f1ecf5e3e27f02be9f8b2e38630c1c0"
   },
   "sk-us": {
-    "version": 15,
-    "fingerprint": "cabd39a60649bfbe1850e2579743db03866834ce39da8975673fd17aac08f3bf"
+    "version": 16,
+    "fingerprint": "85e21320c19d98050e808ffb39e863c955448e7ce238b101d5a6c1e309e65b64"
   },
   "uk-fcl": {
     "version": 3,

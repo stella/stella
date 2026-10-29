@@ -13,6 +13,7 @@ import {
 } from "@stll/api-contract/mobile-updates";
 
 import { appConfigFor, UPDATE_SIGNING_CERTIFICATE } from "../app.config";
+import manifest from "../package.json" with { type: "json" };
 
 const RUNTIME_VERSION = "2965817a6ba1e5b803427be6ba77a293ad958df4";
 
@@ -80,27 +81,6 @@ describe("the connection layer", () => {
   );
 });
 
-/** Every module the app bundles: tests run under Bun, never on the phone. */
-const appModules = readdirSync(SOURCE_ROOT, { recursive: true })
-  .map(String)
-  .filter((name) => /\.tsx?$/u.test(name) && !name.includes(".test."))
-  .toSorted();
-
-describe("the app's dates", () => {
-  test("finds the app's modules to scan", () => {
-    expect(appModules).toContain(path.join("components", "matter-row.tsx"));
-  });
-
-  // Hermes has no Intl.RelativeTimeFormat; use-intl then logs an error per
-  // call and shows the raw date.
-  test.each(appModules)("%s formats no relative time", (name) => {
-    const source = readFileSync(path.join(SOURCE_ROOT, name), "utf-8");
-    expect(source.match(/relativeTime\(|RelativeTimeFormat/gu) ?? []).toEqual(
-      [],
-    );
-  });
-});
-
 describe("the app's builds", () => {
   const configs = MOBILE_APP_VARIANTS.map((variant) => ({
     variant,
@@ -119,12 +99,63 @@ describe("the app's builds", () => {
       expect(
         mobileRedirectUri(variant).startsWith(`${String(config.scheme)}:`),
       ).toBe(true);
-      expect(config.extra).toEqual({ variant });
+      expect(config.extra).toEqual({
+        liveActivities: true,
+        pushNotifications: true,
+        variant,
+      });
       expect(config.ios?.bundleIdentifier).toBe(config.android?.package);
       expect(config.ios?.buildNumber).toBe("7");
       expect(config.android?.versionCode).toBe(7);
     },
   );
+
+  test("a signed release leaves out the Live Activity extension it cannot sign yet", () => {
+    const signed = appConfigFor({
+      buildNumber: 7,
+      runtimeVersion: RUNTIME_VERSION,
+      signing: { profileUuid: "profile", teamId: "TEAM" },
+      signingCertificatePresent: true,
+      variant: "preview",
+    });
+    expect(signed.extra).toEqual({
+      liveActivities: false,
+      pushNotifications: false,
+      variant: "preview",
+    });
+    expect(
+      signed.plugins?.some(
+        (plugin) =>
+          (Array.isArray(plugin) ? plugin[0] : plugin) === "expo-widgets",
+      ),
+    ).toBe(false);
+  });
+
+  test("a release with the widgets profile carries the Live Activity extension", () => {
+    const signed = appConfigFor({
+      buildNumber: 7,
+      runtimeVersion: RUNTIME_VERSION,
+      signing: {
+        profileUuid: "profile",
+        teamId: "TEAM",
+        widgetsProfileUuid: "widgets",
+      },
+      signingCertificatePresent: true,
+      variant: "preview",
+    });
+    expect(signed.extra).toEqual({
+      liveActivities: true,
+      pushNotifications: true,
+      variant: "preview",
+    });
+    expect(signed.plugins).toContainEqual([
+      "expo-widgets",
+      {
+        bundleIdentifier: "app.stll.mobile.preview.widgets",
+        groupIdentifier: "group.app.stll.mobile.preview",
+      },
+    ]);
+  });
 
   test("no two builds share a store identity, a scheme or a name", () => {
     for (const read of [
@@ -166,6 +197,12 @@ describe("the app's builds", () => {
   });
 });
 
+/** Every module the app bundles: tests run under Bun, never on the phone. */
+const appModules = readdirSync(SOURCE_ROOT, { recursive: true })
+  .map(String)
+  .filter((name) => /\.tsx?$/u.test(name) && !name.includes(".test."))
+  .toSorted();
+
 describe("the app's JavaScript engine", () => {
   test("finds the app's modules to scan", () => {
     expect(appModules).toContain(path.join("state", "chat-threads.ts"));
@@ -182,9 +219,67 @@ describe("the app's JavaScript engine", () => {
   );
 });
 
+describe("the app's dates", () => {
+  test("finds the app's modules to scan", () => {
+    expect(appModules).toContain(path.join("components", "matter-row.tsx"));
+  });
+
+  // Hermes has no Intl.RelativeTimeFormat; use-intl then logs an error per
+  // call and shows the raw date.
+  test.each(appModules)("%s formats no relative time", (name) => {
+    const source = readFileSync(path.join(SOURCE_ROOT, name), "utf-8");
+    expect(source.match(/relativeTime\(|RelativeTimeFormat/gu) ?? []).toEqual(
+      [],
+    );
+  });
+});
+
+describe("the app's dependencies", () => {
+  /** Test helpers run under Bun beside the tests and may use dev dependencies. */
+  const bundled = appModules.filter(
+    (name) => !name.split(path.sep).includes("test-support"),
+  );
+
+  /** `@scope/name/sub` and `name/sub` name the packages `@scope/name` and `name`. */
+  const packageOf = (specifier: string): string =>
+    specifier
+      .split("/")
+      .slice(0, specifier.startsWith("@") ? 2 : 1)
+      .join("/");
+
+  test("reads a scoped package's name from a subpath import", () => {
+    expect(packageOf("@stll/ui/matter-colors")).toBe("@stll/ui");
+    expect(packageOf("expo-router/stack")).toBe("expo-router");
+  });
+
+  // The release jobs install only `@stll/mobile...`, so a package that is
+  // linked at the workspace root but missing here type-checks and bundles
+  // locally, then fails the TestFlight archive.
+  test.each(bundled)("%s imports only packages the app depends on", (name) => {
+    const source = readFileSync(path.join(SOURCE_ROOT, name), "utf-8");
+    expect(
+      importsOf(source)
+        .filter(
+          (specifier) =>
+            !specifier.startsWith(".") && !specifier.startsWith("@/"),
+        )
+        .map(packageOf)
+        .filter((pkg) => !Object.hasOwn(manifest.dependencies, pkg)),
+    ).toEqual([]);
+  });
+});
+
 describe("the app's colours", () => {
-  /** Every bundled module but the generated theme, which is where colours live. */
-  const painted = appModules.filter((name) => name !== "ui-theme.gen.ts");
+  /**
+   * Every bundled module but the generated theme, which is where colours
+   * live, and the sign-in backdrop, whose blue the web writes outside its
+   * theme (auth-backdrop.test.ts holds it to the web's).
+   */
+  const painted = appModules.filter(
+    (name) =>
+      name !== "ui-theme.gen.ts" &&
+      name !== path.join("components", "auth-backdrop.ts"),
+  );
 
   test("finds the theme that maps the web's colours", () => {
     expect(painted).toContain("theme.ts");
@@ -197,6 +292,38 @@ describe("the app's colours", () => {
     expect(
       source.match(/["'`]#[\da-f]{3,8}["'`]|\b(?:rgba?|hsla?|oklch)\(/giu) ??
         [],
+    ).toEqual([]);
+  });
+});
+
+describe("the app's text", () => {
+  const screens = readdirSync(SOURCE_ROOT, { recursive: true })
+    .map(String)
+    .filter(
+      (name) =>
+        name.endsWith(".tsx") &&
+        !name.includes(".test.") &&
+        name !== path.join("components", "ui", "text.tsx"),
+    )
+    .toSorted();
+
+  test("finds the screens to scan", () => {
+    expect(screens).toContain(path.join("app", "sign-in.tsx"));
+  });
+
+  // React Native's own Text has neither the web's typeface nor its colours;
+  // the app's Text (components/ui/text.tsx) has both.
+  test.each(screens)("%s sets text through the app's Text", (name) => {
+    const source = readFileSync(path.join(SOURCE_ROOT, name), "utf-8");
+    const fromReactNative = [
+      ...source.matchAll(/import \{([^}]*)\} from "react-native";/gu),
+    ].flatMap((match) =>
+      (match[1] ?? "").split(",").map((part) => part.trim()),
+    );
+    expect(
+      fromReactNative.filter(
+        (imported) => imported === "Text" || imported === "TextInput",
+      ),
     ).toEqual([]);
   });
 });

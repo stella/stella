@@ -1,0 +1,5 @@
+{
+  "kind": "priority",
+  "qualifier": "Publishes generated-only conflict resolutions to pull-request branches.",
+  "reviewedDigest": "ba651b8a4df37ebe5204bdfbfe3423d3093c45a35da8a44611c08217efc65e41"
+}
