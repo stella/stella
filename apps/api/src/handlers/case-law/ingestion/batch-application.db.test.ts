@@ -452,7 +452,9 @@ describe("crawl cancellation", () => {
             (await decisionRows(sourceId)).map(
               ({ sourceDocumentId }) => sourceDocumentId,
             ),
-          ).toEqual(decisions.map(({ sourceDocumentId }) => sourceDocumentId));
+          ).toEqual(
+            decisions.map(({ sourceDocumentId }) => sourceDocumentId ?? null),
+          );
           expect(await ledgerRows(sourceId)).toEqual([]);
         }),
         { numRuns: 8 },
