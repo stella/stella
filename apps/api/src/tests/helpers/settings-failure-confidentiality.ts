@@ -165,6 +165,14 @@ const normalizeFrame = (value: unknown): unknown => {
   return value.replace(/:\d+:\d+$/u, ":[line]:[column]");
 };
 
+export const assertSettingsAnalyticsFrame = (value: unknown): unknown => {
+  const normalizedFrame = normalizeFrame(value);
+  expect(normalizedFrame).toBe(
+    `${REPOSITORY_ROOT}apps/api/src/lib/ai-config-response.ts:[line]:[column]`,
+  );
+  return normalizedFrame;
+};
+
 const ownRecord = (value: unknown): Record<string, unknown> => {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     panic("Expected an object record");
@@ -378,7 +386,9 @@ export const assertSettingsFailureConfidential = ({
       panic("Expected an exception analytics event");
     }
     const properties = ownRecord(event.properties);
-    normalizeFrame(properties["error.frame"]);
+    const normalizedFrame = assertSettingsAnalyticsFrame(
+      properties["error.frame"],
+    );
     expect(properties["$exception_fingerprint"]).toBe(
       '[["HandlerError"],"api.safeHandlerFailure",["[\\"request\\",\\"GET\\",\\"/tests/handler-context\\"]"],"ai_config_stored_unreadable","",{}]',
     );
@@ -397,7 +407,7 @@ export const assertSettingsFailureConfidential = ({
         $exception_list: [
           { ...exceptionEntry, value: "[classified-exception]" },
         ],
-        "error.frame": "apps/api/src/lib/ai-config-response.ts:[line]:[column]",
+        "error.frame": normalizedFrame,
       },
     };
     expect(normalizedEvent).toEqual({
@@ -419,7 +429,7 @@ export const assertSettingsFailureConfidential = ({
         $exception_type: "HandlerError",
         "error.class": "HandlerError",
         "error.code": "ai_config_stored_unreadable",
-        "error.frame": "apps/api/src/lib/ai-config-response.ts:[line]:[column]",
+        "error.frame": `${REPOSITORY_ROOT}apps/api/src/lib/ai-config-response.ts:[line]:[column]`,
         "failure.grade": "defect",
         "failure.reason": "tagged_failure",
         "failure.shadow": "true",

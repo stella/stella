@@ -27,6 +27,7 @@ import {
 } from "@/api/tests/helpers/recording-telemetry";
 import {
   assertClassifiedSettingsFailure,
+  assertSettingsAnalyticsFrame,
   assertSettingsFailureConfidential,
 } from "@/api/tests/helpers/settings-failure-confidentiality";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -312,74 +313,211 @@ describe("loadOrgAIConfig", () => {
   });
 
   test("the covered reader inventory owns every encrypted settings read", async () => {
-    const boundaryCallers: string[] = [];
+    const programs = new Map<string, ReturnType<typeof parseSync>["program"]>();
     for await (const file of new Bun.Glob("src/**/*.ts").scan(".")) {
       if (file.endsWith(".test.ts") || file.includes("/tests/")) {
         continue;
       }
-      const program = parseSync(file, await Bun.file(file).text()).program;
-      const boundaryBindings = new Set<string>();
-      for (const statement of program.body) {
-        if (statement.type !== "ImportDeclaration") {
-          continue;
+      programs.set(file, parseSync(file, await Bun.file(file).text()).program);
+    }
+
+    const inventory = (modules: typeof programs): string[] => {
+      const resolveModule = (from: string, source: string): string => {
+        let unresolved = source;
+        if (source.startsWith("@/api/")) {
+          unresolved = `src/${source.slice("@/api/".length)}`;
+        } else if (source.startsWith("./") || source.startsWith("../")) {
+          unresolved = `${from.slice(0, from.lastIndexOf("/") + 1)}${source}`;
         }
-        for (const specifier of statement.specifiers) {
-          let importedName: string | undefined;
-          if (specifier.type === "ImportSpecifier") {
-            importedName =
-              specifier.imported.type === "Identifier"
-                ? specifier.imported.name
-                : specifier.imported.value;
-          }
-          if (
-            specifier.type === "ImportSpecifier" &&
-            (importedName === "decryptAIConfig" ||
-              importedName === "decryptOrgAIConfigRow")
-          ) {
-            boundaryBindings.add(specifier.local.name);
+        const parts: string[] = [];
+        for (const part of unresolved.split("/")) {
+          if (part === "..") {
+            parts.pop();
+          } else if (part !== ".") {
+            parts.push(part);
           }
         }
-      }
-      const visit = (node: unknown): void => {
-        if (typeof node !== "object" || node === null) {
-          return;
-        }
-        if (
-          "type" in node &&
-          node.type === "CallExpression" &&
-          "callee" in node &&
-          typeof node.callee === "object" &&
-          node.callee !== null &&
-          "type" in node.callee &&
-          node.callee.type === "Identifier" &&
-          "name" in node.callee &&
-          typeof node.callee.name === "string" &&
-          boundaryBindings.has(node.callee.name)
-        ) {
-          boundaryCallers.push(file);
-        }
-        for (const value of Object.values(node)) {
-          if (Array.isArray(value)) {
-            for (const child of value) {
-              visit(child);
-            }
-          } else {
-            visit(value);
-          }
-        }
+        const path = parts.join("/");
+        return path.endsWith(".ts") ? path : `${path}.ts`;
       };
-      visit(program);
-      if (new Set(boundaryCallers).size !== boundaryCallers.length) {
-        throw new Error(
-          "Each settings reader must have one exercised decryption boundary",
-        );
+      const boundaryExports = new Map<string, Set<string>>([
+        ["src/lib/ai-config-crypto.ts", new Set(["decryptAIConfig"])],
+        [
+          "src/lib/ai-config-loader-core.ts",
+          new Set(["decryptOrgAIConfigRow"]),
+        ],
+      ]);
+      for (let pass = 0; pass < modules.size; pass += 1) {
+        for (const [file, program] of modules) {
+          const exported = boundaryExports.get(file) ?? new Set<string>();
+          const before = exported.size;
+          for (const statement of program.body) {
+            if (
+              statement.type !== "ExportNamedDeclaration" ||
+              !statement.source
+            ) {
+              continue;
+            }
+            const sourceExports = boundaryExports.get(
+              resolveModule(file, statement.source.value),
+            );
+            if (!sourceExports) {
+              continue;
+            }
+            for (const specifier of statement.specifiers) {
+              const local =
+                specifier.local.type === "Identifier"
+                  ? specifier.local.name
+                  : specifier.local.value;
+              if (!sourceExports.has(local)) {
+                continue;
+              }
+              exported.add(
+                specifier.exported.type === "Identifier"
+                  ? specifier.exported.name
+                  : specifier.exported.value,
+              );
+            }
+          }
+          if (exported.size > before) {
+            boundaryExports.set(file, exported);
+          }
+        }
       }
+
+      const boundaryCallers: string[] = [];
+      for (const [file, program] of modules) {
+        const boundaryBindings = new Set<string>();
+        const boundaryNamespaces = new Map<string, Set<string>>();
+        for (const statement of program.body) {
+          if (statement.type !== "ImportDeclaration") {
+            continue;
+          }
+          const sourceExports = boundaryExports.get(
+            resolveModule(file, statement.source.value),
+          );
+          if (!sourceExports) {
+            continue;
+          }
+          for (const specifier of statement.specifiers) {
+            if (specifier.type === "ImportSpecifier") {
+              const importedName =
+                specifier.imported.type === "Identifier"
+                  ? specifier.imported.name
+                  : specifier.imported.value;
+              if (sourceExports.has(importedName)) {
+                boundaryBindings.add(specifier.local.name);
+              }
+            } else if (specifier.type === "ImportNamespaceSpecifier") {
+              boundaryNamespaces.set(specifier.local.name, sourceExports);
+            }
+          }
+        }
+        const visit = (node: unknown): void => {
+          if (typeof node !== "object" || node === null) {
+            return;
+          }
+          const isIdentifierCall =
+            "type" in node &&
+            node.type === "CallExpression" &&
+            "callee" in node &&
+            typeof node.callee === "object" &&
+            node.callee !== null &&
+            "type" in node.callee &&
+            node.callee.type === "Identifier" &&
+            "name" in node.callee &&
+            typeof node.callee.name === "string" &&
+            boundaryBindings.has(node.callee.name);
+          const isNamespaceCall =
+            "type" in node &&
+            node.type === "CallExpression" &&
+            "callee" in node &&
+            typeof node.callee === "object" &&
+            node.callee !== null &&
+            "type" in node.callee &&
+            node.callee.type === "MemberExpression" &&
+            "object" in node.callee &&
+            typeof node.callee.object === "object" &&
+            node.callee.object !== null &&
+            "type" in node.callee.object &&
+            node.callee.object.type === "Identifier" &&
+            "name" in node.callee.object &&
+            typeof node.callee.object.name === "string" &&
+            "property" in node.callee &&
+            typeof node.callee.property === "object" &&
+            node.callee.property !== null &&
+            "type" in node.callee.property &&
+            node.callee.property.type === "Identifier" &&
+            "name" in node.callee.property &&
+            typeof node.callee.property.name === "string" &&
+            boundaryNamespaces
+              .get(node.callee.object.name)
+              ?.has(node.callee.property.name) === true;
+          if (isIdentifierCall || isNamespaceCall) {
+            boundaryCallers.push(file);
+          }
+          for (const value of Object.values(node)) {
+            if (Array.isArray(value)) {
+              for (const child of value) {
+                visit(child);
+              }
+            } else {
+              visit(value);
+            }
+          }
+        };
+        visit(program);
+      }
+      return boundaryCallers;
+    };
+
+    const boundaryCallers = inventory(programs);
+    if (new Set(boundaryCallers).size !== boundaryCallers.length) {
+      throw new Error(
+        "Each settings reader must have one exercised decryption boundary",
+      );
     }
     expect(boundaryCallers.toSorted()).toEqual([
       "src/handlers/organization-settings/read-ai-config.ts",
       "src/handlers/organization-settings/update-ai-config.ts",
       "src/lib/ai-config-loader.ts",
     ]);
+
+    const uncoveredReaders = new Map(programs);
+    uncoveredReaders.set(
+      "src/uncovered-namespace.ts",
+      parseSync(
+        "src/uncovered-namespace.ts",
+        'import * as crypto from "@/api/lib/ai-config-crypto"; crypto.decryptAIConfig();',
+      ).program,
+    );
+    uncoveredReaders.set(
+      "src/re-export.ts",
+      parseSync(
+        "src/re-export.ts",
+        'export { decryptAIConfig as decryptSettings } from "@/api/lib/ai-config-crypto";',
+      ).program,
+    );
+    uncoveredReaders.set(
+      "src/uncovered-re-export.ts",
+      parseSync(
+        "src/uncovered-re-export.ts",
+        'import { decryptSettings } from "./re-export"; decryptSettings();',
+      ).program,
+    );
+    expect(inventory(uncoveredReaders).toSorted()).toEqual(
+      [
+        ...boundaryCallers,
+        "src/uncovered-namespace.ts",
+        "src/uncovered-re-export.ts",
+      ].toSorted(),
+    );
+  });
+
+  test("rejects an analytics frame from another repository source", () => {
+    expect(() =>
+      assertSettingsAnalyticsFrame("apps/api/src/lib/ai-config.ts:12:3"),
+    ).toThrow("apps/api/src/lib/ai-config-response.ts:[line]:[column]");
   });
 });
 
