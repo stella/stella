@@ -60,6 +60,11 @@ runs:
         STELLA_CI_INSTALL_FLAGS: ${{ inputs.flags }}
       run: |
         bun scripts/ci-install-store.ts key >> "$GITHUB_OUTPUT"
+        key=$(bun scripts/ci-install-store.ts key | sed -n 's/^key=//p')
+        if [[ -z "$key" ]]; then
+          echo "::error title=install-store-identity::kind=infra class=install-store-identity Missing install-store key"
+          exit 1
+        fi
         echo "artifact-id=$(bun -e 'console.log(crypto.randomUUID())')" >> "$GITHUB_OUTPUT"
         echo "start=$(bun -e 'console.log(Date.now())')" >> "$GITHUB_OUTPUT"
     - name: Alias the hosted work directory inside job containers
@@ -82,19 +87,21 @@ runs:
           echo "::error title=install-store-alias::$ALIAS_LINK does not resolve to $ALIAS_TARGET"
           exit 1
         fi
-    - name: Restore exact complete install store
+    - name: Restore exact or newest compatible complete install store
       id: cache
       if: steps.compression.outcome == 'success'
       uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ${{ steps.identity.outputs.store }}
         key: ${{ steps.identity.outputs.key }}
+        restore-keys: ${{ steps.identity.outputs.restore-prefix }}
     - name: Record restore time and verify exact store
       id: restore-time
       shell: bash
       env:
         BUN_INSTALL_CACHE_DIR: ${{ steps.identity.outputs.store }}
         CACHE_HIT: ${{ steps.cache.outputs.cache-hit }}
+        MATCHED_KEY: ${{ steps.cache.outputs.cache-matched-key }}
         STORE_KEY: ${{ steps.identity.outputs.key }}
         START_MS: ${{ steps.identity.outputs.start }}
       run: |
@@ -110,6 +117,11 @@ runs:
           else
             outcome=hit
           fi
+        elif [[ -n "$MATCHED_KEY" ]]; then
+          # Prefix restores are useful seeds, but only the exact key is trusted
+          # as complete. The frozen install fills the delta before pruning.
+          rm -f "$BUN_INSTALL_CACHE_DIR/.stella-install-complete"
+          outcome=partial
         fi
         echo "outcome=$outcome" >> "$GITHUB_OUTPUT"
         end=$(bun -e 'console.log(Date.now())')
@@ -141,6 +153,7 @@ runs:
         START_MS: ${{ steps.restore-time.outputs.start }}
       run: |
         if [[ "$INSTALL_OUTCOME" == success && "$CACHE_WRITE" == save && "$CACHE_HIT" != true ]]; then
+          bun scripts/ci-install-store.ts prune "$STORE_KEY"
           if ! bun scripts/ci-install-store.ts seal "$STORE_KEY"; then
             echo "::warning title=install-store-save::Store sealing failed; skipping cache save."
             echo '{"event":"install-store-save","outcome":"seal-failed"}'

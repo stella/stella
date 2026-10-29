@@ -12,13 +12,13 @@ import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 
 import type { SafeId } from "@/api/lib/branded-types";
+import { chatCompactionQueueClaimLock } from "@/api/lib/db/aggregate-lock";
 import {
   brandPersistedChatThreadId,
   brandPersistedOrganizationId,
   brandPersistedUserId,
-  brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
-import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
+import { isRecord } from "@/api/lib/type-guards";
 
 /**
  * Threads one run may claim. Each claimed thread costs one bounded delta read
@@ -33,7 +33,6 @@ export const CHAT_COMPACTION_QUEUE_LEASE_MS = 15 * 60_000;
 
 export type QueuedCompactionThread = {
   chatModel: string | null;
-  dataWorkspaceIds: SafeId<"workspace">[];
   organizationId: SafeId<"organization">;
   threadId: SafeId<"chatThread">;
   /** Thread owner. The compactor reads under this user's RLS scope, never a
@@ -74,7 +73,7 @@ export const buildClaimChatCompactionQueueQuery = ({
       thread.compaction_attempted_at ASC NULLS FIRST,
       thread.id
     LIMIT ${CHAT_COMPACTION_THREAD_BATCH_SIZE}
-    FOR UPDATE SKIP LOCKED
+    ${chatCompactionQueueClaimLock()}
   ),
   claimed_threads AS (
     UPDATE chat_threads AS thread
@@ -85,15 +84,13 @@ export const buildClaimChatCompactionQueueQuery = ({
       thread.id,
       thread.organization_id,
       thread.user_id,
-      thread.chat_model,
-      thread.data_workspace_ids
+      thread.chat_model
   )
   SELECT
     claimed.id AS "threadId",
     claimed.organization_id AS "organizationId",
     claimed.user_id AS "userId",
-    claimed.chat_model AS "chatModel",
-    claimed.data_workspace_ids AS "dataWorkspaceIds"
+    claimed.chat_model AS "chatModel"
   FROM claimed_threads AS claimed
 `;
 
@@ -235,8 +232,7 @@ const parseChatCompactionQueueRow = (
     return null;
   }
 
-  const { chatModel, dataWorkspaceIds, organizationId, threadId, userId } =
-    value;
+  const { chatModel, organizationId, threadId, userId } = value;
   if (
     typeof threadId !== "string" ||
     typeof organizationId !== "string" ||
@@ -251,16 +247,8 @@ const parseChatCompactionQueueRow = (
     return null;
   }
 
-  if (
-    !isUnknownArray(dataWorkspaceIds) ||
-    !dataWorkspaceIds.every((id) => typeof id === "string")
-  ) {
-    return null;
-  }
-
   return {
     chatModel,
-    dataWorkspaceIds: dataWorkspaceIds.map(brandPersistedWorkspaceId),
     organizationId: brandPersistedOrganizationId(organizationId),
     threadId: brandPersistedChatThreadId(threadId),
     userId: brandPersistedUserId(userId),

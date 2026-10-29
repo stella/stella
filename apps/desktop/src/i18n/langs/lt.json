@@ -618,5 +618,46 @@
       "fullDiskAccess": "Visa prieiga prie disko",
       "administrator": "Administratoriaus teisės"
     }
+  },
+  "agentSubscriptions": {
+    "title": "DI prenumeratos",
+    "chatGpt": "ChatGPT",
+    "description": "Naudokite savo ChatGPT planą DI užklausoms stelloje. Naudojimas skaičiuojamas pagal jūsų ChatGPT planą, atskirai nuo stellos prenumeratos.",
+    "continueWithChatGpt": "Tęsti su ChatGPT",
+    "continueAs": "Tęsti kaip {email}",
+    "useDifferentAccount": "Naudoti kitą paskyrą",
+    "signingIn": "Baikite prisijungti naršyklėje.",
+    "cancel": "Atšaukti",
+    "pasteDescription": "Jei prisijungus naršyklė parodo klaidos puslapį, nukopijuokite jo adresą ir įklijuokite čia.",
+    "pasteSubmit": "Baigti prisijungimą",
+    "connected": "ChatGPT prijungtas",
+    "connectedAs": "ChatGPT prijungtas · {email}",
+    "manageUsage": "Tvarkyti naudojimą",
+    "disconnect": "Atjungti",
+    "needsReconnect": "Jūsų ChatGPT ryšys nebegalioja. Prisijunkite iš naujo, kad galėtumėte toliau naudoti planą.",
+    "notice": {
+      "actionFailed": "Nepavyko. Bandykite dar kartą.",
+      "pasteRejected": "Šis adresas nepriklauso dabartiniam prisijungimui. Nukopijuokite visą adresą iš atsidariusio naršyklės skirtuko.",
+      "revocationUnconfirmed": "Atjungta šiame kompiuteryje, bet ChatGPT to nepatvirtino. Stellą taip pat galite pašalinti ChatGPT nustatymuose."
+    },
+    "failure": {
+      "declined": "Prisijungimas naršyklėje atmestas.",
+      "planUsageNotGranted": "Stella negavo leidimo naudoti jūsų ChatGPT planą. Prisijunkite iš naujo ir leiskite.",
+      "differentAccount": "Prisijungėte kita ChatGPT paskyra. Išsaugotas ryšys nepasikeitė.",
+      "stateMismatch": "Nepavyko patikrinti prisijungimo. Bandykite dar kartą.",
+      "timedOut": "Prisijungimas užtruko per ilgai. Bandykite dar kartą.",
+      "browserUnavailable": "Nepavyko atidaryti naršyklės. Bandykite dar kartą.",
+      "callbackUnavailable": "Šiame kompiuteryje nepavyko paruošti prisijungimo. Bandykite dar kartą.",
+      "registrationIncomplete": "ChatGPT nebaigė prijungti stellos. Bandykite dar kartą.",
+      "codeExpired": "Prisijungimo galiojimas baigėsi jam nepasibaigus. Bandykite dar kartą.",
+      "verification": "Nepavyko patikrinti ChatGPT atsakymo. Bandykite dar kartą.",
+      "clientRejected": "ChatGPT nebepriima šio ryšio. Prisijunkite iš naujo kita paskyra.",
+      "unreachable": "ChatGPT prisijungimas nepasiekiamas. Patikrinkite interneto ryšį ir bandykite dar kartą.",
+      "storage": "Šiame kompiuteryje nepavyko nuskaityti ar išsaugoti ryšio."
+    },
+    "callbackConnectedTitle": "ChatGPT prijungtas",
+    "callbackConnectedBody": "Galite uždaryti šį skirtuką ir grįžti į stellą.",
+    "callbackNotConnectedTitle": "ChatGPT neprijungtas",
+    "callbackNotConnectedBody": "Grįžkite į stellą, pažiūrėkite, kas nutiko, ir bandykite dar kartą."
   }
 }

@@ -32,10 +32,10 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { STABLE_RELEASE_TAG } from "./promoted-release-policy";
 import { ALL_PACKAGE_ORDER } from "./publish-packages";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
-const STABLE_TAG = /^v\d+\.\d+\.\d+$/u;
 
 class NpmPublishLagError extends Error {
   readonly _tag = "NpmPublishLagError";
@@ -53,7 +53,7 @@ const fail = (message: string): never => {
 export const DAY_SECONDS = 24 * 60 * 60;
 const SEMVER = /^\d+\.\d+\.\d+(?:-[\da-zA-Z.-]+)?(?:\+[\da-zA-Z.-]+)?$/u;
 
-export type RegistryResult =
+type RegistryCheckResult =
   | { status: "passed"; reason: "ok" }
   | { status: "passed"; reason: "published_from_declared_repository" }
   | { status: "skipped"; reason: "publish_pending" }
@@ -62,11 +62,7 @@ export type RegistryResult =
   | {
       status: "failed";
       reason:
-        | "http_status"
-        | "timeout"
-        | "contract_error"
-        | "publish_awaits_promote"
-        | "unattested_publish";
+        "http_status" | "timeout" | "contract_error" | "unattested_publish";
     };
 
 type RepositoryField = string | { url: string };
@@ -375,7 +371,7 @@ export const checkRegistry = async ({
   movedRepository,
   npmRunner = runNpm,
   fetchImpl = fetch,
-}: CheckRegistryOptions): Promise<RegistryResult> => {
+}: CheckRegistryOptions): Promise<RegistryCheckResult> => {
   try {
     const response = await fetchImpl(
       `${registry.replace(/\/$/u, "")}/${encodeURIComponent(name)}/latest`,
@@ -449,6 +445,84 @@ export const checkRegistry = async ({
           ? "timeout"
           : "contract_error",
     };
+  }
+};
+
+// A release target carries its promotion time, never a main bump timestamp.
+type PromotedPackage = {
+  version: string;
+  promotedAt: number;
+};
+
+export type RegistryResult =
+  | RegistryCheckResult
+  | PromotedRegistryResult
+  | FirstPublishResult
+  | { status: "failed"; reason: "promotion_unavailable" };
+
+// A package still at the enrollment version on main has never been released.
+// Only a pending changeset naming it makes that expected; the release that
+// consumes the changeset bumps the version and ends the pending state.
+export type FirstPublishResult =
+  | { status: "skipped"; reason: "pending_first_publish" }
+  | { status: "failed"; reason: "first_publish_unplanned" };
+
+type PromotedRegistryResult =
+  | { status: "passed"; reason: "published" }
+  | { status: "skipped"; reason: "pending_release" }
+  | { status: "skipped"; reason: "publish_pending" }
+  | { status: "failed"; reason: "publish_lagging"; latest: string };
+
+type CheckPromotedRegistryOptions = Omit<
+  CheckRegistryOptions,
+  "version" | "bumpedAt" | "movedRepository"
+> & {
+  mainVersion: string;
+  promotion: PromotedPackage;
+};
+
+export const checkPromotedRegistry = async ({
+  mainVersion,
+  promotion,
+  ...options
+}: CheckPromotedRegistryOptions): Promise<RegistryResult> => {
+  const result = await checkRegistry({
+    ...options,
+    version: promotion.version,
+    bumpedAt: undefined,
+    movedRepository: undefined,
+  });
+  switch (result.reason) {
+    case "ok":
+      return Bun.semver.order(mainVersion, promotion.version) > 0
+        ? { status: "skipped", reason: "pending_release" }
+        : { status: "passed", reason: "published" };
+    case "version_mismatch":
+      // A newer published release also fulfills the promoted minimum.
+      if (Bun.semver.order(result.latest, promotion.version) > 0) {
+        return Bun.semver.order(mainVersion, promotion.version) > 0
+          ? { status: "skipped", reason: "pending_release" }
+          : { status: "passed", reason: "published" };
+      }
+      return promotion.promotedAt <= options.now &&
+        options.now - promotion.promotedAt < DAY_SECONDS
+        ? { status: "skipped", reason: "publish_pending" }
+        : {
+            status: "failed",
+            reason: "publish_lagging",
+            latest: result.latest,
+          };
+    case "http_status":
+    case "timeout":
+    case "contract_error":
+    case "unattested_publish":
+    case "published_from_declared_repository":
+    case "publish_pending":
+      return result;
+    default: {
+      result satisfies never;
+      throw new NpmPublishLagError("Unhandled promoted registry assessment");
+    }
   }
 };
 
@@ -625,9 +699,20 @@ export const readPublishablePackages = ({
   });
 };
 
-/** The newest stable `vX.Y.Z` tag among those listed, newest first. */
-export const newestStableTag = (tags: readonly string[]): string | undefined =>
-  tags.find((tag) => STABLE_TAG.test(tag));
+/** The newest final tag, optionally bounded strictly below a release version. */
+export const newestStableTag = (
+  tags: readonly string[],
+  beforeVersion?: string,
+): string | undefined =>
+  tags
+    .filter(
+      (tag) =>
+        STABLE_RELEASE_TAG.test(tag) &&
+        (beforeVersion === undefined ||
+          Bun.semver.order(tag.slice(1), beforeVersion) < 0),
+    )
+    .toSorted((left, right) => Bun.semver.order(right.slice(1), left.slice(1)))
+    .at(0);
 
 type Attempt = {
   readonly attempts: number;
@@ -768,26 +853,32 @@ export const parseArgs = (argv: readonly string[]): Args => {
   };
 };
 
-const resolveRef = (args: Args): string => {
+export const resolveRef = (args: Args, execute = run): string => {
   if (args.ref !== undefined) {
     return args.ref;
   }
-  const tags = run([
-    "git",
-    "tag",
-    "--merged",
-    args.previousReleaseOf ?? "HEAD",
-    "--list",
-    "v*",
-    "--sort=-v:refname",
-  ]);
+  const previousReleaseOf = args.previousReleaseOf ?? "HEAD";
+  const versionFile = execute(["git", "show", `${previousReleaseOf}:VERSION`]);
+  if (!versionFile.ok) {
+    return fail(
+      `cannot read VERSION at ${previousReleaseOf}: ${versionFile.stderr.trim()}`,
+    );
+  }
+  const version = versionFile.stdout.trim();
+  if (!/^\d+\.\d+\.\d+$/u.test(version)) {
+    return fail(`VERSION at ${previousReleaseOf} must be X.Y.Z`);
+  }
+  const tags = execute(["git", "tag", "--list", "v*"]);
   if (!tags.ok) {
-    return fail(`git tag --merged failed: ${tags.stderr.trim()}`);
+    return fail(`git tag --list failed: ${tags.stderr.trim()}`);
   }
   return (
-    newestStableTag(tags.stdout.split("\n").map((tag) => tag.trim())) ??
+    newestStableTag(
+      tags.stdout.split("\n").map((tag) => tag.trim()),
+      version,
+    ) ??
     fail(
-      `no stable release tag is reachable from ${args.previousReleaseOf ?? "HEAD"}`,
+      `no final release tag is strictly lower than ${version} at ${previousReleaseOf}`,
     )
   );
 };

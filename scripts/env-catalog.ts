@@ -73,6 +73,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "ACTION_ADMISSION_BACKGROUND_ORG_CONCURRENCY",
   "ACTION_ADMISSION_BACKGROUND_USER_CONCURRENCY",
   "ACTION_ADMISSION_LEASE_MS",
+  "MCP_PUBLIC_READ_CALLER_CONCURRENCY",
   "ACTION_ADMISSION_ORG_CONCURRENCY",
   "ACTION_ADMISSION_USER_CONCURRENCY",
   "ACTION_REQUEST_MAX_BYTES",
@@ -101,7 +102,11 @@ const INTERNAL_SERVER_KEYS = new Set([
   "AI_MODEL_REASONING",
   "TYPESAFE_MODEL",
   "AI_PROVIDER_BASE_URL",
+  "APPLE_AUTH_CLIENT_ID",
+  "APPLE_AUTH_KEY_ID",
+  "APPLE_AUTH_TEAM_ID",
   "OPENROUTER_WIF_POLICY_ID",
+  "OPENROUTER_FAST_TIER_WIF_POLICY_ID",
   "OPENROUTER_WIF_AUDIENCE",
   "OPENROUTER_WIF_STS_REGION",
   "AZURE_API_VERSION",
@@ -236,6 +241,7 @@ const INTERNAL_SERVER_KEYS = new Set([
 ]);
 
 const EXAMPLE_VALUES: Record<string, string> = {
+  DEPLOY_ENVIRONMENT: "development",
   API_FEATURE_ACCESS_GRANTS: "{}",
   KILL_SWITCHES: "{}",
   BETTER_AUTH_SECRET: "your-secret-at-least-32-chars-long",
@@ -388,6 +394,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Container-reachable MCP endpoint used by isolated agent runs.",
   AGENT_SANDBOX_RUNS_ENABLED:
     "Enable explicit agent-mode chat requests for this deployment.",
+  DEPLOY_ENVIRONMENT:
+    "Runtime deployment environment: production, staging, or development. Independent of NODE_ENV; unset events are excluded from production release health.",
   BETTER_AUTH_SECRET:
     "HMAC secret used to sign Better Auth sessions. Use at least 32 characters; rotation logs everyone out.",
   BETTER_AUTH_URL:
@@ -515,6 +523,10 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Enforce organization file byte reservations at storage writes.",
   OPENROUTER_WIF_POLICY_ID:
     "Workload-identity federation policy. Configure with audience and regional STS endpoint; a static key takes precedence.",
+  OPENROUTER_FAST_TIER_WIF_POLICY_ID:
+    "Workload-identity federation policy for fast-tier managed work. Shares the audience and regional STS endpoint; a fast-tier static key takes precedence.",
+  OPENROUTER_FAST_TIER_API_KEY:
+    "Managed OpenRouter key for fast-tier work. Never falls back to the standard key; required when the free tier runs on managed OpenRouter, unless the fast-tier federation policy is set.",
   OPENROUTER_WIF_AUDIENCE:
     "Audience for the workload-identity token. Required with the federation policy and STS region.",
   OPENROUTER_WIF_STS_REGION:
@@ -541,6 +553,13 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Token used to file feedback issues in FEEDBACK_GITHUB_REPO. Needs issue-write scope only; unset disables GitHub delivery.",
   FRONTEND_URL:
     "Web app origin used for absolute transactional-email links, document verification links, and trusted redirects.",
+  APPLE_AUTH_CLIENT_ID:
+    "Sign in with Apple Services ID used as the OAuth client ID; required when the matching web login flag is enabled.",
+  APPLE_AUTH_KEY_ID: "Key ID of the Sign in with Apple private key.",
+  APPLE_AUTH_PRIVATE_KEY:
+    "PEM text of the Sign in with Apple private key (.p8). The API mints the short-lived client secret from it.",
+  APPLE_AUTH_TEAM_ID:
+    "Apple Developer team ID that owns the Services ID and key.",
   GOOGLE_AUTH_CLIENT_ID:
     "Google OAuth client ID; required when the matching web login flag is enabled.",
   GOOGLE_AUTH_CLIENT_SECRET:
@@ -665,6 +684,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Show Google login only when the API has matching OAuth credentials.",
   VITE_AUTH_MICROSOFT:
     "Show Microsoft login only when the API has matching OAuth credentials.",
+  VITE_AUTH_APPLE:
+    "Show Sign in with Apple only when the API has a matching Apple configuration.",
   VITE_COLLAB_URL:
     "WebSocket URL for collaborative editing. Unset keeps the single-user editing path.",
   VITE_BETA_FEATURES_ENABLED:
@@ -707,6 +728,10 @@ const CONDITIONAL_REQUIREMENT_NOTES: Record<string, string> = {
   INBOUND_MAIL_TOPIC_ARN: "another INBOUND_MAIL_* transport key is set",
   LEGAL_CORPUS_S3_BUCKET: "corpus storage is enabled in a deployed environment",
   MICROSOFT_AUTH_TENANT_ID: "Microsoft OAuth credentials are configured",
+  APPLE_AUTH_CLIENT_ID: "another APPLE_AUTH_* key is set",
+  APPLE_AUTH_KEY_ID: "another APPLE_AUTH_* key is set",
+  APPLE_AUTH_PRIVATE_KEY: "another APPLE_AUTH_* key is set",
+  APPLE_AUTH_TEAM_ID: "another APPLE_AUTH_* key is set",
   ORG_EVALUATION_PERIOD_DAYS: "FEATURE_ORG_ACCESS_STATE is true",
   REDIS_URL: "the API server or the document-processing worker runs",
   S3_ACCESS_KEY_ID: 'S3_CREDENTIALS_PROVIDER is "env"',
@@ -748,6 +773,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   ACTION_ADMISSION_BACKGROUND_USER_CONCURRENCY:
     ENV_CREDENTIAL_KIND.notCredential,
   ACTION_ADMISSION_LEASE_MS: ENV_CREDENTIAL_KIND.notCredential,
+  MCP_PUBLIC_READ_CALLER_CONCURRENCY: ENV_CREDENTIAL_KIND.notCredential,
   ACTION_ADMISSION_ORG_CONCURRENCY: ENV_CREDENTIAL_KIND.notCredential,
   ACTION_ADMISSION_PERIOD_ACTIONS: ENV_CREDENTIAL_KIND.notCredential,
   ACTION_ADMISSION_PERIOD_MS: ENV_CREDENTIAL_KIND.notCredential,
@@ -784,6 +810,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   AZURE_RESOURCE_NAME: ENV_CREDENTIAL_KIND.notCredential,
   BEDROCK_API_KEY: ENV_CREDENTIAL_KIND.credential,
   BETTER_AUTH_COOKIE_PREFIX: ENV_CREDENTIAL_KIND.notCredential,
+  DEPLOY_ENVIRONMENT: ENV_CREDENTIAL_KIND.notCredential,
   BETTER_AUTH_SECRET: ENV_CREDENTIAL_KIND.credential,
   BETTER_AUTH_URL: ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_DATABASE_POOL_MAX: ENV_CREDENTIAL_KIND.notCredential,
@@ -875,6 +902,10 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   GITHUB_TOKEN: ENV_CREDENTIAL_KIND.credential,
   GOOGLE_AI_API_KEY_CH: ENV_CREDENTIAL_KIND.credential,
   GOOGLE_AI_API_KEY_EU: ENV_CREDENTIAL_KIND.credential,
+  APPLE_AUTH_CLIENT_ID: ENV_CREDENTIAL_KIND.notCredential,
+  APPLE_AUTH_KEY_ID: ENV_CREDENTIAL_KIND.notCredential,
+  APPLE_AUTH_PRIVATE_KEY: ENV_CREDENTIAL_KIND.credential,
+  APPLE_AUTH_TEAM_ID: ENV_CREDENTIAL_KIND.notCredential,
   GOOGLE_AUTH_CLIENT_ID: ENV_CREDENTIAL_KIND.notCredential,
   GOOGLE_AUTH_CLIENT_SECRET: ENV_CREDENTIAL_KIND.credential,
   GOOGLE_GENERATIVE_AI_API_KEY: ENV_CREDENTIAL_KIND.credential,
@@ -930,6 +961,8 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   OPENAI_API_KEY: ENV_CREDENTIAL_KIND.credential,
   OPENAI_APPS_CHALLENGE_TOKEN: ENV_CREDENTIAL_KIND.credential,
   OPENROUTER_API_KEY: ENV_CREDENTIAL_KIND.credential,
+  OPENROUTER_FAST_TIER_API_KEY: ENV_CREDENTIAL_KIND.credential,
+  OPENROUTER_FAST_TIER_WIF_POLICY_ID: ENV_CREDENTIAL_KIND.notCredential,
   OPENROUTER_WIF_AUDIENCE: ENV_CREDENTIAL_KIND.notCredential,
   OPENROUTER_WIF_POLICY_ID: ENV_CREDENTIAL_KIND.notCredential,
   OPENROUTER_WIF_STS_REGION: ENV_CREDENTIAL_KIND.notCredential,
@@ -1029,6 +1062,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   VITE_API_URL: ENV_CREDENTIAL_KIND.notCredential,
   VITE_AUTH_GOOGLE: ENV_CREDENTIAL_KIND.notCredential,
   VITE_AUTH_MICROSOFT: ENV_CREDENTIAL_KIND.notCredential,
+  VITE_AUTH_APPLE: ENV_CREDENTIAL_KIND.notCredential,
   VITE_BETA_FEATURES_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
   VITE_BROWSER_API_URL: ENV_CREDENTIAL_KIND.notCredential,
   VITE_COLLAB_URL: ENV_CREDENTIAL_KIND.notCredential,
@@ -1139,7 +1173,7 @@ const sectionFor = (name: string) => {
     return "AI providers";
   }
   if (
-    /^(BETTER_AUTH|GOOGLE_AUTH|MICROSOFT_AUTH|SELFHOST|SECURITY_CANARY|SESSION_)/u.test(
+    /^(BETTER_AUTH|GOOGLE_AUTH|MICROSOFT_AUTH|APPLE_AUTH|SELFHOST|SECURITY_CANARY|SESSION_)/u.test(
       name,
     )
   ) {
@@ -1281,7 +1315,11 @@ export const ENV_CATALOG = [
   }),
   ...createCatalogEntries({
     owner: ENV_OWNER.apiServer,
-    schema: envApiServerSchema,
+    schema: Object.fromEntries(
+      Object.entries(envApiServerSchema).filter(
+        ([name]) => !Object.hasOwn(envBaseServerSchema, name),
+      ),
+    ),
   }),
   ...createCatalogEntries({ owner: ENV_OWNER.web, schema: envWebClientSchema }),
   ...createCatalogEntries({
@@ -1322,6 +1360,8 @@ export const MANUAL_SCHEMA_KEYS = new Set([
   "DB_STATEMENT_TIMEOUT_MS",
   "DB_TRANSACTION_TIMEOUT_MS",
   "DISABLED_ADAPTERS",
+  // Expo inlines it into the mobile bundle; apps/mobile/src/env.ts reads it.
+  "EXPO_PUBLIC_STELLA_SERVER_URL",
   "HOME",
   "MAX_CONCURRENT_ADAPTER_CYCLES",
   "MAX_CONCURRENT_DB_WRITES",
@@ -1357,6 +1397,7 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
   "POSTHOG_SOURCEMAP_PROJECT_ID",
   "POSTHOG_SOURCEMAP_PUBLISH",
   "PUBLIC_API_URL",
+  "PUBLIC_APPLE_LOGIN_ENABLED",
   "PUBLIC_APP_URL",
   "PUBLIC_BROWSER_API_URL",
   "PUBLIC_GOOGLE_LOGIN_ENABLED",
@@ -1408,6 +1449,12 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
 ]);
 
 export const TOOLING_ENV_KEYS = new Set([
+  // The mobile app's Expo config reads its variant and signing from the build.
+  "APP_VARIANT",
+  "APPLE_TEAM_ID",
+  "MOBILE_BUILD_NUMBER",
+  "MOBILE_PROFILE_UUID",
+  "MOBILE_RUNTIME_VERSION",
   // Invocation-local handoff values are removed before test/native entry points run.
   "STELLA_TEST_PROCESS_STARTUP_GATE",
   "STELLA_TEST_NATIVE_COMMAND",
@@ -1460,6 +1507,9 @@ export const TOOLING_ENV_KEYS = new Set([
   "CHECK_SHA",
   "CHECK_START_FILE",
   "CHECK_TARGET",
+  // Hosted agent runtimes identify themselves before secret-scanner bootstrap.
+  "CLAUDE_CODE_REMOTE",
+  "CODEX_CI",
   // Local verification host configuration, remote recursion guard, and base preparation.
   "STELLA_VERIFY_CONFIG",
   "REMOTE_CHECK",
@@ -1491,10 +1541,16 @@ export const TOOLING_ENV_KEYS = new Set([
   "STAGING_WAKE_START_POLL_SECONDS",
   "STAGING_WAKE_READY_MINUTES",
   "STAGING_WAKE_READY_POLL_SECONDS",
-  // Dated-waiver healing: the private repository its fix tasks go to, and
-  // the merge hold that keeps it from arming removals.
+  // The same script requests a candidate's power lease without waiting for
+  // readiness, for the hours the promotion asks.
+  "STAGING_LEASE_ONLY",
+  "STAGING_LEASE_HOURS",
+  // A staging promotion waits for the other owner kind (scripts/staging-owner.sh).
+  "STAGING_OWNER_MODE",
+  "STAGING_OWNER_ATTEMPTS",
+  "STAGING_OWNER_INTERVAL_SECONDS",
+  // Dated-waiver healing: the private repository its fix tasks go to.
   "DATED_WAIVER_FIX_REPO",
-  "MERGE_HOLD",
   // Preserve Bun global-store links inside browser containers.
   "BUN_INSTALL_CACHE_DIR",
   // Browser commands use only executables baked into the pinned image.
@@ -1517,6 +1573,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "API_DEPLOYMENT_ATTEMPTS",
   "API_DEPLOYMENT_DELAY_MS",
   "API_DEPLOYMENT_EXPECTED_COMMIT",
+  "API_DEPLOYMENT_EXPECTED_ENVIRONMENT",
   "API_DEPLOYMENT_PROBE_PATH",
   "API_DEPLOYMENT_STABLE_PROBES",
   "API_DEPLOYMENT_URL",
@@ -1584,6 +1641,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "JOURNEY_MCP_URL",
   "JOURNEY_NPM_REGISTRY_URL",
   "JOURNEY_REGISTRY_TIMEOUT_MS",
+  "JOURNEY_RELEASES_API_URL",
   "JOURNEY_RETRY_PAUSE_SECONDS",
   "JOURNEY_SIGN_IN",
   "JOURNEY_SMOKE_SESSION_URL",
@@ -1612,6 +1670,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "MODE",
   "NETWORK_BASELINE_PURPOSE",
   "NETWORK_CANARY_URL",
+  // Read-only npm summary receives the publishing jobs' needs context.
+  "NPM_RELEASE_NEEDS",
   // The online index gate's child-process fixture receives its target here.
   "ONLINE_INDEX_TEST_NAME",
   "ONLINE_INDEX_TEST_NOW",
@@ -1627,6 +1687,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "OXLINT_TAILWINDCSS_WORKER_REQUEST_TIMEOUT",
   // Worker-local custom lint reports, merged before the coverage census.
   "OXLINT_RULE_COVERAGE_PATH",
+  // Historical package builds use current tooling against a separate source root.
+  "PACK_SOURCE_ROOT",
   "PGLITE_TEST_SNAPSHOT",
   "PR_HEAD_SHA",
   "PR_TITLE",
@@ -1669,10 +1731,12 @@ export const TOOLING_ENV_KEYS = new Set([
   "REHEARSAL_PRODUCTION_READY_URL",
   "REHEARSAL_WRITER_GAP_BUDGET_SECONDS",
   // Trusted release-proof controls passed between workflow steps.
+  "PRODUCTION_WEB_IMAGE_DIGEST",
   "PROOF_MAIN_BASE",
   "RELEASE_CANDIDATE_CHECKER",
   "RELEASE_CANDIDATE_TREE_VERIFIER",
   "RELEASE_GATE_DIR",
+  "RELEASE_HEALTH_TOKEN",
   // Release pull request refresh: open release numbers, the release to update,
   // its branch, whether main merges in, and the versioned staging tip.
   "RELEASE_NUMBERS",
@@ -1708,6 +1772,7 @@ export const TOOLING_ENV_KEYS = new Set([
   // The source-fingerprint baseline generator reads the guard test's census.
   "SOURCE_FINGERPRINT_CENSUS_OUT",
   "STAGING_STATE",
+  "STAGING_STATUS_WRITER",
   // CI names the target-branch revision the statute recall floor compares to.
   "STATUTE_RECALL_BASE_REF",
   "STELLA_AGENT_CAPTURE_LOG",
@@ -1724,9 +1789,10 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_DEV_INSTANCE",
   "STELLA_DOCKER_KEEPER_LABEL",
   "STELLA_INFRA_OFFSET",
-  "STELLA_MERGE_HOLD",
   "STELLA_PORT_OFFSET",
   "STELLA_QUERY_PLAN_SCALE_PROFILE",
+  // Development render census: verify React Refresh with isolated temporary modules.
+  "STELLA_RENDER_CENSUS_HMR",
   "STELLA_RUN_CORPUS_ENGINE_TESTS",
   "STELLA_RUN_POSTGRES_TESTS",
   "STELLA_RUN_QUERY_PERF_TESTS",
@@ -1797,13 +1863,12 @@ export const TOOLING_ENV_KEYS = new Set([
   "FIX_BRANCH",
   // Shell fixtures for the dependency-audit gate and remediation scripts.
   "TEST_AUDIT_STATUS",
-  "TEST_CONCURRENT_SHA",
+  "TEST_ASSESS_STATUS",
   "TEST_FIX_AVAILABLE",
   "TEST_OPEN_PRS",
   "TEST_ADVISORIES_REMAIN",
   "TEST_STALE",
   "TEST_PIN_REWRITE",
-  "TEST_LS_REMOTE_FAILS_ONCE",
   "WXT_STELLA_ORIGINS",
 ]);
 

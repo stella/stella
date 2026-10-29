@@ -125,11 +125,6 @@
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
   {
-    "id": "no-real-time-wait::apps/api/src/handlers/chat/send-message.test.ts::<module>::Bun.sleep",
-    "count": 2,
-    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
-  },
-  {
     "id": "no-real-time-wait::apps/api/src/handlers/chat/tools/execute/sandbox/run-sandbox.test.ts::<module>::@stll/concurrency/sleep#sleep",
     "count": 1,
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
@@ -481,11 +476,6 @@
   },
   {
     "id": "no-real-time-wait::apps/collab/src/server.test.ts::runDocker::new Promise(setTimeout)",
-    "count": 1,
-    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
-  },
-  {
-    "id": "no-real-time-wait::apps/desktop/tests/App.dom.test.tsx::flushAct::@stll/concurrency/sleep#sleep",
     "count": 1,
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
@@ -911,7 +901,7 @@
   },
   {
     "id": "no-real-time-wait::apps/web/src/routes/_protected.chat/-components/chat-thread-page.dom.test.tsx::<module>::node:timers/promises#setTimeout",
-    "count": 2,
+    "count": 1,
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
   {
@@ -4142,11 +4132,6 @@
   {
     "id": "no-unreasoned-timeout::scripts/check-migrations.test.ts::<module>::test timeout",
     "count": 1,
-    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
-  },
-  {
-    "id": "no-unreasoned-timeout::scripts/check-release-candidate.test.ts::<module>::test timeout",
-    "count": 2,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {

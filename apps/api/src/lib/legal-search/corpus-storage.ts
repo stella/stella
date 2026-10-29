@@ -6,7 +6,6 @@ import * as v from "valibot";
 import {
   type DocumentAst,
   persistedAstDegradations,
-  persistedDocumentAstSchema,
 } from "@stll/legal-ast/document-ast";
 
 import { CASE_LAW_CORPUS_MIRROR_STATUS } from "@/api/db/schema";
@@ -25,6 +24,10 @@ import {
   CorpusPayloadUnavailableError,
   StoredAstDegradedError,
 } from "@/api/lib/errors/tagged-errors";
+import {
+  persistedCorpusAstSchema,
+  prepareCorpusAst,
+} from "@/api/lib/legal-search/corpus-ast";
 import {
   corpusContentHash,
   EMPTY_CORPUS_CONTENT_HASHES,
@@ -46,10 +49,7 @@ import type {
   CorpusTombstoneReader,
   CorpusTombstoneWriter,
 } from "@/api/lib/legal-search/corpus-tombstones";
-import {
-  emptyAstSchema,
-  persistedDecisionSectionsSchema,
-} from "@/api/lib/legal-search/document-types";
+import { persistedDecisionSectionsSchema } from "@/api/lib/legal-search/document-types";
 import type {
   DecisionSection,
   EmptyAst,
@@ -97,10 +97,6 @@ const PAYLOAD_MAX_BYTES = LIMITS.corpusPayloadMaxDecompressedBytes;
  * whole-object read and the packed range read are checked against it.
  */
 export const CORPUS_TRANSFER_MAX_BYTES = zstdCompressBound(PAYLOAD_MAX_BYTES);
-
-const persistedCorpusAstSchema = v.nullable(
-  v.union([persistedDocumentAstSchema, emptyAstSchema]),
-);
 
 export const parsePersistedCorpusSections = (
   value: unknown,
@@ -556,9 +552,13 @@ export const corpusPayloadDisposition = ({
  * planning rule above is shared by every one of them.
  */
 export const writeCorpusDocument = async (
-  input: WriteCorpusInput,
+  uncheckedInput: WriteCorpusInput,
   { signal, s3Policy }: CorpusIoOptions = {},
 ): Promise<CorpusWriteOutcome> => {
+  const input = {
+    ...uncheckedInput,
+    ast: prepareCorpusAst({ ast: uncheckedInput.ast }).ast,
+  };
   const plan = planCorpusDocumentWrite(input);
   if (plan.type !== "put") {
     return plan;

@@ -1,8 +1,11 @@
 import { panic, TaggedError } from "better-result";
 
 import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
+import {
+  buildFulltextParagraphBlocks,
+  parseCaseLawDecisionAst,
+} from "@stll/legal-ast/case-law-reader";
 import { locateCitationSpans } from "@stll/legal-ast/citation-passage";
-import { hasUsableAst } from "@stll/legal-ast/document-ast";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { projectionPieces } from "@stll/legal-ast/projection-digest";
 import { provisionHeadingAnchor } from "@stll/legal-ast/provision-preview";
@@ -205,9 +208,30 @@ export const readDecisionReaderSource = defineWindowedRead(
         if (!("caseNumber" in decision)) {
           return null;
         }
-        const ast = hasUsableAst(decision.documentAst)
-          ? decision.documentAst
-          : null;
+        let ast = parseCaseLawDecisionAst(decision.documentAst);
+        // The shared read resolves flat text when no usable AST is stored.
+        // Keep the web reader's fulltext:N anchors across every reader surface.
+        if (ast === null && decision.fulltext) {
+          ast = {
+            version: 1,
+            source: {
+              system: decision.source.adapterKey,
+              documentId: decision.id,
+              webUrl: decision.sourceUrl ?? "",
+              printUrl: decision.documentUrl ?? "",
+            },
+            metadata: {
+              caseNumber: decision.caseNumber,
+              ecli: decision.ecli,
+              court: decision.court,
+              decisionDate: decision.decisionDate,
+              decisionType: decision.decisionType,
+              keywords: [],
+              statutes: [],
+            },
+            blocks: buildFulltextParagraphBlocks(decision.fulltext),
+          };
+        }
         const textAccess = readerTextAccess({
           allowsDerivedAi: decision.source.allowsDerivedAi,
           adapterKey: decision.source.adapterKey,
