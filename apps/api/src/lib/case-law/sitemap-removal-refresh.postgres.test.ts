@@ -17,6 +17,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import {
   invalidateCaseLawSitemapShardsTx,
   refreshCaseLawSitemapShards,
+  SITEMAP_WHOLE_COUNTRY,
 } from "@/api/lib/case-law/sitemap-shard-refresh";
 import {
   lockCaseLawRemovalSnapshots,
@@ -122,6 +123,7 @@ describe.skipIf(!enabled)("monthly sitemap removal fence (postgres)", () => {
       const removing = Result.tryPromise(
         async () =>
           await withAggregateTransaction(db, async (tx) => {
+            await tx.execute(sql`SET LOCAL ROLE stella_ingestion`);
             await lockCaseLawRemovalSnapshots(tx);
             await tx
               .update(caseLawDecisions)
@@ -160,6 +162,18 @@ describe.skipIf(!enabled)("monthly sitemap removal fence (postgres)", () => {
           .from(caseLawSitemapCountryGenerations)
           .where(eq(caseLawSitemapCountryGenerations.country, country)),
       ).toEqual([{ generation: 1n }]);
+      expect(
+        await db
+          .select({
+            year: caseLawSitemapChanges.year,
+            month: caseLawSitemapChanges.month,
+          })
+          .from(caseLawSitemapChanges)
+          .where(eq(caseLawSitemapChanges.country, country)),
+      ).toContainEqual({
+        year: SITEMAP_WHOLE_COUNTRY,
+        month: SITEMAP_WHOLE_COUNTRY,
+      });
       // A later run rebuilds from the post-removal corpus, consuming its log.
       await refreshCaseLawSitemapShards(
         asTestRaw<Parameters<typeof refreshCaseLawSitemapShards>[0]>(db),

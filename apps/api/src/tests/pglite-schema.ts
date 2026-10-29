@@ -1133,8 +1133,8 @@ export const installPgliteCaseLawSitemapChanges = async (
       source.startsWith('CREATE TRIGGER "case_law_')
     );
   });
-  if (statements.length !== 6) {
-    panic("Expected the two sitemap change functions and four triggers");
+  if (statements.length !== 8) {
+    panic("Expected the three sitemap change functions and five triggers");
   }
   for (const statement of statements) {
     await db.execute(sql.raw(statement));

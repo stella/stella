@@ -197,11 +197,10 @@ if (!databaseUrl || !runPostgresTests) {
 
     /**
      * Under the deployed roles: the ingestion role's decision write logs its
-     * month through the owner-run trigger, while neither the ingestion role
-     * can read or mutate logged work; the application role may only append
-     * removal invalidation work.
+     * month through the owner-run trigger, while neither writer role can read
+     * or mutate logged work directly.
      */
-    test("ingestion logs through its trigger and application invalidation only appends", async () => {
+    test("ingestion logs through its trigger while writer roles cannot access the log", async () => {
       await insertDecisions("1905-03-15", 1);
       await refreshUntilDone();
       expect(await loggedMonths("1905")).toEqual([]);
@@ -239,16 +238,13 @@ if (!databaseUrl || !runPostgresTests) {
             ),
           ).toMatch(/permission denied/u);
           // db-await-in-loop: each role is probed in its own transaction
-          const inserted = await refused(
-            role,
-            async (tx) =>
-              await tx`INSERT INTO case_law_sitemap_changes (country, year, month) VALUES (${COUNTRY}, '1905', '02')`,
-          );
-          if (role === "stella") {
-            expect(inserted).toBe("allowed");
-          } else {
-            expect(inserted).toMatch(/permission denied/u);
-          }
+          expect(
+            await refused(
+              role,
+              async (tx) =>
+                await tx`INSERT INTO case_law_sitemap_changes (country, year, month) VALUES (${COUNTRY}, '1905', '02')`,
+            ),
+          ).toMatch(/permission denied/u);
           // db-await-in-loop: neither writer may consume the owner's pending work
           expect(
             await refused(
@@ -257,7 +253,7 @@ if (!databaseUrl || !runPostgresTests) {
             ),
           ).toMatch(/permission denied/u);
         }
-        expect(await loggedMonths("1905")).toEqual(["1905/01", "1905/02"]);
+        expect(await loggedMonths("1905")).toEqual(["1905/01"]);
       });
       await refreshUntilDone();
       expect(await loggedMonths("1905")).toEqual([]);

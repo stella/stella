@@ -23,11 +23,10 @@ ALTER TABLE "case_law_sitemap_changes" FORCE ROW LEVEL SECURITY;--> statement-br
 -- Row security is forced, so the owner-run refresh and the owner's trigger
 -- functions are bound by policy too. The owner role is named per deployment,
 -- so the policy cannot name it; table privileges decide who reaches the rows.
--- stella-migration-safety: reviewed permissive-policy - privileges, not this policy, decide access: the owner holds them all and stella only INSERT (granted below) for removal invalidation; no other role is granted
+-- stella-migration-safety: reviewed permissive-policy - privileges, not this policy, decide access: only the owner and the owner's trigger functions write the log; no role is granted
 CREATE POLICY "case_law_sitemap_change_owner_access" ON "case_law_sitemap_changes"
   AS PERMISSIVE FOR ALL TO public USING (true) WITH CHECK (true);--> statement-breakpoint
 REVOKE ALL PRIVILEGES ON TABLE "case_law_sitemap_changes" FROM stella;--> statement-breakpoint
-GRANT INSERT ON TABLE "case_law_sitemap_changes" TO stella;--> statement-breakpoint
 
 -- A decision's shard is its country and month, the bucket of its id, its
 -- source (the redistribution gate), its updated_at (the shard's last
@@ -35,7 +34,7 @@ GRANT INSERT ON TABLE "case_law_sitemap_changes" TO stella;--> statement-breakpo
 -- a decision published before or after it, logs the month the decision left
 -- and the month it entered, plus the published language group's months. The function runs as its owner: the writers of
 -- case_law_decisions need no log privileges for trigger execution; the
--- application role separately holds INSERT for removal invalidation.
+-- generation trigger below logs removal invalidation.
 -- stella-migration-safety: reviewed security-definer - trigger-only function with a fixed search path and PUBLIC execute revoked below; it only appends the months of the decision and its same-country language group
 CREATE FUNCTION "log_case_law_sitemap_decision_change"()
 RETURNS trigger
@@ -112,6 +111,24 @@ END
 $function$;--> statement-breakpoint
 REVOKE ALL ON FUNCTION "log_case_law_sitemap_source_change"() FROM PUBLIC;--> statement-breakpoint
 
+-- A generation bump invalidates every shard in that country. The function
+-- runs as its owner, so removal writers need no change-log privileges.
+-- stella-migration-safety: reviewed security-definer - trigger-only function with a fixed search path and PUBLIC execute revoked below; it only appends one whole-country row to the sitemap change log
+CREATE FUNCTION "log_case_law_sitemap_country_generation_change"()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public, pg_temp
+AS $function$
+BEGIN
+  INSERT INTO public.case_law_sitemap_changes (country, year, month)
+  VALUES (NEW.country, '*', '*')
+  ON CONFLICT ON CONSTRAINT case_law_sitemap_changes_month_xact_key DO NOTHING;
+  RETURN NULL;
+END
+$function$;--> statement-breakpoint
+REVOKE ALL ON FUNCTION "log_case_law_sitemap_country_generation_change"() FROM PUBLIC;--> statement-breakpoint
+
 CREATE TRIGGER "case_law_decisions_sitemap_insert"
 AFTER INSERT ON "case_law_decisions"
 FOR EACH ROW
@@ -153,6 +170,11 @@ WHEN (
     IS DISTINCT FROM (NEW.descriptor IS NULL OR (NEW.descriptor ->> 'allowsRedistribution') = 'true')
 )
 EXECUTE FUNCTION "log_case_law_sitemap_source_change"();--> statement-breakpoint
+
+CREATE TRIGGER "case_law_sitemap_country_generations_change"
+AFTER INSERT OR UPDATE ON "case_law_sitemap_country_generations"
+FOR EACH ROW
+EXECUTE FUNCTION "log_case_law_sitemap_country_generation_change"();--> statement-breakpoint
 
 -- The first runs recount every country through the change log.
 INSERT INTO "case_law_sitemap_changes" ("country", "year", "month")

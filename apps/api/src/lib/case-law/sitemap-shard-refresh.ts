@@ -716,8 +716,4 @@ export const invalidateCaseLawSitemapShardsTx = async (
   await tx
     .delete(caseLawSitemapShards)
     .where(eq(caseLawSitemapShards.country, country));
-  await tx
-    .insert(caseLawSitemapChanges)
-    .values(wholeCountryRow(country))
-    .onConflictDoNothing();
 };

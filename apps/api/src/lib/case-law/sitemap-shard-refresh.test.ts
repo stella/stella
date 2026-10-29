@@ -13,6 +13,7 @@ import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
 import {
   caseLawDecisions,
   caseLawSitemapChanges,
+  caseLawSitemapCountryGenerations,
   caseLawSitemapShards,
   caseLawSources,
 } from "@/api/db/schema";
@@ -316,6 +317,31 @@ const spentClock = () => {
     return now;
   };
 };
+
+test("country generation writes log the TypeScript whole-country marker", async () => {
+  const country = "XTG";
+  await db
+    .insert(caseLawSitemapCountryGenerations)
+    .values({ country, generation: 1n });
+  await db
+    .update(caseLawSitemapCountryGenerations)
+    .set({ generation: 2n })
+    .where(eq(caseLawSitemapCountryGenerations.country, country));
+
+  expect(
+    await db
+      .select({
+        year: caseLawSitemapChanges.year,
+        month: caseLawSitemapChanges.month,
+      })
+      .from(caseLawSitemapChanges)
+      .where(eq(caseLawSitemapChanges.country, country))
+      .orderBy(asc(caseLawSitemapChanges.id)),
+  ).toEqual([
+    { year: SITEMAP_WHOLE_COUNTRY, month: SITEMAP_WHOLE_COUNTRY },
+    { year: SITEMAP_WHOLE_COUNTRY, month: SITEMAP_WHOLE_COUNTRY },
+  ]);
+});
 
 test(
   "the index reads only the shard table, so it lists nothing before a refresh",
