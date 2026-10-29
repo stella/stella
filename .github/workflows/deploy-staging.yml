@@ -904,7 +904,7 @@ jobs:
         uses: ./.github/actions/setup-playwright
 
       - name: Configure flaky-test quarantine
-        if: ${{ !cancelled() && steps.proof-readiness.outputs.status == 'ready' }}
+        if: ${{ !cancelled() && steps.proof-readiness.outputs.status == 'ready' && hashFiles('.github/actions/flaky-test-quarantine/action.yml') != '' }}
         timeout-minutes: 1
         uses: ./.github/actions/flaky-test-quarantine
 

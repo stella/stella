@@ -56,6 +56,7 @@ export const reportFlakyTestQuarantine = (): void => {
     ],
     {
       cwd: workspace,
+      timeout: 120_000,
       // Output streams straight to the job log; the limit only binds piped output.
       maxBuffer: 2 ** 30,
       stdio: "inherit",

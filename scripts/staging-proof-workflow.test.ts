@@ -53,6 +53,17 @@ const stepNamed = (name: string, candidate = source) => {
   return step;
 };
 
+const resolveFileHashes = (
+  condition: string,
+  root = path.resolve(import.meta.dir, ".."),
+) =>
+  condition.replace(/hashFiles\('([^']+)'\)/gu, (_call, pattern: string) =>
+    [...new Bun.Glob(pattern).scanSync({ cwd: root, onlyFiles: true })].length >
+    0
+      ? "'present'"
+      : "''",
+  );
+
 const PROOF_STEPS = [
   "Configure flaky-test quarantine",
   "Run staging web smoke",
@@ -81,7 +92,7 @@ const assertReadinessGates = (candidate = source) => {
     ...PROOF_STEPS,
   ]);
   for (const name of PROOF_STEPS) {
-    const condition = text(stepNamed(name, candidate), "if");
+    const condition = resolveFileHashes(text(stepNamed(name, candidate), "if"));
     for (const readiness of [
       "",
       "environment-unavailable",
@@ -419,5 +430,28 @@ test("proof tooling failures remain distinct before waiver evaluation", () => {
     expect(result).toStartWith("error|Staging proof tooling failure:");
     expect(result).not.toContain("rerun");
     expect(result).not.toContain("waived:");
+  }
+});
+
+test("quarantine setup requires the action in the deployed source", () => {
+  const root = mkdtempSync(
+    path.resolve(import.meta.dir, "../.quarantine-source-test-"),
+  );
+  try {
+    const condition = text(stepNamed("Configure flaky-test quarantine"), "if");
+    const context = {
+      values: { "steps.proof-readiness.outputs.status": "ready" },
+      status: { cancelled: false, success: true },
+    };
+    expect(evaluate(resolveFileHashes(condition, root), context)).toBe(false);
+    const action = path.join(
+      root,
+      ".github/actions/flaky-test-quarantine/action.yml",
+    );
+    mkdirSync(path.dirname(action), { recursive: true });
+    writeFileSync(action, "name: quarantine\n");
+    expect(evaluate(resolveFileHashes(condition, root), context)).toBe(true);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 });
