@@ -382,12 +382,14 @@ describe("release workflows run the gate", () => {
   const read = (file: string) =>
     readFileSync(path.join(REPO_ROOT, file), "utf-8");
 
-  test("the tag workflow refuses a stable tag before pushing it", () => {
+  test("the RC workflow checks CLI coupling before its candidate tag push", () => {
     const workflow = read(".github/workflows/release-tag.yml");
     const gate = workflow.indexOf(SCRIPT);
-    const push = workflow.indexOf("- name: Push tag");
+    const verdict = workflow.indexOf("- name: Report every release gate");
+    const push = workflow.indexOf("- name: Push candidate tag once");
     expect(gate).toBeGreaterThan(0);
-    expect(push).toBeGreaterThan(gate);
+    expect(verdict).toBeGreaterThan(gate);
+    expect(push).toBeGreaterThan(verdict);
   });
 
   test("a release pull request sees the same verdict before merging", () => {
@@ -575,6 +577,78 @@ test("release contract reads committed data without installed dependencies or de
     expect(JSON.parse(result.stdout)).toEqual(readHeadSurface(root));
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+const releasedTagFixture = (tagged: "release" | "elsewhere" | "none") => {
+  const root = mkdtempSync(path.join(tmpdir(), "stella-release-tagged-"));
+  const git = (...args: string[]) => {
+    const result = spawnSync("git", args, {
+      maxBuffer: 2 ** 30,
+      cwd: root,
+      encoding: "utf-8",
+    });
+    expect(result.status).toBe(0);
+    return result.stdout.trim();
+  };
+  copyNoInstallFiles(root);
+  git("init");
+  git("config", "user.name", "Release fixture");
+  git("config", "user.email", "fixture@example.test");
+  git("config", "commit.gpgsign", "false");
+  git("config", "tag.gpgsign", "false");
+  writeFileSync(path.join(root, "VERSION"), "0.9.47\n");
+  git("add", ".");
+  git("commit", "-m", "fixture base");
+  git("branch", "fixture-main");
+  const base = git("rev-parse", "HEAD");
+  writeFileSync(path.join(root, "VERSION"), "0.9.48\n");
+  git("add", ".");
+  git("commit", "-m", "fixture release");
+  if (tagged === "release") {
+    git("tag", "-a", "v0.9.48", "-m", "v0.9.48");
+  }
+  if (tagged === "elsewhere") {
+    git("checkout", "--detach", base);
+    writeFileSync(path.join(root, "other.txt"), "other\n");
+    git("add", "other.txt");
+    git("commit", "-m", "fixture unrelated");
+    git("tag", "-a", "v0.9.48", "-m", "v0.9.48");
+    git("checkout", "-");
+  }
+  return root;
+};
+
+const runBase = (root: string) =>
+  Bun.spawnSync([process.execPath, SCRIPT, "--base", "fixture-main"], {
+    cwd: root,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+
+test("a release pull request whose version is already tagged releases nothing on merge", () => {
+  const root = releasedTagFixture("release");
+  try {
+    const result = runBase(root);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout.toString()).toContain("v0.9.48 is already tagged at");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("an untagged release, or a tag outside this history, still gets the full check", () => {
+  for (const tagged of ["none", "elsewhere"] as const) {
+    const root = releasedTagFixture(tagged);
+    try {
+      const result = runBase(root);
+      // The fixture has no CLI package, so reaching the full check fails it:
+      // a release the tag does not cover is never waved through.
+      expect(result.exitCode, tagged).not.toBe(0);
+      expect(result.stdout.toString()).not.toContain("already tagged");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   }
 });
 

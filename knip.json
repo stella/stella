@@ -26,8 +26,17 @@
       "typescript": { "config": ["tsconfig*.json"] },
       // Metro requires Babel; the doctor script constructs its executable path.
       // app.config.ts turns expo-updates on for preview and production
-      // builds; knip evaluates the development one, where it is off.
-      "ignoreDependencies": ["@babel/core", "expo-doctor", "expo-updates"]
+      // builds; knip evaluates the development one, where it is off. The
+      // test-mobile skill drives simulators through agent-device's CLI. The
+      // DM Sans faces are embedded by expo-font's config plugin from their
+      // paths in app.config.ts, which import nothing.
+      "ignoreDependencies": [
+        "@babel/core",
+        "@expo-google-fonts/dm-sans",
+        "agent-device",
+        "expo-doctor",
+        "expo-updates"
+      ]
     },
     "packages/ai-catalog": {
       // Compile-time provider capability assertions consume the adapter types.
@@ -154,6 +163,9 @@
     "packages/mojibake": {
       "entry": ["src/**/*.test.ts", "scripts/*.ts"]
     },
+    "packages/parameter-store": {
+      "entry": ["src/read-parameter.ts", "src/**/*.test.ts"]
+    },
     "packages/portable-path": {
       "entry": ["src/**/*.test.ts"]
     },
@@ -219,7 +231,10 @@
   },
   "ignore": [".oxlint-plugins/**", ".claude/**"],
   "ignoreIssues": {
-    "packages/infosoud/src/constants.ts": ["duplicates"]
+    "packages/infosoud/src/constants.ts": ["duplicates"],
+    // The web's whole icon module, regenerated for the app from
+    // packages/ui/src/icons.ts; the app draws only some of its glyphs.
+    "apps/mobile/src/icons.gen.ts": ["exports", "types"]
   },
   "exclude": ["exports", "types"],
   "ignoreDependencies": [

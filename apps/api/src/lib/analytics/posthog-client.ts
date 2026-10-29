@@ -25,7 +25,11 @@ import type {
 import { errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { postToOperatorEndpoint } from "@/api/lib/observability/operator-endpoint-fetch";
-import { RELEASE_VERSION_PROPERTY } from "@/api/lib/observability/release-failure-contract";
+import {
+  type DeployEnvironment,
+  RELEASE_ENVIRONMENT_PROPERTY,
+  RELEASE_VERSION_PROPERTY,
+} from "@/api/lib/observability/release-failure-contract";
 import { APP_COMMIT_SHA, APP_VERSION } from "@/api/lib/version";
 
 /** Library stamp on every event, in place of the SDK's own. */
@@ -103,9 +107,12 @@ const normalizeHost = (host: string): string => {
 const isoNow = (): string =>
   Temporal.Now.instant().toString({ smallestUnit: "millisecond" });
 
+// The deployment environment is required so staging events never count
+// toward a production release's health; undefined (local runs) stamps none.
 export const createPostHogServerAnalytics = (
   key: string,
   host: string,
+  deployEnvironment: DeployEnvironment | undefined,
   options: PostHogClientOptions = {},
 ): ServerAnalytics => {
   const flushAt = Math.max(options.flushAt ?? DEFAULT_FLUSH_AT, 1);
@@ -289,6 +296,9 @@ export const createPostHogServerAnalytics = (
           ...(anonymous ? { $process_person_profile: false } : {}),
           app_commit: APP_COMMIT_SHA,
           [RELEASE_VERSION_PROPERTY]: APP_VERSION,
+          ...(deployEnvironment === undefined
+            ? {}
+            : { [RELEASE_ENVIRONMENT_PROPERTY]: deployEnvironment }),
           ...(groups === undefined ? {} : { $groups: groups }),
           ...commonProperties,
         },

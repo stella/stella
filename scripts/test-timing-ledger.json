@@ -125,11 +125,6 @@
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
   {
-    "id": "no-real-time-wait::apps/api/src/handlers/chat/send-message.test.ts::<module>::Bun.sleep",
-    "count": 2,
-    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
-  },
-  {
     "id": "no-real-time-wait::apps/api/src/handlers/chat/tools/execute/sandbox/run-sandbox.test.ts::<module>::@stll/concurrency/sleep#sleep",
     "count": 1,
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
@@ -725,11 +720,6 @@
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
   {
-    "id": "no-real-time-wait::apps/web/src/features/case-law/components/case-viewer/use-reader-answers.dom.test.tsx::<module>::@stll/concurrency/sleep#sleep",
-    "count": 4,
-    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
-  },
-  {
     "id": "no-real-time-wait::apps/web/src/features/chat/chat-runtime-emit.test.ts::tick::@stll/concurrency/sleep#sleep",
     "count": 1,
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
@@ -906,7 +896,7 @@
   },
   {
     "id": "no-real-time-wait::apps/web/src/routes/_protected.chat/-components/chat-thread-page.dom.test.tsx::<module>::node:timers/promises#setTimeout",
-    "count": 2,
+    "count": 1,
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
   {
@@ -3905,53 +3895,8 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
-    "id": "no-unreasoned-timeout::apps/web/src/components/chat/markdown-selection.dom.test.tsx::<module>::test timeout",
-    "count": 1,
-    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
-  },
-  {
-    "id": "no-unreasoned-timeout::apps/web/src/components/chat/recorded-conversations.dom.test.tsx::<module>::test timeout",
-    "count": 4,
-    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
-  },
-  {
-    "id": "no-unreasoned-timeout::apps/web/src/components/legal-reader/legal-reader-ai-chat.dom.test.tsx::<module>::test timeout",
-    "count": 1,
-    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
-  },
-  {
-    "id": "no-unreasoned-timeout::apps/web/src/components/workspaces/matter-combobox.dom.test.tsx::<module>::setDefaultTimeout",
-    "count": 1,
-    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
-  },
-  {
-    "id": "no-unreasoned-timeout::apps/web/src/features/case-law/components/case-viewer/use-reader-answers.dom.test.tsx::<module>::test timeout",
-    "count": 1,
-    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
-  },
-  {
-    "id": "no-unreasoned-timeout::apps/web/src/features/chat/stream-chunk-commit-budget.dom.test.tsx::<module>::test timeout",
-    "count": 1,
-    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
-  },
-  {
-    "id": "no-unreasoned-timeout::apps/web/src/features/knowledge/knowledge-audience.dom.test.tsx::<module>::test timeout",
-    "count": 2,
-    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
-  },
-  {
     "id": "no-unreasoned-timeout::apps/web/src/lib/organization/feature-access/capability-action-coverage.test.ts::<module>::test timeout",
     "count": 1,
-    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
-  },
-  {
-    "id": "no-unreasoned-timeout::apps/web/src/routes/_protected.chat/-components/chat-history-page.dom.test.tsx::<module>::setDefaultTimeout",
-    "count": 1,
-    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
-  },
-  {
-    "id": "no-unreasoned-timeout::apps/web/src/routes/law/-law-home/law-recent.dom.test.tsx::<module>::test timeout",
-    "count": 2,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
@@ -4036,7 +3981,7 @@
   },
   {
     "id": "no-unreasoned-timeout::packages/scripts/src/ci-job-classification.test.ts::<module>::test timeout",
-    "count": 19,
+    "count": 18,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
@@ -4137,11 +4082,6 @@
   {
     "id": "no-unreasoned-timeout::scripts/check-migrations.test.ts::<module>::test timeout",
     "count": 1,
-    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
-  },
-  {
-    "id": "no-unreasoned-timeout::scripts/check-release-candidate.test.ts::<module>::test timeout",
-    "count": 2,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {

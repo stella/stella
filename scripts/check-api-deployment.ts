@@ -1,3 +1,4 @@
+import { DEPLOY_ENV_CONTRACT } from "../apps/api/src/deploy-env-contract";
 import { getApiHealthUrl, parseHealthCommit } from "./api-health";
 
 const DEFAULT_ATTEMPTS = 30;
@@ -65,23 +66,75 @@ const sleep = async (ms: number) => {
   await Bun.sleep(ms);
 };
 
-const readDeployedCommit = async (apiUrl: string, probePath: string) => {
-  const probeUrl = getApiHealthUrl(apiUrl, probePath);
+const readExpectedEnvironment = () => {
+  const value = process.env["API_DEPLOYMENT_EXPECTED_ENVIRONMENT"]?.trim();
+  if (!value) {
+    return undefined;
+  }
+  if (value !== "production" && value !== "staging") {
+    throw new ApiDeploymentError(
+      "API_DEPLOYMENT_EXPECTED_ENVIRONMENT must be production or staging",
+    );
+  }
+  return value;
+};
+
+type ReadApiDeploymentOptions = {
+  url: URL;
+  headers?: Headers;
+  timeoutMs?: number;
+  expectedEnvironment?: ReturnType<typeof readExpectedEnvironment>;
+};
+
+export const readApiDeployment = async ({
+  url: probeUrl,
+  headers,
+  timeoutMs = FETCH_TIMEOUT_MS,
+  expectedEnvironment,
+}: ReadApiDeploymentOptions) => {
   const response = await fetch(probeUrl, {
-    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    headers,
+    signal: AbortSignal.timeout(timeoutMs),
+    cache: "no-store",
   });
   if (!response.ok) {
     throw new ApiDeploymentError(
       `${probeUrl.toString()} returned HTTP ${response.status}`,
     );
   }
-  const commit = parseHealthCommit(await response.json());
+  const body: unknown = await response.json();
+  const commit = parseHealthCommit(body);
   if (!commit) {
     throw new ApiDeploymentError(
       `${probeUrl.toString()} did not return a full commit SHA`,
     );
   }
-  return commit;
+  if (expectedEnvironment !== undefined) {
+    for (const { readinessField } of DEPLOY_ENV_CONTRACT) {
+      if (readinessField === undefined) {
+        continue;
+      }
+      const observedEnvironment =
+        typeof body === "object" && body !== null
+          ? Reflect.get(body, readinessField)
+          : undefined;
+      if (observedEnvironment !== expectedEnvironment) {
+        throw new ApiDeploymentError(
+          `${probeUrl.toString()} ${readinessField} must be ${expectedEnvironment}; observed ${String(observedEnvironment ?? "unset")}`,
+        );
+      }
+    }
+  }
+  return {
+    statusCode: response.status,
+    commit,
+    status:
+      typeof body === "object" &&
+      body !== null &&
+      Reflect.get(body, "status") === "ok"
+        ? "ready"
+        : "not-ready",
+  } as const;
 };
 
 const main = async () => {
@@ -89,6 +142,13 @@ const main = async () => {
   const probePath =
     process.env["API_DEPLOYMENT_PROBE_PATH"]?.trim() || DEFAULT_PROBE_PATH;
   const expectedCommit = readRequiredEnv("API_DEPLOYMENT_EXPECTED_COMMIT");
+  const expectedEnvironment = readExpectedEnvironment();
+  const headers = new Headers();
+  const edgeHeaderName = process.env["EDGE_HEADER_NAME"]?.trim();
+  const edgeHeaderValue = process.env["EDGE_HEADER_VALUE"]?.trim();
+  if (edgeHeaderName && edgeHeaderValue) {
+    headers.set(edgeHeaderName, edgeHeaderValue);
+  }
   if (!COMMIT_SHA_PATTERN.test(expectedCommit)) {
     throw new ApiDeploymentError(
       "API_DEPLOYMENT_EXPECTED_COMMIT must be a full lowercase commit SHA",
@@ -116,7 +176,20 @@ const main = async () => {
   let consecutiveMatches = 0;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
-      lastObservedCommit = await readDeployedCommit(apiUrl, probePath);
+      const probe = await readApiDeployment({
+        url: getApiHealthUrl(apiUrl, probePath),
+        expectedEnvironment,
+        headers,
+      });
+      if (
+        probePath === "ready" &&
+        (probe.statusCode !== 200 || probe.status !== "ready")
+      ) {
+        throw new ApiDeploymentError(
+          "Readiness probe must return HTTP 200 and status ok",
+        );
+      }
+      lastObservedCommit = probe.commit;
       const stability = advanceDeploymentStability({
         consecutiveMatches,
         expectedCommit,
@@ -152,7 +225,7 @@ const main = async () => {
   }
 
   throw new ApiDeploymentError(
-    `production did not remain at ${expectedCommit} for ${requiredStableProbes} consecutive probes; last observed ${lastObservedCommit ?? "unavailable"}; final streak ${consecutiveMatches}`,
+    `deployment did not remain at ${expectedCommit} for ${requiredStableProbes} consecutive probes; last observed ${lastObservedCommit ?? "unavailable"}; final streak ${consecutiveMatches}`,
   );
 };
 
