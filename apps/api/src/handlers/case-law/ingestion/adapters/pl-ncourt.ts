@@ -138,9 +138,12 @@ import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supple
 import { DOCUMENT_ROLE_UNMAPPED } from "@/api/lib/legal-search/document-role-diagnostics";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import {
+  LEGACY_REPAIR_NAMESPACE,
   QUARANTINE_NAMESPACE,
   quarantineIdentity,
+  repairAliasesForStableFields,
 } from "@/api/lib/legal-search/quarantine-identity";
+import type { RepairAlias } from "@/api/lib/legal-search/quarantine-identity";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
@@ -1050,7 +1053,6 @@ export const assemblePlNcourtDecision = ({
   detailXml,
   documentStatus,
   listingXml,
-  positionAlias,
 }: AssemblePlNcourtDecisionOptions): PlNcourtBuild => {
   const listing = readPlNcourtListingRow(listingXml);
   if (listing === null) {
@@ -1122,10 +1124,8 @@ export const assemblePlNcourtDecision = ({
   });
   // Where the listing once could not serve this row, or served it without a
   // usable id, its audit row is found through these, and enriched.
-  const repairAliases = [
-    ...(positionAlias === undefined ? [] : [positionAlias]),
-    ...plNcourtRowRepairAliases(row, id),
-  ];
+  // Positional evidence remains in listing payloads; it cannot identify this judgment.
+  const repairAliases = plNcourtRowRepairAliases(row, id);
 
   const decision: IngestionResult = plainTextIngestionResult({
     ...keyed,
@@ -1344,22 +1344,29 @@ export const plNcourtRowFingerprintId = (
 const plNcourtRowRepairAliases = (
   row: PlNcourtListingRow,
   storedUnder: string,
-): string[] => {
+): RepairAlias[] => {
   const states = (value: string | undefined): boolean =>
     value !== undefined && value.trim().length > 0;
-  const forms = [
-    states(row.signature) || states(row.excerpt)
-      ? listedFingerprintOf(row)
-      : undefined,
-    states(row.thesis) ? publishedFingerprintOf(row) : undefined,
-  ];
-  return [
-    ...new Set(
-      forms.flatMap((alias) =>
-        alias === undefined || alias === storedUnder ? [] : [alias],
-      ),
-    ),
-  ];
+  const listedId = listedFingerprintOf(row);
+  const listedAliases =
+    listedId === undefined || (!states(row.signature) && !states(row.excerpt))
+      ? []
+      : repairAliasesForStableFields({
+          namespace: LEGACY_REPAIR_NAMESPACE.PL_NCOURT_LISTED,
+          sourceDocumentIds: [listedId],
+          stableFields: { signature: row.signature, excerpt: row.excerpt },
+        });
+  const publishedId = publishedFingerprintOf(row);
+  const publishedAliases =
+    publishedId === undefined
+      ? []
+      : repairAliasesForStableFields({
+          namespace: QUARANTINE_NAMESPACE.PL_NCOURT,
+          sourceDocumentIds: [publishedId],
+          stableFields: { thesis: row.thesis },
+        });
+  const forms = [...listedAliases, ...publishedAliases];
+  return [...new Set(forms.filter((alias) => alias !== storedUnder))];
 };
 
 /**
@@ -2245,6 +2252,7 @@ const fetchUnreadableWindow = async (
 ): Promise<Result<SyncPage, AdapterFetchError>> => {
   if (cursor.window > 1) {
     return Result.ok({
+      observations: [],
       decisions: [],
       sourceUrl: url,
       nextCursor: encodePlNcourtCursor({
@@ -2263,6 +2271,7 @@ const fetchUnreadableWindow = async (
     return quarantine;
   }
   return Result.ok({
+    observations: [],
     decisions: [buildPlNcourtQuarantine(quarantine.value)],
     sourceUrl: url,
     nextCursor: encodePlNcourtCursor({
@@ -2367,6 +2376,7 @@ const plNcourtFetchPage = async (
     parsed.lane === "tip" && parsed.offset === 0 && parsed.anchor === "";
   if (lapStart && parsed.from >= today()) {
     return Result.ok({
+      observations: [],
       decisions: [],
       nextCursor: encodePlNcourtCursor(parsed),
     });
@@ -2387,6 +2397,7 @@ const plNcourtFetchPage = async (
       found: listed.value.found ?? "",
     });
     return Result.ok({
+      observations: [],
       decisions: [],
       sourceUrl: listed.value.url,
       nextCursor: encodePlNcourtCursor({
@@ -2414,6 +2425,7 @@ const plNcourtFetchPage = async (
   }
   const { decisions, itemBuildFailures, supplements, read } = built.value;
   return Result.ok({
+    observations: [],
     decisions,
     ...(itemBuildFailures === 0
       ? {}
@@ -2593,6 +2605,7 @@ const listPlNcourtSlicePage = async ({
   }
   const { items, total } = listed.value;
   return {
+    observations: [],
     items,
     // A page every row of which was unservable states no total; it is still
     // a page, and the ones after it are listed.

@@ -270,7 +270,7 @@ describe.skipIf(!enabled)(
             const warnings = spyOn(logger, "warn");
             let counts = 0;
             czNsAdapter.fetchPage = async () =>
-              Result.ok({ decisions: [], nextCursor: null });
+              Result.ok({ observations: [], decisions: [], nextCursor: null });
             const run = async () => {
               const lease = await acquireCaseLawSourceIngestionLease({
                 scopedDb,

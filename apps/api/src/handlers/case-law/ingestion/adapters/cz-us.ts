@@ -1049,7 +1049,7 @@ type ParseDecisionPageOptions = {
   listedCounter: number | undefined;
   nalusRecordId: string | undefined;
   nalusSz: string | undefined;
-  nalusQuarantineIds: readonly string[];
+  nalusRepairAliases: IngestionResult["sourceDocumentIdRepairAliases"];
 };
 
 /** A served page the structured parser could not read. */
@@ -1067,7 +1067,7 @@ const parseDecisionPage = ({
   listedCounter,
   nalusRecordId,
   nalusSz,
-  nalusQuarantineIds,
+  nalusRepairAliases,
 }: ParseDecisionPageOptions): IngestionResult | null => {
   const registrySign = extractLabel(html, "lblRegistrySign");
   if (!registrySign?.includes("ze dne")) {
@@ -1160,9 +1160,7 @@ const parseDecisionPage = ({
       sz: nalusSz,
       ecli,
     })?.aliases,
-    sourceDocumentIdRepairAliases: nalusQuarantineIds.map((quarantineId) =>
-      quarantineSourceDocumentId(QUARANTINE_NAMESPACE.CZ_US, quarantineId),
-    ),
+    sourceDocumentIdRepairAliases: nalusRepairAliases,
     legacySourceUrls: legacySourceUrlsFor(
       parsed.caseNumber,
       ecliCounter,
@@ -1584,14 +1582,67 @@ const hiddenField = (html: string, name: string): string | undefined =>
  * markup would mint a new quarantine identity whenever result order moves.
  * The field order is part of the digest stored rows carry.
  */
-const quarantineFingerprint = (stableFields: {
-  stablePrimaryText: string;
-  stableActionsText: string;
-  stableDetailText: string;
-  stableCounterText: string;
-}): string =>
-  quarantineIdentity({ namespace: QUARANTINE_NAMESPACE.CZ_US, stableFields })
-    .fingerprint;
+type NalusQuarantineFormsOptions = {
+  primary: Parameters<typeof visibleHtmlText>[0];
+  actions: Parameters<typeof visibleHtmlText>[0];
+  ecli: string | undefined;
+  szCounter: string | undefined;
+};
+
+const nalusQuarantineForms = ({
+  primary,
+  actions,
+  ecli,
+  szCounter,
+}: NalusQuarantineFormsOptions) => {
+  const detail = primary.find("a[href*='ResultDetail.aspx']").first();
+  const stablePrimary = primary.clone();
+  stablePrimary.find("a[href*='ResultDetail.aspx']").remove();
+  const stableActions = actions.clone();
+  stableActions
+    .find("[onclick*='GetText.aspx?sz='], a[href*='GetText.aspx?sz=']")
+    .remove();
+  return [visibleHtmlText, legacyQuarantineHtmlText].flatMap((readText) => {
+    const projectionDetailText = readText(detail);
+    const counter = /#(?<counter>\d+)\s*$/u.exec(projectionDetailText)
+      ?.groups?.["counter"];
+    const stableDetailTexts = [
+      ...new Set([projectionDetailText.replace(/#\d+\s*$/u, "").trim(), ""]),
+    ];
+    const stableCounterTexts = [...new Set([counter ?? szCounter ?? "", ""])];
+    return stableDetailTexts.flatMap((stableDetailText) =>
+      stableCounterTexts.map((stableCounterText) =>
+        quarantineIdentity({
+          namespace: QUARANTINE_NAMESPACE.CZ_US,
+          stableFields: {
+            stablePrimaryText: readText(stablePrimary).replace(ecli ?? "", ""),
+            stableActionsText: readText(stableActions),
+            stableDetailText,
+            stableCounterText,
+          },
+        }),
+      ),
+    );
+  });
+};
+
+/** Only qualified forms already captured by the listing may adopt a stored row. */
+const nalusRepairAliases = (listed: ListedDecision) => {
+  const $ = cheerio.load(`<table>${listed.listingHtml}</table>`);
+  const primary = ownTableRows($("table"))
+    .filter(".resultData0, .resultData1")
+    .filter((_, row) => $(row).attr("valign") !== "top")
+    .first();
+  const allowed = new Set(listed.quarantineRepairIds);
+  return nalusQuarantineForms({
+    primary,
+    actions: primary.next("tr"),
+    ecli: listed.ecli,
+    szCounter: /_(?<counter>\d+)$/u.exec(listed.sz ?? "")?.groups?.["counter"],
+  }).flatMap((form) =>
+    allowed.has(form.fingerprint) ? form.repairAliases : [],
+  );
+};
 
 const cookieHeader = (responses: readonly Response[]): string => {
   const cookies = new Map<string, string>();
@@ -1749,43 +1800,11 @@ const parseResultPage = ({
       // text: the detail anchor, ECLI and retrieval action can all appear only
       // when identity metadata recovers, so none may participate in the repair
       // fingerprint.
-      const stablePrimary = primary.clone();
-      stablePrimary.find("a[href*='ResultDetail.aspx']").remove();
-      const stableActions = actions.clone();
-      stableActions
-        .find("[onclick*='GetText.aspx?sz='], a[href*='GetText.aspx?sz=']")
-        .remove();
-      // Visible text defines new identities; raw text only locates audited rows
-      // stored before the projection changed.
       const quarantineRepairIds = [
         ...new Set(
-          [visibleHtmlText, legacyQuarantineHtmlText].flatMap((readText) => {
-            const projectionDetailText = readText(detail);
-            const counter = /#(?<counter>\d+)\s*$/u.exec(projectionDetailText)
-              ?.groups?.["counter"];
-            const stableDetailTexts = [
-              ...new Set([
-                projectionDetailText.replace(/#\d+\s*$/u, "").trim(),
-                "",
-              ]),
-            ];
-            const stableCounterTexts = [
-              ...new Set([counter ?? szCounter ?? "", ""]),
-            ];
-            return stableDetailTexts.flatMap((stableDetailText) =>
-              stableCounterTexts.map((stableCounterText) =>
-                quarantineFingerprint({
-                  stablePrimaryText: readText(stablePrimary).replace(
-                    ecli ?? "",
-                    "",
-                  ),
-                  stableActionsText: readText(stableActions),
-                  stableDetailText,
-                  stableCounterText,
-                }),
-              ),
-            );
-          }),
+          nalusQuarantineForms({ primary, actions, ecli, szCounter }).map(
+            ({ fingerprint }) => fingerprint,
+          ),
         ),
       ];
       const quarantineId =
@@ -2351,7 +2370,7 @@ const buildCzUsDecision = ({
     listedCounter: listed.counter,
     nalusRecordId: listed.nalusRecordId,
     nalusSz: listed.sz,
-    nalusQuarantineIds: listed.quarantineRepairIds,
+    nalusRepairAliases: nalusRepairAliases(listed),
   });
   if (!decision) {
     return null;
@@ -2668,12 +2687,7 @@ const listedOnlyDecision = (
     sourceDocumentIdRepairAliases:
       listed.identityQuarantined === true
         ? undefined
-        : listed.quarantineRepairIds.map((quarantineId) =>
-            quarantineSourceDocumentId(
-              QUARANTINE_NAMESPACE.CZ_US,
-              quarantineId,
-            ),
-          ),
+        : nalusRepairAliases(listed),
     legacySourceUrls: legacySourceUrlsFor(
       listed.caseNumber,
       listed.counter,
@@ -2853,9 +2867,10 @@ const listCzUsSlicePage = async ({
     signal,
   });
   if (listing === null) {
-    return { items: [], totalPages: 0 };
+    return { observations: [], items: [], totalPages: 0 };
   }
   return {
+    observations: [],
     items: listing.listed.map((listed) => ({
       identity: czUsListingIdentity(listed),
       payload: listed,
@@ -3042,7 +3057,7 @@ const reparseStoredRaw = (
     nalusRecordId:
       typeof nalusRecordId === "string" ? nalusRecordId : undefined,
     nalusSz: typeof nalusSz === "string" ? nalusSz : undefined,
-    nalusQuarantineIds: [],
+    nalusRepairAliases: [],
   });
   if (decision === null) {
     return {
@@ -3331,7 +3346,11 @@ export const czUsAdapter = defineSourceAdapter({
             // Every closed availability day is accounted for, so there is
             // nothing to list and no request to spend. An unchanged cursor is
             // how this pipeline reads a source with nothing left.
-            return { decisions: [], nextCursor: makeCursor(state) };
+            return {
+              observations: [],
+              decisions: [],
+              nextCursor: makeCursor(state),
+            };
           }
           state = rearmed;
         }
@@ -3345,6 +3364,7 @@ export const czUsAdapter = defineSourceAdapter({
         } catch (error) {
           if (state.page > 0 && error instanceof SearchPageDriftError) {
             return {
+              observations: [],
               decisions: [],
               nextCursor: makeCursor(restartSlice(state)),
             };
@@ -3354,6 +3374,7 @@ export const czUsAdapter = defineSourceAdapter({
         if (page === null) {
           if (state.pass === CRAWL_PASS.VERIFY) {
             return {
+              observations: [],
               decisions: [],
               nextCursor: makeCursor(
                 afterUnconfirmedSlice(state, now, "listing-now-empty"),
@@ -3361,6 +3382,7 @@ export const czUsAdapter = defineSourceAdapter({
             };
           }
           return {
+            observations: [],
             decisions: [],
             nextCursor: makeCursor(nextSlice(state, now)),
           };
@@ -3371,6 +3393,7 @@ export const czUsAdapter = defineSourceAdapter({
         if (state.pass === CRAWL_PASS.VERIFY) {
           if (!sliceComplete) {
             return {
+              observations: [],
               decisions: [],
               nextCursor: makeCursor({
                 ...state,
@@ -3381,6 +3404,7 @@ export const czUsAdapter = defineSourceAdapter({
           }
           if (digest !== state.expectedDigest) {
             return {
+              observations: [],
               decisions: [],
               nextCursor: makeCursor(
                 afterUnconfirmedSlice(state, now, "digest-mismatch"),
@@ -3388,6 +3412,7 @@ export const czUsAdapter = defineSourceAdapter({
             };
           }
           return {
+            observations: [],
             decisions: [],
             nextCursor: makeCursor(nextSlice(state, now)),
           };
@@ -3400,6 +3425,7 @@ export const czUsAdapter = defineSourceAdapter({
         );
         if (sliceComplete) {
           return {
+            observations: [],
             decisions,
             itemBuildFailures,
             nextCursor: makeCursor({
@@ -3413,6 +3439,7 @@ export const czUsAdapter = defineSourceAdapter({
           };
         }
         return {
+          observations: [],
           decisions,
           itemBuildFailures,
           nextCursor: makeCursor({

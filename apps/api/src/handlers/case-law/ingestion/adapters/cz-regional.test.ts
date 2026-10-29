@@ -670,7 +670,7 @@ describe("a court's record with no usable identity is quarantined", () => {
     });
   });
 
-  test("a keyed observation emits each quarantined form as a repair alias", async () => {
+  test("a keyed observation repairs only forms that retain its docket", async () => {
     const item = await district();
     const built = assembleCzRegionalDecision({
       item,
@@ -682,11 +682,7 @@ describe("a court's record with no usable identity is quarantined", () => {
 
     expect(decision.sourceDocumentId).not.toMatch(QUARANTINE_ID);
     expect(decision.sourceDocumentIdRepairAliases?.toSorted()).toEqual(
-      [
-        quarantineIdOf({ ...item, jednaciCislo: null }),
-        quarantineIdOf({ ...item, soud: null }),
-        quarantineIdOf({ ...item, jednaciCislo: null, soud: null }),
-      ].toSorted(),
+      [quarantineIdOf({ ...item, soud: null })].toSorted(),
     );
     // A row keyed on its docket states no publisher id, and the pipeline
     // adopts by repair alias only for one that does.
@@ -700,6 +696,40 @@ describe("a court's record with no usable identity is quarantined", () => {
         ? docketKeyed.decision.sourceDocumentIdRepairAliases
         : "unbuilt",
     ).toBeUndefined();
+  });
+
+  test("different dockets with identical metadata cannot adopt one another's quarantine forms", async () => {
+    const first = await district();
+    const second = {
+      ...first,
+      jednaciCislo: "18 C 131/2024",
+      odkaz: QUARANTINED_LINK,
+    };
+    const aliasesOf = (item: typeof first) => {
+      const built = assembleCzRegionalDecision({
+        item,
+        document: null,
+        chain: null,
+      });
+      return built.type === "built"
+        ? (built.decision.sourceDocumentIdRepairAliases ?? [])
+        : panic("listed decision did not build");
+    };
+    const firstAliases = aliasesOf(first);
+    const secondAliases = aliasesOf(second);
+    expect(firstAliases).toContain(quarantineIdOf({ ...first, soud: null }));
+    expect(secondAliases).toContain(quarantineIdOf({ ...second, soud: null }));
+    expect(
+      firstAliases.filter((alias) => secondAliases.includes(alias)),
+    ).toEqual([]);
+    for (const aliases of [firstAliases, secondAliases]) {
+      expect(aliases).not.toContain(
+        quarantineIdOf({ ...first, jednaciCislo: null }),
+      );
+      expect(aliases).not.toContain(
+        quarantineIdOf({ ...first, jednaciCislo: null, soud: null }),
+      );
+    }
   });
 
   test("a row stating nothing to fingerprint is left out, and counted", async () => {
@@ -1386,7 +1416,9 @@ describe("the crawl keeps a refused row as its listing", () => {
       return await Promise.resolve(
         new Response(
           input === appellate.odkaz ? "<html>maintenance</html>" : listing,
-          { headers: { "Content-Type": "application/json" } },
+          {
+            headers: { "Content-Type": "application/json" },
+          },
         ),
       );
     });
@@ -1924,7 +1956,10 @@ describe("a failed publisher read is never built", () => {
       });
       expect(
         await fetchCzRegionalAffectingDocs(CHAIN_DOCUMENT_ID),
-      ).toMatchObject({ type: "refused", scope: "part" });
+      ).toMatchObject({
+        type: "refused",
+        scope: "part",
+      });
     },
   );
 
@@ -1941,14 +1976,18 @@ describe("a failed publisher read is never built", () => {
       async () => await Promise.resolve(new Response('{"items":[]}')),
     );
     expect(await fetchCzRegionalAffectingDocs(CHAIN_DOCUMENT_ID)).toMatchObject(
-      { type: "unavailable" },
+      {
+        type: "unavailable",
+      },
     );
 
     globalThis.fetch = asFetchMock(
       async () => await Promise.resolve(new Response("<html>busy</html>")),
     );
     expect(await fetchCzRegionalAffectingDocs(CHAIN_DOCUMENT_ID)).toMatchObject(
-      { type: "unavailable" },
+      {
+        type: "unavailable",
+      },
     );
   });
 

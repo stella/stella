@@ -714,7 +714,11 @@ describe("cz-ns listSlicePage", () => {
   test("the publisher's own words for an empty day are an empty slice", async () => {
     mockFetch({ listing: { body: EMPTY_LISTING_HTML } });
 
-    expect(await listSlice("2026-07-05")).toEqual({ items: [], totalPages: 0 });
+    expect(await listSlice("2026-07-05")).toEqual({
+      observations: [],
+      items: [],
+      totalPages: 0,
+    });
   });
 
   test("a failed request is thrown, never read as an empty day", async () => {

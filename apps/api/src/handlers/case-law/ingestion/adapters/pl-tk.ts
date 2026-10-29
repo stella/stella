@@ -1617,6 +1617,7 @@ const plTkFetchPage = async (
     // Caught up on this stage: hand over, so the crawl at rest rotates
     // through the stages and re-reads only each one's newest end.
     return Result.ok({
+      observations: [],
       decisions: [],
       sourceUrl: firstUrl,
       nextCursor: encodePlTkCursor({
@@ -1848,7 +1849,7 @@ const listPlTkSlicePage = async ({
 }: ReconciliationSlicePageOptions): Promise<ReconciliationSlicePage> => {
   const stage = STAGE_ORDER[page];
   if (stage === undefined) {
-    return { items: [], totalPages: STAGE_ORDER.length };
+    return { observations: [], items: [], totalPages: STAGE_ORDER.length };
   }
   const listed = await listStageYear(stage, String(sliceYear(slice)), signal);
   if (Result.isError(listed)) {
@@ -1857,6 +1858,7 @@ const listPlTkSlicePage = async ({
     return await Promise.reject(listed.error);
   }
   return {
+    observations: [],
     items: listed.value.map((row) => ({
       identity: plTkListingIdentity(row),
       payload: row,

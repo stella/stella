@@ -116,12 +116,15 @@ import {
 } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import {
+  LEGACY_REPAIR_NAMESPACE,
   QUARANTINE_NAMESPACE,
   quarantineIdentity,
+  repairAliasesForStableFields,
 } from "@/api/lib/legal-search/quarantine-identity";
 import type {
   QuarantineIdentity,
   QuarantineStableFields,
+  RepairAlias,
 } from "@/api/lib/legal-search/quarantine-identity";
 import { restrictSkCourtDocumentUrl } from "@/api/lib/legal-search/sk-court-document-url";
 import type { SkDocumentFetch } from "@/api/lib/legal-search/sk-document-backfill";
@@ -928,7 +931,13 @@ const quarantinedSkCourtsDecision = (
     sourceDocumentId: quarantine.sourceDocumentId,
     ...(legacyId === undefined
       ? {}
-      : { sourceDocumentIdRepairAliases: [legacyId] }),
+      : {
+          sourceDocumentIdRepairAliases: repairAliasesForStableFields({
+            namespace: LEGACY_REPAIR_NAMESPACE.SK_COURTS_PLAINTEXT,
+            sourceDocumentIds: [legacyId],
+            stableFields: { caseNumber: statedCaseNumber },
+          }),
+        }),
     court: statedCourt ?? "",
     country: ADAPTER_MANIFESTS[ADAPTER_KEYS.SK_COURTS].country,
     language: SK_COURTS_LANGUAGE,
@@ -1221,7 +1230,7 @@ const skCourtsRepairAliases = (
       ),
     ),
   );
-  const aliases = new Set<string>();
+  const aliases = new Set<RepairAlias>();
   for (const form of forms) {
     if (
       form.identifikacneCislo === undefined &&
@@ -1232,7 +1241,9 @@ const skCourtsRepairAliases = (
     }
     const quarantine = skCourtsQuarantineIdentity(form);
     if (quarantine !== null) {
-      aliases.add(quarantine.sourceDocumentId);
+      for (const alias of quarantine.repairAliases) {
+        aliases.add(alias);
+      }
     }
   }
   return aliases.size === 0
@@ -1960,6 +1971,7 @@ const listSkCourtsSlicePage = async ({
   // Every listed record left out above states no stable field.
   const withoutStableFields = listed.length - items.length;
   return {
+    observations: [],
     items,
     ...(withoutStableFields === 0 ? {} : { withoutStableFields }),
     totalPages: Math.ceil(total / LISTING_PAGE_SIZE),
@@ -2117,6 +2129,7 @@ const collectFrontierPage = async (
   const day = nextClosedDay(frontier.verifiedThrough);
   if (day === null) {
     return Result.ok({
+      observations: [],
       decisions: [],
       nextCursor: encodeFrontierCursor({
         verifiedThrough: frontier.verifiedThrough,
@@ -2464,8 +2477,8 @@ const reparseQuarantinedSkCourtsRaw = (
   const rebuilt = quarantinedSkCourtsDecision(listed);
   return stored.sourceDocumentId === listed.quarantine.sourceDocumentId ||
     (stored.sourceDocumentId !== null &&
-      rebuilt.sourceDocumentIdRepairAliases?.includes(
-        stored.sourceDocumentId,
+      rebuilt.sourceDocumentIdRepairAliases?.some(
+        (alias) => alias === stored.sourceDocumentId,
       ) === true)
     ? reparsedSkCourtsDecision(stored, rebuilt)
     : {

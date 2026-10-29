@@ -65,6 +65,7 @@ import {
   QUARANTINE_NAMESPACE,
   type QuarantineIdentity,
   quarantineIdentity,
+  type RepairAlias,
 } from "@/api/lib/legal-search/quarantine-identity";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
@@ -204,7 +205,7 @@ type CzUohsKeyedIdentity = {
   type: "keyed";
   sourceDocumentId: string;
   /** The quarantine id this decision would have had without its IRI. */
-  repairAlias: string | undefined;
+  repairAliases: readonly RepairAlias[];
 };
 
 type CzUohsQuarantinedIdentity = {
@@ -269,7 +270,7 @@ const czUohsRecordIdentity = (record: CzUohsRecord): CzUohsRecordIdentity => {
     return {
       type: "keyed",
       sourceDocumentId: record.iri,
-      repairAlias: quarantine?.sourceDocumentId,
+      repairAliases: quarantine?.repairAliases ?? [],
     };
   }
   // Only the numbers the decision states: the docket of its listing-only row
@@ -564,15 +565,15 @@ const czUohsSourceRaw = (
 
 /** The quarantine id a keyed record takes over when its IRI recovers. */
 const czUohsRepairAliases = (
-  repairAlias: string | undefined,
+  repairAliases: readonly RepairAlias[],
 ): Pick<IngestionResult, "sourceDocumentIdRepairAliases"> =>
-  repairAlias === undefined
+  repairAliases.length === 0
     ? {}
-    : { sourceDocumentIdRepairAliases: [repairAlias] };
+    : { sourceDocumentIdRepairAliases: repairAliases };
 
 const readCzUohsDecision = async (
   record: CzUohsRecord,
-  { sourceDocumentId, repairAlias }: CzUohsKeyedIdentity,
+  { sourceDocumentId, repairAliases }: CzUohsKeyedIdentity,
   signal?: AbortSignal,
 ): Promise<IngestionResult> => {
   const collection = czUohsCollectionOf(record);
@@ -681,7 +682,7 @@ const readCzUohsDecision = async (
     caseNumberType: "case-number",
     identifiers,
     sourceDocumentId,
-    ...czUohsRepairAliases(repairAlias),
+    ...czUohsRepairAliases(repairAliases),
     court: ADAPTER_MANIFESTS[ADAPTER_KEYS.CZ_UOHS].publisher,
     country: "CZE",
     language: "cs",
@@ -1000,7 +1001,11 @@ export const czUohsAdapter = defineSourceAdapter({
     const position = parsedPosition.value;
     const encoded = encodeCzUohsCursor(position);
     if (position.parkedOn !== undefined && position.parkedOn >= todayUtc()) {
-      return Result.ok({ decisions: [], nextCursor: encoded });
+      return Result.ok({
+        observations: [],
+        decisions: [],
+        nextCursor: encoded,
+      });
     }
     const listing = await listingForCursor(cursor, position, signal);
     if (Result.isError(listing)) {
@@ -1030,6 +1035,7 @@ export const czUohsAdapter = defineSourceAdapter({
     const lastId = selected.at(-1)?.iri ?? afterId;
     const reachedTip = selected.length < PAGE_SIZE;
     return Result.ok({
+      observations: [],
       decisions,
       nextCursor: encodeCzUohsCursor({
         version: CURSOR_VERSION,
@@ -1059,7 +1065,7 @@ export const czUohsAdapter = defineSourceAdapter({
     revisionOf: (payload) => payload,
     listSlicePage: async ({ slice, page, signal }) => {
       if (slice !== "all" || page !== 0) {
-        return { items: [], totalPages: 0 };
+        return { observations: [], items: [], totalPages: 0 };
       }
       const listing = await readListing(null, signal);
       if (Result.isError(listing)) {
@@ -1074,6 +1080,7 @@ export const czUohsAdapter = defineSourceAdapter({
       // counted so coverage shows it, and the crawl warns on it.
       const withoutStableFields = records.length - items.length;
       return {
+        observations: [],
         items,
         ...(withoutStableFields === 0 ? {} : { withoutStableFields }),
         totalPages: records.length === 0 ? 0 : 1,

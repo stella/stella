@@ -151,6 +151,7 @@ const fakePublisher = ({
           }
           const ids = listed[slice] ?? [];
           return {
+            observations: [],
             items: ids
               .slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
               .map(itemFor),

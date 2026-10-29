@@ -70,9 +70,73 @@ export type QuarantineStableFields = Readonly<
   Record<string, string | undefined>
 >;
 
+const repairAliasSchema = v.pipe(v.string(), v.brand("RepairAlias"));
+
+/** An adoption candidate, distinct from a stored quarantine identity. */
+export type RepairAlias = v.InferOutput<typeof repairAliasSchema>;
+
+export const LEGACY_REPAIR_NAMESPACE = {
+  AT_COURTS: "ris",
+  AT_FINDOK: "findok",
+  PL_KIO: "pl-kio",
+  PL_KIS: "pl-kis",
+  PL_NSA: "pl-nsa",
+  PL_NCOURT_LISTED: "ncourt-listed",
+  SK_COURTS_PLAINTEXT: "sk-courts-plaintext",
+} as const;
+
+type RepairNamespace =
+  | QuarantineNamespace
+  | (typeof LEGACY_REPAIR_NAMESPACE)[keyof typeof LEGACY_REPAIR_NAMESPACE];
+
+/** Only fields present in the fingerprint may qualify that form for adoption. */
+const REPAIR_DISCRIMINATORS = {
+  "cz-ns": [],
+  "cz-nss": ["reference"],
+  "cz-regional": ["docket"],
+  "cz-uohs": ["referenceNumber"],
+  nalus: ["stableDetailText"],
+  "eu-ecj": ["ecli"],
+  "hu-bhgy": ["docket"],
+  "pl-courts": ["docket"],
+  "pl-ncourt": ["thesis"],
+  "pl-sn": ["docket"],
+  "pl-tk": [],
+  "pl-uodo": ["refname"],
+  "pl-uokik": ["decisionNumber"],
+  "sk-courts": ["spisovaZnacka", "identifikacneCislo"],
+  "sk-us": ["mkRSAPNumberOfFile", "mkRVPNumberOfFile"],
+  ris: ["caseNumbers"],
+  findok: ["stammNr", "pathPdf", "pathZip", "gz"],
+  "pl-kio": ["signature"],
+  "pl-kis": ["signature", "thesis"],
+  "pl-nsa": ["docket_number"],
+  "ncourt-listed": ["signature", "excerpt"],
+  "sk-courts-plaintext": ["caseNumber"],
+} as const satisfies Record<RepairNamespace, readonly string[]>;
+
+type RepairAliasesForStableFieldsOptions = {
+  namespace: RepairNamespace;
+  sourceDocumentIds: readonly string[];
+  stableFields: QuarantineStableFields;
+};
+
+/** General metadata still identifies a stored observation, but cannot adopt a decision. */
+export const repairAliasesForStableFields = ({
+  namespace,
+  sourceDocumentIds,
+  stableFields,
+}: RepairAliasesForStableFieldsOptions): RepairAlias[] =>
+  REPAIR_DISCRIMINATORS[namespace].some(
+    (field) => (stableFields[field]?.trim().length ?? 0) > 0,
+  )
+    ? sourceDocumentIds.map((identity) => v.parse(repairAliasSchema, identity))
+    : [];
+
 export type QuarantineIdentity = {
   /** The bare SHA-256 hex digest, for labels and URL fragments. */
   readonly fingerprint: string;
+  readonly repairAliases: readonly RepairAlias[];
   /** `<namespace>-quarantine:<fingerprint>`, what the row is stored under. */
   readonly sourceDocumentId: string;
 };
@@ -124,9 +188,15 @@ export const quarantineIdentity = ({
       ),
     ),
   );
+  const sourceDocumentId = quarantineSourceDocumentId(namespace, fingerprint);
   return {
     fingerprint,
-    sourceDocumentId: quarantineSourceDocumentId(namespace, fingerprint),
+    sourceDocumentId,
+    repairAliases: repairAliasesForStableFields({
+      namespace,
+      sourceDocumentIds: [sourceDocumentId],
+      stableFields,
+    }),
   };
 };
 

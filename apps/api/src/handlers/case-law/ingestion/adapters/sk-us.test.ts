@@ -712,7 +712,7 @@ describe("sk-us listSlicePage", () => {
 
     expect(
       await reconciliation.listSlicePage({ slice: "1993-01", page: 0 }),
-    ).toEqual({ items: [], totalPages: 0 });
+    ).toEqual({ observations: [], items: [], totalPages: 0 });
   });
 
   test("a server error throws instead of reading as an empty slice", async () => {
@@ -2536,4 +2536,29 @@ describe("the responses this court served, as recorded", () => {
     expect(xhtml).toContain("PL. ÚS 11/2021");
     expect(new TextDecoder().decode(file.subarray(0, 5))).toBe("%PDF-");
   });
+});
+
+test("a terminal page retains malformed records and unserved slots as evidence", async () => {
+  mockFetch({
+    search: [],
+    searchFor: ({ start, pageSize }) => {
+      if (start <= 1 && start + pageSize > 1) {
+        return { type: "status", status: 204 };
+      }
+      return { type: "page", documents: start === 0 ? [{}] : [], numFound: 2 };
+    },
+  });
+  const page = (await skUsAdapter.fetchPage("1993:0", {})).unwrap(
+    "The bounded terminal listing remains readable",
+  );
+  expect(page.decisions).toEqual([]);
+  expect(page.observations.map(({ reason }) => reason)).toEqual([
+    "no-usable-id",
+    "unserved-listing-record",
+  ]);
+  expect(page.observations.map(({ payload }) => payload)).toEqual([
+    {},
+    { type: "unserved", year: 1993, offset: 1 },
+  ]);
+  expect(page.nextCursor).toBe("1994:0");
 });

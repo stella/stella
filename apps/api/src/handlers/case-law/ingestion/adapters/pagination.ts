@@ -31,6 +31,12 @@ import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 
+/** An empty decision page still carries the observations that precede its cursor. */
+export const emptySyncPage = (
+  nextCursor: SyncPage["nextCursor"],
+  observations: SyncPage["observations"],
+) => ({ decisions: [], observations, nextCursor }) satisfies SyncPage;
+
 /**
  * Options for page-number pagination (1-indexed or
  * 0-indexed). Covers: SK, PL, AT, CZ-supreme-admin,
@@ -859,6 +865,7 @@ export const createPagePaginatedFetch = <TResponse>(
               page: String(page),
             });
             return Result.ok({
+              observations: [],
               decisions: [],
               nextCursor: encode(pageStartOffset + opts.pageSize),
             });
@@ -1049,7 +1056,7 @@ export const createPagePaginatedFetch = <TResponse>(
 
         return Result.ok({
           decisions,
-          ...(observations.length === 0 ? {} : { observations }),
+          observations,
           ...(itemsSkipped === 0
             ? {}
             : {

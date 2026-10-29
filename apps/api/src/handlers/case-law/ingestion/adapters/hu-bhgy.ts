@@ -131,7 +131,10 @@ import {
   QUARANTINE_NAMESPACE,
   quarantineIdentity,
 } from "@/api/lib/legal-search/quarantine-identity";
-import type { QuarantineIdentity } from "@/api/lib/legal-search/quarantine-identity";
+import type {
+  QuarantineIdentity,
+  RepairAlias,
+} from "@/api/lib/legal-search/quarantine-identity";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
@@ -788,8 +791,10 @@ const huBhgyQuarantineForms = (row: HuBhgyRow): QuarantineIdentity[] => {
 };
 
 /** The stored ids of quarantine forms, once each. */
-const quarantineIdsOf = (forms: readonly QuarantineIdentity[]): string[] => [
-  ...new Set(forms.map(({ sourceDocumentId }) => sourceDocumentId)),
+const quarantineIdsOf = (
+  forms: readonly QuarantineIdentity[],
+): readonly RepairAlias[] => [
+  ...new Set(forms.flatMap(({ repairAliases }) => repairAliases)),
 ];
 
 /** Why a listed row is stored under its quarantine identity. */
@@ -824,7 +829,7 @@ export type HuBhgyIdentity =
   | {
       type: "keyed";
       sourceDocumentId: string;
-      repairAliases: readonly string[];
+      repairAliases: readonly RepairAlias[];
     }
   | {
       type: "quarantined";
@@ -832,7 +837,7 @@ export type HuBhgyIdentity =
       fingerprint: string;
       reason: HuBhgyQuarantineReason;
       /** Less specific forms an earlier observation may be stored under. */
-      repairAliases: readonly string[];
+      repairAliases: readonly RepairAlias[];
     }
   /** No publisher key and no stable field set: nothing can name this row. */
   | { type: "no-stable-field" };
@@ -1731,6 +1736,7 @@ const listHuBhgySlicePage = async ({
     }
   }
   return {
+    observations: [],
     items,
     ...(withoutStableFields === 0 ? {} : { withoutStableFields }),
     totalPages: Math.ceil(count / MAX_PAGE_SIZE),
@@ -2120,6 +2126,7 @@ const sweepPage = async (
         // the rows it never reached: parking at the page's own start replays it
         // rather than checkpointing past them.
         return Result.ok({
+          observations: [],
           ...collectedPage(collected.value),
           sourceUrl: url,
           nextCursor: cursor,
@@ -2128,6 +2135,7 @@ const sweepPage = async (
       const nextOffset = offset + rows.length;
       if (nextOffset < count) {
         return Result.ok({
+          observations: [],
           ...collectedPage(collected.value),
           sourceUrl: url,
           nextCursor: encodeHuBhgyCursor({
@@ -2140,6 +2148,7 @@ const sweepPage = async (
       }
       const after = nextWindow(year, slug);
       return Result.ok({
+        observations: [],
         ...collectedPage(collected.value),
         sourceUrl: url,
         nextCursor:
@@ -2164,6 +2173,7 @@ const sweepPage = async (
     const after = nextWindow(year, slug);
     if (after === null) {
       return Result.ok({
+        observations: [],
         decisions: [],
         sourceUrl: url,
         nextCursor: encodeHuBhgyCursor({
@@ -2180,6 +2190,7 @@ const sweepPage = async (
 
   // Out of steps rather than out of windows: bank where the walk got to.
   return Result.ok({
+    observations: [],
     decisions: [],
     sourceUrl: url,
     nextCursor: encodeHuBhgyCursor({ ...start, year, slug, offset }),
@@ -2231,6 +2242,7 @@ const tipPage = async (
     // walk has reached rows the frontier covers — and standing still there
     // would leave the tip reading this offset instead of the head.
     return Result.ok({
+      observations: [],
       decisions: [],
       sourceUrl: url,
       nextCursor: start.walk === "head" ? cursor : caughtUp(),
@@ -2244,6 +2256,7 @@ const tipPage = async (
   const { aborted } = collected.value;
   if (aborted) {
     return Result.ok({
+      observations: [],
       ...collectedPage(collected.value),
       sourceUrl: url,
       nextCursor: cursor,
@@ -2252,6 +2265,7 @@ const tipPage = async (
 
   if (reachedFrontier) {
     return Result.ok({
+      observations: [],
       ...collectedPage(collected.value),
       sourceUrl: url,
       nextCursor: caughtUp(),
@@ -2272,6 +2286,7 @@ const tipPage = async (
   // A descending listing only grows at its head, so resuming at this offset
   // can re-read a row but cannot step over one.
   return Result.ok({
+    observations: [],
     ...collectedPage(collected.value),
     sourceUrl: url,
     nextCursor: encodeHuBhgyCursor({

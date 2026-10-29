@@ -103,8 +103,12 @@ import {
   QUARANTINE_NAMESPACE,
   quarantinedListingObservation,
   quarantineIdentity,
+  repairAliasesForStableFields,
 } from "@/api/lib/legal-search/quarantine-identity";
-import type { ListingObservation } from "@/api/lib/legal-search/quarantine-identity";
+import type {
+  ListingObservation,
+  RepairAlias,
+} from "@/api/lib/legal-search/quarantine-identity";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -1423,13 +1427,19 @@ const plCourtsItemIdentity = (item: SaosItem): PlCourtsItemIdentity => {
 };
 
 /** A docket distinguishes a repair alias; a day, court and bench do not. */
-const plCourtsRepairAliases = (item: SaosItem): string[] => {
+const plCourtsRepairAliases = (item: SaosItem): readonly RepairAlias[] => {
   const docket = primaryCaseNumber({ preferred: item });
   if (docket === undefined) {
     return [];
   }
   const alias = plCourtsQuarantineId(item, docket);
-  return alias === undefined ? [] : [alias];
+  return alias === undefined
+    ? []
+    : repairAliasesForStableFields({
+        namespace: QUARANTINE_NAMESPACE.PL_COURTS,
+        sourceDocumentIds: [alias],
+        stableFields: { docket },
+      });
 };
 
 /**
@@ -1653,7 +1663,7 @@ type BuildPlDecisionOptions = {
 const repairAliasesOf = (
   sourceDocumentId: string | undefined,
   listingItem: SaosItem,
-): { sourceDocumentIdRepairAliases?: string[] } => {
+): Pick<IngestionResult, "sourceDocumentIdRepairAliases"> => {
   if (sourceDocumentId === undefined) {
     return {};
   }
@@ -2296,7 +2306,7 @@ const listPlCourtsSlicePage = async ({
   }
   return {
     items,
-    ...(observations.length === 0 ? {} : { observations }),
+    observations,
     totalPages,
   };
 };

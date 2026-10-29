@@ -93,6 +93,7 @@ import type {
   UnreadOutcome,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
+import { emptySyncPage } from "@/api/handlers/case-law/ingestion/adapters/pagination";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import {
   readPublisherBytes,
@@ -1893,7 +1894,7 @@ const assembleSkUsDecision = ({
     // observation of the same record (case-law AGENTS.md rule 20).
     ...(quarantine === null
       ? {}
-      : { sourceDocumentIdRepairAliases: [quarantine.sourceDocumentId] }),
+      : { sourceDocumentIdRepairAliases: quarantine.repairAliases }),
     // What every row this adapter wrote before it stated an id was stored
     // under: one row per docket, carrying the download URL of whichever of the
     // docket's documents was written last. The URL names one document exactly,
@@ -2579,7 +2580,7 @@ const listSkUsSlicePage = async ({
   });
   return {
     items: listed,
-    ...(observations.length === 0 ? {} : { observations }),
+    observations,
     // Still the publisher's count, unserved records included: it sizes the
     // walk, and the walk's offsets are the publisher's.
     totalPages: Math.ceil(numFound / LISTING_PAGE_SIZE),
@@ -3113,7 +3114,7 @@ const reparseStoredRaw = (
       ...(fields.quarantine === null
         ? {}
         : {
-            sourceDocumentIdRepairAliases: [fields.quarantine.sourceDocumentId],
+            sourceDocumentIdRepairAliases: fields.quarantine.repairAliases,
           }),
       ecli: listing.mkECLI ?? undefined,
       court,
@@ -3393,6 +3394,7 @@ export const skUsAdapter = defineSourceAdapter({
           });
           return {
             decisions: [],
+            observations: [],
             itemBuildFailures: { type: "item_build_failed", count: PAGE_SIZE },
             nextCursor:
               year < currentYear
@@ -3404,16 +3406,13 @@ export const skUsAdapter = defineSourceAdapter({
         if (items.length === 0) {
           if (year < currentYear) {
             // Move to next year
-            return {
-              decisions: [],
-              nextCursor: encodeCursor({ year: year + 1, offset: 0 }),
-            };
+            return emptySyncPage(
+              encodeCursor({ year: year + 1, offset: 0 }),
+              [],
+            );
           }
           // Current year exhausted; park at current offset
-          return {
-            decisions: [],
-            nextCursor: encodeCursor({ year, offset }),
-          };
+          return emptySyncPage(encodeCursor({ year, offset }), []);
         }
 
         const decisions: IngestionResult[] = [];
@@ -3541,7 +3540,7 @@ export const skUsAdapter = defineSourceAdapter({
         if (hasMore) {
           return {
             decisions,
-            ...(observations.length === 0 ? {} : { observations }),
+            observations,
             itemBuildFailures: { type: "item_build_failed", count: failed },
             ...unreadPage(unreadItems),
             nextCursor: encodeCursor({ year, offset: nextOffset }),
@@ -3552,6 +3551,7 @@ export const skUsAdapter = defineSourceAdapter({
         if (year < currentYear) {
           return {
             decisions,
+            observations,
             itemBuildFailures: { type: "item_build_failed", count: failed },
             ...unreadPage(unreadItems),
             nextCursor: encodeCursor({ year: year + 1, offset: 0 }),
@@ -3569,6 +3569,7 @@ export const skUsAdapter = defineSourceAdapter({
         // to find, not this cursor's.
         return {
           decisions,
+          observations,
           itemBuildFailures: { type: "item_build_failed", count: failed },
           ...unreadPage(unreadItems),
           nextCursor: encodeCursor({

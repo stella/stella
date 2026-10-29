@@ -1911,7 +1911,7 @@ describe("the walk", () => {
     expect(await walk()).toEqual(first);
   });
 
-  test("once the row is served, it names its audit row as a repair alias", async () => {
+  test("a served row keeps its positional audit identity out of repair aliases", async () => {
     const rows = await rowsAroundPoison();
     installWalkStub({
       rows: await servableRows(),
@@ -1923,7 +1923,7 @@ describe("the walk", () => {
     const served = decisions.find(
       (decision) => decision.sourceDocumentId === RECOVERED_ID,
     );
-    expect(served?.sourceDocumentIdRepairAliases).toContain(
+    expect(served?.sourceDocumentIdRepairAliases ?? []).not.toContain(
       plNcourtPositionId({
         query: WALK_QUERY,
         previous: { id: idOf(rows.get(POISONED_OFFSET - 1)), gap: 1 },
@@ -2496,4 +2496,29 @@ describe("a judgment date", () => {
     );
     expect(failure).toContain("dateFrom=2018-03-22");
   });
+});
+
+test("a position-only listing candidate cannot adopt an existing record", async () => {
+  const positionAlias = plNcourtPositionId({
+    query: WALK_QUERY,
+    previous: { id: "previous-published-record", gap: 1 },
+    next: { id: "next-published-record", gap: 1 },
+  });
+  const decision = built(
+    assemblePlNcourtDecision({
+      listingXml: rowXml({
+        id: PAIR,
+        publicationDate: "2019-02-28 18:26:16.0 CET",
+      }),
+      detailXml: await fixture(`pl-ncourt-detail-${PAIR}.xml`),
+      contentXml: undefined,
+      positionAlias,
+    }),
+  );
+  expect(positionAlias).toStartWith("ncourt-quarantine:");
+  expect(decision.sourceDocumentId).toBe(PAIR);
+  expect(decision.sourceDocumentIdRepairAliases ?? []).toEqual([]);
+  expect(decision.sourceDocumentIdRepairAliases ?? []).not.toContain(
+    positionAlias,
+  );
 });

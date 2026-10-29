@@ -605,9 +605,11 @@ together with the new exact identity, or the recovered observation will hash
 differently from its quarantine row. Do not discard stable discriminators such
 as the docket and sibling counter merely because an older malformed row may
 lack one: use their most specific fingerprint for the quarantine identity and
-emit the bounded combinations of present and absent optional discriminators as
-repair-only aliases after recovery. A low-information form must never be
-reserved as an exact identity.
+emit only bounded combinations that retain a document-specific discriminator
+as repair-only aliases after recovery. The shared quarantine owner qualifies
+these candidates as branded `RepairAlias` values; metadata-only forms remain
+stored observations and never become adoption candidates. A low-information
+form must never be reserved as an exact identity.
 Likewise, preserve the digit string of any numeric publisher component used to
 synthesize an exact alias, or reject it unless it is a safe bounded integer;
 rounding two counters to one JavaScript number silently merges documents. An

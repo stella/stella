@@ -1454,7 +1454,7 @@ const listCzNsSlicePage = async ({
 
   if (rows.length === 0) {
     if (html.includes(LISTING_EMPTY_MARKER)) {
-      return { items: [], totalPages: 0 };
+      return { observations: [], items: [], totalPages: 0 };
     }
     throw new AdapterFetchError({
       message: `CZ Supreme Court listing for ${slice} stated neither results nor emptiness`,
@@ -1510,6 +1510,7 @@ const listCzNsSlicePage = async ({
   });
   const withoutStableFields = rows.length - items.length;
   return {
+    observations: [],
     items,
     ...(withoutStableFields === 0 ? {} : { withoutStableFields }),
     totalPages: 1,

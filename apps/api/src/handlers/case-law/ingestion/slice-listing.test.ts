@@ -44,6 +44,7 @@ const pagedListing =
   (pages: ReconciliationListingItem[][]) =>
   async ({ page }: ReconciliationSlicePageOptions) =>
     await Promise.resolve({
+      observations: [],
       items: pages[page] ?? [],
       totalPages: pages.length,
     });
@@ -117,7 +118,11 @@ test("an empty slice lists nothing after one request", async () => {
       revisionOf: payloadRevision,
       listSlicePage: async () => {
         requests += 1;
-        return await Promise.resolve({ items: [], totalPages: 0 });
+        return await Promise.resolve({
+          observations: [],
+          items: [],
+          totalPages: 0,
+        });
       },
       pageDelayMs: 0,
       pageTimeoutMs: 5000,
@@ -140,6 +145,7 @@ test("a listing past the page ceiling is refused, not truncated", async () => {
     listSlicePage: async ({ page }) => {
       requests += 1;
       return await Promise.resolve({
+        observations: [],
         items: [documentItem(String(page))],
         totalPages: Number.MAX_SAFE_INTEGER,
       });
@@ -174,6 +180,7 @@ const changingListing = (
       walks += 1;
     }
     return await Promise.resolve({
+      observations: [],
       items: current[page] ?? [],
       totalPages: current.length,
     });
@@ -237,6 +244,7 @@ test("a verification walk that fails fails the listing", async () => {
   const listed = await listWith(async () => {
     calls += 1;
     return await Promise.resolve({
+      observations: [],
       items: [documentItem("a")],
       totalPages: calls === 1 ? 1 : Number.MAX_SAFE_INTEGER,
     });
@@ -312,6 +320,7 @@ test("a quarantine id listed for two different records is a counted collision, n
         revisionOf: payloadRevision,
         listSlicePage: async () =>
           await Promise.resolve({
+            observations: [],
             items: [
               quarantined({ row: "first" }),
               // The same record listed again: a duplicate.
@@ -385,6 +394,7 @@ test("a keyed record whose quarantine peer is also listed quarantined is a repor
         revisionOf: payloadRevision,
         listSlicePage: async () =>
           await Promise.resolve({
+            observations: [],
             items: [
               { ...documentItem("a"), quarantinePeers: [shared] },
               {

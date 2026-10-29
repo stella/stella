@@ -12,7 +12,54 @@ import {
   quarantinedListingObservation,
   quarantineIdentity,
   quarantineSourceDocumentId,
+  type RepairAlias,
 } from "@/api/lib/legal-search/quarantine-identity";
+
+describe("repair alias qualification", () => {
+  test.each(Object.values(QUARANTINE_NAMESPACE))(
+    "%s keeps metadata-only observations out of adoption",
+    (namespace) => {
+      const identity = quarantineIdentity({
+        namespace,
+        stableFields: {
+          court: "Published court",
+          decisionDate: "2026-01-12",
+          author: "Published author",
+          subject: "Published subject",
+          keywords: "contract",
+          statutes: "Section 12",
+        },
+      });
+      expect(identity.sourceDocumentId.length).toBeGreaterThan(0);
+      expect(identity.repairAliases).toEqual([]);
+    },
+  );
+
+  test("only the discriminator stated by that fingerprint qualifies it", () => {
+    const shared = { decisionDate: "2026-01-12", subject: "Published subject" };
+    const first = quarantineIdentity({
+      namespace: QUARANTINE_NAMESPACE.CZ_REGIONAL,
+      stableFields: { docket: "18 C 130/2024", ...shared },
+    });
+    const second = quarantineIdentity({
+      namespace: QUARANTINE_NAMESPACE.CZ_REGIONAL,
+      stableFields: { docket: "18 C 131/2024", ...shared },
+    });
+    const absent = quarantineIdentity({
+      namespace: QUARANTINE_NAMESPACE.CZ_REGIONAL,
+      stableFields: { docket: undefined, ...shared },
+    });
+    expect(first.repairAliases).toEqual([first.sourceDocumentId]);
+    expect(second.repairAliases).toEqual([second.sourceDocumentId]);
+    expect(
+      first.repairAliases.filter((alias) =>
+        second.repairAliases.includes(alias),
+      ),
+    ).toEqual([]);
+    expect(absent.repairAliases).toEqual([]);
+    expectTypeOf<string>().not.toExtend<RepairAlias>();
+  });
+});
 
 describe("quarantineIdentity", () => {
   test("keeps the Constitutional Court's stored quarantine ids byte for byte", () => {
@@ -30,6 +77,9 @@ describe("quarantineIdentity", () => {
         },
       }),
     ).toEqual({
+      repairAliases: [
+        "nalus-quarantine:43ae4610609797ebfc941ed3d3ebc641fa2d31fd1a73cdfd19c5754a069860f8",
+      ],
       fingerprint:
         "43ae4610609797ebfc941ed3d3ebc641fa2d31fd1a73cdfd19c5754a069860f8",
       sourceDocumentId:

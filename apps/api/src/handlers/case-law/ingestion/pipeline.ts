@@ -238,7 +238,7 @@ const pageItemCount = ({
   decisions.length +
   (supplements?.length ?? 0) +
   (unreadItems?.length ?? 0) +
-  (observations?.length ?? 0);
+  observations.length;
 
 const PAGE_SLOT = {
   HELD: "held",
@@ -769,7 +769,7 @@ const runScopedIngestionPipeline = async ({
     page: SyncPage;
     observation: { order: bigint; observedAt: Date };
   }): Promise<string | null> => {
-    if (page.observations !== undefined && page.observations.length > 0) {
+    if (page.observations.length > 0) {
       await sourceLease.beforeDatabaseMark();
       await storeListingObservations(scopedDb, {
         sourceId: source.id,

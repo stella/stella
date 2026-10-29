@@ -112,6 +112,7 @@ import {
 import type {
   QuarantineIdentity,
   QuarantineStableFields,
+  RepairAlias,
 } from "@/api/lib/legal-search/quarantine-identity";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
@@ -1300,7 +1301,7 @@ const quarantineReasonOf = ({
  */
 const czRegionalRepairAliases = (
   row: CzRegionalKeyedRow,
-): readonly string[] => {
+): readonly RepairAlias[] => {
   const forms: readonly CzRegionalIdentityHalves[] = [
     { court: row.court, docket: undefined },
     { court: undefined, docket: row.usableDocket },
@@ -1310,7 +1311,7 @@ const czRegionalRepairAliases = (
     ...new Set(
       forms.flatMap((halves) => {
         const quarantine = czRegionalQuarantineIdentity(row.record, halves);
-        return quarantine === undefined ? [] : [quarantine.sourceDocumentId];
+        return quarantine?.repairAliases ?? [];
       }),
     ),
   ];
@@ -2207,6 +2208,7 @@ const listCzRegionalSlicePage = async ({
     }
   }
   return {
+    observations: [],
     items: listed,
     ...(withoutStableFields === 0 ? {} : { withoutStableFields }),
     totalPages,
@@ -3135,6 +3137,7 @@ export const czRegionalAdapter = defineSourceAdapter({
             const skip = gapSkipDays(empty);
             const next = advanceDate(state.date, skip);
             return {
+              observations: [],
               decisions: [],
               nextCursor:
                 next <= today
@@ -3186,6 +3189,7 @@ export const czRegionalAdapter = defineSourceAdapter({
         });
 
         return {
+          observations: [],
           decisions,
           itemBuildFailures: { type: "item_build_failed", count: refused },
           nextCursor: nextCzRegionalListingCursor({

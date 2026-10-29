@@ -218,6 +218,7 @@ const publisher = (
   nextSlice: () => null,
   previousSlice: () => null,
   listSlicePage: async () => ({
+    observations: [],
     items: payloads.map((payload) => ({
       identity: { type: "document", sourceDocumentId: payload.documentId },
       payload,
@@ -329,6 +330,7 @@ describe.skipIf(!enabled)(
               sliceOf: () => fixture.slice,
               revisionOf: listing.revisionOf,
               listSlicePage: async () => ({
+                observations: [],
                 items: [
                   {
                     identity: {
@@ -345,6 +347,7 @@ describe.skipIf(!enabled)(
             await fixture.walk({
               ...reconciliation,
               listSlicePage: async () => ({
+                observations: [],
                 items: [
                   {
                     identity: {

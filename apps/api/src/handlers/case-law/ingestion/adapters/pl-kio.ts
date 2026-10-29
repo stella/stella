@@ -111,6 +111,11 @@ import {
 } from "@/api/lib/legal-search/ingestion-normalization";
 import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import {
+  LEGACY_REPAIR_NAMESPACE,
+  repairAliasesForStableFields,
+} from "@/api/lib/legal-search/quarantine-identity";
+import type { RepairAlias } from "@/api/lib/legal-search/quarantine-identity";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
@@ -401,22 +406,34 @@ const plKioQuarantineId = (item: PlKioListingItem): string =>
   )}`;
 
 // Raw-text digests are repair aliases only; newly quarantined rows use visible fields.
-const plKioQuarantineRepairIds = (item: PlKioListingItem): string[] => {
+const plKioQuarantineRepairIds = (item: PlKioListingItem): RepairAlias[] => {
   const canonicalId = plKioQuarantineId(item);
+  const canonicalAlias = repairAliasesForStableFields({
+    namespace: LEGACY_REPAIR_NAMESPACE.PL_KIO,
+    sourceDocumentIds: [canonicalId],
+    stableFields: { signature: item.signature },
+  });
   if (item.html === undefined) {
-    return [canonicalId];
+    return canonicalAlias;
   }
   const parsed = readPlKioHtml(item.html, {
     maxBytes: PL_KIO_RESPONSE_BYTE_CAP.listing,
   });
   if (parsed.type !== "accepted") {
-    return [canonicalId];
+    return canonicalAlias;
   }
   const $ = parsed.document;
-  const legacyId = plKioQuarantineId(
-    readPlKioListingItem($(".search-list-item"), legacyQuarantineHtmlText),
+  const legacyItem = readPlKioListingItem(
+    $(".search-list-item"),
+    legacyQuarantineHtmlText,
   );
-  return [...new Set([canonicalId, legacyId])];
+  const legacyId = plKioQuarantineId(legacyItem);
+  const legacyAlias = repairAliasesForStableFields({
+    namespace: LEGACY_REPAIR_NAMESPACE.PL_KIO,
+    sourceDocumentIds: [legacyId],
+    stableFields: { signature: legacyItem.signature },
+  });
+  return [...new Set([...canonicalAlias, ...legacyAlias])];
 };
 
 /** The database's own record id, where the row states a usable one. */
@@ -1768,6 +1785,7 @@ const fetchTailPage = async (
   }
   const { decisions, itemBuildFailures, aborted } = built.value;
   return Result.ok({
+    observations: [],
     decisions,
     ...(itemBuildFailures === 0
       ? {}
@@ -1808,6 +1826,7 @@ const plKioFetchPage = async (
   if (aborted) {
     // Replay the page rather than checkpoint past rows never reached.
     return Result.ok({
+      observations: [],
       decisions,
       ...(itemBuildFailures === 0
         ? {}
@@ -1824,6 +1843,7 @@ const plKioFetchPage = async (
   const reached = cursor.offset + rows.length;
   if (reached < listed.total) {
     return Result.ok({
+      observations: [],
       decisions,
       ...(itemBuildFailures === 0
         ? {}
@@ -1839,6 +1859,7 @@ const plKioFetchPage = async (
   }
   const next = monthAfter(cursor.month);
   return Result.ok({
+    observations: [],
     decisions,
     ...(itemBuildFailures === 0
       ? {}
@@ -1886,6 +1907,7 @@ const listPlKioSlicePage = async ({
   const totalPages = Math.ceil(listed.value.total / PL_KIO_PAGE_SIZE);
   const rows = rowsFrom(listed.value, page * PL_KIO_PAGE_SIZE);
   return {
+    observations: [],
     items: rows.map((row) => ({
       identity: plKioListingIdentity(row),
       payload: row,

@@ -881,7 +881,11 @@ describe("the year census", () => {
 
   test("a year the register holds nothing for lists nothing", async () => {
     serveRegister(await registerOverFixtures());
-    expect(await listSlice("2015")).toEqual({ items: [], totalPages: 0 });
+    expect(await listSlice("2015")).toEqual({
+      observations: [],
+      items: [],
+      totalPages: 0,
+    });
   });
 
   test("a view that changes size while it is bisected refuses the slice", async () => {

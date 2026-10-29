@@ -211,6 +211,7 @@ const stubReconciliation: SourceReconciliation = {
   listSlicePage: async (options): Promise<ReconciliationSlicePage> => {
     listed.push(options);
     return await Promise.resolve({
+      observations: [],
       items: LISTING_ITEMS.map((item) => ({
         identity: {
           type: "document",
@@ -239,7 +240,11 @@ const unwalkableSliceStub: SourceReconciliation = {
         cursor: options.slice,
       });
     }
-    return await Promise.resolve({ items: [], totalPages: 1 });
+    return await Promise.resolve({
+      observations: [],
+      items: [],
+      totalPages: 1,
+    });
   },
 };
 
@@ -290,6 +295,7 @@ const caseNumberStub: SourceReconciliation = {
   listSlicePage: async (options): Promise<ReconciliationSlicePage> => {
     listed.push(options);
     return await Promise.resolve({
+      observations: [],
       items: FIXTURE_CASE_NUMBERS.map((caseNumber) => ({
         identity: {
           type: "case-number",
@@ -467,7 +473,7 @@ test("an aborted reconciliation backoff sleep returns immediately", async () => 
     ...stubReconciliation,
     listSlicePage: async () => {
       fetches += 1;
-      return { items: [], totalPages: 2 };
+      return { observations: [], items: [], totalPages: 2 };
     },
   };
   const pending = runUnitWith({
@@ -1171,7 +1177,7 @@ test.each(Object.values(RECONCILIATION_ITEM_STATUS))(
             cursor: OWED_SLICE,
           });
         }
-        return { items: [], totalPages: 2 };
+        return { observations: [], items: [], totalPages: 2 };
       },
     };
     const rejected = await rejectionOf(runUnit(sourceId, reconciliation));
@@ -1278,7 +1284,11 @@ const refusingSlice = (refused: string): SourceReconciliation => ({
         cursor: options.slice,
       });
     }
-    return await Promise.resolve({ items: [], totalPages: 1 });
+    return await Promise.resolve({
+      observations: [],
+      items: [],
+      totalPages: 1,
+    });
   },
 });
 
@@ -2327,6 +2337,7 @@ test("a quarantined record's listing-only row is held where the source requires 
     listSlicePage: async (options): Promise<ReconciliationSlicePage> => {
       listed.push(options);
       return await Promise.resolve({
+        observations: [],
         items: [quarantined, failed].map((sourceDocumentId) => ({
           identity: { type: "document", sourceDocumentId },
           payload: { refid: sourceDocumentId },
@@ -2367,6 +2378,7 @@ test("a record kind declared complete without a document is held on its record a
     listSlicePage: async (options): Promise<ReconciliationSlicePage> => {
       listed.push(options);
       return await Promise.resolve({
+        observations: [],
         items: [decisionUrn, rulingUrn].map((sourceDocumentId) => ({
           identity: { type: "document", sourceDocumentId },
           payload: { refid: sourceDocumentId },
@@ -2422,6 +2434,7 @@ test("a row stating a declared reason for holding no document is held on that re
     listSlicePage: async (options): Promise<ReconciliationSlicePage> => {
       listed.push(options);
       return await Promise.resolve({
+        observations: [],
         items: [scanned, failed, otherReason].map((sourceDocumentId) => ({
           identity: { type: "document", sourceDocumentId },
           payload: { unid: sourceDocumentId },
@@ -2488,6 +2501,7 @@ test("a held row stating a recheck value is asked for again, and what its page a
     listSlicePage: async (options): Promise<ReconciliationSlicePage> => {
       listed.push(options);
       return await Promise.resolve({
+        observations: [],
         items: [watched, settled].map((sourceDocumentId) => ({
           identity: { type: "document", sourceDocumentId },
           payload: { unid: sourceDocumentId },
@@ -2662,6 +2676,7 @@ test("reconciliation persists registered root and nested URLs without caller sch
       ...stubReconciliation,
       listSlicePage: async () =>
         await Promise.resolve({
+          observations: [],
           items: [
             {
               identity: {

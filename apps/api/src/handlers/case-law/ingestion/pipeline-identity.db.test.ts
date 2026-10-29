@@ -37,6 +37,10 @@ import {
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import {
+  QUARANTINE_NAMESPACE,
+  repairAliasesForStableFields,
+} from "@/api/lib/legal-search/quarantine-identity";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   openGatedTestDatabase,
@@ -1291,7 +1295,11 @@ if (!databaseUrl || !runPostgresTests) {
         input: plainTextIngestionResult({
           ...quarantined,
           sourceDocumentId: recoveredId,
-          sourceDocumentIdRepairAliases: [quarantineId],
+          sourceDocumentIdRepairAliases: repairAliasesForStableFields({
+            namespace: QUARANTINE_NAMESPACE.PL_SN,
+            stableFields: { docket: "Fixture reference" },
+            sourceDocumentIds: [quarantineId],
+          }),
           rawHash: "hash-known-repair-recovered",
         }),
         observationOrder: 2n,
@@ -1305,7 +1313,11 @@ if (!databaseUrl || !runPostgresTests) {
             "Distinct row after repair",
             "nalus-record:known-repair-collision",
           ),
-          sourceDocumentIdRepairAliases: [quarantineId],
+          sourceDocumentIdRepairAliases: repairAliasesForStableFields({
+            namespace: QUARANTINE_NAMESPACE.PL_SN,
+            stableFields: { docket: "Fixture reference" },
+            sourceDocumentIds: [quarantineId],
+          }),
         }),
         observationOrder: 3n,
         sourceId,
@@ -1320,7 +1332,11 @@ if (!databaseUrl || !runPostgresTests) {
             await processDecision({
               input: plainTextIngestionResult({
                 ...decisionAt(`Distinct repair row ${index}`, publisherId),
-                sourceDocumentIdRepairAliases: [unclaimedRepairId],
+                sourceDocumentIdRepairAliases: repairAliasesForStableFields({
+                  namespace: QUARANTINE_NAMESPACE.PL_SN,
+                  stableFields: { docket: "Fixture reference" },
+                  sourceDocumentIds: [unclaimedRepairId],
+                }),
               }),
               observationOrder: BigInt(index + 4),
               sourceId,
@@ -1406,7 +1422,11 @@ if (!databaseUrl || !runPostgresTests) {
           await processDecision({
             input: {
               ...decisionAt("Ambiguous repair", canonicalId),
-              sourceDocumentIdRepairAliases: quarantineIds,
+              sourceDocumentIdRepairAliases: repairAliasesForStableFields({
+                namespace: QUARANTINE_NAMESPACE.PL_SN,
+                stableFields: { docket: "Fixture reference" },
+                sourceDocumentIds: quarantineIds,
+              }),
             },
             observationOrder,
             sourceId,

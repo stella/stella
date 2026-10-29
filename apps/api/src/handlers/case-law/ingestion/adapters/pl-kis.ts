@@ -113,6 +113,10 @@ import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import {
+  LEGACY_REPAIR_NAMESPACE,
+  repairAliasesForStableFields,
+} from "@/api/lib/legal-search/quarantine-identity";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { toMetadataUrl } from "@/api/lib/sanitize-url";
@@ -1282,7 +1286,18 @@ export const assemblePlKisDecision = async ({
       // missing, so the observation that recovers it enriches that row.
       ...(publisherId === undefined
         ? {}
-        : { sourceDocumentIdRepairAliases: [quarantineId] }),
+        : {
+            sourceDocumentIdRepairAliases: repairAliasesForStableFields({
+              namespace: LEGACY_REPAIR_NAMESPACE.PL_KIS,
+              sourceDocumentIds: [quarantineId],
+              stableFields: {
+                signature:
+                  typeof row["SYG"] === "string" ? row["SYG"] : undefined,
+                thesis:
+                  typeof row["TEZA"] === "string" ? row["TEZA"] : undefined,
+              },
+            }),
+          }),
       court,
       country: ADAPTER_MANIFESTS[ADAPTER_KEYS.PL_KIS].country,
       language: LANGUAGE,
@@ -1759,6 +1774,7 @@ const listPlKisSlicePage = async ({
       return await Promise.reject(undated.error);
     }
     return {
+      observations: [],
       items: undated.value.rows.map((row) => ({
         identity: plKisListingIdentity(row),
         payload: row,
@@ -1806,6 +1822,7 @@ const listPlKisSlicePage = async ({
     );
   }
   return {
+    observations: [],
     items: rows.map((row) => ({
       identity: plKisListingIdentity(row),
       payload: row,
@@ -2052,6 +2069,7 @@ const sweepPage = async (
       const { aborted, decisions, itemBuildFailures } = collected.value;
       if (aborted) {
         return Result.ok({
+          observations: [],
           decisions,
           ...(itemBuildFailures === 0
             ? {}
@@ -2067,6 +2085,7 @@ const sweepPage = async (
       }
       if ((page + 1) * CRAWL_PAGE_SIZE < totalHits) {
         return Result.ok({
+          observations: [],
           decisions,
           ...(itemBuildFailures === 0
             ? {}
@@ -2082,6 +2101,7 @@ const sweepPage = async (
       }
       const after = nextMonth();
       return Result.ok({
+        observations: [],
         decisions,
         ...(itemBuildFailures === 0
           ? {}
@@ -2100,12 +2120,18 @@ const sweepPage = async (
     }
     const after = nextMonth();
     if (after === null) {
-      return Result.ok({ decisions: [], sourceUrl: url, nextCursor: tip() });
+      return Result.ok({
+        observations: [],
+        decisions: [],
+        sourceUrl: url,
+        nextCursor: tip(),
+      });
     }
     month = after;
     page = 0;
   }
   return Result.ok({
+    observations: [],
     decisions: [],
     ...(url === undefined ? {} : { sourceUrl: url }),
     nextCursor: encodePlKisCursor({ ...start, month, page }),
@@ -2159,6 +2185,7 @@ const tipPage = async (
 
   if (fresh.length === 0) {
     return Result.ok({
+      observations: [],
       decisions: [],
       sourceUrl: url,
       nextCursor: start.walk === "head" ? cursor : caughtUp(),
@@ -2171,6 +2198,7 @@ const tipPage = async (
   const { aborted, decisions, itemBuildFailures } = collected.value;
   if (aborted) {
     return Result.ok({
+      observations: [],
       decisions,
       ...(itemBuildFailures === 0
         ? {}
@@ -2186,6 +2214,7 @@ const tipPage = async (
   }
   if (reachedFrontier) {
     return Result.ok({
+      observations: [],
       decisions,
       ...(itemBuildFailures === 0
         ? {}
@@ -2209,6 +2238,7 @@ const tipPage = async (
       pending,
     });
     return Result.ok({
+      observations: [],
       decisions,
       ...(itemBuildFailures === 0
         ? {}
@@ -2225,6 +2255,7 @@ const tipPage = async (
   // A descending listing grows only at its head, so the next page can re-read
   // a row but cannot step over one.
   return Result.ok({
+    observations: [],
     decisions,
     ...(itemBuildFailures === 0
       ? {}
@@ -2282,6 +2313,7 @@ const undatedPage = async (
   const { aborted, decisions, itemBuildFailures } = collected.value;
   if (aborted) {
     return Result.ok({
+      observations: [],
       decisions,
       ...(itemBuildFailures === 0
         ? {}
@@ -2296,6 +2328,7 @@ const undatedPage = async (
     });
   }
   return Result.ok({
+    observations: [],
     decisions,
     ...(itemBuildFailures === 0
       ? {}

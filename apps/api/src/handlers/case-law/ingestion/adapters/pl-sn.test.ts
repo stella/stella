@@ -384,7 +384,7 @@ describe("listing one decision date", () => {
       page: 0,
     });
 
-    expect(page).toEqual({ items: [], totalPages: 0 });
+    expect(page).toEqual({ observations: [], items: [], totalPages: 0 });
   });
 
   test("the window error the proxy wraps in a 200 fails the slice", async () => {

@@ -117,7 +117,10 @@ import {
   QUARANTINE_NAMESPACE,
   quarantineIdentity,
 } from "@/api/lib/legal-search/quarantine-identity";
-import type { QuarantineIdentity } from "@/api/lib/legal-search/quarantine-identity";
+import type {
+  QuarantineIdentity,
+  RepairAlias,
+} from "@/api/lib/legal-search/quarantine-identity";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import { toMetadataUrl } from "@/api/lib/sanitize-url";
@@ -730,6 +733,12 @@ const ecjQuarantineOf = (
         stableFields: { ecli, language: rowLanguage },
       });
 
+/** Adoption candidates are exposed only when the publisher identity has recovered. */
+const keyedRepairAliases = (
+  sourceDocumentId: string | undefined,
+  quarantine: QuarantineIdentity | undefined,
+) => (sourceDocumentId === undefined ? [] : (quarantine?.repairAliases ?? []));
+
 /** The fields of one listed binding that decide how its variant is keyed. */
 export type EcjListedVariant = {
   celex: string;
@@ -751,7 +760,7 @@ export type EcjVariantIdentity =
   | {
       type: "keyed";
       sourceDocumentId: string;
-      repairAliases: readonly string[];
+      repairAliases: readonly RepairAlias[];
     }
   | { type: "quarantined"; sourceDocumentId: string; fingerprint: string }
   /** No usable CELEX and a blank ECLI: nothing names this variant. */
@@ -769,8 +778,7 @@ export const ecjVariantIdentity = ({
     return {
       type: "keyed",
       sourceDocumentId,
-      repairAliases:
-        quarantine === undefined ? [] : [quarantine.sourceDocumentId],
+      repairAliases: quarantine?.repairAliases ?? [],
     };
   }
   return quarantine === undefined
@@ -1847,17 +1855,17 @@ const ecjDecisionFromParts = ({
   const sourceDocumentId = ecjSourceDocumentId(celex, language);
   // Only a keyed row may take over a quarantined one; a legacy row replayed
   // with an unusable CELEX is no recovered identity.
-  const repairAlias =
-    sourceDocumentId === undefined
-      ? undefined
-      : ecjQuarantineOf(ecli, language)?.sourceDocumentId;
+  const repairAliases = keyedRepairAliases(
+    sourceDocumentId,
+    ecjQuarantineOf(ecli, language),
+  );
   return plainTextIngestionResult(
     {
       caseNumber,
       sourceDocumentId,
-      ...(repairAlias === undefined
+      ...(repairAliases.length === 0
         ? {}
-        : { sourceDocumentIdRepairAliases: [repairAlias] }),
+        : { sourceDocumentIdRepairAliases: repairAliases }),
       // What every row this adapter wrote before it stated an id was stored
       // under: one row per docket and language, carrying the EUR-Lex URL of
       // whichever of the docket's documents was written last. That URL names one
@@ -2876,6 +2884,7 @@ const listEcjSlicePage = async ({
     signal: signal ?? AbortSignal.timeout(ECJ_LISTING_TIMEOUT_MS),
   });
   return {
+    observations: [],
     ...listedEcjItems(bindings),
     // Structural, not reported: the publisher answers a date range, so the
     // months of the year are the pages whether or not it decided anything in

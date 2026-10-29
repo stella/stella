@@ -202,6 +202,7 @@ describe("a listed item whose read stays unavailable", () => {
   test("holds its page for the bound, then the page advances with the item kept listing-only", async () => {
     const sourceId = await crawlSource();
     const page = {
+      observations: [],
       decisions: [fullDecision("ok-1")],
       unreadItems: [noContent("gone-quiet")],
     };
@@ -239,7 +240,10 @@ describe("a listed item whose read stays unavailable", () => {
 
   test("a stored row keeps its detail byte for byte and records the outcome", async () => {
     const sourceId = await crawlSource();
-    await cycle(sourceId, { decisions: [fullDecision("held-1")] });
+    await cycle(sourceId, {
+      observations: [],
+      decisions: [fullDecision("held-1")],
+    });
     const before = (await decisionRow(sourceId, "held-1")) ?? panic("stored");
     expect(before.contentHash).not.toBeNull();
     await db
@@ -249,6 +253,7 @@ describe("a listed item whose read stays unavailable", () => {
 
     for (let n = 0; n < UNAVAILABLE_CYCLES_BEFORE_MARKING; n += 1) {
       await cycle(sourceId, {
+        observations: [],
         decisions: [],
         unreadItems: [emptyServerError("held-1")],
       });
@@ -284,13 +289,17 @@ describe("a listed item whose read stays unavailable", () => {
 
   test("a later read of unchanged content removes the recorded outcome", async () => {
     const sourceId = await crawlSource();
-    await cycle(sourceId, { decisions: [fullDecision("back-1")] });
+    await cycle(sourceId, {
+      observations: [],
+      decisions: [fullDecision("back-1")],
+    });
     for (let n = 0; n < UNAVAILABLE_CYCLES_BEFORE_MARKING; n += 1) {
       await db
         .update(caseLawSources)
         .set({ syncCursor: "page-1" })
         .where(eq(caseLawSources.id, sourceId));
       await cycle(sourceId, {
+        observations: [],
         decisions: [],
         unreadItems: [emptyServerError("back-1")],
       });
@@ -302,7 +311,10 @@ describe("a listed item whose read stays unavailable", () => {
       .set({ syncCursor: "page-1" })
       .where(eq(caseLawSources.id, sourceId));
 
-    await cycle(sourceId, { decisions: [fullDecision("back-1")] });
+    await cycle(sourceId, {
+      observations: [],
+      decisions: [fullDecision("back-1")],
+    });
 
     const after = (await decisionRow(sourceId, "back-1")) ?? panic("stored");
     expect(after.sourceHash).toBe(marked.sourceHash);
@@ -328,11 +340,18 @@ describe("a listed item whose read stays unavailable", () => {
 
   test("a successful read in between starts the count again", async () => {
     const sourceId = await crawlSource();
-    const unread = { decisions: [], unreadItems: [noContent("flaky")] };
+    const unread = {
+      observations: [],
+      decisions: [],
+      unreadItems: [noContent("flaky")],
+    };
 
     await cycle(sourceId, unread);
     await cycle(sourceId, unread);
-    await cycle(sourceId, { decisions: [fullDecision("flaky")] });
+    await cycle(sourceId, {
+      observations: [],
+      decisions: [fullDecision("flaky")],
+    });
     expect((await sourceState(sourceId)).cursor).toBe("page-2");
     await db
       .update(caseLawSources)
@@ -360,6 +379,7 @@ describe("a listed item whose read stays unavailable", () => {
     czNsAdapter.fetchPage = async () =>
       await Promise.resolve(
         Result.ok({
+          observations: [],
           decisions: [],
           unreadItems: [forbidden("slotted")],
           nextCursor: "page-2",
@@ -394,6 +414,7 @@ describe("a listed item whose read stays unavailable", () => {
     const sourceId = await crawlSource();
 
     const run = await cycle(sourceId, {
+      observations: [],
       decisions: [],
       unreadItems: [forbidden("withheld")],
     });

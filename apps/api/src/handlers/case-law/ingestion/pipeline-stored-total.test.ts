@@ -56,7 +56,7 @@ test("a real pipeline deadline admits one exact count and persists its pair", as
       panic("Expected source ingestion lease");
     }
     czNsAdapter.fetchPage = async () =>
-      Result.ok({ decisions: [], nextCursor: null });
+      Result.ok({ observations: [], decisions: [], nextCursor: null });
     const budgetMs = 300_000;
     const startedAt = performance.now();
     let admissions = 0;

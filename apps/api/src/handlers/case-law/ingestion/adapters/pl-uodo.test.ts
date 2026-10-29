@@ -793,6 +793,7 @@ describe("the crawl over modification time", () => {
 
     const again = await plUodoAdapter.fetchPage(parked, {});
     expect(Result.isOk(again) && again.value).toEqual({
+      observations: [],
       decisions: [],
       nextCursor: parked,
     });

@@ -179,16 +179,14 @@ const listSlicePass = async ({
     listing.pages += 1;
     listing.listed +=
       listed.items.length +
-      (listed.observations?.length ?? 0) +
+      listed.observations.length +
       (listed.withoutStableFields ?? 0);
-    if (listed.observations !== undefined) {
-      for (const observation of listed.observations) {
-        const key = observation.identity.fingerprint;
-        if (listing.observations.has(key)) {
-          repeats += 1;
-        } else {
-          listing.observations.set(key, observation);
-        }
+    for (const observation of listed.observations) {
+      const key = observation.identity.fingerprint;
+      if (listing.observations.has(key)) {
+        repeats += 1;
+      } else {
+        listing.observations.set(key, observation);
       }
     }
     listing.withoutStableFields += listed.withoutStableFields ?? 0;

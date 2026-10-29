@@ -1340,7 +1340,7 @@ describe("a listed decision with no usable publisher key", () => {
       huBhgyListingIdentity(normalizeHuBhgyRow(withDocket)),
     );
 
-    test("a docket arriving: the docket-form row adopts the summary-form row", async () => {
+    test("a docket arriving keeps the summary-only row out of repair aliases", async () => {
       expect(docketId).not.toBe(earlierId);
       const built = await assembleHuBhgyDecision({
         row: normalizeHuBhgyRow(withDocket),
@@ -1350,10 +1350,10 @@ describe("a listed decision with no usable publisher key", () => {
       const decision =
         built.type === "quarantined" ? built.decision : undefined;
       expect(decision?.sourceDocumentId).toBe(docketId);
-      expect(decision?.sourceDocumentIdRepairAliases).toEqual([earlierId]);
+      expect(decision?.sourceDocumentIdRepairAliases ?? []).toEqual([]);
     });
 
-    test("the key arriving: the keyed row names both earlier forms, once each", async () => {
+    test("the key arriving names the docket-qualified earlier form only", async () => {
       const keyed = { ...withDocket, IndexId: "id-30000" };
       const built = await assembleHuBhgyDecision({
         row: normalizeHuBhgyRow(keyed),
@@ -1363,13 +1363,10 @@ describe("a listed decision with no usable publisher key", () => {
       const decision =
         built.type === "detail-unavailable" ? built.decision : undefined;
       expect(decision?.sourceDocumentId).toBe("id-30000");
-      expect(decision?.sourceDocumentIdRepairAliases).toEqual([
-        docketId,
-        earlierId,
-      ]);
+      expect(decision?.sourceDocumentIdRepairAliases).toEqual([docketId]);
     });
 
-    test("a key arriving without a docket adopts the summary-form row", async () => {
+    test("a key arriving without a docket cannot adopt the summary-only row", async () => {
       const keyed = { ...summarised, IndexId: "id-30000" };
       const built = await assembleHuBhgyDecision({
         row: normalizeHuBhgyRow(keyed),
@@ -1380,9 +1377,9 @@ describe("a listed decision with no usable publisher key", () => {
         built.type === "detail-unavailable" ? built.decision : undefined;
       expect(decision).toMatchObject({
         sourceDocumentId: "id-30000",
-        sourceDocumentIdRepairAliases: [earlierId],
         caseNumberIsPlaceholder: true,
       });
+      expect(decision?.sourceDocumentIdRepairAliases ?? []).toEqual([]);
     });
 
     test("a row stating one form names no alias for its own identity", () => {

@@ -646,7 +646,11 @@ describe("the cursor", () => {
     const crawler = createPlNsaCrawler({ snapshot, source: counted });
     const parked = `${snapshot.revision}:2:0`;
     const page = (await crawler.fetchPage(parked)).unwrap();
-    expect(page).toEqual({ decisions: [], nextCursor: parked });
+    expect(page).toEqual({
+      observations: [],
+      decisions: [],
+      nextCursor: parked,
+    });
     expect(local).not.toHaveBeenCalled();
   });
 

@@ -463,7 +463,11 @@ describe("cz-us listSlicePage", () => {
   test("reports a stated-empty year as zero pages", async () => {
     installSearchMock({ statedEmpty: true });
 
-    expect(await listSlice("1993")).toEqual({ items: [], totalPages: 0 });
+    expect(await listSlice("1993")).toEqual({
+      observations: [],
+      items: [],
+      totalPages: 0,
+    });
   });
 
   test.each([

@@ -142,6 +142,7 @@ import {
   isQuarantineSourceDocumentId,
   QUARANTINE_NAMESPACE,
   quarantineSourceDocumentId,
+  repairAliasesForStableFields,
 } from "@/api/lib/legal-search/quarantine-identity";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
@@ -1402,11 +1403,17 @@ const documentStateOf = ({
 /** The quarantine digest a keyed row would have had, for a later repair. */
 const repairAliasesOf = (
   row: PlUokikViewRow,
-): { sourceDocumentIdRepairAliases?: string[] } => {
+): Pick<IngestionResult, "sourceDocumentIdRepairAliases"> => {
   const quarantineId = plUokikQuarantineId(row);
   return quarantineId === undefined
     ? {}
-    : { sourceDocumentIdRepairAliases: [quarantineId] };
+    : {
+        sourceDocumentIdRepairAliases: repairAliasesForStableFields({
+          namespace: QUARANTINE_NAMESPACE.PL_UOKIK,
+          sourceDocumentIds: [quarantineId],
+          stableFields: { decisionNumber: row.decisionNumber },
+        }),
+      };
 };
 
 /**
@@ -2360,7 +2367,7 @@ const plUokikFetchPage = async (
     position.parkedOn !== undefined &&
     position.parkedOn >= todayUtc()
   ) {
-    return Result.ok({ decisions: [], nextCursor: encoded });
+    return Result.ok({ observations: [], decisions: [], nextCursor: encoded });
   }
   const located = await readPastAnchor(position, encoded, signal);
   if (Result.isError(located)) {
@@ -2372,6 +2379,7 @@ const plUokikFetchPage = async (
       cursor: encoded,
     });
     return Result.ok({
+      observations: [],
       decisions: [],
       nextCursor: encodePlUokikCursor({
         phase: position.phase,
@@ -2415,6 +2423,7 @@ const plUokikFetchPage = async (
     // The cycle stopped partway through, so it says nothing about the rows
     // it never reached; the page is read again next cycle.
     return Result.ok({
+      observations: [],
       decisions,
       ...(itemBuildFailures === 0
         ? {}
@@ -2443,6 +2452,7 @@ const plUokikFetchPage = async (
           anchor: resumed.row.unid,
         };
   return Result.ok({
+    observations: [],
     decisions,
     ...(itemBuildFailures === 0
       ? {}
@@ -2606,11 +2616,11 @@ const listPlUokikSlicePage = async ({
   const { first, last, total } = located.value;
   const size = last - first + 1;
   if (size <= 0) {
-    return { items: [], totalPages: 0 };
+    return { observations: [], items: [], totalPages: 0 };
   }
   const totalPages = Math.ceil(size / SLICE_PAGE_ROWS);
   if (page >= totalPages) {
-    return { items: [], totalPages };
+    return { observations: [], items: [], totalPages };
   }
   const pageFirst = first + page * SLICE_PAGE_ROWS;
   const pageLast = Math.min(last, pageFirst + SLICE_PAGE_ROWS - 1);
@@ -2657,6 +2667,7 @@ const listPlUokikSlicePage = async ({
   });
   const withoutStableFields = inside.length - items.length;
   return {
+    observations: [],
     items,
     ...(withoutStableFields === 0 ? {} : { withoutStableFields }),
     totalPages,

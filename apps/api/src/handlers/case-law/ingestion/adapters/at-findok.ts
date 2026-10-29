@@ -40,6 +40,7 @@ import {
   FINDOK_REQUEST_INTERVAL_MS,
 } from "@/api/handlers/case-law/ingestion/adapters/at-findok-throttle";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
+import { emptySyncPage } from "@/api/handlers/case-law/ingestion/adapters/pagination";
 import {
   PublisherPageError,
   validatePublisherPage,
@@ -66,6 +67,11 @@ import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import {
+  LEGACY_REPAIR_NAMESPACE,
+  repairAliasesForStableFields,
+} from "@/api/lib/legal-search/quarantine-identity";
+import type { RepairAlias } from "@/api/lib/legal-search/quarantine-identity";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { isRecord } from "@/api/lib/type-guards";
@@ -127,7 +133,7 @@ type FindokDocumentItem = {
   pathPdf: string;
   pathZip: string;
   raw: Record<string, unknown>;
-  sourceDocumentIdRepairAliases: readonly string[] | undefined;
+  sourceDocumentIdRepairAliases: readonly RepairAlias[] | undefined;
   stammNr: number;
   titel: string | undefined;
 };
@@ -283,7 +289,18 @@ const manifestItem = (value: unknown): FindokDocumentItem | undefined => {
     pathZip: item.pathZip,
     raw: value,
     sourceDocumentIdRepairAliases:
-      publisherId === undefined ? undefined : [quarantineId],
+      publisherId === undefined
+        ? undefined
+        : repairAliasesForStableFields({
+            namespace: LEGACY_REPAIR_NAMESPACE.AT_FINDOK,
+            sourceDocumentIds: [quarantineId],
+            stableFields: {
+              stammNr: String(stammNr),
+              pathPdf: item.pathPdf,
+              pathZip: item.pathZip,
+              gz: item.gz,
+            },
+          }),
     stammNr,
     titel: item.titel,
   };
@@ -988,6 +1005,7 @@ const listReconciliationPage = async (
   const items = itemsForSlice(manifest, parts.year);
   const start = page * RECONCILIATION_PAGE_SIZE;
   return {
+    observations: [],
     items: items.slice(start, start + RECONCILIATION_PAGE_SIZE).map((item) => ({
       identity: { type: "document", sourceDocumentId: item.dokumentId },
       payload: {
@@ -1512,28 +1530,19 @@ export const createAtFindokAdapter = (
             state.snapshotId !== null &&
             state.snapshotId !== manifest.snapshotId
           ) {
-            return {
-              decisions: [],
-              nextCursor: encodeCursor(cursorForSlice(state.slice)),
-            };
+            return emptySyncPage(encodeCursor(cursorForSlice(state.slice)), []);
           }
           const allItems = itemsForSlice(manifest, parts.year);
           const expectedTotal = state.total ?? allItems.length;
           if (expectedTotal !== allItems.length) {
-            return {
-              decisions: [],
-              nextCursor: encodeCursor(cursorForSlice(state.slice)),
-            };
+            return emptySyncPage(encodeCursor(cursorForSlice(state.slice)), []);
           }
           if (allItems.length === 0) {
             const next = atFindokNextSlice(state.slice, dependencies.now());
             const nextState = cursorForSlice(
               next ?? tipSlice(dependencies.now()),
             );
-            return {
-              decisions: [],
-              nextCursor: encodeCursor(nextState),
-            };
+            return emptySyncPage(encodeCursor(nextState), []);
           }
           const totalPages = Math.ceil(allItems.length / CRAWL_PAGE_SIZE);
           if (state.page >= totalPages) {
@@ -1551,6 +1560,7 @@ export const createAtFindokAdapter = (
           if (state.phase === CURSOR_PHASE.VERIFY) {
             if (state.page + 1 < totalPages) {
               return {
+                observations: [],
                 decisions: [],
                 nextCursor: encodeCursor({
                   ...state,
@@ -1563,12 +1573,14 @@ export const createAtFindokAdapter = (
             }
             if (digest !== state.expectedDigest) {
               return {
+                observations: [],
                 decisions: [],
                 nextCursor: encodeCursor(cursorForSlice(state.slice)),
               };
             }
             const next = atFindokNextSlice(state.slice, dependencies.now());
             return {
+              observations: [],
               decisions: [],
               nextCursor: encodeCursor(
                 cursorForSlice(next ?? tipSlice(dependencies.now())),
@@ -1586,6 +1598,7 @@ export const createAtFindokAdapter = (
           const collected = state.collected + decisions.length;
           if (state.page + 1 < totalPages) {
             return {
+              observations: [],
               decisions,
               itemBuildFailures,
               nextCursor: encodeCursor({
@@ -1599,6 +1612,7 @@ export const createAtFindokAdapter = (
             };
           }
           return {
+            observations: [],
             decisions,
             itemBuildFailures,
             nextCursor: encodeCursor({

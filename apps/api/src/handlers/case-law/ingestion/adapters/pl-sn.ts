@@ -995,7 +995,7 @@ export const assemblePlSnDecision = async ({
     ...(identity.quarantine === undefined
       ? {}
       : {
-          sourceDocumentIdRepairAliases: [identity.quarantine.sourceDocumentId],
+          sourceDocumentIdRepairAliases: identity.quarantine.repairAliases,
         }),
     court,
     country: ADAPTER_MANIFESTS[ADAPTER_KEYS.PL_SN].country,
@@ -1419,9 +1419,10 @@ const listPlSnSlicePage = async ({
   const unstored = withoutStableFields === 0 ? {} : { withoutStableFields };
 
   if (rows.length === 0) {
-    return { items, totalPages: page };
+    return { observations: [], items, totalPages: page };
   }
   return {
+    observations: [],
     items,
     ...unstored,
     totalPages: rows.length < LISTING_PAGE_SIZE ? page + 1 : page + 2,
@@ -1577,6 +1578,7 @@ const plSnFetchPage = async (
   const window = advanced.value;
   if (!window.listed) {
     return Result.ok({
+      observations: [],
       decisions: [],
       sourceUrl: window.url,
       nextCursor: encodePlSnCursor(window),

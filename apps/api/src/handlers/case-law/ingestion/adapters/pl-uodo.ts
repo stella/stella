@@ -110,6 +110,7 @@ import {
   isQuarantineSourceDocumentId,
   QUARANTINE_NAMESPACE,
   quarantineSourceDocumentId,
+  repairAliasesForStableFields,
 } from "@/api/lib/legal-search/quarantine-identity";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
@@ -1281,11 +1282,17 @@ const caseNumberOf = (
 /** The quarantine digest a keyed record would have had, for a later repair. */
 const repairAliasesOf = (
   row: PlUodoRow,
-): { sourceDocumentIdRepairAliases?: string[] } => {
+): Pick<IngestionResult, "sourceDocumentIdRepairAliases"> => {
   const quarantineId = plUodoQuarantineId(row);
   return quarantineId === undefined
     ? {}
-    : { sourceDocumentIdRepairAliases: [quarantineId] };
+    : {
+        sourceDocumentIdRepairAliases: repairAliasesForStableFields({
+          namespace: QUARANTINE_NAMESPACE.PL_UODO,
+          sourceDocumentIds: [quarantineId],
+          stableFields: { refname: row.refname },
+        }),
+      };
 };
 
 /** What every record states, whichever kind it is. */
@@ -2293,9 +2300,10 @@ const listPlUodoSlicePage = async ({
   const withoutStableFields = inScope.length - items.length;
   const unstored = withoutStableFields === 0 ? {} : { withoutStableFields };
   if (served === 0) {
-    return { items, totalPages: page };
+    return { observations: [], items, totalPages: page };
   }
   return {
+    observations: [],
     items,
     ...unstored,
     totalPages: served < LISTING_PAGE_SIZE ? page + 1 : page + 2,
@@ -2399,7 +2407,7 @@ const plUodoFetchPage = async (
   const encoded = encodePlUodoCursor(position);
   // Parked on a day that has not closed: this cycle has nothing to ask.
   if (position.parkedOn !== undefined && position.parkedOn >= todayUtc()) {
-    return Result.ok({ decisions: [], nextCursor: encoded });
+    return Result.ok({ observations: [], decisions: [], nextCursor: encoded });
   }
   const listing: Record<string, unknown>[] = [];
   let url = "";

@@ -644,8 +644,8 @@ test("no-id dump listings are observations and never request a canonical detail"
       "A listing page is readable",
     );
     expect(page.decisions).toEqual([]);
-    expect(page.observations?.map(({ payload }) => payload)).toEqual(payloads);
-    expect(page.observations?.map(({ reason }) => reason)).toEqual(
+    expect(page.observations.map(({ payload }) => payload)).toEqual(payloads);
+    expect(page.observations.map(({ reason }) => reason)).toEqual(
       payloads.map(() => "no-usable-id"),
     );
     expect(listingRequests).toBe(1);
@@ -681,7 +681,7 @@ test("reconciliation retains every malformed listing value without canonical det
       page: 0,
     });
     expect(page.items).toEqual([]);
-    expect(page.observations?.map(({ payload }) => payload)).toEqual(payloads);
+    expect(page.observations.map(({ payload }) => payload)).toEqual(payloads);
     expect(page.withoutStableFields).toBeUndefined();
   } finally {
     globalThis.fetch = original;

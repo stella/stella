@@ -899,6 +899,7 @@ test("the crawl places a page's reasons after its decisions, from the payload it
   plCourtsAdapter.fetchPage = async () =>
     await Promise.resolve(
       Result.ok({
+        observations: [],
         decisions: [decisionOf(RULING)],
         supplements: [supplementOf(REASONS)],
         nextCursor: null,

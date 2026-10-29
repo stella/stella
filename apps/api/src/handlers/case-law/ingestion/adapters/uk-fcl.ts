@@ -606,6 +606,7 @@ export const ukFclAdapter = defineSourceAdapter({
         return await Promise.reject(listed.error);
       }
       return {
+        observations: [],
         items: listed.value.entries.map((entry) => ({
           identity: {
             type: "document" as const,

@@ -62,7 +62,10 @@ import {
   type AdapterKey,
 } from "@/api/lib/legal-search/ingestion-constants";
 import type { ObservationDetail } from "@/api/lib/legal-search/partial-observation-sql";
-import type { ListingObservation } from "@/api/lib/legal-search/quarantine-identity";
+import type {
+  ListingObservation,
+  RepairAlias,
+} from "@/api/lib/legal-search/quarantine-identity";
 import type { SkCollectionConnector } from "@/api/lib/legal-search/sk-collection-enrichment";
 import {
   decodeSourceRawEnvelope,
@@ -196,7 +199,7 @@ export type RawIngestionResult = {
    * when unclaimed. Use this for content-addressed repair fingerprints, never
    * for an alternate publisher key.
    */
-  sourceDocumentIdRepairAliases?: readonly string[] | undefined;
+  sourceDocumentIdRepairAliases?: readonly RepairAlias[] | undefined;
   /**
    * Exact source URLs emitted by an older adapter version for this same
    * publisher document. This is a narrowly scoped identity-migration hint:
@@ -629,9 +632,12 @@ export type SliceCoverage = {
 };
 
 /** A page of ingestion results with an optional cursor. */
-export type SyncPage = {
-  /** Captured listings with no canonical identity; stored outside the decision path. */
-  observations?: readonly ListingObservation[] | undefined;
+type ListingPageBase = {
+  /** Captured evidence is required on every page, including terminal and empty pages. */
+  observations: readonly ListingObservation[];
+};
+
+export type SyncPage = ListingPageBase & {
   decisions: IngestionResult[];
   /** Failed item builds retained as listing-only rows for reconciliation. */
   itemBuildFailures?: { type: "item_build_failed"; count: number } | undefined;
@@ -1140,9 +1146,7 @@ export type ReconciliationListingItem = {
   quarantinePeers?: readonly string[] | undefined;
 };
 
-export type ReconciliationSlicePage = {
-  /** Captured source evidence with no canonical listing identity. */
-  observations?: readonly ListingObservation[] | undefined;
+export type ReconciliationSlicePage = ListingPageBase & {
   items: ReconciliationListingItem[];
   /**
    * Records the page lists that state no stable field at all (no publisher
@@ -1365,7 +1369,10 @@ export type SourceTotalProbeFailure =
 /** A failure the adapter detected without a throw. */
 export const sourceTotalProbeFailed = (
   failure: SourceTotalProbeFailure,
-): SourceTotalCount => ({ type: "probe-failed", errorTag: failure });
+): SourceTotalCount => ({
+  type: "probe-failed",
+  errorTag: failure,
+});
 
 /**
  * The count answer for a number an adapter read out of a publisher's payload.

@@ -106,6 +106,7 @@ import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-asse
 import {
   QUARANTINE_NAMESPACE,
   quarantineIdentity,
+  type RepairAlias,
 } from "@/api/lib/legal-search/quarantine-identity";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
@@ -528,7 +529,7 @@ type CzNssRowIdentity =
       type: "document";
       sourceDocumentId: string;
       /** The quarantine id this row would have had without its id. */
-      repairAlias: string | undefined;
+      repairAliases: readonly RepairAlias[];
     }
   | { type: "quarantined"; sourceDocumentId: string };
 
@@ -581,7 +582,7 @@ const czNssRowIdentity = (row: ParsedRow): CzNssRowIdentity | null => {
     return {
       type: "document",
       sourceDocumentId: documentId,
-      repairAlias: quarantine?.sourceDocumentId,
+      repairAliases: quarantine?.repairAliases ?? [],
     };
   }
   return quarantine === undefined
@@ -2134,8 +2135,8 @@ const rowToResult = ({
     sourceDocumentId,
     // So the listing row a crawl kept for this document while its id was
     // unusable is taken over by it rather than left beside it.
-    ...(identity.type === "document" && identity.repairAlias !== undefined
-      ? { sourceDocumentIdRepairAliases: [identity.repairAlias] }
+    ...(identity.type === "document" && identity.repairAliases.length > 0
+      ? { sourceDocumentIdRepairAliases: identity.repairAliases }
       : {}),
     // What every row this adapter wrote before it stated an id was stored
     // under: one row per docket, carrying the detail URL of whichever document
@@ -2359,20 +2360,20 @@ const rebuildStoredDocument = async ({
 const storedRepairAlias = (
   parts: SourceRawParts | null,
   sourceDocumentId: string | undefined,
-): string | undefined => {
+): readonly RepairAlias[] => {
   const listing = parts?.[CZ_NSS_RAW_PART.LISTING];
   if (listing === undefined) {
-    return undefined;
+    return [];
   }
   const row = Result.try((): unknown => JSON.parse(listing)).unwrapOr(null);
   if (!isCzNssListingRow(row)) {
-    return undefined;
+    return [];
   }
   const identity = czNssRowIdentity(row);
   return identity?.type === "document" &&
     identity.sourceDocumentId === sourceDocumentId
-    ? identity.repairAlias
-    : undefined;
+    ? identity.repairAliases
+    : [];
 };
 
 /**
@@ -2446,7 +2447,7 @@ const reparseStoredRaw = async (
     nonEmptyString(stored.metadata["citation"]);
   const reporterIdentifiers = nssReporterIdentifiers(citation);
   const sourceDocumentId = stored.sourceDocumentId ?? undefined;
-  const repairAlias = storedRepairAlias(parts, sourceDocumentId);
+  const repairAliases = storedRepairAlias(parts, sourceDocumentId);
   // The stored docket of a row listed without a reference is the id standing
   // in for one, which must not be read back as a reference the court wrote.
   const listingDocketMissing = stored.metadata["listingDocketMissing"] === true;
@@ -2488,9 +2489,9 @@ const reparseStoredRaw = async (
         ? {}
         : { identifiers: reporterIdentifiers }),
       sourceDocumentId,
-      ...(repairAlias === undefined
+      ...(repairAliases.length === 0
         ? {}
-        : { sourceDocumentIdRepairAliases: [repairAlias] }),
+        : { sourceDocumentIdRepairAliases: repairAliases }),
       ...(sourceDocumentId === undefined
         ? {}
         : { legacySourceUrls: [detailUrl(sourceDocumentId)] }),
@@ -3201,7 +3202,7 @@ const listCzNssSlicePage = async ({
         cursor: slice,
       });
     }
-    return { items: [], totalPages: 0 };
+    return { observations: [], items: [], totalPages: 0 };
   }
 
   const { continuation } = search;
@@ -3259,6 +3260,7 @@ const listCzNssSlicePage = async ({
   const withoutStableFields =
     parsed.withoutStableFields + (parsed.rows.length - items.length);
   return {
+    observations: [],
     items,
     ...(withoutStableFields === 0 ? {} : { withoutStableFields }),
     totalPages: czNssTotalPages(search.statedCount),
@@ -3581,7 +3583,11 @@ export const czNssAdapter = defineSourceAdapter({
         // only re-check today on the next cycle (never null —
         // null restarts from DEFAULT_LOOKBACK_DAYS ago).
         if (date > today) {
-          return { decisions: [], nextCursor: cursorFor(today, 0) };
+          return {
+            observations: [],
+            decisions: [],
+            nextCursor: cursorFor(today, 0),
+          };
         }
 
         // 1. Get or reuse session
@@ -3600,6 +3606,7 @@ export const czNssAdapter = defineSourceAdapter({
               attempts,
             });
             return {
+              observations: [],
               decisions: [],
               nextCursor: encodeCursor({
                 date,
@@ -3617,6 +3624,7 @@ export const czNssAdapter = defineSourceAdapter({
           });
           const next = nextDay(date);
           return {
+            observations: [],
             decisions: [],
             itemBuildFailures: { type: "item_build_failed", count: 1 },
             nextCursor: encodeCursor({
@@ -3638,6 +3646,7 @@ export const czNssAdapter = defineSourceAdapter({
           }
           const next = nextDay(date);
           return {
+            observations: [],
             decisions: [],
             nextCursor: cursorFor(next <= today ? next : today, 0),
           };
@@ -3746,6 +3755,7 @@ export const czNssAdapter = defineSourceAdapter({
         if (page + 1 < czNssTotalPages(searchResult.statedCount)) {
           // More pages for this date
           return {
+            observations: [],
             decisions,
             itemBuildFailures: { type: "item_build_failed", count: failed },
             nextCursor: cursorFor(date, page + 1),
@@ -3755,6 +3765,7 @@ export const czNssAdapter = defineSourceAdapter({
         // No more pages; advance to next day
         const next = nextDay(date);
         return {
+          observations: [],
           decisions,
           itemBuildFailures: { type: "item_build_failed", count: failed },
           nextCursor: cursorFor(next <= today ? next : today, 0),

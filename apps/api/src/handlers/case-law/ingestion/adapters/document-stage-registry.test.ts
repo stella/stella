@@ -88,7 +88,11 @@ describe("registered document stages", () => {
   test("the factory wires its page entrypoint through the registered stage observer", async () => {
     for (const registered of listAdapters()) {
       const observations: DocumentStageObservation[] = [];
-      const page = Result.ok({ decisions: [], nextCursor: null });
+      const page = Result.ok({
+        observations: [],
+        decisions: [],
+        nextCursor: null,
+      });
       const adapter = defineSourceAdapter({
         ...registered,
         fetchPage: async () => {
