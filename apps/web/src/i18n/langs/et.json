@@ -132,6 +132,7 @@
     "checkSpamHint": "Kui te seda ei näe, kontrollige rämpsposti kausta.",
     "chooseOrganization": "Valige organisatsioon, milles soovite töötada",
     "codeSentAgain": "Saatsime uue koodi.",
+    "continueWithApple": "Jätka Apple'iga",
     "continueWithEmail": "Jätka",
     "continueWithGoogle": "Jätka Google'iga",
     "continueWithMicrosoft": "Jätka Microsoftiga",
@@ -710,10 +711,29 @@
       },
       "linkedExpenses": "Seotud kulud",
       "linkedTimeEntries": "Seotud ajakirjed",
-      "markPaid": "Märgi makstuks",
       "noEntries": "Selle arvega pole kirjeid seotud",
       "noInvoices": "Arveid pole veel",
       "paidAt": "Tasutud",
+      "payments": {
+        "amountTooHigh": "Summa ületab tasumata jäägi {amount}.",
+        "confirmVoid": "Makse jääb arvele tühistatuna ega lähe enam selle arve tasumise arvestusse.",
+        "empty": "Makseid pole veel registreeritud",
+        "method": "Makseviis",
+        "methods": {
+          "bank_transfer": "Pangaülekanne",
+          "card": "Kaart",
+          "cash": "Sularaha",
+          "other": "Muu viis"
+        },
+        "outstandingAmount": "Tasumata {amount}",
+        "paidOn": "Makse kuupäev",
+        "partiallyPaid": "Osaliselt makstud",
+        "record": "Registreeri makse",
+        "summary": "Makstud {paid}, tasumata {outstanding}",
+        "title": "Maksed",
+        "void": "Tühista makse",
+        "voided": "Tühistatud"
+      },
       "removeEntries": "Eemalda kirjed",
       "send": "Saada",
       "statuses": {
@@ -895,6 +915,7 @@
     "aiMissing": "Tehisintellekt pole seadistatud.",
     "availabilityUnknown": "Saadavust ei õnnestunud kinnitada.",
     "deeplMissing": "DeepL pole seadistatud.",
+    "deeplPdfRequired": "PDF-failide tõlkimiseks on vaja DeepL-i.",
     "desktopUnavailable": "Ühendage või uuendage stella desktopi.",
     "featureUnavailable": "See funktsioon pole saadaval.",
     "ocrUnavailable": "OCR pole saadaval.",
@@ -2457,6 +2478,8 @@
       "aresNotFound": "Selle IČO järgi ettevõtet ei leitud.",
       "aresTitle": "Tšehhi register (ARES)",
       "contactName": "Kontakti nimi",
+      "displayNameOrganizationHint": "Valikuline asendus; muul juhul luuakse organisatsiooni nimest.",
+      "displayNamePersonHint": "Valikuline asendus; muul juhul luuakse ees- ja perekonnanimest.",
       "icoPlaceholder": "IČO",
       "invalidIco": "Sisesta 8-kohaline IČO."
     },
@@ -2769,12 +2792,15 @@
   },
   "errors": {
     "actionAdmission": {
-      "admissionUnavailable": "See toiming on ajutiselt peatatud. Palun proovige varsti uuesti.",
       "concurrencyBusy": "Muud toimingud on pooleli. Palun proovige varsti uuesti.",
+      "configurationIncomplete": "See toiming pole täielikult seadistatud. Võtke ühendust administraatoriga.",
       "contact": "Võtke meiega ühendust",
       "featureDisabled": "See funktsioon on ajutiselt välja lülitatud.",
+      "leaseLost": "Toimingu broneering aegus. Palun proovige uuesti.",
       "notEnabled": "See toiming ei ole teie organisatsiooni jaoks lubatud.",
-      "periodExhausted": "See toiming on teie organisatsiooni jaoks peatatud."
+      "organizationStateUnreadable": "Organisatsiooni juurdepääsu ei saanud kontrollida. Palun proovige varsti uuesti.",
+      "periodExhausted": "See toiming on teie organisatsiooni jaoks peatatud.",
+      "storeUnavailable": "Teenus pole ajutiselt saadaval. Palun proovige varsti uuesti."
     },
     "actionFailed": "See ei õnnestunud. Proovige uuesti või laadige leht uuesti, kui see kordub.",
     "api": {

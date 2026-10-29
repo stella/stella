@@ -132,6 +132,7 @@
     "checkSpamHint": "Jeśli go nie widzisz, sprawdź folder spam.",
     "chooseOrganization": "Wybierz organizację, w której chcesz pracować",
     "codeSentAgain": "Wysłaliśmy nowy kod.",
+    "continueWithApple": "Kontynuuj przez Apple",
     "continueWithEmail": "Kontynuuj",
     "continueWithGoogle": "Kontynuuj przez Google",
     "continueWithMicrosoft": "Kontynuuj przez Microsoft",
@@ -710,10 +711,29 @@
       },
       "linkedExpenses": "Powiązane wydatki",
       "linkedTimeEntries": "Powiązane wpisy czasu",
-      "markPaid": "Oznacz jako zapłaconą",
       "noEntries": "Brak wpisów powiązanych z tą fakturą",
       "noInvoices": "Brak faktur",
       "paidAt": "Zapłacono",
+      "payments": {
+        "amountTooHigh": "Kwota przekracza pozostałą do zapłaty kwotę {amount}.",
+        "confirmVoid": "Płatność pozostanie w ewidencji jako anulowana i nie będzie już zaliczana na poczet tej faktury.",
+        "empty": "Nie zarejestrowano jeszcze żadnych płatności",
+        "method": "Forma płatności",
+        "methods": {
+          "bank_transfer": "Przelew bankowy",
+          "card": "Karta",
+          "cash": "Gotówka",
+          "other": "Inna forma"
+        },
+        "outstandingAmount": "Pozostało do zapłaty {amount}",
+        "paidOn": "Data płatności",
+        "partiallyPaid": "Częściowo zapłacona",
+        "record": "Zarejestruj płatność",
+        "summary": "Zapłacono {paid}, pozostało {outstanding}",
+        "title": "Płatności",
+        "void": "Anuluj płatność",
+        "voided": "Anulowana"
+      },
       "removeEntries": "Usuń wpisy",
       "send": "Wyślij",
       "statuses": {
@@ -895,6 +915,7 @@
     "aiMissing": "AI nie jest skonfigurowana.",
     "availabilityUnknown": "Nie udało się potwierdzić dostępności.",
     "deeplMissing": "DeepL nie jest skonfigurowany.",
+    "deeplPdfRequired": "Tłumaczenie plików PDF wymaga DeepL.",
     "desktopUnavailable": "Połącz lub zaktualizuj stella desktop.",
     "featureUnavailable": "Ta funkcja jest niedostępna.",
     "ocrUnavailable": "OCR jest niedostępne.",
@@ -2457,6 +2478,8 @@
       "aresNotFound": "Nie znaleziono firmy dla tego IČO.",
       "aresTitle": "Czeski rejestr (ARES)",
       "contactName": "Nazwa kontaktu",
+      "displayNameOrganizationHint": "Opcjonalne zastąpienie; w przeciwnym razie tworzone z nazwy organizacji.",
+      "displayNamePersonHint": "Opcjonalne zastąpienie; w przeciwnym razie tworzone z imienia i nazwiska.",
       "icoPlaceholder": "IČO",
       "invalidIco": "Wpisz 8-cyfrowe IČO."
     },
@@ -2769,12 +2792,15 @@
   },
   "errors": {
     "actionAdmission": {
-      "admissionUnavailable": "Ta czynność jest tymczasowo wstrzymana. Spróbuj ponownie za chwilę.",
       "concurrencyBusy": "Trwają inne operacje. Spróbuj ponownie za chwilę.",
+      "configurationIncomplete": "Ta czynność nie jest w pełni skonfigurowana. Skontaktuj się z administratorem.",
       "contact": "Skontaktuj się z nami",
       "featureDisabled": "Ta funkcja jest tymczasowo wyłączona.",
+      "leaseLost": "Rezerwacja czynności wygasła. Spróbuj ponownie.",
       "notEnabled": "Ta czynność nie jest włączona dla Twojej organizacji.",
-      "periodExhausted": "Ta czynność jest wstrzymana dla Twojej organizacji."
+      "organizationStateUnreadable": "Nie udało się sprawdzić dostępu organizacji. Spróbuj ponownie za chwilę.",
+      "periodExhausted": "Ta czynność jest wstrzymana dla Twojej organizacji.",
+      "storeUnavailable": "Usługa jest tymczasowo niedostępna. Spróbuj ponownie za chwilę."
     },
     "actionFailed": "Nie udało się. Spróbuj ponownie lub odśwież stronę, jeśli problem się powtarza.",
     "api": {
