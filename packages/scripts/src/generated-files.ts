@@ -9,9 +9,18 @@ export const MCP_APP_GENERATED_OUTPUTS = {
     "packages/mcp-apps/src/shared/generated/reader-messages.json",
     "packages/mcp-apps/src/shared/generated/reader-inputs.json",
     "packages/mcp-apps/src/shared/generated/style.css",
+    "packages/mcp-apps/src/generated/runtime.js.txt",
+    "packages/mcp-apps/src/generated/runtime.css.txt",
     "packages/mcp-apps/src/generated/bundles.ts",
   ],
 } as const;
+
+/** What the build writes to `packages/mcp-apps/src/<app>/generated/`. */
+export const MCP_APP_DIRECTORY_OUTPUTS = [
+  "app.html.txt",
+  "app.js.txt",
+  "app.css.txt",
+] as const;
 
 export const CI_GENERATED_OUTPUTS = {
   capabilityRuntime: [

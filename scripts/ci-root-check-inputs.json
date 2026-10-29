@@ -460,6 +460,15 @@
       "docs/changelog/**",
       "VERSION"
     ],
+    "Test staging proof readiness": [
+      "@stll/portable-path",
+      "apps/api/src/db-components.ts",
+      "apps/api/src/deploy-env-contract.ts",
+      "scripts/**",
+      ".github/workflows/**",
+      ".github/actions/setup-playwright/**",
+      ".github/actions/promote-dispatch/**"
+    ],
     "Generated files manifest guard": ["**"],
     "Playwright config scope": ["**"],
     "Test documentation and landing CI scope": ["**"],
@@ -699,7 +708,35 @@
       "@stll/docx-utils",
       "@stll/locales"
     ],
-    "Test projection-totality classification": ["@stll/api", "scripts/**"],
+    "Test projection-totality classification": [
+      "@stll/api",
+      "@stll/agent-input",
+      "@stll/ai-catalog",
+      "@stll/api-contract",
+      "@stll/auth-model",
+      "@stll/chat-limits",
+      "@stll/collation",
+      "@stll/concurrency",
+      "@stll/conditions",
+      "@stll/country-codes",
+      "@stll/docx-utils",
+      "@stll/errors",
+      "@stll/fetch",
+      "@stll/invoicing",
+      "@stll/legal-ast",
+      "@stll/legal-atlas",
+      "@stll/money",
+      "@stll/permissions",
+      "@stll/portable-path",
+      "@stll/redis-config",
+      "@stll/runtime-mode",
+      "@stll/sha256",
+      "@stll/skills",
+      "@stll/template-conditions",
+      "@stll/text-normalize",
+      "@stll/uuid-codec",
+      "scripts/**"
+    ],
     "Test aggregate inventories": [
       "scripts/**",
       ".oxlint-plugins/**",
@@ -714,7 +751,8 @@
       "apps/desktop/src/shared/rpc.gen.ts",
       "packages/api-contract/src/desktop-edit-file-types.ts",
       "scripts/check-bridge-version.sh"
-    ]
+    ],
+    "Test depth repository scripts": ["**"]
   },
   "ci-checks-policy": {
     "Resolve static check receipts": ["**"],

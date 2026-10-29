@@ -16,7 +16,7 @@ import { getTranslator } from "@/i18n/translator";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { APIError } from "@/lib/errors/api";
-import { readQueryResult } from "@/lib/errors/query-result";
+import { captureQueryError, readQueryResult } from "@/lib/errors/query-result";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -562,7 +562,7 @@ const readerAnswersRecoveryOptions = ({
       if (context.signal.aborted || runtime.isCancelled()) {
         return readQueryResult(fetched);
       }
-      getAnalytics().captureError(fetched.error, {
+      captureQueryError(fetched.error, {
         fingerprintKey: "readerAnswersRecoveryOptions.queryFn:failure",
         scope: {
           type: "handler",

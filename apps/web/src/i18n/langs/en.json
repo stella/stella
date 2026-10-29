@@ -132,6 +132,7 @@
     "checkSpamHint": "If you don't see it, check your spam folder.",
     "chooseOrganization": "Choose which organization to work in",
     "codeSentAgain": "We sent a new code.",
+    "continueWithApple": "Continue with Apple",
     "continueWithEmail": "Continue",
     "continueWithGoogle": "Continue with Google",
     "continueWithMicrosoft": "Continue with Microsoft",
@@ -546,6 +547,14 @@
     },
     "approve": "Approve",
     "approveSelected": "Approve selected",
+    "arrangement": {
+      "alertThreshold": "Alert threshold (%)",
+      "amountCap": "Amount cap",
+      "flatFee": "Flat fee",
+      "invalidCap": "Enter positive caps and an alert threshold between 0.01% and 100%.",
+      "minuteCap": "Time cap (minutes)",
+      "title": "Billing arrangement"
+    },
     "batchActions": "Batch actions",
     "billable": "Billable",
     "billedAmount": "Billed amount",
@@ -914,6 +923,7 @@
     "aiMissing": "AI is not configured.",
     "availabilityUnknown": "Availability could not be confirmed.",
     "deeplMissing": "DeepL is not configured.",
+    "deeplPdfRequired": "Translating PDFs requires DeepL.",
     "desktopUnavailable": "Connect or update stella desktop.",
     "featureUnavailable": "This feature is unavailable.",
     "ocrUnavailable": "OCR is unavailable.",
@@ -1277,7 +1287,8 @@
       "versionAtDecisionDateInferred": "Version at decision date (inferred)",
       "versionBasisInferredCompact": "Decision date · inferred",
       "versionBasisInferredExplanation": "The version is inferred from the decision date. The decision does not state which wording applies."
-    }
+    },
+    "withdrawnByPublisher": "Withdrawn by publisher"
   },
   "catalogue": {
     "addCustom": "Add custom",
@@ -1574,6 +1585,12 @@
     "loadEarlierMessagesError": "Couldn't load earlier messages",
     "loadingEarlierMessages": "Loading earlier messages…",
     "maxAttachmentsReached": "Maximum {count} files per message",
+    "mcpReconnect": {
+      "additional": "{count, plural, one {+# more} other {+# more}}",
+      "dismiss": "Dismiss connection notice",
+      "stoppedWorking": "Your connection to <name>{server}</name> stopped working.",
+      "waitingApproval": "Your connection to <name>{server}</name> is waiting for approval."
+    },
     "mention": {
       "category": {
         "entities": "In this matter",
@@ -2480,6 +2497,8 @@
       "aresNotFound": "No company found for this IČO.",
       "aresTitle": "Czech registry (ARES)",
       "contactName": "Contact name",
+      "displayNameOrganizationHint": "Optional override; otherwise generated from the organization name.",
+      "displayNamePersonHint": "Optional override; otherwise generated from the first and last name.",
       "icoPlaceholder": "IČO",
       "invalidIco": "Enter an 8-digit IČO."
     },
@@ -5060,6 +5079,16 @@
       "preferredNamePlaceholder": "Your name",
       "profileDescription": "Manage your personal preferences",
       "sendOtpCode": "Send verification code",
+      "signInMethods": {
+        "confirmDescription": "Enter a fresh code sent to your email to disconnect this sign-in method.",
+        "confirmTitle": "Disconnect {provider}?",
+        "description": "Connect accounts that use the same verified email address.",
+        "emailCode": "Email code",
+        "emailCodeDescription": "You can always sign in with a code sent to your email.",
+        "lastMethod": "Connect another account before disconnecting this one.",
+        "title": "Sign-in methods",
+        "unavailable": "Email delivery must be configured to disconnect sign-in methods."
+      },
       "timezone": "Timezone",
       "timezoneDescription": "Used for timestamps in notifications and emails",
       "timezoneSaved": "Timezone updated",

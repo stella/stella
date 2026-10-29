@@ -132,6 +132,7 @@
     "checkSpamHint": "Ja to neredzat, pārbaudiet mēstuļu mapi.",
     "chooseOrganization": "Izvēlieties organizāciju, kurā strādāt",
     "codeSentAgain": "Nosūtījām jaunu kodu.",
+    "continueWithApple": "Turpināt ar Apple",
     "continueWithEmail": "Turpināt",
     "continueWithGoogle": "Turpināt ar Google",
     "continueWithMicrosoft": "Turpināt ar Microsoft",
@@ -546,6 +547,14 @@
     },
     "approve": "Apstiprināt",
     "approveSelected": "Apstiprināt atlasītos",
+    "arrangement": {
+      "alertThreshold": "Brīdinājuma slieksnis (%)",
+      "amountCap": "Atlīdzības limits",
+      "flatFee": "Fiksēta atlīdzība",
+      "invalidCap": "Ievadiet pozitīvus limitus un brīdinājuma slieksni no 0,01 % līdz 100 %.",
+      "minuteCap": "Laika limits (minūtes)",
+      "title": "Vienošanās par atlīdzību"
+    },
     "batchActions": "Grupas darbības",
     "billable": "Apmaksājams",
     "billedAmount": "Rēķinā iekļautā summa",
@@ -914,6 +923,7 @@
     "aiMissing": "AI nav konfigurēts.",
     "availabilityUnknown": "Neizdevās apstiprināt pieejamību.",
     "deeplMissing": "DeepL nav konfigurēts.",
+    "deeplPdfRequired": "PDF failu tulkošanai ir nepieciešams DeepL.",
     "desktopUnavailable": "Savienojiet vai atjauniniet stella desktop.",
     "featureUnavailable": "Šī funkcija nav pieejama.",
     "ocrUnavailable": "OCR nav pieejams.",
@@ -1277,7 +1287,8 @@
       "versionAtDecisionDateInferred": "Redakcija lēmuma datumā (izsecināta)",
       "versionBasisInferredCompact": "Nolēmuma datums · izsecināts",
       "versionBasisInferredExplanation": "Redakcija ir izsecināta no nolēmuma datuma. Nolēmumā nav norādīts, kura redakcija ir piemērojama."
-    }
+    },
+    "withdrawnByPublisher": "Izdevējs atsaucis"
   },
   "catalogue": {
     "addCustom": "Pievienot pielāgotu",
@@ -1574,6 +1585,12 @@
     "loadEarlierMessagesError": "Neizdevās ielādēt vecākus ziņojumus",
     "loadingEarlierMessages": "Ielādē vecākus ziņojumus…",
     "maxAttachmentsReached": "Maksimāli {count} faili vienā ziņojumā",
+    "mcpReconnect": {
+      "additional": "{count, plural, zero {+# citu} one {+# cits} other {+# citi}}",
+      "dismiss": "Paslēpt paziņojumu par savienojumu",
+      "stoppedWorking": "Jūsu savienojums ar <name>{server}</name> vairs nedarbojas.",
+      "waitingApproval": "Jūsu savienojums ar <name>{server}</name> gaida apstiprinājumu."
+    },
     "mention": {
       "category": {
         "entities": "Šajā lietā",
@@ -2480,6 +2497,8 @@
       "aresNotFound": "Šim IČO uzņēmums netika atrasts.",
       "aresTitle": "Čehijas reģistrs (ARES)",
       "contactName": "Kontakta nosaukums",
+      "displayNameOrganizationHint": "Neobligāta pārrakstīšana; citādi tiek izveidots no organizācijas nosaukuma.",
+      "displayNamePersonHint": "Neobligāta pārrakstīšana; citādi tiek izveidots no vārda un uzvārda.",
       "icoPlaceholder": "IČO",
       "invalidIco": "Ievadiet 8 ciparu IČO."
     },
@@ -5060,6 +5079,16 @@
       "preferredNamePlaceholder": "Jūsu vārds",
       "profileDescription": "Pārvaldiet savas personīgās preferences",
       "sendOtpCode": "Nosūtīt apstiprinājuma kodu",
+      "signInMethods": {
+        "confirmDescription": "Lai atsaistītu šo pierakstīšanās veidu, ievadiet jaunu kodu, kas nosūtīts uz jūsu e-pastu.",
+        "confirmTitle": "Atsaistīt {provider}?",
+        "description": "Saistiet kontus, kuros izmantota viena un tā pati verificētā e-pasta adrese.",
+        "emailCode": "E-pasta kods",
+        "emailCodeDescription": "Jūs vienmēr varat pierakstīties, izmantojot uz jūsu e-pastu nosūtītu kodu.",
+        "lastMethod": "Pirms šī konta atvienošanas pievienojiet citu kontu.",
+        "title": "Pierakstīšanās veidi",
+        "unavailable": "Lai atsaistītu pierakstīšanās veidus, jābūt konfigurētai e-pasta piegādei."
+      },
       "timezone": "Laika josla",
       "timezoneDescription": "Tiek izmantota laika zīmogiem paziņojumos un e-pastos",
       "timezoneSaved": "Laika josla atjaunināta",

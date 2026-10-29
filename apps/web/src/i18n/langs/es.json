@@ -132,6 +132,7 @@
     "checkSpamHint": "Si no lo ve, revise su carpeta de spam.",
     "chooseOrganization": "Seleccione en qué organización desea trabajar",
     "codeSentAgain": "Hemos enviado un código nuevo.",
+    "continueWithApple": "Continuar con Apple",
     "continueWithEmail": "Continuar",
     "continueWithGoogle": "Continuar con Google",
     "continueWithMicrosoft": "Continuar con Microsoft",
@@ -546,6 +547,14 @@
     },
     "approve": "Aprobar",
     "approveSelected": "Aprobar seleccionados",
+    "arrangement": {
+      "alertThreshold": "Umbral de aviso (%)",
+      "amountCap": "Límite de honorarios",
+      "flatFee": "Honorarios fijos",
+      "invalidCap": "Introduzca límites positivos y un umbral de aviso entre el 0,01 % y el 100 %.",
+      "minuteCap": "Límite de tiempo (minutos)",
+      "title": "Acuerdo de honorarios"
+    },
     "batchActions": "Acciones en lote",
     "billable": "Facturable",
     "billedAmount": "Importe facturado",
@@ -914,6 +923,7 @@
     "aiMissing": "La IA no está configurada.",
     "availabilityUnknown": "No se pudo confirmar la disponibilidad.",
     "deeplMissing": "DeepL no está configurado.",
+    "deeplPdfRequired": "Para traducir archivos PDF se necesita DeepL.",
     "desktopUnavailable": "Conecta o actualiza stella desktop.",
     "featureUnavailable": "Esta función no está disponible.",
     "ocrUnavailable": "El OCR no está disponible.",
@@ -1277,7 +1287,8 @@
       "versionAtDecisionDateInferred": "Versión a la fecha de la resolución (inferida)",
       "versionBasisInferredCompact": "Fecha de la resolución · inferida",
       "versionBasisInferredExplanation": "La versión se infiere de la fecha de la resolución. La resolución no indica qué redacción se aplica."
-    }
+    },
+    "withdrawnByPublisher": "Retirado por el editor"
   },
   "catalogue": {
     "addCustom": "Añadir personalizado",
@@ -1574,6 +1585,12 @@
     "loadEarlierMessagesError": "No se pudieron cargar los mensajes anteriores",
     "loadingEarlierMessages": "Cargando mensajes anteriores…",
     "maxAttachmentsReached": "Máximo {count} archivos por mensaje",
+    "mcpReconnect": {
+      "additional": "{count, plural, one {+# más} many {+# más} other {+# más}}",
+      "dismiss": "Ocultar aviso de conexión",
+      "stoppedWorking": "Tu conexión con <name>{server}</name> ha dejado de funcionar.",
+      "waitingApproval": "Tu conexión con <name>{server}</name> está pendiente de aprobación."
+    },
     "mention": {
       "category": {
         "entities": "En este asunto",
@@ -2480,6 +2497,8 @@
       "aresNotFound": "No se encontró ninguna empresa para este IČO.",
       "aresTitle": "Registro checo (ARES)",
       "contactName": "Nombre del contacto",
+      "displayNameOrganizationHint": "Sustitución opcional; de lo contrario, se genera a partir del nombre de la organización.",
+      "displayNamePersonHint": "Sustitución opcional; de lo contrario, se genera a partir del nombre y apellido.",
       "icoPlaceholder": "IČO",
       "invalidIco": "Introduce un IČO de 8 dígitos."
     },
@@ -5060,6 +5079,16 @@
       "preferredNamePlaceholder": "Tu nombre",
       "profileDescription": "Gestiona tus preferencias personales",
       "sendOtpCode": "Enviar código de verificación",
+      "signInMethods": {
+        "confirmDescription": "Introduce un código nuevo enviado a tu correo electrónico para desconectar este método de inicio de sesión.",
+        "confirmTitle": "¿Desconectar {provider}?",
+        "description": "Conecta cuentas que usen la misma dirección de correo electrónico verificada.",
+        "emailCode": "Código por correo electrónico",
+        "emailCodeDescription": "Siempre puedes iniciar sesión con un código enviado a tu correo electrónico.",
+        "lastMethod": "Conecta otra cuenta antes de desconectar esta.",
+        "title": "Métodos de inicio de sesión",
+        "unavailable": "Debe configurarse el envío de correo electrónico para desconectar métodos de inicio de sesión."
+      },
       "timezone": "Zona horaria",
       "timezoneDescription": "Se usa para las marcas de tiempo en notificaciones y correos",
       "timezoneSaved": "Zona horaria actualizada",

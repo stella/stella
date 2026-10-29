@@ -1,5 +1,6 @@
 import {
   Fragment,
+  type ReactNode,
   type RefObject,
   useCallback,
   useLayoutEffect,
@@ -104,6 +105,12 @@ type WorkspaceTableProps<TRow extends TableRowData> = {
   // last result instead, so grouped sections and the public results list opt
   // out. The add-column rail is drawn beside the table either way.
   fillHeight?: boolean;
+  // What stands where the rows would be when the table holds none and waits
+  // for none: right under the headers, in place of the body. While it shows,
+  // the body does not scroll sideways (no row lies beyond the edge to scroll
+  // to) and claims no height of its own, so neither a scrollbar nor a blank
+  // band separates the headers from it. Omitted, an empty body stays empty.
+  emptyState?: ReactNode;
   // When set, the table flows inside this shared scroll container instead of
   // owning its own scroll box. Grouped sections pass the single grouped-view
   // scroller so every group shares one vertical/horizontal scroll (nested
@@ -130,6 +137,7 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
   skeletonRowCount = 0,
   stickyColumnHeader = true,
   fillHeight = true,
+  emptyState,
   firstRowNumber = 1,
   outerScrollRef,
 }: WorkspaceTableProps<TRow>) => {
@@ -385,6 +393,10 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
   // Rows that are on their way stand in the grid; rows that are on screen stay
   // on screen, so a refetch over a drawn result set never draws both.
   const showsSkeletonRows = skeletonRowCount > 0 && rowModel.rows.length === 0;
+  const showsEmptyState =
+    emptyState !== undefined &&
+    rowModel.rows.length === 0 &&
+    !showsSkeletonRows;
   const orderedColumns = getOrderedColumns({
     startColumns: table.getStartLeafColumns(),
     centerColumns: table.getCenterLeafColumns(),
@@ -580,12 +592,15 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
       className={cn(
         "relative",
         !inlineFlow && "h-full flex-1",
+        showsEmptyState && "flex flex-col",
         addPropertyColumn && ADD_PROPERTY_RAIL_ACTIVE_CLASS_NAME,
       )}
     >
       <div
         className={cn(
-          inlineFlow ? "w-full" : "scrollbar-subtle h-full overflow-auto",
+          showsEmptyState && "shrink-0 overflow-hidden",
+          !showsEmptyState &&
+            (inlineFlow ? "w-full" : "scrollbar-subtle h-full overflow-auto"),
         )}
         data-slot={WORKSPACE_TABLE_SCROLL_SLOT}
         ref={tableWrapperRef}
@@ -596,7 +611,7 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
           aria-rowcount={rowModel.rows.length}
           className={cn(
             "relative flex flex-col text-sm",
-            !inlineFlow && "min-h-full",
+            !inlineFlow && !showsEmptyState && "min-h-full",
           )}
           role="grid"
           style={gridStyle}
@@ -726,6 +741,11 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
           </div>
         </div>
       </div>
+      {showsEmptyState && (
+        <div className="flex flex-1 justify-center px-4 py-8">
+          <div className="w-full max-w-md">{emptyState}</div>
+        </div>
+      )}
       {!inlineFlow &&
         addPropertyColumn !== null &&
         rowHost.addColumnRail !== undefined && (

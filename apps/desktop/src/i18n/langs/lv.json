@@ -299,7 +299,7 @@
     "moreOptions": "Vairāk iespēju",
     "moreItemActions": "Vairāk darbību vienumam {number}",
     "noResults": "Nav atbilstošu izgriezumu",
-    "noResultsDescription": "Vai tā vietā meklēt “{query}” reģistros?",
+    "noResultsSearchRegistries": "Meklēt “{query}” reģistros",
     "noGroup": "Bez grupas",
     "newGroupOption": "Jauna grupa…",
     "copyItem": "Kopēt vienumu {number}",

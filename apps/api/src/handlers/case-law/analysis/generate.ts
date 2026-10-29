@@ -853,7 +853,7 @@ export const generateAnalysis = async ({
     return Result.err(available.error);
   }
   if (promptCachingEnabled === null) {
-    return Result.err(storedAIConfigUnreadableError(undefined));
+    return Result.err(storedAIConfigUnreadableError());
   }
   if (reader === null) {
     return panic("An available analysis role must resolve a reader key");

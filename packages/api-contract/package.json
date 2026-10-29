@@ -8,6 +8,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./api-date": "./src/api-date.ts",
+    "./contact-date": "./src/contact-date.ts",
     "./conversion-refusal": "./src/conversion-refusal.ts",
     "./mcp": "./src/mcp.ts",
     "./stella-logo": "./src/stella-logo.ts",
@@ -20,6 +21,7 @@
     "./provider-setup": "./src/provider-setup.ts",
     "./organization-ai-availability": "./src/organization-ai-availability.ts",
     "./currency-code": "./src/currency-code.ts",
+    "./billing": "./src/billing.ts",
     "./visual-preview": "./src/visual-preview.ts",
     "./ai-disclosure": "./src/ai-disclosure.ts",
     "./ai-decision-provider": "./src/ai-decision-provider.ts",
