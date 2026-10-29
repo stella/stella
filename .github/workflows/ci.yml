@@ -1125,7 +1125,9 @@ jobs:
           COMPARISON_BASE: ${{ steps.changed-files.outputs.comparison_base }}
           API_SCOPE_UNKNOWN: ${{ steps.changed-files.outputs.api_scope_unknown }}
         run: |
+          : "${RUNNER_TEMP:?RUNNER_TEMP must name the runner temporary directory}"
           if ! timeout --kill-after=10s 120s bun scripts/ci-api-test-plan.ts; then
+            : > "$RUNNER_TEMP/api-test-files"
             {
               echo 'ci_tests_required=true'
               echo 'ci_tests_matrix={"shard":["api-1","api-2","api-3","api-4","api-5","api-6","rest-web"]}'
@@ -1257,6 +1259,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          : "${RUNNER_TEMP:?RUNNER_TEMP must name the runner temporary directory}"
           changed_files=()
           if [[ -s "$RUNNER_TEMP/api-test-changed-paths" ]]; then
             while IFS= read -r -d '' file; do
@@ -1264,6 +1267,7 @@ jobs:
             done < "$RUNNER_TEMP/api-test-changed-paths"
           fi
           plan=$(bun scripts/e2e-spec-shards.ts select "${changed_files[@]}")
+          printf '%s\n' "$plan" > "$RUNNER_TEMP/e2e-pr-selection.json"
           matrix=$(jq -c .matrix <<< "$plan")
           mode=$(jq -r .status <<< "$plan")
           specs=$(jq -c .specs <<< "$plan")
@@ -1281,20 +1285,19 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           E2E_PRODUCTION_REQUIRED: ${{ steps.changed-files.outputs.e2e_production_required }}
           ROUTE_SMOKE_REQUIRED: ${{ steps.changed-files.outputs.route_smoke_required }}
-          SELECTED_MATRIX: ${{ steps.e2e-pr-selection.outputs.matrix }}
           SELECTED_MODE: ${{ steps.e2e-pr-selection.outputs.mode }}
-          SELECTED_SPECS: ${{ steps.e2e-pr-selection.outputs.specs }}
+          SELECTED_PLAN_PATH: ${{ runner.temp }}/e2e-pr-selection.json
           SELECTOR_OUTCOME: ${{ steps.e2e-pr-selection.outcome }}
         run: |
           set -euo pipefail
-          if [[ "$EVENT_NAME" != pull_request || "$SELECTOR_OUTCOME" != success || -z "$SELECTED_MATRIX" ]]; then
+          if [[ "$EVENT_NAME" != pull_request || "$SELECTOR_OUTCOME" != success || ! -s "$SELECTED_PLAN_PATH" ]]; then
             matrix=$(bun scripts/e2e-spec-shards-core.ts all)
             mode=full
             specs='[]'
           else
-            matrix=$SELECTED_MATRIX
+            matrix=$(jq -c .matrix "$SELECTED_PLAN_PATH")
             mode=$SELECTED_MODE
-            specs=$SELECTED_SPECS
+            specs=$(jq -c .specs "$SELECTED_PLAN_PATH")
           fi
           # route-smoke runs the same seeded network proof for affected merge
           # groups, so do not start a second production stack for that leg.
@@ -1333,7 +1336,7 @@ jobs:
           ARMED_PROOF_JOBS: ${{ steps.completed-depth.outputs.armed_proof_jobs || '[]' }}
           ARMED_JOB_SCOPES: ${{ steps.heavy-plan.outputs.armed_job_scopes || '{}' }}
           HEAVY_PROOF_JOBS: &armed_proof_jobs '["migration-upgrade-rehearsal","release-typecheck","web-image-smoke","mobile-build","landing-build","route-smoke","stack-redaction-browsers","e2e-vite-canary","marketing-screenshots","api-image-smoke","legal-atlas-image","desktop-windows-dry-run","windows-scripts","desktop-rust-tests"]'
-          CHANGED_SCOPE: ${{ toJSON(steps.changed-files.outputs) }}
+          CHANGED_SCOPE_PATH: ${{ runner.temp }}/changed-scope.json
           MERGE_GROUP_HEAVY_KEEP: '["migration-upgrade-rehearsal","e2e-report"]'
         run: |
           armed_delta=false
@@ -1350,10 +1353,10 @@ jobs:
                 # The exact bound source payloads must cover every suite this
                 # group now requires; missing planner inputs retain all suites.
                 if [[ "${ARMED_PROOF:-}" == complete ]] && jq -ne \
-                  --argjson scopes "$ARMED_JOB_SCOPES" --argjson plans "$CHANGED_SCOPE" --argjson eligible "$HEAVY_PROOF_JOBS" \
+                  --argjson scopes "$ARMED_JOB_SCOPES" --slurpfile plans "$CHANGED_SCOPE_PATH" --argjson eligible "$HEAVY_PROOF_JOBS" \
                   --argjson proven "$ARMED_PROOF_JOBS" --argjson keep "$MERGE_GROUP_HEAVY_KEEP" \
                   --arg marketing "${MARKETING_REQUIRED:-false}" '
-                    ($plans + {marketing_screenshots_required: $marketing}) as $planned
+                    ($plans[0] + {marketing_screenshots_required: $marketing}) as $planned
                     | ($scopes | type == "object" and length > 0)
                     and (($scopes | keys) == ($eligible | sort))
                     and all($scopes[]; if . == null then true
@@ -1385,7 +1388,7 @@ jobs:
           PACKAGE_CHECKS_REQUIRED: ${{ steps.changed-files.outputs.package_checks_required }}
           SELECTED_REQUIRED: ${{ steps.api-test-selection.outputs.ci_tests_required }}
           SELECTED_MATRIX: ${{ steps.api-test-selection.outputs.ci_tests_matrix }}
-          SELECTED_FILES: ${{ steps.api-test-selection.outputs.api_test_files }}
+          SELECTED_FILES_PATH: ${{ runner.temp }}/api-test-files
           SELECTED_SHARDS: ${{ steps.api-test-selection.outputs.api_test_shards }}
           SELECTED_SCOPE: ${{ steps.api-test-selection.outputs.test_scope }}
         run: |
@@ -1398,7 +1401,8 @@ jobs:
             } >> "$GITHUB_OUTPUT"
             {
               echo 'api_test_files<<API_TEST_FILES_END'
-              printf '%s\n' "$SELECTED_FILES"
+              cat "$SELECTED_FILES_PATH"
+              printf '\n'
               echo 'API_TEST_FILES_END'
             } >> "$GITHUB_OUTPUT"
           # ci_tests_required is the one gate of ci-tests: without package
@@ -2208,6 +2212,15 @@ jobs:
           bun scripts/check-published-exports.ts packages/fetch
           bun scripts/check-published-exports.ts packages/scan-engine
 
+      - name: Rebuild every npm package to verify identical tarball bytes
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && needs.ci-plan.outputs.published_exports_required == 'true') }}
+        timeout-minutes: 20
+        run: bash scripts/check-publish-reproducibility.sh
+
+      - name: npm release jobs match the package dependency graph
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && needs.ci-plan.outputs.published_exports_required == 'true') }}
+        run: bun --preload ./scripts/offline-network-preload.ts scripts/generate-npm-release-jobs.ts --check
+
       - name: Load merge base measurement
         timeout-minutes: 6
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
@@ -2968,6 +2981,7 @@ jobs:
         run: nproc; free -g
 
       - name: Test API or rest
+        id: test-api-or-rest
         if: >-
           !cancelled()
           && needs.ci-plan.outputs.package_checks_required == 'true'
@@ -3008,6 +3022,8 @@ jobs:
           set -o pipefail
           plan="$RUNNER_TEMP/test-plan-$SHARD.json"
           output="$RUNNER_TEMP/test-output-$SHARD.log"
+          # The upload step reads this path; the rest-web leg writes the rest shard's file.
+          echo "output=$output" >> "$GITHUB_OUTPUT"
           bun run test -- --concurrency=2 "${args[@]}" "${shard_args[@]}" --dry=json > "$plan"
           # On failure the log ends with the failing tests and their errors.
           bun run test -- --concurrency=2 --output-logs=full --log-order=stream "${args[@]}" "${shard_args[@]}" 2>&1 | tee "$output" || {
@@ -3016,6 +3032,15 @@ jobs:
             exit "$status"
           }
           bun scripts/test-shards.ts --verify-output "$SHARD" "$plan" "$output"
+
+      - name: Upload failed API or rest test output
+        if: failure() && steps.test-api-or-rest.outcome == 'failure'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-output-${{ matrix.shard }}
+          path: ${{ steps.test-api-or-rest.outputs.output }}
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Upload API test timings
         if: always() && startsWith(matrix.shard, 'api-')
@@ -3027,6 +3052,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Test web
+        id: test-web
         if: >-
           !cancelled()
           && needs.ci-plan.outputs.package_checks_required == 'true'
@@ -3051,6 +3077,8 @@ jobs:
           set -o pipefail
           plan="$RUNNER_TEMP/test-plan-$SHARD.json"
           output="$RUNNER_TEMP/test-output-$SHARD.log"
+          # The upload step reads this path; the rest-web leg writes the rest shard's file.
+          echo "output=$output" >> "$GITHUB_OUTPUT"
           bun run test -- --concurrency=2 "${args[@]}" "${shard_args[@]}" --dry=json > "$plan"
           # On failure the log ends with the failing tests and their errors.
           bun run test -- --concurrency=2 --output-logs=full --log-order=stream "${args[@]}" "${shard_args[@]}" 2>&1 | tee "$output" || {
@@ -3059,6 +3087,15 @@ jobs:
             exit "$status"
           }
           bun scripts/test-shards.ts --verify-output "$SHARD" "$plan" "$output"
+
+      - name: Upload failed web test output
+        if: failure() && steps.test-web.outcome == 'failure'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-output-web
+          path: ${{ steps.test-web.outputs.output }}
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Repeat changed tests
         if: >-

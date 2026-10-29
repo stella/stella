@@ -97,7 +97,11 @@ const availability = (
     return { type: "pending" };
   }
   if (typeof enabled === "object") {
-    return { type: "error" };
+    return {
+      type: "unavailable",
+      reason: "availabilityUnknown",
+      settingsLink,
+    };
   }
   if (enabled) {
     return { type: "available" };

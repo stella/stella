@@ -1,0 +1,5 @@
+{
+  "kind": "priority",
+  "qualifier": "Publishes pruned quarantine exclusions as a signed-commit pull request.",
+  "reviewedDigest": "f6f35ce5b33f9736e413e1e29be7c0f2a4f25bbbc83cb94bf73582116c04b136"
+}
