@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import { beforeAll, describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
+import { getTableConfig } from "drizzle-orm/pg-core";
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
@@ -351,6 +352,61 @@ describe.skipIf(!enabled)("generated artefact storage (postgres)", () => {
     ).at(0);
     expect(row?.title).toBe("Other title");
     expect(row?.generationProvenance).toBeNull();
+  });
+  const validOrigin = {
+    type: "generated",
+    generator,
+    decisionIds: [sourceId],
+    coverage: "complete",
+  };
+  test.each([
+    null,
+    { version: 1, slots: { title: {} } },
+    [validOrigin],
+    { version: 1, slots: [{ title: validOrigin }] },
+    { version: 1, slots: { title: [validOrigin] } },
+    { version: 1, slots: { title: [[validOrigin]] } },
+    { version: 1, slots: { title: { type: "authored" } } },
+    { version: 1, slots: { title: { type: ["authored"] } } },
+    {
+      version: 1,
+      slots: { title: { ...validOrigin, coverage: "legacy-input" } },
+    },
+    ...Object.entries(validOrigin).flatMap(([key, valid]) =>
+      [valid, [valid], [[valid]], [], null, {}, 0, true, undefined].map(
+        (value) => ({
+          version: 1,
+          slots: { title: { ...validOrigin, [key]: value } },
+        }),
+      ),
+    ),
+  ])("deterministic database/runtime provenance parity: %j", async (value) => {
+    const decoded = Result.try(() => readArtefactOrigin(value, "title"));
+    const constraint =
+      getTableConfig(chatThreads).checks.find(
+        ({ name }) => name === "chat_threads_generation_provenance_valid",
+      ) ?? panic("Missing provenance constraint");
+    const schema = await db.execute(
+      sql`SELECT ${constraint.value} AS accepted FROM (SELECT ${JSON.stringify(value)}::text::jsonb AS generation_provenance) chat_threads`,
+    );
+    expect(schema.at(0)?.["accepted"]).toBe(decoded.isOk());
+    const stored = await Result.tryPromise(
+      async () =>
+        await db
+          .update(chatThreads)
+          .set({
+            generationProvenance: sql`${JSON.stringify(value)}::text::jsonb`,
+          })
+          .where(eq(chatThreads.id, validationId))
+          .returning({ provenance: chatThreads.generationProvenance }),
+    );
+    expect(stored.isOk()).toBe(decoded.isOk());
+    if (stored.isOk()) {
+      const row = stored.value.at(0) ?? panic("Missing parity fixture");
+      expect(readArtefactOrigin(row.provenance, "title")).toEqual(
+        decoded.unwrap(),
+      );
+    }
   });
   test("generated-artefact.storage-validation", async () => {
     const origin = fc.oneof(

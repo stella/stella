@@ -844,6 +844,29 @@ test("generated artefact provenance detector rejects new raw calls and writes", 
   ).toMatchObject({ modelImport: true, legacyCalls: 1 });
 });
 
+test("generated artefact provenance counts every dynamic-import invocation", async () => {
+  const { inspectArtefactGenerators, assessArtefactGenerator } =
+    await import("./generated-artefact-provenance");
+  const file = "apps/api/src/handlers/chat/generate-thread-title.ts";
+  const module = '"@/api/lib/tanstack-ai-generate"';
+  for (const source of [
+    `const m = await import(${module}); m.collectTanStackTextRun({}); m.collectTanStackTextRun({});`,
+    `const m = await import(${module}); const copy = m; const run = copy.collectTanStackTextRun; run({}); run({});`,
+    `const pending = import(${module}); pending.then(m => { m.collectTanStackTextRun({}); m.collectTanStackTextRun({}); });`,
+    `const { collectTanStackTextRun: run } = await import(${module}); run({}); run({});`,
+    `import(${module}).then(m => { m.collectTanStackTextRun({}); m.collectTanStackTextRun({}); });`,
+    `import(${module}).then(({ collectTanStackTextRun: run }) => { run({}); run({}); });`,
+  ]) {
+    const scanned = inspectArtefactGenerators({ file, source });
+    expect(scanned).toMatchObject({ modelImport: true, legacyCalls: 2 });
+    expect(
+      assessArtefactGenerator({ file, scanned, ledger: { [file]: 1 } }),
+    ).toContain(
+      `${file}: raw generation count 2; migrate through generateArtefact and shrink the transition list`,
+    );
+  }
+});
+
 test("generated artefact provenance rejects new consumers and transition growth in a real diff", async () => {
   const { checkArtefactProvenance } =
     await import("./generated-artefact-provenance");
