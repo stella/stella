@@ -3,6 +3,8 @@
 // waiver on main in one proposal instead of leaving the date to whichever
 // change next touches the owner file. Every other kind, and any probe that
 // could not confirm absence, keeps its deadline.
+import { panic } from "better-result";
+
 import type { StringLiteral } from "../packages/scripts/src/syntax-tree";
 import type { FixEvidence } from "./dated-waiver-fix-task";
 import {
@@ -44,16 +46,60 @@ export type RenewalPlan = {
   baseFiles: Record<string, string>;
 };
 
+const sharedDateGroups = (sites: readonly DocumentationSite[]) => {
+  const parents = new Map(sites.map((site) => [site, site]));
+  const root = (site: DocumentationSite): DocumentationSite => {
+    const parent = parents.get(site);
+    if (parent === undefined) {
+      return panic("Documentation date group missing");
+    }
+    if (parent === site) {
+      return site;
+    }
+    const owner = root(parent);
+    parents.set(site, owner);
+    return owner;
+  };
+  const literalOwners = new Map<number, DocumentationSite>();
+  for (const site of sites) {
+    for (const literal of [site.checkedAt, site.expiresAt]) {
+      if (literal === undefined) {
+        continue;
+      }
+      const owner = literalOwners.get(literal.start);
+      if (owner === undefined) {
+        literalOwners.set(literal.start, site);
+        continue;
+      }
+      parents.set(root(site), root(owner));
+    }
+  }
+  const groups = new Map<DocumentationSite, DocumentationSite[]>();
+  for (const site of sites) {
+    const owner = root(site);
+    const members = groups.get(owner);
+    if (members === undefined) {
+      groups.set(owner, [site]);
+      continue;
+    }
+    members.push(site);
+  }
+  return new Map(
+    sites.map((site) => {
+      const group = groups.get(root(site));
+      if (group === undefined) {
+        return panic("Documentation date group missing");
+      }
+      return [site, group] as const;
+    }),
+  );
+};
+
 type PlanRenewalOptions = {
   source: string;
   absent: readonly DatedWaiver[];
   now: Date;
 };
-
-const slotKey = (site: DocumentationSite): string | undefined =>
-  site.checkedAt && site.expiresAt
-    ? `${site.checkedAt.start}:${site.expiresAt.start}`
-    : undefined;
 
 export const planDocRenewal = ({
   source,
@@ -62,23 +108,37 @@ export const planDocRenewal = ({
 }: PlanRenewalOptions): RenewalPlan => {
   const dates = renewalDates(now);
   const { sites } = readDocumentationOwner(source);
-  const confirmed = new Set(
-    absent
-      .filter(
-        (entry) =>
-          entry.kind === "no-llms-txt" &&
-          entry.source === DOC_SOURCE_FILE &&
-          now.getTime() < Date.parse(expiryInstant(entry.expiresAt)),
-      )
-      .map(({ id }) => id),
-  );
-  const members = new Map<string, DocumentationSite[]>();
-  for (const site of sites) {
-    const key = slotKey(site);
-    if (key !== undefined) {
-      members.set(key, [...(members.get(key) ?? []), site]);
+  const groups = sharedDateGroups(sites);
+  const candidates = new Map<
+    DatedWaiver,
+    {
+      site: DocumentationSite;
+      checkedAt: StringLiteral;
+      expiresAt: StringLiteral;
     }
+  >();
+  for (const entry of absent) {
+    const matches = sites.filter(({ dependency }) => dependency === entry.id);
+    const site = matches.at(0);
+    if (
+      entry.kind !== "no-llms-txt" ||
+      entry.source !== DOC_SOURCE_FILE ||
+      now.getTime() >= Date.parse(expiryInstant(entry.expiresAt)) ||
+      matches.length !== 1 ||
+      site?.checkedAt === undefined ||
+      site.expiresAt === undefined ||
+      site.expiresAt.value !== entry.expiresAt ||
+      site.checkedAt.value !== entry.checkedAt
+    ) {
+      continue;
+    }
+    candidates.set(entry, {
+      site,
+      checkedAt: site.checkedAt,
+      expiresAt: site.expiresAt,
+    });
   }
+  const eligible = new Set([...candidates.values()].map(({ site }) => site));
   const replacements = new Map<
     number,
     { literal: StringLiteral; value: string }
@@ -86,28 +146,25 @@ export const planDocRenewal = ({
   const renewed: DatedWaiver[] = [];
   const held: DatedWaiver[] = [];
   for (const entry of absent) {
-    const matches = sites.filter(({ dependency }) => dependency === entry.id);
-    const site = matches.at(0);
-    const key = site === undefined ? undefined : slotKey(site);
-    const group = key === undefined ? [] : (members.get(key) ?? []);
-    if (
-      !confirmed.has(entry.id) ||
-      matches.length !== 1 ||
-      site?.checkedAt === undefined ||
-      site.expiresAt === undefined ||
-      site.expiresAt.value !== entry.expiresAt ||
-      site.checkedAt.value !== entry.checkedAt ||
-      !group.every(({ dependency }) => confirmed.has(dependency))
-    ) {
+    const candidate = candidates.get(entry);
+    if (candidate === undefined) {
       held.push(entry);
       continue;
     }
-    replacements.set(site.checkedAt.start, {
-      literal: site.checkedAt,
+    const group = groups.get(candidate.site);
+    if (group === undefined) {
+      panic("Documentation date group missing");
+    }
+    if (!group.every((site) => eligible.has(site))) {
+      held.push(entry);
+      continue;
+    }
+    replacements.set(candidate.checkedAt.start, {
+      literal: candidate.checkedAt,
       value: dates.checkedAt,
     });
-    replacements.set(site.expiresAt.start, {
-      literal: site.expiresAt,
+    replacements.set(candidate.expiresAt.start, {
+      literal: candidate.expiresAt,
       value: dates.expiresAt,
     });
     renewed.push(entry);

@@ -219,6 +219,41 @@ test("shared dates renew only when every entry sharing them is confirmed absent"
   });
 });
 
+test("shared date declarations renew as one connected group", () => {
+  const source = `export const DOC_SOURCES = {};
+const CHECKED_AT = "${SOON.checkedAt}";
+const EXPIRES_AT = "${SOON.expiresAt}";
+export const DOC_SOURCE_EXCLUSIONS = [
+  { dependency: "a", checkedAt: CHECKED_AT, expiresAt: "${SOON.expiresAt}" },
+  { dependency: "b", checkedAt: CHECKED_AT, expiresAt: EXPIRES_AT },
+  { dependency: "c", checkedAt: "${SOON.checkedAt}", expiresAt: EXPIRES_AT },
+];`;
+  const entries = ["a", "b", "c"].map((id) => docWaiver(id, SOON));
+  for (let subset = 0; subset < 2 ** entries.length; subset += 1) {
+    const absent = entries.filter(
+      (_entry, index) => Math.floor(subset / 2 ** index) % 2 === 1,
+    );
+    const plan = planDocRenewal({ source, absent, now: NOW });
+    if (absent.length === entries.length) {
+      expect(plan.renewed).toEqual(entries);
+      expect(plan.held).toEqual([]);
+      continue;
+    }
+    expect(plan.renewed).toEqual([]);
+    expect(plan.held).toEqual(absent);
+    expect(plan.files).toEqual({});
+  }
+  const plan = planDocRenewal({
+    source,
+    absent: entries.map((entry) =>
+      entry.id === "a" ? { ...entry, checkedAt: LATER.checkedAt } : entry,
+    ),
+    now: NOW,
+  });
+  expect(plan.renewed).toEqual([]);
+  expect(plan.files).toEqual({});
+});
+
 test("stale, lapsed or foreign evidence is held instead of renewed", () => {
   const plan = planDocRenewal({
     source: OWNER,
