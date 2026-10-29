@@ -1380,15 +1380,18 @@ describe("CZ printed lines read as paragraphs", () => {
         (block) => block.type === "paragraph" && block.role === "holding",
       )?.plainText,
     ).toBe("Ústavní stížnost se zamítá.");
+    // The sentence handing over to the ruling is part of the opening.
+    expect(
+      documentAst.blocks.find(
+        (block) => block.type === "paragraph" && block.role === "intro",
+      )?.plainText,
+    ).toBe("Ústavní soud rozhodl o ústavní stížnosti takto:");
     expect(
       documentAst.blocks
         .filter(
           (block) => block.type === "paragraph" && block.role === undefined,
         )
         .map((block) => block.plainText),
-    ).toEqual([
-      "Ústavní soud rozhodl o ústavní stížnosti takto:",
-      ...sentences,
-    ]);
+    ).toEqual(sentences);
   });
 });

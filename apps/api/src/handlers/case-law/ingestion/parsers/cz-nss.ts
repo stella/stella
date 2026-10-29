@@ -959,22 +959,32 @@ const finishesCutParagraph = ({
   return true;
 };
 
+/** An Arabic numeral and a title; Roman section titles have their own reader. */
+const ARABIC_LABEL_RE = /^\d/u;
+
 /**
- * A centred bold list item after Odůvodnění is the court's numbered section
- * heading (`1. Vymezení věci`), not a numbered paragraph.
+ * A centred bold numbered line after Odůvodnění is the court's numbered
+ * section heading (`1. Vymezení věci`), not a numbered paragraph. Word sets
+ * it as a list item or, for a section it renumbered by hand, as a paragraph
+ * that prints its own numeral.
  */
-const numberedListHeading = (
+const numberedSectionHeading = (
   chunk: PChunk,
   content: ChunkContent,
   phase: DocumentPhase,
-) =>
-  chunk.listItemIndex !== null &&
-  chunk.decimalList &&
-  chunk.centered &&
-  chunk.bold &&
-  REASONING_PHASES.has(phase)
-    ? labelledHeading(withListMarker(chunk, content).plainText)
+) => {
+  if (!chunk.centered || !chunk.bold || !REASONING_PHASES.has(phase)) {
+    return null;
+  }
+  if (chunk.listItemIndex !== null) {
+    return chunk.decimalList
+      ? labelledHeading(withListMarker(chunk, content).plainText)
+      : null;
+  }
+  return ARABIC_LABEL_RE.test(content.plainText)
+    ? labelledHeading(content.plainText)
     : null;
+};
 
 /** How the preamble hands over to the operative part, if this line does. */
 const taktoLead = (
@@ -1305,18 +1315,16 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
       }
     }
 
-    // A centred bold list item after Odůvodnění is the court's numbered
-    // section heading (`1. Vymezení věci`), not a numbered paragraph.
-    const listHeading = numberedListHeading(chunk, content, phase);
-    if (listHeading !== null) {
+    const sectionHeading = numberedSectionHeading(chunk, content, phase);
+    if (sectionHeading !== null) {
       blockIndex += 1;
       blocks.push({
         id: makeBlockId(),
         anchorId: makeAnchorId("h", blockIndex),
         type: "heading",
         level: 3,
-        inlines: [{ type: "text", text: listHeading.text }],
-        plainText: listHeading.text,
+        inlines: [{ type: "text", text: sectionHeading.text }],
+        plainText: sectionHeading.text,
       });
       continue;
     }
