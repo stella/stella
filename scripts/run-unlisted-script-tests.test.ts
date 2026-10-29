@@ -10,6 +10,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { buildImportGraph } from "./api-test-impact";
 import { readCiCheckCommandText } from "./ci-check-pool-registry";
 import { comparisonBase } from "./ci-comparison-base";
 import {
@@ -18,7 +19,6 @@ import {
   gitInvocation,
   parseScriptTestArguments,
   prepareStrace,
-  resolverDirectories,
   SCAN_PRELOAD_PATH,
   selectAffectedScriptTests,
   selectScriptTests,
@@ -623,35 +623,42 @@ describe("directory scan coverage", () => {
     });
   });
 
-  test("listings of directories module resolution walks are not scans", () => {
+  test("a scan of an import directory requires structural coverage", () => {
     withTrackedFixture(({ root, tracked }) => {
-      const resolved = resolverDirectories(
-        new Set(["scripts/subject.test.ts", "apps/web/src/value.ts"]),
+      mkdirSync(path.join(root, "scripts"));
+      writeFileSync(
+        path.join(root, "scripts/value.ts"),
+        "export const value = 1;\n",
       );
-      expect([...resolved].toSorted()).toEqual([
-        "",
-        "apps",
-        "apps/web",
-        "apps/web/src",
-        "scripts",
-      ]);
-      const trace = [
-        `1 getdents64(3<${root}>, 0x5555 /* 9 entries */, 32768) = 80`,
-        `1 getdents64(4<${root}/apps/web/src>, 0x5555 /* 3 entries */, 32768) = 80`,
-        `1 getdents64(5<${root}/data>, 0x5555 /* 3 entries */, 32768) = 80`,
-      ].join("\n");
-      // The data directory holds no imported module, so its listing still
-      // needs a declaration.
+      const testFile = "scripts/subject.test.ts";
+      writeFileSync(
+        path.join(root, testFile),
+        'import { readdirSync } from "node:fs"; import { value } from "./value"; readdirSync(import.meta.dir); void value;\n',
+      );
+      const graph = buildImportGraph(root, [testFile]);
+      expect(graph.closure(testFile).has("scripts/value.ts")).toBe(true);
+      const trace = `1 getdents64(3<${root}/scripts>, 0x5555 /* 3 entries */, 32768) = 80`;
+      const options = {
+        scanLog: "",
+        trace,
+        tracked,
+        root,
+      };
       expect(
-        uncoveredScans({
-          scanLog: "",
-          trace,
-          declared: [],
-          tracked,
+        uncoveredScans({ ...options, declared: ["scripts/value.ts"] }),
+      ).toEqual([{ directory: path.join(root, "scripts"), listing: true }]);
+      expect(uncoveredScans({ ...options, declared: ["scripts/**"] })).toEqual(
+        [],
+      );
+      expect(
+        selectAffectedScriptTests({
+          tests: [testFile],
+          changed: ["scripts/added.ts"],
           root,
-          resolved,
-        }),
-      ).toEqual([{ directory: path.join(root, "data"), listing: true }]);
+          inputs: { [testFile]: ["scripts/**"] },
+          tracked: new Set([...tracked, testFile, "scripts/value.ts"]),
+        }).files,
+      ).toEqual([testFile]);
     });
   });
 

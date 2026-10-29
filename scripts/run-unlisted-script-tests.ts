@@ -506,27 +506,6 @@ type ScanRecord = {
   readonly listing?: true;
 };
 
-/**
- * Directories module resolution may list for a test: each one holding, or
- * above, a file in its import closure. Bun's resolver reads their entries
- * while it loads modules, so such a listing is not a data scan.
- */
-export const resolverDirectories = (
-  closure: ReadonlySet<string>,
-): ReadonlySet<string> => {
-  const directories = new Set<string>([""]);
-  for (const file of closure) {
-    for (
-      let directory = path.posix.dirname(file);
-      directory !== "." && !directories.has(directory);
-      directory = path.posix.dirname(directory)
-    ) {
-      directories.add(directory);
-    }
-  }
-  return directories;
-};
-
 const repositoryScan = (
   directory: string,
   root: string,
@@ -825,7 +804,6 @@ export const uncoveredScans = ({
   tracked,
   root = REPO_ROOT,
   testFile,
-  resolved = new Set(),
 }: {
   readonly scanLog: string;
   readonly trace?: string;
@@ -833,8 +811,6 @@ export const uncoveredScans = ({
   readonly tracked: ReadonlySet<string>;
   readonly root?: string;
   readonly testFile?: string;
-  /** Directories module resolution lists, from `resolverDirectories`. */
-  readonly resolved?: ReadonlySet<string>;
 }): ScanRecord[] => {
   // Kept in the public options because callers already own this census; scan
   // coverage itself is deliberately independent of today's tracked files.
@@ -871,12 +847,10 @@ export const uncoveredScans = ({
       `${testFile ?? "script test"}: cannot resolve the working directory of a scan by ${unresolvedCommand}`,
     );
   }
+  // A syscall trace cannot attribute a listing to the module resolver or
+  // test code, so either requires structural coverage of the directory.
   return [...records, ...commandRecords].filter(
-    (record) =>
-      !(
-        record.listing === true &&
-        resolved.has(repositoryScan(record.directory, root)?.relative ?? "..")
-      ) && !scanCovered({ record, declared, root }),
+    (record) => !scanCovered({ record, declared, root }),
   );
 };
 
@@ -970,9 +944,6 @@ const run = async ({
       declared: declaredInputs.get(testFile) ?? [],
       tracked,
       testFile,
-      resolved: resolverDirectories(
-        tracedAllowance((file) => graph.closure(file), testFile),
-      ),
     });
     for (const uncovered of scans) {
       console.error(
