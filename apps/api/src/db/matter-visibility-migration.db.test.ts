@@ -34,7 +34,7 @@ import type { OnlineMigrationConnection } from "./online-migration-connection";
 
 const MIGRATION_PATH = nodePath.resolve(
   import.meta.dir,
-  "../../drizzle/20261029072000_matter_visibility/migration.sql",
+  "../../drizzle/20261029074600_matter_visibility/migration.sql",
 );
 
 const migrationSql = readFileSync(MIGRATION_PATH, "utf-8")

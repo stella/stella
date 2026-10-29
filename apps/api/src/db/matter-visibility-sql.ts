@@ -6,7 +6,7 @@ export const readMatterVisibilityCutoverSql = () =>
   readFileSync(
     nodePath.resolve(
       import.meta.dir,
-      "../../drizzle/20261029072000_matter_visibility/cutover.sql",
+      "../../drizzle/20261029074600_matter_visibility/cutover.sql",
     ),
     "utf-8",
   )
