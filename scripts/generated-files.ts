@@ -236,6 +236,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/uploads/file-comparison/sweep.ts",
     "apps/api/src/lib/user-files/types.ts",
     "apps/api/src/lib/views/*",
+    "apps/api/src/lib/workspaces/creation-capacity.ts",
     "apps/api/src/lib/workspaces/list-query.ts",
     "packages/anonymize-chat/src/index.ts",
     "packages/anonymize-chat/src/normalization.ts",
