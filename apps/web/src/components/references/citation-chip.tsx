@@ -42,6 +42,7 @@ const CITATION_RENDERERS: CitationRenderers = {
     onOpenInSidePanel,
     label,
     citingText,
+    showBadge,
   }) => (
     <DecisionCitationChip
       citingText={citingText}
@@ -52,6 +53,7 @@ const CITATION_RENDERERS: CitationRenderers = {
       passage={passage}
       presentation={presentation}
       preview={preview}
+      showBadge={showBadge}
     />
   ),
 };

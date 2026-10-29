@@ -101,7 +101,7 @@ import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { APIError, toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import {
   duplicatePosition,
   extractToGraded,
@@ -1102,7 +1102,7 @@ const PlaybookEditorForm = ({
         );
       }
       if (refused === "approval" || !autosaves) {
-        notifyUserError(undefined, failure.title, {
+        notifyUserProblem(failure.title, {
           description: failure.description,
         });
       }
@@ -1114,7 +1114,7 @@ const PlaybookEditorForm = ({
         "playbook-editor.refetch-after-conflict",
       );
     }
-    notifyUserError(undefined, failure.title, {
+    notifyUserProblem(failure.title, {
       description: failure.description,
       ...(onReload
         ? {
@@ -1235,15 +1235,12 @@ const PlaybookEditorForm = ({
   const handleSave = async (): Promise<boolean> => {
     if (nameMissing) {
       setAttemptedSave(true);
-      notifyUserError(undefined, t("knowledge.playbooks.nameRequired"));
+      notifyUserProblem(t("knowledge.playbooks.nameRequired"));
       return false;
     }
     if (invalidIds.length > 0) {
       revealInvalidPositions();
-      notifyUserError(
-        undefined,
-        t("knowledge.playbooks.fixErrorsBeforeSaving"),
-      );
+      notifyUserProblem(t("knowledge.playbooks.fixErrorsBeforeSaving"));
       return false;
     }
 
@@ -1346,7 +1343,7 @@ const PlaybookEditorForm = ({
       organizationId,
       playbookId,
       onReadError: (error) => {
-        notifyUserError(undefined, t("common.unexpectedError"), {
+        notifyUserError(error, t("common.unexpectedError"), {
           description: userErrorFromThrown(error, t("common.unexpectedError")),
         });
       },

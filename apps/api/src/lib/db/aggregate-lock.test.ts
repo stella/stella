@@ -26,6 +26,7 @@ import {
   withInvoiceMatterLocks,
   withSkipLockedBatch,
 } from "./aggregate-lock";
+import namespaceLedger from "./aggregate-lock-namespaces.json" with { type: "json" };
 
 test.each(["present", "missing"] as const)(
   "invoice matter batches retain only visible sorted row locks (%s)",
@@ -278,11 +279,24 @@ const assertUniqueAdvisoryNamespaces = (namespaces: readonly unknown[]) => {
   ).toBe(namespaces.length);
 };
 
-test("every advisory aggregate declares a distinct first-key namespace", async () => {
+/**
+ * The first key of an advisory aggregate as its SQL renders it, with numeric
+ * parameters written out and identity parameters named, so the deployed
+ * namespace can be compared across revisions.
+ */
+const namespaceSignature = (expression: string, parameters: unknown[]) =>
+  expression.replaceAll(/\$(\d+)/gu, (_, position: string) => {
+    const value = parameters.at(Number(position) - 1);
+    return typeof value === "number"
+      ? `0x${value.toString(16).padStart(8, "0")}`
+      : "<identity>";
+  });
+
+test("every advisory aggregate declares a distinct first-key namespace, recorded in its ledger", async () => {
   const fixture = fences();
   const dialect = new PgDialect();
   const namespaces: string[] = [];
-  const exercised: string[] = [];
+  const signatures = new Map<string, string>();
   for (const options of Object.values(fixture)) {
     if ("mode" in options) {
       continue;
@@ -297,19 +311,25 @@ test("every advisory aggregate declares a distinct first-key namespace", async (
           query.params.at(Number(match.at(1)) - 1),
         );
         namespaces.push(JSON.stringify([expression, parameters]));
+        signatures.set(
+          options.aggregate,
+          namespaceSignature(expression, query.params),
+        );
         return aggregateExecutionRows(statement);
       },
     };
-    exercised.push(options.aggregate);
     await withAggregateLock({ ...options, tx });
   }
-  expect(exercised.toSorted()).toEqual(
+  expect([...signatures.keys()].toSorted()).toEqual(
     Object.entries(AGGREGATE_LOCKS)
       .filter(([, { kind }]) => kind === "advisory")
       .map(([aggregate]) => aggregate)
       .toSorted(),
   );
   assertUniqueAdvisoryNamespaces(namespaces);
+  // scripts/check-aggregate-locks.ts holds this ledger to its base revision:
+  // an existing aggregate keeps its namespace and a new one takes a fresh one.
+  expect(Object.fromEntries(signatures)).toEqual(namespaceLedger);
 });
 
 test("the advisory namespace census rejects a duplicate", () => {

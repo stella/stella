@@ -19,6 +19,8 @@ import {
   spliceSpanProposal,
 } from "@/api/handlers/chat/messages/revisions/span-proposal";
 import { resolveCaching } from "@/api/lib/ai-config";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
@@ -28,6 +30,7 @@ import {
 } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { resolveEffectiveChatModelSelection } from "@/api/lib/chat-model-selection";
+import { readChatCopyProjection } from "@/api/lib/chat/withdrawn-copies";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
@@ -83,6 +86,7 @@ export const createProposeMessageSpanEdit = ({
   createSafeRootHandler(
     config,
     async function* ({
+      orgAIConfigStatus,
       body,
       params: { threadId, messageId },
       safeDb,
@@ -96,6 +100,10 @@ export const createProposeMessageSpanEdit = ({
       request,
       promptCachingEnabled,
     }) {
+      if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+        return Result.err(storedAIConfigUnreadableError());
+      }
+
       const organizationId = session.activeOrganizationId;
       const loaded = yield* Result.await(
         safeDb(
@@ -115,7 +123,17 @@ export const createProposeMessageSpanEdit = ({
           new HandlerError({ status: 404, message: "Chat message not found" }),
         );
       }
-      const prepared = prepareSpanRewrite({ loaded, body });
+      const { projection } = yield* Result.await(
+        safeDb(
+          async (tx) =>
+            await readChatCopyProjection({
+              tx,
+              threadIds: [threadId],
+              values: loaded,
+            }),
+        ),
+      );
+      const prepared = prepareSpanRewrite({ loaded, body, projection });
       if (Result.isError(prepared)) {
         return Result.err(prepared.error);
       }

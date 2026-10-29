@@ -11,6 +11,7 @@ import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { BidiText } from "@stll/ui/bidi-text";
 import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import { LandmarkIcon } from "@stll/ui/icons";
+import { LEGAL_TEXT_CLASS_NAME } from "@stll/ui/prose";
 import { cn } from "@stll/ui/utils";
 
 import type { DecisionCitationMetadata } from "@/components/references/decision-citation-chip.logic";
@@ -43,6 +44,8 @@ export type DecisionCitationChipProps = {
    * not only its badge.
    */
   citingText?: ReactNode;
+  /** The citation range owner emits the badge; later text runs do not. */
+  showBadge?: boolean | undefined;
 };
 
 const DecisionCitationLabel = ({
@@ -126,11 +129,15 @@ const DecisionCitationTriggerContent = ({
   label,
   paragraph,
   presentation,
-}: Pick<DecisionCitationChipProps, "citingText" | "decision" | "label"> & {
+  showBadge,
+}: Pick<
+  DecisionCitationChipProps,
+  "citingText" | "decision" | "label" | "showBadge"
+> & {
   /** The court's number, already in the reader's formatting locale. */
   paragraph: string | null;
   presentation: DecisionCitationPresentation;
-}) => {
+}): ReactNode => {
   const t = useTranslations();
   const badge = (
     <DecisionCitationLabel
@@ -153,6 +160,9 @@ const DecisionCitationTriggerContent = ({
   }
   if (citingText === undefined) {
     return badge;
+  }
+  if (!showBadge) {
+    return citingText;
   }
   return (
     <>
@@ -178,6 +188,7 @@ export const DecisionCitationChip = ({
   onOpenInSidePanel,
   label,
   citingText,
+  showBadge = true,
 }: DecisionCitationChipProps) => {
   const t = useTranslations();
   const format = useFormatter();
@@ -239,7 +250,10 @@ export const DecisionCitationChip = ({
           </span>
         )}
         {passage !== undefined && (
-          <div className="text-sm wrap-anywhere whitespace-pre-wrap" dir="auto">
+          <div
+            className={cn(LEGAL_TEXT_CLASS_NAME, "text-sm whitespace-pre-wrap")}
+            dir="auto"
+          >
             {passage}
           </div>
         )}
@@ -292,6 +306,7 @@ export const DecisionCitationChip = ({
         label={label}
         paragraph={paragraph}
         presentation={presentation}
+        showBadge={showBadge}
       />
     </ReferencePeek>
   );

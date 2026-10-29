@@ -172,6 +172,7 @@ const fullDecision = {
   decisionType: null,
   ecli: null,
   language: "cs",
+  caseFile: { items: [], nextCursor: null, limit: 50 },
   languageAlternates: [],
   languageGroupKey: null,
   slug: null,
@@ -228,6 +229,7 @@ const canonicalSearchHit = {
   headline: null,
   citationAuthority: 0,
   citationCount: 0,
+  textAvailability: "available",
   matchingPassages: 1,
   match: "all_terms",
 } satisfies PublicLawData<

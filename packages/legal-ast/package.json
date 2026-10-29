@@ -99,6 +99,10 @@
       "types": "./src/paragraph-range.ts",
       "import": "./src/paragraph-range.ts"
     },
+    "./closed-quotation-paragraphs": {
+      "types": "./src/closed-quotation-paragraphs.ts",
+      "import": "./src/closed-quotation-paragraphs.ts"
+    },
     "./court-paragraph-numbers": {
       "types": "./src/court-paragraph-numbers.ts",
       "import": "./src/court-paragraph-numbers.ts"
@@ -134,6 +138,10 @@
     "./slovak-document-roles": {
       "types": "./src/slovak-document-roles.ts",
       "import": "./src/slovak-document-roles.ts"
+    },
+    "./spot-place": {
+      "types": "./src/spot-place.ts",
+      "import": "./src/spot-place.ts"
     },
     "./statute-ast": {
       "types": "./src/statute-ast.ts",

@@ -1,6 +1,7 @@
 {
   "account": {
     "sessions": {
+      "activeNow": "Teraz",
       "currentSession": "Aktuálna",
       "device": "Zariadenie",
       "deviceOnOs": "{browser} na {os}",
@@ -81,6 +82,8 @@
   },
   "aiColumns": {
     "countSummary": "{columns} stĺpcov × {rows} riadkov = {answers, plural, one {# odpoveď} few {# odpovede} many {# odpovede} other {# odpovedí}}. Odpovede čerpajú rozpočet.",
+    "modelRefused": "Model odmietol odpovedať",
+    "nothingFound": "Nič sa nenašlo",
     "refusedBudget": "Nespustené: rozpočet na odpovede nie je k dispozícii",
     "rerunAllPage": "Spustiť všetko znova (táto stránka)",
     "rerunColumnPage": "Spustiť stĺpec znova (táto stránka)",
@@ -129,6 +132,7 @@
     "checkSpamHint": "Ak ho nevidíte, pozrite sa do priečinka Spam.",
     "chooseOrganization": "Vyberte organizáciu, v ktorej chcete pracovať",
     "codeSentAgain": "Poslali sme nový kód.",
+    "continueWithApple": "Pokračovať cez Apple",
     "continueWithEmail": "Pokračovať",
     "continueWithGoogle": "Pokračovať cez Google",
     "continueWithMicrosoft": "Pokračovať cez Microsoft",
@@ -543,6 +547,14 @@
     },
     "approve": "Schváliť",
     "approveSelected": "Schváliť vybrané",
+    "arrangement": {
+      "alertThreshold": "Prah upozornenia (%)",
+      "amountCap": "Limit odmeny",
+      "flatFee": "Paušálna odmena",
+      "invalidCap": "Zadajte kladné limity a prah upozornenia od 0,01 % do 100 %.",
+      "minuteCap": "Časový limit (minúty)",
+      "title": "Dohoda o odmene"
+    },
     "batchActions": "Hromadné akcie",
     "billable": "Fakturovateľné",
     "billedAmount": "Fakturovaná čiastka",
@@ -707,10 +719,29 @@
       },
       "linkedExpenses": "Prepojené výdavky",
       "linkedTimeEntries": "Prepojené časové záznamy",
-      "markPaid": "Označiť ako uhradenú",
       "noEntries": "K tejto faktúre nie sú pripojené žiadne záznamy",
       "noInvoices": "Zatiaľ žiadne faktúry",
       "paidAt": "Uhradená",
+      "payments": {
+        "amountTooHigh": "Čiastka prevyšuje zostávajúcu dlžnú čiastku {amount}.",
+        "confirmVoid": "Platba zostane v evidencii ako zrušená a do úhrady tejto faktúry sa už nezapočíta.",
+        "empty": "Zatiaľ nie sú zaznamenané žiadne platby",
+        "method": "Spôsob platby",
+        "methods": {
+          "bank_transfer": "Bankový prevod",
+          "card": "Platobná karta",
+          "cash": "Hotovosť",
+          "other": "Iný spôsob"
+        },
+        "outstandingAmount": "Zostáva uhradiť {amount}",
+        "paidOn": "Dátum platby",
+        "partiallyPaid": "Čiastočne uhradená",
+        "record": "Zaznamenať platbu",
+        "summary": "Uhradené {paid}, zostáva uhradiť {outstanding}",
+        "title": "Platby",
+        "void": "Zrušiť platbu",
+        "voided": "Zrušená"
+      },
       "removeEntries": "Odstrániť záznamy",
       "send": "Odoslať",
       "statuses": {
@@ -892,6 +923,7 @@
     "aiMissing": "AI nie je nakonfigurovaná.",
     "availabilityUnknown": "Dostupnosť sa nepodarilo overiť.",
     "deeplMissing": "DeepL nie je nakonfigurovaný.",
+    "deeplPdfRequired": "Preklad súborov PDF vyžaduje DeepL.",
     "desktopUnavailable": "Pripojte alebo aktualizujte stella desktop.",
     "featureUnavailable": "Táto funkcia nie je k dispozícii.",
     "ocrUnavailable": "OCR nie je k dispozícii.",
@@ -909,12 +941,16 @@
         "reasoning": "Uvažovanie"
       },
       "errors": {
+        "analysisDisabled": "Generovanie AI analýzy je na tomto serveri vypnuté. Prečítajte si text rozhodnutia alebo to skúste neskôr.",
         "answerIncomplete": "{source, select, organization {Kľúč vašej organizácie pre {provider} vrátil neúplnú odpoveď.} other {AI model vrátil neúplnú odpoveď.}}",
+        "decisionNotFound": "Rozhodnutie sa nenašlo. Otvorte ho znova z vyhľadávania.",
+        "documentUnparseable": "Text rozhodnutia nie je pripravený na analýzu. Prečítajte si pôvodný zdroj.",
+        "languageUnsupported": "AI analýza zatiaľ nepodporuje jazyk tohto rozhodnutia. Prečítajte si text rozhodnutia alebo pôvodný zdroj.",
         "providerRefused": "{source, select, organization {{provider} odmietol požiadavku s kľúčom vašej organizácie. Skontrolujte kľúč, jeho kvótu a fakturáciu v nastaveniach organizácie.} other {Poskytovateľ AI požiadavku odmietol.}}",
         "providerUnavailable": "{source, select, organization {{provider} je pre kľúč vašej organizácie momentálne nedostupný.} other {Poskytovateľ AI je momentálne nedostupný.}}",
         "retryAfter": "Znova to môžete skúsiť po {time}.",
-        "timedOut": "{source, select, organization {{provider} s kľúčom vašej organizácie neodpovedal včas.} other {AI model neodpovedal včas.}}",
-        "unavailable": "AI analýza nie je pre toto rozhodnutie k dispozícii."
+        "sourceRestricted": "Zdroj nepovoľuje AI analýzu. Prečítajte si text rozhodnutia alebo pôvodný zdroj.",
+        "timedOut": "{source, select, organization {{provider} s kľúčom vašej organizácie neodpovedal včas.} other {AI model neodpovedal včas.}}"
       },
       "generate": "Zostaviť právne vety pomocou AI",
       "invitation": "S bezplatným účtom vám AI k rozhodnutiu pripraví pracovné poznámky.",
@@ -997,12 +1033,15 @@
       "supreme": "Najvyššie súdy"
     },
     "coverage": {
+      "allCurrent": "Všetky zdroje sú aktuálne",
       "completeness": "Úplnosť",
+      "completenessHelp": "Počet uložených rozhodnutí voči počtu uvedenému vydavateľom, jeho zoznamu alebo ručne zaznamenanému údaju.",
+      "countryNavigation": "Prejsť na krajinu",
       "courtsHeading": "Podľa súdu",
       "decisionYears": "Roky rozhodnutí",
+      "decisionsAcross": "rozhodnutí z {count, plural, one {# jurisdikcie} few {# jurisdikcií} other {# jurisdikcií}}",
       "description": "Koľko judikatúry korpus obsahuje podľa krajín a súdov a aký aktuálny je každý zdroj.",
       "generatedAt": "Údaje k {date}",
-      "globeLabel": "Štáty, ktorých judikatúru korpus obsahuje, na glóbuse",
       "healthCurrent": "Aktuálne",
       "healthDelayed": "S oneskorením",
       "healthDisabled": "Vypnuté",
@@ -1012,10 +1051,10 @@
       "lastSync": "Posledná synchronizácia",
       "notCountedYet": "Zatiaľ nespočítané",
       "notMeasuredYet": "Zatiaľ nemerané",
-      "reportedByListing": "Spočítané zo zoznamu vydavateľa",
-      "reportedByOperator": "Zadané ručne",
-      "reportedByPublisher": "Vlastný údaj vydavateľa",
       "searchable": "Dostupné na vyhľadanie",
+      "sourceExceptions": "{count, plural, one {# zdroj vyžaduje pozornosť} few {# zdroje vyžadujú pozornosť} other {# zdrojov vyžaduje pozornosť}}",
+      "sourcesCurrent": "Aktuálne zdroje",
+      "syncedAt": "Synchronizované {time}",
       "title": "Pokrytie judikatúry",
       "totalFrom": "Celkom k {date}",
       "unavailable": "Údaje o pokrytí momentálne nie sú k dispozícii."
@@ -1116,7 +1155,7 @@
     "reader": {
       "documentUpdated": "Dokument bol aktualizovaný.",
       "expandProvisions": "Rozbaliť ustanovenia",
-      "headMatter": "Úvodná časť",
+      "headMatter": "Informácie o veci",
       "sourceAttribution": "Zdroj údajov je voľne dostupný na <link>{source}</link>."
     },
     "research": {
@@ -1206,6 +1245,7 @@
       "appliedVersionStatedAmendmentCompact": "Uvedené: <reference>{amendment}</reference>",
       "appliedVersionStatedDate": "{relation, select, on {Znenie účinné k {date}} until {Znenie účinné do {date}} from {Znenie účinné od {date}} other {Znenie účinné k {date}}}",
       "appliedVersionStatedDateCompact": "{relation, select, on {Uvedené: {date}} until {Uvedené: do {date}} from {Uvedené: od {date}} other {Uvedené: {date}}}",
+      "caseFileDocuments": "Dokumenty v tomto spise",
       "caseFileMayHoldOthers": "Tento spis môže obsahovať aj ďalšie rozhodnutia.",
       "citedBy": "Citované v",
       "citedDecisionPassage": "Pasáž v rozhodnutí",
@@ -1247,7 +1287,8 @@
       "versionAtDecisionDateInferred": "Znenie k dátumu rozhodnutia (odvodené)",
       "versionBasisInferredCompact": "Dátum rozhodnutia · odvodené",
       "versionBasisInferredExplanation": "Znenie je odvodené z dátumu rozhodnutia. Rozhodnutie neuvádza, ktoré znenie sa použije."
-    }
+    },
+    "withdrawnByPublisher": "Stiahnuté vydavateľom"
   },
   "catalogue": {
     "addCustom": "Pridať vlastné",
@@ -1432,6 +1473,17 @@
         "webSearch": "Na túto zručnosť zapnite vyhľadávanie na webe"
       }
     },
+    "connectConnector": {
+      "checkAction": "Overiť pripojenie",
+      "description": "Asistent žiada o pripojenie konektora {connector}, aby v tejto konverzácii mohol používať jeho nástroje.",
+      "error": "Pripojenie sa nepodarilo spustiť. Skúste to znova.",
+      "notConnected": "Zatiaľ nepripojené. Dokončite prihlásenie a potom pripojenie overte znova.",
+      "openTools": "Otvoriť nástroje",
+      "scopes": "Požadovaný prístup: {scopes}",
+      "title": "Pripojiť konektor",
+      "tokenRequired": "Konektor {connector} vyžaduje prístupový token. Pridajte ho na stránke nástrojov a potom overte pripojenie.",
+      "waiting": "Dokončite prihlásenie v okne, ktoré sa otvorilo."
+    },
     "contextMeter": {
       "attachments": "Pripojené dokumenty",
       "autoCompact": "Pri 100 % stella automaticky zhrnie staršie správy, aby uvoľnila miesto.",
@@ -1506,7 +1558,7 @@
     },
     "historyContext": {
       "overflow": "+{count, number}",
-      "unnamed": "{count, plural, one {a # ďalší} few {a # ďalšie} other {a # ďalších}}"
+      "unnamed": "{count, plural, one {# ďalší} few {# ďalšie} other {# ďalších}}"
     },
     "historyTrimmed": "Staršie správy sa nepodarilo zhrnúť, preto táto odpoveď vychádza len z poslednej časti konverzácie.",
     "improvePrompt": "Vylepšiť zadanie",
@@ -1533,6 +1585,12 @@
     "loadEarlierMessagesError": "Staršie správy sa nepodarilo načítať",
     "loadingEarlierMessages": "Načítavajú sa staršie správy…",
     "maxAttachmentsReached": "Maximálne {count} súborov na správu",
+    "mcpReconnect": {
+      "additional": "{count, plural, one {+# ďalšie} few {+# ďalšie} other {+# ďalších}}",
+      "dismiss": "Skryť upozornenie na pripojenie",
+      "stoppedWorking": "Vaše pripojenie k službe <name>{server}</name> prestalo fungovať.",
+      "waitingApproval": "Vaše pripojenie k službe <name>{server}</name> čaká na schválenie."
+    },
     "mention": {
       "category": {
         "entities": "V tomto spise",
@@ -1747,6 +1805,7 @@
       "business_registry_lookup": "Vyhľadávanie v obchodnom registri",
       "compare_versions": "Porovnávanie verzií",
       "configure_template_fields": "Nastaviť polia vzoru",
+      "connect_connector": "Žiadosť o pripojenie konektora",
       "counterparty_check": "Preverovanie protistrany",
       "create-document": "Pripravujem dokument",
       "create_matter_document": "Vytváram dokument",
@@ -2033,6 +2092,7 @@
     "confirm": "Potvrdiť",
     "confirmAction": "Naozaj?",
     "connect": "Pripojiť",
+    "connected": "Pripojené",
     "connectionLost": "Spojenie stratené",
     "connectionLostDescription": "Stratili sme spojenie so serverom. Automaticky opakujeme.",
     "convertTo": "Previesť na",
@@ -2193,6 +2253,7 @@
     "moveDown": "Posunúť nadol",
     "moveUp": "Posunúť nahor",
     "name": "Názov",
+    "networkError": "Chyba siete. Skontrolujte internetové pripojenie a skúste znova.",
     "newMatter": "Nový spis",
     "newRow": "Nový riadok",
     "next": "Pokračovať",
@@ -2201,6 +2262,8 @@
     "noResults": "Žiadne výsledky",
     "noVersions": "Žiadna história verzií",
     "none": "Žiadne",
+    "notConnected": "Nepripojené",
+    "notNow": "Teraz nie",
     "notStated": "Neuvedené",
     "notes": "Poznámky",
     "open": "Otvoriť",
@@ -2388,7 +2451,7 @@
     "summaryTemplatesAnonymized": "anonymizované vzory dokumentov",
     "title": "Autorizácia prístupu",
     "unverifiedApp": "Neoverená aplikácia",
-    "unverifiedExplanation": "Stella neoverila, kto túto aplikáciu vydáva.",
+    "unverifiedExplanation": "stella neoverila, kto túto aplikáciu vydáva.",
     "useAnotherAccount": "Použiť iný účet",
     "verifiedPublisher": "Overená aplikácia od {publisher}"
   },
@@ -2434,6 +2497,8 @@
       "aresNotFound": "Pre toto IČO sme nenašli žiadnu firmu.",
       "aresTitle": "Český register (ARES)",
       "contactName": "Názov kontaktu",
+      "displayNameOrganizationHint": "Voliteľné prepísanie; inak sa vytvorí z názvu organizácie.",
+      "displayNamePersonHint": "Voliteľné prepísanie; inak sa vytvorí z mena a priezviska.",
       "icoPlaceholder": "IČO",
       "invalidIco": "Zadajte 8-miestne IČO."
     },
@@ -2450,10 +2515,10 @@
       "value": "Hodnota poľa"
     },
     "datePrecision": "Presnosť dátumu",
-    "deleteContact": "Vymazať klienta",
+    "deleteContact": "Vymazať kontakt",
     "deleteContactBlockedByMatters": "Tento kontakt je stále priradený ako klient v spisoch. Pred odstránením kontaktu tieto spisy priraďte inému klientovi alebo ich odstráňte.",
     "deleteContactConfirmDescription": "Naozaj chcete vymazať tento kontakt? Túto akciu nemožno vrátiť.",
-    "editContact": "Upraviť klienta",
+    "editContact": "Upraviť kontakt",
     "emailTypes": {
       "other": "Iný",
       "personal": "Osobný",
@@ -2466,7 +2531,7 @@
     "extractProcuracao": {
       "dropZone": "Presuňte sem plnomocenstvo (.docx) alebo kliknite a vyberte súbor",
       "extracting": "Zisťujeme splnomocniteľa…",
-      "fileHint": "Stella prečíta dokument a automaticky nájde splnomocniteľov (tých, ktorí udeľujú plnomocenstvo, nie advokáta). Pred potvrdením výsledok skontrolujte.",
+      "fileHint": "stella prečíta dokument a automaticky nájde splnomocniteľov (tých, ktorí udeľujú plnomocenstvo, nie advokáta). Pred potvrdením výsledok skontrolujte.",
       "fileTooLarge": "Súbor plnomocenstva môže mať najviac 50 MB.",
       "invalidFileType": "Vyberte, prosím, súbor .docx.",
       "noOutorganteFound": "V tomto dokumente sa nepodarilo identifikovať žiadneho splnomocniteľa.",
@@ -2511,6 +2576,7 @@
       "rowLabel": "Klient {index}",
       "skippedDuplicateContactId": "Preskočené: duplicitné ID kontaktu",
       "skippedDuplicateTaxId": "Preskočené: duplicitné daňové identifikačné číslo",
+      "skippedInFileDuplicate": "Preskočené: opakuje skorší riadok súboru",
       "skippedInvalidRow": "Preskočené: riadok nespĺňa pravidlá importu",
       "skippedInvalidTaxId": "Preskočené: neplatné daňové identifikačné číslo",
       "skippedLimitReached": "Preskočené: dosiahnutý limit kontaktov"
@@ -2552,6 +2618,7 @@
       "issue": {
         "address_line_required": "Ak je uvedená adresa, jej prvý riadok je povinný.",
         "display_name_required": "Zobrazovaný názov sa nepodarilo vytvoriť.",
+        "in_file_duplicate": "Duplikát skoršieho riadka v tomto súbore",
         "invalid_email": "E-mailová adresa je neplatná.",
         "invalid_phone": "Telefónne číslo je neplatné.",
         "invalid_tags": "Značky musia byť textové hodnoty.",
@@ -2580,7 +2647,11 @@
       "taxIdSchemeBrCpfCnpj": "Brazílske CPF/CNPJ (kontrolný súčet)",
       "taxIdSchemeNone": "Bez kontroly daňového čísla",
       "title": "Import kontaktov",
-      "validateFailed": "Tieto kontakty sa nepodarilo skontrolovať."
+      "validateFailed": "Tieto kontakty sa nepodarilo skontrolovať.",
+      "warning": {
+        "ignored_populated_column": "Stĺpec „{column}“ obsahuje údaje, ale je ignorovaný.",
+        "possible_in_file_duplicate": "Možný duplikát riadka {row}; zhoduje sa iba meno."
+      }
     },
     "invalidDateOfBirth": "Zadajte platný dátum narodenia.",
     "invalidNationalityCodes": "Zadajte platné kódy štátnej príslušnosti.",
@@ -2740,12 +2811,15 @@
   },
   "errors": {
     "actionAdmission": {
-      "admissionUnavailable": "Táto akcia je dočasne pozastavená. Skúste to prosím o chvíľu.",
       "concurrencyBusy": "Prebieha iná práca. Skúste to prosím o chvíľu.",
+      "configurationIncomplete": "Táto akcia nie je úplne nastavená. Obráťte sa na správcu.",
       "contact": "Kontaktujte nás",
       "featureDisabled": "Táto funkcia je dočasne vypnutá.",
+      "leaseLost": "Platnosť rezervácie akcie vypršala. Skúste to prosím znova.",
       "notEnabled": "Táto akcia nie je pre vašu organizáciu povolená.",
-      "periodExhausted": "Táto akcia je pre vašu organizáciu pozastavená."
+      "organizationStateUnreadable": "Nepodarilo sa overiť prístup organizácie. Skúste to prosím o chvíľu.",
+      "periodExhausted": "Táto akcia je pre vašu organizáciu pozastavená.",
+      "storeUnavailable": "Služba je dočasne nedostupná. Skúste to prosím o chvíľu."
     },
     "actionFailed": "Nepodarilo sa to. Skúste to znova, a ak sa to opakuje, načítajte stránku znova.",
     "api": {
@@ -3276,7 +3350,6 @@
       "simple": "Jednoduché revízie"
     },
     "moreFormatting": "Ďalšie formátovanie",
-    "networkError": "Chyba siete. Skontrolujte internetové pripojenie a skúste znova.",
     "nextChange": "Ďalšia zmena",
     "numberedList": "Číslovaný zoznam",
     "parseError": "Dokument sa nepodarilo spracovať. Môže byť poškodený alebo v nepodporovanom formáte.",
@@ -4609,7 +4682,6 @@
       "selectAtLeastOneRole": "Vyberte pre tento kľúč aspoň jednu rolu.",
       "selectModelForEachRole": "Pridajte poskytovateľa a pre každú kategóriu vyberte model.",
       "selectedProvider": "{provider}",
-      "title": "Konfigurácia AI",
       "usingDefaults": "Používa predvolené nastavenia"
     },
     "invitations": {
@@ -4817,7 +4889,9 @@
     "viewOnGithub": "Zobraziť na GitHube"
   },
   "readerAnswers": {
+    "answerLanguage": "Jazyk odpovede",
     "budgetError": "Rozpočet na odpovede je vyčerpaný.",
+    "documentLanguage": "Jazyk dokumentu ({language})",
     "expand": "Rozbaliť odpoveď",
     "explain": "Vysvetliť",
     "followUp": "Položiť doplňujúcu otázku",
@@ -5004,6 +5078,16 @@
       "preferredNamePlaceholder": "Vaše meno",
       "profileDescription": "Spravujte svoje osobné nastavenia",
       "sendOtpCode": "Odoslať overovací kód",
+      "signInMethods": {
+        "confirmDescription": "Zadajte nový kód zaslaný na e-mail, aby ste tento spôsob prihlásenia odpojili.",
+        "confirmTitle": "Odpojiť {provider}?",
+        "description": "Prepojte účty, ktoré používajú rovnakú overenú e-mailovú adresu.",
+        "emailCode": "Kód z e-mailu",
+        "emailCodeDescription": "Vždy sa môžete prihlásiť pomocou kódu zaslaného na e-mail.",
+        "lastMethod": "Pred odpojením tohto účtu prepojte iný účet.",
+        "title": "Spôsoby prihlásenia",
+        "unavailable": "Aby bolo možné odpojiť spôsoby prihlásenia, musí byť nakonfigurované doručovanie e-mailov."
+      },
       "timezone": "Časové pásmo",
       "timezoneDescription": "Použité pre časové údaje v notifikáciách a e-mailoch",
       "timezoneSaved": "Časové pásmo aktualizované",
@@ -5037,7 +5121,7 @@
         "title": "Dvojfaktorové overenie"
       },
       "wordEditIdentitySaved": "Identita pre úpravy vo Worde aktualizovaná",
-      "wordEditShortcut": "Skratka pre úpravy vo Worde",
+      "wordEditShortcut": "Iniciály pre úpravy vo Worde",
       "wordEditShortcutDescription": "Krátka značka pre vaše iniciály pri úpravách vo Worde.",
       "wordEditShortcutPlaceholder": "napr. JK"
     },
@@ -5048,7 +5132,6 @@
       "cliInstallLabel": "Inštalácia",
       "cliLoginLabel": "Prihlásenie",
       "cliTitle": "Príkazový riadok",
-      "connected": "Pripojené",
       "connectedAgo": "Pripojené {time}",
       "connectedAppsDescription": "Aplikácie, do ktorých ste sa prihlásili účtom stella. Tie, ktoré už nepoužívate, odpojte.",
       "connectedAppsEmpty": "Zatiaľ nič. Nastavte vyššie Claude alebo ChatGPT a objaví sa tu.",
@@ -5071,7 +5154,6 @@
       "mcpTitle": "Server MCP",
       "mcpUrlLabel": "Adresa URL servera",
       "noMatches": "Výrazu „{query}“ nezodpovedá žiadne pripojenie",
-      "notConnected": "Nepripojené",
       "permissionCount": "{count, plural, one {# oprávnenie} few {# oprávnenia} many {# oprávnenia} other {# oprávnení}}",
       "privateCredentialOnly": "Iba súkromné prihlasovacie údaje",
       "searchPlaceholder": "Hľadať pripojenia",
@@ -5186,7 +5268,6 @@
       "usageLimitDescriptionNoEntitlement": "Funkcie AI vyžadujú aktívne oprávnenie na využitie pre túto organizáciu.",
       "usageLimitDescriptionUsageLimitExceeded": "Túto akciu nemožno spustiť pri aktuálnom stave využitia organizácie.",
       "usageLimitNeeded": "Potrebné",
-      "usageLimitNotNow": "Teraz nie",
       "usageLimitTitleEntitlementInactive": "Oprávnenie na využitie nie je aktívne",
       "usageLimitTitleNoEntitlement": "Vyžaduje sa oprávnenie na využitie",
       "usageLimitTitleUsageLimitExceeded": "Limit využitia AI bol dosiahnutý",
@@ -5426,16 +5507,16 @@
     "savedDescription": "Uložená sada štýlov",
     "sourceDocument": "Zdrojový DOCX",
     "stellaDescription": "Kompletné neutrálne formátovanie právnych dokumentov stella",
-    "stellaStyle": "Stella Style",
+    "stellaStyle": "stella Style",
     "title": "Sady štýlov",
     "untitledDocument": "Dokument bez názvu"
   },
   "success": {
     "aiConfigDeleted": "Konfigurácia AI odstránená",
     "aiConfigUpdated": "Konfigurácia AI aktualizovaná",
-    "clientUpdated": "Klient aktualizovaný",
-    "contactCreated": "Klient vytvorený",
-    "contactDeleted": "Klient vymazaný",
+    "clientUpdated": "Kontakt aktualizovaný",
+    "contactCreated": "Kontakt vytvorený",
+    "contactDeleted": "Kontakt vymazaný",
     "documentCreated": "Dokument vytvorený",
     "folderCreated": "Priečinok vytvorený",
     "invitationCanceled": "Pozvánka zrušená",
@@ -5971,7 +6052,11 @@
       "title": "Preklad je pripravený"
     }
   },
+  "transportErrors": {
+    "timeout": "Požiadavka trvala príliš dlho. Skúste to znova."
+  },
   "validation": {
+    "invalidEmail": "Zadajte platnú e-mailovú adresu.",
     "organizationNameRequired": "Názov organizácie je povinný",
     "slugFormat": "Slug smie obsahovať iba malé písmená, čísla a pomlčky",
     "slugRequired": "Slug je povinný"
@@ -6167,20 +6252,18 @@
         "notOpeningConnect": "Neotvára sa? Pripojte stella desktop",
         "notPickedUpDescription": "stella desktop možno nebeží alebo nie je pripojený k tomuto účtu. Pripojte ho a skúste to znova.",
         "notPickedUpTitle": "stella desktop PDF neotvoril",
+        "placementAttachmentsOnly": "Toto zobrazenie ukazuje prílohy PDF, preto sem pečiatku nemožno umiestniť. Podpíšte bez pečiatky.",
         "placementBox": "Umiestnenie pečiatky",
-        "placementConfirm": "Otvoriť stella desktop",
-        "placementDescription": "Zvoľte, ako sa podpis v PDF zobrazí.",
+        "placementDrawTooLarge": "Na pečiatku je to príliš veľké. Po uvoľnení sa použije najväčšia veľkosť.",
+        "placementDrawTooSmall": "Na pečiatku je to príliš malé. Po uvoľnení sa použije najmenšia veľkosť.",
         "placementHint": "Potiahnutím pečiatku presuniete, potiahnutím jej rohu zmeníte jej veľkosť. Keď je pečiatka vybraná, šípky ju posúvajú a Shift so šípkou mení jej veľkosť.",
-        "placementInvisible": "Neviditeľný podpis",
-        "placementInvisibleDescription": "Podpis sa uloží do súboru bez značky na ktorejkoľvek stránke.",
-        "placementPageLabel": "Strana pečiatky",
-        "placementPageOption": "Stránka {page, number} z {count, number}",
-        "placementPreview": "Náhľad stránky {page, number}",
-        "placementPreviewFailed": "Náhľad stránky sa nepodarilo načítať.",
+        "placementModeHint": "Ťahaním po stránke nakreslite pečiatku alebo ju kliknutím umiestnite.",
+        "placementPlaceOnLastPage": "Umiestniť na poslednú stránku",
+        "placementRedrawHint": "Potiahnutím pečiatku upravíte, alebo nakreslite novú na ktorejkoľvek stránke.",
+        "placementSignInvisible": "Podpísať bez pečiatky",
+        "placementSignVisible": "Podpísať s pečiatkou",
         "placementTitle": "Podpísať PDF",
         "placementTooSmall": "Táto stránka je na pečiatku príliš malá. Zvoľte inú stránku.",
-        "placementVisible": "Viditeľná pečiatka",
-        "placementVisibleDescription": "Rámček na stránke ukazuje, kto a kedy podpísal.",
         "preparingDescription": "Pripravuje sa PDF pre stella desktop.",
         "readOnlyDescription": "Tento dokument je len na čítanie.",
         "signedDescription": "Podpis bol uložený ako verzia {versionNumber, number}.",

@@ -160,14 +160,30 @@ describe("buildSearchResults", () => {
     });
   });
 
-  it("has nothing to mark for a query of words too short to mean anything", () => {
+  it("finds a provision by its one-digit number", () => {
+    const result = buildSearchResults({
+      pieces: [
+        { id: "p1", text: "ČÁST PRVNÍ" },
+        { id: "p2", text: "§ 1" },
+        { id: "p3", text: "(2) Podle odstavce 1 písm. a)" },
+      ],
+      query: "§ 1",
+    });
+
+    expect(result.matchCount).toBe(2);
+    expect(result.rangesByPieceId).toEqual({
+      p2: [{ type: "search", start: 2, end: 3, matchIndex: 0 }],
+      p3: [{ type: "search", start: 19, end: 20, matchIndex: 1 }],
+    });
+  });
+
+  it("finds the short words a reader types", () => {
     const result = buildSearchResults({
       pieces: [{ id: "p1", text: "Za to je odpovědný." }],
       query: "za to",
     });
 
-    expect(result.matchCount).toBe(0);
-    expect(result.rangesByPieceId).toEqual({});
+    expect(result.matchCount).toBe(2);
   });
 
   it("handles contextual lowercasing such as Greek final sigma", () => {

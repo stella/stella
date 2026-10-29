@@ -1,12 +1,5 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import {
-  afterAll,
-  afterEach,
-  describe,
-  expect,
-  setDefaultTimeout,
-  test,
-} from "bun:test";
+import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
 import type { WebApiRoutes } from "@/lib/api";
 import type { WorkspaceNavigationItem } from "@/lib/memory-api";
@@ -17,7 +10,6 @@ GlobalRegistrator.register({ url: "http://localhost:3000/", width: 1280 });
 // A hung test fails instead of holding the run. Assertions compare strings
 // and booleans, never DOM nodes: a failing match on a node makes the runner
 // print the whole document graph.
-setDefaultTimeout(10_000);
 
 const testing = await import("@testing-library/react");
 const query = await import("@tanstack/react-query");

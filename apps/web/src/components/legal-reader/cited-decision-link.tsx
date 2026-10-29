@@ -89,6 +89,8 @@ type CitedDecisionChipProps = CitedDecisionPreviewProps & {
   label?: ReactNode;
   /** The citing text's own words, opened together with the court badge. */
   citingText?: ReactNode;
+  /** Whether this rendered citation segment owns the range's court badge. */
+  showBadge?: boolean | undefined;
 };
 
 type CitedDecisionLinkProps = Omit<
@@ -97,6 +99,8 @@ type CitedDecisionLinkProps = Omit<
 > & {
   children: ReactNode;
   className?: string | undefined;
+  /** Split citation ranges override this for every continuation segment. */
+  showBadge?: boolean | undefined;
 };
 
 /**
@@ -167,12 +171,14 @@ const CitingPassage = ({
 export const CitedDecisionLink = ({
   children,
   className,
+  showBadge = true,
   ...chip
 }: CitedDecisionLinkProps) => (
   <CitedDecisionChip
     {...chip}
     citingText={<span className={className}>{children}</span>}
     label={undefined}
+    showBadge={showBadge}
   />
 );
 
@@ -185,6 +191,7 @@ export const CitedDecisionChip = ({
   treatment,
   presentation,
   occurrences,
+  showBadge = true,
 }: CitedDecisionChipProps) => {
   const inspector = useInspectorView();
   const params = createCaseLawDecisionRouteParams({
@@ -249,6 +256,7 @@ export const CitedDecisionChip = ({
         ) : undefined
       }
       presentation={presentation}
+      showBadge={showBadge}
     />
   );
 };

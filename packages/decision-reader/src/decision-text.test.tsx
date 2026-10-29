@@ -10,6 +10,7 @@ import {
   TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import { PUBLISHER_SUMMARY_ROLES } from "@stll/legal-ast/document-ast";
 import { E_SBIRKA_LIST_SCHEME } from "@stll/legal-ast/statute-list";
 import {
   euProvisionSourceUrl,
@@ -172,6 +173,156 @@ const decision = {
     summary: absent,
   },
 } satisfies ReaderDecision;
+
+test("publisher headings and caption information share one translated disclosure across analysis sections", () => {
+  for (const label of ["Case information", "معلومات القضية"]) {
+    for (const count of [1, 2, 10, 100]) {
+      const blocks = Array.from({ length: count }, (_, index) => [
+        {
+          type: "heading",
+          id: `publisher-heading-${index}`,
+          anchorId: `publisher-heading-${index}`,
+          role: "publisher-heading",
+          level: 2,
+          inlines: [{ type: "text", text: `Publisher heading ${index}.` }],
+          plainText: `Publisher heading ${index}.`,
+        } satisfies DocumentAst["blocks"][number],
+        {
+          type: "paragraph",
+          id: `summary-${index}`,
+          anchorId: `summary-${index}`,
+          role: index % 2 === 0 ? "syllabus" : "summary",
+          inlines: [{ type: "text", text: `Published summary ${index}.` }],
+          plainText: `Published summary ${index}.`,
+        } satisfies DocumentAst["blocks"][number],
+        {
+          type: "paragraph",
+          id: `caption-${index}`,
+          anchorId: `caption-${index}`,
+          role: "apparatus",
+          inlines: [{ type: "text", text: `Publisher information ${index}.` }],
+          plainText: `Publisher information ${index}.`,
+        } satisfies DocumentAst["blocks"][number],
+      ]).flat();
+      const sectionMap = new Map(
+        blocks.map((block) => [
+          block.anchorId,
+          { cssVar: "--muted", headingId: block.id },
+        ]),
+      );
+      const adapters = {
+        ...fakeReaderAdapters,
+        messages: {
+          ...fakeReaderAdapters.messages,
+          "caseLaw.reader.headMatter": label,
+        },
+      } satisfies DecisionReaderAdapters;
+      const markup = renderToStaticMarkup(
+        <DecisionReaderProvider adapters={adapters}>
+          <DecisionText
+            decision={{
+              ...decision,
+              documentAst: { ...ast, blocks: [...blocks, ...ast.blocks] },
+            }}
+            decisionId={decision.id}
+            placements={{
+              anchorsByPieceId: {},
+              provisionsByAnchorId: new Map(),
+              failures: [],
+            }}
+            sectionMap={sectionMap}
+          />
+        </DecisionReaderProvider>,
+      );
+      expect(markup.match(/<details class="reader-apparatus"/gu)).toHaveLength(
+        1,
+      );
+      expect(markup.match(/<details\b/gu)).toHaveLength(2);
+      expect(markup).toContain(
+        `class="reader-apparatus-summary">${label}</summary>`,
+      );
+      const disclosureStart = markup.indexOf(
+        '<details class="reader-apparatus"',
+      );
+      const disclosure = markup.slice(
+        disclosureStart,
+        markup.indexOf("</details>", disclosureStart),
+      );
+      for (const block of blocks) {
+        if (block.type === "heading" || block.role === "apparatus") {
+          expect(disclosure).toContain(block.plainText);
+        } else {
+          expect(disclosure).not.toContain(block.plainText);
+        }
+        expect(markup.split(block.plainText)).toHaveLength(2);
+      }
+    }
+  }
+});
+
+test("publisher-summary roles leave footnotes after the decision body", () => {
+  for (const role of PUBLISHER_SUMMARY_ROLES) {
+    const footnote = {
+      type: "paragraph",
+      id: "publisher-footnote",
+      anchorId: "publisher-footnote",
+      role,
+      note: { type: "footnote", label: "1" },
+      inlines: [{ type: "text", text: "Published footnote." }],
+      plainText: "Published footnote.",
+    } satisfies DocumentAst["blocks"][number];
+    const markup = renderReaderFixture(
+      <DecisionText
+        decision={{
+          ...decision,
+          documentAst: { ...ast, blocks: [...ast.blocks, footnote] },
+        }}
+        decisionId={decision.id}
+        placements={{
+          anchorsByPieceId: {},
+          provisionsByAnchorId: new Map(),
+          failures: [],
+        }}
+      />,
+    );
+    expect(markup).toContain(text);
+    expect(markup).toContain(footnote.plainText);
+    expect(markup.indexOf(footnote.plainText)).toBeGreaterThan(
+      markup.indexOf(text),
+    );
+  }
+});
+
+test("parties and their representatives remain visible together in the caption", () => {
+  const captionBlocks = (
+    ["parties", "counsel", "parties", "counsel"] as const
+  ).map((role, index) => ({
+    type: "paragraph",
+    id: `participant-${index}`,
+    anchorId: `participant-${index}`,
+    role,
+    inlines: [{ type: "text", text: `Participant ${index}.` }],
+    plainText: `Participant ${index}.`,
+  }));
+  const markup = renderReaderFixture(
+    <DecisionText
+      decision={{
+        ...decision,
+        documentAst: { ...ast, blocks: [...captionBlocks, ...ast.blocks] },
+      }}
+      decisionId={decision.id}
+      placements={{
+        anchorsByPieceId: {},
+        provisionsByAnchorId: new Map(),
+        failures: [],
+      }}
+    />,
+  );
+  expect(markup).not.toContain("reader-apparatus");
+  for (const block of captionBlocks) {
+    expect(markup).toContain(block.plainText);
+  }
+});
 
 test("a decision renders numbered anchored text and resolved marks without reading data", () => {
   const renderedCitations: string[] = [];
@@ -1001,7 +1152,9 @@ test("EU provisions link to EUR-Lex in every supported citation language without
       throw new TypeError("EU citation fixture was not placed");
     }
     const markup = renderToStaticMarkup(
-      anchor.render(sentenceText.slice(anchor.start, anchor.end)),
+      anchor.render(sentenceText.slice(anchor.start, anchor.end), {
+        isRangeStart: true,
+      }),
     );
     expect(markup).toContain(`href="${href.replaceAll("&", "&amp;")}"`);
     expect(markup).toContain('target="_blank"');

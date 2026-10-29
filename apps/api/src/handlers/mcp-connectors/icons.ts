@@ -1,11 +1,9 @@
 import { Result } from "better-result";
 import * as cheerio from "cheerio";
 
+import { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
-import {
-  parseSafeOutboundUrl,
-  safeOutboundFetchBytes,
-} from "@/api/lib/safe-outbound-fetch";
+import { parseSafeOutboundUrl } from "@/api/lib/safe-outbound-fetch";
 
 const ICON_DISCOVERY_TIMEOUT_MS = 5000;
 const ICON_HTML_MAX_CHARS = 200_000;
