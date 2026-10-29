@@ -190,6 +190,7 @@ function renderCapabilityActionChromeContent({
 
 type CapabilityActionChildProps = {
   disabled?: boolean;
+  "data-accessible-disabled"?: "";
   "aria-disabled"?: boolean;
   "aria-describedby"?: string;
   onClick?: (event: MouseEvent) => void;
@@ -235,6 +236,7 @@ export const CapabilityAction = ({
   const unavailableControl = children({
     "aria-disabled": true,
     "aria-describedby": reasonId,
+    "data-accessible-disabled": "",
     onClick: (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -254,9 +256,7 @@ export const CapabilityAction = ({
   if (surface === "control") {
     return (
       <Popover onOpenChange={setExplanationOpen} open={explanationOpen}>
-        <span className="inline-flex opacity-64">
-          <PopoverTrigger render={unavailableControl} />
-        </span>
+        <PopoverTrigger render={unavailableControl} />
         <span className="sr-only" id={reasonId}>
           {reason}
         </span>

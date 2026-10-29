@@ -31,7 +31,7 @@ const { cleanup, fireEvent, render, screen, waitFor } =
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
-const { ActionCapabilitiesProvider, useActionCapabilities } =
+const { ActionCapabilitiesProvider, CapabilityAction, useActionCapabilities } =
   await import("./capability-actions");
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
@@ -39,6 +39,7 @@ const { aiAvailabilityOptions } =
   await import("@/lib/organization/ai-config-queries");
 const { roleOptions } = await import("@/lib/auth-queries");
 const { Menu, MenuPopup } = await import("@stll/ui/menu");
+const { Button } = await import("@stll/ui/button");
 const { RowFeatureMenuActions, RowOcrMenuActions } =
   await import("@/components/workspaces/row-actions");
 const { TranslateDocumentDialog } =
@@ -206,6 +207,76 @@ const surfaces = [
   surface: "menu" | "control";
   label: string;
 }[];
+
+test("an unavailable flex control keeps its layout and remains explanatory", async () => {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  clients.push(client);
+  const value = resolveActionCapabilities({
+    role: "admin",
+    ai: false,
+    deepl: false,
+    ocr: DOCUMENT_OCR_AVAILABILITY.unconfigured,
+    desktop: "none",
+    settings: undefined,
+  });
+
+  render(
+    <QueryClientProvider client={client}>
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
+        <ActionCapabilitiesProvider value={value}>
+          <div className="flex" data-testid="flex-parent">
+            <CapabilityAction action={{ capability: "ai" }} surface="control">
+              {(capabilityProps) => (
+                <Button
+                  render={
+                    <button className="min-w-0 flex-1 truncate" type="button" />
+                  }
+                  {...capabilityProps}
+                >
+                  {messages.common.translate}
+                </Button>
+              )}
+            </CapabilityAction>
+          </div>
+        </ActionCapabilitiesProvider>
+      </IntlProvider>
+    </QueryClientProvider>,
+  );
+
+  const parent = screen.getByTestId("flex-parent");
+  const control = screen.getByRole("button", {
+    name: messages.common.translate,
+  });
+  expect(control.parentElement).toBe(parent);
+  expect(control.classList.contains("min-w-0")).toBe(true);
+  expect(control.classList.contains("flex-1")).toBe(true);
+  expect(control.classList.contains("truncate")).toBe(true);
+  expect(control.classList.contains("opacity-64")).toBe(true);
+  expect(control.classList.contains("cursor-not-allowed")).toBe(true);
+  expect(control.getAttribute("aria-disabled")).toBe("true");
+  control.focus();
+  expect(document.activeElement).toBe(control);
+
+  fireEvent.click(control);
+  expect(
+    await screen.findByRole("link", {
+      name: messages.organization.aiConfig.configure,
+    }),
+  ).toBeTruthy();
+  fireEvent.keyDown(control, { key: "Escape" });
+  await waitFor(() =>
+    expect(control.getAttribute("aria-expanded")).toBe("false"),
+  );
+  fireEvent.keyDown(control, { key: "Enter" });
+  expect(
+    await screen.findByRole("link", {
+      name: messages.organization.aiConfig.configure,
+    }),
+  ).toBeTruthy();
+});
+
 for (const fixture of surfaces) {
   describe(`${fixture.name} shared renderer admission`, () => {
     for (const role of ORGANIZATION_ROLE_NAMES) {
@@ -379,9 +450,7 @@ for (const fixture of surfaces) {
           const state = value.capabilities[fixture.capability];
           expect(state.type).toBe("unavailable");
           if (fixture.surface === "control") {
-            expect(
-              control.parentElement?.classList.contains("opacity-64"),
-            ).toBe(true);
+            expect(control.classList.contains("opacity-64")).toBe(true);
             expect(
               screen.queryByRole("link", {
                 name: messages.organization.aiConfig.configure,
