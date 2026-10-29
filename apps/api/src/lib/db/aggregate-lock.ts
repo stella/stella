@@ -689,13 +689,42 @@ const retainLock = (history: LockHistory, lock: HeldLock): void => {
   );
 };
 
+const AGGREGATE_SAVEPOINT_PARENT: unique symbol = Symbol(
+  "stella.aggregateSavepointParent",
+);
+const aggregateSavepointDatabases = new WeakSet<object>();
+
+type AggregateDatabase<Tx extends object> = {
+  transaction: <Value>(run: (tx: Tx) => Promise<Value>) => Promise<Value>;
+  readonly [AGGREGATE_SAVEPOINT_PARENT]?: {
+    transaction: <Value>(run: (tx: Tx) => Promise<Value>) => Promise<Value>;
+  };
+};
+
+/** Lend transaction-owning operations a tracked savepoint of an existing transaction. */
+export const createAggregateSavepointDatabase = <Tx extends object>(parent: {
+  transaction: <Value>(run: (tx: Tx) => Promise<Value>) => Promise<Value>;
+}) => {
+  const database = {
+    [AGGREGATE_SAVEPOINT_PARENT]: parent,
+    transaction: async <Value>(run: (tx: Tx) => Promise<Value>) =>
+      await withAggregateSavepoint(parent, run),
+  };
+  aggregateSavepointDatabases.add(database);
+  return database;
+};
+
 /** A fresh physical transaction owns a fresh history, including failure/commit cleanup. */
 export const withAggregateTransaction = async <Tx extends object, T>(
-  database: {
-    transaction: <Value>(run: (tx: Tx) => Promise<Value>) => Promise<Value>;
-  },
+  database: AggregateDatabase<Tx>,
   run: (tx: Tx) => Promise<T>,
 ): Promise<T> => {
+  if (aggregateSavepointDatabases.has(database)) {
+    const parent =
+      database[AGGREGATE_SAVEPOINT_PARENT] ??
+      panic("Owned savepoint database requires its parent");
+    return await withAggregateSavepoint(parent, run);
+  }
   if (histories.has(database) || "rollback" in database) {
     panic("Use the aggregate savepoint owner for nested transactions");
   }
