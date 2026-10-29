@@ -88,6 +88,7 @@ const TruncatedText = ({
         <TooltipTrigger
           onClick={containedEventHandler(handleClick)}
           onPointerDown={containedEventHandler(recordPointerType)}
+          onBlur={forgetPointerType}
           onPointerEnter={recordPointerType}
           render={text}
         />
@@ -135,6 +136,15 @@ const LAST_POINTER_TYPE = new WeakMap<Element, string>();
 
 function recordPointerType(event: React.PointerEvent<HTMLElement>): void {
   LAST_POINTER_TYPE.set(event.currentTarget, event.pointerType);
+}
+
+/**
+ * A tap's record ends when focus leaves the text, so focus that comes back
+ * from the keyboard later opens the tooltip instead of being taken for the
+ * same tap.
+ */
+function forgetPointerType(event: React.FocusEvent<HTMLElement>): void {
+  LAST_POINTER_TYPE.delete(event.currentTarget);
 }
 
 const TRUNCATED_TEXT_LINES_CLASS = {
