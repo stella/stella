@@ -11,6 +11,7 @@ import {
   distEntryFiles,
   matchShippedAssetPattern,
   sourceExportTargets,
+  sourceNativeExportTargets,
   toPublishedManifest,
 } from "./publish-manifest";
 import { ALL_PACKAGE_ORDER } from "./publish-packages";
@@ -71,6 +72,45 @@ describe("sourceExportTargets", () => {
     expect(() =>
       sourceExportTargets(manifest({ ".": "./src/index.json" })),
     ).toThrow(/expected source export/u);
+  });
+
+  // A component with a React Native renderer resolves to it in a React
+  // Native bundler and to the web module everywhere else; nothing else may
+  // use a condition.
+  const NATIVE_BUTTON = {
+    "react-native": "./src/components/button.native.tsx",
+    default: "./src/components/button.tsx",
+  };
+
+  test("reads a react-native pair as its web module and its native module", () => {
+    const withNative = manifest({
+      ".": "./src/index.ts",
+      "./button": NATIVE_BUTTON,
+    });
+    expect(sourceExportTargets(withNative)).toEqual({
+      ".": "./src/index.ts",
+      "./button": "./src/components/button.tsx",
+    });
+    expect(sourceNativeExportTargets(withNative)).toEqual({
+      "./button": "./src/components/button.native.tsx",
+    });
+  });
+
+  test("rejects a react-native pair in any other shape", () => {
+    for (const target of [
+      {
+        default: NATIVE_BUTTON.default,
+        "react-native": NATIVE_BUTTON["react-native"],
+      },
+      { ...NATIVE_BUTTON, "react-native": "./src/components/input.native.tsx" },
+      { ...NATIVE_BUTTON, import: NATIVE_BUTTON.default },
+    ]) {
+      expect(() =>
+        sourceExportTargets(
+          manifest({ ".": "./src/index.ts", "./button": target }),
+        ),
+      ).toThrow(/expected source export/u);
+    }
   });
 
   test("accepts an exported root JSON asset when files ships it", () => {
@@ -200,6 +240,28 @@ describe("toPublishedManifest", () => {
     });
   });
 
+  test("publishes a native renderer under the react-native condition, first", () => {
+    const publishedNative = toPublishedManifest(
+      manifest({
+        ".": "./src/index.ts",
+        "./button": {
+          "react-native": "./src/components/button.native.tsx",
+          default: "./src/components/button.tsx",
+        },
+      }),
+    );
+    const entry = publishedNative.exports["./button"];
+    expect(entry).toEqual({
+      "react-native": {
+        types: "./dist/components/button.native.d.ts",
+        import: "./dist/components/button.native.js",
+      },
+      types: "./dist/components/button.d.ts",
+      import: "./dist/components/button.js",
+    });
+    expect(Object.keys(entry ?? {})[0]).toBe("react-native");
+  });
+
   // A stylesheet is copied, not compiled: the consumer owns the Tailwind
   // build, so the published entry points at the file itself.
   test("keeps a copied stylesheet as a single dist path", () => {
@@ -309,6 +371,21 @@ describe("distEntryFiles", () => {
     expect(
       distEntryFiles({ types: "./dist/a.d.ts", import: "./dist/a.js" }),
     ).toEqual(["./dist/a.d.ts", "./dist/a.js"]);
+    expect(
+      distEntryFiles({
+        "react-native": {
+          types: "./dist/a.native.d.ts",
+          import: "./dist/a.native.js",
+        },
+        types: "./dist/a.d.ts",
+        import: "./dist/a.js",
+      }),
+    ).toEqual([
+      "./dist/a.native.d.ts",
+      "./dist/a.native.js",
+      "./dist/a.d.ts",
+      "./dist/a.js",
+    ]);
     expect(distEntryFiles("./dist/styles/theme.css")).toEqual([
       "./dist/styles/theme.css",
     ]);

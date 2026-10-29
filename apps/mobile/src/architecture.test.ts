@@ -344,12 +344,7 @@ describe("the app's colours", () => {
 describe("the app's text", () => {
   const screens = readdirSync(SOURCE_ROOT, { recursive: true })
     .map(String)
-    .filter(
-      (name) =>
-        name.endsWith(".tsx") &&
-        !name.includes(".test.") &&
-        name !== path.join("components", "ui", "text.tsx"),
-    )
+    .filter((name) => name.endsWith(".tsx") && !name.includes(".test."))
     .toSorted();
 
   test("finds the screens to scan", () => {
@@ -357,7 +352,7 @@ describe("the app's text", () => {
   });
 
   // React Native's own Text has neither the web's typeface nor its colours;
-  // the app's Text (components/ui/text.tsx) has both.
+  // @stll/ui's Text, Input and Textarea have both.
   test.each(screens)("%s sets text through the app's Text", (name) => {
     const source = readFileSync(path.join(SOURCE_ROOT, name), "utf-8");
     const fromReactNative = [

@@ -4,9 +4,10 @@ import * as WebBrowser from "expo-web-browser";
 import { ScrollView, View } from "react-native";
 import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
+import { Text } from "@stll/ui/text";
+
 import { screenStyles } from "@/components/empty-state-screen";
-import { Button } from "@/components/ui/button";
-import { Text } from "@/components/ui/text";
 import { accountPageUrl } from "@/connection/account-page";
 import { useSession } from "@/connection/session-provider";
 
@@ -38,12 +39,13 @@ const SettingsScreen = () => {
       {session === null ? null : (
         <View className="gap-2">
           <Button
-            label={t("settings.deleteAccount")}
             onPress={() => {
               void WebBrowser.openBrowserAsync(accountPageUrl(session.issuer));
             }}
             variant="outline"
-          />
+          >
+            {t("settings.deleteAccount")}
+          </Button>
           <View className="px-1">
             <Text variant="caption">{t("settings.deleteAccountHint")}</Text>
           </View>
@@ -51,7 +53,6 @@ const SettingsScreen = () => {
       )}
       <Button
         disabled={pending}
-        label={t("settings.signOut")}
         loading={pending}
         onPress={() => {
           startTransition(async () => {
@@ -59,7 +60,9 @@ const SettingsScreen = () => {
           });
         }}
         variant="destructive-outline"
-      />
+      >
+        {t("settings.signOut")}
+      </Button>
     </ScrollView>
   );
 };

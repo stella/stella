@@ -4,8 +4,9 @@ import { Result } from "better-result";
 import { View } from "react-native";
 import { useTimeZone, useTranslations } from "use-intl";
 
-import { Button } from "@/components/ui/button";
-import { Text } from "@/components/ui/text";
+import { Button } from "@stll/ui/button";
+import { Text } from "@stll/ui/text";
+
 import { writeFailure, WriteFailureNotice } from "@/components/write-failure";
 import type { WriteFailure } from "@/components/write-failure";
 import type { AccessTokenSource } from "@/connection/session";
@@ -88,32 +89,35 @@ export const TimerCard = ({
         <Button
           className="flex-1"
           disabled={busy}
-          label={t(running ? "pause" : "resume")}
           onPress={() => {
             act(async () => await toggleTimer({ fetch, source, timer }));
           }}
           variant="outline"
-        />
+        >
+          {t(running ? "pause" : "resume")}
+        </Button>
         <Button
           className="flex-1"
           disabled={busy}
-          label={t("save")}
           onPress={() => {
             act(
               async () => await saveTimer({ fetch, source, timeZone, timer }),
             );
           }}
-        />
+        >
+          {t("save")}
+        </Button>
       </View>
       <Button
         disabled={busy}
-        label={t("discard")}
         onPress={() => {
           act(async () => await discardTimer({ fetch, source, timer }));
         }}
         size="sm"
         variant="destructive-ghost"
-      />
+      >
+        {t("discard")}
+      </Button>
       <WriteFailureNotice failure={failure} message={t("changeFailed")} />
     </View>
   );

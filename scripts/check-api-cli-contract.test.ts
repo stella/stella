@@ -295,7 +295,17 @@ describe("API and CLI release contract", () => {
       if (!isRecord(packageExports)) {
         throw new TypeError(`${packageName} exports is not an object`);
       }
-      for (const [subpath, target] of Object.entries(packageExports)) {
+      for (const [subpath, entry] of Object.entries(packageExports)) {
+        // A component with a React Native renderer pairs it with the web
+        // module under the `react-native` condition (scripts/publish-manifest.ts).
+        const target =
+          isRecord(entry) &&
+          Object.keys(entry).join(",") === "react-native,default" &&
+          typeof entry["default"] === "string" &&
+          entry["react-native"] ===
+            entry["default"].replace(/\.(tsx?)$/u, ".native.$1")
+            ? entry["default"]
+            : entry;
         expect(typeof target).toBe("string");
         if (typeof target !== "string") {
           throw new TypeError(`${packageName} has a non-string export target`);

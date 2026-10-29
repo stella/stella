@@ -4,11 +4,12 @@ import { Result } from "better-result";
 import { RefreshControl, SectionList, View } from "react-native";
 import { useTimeZone, useTranslations } from "use-intl";
 
+import { Text } from "@stll/ui/text";
+
 import { ChatThreadRow } from "@/components/chat-thread-row";
 import { EmptyCard, screenStyles } from "@/components/empty-state-screen";
 import { PagingFooter, RetryButton } from "@/components/retry-button";
 import type { PagingState } from "@/components/retry-button";
-import { Text } from "@/components/ui/text";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
 import type { Load } from "@/state/api-request";

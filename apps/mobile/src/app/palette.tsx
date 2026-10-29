@@ -5,9 +5,11 @@ import { useRouter } from "expo-router";
 import { FlatList, Pressable, View } from "react-native";
 import { useTranslations } from "use-intl";
 
+import { Input } from "@stll/ui/input";
+import { Text } from "@stll/ui/text";
+
 import { useNewChat } from "@/components/new-chat";
 import { useLayout, useSelection } from "@/components/selection";
-import { Text, TextInput } from "@/components/ui/text";
 import { usePaletteEntities } from "@/components/use-palette-entities";
 import { useScan } from "@/components/use-scan";
 import {
@@ -246,7 +248,7 @@ const PaletteScreen = () => {
     >
       <View className="bg-background flex-1">
         <View className="border-border border-b px-4 pt-5 pb-3">
-          <TextInput
+          <Input
             accessibilityLabel={t("palette.placeholder")}
             autoCapitalize="none"
             autoCorrect={false}
@@ -261,7 +263,7 @@ const PaletteScreen = () => {
             placeholder={t("palette.placeholder")}
             returnKeyType="go"
             value={query}
-            variant="search"
+            type="search"
           />
         </View>
         <FlatList
