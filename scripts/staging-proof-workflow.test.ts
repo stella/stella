@@ -54,6 +54,7 @@ const stepNamed = (name: string, candidate = source) => {
 };
 
 const PROOF_STEPS = [
+  "Configure flaky-test quarantine",
   "Run staging web smoke",
   "Run staging response policy checks",
   "Run staging API chat smoke",
