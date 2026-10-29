@@ -318,6 +318,66 @@ test("a successful HTTP status with persistent command failure exhausts four att
   expect(result.stderr).toContain("HTTP 200, attempt 4/4");
 });
 
+const typedRefusal = {
+  exit: 1,
+  http: 200,
+  output: Buffer.from(
+    JSON.stringify({
+      errors: [
+        {
+          type: "UNPROCESSABLE",
+          message: "Pull request is not mergeable",
+          extensions: { code: "STALE_DATA" },
+        },
+      ],
+    }),
+  ).toHex(),
+};
+
+test("a typed GraphQL refusal is returned after one request", async () => {
+  const result = await scenario({
+    args: ["api", "graphql", "-f", "query=query { viewer { login } }"],
+    responses: [typedRefusal],
+  });
+  expect(result.exit).toBe(1);
+  expect(result.calls).toHaveLength(1);
+  expect(result.stdout).toEqual(Buffer.from(typedRefusal.output, "hex"));
+});
+
+test.each([
+  ["type", { type: "UNPROCESSABLE", message: "Request refused" }],
+  [
+    "extension code",
+    { message: "Request refused", extensions: { code: "STALE_DATA" } },
+  ],
+])("a GraphQL refusal with only %s is returned once", async (_, error) => {
+  const output = Buffer.from(JSON.stringify({ errors: [error] }));
+  const result = await scenario({
+    args: ["api", "graphql", "-f", "query=query { viewer { login } }"],
+    responses: [{ exit: 1, http: 200, output: output.toHex() }],
+  });
+  expect(result.exit).toBe(1);
+  expect(result.calls).toHaveLength(1);
+  expect(result.stdout).toEqual(output);
+});
+
+test.each([
+  ["an empty", ""],
+  ["a non-JSON", "not JSON"],
+])(
+  "%s successful response is retried for a repeatable read",
+  async (_, output) => {
+    const result = await scenario({
+      responses: [
+        { exit: 1, http: 200, output: Buffer.from(output).toHex() },
+        success,
+      ],
+    });
+    expect(result.exit).toBe(0);
+    expect(result.calls.length).toBeGreaterThan(1);
+  },
+);
+
 test.each([
   ["view", ["run", "view", "123", "--exit-status"]],
   ["watch", ["run", "watch", "--exit-status=true", "123"]],
