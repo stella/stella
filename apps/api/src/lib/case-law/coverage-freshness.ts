@@ -14,7 +14,7 @@ export const CASE_LAW_COVERAGE_FRESHNESS = {
   REFRESH_PENDING: "refresh_pending",
 } as const;
 
-export type CaseLawCoverageFreshnessStatus =
+type CaseLawCoverageFreshnessStatus =
   (typeof CASE_LAW_COVERAGE_FRESHNESS)[keyof typeof CASE_LAW_COVERAGE_FRESHNESS];
 
 /** How old the served coverage figures are, as a reader may act on it. */
