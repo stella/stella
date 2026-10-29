@@ -590,6 +590,8 @@ type RunProgress = {
   units: number;
   /** Months recounted and written. */
   months: number;
+  /** Broad invalidations must not consume changes after these counts. */
+  recountedCountries: Set<string>;
 };
 
 /**
@@ -631,7 +633,12 @@ export const refreshCaseLawSitemapShards = async (
   // A month worked in this run is not worked again in it: changes committed
   // to it meanwhile wait for the next run, so a month written to without
   // pause cannot keep one run going.
-  const progress: RunProgress = { worked: new Set(), units: 0, months: 0 };
+  const progress: RunProgress = {
+    worked: new Set(),
+    units: 0,
+    months: 0,
+    recountedCountries: new Set(),
+  };
   const queue: SitemapMonth[] = [];
 
   /** One step of the run: list more logged months, or work the next one. */
@@ -653,6 +660,17 @@ export const refreshCaseLawSitemapShards = async (
     if (progress.worked.has(monthKey(target))) {
       return "progress";
     }
+    // Expanding a broad invalidation after a count could consume the row
+    // that removal just appended. Leave it for a fresh run, including when
+    // the country now has no decisions or shards to enumerate.
+    if (
+      target.year === SITEMAP_WHOLE_COUNTRY &&
+      (target.country === SITEMAP_WHOLE_COUNTRY
+        ? progress.recountedCountries.size > 0
+        : progress.recountedCountries.has(target.country))
+    ) {
+      return "deferred";
+    }
     throwIfAborted(signal);
     // Checked before every unit but the first, so every run advances.
     if (progress.units > 0 && clock() - startedAt >= runBudgetMs) {
@@ -666,6 +684,7 @@ export const refreshCaseLawSitemapShards = async (
       await expandCountry(run, target.country);
     } else if (await recountMonth(run, target)) {
       progress.months += 1;
+      progress.recountedCountries.add(target.country);
     }
     return "progress";
   };

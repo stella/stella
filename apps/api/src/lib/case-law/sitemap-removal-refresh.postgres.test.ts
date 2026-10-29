@@ -53,6 +53,67 @@ describe.skipIf(!enabled)("monthly sitemap removal fence (postgres)", () => {
       .where(eq(caseLawSitemapCountryGenerations.country, country));
   });
 
+  test("generation inserts and updates keep a whole-generationCountry row beside a monthly change in the same transaction", async () => {
+    const generationCountry = "XSG";
+    const generationSourceId = createSafeId<"caseLawSource">();
+    const generationDecisionId = createSafeId<"caseLawDecision">();
+    cleanUp(async () => {
+      await db
+        .delete(caseLawDecisions)
+        .where(eq(caseLawDecisions.sourceId, generationSourceId));
+      await db
+        .delete(caseLawSources)
+        .where(eq(caseLawSources.id, generationSourceId));
+      await db
+        .delete(caseLawSitemapChanges)
+        .where(eq(caseLawSitemapChanges.country, generationCountry));
+      await db
+        .delete(caseLawSitemapCountryGenerations)
+        .where(eq(caseLawSitemapCountryGenerations.country, generationCountry));
+    });
+    await db.insert(caseLawSources).values(
+      caseLawSourceRow({
+        id: generationSourceId,
+        adapterKey: `generation-${generationSourceId}`,
+        name: "Generation sitemap source",
+      }),
+    );
+    await withAggregateTransaction(db, async (tx) => {
+      await tx.execute(sql`SET LOCAL ROLE stella_ingestion`);
+      await lockCaseLawRemovalSnapshots(tx);
+      await tx.insert(caseLawDecisions).values({
+        id: generationDecisionId,
+        sourceId: generationSourceId,
+        country: generationCountry,
+        court: "Court",
+        language: "en",
+        caseNumber: "1/2024",
+        decisionDate: "2024-01-01",
+      });
+      await invalidateCaseLawSitemapShardsTx(tx, generationCountry);
+      await invalidateCaseLawSitemapShardsTx(tx, generationCountry);
+    });
+    expect(
+      await db
+        .select({ generation: caseLawSitemapCountryGenerations.generation })
+        .from(caseLawSitemapCountryGenerations)
+        .where(eq(caseLawSitemapCountryGenerations.country, generationCountry)),
+    ).toEqual([{ generation: 2n }]);
+    expect(
+      await db
+        .select({
+          year: caseLawSitemapChanges.year,
+          month: caseLawSitemapChanges.month,
+        })
+        .from(caseLawSitemapChanges)
+        .where(eq(caseLawSitemapChanges.country, generationCountry))
+        .orderBy(caseLawSitemapChanges.id),
+    ).toEqual([
+      { year: "2024", month: "01" },
+      { year: SITEMAP_WHOLE_COUNTRY, month: SITEMAP_WHOLE_COUNTRY },
+    ]);
+  });
+
   test("a concurrent removal cannot be republished by a monthly count", async () => {
     await db.insert(caseLawSources).values(
       caseLawSourceRow({
