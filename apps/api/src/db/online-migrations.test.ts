@@ -507,6 +507,43 @@ describe("online migrations", () => {
     });
   });
 
+  test("reports publisher identity indexes and their legacy retirements as newest-set work", async () => {
+    const introducedBy = "20261019091000_legislation_publisher_identity";
+    const missingIndexes = [
+      "legislation_documents_work_version_lang_idx",
+      "legislation_documents_publisher_identity_idx",
+      "legislation_documents_legacy_version_lang_idx",
+      "legislation_documents_legacy_current_lang_idx",
+    ];
+    const legacyNames = [
+      "legislation_documents_eli_version_lang_idx",
+      "legislation_documents_eli_current_lang_idx",
+    ];
+    const harness = createHarness({
+      newestAppliedMigration: introducedBy,
+      missingIndexes,
+      indexStates: Object.fromEntries(
+        legacyNames.map((name) => [name, [true]]),
+      ),
+    });
+
+    expect(await reportOnlineMigrations(harness.pool)).toEqual({
+      newestAppliedMigration: introducedBy,
+      pending: [
+        ...missingIndexes.map((name) => ({
+          kind: "index",
+          name,
+          introducedBy,
+        })),
+        ...legacyNames.map((name) => ({
+          kind: "replacement_drop",
+          name,
+          introducedBy,
+        })),
+      ],
+    });
+  });
+
   test("reports newest-set retirement work and rejects an older leftover", async () => {
     const replacement = ONLINE_INDEX_REPLACEMENTS.find(
       ({ introducedBy }) => typeof introducedBy === "string",

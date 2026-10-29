@@ -844,7 +844,7 @@ export const ONLINE_INDEX_REPLACEMENTS: readonly OnlineIndexReplacement[] = [
     replacementNames: ["case_law_decisions_search_candidate_published_idx"],
   },
   {
-    introducedBy: "20260606120000_legislation_corpus",
+    introducedBy: LEGISLATION_UNIQUE_INDEXES[0].introducedBy,
     legacyName: "legislation_documents_eli_version_lang_idx",
     replacementNames: [
       "legislation_documents_work_version_lang_idx",
@@ -853,7 +853,7 @@ export const ONLINE_INDEX_REPLACEMENTS: readonly OnlineIndexReplacement[] = [
     ],
   },
   {
-    introducedBy: "20260606120000_legislation_corpus",
+    introducedBy: LEGISLATION_UNIQUE_INDEXES[0].introducedBy,
     legacyName: "legislation_documents_eli_current_lang_idx",
     replacementNames: [
       "legislation_documents_publisher_identity_idx",
