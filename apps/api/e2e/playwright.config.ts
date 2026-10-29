@@ -1,4 +1,6 @@
-import { defineConfig, devices } from "@playwright/test";
+import { defineConfig } from "@playwright/test";
+
+import { devices } from "@stll/playwright-tools/devices";
 
 const IS_CI = process.env["CI"] !== undefined;
 const E2E_OUTPUT_DIR = process.env["E2E_OUTPUT_DIR"] ?? "test-results";

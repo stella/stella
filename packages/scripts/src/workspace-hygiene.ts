@@ -57,6 +57,21 @@ const DENIED_TEST_RUNNER_DEPENDENCIES = new Set([
   "@types/vitest",
   "@types/mocha",
 ]);
+// Packages the API replaced with its own small fetch clients. Each entry names
+// the replacement, so the failure says where the behaviour lives now.
+const POSTHOG_CLIENT = "apps/api/src/lib/analytics/posthog-client.ts";
+const OTLP_LOG_EXPORTER = "apps/api/src/lib/observability/otlp-log-exporter.ts";
+const REPLACED_NPM_DEPENDENCIES: ReadonlyMap<string, string> = new Map([
+  ["posthog-node", `replaced by the fetch client in ${POSTHOG_CLIENT}`],
+  ["@opentelemetry/api", `replaced by the log types in ${OTLP_LOG_EXPORTER}`],
+  ["@opentelemetry/api-logs", `replaced by ${OTLP_LOG_EXPORTER}`],
+  [
+    "@opentelemetry/exporter-logs-otlp-http",
+    `replaced by the fetch client in ${OTLP_LOG_EXPORTER}`,
+  ],
+  ["@opentelemetry/resources", `replaced by ${OTLP_LOG_EXPORTER}`],
+  ["@opentelemetry/sdk-logs", `replaced by ${OTLP_LOG_EXPORTER}`],
+]);
 const DENIED_CARGO_DEPENDENCIES = new Set([
   "strsim",
   "levenshtein",
@@ -116,7 +131,6 @@ const TYPESCRIPT_TOOLCHAIN = {
 // declares it so a filtered install links it.
 const TYPESCRIPT6_API_PACKAGE_PATHS: ReadonlySet<string> = new Set([
   "apps/api/package.json",
-  "packages/scripts/package.json",
 ]);
 const TYPESCRIPT6_COMPATIBILITY = {
   astro: {
@@ -133,7 +147,7 @@ const TYPESCRIPT6_COMPATIBILITY = {
   },
   compilerApi: {
     dependency: "typescript6",
-    packagePath: "packages/scripts/package.json",
+    packagePath: "apps/api/package.json",
     specifier: "catalog:",
   },
 } as const;
@@ -227,6 +241,14 @@ const validateDeniedNpmDependencies = (
       if (DENIED_TEST_RUNNER_DEPENDENCIES.has(actualName)) {
         issues.push({
           message: `${actualName} is blocked; tests run on bun test`,
+          path: packageJsonPath,
+        });
+        continue;
+      }
+      const replacement = REPLACED_NPM_DEPENDENCIES.get(actualName);
+      if (replacement !== undefined) {
+        issues.push({
+          message: `${actualName} is blocked; ${replacement}`,
           path: packageJsonPath,
         });
         continue;
@@ -631,7 +653,7 @@ const validateTypeScriptToolchain = (rootDir: string): WorkspaceIssue[] => {
       ) {
         issues.push({
           message:
-            "The TypeScript 6 compiler API is compatibility-only and may only be declared by apps/api and packages/scripts (and the root)",
+            "The TypeScript 6 compiler API is compatibility-only and may only be declared by apps/api (and the root)",
           path: relativePackagePath,
         });
       }

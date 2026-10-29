@@ -17,17 +17,33 @@ import {
   drainSnsQueue,
   parseSnsQueueBody,
   type SnsQueueDelivery,
-  type SnsQueueDisposition,
+  type SnsQueueHandled,
 } from "@/api/lib/email/sns-queue-drain";
 import type { logger as appLogger } from "@/api/lib/observability/logger";
 
 // Each delivery is one small database write; a batch finishes in seconds.
 const VISIBILITY_TIMEOUT_SECONDS = 60;
 
+/**
+ * The provider sends one message to at most 50 recipients, so one event names
+ * at most 50. An event naming more did not come from it and is kept for the
+ * dead-letter queue.
+ */
+export const MAX_RECIPIENTS_PER_EVENT = 50;
+
+/**
+ * Recipient rows one run may write; the continuation drains the rest. Each
+ * event's rows are one update through the unique address index.
+ */
+export const RECIPIENT_WRITES_PER_RUN = 200;
+
 // The provider's configuration-set events, as its SNS destination publishes
 // them. Only the fields that decide a transition are read; nothing else from
 // the event, and no message content, is kept anywhere.
-const recipientsSchema = v.array(v.object({ emailAddress: v.string() }));
+const recipientsSchema = v.pipe(
+  v.array(v.object({ emailAddress: v.string() })),
+  v.maxLength(MAX_RECIPIENTS_PER_EVENT),
+);
 const providerEventSchema = v.variant("eventType", [
   v.object({
     eventType: v.literal("Bounce"),
@@ -74,11 +90,14 @@ class DeliverabilityEventError extends TaggedError("DeliverabilityEventError")<{
 
 const toRecipients = (
   recipients: v.InferOutput<typeof recipientsSchema>,
-): NormalizedEmail[] =>
-  recipients.flatMap(({ emailAddress }) => {
-    const parsed = v.safeParse(emailAddressSchema, emailAddress);
-    return parsed.success ? [normalizeEmail(parsed.output)] : [];
-  });
+): NormalizedEmail[] => [
+  ...new Set(
+    recipients.flatMap(({ emailAddress }) => {
+      const parsed = v.safeParse(emailAddressSchema, emailAddress);
+      return parsed.success ? [normalizeEmail(parsed.output)] : [];
+    }),
+  ),
+];
 
 const parseEventTime = (
   timestamp: string,
@@ -156,12 +175,12 @@ type DrainDeliverabilityEventsOptions = {
   client: Pick<SQSClient, "send">;
   queueUrl: string;
   topicArn: string;
-  /** Marks the account at this address; resolves whether one was marked. */
+  /** Marks the accounts at these addresses; resolves how many were marked. */
   markUndeliverable: (
-    email: NormalizedEmail,
+    emails: readonly NormalizedEmail[],
     reason: AccountEmailUndeliverableReason,
     at: Date,
-  ) => Promise<boolean>;
+  ) => Promise<number>;
   signal: AbortSignal;
   logger: typeof appLogger;
 };
@@ -191,7 +210,7 @@ export const drainDeliverabilityEvents = async ({
     body,
     deliveryId,
     receiveCount,
-  }: SnsQueueDelivery): Promise<SnsQueueDisposition> => {
+  }: SnsQueueDelivery): Promise<SnsQueueHandled> => {
     const transition = parseSnsQueueBody({ body, topicArn })
       .mapError(
         () =>
@@ -211,21 +230,19 @@ export const drainDeliverabilityEvents = async ({
           "error.reason": transition.error.reason,
         }),
       );
-      return "keep";
+      return { disposition: "keep", work: 0 };
     }
     const { value } = transition;
     if (value.type === "unchanged") {
       counts.unchanged += 1;
-      return "acknowledge";
+      return { disposition: "acknowledge", work: 0 };
     }
+    // One statement writes every recipient's row; a redelivery after a
+    // failed write spends the budget again.
+    const work = value.recipients.length;
     const applied = await Result.tryPromise(
       async () =>
-        await Promise.all(
-          value.recipients.map(
-            async (email) =>
-              await markUndeliverable(email, value.reason, value.at),
-          ),
-        ),
+        await markUndeliverable(value.recipients, value.reason, value.at),
     );
     if (applied.isErr()) {
       counts.retry += 1;
@@ -237,20 +254,19 @@ export const drainDeliverabilityEvents = async ({
           "error.type": applied.error._tag,
         }),
       );
-      return "keep";
+      return { disposition: "keep", work };
     }
-    for (const marked of applied.value) {
-      if (marked) {
-        counts.marked += 1;
-        logger.info("email_deliverability.marked", {
-          "queue.delivery_id": deliveryId,
-          "delivery.refusal_reason": value.reason,
-        });
-      } else {
-        counts.unknownAddress += 1;
-      }
+    const marked = applied.value;
+    counts.marked += marked;
+    counts.unknownAddress += value.recipients.length - marked;
+    if (marked > 0) {
+      logger.info("email_deliverability.marked", {
+        "queue.delivery_id": deliveryId,
+        "delivery.refusal_reason": value.reason,
+        "delivery.marked_accounts": marked,
+      });
     }
-    return "acknowledge";
+    return { disposition: "acknowledge", work };
   };
 
   const drained = await drainSnsQueue({
@@ -258,6 +274,7 @@ export const drainDeliverabilityEvents = async ({
     queueUrl,
     visibilityTimeoutSeconds: VISIBILITY_TIMEOUT_SECONDS,
     handle,
+    workBudget: RECIPIENT_WRITES_PER_RUN,
     signal,
     logger,
     logPrefix: "email_deliverability.queue",

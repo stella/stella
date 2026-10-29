@@ -97,10 +97,11 @@ import { unwrapApiResponse } from "@/lib/errors/api";
 import { hasOrganizationManagementAccess } from "@/lib/organization/role-assignment.logic";
 import type { PromptSuggestion } from "@/lib/prompts/types";
 import { useSuggestedSkills } from "@/lib/prompts/use-suggested-skills";
+import { queryView } from "@/lib/query-view.logic";
 import { runReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
 import { usageEntitlementOptions } from "@/lib/usage-queries";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { ChatThreadFilesButton } from "@/routes/_protected.chat/-components/chat-file-stack";
 import { ChatForkedFromBanner } from "@/routes/_protected.chat/-components/chat-forked-from-banner";
 import { ChatHistoryLink } from "@/routes/_protected.chat/-components/chat-history-link";
@@ -130,7 +131,7 @@ export const ChatThreadPage = ({
   workspaceId,
 }: ChatThreadPageProps) => {
   const t = useTranslations();
-  const { ensureAIAvailable } = useAIKeyGate();
+  const { availability, ensureAIAvailable } = useAIKeyGate();
   const userContext = useChatUserContext();
   const getUserContext = useLatestCallback(() => userContext);
   const suggestedSkills = useSuggestedSkills();
@@ -144,7 +145,7 @@ export const ChatThreadPage = ({
     ...roleOptions,
     staleTime: Number.POSITIVE_INFINITY,
   });
-  const currentUserRoleView = useQueryView(currentUserRoleQuery);
+  const currentUserRoleView = queryView(currentUserRoleQuery);
   useQueryViewError(currentUserRoleView, "ChatThreadPage:query");
   const currentUserRole =
     currentUserRoleView.type === "items" &&
@@ -232,7 +233,7 @@ export const ChatThreadPage = ({
     ...usageEntitlementOptions({ organizationId: activeOrganizationId }),
     enabled: env.VITE_FEATURE_USAGE && canManageOrganization,
   });
-  const usageEntitlementDataView = useQueryView(usageEntitlementDataQuery);
+  const usageEntitlementDataView = queryView(usageEntitlementDataQuery);
   useQueryViewError(usageEntitlementDataView, "ChatThreadPage:query-2");
   const usageEntitlementData =
     usageEntitlementDataView.type === "items"
@@ -271,6 +272,8 @@ export const ChatThreadPage = ({
     handleDeny,
     handleRequestSecret,
     continueRequestSecret,
+    handleConnectConnector,
+    continueConnectConnector,
     resolveSecretTarget,
     secretAvailabilityKey,
     handleAskUserSubmit,
@@ -620,6 +623,8 @@ export const ChatThreadPage = ({
             handleDeny,
             handleRequestSecret,
             continueRequestSecret,
+            handleConnectConnector,
+            continueConnectConnector,
             resolveSecretTarget,
             secretAvailabilityKey,
           }}
@@ -805,6 +810,7 @@ export const ChatThreadPage = ({
                 <div className="relative isolate p-2">
                   <ComposerVeil />
                   <ChatInputSurface
+                    sendDisabled={availability !== "available"}
                     anonymized={anonymized}
                     autoFocus
                     context={{ activeOrganizationId, threadRef }}

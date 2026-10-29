@@ -116,4 +116,28 @@ describe("letter-spaced emphasis", () => {
       { numRuns: 200 },
     );
   });
+
+  describe("short words set apart (setApart)", () => {
+    test.each([
+      // Verbatim from PL. ÚS 15/98 and PL. ÚS 1/2021.
+      [
+        "zákonov   n i e   j e   v súlade s čl. 26",
+        "zákonov nie je v súlade s čl. 26",
+      ],
+      ["zákona  n i e  sú   v  súlade", "zákona nie sú   v  súlade"],
+    ])("reads %j as %j", (spaced, words) => {
+      expect(collapseLetterSpacing(spaced, { setApart: true })).toBe(words);
+      // Off by default: the Czech court spaces no word this short alone.
+      expect(collapseLetterSpacing(spaced)).toBe(spaced);
+    });
+
+    test.each([
+      // A row of one-letter words, an initial, an abbreviation.
+      "slobôd  a v  súlade",
+      "úrad   v L.   o podanie",
+      "zákona   a č.   2",
+    ])("leaves %j as it is", (text) => {
+      expect(collapseLetterSpacing(text, { setApart: true })).toBe(text);
+    });
+  });
 });

@@ -8,7 +8,7 @@ One line per column: `table.column  builder  flags  file:line  first sentence of
 
 ```text
 sanctions_contact_marks.organization_id  safeOrganizationId  fk,not null       sanctions-monitoring.ts:41
-sanctions_contact_marks.contact_id       safeUuid            not null          sanctions-monitoring.ts:44
+sanctions_contact_marks.contact_id       safeUuid            fk,not null       sanctions-monitoring.ts:44
 sanctions_contact_marks.generation       bigint              default,not null  sanctions-monitoring.ts:45
 sanctions_contact_marks.scheduled_at     timestamptz         default,not null  sanctions-monitoring.ts:46
 sanctions_contact_marks.attempt_count    integer             default,not null  sanctions-monitoring.ts:47
@@ -25,9 +25,9 @@ sanctions_organization_marks.generation       bigint              default,not nu
 ## sanctions_monitoring_backfills · `sanctionsMonitoringBackfills` · sanctions-monitoring.ts:106
 
 ```text
-sanctions_monitoring_backfills.organization_id    safeOrganizationId  not null          sanctions-monitoring.ts:109
-sanctions_monitoring_backfills.source_id          text                not null          sanctions-monitoring.ts:110
-sanctions_monitoring_backfills.edition_id         safeUuid            null              sanctions-monitoring.ts:111
+sanctions_monitoring_backfills.organization_id    safeOrganizationId  fk,not null       sanctions-monitoring.ts:109
+sanctions_monitoring_backfills.source_id          text                fk,not null       sanctions-monitoring.ts:110
+sanctions_monitoring_backfills.edition_id         safeUuid            fk,null           sanctions-monitoring.ts:111
 sanctions_monitoring_backfills.cursor_contact_id  safeUuid            null              sanctions-monitoring.ts:112
 sanctions_monitoring_backfills.generation         bigint              default,not null  sanctions-monitoring.ts:113
 sanctions_monitoring_backfills.state              text                default,not null  sanctions-monitoring.ts:114
@@ -48,9 +48,9 @@ sanctions_edition_fanouts.state                   text                default,no
 
 ```text
 sanctions_contact_screenings.organization_id      safeOrganizationId  fk,not null  sanctions-monitoring.ts:204
-sanctions_contact_screenings.contact_id           safeUuid            not null     sanctions-monitoring.ts:207
+sanctions_contact_screenings.contact_id           safeUuid            fk,not null  sanctions-monitoring.ts:207
 sanctions_contact_screenings.source_id            text                fk,not null  sanctions-monitoring.ts:208
-sanctions_contact_screenings.edition_id           safeUuid            null         sanctions-monitoring.ts:212
+sanctions_contact_screenings.edition_id           safeUuid            fk,null      sanctions-monitoring.ts:212
 sanctions_contact_screenings.status               text                not null     sanctions-monitoring.ts:213
 sanctions_contact_screenings.reason               text                null         sanctions-monitoring.ts:214
 sanctions_contact_screenings.contact_fingerprint  text                not null     sanctions-monitoring.ts:215
@@ -61,7 +61,7 @@ sanctions_contact_screenings.checked_at           timestamptz         not null  
 
 ```text
 sanctions_contact_matches.organization_id               safeOrganizationId  fk,not null       sanctions-monitoring.ts:257
-sanctions_contact_matches.contact_id                    safeUuid            not null          sanctions-monitoring.ts:260
+sanctions_contact_matches.contact_id                    safeUuid            fk,not null       sanctions-monitoring.ts:260
 sanctions_contact_matches.source_id                     text                fk,not null       sanctions-monitoring.ts:261
 sanctions_contact_matches.source_entry_id               text                not null          sanctions-monitoring.ts:265
 sanctions_contact_matches.edition_id                    safeUuid            fk,not null       sanctions-monitoring.ts:266
@@ -83,12 +83,12 @@ sanctions_contact_matches.updated_at                    timestamptz         not 
 ```text
 sanctions_screening_events.id                   pUuid               pk,not null  sanctions-monitoring.ts:335
 sanctions_screening_events.organization_id      safeOrganizationId  fk,not null  sanctions-monitoring.ts:336
-sanctions_screening_events.contact_id           safeUuid            not null     sanctions-monitoring.ts:339
+sanctions_screening_events.contact_id           safeUuid            fk,not null  sanctions-monitoring.ts:339
 sanctions_screening_events.source_id            text                fk,not null  sanctions-monitoring.ts:340
 sanctions_screening_events.source_entry_id      text                not null     sanctions-monitoring.ts:344
 sanctions_screening_events.type                 text                not null     sanctions-monitoring.ts:345
-sanctions_screening_events.old_edition_id       safeUuid            null         sanctions-monitoring.ts:346
-sanctions_screening_events.new_edition_id       safeUuid            not null     sanctions-monitoring.ts:347
+sanctions_screening_events.old_edition_id       safeUuid            fk,null      sanctions-monitoring.ts:346
+sanctions_screening_events.new_edition_id       safeUuid            fk,not null  sanctions-monitoring.ts:347
 sanctions_screening_events.reason               text                not null     sanctions-monitoring.ts:348
 sanctions_screening_events.reviewer_id          text                null         sanctions-monitoring.ts:349
 sanctions_screening_events.contact_fingerprint  text                null         sanctions-monitoring.ts:350

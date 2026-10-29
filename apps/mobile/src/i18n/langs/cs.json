@@ -1,0 +1,101 @@
+{
+  "tabs": {
+    "chat": "Chat",
+    "tasks": "Úkoly",
+    "matters": "Spisy",
+    "settings": "Nastavení"
+  },
+  "chat": {
+    "description": "Mějte rozpracovanou práci po ruce a pokračujte z jakéhokoli zařízení.",
+    "emptyTitle": "Zatím žádné konverzace",
+    "emptyDescription": "Zde se zobrazí nové konverzace a nedávná vlákna.",
+    "noMatchesTitle": "Žádné odpovídající konverzace",
+    "noMatchesDescription": "Žádný název konverzace ani spisu neobsahuje „{search}“.",
+    "search": "Hledat konverzace",
+    "loadFailed": "Vaše konverzace se nepodařilo načíst.",
+    "retry": "Zkusit znovu",
+    "untitled": "Konverzace bez názvu",
+    "loadMoreFailed": "Načíst další",
+    "loadOlderFailed": "Načíst starší zprávy",
+    "toolUsed": "Použito: {tool}",
+    "threadTitle": "Konverzace",
+    "threadLoadFailed": "Tuto konverzaci se nepodařilo načíst.",
+    "threadEmptyDescription": "Tato konverzace zatím nemá žádné zprávy.",
+    "sections": {
+      "today": "Dnes",
+      "yesterday": "Včera",
+      "week": "Posledních 7 dní",
+      "earlier": "Dříve"
+    },
+    "newChat": "Nová konverzace",
+    "composerPlaceholder": "Zeptejte se stelly",
+    "send": "Odeslat",
+    "stop": "Zastavit",
+    "sendFailed": "Zprávu se nepodařilo odeslat. Zkuste to znovu.",
+    "answerWorking": "Pracuji…",
+    "answerStopped": "Zastaveno.",
+    "answerNeedsInput": "Tato odpověď čeká na váš vstup. Pokračujte v ní ve webové aplikaci stella.",
+    "answerFailed": "Odpověď se nepodařilo dokončit."
+  },
+  "tasks": {
+    "description": "Podívejte se, co vyžaduje pozornost, aniž byste otevírali celý pracovní prostor.",
+    "emptyTitle": "Žádné otevřené úkoly",
+    "emptyDescription": "Zde se zobrazí přidělená a nadcházející práce."
+  },
+  "matters": {
+    "description": "Najděte spis a rychle získejte potřebný kontext.",
+    "emptyTitle": "Zatím žádné spisy",
+    "emptyDescription": "Zde se zobrazí vaše nedávné spisy.",
+    "loadFailed": "Vaše spisy se nepodařilo načíst.",
+    "retry": "Zkusit znovu"
+  },
+  "matter": {
+    "documents": "Dokumenty",
+    "tasks": "Úkoly",
+    "emptyTitle": "Zatím tu nic není",
+    "emptyDescription": "Zde se zobrazí dokumenty a úkoly tohoto spisu.",
+    "loadFailed": "Spis se nepodařilo načíst.",
+    "loadMoreFailed": "Další položky se nepodařilo načíst.",
+    "loadMore": "Načíst další",
+    "retry": "Zkusit znovu",
+    "untitled": "Bez názvu",
+    "updated": "Upraveno {time}",
+    "kind": {
+      "folder": "Složka",
+      "document": "Dokument",
+      "task": "Úkol"
+    },
+    "status": {
+      "open": "Otevřený",
+      "in_progress": "Rozpracovaný",
+      "in_review": "Ke kontrole",
+      "done": "Hotový",
+      "cancelled": "Zrušený"
+    }
+  },
+  "entity": {
+    "type": "Typ",
+    "reference": "Číslo jednací",
+    "currentVersion": "Aktuální verze",
+    "loadFailed": "Položku se nepodařilo načíst."
+  },
+  "signIn": {
+    "title": "Přihlaste se do aplikace stella",
+    "description": "Zadejte adresu svého serveru stella. Přihlášení potvrdíte v prohlížeči.",
+    "serverLabel": "Adresa serveru",
+    "serverPlaceholder": "stella.example.com",
+    "submit": "Pokračovat",
+    "sessionEnded": "Vaše relace skončila. Přihlaste se znovu.",
+    "errors": {
+      "address": "Zadejte adresu https, například stella.example.com.",
+      "unreachable": "Na této adrese neodpověděl žádný server stella.",
+      "denied": "Přihlášení nebylo schváleno.",
+      "failed": "Přihlášení se nedokončilo. Zkuste to znovu."
+    }
+  },
+  "settings": {
+    "accountTitle": "Účet",
+    "server": "Server",
+    "signOut": "Odhlásit se"
+  }
+}

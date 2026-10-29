@@ -77,6 +77,7 @@ export const ColumnFilterButton = ({
             type="button"
           />
         }
+        tooltip={t("common.filter")}
       >
         <FilterIcon
           className={cn("size-3", isActive && "fill-primary stroke-primary")}

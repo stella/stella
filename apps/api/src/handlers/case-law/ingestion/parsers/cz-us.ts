@@ -71,7 +71,9 @@ import {
   type Inline,
   plainTextOf,
 } from "@stll/legal-ast/document-ast";
+// parser-output-unchanged: mapInlineText moved unchanged to the shared inline-line module.
 import {
+  mapInlineText,
   normalizeInlineLine,
   stripInlineLinePrefix,
 } from "@stll/legal-ast/inline-line";
@@ -418,6 +420,10 @@ export const usDocumentLinesOf = (
         case "preservedBlock":
         case "bookmarkStart":
         case "bookmarkEnd":
+        case "moveFromRangeStart":
+        case "moveFromRangeEnd":
+        case "moveToRangeStart":
+        case "moveToRangeEnd":
           break;
         default:
           block satisfies never;
@@ -428,19 +434,6 @@ export const usDocumentLinesOf = (
   visit(document.package.document.content);
   return reflowUsLines(printed, normalize);
 };
-
-const mapInlineText = (
-  inlines: readonly Inline[],
-  map: (text: string) => string,
-): Inline[] =>
-  inlines.map((node): Inline => {
-    if (node.type === "text") {
-      return { ...node, text: map(node.text) };
-    }
-    return hasInlineChildren(node)
-      ? { ...node, children: mapInlineText(node.children, map) }
-      : node;
-  });
 
 /**
  * Drop the last character of the inlines, wherever it is nested. Touches

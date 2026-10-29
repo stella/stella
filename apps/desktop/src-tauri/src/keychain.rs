@@ -299,6 +299,50 @@ pub fn create_local_data_key(key: LocalDataKey<'_>) -> Result<[u8; 32], String> 
   Ok(secret.into())
 }
 
+/// The ChatGPT sign-in's host identifier: generated once per installation and
+/// kept across sign-outs, so later sign-ins report the same host.
+const CHATGPT_HOST_ID_KEY: &str = "agent:chatgpt:host-id:v1";
+/// The key of the encrypted ChatGPT connection file. Tokens are larger than a
+/// Windows credential can hold, so the credential store keeps only this key.
+const CHATGPT_CONNECTION_KEY: &str = "agent:chatgpt:connection-key:v1";
+
+pub(crate) fn chatgpt_host_id() -> Result<Option<String>, String> {
+  match named_entry(CHATGPT_HOST_ID_KEY)?.get_password() {
+    Ok(value) => Ok(Some(value)),
+    Err(Error::NoEntry) => Ok(None),
+    Err(_) => Err("ChatGPT host Keychain read failed".into()),
+  }
+}
+
+pub(crate) fn store_chatgpt_host_id(value: &str) -> Result<(), String> {
+  named_entry(CHATGPT_HOST_ID_KEY)?
+    .set_password(value)
+    .map_err(with_cause_logged("Could not save ChatGPT host in Keychain"))
+}
+
+pub(crate) fn chatgpt_connection_key() -> Result<Option<[u8; 32]>, String> {
+  match named_entry(CHATGPT_CONNECTION_KEY)?.get_secret() {
+    Ok(secret) => secret
+      .try_into()
+      .map(Some)
+      .map_err(|_wrong_length: Vec<u8>| "ChatGPT connection key is invalid".into()),
+    Err(Error::NoEntry) => Ok(None),
+    Err(_) => Err("ChatGPT connection Keychain read failed".into()),
+  }
+}
+
+pub(crate) fn create_chatgpt_connection_key() -> Result<[u8; 32], String> {
+  use aes_gcm::{Aes256Gcm, Key, aead::Generate};
+
+  let secret = Key::<Aes256Gcm>::generate();
+  named_entry(CHATGPT_CONNECTION_KEY)?
+    .set_secret(&secret)
+    .map_err(with_cause_logged(
+      "Could not save ChatGPT connection key in Keychain",
+    ))?;
+  Ok(secret.into())
+}
+
 pub async fn get_account_rotation() -> Result<Option<String>, String> {
   let read = tokio::task::spawn_blocking(|| {
     match named_entry(ACCOUNT_ROTATION_KEY)?.get_password() {

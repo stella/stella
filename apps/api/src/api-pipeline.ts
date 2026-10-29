@@ -23,6 +23,7 @@ import {
   socketPeerOnce,
   stampClientAddressHeader,
 } from "@/api/lib/client-ip";
+import { runWithStatementCeiling } from "@/api/lib/db/statement-ceiling";
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
 import { httpError } from "@/api/lib/errors/http-error";
 import { FORMATTING_LOCALE_HEADER } from "@/api/lib/locale";
@@ -87,7 +88,15 @@ const requestScope: Middleware = async (ctx, inner) =>
       routeTemplate: ctx.route ?? "unmatched",
     } as const;
     recordRequestExceptionScope(ctx.request, scope);
-    return await withExceptionScope(scope, async () => await inner());
+    return await withExceptionScope(
+      scope,
+      async () =>
+        await runWithStatementCeiling({
+          kind: "request",
+          key: `${ctx.request.method} ${ctx.route ?? "<unmatched>"}`,
+          run: inner,
+        }),
+    );
   });
 
 /**

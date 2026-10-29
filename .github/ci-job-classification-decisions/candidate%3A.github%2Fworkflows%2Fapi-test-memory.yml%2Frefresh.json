@@ -1,5 +1,5 @@
 {
-  "kind": "ordinary",
-  "qualifier": "Checks; no publication, tag creation, or deployment.",
+  "kind": "priority",
+  "qualifier": "Publishes the refreshed API test memory profile as a signed-commit pull request.",
   "reviewedDigest": "bcc8def8b2f47722e4fbacd2b2735645c51394de7463e59da20860af489f607f"
 }

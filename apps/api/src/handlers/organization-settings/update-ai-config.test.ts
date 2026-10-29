@@ -19,8 +19,8 @@ import type {
   OrgAIModelSelection,
 } from "@/api/lib/ai-config";
 import { decryptAIConfig } from "@/api/lib/ai-config-crypto";
+import * as outbound from "@/api/lib/auth/authorized-outbound-fetch";
 import { toSafeId } from "@/api/lib/branded-types";
-import * as outbound from "@/api/lib/safe-outbound-fetch";
 import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import {
   createTestHandlerContext,
