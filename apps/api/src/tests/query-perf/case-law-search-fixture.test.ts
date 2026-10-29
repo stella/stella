@@ -44,7 +44,16 @@ test("page selection retains publication, time filters, keyset and ranking befor
     );
     const boundary = statement.sql.indexOf("LIMIT");
     const candidates = statement.sql.slice(0, boundary);
-    expect(candidates).toContain("JOIN case_law_published_decisions d");
+    if (query) {
+      expect(candidates).toContain(
+        "FROM case_law_published_decisions decision",
+      );
+      expect(candidates).toContain("WHERE decision.id = clsd.decision_id");
+      expect(candidates).toContain("OFFSET 0");
+    } else {
+      expect(candidates).toContain("JOIN case_law_published_decisions d");
+      expect(candidates).not.toContain("OFFSET 0");
+    }
     expect(candidates).toContain("case_law_sources");
     expect(candidates).toContain("allowsRedistribution");
     expect(candidates).toContain("d.updated_at >=");

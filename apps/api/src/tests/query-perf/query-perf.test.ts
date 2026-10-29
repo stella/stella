@@ -169,6 +169,15 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
               CASE_LAW_SEARCH_FETCH_LIMIT,
             );
             expect(budgetProblem(budgetId, good.metrics)).toBeUndefined();
+            // Fixed text hits must not walk unrelated decisions before LIMIT.
+            expect(
+              good.planViolations.filter(
+                ({ kind, node }) =>
+                  kind === "large-scan" &&
+                  node["Relation Name"] ===
+                    getTableName(schema.caseLawDecisions),
+              ),
+            ).toEqual([]);
             expect(
               budgetViolations(bad.metrics, READ_BUDGETS[budgetId].pages).map(
                 ({ kind }) => kind,

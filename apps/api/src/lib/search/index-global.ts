@@ -1463,6 +1463,18 @@ export const globalCaseLawHitsStatement = ({
     editedByUserIds: [],
     mimeTypes: [],
   });
+  // Text matches drive indexed publication checks. A flattened join instead
+  // hashes the hits and scans every decision, even when the hit set is fixed.
+  // Filter-only search keeps the planner free to use the updated-time order.
+  const candidateDecisionJoin =
+    query.trim().length > 0
+      ? sql`JOIN LATERAL (
+          SELECT decision.id, decision.updated_at, decision.source_id
+          FROM case_law_published_decisions decision
+          WHERE decision.id = clsd.decision_id
+          OFFSET 0
+        ) d ON true`
+      : sql`JOIN case_law_published_decisions d ON d.id = clsd.decision_id`;
   // MATERIALIZED keeps the body lateral join outside the candidate scan even
   // when the planner would otherwise inline the page and move its work earlier.
   // OFFSET 0 retains parameterized primary-key enrichment probes: flattening them
@@ -1473,7 +1485,7 @@ export const globalCaseLawHitsStatement = ({
         ${searchTier(sql`clsd.title`)},
         ${searchScore({ tsv: sql`clsd.tsv`, updatedAt: sql`d.updated_at` })}
       FROM case_law_search_documents clsd
-      JOIN case_law_published_decisions d ON d.id = clsd.decision_id
+      ${candidateDecisionJoin}
       ${publicCaseLawDecisionJoin}
       WHERE TRUE
         ${caseLawTextSearchFilter}
