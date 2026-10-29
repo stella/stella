@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
+
+import { assertProperty } from "@stll/property-testing";
 
 import { caseLawSectionHeading, labelledHeading } from "./case-law-heading";
 
@@ -18,6 +21,59 @@ describe("case-law section heading", () => {
       caseLawSectionHeading(`I. ${"Velmi dlouhý název ".repeat(20)}`),
     ).toBeNull();
   });
+});
+
+describe("section heading title shape", () => {
+  test.each([
+    "I. Žalovaný je povinen zaplatit žalobci částku",
+    "II. Ve zbytku se žaloba zamítá",
+    "III. Rozsudek se ruší",
+    "IV. Výrok se mění",
+    "V. Rozsudek se potvrzuje",
+    "VI. Úhrada nákladů zaplatit",
+    "VII. Žaloba se zamítá.",
+    "VIII. Výrok o nákladech;",
+  ])("leaves %j as text", (text) => {
+    expect(caseLawSectionHeading(text)).toBeNull();
+  });
+
+  const romanArb = fc.constantFrom("I", "II", "III", "IV", "V", "IX", "XII");
+  const wordArb = fc.constantFrom(
+    "Žalovaný",
+    "je",
+    "povinen",
+    "se",
+    "zamítá",
+    "ruší",
+    "mění",
+    "potvrzuje",
+    "zaplatit",
+    "Vlastní",
+    "přezkum",
+    "soud",
+    "A)",
+    "žaloba",
+  );
+  const endArb = fc.constantFrom("", ".", ";", ",", ":");
+
+  assertProperty(
+    "a promoted heading never ends a sentence or carries an operative verb",
+    fc.property(
+      romanArb,
+      fc.array(wordArb, { minLength: 1, maxLength: 8 }),
+      endArb,
+      (numeral, words, end) => {
+        const text = `${numeral}. ${words.join(" ")}${end}`;
+        if (caseLawSectionHeading(text) === null) {
+          return;
+        }
+        expect(text).not.toMatch(/[.;]$/u);
+        expect(text).not.toMatch(
+          /je povinen|se zamítá|se ruší|se mění|se potvrzuje|zaplatit/u,
+        );
+      },
+    ),
+  );
 });
 
 describe("labelled heading", () => {

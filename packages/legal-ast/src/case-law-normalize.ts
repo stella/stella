@@ -1,9 +1,11 @@
 import { collapseSpacedLetters } from "@stll/text-normalize";
 
-import { caseLawSectionHeading } from "./case-law-heading.js";
+import { caseLawSectionHeading, isRomanItem } from "./case-law-heading.js";
 import type { Block, DocumentAst } from "./document-ast.js";
 
 const REASONING_HEADING = /^Odůvodnění\s*:?$/iu;
+/** A sentence introducing a quoted ruling: the Roman items after it are its content. */
+const QUOTE_INTRO = /(?:tak,?\s+že|takto)\s*:?$/iu;
 
 /**
  * Repair structure shared by every case-law consumer, including decisions
@@ -13,6 +15,8 @@ export const normalizeCaseLawDecisionAst = (ast: DocumentAst): DocumentAst => {
   const blocks: Block[] = [];
   let changed = false;
   let inReasoning = false;
+  let inQuotedRun = false;
+  let previousText = "";
   for (const block of ast.blocks) {
     if (
       block.type === "heading" &&
@@ -20,7 +24,21 @@ export const normalizeCaseLawDecisionAst = (ast: DocumentAst): DocumentAst => {
     ) {
       inReasoning = true;
     }
-    if (inReasoning && block.type === "paragraph" && block.role === undefined) {
+    const text = block.plainText.trim();
+    const isItem = block.type === "paragraph" && isRomanItem(text);
+    if (inQuotedRun && !isItem) {
+      inQuotedRun = false;
+    }
+    if (!inQuotedRun && isItem && QUOTE_INTRO.test(previousText)) {
+      inQuotedRun = true;
+    }
+    previousText = text;
+    if (
+      inReasoning &&
+      !inQuotedRun &&
+      block.type === "paragraph" &&
+      block.role === undefined
+    ) {
       const heading = caseLawSectionHeading(block.plainText);
       if (heading !== null) {
         blocks.push({

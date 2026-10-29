@@ -12,6 +12,22 @@ const LABELLED_TITLE_MAX_CHARS = 120;
 /** A title is not a sentence: ruling items and numbered paragraphs end in one. */
 const SENTENCE_END_RE = /[.;,:!?]$/u;
 
+/**
+ * A finite operative verb marks a quoted or issued ruling item, never a title.
+ * Appellate decisions quote the lower court's verdict as `I. Žalovaný je
+ * povinen zaplatit…`.
+ */
+const OPERATIVE_VERB_RE =
+  /(?<!\p{L})(?:je|jsou)\s+povinn\p{L}*|(?<!\p{L})se\s+(?:zamítá|zamítají|ruší|zrušuje|mění|potvrzuje|odmítá|zastavuje)(?!\p{L})|(?<!\p{L})zaplatit(?!\p{L})/iu;
+const ROMAN_ITEM_RE = /^(?=[IVX])(?:X{0,3}(?:IX|IV|V?I{0,3}))\.\s+\S/u;
+
+/** A paragraph opening with a Roman numeral, whatever follows it. */
+export const isRomanItem = (text: string): boolean => ROMAN_ITEM_RE.test(text);
+
+/** A title carries no sentence end and no operative verb. */
+export const isHeadingTitleShape = (title: string): boolean =>
+  !SENTENCE_END_RE.test(title) && !OPERATIVE_VERB_RE.test(title);
+
 export type LabelledHeading = {
   /** The numeral as printed, without its full stop: `I`, `4`. */
   label: string;
@@ -50,6 +66,9 @@ export const caseLawSectionHeading = (
   }
   const match = ROMAN_SECTION_TITLE_RE.exec(text);
   if (match === null) {
+    return null;
+  }
+  if (!isHeadingTitleShape(text.slice(text.indexOf(".") + 1).trim())) {
     return null;
   }
   return { level: match.groups?.["subsection"] === undefined ? 3 : 4 };
