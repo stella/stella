@@ -96,6 +96,7 @@ const INSTRUCTION_ENFORCEMENT_LEDGER_REL =
 // legacy site.
 const TRANSPORT_OWNER_MODULES: ReadonlySet<string> = new Set([
   "apps/api/src/lib/safe-outbound-fetch.ts",
+  "apps/api/src/lib/observability/operator-endpoint-fetch.ts",
   "apps/api/src/db/sql-client.ts",
   "apps/api/src/lib/email/sns-queue-drain.ts",
 ]);
@@ -2549,14 +2550,6 @@ const countReviewOnlyInstructionRules: FileCounter = (content) => {
   return parsed.reviewOnlyRules;
 };
 
-const countParserValidatorLedgerEntries: FileCounter = (content) => {
-  const parsed: unknown = JSON.parse(content);
-  if (!Array.isArray(parsed)) {
-    panic("parser-validator-call ledger must be a JSON array");
-  }
-  return parsed.length;
-};
-
 const countOutboundIndirectAccessExceptions = (
   context: ScanContext,
 ): RepoMetricResult => {
@@ -3648,15 +3641,6 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
   },
   {
     scope: "file",
-    id: "parser-validator-call-ledger-entries",
-    description:
-      "legacy parser validator imports and calls; validation moves to the pipeline and this ledger only shrinks",
-    include: ["scripts/parser-validator-call-ledger.json"],
-    exclude: () => false,
-    count: countParserValidatorLedgerEntries,
-  },
-  {
-    scope: "file",
     id: "internal-module-mock-ledger-entries",
     description:
       "grandfathered mock.module targets of workspace modules, one per <test file>::<module> pair in scripts/internal-module-mock-ledger.json (each replaces a real dependency with a fabrication the mocked module's contract changes cannot fail)",
@@ -4225,17 +4209,19 @@ const metricStatus = (current: number, baseline: number): MetricStatus => {
 type DiffOptions = {
   perFile?: true | undefined;
   allowlist?: true | undefined;
+  renamedFrom?: ReadonlyMap<string, string> | undefined;
 };
 
 const diffMetric = (
   id: string,
   current: MetricSnapshot,
   baseline: MetricSnapshot,
-  { perFile, allowlist }: DiffOptions = {},
+  { perFile, allowlist, renamedFrom }: DiffOptions = {},
 ): MetricDiff => {
   const regressedFiles: RegressedFile[] = [];
   for (const [file, to] of Object.entries(current.files)) {
-    const from = baseline.files[file] ?? 0;
+    const baselineFile = renamedFrom?.get(file) ?? file;
+    const from = baseline.files[baselineFile] ?? 0;
     if (to > from) {
       regressedFiles.push({ file, from, to });
     }
@@ -4244,8 +4230,11 @@ const diffMetric = (
 
   const staleFiles: RegressedFile[] = [];
   if (allowlist === true) {
+    const renamedTo = new Map(
+      [...(renamedFrom ?? [])].map(([to, from]) => [from, to]),
+    );
     for (const [file, from] of Object.entries(baseline.files)) {
-      const to = current.files[file] ?? 0;
+      const to = current.files[renamedTo.get(file) ?? file] ?? 0;
       if (to < from) {
         staleFiles.push({ file, from, to });
       }
@@ -4329,19 +4318,21 @@ type AssessMeasurementsOptions = {
   current: Baseline;
   baseline: Baseline;
   metrics?: readonly RatchetMetric[];
+  renamedFrom?: ReadonlyMap<string, string>;
 };
 
 export const assessMeasurements = ({
   current,
   baseline,
   metrics = RATCHET_METRICS,
+  renamedFrom,
 }: AssessMeasurementsOptions): MeasurementAssessment => {
   const diffs = metrics.map((metric) =>
     diffMetric(
       metric.id,
       requireSnapshot(current, metric.id),
       baseline[metric.id] ?? { count: 0, files: {} },
-      { perFile: metricGate(metric).perFile },
+      { perFile: metricGate(metric).perFile, renamedFrom },
     ),
   );
   return {
@@ -4361,6 +4352,33 @@ const revisionOption = (flag: "--base" | "--head"): string | undefined => {
 
 const resolveCommit = (ref: string): string =>
   readGit(["rev-parse", "--verify", "--end-of-options", `${ref}^{commit}`]);
+
+const renamedFiles = (
+  base: string,
+  head: string | undefined,
+): ReadonlyMap<string, string> => {
+  const output = readGit([
+    "diff",
+    "--find-renames",
+    "--name-status",
+    "-z",
+    base,
+    ...(head === undefined ? [] : [head]),
+    "--",
+  ]);
+  const fields = output.split("\0");
+  const renamedFrom = new Map<string, string>();
+  for (let index = 0; index < fields.length;) {
+    const status = fields[index++] ?? "";
+    const source = fields[index++] ?? "";
+    if (!status.startsWith("R")) {
+      continue;
+    }
+    const destination = fields[index++] ?? "";
+    renamedFrom.set(destination, source);
+  }
+  return renamedFrom;
+};
 
 const comparisonBase = (headRef?: string): string => {
   const explicitBase =
@@ -4663,7 +4681,11 @@ const runCheck = (): number => {
   const drops: MetricDiff[] = [];
   const remedies = new Set<string>();
 
-  const assessment = assessMeasurements({ current, baseline });
+  const assessment = assessMeasurements({
+    current,
+    baseline,
+    renamedFrom: renamedFiles(base, headRef),
+  });
   for (const [index, diff] of assessment.diffs.entries()) {
     const metric =
       RATCHET_METRICS.at(index) ?? panic("ratchet diff has no metric");
@@ -4715,7 +4737,8 @@ const runCheck = (): number => {
   if (regressions.some(({ id }) => PER_FILE_METRIC_IDS.has(id))) {
     console.error(
       "\nA per-file metric fails on any file above its own baseline, even when\n" +
-        "the total did not rise: move the new occurrence behind the owner instead.",
+        "the total did not rise: move the new occurrence behind the owner instead.\n" +
+        "File moves follow Git rename detection; edits below Git's similarity threshold are treated as a deletion plus an addition.",
     );
   }
   for (const remedy of remedies) {
@@ -5571,12 +5594,6 @@ const SELF_TEST_INSTRUCTION_ENFORCEMENT_LEDGER = `${JSON.stringify(
   2,
 )}\n`;
 const EXPECTED_REVIEW_ONLY_INSTRUCTION_RULES = 4;
-const SELF_TEST_PARSER_VALIDATOR_LEDGER = `${JSON.stringify([
-  "apps/api/src/handlers/case-law/ingestion/parsers/alpha.ts::import::1",
-  "apps/api/src/handlers/case-law/ingestion/parsers/alpha.ts::call::1",
-  "apps/api/src/lib/legal-search/parsers/beta.ts::call::1",
-])}\n`;
-const EXPECTED_PARSER_VALIDATOR_LEDGER_ENTRIES = 3;
 // Expected: the two tables that declare organizationId AND spread wsPolicies().
 // Excluded: the workspace-only table with no organizationId column, the table
 // already on wsOrganizationPolicies, the org-only table, the table whose only
@@ -6262,10 +6279,6 @@ const ledgerSelfTestFailures = (snapshot: Baseline): string[] => {
   const failures: string[] = [];
   for (const { id, expected } of [
     {
-      id: "parser-validator-call-ledger-entries",
-      expected: EXPECTED_PARSER_VALIDATOR_LEDGER_ENTRIES,
-    },
-    {
       id: "internal-module-mock-ledger-entries",
       expected: EXPECTED_INTERNAL_MODULE_MOCK_LEDGER_ENTRIES,
     },
@@ -6929,11 +6942,6 @@ const runSelfTest = (): number => {
       root,
       "apps/api/src/lib/case-law/public-subject.ts",
       SELF_TEST_AD_HOC_SUBJECT_GATE,
-    );
-    writeFixture(
-      root,
-      "scripts/parser-validator-call-ledger.json",
-      SELF_TEST_PARSER_VALIDATOR_LEDGER,
     );
     writeFixture(
       root,

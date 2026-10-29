@@ -121,8 +121,7 @@ and on a declared input no test reads any more.
 
 Main has a merge queue: GitHub builds main plus the pull request, runs CI on that
 commit, and merges only if it passes. Add ready pull requests directly to the
-merge queue. `ci-result` remains the required aggregate check, and
-`STELLA_MERGE_HOLD` can hold non-release queue entries during a release.
+merge queue. `ci-result` remains the required aggregate check.
 
 ## Documentation Access
 

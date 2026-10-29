@@ -1151,21 +1151,28 @@ test("owner-named Markdown declarations preserve input scope without duplicate p
 });
 
 test("every owner-named input declaration enters the census even through a delegated reader", () => {
+  // Listed in command order, the order the plan returns them in.
+  const declared = ["scripts/other-reader.ts", "scripts/owned-reader.ts"];
   repository((root, write) => {
-    const declared = ["scripts/owned-reader.ts", "scripts/other-reader.ts"];
     for (const [index, file] of declared.entries()) {
       write(
         file,
         `import { consume } from "./consumer";
-         export const CI_MARKDOWN_READER_INPUTS_OWNER_${index} = ["docs/owned.md"];
-         export const CI_MARKDOWN_READER_COMMAND = "bun ${file}";
-         consume();`,
+           export const CI_MARKDOWN_READER_INPUTS_OWNER_${index} = ["docs/owned.md"];
+           export const CI_MARKDOWN_READER_COMMAND = "bun ${file}";
+           consume();`,
       );
     }
-    const census = new Set(markdownReaders(root).map(({ file }) => file));
-    for (const file of declared) {
-      expect(census.has(file), file).toBe(true);
-    }
+    const outputs = [declared, declared.toReversed()].map((sourceFileOrder) => {
+      const census = new Set(markdownReaders(root).map(({ file }) => file));
+      for (const file of declared) {
+        expect(census.has(file), file).toBe(true);
+      }
+      return markdownReaders(root, sourceFileOrder)
+        .filter(({ inputs }) => inputs.includes("docs/owned.md"))
+        .map(({ file }) => file);
+    });
+    expect(outputs).toEqual([declared, declared]);
     expect(markdownChecks({ root, changed: ["docs/owned.md"] })).toEqual(
       declared.map((file) => ["bun", file]),
     );

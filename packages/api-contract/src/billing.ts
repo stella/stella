@@ -1,3 +1,6 @@
+/** Maximum stored task or activity code length. */
+export const BILLING_CODE_MAX_LENGTH = 20;
+
 export const TIME_ENTRY_ACTIVITY_GROUPS = ["client", "internal"] as const;
 export type TimeEntryActivityGroup =
   (typeof TIME_ENTRY_ACTIVITY_GROUPS)[number];
@@ -15,8 +18,13 @@ true satisfies MissingTimeEntryActivityGroup extends never ? true : never;
 /** ISO 4217 code for an entry whose financial value has not been configured. */
 export const UNPRICED_TIME_ENTRY_CURRENCY = "XXX";
 
+/**
+ * An entry's review lifecycle: a timekeeper's draft is submitted for review,
+ * approved (or returned to draft with a reason), then billed or written off.
+ */
 export const TIME_ENTRY_STATUSES = [
   "draft",
+  "submitted",
   "approved",
   "billed",
   "written_off",
@@ -26,6 +34,7 @@ export type TimeEntryStatus = (typeof TIME_ENTRY_STATUSES)[number];
 
 export const BILLING_STATUS = {
   DRAFT: "draft",
+  SUBMITTED: "submitted",
   APPROVED: "approved",
   BILLED: "billed",
   WRITTEN_OFF: "written_off",
@@ -167,8 +176,42 @@ type MissingInvoiceLineSource = Exclude<
 
 true satisfies MissingInvoiceLineSource extends never ? true : never;
 
+/** How a client settled (part of) an invoice. */
+export const INVOICE_PAYMENT_METHODS = [
+  "bank_transfer",
+  "card",
+  "cash",
+  "other",
+] as const;
+
+export type InvoicePaymentMethod = (typeof INVOICE_PAYMENT_METHODS)[number];
+
+/** Persisted payment text bounds shared by HTTP schemas and the payment form. */
+export const INVOICE_PAYMENT_INPUT_LIMITS = {
+  referenceMaxChars: 140,
+  noteMaxChars: 1000,
+} as const;
+
 /** Payment terms the invoice composer offers as one-click choices. */
 export const INVOICE_DUE_DAY_PRESETS = [7, 14, 30] as const;
 
 /** Payment term used when neither the client nor the caller sets one. */
 export const DEFAULT_INVOICE_DUE_DAYS = 14;
+
+/** Persisted invoice-line input bounds shared by HTTP schemas and bill editors. */
+export const INVOICE_LINE_INPUT_LIMITS = {
+  descriptionMinChars: 1,
+  descriptionMaxChars: 10_000,
+  quantityPrecision: 18,
+  quantityScale: 4,
+  unitMaxChars: 32,
+  unitPriceMinMinor: 0,
+} as const;
+
+export const INVOICE_LINE_QUANTITY_PATTERN = `^(0|[1-9][0-9]{0,${INVOICE_LINE_INPUT_LIMITS.quantityPrecision - INVOICE_LINE_INPUT_LIMITS.quantityScale - 1}})(\\.[0-9]{1,${INVOICE_LINE_INPUT_LIMITS.quantityScale}})?$`;
+
+/** Basis points represented by one percentage point of a billing cap. */
+export const BPS_PER_PERCENTAGE_POINT = 100;
+
+/** Largest minute cap representable by the persisted PostgreSQL integer column. */
+export const BILLING_CAP_MINUTES_MAX = 2_147_483_647;

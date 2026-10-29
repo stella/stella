@@ -40,7 +40,7 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { useSkillsPages } from "@/lib/knowledge/built-in-skills";
 import { useChatUnavailableSkillIds } from "@/lib/prompts/use-chat-unavailable-skills";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 
 /**
  * How the controlled string `value` round-trips through the editor.
@@ -117,7 +117,7 @@ export const AIPromptInput = ({
     organizationId: activeOrganizationId,
     userId,
   });
-  const skillsView = useQueryView(skillsQuery, {
+  const skillsView = queryView(skillsQuery, {
     isEmpty: (data) =>
       data.pages.every(
         (page) => page.builtIn.length === 0 && page.installed.length === 0,

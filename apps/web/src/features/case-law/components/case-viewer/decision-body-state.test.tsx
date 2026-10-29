@@ -49,6 +49,14 @@ describe("MissingDecisionBody", () => {
   test("never the case-law list's empty state", () => {
     for (const reason of Object.values(MISSING_BODY_REASON)) {
       expect(renderPane(reason)).not.toContain(messages.caseLaw.emptyState);
+      expect(
+        renderPane(reason).includes(
+          messages.caseLaw.research.answers.failureReasons.noText,
+        ),
+      ).toBe(
+        reason === MISSING_BODY_REASON.absent ||
+          reason === MISSING_BODY_REASON.unavailable,
+      );
     }
   });
 });

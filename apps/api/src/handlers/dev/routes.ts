@@ -8,6 +8,8 @@ import { Temporal } from "@stll/time";
 
 import {
   contacts,
+  expenses,
+  invoices,
   properties,
   propertyDependencies,
   timeEntries,
@@ -263,7 +265,10 @@ const cleanOrganization = defineEndpoint.member(
     await scopedDb(async (tx) => {
       // audit: skip — dev-only org-nuke endpoint; not deployed to prod
       // Delete in dependency order.
-      // 1. Time entries and workspace contacts (org-scoped)
+      // 1. Billing records, which a matter deletion refuses to take (lines
+      //    go with their invoices), and workspace contacts (org-scoped)
+      await tx.delete(invoices).where(eq(invoices.organizationId, orgId));
+      await tx.delete(expenses).where(eq(expenses.organizationId, orgId));
       await tx.delete(timeEntries).where(eq(timeEntries.organizationId, orgId));
       await tx
         .delete(workspaceContacts)
