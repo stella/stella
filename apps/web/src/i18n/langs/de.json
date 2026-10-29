@@ -5906,7 +5906,7 @@
     "useAsMyLookupFormatDefault": "Als meinen Standard verwenden",
     "useTemplate": "Vorlage verwenden",
     "useTemplateHint": "Füllen Sie die Felder aus und laden Sie das Dokument herunter oder speichern Sie es in einer Akte.",
-    "usedTimes": "{count}-mal verwendet",
+    "usedTimes": "{count, plural, one {#-mal} other {#-mal}} verwendet",
     "validationErrors": "Bitte beheben Sie die markierten Fehler",
     "validationKrsFormat": "Geben Sie eine zehnstellige KRS-Nummer ein",
     "validationMaxLength": "Maximal {max} Zeichen",

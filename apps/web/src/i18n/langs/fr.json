@@ -81,17 +81,17 @@
     }
   },
   "aiColumns": {
-    "countSummary": "{columns} colonnes × {rows} lignes = {answers, plural, one {# réponse} other {# réponses}}. Les réponses consomment le budget.",
+    "countSummary": "{columns} colonnes × {rows} lignes = {answers, plural, one {# réponse} other {# réponses} many {# réponses}}. Les réponses consomment le budget.",
     "modelRefused": "Le modèle a refusé de répondre",
     "nothingFound": "Aucun résultat",
     "refusedBudget": "Non exécuté : budget de réponses indisponible",
     "rerunAllPage": "Tout relancer (cette page)",
     "rerunColumnPage": "Relancer la colonne (cette page)",
     "runColumnPage": "Exécuter la colonne (cette page)",
-    "runPageRows": "Exécuter pour {count, plural, one {# ligne de cette page} other {# lignes de cette page}}",
+    "runPageRows": "Exécuter pour {count, plural, one {# ligne de cette page} other {# lignes de cette page} many {# lignes de cette page}}",
     "runRemainingPage": "Exécuter le reste (cette page)",
-    "runSelectedRows": "Exécuter pour {count, plural, one {# ligne sélectionnée} other {# lignes sélectionnées}}",
-    "selectedRun": "Exécuter les colonnes IA pour {count, plural, one {# ligne} other {# lignes}}"
+    "runSelectedRows": "Exécuter pour {count, plural, one {# ligne sélectionnée} other {# lignes sélectionnées} many {# lignes sélectionnées}}",
+    "selectedRun": "Exécuter les colonnes IA pour {count, plural, one {# ligne} other {# lignes} many {# lignes}}"
   },
   "aiDisclosure": {
     "caseLaw": "Les résumés, notes et analyses de décisions de justice produits par l’IA sont générés par stella ; ils ne sont pas approuvés par les juridictions et ne reflètent pas leur propre raisonnement. Ce sont des outils d’aide destinés aux professionnels du droit ; seul le texte de la décision fait foi."
@@ -202,7 +202,7 @@
       "editInterpretationNote": "Modifier la note d’interprétation",
       "empty": "Marquez des éléments de cette liste comme des faits auxquels confronter les documents.",
       "extractionAndReview": "Extraction et relecture",
-      "factCount": "{count, plural, one {# fait} other {# faits}}",
+      "factCount": "{count, plural, one {# fait} other {# faits} many {# faits}}",
       "heldDescription": "Le sens de ces extractions est <strong>réellement incertain</strong> — leur contenu est provisoire ou non confirmé, et pas simplement manuscrit. Elles sont exclues du scoring jusqu’à ce qu’un relecteur les confirme, les modifie ou les requalifie. Une source lisible n’est jamais mise en attente pour son seul support.",
       "heldForReview": "En attente de relecture",
       "holdOutOfScoring": "Exclure de la notation",
@@ -254,14 +254,14 @@
       "reopenedTooltip": "Un relecteur a requalifié cette affirmation en fait vérifiable ; une vérification en direct du dossier est encore en attente.",
       "score": {
         "anchorFactsDisagree": "Les faits d’ancrage se contredisent",
-        "conflictCount": "{count, plural, one {# contradiction} other {# contradictions}}",
+        "conflictCount": "{count, plural, one {# contradiction} other {# contradictions} many {# contradictions}}",
         "noCoverage": "<strong>Le dossier est muet.</strong> Aucun fait d’ancrage de la base ne traite de cette affirmation. Ce n’est pas un score faible : cela signifie qu’il n’y a encore rien pour la vérifier.",
         "notVerifiable": "<strong>Pas une assertion vérifiable.</strong> C’est le genre de déclaration qu’aucun document ne pourra jamais trancher — un contrefactuel, une prédiction, une déclaration d’intention, une conclusion juridique ou une affirmation trop vague pour être vérifiée. Écartée plutôt que notée.",
         "outOf100": "<strong>/ 100</strong> score de soutien",
-        "supportCount": "{count, plural, one {# soutien} other {# soutiens}}",
+        "supportCount": "{count, plural, one {# soutien} other {# soutiens} many {# soutiens}}",
         "verdictWithheld": "Verdict suspendu"
       },
-      "sourceCount": "{count, plural, one {# source} other {# sources}}",
+      "sourceCount": "{count, plural, one {# source} other {# sources} many {# sources}}",
       "whyScore": "Pourquoi ce score — faits d’ancrage"
     },
     "claimTypes": {
@@ -313,7 +313,7 @@
       "readyToConfirm": "Prête à confirmer"
     },
     "matches": {
-      "count": "{count, plural, one {# correspondance} other {# correspondances}}",
+      "count": "{count, plural, one {# correspondance} other {# correspondances} many {# correspondances}}",
       "position": "{current}/{total}"
     },
     "review": {
@@ -335,7 +335,7 @@
         "pinUnresolved": "La version du document sur laquelle cette vérification avait démarré est introuvable.",
         "unsupportedFormat": "Seuls les fichiers DOCX, les PDF et les fichiers disposant d’une version PDF peuvent être vérifiés."
       },
-      "evidencePinned": "Vérifié par rapport à {count, plural, one {# fait} other {# faits}} tels qu’ils se présentaient le {checkedAt}. Les modifications ultérieures de la liste ne changent pas cette vérification.",
+      "evidencePinned": "Vérifié par rapport à {count, plural, one {# fait} other {# faits} many {# faits}} tels qu’ils se présentaient le {checkedAt}. Les modifications ultérieures de la liste ne changent pas cette vérification.",
       "failedTitle": "Échec de la vérification",
       "history": {
         "label": "Historique des vérifications",
@@ -381,16 +381,16 @@
       }
     },
     "verification": {
-      "acceptRoutine": "Accepter {count, plural, one {# affirmation de routine} other {# affirmations de routine}}",
-      "attentionComplete": "<strong>Toutes les affirmations nécessitant un jugement ont été traitées.</strong> {count, plural, one {La # détermination de routine ne nécessite pas d’examen individuel.} other {Les # déterminations de routine ne nécessitent pas d’examen individuel.}}",
-      "attentionOpen": "<strong>{count, plural, one {# affirmation requiert} other {# affirmations requièrent}} votre jugement</strong> — contradictions et interprétations contestées. {routineCount, plural, one {L’autre # est de routine et ne nécessite pas de validation individuelle.} other {Les # autres sont de routine et ne nécessitent pas de validation individuelle.}}",
+      "acceptRoutine": "Accepter {count, plural, one {# affirmation de routine} other {# affirmations de routine} many {# affirmations de routine}}",
+      "attentionComplete": "<strong>Toutes les affirmations nécessitant un jugement ont été traitées.</strong> {count, plural, one {La # détermination de routine ne nécessite pas d’examen individuel.} other {Les # déterminations de routine ne nécessitent pas d’examen individuel.} many {Les # déterminations de routine ne nécessitent pas d’examen individuel.}}",
+      "attentionOpen": "<strong>{count, plural, one {# affirmation requiert} other {# affirmations requièrent} many {# affirmations requièrent}} votre jugement</strong> — contradictions et interprétations contestées. {routineCount, plural, one {L’autre # est de routine et ne nécessite pas de validation individuelle.} other {Les # autres sont de routine et ne nécessitent pas de validation individuelle.} many {Les # autres sont de routine et ne nécessitent pas de validation individuelle.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, contestée} other {}}{reviewStatus, select, reviewed {, examinée} disputed {, désaccord signalé} other {}})",
       "documentView": {
         "label": "Affichage du document",
         "original": "Original",
         "reading": "Mode lecture"
       },
-      "notLocated": "{count, plural, one {# affirmation introuvable dans l’original} other {# affirmations introuvables dans l’original}}",
+      "notLocated": "{count, plural, one {# affirmation introuvable dans l’original} other {# affirmations introuvables dans l’original} many {# affirmations introuvables dans l’original}}",
       "pdfTextFailed": "Le texte du PDF n’a pas pu être lu : les affirmations ne sont donc pas signalées sur ses pages.",
       "selectClaim": "Sélectionnez une affirmation pour inspecter le dossier.",
       "showQueue": "Afficher la file",
@@ -423,7 +423,7 @@
       "title": "Échec de la version bilingue"
     },
     "success": {
-      "description": "<bdi>{fileName}</bdi> est prêt avec {rowCount, plural, one {# ligne} other {# lignes}} à traduire.",
+      "description": "<bdi>{fileName}</bdi> est prêt avec {rowCount, plural, one {# ligne} other {# lignes} many {# lignes}} à traduire.",
       "title": "Version bilingue créée"
     }
   },
@@ -482,7 +482,7 @@
       "model": "IA"
     },
     "review": {
-      "droppedRows": "{count, plural, one {# ligne a été ignorée} other {# lignes ont été ignorées}} : elles ne contiennent aucun texte traduisible.",
+      "droppedRows": "{count, plural, one {# ligne a été ignorée} other {# lignes ont été ignorées} many {# lignes ont été ignorées}} : elles ne contiennent aucun texte traduisible.",
       "start": "Lancer la traduction",
       "starting": "Lancement…"
     },
@@ -495,12 +495,12 @@
     },
     "run": {
       "cancelled": "La traduction a été annulée.",
-      "doneSummary": "{count, plural, one {# ligne traduite} other {# lignes traduites}}.",
+      "doneSummary": "{count, plural, one {# ligne traduite} other {# lignes traduites} many {# lignes traduites}}.",
       "doneTitle": "Traduction terminée",
-      "failedRows": "{count, plural, one {# ligne n'a pas pu être traduite} other {# lignes n'ont pas pu être traduites}}.",
+      "failedRows": "{count, plural, one {# ligne n'a pas pu être traduite} other {# lignes n'ont pas pu être traduites} many {# lignes n'ont pas pu être traduites}}.",
       "failedTitle": "Traduction interrompue",
       "hint": "La traduction s'exécute sur le serveur. Gardez cette fenêtre ouverte pour la suivre.",
-      "moreRows": "{count, plural, one {# ligne de plus} other {# lignes de plus}}",
+      "moreRows": "{count, plural, one {# ligne de plus} other {# lignes de plus} many {# lignes de plus}}",
       "progress": "{completed} lignes traduites sur {total}",
       "title": "Traduction en cours…",
       "warningsTitle": "Lignes à vérifier"
@@ -511,15 +511,15 @@
     "amount": "Montant",
     "amountMustBePositive": "Le montant doit être supérieur à zéro",
     "approval": {
-      "approveAll": "{count, plural, one {Approuver # entrée} other {Approuver les # entrées}}",
-      "approveSelected": "Approuver {count, plural, one {# saisie sélectionnée} other {# saisies sélectionnées}}",
+      "approveAll": "{count, plural, one {Approuver # entrée} other {Approuver les # entrées} many {Approuver les # entrées}}",
+      "approveSelected": "Approuver {count, plural, one {# saisie sélectionnée} other {# saisies sélectionnées} many {# saisies sélectionnées}}",
       "billedTotal": "{duration} facturé",
       "empty": "Rien n’attend d’approbation dans ce dossier.",
       "emptyWeek": "Rien n’attend d’approbation cette semaine. Le temps soumis apparaît ici.",
       "everyone": "Tout le monde",
       "failed": "La modification n’a pas été enregistrée. Réessayez.",
       "myTime": "Mon temps",
-      "pending": "{count, plural, one {# entrée à approuver} other {# entrées à approuver}}",
+      "pending": "{count, plural, one {# entrée à approuver} other {# entrées à approuver} many {# entrées à approuver}}",
       "refusals": {
         "invalidEntry": "Ajoutez une description et vérifiez la date de travail, puis approuvez la saisie.",
         "notApprover": "Seul l’approbateur désigné ou un administrateur peut approuver cette saisie.",
@@ -539,7 +539,7 @@
         "timePeriodLocked": "Ce mois est verrouillé, la saisie ne peut donc pas être renvoyée. Demandez à un administrateur de le déverrouiller.",
         "wrongStatus": "Le temps facturé ou passé en pertes ne peut pas être renvoyé à son auteur."
       },
-      "returnSelected": "Renvoyer {count, plural, one {# saisie sélectionnée} other {# saisies sélectionnées}}",
+      "returnSelected": "Renvoyer {count, plural, one {# saisie sélectionnée} other {# saisies sélectionnées} many {# saisies sélectionnées}}",
       "selectEntry": "Sélectionner la saisie",
       "timeEntries": "Saisies de temps",
       "title": "Approbations"
@@ -621,7 +621,7 @@
       "continueToDetails": "Continuer vers les informations",
       "continueToIssue": "Continuer vers l’émission",
       "datesAndPayment": "Dates et paiement",
-      "days": "{days, plural, one {# jour} other {# jours}}",
+      "days": "{days, plural, one {# jour} other {# jours} many {# jours}}",
       "draftSavedTitle": "Brouillon de facture enregistré",
       "dueIn": "Échéance",
       "dueOn": "échéance le {date}",
@@ -640,9 +640,9 @@
       "noVat": "Sans TVA",
       "nothingToBill": "Rien à facturer pour l’instant. Approuvez des saisies de temps ou des débours de ce dossier pour les facturer.",
       "openInvoice": "Ouvrir la facture",
-      "otherCurrency": "{count, plural, one {# élément est saisi} other {# éléments sont saisis}} dans une autre devise que {currency} et restent à facturer séparément.",
+      "otherCurrency": "{count, plural, one {# élément est saisi} other {# éléments sont saisis} many {# éléments sont saisis}} dans une autre devise que {currency} et restent à facturer séparément.",
       "outsideScope": "Hors du champ d'application de la TVA, 0 %",
-      "pendingApprovals": "{count, plural, one {# élément attend} other {# éléments attendent}} une approbation. Vérifier les approbations.",
+      "pendingApprovals": "{count, plural, one {# élément attend} other {# éléments attendent} many {# éléments attendent}} une approbation. Vérifier les approbations.",
       "rate": "Taux",
       "readyDescription": "L’émission attribue le numéro suivant de votre série et verrouille la facture. Un brouillon reste modifiable.",
       "readyTitle": "Prête à émettre",
@@ -663,7 +663,7 @@
       "tax": "Taxe et devise",
       "taxableSupplyDate": "Date de la prestation",
       "timeEntries": "Saisies de temps",
-      "timeSummary": "{count, plural, one {# saisie} other {# saisies}} · {hours} h",
+      "timeSummary": "{count, plural, one {# saisie} other {# saisies} many {# saisies}} · {hours} h",
       "title": "Nouvelle facture",
       "totalsSummary": "HT {net} · TVA {vat} · Total {total}",
       "vat": "Régime de TVA",
@@ -724,7 +724,7 @@
         "void": "Annulée"
       },
       "totalAmount": "Montant total",
-      "totalEntries": "{count, plural, one {# entrée} other {# entrées}}",
+      "totalEntries": "{count, plural, one {# entrée} other {# entrées} many {# entrées}}",
       "void": "Annuler"
     },
     "loading": "Chargement...",
@@ -794,7 +794,7 @@
       "ongoing": "En cours",
       "override": "Remplacer",
       "perHour": "/h",
-      "rateCount": "{count, plural, one {# tarif} other {# tarifs}}",
+      "rateCount": "{count, plural, one {# tarif} other {# tarifs} many {# tarifs}}",
       "rateEntries": "Entrées tarifaires",
       "rateResolved": "Tarif résolu",
       "rateTables": "Barèmes",
@@ -810,7 +810,7 @@
     },
     "selectMatter": "Sélectionner un dossier...",
     "selectMatterToStart": "Sélectionnez un dossier pour démarrer",
-    "selectedCount": "{count, plural, one {# élément sélectionné} other {# éléments sélectionnés}}",
+    "selectedCount": "{count, plural, one {# élément sélectionné} other {# éléments sélectionnés} many {# éléments sélectionnés}}",
     "sellerProfiles": {
       "add": "Ajouter un profil de vendeur",
       "archiveConfirm": "Archiver ce profil de vendeur ? Il ne sera plus disponible pour les nouvelles factures.",
@@ -947,14 +947,14 @@
     },
     "citation": {
       "citedAtLeast": "Citée au moins {count} fois",
-      "citedSummary": "{count, plural, =0 {Non citée} one {Citée une fois} other {Citée # fois}}",
+      "citedSummary": "{count, plural, =0 {Non citée} one {Citée une fois} other {Citée # fois} many {Citée # fois}}",
       "dateUnavailable": "Date indisponible",
-      "decisionCount": "{count, plural, =0 {Aucune décision} one {# décision} other {# décisions}}",
+      "decisionCount": "{count, plural, =0 {Aucune décision} one {# décision} other {# décisions} many {# décisions}}",
       "goToMention": "Aller à la mention nº {number}",
       "goToParagraph": "Aller au point {paragraph}",
       "lastNegative": "dernière citation négative en {year}",
       "mentionMark": "mention nº {number}",
-      "mentionsInDecision": "{count, plural, one {Citée une fois dans cette décision} other {Citée # fois dans cette décision}}",
+      "mentionsInDecision": "{count, plural, one {Citée une fois dans cette décision} other {Citée # fois dans cette décision} many {Citée # fois dans cette décision}}",
       "negativeCount": "{count, plural, one {# négative} many {# négatives} other {# négatives}}",
       "none": "Aucune citation enregistrée pour l'instant.",
       "notInStella": "Pas encore dans stella",
@@ -979,7 +979,7 @@
       },
       "unresolved": "Non rattachée à une décision",
       "whereCited": "Où elle cite cette décision",
-      "yearTitle": "{year} : {count, plural, one {# citation} other {# citations}}"
+      "yearTitle": "{year} : {count, plural, one {# citation} other {# citations} many {# citations}}"
     },
     "columns": {
       "caseNumber": "Numéro d'affaire",
@@ -988,7 +988,7 @@
       "summary": "Sommaire / passage trouvé"
     },
     "corpusStatus": {
-      "courtCount": "{count, plural, one {# juridiction} other {# juridictions}}",
+      "courtCount": "{count, plural, one {# juridiction} other {# juridictions} many {# juridictions}}",
       "newLast24Hours": "{count} depuis 24 h",
       "newLast7Days": "Nouvelles depuis 7 jours",
       "otherCourts": "Autres juridictions"
@@ -1006,7 +1006,7 @@
       "countryNavigation": "Accéder à un pays",
       "courtsHeading": "Par juridiction",
       "decisionYears": "Années des décisions",
-      "decisionsAcross": "décisions dans {count, plural, one {# juridiction} other {# juridictions}}",
+      "decisionsAcross": "décisions dans {count, plural, one {# juridiction} other {# juridictions} many {# juridictions}}",
       "description": "Le volume de jurisprudence contenu dans le corpus, par pays et par juridiction, et la fraîcheur de chaque source.",
       "generatedAt": "Chiffres au {date}",
       "healthCurrent": "À jour",
@@ -1019,7 +1019,7 @@
       "notCountedYet": "Pas encore décompté",
       "notMeasuredYet": "Pas encore mesuré",
       "searchable": "Interrogeables",
-      "sourceExceptions": "{count, plural, one {# source à vérifier} other {# sources à vérifier}}",
+      "sourceExceptions": "{count, plural, one {# source à vérifier} other {# sources à vérifier} many {# sources à vérifier}}",
       "sourcesCurrent": "Sources à jour",
       "syncedAt": "Synchronisation : {time}",
       "title": "Couverture de la jurisprudence",
@@ -1060,7 +1060,7 @@
       "remove": "Retirer le filtre {filter}"
     },
     "languages": {
-      "count": "{count, plural, one {# langue} other {# langues}}",
+      "count": "{count, plural, one {# langue} other {# langues} many {# langues}}",
       "matchedIn": "Correspondance en {language}"
     },
     "loadingMore": "Chargement en cours…",
@@ -1071,19 +1071,19 @@
       "unnumberedParagraph": "{count, plural, =0 {Aucune disposition citée dans ce paragraphe} one {# disposition citée dans ce paragraphe} many {# de dispositions citées dans ce paragraphe} other {# dispositions citées dans ce paragraphe}}"
     },
     "matterLinks": {
-      "alreadySaved": "{count, plural, one {# décision était déjà enregistrée ici} other {# décisions étaient déjà enregistrées ici}}",
+      "alreadySaved": "{count, plural, one {# décision était déjà enregistrée ici} other {# décisions étaient déjà enregistrées ici} many {# décisions étaient déjà enregistrées ici}}",
       "empty": "Aucune jurisprudence n’est encore conservée dans ce dossier.",
       "emptyAction": "Rechercher dans la jurisprudence",
       "note": "Remarque",
       "notePlaceholder": "Pourquoi ces décisions comptent ici…",
-      "rejectedLimit": "{count, plural, one {# décision n'a pas été enregistrée : le dossier est plein} other {# décisions n'ont pas été enregistrées : le dossier est plein}}",
-      "rejectedMissing": "{count, plural, one {# décision est introuvable} other {# décisions sont introuvables}}",
+      "rejectedLimit": "{count, plural, one {# décision n'a pas été enregistrée : le dossier est plein} other {# décisions n'ont pas été enregistrées : le dossier est plein} many {# décisions n'ont pas été enregistrées : le dossier est plein}}",
+      "rejectedMissing": "{count, plural, one {# décision est introuvable} other {# décisions sont introuvables} many {# décisions sont introuvables}}",
       "remove": "Retirer du dossier",
       "save": "Enregistrer dans un dossier",
-      "savePage": "{count, plural, one {# décision de cette page sera enregistrée.} other {# décisions de cette page seront enregistrées.}}",
-      "saveSelection": "{count, plural, one {# décision sélectionnée sera enregistrée.} other {# décisions sélectionnées seront enregistrées.}}",
+      "savePage": "{count, plural, one {# décision de cette page sera enregistrée.} other {# décisions de cette page seront enregistrées.} many {# décisions de cette page seront enregistrées.}}",
+      "saveSelection": "{count, plural, one {# décision sélectionnée sera enregistrée.} other {# décisions sélectionnées seront enregistrées.} many {# décisions sélectionnées seront enregistrées.}}",
       "saveTitle": "Enregistrer dans un dossier",
-      "saved": "{count, plural, one {# décision enregistrée} other {# décisions enregistrées}} dans {matter}"
+      "saved": "{count, plural, one {# décision enregistrée} other {# décisions enregistrées} many {# décisions enregistrées}} dans {matter}"
     },
     "newestDecisions": "Décisions les plus récentes",
     "noResults": {
@@ -1101,16 +1101,16 @@
       "pageOfCount": "Page {page} sur {pageCount}",
       "pageOfEstimatedCount": "Page {page} sur ~{pageCount}",
       "pageOfEstimatedCountLabel": "Page {page} sur environ {pageCount}",
-      "pageWithEstimatedMatchCounts": "Page n° {page} · environ {exactCount, plural, one {# correspondance exacte} other {# correspondances exactes}} · {relaxedCount, plural, one {# correspondance partielle} other {# correspondances partielles}} sur cette page",
-      "pageWithEstimatedResultCount": "Page n° {page} · environ {count, plural, one {# résultat} other {# résultats}}",
-      "pageWithMatchCounts": "Page n° {page} · {exactCount, plural, one {# correspondance exacte} other {# correspondances exactes}} · {relaxedCount, plural, one {# correspondance partielle} other {# correspondances partielles}} sur cette page",
-      "pageWithPartialMatchCount": "Page n° {page} · {relaxedCount, plural, one {# correspondance partielle} other {# correspondances partielles}} sur cette page",
-      "pageWithResultCount": "Page n° {page} · {count, plural, one {# résultat} other {# résultats}}",
+      "pageWithEstimatedMatchCounts": "Page n° {page} · environ {exactCount, plural, one {# correspondance exacte} other {# correspondances exactes} many {# correspondances exactes}} · {relaxedCount, plural, one {# correspondance partielle} other {# correspondances partielles} many {# correspondances partielles}} sur cette page",
+      "pageWithEstimatedResultCount": "Page n° {page} · environ {count, plural, one {# résultat} other {# résultats} many {# résultats}}",
+      "pageWithMatchCounts": "Page n° {page} · {exactCount, plural, one {# correspondance exacte} other {# correspondances exactes} many {# correspondances exactes}} · {relaxedCount, plural, one {# correspondance partielle} other {# correspondances partielles} many {# correspondances partielles}} sur cette page",
+      "pageWithPartialMatchCount": "Page n° {page} · {relaxedCount, plural, one {# correspondance partielle} other {# correspondances partielles} many {# correspondances partielles}} sur cette page",
+      "pageWithResultCount": "Page n° {page} · {count, plural, one {# résultat} other {# résultats} many {# résultats}}",
       "perPage": "Par page",
       "refineForMore": "Affinez votre recherche pour voir d’autres résultats"
     },
-    "paragraphRangeNotFound": "{count, plural, one {Le paragraphe {range} est introuvable dans ce texte.} other {Les paragraphes {range} sont introuvables dans ce texte.}}",
-    "paragraphRangeSelected": "{count, plural, one {Le paragraphe {range} est surligné.} other {Les paragraphes {range} sont surlignés.}}",
+    "paragraphRangeNotFound": "{count, plural, one {Le paragraphe {range} est introuvable dans ce texte.} other {Les paragraphes {range} sont introuvables dans ce texte.} many {Les paragraphes {range} sont introuvables dans ce texte.}}",
+    "paragraphRangeSelected": "{count, plural, one {Le paragraphe {range} est surligné.} other {Les paragraphes {range} sont surlignés.} many {Les paragraphes {range} sont surlignés.}}",
     "provision": {
       "article": "art. {value}",
       "letter": "let. {value})",
@@ -1126,7 +1126,7 @@
       "sourceAttribution": "Les données sources sont librement accessibles sur <link>{source}</link>."
     },
     "research": {
-      "answering": "{count, plural, one {Réponse en cours pour # cellule…} other {Réponse en cours pour # cellules…}}",
+      "answering": "{count, plural, one {Réponse en cours pour # cellule…} other {Réponse en cours pour # cellules…} many {Réponse en cours pour # cellules…}}",
       "answers": {
         "failureReasons": {
           "decisionUnavailable": "Décision indisponible",
@@ -1153,7 +1153,7 @@
       "removeFromSearch": "Retirer de cette recherche",
       "runAll": "Tout répondre",
       "runConfirm": "Répondre maintenant",
-      "runEstimate": "{rows, plural, one {# décision} other {# décisions}} × {columns, plural, one {# question} other {# questions}} sur cette page : {cells, plural, one {# réponse sera produite} other {# réponses seront produites}}.",
+      "runEstimate": "{rows, plural, one {# décision} other {# décisions} many {# décisions}} × {columns, plural, one {# question} other {# questions} many {# questions}} sur cette page : {cells, plural, one {# réponse sera produite} other {# réponses seront produites} many {# réponses seront produites}}.",
       "runTitle": "Répondre pour cette page",
       "savedQuestions": "Questions enregistrées",
       "title": "Tableaux de recherche"
@@ -1170,7 +1170,7 @@
       "line": "Aucune correspondance exacte pour <bdi>{original}</bdi> ; résultats pour <bdi>{query}</bdi>",
       "searchOriginal": "Rechercher mes mots d'origine"
     },
-    "sameCaseNumber": "{count, plural, one {# décision porte} other {# décisions portent}} ce numéro d'affaire. Choisissez la juridiction.",
+    "sameCaseNumber": "{count, plural, one {# décision porte} other {# décisions portent} many {# décisions portent}} ce numéro d'affaire. Choisissez la juridiction.",
     "searchLabel": "Rechercher dans la jurisprudence",
     "searchPlaceholder": "Numéro d'affaire, ECLI ou mots-clés, p. ex. 22 Cdo 2653/2012",
     "searchUnavailable": {
@@ -1218,7 +1218,7 @@
       "citedDecisionPassage": "Passage dans la décision",
       "cites": "Cite",
       "dissentByline": "Opinion dissidente : <bdi>{names}</bdi>",
-      "goToParagraph": "{count, plural, one {Aller au paragraphe} other {Aller aux paragraphes}}",
+      "goToParagraph": "{count, plural, one {Aller au paragraphe} other {Aller aux paragraphes} many {Aller aux paragraphes}}",
       "judgeRole": {
         "advocateGeneral": "Avocat général",
         "dissenting": "Opinion dissidente",
@@ -1233,7 +1233,7 @@
       "popularName": "Nom courant",
       "portraitCredit": "Source des portraits : {source}",
       "provisionMentions": "{count, number}×",
-      "provisionMentionsLabel": "{count, plural, one {# occurrence} other {# occurrences}}",
+      "provisionMentionsLabel": "{count, plural, one {# occurrence} other {# occurrences} many {# occurrences}}",
       "provisionsCited": "Dispositions citées",
       "provisionsFailed": "Le traitement des citations a échoué",
       "provisionsNoneFound": "Aucune disposition citée trouvée",
@@ -1277,15 +1277,15 @@
     "firstParty": "stella",
     "firstPartyTooltip": "Créé par l'équipe stella",
     "installFailed": "Échec de l'installation",
-    "installPack": "{count, plural, one {Installer # outil} other {Installer # outils}}",
+    "installPack": "{count, plural, one {Installer # outil} other {Installer # outils} many {Installer # outils}}",
     "installed": "{name} installé",
     "installedShort": "Installé",
     "onboarding": {
       "packTitle": "Recommandé pour votre juridiction"
     },
     "openHomepage": "Ouvrir la page d'accueil",
-    "packDescription": "{count, plural, one {# outil} other {# outils}} sélectionnés pour votre pratique. Installation en un clic ou choix individuel ci-dessous.",
-    "packInstalled": "{count, plural, one {# outil installé} other {# outils installés}}",
+    "packDescription": "{count, plural, one {# outil} other {# outils} many {# outils}} sélectionnés pour votre pratique. Installation en un clic ou choix individuel ci-dessous.",
+    "packInstalled": "{count, plural, one {# outil installé} other {# outils installés} many {# outils installés}}",
     "packPartial": "{installed} installés, {failed} en échec",
     "removed": "Cet outil n'est plus disponible.",
     "sectionOthers": "Autres",
@@ -1606,17 +1606,17 @@
     "pastedChars": "Collé · {count} caractères",
     "pastedText": {
       "expand": "Afficher le texte complet",
-      "fromClipboard": "Collé : {count, plural, one {# caractère} other {# caractères}}",
+      "fromClipboard": "Collé : {count, plural, one {# caractère} other {# caractères} many {# caractères}}",
       "fromPromptFallback": "Compétence",
       "showInTextField": "Afficher dans le champ de texte",
       "title": "Texte collé"
     },
     "placeholder": "Saisissez votre question ici, / pour les compétences, @ pour ajouter du contexte",
     "processSummary": {
-      "analyses": "{count, plural, one {# analyse} other {# analyses}}",
-      "changesSaved": "{count, plural, one {# modification enregistrée} other {# modifications enregistrées}}",
-      "documentEdits": "{count, plural, one {# modification du document} other {# modifications du document}}",
-      "sourcesChecked": "{count, plural, one {# source vérifiée} other {# sources vérifiées}}"
+      "analyses": "{count, plural, one {# analyse} other {# analyses} many {# analyses}}",
+      "changesSaved": "{count, plural, one {# modification enregistrée} other {# modifications enregistrées} many {# modifications enregistrées}}",
+      "documentEdits": "{count, plural, one {# modification du document} other {# modifications du document} many {# modifications du document}}",
+      "sourcesChecked": "{count, plural, one {# source vérifiée} other {# sources vérifiées} many {# sources vérifiées}}"
     },
     "promptImprovementStrategies": {
       "decompose": {
@@ -1643,7 +1643,7 @@
     "queuedAttachmentCount": "{count, plural, one {# pièce jointe} many {# pièces jointes} other {# pièces jointes}}",
     "queuedNotice": "En file d’attente : envoi à la fin de la réponse en cours",
     "reasoning": "Raisonnement",
-    "reasoningTokens": "{count, plural, one {# jeton de raisonnement} other {# jetons de raisonnement}}",
+    "reasoningTokens": "{count, plural, one {# jeton de raisonnement} other {# jetons de raisonnement} many {# jetons de raisonnement}}",
     "recapLoading": "Récapitulatif de la conversation…",
     "removeSuggestion": "(supprimer)",
     "renameThread": "Renommer la conversation",
@@ -1828,8 +1828,8 @@
       "set_practice_jurisdictions": "Définir les juridictions d’exercice",
       "show_in_document": "Affichage dans le document",
       "spawn_subagents": "Délégation à des sous-agents",
-      "suggestChangesApplied": "{applied, plural, one {# modification appliquée} other {# modifications appliquées}}",
-      "suggestChangesAppliedWithSkipped": "{applied, plural, one {# modification appliquée} other {# modifications appliquées}} ({skipped, plural, one {# ignorée} other {# ignorées}})",
+      "suggestChangesApplied": "{applied, plural, one {# modification appliquée} other {# modifications appliquées} many {# modifications appliquées}}",
+      "suggestChangesAppliedWithSkipped": "{applied, plural, one {# modification appliquée} other {# modifications appliquées} many {# modifications appliquées}} ({skipped, plural, one {# ignorée} other {# ignorées} many {# ignorées}})",
       "suggestChangesAuthorNameDialogDescription": "Les modifications automatiques du document vous sont attribuées en tant qu’auteur des modifications suivies. Définissez un nom préféré pour continuer.",
       "suggestChangesAuthorNameDialogTitle": "Définir votre nom pour le suivi des modifications",
       "suggestChangesRepresentationDirect": "Réécrire",
@@ -1857,7 +1857,7 @@
       "sourceCode": "Code source",
       "statusWaiting": "En attente",
       "toggleDetails": "Afficher les détails",
-      "unrestoredFields": "En mode anonymisé, {count, plural, one {# champ n’a pas pu être rempli} other {# champs n’ont pas pu être remplis}} avec des valeurs réelles. À vérifier : {fields}"
+      "unrestoredFields": "En mode anonymisé, {count, plural, one {# champ n’a pas pu être rempli} other {# champs n’ont pas pu être remplis} many {# champs n’ont pas pu être remplis}} avec des valeurs réelles. À vérifier : {fields}"
     },
     "turnNotification": {
       "failedBody": "Une réponse dans une conversation stella n’a pas abouti.",
@@ -1916,8 +1916,8 @@
     "exportFailed": "Impossible d'exporter les clauses",
     "formattingPreviewHint": "La numérotation et la mise en forme sont ici un aperçu. Le document généré applique sa propre mise en forme des listes, ne saisissez donc pas les numéros à la main.",
     "importFailed": "Impossible d'importer les clauses",
-    "importResult": "{created, plural, one {# créée} other {# créées}}, {skipped, plural, one {# ignorée} other {# ignorées}}",
-    "importSuccess": "{count, plural, one {# clause importée} other {# clauses importées}}",
+    "importResult": "{created, plural, one {# créée} other {# créées} many {# créées}}, {skipped, plural, one {# ignorée} other {# ignorées} many {# ignorées}}",
+    "importSuccess": "{count, plural, one {# clause importée} other {# clauses importées} many {# clauses importées}}",
     "importing": "Importation en cours…",
     "keepMyText": "Garder mon texte",
     "languagePlaceholder": "p. ex. fr",
@@ -1931,7 +1931,7 @@
     "linkedClauses": "Clauses liées",
     "loadFailed": "Impossible de charger les clauses",
     "loading": "Chargement des clauses…",
-    "needUpdate": "{count, plural, one {# à mettre à jour} other {# à mettre à jour}}",
+    "needUpdate": "{count, plural, one {# à mettre à jour} other {# à mettre à jour} many {# à mettre à jour}}",
     "noChanges": "Aucune modification",
     "noLinkedClauses": "Aucune clause liée",
     "noResults": "Aucune clause",
@@ -1962,7 +1962,7 @@
     "syncFailed": "Impossible de synchroniser",
     "syncVersion": "Synchroniser avec la dernière version",
     "synced": "Synchronisé avec la dernière version",
-    "syncedAllResult": "{count, plural, =0 {Tout est déjà à jour} one {# clause synchronisée} other {# clauses synchronisées}}",
+    "syncedAllResult": "{count, plural, =0 {Tout est déjà à jour} one {# clause synchronisée} other {# clauses synchronisées} many {# clauses synchronisées}}",
     "takeTheirText": "Utiliser le texte enregistré",
     "titleLabel": "Titre",
     "titlePlaceholder": "p. ex. Clause de confidentialité",
@@ -2085,7 +2085,7 @@
     "delete": "Supprimer",
     "deleteCategory": "Supprimer la catégorie",
     "deleteConfirmDescription": "Voulez-vous vraiment supprimer « {name} » ? Cette action est irréversible.",
-    "deletedCount": "{count, plural, one {# élément supprimé} other {# éléments supprimés}}",
+    "deletedCount": "{count, plural, one {# élément supprimé} other {# éléments supprimés} many {# éléments supprimés}}",
     "description": "Description",
     "details": "Détails",
     "detailsHiddenFeatureUnavailable": "Détails masqués : fonctionnalité non activée",
@@ -2104,14 +2104,14 @@
     "doubleClickToRename": "Double-cliquez pour renommer",
     "download": "Télécharger",
     "dragAndDrop": {
-      "cancelled": "{count, plural, one {Déplacement annulé. {itemName} n’a pas été déplacé.} other {Déplacement annulé. {itemName} n’ont pas été déplacés.}}",
-      "droppedOn": "{count, plural, one {{itemName} a été déposé sur {destinationName}.} other {{itemName} ont été déposés sur {destinationName}.}}",
-      "movedNear": "{count, plural, one {{itemName} a été déplacé près de {destinationName}.} other {{itemName} ont été déplacés près de {destinationName}.}}",
-      "movedTo": "{count, plural, one {{itemName} a été déplacé vers {destinationName}.} other {{itemName} ont été déplacés vers {destinationName}.}}",
-      "movingNear": "{count, plural, one {Déplacement de {itemName} près de {destinationName}.} other {Déplacement de {itemName} près de {destinationName}.}}",
-      "movingTo": "{count, plural, one {Déplacement de {itemName} vers {destinationName}.} other {Déplacement de {itemName} vers {destinationName}.}}",
-      "pickedUp": "{count, plural, one {{itemName} a été saisi.} other {{itemName} ont été saisis.}}",
-      "selectedItems": "{count, plural, one {# élément sélectionné} other {# éléments sélectionnés}}"
+      "cancelled": "{count, plural, one {Déplacement annulé. {itemName} n’a pas été déplacé.} other {Déplacement annulé. {itemName} n’ont pas été déplacés.} many {Déplacement annulé. {itemName} n’ont pas été déplacés.}}",
+      "droppedOn": "{count, plural, one {{itemName} a été déposé sur {destinationName}.} other {{itemName} ont été déposés sur {destinationName}.} many {{itemName} ont été déposés sur {destinationName}.}}",
+      "movedNear": "{count, plural, one {{itemName} a été déplacé près de {destinationName}.} other {{itemName} ont été déplacés près de {destinationName}.} many {{itemName} ont été déplacés près de {destinationName}.}}",
+      "movedTo": "{count, plural, one {{itemName} a été déplacé vers {destinationName}.} other {{itemName} ont été déplacés vers {destinationName}.} many {{itemName} ont été déplacés vers {destinationName}.}}",
+      "movingNear": "{count, plural, one {Déplacement de {itemName} près de {destinationName}.} other {Déplacement de {itemName} près de {destinationName}.} many {Déplacement de {itemName} près de {destinationName}.}}",
+      "movingTo": "{count, plural, one {Déplacement de {itemName} vers {destinationName}.} other {Déplacement de {itemName} vers {destinationName}.} many {Déplacement de {itemName} vers {destinationName}.}}",
+      "pickedUp": "{count, plural, one {{itemName} a été saisi.} other {{itemName} ont été saisis.} many {{itemName} ont été saisis.}}",
+      "selectedItems": "{count, plural, one {# élément sélectionné} other {# éléments sélectionnés} many {# éléments sélectionnés}}"
     },
     "duplicate": "Dupliquer",
     "duplicated": "Dupliqué",
@@ -2266,7 +2266,7 @@
     "retry": "Réessayer",
     "role": "Rôle",
     "run": "Exécuter",
-    "runSizeConfirmDescription": "Cette exécution est estimée à {estimated, plural, one {# unité d'utilisation} other {# unités d'utilisation}} ; {available, plural, one {# est disponible} other {# sont disponibles}}. La lancer quand même ?",
+    "runSizeConfirmDescription": "Cette exécution est estimée à {estimated, plural, one {# unité d'utilisation} other {# unités d'utilisation} many {# unités d'utilisation}} ; {available, plural, one {# est disponible} other {# sont disponibles} many {# sont disponibles}}. La lancer quand même ?",
     "running": "En cours",
     "save": "Enregistrer",
     "saveAndLeave": "Enregistrer et quitter",
@@ -2299,7 +2299,7 @@
     "stale": "Obsolète",
     "start": "Commencer",
     "status": "Statut",
-    "stepCount": "{count, plural, one {# étape} other {# étapes}}",
+    "stepCount": "{count, plural, one {# étape} other {# étapes} many {# étapes}}",
     "stepProgress": "{current} sur {total}",
     "suggested": "Suggestion",
     "summarizeChanges": "Résumer les modifications",
@@ -2383,7 +2383,7 @@
     "scopeTemplates": "Lister, remplir et créer vos modèles de documents",
     "scopeTemplatesAnonymized": "Lister, remplir et créer des versions anonymisées de vos modèles de documents",
     "sensitiveAccess": "Comprend des accès qui peuvent supprimer des données ou modifier votre organisation",
-    "showAllPermissions": "{count, plural, one {Afficher l’autorisation} other {Afficher les # autorisations}}",
+    "showAllPermissions": "{count, plural, one {Afficher l’autorisation} other {Afficher les # autorisations} many {Afficher les # autorisations}}",
     "signedInAs": "Connecté en tant que <email>{accountEmail}</email>",
     "summaryAdminRead": "journal d'audit",
     "summaryAdminWrite": "membres et paramètres de l'organisation",
@@ -2529,8 +2529,8 @@
     "filterPersons": "Personnes",
     "import": {
       "confirmAction": "Confirmer l'importation",
-      "previewSummary": "{valid, plural, one {# prêt} other {# prêts}}, {invalid, plural, one {# en erreur} other {# en erreur}}",
-      "resultsSummary": "{created, plural, one {# créé} other {# créés}}, {skipped, plural, one {# ignoré} other {# ignorés}}",
+      "previewSummary": "{valid, plural, one {# prêt} other {# prêts} many {# prêts}}, {invalid, plural, one {# en erreur} other {# en erreur} many {# en erreur}}",
+      "resultsSummary": "{created, plural, one {# créé} other {# créés} many {# créés}}, {skipped, plural, one {# ignoré} other {# ignorés} many {# ignorés}}",
       "rowLabel": "Client n° {index}",
       "skippedDuplicateContactId": "Ignoré : identifiant de contact en double",
       "skippedDuplicateTaxId": "Ignoré : numéro fiscal en double",
@@ -2566,11 +2566,11 @@
         "type": "Type de contact"
       },
       "fileInvalid": "Choisissez un seul fichier CSV, TSV ou TXT.",
-      "fileSummary": "{name} : {count, plural, one {# contact} other {# contacts}}",
+      "fileSummary": "{name} : {count, plural, one {# contact} other {# contacts} many {# contacts}}",
       "generateDisplayName": "Créer les noms affichés à partir des champs de nom associés",
       "ignore": "Ne pas importer",
       "importAnother": "Importer un autre fichier",
-      "importCount": "Importer {count, plural, one {# contact} other {# contacts}}",
+      "importCount": "Importer {count, plural, one {# contact} other {# contacts} many {# contacts}}",
       "importFailed": "Impossible d’importer les contacts.",
       "inspectFailed": "Impossible de lire ce fichier de contacts.",
       "issue": {
@@ -2593,7 +2593,7 @@
       "preview": "Vérifier l’importation",
       "previewFailed": "Impossible de créer l’aperçu de l’importation.",
       "reviewDescription": "Aucun contact n’a encore été importé. Modifiez les lignes ci-dessous, puis importez les contacts prêts.",
-      "reviewSummary": "{ready, plural, one {# contact est prêt} other {# contacts sont prêts}}. {errors, plural, =0 {Aucune erreur.} one {# erreur doit être corrigée.} other {# erreurs doivent être corrigées.}}",
+      "reviewSummary": "{ready, plural, one {# contact est prêt} other {# contacts sont prêts} many {# contacts sont prêts}}. {errors, plural, =0 {Aucune erreur.} one {# erreur doit être corrigée.} other {# erreurs doivent être corrigées.} many {# erreurs doivent être corrigées.}}",
       "sampleValues": "Exemples de valeurs",
       "sourceColumn": "Colonne source",
       "sourceRow": "Ligne {index}",
@@ -2707,11 +2707,11 @@
       "deleteParagraph": "Supprimer le paragraphe",
       "replacement": "« {find} » → « {replace} »"
     },
-    "countHigh": "{count, plural, one {# élevée} other {# élevées}}",
-    "countLow": "{count, plural, one {# faible} other {# faibles}}",
-    "countMedium": "{count, plural, one {# moyenne} other {# moyennes}}",
-    "countUnspecified": "{count, plural, one {# non précisée} other {# non précisées}}",
-    "finalizePendingNote": "{count, plural, one {# suggestion est encore en attente de révision.} other {# suggestions sont encore en attente de révision.}}",
+    "countHigh": "{count, plural, one {# élevée} other {# élevées} many {# élevées}}",
+    "countLow": "{count, plural, one {# faible} other {# faibles} many {# faibles}}",
+    "countMedium": "{count, plural, one {# moyenne} other {# moyennes} many {# moyennes}}",
+    "countUnspecified": "{count, plural, one {# non précisée} other {# non précisées} many {# non précisées}}",
+    "finalizePendingNote": "{count, plural, one {# suggestion est encore en attente de révision.} other {# suggestions sont encore en attente de révision.} many {# suggestions sont encore en attente de révision.}}",
     "hideAccepted": "Masquer les suggestions acceptées",
     "keepInReview": "Garder en révision",
     "notApplied": "Modification non appliquée",
@@ -2729,7 +2729,7 @@
       "commentOnSelection": "Commenter le texte sélectionné",
       "deleteParagraph": "{label, select, none {Supprimer un paragraphe} other {Supprimer le paragraphe {label}}}",
       "deleteParagraphRange": "Supprimer les paragraphes {first} à {last}",
-      "deleteParagraphs": "{count, plural, one {Supprimer # paragraphe} other {Supprimer # paragraphes}}",
+      "deleteParagraphs": "{count, plural, one {Supprimer # paragraphe} other {Supprimer # paragraphes} many {Supprimer # paragraphes}}",
       "deleteTable": "Supprimer un tableau",
       "deleteTableColumn": "Supprimer une colonne de tableau",
       "deleteTableRow": "Supprimer une ligne de tableau",
@@ -2933,7 +2933,7 @@
   "fileDetail": {
     "base": "Base",
     "cannotDeleteLastVersion": "Impossible de supprimer la seule version restante",
-    "changesDetected": "{count, plural, one {# modification} other {# modifications}}",
+    "changesDetected": "{count, plural, one {# modification} other {# modifications} many {# modifications}}",
     "changesSince": "Modifications depuis {version}",
     "compare": "Comparer",
     "compareAcceptedChangesDescription": "Avant la comparaison, les modifications suivies dans les versions {baseVersion} et {targetVersion} seront considérées comme acceptées. L’aperçu du suivi des modifications n’affichera que la différence entre le texte final des deux documents.",
@@ -2967,7 +2967,7 @@
     "compareRedlineUnavailable": "La comparaison a été enregistrée, mais son fichier n'a pas pu être ouvert. Actualisez l'historique des versions pour réessayer.",
     "compareRequestFailed": "Les versions n'ont pas pu être comparées.",
     "compareTo": "Comparer à",
-    "compareUnsupported": "{count, plural, one {# partie non comparée} other {# parties non comparées}}",
+    "compareUnsupported": "{count, plural, one {# partie non comparée} other {# parties non comparées} many {# parties non comparées}}",
     "compareUnsupportedDescription": "Ces parties du document n'ont pas été comparées :",
     "compareUnsupportedReasons": {
       "missingInBase": "La partie du document existe uniquement dans la cible",
@@ -2976,7 +2976,7 @@
       "unsupportedContent": "Cette version contient du contenu qui ne peut pas encore être comparé."
     },
     "compareUnverified": "Comparaison non vérifiée",
-    "compareVerificationFailures": "{count, plural, one {Une vérification aller-retour a échoué. Examinez cette comparaison avant de vous y fier.} other {# vérifications aller-retour ont échoué. Examinez cette comparaison avant de vous y fier.}}",
+    "compareVerificationFailures": "{count, plural, one {Une vérification aller-retour a échoué. Examinez cette comparaison avant de vous y fier.} other {# vérifications aller-retour ont échoué. Examinez cette comparaison avant de vous y fier.} many {# vérifications aller-retour ont échoué. Examinez cette comparaison avant de vous y fier.}}",
     "compareVerified": "Comparaison vérifiée",
     "compareVersions": "{targetVersion} vs {baseVersion}",
     "compareVersionsDescription": "Sélectionnez la version antérieure comme base et la version ultérieure comme cible.",
@@ -3661,7 +3661,7 @@
       "remove": "Dissocier les onglets",
       "rename": "Renommer le groupe",
       "saveFailed": "Impossible d’enregistrer les groupes d’onglets dans ce navigateur.",
-      "tabCount": "{count, plural, one {# onglet} other {# onglets}}",
+      "tabCount": "{count, plural, one {# onglet} other {# onglets} many {# onglets}}",
       "ungroup": "Retirer du groupe"
     },
     "hidePane": "Masquer le volet",
@@ -3738,10 +3738,10 @@
         "missingFromTarget": "Absent du document cible",
         "notComparable": "Non comparable"
       },
-      "basisCombined": "{count, plural, one {Revue selon {name} et comparaison avec # document de référence} other {Revue selon {name} et comparaison avec # documents de référence}}",
+      "basisCombined": "{count, plural, one {Revue selon {name} et comparaison avec # document de référence} other {Revue selon {name} et comparaison avec # documents de référence} many {Revue selon {name} et comparaison avec # documents de référence}}",
       "basisDivider": "et / ou",
       "basisPlaybook": "Revue selon {name}",
-      "basisReferences": "{count, plural, one {Comparaison avec # document de référence} other {Comparaison avec # documents de référence}}",
+      "basisReferences": "{count, plural, one {Comparaison avec # document de référence} other {Comparaison avec # documents de référence} many {Comparaison avec # documents de référence}}",
       "basisToggle": "Ce qui a été comparé",
       "changeBasis": "Modifier la base de révision",
       "chatDraft": {
@@ -3753,7 +3753,7 @@
       },
       "checks": "Point vérifié :",
       "commentFailed": "Impossible d’ajouter le commentaire",
-      "comparedWithReferences": "{count, plural, one {Comparé à # document de référence} other {Comparé à # documents de référence}}",
+      "comparedWithReferences": "{count, plural, one {Comparé à # document de référence} other {Comparé à # documents de référence} many {Comparé à # documents de référence}}",
       "decidedCount": "{count, number} décidé",
       "decision": "Décision",
       "decisionFailed": "Impossible d’enregistrer votre décision",
@@ -3779,13 +3779,13 @@
       "filterCoverage": "Couverture",
       "filterDeviations": "Écarts",
       "flag": "Signaler",
-      "flaggedPositions": "{total, plural, one {{flagged, number} sur # critère signalé} other {{flagged, number} sur # critères signalés}}",
+      "flaggedPositions": "{total, plural, one {{flagged, number} sur # critère signalé} other {{flagged, number} sur # critères signalés} many {{flagged, number} sur # critères signalés}}",
       "fromChat": "Depuis la conversation",
       "fromThisMatter": "De ce dossier",
       "history": {
         "backToLatest": "Retour à la dernière version",
         "decided": "{decided, number} sur {total, number} décidé",
-        "references": "{count, plural, one {# référence} other {# références}}"
+        "references": "{count, plural, one {# référence} other {# références} many {# références}}"
       },
       "impact": {
         "favourable": "Favorable",
@@ -3830,9 +3830,9 @@
         "review": "Principal : constats dans le panneau large"
       },
       "passageUnavailable": "Texte de référence indisponible",
-      "passagesCount": "{count, plural, one {# passage} other {# passages}}",
+      "passagesCount": "{count, plural, one {# passage} other {# passages} many {# passages}}",
       "passagesToggle": "Passages",
-      "pendingCount": "{count, plural, one {# en attente} other {# en attente}}",
+      "pendingCount": "{count, plural, one {# en attente} other {# en attente} many {# en attente}}",
       "perspective": {
         "neutral": "Non précisé",
         "other": "Autre…",
@@ -3848,7 +3848,7 @@
         "absent": "Non",
         "present": "Oui"
       },
-      "progressPositions": "{total, plural, one {{completed, number} sur # critère} other {{completed, number} sur # critères}}",
+      "progressPositions": "{total, plural, one {{completed, number} sur # critère} other {{completed, number} sur # critères} many {{completed, number} sur # critères}}",
       "proposedChange": "Modification proposée",
       "proposing": "Proposition des critères… {count, number}",
       "readOnlyRun": "Décidé lors de cette révision",
@@ -3866,7 +3866,7 @@
       "results": "Résultats de la révision",
       "reviewAgain": "Lancer une autre révision",
       "reviewPositionsFirst": "Vérifier d'abord les critères",
-      "reviewedAgainstCombined": "{count, plural, one {Revu selon {name} et comparé à # document de référence} other {Revu selon {name} et comparé à # documents de référence}}",
+      "reviewedAgainstCombined": "{count, plural, one {Revu selon {name} et comparé à # document de référence} other {Revu selon {name} et comparé à # documents de référence} many {Revu selon {name} et comparé à # documents de référence}}",
       "reviewing": "Révision en cours…",
       "reviewingHint": "Cela peut prendre quelques minutes pour les documents volumineux.",
       "run": "Lancer la révision",
@@ -3891,7 +3891,7 @@
         "forParty": "pour {role}",
         "noSide": "aucune partie",
         "proposedFromReferences": "critères proposés à partir des références",
-        "unnamedReferences": "{count, plural, one {# document de référence} other {# documents de référence}}"
+        "unnamedReferences": "{count, plural, one {# document de référence} other {# documents de référence} many {# documents de référence}}"
       },
       "targetAsReference": "Le document examiné ne peut pas être sa propre référence.",
       "targetColumn": "Ce document",
@@ -3932,9 +3932,9 @@
       "deleteFileConfirm": "Supprimer le fichier ? Cette action est irréversible.",
       "disableSkill": "Désactiver la compétence",
       "discoverSkills": "Rechercher des compétences",
-      "discoveredSkills": "{count, plural, one {# compétence trouvée} other {# compétences trouvées}}",
+      "discoveredSkills": "{count, plural, one {# compétence trouvée} other {# compétences trouvées} many {# compétences trouvées}}",
       "discoveryEmpty": "Aucune compétence n’a été trouvée dans ce dépôt ou ce dossier.",
-      "discoverySkippedInvalid": "{count, plural, one {# compétence non valide a été ignorée} other {# compétences non valides ont été ignorées}}",
+      "discoverySkippedInvalid": "{count, plural, one {# compétence non valide a été ignorée} other {# compétences non valides ont été ignorées} many {# compétences non valides ont été ignorées}}",
       "editSkill": "Modifier la compétence",
       "enableSkill": "Activer la compétence",
       "fileExists": "Un fichier avec ce chemin existe déjà",
@@ -3944,11 +3944,11 @@
       "importFailureLimit": "La limite de compétences a été atteinte.",
       "importFailureNameConflict": "Une compétence portant ce nom existe déjà.",
       "importHelp": "Collez l’URL d’un dépôt ou dossier GitHub public, ou d’un fichier SKILL.md. Vérifiez les compétences trouvées avant de les installer.",
-      "importPartial": "{installedCount, plural, one {{installed} importée} other {{installed} importées}} ; {failedCount, plural, one {échec pour {failed}} other {échec pour {failed}}}.",
+      "importPartial": "{installedCount, plural, one {{installed} importée} other {{installed} importées} many {{installed} importées}} ; {failedCount, plural, one {échec pour {failed}} other {échec pour {failed}} many {échec pour {failed}}}.",
       "importSelected": "Importer la sélection ({count})",
       "importSkill": "Importer depuis une URL",
       "importTitle": "Importer une compétence",
-      "importedSkills": "{count, plural, one {# compétence importée} other {# compétences importées}}",
+      "importedSkills": "{count, plural, one {# compétence importée} other {# compétences importées} many {# compétences importées}}",
       "invalidPath": "Le chemin ne doit contenir que des lettres minuscules, des chiffres, des points, des traits d'union ou des tirets bas",
       "invocationAuto": "Automatiquement",
       "invocationAutoHelp": "L’IA peut utiliser cette compétence d’elle-même lorsqu’elle correspond à la demande.",
@@ -3964,7 +3964,7 @@
       "scopePrivate": "Moi uniquement",
       "scopeTeam": "Toute l’équipe",
       "selectionLimit": "Sélectionnez jusqu’à {count} compétences à la fois.",
-      "skippedFiles": "{count, plural, one {# fichier n’a pas été importé} other {# fichiers n’ont pas été importés}}",
+      "skippedFiles": "{count, plural, one {# fichier n’a pas été importé} other {# fichiers n’ont pas été importés} many {# fichiers n’ont pas été importés}}",
       "skippedReasonNotUtf8Text": "Pas du texte UTF-8",
       "skippedReasonOutsideSkillFolder": "En dehors du dossier de la compétence",
       "skippedReasonUnsupportedExtension": "Type de fichier non pris en charge",
@@ -4059,7 +4059,7 @@
       "autosave": {
         "failed": "Échec de l’enregistrement",
         "nameMissing": "Non enregistré : ajoutez un nom",
-        "positionsNeedAttention": "Non enregistré : {count, plural, one {# critère nécessite} other {# critères nécessitent}} votre attention"
+        "positionsNeedAttention": "Non enregistré : {count, plural, one {# critère nécessite} other {# critères nécessitent} many {# critères nécessitent}} votre attention"
       },
       "buildWithAi": {
         "description": "Répondez à quelques questions dans une conversation et le playbook s’enregistre au fur et à mesure.",
@@ -4089,7 +4089,7 @@
       "created": "Playbook créé",
       "customizeAnswer": "Modifier la réponse extraite",
       "customizeAnswerHint": "Modifier la question ou le format de réponse.",
-      "decisionLine": "{runs, plural, one {accepté {accepted, number} · écarté {dismissed, number} · sur # révision} other {accepté {accepted, number} · écarté {dismissed, number} · sur # révisions}}",
+      "decisionLine": "{runs, plural, one {accepté {accepted, number} · écarté {dismissed, number} · sur # révision} other {accepté {accepted, number} · écarté {dismissed, number} · sur # révisions} many {accepté {accepted, number} · écarté {dismissed, number} · sur # révisions}}",
       "deleteFailed": "Échec de la suppression du playbook",
       "deletePlaybook": "Supprimer le playbook",
       "deletePosition": "Supprimer le critère",
@@ -4199,7 +4199,7 @@
       "starters": {
         "addedToast": "Playbook ajouté",
         "browseButton": "Parcourir les playbooks de démarrage",
-        "positionCount": "{count, plural, one {# position de négociation} other {# positions de négociation}}",
+        "positionCount": "{count, plural, one {# position de négociation} other {# positions de négociation} many {# positions de négociation}}",
         "title": "Playbooks de démarrage",
         "useStarter": "Utiliser ce modèle"
       },
@@ -4478,7 +4478,7 @@
     "loadOlder": "Charger les plus anciennes",
     "markAllRead": "Tout marquer comme lu",
     "title": "Vos notifications",
-    "unreadLabel": "{count, plural, one {# notification non lue} other {# notifications non lues}}"
+    "unreadLabel": "{count, plural, one {# notification non lue} other {# notifications non lues} many {# notifications non lues}}"
   },
   "onboarding": {
     "aiConfigFailed": "Impossible d'enregistrer votre configuration IA. Vous pouvez la finaliser dans les paramètres.",
@@ -4488,7 +4488,7 @@
     "appsTitle": "Obtenez stella partout",
     "catalogueAlwaysOn": "Toujours actif",
     "catalogueCommunityHeading": "Autres",
-    "catalogueContinueWithCount": "{count, plural, one {Continuer avec # outil} other {Continuer avec # outils}}",
+    "catalogueContinueWithCount": "{count, plural, one {Continuer avec # outil} other {Continuer avec # outils} many {Continuer avec # outils}}",
     "catalogueDetailAbout": "À propos",
     "catalogueDetailCost": "Coût",
     "catalogueDetailJurisdictions": "Juridictions",
@@ -4497,7 +4497,7 @@
     "catalogueFootnote": "Vous pourrez créer vos propres outils plus tard directement dans l'application, ou <link>demander leur ajout via GitHub</link>.",
     "cataloguePartial": "{installed} installés, {failed} en échec",
     "cataloguePreviewBaseline": "Intégrés",
-    "cataloguePreviewCount": "{count, plural, =0 {Aucune capacité} one {# capacité} other {# capacités}}",
+    "cataloguePreviewCount": "{count, plural, =0 {Aucune capacité} one {# capacité} other {# capacités} many {# capacités}}",
     "cataloguePreviewEmpty": "Choisissez dans le pack recommandé ou découvrez d’autres outils ci-dessous.",
     "cataloguePreviewYourStack": "Votre sélection",
     "catalogueProposeTool": "Proposer un nouvel outil",
@@ -4874,8 +4874,8 @@
   "search": {
     "aiRefine": "Améliorer la requête avec l’IA",
     "caseLawEmptyState": "Commencez à saisir pour rechercher des décisions de justice.",
-    "caseLawMatchingDecisions": "{count, plural, one {# décision correspondante} other {# décisions correspondantes}}",
-    "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ décision correspondante} other {#+ décisions correspondantes}}",
+    "caseLawMatchingDecisions": "{count, plural, one {# décision correspondante} other {# décisions correspondantes} many {# décisions correspondantes}}",
+    "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ décision correspondante} other {#+ décisions correspondantes} many {#+ décisions correspondantes}}",
     "continueInChat": "Continuer dans une conversation",
     "dateFrom": "Du",
     "dateTo": "Au",
@@ -4883,7 +4883,7 @@
     "deleteSearchTitle": "Supprimer la recherche enregistrée",
     "editedBy": "Modifié par",
     "emptyState": "Commencez à saisir pour rechercher dans tous les dossiers.",
-    "estimatedResultCount": "{count, plural, one {Environ # résultat} other {Environ # résultats}}",
+    "estimatedResultCount": "{count, plural, one {Environ # résultat} other {Environ # résultats} many {Environ # résultats}}",
     "hintAskAI": "<kbd>Tab</kbd> demander à l’IA",
     "hintClear": "<kbd>Esc</kbd> effacer",
     "hintClose": "<kbd>Esc</kbd> fermer",
@@ -4926,7 +4926,7 @@
     "requestCountry": "Demander l’ajout d’un pays",
     "resizeFilters": "Redimensionner la colonne des filtres",
     "resizePreview": "Redimensionner la colonne d’aperçu",
-    "resultCount": "{count, plural, one {# résultat} other {# résultats}}",
+    "resultCount": "{count, plural, one {# résultat} other {# résultats} many {# résultats}}",
     "saveSearch": "Enregistrer la recherche",
     "saveSearchNamePlaceholder": "p. ex. PDF récents",
     "saveSearchTitle": "Enregistrer la recherche",
@@ -5098,7 +5098,7 @@
       "mcpTitle": "Serveur MCP",
       "mcpUrlLabel": "URL du serveur",
       "noMatches": "Aucune connexion ne correspond à « {query} »",
-      "permissionCount": "{count, plural, one {# autorisation} other {# autorisations}}",
+      "permissionCount": "{count, plural, one {# autorisation} other {# autorisations} many {# autorisations}}",
       "privateCredentialOnly": "Identifiant privé uniquement",
       "searchPlaceholder": "Rechercher des connexions",
       "title": "Connexions",
@@ -5230,7 +5230,7 @@
       "usagePlanSeats": "Sièges",
       "usagePlansDescription": "Choisissez un forfait pour votre organisation.",
       "usagePlansTitle": "Forfaits",
-      "usageSeats": "{count, plural, one {# siège} other {# sièges}}",
+      "usageSeats": "{count, plural, one {# siège} other {# sièges} many {# sièges}}",
       "usageStatusCancelled": "Annulé",
       "usageStatusPastDue": "En retard de paiement",
       "usageStatusPaused": "En pause",
@@ -5268,7 +5268,7 @@
     "summaryPlaceholder": "Qu'est-ce qui change ?"
   },
   "statutes": {
-    "amendedTimes": "{count, plural, =0 {Jamais modifié} one {Modifié # fois} other {Modifié # fois}}",
+    "amendedTimes": "{count, plural, =0 {Jamais modifié} one {Modifié # fois} other {Modifié # fois} many {Modifié # fois}}",
     "asOf": "Version en vigueur au",
     "backToList": "Tous les textes",
     "citingDecisionHideSnippet": "Réduire le passage",
@@ -5608,7 +5608,7 @@
     "clearMyLookupFormatDefault": "Supprimer mon format par défaut",
     "conditionAddGroup": "Ajouter un groupe",
     "conditionAddRule": "Ajouter une règle",
-    "conditionCount": "{count, plural, one {# condition} other {# conditions}}",
+    "conditionCount": "{count, plural, one {# condition} other {# conditions} many {# conditions}}",
     "conditionDecidedNo": "Non · {probability}",
     "conditionDecidedOnGenerate": "Décidé lors de la génération",
     "conditionDecidedYes": "Oui · {probability}",
@@ -5671,7 +5671,7 @@
     "dragAndDrop": "ou glisser-déposer",
     "dropToCreate": "Déposez un fichier .docx pour créer un modèle",
     "editFields": "Modifier les champs",
-    "emptyFieldsWarning": "{count, plural, one {# champ est encore vide} other {# champs sont encore vides}} : {names}",
+    "emptyFieldsWarning": "{count, plural, one {# champ est encore vide} other {# champs sont encore vides} many {# champs sont encore vides}} : {names}",
     "fieldCount": "{count, plural, one {# champ} many {# champs} other {# champs}}",
     "fieldFormat": "Format de sortie",
     "fieldFormatHint": "Utilisez '{{key}}' pour insérer une partie.",
@@ -5895,7 +5895,7 @@
     "templateSaved": "Modèle enregistré",
     "unmatchedPlaceholders": "Certains champs n'ont pas été remplis : {list}",
     "untitledTemplate": "Modèle sans titre",
-    "unusedFields": "{count, plural, one {# champ inutilisé} other {# champs inutilisés}}",
+    "unusedFields": "{count, plural, one {# champ inutilisé} other {# champs inutilisés} many {# champs inutilisés}}",
     "unusedValues": "Certaines valeurs n'ont pas été utilisées : {list}",
     "upToNItems": "Jusqu'à {max}",
     "updatedAgo": "Mis à jour {time}",
@@ -5906,11 +5906,11 @@
     "useAsMyLookupFormatDefault": "Utiliser comme mon format par défaut",
     "useTemplate": "Utiliser le modèle",
     "useTemplateHint": "Remplissez les champs, puis téléchargez le document ou enregistrez-le dans un dossier.",
-    "usedTimes": "Utilisé {count, plural, one {# fois} other {# fois}}",
+    "usedTimes": "Utilisé {count, plural, one {# fois} other {# fois} many {# fois}}",
     "validationErrors": "Veuillez corriger les erreurs surlignées",
     "validationKrsFormat": "Saisissez un numéro KRS à 10 chiffres",
     "validationMaxLength": "Maximum {max} caractères",
-    "validationMinItems": "Ajoutez au moins {min, plural, one {# élément} other {# éléments}}",
+    "validationMinItems": "Ajoutez au moins {min, plural, one {# élément} other {# éléments} many {# éléments}}",
     "validationMinLength": "Minimum {min} caractères",
     "validationNumberMax": "La valeur maximale est {max}",
     "validationNumberMin": "La valeur minimale est {min}",
@@ -5932,7 +5932,7 @@
       "entriesTitle": "Temps saisi",
       "nextWeek": "Semaine suivante",
       "noActivity": "Rien à saisir pour l’instant. Travaillez dans un dossier et votre activité apparaîtra ici pour être acceptée.",
-      "pendingCount": "{count, plural, one {# suggestion en attente} other {# suggestions en attente}}",
+      "pendingCount": "{count, plural, one {# suggestion en attente} other {# suggestions en attente} many {# suggestions en attente}}",
       "previousWeek": "Semaine précédente",
       "range": "{start} – {end}",
       "refusals": {
@@ -6045,7 +6045,7 @@
       "copied": "Copié dans le dossier",
       "copyOption": "Copier (conserver l'original)",
       "description": "Copier ou déplacer \"{name}\" vers un autre dossier",
-      "descriptionCount": "Copier ou déplacer {count, plural, one {# élément} other {# éléments}} vers un autre dossier",
+      "descriptionCount": "Copier ou déplacer {count, plural, one {# élément} other {# éléments} many {# éléments}} vers un autre dossier",
       "dragFolder": "Faire glisser pour déplacer le dossier",
       "goToMatter": "Accéder au dossier",
       "menuItem": "Copier/Déplacer vers un dossier",
@@ -6072,8 +6072,8 @@
     "createNewWorkspace": "Créer un nouveau dossier",
     "defaultName": "Sans titre",
     "deleteItem": "Supprimer l'élément",
-    "deleteItems": "Supprimer {count, plural, one {# élément} other {# éléments}}",
-    "deleteItemsDescription": "Êtes-vous sûr de vouloir supprimer {count, plural, one {# élément} other {# éléments}} ? Cette action est irréversible.",
+    "deleteItems": "Supprimer {count, plural, one {# élément} other {# éléments} many {# éléments}}",
+    "deleteItemsDescription": "Êtes-vous sûr de vouloir supprimer {count, plural, one {# élément} other {# éléments} many {# éléments}} ? Cette action est irréversible.",
     "deleteSelectedRows": "Supprimer les lignes sélectionnées",
     "deleteSelectedRowsDescription": "{count, plural, one {Voulez-vous vraiment supprimer # ligne sélectionnée ? Cette action est irréversible.} many {Voulez-vous vraiment supprimer # lignes sélectionnées ? Cette action est irréversible.} other {Voulez-vous vraiment supprimer # lignes sélectionnées ? Cette action est irréversible.}}",
     "deleteSelection": "Supprimer la sélection",
@@ -6096,7 +6096,7 @@
       "description": "Créez un dossier pour organiser les documents, contacts, tâches et l’activité de l’équipe au même endroit.",
       "title": "Créez votre premier dossier"
     },
-    "entitiesCount": "{count, plural, one {# élément} other {# éléments}}",
+    "entitiesCount": "{count, plural, one {# élément} other {# éléments} many {# éléments}}",
     "exportToCsv": "Exporter en CSV",
     "fields": {
       "calculating": "Calcul en cours...",
@@ -6109,7 +6109,7 @@
       "addFilePropertyToUpload": "Ajoutez une propriété de fichier pour importer des fichiers",
       "attachedTemplateUpload": {
         "confirm": "Supprimer le lien et importer",
-        "description": "{count, plural, one {Ce fichier contient un lien vers un modèle Word externe au document.} other {Ces fichiers contiennent des liens vers des modèles Word externes aux documents.}} stella ne les importera pas tels quels, car Word peut charger du contenu ou des macros via ces liens.",
+        "description": "{count, plural, one {Ce fichier contient un lien vers un modèle Word externe au document.} other {Ces fichiers contiennent des liens vers des modèles Word externes aux documents.} many {Ces fichiers contiennent des liens vers des modèles Word externes aux documents.}} stella ne les importera pas tels quels, car Word peut charger du contenu ou des macros via ces liens.",
         "effect": "En continuant, seul le lien vers le modèle est supprimé de la copie importée. Le fichier d’origine sur votre appareil n’est pas modifié.",
         "localLocation": "Emplacement du modèle : un chemin de fichier local externe à ce document",
         "mixedLocation": "Emplacements des modèles : plusieurs types de chemins externes",
@@ -6230,16 +6230,16 @@
       "rateLimited": "Débit limité; reprise dans {seconds, number} s",
       "referencedUpload": {
         "choiceLabel": "Que faire de {fileName}",
-        "description": "{count, plural, one {# fichier porte la référence d'un document que vous avez déjà.} other {# fichiers portent des références de documents que vous avez déjà.}} Choisissez ce qu'il faut faire de chacun.",
+        "description": "{count, plural, one {# fichier porte la référence d'un document que vous avez déjà.} other {# fichiers portent des références de documents que vous avez déjà.} many {# fichiers portent des références de documents que vous avez déjà.}} Choisissez ce qu'il faut faire de chacun.",
         "matchedDocument": "Version {version, number} de <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>) dans le dossier <bdi>{matterName}</bdi>",
         "title": "Les classer comme nouvelles versions ?",
         "uploadAsNewDocument": "Importer comme nouveau document"
       },
       "removeMetadata": "Supprimer les métadonnées du document",
       "renamedToAvoidConflicts": "{count, plural, one {# fichier renommé pour éviter les conflits} many {# fichiers renommés pour éviter les conflits} other {# fichiers renommés pour éviter les conflits}}",
-      "retryFailed": "Réessayer {count, plural, one {# fichier} other {# fichiers}}",
+      "retryFailed": "Réessayer {count, plural, one {# fichier} other {# fichiers} many {# fichiers}}",
       "scrubFailed": "Les métadonnées de ce fichier n’ont pas pu être supprimées, rien n’a donc été téléchargé",
-      "uploadedPartially": "{failed, plural, one {# fichier échoué} other {# fichiers échoués}} sur {total, number}",
+      "uploadedPartially": "{failed, plural, one {# fichier échoué} other {# fichiers échoués} many {# fichiers échoués}} sur {total, number}",
       "uploadedSuccessfully": "Fichiers importés avec succès",
       "uploading": "Import des fichiers",
       "uploadingDescription": "Ne fermez pas cette page tant que les fichiers ne sont pas importés",
@@ -6271,8 +6271,8 @@
     "filesystem": {
       "collapseAll": "Réduire tous les dossiers",
       "expandAll": "Développer tous les dossiers",
-      "fileCount": "{count, plural, one {# fichier} other {# fichiers}}",
-      "matchingFileCount": "{count, plural, one {# fichier correspondant} other {# fichiers correspondants}}",
+      "fileCount": "{count, plural, one {# fichier} other {# fichiers} many {# fichiers}}",
+      "matchingFileCount": "{count, plural, one {# fichier correspondant} other {# fichiers correspondants} many {# fichiers correspondants}}",
       "moveToRoot": "Déposez ici pour déplacer à la racine",
       "newSubfolder": "Nouveau sous-dossier",
       "noFilesYet": "Aucun fichier pour le moment"
@@ -6328,9 +6328,9 @@
       "apply": "Appliquer les changements",
       "applying": "Réorganisation des fichiers…",
       "collapseFolder": "Réduire le dossier",
-      "description": "{count, plural, =0 {Aucun fichier à organiser} one {Déplacements et renommages suggérés pour # fichier} other {Déplacements et renommages suggérés pour # fichiers}}",
+      "description": "{count, plural, =0 {Aucun fichier à organiser} one {Déplacements et renommages suggérés pour # fichier} other {Déplacements et renommages suggérés pour # fichiers} many {Déplacements et renommages suggérés pour # fichiers}}",
       "empty": "Aucun fichier à organiser",
-      "emptyFoldersToDelete": "{count, plural, one {# dossier vide à supprimer} other {# dossiers vides à supprimer}}",
+      "emptyFoldersToDelete": "{count, plural, one {# dossier vide à supprimer} other {# dossiers vides à supprimer} many {# dossiers vides à supprimer}}",
       "expandFolder": "Développer le dossier",
       "failed": "Échec de l’organisation",
       "folderPlaceholder": "ex. Compliance/2025",
@@ -6355,12 +6355,12 @@
     "infosoud": {
       "courtPlaceholder": "Rechercher une juridiction ou un code",
       "courtsFailed": "Impossible de charger les juridictions InfoSoud",
-      "eventCount": "{count, plural, one {# événement} other {# événements}}",
+      "eventCount": "{count, plural, one {# événement} other {# événements} many {# événements}}",
       "events": "Événements",
       "hearings": "Audiences",
       "importAgenda": "Enregistrer dans Agenda",
       "importAgendaFailed": "Impossible d’enregistrer les éléments InfoSoud dans Agenda",
-      "importAgendaResult": "{count, plural, one {# élément enregistré dans Agenda} other {# éléments enregistrés dans Agenda}}",
+      "importAgendaResult": "{count, plural, one {# élément enregistré dans Agenda} other {# éléments enregistrés dans Agenda} many {# éléments enregistrés dans Agenda}}",
       "importAgendaUpToDate": "Agenda est déjà à jour",
       "lookup": "Rechercher",
       "lookupFailed": "La recherche InfoSoud a échoué",
@@ -6378,7 +6378,7 @@
       "deleteAll": "Tout supprimer",
       "deleteAllConfirm": "Supprimer les {count} éléments de « {column} » ?",
       "hideColumn": "Masquer la colonne",
-      "moveFailed": "{failed, plural, one {# élément sur {total} n’a pas pu être déplacé.} other {# éléments sur {total} n’ont pas pu être déplacés.}}",
+      "moveFailed": "{failed, plural, one {# élément sur {total} n’a pas pu être déplacé.} other {# éléments sur {total} n’ont pas pu être déplacés.} many {# éléments sur {total} n’ont pas pu être déplacés.}}",
       "readOnlyGrouping": "Ce regroupement est en lecture seule",
       "selectPropertyHint": "Sélectionnez une propriété de regroupement dans la barre d'outils",
       "uploadDocument": "Téléverser un document",
@@ -6392,7 +6392,7 @@
     },
     "lockMatter": "Verrouiller",
     "matterInfo": "Informations sur le dossier",
-    "mattersCount": "{count, plural, one {# dossier} other {# dossiers}}",
+    "mattersCount": "{count, plural, one {# dossier} other {# dossiers} many {# dossiers}}",
     "members": {
       "addMember": "Ajouter un membre",
       "addMemberDescription": "Ajouter un membre de l'équipe à ce dossier",
@@ -6447,7 +6447,7 @@
           "webhook": "Déclencheur web"
         },
         "documentReview": {
-          "decided": "A traité {count, plural, one {# constat} other {# constats}} dans la révision de",
+          "decided": "A traité {count, plural, one {# constat} other {# constats} many {# constats}} dans la révision de",
           "started": "A lancé une révision de"
         },
         "empty": "Aucune activité dans ce dossier pour le moment.",
@@ -6479,7 +6479,7 @@
           "scheduled": "Démarré selon le planning",
           "scheduledBy": "Automatisation planifiée de {user}"
         },
-        "runCount": "{count, plural, one {# activité} other {# activités}}",
+        "runCount": "{count, plural, one {# activité} other {# activités} many {# activités}}",
         "sources": {
           "chat": "Conversation IA",
           "mcp": "Outil connecté"
@@ -6508,7 +6508,7 @@
       "atAGlance": "En un coup d'œil",
       "getStarted": "Commencez en téléversant des documents ou en créant votre premier dossier.",
       "matterDetails": "Détails du dossier",
-      "membersCount": "{count, plural, one {# membre} other {# membres}}",
+      "membersCount": "{count, plural, one {# membre} other {# membres} many {# membres}}",
       "nextDeadline": "Prochain délai",
       "openTasks": "Agenda ouvert",
       "recentActivity": "Activité récente",
@@ -6581,7 +6581,7 @@
           "cleaned": "Nettoyée",
           "cleaning": "Nettoyage de la page",
           "contentCrop": "Rogner au contenu",
-          "description": "{count, plural, one {Vérifiez la page nettoyée avant de l’utiliser. Le document ne change qu’à ce moment-là.} other {Vérifiez chacune des # pages nettoyées avant de les utiliser. Le document ne change qu’à ce moment-là.}}",
+          "description": "{count, plural, one {Vérifiez la page nettoyée avant de l’utiliser. Le document ne change qu’à ce moment-là.} other {Vérifiez chacune des # pages nettoyées avant de les utiliser. Le document ne change qu’à ce moment-là.} many {Vérifiez chacune des # pages nettoyées avant de les utiliser. Le document ne change qu’à ce moment-là.}}",
           "deskew": "Redresser",
           "failedEngine": "Le nettoyage a échoué. La page reste inchangée.",
           "failedRender": "La page n’a pas pu être préparée pour le nettoyage. Elle reste inchangée.",
@@ -6596,17 +6596,17 @@
           "reject": "Garder l’original",
           "rejectPage": "Garder la page d’origine {number}",
           "rejected": "Original conservé",
-          "scope": "{count, plural, =0 {Redresser et nettoyer toutes les pages} one {Redresser et nettoyer la page sélectionnée} other {Redresser et nettoyer les # pages sélectionnées}}",
+          "scope": "{count, plural, =0 {Redresser et nettoyer toutes les pages} one {Redresser et nettoyer la page sélectionnée} other {Redresser et nettoyer les # pages sélectionnées} many {Redresser et nettoyer les # pages sélectionnées}}",
           "unrecognized": "La page n’a pas été reconnue comme un scan. Elle reste inchangée.",
           "unrecognizedNoContent": "Aucun contenu n’a été trouvé sur cette page. Elle reste inchangée.",
           "unrecognizedNoPage": "Les bords de la page sont introuvables. La page reste inchangée.",
           "unrecognizedTooLarge": "La page est trop grande pour être nettoyée. Elle reste inchangée.",
-          "use": "{count, plural, =0 {Utiliser les pages nettoyées} one {Utiliser # page nettoyée} other {Utiliser # pages nettoyées}}"
+          "use": "{count, plural, =0 {Utiliser les pages nettoyées} one {Utiliser # page nettoyée} other {Utiliser # pages nettoyées} many {Utiliser # pages nettoyées}}"
         },
         "crop": "Rogner",
         "cropAdvanced": "Options avancées",
         "cropBottom": "Bas (mm)",
-        "cropDescription": "{count, plural, one {Définissez les marges de rognage pour la page sélectionnée en millimètres.} other {Définissez les marges de rognage pour les # pages sélectionnées en millimètres.}}",
+        "cropDescription": "{count, plural, one {Définissez les marges de rognage pour la page sélectionnée en millimètres.} other {Définissez les marges de rognage pour les # pages sélectionnées en millimètres.} many {Définissez les marges de rognage pour les # pages sélectionnées en millimètres.}}",
         "cropHandle": "Redimensionner le rognage : {position}",
         "cropHandleBottom": "bas",
         "cropHandleBottomLeft": "en bas à gauche",
@@ -6639,7 +6639,7 @@
         "duplicate": "Dupliquer",
         "editPages": "Modifier les pages",
         "multiSelectHint": "Maintenez {modifier} pour sélectionner d’autres pages",
-        "pageCount": "{count, plural, one {Nombre : # page} other {Nombre : # pages}}",
+        "pageCount": "{count, plural, one {Nombre : # page} other {Nombre : # pages} many {Nombre : # pages}}",
         "pageNumber": "N° {number}",
         "pages": "Feuillets",
         "redo": "Rétablir la modification de page",
@@ -6675,14 +6675,14 @@
     "playbooks": {
       "autoRun": "Exécution automatique",
       "autoRunHint": "Détecte et exécute automatiquement chaque playbook correspondant aux types des documents",
-      "autoRunStarted": "Exécution de {count, plural, one {# playbook} other {# playbooks}}",
+      "autoRunStarted": "Exécution de {count, plural, one {# playbook} other {# playbooks} many {# playbooks}}",
       "projection": "Afficher les résultats sous forme de",
       "projectionColumns": "Colonnes du tableau",
       "projectionNone": "Révision uniquement",
-      "reviewStarted": "Révision de {count, plural, one {# document} other {# documents}}",
+      "reviewStarted": "Révision de {count, plural, one {# document} other {# documents} many {# documents}}",
       "run": "Exécuter le playbook",
       "runFailed": "Échec de l’exécution du playbook",
-      "runStarted": "Exécution du playbook ({count, plural, one {# colonne} other {# colonnes}})"
+      "runStarted": "Exécution du playbook ({count, plural, one {# colonne} other {# colonnes} many {# colonnes}})"
     },
     "possibleDuplicates": "Doublons possibles",
     "properties": {
@@ -6747,8 +6747,8 @@
       "markAllAsReviewed": "Tout marquer comme vérifié",
       "markThisGroupAsLocked": "Verrouiller ce groupe",
       "markThisGroupAsReviewed": "Marquer ce groupe comme vérifié",
-      "markedAsLocked": "{count, plural, one {# cellule verrouillée} other {# cellules verrouillées}}",
-      "markedAsReviewed": "{count, plural, one {# cellule marquée comme vérifiée} other {# cellules marquées comme vérifiées}}",
+      "markedAsLocked": "{count, plural, one {# cellule verrouillée} other {# cellules verrouillées} many {# cellules verrouillées}}",
+      "markedAsReviewed": "{count, plural, one {# cellule marquée comme vérifiée} other {# cellules marquées comme vérifiées} many {# cellules marquées comme vérifiées}}",
       "money": "Montant",
       "multiSelect": "Sélection multiple",
       "nameProperty": "Propriété du nom",
@@ -6788,7 +6788,7 @@
       "sortDescendingDate": "Plus récents en premier",
       "sortDescendingNumber": "Plus grands en premier",
       "sortDescendingText": "Z → A",
-      "splitOptions": "{count, plural, one {Diviser en # option} other {Diviser en # options}}",
+      "splitOptions": "{count, plural, one {Diviser en # option} other {Diviser en # options} many {Diviser en # options}}",
       "suggestWithAI": "Suggérer avec l’IA",
       "text": "Texte",
       "typeChangeWarning": "Les données existantes seront effacées et reconstruites à l’enregistrement.",
@@ -6797,7 +6797,7 @@
       "untitledColumn": "Nom de colonne, p. ex. Date d'effet"
     },
     "reference": "Numéro de référence",
-    "referenceChangeConfirmDescription": "{count, plural, one {# version de document porte} other {# versions de documents portent}} la référence <bdi>{oldReference}</bdi>. Les copies imprimées la conservent et restent accessibles avec leur code de vérification. Les nouvelles versions seront numérotées sous <bdi>{newReference}</bdi>. <bdi>{oldReference}</bdi> reste réservée à ce dossier et ne peut pas être attribuée à un autre.",
+    "referenceChangeConfirmDescription": "{count, plural, one {# version de document porte} other {# versions de documents portent} many {# versions de documents portent}} la référence <bdi>{oldReference}</bdi>. Les copies imprimées la conservent et restent accessibles avec leur code de vérification. Les nouvelles versions seront numérotées sous <bdi>{newReference}</bdi>. <bdi>{oldReference}</bdi> reste réservée à ce dossier et ne peut pas être attribuée à un autre.",
     "referenceChangeConfirmTitle": "Modifier la référence du dossier ?",
     "referenceConventionHint": "Format préféré : {example}",
     "referenceFormatWarning": "Ne correspond pas au format préféré.",
@@ -6841,7 +6841,7 @@
       "tightContent": "Compact",
       "wrapContent": "Retour à la ligne"
     },
-    "tasksCount": "{count, plural, one {# élément d'agenda} other {# éléments d'agenda}}",
+    "tasksCount": "{count, plural, one {# élément d'agenda} other {# éléments d'agenda} many {# éléments d'agenda}}",
     "team": "Équipe",
     "tools": {
       "aiModel": "Modèle IA",
@@ -6852,7 +6852,7 @@
     "views": {
       "addAdvancedFilter": "Ajouter un filtre avancé",
       "addFields": "Ajouter des champs",
-      "advancedFilterCount": "{count, plural, =0 {Tous} one {# règle} other {# règles}}",
+      "advancedFilterCount": "{count, plural, =0 {Tous} one {# règle} other {# règles} many {# règles}}",
       "aiGenerated": "Généré par IA",
       "calendar": {
         "addDates": "+ Dates",
@@ -6880,7 +6880,7 @@
       "fieldsSelected": "{count, plural, one {# sélectionné} many {# sélectionnés} other {# sélectionnés}}",
       "filter": "Filtrer",
       "filterByPlaceholder": "Filtrer par…",
-      "filtersWithCount": "{count, plural, one {# filtre} other {# filtres}}",
+      "filtersWithCount": "{count, plural, one {# filtre} other {# filtres} many {# filtres}}",
       "findAllColumns": "Toutes les colonnes",
       "findColumnMetadataNotSearchable": "Triez cette colonne au lieu d’y rechercher",
       "findColumnNotSearchable": "Filtrez cette colonne au lieu d’y rechercher",
@@ -6888,11 +6888,11 @@
       "findInTable": "Rechercher dans le tableau",
       "findInTableHint": "Recherche dans les lignes de cette page",
       "findPlaceholder": "Rechercher dans les lignes…",
-      "findScopeColumns": "{count, plural, one {# colonne} other {# colonnes}}",
-      "findTermTooShort": "{count, plural, one {Saisissez au moins # caractère} other {Saisissez au moins # caractères}}",
+      "findScopeColumns": "{count, plural, one {# colonne} other {# colonnes} many {# colonnes}}",
+      "findTermTooShort": "{count, plural, one {Saisissez au moins # caractère} other {Saisissez au moins # caractères} many {Saisissez au moins # caractères}}",
       "group": "Groupe",
       "groupBy": "Regrouper par :",
-      "groupItemCount": "{count, plural, one {# élément} other {# éléments}}",
+      "groupItemCount": "{count, plural, one {# élément} other {# éléments} many {# éléments}}",
       "hideColumn": "Masquer la colonne",
       "layouts": {
         "avt": "AVT",

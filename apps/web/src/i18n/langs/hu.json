@@ -5906,7 +5906,7 @@
     "useAsMyLookupFormatDefault": "Beállítás saját alapértelmezettként",
     "useTemplate": "Sablon használata",
     "useTemplateHint": "Töltse ki a mezőket, majd töltse le a dokumentumot, vagy mentse egy ügyiratba.",
-    "usedTimes": "{count} alkalommal használva",
+    "usedTimes": "{count, plural, one {# alkalommal} other {# alkalommal}} használva",
     "validationErrors": "Kérjük, javítsa ki a kiemelt hibákat",
     "validationKrsFormat": "Adjon meg egy tízjegyű KRS-számot",
     "validationMaxLength": "Legfeljebb {max} karakter",
