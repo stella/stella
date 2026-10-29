@@ -212,7 +212,7 @@
     "build": "tsdown",
     "pack:dry-run": "bun pm pack --dry-run",
     "test": "bun run test:unit",
-    "test:unit": "bun test src --path-ignore-patterns '**/*.playwright.spec.ts'",
+    "test:unit": "bun test --path-ignore-patterns '**/*.playwright.spec.ts'",
     "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts')",
     "test:browser": "playwright test --config playwright.config.ts",
     "pack:check": "cd ../.. && bun scripts/check-published-exports.ts packages/ui",
