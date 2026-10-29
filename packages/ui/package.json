@@ -89,6 +89,7 @@
     "./option-color": "./src/lib/option-color.ts",
     "./outline-rail": "./src/components/outline-rail.tsx",
     "./overlay-layer": "./src/lib/overlay-layer.ts",
+    "./scroll-edge-fade": "./src/lib/scroll-edge-fade.ts",
     "./panel-inset": "./src/lib/panel-inset.ts",
     "./pagination": "./src/components/pagination.tsx",
     "./popover": "./src/components/popover.tsx",
