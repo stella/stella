@@ -1,5 +1,14 @@
 import path from "node:path";
-import ts from "typescript6";
+
+import {
+  type CallExpression,
+  type ImportDeclaration,
+  isObjectLiteralProperty,
+  type Node,
+  parseSource,
+  type VariableDeclarator,
+  walk,
+} from "@stll/scripts/src/syntax-tree";
 
 /**
  * Census of the modules that decide matter (workspace) access outside the
@@ -103,31 +112,47 @@ type Aliases = Map<string, string>;
 const resolveName = (name: string, aliases: Aliases) =>
   aliases.get(name) ?? name;
 
+/** `a?.b` reads like `a.b`. */
+const unchain = (node: Node): Node =>
+  node.type === "ChainExpression" ? node.expression : node;
+
+/** The name a `receiver.name` access reads, `#name` for a private one. */
+const accessedName = (node: Node): string | undefined => {
+  if (node.type !== "MemberExpression" || node.computed) {
+    return undefined;
+  }
+  return node.property.type === "PrivateIdentifier"
+    ? `#${node.property.name}`
+    : node.property.name;
+};
+
 /** The name an alias initializer stands for: `x`, `ns.x`, `(x as T)`. */
 const aliasTarget = (
-  node: ts.Expression,
+  expression: Node,
   aliases: Aliases,
 ): string | undefined => {
+  const node = unchain(expression);
   if (
-    ts.isParenthesizedExpression(node) ||
-    ts.isAsExpression(node) ||
-    ts.isNonNullExpression(node) ||
-    ts.isSatisfiesExpression(node)
+    node.type === "ParenthesizedExpression" ||
+    node.type === "TSAsExpression" ||
+    node.type === "TSNonNullExpression" ||
+    node.type === "TSSatisfiesExpression"
   ) {
     return aliasTarget(node.expression, aliases);
   }
-  if (ts.isIdentifier(node)) {
-    return resolveName(node.text, aliases);
+  if (node.type === "Identifier") {
+    return resolveName(node.name, aliases);
   }
-  return ts.isPropertyAccessExpression(node) ? node.name.text : undefined;
+  return accessedName(node);
 };
 
 /** The table an expression names: `workspaces`, an alias, or `schema.x`. */
-const tableName = (node: ts.Expression, aliases: Aliases) => {
-  if (ts.isIdentifier(node)) {
-    return resolveName(node.text, aliases);
+const tableName = (expression: Node, aliases: Aliases) => {
+  const node = unchain(expression);
+  if (node.type === "Identifier") {
+    return resolveName(node.name, aliases);
   }
-  return ts.isPropertyAccessExpression(node) ? node.name.text : undefined;
+  return accessedName(node);
 };
 
 /** Alias target recorded for a local that holds a matter-id column. */
@@ -137,33 +162,32 @@ const MATTER_ID_COLUMN = "<matter-id column>";
  * A column that holds a matter id: any `<table>.workspaceId`, the matters
  * table's own `workspaces.id` under any name, or a local holding either.
  */
-const isMatterIdColumn = (column: ts.Expression, aliases: Aliases): boolean =>
-  (ts.isIdentifier(column) &&
-    resolveName(column.text, aliases) === MATTER_ID_COLUMN) ||
-  (ts.isPropertyAccessExpression(column) &&
-    (column.name.text === "workspaceId" ||
-      (column.name.text === "id" &&
-        tableName(column.expression, aliases) === "workspaces")));
+const isMatterIdColumn = (expression: Node, aliases: Aliases): boolean => {
+  const column = unchain(expression);
+  if (column.type === "Identifier") {
+    return resolveName(column.name, aliases) === MATTER_ID_COLUMN;
+  }
+  const name = accessedName(column);
+  return (
+    column.type === "MemberExpression" &&
+    (name === "workspaceId" ||
+      (name === "id" && tableName(column.object, aliases) === "workspaces"))
+  );
+};
 
 /** A matter-id column, also when wrapped: `(c)`, `c as T`, sql`${c}`. */
-const holdsMatterIdColumn = (
-  node: ts.Expression,
-  aliases: Aliases,
-): boolean => {
+const holdsMatterIdColumn = (node: Node, aliases: Aliases): boolean => {
   if (
-    ts.isParenthesizedExpression(node) ||
-    ts.isAsExpression(node) ||
-    ts.isNonNullExpression(node) ||
-    ts.isSatisfiesExpression(node)
+    node.type === "ParenthesizedExpression" ||
+    node.type === "TSAsExpression" ||
+    node.type === "TSNonNullExpression" ||
+    node.type === "TSSatisfiesExpression"
   ) {
     return holdsMatterIdColumn(node.expression, aliases);
   }
-  if (ts.isTaggedTemplateExpression(node)) {
-    return (
-      ts.isTemplateExpression(node.template) &&
-      node.template.templateSpans.some((span) =>
-        holdsMatterIdColumn(span.expression, aliases),
-      )
+  if (node.type === "TaggedTemplateExpression") {
+    return node.quasi.expressions.some((expression) =>
+      holdsMatterIdColumn(expression, aliases),
     );
   }
   return isMatterIdColumn(node, aliases);
@@ -189,54 +213,81 @@ const isOwnerConnectionModule = (specifier: string, file: string) => {
   );
 };
 
-const literalText = (node: ts.Node): string | undefined => {
-  if (
-    ts.isStringLiteral(node) ||
-    ts.isNoSubstitutionTemplateLiteral(node) ||
-    ts.isTemplateHead(node) ||
-    ts.isTemplateMiddle(node) ||
-    ts.isTemplateTail(node)
-  ) {
-    return node.text;
+const literalText = (node: Node): string | undefined => {
+  if (node.type === "Literal" && typeof node.value === "string") {
+    return node.value;
+  }
+  if (node.type === "TemplateElement") {
+    return node.value.cooked ?? node.value.raw;
   }
   return undefined;
 };
 
-const declarationName = (node: ts.Node): string | undefined => {
-  if (
-    (ts.isFunctionDeclaration(node) ||
-      ts.isMethodDeclaration(node) ||
-      ts.isClassDeclaration(node) ||
-      ts.isVariableDeclaration(node) ||
-      ts.isPropertyAssignment(node) ||
-      ts.isPropertyDeclaration(node)) &&
-    node.name !== undefined &&
-    (ts.isIdentifier(node.name) || ts.isStringLiteral(node.name))
-  ) {
-    return node.name.text;
+const namedKey = (key: Node, computed: boolean) => {
+  if (computed) {
+    return undefined;
   }
-  return undefined;
+  if (key.type === "Identifier") {
+    return key.name;
+  }
+  return key.type === "Literal" && typeof key.value === "string"
+    ? key.value
+    : undefined;
+};
+
+const declarationName = (
+  node: Node,
+  parent: Node | undefined,
+): string | undefined => {
+  if (
+    node.type === "FunctionDeclaration" ||
+    node.type === "TSDeclareFunction" ||
+    node.type === "ClassDeclaration"
+  ) {
+    return node.id?.name;
+  }
+  if (node.type === "VariableDeclarator") {
+    return node.id.type === "Identifier" ? node.id.name : undefined;
+  }
+  if (
+    node.type === "MethodDefinition" ||
+    node.type === "TSAbstractMethodDefinition"
+  ) {
+    return node.kind === "method"
+      ? namedKey(node.key, node.computed)
+      : undefined;
+  }
+  if (
+    node.type === "PropertyDefinition" ||
+    node.type === "TSAbstractPropertyDefinition" ||
+    node.type === "AccessorProperty" ||
+    node.type === "TSAbstractAccessorProperty"
+  ) {
+    return namedKey(node.key, node.computed);
+  }
+  // An object literal entry `name: value` or method `name() {}`.
+  return isObjectLiteralProperty(node, parent) &&
+    node.kind === "init" &&
+    !node.shorthand
+    ? namedKey(node.key, node.computed)
+    : undefined;
 };
 
 /** `outer.inner` names of the declarations enclosing a node. */
-const enclosingSymbol = (node: ts.Node): string => {
+const enclosingSymbol = (ancestors: readonly Node[]): string => {
   const names: string[] = [];
-  // Sites are nodes inside a file, so the walk ends at its source file.
-  for (
-    let current = node.parent;
-    !ts.isSourceFile(current);
-    current = current.parent
-  ) {
-    const name = declarationName(current);
+  for (const [index, ancestor] of ancestors.entries()) {
+    const name = declarationName(ancestor, ancestors[index - 1]);
     if (name !== undefined) {
-      names.unshift(name);
+      names.push(name);
     }
   }
   return names.length === 0 ? "<module>" : names.join(".");
 };
 
 type SiteCounter = {
-  add: (node: ts.Node, count?: number) => void;
+  /** Counts a site under the declarations among its `ancestors`. */
+  add: (ancestors: readonly Node[], count?: number) => void;
   sites: MatterAccessSites;
 };
 
@@ -244,9 +295,9 @@ const siteCounter = (): SiteCounter => {
   const sites: MatterAccessSites = {};
   return {
     sites,
-    add: (node, count = 1) => {
+    add: (ancestors, count = 1) => {
       if (count > 0) {
-        const symbol = enclosingSymbol(node);
+        const symbol = enclosingSymbol(ancestors);
         sites[symbol] = (sites[symbol] ?? 0) + count;
       }
     },
@@ -268,45 +319,58 @@ type Facts = {
   roleRule: SiteCounter;
 };
 
+const importedName = (specifier: ImportDeclaration["specifiers"][number]) => {
+  if (specifier.type !== "ImportSpecifier") {
+    return undefined;
+  }
+  return specifier.imported.type === "Literal"
+    ? specifier.imported.value
+    : specifier.imported.name;
+};
+
 const recordImport = (
-  node: ts.ImportDeclaration,
+  node: ImportDeclaration,
   facts: Facts,
   aliases: Aliases,
   file: string,
 ) => {
-  if (
-    !ts.isStringLiteral(node.moduleSpecifier) ||
-    node.importClause?.phaseModifier === ts.SyntaxKind.TypeKeyword
-  ) {
+  if (node.importKind === "type") {
     return;
   }
-  const fromOwnerConnection = isOwnerConnectionModule(
-    node.moduleSpecifier.text,
-    file,
+  const fromOwnerConnection = isOwnerConnectionModule(node.source.value, file);
+  const bindings = node.specifiers.filter(
+    (specifier) => specifier.type !== "ImportDefaultSpecifier",
   );
-  const bindings = node.importClause?.namedBindings;
-  if (bindings === undefined) {
+  if (bindings.length === 0) {
     return;
   }
-  if (ts.isNamespaceImport(bindings)) {
+  if (
+    bindings.some((specifier) => specifier.type === "ImportNamespaceSpecifier")
+  ) {
     // `root.rootDb` reaches the owner connection without naming it here.
     if (fromOwnerConnection) {
       facts.importsRootDbValue = true;
     }
-  } else {
-    for (const element of bindings.elements) {
-      if (!element.isTypeOnly && element.propertyName !== undefined) {
-        aliases.set(element.name.text, element.propertyName.text);
-      }
+    return;
+  }
+  for (const element of bindings) {
+    const imported = importedName(element);
+    if (
+      element.type === "ImportSpecifier" &&
+      element.importKind !== "type" &&
+      imported !== undefined &&
+      element.imported.start !== element.local.start
+    ) {
+      aliases.set(element.local.name, imported);
     }
   }
   if (
     fromOwnerConnection &&
-    ts.isNamedImports(bindings) &&
-    bindings.elements.some(
+    bindings.some(
       (element) =>
-        !element.isTypeOnly &&
-        (element.propertyName ?? element.name).text === "rootDb",
+        element.type === "ImportSpecifier" &&
+        element.importKind !== "type" &&
+        importedName(element) === "rootDb",
     )
   ) {
     facts.importsRootDbValue = true;
@@ -318,28 +382,29 @@ const recordImport = (
  * local alias of it, or `<anything>.inArray`. Over-matching a same-named
  * helper only adds a finding.
  */
-const isInArrayCall = (node: ts.CallExpression, aliases: Aliases): boolean =>
-  aliasTarget(node.expression, aliases) === "inArray";
+const isInArrayCall = (node: CallExpression, aliases: Aliases): boolean =>
+  aliasTarget(node.callee, aliases) === "inArray";
 
 /** Names of the functions a module declares itself (hoisting included). */
-const localFunctionNames = (sourceFile: ts.SourceFile) => {
+const localFunctionNames = (program: Node) => {
   const names = new Set<string>();
-  const visit = (node: ts.Node): void => {
-    if (ts.isFunctionDeclaration(node) && node.name !== undefined) {
-      names.add(node.name.text);
+  walk(program, (node) => {
+    if (
+      (node.type === "FunctionDeclaration" ||
+        node.type === "TSDeclareFunction") &&
+      node.id !== null
+    ) {
+      names.add(node.id.name);
     }
     if (
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      node.initializer !== undefined &&
-      (ts.isArrowFunction(node.initializer) ||
-        ts.isFunctionExpression(node.initializer))
+      node.type === "VariableDeclarator" &&
+      node.id.type === "Identifier" &&
+      (node.init?.type === "ArrowFunctionExpression" ||
+        node.init?.type === "FunctionExpression")
     ) {
-      names.add(node.name.text);
+      names.add(node.id.name);
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
+  });
   return names;
 };
 
@@ -350,48 +415,53 @@ const localFunctionNames = (sourceFile: ts.SourceFile) => {
  * helper only adds a finding.
  */
 const isMatterSetPredicate = (
-  node: ts.Node,
+  node: Node,
   aliases: Aliases,
   localFunctions: ReadonlySet<string>,
 ) =>
-  ts.isCallExpression(node) &&
+  node.type === "CallExpression" &&
   (isInArrayCall(node, aliases) ||
-    (ts.isIdentifier(node.expression) &&
-      localFunctions.has(node.expression.text))) &&
+    (node.callee.type === "Identifier" &&
+      localFunctions.has(node.callee.name))) &&
   node.arguments.some((argument) => holdsMatterIdColumn(argument, aliases));
 
 const recordIdentifier = (
-  node: ts.Identifier,
+  name: string,
+  ancestors: readonly Node[],
   facts: Facts,
   aliases: Aliases,
 ) => {
   // A renamed import or local alias is a use of the original name.
-  const name = resolveName(node.text, aliases);
-  if (VIEW_IDENTIFIERS.has(name)) {
-    facts.view.add(node);
+  const original = resolveName(name, aliases);
+  if (VIEW_IDENTIFIERS.has(original)) {
+    facts.view.add(ancestors);
   }
-  if (name === "workspaceMembers") {
-    facts.membership.add(node);
+  if (original === "workspaceMembers") {
+    facts.membership.add(ancestors);
   }
-  if (ROLE_RULE_IDENTIFIERS.has(name)) {
+  if (ROLE_RULE_IDENTIFIERS.has(original)) {
     facts.namesRoleRule = true;
-    facts.roleRule.add(node);
+    facts.roleRule.add(ancestors);
   }
-  if (name === "rootDb") {
-    facts.rootDbUse.add(node);
+  if (original === "rootDb") {
+    facts.rootDbUse.add(ancestors);
   }
-  if (name === "clientId") {
+  if (original === "clientId") {
     facts.namesClientId = true;
   }
-  if (WORKSPACE_SET_IDENTIFIERS.has(name)) {
-    facts.workspaceSet.add(node);
+  if (WORKSPACE_SET_IDENTIFIERS.has(original)) {
+    facts.workspaceSet.add(ancestors);
   }
 };
 
-const recordLiteral = (node: ts.Node, text: string, facts: Facts) => {
-  facts.view.add(node, matchCount(VIEW_SQL_NAME, text));
-  facts.membership.add(node, matchCount(SQL_MEMBERSHIP, text));
-  facts.workspaceSet.add(node, matchCount(SQL_WORKSPACE_SET, text));
+const recordLiteral = (
+  ancestors: readonly Node[],
+  text: string,
+  facts: Facts,
+) => {
+  facts.view.add(ancestors, matchCount(VIEW_SQL_NAME, text));
+  facts.membership.add(ancestors, matchCount(SQL_MEMBERSHIP, text));
+  facts.workspaceSet.add(ancestors, matchCount(SQL_WORKSPACE_SET, text));
   if (SQL_MEMBER_ROLE.test(text)) {
     facts.namesMemberRole = true;
   }
@@ -405,57 +475,103 @@ const recordLiteral = (node: ts.Node, text: string, facts: Facts) => {
  * `const { rootDb: owner } = root`, `const within = d.inArray`. Later uses of
  * the alias mean the original name; the declared name itself is not a use.
  */
-const isAliasDeclaration = (node: ts.Node): node is ts.VariableDeclaration =>
-  ts.isVariableDeclaration(node) &&
-  node.initializer !== undefined &&
-  (ts.isObjectBindingPattern(node.name) ||
-    aliasTarget(node.initializer, new Map()) !== undefined);
+const isAliasDeclaration = (
+  node: Node | undefined,
+): node is VariableDeclarator & { init: Node } =>
+  node?.type === "VariableDeclarator" &&
+  node.init !== null &&
+  (node.id.type === "ObjectPattern" ||
+    aliasTarget(node.init, new Map()) !== undefined);
 
-const isLocalAliasName = (node: ts.Identifier) =>
-  (isAliasDeclaration(node.parent) && node.parent.name === node) ||
-  (ts.isBindingElement(node.parent) &&
-    ts.isObjectBindingPattern(node.parent.parent) &&
-    isAliasDeclaration(node.parent.parent.parent));
+/**
+ * The name an object pattern entry binds: `{ a }`, `{ a: b }`, `{ a = x }`,
+ * `{ ...rest }`.
+ */
+const boundName = (entry: Node) => {
+  let target = entry;
+  if (entry.type === "Property") {
+    target =
+      entry.value.type === "AssignmentPattern" ? entry.value.left : entry.value;
+  }
+  if (target.type === "Identifier") {
+    return target;
+  }
+  return target.type === "RestElement" && target.argument.type === "Identifier"
+    ? target.argument
+    : undefined;
+};
 
-const recordLocalAlias = (node: ts.Node, aliases: Aliases) => {
-  if (!isAliasDeclaration(node) || node.initializer === undefined) {
+/**
+ * Whether an identifier declares an alias (`const owner = rootDb`) or belongs
+ * to an entry of an alias pattern (`const { rootDb: owner = fallback } = root`).
+ */
+const isLocalAliasName = (node: Node, ancestors: readonly Node[]) => {
+  const parent = ancestors.at(-1);
+  if (isAliasDeclaration(parent)) {
+    return parent.id === node;
+  }
+  const depth = parent?.type === "AssignmentPattern" ? 2 : 1;
+  const entry = ancestors.at(-depth);
+  const pattern = ancestors.at(-depth - 1);
+  const declaration = ancestors.at(-depth - 2);
+  if (
+    pattern?.type !== "ObjectPattern" ||
+    !isAliasDeclaration(declaration) ||
+    declaration.id !== pattern
+  ) {
+    return false;
+  }
+  return (
+    entry?.type === "RestElement" ||
+    (entry?.type === "Property" && !(entry.computed && entry.key === node))
+  );
+};
+
+const recordLocalAlias = (node: Node, aliases: Aliases) => {
+  if (!isAliasDeclaration(node)) {
     return;
   }
-  if (ts.isIdentifier(node.name)) {
-    const target = isMatterIdColumn(node.initializer, aliases)
+  if (node.id.type === "Identifier") {
+    const target = isMatterIdColumn(node.init, aliases)
       ? MATTER_ID_COLUMN
-      : aliasTarget(node.initializer, aliases);
+      : aliasTarget(node.init, aliases);
     if (target !== undefined) {
-      aliases.set(node.name.text, target);
+      aliases.set(node.id.name, target);
     }
     return;
   }
-  if (!ts.isObjectBindingPattern(node.name)) {
+  if (node.id.type !== "ObjectPattern") {
     return;
   }
-  const table = tableName(node.initializer, aliases);
-  for (const element of node.name.elements) {
-    const key = element.propertyName ?? element.name;
-    if (ts.isIdentifier(element.name) && ts.isIdentifier(key)) {
+  const table = tableName(node.init, aliases);
+  for (const element of node.id.properties) {
+    const name = boundName(element);
+    let key: Node | undefined = name;
+    if (element.type === "Property") {
+      key = element.computed ? undefined : element.key;
+    }
+    if (name !== undefined && key?.type === "Identifier") {
       // `const { workspaceId } = entities`, `const { id } = workspaces`.
       const holdsMatterId =
-        key.text === "workspaceId" ||
-        (key.text === "id" && table === "workspaces");
+        key.name === "workspaceId" ||
+        (key.name === "id" && table === "workspaces");
       aliases.set(
-        element.name.text,
-        holdsMatterId ? MATTER_ID_COLUMN : resolveName(key.text, aliases),
+        name.name,
+        holdsMatterId ? MATTER_ID_COLUMN : resolveName(key.name, aliases),
       );
     }
   }
 };
 
+/** A name the source spells once although oxc holds it twice. */
+const isRepeatedName = (node: Node, parent: Node | undefined) =>
+  (parent?.type === "Property" && parent.shorthand && parent.key === node) ||
+  (parent?.type === "ExportSpecifier" &&
+    parent.exported === node &&
+    parent.local.start === node.start);
+
 const readFacts = (file: string, source: string): Facts => {
-  const sourceFile = ts.createSourceFile(
-    file,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-  );
+  const { program } = parseSource(file, source);
   const facts: Facts = {
     importsRootDbValue: false,
     namesRoleRule: false,
@@ -468,44 +584,52 @@ const readFacts = (file: string, source: string): Facts => {
     roleRule: siteCounter(),
   };
   const aliases: Aliases = new Map();
-  const localFunctions = localFunctionNames(sourceFile);
-  const visit = (node: ts.Node): void => {
-    if (ts.isImportDeclaration(node)) {
+  const localFunctions = localFunctionNames(program);
+  walk(program, (node, ancestors) => {
+    if (node.type === "ImportDeclaration") {
       // Import specifiers name the imported symbols; they are not uses.
       recordImport(node, facts, aliases, file);
-      return;
+      return "skip-children";
     }
     recordLocalAlias(node, aliases);
-    if (ts.isIdentifier(node) && !isLocalAliasName(node)) {
-      recordIdentifier(node, facts, aliases);
+    if (
+      (node.type === "Identifier" || node.type === "JSXIdentifier") &&
+      !isRepeatedName(node, ancestors.at(-1)) &&
+      !isLocalAliasName(node, ancestors)
+    ) {
+      recordIdentifier(node.name, ancestors, facts, aliases);
     }
     if (
-      ts.isPropertyAccessExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      node.expression.text === "member" &&
-      node.name.text === "role"
+      node.type === "MemberExpression" &&
+      node.object.type === "Identifier" &&
+      node.object.name === "member" &&
+      accessedName(node) === "role"
     ) {
       facts.namesMemberRole = true;
     }
     if (isMatterSetPredicate(node, aliases, localFunctions)) {
-      facts.workspaceSet.add(node);
+      facts.workspaceSet.add(ancestors);
     }
     // sql`${entities.workspaceId} = ANY(${ids})`: an interpolated matter
     // column opening a set predicate.
-    if (
-      ts.isTemplateSpan(node) &&
-      isMatterIdColumn(node.expression, aliases) &&
-      SQL_SET_AFTER_COLUMN.test(node.literal.text)
-    ) {
-      facts.workspaceSet.add(node);
+    if (node.type === "TemplateLiteral") {
+      for (const [index, expression] of node.expressions.entries()) {
+        const literal = node.quasis[index + 1];
+        if (
+          literal !== undefined &&
+          isMatterIdColumn(expression, aliases) &&
+          SQL_SET_AFTER_COLUMN.test(literal.value.cooked ?? literal.value.raw)
+        ) {
+          facts.workspaceSet.add(ancestors);
+        }
+      }
     }
     const text = literalText(node);
     if (text !== undefined) {
-      recordLiteral(node, text, facts);
+      recordLiteral(ancestors, text, facts);
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
+    return undefined;
+  });
   return facts;
 };
 

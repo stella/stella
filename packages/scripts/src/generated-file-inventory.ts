@@ -3,6 +3,7 @@ import path from "node:path";
 
 import {
   CI_GENERATED_FILES,
+  MCP_APP_DIRECTORY_OUTPUTS,
   MCP_APP_GENERATED_OUTPUTS,
 } from "./generated-files";
 
@@ -25,8 +26,10 @@ export const ciGeneratedFiles = (root: string) => {
             entry.isDirectory() &&
             existsSync(path.join(apps, entry.name, "app.html")),
         )
-        .map(
-          ({ name }) => `packages/mcp-apps/src/${name}/generated/app.html.txt`,
+        .flatMap(({ name }) =>
+          MCP_APP_DIRECTORY_OUTPUTS.map(
+            (file) => `packages/mcp-apps/src/${name}/generated/${file}`,
+          ),
         )
     : [];
   const shared = existsSync(apps)

@@ -1,12 +1,21 @@
 import { entityContextProjection } from "@/api/db/entity-feature-policies";
 import { expenses, timeEntries } from "@/api/db/schema";
 import { INVOICE_LINE_COLUMNS } from "@/api/lib/billing/invoice-lines";
+import {
+  INVOICE_PAYMENT_COLUMNS,
+  INVOICE_PAYMENT_ORDER,
+} from "@/api/lib/billing/invoice-payments";
 
 const timeEntryContext = entityContextProjection(timeEntries.workItemId);
 const expenseContext = entityContextProjection(expenses.matterId);
 
-/** The line items an invoice detail read loads with the invoice row. */
+/** The line items and payments an invoice detail read loads with the invoice row. */
 export const INVOICE_DETAIL_RELATIONS = {
+  // Bounded by LIMITS.invoicePaymentsPerInvoice, enforced when one is recorded.
+  payments: {
+    columns: INVOICE_PAYMENT_COLUMNS,
+    orderBy: INVOICE_PAYMENT_ORDER,
+  },
   lines: {
     columns: INVOICE_LINE_COLUMNS,
     with: { workspace: { columns: { id: true, name: true, color: true } } },

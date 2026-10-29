@@ -299,7 +299,7 @@
     "moreOptions": "Mais opções",
     "moreItemActions": "Mais ações para o item {number}",
     "noResults": "Nenhum recorte correspondente",
-    "noResultsDescription": "Deseja pesquisar “{query}” nos registros?",
+    "noResultsSearchRegistries": "Pesquisar “{query}” nos registros",
     "noGroup": "Sem grupo",
     "newGroupOption": "Novo grupo…",
     "copyItem": "Copiar item {number}",
@@ -368,7 +368,8 @@
     "welcomeShortcutDescription": "Pressione {shortcut} para navegar pelo histórico e escolher um recorte.",
     "welcomeShortcutTitle": "Abra em qualquer lugar.",
     "welcomeStart": "Começar a copiar",
-    "welcomeTitle": "Conheça sua área de transferência"
+    "welcomeTitle": "Conheça sua área de transferência",
+    "registryIdentifierSearchHint": "Insira {identifiers}."
   },
   "activity": {
     "title": "Atividade",
@@ -618,5 +619,46 @@
       "fullDiskAccess": "Acesso total ao disco",
       "administrator": "Direitos de administrador"
     }
+  },
+  "agentSubscriptions": {
+    "title": "Assinaturas de IA",
+    "chatGpt": "ChatGPT",
+    "description": "Use seu plano do ChatGPT para solicitações de IA no stella. O uso é descontado do seu plano do ChatGPT, separado da sua assinatura do stella.",
+    "continueWithChatGpt": "Continuar com o ChatGPT",
+    "continueAs": "Continuar como {email}",
+    "useDifferentAccount": "Usar outra conta",
+    "signingIn": "Conclua o login no navegador.",
+    "cancel": "Cancelar",
+    "pasteDescription": "Se o navegador mostrar uma página de erro depois do login, copie o endereço dela e cole aqui.",
+    "pasteSubmit": "Concluir login",
+    "connected": "ChatGPT conectado",
+    "connectedAs": "ChatGPT conectado · {email}",
+    "manageUsage": "Gerenciar uso",
+    "disconnect": "Desconectar",
+    "needsReconnect": "Sua conexão com o ChatGPT expirou. Faça login de novo para continuar usando seu plano.",
+    "notice": {
+      "actionFailed": "Não funcionou. Tente de novo.",
+      "pasteRejected": "Este endereço não é do login atual. Copie o endereço completo da guia do navegador que foi aberta.",
+      "revocationUnconfirmed": "Desconectado neste computador, mas o ChatGPT não confirmou. Você também pode remover o stella nas configurações do ChatGPT."
+    },
+    "failure": {
+      "declined": "O login foi recusado no navegador.",
+      "planUsageNotGranted": "O stella não recebeu permissão para usar seu plano do ChatGPT. Faça login de novo e permita.",
+      "differentAccount": "Você entrou com outra conta do ChatGPT. Sua conexão salva não mudou.",
+      "stateMismatch": "Não foi possível verificar o login. Tente de novo.",
+      "timedOut": "O login demorou demais. Tente de novo.",
+      "browserUnavailable": "Não foi possível abrir o navegador. Tente de novo.",
+      "callbackUnavailable": "Não foi possível preparar o login neste computador. Tente de novo.",
+      "registrationIncomplete": "O ChatGPT não concluiu a conexão com o stella. Tente de novo.",
+      "codeExpired": "O login expirou antes de ser concluído. Tente de novo.",
+      "verification": "Não foi possível verificar a resposta do ChatGPT. Tente de novo.",
+      "clientRejected": "O ChatGPT não aceita mais esta conexão. Conecte de novo com outra conta.",
+      "unreachable": "Não foi possível acessar o login do ChatGPT. Verifique sua conexão com a internet e tente de novo.",
+      "storage": "Não foi possível ler nem salvar a conexão neste computador."
+    },
+    "callbackConnectedTitle": "O ChatGPT está conectado",
+    "callbackConnectedBody": "Você pode fechar esta guia e voltar para o stella.",
+    "callbackNotConnectedTitle": "O ChatGPT não foi conectado",
+    "callbackNotConnectedBody": "Volte para o stella para ver o que aconteceu e tente de novo."
   }
 }

@@ -12,6 +12,7 @@ import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { runTransactionsInCallerContext } from "@/api/lib/db/caller-async-context";
 import { recordLegalResolveAuditInTransaction } from "@/api/lib/db/legal-resolve-audit";
 import type { LegalResolveAudit } from "@/api/lib/db/legal-resolve-audit";
+import { meterSqlClient } from "@/api/lib/db/meter-client";
 import { readAuditedActivitySummary } from "@/api/lib/db/operator-activity/read";
 import type { RegistrationQuery } from "@/api/lib/db/operator-registrations/input";
 import { readAuditedRegistrationPage } from "@/api/lib/db/operator-registrations/read";
@@ -38,11 +39,11 @@ import type {
 } from "@/api/lib/db/service-client-operator";
 import { createSanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
 import { createRootPoolWindow } from "@/api/lib/observability/root-pool-window";
-import {
+import type {
   authorizeSyntheticSession,
   readSyntheticSessionAuthority,
+  SyntheticSessionAuthorityReader,
 } from "@/api/lib/synthetic-principal/session-authority";
-import type { SyntheticSessionAuthorityReader } from "@/api/lib/synthetic-principal/session-authority";
 import type { createSyntheticSessionStore } from "@/api/lib/synthetic-principal/store";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
@@ -76,7 +77,7 @@ const nativeRootClient = createSqlClient({
   },
 });
 const rootClient = instrumentRootPoolTransactions(
-  nativeRootClient,
+  meterSqlClient(nativeRootClient),
   rootPoolWindow,
 );
 
@@ -183,14 +184,11 @@ export const bindOwnerSyntheticSessionAuthorityReader =
   async (options) =>
     await readAuthority(rootDb, options);
 
-/** Request handlers receive the bounded reader, never the owner database. */
-export const ownerSyntheticSessionAuthorityReader =
-  bindOwnerSyntheticSessionAuthorityReader(readSyntheticSessionAuthority);
-
-/** Better Auth receives a bounded session decision, never the owner database. */
-export const authorizeOwnerSyntheticSession = async (
-  current: Parameters<typeof authorizeSyntheticSession>[1],
-) => await authorizeSyntheticSession(rootDb, current);
+/** Better Auth binds its session decision without exporting the owner handle. */
+export const bindOwnerSyntheticSessionAuthorizer =
+  (authorize: typeof authorizeSyntheticSession) =>
+  async (current: Parameters<typeof authorizeSyntheticSession>[1]) =>
+    await authorize(rootDb, current);
 
 export type RootDatabase = typeof rootDb;
 export type Transaction = TransactionOf<RootDatabase>;

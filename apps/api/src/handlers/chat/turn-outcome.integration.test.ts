@@ -396,7 +396,6 @@ const prepareThread = async (
       );
       const outcome = await runChatThreadCompaction({
         abortSignal: AbortSignal.timeout(TURN_TIMEOUT_MS),
-        dataWorkspaceIds: [],
         orgAIConfig: orgConfigOf(provider, { fallback: false }),
         managedAIResidency: "eu" as const,
         organizationId: ids.orgA,
@@ -405,6 +404,8 @@ const prepareThread = async (
         safeDb,
         threadId,
         triggerTokens: 1,
+        userId: ids.userA1,
+        withStoredContentEgress: async ({ work }) => await work(),
       });
       replay.takeFindings();
       expect(

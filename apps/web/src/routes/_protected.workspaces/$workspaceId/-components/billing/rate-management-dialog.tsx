@@ -10,6 +10,7 @@ import {
   currencyCodeSchema,
 } from "@stll/api-contract/currency-code";
 import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
+import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
 import { tryToMinorUnits } from "@stll/money";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
@@ -20,6 +21,13 @@ import { Form } from "@stll/ui/form";
 import { ArrowLeftIcon, PlusIcon, StarIcon, TrashIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
+import {
+  Select,
+  SelectItem,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from "@stll/ui/select";
 
 import { formatCurrencyAmount } from "@/components/billing/format-currency";
 import { DatePickerPopover } from "@/components/date-picker-popover";
@@ -42,10 +50,13 @@ import {
   schemaFormOptions,
   toFormErrors,
 } from "@/lib/schema";
+import { billingCodesOptions } from "@/lib/workspaces/queries/billing-codes";
 import {
   rateEntriesOptions,
   rateTablesOptions,
 } from "@/lib/workspaces/queries/rates";
+
+import { BillingArrangementEditor } from "./billing-arrangement-editor";
 
 type RateManagementDialogProps = {
   open: boolean;
@@ -234,6 +245,8 @@ const RateTablesView = ({
         </Button>
       </div>
 
+      <BillingArrangementEditor workspaceId={workspaceId} />
+
       {showForm && (
         <CreateRateTableForm
           onCancel={() => setShowForm(false)}
@@ -271,7 +284,7 @@ const RateTablesView = ({
                 </span>
               </button>
 
-              <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+              <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 pointer-coarse:opacity-100">
                 {!table.isDefault && (
                   <Button
                     className="size-7"
@@ -467,17 +480,25 @@ const RateEntriesView = ({
       workspaceId: string;
       rateTableId: string;
       userId?: string | null;
+      role?: (typeof ORGANIZATION_ROLE_NAMES)[number] | null;
+      activityCodeId?: string | null;
       hourlyRate: number;
       effectiveFrom: string;
       effectiveTo?: string | null;
     }) => {
-      const { userId, ...restBody } = body;
+      const { userId, activityCodeId, ...restBody } = body;
       const response = await api
         .rates({ workspaceId: toSafeId<"workspace">(ws) })({
           rateTableId: toSafeId<"rateTable">(rtId),
         })
         .entries.put({
           ...restBody,
+          ...(activityCodeId !== undefined && {
+            activityCodeId:
+              activityCodeId === null
+                ? null
+                : toSafeId<"billingCode">(activityCodeId),
+          }),
           ...(userId !== undefined && {
             userId: userId === null ? null : toSafeId<"user">(userId),
           }),
@@ -571,6 +592,7 @@ const RateEntriesView = ({
       {showForm && (
         <CreateRateEntryForm
           currency={table?.currency ?? "USD"}
+          workspaceId={workspaceId}
           members={members}
           onCancel={() => setShowForm(false)}
           onSubmit={(values) => {
@@ -595,47 +617,14 @@ const RateEntriesView = ({
               className="group flex items-center gap-3 rounded-md border px-3 py-2"
               key={entry.id}
             >
-              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                {entry.userId ? (
-                  <div className="flex items-center gap-2">
-                    <UserIdentity
-                      avatarClassName="size-7 shrink-0 text-3xs"
-                      image={entry.userImage}
-                      name={entry.userName}
-                    />
-                    <span className="text-sm tabular-nums">
-                      {formatCurrencyAmount(
-                        entry.hourlyRate,
-                        table?.currency ?? "USD",
-                      )}
-                      {t("billing.rates.perHour")}
-                    </span>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium">
-                      {t("billing.rates.defaultRate")}
-                    </span>
-                    <span className="text-sm tabular-nums">
-                      {formatCurrencyAmount(
-                        entry.hourlyRate,
-                        table?.currency ?? "USD",
-                      )}
-                      {t("billing.rates.perHour")}
-                    </span>
-                  </div>
-                )}
-                <span className="text-muted-foreground text-xs">
-                  {entry.effectiveFrom}
-                  {entry.effectiveTo
-                    ? ` — ${entry.effectiveTo}`
-                    : ` — ${t("billing.rates.ongoing")}`}
-                </span>
-              </div>
+              <RateEntryDetails
+                entry={entry}
+                currency={table?.currency ?? "USD"}
+              />
 
               <Button
                 aria-label={t("common.delete")}
-                className="size-7 opacity-0 transition-opacity group-hover:opacity-100"
+                className="size-7 opacity-0 transition-opacity group-hover:opacity-100 pointer-coarse:opacity-100"
                 onClick={() => handleDelete(entry.id)}
                 size="icon"
                 variant="destructive-ghost"
@@ -668,15 +657,19 @@ type Member = {
 const CreateRateEntryForm = ({
   members,
   currency,
+  workspaceId,
   today,
   onSubmit,
   onCancel,
 }: {
   members: Member[];
+  workspaceId: string;
   currency: string;
   today: string;
   onSubmit: (values: {
     userId?: string | null;
+    role?: (typeof ORGANIZATION_ROLE_NAMES)[number] | null;
+    activityCodeId?: string | null;
     hourlyRate: number;
     effectiveFrom: string;
     effectiveTo?: string | null;
@@ -685,6 +678,9 @@ const CreateRateEntryForm = ({
 }) => {
   const t = useTranslations();
   const userFieldId = useId();
+  const activityView = queryView(
+    useQuery(billingCodesOptions(workspaceId, "activity")),
+  );
   const memberOptions = members.map((member) => ({
     email: member.user.email,
     image: member.user.image ?? null,
@@ -696,8 +692,11 @@ const CreateRateEntryForm = ({
       v.string(),
       v.transform((value) => value || null),
     ),
-    // The typed text is scaled directly rather than through a parsed float,
-    // which would lose the cent that 1.005 should round to in USD.
+    role: v.nullable(v.picklist(ORGANIZATION_ROLE_NAMES)),
+    activityCodeId: v.pipe(
+      v.string(),
+      v.transform((value) => value || null),
+    ),
     hourlyRate: v.pipe(
       v.string(),
       v.rawTransform(({ addIssue, dataset, NEVER }) => {
@@ -725,6 +724,8 @@ const CreateRateEntryForm = ({
       submitValues: "schema-output",
       defaultValues: {
         userId: "",
+        role: null,
+        activityCodeId: "",
         hourlyRate: "",
         effectiveFrom: today,
         effectiveTo: "",
@@ -763,7 +764,12 @@ const CreateRateEntryForm = ({
               id={userFieldId}
               label={t("common.user")}
               members={memberOptions}
-              onValueChange={(userId) => field.handleChange(userId ?? "")}
+              onValueChange={(userId) => {
+                field.handleChange(userId ?? "");
+                if (userId) {
+                  form.setFieldValue("role", null);
+                }
+              }}
               placeholder={t("billing.rates.defaultRate")}
               value={field.state.value || null}
             />
@@ -771,6 +777,31 @@ const CreateRateEntryForm = ({
         </form.Field>
       </div>
 
+      <form.Field name="role">
+        {(field) => (
+          <RateRoleSelect
+            value={field.state.value}
+            onChange={(role) => {
+              field.handleChange(role);
+              if (role) {
+                form.setFieldValue("userId", "");
+              }
+            }}
+          />
+        )}
+      </form.Field>
+      <QueryViewFeedback view={activityView} />
+      <form.Field name="activityCodeId">
+        {(field) => (
+          <RateActivitySelect
+            value={field.state.value}
+            onChange={field.handleChange}
+            codes={
+              activityView.type === "items" ? activityView.items : undefined
+            }
+          />
+        )}
+      </form.Field>
       <div className="flex gap-3">
         <div className="flex flex-1 flex-col gap-1.5">
           <form.Field name="hourlyRate">
@@ -826,5 +857,138 @@ const CreateRateEntryForm = ({
         </Button>
       </div>
     </Form>
+  );
+};
+
+const RateRoleSelect = ({
+  value,
+  onChange,
+}: {
+  value: (typeof ORGANIZATION_ROLE_NAMES)[number] | null;
+  onChange: (value: (typeof ORGANIZATION_ROLE_NAMES)[number] | null) => void;
+}) => {
+  const t = useTranslations();
+  return (
+    <Field name="role">
+      <FieldLabel>{t("common.role")}</FieldLabel>
+      <Select
+        value={value ?? "none"}
+        onValueChange={(selected) =>
+          onChange(
+            ORGANIZATION_ROLE_NAMES.find(
+              (candidate) => candidate === selected,
+            ) ?? null,
+          )
+        }
+      >
+        <SelectTrigger>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectPopup>
+          <SelectItem value="none">{t("common.none")}</SelectItem>
+          {ORGANIZATION_ROLE_NAMES.map((role) => (
+            <SelectItem key={role} value={role}>
+              {t(`organization.roles.${role}`)}
+            </SelectItem>
+          ))}
+        </SelectPopup>
+      </Select>
+    </Field>
+  );
+};
+
+const RateActivitySelect = ({
+  value,
+  onChange,
+  codes,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  codes: { id: string; code: string; label: string }[] | undefined;
+}) => {
+  const t = useTranslations();
+  return (
+    <Field name="activityCodeId">
+      <FieldLabel>{t("billing.codes.activityCode")}</FieldLabel>
+      <Select
+        value={value || "none"}
+        onValueChange={(selected) =>
+          onChange(selected === "none" || selected === null ? "" : selected)
+        }
+      >
+        <SelectTrigger>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectPopup>
+          <SelectItem value="none">{t("common.none")}</SelectItem>
+          {codes?.map((code) => (
+            <SelectItem
+              key={code.id}
+              value={code.id}
+            >{`${code.code}: ${code.label}`}</SelectItem>
+          ))}
+        </SelectPopup>
+      </Select>
+    </Field>
+  );
+};
+
+const RateEntryDetails = ({
+  entry,
+  currency,
+}: {
+  entry: {
+    userId: string | null;
+    role: (typeof ORGANIZATION_ROLE_NAMES)[number] | null;
+    userImage: string | null;
+    userName: string | null;
+    hourlyRate: number;
+    activityCode: string | null;
+    activityLabel: string | null;
+    effectiveFrom: string;
+    effectiveTo: string | null;
+  };
+  currency: string;
+}) => {
+  const t = useTranslations();
+  return (
+    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+      {entry.userId ? (
+        <div className="flex items-center gap-2">
+          <UserIdentity
+            avatarClassName="size-7 shrink-0 text-3xs"
+            image={entry.userImage}
+            name={entry.userName}
+          />
+          <span className="text-sm tabular-nums">
+            {formatCurrencyAmount(entry.hourlyRate, currency)}
+            {t("billing.rates.perHour")}
+          </span>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium">
+            {entry.role
+              ? t(`organization.roles.${entry.role}`)
+              : t("billing.rates.defaultRate")}
+          </span>
+          <span className="text-sm tabular-nums">
+            {formatCurrencyAmount(entry.hourlyRate, currency)}
+            {t("billing.rates.perHour")}
+          </span>
+        </div>
+      )}
+      {entry.activityCode && (
+        <span className="text-muted-foreground text-xs">
+          <bdi>{entry.activityCode}</bdi>: {entry.activityLabel}
+        </span>
+      )}
+      <span className="text-muted-foreground text-xs">
+        {entry.effectiveFrom}
+        {entry.effectiveTo
+          ? ` — ${entry.effectiveTo}`
+          : ` — ${t("billing.rates.ongoing")}`}
+      </span>
+    </div>
   );
 };

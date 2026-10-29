@@ -247,7 +247,6 @@ export const MatterMetadataPanel = ({
     const toastId = stellaToast.add({
       title: t("workspaces.deletingWorkspace"),
       type: "loading",
-      timeout: Number.POSITIVE_INFINITY,
     });
 
     await deleteWorkspace.mutateAsync(
@@ -285,7 +284,6 @@ export const MatterMetadataPanel = ({
     const toastId = stellaToast.add({
       title: t("workspaces.duplicatingWorkspace"),
       type: "loading",
-      timeout: Number.POSITIVE_INFINITY,
     });
 
     duplicateWorkspace.mutate(

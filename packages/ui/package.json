@@ -1,6 +1,6 @@
 {
   "name": "@stll/ui",
-  "version": "0.53.0",
+  "version": "0.55.1",
   "description": "Stella's design system: bidi-aware React primitives built on Base UI, the dockable inspector pane, and the Tailwind v4 theme they are styled with.",
   "keywords": [
     "base-ui",
@@ -22,7 +22,8 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "THIRD_PARTY_NOTICES"
   ],
   "type": "module",
   "sideEffects": [
@@ -38,6 +39,7 @@
     "./alert-dialog": "./src/components/alert-dialog.tsx",
     "./workspace-shell": "./src/components/workspace-shell.tsx",
     "./avatar": "./src/components/avatar.tsx",
+    "./badge": "./src/components/badge.tsx",
     "./bidi-text": "./src/components/bidi-text.tsx",
     "./brand-icons": "./src/components/brand-icons.tsx",
     "./breadcrumb": "./src/components/breadcrumb.tsx",
@@ -47,6 +49,7 @@
     "./combobox": "./src/components/combobox.tsx",
     "./command": "./src/components/command.tsx",
     "./composer": "./src/components/composer.tsx",
+    "./composer-tokens": "./src/components/composer-tokens.ts",
     "./context-menu": "./src/components/context-menu.tsx",
     "./document-identity-badge": "./src/components/document-identity-badge.tsx",
     "./document-identity-badge.logic": "./src/components/document-identity-badge.logic.ts",
@@ -86,6 +89,7 @@
     "./option-color": "./src/lib/option-color.ts",
     "./outline-rail": "./src/components/outline-rail.tsx",
     "./overlay-layer": "./src/lib/overlay-layer.ts",
+    "./scroll-edge-fade": "./src/lib/scroll-edge-fade.ts",
     "./panel-inset": "./src/lib/panel-inset.ts",
     "./pagination": "./src/components/pagination.tsx",
     "./popover": "./src/components/popover.tsx",
@@ -128,6 +132,7 @@
     "./textarea": "./src/components/textarea.tsx",
     "./toast": "./src/components/toast.tsx",
     "./tooltip": "./src/components/tooltip.tsx",
+    "./truncated-text": "./src/components/truncated-text.tsx",
     "./typed-character": "./src/lib/typed-character.ts",
     "./use-contained-handler": "./src/hooks/use-contained-handler.ts",
     "./use-content-dir": "./src/hooks/use-content-dir.ts",
@@ -213,6 +218,7 @@
     "pack:dry-run": "bun pm pack --dry-run",
     "test": "bun run test:unit",
     "test:unit": "bun test src --path-ignore-patterns '**/*.playwright.spec.ts'",
+    "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts')",
     "test:browser": "playwright test --config playwright.config.ts",
     "pack:check": "cd ../.. && bun scripts/check-published-exports.ts packages/ui",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
@@ -235,6 +241,7 @@
     "@base-ui/react": "catalog:",
     "@happy-dom/global-registrator": "21.0.4",
     "@playwright/test": "^1.63.0",
+    "@stll/playwright-tools": "workspace:*",
     "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "@tailwindcss/vite": "catalog:",
