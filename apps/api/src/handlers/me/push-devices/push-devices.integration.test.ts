@@ -418,7 +418,7 @@ describe("delivery's view of devices", () => {
       organizationId: ids.orgA,
     });
     if (first === undefined || second === undefined) {
-      return expect.unreachable("both devices are deliverable");
+      expect.unreachable("both devices are deliverable");
     }
     // `second` re-registers after delivery read it; only `first` may go.
     await testDb
