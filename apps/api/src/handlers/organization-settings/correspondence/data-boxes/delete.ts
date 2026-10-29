@@ -64,7 +64,7 @@ const removeOrganizationDataBox = createSafeRootHandler(
   },
 );
 
-declareAggregateMutation(removeOrganizationDataBox.handler, {
+declareAggregateMutation(removeOrganizationDataBox, {
   type: "aggregate",
   aggregates: ["organizationDataBoxes"],
 });

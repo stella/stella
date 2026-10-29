@@ -92,7 +92,7 @@ if (import.meta.main) {
           "--",
           path.dirname(relativePath),
         ],
-        { cwd: repoRoot, encoding: "utf-8" },
+        { cwd: repoRoot, encoding: "utf-8", maxBuffer: 32 * 1024 * 1024 },
       );
       if (merged.trim() !== "") {
         panic(

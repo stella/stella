@@ -70,7 +70,7 @@ const addOrganizationDataBox = createSafeRootHandler(
   },
 );
 
-declareAggregateMutation(addOrganizationDataBox.handler, {
+declareAggregateMutation(addOrganizationDataBox, {
   type: "aggregate",
   aggregates: ["organizationDataBoxes"],
 });

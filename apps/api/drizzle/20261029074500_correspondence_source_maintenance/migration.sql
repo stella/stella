@@ -1,4 +1,4 @@
--- requires: 20261026120400_data_box_source_gates
+-- requires: 20261029074300_data_box_source_gates
 SET LOCAL lock_timeout = '1s';--> statement-breakpoint
 SET LOCAL statement_timeout = '5s';--> statement-breakpoint
 

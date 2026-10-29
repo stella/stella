@@ -69,6 +69,10 @@ const CATALOG_DIRECTORY = "packages/cli/capabilities";
  */
 const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
   [
+    "/v1/organization-settings/correspondence/data-boxes",
+    "Organization data-box settings support matter correspondence on every deployment",
+  ],
+  [
     "/v1/desktop/matter-candidates",
     "Desktop billing routes enforce authenticated activity and billing feature decisions on every deployment",
   ],

@@ -200,6 +200,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/email/correspondence/access.ts",
     "apps/api/src/lib/email/correspondence/create.ts",
     "apps/api/src/lib/email/correspondence/provenance.ts",
+    "apps/api/src/lib/email/correspondence/data-box/*",
     "apps/api/src/lib/email/inbound/*",
     "apps/api/src/lib/hosted-usage-provider/webhook-retention.ts",
     "apps/api/src/lib/infosoud/agenda-import.ts",

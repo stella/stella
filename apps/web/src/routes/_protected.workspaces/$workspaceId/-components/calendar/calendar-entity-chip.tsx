@@ -1,5 +1,6 @@
 import { useRef } from "react";
 
+import { centerUnderPointer } from "@atlaskit/pragmatic-drag-and-drop/utils/center-under-pointer";
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/utils/set-custom-native-drag-preview";
 import { useTranslations } from "use-intl";
 
@@ -79,10 +80,7 @@ export const CalendarEntityChip = ({
       onGenerateDragPreview: ({ nativeSetDragImage }) => {
         setCustomNativeDragPreview({
           nativeSetDragImage,
-          getOffset: ({ container }) => {
-            const { width, height } = container.getBoundingClientRect();
-            return { x: width / 2, y: height / 2 };
-          },
+          getOffset: centerUnderPointer,
           render: ({ container }) => {
             const data: DragPreviewData = {
               name,
