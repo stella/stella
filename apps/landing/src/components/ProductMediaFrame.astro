@@ -131,8 +131,8 @@ const storyThumbnail = media.type === "story" ? productStoryThumbnails(locale)[m
   {
     media.type === "image" && (
       <ThemeImage
-        lightSrc={productCaptures[media.captureId][locale].src}
-        darkSrc={productCaptures[media.captureId][locale].darkSrc}
+        lightSrc={productCaptures[media.captureId].src[locale]}
+        darkSrc={productCaptures[media.captureId].darkSrc[locale]}
         alt={t(media.altKey)}
         class={`h-full w-full border object-cover object-top ${compact ? "rounded-lg" : "rounded-[1.1rem]"}`}
         style="border-color: color-mix(in srgb, var(--foreground) 11%, transparent); box-shadow: 0 42px 110px -54px rgba(15, 23, 42, 0.5)"
@@ -183,8 +183,8 @@ const storyThumbnail = media.type === "story" ? productStoryThumbnails(locale)[m
         <div class="absolute inset-0 sm:hidden" data-editor-preview="static">
           <MacWindow class="h-full" label={staticEditorLabel}>
             <ThemeImage
-              lightSrc={productCaptures.editor[locale].src}
-              darkSrc={productCaptures.editor[locale].darkSrc}
+              lightSrc={productCaptures.editor.src[locale]}
+              darkSrc={productCaptures.editor.darkSrc[locale]}
               alt=""
               class="h-full w-full object-contain object-top"
               media="(max-width: 639px)"
@@ -210,11 +210,11 @@ const storyThumbnail = media.type === "story" ? productStoryThumbnails(locale)[m
       thumbnail && (
         <ThemeImage
           lightSrc={media.type === "live-editor"
-            ? productCaptures.editor[locale].src
-            : productCaptures.anonymization[locale].src}
+            ? productCaptures.editor.src[locale]
+            : productCaptures.anonymization.src[locale]}
           darkSrc={media.type === "live-editor"
-            ? productCaptures.editor[locale].darkSrc
-            : productCaptures.anonymization[locale].darkSrc}
+            ? productCaptures.editor.darkSrc[locale]
+            : productCaptures.anonymization.darkSrc[locale]}
           alt={media.alt}
           class="h-full w-full rounded-lg border object-cover"
           style="border-color: color-mix(in srgb, var(--border) 70%, transparent); box-shadow: 0 18px 42px -30px rgba(0, 0, 0, 0.5); object-position: 0% 0%"

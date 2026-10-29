@@ -111,26 +111,31 @@ export const openingProductStory = [
 export const productStoryThumbnails = (locale: Locale) =>
   ({
     workspace: {
-      ...productCaptures["workspace"][locale],
+      src: productCaptures["workspace"].src[locale],
+      darkSrc: productCaptures["workspace"].darkSrc[locale],
       alt: "Matter workspace in stella",
     },
     review: {
-      ...productCaptures["tabular-review"][locale],
+      src: productCaptures["tabular-review"].src[locale],
+      darkSrc: productCaptures["tabular-review"].darkSrc[locale],
       alt: "Contract review table in stella",
     },
     // Product-page-only scene (same product area as "review"); reuses its
     // thumbnail since nothing lists this scene by icon (nav mega-menu,
     // homepage chapters) the way "review" itself is.
     "review-citation": {
-      ...productCaptures["tabular-review"][locale],
+      src: productCaptures["tabular-review"].src[locale],
+      darkSrc: productCaptures["tabular-review"].darkSrc[locale],
       alt: "Contract review table in stella",
     },
     editor: {
-      ...productCaptures["editor"][locale],
+      src: productCaptures["editor"].src[locale],
+      darkSrc: productCaptures["editor"].darkSrc[locale],
       alt: "Word document open in the stella Editor",
     },
     agent: {
-      ...productCaptures["agent"][locale],
+      src: productCaptures["agent"].src[locale],
+      darkSrc: productCaptures["agent"].darkSrc[locale],
       alt: "AI agent in stella: a cited change-of-control review with a generated exposure view",
     },
     cli: {
@@ -139,13 +144,15 @@ export const productStoryThumbnails = (locale: Locale) =>
       alt: "The tools and capability catalogue in stella",
     },
     templates: {
-      ...productCaptures.templates[locale],
+      src: productCaptures.templates.src[locale],
+      darkSrc: productCaptures.templates.darkSrc[locale],
       alt: "A template with fields and conditional clauses in the stella template studio",
     },
     // Product-page-only scene (same product area as "templates"); reuses its
     // thumbnail since nothing lists this scene by icon.
     "template-fill": {
-      ...productCaptures.templates[locale],
+      src: productCaptures.templates.src[locale],
+      darkSrc: productCaptures.templates.darkSrc[locale],
       alt: "A template with fields and conditional clauses in the stella template studio",
     },
   }) as const satisfies Record<

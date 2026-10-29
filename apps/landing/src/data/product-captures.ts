@@ -1,765 +1,485 @@
 import type { Locale } from "../i18n/config";
 
-type ProductCapture = { src: string; darkSrc: string };
+type CaptureSources = Record<Locale, string>;
 
-// Literal public paths keep shipped captures visible to the public-assets guard.
+// Keep literal paths in locale tables so the public-assets guard can find them.
+const agentCapture = {
+  src: {
+    ar: "/media/products/agent.png",
+    cs: "/media/products/agent-cs.png",
+    de: "/media/products/agent.png",
+    en: "/media/products/agent.png",
+    es: "/media/products/agent.png",
+    et: "/media/products/agent.png",
+    fr: "/media/products/agent.png",
+    hu: "/media/products/agent.png",
+    lt: "/media/products/agent.png",
+    lv: "/media/products/agent.png",
+    pl: "/media/products/agent.png",
+    "pt-BR": "/media/products/agent.png",
+    sk: "/media/products/agent-sk.png",
+  } as const satisfies CaptureSources,
+  darkSrc: {
+    ar: "/media/products/agent-dark.png",
+    cs: "/media/products/agent-cs-dark.png",
+    de: "/media/products/agent-dark.png",
+    en: "/media/products/agent-dark.png",
+    es: "/media/products/agent-dark.png",
+    et: "/media/products/agent-dark.png",
+    fr: "/media/products/agent-dark.png",
+    hu: "/media/products/agent-dark.png",
+    lt: "/media/products/agent-dark.png",
+    lv: "/media/products/agent-dark.png",
+    pl: "/media/products/agent-dark.png",
+    "pt-BR": "/media/products/agent-dark.png",
+    sk: "/media/products/agent-sk-dark.png",
+  } as const satisfies CaptureSources,
+};
+
+const anonymizationCapture = {
+  src: {
+    ar: "/media/products/anonymization.png",
+    cs: "/media/products/anonymization-cs.png",
+    de: "/media/products/anonymization.png",
+    en: "/media/products/anonymization.png",
+    es: "/media/products/anonymization.png",
+    et: "/media/products/anonymization.png",
+    fr: "/media/products/anonymization.png",
+    hu: "/media/products/anonymization.png",
+    lt: "/media/products/anonymization.png",
+    lv: "/media/products/anonymization.png",
+    pl: "/media/products/anonymization.png",
+    "pt-BR": "/media/products/anonymization.png",
+    sk: "/media/products/anonymization-sk.png",
+  } as const satisfies CaptureSources,
+  darkSrc: {
+    ar: "/media/products/anonymization-dark.png",
+    cs: "/media/products/anonymization-cs-dark.png",
+    de: "/media/products/anonymization-dark.png",
+    en: "/media/products/anonymization-dark.png",
+    es: "/media/products/anonymization-dark.png",
+    et: "/media/products/anonymization-dark.png",
+    fr: "/media/products/anonymization-dark.png",
+    hu: "/media/products/anonymization-dark.png",
+    lt: "/media/products/anonymization-dark.png",
+    lv: "/media/products/anonymization-dark.png",
+    pl: "/media/products/anonymization-dark.png",
+    "pt-BR": "/media/products/anonymization-dark.png",
+    sk: "/media/products/anonymization-sk-dark.png",
+  } as const satisfies CaptureSources,
+};
+
+const caseLawSearchCapture = {
+  src: {
+    ar: "/media/products/case-law-search.png",
+    cs: "/media/products/case-law-search-cs.png",
+    de: "/media/products/case-law-search.png",
+    en: "/media/products/case-law-search.png",
+    es: "/media/products/case-law-search.png",
+    et: "/media/products/case-law-search.png",
+    fr: "/media/products/case-law-search.png",
+    hu: "/media/products/case-law-search.png",
+    lt: "/media/products/case-law-search.png",
+    lv: "/media/products/case-law-search.png",
+    pl: "/media/products/case-law-search.png",
+    "pt-BR": "/media/products/case-law-search.png",
+    sk: "/media/products/case-law-search.png",
+  } as const satisfies CaptureSources,
+  darkSrc: {
+    ar: "/media/products/case-law-search-dark.png",
+    cs: "/media/products/case-law-search-cs-dark.png",
+    de: "/media/products/case-law-search-dark.png",
+    en: "/media/products/case-law-search-dark.png",
+    es: "/media/products/case-law-search-dark.png",
+    et: "/media/products/case-law-search-dark.png",
+    fr: "/media/products/case-law-search-dark.png",
+    hu: "/media/products/case-law-search-dark.png",
+    lt: "/media/products/case-law-search-dark.png",
+    lv: "/media/products/case-law-search-dark.png",
+    pl: "/media/products/case-law-search-dark.png",
+    "pt-BR": "/media/products/case-law-search-dark.png",
+    sk: "/media/products/case-law-search-dark.png",
+  } as const satisfies CaptureSources,
+};
+
+const contactsCapture = {
+  src: {
+    ar: "/media/products/contacts.png",
+    cs: "/media/products/contacts-cs.png",
+    de: "/media/products/contacts.png",
+    en: "/media/products/contacts.png",
+    es: "/media/products/contacts.png",
+    et: "/media/products/contacts.png",
+    fr: "/media/products/contacts.png",
+    hu: "/media/products/contacts.png",
+    lt: "/media/products/contacts.png",
+    lv: "/media/products/contacts.png",
+    pl: "/media/products/contacts.png",
+    "pt-BR": "/media/products/contacts.png",
+    sk: "/media/products/contacts-sk.png",
+  } as const satisfies CaptureSources,
+  darkSrc: {
+    ar: "/media/products/contacts-dark.png",
+    cs: "/media/products/contacts-cs-dark.png",
+    de: "/media/products/contacts-dark.png",
+    en: "/media/products/contacts-dark.png",
+    es: "/media/products/contacts-dark.png",
+    et: "/media/products/contacts-dark.png",
+    fr: "/media/products/contacts-dark.png",
+    hu: "/media/products/contacts-dark.png",
+    lt: "/media/products/contacts-dark.png",
+    lv: "/media/products/contacts-dark.png",
+    pl: "/media/products/contacts-dark.png",
+    "pt-BR": "/media/products/contacts-dark.png",
+    sk: "/media/products/contacts-sk-dark.png",
+  } as const satisfies CaptureSources,
+};
+
+const editorCapture = {
+  src: {
+    ar: "/media/products/editor.png",
+    cs: "/media/products/editor-cs.png",
+    de: "/media/products/editor.png",
+    en: "/media/products/editor.png",
+    es: "/media/products/editor.png",
+    et: "/media/products/editor.png",
+    fr: "/media/products/editor.png",
+    hu: "/media/products/editor.png",
+    lt: "/media/products/editor.png",
+    lv: "/media/products/editor.png",
+    pl: "/media/products/editor.png",
+    "pt-BR": "/media/products/editor.png",
+    sk: "/media/products/editor-sk.png",
+  } as const satisfies CaptureSources,
+  darkSrc: {
+    ar: "/media/products/editor-dark.png",
+    cs: "/media/products/editor-cs-dark.png",
+    de: "/media/products/editor-dark.png",
+    en: "/media/products/editor-dark.png",
+    es: "/media/products/editor-dark.png",
+    et: "/media/products/editor-dark.png",
+    fr: "/media/products/editor-dark.png",
+    hu: "/media/products/editor-dark.png",
+    lt: "/media/products/editor-dark.png",
+    lv: "/media/products/editor-dark.png",
+    pl: "/media/products/editor-dark.png",
+    "pt-BR": "/media/products/editor-dark.png",
+    sk: "/media/products/editor-sk-dark.png",
+  } as const satisfies CaptureSources,
+};
+
+const importExportCapture = {
+  src: {
+    ar: "/media/products/import-export.png",
+    cs: "/media/products/import-export-cs.png",
+    de: "/media/products/import-export.png",
+    en: "/media/products/import-export.png",
+    es: "/media/products/import-export.png",
+    et: "/media/products/import-export.png",
+    fr: "/media/products/import-export.png",
+    hu: "/media/products/import-export.png",
+    lt: "/media/products/import-export.png",
+    lv: "/media/products/import-export.png",
+    pl: "/media/products/import-export.png",
+    "pt-BR": "/media/products/import-export.png",
+    sk: "/media/products/import-export-sk.png",
+  } as const satisfies CaptureSources,
+  darkSrc: {
+    ar: "/media/products/import-export-dark.png",
+    cs: "/media/products/import-export-cs-dark.png",
+    de: "/media/products/import-export-dark.png",
+    en: "/media/products/import-export-dark.png",
+    es: "/media/products/import-export-dark.png",
+    et: "/media/products/import-export-dark.png",
+    fr: "/media/products/import-export-dark.png",
+    hu: "/media/products/import-export-dark.png",
+    lt: "/media/products/import-export-dark.png",
+    lv: "/media/products/import-export-dark.png",
+    pl: "/media/products/import-export-dark.png",
+    "pt-BR": "/media/products/import-export-dark.png",
+    sk: "/media/products/import-export-sk-dark.png",
+  } as const satisfies CaptureSources,
+};
+
+const invoicingCapture = {
+  src: {
+    ar: "/media/products/invoicing.png",
+    cs: "/media/products/invoicing-cs.png",
+    de: "/media/products/invoicing.png",
+    en: "/media/products/invoicing.png",
+    es: "/media/products/invoicing.png",
+    et: "/media/products/invoicing.png",
+    fr: "/media/products/invoicing.png",
+    hu: "/media/products/invoicing.png",
+    lt: "/media/products/invoicing.png",
+    lv: "/media/products/invoicing.png",
+    pl: "/media/products/invoicing.png",
+    "pt-BR": "/media/products/invoicing.png",
+    sk: "/media/products/invoicing-sk.png",
+  } as const satisfies CaptureSources,
+  darkSrc: {
+    ar: "/media/products/invoicing-dark.png",
+    cs: "/media/products/invoicing-cs-dark.png",
+    de: "/media/products/invoicing-dark.png",
+    en: "/media/products/invoicing-dark.png",
+    es: "/media/products/invoicing-dark.png",
+    et: "/media/products/invoicing-dark.png",
+    fr: "/media/products/invoicing-dark.png",
+    hu: "/media/products/invoicing-dark.png",
+    lt: "/media/products/invoicing-dark.png",
+    lv: "/media/products/invoicing-dark.png",
+    pl: "/media/products/invoicing-dark.png",
+    "pt-BR": "/media/products/invoicing-dark.png",
+    sk: "/media/products/invoicing-sk-dark.png",
+  } as const satisfies CaptureSources,
+};
+
+const storyPublicData1Capture = {
+  src: {
+    ar: "/media/products/story-public-data-1.png",
+    cs: "/media/products/story-public-data-1-cs.png",
+    de: "/media/products/story-public-data-1.png",
+    en: "/media/products/story-public-data-1.png",
+    es: "/media/products/story-public-data-1.png",
+    et: "/media/products/story-public-data-1.png",
+    fr: "/media/products/story-public-data-1.png",
+    hu: "/media/products/story-public-data-1.png",
+    lt: "/media/products/story-public-data-1.png",
+    lv: "/media/products/story-public-data-1.png",
+    pl: "/media/products/story-public-data-1.png",
+    "pt-BR": "/media/products/story-public-data-1.png",
+    sk: "/media/products/story-public-data-1-sk.png",
+  } as const satisfies CaptureSources,
+  darkSrc: {
+    ar: "/media/products/story-public-data-1-dark.png",
+    cs: "/media/products/story-public-data-1-cs-dark.png",
+    de: "/media/products/story-public-data-1-dark.png",
+    en: "/media/products/story-public-data-1-dark.png",
+    es: "/media/products/story-public-data-1-dark.png",
+    et: "/media/products/story-public-data-1-dark.png",
+    fr: "/media/products/story-public-data-1-dark.png",
+    hu: "/media/products/story-public-data-1-dark.png",
+    lt: "/media/products/story-public-data-1-dark.png",
+    lv: "/media/products/story-public-data-1-dark.png",
+    pl: "/media/products/story-public-data-1-dark.png",
+    "pt-BR": "/media/products/story-public-data-1-dark.png",
+    sk: "/media/products/story-public-data-1-sk-dark.png",
+  } as const satisfies CaptureSources,
+};
+
+const storyPublicData2Capture = {
+  src: {
+    ar: "/media/products/story-public-data-2.png",
+    cs: "/media/products/story-public-data-2-cs.png",
+    de: "/media/products/story-public-data-2.png",
+    en: "/media/products/story-public-data-2.png",
+    es: "/media/products/story-public-data-2.png",
+    et: "/media/products/story-public-data-2.png",
+    fr: "/media/products/story-public-data-2.png",
+    hu: "/media/products/story-public-data-2.png",
+    lt: "/media/products/story-public-data-2.png",
+    lv: "/media/products/story-public-data-2.png",
+    pl: "/media/products/story-public-data-2.png",
+    "pt-BR": "/media/products/story-public-data-2.png",
+    sk: "/media/products/story-public-data-2-sk.png",
+  } as const satisfies CaptureSources,
+  darkSrc: {
+    ar: "/media/products/story-public-data-2-dark.png",
+    cs: "/media/products/story-public-data-2-cs-dark.png",
+    de: "/media/products/story-public-data-2-dark.png",
+    en: "/media/products/story-public-data-2-dark.png",
+    es: "/media/products/story-public-data-2-dark.png",
+    et: "/media/products/story-public-data-2-dark.png",
+    fr: "/media/products/story-public-data-2-dark.png",
+    hu: "/media/products/story-public-data-2-dark.png",
+    lt: "/media/products/story-public-data-2-dark.png",
+    lv: "/media/products/story-public-data-2-dark.png",
+    pl: "/media/products/story-public-data-2-dark.png",
+    "pt-BR": "/media/products/story-public-data-2-dark.png",
+    sk: "/media/products/story-public-data-2-sk-dark.png",
+  } as const satisfies CaptureSources,
+};
+
+const storyPublicData3Capture = {
+  src: {
+    ar: "/media/products/story-public-data-3.png",
+    cs: "/media/products/story-public-data-3-cs.png",
+    de: "/media/products/story-public-data-3.png",
+    en: "/media/products/story-public-data-3.png",
+    es: "/media/products/story-public-data-3.png",
+    et: "/media/products/story-public-data-3.png",
+    fr: "/media/products/story-public-data-3.png",
+    hu: "/media/products/story-public-data-3.png",
+    lt: "/media/products/story-public-data-3.png",
+    lv: "/media/products/story-public-data-3.png",
+    pl: "/media/products/story-public-data-3.png",
+    "pt-BR": "/media/products/story-public-data-3.png",
+    sk: "/media/products/story-public-data-3-sk.png",
+  } as const satisfies CaptureSources,
+  darkSrc: {
+    ar: "/media/products/story-public-data-3-dark.png",
+    cs: "/media/products/story-public-data-3-cs-dark.png",
+    de: "/media/products/story-public-data-3-dark.png",
+    en: "/media/products/story-public-data-3-dark.png",
+    es: "/media/products/story-public-data-3-dark.png",
+    et: "/media/products/story-public-data-3-dark.png",
+    fr: "/media/products/story-public-data-3-dark.png",
+    hu: "/media/products/story-public-data-3-dark.png",
+    lt: "/media/products/story-public-data-3-dark.png",
+    lv: "/media/products/story-public-data-3-dark.png",
+    pl: "/media/products/story-public-data-3-dark.png",
+    "pt-BR": "/media/products/story-public-data-3-dark.png",
+    sk: "/media/products/story-public-data-3-sk-dark.png",
+  } as const satisfies CaptureSources,
+};
+
+const tabularReviewCapture = {
+  src: {
+    ar: "/media/products/tabular-review.png",
+    cs: "/media/products/tabular-review-cs.png",
+    de: "/media/products/tabular-review.png",
+    en: "/media/products/tabular-review.png",
+    es: "/media/products/tabular-review.png",
+    et: "/media/products/tabular-review.png",
+    fr: "/media/products/tabular-review.png",
+    hu: "/media/products/tabular-review.png",
+    lt: "/media/products/tabular-review.png",
+    lv: "/media/products/tabular-review.png",
+    pl: "/media/products/tabular-review.png",
+    "pt-BR": "/media/products/tabular-review.png",
+    sk: "/media/products/tabular-review-sk.png",
+  } as const satisfies CaptureSources,
+  darkSrc: {
+    ar: "/media/products/tabular-review-dark.png",
+    cs: "/media/products/tabular-review-cs-dark.png",
+    de: "/media/products/tabular-review-dark.png",
+    en: "/media/products/tabular-review-dark.png",
+    es: "/media/products/tabular-review-dark.png",
+    et: "/media/products/tabular-review-dark.png",
+    fr: "/media/products/tabular-review-dark.png",
+    hu: "/media/products/tabular-review-dark.png",
+    lt: "/media/products/tabular-review-dark.png",
+    lv: "/media/products/tabular-review-dark.png",
+    pl: "/media/products/tabular-review-dark.png",
+    "pt-BR": "/media/products/tabular-review-dark.png",
+    sk: "/media/products/tabular-review-sk-dark.png",
+  } as const satisfies CaptureSources,
+};
+
+const templatesCapture = {
+  src: {
+    ar: "/media/products/templates.png",
+    cs: "/media/products/templates-cs.png",
+    de: "/media/products/templates.png",
+    en: "/media/products/templates.png",
+    es: "/media/products/templates.png",
+    et: "/media/products/templates.png",
+    fr: "/media/products/templates.png",
+    hu: "/media/products/templates.png",
+    lt: "/media/products/templates.png",
+    lv: "/media/products/templates.png",
+    pl: "/media/products/templates.png",
+    "pt-BR": "/media/products/templates.png",
+    sk: "/media/products/templates-sk.png",
+  } as const satisfies CaptureSources,
+  darkSrc: {
+    ar: "/media/products/templates-dark.png",
+    cs: "/media/products/templates-cs-dark.png",
+    de: "/media/products/templates-dark.png",
+    en: "/media/products/templates-dark.png",
+    es: "/media/products/templates-dark.png",
+    et: "/media/products/templates-dark.png",
+    fr: "/media/products/templates-dark.png",
+    hu: "/media/products/templates-dark.png",
+    lt: "/media/products/templates-dark.png",
+    lv: "/media/products/templates-dark.png",
+    pl: "/media/products/templates-dark.png",
+    "pt-BR": "/media/products/templates-dark.png",
+    sk: "/media/products/templates-sk-dark.png",
+  } as const satisfies CaptureSources,
+};
+
+const timeTrackingCapture = {
+  src: {
+    ar: "/media/products/time-tracking.png",
+    cs: "/media/products/time-tracking-cs.png",
+    de: "/media/products/time-tracking.png",
+    en: "/media/products/time-tracking.png",
+    es: "/media/products/time-tracking.png",
+    et: "/media/products/time-tracking.png",
+    fr: "/media/products/time-tracking.png",
+    hu: "/media/products/time-tracking.png",
+    lt: "/media/products/time-tracking.png",
+    lv: "/media/products/time-tracking.png",
+    pl: "/media/products/time-tracking.png",
+    "pt-BR": "/media/products/time-tracking.png",
+    sk: "/media/products/time-tracking-sk.png",
+  } as const satisfies CaptureSources,
+  darkSrc: {
+    ar: "/media/products/time-tracking-dark.png",
+    cs: "/media/products/time-tracking-cs-dark.png",
+    de: "/media/products/time-tracking-dark.png",
+    en: "/media/products/time-tracking-dark.png",
+    es: "/media/products/time-tracking-dark.png",
+    et: "/media/products/time-tracking-dark.png",
+    fr: "/media/products/time-tracking-dark.png",
+    hu: "/media/products/time-tracking-dark.png",
+    lt: "/media/products/time-tracking-dark.png",
+    lv: "/media/products/time-tracking-dark.png",
+    pl: "/media/products/time-tracking-dark.png",
+    "pt-BR": "/media/products/time-tracking-dark.png",
+    sk: "/media/products/time-tracking-sk-dark.png",
+  } as const satisfies CaptureSources,
+};
+
+const workspaceCapture = {
+  src: {
+    ar: "/media/products/workspace.png",
+    cs: "/media/products/workspace-cs.png",
+    de: "/media/products/workspace.png",
+    en: "/media/products/workspace.png",
+    es: "/media/products/workspace.png",
+    et: "/media/products/workspace.png",
+    fr: "/media/products/workspace.png",
+    hu: "/media/products/workspace.png",
+    lt: "/media/products/workspace.png",
+    lv: "/media/products/workspace.png",
+    pl: "/media/products/workspace.png",
+    "pt-BR": "/media/products/workspace.png",
+    sk: "/media/products/workspace-sk.png",
+  } as const satisfies CaptureSources,
+  darkSrc: {
+    ar: "/media/products/workspace-dark.png",
+    cs: "/media/products/workspace-cs-dark.png",
+    de: "/media/products/workspace-dark.png",
+    en: "/media/products/workspace-dark.png",
+    es: "/media/products/workspace-dark.png",
+    et: "/media/products/workspace-dark.png",
+    fr: "/media/products/workspace-dark.png",
+    hu: "/media/products/workspace-dark.png",
+    lt: "/media/products/workspace-dark.png",
+    lv: "/media/products/workspace-dark.png",
+    pl: "/media/products/workspace-dark.png",
+    "pt-BR": "/media/products/workspace-dark.png",
+    sk: "/media/products/workspace-sk-dark.png",
+  } as const satisfies CaptureSources,
+};
+
 export const productCaptures = {
-  agent: {
-    ar: {
-      src: "/media/products/agent.png",
-      darkSrc: "/media/products/agent-dark.png",
-    },
-    cs: {
-      src: "/media/products/agent-cs.png",
-      darkSrc: "/media/products/agent-cs-dark.png",
-    },
-    de: {
-      src: "/media/products/agent.png",
-      darkSrc: "/media/products/agent-dark.png",
-    },
-    en: {
-      src: "/media/products/agent.png",
-      darkSrc: "/media/products/agent-dark.png",
-    },
-    es: {
-      src: "/media/products/agent.png",
-      darkSrc: "/media/products/agent-dark.png",
-    },
-    et: {
-      src: "/media/products/agent.png",
-      darkSrc: "/media/products/agent-dark.png",
-    },
-    fr: {
-      src: "/media/products/agent.png",
-      darkSrc: "/media/products/agent-dark.png",
-    },
-    hu: {
-      src: "/media/products/agent.png",
-      darkSrc: "/media/products/agent-dark.png",
-    },
-    lt: {
-      src: "/media/products/agent.png",
-      darkSrc: "/media/products/agent-dark.png",
-    },
-    lv: {
-      src: "/media/products/agent.png",
-      darkSrc: "/media/products/agent-dark.png",
-    },
-    pl: {
-      src: "/media/products/agent.png",
-      darkSrc: "/media/products/agent-dark.png",
-    },
-    "pt-BR": {
-      src: "/media/products/agent.png",
-      darkSrc: "/media/products/agent-dark.png",
-    },
-    sk: {
-      src: "/media/products/agent-sk.png",
-      darkSrc: "/media/products/agent-sk-dark.png",
-    },
-  } as const satisfies Record<Locale, ProductCapture>,
-  anonymization: {
-    ar: {
-      src: "/media/products/anonymization.png",
-      darkSrc: "/media/products/anonymization-dark.png",
-    },
-    cs: {
-      src: "/media/products/anonymization-cs.png",
-      darkSrc: "/media/products/anonymization-cs-dark.png",
-    },
-    de: {
-      src: "/media/products/anonymization.png",
-      darkSrc: "/media/products/anonymization-dark.png",
-    },
-    en: {
-      src: "/media/products/anonymization.png",
-      darkSrc: "/media/products/anonymization-dark.png",
-    },
-    es: {
-      src: "/media/products/anonymization.png",
-      darkSrc: "/media/products/anonymization-dark.png",
-    },
-    et: {
-      src: "/media/products/anonymization.png",
-      darkSrc: "/media/products/anonymization-dark.png",
-    },
-    fr: {
-      src: "/media/products/anonymization.png",
-      darkSrc: "/media/products/anonymization-dark.png",
-    },
-    hu: {
-      src: "/media/products/anonymization.png",
-      darkSrc: "/media/products/anonymization-dark.png",
-    },
-    lt: {
-      src: "/media/products/anonymization.png",
-      darkSrc: "/media/products/anonymization-dark.png",
-    },
-    lv: {
-      src: "/media/products/anonymization.png",
-      darkSrc: "/media/products/anonymization-dark.png",
-    },
-    pl: {
-      src: "/media/products/anonymization.png",
-      darkSrc: "/media/products/anonymization-dark.png",
-    },
-    "pt-BR": {
-      src: "/media/products/anonymization.png",
-      darkSrc: "/media/products/anonymization-dark.png",
-    },
-    sk: {
-      src: "/media/products/anonymization-sk.png",
-      darkSrc: "/media/products/anonymization-sk-dark.png",
-    },
-  } as const satisfies Record<Locale, ProductCapture>,
-  "case-law-search": {
-    ar: {
-      src: "/media/products/case-law-search.png",
-      darkSrc: "/media/products/case-law-search-dark.png",
-    },
-    cs: {
-      src: "/media/products/case-law-search-cs.png",
-      darkSrc: "/media/products/case-law-search-cs-dark.png",
-    },
-    de: {
-      src: "/media/products/case-law-search.png",
-      darkSrc: "/media/products/case-law-search-dark.png",
-    },
-    en: {
-      src: "/media/products/case-law-search.png",
-      darkSrc: "/media/products/case-law-search-dark.png",
-    },
-    es: {
-      src: "/media/products/case-law-search.png",
-      darkSrc: "/media/products/case-law-search-dark.png",
-    },
-    et: {
-      src: "/media/products/case-law-search.png",
-      darkSrc: "/media/products/case-law-search-dark.png",
-    },
-    fr: {
-      src: "/media/products/case-law-search.png",
-      darkSrc: "/media/products/case-law-search-dark.png",
-    },
-    hu: {
-      src: "/media/products/case-law-search.png",
-      darkSrc: "/media/products/case-law-search-dark.png",
-    },
-    lt: {
-      src: "/media/products/case-law-search.png",
-      darkSrc: "/media/products/case-law-search-dark.png",
-    },
-    lv: {
-      src: "/media/products/case-law-search.png",
-      darkSrc: "/media/products/case-law-search-dark.png",
-    },
-    pl: {
-      src: "/media/products/case-law-search.png",
-      darkSrc: "/media/products/case-law-search-dark.png",
-    },
-    "pt-BR": {
-      src: "/media/products/case-law-search.png",
-      darkSrc: "/media/products/case-law-search-dark.png",
-    },
-    sk: {
-      src: "/media/products/case-law-search.png",
-      darkSrc: "/media/products/case-law-search-dark.png",
-    },
-  } as const satisfies Record<Locale, ProductCapture>,
-  contacts: {
-    ar: {
-      src: "/media/products/contacts.png",
-      darkSrc: "/media/products/contacts-dark.png",
-    },
-    cs: {
-      src: "/media/products/contacts-cs.png",
-      darkSrc: "/media/products/contacts-cs-dark.png",
-    },
-    de: {
-      src: "/media/products/contacts.png",
-      darkSrc: "/media/products/contacts-dark.png",
-    },
-    en: {
-      src: "/media/products/contacts.png",
-      darkSrc: "/media/products/contacts-dark.png",
-    },
-    es: {
-      src: "/media/products/contacts.png",
-      darkSrc: "/media/products/contacts-dark.png",
-    },
-    et: {
-      src: "/media/products/contacts.png",
-      darkSrc: "/media/products/contacts-dark.png",
-    },
-    fr: {
-      src: "/media/products/contacts.png",
-      darkSrc: "/media/products/contacts-dark.png",
-    },
-    hu: {
-      src: "/media/products/contacts.png",
-      darkSrc: "/media/products/contacts-dark.png",
-    },
-    lt: {
-      src: "/media/products/contacts.png",
-      darkSrc: "/media/products/contacts-dark.png",
-    },
-    lv: {
-      src: "/media/products/contacts.png",
-      darkSrc: "/media/products/contacts-dark.png",
-    },
-    pl: {
-      src: "/media/products/contacts.png",
-      darkSrc: "/media/products/contacts-dark.png",
-    },
-    "pt-BR": {
-      src: "/media/products/contacts.png",
-      darkSrc: "/media/products/contacts-dark.png",
-    },
-    sk: {
-      src: "/media/products/contacts-sk.png",
-      darkSrc: "/media/products/contacts-sk-dark.png",
-    },
-  } as const satisfies Record<Locale, ProductCapture>,
-  editor: {
-    ar: {
-      src: "/media/products/editor.png",
-      darkSrc: "/media/products/editor-dark.png",
-    },
-    cs: {
-      src: "/media/products/editor-cs.png",
-      darkSrc: "/media/products/editor-cs-dark.png",
-    },
-    de: {
-      src: "/media/products/editor.png",
-      darkSrc: "/media/products/editor-dark.png",
-    },
-    en: {
-      src: "/media/products/editor.png",
-      darkSrc: "/media/products/editor-dark.png",
-    },
-    es: {
-      src: "/media/products/editor.png",
-      darkSrc: "/media/products/editor-dark.png",
-    },
-    et: {
-      src: "/media/products/editor.png",
-      darkSrc: "/media/products/editor-dark.png",
-    },
-    fr: {
-      src: "/media/products/editor.png",
-      darkSrc: "/media/products/editor-dark.png",
-    },
-    hu: {
-      src: "/media/products/editor.png",
-      darkSrc: "/media/products/editor-dark.png",
-    },
-    lt: {
-      src: "/media/products/editor.png",
-      darkSrc: "/media/products/editor-dark.png",
-    },
-    lv: {
-      src: "/media/products/editor.png",
-      darkSrc: "/media/products/editor-dark.png",
-    },
-    pl: {
-      src: "/media/products/editor.png",
-      darkSrc: "/media/products/editor-dark.png",
-    },
-    "pt-BR": {
-      src: "/media/products/editor.png",
-      darkSrc: "/media/products/editor-dark.png",
-    },
-    sk: {
-      src: "/media/products/editor-sk.png",
-      darkSrc: "/media/products/editor-sk-dark.png",
-    },
-  } as const satisfies Record<Locale, ProductCapture>,
-  "import-export": {
-    ar: {
-      src: "/media/products/import-export.png",
-      darkSrc: "/media/products/import-export-dark.png",
-    },
-    cs: {
-      src: "/media/products/import-export-cs.png",
-      darkSrc: "/media/products/import-export-cs-dark.png",
-    },
-    de: {
-      src: "/media/products/import-export.png",
-      darkSrc: "/media/products/import-export-dark.png",
-    },
-    en: {
-      src: "/media/products/import-export.png",
-      darkSrc: "/media/products/import-export-dark.png",
-    },
-    es: {
-      src: "/media/products/import-export.png",
-      darkSrc: "/media/products/import-export-dark.png",
-    },
-    et: {
-      src: "/media/products/import-export.png",
-      darkSrc: "/media/products/import-export-dark.png",
-    },
-    fr: {
-      src: "/media/products/import-export.png",
-      darkSrc: "/media/products/import-export-dark.png",
-    },
-    hu: {
-      src: "/media/products/import-export.png",
-      darkSrc: "/media/products/import-export-dark.png",
-    },
-    lt: {
-      src: "/media/products/import-export.png",
-      darkSrc: "/media/products/import-export-dark.png",
-    },
-    lv: {
-      src: "/media/products/import-export.png",
-      darkSrc: "/media/products/import-export-dark.png",
-    },
-    pl: {
-      src: "/media/products/import-export.png",
-      darkSrc: "/media/products/import-export-dark.png",
-    },
-    "pt-BR": {
-      src: "/media/products/import-export.png",
-      darkSrc: "/media/products/import-export-dark.png",
-    },
-    sk: {
-      src: "/media/products/import-export-sk.png",
-      darkSrc: "/media/products/import-export-sk-dark.png",
-    },
-  } as const satisfies Record<Locale, ProductCapture>,
-  invoicing: {
-    ar: {
-      src: "/media/products/invoicing.png",
-      darkSrc: "/media/products/invoicing-dark.png",
-    },
-    cs: {
-      src: "/media/products/invoicing-cs.png",
-      darkSrc: "/media/products/invoicing-cs-dark.png",
-    },
-    de: {
-      src: "/media/products/invoicing.png",
-      darkSrc: "/media/products/invoicing-dark.png",
-    },
-    en: {
-      src: "/media/products/invoicing.png",
-      darkSrc: "/media/products/invoicing-dark.png",
-    },
-    es: {
-      src: "/media/products/invoicing.png",
-      darkSrc: "/media/products/invoicing-dark.png",
-    },
-    et: {
-      src: "/media/products/invoicing.png",
-      darkSrc: "/media/products/invoicing-dark.png",
-    },
-    fr: {
-      src: "/media/products/invoicing.png",
-      darkSrc: "/media/products/invoicing-dark.png",
-    },
-    hu: {
-      src: "/media/products/invoicing.png",
-      darkSrc: "/media/products/invoicing-dark.png",
-    },
-    lt: {
-      src: "/media/products/invoicing.png",
-      darkSrc: "/media/products/invoicing-dark.png",
-    },
-    lv: {
-      src: "/media/products/invoicing.png",
-      darkSrc: "/media/products/invoicing-dark.png",
-    },
-    pl: {
-      src: "/media/products/invoicing.png",
-      darkSrc: "/media/products/invoicing-dark.png",
-    },
-    "pt-BR": {
-      src: "/media/products/invoicing.png",
-      darkSrc: "/media/products/invoicing-dark.png",
-    },
-    sk: {
-      src: "/media/products/invoicing-sk.png",
-      darkSrc: "/media/products/invoicing-sk-dark.png",
-    },
-  } as const satisfies Record<Locale, ProductCapture>,
-  "story-public-data-1": {
-    ar: {
-      src: "/media/products/story-public-data-1.png",
-      darkSrc: "/media/products/story-public-data-1-dark.png",
-    },
-    cs: {
-      src: "/media/products/story-public-data-1-cs.png",
-      darkSrc: "/media/products/story-public-data-1-cs-dark.png",
-    },
-    de: {
-      src: "/media/products/story-public-data-1.png",
-      darkSrc: "/media/products/story-public-data-1-dark.png",
-    },
-    en: {
-      src: "/media/products/story-public-data-1.png",
-      darkSrc: "/media/products/story-public-data-1-dark.png",
-    },
-    es: {
-      src: "/media/products/story-public-data-1.png",
-      darkSrc: "/media/products/story-public-data-1-dark.png",
-    },
-    et: {
-      src: "/media/products/story-public-data-1.png",
-      darkSrc: "/media/products/story-public-data-1-dark.png",
-    },
-    fr: {
-      src: "/media/products/story-public-data-1.png",
-      darkSrc: "/media/products/story-public-data-1-dark.png",
-    },
-    hu: {
-      src: "/media/products/story-public-data-1.png",
-      darkSrc: "/media/products/story-public-data-1-dark.png",
-    },
-    lt: {
-      src: "/media/products/story-public-data-1.png",
-      darkSrc: "/media/products/story-public-data-1-dark.png",
-    },
-    lv: {
-      src: "/media/products/story-public-data-1.png",
-      darkSrc: "/media/products/story-public-data-1-dark.png",
-    },
-    pl: {
-      src: "/media/products/story-public-data-1.png",
-      darkSrc: "/media/products/story-public-data-1-dark.png",
-    },
-    "pt-BR": {
-      src: "/media/products/story-public-data-1.png",
-      darkSrc: "/media/products/story-public-data-1-dark.png",
-    },
-    sk: {
-      src: "/media/products/story-public-data-1-sk.png",
-      darkSrc: "/media/products/story-public-data-1-sk-dark.png",
-    },
-  } as const satisfies Record<Locale, ProductCapture>,
-  "story-public-data-2": {
-    ar: {
-      src: "/media/products/story-public-data-2.png",
-      darkSrc: "/media/products/story-public-data-2-dark.png",
-    },
-    cs: {
-      src: "/media/products/story-public-data-2-cs.png",
-      darkSrc: "/media/products/story-public-data-2-cs-dark.png",
-    },
-    de: {
-      src: "/media/products/story-public-data-2.png",
-      darkSrc: "/media/products/story-public-data-2-dark.png",
-    },
-    en: {
-      src: "/media/products/story-public-data-2.png",
-      darkSrc: "/media/products/story-public-data-2-dark.png",
-    },
-    es: {
-      src: "/media/products/story-public-data-2.png",
-      darkSrc: "/media/products/story-public-data-2-dark.png",
-    },
-    et: {
-      src: "/media/products/story-public-data-2.png",
-      darkSrc: "/media/products/story-public-data-2-dark.png",
-    },
-    fr: {
-      src: "/media/products/story-public-data-2.png",
-      darkSrc: "/media/products/story-public-data-2-dark.png",
-    },
-    hu: {
-      src: "/media/products/story-public-data-2.png",
-      darkSrc: "/media/products/story-public-data-2-dark.png",
-    },
-    lt: {
-      src: "/media/products/story-public-data-2.png",
-      darkSrc: "/media/products/story-public-data-2-dark.png",
-    },
-    lv: {
-      src: "/media/products/story-public-data-2.png",
-      darkSrc: "/media/products/story-public-data-2-dark.png",
-    },
-    pl: {
-      src: "/media/products/story-public-data-2.png",
-      darkSrc: "/media/products/story-public-data-2-dark.png",
-    },
-    "pt-BR": {
-      src: "/media/products/story-public-data-2.png",
-      darkSrc: "/media/products/story-public-data-2-dark.png",
-    },
-    sk: {
-      src: "/media/products/story-public-data-2-sk.png",
-      darkSrc: "/media/products/story-public-data-2-sk-dark.png",
-    },
-  } as const satisfies Record<Locale, ProductCapture>,
-  "story-public-data-3": {
-    ar: {
-      src: "/media/products/story-public-data-3.png",
-      darkSrc: "/media/products/story-public-data-3-dark.png",
-    },
-    cs: {
-      src: "/media/products/story-public-data-3-cs.png",
-      darkSrc: "/media/products/story-public-data-3-cs-dark.png",
-    },
-    de: {
-      src: "/media/products/story-public-data-3.png",
-      darkSrc: "/media/products/story-public-data-3-dark.png",
-    },
-    en: {
-      src: "/media/products/story-public-data-3.png",
-      darkSrc: "/media/products/story-public-data-3-dark.png",
-    },
-    es: {
-      src: "/media/products/story-public-data-3.png",
-      darkSrc: "/media/products/story-public-data-3-dark.png",
-    },
-    et: {
-      src: "/media/products/story-public-data-3.png",
-      darkSrc: "/media/products/story-public-data-3-dark.png",
-    },
-    fr: {
-      src: "/media/products/story-public-data-3.png",
-      darkSrc: "/media/products/story-public-data-3-dark.png",
-    },
-    hu: {
-      src: "/media/products/story-public-data-3.png",
-      darkSrc: "/media/products/story-public-data-3-dark.png",
-    },
-    lt: {
-      src: "/media/products/story-public-data-3.png",
-      darkSrc: "/media/products/story-public-data-3-dark.png",
-    },
-    lv: {
-      src: "/media/products/story-public-data-3.png",
-      darkSrc: "/media/products/story-public-data-3-dark.png",
-    },
-    pl: {
-      src: "/media/products/story-public-data-3.png",
-      darkSrc: "/media/products/story-public-data-3-dark.png",
-    },
-    "pt-BR": {
-      src: "/media/products/story-public-data-3.png",
-      darkSrc: "/media/products/story-public-data-3-dark.png",
-    },
-    sk: {
-      src: "/media/products/story-public-data-3-sk.png",
-      darkSrc: "/media/products/story-public-data-3-sk-dark.png",
-    },
-  } as const satisfies Record<Locale, ProductCapture>,
-  "tabular-review": {
-    ar: {
-      src: "/media/products/tabular-review.png",
-      darkSrc: "/media/products/tabular-review-dark.png",
-    },
-    cs: {
-      src: "/media/products/tabular-review-cs.png",
-      darkSrc: "/media/products/tabular-review-cs-dark.png",
-    },
-    de: {
-      src: "/media/products/tabular-review.png",
-      darkSrc: "/media/products/tabular-review-dark.png",
-    },
-    en: {
-      src: "/media/products/tabular-review.png",
-      darkSrc: "/media/products/tabular-review-dark.png",
-    },
-    es: {
-      src: "/media/products/tabular-review.png",
-      darkSrc: "/media/products/tabular-review-dark.png",
-    },
-    et: {
-      src: "/media/products/tabular-review.png",
-      darkSrc: "/media/products/tabular-review-dark.png",
-    },
-    fr: {
-      src: "/media/products/tabular-review.png",
-      darkSrc: "/media/products/tabular-review-dark.png",
-    },
-    hu: {
-      src: "/media/products/tabular-review.png",
-      darkSrc: "/media/products/tabular-review-dark.png",
-    },
-    lt: {
-      src: "/media/products/tabular-review.png",
-      darkSrc: "/media/products/tabular-review-dark.png",
-    },
-    lv: {
-      src: "/media/products/tabular-review.png",
-      darkSrc: "/media/products/tabular-review-dark.png",
-    },
-    pl: {
-      src: "/media/products/tabular-review.png",
-      darkSrc: "/media/products/tabular-review-dark.png",
-    },
-    "pt-BR": {
-      src: "/media/products/tabular-review.png",
-      darkSrc: "/media/products/tabular-review-dark.png",
-    },
-    sk: {
-      src: "/media/products/tabular-review-sk.png",
-      darkSrc: "/media/products/tabular-review-sk-dark.png",
-    },
-  } as const satisfies Record<Locale, ProductCapture>,
-  templates: {
-    ar: {
-      src: "/media/products/templates.png",
-      darkSrc: "/media/products/templates-dark.png",
-    },
-    cs: {
-      src: "/media/products/templates-cs.png",
-      darkSrc: "/media/products/templates-cs-dark.png",
-    },
-    de: {
-      src: "/media/products/templates.png",
-      darkSrc: "/media/products/templates-dark.png",
-    },
-    en: {
-      src: "/media/products/templates.png",
-      darkSrc: "/media/products/templates-dark.png",
-    },
-    es: {
-      src: "/media/products/templates.png",
-      darkSrc: "/media/products/templates-dark.png",
-    },
-    et: {
-      src: "/media/products/templates.png",
-      darkSrc: "/media/products/templates-dark.png",
-    },
-    fr: {
-      src: "/media/products/templates.png",
-      darkSrc: "/media/products/templates-dark.png",
-    },
-    hu: {
-      src: "/media/products/templates.png",
-      darkSrc: "/media/products/templates-dark.png",
-    },
-    lt: {
-      src: "/media/products/templates.png",
-      darkSrc: "/media/products/templates-dark.png",
-    },
-    lv: {
-      src: "/media/products/templates.png",
-      darkSrc: "/media/products/templates-dark.png",
-    },
-    pl: {
-      src: "/media/products/templates.png",
-      darkSrc: "/media/products/templates-dark.png",
-    },
-    "pt-BR": {
-      src: "/media/products/templates.png",
-      darkSrc: "/media/products/templates-dark.png",
-    },
-    sk: {
-      src: "/media/products/templates-sk.png",
-      darkSrc: "/media/products/templates-sk-dark.png",
-    },
-  } as const satisfies Record<Locale, ProductCapture>,
-  "time-tracking": {
-    ar: {
-      src: "/media/products/time-tracking.png",
-      darkSrc: "/media/products/time-tracking-dark.png",
-    },
-    cs: {
-      src: "/media/products/time-tracking-cs.png",
-      darkSrc: "/media/products/time-tracking-cs-dark.png",
-    },
-    de: {
-      src: "/media/products/time-tracking.png",
-      darkSrc: "/media/products/time-tracking-dark.png",
-    },
-    en: {
-      src: "/media/products/time-tracking.png",
-      darkSrc: "/media/products/time-tracking-dark.png",
-    },
-    es: {
-      src: "/media/products/time-tracking.png",
-      darkSrc: "/media/products/time-tracking-dark.png",
-    },
-    et: {
-      src: "/media/products/time-tracking.png",
-      darkSrc: "/media/products/time-tracking-dark.png",
-    },
-    fr: {
-      src: "/media/products/time-tracking.png",
-      darkSrc: "/media/products/time-tracking-dark.png",
-    },
-    hu: {
-      src: "/media/products/time-tracking.png",
-      darkSrc: "/media/products/time-tracking-dark.png",
-    },
-    lt: {
-      src: "/media/products/time-tracking.png",
-      darkSrc: "/media/products/time-tracking-dark.png",
-    },
-    lv: {
-      src: "/media/products/time-tracking.png",
-      darkSrc: "/media/products/time-tracking-dark.png",
-    },
-    pl: {
-      src: "/media/products/time-tracking.png",
-      darkSrc: "/media/products/time-tracking-dark.png",
-    },
-    "pt-BR": {
-      src: "/media/products/time-tracking.png",
-      darkSrc: "/media/products/time-tracking-dark.png",
-    },
-    sk: {
-      src: "/media/products/time-tracking-sk.png",
-      darkSrc: "/media/products/time-tracking-sk-dark.png",
-    },
-  } as const satisfies Record<Locale, ProductCapture>,
-  workspace: {
-    ar: {
-      src: "/media/products/workspace.png",
-      darkSrc: "/media/products/workspace-dark.png",
-    },
-    cs: {
-      src: "/media/products/workspace-cs.png",
-      darkSrc: "/media/products/workspace-cs-dark.png",
-    },
-    de: {
-      src: "/media/products/workspace.png",
-      darkSrc: "/media/products/workspace-dark.png",
-    },
-    en: {
-      src: "/media/products/workspace.png",
-      darkSrc: "/media/products/workspace-dark.png",
-    },
-    es: {
-      src: "/media/products/workspace.png",
-      darkSrc: "/media/products/workspace-dark.png",
-    },
-    et: {
-      src: "/media/products/workspace.png",
-      darkSrc: "/media/products/workspace-dark.png",
-    },
-    fr: {
-      src: "/media/products/workspace.png",
-      darkSrc: "/media/products/workspace-dark.png",
-    },
-    hu: {
-      src: "/media/products/workspace.png",
-      darkSrc: "/media/products/workspace-dark.png",
-    },
-    lt: {
-      src: "/media/products/workspace.png",
-      darkSrc: "/media/products/workspace-dark.png",
-    },
-    lv: {
-      src: "/media/products/workspace.png",
-      darkSrc: "/media/products/workspace-dark.png",
-    },
-    pl: {
-      src: "/media/products/workspace.png",
-      darkSrc: "/media/products/workspace-dark.png",
-    },
-    "pt-BR": {
-      src: "/media/products/workspace.png",
-      darkSrc: "/media/products/workspace-dark.png",
-    },
-    sk: {
-      src: "/media/products/workspace-sk.png",
-      darkSrc: "/media/products/workspace-sk-dark.png",
-    },
-  } as const satisfies Record<Locale, ProductCapture>,
+  agent: agentCapture,
+  anonymization: anonymizationCapture,
+  "case-law-search": caseLawSearchCapture,
+  contacts: contactsCapture,
+  editor: editorCapture,
+  "import-export": importExportCapture,
+  invoicing: invoicingCapture,
+  "story-public-data-1": storyPublicData1Capture,
+  "story-public-data-2": storyPublicData2Capture,
+  "story-public-data-3": storyPublicData3Capture,
+  "tabular-review": tabularReviewCapture,
+  templates: templatesCapture,
+  "time-tracking": timeTrackingCapture,
+  workspace: workspaceCapture,
 } as const;
 
 export type ProductCaptureId = keyof typeof productCaptures;

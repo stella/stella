@@ -75,15 +75,18 @@ const chapters = [
 // apps/web/e2e/marketing/product-screenshots.spec.ts.
 const storyShots = [
   {
-    ...productCaptures["story-public-data-1"][locale],
+    src: productCaptures["story-public-data-1"].src[locale],
+    darkSrc: productCaptures["story-public-data-1"].darkSrc[locale],
     altKey: "story.dataMainAlt",
   },
   {
-    ...productCaptures["story-public-data-2"][locale],
+    src: productCaptures["story-public-data-2"].src[locale],
+    darkSrc: productCaptures["story-public-data-2"].darkSrc[locale],
     altKey: "story.dataConstitutionalAlt",
   },
   {
-    ...productCaptures["story-public-data-3"][locale],
+    src: productCaptures["story-public-data-3"].src[locale],
+    darkSrc: productCaptures["story-public-data-3"].darkSrc[locale],
     altKey: "story.dataSupremeAlt",
   },
 ] as const satisfies readonly { darkSrc: string; src: string; altKey: TranslationKey }[];

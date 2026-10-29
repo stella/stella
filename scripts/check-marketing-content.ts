@@ -6,6 +6,7 @@ import nodePath from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { CLI_DEMO_TOOLS } from "../apps/landing/src/data/cli-demo";
+import { productCaptures } from "../apps/landing/src/data/product-captures";
 import {
   productStoryEditorPortraitMedia,
   productStoryHeroMedia,
@@ -236,13 +237,18 @@ export const checkMarketingContent = (rootDir: string): string[] => {
       continue;
     }
 
-    const heroPath = nodePath.join(
-      rootDir,
-      "apps/landing/public",
-      product.hero.src.replace(/^\//u, ""),
-    );
-    if (!existsSync(heroPath)) {
-      errors.push(`${product.slug}: missing captured hero ${product.hero.src}`);
+    const capture = productCaptures[product.hero.captureId];
+    for (const sources of Object.values(capture)) {
+      for (const publicPath of new Set(Object.values(sources))) {
+        const heroPath = nodePath.join(
+          rootDir,
+          "apps/landing/public",
+          publicPath.replace(/^\//u, ""),
+        );
+        if (!existsSync(heroPath)) {
+          errors.push(`${product.slug}: missing captured hero ${publicPath}`);
+        }
+      }
     }
   }
 
