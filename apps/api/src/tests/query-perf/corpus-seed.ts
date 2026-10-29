@@ -544,7 +544,7 @@ const replaceCoverageRefreshState = async (
     await database.execute(sql`INSERT INTO ${sql.raw(table)}
       SELECT * FROM jsonb_populate_recordset(
         NULL::${sql.raw(table)},
-        ${state[table] ?? "[]"}::jsonb
+        ${state[table] ?? panic(`No ${table} state to restore`)}::text::jsonb
       )`);
   }
 };
