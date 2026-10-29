@@ -120,16 +120,22 @@ describe.skipIf(!enabled)("published court walks (postgres)", () => {
           // Hidden courts precede the published names and make a heap-filtered
           // loose scan inspect excluded rows before reaching its first court.
           await db.execute(sql`INSERT INTO case_law_decisions
-            (id, source_id, case_number, court, country, language, decision_date, redacted_at, metadata)
+            (id, source_id, case_number, court, country, language, decision_date, metadata)
             SELECT gen_random_uuid(), ${sourceId}::uuid, status || '/' || n,
               CASE WHEN status = 'published' THEN 'Court ' || lpad((n % ${COURTS})::text, 2, '0')
                 ELSE 'Excluded ' || status END,
               'CZE', 'cs', CASE WHEN n % 7 = 0 THEN NULL ELSE DATE '2020-01-01' + (n % 365) END,
-              CASE WHEN status = 'redacted' THEN TIMESTAMPTZ '2026-01-01 00:00:00+00' END,
               CASE WHEN status = 'listing-only' THEN
                 '{"_stellaPartialObservation":{"isListingOnly":true}}'::jsonb ELSE '{}'::jsonb END
             FROM generate_series(1, ${decisions}::int) n
-            CROSS JOIN (VALUES ('published'), ('redacted'), ('listing-only')) statuses(status)`);
+            CROSS JOIN (VALUES ('published'), ('listing-only')) statuses(status)`);
+          await db.execute(sql`INSERT INTO case_law_decisions
+            (id, source_id, case_number, court, country, language, decision_date, redacted_at, text_state, metadata)
+            SELECT gen_random_uuid(), ${sourceId}::uuid, 'redacted/' || n,
+              'Excluded redacted', 'CZE', 'cs',
+              CASE WHEN n % 7 = 0 THEN NULL ELSE DATE '2020-01-01' + (n % 365) END,
+              TIMESTAMPTZ '2026-01-01 00:00:00+00', NULL, '{}'::jsonb
+            FROM generate_series(1, ${decisions}::int) n`);
           await vacuumUntilAllVisible({ db, table: "case_law_decisions" });
           await db.execute(sql`ANALYZE case_law_sources`);
           captured.length = 0;

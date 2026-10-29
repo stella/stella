@@ -3,6 +3,12 @@ SET LOCAL statement_timeout = '30s';--> statement-breakpoint
 
 ALTER TABLE public.case_law_decisions ADD COLUMN text_state jsonb;--> statement-breakpoint
 
+-- Install the stable default separately: existing rows stay NULL without a rewrite.
+ALTER TABLE public.case_law_decisions ALTER COLUMN text_state SET DEFAULT
+  jsonb_build_object('status', 'fetch_pending', 'attemptCount', 0,
+    'nextAttemptAt', to_char(CURRENT_TIMESTAMP AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+    'lastAttemptAt', NULL, 'recovery', jsonb_build_object('type', 'verify_storage'));--> statement-breakpoint
+
 CREATE FUNCTION public.case_law_text_state_instant_valid(value jsonb)
 RETURNS boolean
 LANGUAGE plpgsql IMMUTABLE PARALLEL SAFE
@@ -196,6 +202,7 @@ AS $function$
   END, false)
 $function$;--> statement-breakpoint
 
+-- Only OLD-versus-NEW transitions belong here; the CHECK below owns row validity.
 CREATE FUNCTION public.case_law_decision_text_state_guard()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -204,34 +211,32 @@ AS $function$
 DECLARE
   payload_changed boolean;
   preserves_corpus_trim boolean;
+  reset_required boolean;
 BEGIN
   IF NEW.redacted_at IS NOT NULL THEN
-    NEW.text_state := NULL;
+    IF OLD.redacted_at IS DISTINCT FROM NEW.redacted_at THEN
+      NEW.text_state := NULL;
+    END IF;
     RETURN NEW;
   END IF;
-  IF TG_OP = 'UPDATE' THEN
-    payload_changed := ROW(NEW.fulltext, NEW.sections, NEW.document_ast, NEW.content_hash,
-      NEW.text_s3_key, NEW.normalized_s3_key, NEW.ast_s3_key)
-      IS DISTINCT FROM ROW(OLD.fulltext, OLD.sections, OLD.document_ast, OLD.content_hash,
-      OLD.text_s3_key, OLD.normalized_s3_key, OLD.ast_s3_key);
-    preserves_corpus_trim := OLD.text_state ->> 'status' = 'stored'
-      AND OLD.text_state ->> 'storage' = 'corpus'
-      AND OLD.text_state ->> 'contentHash' = NEW.content_hash
-      AND NEW.fulltext IS NULL AND NEW.sections IS NULL AND NEW.document_ast IS NULL
-      AND ROW(NEW.content_hash, NEW.text_s3_key, NEW.normalized_s3_key, NEW.ast_s3_key)
-        IS NOT DISTINCT FROM ROW(OLD.content_hash, OLD.text_s3_key, OLD.normalized_s3_key, OLD.ast_s3_key);
-    IF payload_changed AND NEW.text_state IS NOT DISTINCT FROM OLD.text_state
-      AND NOT coalesce(preserves_corpus_trim, false) THEN
-      NEW.text_state := NULL;
-    END IF;
-    IF NEW.text_state ->> 'status' IS DISTINCT FROM 'stored'
+  payload_changed := ROW(NEW.fulltext, NEW.sections, NEW.document_ast, NEW.content_hash,
+    NEW.text_s3_key, NEW.normalized_s3_key, NEW.ast_s3_key)
+    IS DISTINCT FROM ROW(OLD.fulltext, OLD.sections, OLD.document_ast, OLD.content_hash,
+    OLD.text_s3_key, OLD.normalized_s3_key, OLD.ast_s3_key);
+  preserves_corpus_trim := OLD.text_state ->> 'status' = 'stored'
+    AND OLD.text_state ->> 'storage' = 'corpus'
+    AND OLD.text_state ->> 'contentHash' = NEW.content_hash
+    AND NEW.fulltext IS NULL AND NEW.sections IS NULL AND NEW.document_ast IS NULL
+    AND ROW(NEW.content_hash, NEW.text_s3_key, NEW.normalized_s3_key, NEW.ast_s3_key)
+      IS NOT DISTINCT FROM ROW(OLD.content_hash, OLD.text_s3_key, OLD.normalized_s3_key, OLD.ast_s3_key);
+  reset_required := OLD.redacted_at IS DISTINCT FROM NEW.redacted_at
+    OR (payload_changed AND NEW.text_state IS NOT DISTINCT FROM OLD.text_state
+      AND NOT coalesce(preserves_corpus_trim, false))
+    OR (NEW.text_state ->> 'status' IS DISTINCT FROM 'stored'
       AND NEW.text_state IS NOT DISTINCT FROM OLD.text_state
       AND ROW(NEW.source_hash, NEW.source_raw_s3_key)
-        IS DISTINCT FROM ROW(OLD.source_hash, OLD.source_raw_s3_key) THEN
-      NEW.text_state := NULL;
-    END IF;
-  END IF;
-  IF NEW.text_state IS NULL THEN
+        IS DISTINCT FROM ROW(OLD.source_hash, OLD.source_raw_s3_key));
+  IF reset_required THEN
     NEW.text_state := jsonb_build_object('status', 'fetch_pending', 'attemptCount', 0,
       'nextAttemptAt', to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
       'lastAttemptAt', NULL, 'recovery', jsonb_build_object('type', 'verify_storage'));
@@ -241,7 +246,7 @@ END
 $function$;--> statement-breakpoint
 
 CREATE TRIGGER case_law_decisions_text_state_guard
-BEFORE INSERT OR UPDATE ON public.case_law_decisions
+BEFORE UPDATE ON public.case_law_decisions
 FOR EACH ROW EXECUTE FUNCTION public.case_law_decision_text_state_guard();--> statement-breakpoint
 
 ALTER TABLE public.case_law_decisions ADD CONSTRAINT case_law_decisions_text_state_valid

@@ -209,6 +209,7 @@ beforeAll(async () => {
       ...(state === "withheld"
         ? {
             redactedAt: new Date("2026-01-01T00:00:00Z"),
+            textState: null,
             fulltext: null,
             sections: null,
             documentAst: null,

@@ -112,6 +112,7 @@ beforeAll(async () => {
         id: createSafeId<"caseLawDecision">(),
         languageGroupKey: "redacted",
         redactedAt: new Date("2020-01-01"),
+        textState: null,
       },
       {
         ...base,

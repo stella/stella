@@ -71,8 +71,13 @@ const rejects = async (query: string, values: unknown[]) => {
 
 test("legacy adoption and replay are honest and stable", async () => {
   expect(await stateOf("legacy")).toBeNull();
-  await db.query(
+  await rejects(
     "UPDATE case_law_decisions SET metadata='{}' WHERE id='legacy'",
+    [],
+  );
+  await db.query(
+    "UPDATE case_law_decisions SET text_state=$1 WHERE id='legacy'",
+    [pending],
   );
   expect(await stateOf("legacy")).toMatchObject({
     status: "fetch_pending",
@@ -368,5 +373,262 @@ test("online index declarations match PostgreSQL catalog definitions", async () 
     expect(result.rows.at(0)?.definition).toBe(
       `CREATE INDEX ${index.name} ${index.definitionBody}`,
     );
+  }
+});
+
+type FunctionDefinition = {
+  oid: number;
+  schema_name: string;
+  function_name: string;
+  language_name: string;
+  source: string;
+};
+
+type FunctionInspection = {
+  visited: string[];
+  violations: string[];
+};
+
+const SQL_SPECIAL_FORMS = new Set([
+  "and",
+  "or",
+  "not",
+  "array",
+  "case",
+  "cast",
+  "coalesce",
+  "exists",
+  "filter",
+  "greatest",
+  "if",
+  "in",
+  "least",
+  "nullif",
+  "over",
+  "row",
+  "values",
+  "within",
+]);
+
+const AUDITED_NATIVE_FUNCTIONS = new Set([
+  "clock_timestamp",
+  "jsonb_build_object",
+  "to_char",
+]);
+
+const inspectTriggerFunctionTree = async (
+  rootSchema: string,
+  rootFunction: string,
+): Promise<FunctionInspection> => {
+  const functionsToInspect = [{ schema: rootSchema, name: rootFunction }];
+  const visitedOids = new Set<number>();
+  const visited: string[] = [];
+  const violations: string[] = [];
+
+  while (functionsToInspect.length > 0) {
+    const target = functionsToInspect.pop();
+    if (target === undefined) {
+      break;
+    }
+    const result = await db.query<FunctionDefinition>(
+      `SELECT p.oid::integer AS oid,
+              n.nspname AS schema_name,
+              p.proname AS function_name,
+              l.lanname AS language_name,
+              p.prosrc AS source
+       FROM pg_catalog.pg_proc p
+       JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
+       JOIN pg_catalog.pg_language l ON l.oid = p.prolang
+       WHERE n.nspname = $1 AND p.proname = $2`,
+      [target.schema, target.name],
+    );
+    const definitions = result.rows;
+    if (definitions.length === 0) {
+      violations.push(`unresolved function ${target.schema}.${target.name}`);
+      continue;
+    }
+
+    for (const definition of definitions) {
+      if (visitedOids.has(definition.oid)) {
+        continue;
+      }
+      visitedOids.add(definition.oid);
+      const label = `${definition.schema_name}.${definition.function_name}`;
+      visited.push(label);
+
+      if (
+        definition.schema_name === "pg_catalog" &&
+        definition.language_name !== "sql" &&
+        definition.language_name !== "plpgsql"
+      ) {
+        if (!AUDITED_NATIVE_FUNCTIONS.has(definition.function_name)) {
+          violations.push(`unreviewed native function ${label}`);
+        }
+        continue;
+      }
+      if (
+        definition.schema_name !== "public" &&
+        definition.schema_name !== "pg_catalog"
+      ) {
+        violations.push(`unsupported function namespace ${label}`);
+        continue;
+      }
+      if (
+        definition.language_name !== "sql" &&
+        definition.language_name !== "plpgsql"
+      ) {
+        violations.push(
+          `unsupported function language ${definition.language_name} for ${label}`,
+        );
+        continue;
+      }
+
+      // Reject quoted/custom invocation syntax rather than leaving a path the
+      // conservative call scanner cannot resolve from the catalog.
+      const code = definition.source.replace(/'(?:''|[^'])*'/gu, "''");
+      if (/["$]/u.test(code) || /\bOPERATOR\s*\(/iu.test(code)) {
+        violations.push(`unsupported invocation syntax in ${label}`);
+      }
+      const body = code.replace(
+        /\bIS\s+(?:NOT\s+)?DISTINCT\s+FROM\b/giu,
+        "IS DISTINCT OPERATOR",
+      );
+      const readsOrDynamicExecution =
+        /\b(?:SELECT|FROM|JOIN|TABLE|INSERT|UPDATE|DELETE|MERGE|TRUNCATE|COPY|EXECUTE|PERFORM|CALL|OPEN|FETCH|LOCK|REFRESH)\b/iu.test(
+          body,
+        );
+      if (readsOrDynamicExecution) {
+        violations.push(`read or dynamic execution in ${label}`);
+      }
+
+      const callPattern =
+        /(?:(?<schema>[a-z_][a-z0-9_$]*)\s*\.\s*)?(?<name>[a-z_][a-z0-9_$]*)\s*\(/giu;
+      for (const match of body.matchAll(callPattern)) {
+        const name = match.groups?.["name"]?.toLowerCase();
+        const schema = match.groups?.["schema"]?.toLowerCase();
+        if (name === undefined || SQL_SPECIAL_FORMS.has(name)) {
+          continue;
+        }
+        if (schema !== undefined) {
+          if (schema !== "public" && schema !== "pg_catalog") {
+            violations.push(
+              `unsupported callee ${schema}.${name} from ${label}`,
+            );
+            continue;
+          }
+          functionsToInspect.push({ schema, name });
+          continue;
+        }
+
+        // With unknown argument types, inspect every same-named candidate in
+        // the allowed search path instead of guessing which overload resolves.
+        let foundCandidate = false;
+        for (const candidateSchema of ["pg_catalog", "public"]) {
+          const candidate = await db.query<{ oid: number }>(
+            `SELECT p.oid::integer AS oid
+             FROM pg_catalog.pg_proc p
+             JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
+             WHERE n.nspname = $1 AND p.proname = $2`,
+            [candidateSchema, name],
+          );
+          if (candidate.rows.length > 0) {
+            foundCandidate = true;
+            functionsToInspect.push({ schema: candidateSchema, name });
+          }
+        }
+        if (!foundCandidate) {
+          violations.push(`unresolved callee ${name} from ${label}`);
+        }
+      }
+    }
+  }
+
+  return { visited, violations };
+};
+
+test("full-text state trigger and every called helper avoid table reads", async () => {
+  const inspection = await inspectTriggerFunctionTree(
+    "public",
+    "case_law_decision_text_state_guard",
+  );
+
+  expect(inspection.visited).toContain(
+    "public.case_law_decision_text_state_guard",
+  );
+  expect(inspection.visited.length).toBeGreaterThan(0);
+  expect(inspection.violations).toEqual([]);
+});
+
+test("function inspection rejects reads in a nested public helper", async () => {
+  await db.exec(`
+    CREATE FUNCTION public.fulltext_guard_probe_root() RETURNS text
+    LANGUAGE plpgsql AS $probe$
+    DECLARE result text;
+    BEGIN
+      result := public.fulltext_guard_probe_nested();
+      RETURN result;
+    END
+    $probe$;
+    CREATE FUNCTION public.fulltext_guard_probe_nested() RETURNS text
+    LANGUAGE sql AS $probe$
+      SELECT decision.id
+      FROM public.case_law_decisions decision
+      LIMIT 1
+    $probe$;
+  `);
+
+  const inspection = await inspectTriggerFunctionTree(
+    "public",
+    "fulltext_guard_probe_root",
+  );
+
+  expect(inspection.visited).toContain("public.fulltext_guard_probe_nested");
+  expect(inspection.violations).toContain(
+    "read or dynamic execution in public.fulltext_guard_probe_nested",
+  );
+});
+
+test("redacted inserts require explicit NULL under the declarative row constraint", async () => {
+  expect(
+    await rejectionOf(
+      db.query(
+        "INSERT INTO case_law_decisions (id,redacted_at) VALUES ('redacted-default',now())",
+      ),
+    ),
+  ).toMatchObject({
+    code: "23514",
+    constraint: "case_law_decisions_text_state_valid",
+  });
+  await db.query(
+    "INSERT INTO case_law_decisions (id,redacted_at,text_state) VALUES ('redacted-explicit',now(),NULL)",
+  );
+  expect(await stateOf("redacted-explicit")).toBeNull();
+  await rejects(
+    "UPDATE case_law_decisions SET text_state=$1 WHERE id='redacted-explicit'",
+    [pending],
+  );
+});
+
+test("row validity is a deferred CHECK and INSERT default uses only stable row-free expressions", async () => {
+  const constraints = await db.query<{
+    convalidated: boolean;
+    contype: string;
+  }>(
+    "SELECT convalidated,contype FROM pg_constraint WHERE conrelid='public.case_law_decisions'::regclass AND conname='case_law_decisions_text_state_valid'",
+  );
+  expect(constraints.rows).toEqual([{ convalidated: false, contype: "c" }]);
+  const defaults = await db.query<{ expression: string }>(
+    "SELECT pg_get_expr(adbin,adrelid) AS expression FROM pg_attrdef d JOIN pg_attribute a ON a.attrelid=d.adrelid AND a.attnum=d.adnum WHERE a.attrelid='public.case_law_decisions'::regclass AND a.attname='text_state'",
+  );
+  expect(defaults.rows.at(0)?.expression).toContain("CURRENT_TIMESTAMP");
+  expect(defaults.rows.at(0)?.expression).not.toMatch(
+    /clock_timestamp|\b(?:SELECT|FROM|JOIN)\b/iu,
+  );
+  const functions = await db.query<{ proname: string; provolatile: string }>(
+    "SELECT proname,provolatile FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='pg_catalog' AND proname IN ('jsonb_build_object','to_char','timezone')",
+  );
+  expect(functions.rows.length).toBeGreaterThan(0);
+  for (const fn of functions.rows) {
+    expect(fn.provolatile).not.toBe("v");
   }
 });

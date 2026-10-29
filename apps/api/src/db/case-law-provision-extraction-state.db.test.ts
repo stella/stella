@@ -132,10 +132,11 @@ const decisionInsert = (
   return sql`
     INSERT INTO case_law_decisions (
       id, source_id, court, case_number, metadata,
-      content_hash, decision_date, country, language, redacted_at
+      content_hash, decision_date, country, language, redacted_at, text_state
     ) VALUES (
       ${id}, ${SOURCE_ID}, 'Court', ${id}, '{}'::jsonb,
-      ${contentHash}, ${decisionDate}, ${country}, ${language}, ${redactedAt}
+      ${contentHash}, ${decisionDate}, ${country}, ${language}, ${redactedAt},
+      ${redactedAt === null ? sql`DEFAULT` : sql`NULL`}
     )
   `;
 };

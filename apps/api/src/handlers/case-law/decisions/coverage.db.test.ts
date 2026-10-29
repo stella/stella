@@ -105,6 +105,7 @@ const decisionRow = (overrides: {
   decisionDate: overrides.decisionDate,
   fulltext: overrides.fulltext,
   redactedAt: overrides.redactedAt,
+  textState: overrides.redactedAt === undefined ? undefined : null,
 });
 
 beforeAll(

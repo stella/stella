@@ -813,7 +813,10 @@ export const caseLawDecisions = p.pgTable(
       .notNull()
       .$onUpdate(() => new Date()),
     /** Verified full-text lifecycle; legacy rows remain unclassified until reconciliation. */
-    textState: jsonb("text_state").$type<DecisionTextState>(),
+    textState: jsonb("text_state").$type<DecisionTextState>()
+      .default(sql`jsonb_build_object('status', 'fetch_pending', 'attemptCount', 0,
+      'nextAttemptAt', to_char(CURRENT_TIMESTAMP AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+      'lastAttemptAt', NULL, 'recovery', jsonb_build_object('type', 'verify_storage'))`),
   },
   (t) => [
     parsedSourceComplete(t),

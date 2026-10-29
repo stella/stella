@@ -84,10 +84,11 @@ const decision = async ({
 }: DecisionOptions = {}): Promise<SafeId<"caseLawDecision">> => {
   const id = createSafeId<"caseLawDecision">();
   await run(sql`INSERT INTO case_law_decisions
-    (id, source_id, country, language, court, case_number, content_hash, redacted_at)
+    (id, source_id, country, language, court, case_number, content_hash, redacted_at, text_state)
     VALUES (${id}, ${SOURCE_ID}, ${country}, ${language}, 'Court', ${id},
       ${redacted ? null : contentHash},
-      ${redacted ? "2026-01-01T00:00:00Z" : null}::timestamptz)`);
+      ${redacted ? "2026-01-01T00:00:00Z" : null}::timestamptz,
+      ${redacted ? sql`NULL` : sql`DEFAULT`})`);
   return id;
 };
 

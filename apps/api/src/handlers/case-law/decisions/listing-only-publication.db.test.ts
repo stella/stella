@@ -181,6 +181,7 @@ beforeAll(async () => {
         metadata: {},
       }),
       redactedAt: new Date("2026-03-05T00:00:00Z"),
+      textState: null,
     },
     seedDecision({
       id: pendingId,

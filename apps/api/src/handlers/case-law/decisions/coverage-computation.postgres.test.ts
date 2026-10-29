@@ -214,6 +214,7 @@ describe.skipIf(!enabled)("coverage computation (postgres)", () => {
               fulltext: null,
               decisionDate: "2024-01-01",
               redactedAt: new Date(),
+              textState: null,
             },
             ...regionalCourts.map((court, index) => ({
               id: createSafeId<"caseLawDecision">(),
