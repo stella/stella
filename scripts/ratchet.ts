@@ -2533,14 +2533,6 @@ const countInternalModuleMockLedgerEntries: FileCounter = (content) => {
   return parsed.length;
 };
 
-const countParserValidatorLedgerEntries: FileCounter = (content) => {
-  const parsed: unknown = JSON.parse(content);
-  if (!Array.isArray(parsed)) {
-    panic("parser-validator-call ledger must be a JSON array");
-  }
-  return parsed.length;
-};
-
 const countOutboundIndirectAccessExceptions = (
   context: ScanContext,
 ): RepoMetricResult => {
@@ -3629,15 +3621,6 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
     include: ["apps/api/src/db/schema/**/*.ts"],
     exclude: isExcludedSource,
     count: countWorkspaceOnlyRlsOnOrgTables,
-  },
-  {
-    scope: "file",
-    id: "parser-validator-call-ledger-entries",
-    description:
-      "legacy parser validator imports and calls; validation moves to the pipeline and this ledger only shrinks",
-    include: ["scripts/parser-validator-call-ledger.json"],
-    exclude: () => false,
-    count: countParserValidatorLedgerEntries,
   },
   {
     scope: "file",
@@ -5579,12 +5562,6 @@ const SELF_TEST_INTERNAL_MODULE_MOCK_LEDGER = `${JSON.stringify(
   2,
 )}\n`;
 const EXPECTED_INTERNAL_MODULE_MOCK_LEDGER_ENTRIES = 3;
-const SELF_TEST_PARSER_VALIDATOR_LEDGER = `${JSON.stringify([
-  "apps/api/src/handlers/case-law/ingestion/parsers/alpha.ts::import::1",
-  "apps/api/src/handlers/case-law/ingestion/parsers/alpha.ts::call::1",
-  "apps/api/src/lib/legal-search/parsers/beta.ts::call::1",
-])}\n`;
-const EXPECTED_PARSER_VALIDATOR_LEDGER_ENTRIES = 3;
 // Expected: the two tables that declare organizationId AND spread wsPolicies().
 // Excluded: the workspace-only table with no organizationId column, the table
 // already on wsOrganizationPolicies, the org-only table, the table whose only
@@ -6270,10 +6247,6 @@ const ledgerSelfTestFailures = (snapshot: Baseline): string[] => {
   const failures: string[] = [];
   for (const { id, expected } of [
     {
-      id: "parser-validator-call-ledger-entries",
-      expected: EXPECTED_PARSER_VALIDATOR_LEDGER_ENTRIES,
-    },
-    {
       id: "internal-module-mock-ledger-entries",
       expected: EXPECTED_INTERNAL_MODULE_MOCK_LEDGER_ENTRIES,
     },
@@ -6933,11 +6906,6 @@ const runSelfTest = (): number => {
       root,
       "apps/api/src/lib/case-law/public-subject.ts",
       SELF_TEST_AD_HOC_SUBJECT_GATE,
-    );
-    writeFixture(
-      root,
-      "scripts/parser-validator-call-ledger.json",
-      SELF_TEST_PARSER_VALIDATOR_LEDGER,
     );
     writeFixture(
       root,

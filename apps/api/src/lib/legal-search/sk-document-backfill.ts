@@ -43,7 +43,7 @@ import {
 } from "drizzle-orm";
 
 import { sanitizeErrorForOutput } from "@stll/errors";
-import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
 import {
   DOCUMENT_FETCH_OUTCOME,
   type DocumentFetchOutcome,
@@ -184,6 +184,23 @@ export type SkDocumentFetch = (
   url: URL,
   init: { signal?: AbortSignal },
 ) => Promise<SkDocumentRead>;
+
+/**
+ * The retention check for a document the drain stores, supplied by the
+ * caller. These documents are parsed and written here, outside the
+ * pipeline, so its retention check never sees them; the check and the
+ * source's projection of the PDF live in the ingestion slice, which `lib` may
+ * not import. Required for the reason `SkDocumentFetch` is: a call site that
+ * forgot it would store documents nothing measured. It only starts the
+ * check, off the drain's path: re-reading a PDF must not spend the fetch
+ * deadline or hold the store it follows.
+ */
+export type SkDocumentRetentionCheck = (input: {
+  readonly decision: PendingDocument;
+  /** The PDF bytes the document was parsed from. */
+  readonly pdfBytes: Uint8Array;
+  readonly blocks: Block[];
+}) => void;
 
 /** What one gated download established. */
 export type SkDocumentRead =
@@ -1701,6 +1718,8 @@ export type FetchDecisionDocumentOptions = {
   decisionId: SafeId<"caseLawDecision">;
   /** The publisher's gate, supplied by the caller. See `SkDocumentFetch`. */
   fetchDocument: SkDocumentFetch;
+  /** Measures each stored document. See `SkDocumentRetentionCheck`. */
+  checkRetention: SkDocumentRetentionCheck;
   scopedDb: ScopedDb;
   signal: AbortSignal;
 };
@@ -1774,6 +1793,7 @@ const parseFetchedDocument = async ({
 const runDecisionDocumentFetch = async ({
   decisionId,
   fetchDocument,
+  checkRetention,
   scopedDb,
   signal,
   fence,
@@ -1794,6 +1814,7 @@ const runDecisionDocumentFetch = async ({
       await processClaimedDocument({
         claim,
         fetchDocument,
+        checkRetention,
         signal,
         fence,
       }),
@@ -1902,6 +1923,7 @@ const settleFetchedDocument = async ({
 type ProcessClaimedDocumentOptions = {
   claim: Extract<DocumentFetchClaim, { status: "claimed" }>;
   fetchDocument: SkDocumentFetch;
+  checkRetention: SkDocumentRetentionCheck;
   signal: AbortSignal;
   fence: DeferredDocumentSourceFence;
 };
@@ -1909,6 +1931,7 @@ type ProcessClaimedDocumentOptions = {
 const processClaimedDocument = async ({
   claim,
   fetchDocument,
+  checkRetention,
   signal,
   fence,
 }: ProcessClaimedDocumentOptions): Promise<DecisionDocumentOutcome> => {
@@ -1966,6 +1989,16 @@ const processClaimedDocument = async ({
   });
   if (stored === "superseded") {
     return { status: "superseded" };
+  }
+  // Measured once stored, as the pipeline measures every document it writes:
+  // a document that fails the check is still the decision's text, and a
+  // superseded store is never reported. The check is only started here.
+  if (fetched.type === "document") {
+    checkRetention({
+      decision,
+      pdfBytes: fetched.bytes,
+      blocks: document.documentAst.blocks,
+    });
   }
   return { status: "filled", document };
 };

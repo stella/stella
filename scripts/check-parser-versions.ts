@@ -52,7 +52,7 @@ const OUTPUT_UNCHANGED =
 const transpiler = new Bun.Transpiler({ loader: "ts" });
 const jsxTranspiler = new Bun.Transpiler({ loader: "tsx" });
 
-type SourceTree = ReadonlyMap<string, string>;
+export type SourceTree = ReadonlyMap<string, string>;
 export type ParserOutputBoundary = {
   path: string;
   reason: string;
@@ -529,6 +529,21 @@ export const sourceOwners = (
   files: SourceTree,
   boundaries: readonly ParserOutputBoundary[] = PARSER_OUTPUT_BOUNDARIES,
 ): SourceOwnersResult => new StaticTree(files, boundaries).owners();
+
+/**
+ * The repository modules each file imports by value (static imports and
+ * dynamic ones with a literal specifier; type-only imports are erased), and
+ * everything a file reaches through them, itself included. The same walk
+ * the version guard runs, without its output boundaries, for checks that
+ * need the whole reachable graph (the retention projections' independence).
+ */
+export const valueImportGraph = (files: SourceTree) => {
+  const tree = new StaticTree(files, []);
+  return {
+    imports: (file: string): readonly string[] => tree.imports(file),
+    closure: (file: string): ReadonlySet<string> => tree.closure(file),
+  };
+};
 
 // Match the original source rather than transpiled output: local types and
 // unused imports can be erased, but deleting them still needs a version decision.
