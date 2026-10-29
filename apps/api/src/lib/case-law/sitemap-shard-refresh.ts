@@ -35,6 +35,7 @@ import {
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
+import { READ_BUDGETS } from "@/api/lib/db/read-budgets";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 
@@ -69,7 +70,8 @@ export type SitemapRefreshBudget = {
  * runs past this is not making progress; it is cancelled and the next run
  * retries it.
  */
-const MAX_STATEMENT_TIMEOUT_MS = 30_000;
+const MAX_STATEMENT_TIMEOUT_MS =
+  READ_BUDGETS["scheduled.caseLaw.refreshSitemapShards"].statementDeadlineMs;
 /** A count takes no lock a writer holds; waiting on one is not progress. */
 const MAX_LOCK_TIMEOUT_MS = 5000;
 
@@ -568,7 +570,8 @@ const readPublicShardExtent = async (
  * leaves the scheduler's runtime ceiling room for the month in progress; the
  * next run continues from the rows still logged.
  */
-const SITEMAP_REFRESH_RUN_BUDGET_MS = 15 * 60 * 1000;
+const SITEMAP_REFRESH_RUN_BUDGET_MS =
+  READ_BUDGETS["scheduled.caseLaw.refreshSitemapShards"].runBudgetMs;
 
 type SitemapRefreshOutcome =
   | { type: "pending"; months: number; retry: "immediate" | "delayed" }

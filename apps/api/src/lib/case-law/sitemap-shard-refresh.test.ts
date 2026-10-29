@@ -886,7 +886,7 @@ test(
         .where(eq(caseLawSitemapChanges.country, "XBG"));
     }
   },
-  DB_TEST_TIMEOUT_MS,
+  propertyTestTimeout(DB_TEST_TIMEOUT_MS),
 );
 
 for (const target of [
@@ -1057,7 +1057,7 @@ test(
         .where(inArray(caseLawDecisions.id, ids));
     }
   },
-  DB_TEST_TIMEOUT_MS,
+  propertyTestTimeout(DB_TEST_TIMEOUT_MS),
 );
 
 // timeout: each mutation and refresh executes on the embedded PostgreSQL engine.
@@ -1123,7 +1123,7 @@ test(
         .where(inArray(caseLawDecisions.id, ids));
     }
   },
-  DB_TEST_TIMEOUT_MS,
+  propertyTestTimeout(DB_TEST_TIMEOUT_MS),
 );
 
 type Operation =

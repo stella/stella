@@ -1123,7 +1123,7 @@ export const installPgliteCaseLawSitemapChanges = async (
   const statements = readMigrationStatements(
     nodePath.join(
       DRIZZLE_DIR,
-      "20261029000400_case_law_sitemap_changes",
+      "20261029094425_case_law_sitemap_changes",
       "migration.sql",
     ),
   ).filter((statement) => {
