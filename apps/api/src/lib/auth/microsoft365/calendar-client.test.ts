@@ -195,6 +195,89 @@ test("free/busy sends bounded attendee schedules and strips subject fields", asy
   }
 });
 
+test("free/busy refuses attendee schedules without availability evidence or an error", async () => {
+  const result = await calendarFreeBusy(
+    { ...range, attendees: ["a@example.test"] },
+    {
+      accessToken,
+      permit,
+      fetchBytes: async () =>
+        jsonResponse({ value: [{ scheduleId: "a@example.test" }] }),
+    },
+  );
+  expect(Result.isError(result)).toBe(true);
+  if (Result.isError(result)) {
+    expect(result.error).toMatchObject({
+      kind: "upstream",
+      cause: "Invalid free/busy response",
+    });
+  }
+});
+
+test("free/busy preserves explicit availability evidence", async () => {
+  for (const evidence of [
+    { scheduleItems: [] },
+    { availabilityView: "0" },
+    { availabilityView: "" },
+    { availabilityView: "0", scheduleItems: [] },
+  ]) {
+    const result = await calendarFreeBusy(
+      { ...range, attendees: ["a@example.test"] },
+      {
+        accessToken,
+        permit,
+        fetchBytes: async () =>
+          jsonResponse({
+            value: [{ scheduleId: "a@example.test", ...evidence }],
+          }),
+      },
+    );
+    const value = result.unwrap();
+    if (value.type !== "attendees") {
+      panic("Expected attendee availability response");
+    }
+    expect(value.schedules).toEqual([
+      {
+        type: "availability",
+        scheduleId: "a@example.test",
+        availabilityView: evidence.availabilityView,
+        scheduleItems: [],
+      },
+    ]);
+  }
+});
+
+test("free/busy gives provider errors precedence over availability evidence", async () => {
+  const error = {
+    responseCode: "ErrorMailRecipientNotFound",
+    message: "Attendee unavailable",
+  };
+  for (const evidence of [
+    { scheduleItems: [] },
+    { availabilityView: "0" },
+    { availabilityView: "0", scheduleItems: [] },
+  ]) {
+    const result = await calendarFreeBusy(
+      { ...range, attendees: ["a@example.test"] },
+      {
+        accessToken,
+        permit,
+        fetchBytes: async () =>
+          jsonResponse({
+            value: [{ scheduleId: "a@example.test", error, ...evidence }],
+          }),
+      },
+    );
+    const value = result.unwrap();
+    if (value.type !== "attendees") {
+      panic("Expected attendee availability response");
+    }
+    expect(value.schedules).toEqual([
+      { type: "error", scheduleId: "a@example.test", error },
+    ]);
+  }
+});
+
 test("free/busy refuses omitted, duplicate, and unexpected attendee schedules", async () => {
   const attendeeA = "a@example.test";
   const attendees = [attendeeA, "b@example.test"];
@@ -252,7 +335,11 @@ test("free/busy retains explicit per-attendee errors with complete coverage", as
     if (result.value.type !== "attendees") {
       panic("Expected attendee availability response");
     }
-    expect(result.value.schedules.at(0)?.error).toMatchObject({
+    const schedule = result.value.schedules.at(0);
+    if (schedule?.type !== "error") {
+      panic("Expected explicit attendee error");
+    }
+    expect(schedule.error).toMatchObject({
       responseCode: "ErrorMailRecipientNotFound",
     });
   }
