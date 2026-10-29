@@ -84,7 +84,8 @@ type QuestionAnswerRun = {
 export type QuestionAnswer = {
   columnId: string;
   decisionId: string;
-  state: CaseLawResearchAnswerState;
+  state: CaseLawResearchAnswerState | "withdrawn";
+  withdrawnMarker?: string | null;
   /** A pending cell whose run went quiet; the server decides, on its clock. */
   stale: boolean;
   answer: WorkspaceFieldContent | null;
@@ -110,11 +111,13 @@ const needsRun = (
   answer: QuestionAnswer | undefined,
   force: boolean,
 ): boolean =>
-  answerNeedsRun(
-    answer === undefined
-      ? { state: null, stale: false, force }
-      : { state: answer.state, stale: answer.stale, force },
-  );
+  answer?.state === "withdrawn"
+    ? false
+    : answerNeedsRun(
+        answer === undefined
+          ? { state: null, stale: false, force }
+          : { state: answer.state, stale: answer.stale, force },
+      );
 
 type RunSetInput = {
   columns: readonly QuestionColumn[];

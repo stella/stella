@@ -1433,6 +1433,7 @@ test("code-quality pool preserves every moved check exactly once", () => {
     "Aggregate ownership",
     "Split-button census",
     "Database awaits in loops",
+    "Online unique index dependency guard",
     "API timeout mutation guard",
     "Result consumption (rest)",
   ];

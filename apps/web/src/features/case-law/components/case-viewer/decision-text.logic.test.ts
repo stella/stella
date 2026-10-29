@@ -543,7 +543,7 @@ describe("apparatus block ids", () => {
       plainText: "",
     }));
 
-  test("folds every publisher-authored role, and leaves the bench alone", () => {
+  test("folds publisher-authored roles and leaves court participants visible", () => {
     expect([
       ...apparatusBlockIds(
         roleBlocks([
@@ -557,7 +557,20 @@ describe("apparatus block ids", () => {
           undefined,
         ]),
       ),
-    ]).toEqual(["apparatus", "syllabus", "headnotes", "summary", "counsel"]);
+    ]).toEqual(["apparatus", "syllabus", "headnotes", "summary"]);
+  });
+
+  test("publisher footnotes stay in the decision's note flow", () => {
+    const publisherNotes = roleBlocks([
+      "apparatus",
+      "headnotes",
+      "summary",
+    ]).map((block) => ({
+      ...block,
+      note: { type: "footnote", label: "1" } as const,
+    }));
+
+    expect([...apparatusBlockIds(publisherNotes)]).toEqual([]);
   });
 });
 

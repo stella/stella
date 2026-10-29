@@ -22,6 +22,7 @@ export const NON_PLUGIN_MODULES: ReadonlySet<string> = new Set([
   "icon-ownership.ts",
   "module-id.ts",
   "network-call.ts",
+  "no-native-ui-registry.ts",
   "physical-properties.ts",
   "public-law-decision-surface-modules.ts",
   "public-read-io-provenance.ts",

@@ -30,6 +30,7 @@ const JSON_MEMBER_REFERENCE_COLUMNS = [
   "chat_messages.content",
   "chat_message_revisions.content",
   "chat_run_log_entries.chunk",
+  "chat_run_logs.reference_summary",
   "entity_versions.collaboration_contributor_user_ids",
   "fields.content",
   "flow_run_steps.output",
@@ -236,6 +237,8 @@ const RETAINED_MEMBER_COLUMNS = {
   "buffer_object_cleanup_intents.writer_user_id":
     "Storage erasure receipt; retained for cleanup.",
   "time_entries.approved_by_user_id": "Billing approval history.",
+  "invoice_payments.recorded_by": "Billing payment attribution history.",
+  "invoice_payments.voided_by": "Billing payment reversal attribution history.",
   "time_entries.returned_by_user_id": "Billing return history.",
   "usage_allocations.seat_scope_user_id":
     "Accounting scope; active seat assignment is membership-bound.",
@@ -462,6 +465,8 @@ const RETAINED_MEMBER_COLUMNS = {
     "Conversation history; tool payloads name members as they were.",
   "chat_run_log_entries.chunk":
     "Run log history; tool payloads name members as they were.",
+  "chat_run_logs.reference_summary":
+    "Derived conversation context can retain member identifiers in text; it grants no membership and expires with the run log.",
   "fields.content":
     "A person property value; it names someone and grants nothing.",
   "flow_run_steps.output": "Review gate decision attribution history.",

@@ -5,11 +5,13 @@ import * as v from "valibot";
 
 import {
   type CallExpression,
+  type Expression,
   type Node,
   type ObjectExpression,
   type ParsedSource,
   parseSource,
-  type VariableDeclarator,
+  staticPropertyName,
+  type StringLiteral,
   walk,
 } from "../packages/scripts/src/syntax-tree";
 import {
@@ -73,60 +75,197 @@ const removeNode = (source: string, ast: ParsedSource, node: Node): string => {
   return source.slice(0, node.start) + source.slice(end);
 };
 
-const removeDocumentation = (source: string, entry: DatedWaiver): string => {
-  const ast = parseOwner(source, DOC_SOURCE_FILE);
-  let owner: VariableDeclarator | undefined;
-  let registry: ObjectExpression | undefined;
-  walk(ast.program, (node) => {
-    if (node.type !== "VariableDeclarator" || node.id.type !== "Identifier") {
-      return;
-    }
-    if (node.id.name === "DOC_SOURCE_EXCLUSIONS") {
-      owner = node;
-    }
-    if (node.id.name === "DOC_SOURCES" && node.init) {
-      let value = node.init;
-      while (
-        value.type === "TSSatisfiesExpression" ||
-        value.type === "TSAsExpression"
-      ) {
-        value = value.expression;
-      }
-      if (value.type === "ObjectExpression") {
-        registry = value;
-      }
-    }
-  });
-  if (!owner || !registry) {
-    panic("Documentation waiver owner missing");
+const unwrap = (node: Expression): Expression => {
+  let value = node;
+  while (
+    value.type === "ParenthesizedExpression" ||
+    value.type === "TSSatisfiesExpression" ||
+    value.type === "TSAsExpression" ||
+    value.type === "TSNonNullExpression"
+  ) {
+    value = value.expression;
   }
-  const matches: Node[] = [];
-  walk(owner, (node) => {
-    if (
-      node.type === "ObjectExpression" &&
-      node.properties.some(
-        (property) =>
-          property.type === "Property" &&
-          !property.method &&
-          !property.shorthand &&
-          source.slice(property.key.start, property.key.end) === "dependency" &&
-          property.value.type === "Literal" &&
-          property.value.value === entry.id,
-      )
-    ) {
-      matches.push(node);
-      return "skip-children";
+  return value;
+};
+
+/**
+ * One documentation waiver as its owner declares it: the element a removal
+ * deletes, and the string literals its checkedAt and expiresAt come from.
+ * Entries built from one shared date constant share those literal nodes.
+ */
+export type DocumentationSite = {
+  dependency: string;
+  node: Node;
+  checkedAt: StringLiteral | undefined;
+  expiresAt: StringLiteral | undefined;
+};
+
+type DocumentationOwner = {
+  ast: ParsedSource;
+  registry: ObjectExpression;
+  sites: DocumentationSite[];
+};
+
+// Reads the declaration shapes the owner uses: inline objects, `.concat`,
+// spreads, and `.map` over dependency names or `[name, urls]` tuples, with
+// dates from literals or top-level string constants. Any other shape fails
+// closed rather than being skipped.
+export const readDocumentationOwner = (source: string): DocumentationOwner => {
+  const ast = parseOwner(source, DOC_SOURCE_FILE);
+  const declarations = new Map<string, Expression>();
+  for (const statement of ast.program.body) {
+    const declaration =
+      statement.type === "ExportNamedDeclaration"
+        ? statement.declaration
+        : statement;
+    if (declaration?.type !== "VariableDeclaration") {
+      continue;
     }
-    if (node.type === "ArrayExpression") {
-      for (const element of node.elements) {
-        if (element?.type === "Literal" && element.value === entry.id) {
-          matches.push(element);
-        }
+    for (const variable of declaration.declarations) {
+      if (variable.id.type === "Identifier" && variable.init) {
+        declarations.set(variable.id.name, variable.init);
+      }
+    }
+  }
+  const resolve = (node: Expression, depth = 0): Expression => {
+    const value = unwrap(node);
+    if (value.type !== "Identifier") {
+      return value;
+    }
+    const declared = declarations.get(value.name);
+    if (declared === undefined || depth > 8) {
+      return panic(
+        `Documentation waiver reference is not a top-level constant: ${value.name}`,
+      );
+    }
+    return resolve(declared, depth + 1);
+  };
+  const owner = declarations.get("DOC_SOURCE_EXCLUSIONS");
+  const registry = declarations.get("DOC_SOURCES");
+  const registryObject = registry === undefined ? undefined : unwrap(registry);
+  if (owner === undefined || registryObject?.type !== "ObjectExpression") {
+    return panic("Documentation waiver owner missing");
+  }
+  const property = (
+    object: ObjectExpression,
+    name: string,
+  ): Expression | undefined => {
+    for (const member of object.properties) {
+      if (
+        member.type === "Property" &&
+        !member.method &&
+        staticPropertyName(member) === name
+      ) {
+        return member.value;
       }
     }
     return undefined;
+  };
+  const dateSlot = (
+    object: ObjectExpression,
+    name: "checkedAt" | "expiresAt",
+  ): StringLiteral | undefined => {
+    const initializer = property(object, name);
+    if (initializer === undefined) {
+      return undefined;
+    }
+    const value = resolve(initializer);
+    return value.type === "Literal" && typeof value.value === "string"
+      ? value
+      : panic(`Documentation waiver ${name} is not a string literal`);
+  };
+  const dateSlots = (object: ObjectExpression) => ({
+    checkedAt: dateSlot(object, "checkedAt"),
+    expiresAt: dateSlot(object, "expiresAt"),
   });
-  const target = matches.at(0);
+  const mapped = (
+    call: CallExpression,
+    receiver: Expression,
+  ): DocumentationSite[] => {
+    const items = resolve(receiver);
+    const callback = call.arguments.at(0);
+    if (
+      items.type !== "ArrayExpression" ||
+      callback === undefined ||
+      callback.type === "SpreadElement"
+    ) {
+      return panic("Documentation waiver map has no literal dependency list");
+    }
+    const fn = resolve(callback);
+    const object =
+      fn.type === "ArrowFunctionExpression" && fn.body.type !== "BlockStatement"
+        ? unwrap(fn.body)
+        : undefined;
+    if (object?.type !== "ObjectExpression") {
+      return panic("Documentation waiver map callback must return an object");
+    }
+    return items.elements.map((item) => {
+      const name =
+        item?.type === "ArrayExpression" ? item.elements.at(0) : item;
+      if (!item || name?.type !== "Literal" || typeof name.value !== "string") {
+        return panic("Documentation waiver map item has no dependency name");
+      }
+      return { dependency: name.value, node: item, ...dateSlots(object) };
+    });
+  };
+  const collect = (node: Expression): DocumentationSite[] => {
+    const value = resolve(node);
+    if (value.type === "ObjectExpression") {
+      const dependency = property(value, "dependency");
+      if (
+        dependency?.type !== "Literal" ||
+        typeof dependency.value !== "string"
+      ) {
+        return panic("Documentation waiver object has no literal dependency");
+      }
+      return [
+        { dependency: dependency.value, node: value, ...dateSlots(value) },
+      ];
+    }
+    if (value.type === "ArrayExpression") {
+      return value.elements.flatMap((element) => {
+        if (element === null) {
+          return panic("Unsupported documentation waiver declaration shape");
+        }
+        return collect(
+          element.type === "SpreadElement" ? element.argument : element,
+        );
+      });
+    }
+    if (
+      value.type === "CallExpression" &&
+      value.callee.type === "MemberExpression" &&
+      !value.callee.computed &&
+      value.callee.property.type === "Identifier"
+    ) {
+      const receiver = value.callee.object;
+      switch (value.callee.property.name) {
+        case "concat":
+          return [
+            ...collect(receiver),
+            ...value.arguments.flatMap((argument) =>
+              collect(
+                argument.type === "SpreadElement"
+                  ? argument.argument
+                  : argument,
+              ),
+            ),
+          ];
+        case "map":
+          return mapped(value, receiver);
+        default:
+          break;
+      }
+    }
+    return panic("Unsupported documentation waiver declaration shape");
+  };
+  return { ast, registry: registryObject, sites: collect(owner) };
+};
+
+const removeDocumentation = (source: string, entry: DatedWaiver): string => {
+  const { ast, registry, sites } = readDocumentationOwner(source);
+  const matches = sites.filter(({ dependency }) => dependency === entry.id);
+  const target = matches.at(0)?.node;
   if (matches.length !== 1 || !target) {
     panic(`Documentation waiver anchor is not unique: ${entry.id}`);
   }
@@ -476,6 +615,17 @@ export const removeWaiver = (
 
 export type ProbeResult = { passed: boolean; output: string };
 
+// 404 and 410 confirm the llms.txt is still absent. Network failures, redirects,
+// rate limits and server errors say nothing about it.
+const DOC_ABSENT_STATUSES: ReadonlySet<number> = new Set([404, 410]);
+const docEndpointReceipt = (status: number): string =>
+  `Documentation endpoint returned HTTP ${status}.`;
+/** Whether one probe sample's whole output is an absence receipt. */
+export const isDocAbsentReceipt = (output: string): boolean =>
+  [...DOC_ABSENT_STATUSES].some(
+    (status) => output.trim() === docEndpointReceipt(status),
+  );
+
 export const PROBE_PHASE_BUDGET_MS = 45 * 60_000;
 export const PROBE_TIMEOUT_MS = 10 * 60_000;
 const BUDGET_EXHAUSTED_OUTPUT =
@@ -599,9 +749,23 @@ export const runWaiverProbe = async (
     });
   }
   const passed = results.filter((result) => result.passed).length;
+  // Only a documentation waiver can confirm its own premise, and only when
+  // every sample got the exact absence receipt: an error, timeout or any
+  // other status stays red, so it reports instead of renewing.
+  const absent =
+    entry.kind === "no-llms-txt" &&
+    results.length === entry.probe.attempts &&
+    results.every(
+      (result) => !result.passed && isDocAbsentReceipt(result.output),
+    );
+  let status: "green" | "absent" | "red" = "red";
+  if (passed === entry.probe.attempts) {
+    status = "green";
+  } else if (absent) {
+    status = "absent";
+  }
   return {
-    status:
-      passed === entry.probe.attempts ? ("green" as const) : ("red" as const),
+    status,
     attempts: entry.probe.attempts,
     passed,
     command: entry.probe.command,
@@ -631,7 +795,7 @@ export const probeDocUrl = async (
   await result.value.body?.cancel();
   return {
     passed: result.value.status === 200,
-    output: `Documentation endpoint returned HTTP ${result.value.status}.`,
+    output: docEndpointReceipt(result.value.status),
   };
 };
 
