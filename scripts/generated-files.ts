@@ -173,6 +173,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
   ],
   "bun-toolchain": ["packages/portable-path/src/index.ts"],
   "mobile-ui-theme": ["packages/portable-path/src/index.ts"],
+  "mobile-icons": ["packages/portable-path/src/index.ts"],
   "capability-catalog": ["apps/api/package.json", "apps/api/scripts/*"],
   "capability-runtime": [
     "packages/legal-ast/src/analysis.ts",
@@ -1027,7 +1028,10 @@ const GENERATOR_DECLARATIONS = [
   {
     id: "mobile-ui-theme",
     outputKind: "committed",
-    outputs: ["apps/mobile/src/ui-theme.gen.ts"],
+    outputs: [
+      "apps/mobile/src/ui-theme.gen.ts",
+      "apps/mobile/ui-theme.gen.css",
+    ],
     inputs: [
       "packages/ui/src/styles/theme.css",
       "scripts/generate-mobile-ui-theme.ts",
@@ -1044,6 +1048,27 @@ const GENERATOR_DECLARATIONS = [
     ],
     write: ["bun", "scripts/generate-mobile-ui-theme.ts", "--write"],
     check: ["bun", "scripts/generate-mobile-ui-theme.ts"],
+    autofix: true,
+    after: [],
+  },
+  {
+    id: "mobile-icons",
+    outputKind: "committed",
+    outputs: ["apps/mobile/src/icons.gen.ts", "apps/mobile/src/brand.gen.ts"],
+    inputs: [
+      "packages/ui/src/icons.ts",
+      "packages/ui/src/components/stella-wordmark.tsx",
+      "scripts/generate-mobile-icons.ts",
+      "scripts/generated-artifacts.ts",
+      "packages/scripts/src/generated-artifact-format.ts",
+    ],
+    checkInputs: [
+      "bunfig.toml",
+      ".prettierrc.yml",
+      ...TRANSITIVE_GENERATOR_INPUTS["mobile-icons"],
+    ],
+    write: ["bun", "scripts/generate-mobile-icons.ts", "--write"],
+    check: ["bun", "scripts/generate-mobile-icons.ts"],
     autofix: true,
     after: [],
   },
