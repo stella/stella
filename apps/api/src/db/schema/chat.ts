@@ -829,6 +829,10 @@ export const chatRunLogEntries = p.pgTable(
       .uniqueIndex("chat_run_log_entries_batch_uidx")
       .on(table.organizationId, table.runId, table.batchId, table.batchIndex),
     p
+      .index("chat_run_log_entries_message_snapshot_idx")
+      .on(table.organizationId, table.runId, table.seq)
+      .where(sql`${table.chunk}->>'type' = 'MESSAGES_SNAPSHOT'`),
+    p
       .index("chat_run_log_entries_text_start_idx")
       .on(table.organizationId, table.runId, table.seq)
       .where(chatRunTextStartSql(sql`${table.chunk}`)),

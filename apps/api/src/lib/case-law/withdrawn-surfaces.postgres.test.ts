@@ -2556,6 +2556,224 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
     },
   );
 
+  test.each(
+    [
+      {
+        label: "assistant introduction",
+        first: "assistant",
+        next: "same",
+        final: "assistant",
+      },
+      {
+        label: "user introduction",
+        first: "user",
+        next: "same",
+        final: "user",
+      },
+      {
+        label: "unchanged assistant labels",
+        first: "assistant",
+        next: "repeat",
+        final: "assistant",
+      },
+      {
+        label: "unchanged user labels",
+        first: "user",
+        next: "repeat",
+        final: "user",
+      },
+      {
+        label: "empty snapshot",
+        first: "assistant",
+        next: "empty",
+        final: "assistant",
+      },
+      {
+        label: "assistant relabeled user",
+        first: "assistant",
+        next: "user",
+        final: "user",
+      },
+      {
+        label: "user relabeled assistant",
+        first: "user",
+        next: "assistant",
+        final: "assistant",
+      },
+      {
+        label: "application state",
+        first: "assistant",
+        next: "state",
+        final: "assistant",
+      },
+    ].flatMap((scenario) =>
+      (["snapshot", "cursor"] as const).map((mode) => ({ ...scenario, mode })),
+    ),
+  )(
+    "$mode replay attributes snapshot messages: $label",
+    async ({ first, next, final, mode }) => {
+      const {
+        writer,
+        options,
+        threadId: snapshotThread,
+      } = await liveLogFixture("generic");
+      await scopedDb(
+        async (tx) =>
+          await tx
+            .update(chatThreads)
+            .set({ subjectDecisionId: decisionId })
+            .where(eq(chatThreads.id, snapshotThread)),
+      );
+      const identity = createSafeId<"chatMessage">();
+      const role = first === "user" ? "user" : "assistant";
+      const initial = {
+        type: EventType.MESSAGES_SNAPSHOT,
+        messages: [{ id: identity, role, content: "prior" }],
+      } satisfies StreamChunk;
+      const declaredRole = next === "repeat" ? role : next;
+      const replacementRole = declaredRole === "user" ? "user" : "assistant";
+      const messages =
+        next === "empty"
+          ? []
+          : ([
+              { id: identity, role: replacementRole, content: "prior" },
+            ] satisfies Extract<
+              StreamChunk,
+              { type: EventType.MESSAGES_SNAPSHOT }
+            >["messages"]);
+      const continuation = (
+        next === "state"
+          ? {
+              type: EventType.STATE_SNAPSHOT,
+              snapshot: { messages: [{ id: identity, role: "user" }] },
+            }
+          : { type: EventType.MESSAGES_SNAPSHOT, messages }
+      ) satisfies StreamChunk;
+      const additional = next === "same" ? [] : [continuation];
+      const prefix = [initial, ...additional];
+      await writer.append(prefix);
+      const cursor = String(prefix.length);
+      const delta = final === "user" ? own : secret;
+      await writer.append([
+        { type: EventType.TEXT_MESSAGE_CONTENT, messageId: identity, delta },
+        { type: EventType.TEXT_MESSAGE_END, messageId: identity },
+      ]);
+      await writer.close();
+      const received = await request(async () => {
+        if (mode === "snapshot") {
+          return await writer.snapshot();
+        }
+        const viewer = createChatRunLog({
+          ...options,
+          db: scopedDb,
+          resumeOffset: cursor,
+        });
+        const entries = [];
+        for await (const entry of viewer.read(
+          cursor,
+          new AbortController().signal,
+        )) {
+          entries.push(entry);
+        }
+        return entries;
+      });
+      expect(
+        received.find(
+          ({ chunk }) => chunk.type === EventType.TEXT_MESSAGE_CONTENT,
+        )?.chunk,
+      ).toEqual({
+        type: EventType.TEXT_MESSAGE_CONTENT,
+        messageId: identity,
+        delta: final === "user" ? own : marker,
+      });
+    },
+  );
+
+  test.each(
+    (["assistant", "user"] as const).flatMap((initialRole) =>
+      (["snapshot", "cursor", "after-relabel"] as const).map((mode) => ({
+        initialRole,
+        mode,
+      })),
+    ),
+  )(
+    "$mode replay keeps snapshot relabeling at its sequence ($initialRole first)",
+    async ({ initialRole, mode }) => {
+      const {
+        writer,
+        options,
+        threadId: snapshotThread,
+      } = await liveLogFixture("generic");
+      await scopedDb(
+        async (tx) =>
+          await tx
+            .update(chatThreads)
+            .set({ subjectDecisionId: decisionId })
+            .where(eq(chatThreads.id, snapshotThread)),
+      );
+      const identity = createSafeId<"chatMessage">();
+      const laterRole = initialRole === "user" ? "assistant" : "user";
+      const initialText = initialRole === "user" ? own : secret;
+      const laterText = laterRole === "user" ? own : secret;
+      await writer.append([
+        {
+          type: EventType.MESSAGES_SNAPSHOT,
+          messages: [{ id: identity, role: initialRole, content: "prior" }],
+        },
+        {
+          type: EventType.TEXT_MESSAGE_CONTENT,
+          messageId: identity,
+          delta: initialText,
+        },
+        {
+          type: EventType.MESSAGES_SNAPSHOT,
+          messages: [{ id: identity, role: laterRole, content: "prior" }],
+        },
+        {
+          type: EventType.TEXT_MESSAGE_CONTENT,
+          messageId: identity,
+          delta: laterText,
+        },
+        { type: EventType.TEXT_MESSAGE_END, messageId: identity },
+      ]);
+      await writer.close();
+      const cursor = mode === "after-relabel" ? "3" : "1";
+      const received = await request(async () => {
+        if (mode === "snapshot") {
+          return await writer.snapshot();
+        }
+        const viewer = createChatRunLog({ ...options, db: scopedDb });
+        const entries = [];
+        for await (const entry of viewer.read(
+          cursor,
+          new AbortController().signal,
+        )) {
+          entries.push(entry);
+        }
+        return entries;
+      });
+      const expected = [
+        {
+          type: EventType.TEXT_MESSAGE_CONTENT,
+          messageId: identity,
+          delta: laterRole === "user" ? own : marker,
+        },
+      ] satisfies StreamChunk[];
+      if (mode !== "after-relabel") {
+        expected.unshift({
+          type: EventType.TEXT_MESSAGE_CONTENT,
+          messageId: identity,
+          delta: initialRole === "user" ? own : marker,
+        });
+      }
+      expect(
+        received
+          .filter(({ chunk }) => chunk.type === EventType.TEXT_MESSAGE_CONTENT)
+          .map(({ chunk }) => chunk),
+      ).toEqual(expected);
+    },
+  );
+
   test.each(["now", "cursor"] as const)(
     "%s restores every open message role before interleaved deltas",
     async (mode) => {

@@ -11,29 +11,33 @@ export type OpenRunMessage = {
 type Identity = { type: "known"; messageId: string } | { type: "unknown" };
 type Attribution =
   { type: TextRole; identity: Identity } | { type: "protocol" };
+const snapshotRoleEvents = {
+  MESSAGES_SNAPSHOT: EventType.MESSAGES_SNAPSHOT,
+} as const satisfies Record<
+  Extract<StreamChunk, { messages: unknown }>["type"],
+  StreamChunk["type"]
+>;
 const roles = {
   user: "authored",
   assistant: "generated",
   system: "generated",
   developer: "generated",
+  tool: "generated",
+  activity: "generated",
+  reasoning: "generated",
 } as const satisfies Record<
-  NonNullable<Extract<StreamChunk, { type: "TEXT_MESSAGE_START" }>["role"]>,
+  | NonNullable<Extract<StreamChunk, { type: "TEXT_MESSAGE_START" }>["role"]>
+  | Extract<
+      StreamChunk,
+      { type: "MESSAGES_SNAPSHOT" }
+    >["messages"][number]["role"],
   TextRole
 >;
-const roleOf = (role: string | null | undefined): TextRole => {
-  if (role === null || role === undefined) {
-    return "unknown";
-  }
-  switch (role) {
-    case "user":
-    case "assistant":
-    case "system":
-    case "developer":
-      return roles[role];
-    default:
-      return "unknown";
-  }
-};
+const roleKinds = new Map(Object.entries(roles));
+const roleOf = (role: string | null | undefined): TextRole =>
+  role === null || role === undefined
+    ? "unknown"
+    : (roleKinds.get(role) ?? "unknown");
 export const createRunMessageRoles = () => {
   const messages = new Map<string, TextRole>();
   let current: { role: TextRole; identity: Identity } = {
@@ -100,10 +104,14 @@ export const createRunMessageRoles = () => {
         }
         return { type: role, identity };
       }
+      case snapshotRoleEvents.MESSAGES_SNAPSHOT:
+        for (const message of chunk.messages) {
+          messages.set(message.id, roleOf(message.role));
+        }
+        return { type: "protocol" };
       case EventType.RUN_STARTED:
       case EventType.RUN_FINISHED:
       case EventType.RUN_ERROR:
-      case EventType.MESSAGES_SNAPSHOT:
       case "ACTIVITY_DELTA":
       case "ACTIVITY_SNAPSHOT":
       case "CUSTOM":

@@ -74,3 +74,63 @@ test("restored roles retain every open identity and clear only the matching end"
     roles.classify({ type: EventType.TEXT_MESSAGE_CHUNK, delta: "text" }).type,
   ).toBe("unknown");
 });
+
+test("transcript snapshots record every wire role and preserve labels they do not change", () => {
+  const roles = createRunMessageRoles();
+  roles.classify({
+    type: EventType.MESSAGES_SNAPSHOT,
+    messages: [
+      { id: "user", role: "user", content: "own" },
+      { id: "assistant", role: "assistant", content: "answer" },
+      { id: "system", role: "system", content: "context" },
+      { id: "developer", role: "developer", content: "context" },
+      { id: "tool", role: "tool", toolCallId: "call", content: "result" },
+      {
+        id: "activity",
+        role: "activity",
+        activityType: "progress",
+        content: {},
+      },
+      { id: "reasoning", role: "reasoning", content: "reasoning" },
+    ],
+  });
+  roles.classify({ type: EventType.MESSAGES_SNAPSHOT, messages: [] });
+  roles.classify({
+    type: EventType.STATE_SNAPSHOT,
+    snapshot: { messages: [{ id: "assistant", role: "user" }] },
+  });
+  roles.classify({
+    type: "ACTIVITY_SNAPSHOT",
+    messageId: "status",
+    activityType: "progress",
+    content: { messages: [{ id: "assistant", role: "user" }] },
+  });
+  for (const id of [
+    "user",
+    "assistant",
+    "system",
+    "developer",
+    "tool",
+    "activity",
+    "reasoning",
+  ]) {
+    expect(
+      roles.classify({
+        type: EventType.TEXT_MESSAGE_CONTENT,
+        messageId: id,
+        delta: "text",
+      }).type,
+    ).toBe(id === "user" ? "authored" : "generated");
+  }
+  roles.classify({
+    type: EventType.MESSAGES_SNAPSHOT,
+    messages: [{ id: "assistant", role: "user", content: "own" }],
+  });
+  expect(
+    roles.classify({
+      type: EventType.TEXT_MESSAGE_CONTENT,
+      messageId: "assistant",
+      delta: "own",
+    }).type,
+  ).toBe("authored");
+});

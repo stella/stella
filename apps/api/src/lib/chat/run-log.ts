@@ -221,19 +221,55 @@ const readRunLogHeaderOnTx = async ({
   (
     await tx
       .select({
+        // The partial snapshot index skips text history; only the latest applicable role metadata crosses the read boundary.
         openMessages:
           restoreRolesAfter === undefined
             ? sql<OpenRunMessage[]>`'[]'::jsonb`
             : sql<OpenRunMessage[]>`to_jsonb(ARRAY(
-          SELECT jsonb_build_object('messageId', started.chunk->>'messageId', 'role', started.chunk->>'role', 'current', started.seq = (
-            SELECT latest.seq FROM chat_run_log_entries latest
-            WHERE latest.organization_id = started.organization_id AND latest.run_id = started.run_id
-              AND latest.seq <= ${restoreRolesAfter} AND ${chatRunTextStartSql(sql`latest.chunk`)}
-            ORDER BY latest.seq DESC LIMIT 1
-          )) FROM chat_run_log_entries started
-          WHERE started.organization_id = ${chatRunLogs.organizationId} AND started.run_id = ${chatRunLogs.runId}
-            AND started.seq <= ${restoreRolesAfter} AND ${chatRunTextStartSql(sql`started.chunk`)}
-            AND started.text_boundary_initialization = 'recorded' AND (started.text_message_end_seq IS NULL OR started.text_message_end_seq > ${restoreRolesAfter}) ORDER BY started.seq LIMIT ${MAX_RUN_BYTES}
+          WITH snapshots AS MATERIALIZED (
+            SELECT snapshot.seq, snapshot.chunk->'messages' AS messages
+            FROM chat_run_log_entries snapshot
+            WHERE snapshot.organization_id = ${chatRunLogs.organizationId}
+              AND snapshot.run_id = ${chatRunLogs.runId}
+              AND snapshot.seq <= ${restoreRolesAfter}
+              AND snapshot.chunk->>'type' = 'MESSAGES_SNAPSHOT'
+            ORDER BY snapshot.seq DESC LIMIT ${MAX_RUN_BYTES}
+          ), snapshot_roles AS MATERIALIZED (
+            SELECT DISTINCT ON (message.value->>'id')
+              snapshot.seq, message.ordinal,
+              message.value->>'id' AS message_id, message.value->>'role' AS role
+            FROM snapshots snapshot
+            CROSS JOIN LATERAL jsonb_array_elements(snapshot.messages) WITH ORDINALITY AS message(value, ordinal)
+            ORDER BY message.value->>'id', snapshot.seq DESC, message.ordinal DESC
+          ), role_facts AS (
+            SELECT started.seq, 0::bigint AS ordinal,
+              started.chunk->>'messageId' AS message_id, started.chunk->>'role' AS role,
+              started.seq = (
+                SELECT latest.seq FROM chat_run_log_entries latest
+                WHERE latest.organization_id = started.organization_id AND latest.run_id = started.run_id
+                  AND latest.seq <= ${restoreRolesAfter} AND ${chatRunTextStartSql(sql`latest.chunk`)}
+                ORDER BY latest.seq DESC LIMIT 1
+              ) AS current
+            FROM chat_run_log_entries started
+            WHERE started.organization_id = ${chatRunLogs.organizationId} AND started.run_id = ${chatRunLogs.runId}
+              AND started.seq <= ${restoreRolesAfter} AND ${chatRunTextStartSql(sql`started.chunk`)}
+              AND started.text_boundary_initialization = 'recorded'
+              AND (started.text_message_end_seq IS NULL OR started.text_message_end_seq > ${restoreRolesAfter})
+            UNION ALL
+            SELECT snapshot.seq, snapshot.ordinal, snapshot.message_id, snapshot.role, false
+            FROM snapshot_roles snapshot
+            WHERE NOT EXISTS (
+              SELECT 1 FROM chat_run_log_entries boundary
+              WHERE boundary.organization_id = ${chatRunLogs.organizationId} AND boundary.run_id = ${chatRunLogs.runId}
+                AND md5(boundary.chunk->>'messageId') = md5(snapshot.message_id)
+                AND boundary.chunk->>'messageId' = snapshot.message_id
+                AND boundary.seq > snapshot.seq AND boundary.seq <= ${restoreRolesAfter}
+                AND (${chatRunTextStartSql(sql`boundary.chunk`)} OR boundary.chunk->>'type' = 'TEXT_MESSAGE_END')
+              LIMIT 1
+            )
+          )
+          SELECT jsonb_build_object('messageId', message_id, 'role', role, 'current', current)
+          FROM role_facts ORDER BY seq, ordinal LIMIT ${MAX_RUN_BYTES}
         ))`,
         closedAt: chatRunLogs.closedAt,
         nextSeq: chatRunLogs.nextSeq,

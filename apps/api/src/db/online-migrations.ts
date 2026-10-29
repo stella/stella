@@ -241,6 +241,15 @@ const PUBLISHED_CASE_LAW_DECISION_INDEX_DEFINITION =
 
 export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
   {
+    name: "chat_run_log_entries_message_snapshot_idx",
+    tableName: "chat_run_log_entries",
+    isUnique: false,
+    createSql:
+      "CREATE INDEX CONCURRENTLY \"chat_run_log_entries_message_snapshot_idx\" ON public.chat_run_log_entries (organization_id, run_id, seq) WHERE chunk->>'type' = 'MESSAGES_SNAPSHOT'",
+    definitionBody:
+      "ON public.chat_run_log_entries USING btree (organization_id, run_id, seq) WHERE ((chunk ->> 'type'::text) = 'MESSAGES_SNAPSHOT'::text)",
+  },
+  {
     name: "chat_run_log_entries_text_start_idx",
     tableName: "chat_run_log_entries",
     isUnique: false,
