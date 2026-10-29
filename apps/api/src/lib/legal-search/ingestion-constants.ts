@@ -60,12 +60,12 @@ export const PARSER_VERSIONS = {
   [ADAPTER_KEYS.CZ_UOHS]: 4,
   [ADAPTER_KEYS.SK_COURTS]: 19,
   [ADAPTER_KEYS.SK_US]: 16,
-  [ADAPTER_KEYS.PL_COURTS]: 16,
-  [ADAPTER_KEYS.PL_SN]: 9,
-  [ADAPTER_KEYS.PL_KIO]: 10,
+  [ADAPTER_KEYS.PL_COURTS]: 17,
+  [ADAPTER_KEYS.PL_SN]: 10,
+  [ADAPTER_KEYS.PL_KIO]: 11,
   [ADAPTER_KEYS.PL_TK]: 9,
   [ADAPTER_KEYS.PL_NSA]: 9,
-  [ADAPTER_KEYS.PL_NCOURT]: 15,
+  [ADAPTER_KEYS.PL_NCOURT]: 16,
   [ADAPTER_KEYS.AT_COURTS]: 8,
   [ADAPTER_KEYS.AT_VFGH]: 8,
   [ADAPTER_KEYS.AT_VWGH]: 8,
@@ -81,9 +81,9 @@ export const PARSER_VERSIONS = {
   [ADAPTER_KEYS.EU_ECJ]: 17,
   [ADAPTER_KEYS.HU_BHGY]: 21,
   [ADAPTER_KEYS.UK_FCL]: 3,
-  [ADAPTER_KEYS.PL_KIS]: 10,
+  [ADAPTER_KEYS.PL_KIS]: 11,
   [ADAPTER_KEYS.PL_UODO]: 14,
-  [ADAPTER_KEYS.PL_UOKIK]: 11,
+  [ADAPTER_KEYS.PL_UOKIK]: 12,
 } as const satisfies Record<AdapterKey, number>;
 
 // parser-output-unchanged: adds the source fingerprint versions; no parser reads them, so parser output is unchanged.

@@ -32,7 +32,7 @@ import {
   opensBlockParagraph,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-printed-lines";
 import {
-  buildBoldRanges,
+  buildFontStyleRanges,
   normalizeSpanText,
 } from "@/api/lib/legal-search/parsers/libpdf-utils";
 import type { PdfSpan } from "@/api/lib/legal-search/parsers/libpdf-utils";
@@ -40,10 +40,11 @@ import type { PdfSpan } from "@/api/lib/legal-search/parsers/libpdf-utils";
 /** Publisher recorded on the AST, so a stored document names where it came from. */
 const PL_SN_SOURCE_SYSTEM = "sn.pl";
 
-/** A run of characters sharing one font weight. */
+/** A run of characters sharing font emphasis. */
 export type PlSnRun = {
   text: string;
   bold: boolean;
+  italic?: true | undefined;
   footnoteReference?: string | undefined;
   /** Set raised in small type: an article's or a unit's index (`394¹`). */
   superscript?: true | undefined;
@@ -289,10 +290,18 @@ export const withoutRaisedReferenceMarkers = (
  * would miss it once the spacing is gone.
  */
 const runsOfLine = (line: ExtractedLine): PlSnRun[] => {
-  const ranges = buildBoldRanges([...line.spans], line.text);
+  const ranges = buildFontStyleRanges(line.spans, line.text);
   const runs = ranges.flatMap((range) => {
     const text = collapseSpacedLetters(line.text.slice(range.start, range.end));
-    return text.length === 0 ? [] : [{ text, bold: range.bold }];
+    return text.length === 0
+      ? []
+      : [
+          {
+            text,
+            bold: range.bold,
+            ...(range.italic ? { italic: true as const } : {}),
+          },
+        ];
   });
   return line.superscripts === undefined
     ? runs
@@ -322,16 +331,21 @@ const withSuperscripts = (
   const pending = marks.toSorted((left, right) => left.after - right.after);
   const out: PlSnRun[] = [];
   let printed = 0;
-  const setDue = (bold: boolean): void => {
+  const setDue = (run: PlSnRun | undefined): void => {
     while (pending.length > 0 && (pending.at(0)?.after ?? 0) <= printed) {
       const mark = pending.shift();
       if (mark !== undefined) {
-        out.push({ text: mark.text, bold, superscript: true });
+        out.push({
+          text: mark.text,
+          bold: run?.bold ?? false,
+          ...(run?.italic === undefined ? {} : { italic: run.italic }),
+          superscript: true,
+        });
       }
     }
   };
   for (const run of runs) {
-    setDue(run.bold);
+    setDue(run);
     let start = 0;
     let end = 0;
     for (const character of run.text) {
@@ -342,7 +356,7 @@ const withSuperscripts = (
       printed += 1;
       if ((pending.at(0)?.after ?? Number.POSITIVE_INFINITY) <= printed) {
         out.push({ ...run, text: run.text.slice(start, end) });
-        setDue(run.bold);
+        setDue(run);
         start = end;
       }
     }
@@ -350,7 +364,7 @@ const withSuperscripts = (
       out.push({ ...run, text: run.text.slice(start) });
     }
   }
-  setDue(runs.at(-1)?.bold ?? false);
+  setDue(runs.at(-1));
   return out;
 };
 
@@ -665,12 +679,14 @@ export const assemblePlSnParagraphs = (
   // lands in, and the lines handed in are the caller's to keep.
   const copyRun = ({
     bold,
+    italic,
     text,
     footnoteReference,
     superscript,
   }: PlSnRun): PlSnRun => ({
     bold,
     text,
+    ...(italic === undefined ? {} : { italic }),
     ...(footnoteReference === undefined ? {} : { footnoteReference }),
     ...(superscript === undefined ? {} : { superscript }),
   });
@@ -704,6 +720,7 @@ export const assemblePlSnParagraphs = (
     const separator = brokenWord ? "" : " ";
     if (
       previous.bold === head.bold &&
+      previous.italic === head.italic &&
       previous.footnoteReference === undefined &&
       head.footnoteReference === undefined &&
       previous.superscript === undefined &&
@@ -711,11 +728,15 @@ export const assemblePlSnParagraphs = (
     ) {
       previous.text += separator + head.text;
     } else if (head.superscript === undefined) {
-      current.push({ text: separator + head.text, bold: head.bold });
+      current.push({ ...copyRun(head), text: separator + head.text });
     } else {
       // The line break's space stays on the baseline, out of the index.
       if (separator.length > 0) {
-        current.push({ text: separator, bold: head.bold });
+        current.push({
+          text: separator,
+          bold: head.bold,
+          ...(head.italic === undefined ? {} : { italic: head.italic }),
+        });
       }
       current.push(copyRun(head));
     }
@@ -739,12 +760,13 @@ export const plSnParagraphsToHtml = (
     .map(
       (runs) =>
         `<p>${runs
-          .map(({ bold, superscript, text }) => {
+          .map(({ bold, italic, superscript, text }) => {
             const raised =
               superscript === true
                 ? `<sup>${escapeHtml(text)}</sup>`
                 : escapeHtml(text);
-            return bold ? `<b>${raised}</b>` : raised;
+            const emphasized = italic === true ? `<i>${raised}</i>` : raised;
+            return bold ? `<b>${emphasized}</b>` : emphasized;
           })
           .join("")}</p>`,
     )

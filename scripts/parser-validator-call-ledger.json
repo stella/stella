@@ -26,7 +26,6 @@
   "apps/api/src/handlers/case-law/ingestion/parsers/hu-bhgy.ts::call::1",
   "apps/api/src/handlers/case-law/ingestion/parsers/hu-bhgy.ts::import::1",
   "apps/api/src/handlers/case-law/ingestion/parsers/pl-courts.ts::call::1",
-  "apps/api/src/handlers/case-law/ingestion/parsers/pl-courts.ts::call::2",
   "apps/api/src/handlers/case-law/ingestion/parsers/pl-courts.ts::import::1",
   "apps/api/src/handlers/case-law/ingestion/parsers/pl-ncourt.ts::call::1",
   "apps/api/src/handlers/case-law/ingestion/parsers/pl-ncourt.ts::import::1",

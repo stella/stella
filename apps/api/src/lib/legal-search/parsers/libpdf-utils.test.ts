@@ -1,6 +1,9 @@
 import { expect, test } from "bun:test";
 
-import { buildBoldRanges } from "@/api/lib/legal-search/parsers/libpdf-utils";
+import {
+  buildBoldRanges,
+  buildFontStyleRanges,
+} from "@/api/lib/legal-search/parsers/libpdf-utils";
 
 test("keeps the entire line when span spacing differs or a prefix is unmatched", () => {
   for (const lineText of [
@@ -32,4 +35,33 @@ test("keeps the entire line when span spacing differs or a prefix is unmatched",
     expect(ranges.at(-1)?.bold).toBe(true);
     expect(ranges.at(-1)?.start).toBe(lineText.indexOf("suffix"));
   }
+});
+
+test("font style ranges retain independent bold and italic runs without changing bold-only ranges", () => {
+  const fonts = [
+    "ArialMT",
+    "Arial-ItalicMT",
+    "Arial-BoldItalicMT",
+    "Arial-BoldMT",
+    "Helvetica-Oblique",
+  ];
+  const spans = fonts.map((fontName, index) => ({
+    text: String(index + 1),
+    bbox: { x: index * 10, width: 10 },
+    fontSize: 12,
+    fontName,
+  }));
+  const lineText = "1 2 3 4 5";
+  expect(buildFontStyleRanges(spans, lineText)).toEqual([
+    { start: 0, end: 2, bold: false, italic: false },
+    { start: 2, end: 4, bold: false, italic: true },
+    { start: 4, end: 6, bold: true, italic: true },
+    { start: 6, end: 8, bold: true, italic: false },
+    { start: 8, end: 9, bold: false, italic: true },
+  ]);
+  expect(buildBoldRanges(spans, lineText)).toEqual([
+    { start: 0, end: 4, bold: false },
+    { start: 4, end: 8, bold: true },
+    { start: 8, end: 9, bold: false },
+  ]);
 });

@@ -152,14 +152,26 @@ const REASONS_HEADING_RE = /^uzasadnienie\b/iu;
 // share one outline ("V. UZASADNIENIE" after point IV).
 const NUMBERED_REASONS_HEADING_RE = /^[IVXLC]+\s*[.)]\s*uzasadnienie$/iu;
 const HOLDING_HEADING_RE =
-  /^(?:orzeka|postanawia|uchwala|zarządza)\s*(?::\s*)?$/iu;
-const HOLDING_ITEM_RE = /^(?:[IVXLC]+\s*[.)]|[0-9]+\s*[.)]|[a-z][)])\s*/u;
+  /^(?:orzeka|postanawia|postanowił|uchwala|uchwalił|zarządza)\s*(?::\s*)?$/iu;
+const OPERATIVE_ITEM_PREFIX_RE = /^(?:[IVXLCDM]+|\d+|[a-z])[.)]\s*/iu;
 const OPERATIVE_VERB_RE =
-  /^(?:oddala|zmienia|uchyla|zasądza|stwierdza|umarza|utrzymuje|nakazuje|odrzuca|ustala|przyznaje|zwraca się|przekazuje|nie obciąża|znosi)\b/iu;
+  /^(?:oddala|oddalić|zmienia|uchyla|zasądza|stwierdza|umarza|umorzyć|utrzymuje|nakazuje|odrzuca|ustala|przyjmuje|przyznaje|odmawia przyjęcia skargi|zwraca się|przekazuje|obciążyć|nie obciąża|znosi)(?!\p{L})/iu;
+const AUTHORITY_DECISION_TITLE_RE = /^decyzja\s+nr\b/iu;
+const AUTHORITY_DECISION_BASIS_RE =
+  /^(?:[IVXLCDM]+|\d+)[.)]\s+na podstawie\b/iu;
 const CLOSING_RE =
   /^[A-ZĄĆĘŁŃÓŚŹŻ][\p{L} .-]+,\s+dnia\s+\d{1,2}\s+\p{L}+\s+\d{4}\s*r?\.?$/u;
 const SIGNATURE_RE =
   /^(?:SSA|SSA del\.|SSO|SSR|sędzia|Sędzia|Przewodniczący|Przewodnicząca|Prezes|sprawozdawca)\b/u;
+const PANEL_MEMBER_RE = /^(?:SSN|SSA|SSO|SSR)\b|\(ławnik[^)]*\)$/iu;
+const CLERK_MARK_RE = /^\[(?:\p{L}{2,3}|\p{L}\.(?:\p{L}\.?){1,3})\]$/u;
+const CLERK_INITIALS_RE = /^(?:\p{Lu}\.){1,4}$/u;
+const BLOCK_ANCHOR_PREFIX = {
+  heading: "h",
+  paragraph: "p",
+  table: "t",
+  image: "i",
+} as const satisfies Record<Block["type"], string>;
 
 type ParserSection = "preamble" | "holding" | "reasoning";
 
@@ -170,6 +182,9 @@ type ParserState = {
   section: ParserSection;
   sawDecisionTitle: boolean;
   decisionTitle: string | undefined;
+  fallbackDecisionTitle: string | undefined;
+  normalizedCaseNumber: string;
+  panelNames: string[];
   superscripts: boolean;
   markup: PlDecisionMarkup | undefined;
   /** A list item's marker, waiting to open the item's first paragraph. */
@@ -201,6 +216,10 @@ const normalizeLegacyPlainText = (text: string): string =>
 const isDecisionTitleText = (text: string): boolean =>
   DECISION_TITLES.has(text.trim().toLocaleUpperCase("pl-PL"));
 
+const isCaseNumberText = (state: ParserState, plainText: string): boolean =>
+  CASE_NUMBER_RE.test(plainText) ||
+  plainText.replace(/\s+/gu, " ").trim() === state.normalizedCaseNumber;
+
 const normalizeDecisionTitle = (
   decisionType: string | undefined,
 ): string | undefined => {
@@ -215,16 +234,31 @@ const normalizeDecisionTitle = (
   return undefined;
 };
 
-const createState = (
-  superscripts: boolean,
-  markup: PlDecisionMarkup | undefined,
-): ParserState => ({
+type CreateStateOptions = {
+  superscripts: boolean;
+  markup: PlDecisionMarkup | undefined;
+  caseNumber: string;
+  fallbackDecisionTitle: string | undefined;
+};
+
+const createState = ({
+  superscripts,
+  markup,
+  caseNumber,
+  fallbackDecisionTitle,
+}: CreateStateOptions): ParserState => ({
   blocks: [],
   blockIndex: 0,
   blockIdCounter: 0,
-  section: "preamble",
+  section:
+    fallbackDecisionTitle === POLISH_DECISION_TITLE_MAP.uzasadnienie
+      ? "reasoning"
+      : "preamble",
   sawDecisionTitle: false,
   decisionTitle: undefined,
+  fallbackDecisionTitle,
+  normalizedCaseNumber: caseNumber.replace(/\s+/gu, " ").trim(),
+  panelNames: [],
   superscripts,
   markup,
   pendingMarker: undefined,
@@ -247,7 +281,7 @@ const pushHeading = (
   state.blockIndex += 1;
   state.blocks.push({
     id: nextBlockId(state),
-    anchorId: `h-${state.blockIndex}`,
+    anchorId: `${BLOCK_ANCHOR_PREFIX.heading}-${state.blockIndex}`,
     type: "heading",
     level,
     role,
@@ -265,7 +299,7 @@ const pushParagraph = (
   state.blockIndex += 1;
   state.blocks.push({
     id: nextBlockId(state),
-    anchorId: `p-${state.blockIndex}`,
+    anchorId: `${BLOCK_ANCHOR_PREFIX.paragraph}-${state.blockIndex}`,
     type: "paragraph",
     ...(role && { role }),
     inlines,
@@ -281,7 +315,7 @@ const pushTable = (
   state.blockIndex += 1;
   state.blocks.push({
     id: nextBlockId(state),
-    anchorId: `t-${state.blockIndex}`,
+    anchorId: `${BLOCK_ANCHOR_PREFIX.table}-${state.blockIndex}`,
     type: "table",
     role: "metadata-table",
     rows,
@@ -593,10 +627,36 @@ const orderedListMarker = (
 const inferParagraphRole = (
   state: ParserState,
   plainText: string,
-  isBold = false,
 ): ParagraphRole | undefined => {
-  if (CASE_NUMBER_RE.test(plainText)) {
+  const normalizedText = plainText.replace(/\s+/gu, " ").trim();
+  if (isCaseNumberText(state, plainText)) {
     return "case-number";
+  }
+
+  const operativeText = plainText.replace(OPERATIVE_ITEM_PREFIX_RE, "");
+  const isOperative =
+    OPERATIVE_VERB_RE.test(operativeText) ||
+    (state.sawDecisionTitle &&
+      state.fallbackDecisionTitle === POLISH_DECISION_TITLE_MAP.decyzja &&
+      state.section === "preamble" &&
+      AUTHORITY_DECISION_BASIS_RE.test(plainText));
+  const signatureText = normalizedText.replace(/\[[\p{L}]{1,3}\]$/u, "").trim();
+  const panelTokens = state.panelNames
+    .flatMap((name) => name.split(/\s+/u))
+    .toSorted();
+  const signatureTokens = signatureText.split(/\s+/u).toSorted();
+  const isIndividualSignature = state.panelNames.some(
+    (name) => signatureText === name,
+  );
+  const isFullPanelSignature =
+    panelTokens.length > 0 &&
+    panelTokens.length === signatureTokens.length &&
+    panelTokens.every((token, index) => token === signatureTokens[index]);
+  const isBenchSignature =
+    state.section !== "preamble" &&
+    (isIndividualSignature || isFullPanelSignature);
+  if (isBenchSignature) {
+    return "signature";
   }
 
   if (state.section === "reasoning") {
@@ -611,19 +671,45 @@ const inferParagraphRole = (
     return "argumentation";
   }
 
-  if (
-    state.section === "holding" ||
-    HOLDING_ITEM_RE.test(plainText) ||
-    OPERATIVE_VERB_RE.test(plainText)
-  ) {
-    return "holding";
+  if (state.section === "preamble" && PANEL_MEMBER_RE.test(plainText)) {
+    return "panel";
   }
 
-  if (isBold && state.sawDecisionTitle) {
+  if (state.section === "holding" || isOperative) {
     return "holding";
   }
 
   return "intro";
+};
+
+const rememberPanelMember = (
+  state: ParserState,
+  plainText: string,
+  role: ParagraphRole | undefined,
+): void => {
+  if (role !== "panel") {
+    return;
+  }
+  const name = plainText
+    .replace(/^(?:SSN|SSA|SSO|SSR)\s+/iu, "")
+    .replaceAll(/\([^()]*\)/gu, " ")
+    .replaceAll(/\s+/gu, " ")
+    .trim();
+  if (name.length > 0) {
+    state.panelNames.push(name);
+  }
+};
+
+const classifyParagraph = (
+  state: ParserState,
+  plainText: string,
+): ParagraphRole | undefined => {
+  const role = inferParagraphRole(state, plainText);
+  rememberPanelMember(state, plainText, role);
+  if (role === "holding") {
+    state.section = "holding";
+  }
+  return role;
 };
 
 const handleHeadingText = (
@@ -631,6 +717,28 @@ const handleHeadingText = (
   plainText: string,
   inlines: Inline[],
 ): boolean => {
+  if (
+    !state.sawDecisionTitle &&
+    state.fallbackDecisionTitle === POLISH_DECISION_TITLE_MAP.decyzja &&
+    AUTHORITY_DECISION_TITLE_RE.test(plainText)
+  ) {
+    pushHeading(state, 1, plainText, "decision-title", inlines);
+    state.sawDecisionTitle = true;
+    state.decisionTitle = POLISH_DECISION_TITLE_MAP.decyzja;
+    return true;
+  }
+
+  if (
+    REASONS_HEADING_RE.test(plainText) &&
+    !state.sawDecisionTitle &&
+    state.fallbackDecisionTitle !== undefined &&
+    state.fallbackDecisionTitle !== POLISH_DECISION_TITLE_MAP.uzasadnienie
+  ) {
+    pushHeading(state, 2, plainText, "section-heading", inlines);
+    state.section = "reasoning";
+    return true;
+  }
+
   if (isDecisionTitleText(plainText)) {
     const normalizedPlainText = plainText.trim().toLocaleUpperCase("pl-PL");
     if (
@@ -707,15 +815,7 @@ const parseParagraphElement = (
 
   // The role is read from the item's own words; the number its list prints
   // before it is the list's, not a holding marker the item states.
-  const role = inferParagraphRole(
-    state,
-    plainText,
-    node.is("strong, b") || node.children("strong, b").length > 0,
-  );
-
-  if (role === "holding") {
-    state.section = "holding";
-  }
+  const role = classifyParagraph(state, plainText);
 
   if (itemMarker === undefined) {
     pushParagraph(state, plainText, inlines, role);
@@ -740,7 +840,12 @@ const parseTableElement = (
     const inlines = walkInlines($, $(caption), state);
     const plainText = normalizeWhitespace(inlinesToPlainText(inlines));
     if (plainText) {
-      pushParagraph(state, plainText, inlines);
+      pushParagraph(
+        state,
+        plainText,
+        inlines,
+        classifyParagraph(state, plainText),
+      );
     }
   });
   let rows: TableCell[][] = [];
@@ -910,7 +1015,7 @@ const parseListItemContent = ({
         state,
         marker,
         textInline(marker),
-        inferParagraphRole(state, ""),
+        classifyParagraph(state, ""),
       );
       marker = undefined;
     }
@@ -932,7 +1037,7 @@ const parseNode = (
       return;
     }
 
-    pushParagraph(state, text, inlines, inferParagraphRole(state, text));
+    pushParagraph(state, text, inlines, classifyParagraph(state, text));
     return;
   }
 
@@ -1012,7 +1117,7 @@ const flushPendingMarker = (state: ParserState): void => {
     return;
   }
   const plainText = normalizeWhitespace(inlinesToPlainText(marker));
-  pushParagraph(state, plainText, marker, inferParagraphRole(state, plainText));
+  pushParagraph(state, plainText, marker, classifyParagraph(state, plainText));
 };
 
 /** Elements a common court's container sets as blocks of their own. */
@@ -1131,10 +1236,7 @@ const parsePlainText = (state: ParserState, content: string): void => {
       continue;
     }
 
-    const role = inferParagraphRole(state, paragraph);
-    if (role === "holding") {
-      state.section = "holding";
-    }
+    const role = classifyParagraph(state, paragraph);
 
     pushParagraph(state, paragraph, inlines, role);
   }
@@ -1215,20 +1317,19 @@ export const parsePlDecisionContent = (
   input: ParsePlDecisionInput,
 ): ParsePlDecisionOutput => {
   const loadHtml = input.loadHtml ?? cheerio.load;
-  const state = createState(input.superscripts === true, input.markup);
-  const title = normalizeDecisionTitle(input.decisionType);
-
-  if (title) {
-    pushHeading(state, 1, title, "decision-title", textInline(title));
-    state.sawDecisionTitle = true;
-    state.decisionTitle = title;
-    if (title === POLISH_DECISION_TITLE_MAP.uzasadnienie) {
-      state.section = "reasoning";
-    }
-  }
+  const state = createState({
+    superscripts: input.superscripts === true,
+    markup: input.markup,
+    caseNumber: input.caseNumber,
+    fallbackDecisionTitle: normalizeDecisionTitle(input.decisionType),
+  });
+  let validationContent: string;
+  let validationDocument: cheerio.CheerioAPI | undefined;
 
   if (hasHtmlTags(input.content)) {
     const $ = loadHtml(input.content);
+    validationContent = input.content;
+    validationDocument = $;
     const root = $("body").length > 0 ? $("body") : $.root();
     if (state.markup === PL_DECISION_MARKUP.COMMON_COURT) {
       // Before the whitespace is rendered: the serializer's newline is not
@@ -1240,12 +1341,6 @@ export const parsePlDecisionContent = (
       renderHtmlWhiteSpace(parsed);
     }
     parseChildren($, state, root);
-    validateAndLog(
-      { parser: "pl-courts", caseNumber: input.caseNumber },
-      input.content,
-      state.blocks,
-      { document: $ },
-    );
   } else {
     enforcePlainTextExpansionBudget(input.content, input.htmlExpansionBudget);
     const normalizedContent = normalizeLegacyPlainText(
@@ -1257,17 +1352,59 @@ export const parsePlDecisionContent = (
         const normalized = normalizeWhitespace(paragraph);
         return normalized ? [normalized] : [];
       });
-    const validationHtml = buildValidationHtml(paragraphs);
+    validationContent = buildValidationHtml(paragraphs);
     // Check expansion before allocating paragraph ASTs for bounded sources.
-    const sourceDocument = input.loadHtml?.(validationHtml);
+    validationDocument = input.loadHtml?.(validationContent);
     parsePlainText(state, normalizedContent);
-    validateAndLog(
-      { parser: "pl-courts", caseNumber: input.caseNumber },
-      validationHtml,
-      state.blocks,
-      sourceDocument === undefined ? {} : { document: sourceDocument },
-    );
   }
+
+  if (!state.sawDecisionTitle && state.fallbackDecisionTitle !== undefined) {
+    const title = state.fallbackDecisionTitle;
+    pushHeading(state, 1, title, "decision-title", textInline(title));
+    const fallbackHeading = state.blocks.pop();
+    if (fallbackHeading === undefined) {
+      return panic("Fallback decision title was not added");
+    }
+    state.blocks.unshift(fallbackHeading);
+    state.sawDecisionTitle = true;
+    state.decisionTitle = title;
+    if (title === POLISH_DECISION_TITLE_MAP.uzasadnienie) {
+      state.section = "reasoning";
+    }
+    for (const [index, block] of state.blocks.entries()) {
+      const order = index + 1;
+      block.id = `b${order}`;
+      block.anchorId = `${BLOCK_ANCHOR_PREFIX[block.type]}-${order}`;
+    }
+    state.blockIndex = state.blocks.length;
+    state.blockIdCounter = state.blocks.length;
+  }
+
+  let sawTerminalSignature = false;
+  for (const block of state.blocks.toReversed()) {
+    if (block.type !== "paragraph") {
+      break;
+    }
+    if (block.role === "signature") {
+      sawTerminalSignature = true;
+      continue;
+    }
+    if (
+      CLERK_MARK_RE.test(block.plainText) ||
+      (sawTerminalSignature && CLERK_INITIALS_RE.test(block.plainText))
+    ) {
+      block.role = "apparatus";
+      continue;
+    }
+    break;
+  }
+
+  validateAndLog(
+    { parser: "pl-courts", caseNumber: input.caseNumber },
+    validationContent,
+    state.blocks,
+    validationDocument === undefined ? {} : { document: validationDocument },
+  );
 
   const fulltext = state.blocks
     .flatMap((block) => (block.plainText ? [block.plainText] : []))

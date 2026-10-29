@@ -157,27 +157,27 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_COURTS]: {
-    version: 16,
+    version: 17,
     scope: {
       type: "all",
       reason:
-        "Re-read SAOS judgments in the courts' own markup: line wraps, list markers, framed tables, soft hyphens and article superscripts change paragraph text and inlines; thesis placeholders become absent summaries.",
+        "Re-read printed title order and opening, operative and signature roles from stored source; roles and block ordering have no independent feature storage.",
     },
   },
   [ADAPTER_KEYS.PL_SN]: {
-    version: 9,
-    scope: {
-      type: "all",
-      reason:
-        "Re-read Supreme Court PDFs: word spaces set by position alone, running headers, indented blocks, hanging lists and superscripts change paragraph text and inlines.",
-    },
-  },
-  [ADAPTER_KEYS.PL_KIO]: {
     version: 10,
     scope: {
       type: "all",
       reason:
-        "Re-read procurement rulings with printed paragraph structure, joined page continuations, preserved superscripts and publisher-only markup budgets.",
+        "Re-read printed title order and opening, operative and signature roles from stored source; preserve inline bold and italic emphasis in PDFs.",
+    },
+  },
+  [ADAPTER_KEYS.PL_KIO]: {
+    version: 11,
+    scope: {
+      type: "all",
+      reason:
+        "Re-read printed title order and opening, operative and signature roles from stored source; roles and block ordering have no independent feature storage.",
     },
   },
   [ADAPTER_KEYS.PL_TK]: {
@@ -197,11 +197,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_NCOURT]: {
-    version: 15,
+    version: 16,
     scope: {
       type: "all",
       reason:
-        "Re-read portal judgments in the courts' own markup: line wraps, list markers, framed tables, soft hyphens and article superscripts change paragraph text and inlines; thesis placeholders become absent headnotes.",
+        "Re-read printed title order and opening, operative and signature roles from stored source; roles and block ordering have no independent feature storage.",
     },
   },
   [ADAPTER_KEYS.AT_COURTS]: {
@@ -314,11 +314,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_KIS]: {
-    version: 10,
+    version: 11,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Re-read printed title order and opening, operative and signature roles from stored source; preserve inline bold and italic emphasis in PDFs.",
     },
   },
   [ADAPTER_KEYS.PL_UODO]: {
@@ -330,11 +330,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_UOKIK]: {
-    version: 11,
+    version: 12,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Re-read printed title order and opening, operative and signature roles from stored source; preserve inline bold and italic emphasis in PDFs.",
     },
   },
   [ADAPTER_KEYS.CZ_UOHS]: {
