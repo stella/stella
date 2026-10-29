@@ -1432,6 +1432,34 @@ export const caseLawDecisionSourceIdentities = p.pgTable(
   ],
 );
 
+/** Exact court-qualified fallback keys survive enrichment and retired decision UUIDs. */
+export const caseLawDecisionFallbackIdentities = p.pgTable(
+  "case_law_decision_fallback_identities",
+  {
+    sourceId: safeUuid<"caseLawSource">("source_id")
+      .notNull()
+      .references(() => caseLawSources.id, { onDelete: "cascade" }),
+    identityKey: p.varchar("identity_key", { length: 320 }).notNull(),
+    // Canonical aliases resolve retired UUIDs, as for publisher identity reservations.
+    decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p.primaryKey({
+      columns: [t.sourceId, t.identityKey],
+      name: "case_law_decision_fallback_identities_pk",
+    }),
+    p
+      .index("case_law_decision_fallback_identities_decision_idx")
+      .on(t.decisionId),
+    p.check(
+      "case_law_decision_fallback_identities_strong_key",
+      sql`left(${t.identityKey}, length('case-number:v2:["decision",')) = 'case-number:v2:["decision",'`,
+    ),
+    ...caseLawIngestionOnlyPolicies(),
+  ],
+);
+
 /** Retired UUIDs outlive their rows; targets remain live and chains are flattened. */
 export const caseLawDecisionAliases = p.pgTable(
   "case_law_decision_aliases",

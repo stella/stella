@@ -156,10 +156,15 @@ if (!databaseUrl || !runPostgresTests) {
         name: "Fallback identity fixture",
         enabled: false,
       });
+      let observationOrder = 0n;
       const write = async (court: string, decisionDate: string) =>
         await processDecision({
-          input: { ...decisionAt(court, undefined), decisionDate },
-          observationOrder: 1n,
+          input: {
+            ...decisionAt(court, undefined),
+            decisionDate,
+            rawHash: `${court}:${decisionDate}`,
+          },
+          observationOrder: ++observationOrder,
           sourceId: scopedSourceId,
           scopedDb,
           observedAt: new Date("2026-07-31T12:00:00.000Z"),
@@ -177,10 +182,11 @@ if (!databaseUrl || !runPostgresTests) {
           .from(caseLawDecisions)
           .where(eq(caseLawDecisions.sourceId, scopedSourceId));
         expect(before).toHaveLength(1);
-        expect(before.at(0)?.fallbackContentHash).not.toBeNull();
+        const original =
+          before.at(0) ?? panic("Initial fallback observation must be stored");
+        expect(original.fallbackContentHash).not.toBeNull();
         for (const [court, decisionDate] of [
           ["Okresný súd Bardejov", "2025-04-18"],
-          ["Mestský súd Košice", "2025-05-28"],
         ] as const) {
           // db-await-in-loop: each observation must leave the first decision unchanged.
           const attempted = await Result.tryPromise({
@@ -217,6 +223,22 @@ if (!databaseUrl || !runPostgresTests) {
             .from(caseLawDecisions)
             .where(eq(caseLawDecisions.sourceId, scopedSourceId)),
         ).toHaveLength(1);
+        await write("Mestský súd Košice", "2025-05-28");
+        const corrected = await db
+          .select({
+            id: caseLawDecisions.id,
+            decisionDate: caseLawDecisions.decisionDate,
+            fallbackContentHash: caseLawDecisions.fallbackContentHash,
+          })
+          .from(caseLawDecisions)
+          .where(eq(caseLawDecisions.sourceId, scopedSourceId));
+        expect(corrected).toEqual([
+          {
+            id: original.id,
+            decisionDate: "2025-05-28",
+            fallbackContentHash: original.fallbackContentHash,
+          },
+        ]);
       } finally {
         await db
           .delete(caseLawSources)

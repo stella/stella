@@ -5,6 +5,7 @@ import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import type { Transaction } from "@/api/db/root";
 import {
+  caseLawDecisionFallbackIdentities,
   caseLawDecisions,
   caseLawDecisionSourceIdentities,
 } from "@/api/db/schema";
@@ -29,6 +30,8 @@ import {
   decisionStorageEnrichmentMatch,
   decisionStorageIdentity,
   decisionStorageIdentityMatch,
+  fallbackDecisionCourtMatch,
+  fallbackEcliComparisonKey,
 } from "@/api/lib/case-law/fallback-decision-identity";
 import { rowHoldsDocumentFor } from "@/api/lib/case-law/stored-payload";
 import {
@@ -193,6 +196,7 @@ const IDENTITY_COLUMNS = {
   decisionDate: true,
   sourceDocumentId: true,
   ecli: true,
+  sheetNumber: true,
   metadata: true,
   sourceHash: true,
   sourceHashVersion: true,
@@ -392,6 +396,80 @@ type FindExistingDecisionOptions = Pick<
   repairClaimedDecisionId: SafeId<"caseLawDecision"> | undefined;
 };
 
+type StrongFallbackOptions = {
+  sourceId: SafeId<"caseLawSource">;
+  storageIdentity: Extract<
+    ReturnType<typeof decisionStorageIdentity>,
+    { type: "strong" }
+  >;
+};
+
+const findStrongFallbackDecisionTx = async (
+  tx: Transaction,
+  { sourceId, storageIdentity }: StrongFallbackOptions,
+) => {
+  const keys = storageIdentity.aliases.map(({ key }) => key);
+  const aliases = await tx
+    .select({
+      id: canonicalDecisionIdSql(caseLawDecisionFallbackIdentities.decisionId),
+    })
+    .from(caseLawDecisionFallbackIdentities)
+    .where(
+      and(
+        eq(caseLawDecisionFallbackIdentities.sourceId, sourceId),
+        inArray(caseLawDecisionFallbackIdentities.identityKey, keys),
+      ),
+    )
+    .limit(keys.length);
+  const keyed = await tx.query.caseLawDecisions.findMany({
+    where: {
+      sourceId: { eq: sourceId },
+      ...decisionStorageIdentityMatch(storageIdentity),
+    },
+    columns: IDENTITY_COLUMNS,
+    extras: IDENTITY_EXTRAS,
+    limit: keys.length + 1,
+  });
+  const legacy =
+    storageIdentity.identity.evidence.type !== "ecli"
+      ? []
+      : await tx.query.caseLawDecisions.findMany({
+          where: {
+            sourceId: { eq: sourceId },
+            sourceDocumentId: { isNull: true },
+            fallbackIdentityKey: { isNull: true },
+            fallbackCohortKey: { isNull: true },
+            caseNumber: storageIdentity.identity.caseNumber,
+            language: storageIdentity.identity.language,
+            ...fallbackDecisionCourtMatch(storageIdentity.identity),
+            ecli: { isNotNull: true },
+          },
+          columns: IDENTITY_COLUMNS,
+          extras: IDENTITY_EXTRAS,
+          limit: MAX_LEGACY_DOCKET_CANDIDATES + 1,
+        });
+  if (legacy.length > MAX_LEGACY_DOCKET_CANDIDATES) {
+    return panic(
+      "Legacy fallback ECLI candidates exceed the bounded identity scan",
+    );
+  }
+  const ecliKey =
+    storageIdentity.identity.evidence.type === "ecli"
+      ? storageIdentity.identity.evidence.value
+      : null;
+  const normalized = legacy.filter(
+    ({ ecli }) => ecli !== null && fallbackEcliComparisonKey(ecli) === ecliKey,
+  );
+  const ids = [
+    ...new Set([...aliases, ...keyed, ...normalized].map(({ id }) => id)),
+  ];
+  if (ids.length > 1) {
+    return panic("Exact fallback identities have conflicting decision owners");
+  }
+  const id = ids.at(0);
+  return id === undefined ? undefined : await findIdentityRowTx(tx, id);
+};
+
 type FindFallbackDecisionOptions = Pick<
   FindExistingDecisionOptions,
   "sourceId" | "storageIdentity"
@@ -401,6 +479,12 @@ export const findFallbackDecisionTx = async (
   tx: Transaction,
   { sourceId, storageIdentity }: FindFallbackDecisionOptions,
 ) => {
+  if (storageIdentity.type === "strong") {
+    return await findStrongFallbackDecisionTx(tx, {
+      sourceId,
+      storageIdentity,
+    });
+  }
   const exact = await tx.query.caseLawDecisions.findFirst({
     where: {
       sourceId: { eq: sourceId },

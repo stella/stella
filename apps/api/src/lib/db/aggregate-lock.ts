@@ -3112,16 +3112,16 @@ export const lockCaseLawRemovalSource = async ({
 };
 
 /** Serialize fallback publication enrichment through the decision row write, including absent rows. */
-export const lockCaseLawFallbackPublication = async ({
+export const lockCaseLawFallbackIdentity = async ({
   tx,
   sourceId,
-  publicationHash,
+  identityKey,
 }: {
   tx: ExecuteTransaction;
   sourceId: SafeId<"caseLawSource">;
-  publicationHash: string;
+  identityKey: string;
 }): Promise<void> => {
   await tx.execute(
-    sql`SELECT pg_advisory_xact_lock(hashtext('case_law_fallback_publication'), hashtext(${`${sourceId}:${publicationHash}`}))`,
+    sql`SELECT pg_advisory_xact_lock(hashtext('case_law_fallback_identity'), hashtext(${`${sourceId}:${identityKey}`}))`,
   );
 };

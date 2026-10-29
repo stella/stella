@@ -2,6 +2,10 @@
 import { panic, Result } from "better-result";
 import { not } from "drizzle-orm";
 
+import {
+  DECISION_IDENTIFIER_TYPES,
+  normalizeStructuredDecisionIdentifier,
+} from "@stll/legal-ast/decision-identifier";
 import { sha256Hex } from "@stll/sha256/bun";
 
 import { listingCourtIdentity } from "@/api/lib/case-law/decision-court-identity";
@@ -77,13 +81,17 @@ export const fallbackDecisionIdentity = (
     return { type: "unidentifiable" };
   }
   const court = listingCourtIdentity(input);
-  if (court.type !== "unknown-court" && ecli.length > 0) {
+  const normalizedEcli = normalizeStructuredDecisionIdentifier({
+    type: DECISION_IDENTIFIER_TYPES.ECLI,
+    value: ecli,
+  });
+  if (court.type !== "unknown-court" && normalizedEcli.length > 0) {
     return {
       type: "decision",
       language,
       court,
       caseNumber,
-      evidence: { type: "ecli", value: ecli },
+      evidence: { type: "ecli", value: normalizedEcli },
     };
   }
   if (court.type !== "unknown-court" && sheetNumber.length > 0) {
@@ -283,6 +291,10 @@ export type DecisionStorageIdentity =
       type: "strong";
       identity: Extract<FallbackDecisionIdentity, { type: "decision" }>;
       key: string;
+      aliases: readonly {
+        identity: Extract<FallbackDecisionIdentity, { type: "decision" }>;
+        key: string;
+      }[];
     }
   | {
       type: "content";
@@ -311,7 +323,20 @@ export const decisionStorageIdentity = (
     return { type: "unkeyable", identity };
   }
   if (identity.type === "decision") {
-    return { type: "strong", identity, key };
+    const sheetIdentity = fallbackDecisionIdentity({
+      ...result,
+      ecli: undefined,
+    });
+    const sheetKey = fallbackDecisionIdentityKey(sheetIdentity);
+    const aliases = [{ identity, key }];
+    if (
+      sheetIdentity.type === "decision" &&
+      sheetKey !== null &&
+      sheetKey !== key
+    ) {
+      aliases.push({ identity: sheetIdentity, key: sheetKey });
+    }
+    return { type: "strong", identity, key, aliases };
   }
   const publicationHash = scopedPublicationHash(
     identity,
@@ -412,13 +437,12 @@ export const decisionStorageIdentityMatch = (
     return {
       sourceDocumentId: ABSENT_FIELD,
       OR: [
-        { fallbackIdentityKey: storage.key },
-        {
-          ...legacyScope,
-          ...(storage.identity.evidence.type === "ecli"
-            ? { ecli: storage.identity.evidence.value }
-            : { sheetNumber: storage.identity.evidence.value }),
-        },
+        { fallbackIdentityKey: { in: storage.aliases.map(({ key }) => key) } },
+        ...storage.aliases.flatMap(({ identity: alias }) =>
+          alias.evidence.type === "sheet-number"
+            ? [{ ...legacyScope, sheetNumber: alias.evidence.value }]
+            : [],
+        ),
       ],
     };
   }
@@ -426,14 +450,14 @@ export const decisionStorageIdentityMatch = (
     sourceDocumentId: ABSENT_FIELD,
     OR: [
       { fallbackContentHash: storage.contentHash },
-      {
-        ...legacyScope,
-        contentHash: storage.publishedContentHash,
-        ecli: storage.identity.evidence.ecli ?? ABSENT_FIELD,
-        sheetNumber: storage.identity.evidence.sheetNumber ?? ABSENT_FIELD,
-        decisionDate: storage.identity.evidence.decisionDate ?? ABSENT_FIELD,
-        decisionType: storage.identity.evidence.decisionType ?? ABSENT_FIELD,
-      },
+      ...(storage.documentState === "document"
+        ? [
+            {
+              ...legacyScope,
+              contentHash: storage.publishedContentHash,
+            },
+          ]
+        : []),
     ],
   };
 };
@@ -455,4 +479,42 @@ export const decisionStorageEnrichmentMatch = (
         ? not(rowHoldsDocumentFor(table))
         : rowHoldsDocumentFor(table),
   };
+};
+
+/** Same owner as citation identifiers; spelling changes do not create ECLI aliases. */
+export const fallbackEcliComparisonKey = (value: string) =>
+  normalizeStructuredDecisionIdentifier({
+    type: DECISION_IDENTIFIER_TYPES.ECLI,
+    value,
+  });
+
+export const fallbackDecisionCourtMatch = (
+  identity: Exclude<FallbackDecisionIdentity, { type: "unidentifiable" }>,
+) =>
+  identity.court.type === "court-id"
+    ? { courtId: identity.court.courtId }
+    : {
+        courtId: ABSENT_FIELD,
+        court: identity.court.type === "court-name" ? identity.court.name : "",
+      };
+
+export const decisionStorageLockKeys = (
+  storage: DecisionStorageIdentity,
+): string[] => {
+  switch (storage.type) {
+    case "strong":
+      return storage.aliases.map(({ key }) => key).toSorted();
+    case "content":
+      return [
+        `content:${storage.contentHash}`,
+        `publication:${storage.publicationHash}`,
+      ].toSorted();
+    case "document":
+      return [];
+    case "unkeyable":
+      return panic("Unkeyable decisions have no storage lock");
+    default:
+      storage satisfies never;
+      return panic("Unhandled storage lock identity");
+  }
 };

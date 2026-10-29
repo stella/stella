@@ -365,6 +365,7 @@ describe("notice publication outcomes", () => {
       decisionDate: result.decisionDate ?? null,
       sourceDocumentId: result.sourceDocumentId ?? null,
       ecli: result.ecli ?? null,
+      sheetNumber: result.sheetNumber ?? null,
       metadata: result.metadata,
       sourceHash: result.rawHash,
       sourceHashVersion: 0,

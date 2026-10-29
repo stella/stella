@@ -1,11 +1,15 @@
 import { panic, Result } from "better-result";
-import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 
 import { createCaseLawDecisionSlug } from "@stll/api-contract/case-law-decision-route";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
-import { caseLawDecisionIdentifiers, caseLawDecisions } from "@/api/db/schema";
+import {
+  caseLawDecisionFallbackIdentities,
+  caseLawDecisionIdentifiers,
+  caseLawDecisions,
+} from "@/api/db/schema";
 import { runCitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import type { CitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import {
@@ -37,13 +41,17 @@ import {
   selectComposableSupplements,
 } from "@/api/handlers/case-law/ingestion/supplement-composition";
 import type { SafeId } from "@/api/lib/branded-types";
+import { canonicalDecisionIdSql } from "@/api/lib/case-law/decision-alias";
 import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
-import { decisionFallbackColumns } from "@/api/lib/case-law/fallback-decision-identity";
+import {
+  decisionFallbackColumns,
+  decisionStorageLockKeys,
+} from "@/api/lib/case-law/fallback-decision-identity";
 import {
   FALLBACK_DECISION_CONTENT_INDEX,
   FALLBACK_DECISION_IDENTITY_INDEX,
 } from "@/api/lib/case-law/fallback-decision-identity-constants";
-import { lockCaseLawFallbackPublication } from "@/api/lib/db/aggregate-lock";
+import { lockCaseLawFallbackIdentity } from "@/api/lib/db/aggregate-lock";
 import { corpusContentHash } from "@/api/lib/legal-search/corpus-content-hash";
 import type { ActiveCorpusProjectionSourceLock } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { lockActiveCorpusProjectionSourceByIdTx } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
@@ -213,6 +221,49 @@ const finishInsertedRowTx = async (
   return DECISION_ROW_WRITE_STATUS.APPLIED;
 };
 
+const reserveFallbackAliasesTx = async (
+  tx: Transaction,
+  write: DecisionRowWrite,
+  decisionId: SafeId<"caseLawDecision">,
+) => {
+  const { storageIdentity, sourceId } = write;
+  if (storageIdentity.type !== "strong") {
+    return;
+  }
+  // audit: skip - public corpus identity bookkeeping, not user activity
+  await tx
+    .insert(caseLawDecisionFallbackIdentities)
+    .values(
+      storageIdentity.aliases.map(({ key }) => ({
+        sourceId,
+        identityKey: key,
+        decisionId,
+      })),
+    )
+    .onConflictDoNothing();
+  const owners = await tx
+    .select({
+      id: canonicalDecisionIdSql(caseLawDecisionFallbackIdentities.decisionId),
+    })
+    .from(caseLawDecisionFallbackIdentities)
+    .where(
+      and(
+        eq(caseLawDecisionFallbackIdentities.sourceId, sourceId),
+        inArray(
+          caseLawDecisionFallbackIdentities.identityKey,
+          storageIdentity.aliases.map(({ key }) => key),
+        ),
+      ),
+    )
+    .limit(storageIdentity.aliases.length);
+  if (
+    owners.length !== storageIdentity.aliases.length ||
+    owners.some(({ id }) => id !== decisionId)
+  ) {
+    panic("Fallback alias reservation conflicts with its decision owner");
+  }
+};
+
 /**
  * Write the decision's row, its identifiers and citations in one transaction.
  * Every statement that writes the decision's own rows runs here; the phases
@@ -234,16 +285,16 @@ const writeDecisionRow = async (
       plan: { payloadColumns, storedPayloadUnchanged },
       inputProvenance,
     } = write;
-    if (write.storageIdentity.type === "content") {
-      await lockCaseLawFallbackPublication({
-        tx,
-        sourceId,
-        publicationHash: write.storageIdentity.publicationHash,
-      });
+    for (const identityKey of decisionStorageLockKeys(write.storageIdentity)) {
+      // db-await-in-loop: sorted strong aliases and weak evidence locks prevent inverse-order deadlocks.
+      await lockCaseLawFallbackIdentity({ tx, sourceId, identityKey });
     }
-    if (existing === undefined && write.storageIdentity.type === "content") {
+    if (
+      write.storageIdentity.type === "content" ||
+      write.storageIdentity.type === "strong"
+    ) {
       const winner = await findFallbackDecisionTx(tx, write);
-      if (winner !== undefined && winner.id !== decisionId) {
+      if (winner !== undefined && winner.id !== (existing?.id ?? decisionId)) {
         return DECISION_ROW_WRITE_STATUS.IDENTITY_MOVED;
       }
     }
@@ -306,6 +357,8 @@ const writeDecisionRow = async (
             storedPayloadUnchanged || inputProvenance.type === "stored",
         });
       }
+
+      await reserveFallbackAliasesTx(tx, write, existing.id);
 
       if (payloadNeedsGuard) {
         // The row is locked by the update above, so what this reads is
@@ -381,6 +434,7 @@ const writeDecisionRow = async (
     }
 
     const insertedId = await insertDecisionRowTx(tx, write, slugLadder);
+    await reserveFallbackAliasesTx(tx, write, insertedId);
     if (composedSupplements.length > 0) {
       await markSupplementsMerged(tx, {
         sourceId,
