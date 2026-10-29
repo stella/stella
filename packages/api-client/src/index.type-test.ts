@@ -81,48 +81,15 @@ true satisfies {
   ? false
   : true;
 
-declare const headerContractApi: HeaderContractClient;
-
-type MixedCaseRequest = { headers: { "iDeMpOtEnCy-KeY": string } };
-type LowerCaseRequest = { headers: { "idempotency-key": string } };
-type UpperCaseRequest = { headers: { "IDEMPOTENCY-KEY": string } };
-type OpaqueRequest = { headers: Record<string, string> };
-type OptionalOpaqueRequest = { headers?: Record<string, string> };
-type MixedFetchRequest = {
-  fetch: { headers: { "iDeMpOtEnCy-KeY": string } };
-};
-type UnionRequest = { headers: { "x-trace": string } } | MixedCaseRequest;
-
-type CaseGuardOptions<TOptions> = NonNullable<
-  Parameters<typeof headerContractApi.current.post<TOptions>>[1]
->;
-
-true satisfies MixedCaseRequest extends CaseGuardOptions<MixedCaseRequest>
-  ? false
-  : true;
-true satisfies LowerCaseRequest extends CaseGuardOptions<LowerCaseRequest>
-  ? false
-  : true;
-true satisfies UpperCaseRequest extends CaseGuardOptions<UpperCaseRequest>
-  ? false
-  : true;
-true satisfies OpaqueRequest extends CaseGuardOptions<OpaqueRequest>
-  ? false
-  : true;
-true satisfies OptionalOpaqueRequest extends CaseGuardOptions<OptionalOpaqueRequest>
-  ? false
-  : true;
-true satisfies MixedFetchRequest extends CaseGuardOptions<MixedFetchRequest>
-  ? false
-  : true;
-true satisfies UnionRequest extends CaseGuardOptions<UnionRequest>
-  ? false
-  : true;
-
-const inferHeaderContractOptions = (api: HeaderContractClient) => {
+const inferHeaderContractOptions = (
+  api: HeaderContractClient,
+  safeUnion:
+    { headers: { "x-trace": string } } | { fetch: { signal: AbortSignal } },
+) => {
   const body = { name: "Created" };
   const request = { headers: { "x-stella-capability": "things.create" } };
   const current = api.current.post(body, request);
+  const union = api.current.post(body, safeUnion);
   const inferredProof = api.proof.post(body, {
     headers: { "x-proof": "authorized", "x-trace": "request" },
     fetch: { signal: AbortSignal.timeout(1000) },
@@ -131,7 +98,7 @@ const inferHeaderContractOptions = (api: HeaderContractClient) => {
     headers: { "iDeMpOtEnCy-KeY": "intent" },
     fetch: { headers: new Headers({ "idempotency-key": "intent" }) },
   });
-  return { current, proof: inferredProof, replay: inferredReplay };
+  return { current, proof: inferredProof, replay: inferredReplay, union };
 };
 
 true satisfies Awaited<

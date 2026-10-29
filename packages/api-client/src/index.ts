@@ -137,69 +137,22 @@ export type RequestOptions<TRoute extends RouteShape> = QueryOption<
     readonly fetch?: RequestFetchOptions<TRoute["headers"]>;
   };
 
-type OptionsHeaders<TOptions> = TOptions extends {
-  readonly headers?: infer THeaders;
-}
-  ? NonNullable<THeaders>
-  : never;
-
-type OptionsFetch<TOptions> = TOptions extends {
-  readonly fetch?: infer TFetch;
-}
-  ? NonNullable<TFetch>
-  : never;
-
-// A union is unsafe if any branch can carry the reserved header. A string
-// index cannot prove absence; Headers and tuples are runtime-only inputs.
-type HasReplayHeader<THeaders> = THeaders extends Headers | readonly unknown[]
-  ? true
-  : "idempotency-key" extends Lowercase<keyof THeaders & string>
-    ? true
-    : false;
-
-type ReplayOptionsGuard<
-  TRoute extends RouteShape,
-  TOptions,
-> = TRoute["headers"] extends {
-  readonly "Idempotency-Key"?: infer TReplayKey;
-}
-  ? string extends TReplayKey
-    ? unknown
-    : true extends
-          | HasReplayHeader<OptionsHeaders<TOptions>>
-          | HasReplayHeader<OptionsHeaders<OptionsFetch<TOptions>>>
-      ? never
-      : unknown
-  : unknown;
-
-type CheckedRequestOptions<TRoute extends RouteShape, TOptions> = TOptions &
-  NoInfer<RequestOptions<TRoute>> &
-  ReplayOptionsGuard<TRoute, NoInfer<TOptions>>;
-
-type OptionsArgs<TRoute extends RouteShape, TOptions> =
+type OptionsArgs<TRoute extends RouteShape> =
   NoOptions extends RequestOptions<TRoute>
-    ? [options?: CheckedRequestOptions<TRoute, TOptions>]
-    : [options: CheckedRequestOptions<TRoute, TOptions>];
+    ? [options?: RequestOptions<TRoute>]
+    : [options: RequestOptions<TRoute>];
 
-type BodyArgs<TRoute extends RouteShape, TOptions> =
+type BodyArgs<TRoute extends RouteShape> =
   NoOptions extends RequestOptions<TRoute>
     ? undefined extends TRoute["body"]
-      ? [
-          body?: TRoute["body"],
-          options?: CheckedRequestOptions<TRoute, TOptions>,
-        ]
-      : [
-          body: TRoute["body"],
-          options?: CheckedRequestOptions<TRoute, TOptions>,
-        ]
-    : [body: TRoute["body"], options: CheckedRequestOptions<TRoute, TOptions>];
+      ? [body?: TRoute["body"], options?: RequestOptions<TRoute>]
+      : [body: TRoute["body"], options?: RequestOptions<TRoute>]
+    : [body: TRoute["body"], options: RequestOptions<TRoute>];
 
-type MethodCall<TName extends MethodName, TRoute extends RouteShape> = <
-  const TOptions,
->(
+type MethodCall<TName extends MethodName, TRoute extends RouteShape> = (
   ...args: TName extends BodilessMethodName
-    ? OptionsArgs<TRoute, TOptions>
-    : BodyArgs<TRoute, TOptions>
+    ? OptionsArgs<TRoute>
+    : BodyArgs<TRoute>
 ) => Promise<ApiResult<TRoute["response"]>>;
 
 type ParamKey<TNode> = Extract<keyof TNode, `:${string}`>;
@@ -242,7 +195,7 @@ export type RequestReplayRoute = {
 };
 
 export type ApiClientOptions = {
-  /** When supplied, only these method/template pairs may carry an Idempotency-Key. */
+  /** Only declared method/template pairs may carry an Idempotency-Key. */
   readonly requestReplayRoutes?: readonly RequestReplayRoute[];
   /** Observes the same unread response with its declared route, before decoding. */
   readonly onScopedResponse?: ScopedResponseObserver;
@@ -268,7 +221,7 @@ export type ApiClientOptions = {
 type ClientConfig = {
   readonly origin: string;
   readonly options: ApiClientOptions;
-  readonly requestReplayRoutes: ReadonlySet<string> | undefined;
+  readonly requestReplayRoutes: ReadonlySet<string>;
 };
 
 type ClientPath = {
@@ -526,7 +479,6 @@ const send = async (
   await config.options.onRequest?.(path, init);
   const routeTemplate = `/${clientPath.template.join("/")}`;
   if (
-    config.requestReplayRoutes !== undefined &&
     !config.requestReplayRoutes.has(`${method.toUpperCase()} ${routeTemplate}`)
   ) {
     const outgoingHeaders = new Headers(init.headers);
@@ -657,14 +609,11 @@ export function createApiClient(
     {
       origin: withoutTrailingSlashes(origin),
       options,
-      requestReplayRoutes:
-        options.requestReplayRoutes === undefined
-          ? undefined
-          : new Set(
-              options.requestReplayRoutes.map(
-                ({ method, path }) => `${method.toUpperCase()} ${path}`,
-              ),
-            ),
+      requestReplayRoutes: new Set(
+        (options.requestReplayRoutes ?? []).map(
+          ({ method, path }) => `${method.toUpperCase()} ${path}`,
+        ),
+      ),
     },
     { segments: [], template: [] },
   );

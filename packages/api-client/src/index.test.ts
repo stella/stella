@@ -679,13 +679,13 @@ describe("request replay header policy", () => {
     }
   });
 
-  test("clients without a replay policy preserve existing headers", async () => {
+  test("clients without a replay policy omit submission keys", async () => {
     for (const { clientOptions, requestOptions } of headerSources) {
       const result = await client(clientOptions).items.post(
         { name: "Created" },
         requestOptions,
       );
-      expect(result.data?.headers["idempotency-key"]).toBe(key);
+      expect(result.data?.headers["idempotency-key"]).toBeUndefined();
     }
   });
 });
