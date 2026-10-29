@@ -282,6 +282,8 @@
     "scripts/verify-workflow.test.ts",
     "scripts/verify.test.ts",
     "scripts/visual-preview-scope.test.ts",
+    "scripts/web-raw-json-api-census.test.ts",
+    "scripts/web-raw-json-api-census.ts",
     "scripts/workflow-cache-policy.test.ts",
     "scripts/workflow-call-permissions.test.ts",
     "scripts/workflow-concurrency.test.ts",
