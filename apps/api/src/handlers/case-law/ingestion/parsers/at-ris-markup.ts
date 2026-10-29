@@ -174,10 +174,12 @@ const readInlineNodes = (nodes: readonly AnyNode[], reader: Reader): Inline[] =>
 /**
  * Collapse whitespace across the whole inline tree (the XML prints no
  * layout whitespace of its own), trim both ends, and drop empty wrappers,
- * leading, trailing and repeated line breaks.
+ * leading, trailing and repeated line breaks. Breaks are judged on the
+ * last leaf emitted in reading order, so a wrapper never hides one.
  */
 export const normalizeInlineLayout = (inlines: readonly Inline[]): Inline[] => {
   let atStart = true;
+  let lastLeaf: "none" | "content" | "line-break" = "none";
   const walk = (nodes: readonly Inline[]): Inline[] => {
     const out: Inline[] = [];
     for (const node of nodes) {
@@ -190,15 +192,16 @@ export const normalizeInlineLayout = (inlines: readonly Inline[]): Inline[] => {
           continue;
         }
         atStart = text.endsWith(" ");
+        lastLeaf = "content";
         out.push({ ...node, text });
         continue;
       }
       if (node.type === "line-break") {
-        const last = out.at(-1);
-        if (last?.type === "line-break") {
+        if (lastLeaf !== "content") {
           continue;
         }
         atStart = true;
+        lastLeaf = "line-break";
         out.push(node);
         continue;
       }
@@ -209,23 +212,12 @@ export const normalizeInlineLayout = (inlines: readonly Inline[]): Inline[] => {
         }
         continue;
       }
+      lastLeaf = "content";
       out.push(node);
     }
     return out;
   };
-  const walked = walk(inlines);
-  return trimEnd(trimStart(walked));
-};
-
-const trimStart = (nodes: Inline[]): Inline[] => {
-  const first = nodes.at(0);
-  if (first === undefined) {
-    return nodes;
-  }
-  if (first.type === "line-break") {
-    return trimStart(nodes.slice(1));
-  }
-  return nodes;
+  return trimEnd(walk(inlines));
 };
 
 const trimEnd = (nodes: Inline[]): Inline[] => {
@@ -275,6 +267,17 @@ const isBlockElement = (node: AnyNode): boolean => {
   );
 };
 
+/**
+ * Whether a block element sits in `node`, directly or inside unknown
+ * wrappers at any depth: their paragraphs keep their own content types.
+ */
+const holdsBlock = (node: Element): boolean =>
+  node.children.some(
+    (child) =>
+      isBlockElement(child) ||
+      (isTag(child) && specOf(child.name) === undefined && holdsBlock(child)),
+  );
+
 const readBlocks = (
   nodes: readonly AnyNode[],
   reader: Reader,
@@ -296,8 +299,7 @@ const readBlocks = (
     const spec = specOf(node.name);
     if (spec === undefined) {
       reader.unknown.add(node.name);
-      const holdsBlock = node.children.some(isBlockElement);
-      if (holdsBlock) {
+      if (holdsBlock(node)) {
         readBlocks(node.children, reader, items);
         continue;
       }

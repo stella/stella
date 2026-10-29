@@ -3,6 +3,7 @@
  * and its plain text, whatever order a decision prints them in.
  */
 import { describe, expect, test } from "bun:test";
+import * as cheerio from "cheerio";
 import fc from "fast-check";
 
 import type { Inline } from "@stll/legal-ast/document-ast";
@@ -13,7 +14,11 @@ import {
 } from "@stll/property-testing";
 
 import { parseRisDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/at-ris";
-import { RIS_ELEMENTS } from "@/api/handlers/case-law/ingestion/parsers/at-ris-markup";
+import {
+  normalizeInlineLayout,
+  readRisContent,
+  RIS_ELEMENTS,
+} from "@/api/handlers/case-law/ingestion/parsers/at-ris-markup";
 
 const config = (numRuns: number) =>
   propertyConfig({ numRuns, seed: propertySeed() });
@@ -120,6 +125,109 @@ describe("RIS fragments", () => {
         }
       }),
       config(300),
+    );
+  });
+});
+
+/** A text leaf, or a line break where the text is `undefined`. */
+const layoutLeaf = fc
+  .constantFrom("Recht", " ", "  ", "Zeit ", " Antrag", undefined)
+  .map((text): Inline =>
+    text === undefined ? { type: "line-break" } : { type: "text", text },
+  );
+
+/** A leaf, or a mark around any number of `inner` inlines. */
+const layoutLevel = (inner: fc.Arbitrary<Inline>): fc.Arbitrary<Inline> =>
+  fc.oneof(
+    layoutLeaf,
+    fc
+      .tuple(
+        fc.constantFrom("bold", "italic", "underline"),
+        fc.array(inner, { maxLength: 4 }),
+      )
+      .map(([type, children]): Inline => ({ type, children })),
+  );
+
+/** Text and line breaks under up to three levels of marks. */
+const layoutInline = layoutLevel(layoutLevel(layoutLevel(layoutLeaf)));
+
+/** The leaves of an inline tree in reading order. */
+const leavesOf = (inlines: readonly Inline[]): Inline[] =>
+  inlines.flatMap((inline) =>
+    "children" in inline ? leavesOf(inline.children) : [inline],
+  );
+
+describe("RIS inline layout", () => {
+  test("no line break leads, trails or repeats, whatever wraps it", () => {
+    assertProperty(
+      "at-ris-markup-line-breaks-single",
+      fc.property(fc.array(layoutInline, { maxLength: 8 }), (inlines) => {
+        const leaves = leavesOf(normalizeInlineLayout(inlines));
+        const breaks = leaves.flatMap((leaf, index) =>
+          leaf.type === "line-break" ? [index] : [],
+        );
+        for (const index of breaks) {
+          expect(index).toBeGreaterThan(0);
+          expect(index).toBeLessThan(leaves.length - 1);
+          expect(leaves.at(index + 1)?.type).not.toBe("line-break");
+        }
+        const text = (nodes: readonly Inline[]) =>
+          nonSpace(
+            nodes
+              .map((leaf) => (leaf.type === "text" ? leaf.text : ""))
+              .join(""),
+          );
+        expect(text(leaves)).toBe(text(leavesOf(inlines)));
+      }),
+      config(300),
+    );
+  });
+});
+
+const BLOCK_BODIES = [
+  '<absatz ct="text">eins</absatz>',
+  '<absatz ct="norm">ABGB §1</absatz>',
+  "<abstand />",
+  "<ueberschrift>Titel</ueberschrift>",
+  '<absatz ct="begruendung">zwei <b>drei</b></absatz>',
+] as const;
+
+const readItems = (body: string) => {
+  const $ = cheerio.load(`<risdok><nutzdaten>${body}</nutzdaten></risdok>`, {
+    xml: true,
+  });
+  const content = $("nutzdaten").first().get(0);
+  if (content === undefined) {
+    throw new Error("markup has no nutzdaten");
+  }
+  return readRisContent(content);
+};
+
+describe("RIS unknown wrappers", () => {
+  test("paragraphs inside unknown wrappers read as they would unwrapped", () => {
+    assertProperty(
+      "at-ris-markup-unknown-wrappers-transparent",
+      fc.property(
+        fc.array(fc.constantFrom(...BLOCK_BODIES), {
+          minLength: 1,
+          maxLength: 6,
+        }),
+        fc.array(fc.constantFrom("neu", "zusatz", "rahmen"), {
+          minLength: 1,
+          maxLength: 3,
+        }),
+        (blocks, wrappers) => {
+          const body = blocks.join("");
+          const wrapped = `${wrappers.map((name) => `<${name}>`).join("")}${body}${wrappers
+            .toReversed()
+            .map((name) => `</${name}>`)
+            .join("")}`;
+          const reading = readItems(wrapped);
+          expect(reading.items).toEqual(readItems(body).items);
+          expect(reading.unknownElements).toEqual([...new Set(wrappers)]);
+        },
+      ),
+      config(200),
     );
   });
 });
