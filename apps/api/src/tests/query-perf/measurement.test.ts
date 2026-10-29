@@ -44,6 +44,30 @@ test("a sequential scan on a large table fails while a declared small table pass
   ).toEqual([]);
 });
 
+test("a health-signal scan of pg_database passes while another catalog still counts as large", () => {
+  expect(
+    analyzePlan({
+      document: plan({
+        "Node Type": "Seq Scan",
+        "Relation Name": "pg_database",
+      }),
+      owner: "statement.owner",
+      ownerDeadlineMs: 30_000,
+      profileId: "small",
+      statement: "select datname from pg_database",
+    }),
+  ).toEqual([]);
+  expect(
+    analyzePlan({
+      document: plan({ "Node Type": "Seq Scan", "Relation Name": "pg_class" }),
+      owner: "statement.owner",
+      ownerDeadlineMs: 30_000,
+      profileId: "small",
+      statement: "select relname from pg_class",
+    }).map(({ kind }) => kind),
+  ).toEqual(["large-scan"]);
+});
+
 test("a lossy bitmap heap scan fails even without rows removed by recheck", () => {
   expect(
     analyzePlan({
