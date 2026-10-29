@@ -299,7 +299,7 @@
     "moreOptions": "Mais opções",
     "moreItemActions": "Mais ações para o item {number}",
     "noResults": "Nenhum recorte correspondente",
-    "noResultsDescription": "Deseja pesquisar “{query}” nos registros?",
+    "noResultsSearchRegistries": "Pesquisar “{query}” nos registros",
     "noGroup": "Sem grupo",
     "newGroupOption": "Novo grupo…",
     "copyItem": "Copiar item {number}",

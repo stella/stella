@@ -5066,6 +5066,16 @@
       "preferredNamePlaceholder": "Vaše jméno",
       "profileDescription": "Spravujte své osobní předvolby",
       "sendOtpCode": "Odeslat ověřovací kód",
+      "signInMethods": {
+        "confirmDescription": "Zadejte nový kód zaslaný na e-mail, abyste tento způsob přihlášení odpojili.",
+        "confirmTitle": "Odpojit {provider}?",
+        "description": "Propojte účty, které používají stejnou ověřenou e-mailovou adresu.",
+        "emailCode": "Kód z e-mailu",
+        "emailCodeDescription": "Vždy se můžete přihlásit pomocí kódu zaslaného na e-mail.",
+        "lastMethod": "Než tento účet odpojíte, propojte jiný účet.",
+        "title": "Způsoby přihlášení",
+        "unavailable": "Aby bylo možné odpojit způsoby přihlášení, musí být nakonfigurováno doručování e-mailů."
+      },
       "timezone": "Časové pásmo",
       "timezoneDescription": "Použije se pro časové údaje v oznámeních a e-mailech",
       "timezoneSaved": "Časové pásmo aktualizováno",

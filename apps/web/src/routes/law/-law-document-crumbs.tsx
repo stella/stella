@@ -26,6 +26,7 @@ import {
 } from "@/features/statutes/statute-status";
 import { useFormatter } from "@/i18n/formatting-context";
 
+import { CaseFileSwitcher } from "./-components/public-decision-case-file";
 import type { LawCrumbTrail } from "./-law-crumb-trail.logic";
 
 /*
@@ -189,6 +190,12 @@ export const LawDocumentCrumbs = ({ trail }: { trail: LawCrumbTrail }) => {
                 {trail.caseNumber}
               </BidiText>
             </BreadcrumbPage>
+            {trail.caseFile !== null && (
+              <CaseFileSwitcher
+                caseFile={trail.caseFile}
+                caseNumber={trail.caseNumber}
+              />
+            )}
             {trail.legalArea !== null && (
               <span className="text-muted-foreground min-w-0 truncate">
                 {DECISION_TITLE_SEPARATOR} {trail.legalArea}
