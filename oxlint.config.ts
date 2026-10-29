@@ -238,6 +238,12 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-test-support-import.fixture.ts", [
     "no-test-support-import/no-test-support-import",
   ]),
+  fixtureRuleOverride("retention-source-independence.fixture.ts", [
+    "retention-source-independence/retention-source-independence",
+  ]),
+  fixtureRuleOverride("retention-oracle-owner.fixture.ts", [
+    "retention-oracle-owner/retention-oracle-owner",
+  ]),
   fixtureRuleOverride("no-failure-as-empty.fixture.ts", [
     "no-failure-as-empty/no-failure-as-empty",
   ]),
@@ -1846,6 +1852,8 @@ const config = defineConfig({
     "./.oxlint-plugins/no-direct-entity-glyph.ts",
     "./.oxlint-plugins/no-direct-lucide-import.ts",
     "./.oxlint-plugins/no-test-support-import.ts",
+    "./.oxlint-plugins/retention-source-independence.ts",
+    "./.oxlint-plugins/retention-oracle-owner.ts",
     "./.oxlint-plugins/no-banned-glyph.ts",
     "./.oxlint-plugins/no-hand-built-step-marker.ts",
     "./.oxlint-plugins/no-custom-account-modal.ts",
@@ -1903,7 +1911,6 @@ const config = defineConfig({
     "./.oxlint-plugins/no-direct-ingestion-checkpoint-write.ts",
     "./.oxlint-plugins/no-literal-decision-court.ts",
     "./.oxlint-plugins/no-literal-derived-attribute.ts",
-    "./.oxlint-plugins/no-parser-validator-calls.ts",
     "./.oxlint-plugins/no-raw-parser-html.ts",
     "./.oxlint-plugins/no-swallowed-item-error.ts",
     "./.oxlint-plugins/no-failure-as-empty.ts",
@@ -2199,6 +2206,20 @@ const config = defineConfig({
         "apps/api/src/tests/**",
       ],
       rules: { "no-test-support-import/no-test-support-import": "error" },
+    },
+    {
+      files: [
+        "apps/api/src/handlers/case-law/ingestion/retention/sources/**/*.ts",
+      ],
+      excludeFiles: ["**/*.test.ts"],
+      rules: {
+        "retention-source-independence/retention-source-independence": "error",
+      },
+    },
+    {
+      files: ["apps/api/src/**/*.ts"],
+      excludeFiles: ["**/*.test.ts", "apps/api/src/tests/**"],
+      rules: { "retention-oracle-owner/retention-oracle-owner": "error" },
     },
     {
       files: ["apps/api/src/lib/proofs/checked-transaction.ts"],
@@ -4518,24 +4539,6 @@ const config = defineConfig({
     {
       files: [".oxlint-plugins/__fixtures__/no-raw-parser-html.fixture.ts"],
       rules: { "no-raw-parser-html/no-raw-parser-html": "error" },
-    },
-    {
-      files: [
-        "apps/api/src/handlers/case-law/ingestion/{parsers,adapters}/**/*.ts",
-        "apps/api/src/lib/legal-search/parsers/**/*.ts",
-        ".oxlint-plugins/__fixtures__/no-parser-validator-calls.fixture.ts",
-        ".oxlint-plugins/__fixtures__/no-parser-validator-calls.fixture.import.ts",
-        ".oxlint-plugins/__fixtures__/no-parser-validator-calls.fixture.call.ts",
-        ".oxlint-plugins/__fixtures__/no-parser-validator-calls.fixture.legacy.ts",
-        ".oxlint-plugins/__fixtures__/no-parser-validator-calls.fixture.stale.ts",
-      ],
-      excludeFiles: [
-        "**/*.test.ts",
-        "apps/api/src/lib/legal-search/parsers/validate-ast.ts",
-      ],
-      rules: {
-        "no-parser-validator-calls/no-parser-validator-calls": "error",
-      },
     },
     {
       files: [
