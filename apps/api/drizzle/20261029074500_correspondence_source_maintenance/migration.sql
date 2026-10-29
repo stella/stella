@@ -207,4 +207,38 @@ RESET ROLE;--> statement-breakpoint
 GRANT EXECUTE ON FUNCTION public.correspondence_has_other_sources(uuid, uuid) TO stella;--> statement-breakpoint
 REVOKE CREATE ON SCHEMA public FROM stella_correspondence_source;--> statement-breakpoint
 -- stella-migration-safety: reviewed grant-privileges - Disable runtime switching to the private lifecycle role after installing its trigger-only entry point.
-GRANT stella_correspondence_source TO CURRENT_USER WITH SET FALSE;
+GRANT stella_correspondence_source TO CURRENT_USER WITH SET FALSE;--> statement-breakpoint
+
+-- Tenant routines remain available to the application without granting them
+-- to every private maintenance or public-corpus role through PUBLIC.
+REVOKE EXECUTE ON FUNCTION public.delete_service_oauth_client_credential() FROM PUBLIC;--> statement-breakpoint
+REVOKE EXECUTE ON FUNCTION public.legal_reader_annotation_claim_held(uuid, uuid, uuid) FROM PUBLIC;--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.legal_reader_annotation_claim_held(uuid, uuid, uuid) TO stella;--> statement-breakpoint
+REVOKE EXECUTE ON FUNCTION public.legal_reader_annotation_claim_visible(uuid, uuid, uuid) FROM PUBLIC;--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.legal_reader_annotation_claim_visible(uuid, uuid, uuid) TO stella;--> statement-breakpoint
+REVOKE EXECUTE ON FUNCTION public.legal_reader_annotation_document_held(uuid, uuid, uuid) FROM PUBLIC;--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.legal_reader_annotation_document_held(uuid, uuid, uuid) TO stella;--> statement-breakpoint
+REVOKE EXECUTE ON FUNCTION public.legal_reader_annotation_document_visible(uuid, uuid, uuid) FROM PUBLIC;--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.legal_reader_annotation_document_visible(uuid, uuid, uuid) TO stella;--> statement-breakpoint
+REVOKE EXECUTE ON FUNCTION public.mark_sanctions_contact_insert() FROM PUBLIC;--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.mark_sanctions_contact_insert() TO stella;--> statement-breakpoint
+REVOKE EXECUTE ON FUNCTION public.mark_sanctions_contact_update() FROM PUBLIC;--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.mark_sanctions_contact_update() TO stella;--> statement-breakpoint
+REVOKE EXECUTE ON FUNCTION public.mark_sanctions_organization_insert() FROM PUBLIC;--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.mark_sanctions_organization_insert() TO stella;--> statement-breakpoint
+REVOKE EXECUTE ON FUNCTION public.mark_sanctions_organization_update() FROM PUBLIC;--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.mark_sanctions_organization_update() TO stella;--> statement-breakpoint
+REVOKE EXECUTE ON FUNCTION public.register_uploaded_correspondence_source() FROM PUBLIC;--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.register_uploaded_correspondence_source() TO stella;--> statement-breakpoint
+REVOKE EXECUTE ON FUNCTION public.stella_entity_display_name(text, text, uuid, uuid) FROM PUBLIC;--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.stella_entity_display_name(text, text, uuid, uuid) TO stella;--> statement-breakpoint
+REVOKE EXECUTE ON FUNCTION public.stella_refresh_entity_display_name(uuid) FROM PUBLIC;--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.stella_refresh_entity_display_name(uuid) TO stella;--> statement-breakpoint
+REVOKE EXECUTE ON FUNCTION public.stella_refresh_entity_display_name_from_entity() FROM PUBLIC;--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.stella_refresh_entity_display_name_from_entity() TO stella;--> statement-breakpoint
+REVOKE EXECUTE ON FUNCTION public.stella_refresh_entity_display_name_from_field() FROM PUBLIC;--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.stella_refresh_entity_display_name_from_field() TO stella;--> statement-breakpoint
+REVOKE EXECUTE ON FUNCTION public.sync_time_entry_timer_state() FROM PUBLIC;--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.sync_time_entry_timer_state() TO stella;--> statement-breakpoint
+REVOKE EXECUTE ON FUNCTION public.user_files_enforce_organization_key() FROM PUBLIC;--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.user_files_enforce_organization_key() TO stella;--> statement-breakpoint

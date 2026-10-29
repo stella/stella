@@ -11,6 +11,8 @@ import { WORKSPACE_ACCESS_VIEW_NAME } from "@/api/db/rls";
 import { FLOW_TRANSITION_SPECS_V1 } from "@/api/lib/db/flow-run-transition-spec";
 import { transitionTriggerSql } from "@/api/lib/db/transition-sql";
 
+import { parseMigrationStatements } from "../../../../scripts/check-migration-safety";
+
 const DRIZZLE_DIR = nodePath.resolve(import.meta.dir, "../../drizzle");
 const WORKSPACE_AUTHORIZATION_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
@@ -550,6 +552,54 @@ export const installPgliteCorrespondenceSources = async (
       "migration.sql",
     ),
   );
+  // Privilege changes require their existing routines, which schema push omits.
+  // Derive prerequisites from the migration and install their latest definitions.
+  const restrictedNames = new Set(
+    maintenance.flatMap((statement) => {
+      const name = /^REVOKE EXECUTE ON FUNCTION public\.([a-z_]+)\(/u
+        .exec(executableSql(statement))
+        ?.at(1);
+      return name ? [name] : [];
+    }),
+  );
+  const definitions = new Map<string, string>();
+  for (const migration of readdirSync(DRIZZLE_DIR, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .toSorted()) {
+    const migrationPath = nodePath.join(
+      DRIZZLE_DIR,
+      migration,
+      "migration.sql",
+    );
+    for (const { raw: source } of parseMigrationStatements(
+      readFileSync(migrationPath, "utf-8"),
+    )) {
+      const name =
+        /^CREATE(?: OR REPLACE)? FUNCTION (?:public\.)?"?([a-z_]+)"?\(/u
+          .exec(source)
+          ?.at(1);
+      if (name && restrictedNames.has(name)) {
+        definitions.set(name, source);
+      }
+    }
+  }
+  for (const name of restrictedNames) {
+    const definition = definitions.get(name);
+    if (!definition) {
+      panic(`Migration function definition not found: ${name}`);
+    }
+  }
+  for (const definition of definitions.values()) {
+    await db.execute(
+      sql.raw(
+        definition.replace(
+          /^CREATE(?: OR REPLACE)? FUNCTION/u,
+          "CREATE OR REPLACE FUNCTION",
+        ),
+      ),
+    );
+  }
   // Reinstall this routine's policies from its migration so fixtures exercise
   // the shipped policy definitions as well as the private role and functions.
   await db.execute(

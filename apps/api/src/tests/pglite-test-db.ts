@@ -832,9 +832,6 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await db.transaction(async (tx) => {
     await installPgliteEntityFeatureGateMaintenance(tx);
   });
-  await db.transaction(async (tx) => {
-    await installPgliteCorrespondenceSources(tx);
-  });
   await installPgliteAgentSkillRevisionTrigger(db);
   await installPgliteSyntheticMembershipTrigger(db);
   await installPgliteUserFileOrganizationKeyGuard(db);
@@ -876,6 +873,9 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteChatStoredContentEgress(db);
   await installPgliteSanctionsMonitoringTriggers(db);
   await installPglitePlaybookDocumentTypeKey(db);
+  await db.transaction(async (tx) => {
+    await installPgliteCorrespondenceSources(tx);
+  });
 
   return client;
 };
