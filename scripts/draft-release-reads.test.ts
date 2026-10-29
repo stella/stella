@@ -12,6 +12,8 @@ import { repoRelativePath } from "@stll/portable-path";
 // construction; those jobs are listed here with the reason, so a new
 // read-only reader fails until it is classified.
 const PUBLISHED_ONLY_READERS: Readonly<Record<string, string>> = {
+  "release.yml/publish-chrome-extension":
+    "runs only for a stable release after publish-release succeeds",
   "release.yml/release-health-gate":
     "reads the previous stable release, published before this one is cut",
   "release.yml/release-complete":
