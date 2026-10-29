@@ -257,7 +257,9 @@ const STATEMENT_HANDLERS: readonly StatementHandler[] = [
     pattern: pattern(
       `^CREATE\\s+(?:OR\\s+REPLACE\\s+)?FUNCTION\\s+${GATE_ROUTINE}\\s*\\(`,
     ),
-    apply: (state, match, sql) => state.functions.set(group(match, 1), sql),
+    apply: (state, match, sql) => {
+      state.functions.set(group(match, 1), sql);
+    },
   },
   {
     pattern: pattern(
@@ -273,26 +275,29 @@ const STATEMENT_HANDLERS: readonly StatementHandler[] = [
     pattern: pattern(
       `^ALTER\\s+FUNCTION\\s+${GATE_ROUTINE}\\s*\\([^)]*\\)\\s+RENAME\\s+TO\\s+"?([a-z0-9_]+)"?`,
     ),
-    apply: (state, match, sql) =>
-      renameRoutine(state, group(match, 1), group(match, 2), sql),
+    apply: (state, match, sql) => {
+      renameRoutine(state, group(match, 1), group(match, 2), sql);
+    },
   },
   {
     pattern: pattern(
       `^CREATE\\s+POLICY\\s+"?(${POLICY_NAMES})"?\\s+ON\\s+${tableId}`,
     ),
-    apply: (state, match, sql) =>
-      state.policies.set(statementKey(group(match, 2), group(match, 1)), sql),
+    apply: (state, match, sql) => {
+      state.policies.set(statementKey(group(match, 2), group(match, 1)), sql);
+    },
   },
   {
     pattern: pattern(
       `^DROP\\s+POLICY\\s+(?:IF\\s+EXISTS\\s+)?"?(${POLICY_NAMES})"?\\s+ON\\s+${tableId}`,
     ),
-    apply: (state, match) =>
+    apply: (state, match) => {
       forget(
         state,
         "policies",
         (key) => key === statementKey(group(match, 2), group(match, 1)),
-      ),
+      );
+    },
   },
   {
     // A changed expression replaces the stored statement; a rename moves it.
@@ -336,39 +341,43 @@ const STATEMENT_HANDLERS: readonly StatementHandler[] = [
     pattern: pattern(
       `^ALTER\\s+TABLE\\s+(?:ONLY\\s+)?${tableId}\\s+(DISABLE|ENABLE(?:\\s+ALWAYS|\\s+REPLICA)?)\\s+TRIGGER\\s+(ALL|USER|"?${GATE_TRIGGER}"?)`,
     ),
-    apply: (state, match) =>
+    apply: (state, match) => {
       toggleTriggers(
         state,
         group(match, 1),
         group(match, 3).replaceAll('"', ""),
         group(match, 2).toUpperCase() === "ENABLE",
-      ),
+      );
+    },
   },
   {
     pattern: pattern(
       `^ALTER\\s+TRIGGER\\s+"?(${GATE_TRIGGER})"?\\s+ON\\s+${tableId}\\s+RENAME\\s+TO\\s+"?([a-z0-9_]+)"?`,
     ),
-    apply: (state, match, sql) =>
+    apply: (state, match, sql) => {
       renameTrigger(
         state,
         statementKey(group(match, 2), group(match, 1)),
         statementKey(group(match, 2), group(match, 3)),
         sql,
-      ),
+      );
+    },
   },
   {
     pattern: pattern(
       `^CREATE\\s+(?:UNIQUE\\s+)?INDEX(?:\\s+CONCURRENTLY)?(?:\\s+IF\\s+NOT\\s+EXISTS)?\\s+"?(${GATE_INDEX})"?\\s+ON\\s+(?:ONLY\\s+)?${tableId}`,
     ),
-    apply: (state, match, sql) =>
-      state.indexes.set(statementKey(group(match, 2), group(match, 1)), sql),
+    apply: (state, match, sql) => {
+      state.indexes.set(statementKey(group(match, 2), group(match, 1)), sql);
+    },
   },
   {
     pattern: pattern(
       `^DROP\\s+INDEX(?:\\s+CONCURRENTLY)?(?:\\s+IF\\s+EXISTS)?\\s+(?:"?public"?\\.)?"?(${GATE_INDEX})"?`,
     ),
-    apply: (state, match) =>
-      forget(state, "indexes", (key) => key.endsWith(`.${group(match, 1)}`)),
+    apply: (state, match) => {
+      forget(state, "indexes", (key) => key.endsWith(`.${group(match, 1)}`));
+    },
   },
   {
     pattern: pattern(
@@ -388,14 +397,17 @@ const STATEMENT_HANDLERS: readonly StatementHandler[] = [
     pattern: pattern(
       `^GRANT\\s+[\\s\\S]+?\\s+ON\\s+(?:TABLE\\s+)?${tableId}\\s+TO\\s+stella_entity_gate\\b`,
     ),
-    apply: (state, match, sql) => state.grants.set(group(match, 1), sql),
+    apply: (state, match, sql) => {
+      state.grants.set(group(match, 1), sql);
+    },
   },
   {
     pattern: pattern(
       `^REVOKE\\s+[\\s\\S]+?\\s+ON\\s+(?:TABLE\\s+)?${tableId}\\s+FROM\\s+stella_entity_gate\\b`,
     ),
-    apply: (state, match) =>
-      forget(state, "grants", (key) => key === group(match, 1)),
+    apply: (state, match) => {
+      forget(state, "grants", (key) => key === group(match, 1));
+    },
   },
   {
     pattern: pattern(
@@ -419,14 +431,17 @@ const STATEMENT_HANDLERS: readonly StatementHandler[] = [
   },
   {
     pattern: pattern(`^DROP\\s+TABLE\\s+(?:IF\\s+EXISTS\\s+)?${tableId}`),
-    apply: (state, match) => dropTable(state, group(match, 1)),
+    apply: (state, match) => {
+      dropTable(state, group(match, 1));
+    },
   },
   {
     pattern: pattern(
       `^ALTER\\s+TABLE\\s+(?:IF\\s+EXISTS\\s+)?${tableId}\\s+RENAME\\s+TO\\s+${id}`,
     ),
-    apply: (state, match) =>
-      renameTable(state, group(match, 1), group(match, 2)),
+    apply: (state, match) => {
+      renameTable(state, group(match, 1), group(match, 2));
+    },
   },
 ];
 

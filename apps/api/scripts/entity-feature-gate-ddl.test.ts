@@ -157,13 +157,15 @@ test("stale: a changed routine is replaced, as its owner when the gate role owns
   expect(graph?.state).toBe("stale");
   expect(graph?.repair).toHaveLength(1);
   expect(propagate?.state).toBe("stale");
-  expect(propagate?.repair.slice(0, 2)).toEqual([
+  expect(propagate?.repair.slice(0, 3)).toEqual([
+    "GRANT CREATE ON SCHEMA public TO stella_entity_gate;",
     "GRANT stella_entity_gate TO CURRENT_USER WITH SET TRUE;",
     "SET LOCAL ROLE stella_entity_gate;",
   ]);
-  expect(propagate?.repair.slice(-2)).toEqual([
+  expect(propagate?.repair.slice(-3)).toEqual([
     "RESET ROLE;",
     "GRANT stella_entity_gate TO CURRENT_USER WITH SET FALSE;",
+    "REVOKE CREATE ON SCHEMA public FROM stella_entity_gate;",
   ]);
 });
 
@@ -174,11 +176,13 @@ test("over-granted: an unchanged routine PUBLIC may execute again is revoked as 
   expect(
     entityFeatureGateTableSql(tables, descriptors, { ...effective, revokes }),
   ).toEqual([
+    "GRANT CREATE ON SCHEMA public TO stella_entity_gate;",
     "GRANT stella_entity_gate TO CURRENT_USER WITH SET TRUE;",
     "SET LOCAL ROLE stella_entity_gate;",
     "REVOKE ALL ON FUNCTION public.entity_feature_gate_propagate() FROM PUBLIC;",
     "RESET ROLE;",
     "GRANT stella_entity_gate TO CURRENT_USER WITH SET FALSE;",
+    "REVOKE CREATE ON SCHEMA public FROM stella_entity_gate;",
   ]);
 });
 

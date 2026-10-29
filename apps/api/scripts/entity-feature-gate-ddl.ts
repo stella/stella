@@ -86,8 +86,8 @@ const GATE_ROLE_ROUTINES: ReadonlySet<string> = new Set([
 /**
  * A routine's replacement statements, run as the role that owns it. The
  * gate migration leaves the migrator a member of the gate role WITH SET
- * FALSE, so the switch is granted for the replacement and withdrawn after,
- * exactly as that migration did.
+ * FALSE and the gate role without CREATE on the schema, so both are granted
+ * for the replacement and withdrawn after, exactly as that migration did.
  */
 export const routineReplacementSql = (
   name: string,
@@ -95,11 +95,13 @@ export const routineReplacementSql = (
 ): string[] =>
   GATE_ROLE_ROUTINES.has(name)
     ? [
+        "GRANT CREATE ON SCHEMA public TO stella_entity_gate;",
         "GRANT stella_entity_gate TO CURRENT_USER WITH SET TRUE;",
         "SET LOCAL ROLE stella_entity_gate;",
         ...statements,
         "RESET ROLE;",
         "GRANT stella_entity_gate TO CURRENT_USER WITH SET FALSE;",
+        "REVOKE CREATE ON SCHEMA public FROM stella_entity_gate;",
       ]
     : [...statements];
 
