@@ -597,7 +597,7 @@ case_law_sitemap_shards.last_modified_at  timestamptz  not null  case-law.ts:266
 
 ## case_law_sitemap_changes · `caseLawSitemapChanges` · case-law.ts:2694 · rls
 
-The sitemap months a write touched, appended by triggers (migration `20261029140800_case_law_sitemap_changes`): the month a decision left and the month it ente…
+The sitemap months a write touched, appended by triggers (migration `20261029140900_case_law_sitemap_changes`): the month a decision left and the month it ente…
 
 ```text
 case_law_sitemap_changes.id       bigint  pk,generated,not null  case-law.ts:2697

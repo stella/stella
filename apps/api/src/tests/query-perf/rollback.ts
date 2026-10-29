@@ -1,12 +1,11 @@
 import { panic, Result, TaggedError } from "better-result";
-import { sql } from "drizzle-orm";
 
 import type { TransactionOf } from "@/api/db/scoped";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 
 /** Return a measurement while rolling back every write it made. */
 export const withQueryPerfRollback = async <T>(
-  database: GatedTestDb,
+  database: Pick<GatedTestDb, "transaction">,
   run: (tx: TransactionOf<GatedTestDb>) => Promise<T>,
 ): Promise<T> => {
   class MeasurementComplete extends TaggedError("MeasurementComplete")<{
@@ -32,31 +31,3 @@ export const withQueryPerfRollback = async <T>(
   }
   return result.error.value;
 };
-
-/**
- * A task keeps its transaction callbacks as savepoints inside the fixture's
- * rollback transaction. A callback's read-only declaration is enforced by
- * PostgreSQL; restore read-write at the parent before the next callback.
- */
-export const rollbackTaskDatabase = (
-  database: GatedTestDb,
-  tx: TransactionOf<GatedTestDb>,
-) =>
-  new Proxy(database, {
-    get: (_source, property) => {
-      if (property === "transaction") {
-        return async <T>(
-          run: (nested: TransactionOf<GatedTestDb>) => Promise<T>,
-        ) => {
-          const value = await tx.transaction(run);
-          await tx.execute(sql`SET TRANSACTION READ WRITE`);
-          return value;
-        };
-      }
-      const value: unknown = Reflect.get(tx, property, tx);
-      if (typeof value !== "function") {
-        return value;
-      }
-      return (...args: unknown[]): unknown => Reflect.apply(value, tx, args);
-    },
-  });

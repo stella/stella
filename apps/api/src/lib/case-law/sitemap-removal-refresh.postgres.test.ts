@@ -19,6 +19,7 @@ import {
   refreshCaseLawSitemapShards,
   SITEMAP_WHOLE_COUNTRY,
 } from "@/api/lib/case-law/sitemap-shard-refresh";
+import { SITEMAP_ALL_BUCKET } from "@/api/lib/case-law/sitemap-shard-sql";
 import {
   lockCaseLawRemovalSnapshots,
   withAggregateTransaction,
@@ -125,15 +126,53 @@ describe.skipIf(!enabled)("monthly sitemap removal fence (postgres)", () => {
         name: "Monthly sitemap source",
       }),
     );
-    await db.insert(caseLawDecisions).values({
-      id: decisionId,
-      sourceId,
-      country,
-      court: "Court",
-      language: "en",
-      caseNumber: "1/2024",
-      decisionDate: "2024-01-01",
-    });
+    const survivorId = createSafeId<"caseLawDecision">();
+    const publishedAt = new Date("2024-03-01T00:00:00Z");
+    await db.insert(caseLawDecisions).values([
+      {
+        id: decisionId,
+        sourceId,
+        country,
+        court: "Court",
+        language: "en",
+        caseNumber: "1/2024",
+        decisionDate: "2024-01-01",
+        updatedAt: publishedAt,
+      },
+      {
+        id: survivorId,
+        sourceId,
+        country,
+        court: "Court",
+        language: "en",
+        caseNumber: "2/2024",
+        decisionDate: "2024-02-01",
+        updatedAt: publishedAt,
+      },
+    ]);
+    const refreshDb =
+      asTestRaw<Parameters<typeof refreshCaseLawSitemapShards>[0]>(db);
+    await refreshCaseLawSitemapShards(refreshDb);
+    await refreshCaseLawSitemapShards(refreshDb);
+    expect(
+      await db
+        .select()
+        .from(caseLawSitemapChanges)
+        .where(eq(caseLawSitemapChanges.country, country)),
+    ).toEqual([]);
+    expect(
+      await db
+        .select({ month: caseLawSitemapShards.month })
+        .from(caseLawSitemapShards)
+        .where(eq(caseLawSitemapShards.country, country))
+        .orderBy(caseLawSitemapShards.month),
+    ).toEqual([{ month: "01" }, { month: "02" }]);
+    // Only January is dirty. Removal retires February too, so its rebuilding
+    // depends on the generation trigger's whole-country invalidation.
+    await db
+      .update(caseLawDecisions)
+      .set({ updatedAt: new Date("2024-04-01T00:00:00Z") })
+      .where(eq(caseLawDecisions.id, decisionId));
     const counted = Promise.withResolvers<undefined>();
     const release = Promise.withResolvers<undefined>();
     const removalCommitted = Promise.withResolvers<undefined>();
@@ -245,16 +284,62 @@ describe.skipIf(!enabled)("monthly sitemap removal fence (postgres)", () => {
         year: SITEMAP_WHOLE_COUNTRY,
         month: SITEMAP_WHOLE_COUNTRY,
       });
-      // A later run rebuilds from the post-removal corpus, consuming its log.
-      await refreshCaseLawSitemapShards(
-        asTestRaw<Parameters<typeof refreshCaseLawSitemapShards>[0]>(db),
+      // The post-removal monthly row is consumed first; the following run
+      // expands the retained country invalidation before rebuilding February.
+      expect(await refreshCaseLawSitemapShards(refreshDb)).toMatchObject({
+        type: "pending",
+      });
+      expect(await refreshCaseLawSitemapShards(refreshDb)).toMatchObject({
+        type: "refreshed",
+      });
+      const recount = v.parse(
+        v.array(
+          v.object({
+            year: v.string(),
+            month: v.string(),
+            bucket: v.string(),
+            total: v.number(),
+            lastModifiedAt: v.date(),
+          }),
+        ),
+        executedRows(
+          await db.execute(sql`SELECT
+        COALESCE(to_char(d.decision_date, 'YYYY'), 'undated') AS year,
+        COALESCE(to_char(d.decision_date, 'MM'), '00') AS month,
+        ${SITEMAP_ALL_BUCKET}::text AS bucket, count(*)::int AS total,
+        max(d.updated_at) AS "lastModifiedAt"
+        FROM case_law_published_decisions d JOIN case_law_sources s ON s.id = d.source_id
+        WHERE d.country = ${country}
+          AND (s.descriptor IS NULL OR s.descriptor ->> 'allowsRedistribution' = 'true')
+        GROUP BY 1, 2 ORDER BY 1, 2`),
+        ),
       );
+      expect(recount).toEqual([
+        {
+          year: "2024",
+          month: "02",
+          bucket: SITEMAP_ALL_BUCKET,
+          total: 1,
+          lastModifiedAt: publishedAt,
+        },
+      ]);
       expect(
         await db
-          .select()
+          .select({
+            year: caseLawSitemapShards.year,
+            month: caseLawSitemapShards.month,
+            bucket: caseLawSitemapShards.bucket,
+            total: caseLawSitemapShards.total,
+            lastModifiedAt: caseLawSitemapShards.lastModifiedAt,
+          })
           .from(caseLawSitemapShards)
-          .where(eq(caseLawSitemapShards.country, country)),
-      ).toEqual([]);
+          .where(eq(caseLawSitemapShards.country, country))
+          .orderBy(
+            caseLawSitemapShards.year,
+            caseLawSitemapShards.month,
+            caseLawSitemapShards.bucket,
+          ),
+      ).toEqual(recount);
     } finally {
       release.resolve(undefined);
       removalCommitted.resolve(undefined);
