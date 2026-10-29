@@ -1261,7 +1261,7 @@ const SUPERSCRIPT_RAISE_RATIO = 0.15;
  * the typesetter set them, never an index or a reference.
  */
 const continuesNumber = (before: string, digits: string): boolean =>
-  /^\d{3}$/u.test(digits) && /\d\s*$/u.test(before);
+  /^\d{3}$/u.test(digits) && /^\d$/u.test(before.trimEnd().slice(-1));
 
 /**
  * A line without the superscripts the text layer kept on it, and those
@@ -1786,7 +1786,9 @@ const pageNotesOf = (
     const label = parseIntegerToken(opening.label, {
       sign: "unsigned",
       max: 999,
-    }).unwrap();
+    }).unwrap(
+      "A footnote label is an unsigned integer of at most three digits",
+    );
     const referred = references.filter(({ text }) => text === opening.label);
     if (label <= last || referred.length === 0) {
       return undefined;
@@ -1827,7 +1829,9 @@ const pageNotesOf = (
       last = parseIntegerToken(opening.label, {
         sign: "unsigned",
         max: 999,
-      }).unwrap();
+      }).unwrap(
+        "A footnote label is an unsigned integer of at most three digits",
+      );
       openedOnPage = true;
       notes.push({ ...opening, lines: [] });
     } else if (line.text.length > 0) {
@@ -1905,7 +1909,9 @@ const readSetPages = ({
           label: parseIntegerToken(note.label, {
             sign: "unsigned",
             max: 999,
-          }).unwrap(),
+          }).unwrap(
+            "A footnote label is an unsigned integer of at most three digits",
+          ),
           labelSize: note.labelSize ?? read.labelSize,
         };
         const footnote = {
