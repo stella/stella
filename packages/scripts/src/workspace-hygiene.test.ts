@@ -1,10 +1,19 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import repositoryPackage from "../../../package.json";
-import { validateWorkspaceRoot } from "./workspace-hygiene";
+import {
+  regenerateInstallOwnedIgnoredGeneratedOutputs,
+  validateWorkspaceRoot,
+} from "./workspace-hygiene";
 
 // The temporary roots have no Git history; a pinned local environment keeps
 // the app-boundary baseline out of these checks wherever the tests run.
@@ -21,6 +30,60 @@ afterEach(() => {
 });
 
 describe("workspace hygiene", () => {
+  test("postinstall regenerates a stale ignored API test partition", () => {
+    const rootDir = mkdtempSync(
+      path.join(tmpdir(), "stella-hygiene-generated-"),
+    );
+    tempRoots.push(rootDir);
+    const outputs = ["roots", "src", "tests"].map((name) =>
+      path.join(rootDir, `apps/api/.cache/typecheck-declarations/${name}.json`),
+    );
+    for (const output of outputs) {
+      mkdirSync(path.dirname(output), { recursive: true });
+      writeFileSync(output, '{"stale":true}\n');
+    }
+
+    const status = regenerateInstallOwnedIgnoredGeneratedOutputs(
+      rootDir,
+      (command, cwd) => {
+        expect(command).toEqual([
+          "bun",
+          "packages/scripts/src/api-typecheck-partition.ts",
+          "--write",
+        ]);
+        expect(cwd).toBe(rootDir);
+        for (const output of outputs) {
+          writeFileSync(output, '{"stale":false}\n');
+        }
+        return 0;
+      },
+    );
+
+    expect(status).toBe(0);
+    expect(outputs.map((output) => readFileSync(output, "utf-8"))).toEqual([
+      '{"stale":false}\n',
+      '{"stale":false}\n',
+      '{"stale":false}\n',
+    ]);
+  });
+
+  test("postinstall hygiene still rejects a stale tracked file", async () => {
+    const rootDir = createWorkspaceRoot({
+      rootPackageJson: {
+        devDependencies: {
+          "@stll/oxlint-config": "0.6.0",
+          turbo: "2.10.3",
+        },
+      },
+      webPackageJson: { name: "@stll/web" },
+    });
+
+    expect(await validateWorkspaceRoot(rootDir, LOCAL)).toContainEqual({
+      message: `devDependencies.@stll/oxlint-config must be ${repositoryPackage.devDependencies["@stll/oxlint-config"]}; found 0.6.0`,
+      path: "package.json",
+    });
+  });
+
   test("rejects alternate test runners and their types", async () => {
     const deniedNames = [
       "jest",
