@@ -69,7 +69,7 @@ import type {
   ReviewState,
 } from "./billing-review-state";
 import "./day-review.css";
-import { canAssign, matchDay } from "./day-review-logic";
+import { canAssign, matchDay, narrativeEvidence } from "./day-review-logic";
 import type {
   DayReviewGroup,
   MatchConfidence,
@@ -143,10 +143,14 @@ const useReviewEdits = (groups: ReadonlyMap<string, DraftableGroup>) => {
   ) {
     setReview({ edits, sources: captureReviewSources([...groups.values()]) });
   }
-  const narrative = (group: DayReviewGroup) =>
-    group.evidence.length
+  const narrative = (group: DayReviewGroup) => {
+    const evidence = narrativeEvidence(
+      group.evidence,
+      group.matter?.name ?? null,
+    );
+    return evidence.length
       ? t("narrativeEvidence", {
-          evidence: format.list(group.evidence, { type: "conjunction" }),
+          evidence: format.list(evidence, { type: "conjunction" }),
         })
       : t("narrativeApps", {
           apps: format.list(
@@ -154,6 +158,7 @@ const useReviewEdits = (groups: ReadonlyMap<string, DraftableGroup>) => {
             { type: "conjunction" },
           ),
         });
+  };
   const initial = (group: DayReviewGroup) =>
     initialReviewEdit({
       type: "single",
@@ -341,10 +346,6 @@ export const ActivityDayReview = ({
     eligible.map((group) => ({ group, content: editFor(group).content })),
   );
   const selectionExceedsLimit = items.length > DESKTOP_ACTIVITY_REVIEW_LIMIT;
-  const selectedTenths = selected.reduce(
-    (sum, group) => sum + group.roundedTenths,
-    0,
-  );
   const session = useBillingDraftSession({
     snapshot,
     billingDrafts,
@@ -557,8 +558,6 @@ export const ActivityDayReview = ({
       <ReviewBar
         selected={selected}
         itemCount={items.length}
-        eligibleCount={eligible.length}
-        hours={hours(selectedTenths / 10)}
         snapshot={snapshot}
         submission={submission}
         drafts={session.bar}
@@ -618,7 +617,7 @@ const DayReviewMetrics = ({ header, segments }: DayReviewMetricsProps) => {
   return (
     <div className="flex flex-wrap items-center gap-5">
       {header}
-      <div className="ms-auto flex flex-wrap gap-6 tabular-nums">
+      <div className="ms-auto flex flex-wrap gap-4 tabular-nums">
         {[
           { label: t("matchedToMatters"), ms: matchedMs, shown: true },
           // Active equals matched on a fully assigned day; show it only when
@@ -632,12 +631,12 @@ const DayReviewMetrics = ({ header, segments }: DayReviewMetricsProps) => {
         ]
           .filter(({ shown }) => shown)
           .map(({ label, ms }) => (
-            <div key={label}>
-              <b className="block text-base font-semibold">
+            <p key={label} className="text-sm">
+              <b className="font-medium">
                 {t("hours", { hours: hours(ms / 3_600_000) })}
-              </b>
-              <span className="text-muted-foreground text-xs">{label}</span>
-            </div>
+              </b>{" "}
+              <span className="text-muted-foreground">{label}</span>
+            </p>
           ))}
       </div>
     </div>
@@ -770,8 +769,6 @@ const DRAFT_BUTTON_LABELS = {
 const ReviewBar = ({
   selected,
   itemCount,
-  eligibleCount,
-  hours,
   snapshot,
   submission,
   drafts,
@@ -781,8 +778,6 @@ const ReviewBar = ({
 }: {
   selected: readonly DayReviewGroup[];
   itemCount: number;
-  eligibleCount: number;
-  hours: string;
   snapshot: ActivityDaySnapshot;
   submission: Submission;
   drafts: ReviewBarDrafts | null;
@@ -799,66 +794,54 @@ const ReviewBar = ({
     submission.type === "discarding" ||
     (submission.type !== "retry" && (selected.length === 0 || !valid));
   return (
-    <footer className="bg-card sticky bottom-0 z-10 -mx-6 flex flex-col gap-2 border-t px-6 py-3">
-      <div className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-        <span className="tabular-nums">
-          {t("selectedSummary", {
-            selected: selected.length,
-            total: eligibleCount,
-            hours,
-          })}{" "}
-          · {t("roundedSixMinutes")}
-        </span>
-        <span className="ms-auto flex items-center gap-1">
-          <LockKeyholeIcon aria-hidden="true" className="size-3" />
-          {t("batchPrivacy")}
-        </span>
-      </div>
-      {/* The actions get their own row so creating drafts never wraps away. */}
-      <div className="flex flex-wrap items-center justify-end gap-2">
-        <CopyButton
-          copiedLabel={t("copied")}
-          disabled={selected.length === 0}
-          iconClassName="size-4"
-          label={t("copySummary")}
-          onCopy={onCopy}
+    <footer className="bg-card sticky bottom-0 z-10 -mx-6 flex flex-wrap items-center gap-2 border-t px-6 py-3">
+      <p className="text-muted-foreground me-auto flex items-center gap-1.5 text-xs">
+        <LockKeyholeIcon aria-hidden="true" className="size-3" />
+        {t("batchPrivacy")} · <span>{t("roundedSixMinutes")}</span>
+      </p>
+      <CopyButton
+        copiedLabel={t("copied")}
+        disabled={selected.length === 0}
+        iconClassName="size-4"
+        iconOnly
+        label={t("copySummary")}
+        onCopy={onCopy}
+        size="icon-sm"
+        variant="ghost"
+      />
+      {drafts?.undoable ? (
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={!draftEditable}
+          onClick={drafts.onUndoAll}
+        >
+          {t("aiUndoAll")}
+        </Button>
+      ) : null}
+      {drafts ? (
+        <Button
           size="sm"
           variant="outline"
-        />
-        {drafts?.undoable ? (
-          <Button
-            size="sm"
-            variant="ghost"
-            disabled={!draftEditable}
-            onClick={drafts.onUndoAll}
-          >
-            {t("aiUndoAll")}
-          </Button>
-        ) : null}
-        {drafts ? (
-          <Button
-            size="sm"
-            variant="outline"
-            title={
-              drafts.status === "tooMany"
-                ? t("aiDraftLimit", {
-                    limit: DESKTOP_BILLING_DRAFT_LIMITS.entries,
-                  })
-                : undefined
-            }
-            disabled={!draftEditable || drafts.status !== "draft"}
-            onClick={drafts.onDraft}
-          >
-            <AiActionIcon aria-hidden="true" />
-            {t(DRAFT_BUTTON_LABELS[drafts.status])}
-          </Button>
-        ) : null}
-        <Button size="sm" disabled={disabled} onClick={onSubmit}>
-          {submission.type === "retry"
-            ? t("pendingRetry")
-            : t("createDrafts", { count: itemCount })}
+          title={
+            drafts.status === "tooMany"
+              ? t("aiDraftLimit", {
+                  limit: DESKTOP_BILLING_DRAFT_LIMITS.entries,
+                })
+              : undefined
+          }
+          disabled={!draftEditable || drafts.status !== "draft"}
+          onClick={drafts.onDraft}
+        >
+          <AiActionIcon aria-hidden="true" />
+          {t(DRAFT_BUTTON_LABELS[drafts.status])}
         </Button>
-      </div>
+      ) : null}
+      <Button size="sm" disabled={disabled} onClick={onSubmit}>
+        {submission.type === "retry"
+          ? t("pendingRetry")
+          : t("createDrafts", { count: itemCount })}
+      </Button>
     </footer>
   );
 };
@@ -897,7 +880,7 @@ const ReviewItemFields = ({
   const t = useTranslations("activity");
   const format = useFormatter();
   return (
-    <div className="mt-2" id={`review-item-${item.key}`}>
+    <div className="mt-1 flex flex-col gap-1" id={`review-item-${item.key}`}>
       {structured ? (
         <p className="text-muted-foreground flex items-center gap-2 text-xs">
           <MatterIcon matter={item.matter} className="size-3" />
@@ -914,26 +897,30 @@ const ReviewItemFields = ({
           <BillingClassificationCodes classification={item.classification} />
         </div>
       ) : null}
-      <Textarea
-        className="hover:border-input focus-visible:border-ring min-h-9 resize-none border-transparent bg-transparent px-2 py-1.5 text-sm"
-        rows={1}
-        aria-label={t("entryNarrative")}
-        aria-describedby={`review-item-${item.key}`}
-        value={item.narrative}
-        maxLength={DESKTOP_TIME_ENTRY_NARRATIVE_MAX_LENGTH}
-        disabled={!editable}
-        onChange={(event) => onNarrative(event.target.value)}
-      />
-      <Label className="text-muted-foreground gap-1.5 text-xs">
-        <Switch
-          aria-label={t("entryBillable")}
-          aria-describedby={`review-item-${item.key}`}
-          checked={item.billable}
-          disabled={!editable}
-          onCheckedChange={(checked) => onBillable(checked)}
-        />
-        {t("entryBillable")}
-      </Label>
+      <div className="flex items-start gap-3">
+        <div className="text-muted-foreground min-w-0 flex-1 text-sm">
+          <Textarea
+            inline
+            rows={1}
+            aria-label={t("entryNarrative")}
+            aria-describedby={`review-item-${item.key}`}
+            value={item.narrative}
+            maxLength={DESKTOP_TIME_ENTRY_NARRATIVE_MAX_LENGTH}
+            disabled={!editable}
+            onChange={(event) => onNarrative(event.target.value)}
+          />
+        </div>
+        <Label className="text-muted-foreground shrink-0 gap-2 text-xs">
+          {t("entryBillable")}
+          <Switch
+            aria-label={t("entryBillable")}
+            aria-describedby={`review-item-${item.key}`}
+            checked={item.billable}
+            disabled={!editable}
+            onCheckedChange={(checked) => onBillable(checked)}
+          />
+        </Label>
+      </div>
     </div>
   );
 };
@@ -1059,7 +1046,7 @@ const ReviewEntries = ({
           return (
             <div
               key={matter.id}
-              className={`grid grid-cols-[1.25rem_minmax(0,1fr)] gap-3 px-4 py-3.5 min-[40rem]:grid-cols-[1.25rem_minmax(0,1fr)_auto] ${!edit.selected ? "opacity-55" : ""}`}
+              className={`flex items-start gap-3 px-4 py-3 ${!edit.selected ? "opacity-55" : ""}`}
             >
               <Checkbox
                 className="mt-0.5"
@@ -1075,76 +1062,91 @@ const ReviewEntries = ({
                   })
                 }
               />
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2 text-sm font-medium">
-                  <ActivityMatterHeading matter={matter} />
-                  {matter.signals.upcomingDeadline ? (
-                    <ReviewStatusBadge tone="neutral">
-                      {t("upcomingDeadline")} ·{" "}
-                      {format.dateTime(
-                        calendarDate(
-                          matter.signals.upcomingDeadline.slice(0, 10),
-                        ),
-                        { dateStyle: "short" },
-                      )}
-                    </ReviewStatusBadge>
-                  ) : null}
-                  {matter.signals.newlyAssignedAt ? (
-                    <ReviewStatusBadge tone="neutral">
-                      {t("newAssignment")}
-                    </ReviewStatusBadge>
-                  ) : null}
-                  {group.confidence === "likely" ? (
-                    <ReviewStatusBadge
-                      tone={CONFIDENCE_TONES[group.confidence]}
-                    >
-                      {t(CONFIDENCE_LABELS[group.confidence])}
-                    </ReviewStatusBadge>
-                  ) : null}
+              <div className="min-w-0 flex-1">
+                <div className="flex items-baseline gap-3">
+                  <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 text-sm font-medium">
+                    <MatterIcon matter={matter} className="size-4 shrink-0" />
+                    <bdi id={`review-matter-${matter.id}`}>{matter.name}</bdi>
+                    {matter.signals.upcomingDeadline ? (
+                      <ReviewStatusBadge tone="neutral">
+                        {t("upcomingDeadline")} ·{" "}
+                        {format.dateTime(
+                          calendarDate(
+                            matter.signals.upcomingDeadline.slice(0, 10),
+                          ),
+                          { dateStyle: "short" },
+                        )}
+                      </ReviewStatusBadge>
+                    ) : null}
+                    {matter.signals.newlyAssignedAt ? (
+                      <ReviewStatusBadge tone="neutral">
+                        {t("newAssignment")}
+                      </ReviewStatusBadge>
+                    ) : null}
+                    {group.confidence === "likely" ? (
+                      <ReviewStatusBadge
+                        tone={CONFIDENCE_TONES[group.confidence]}
+                      >
+                        {t(CONFIDENCE_LABELS[group.confidence])}
+                      </ReviewStatusBadge>
+                    ) : null}
+                  </div>
+                  <span
+                    className="text-sm font-medium tabular-nums"
+                    title={t("roundedSixMinutes")}
+                  >
+                    {t("hours", { hours: hours(group.roundedTenths / 10) })}
+                  </span>
                 </div>
-                <Evidence group={group} snapshot={snapshot} compact />
-                {absorbed.has(group.id) ? (
-                  <p className="text-muted-foreground mt-2 px-2 text-xs">
-                    {t("aiMergedIntoAnother")}
-                  </p>
-                ) : (
-                  <>
-                    {reviewItems(
-                      [{ group: { ...group, matter }, content: edit.content }],
-                      currentGroups,
-                    ).map((item) => (
-                      <ReviewItemFields
-                        key={item.key}
-                        item={item}
-                        structured={edit.content.type === "accepted"}
-                        editable={editable}
-                        onNarrative={(narrative) =>
-                          dispatch({
-                            type: "set-narrative",
-                            groupId: group.id,
-                            initial: edit,
-                            itemKey: item.key,
-                            narrative,
-                          })
-                        }
-                        onBillable={(billable) =>
-                          dispatch({
-                            type: "set-billable",
-                            groupId: group.id,
-                            initial: edit,
-                            itemKey: item.key,
-                            billable,
-                          })
-                        }
-                      />
-                    ))}
-                    {draftReview({ ...group, matter })}
-                  </>
-                )}
-              </div>
-              <div className="col-start-2 flex items-center justify-between gap-2 min-[40rem]:col-start-3 min-[40rem]:flex-col min-[40rem]:items-end">
-                <div className="text-base font-semibold tabular-nums">
-                  {t("hours", { hours: hours(group.roundedTenths / 10) })}
+                <div className="min-w-0">
+                  {matter.reference ? (
+                    <p className="text-muted-foreground text-xs">
+                      {matter.reference}
+                    </p>
+                  ) : null}
+                  {absorbed.has(group.id) ? (
+                    <p className="text-muted-foreground mt-1 text-xs">
+                      {t("aiMergedIntoAnother")}
+                    </p>
+                  ) : (
+                    <>
+                      {reviewItems(
+                        [
+                          {
+                            group: { ...group, matter },
+                            content: edit.content,
+                          },
+                        ],
+                        currentGroups,
+                      ).map((item) => (
+                        <ReviewItemFields
+                          key={item.key}
+                          item={item}
+                          structured={edit.content.type === "accepted"}
+                          editable={editable}
+                          onNarrative={(narrative) =>
+                            dispatch({
+                              type: "set-narrative",
+                              groupId: group.id,
+                              initial: edit,
+                              itemKey: item.key,
+                              narrative,
+                            })
+                          }
+                          onBillable={(billable) =>
+                            dispatch({
+                              type: "set-billable",
+                              groupId: group.id,
+                              initial: edit,
+                              itemKey: item.key,
+                              billable,
+                            })
+                          }
+                        />
+                      ))}
+                      {draftReview({ ...group, matter })}
+                    </>
+                  )}
                 </div>
               </div>
             </div>

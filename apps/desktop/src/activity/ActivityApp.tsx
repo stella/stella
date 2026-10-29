@@ -542,7 +542,7 @@ const DayHeader = ({
       </nav>
       <div className="flex items-center gap-3">
         <PersistenceBadge snapshot={snapshot} />
-        <Button onClick={onToggleRecording} variant="outline">
+        <Button onClick={onToggleRecording} size="sm" variant="ghost">
           {recording ? (
             <PauseIcon aria-hidden="true" />
           ) : (
@@ -567,15 +567,19 @@ const PersistenceBadge = ({ snapshot }: { snapshot: ActivityDaySnapshot }) => {
     );
   }
   return (
-    <span className="text-muted-foreground bg-muted flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs">
+    <span
+      className="text-muted-foreground flex items-center gap-1.5 text-xs"
+      title={t("encrypted")}
+    >
       {snapshot.recordingStatus === "recording" ? (
         <span
           data-activity-recording
           className="bg-destructive size-1.5 rounded-full"
         />
       ) : null}
+      {status}
       <LockKeyholeIcon aria-hidden="true" className="size-3" />
-      {status} · {t("encrypted")}
+      <span className="sr-only">{t("encrypted")}</span>
     </span>
   );
 };

@@ -13,12 +13,19 @@ import { cn } from "../lib/utils";
 type TextareaProps = React.ComponentProps<"textarea"> & {
   size?: ControlSize | number;
   unstyled?: boolean;
+  /**
+   * Editable text inside a row (a description under a title): no shell, no
+   * minimum height and no inset, so it reads as the text it holds and grows
+   * with it.
+   */
+  inline?: boolean;
 };
 
 const Textarea = ({
   className,
   size = CONTROL_SIZE.default,
   unstyled = false,
+  inline = false,
   dir,
   onChange,
   ...props
@@ -38,6 +45,7 @@ const Textarea = ({
       className={
         cn(
           !unstyled &&
+            !inline &&
             "border-input bg-background text-foreground ring-ring/24 has-focus-visible:border-ring has-aria-invalid:border-destructive/36 has-focus-visible:has-aria-invalid:border-destructive/64 has-focus-visible:has-aria-invalid:ring-destructive/16 dark:bg-input/32 dark:has-aria-invalid:ring-destructive/24 relative inline-flex w-full rounded-lg border text-base shadow-xs/5 not-dark:bg-clip-padding before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-lg)-1px)] not-has-disabled:has-not-focus-visible:not-has-aria-invalid:before:shadow-[0_1px_--theme(--color-black/4%)] has-focus-visible:ring-[3px] has-disabled:opacity-64 has-[:disabled,:focus-visible,[aria-invalid]]:shadow-none sm:text-sm dark:not-has-disabled:has-not-focus-visible:not-has-aria-invalid:before:shadow-[0_-1px_--theme(--color-white/6%)]",
           className,
         ) || undefined
@@ -51,6 +59,7 @@ const Textarea = ({
             className={cn(
               "field-sizing-content min-h-17.5 w-full rounded-[inherit] px-[calc(--spacing(3)-1px)] py-[calc(--spacing(1.5)-1px)] outline-none max-sm:min-h-20.5",
               TEXTAREA_SIZE_CLASS_NAMES[controlSize],
+              inline && "min-h-0 resize-none px-0 py-0 max-sm:min-h-0",
             )}
             data-slot="textarea"
             {...mergeProps(defaultProps, props, { onChange: handleChange })}

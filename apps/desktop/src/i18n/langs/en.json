@@ -161,7 +161,6 @@
     "searchMatters": "Search matters",
     "searchingMatters": "Searching matters…",
     "selectRange": "Select a range",
-    "selectedSummary": "{selected} of {total} selected · {hours} h",
     "settings": "Settings",
     "strongMatch": "Strong match",
     "timelineHint": "Drag across the timeline to assign any range to a matter.",

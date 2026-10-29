@@ -161,7 +161,6 @@
     "searchMatters": "Otsi toimikuid",
     "searchingMatters": "Toimikute otsimine…",
     "selectRange": "Vali ajavahemik",
-    "selectedSummary": "Valitud {selected} / {total} · {hours} h",
     "settings": "Seaded",
     "strongMatch": "Kindel vaste",
     "timelineHint": "Lohista ajajoonel, et määrata ajavahemik toimikule.",

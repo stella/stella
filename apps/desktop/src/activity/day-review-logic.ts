@@ -343,3 +343,29 @@ export const matchDay = ({
     ),
   };
 };
+
+const DOCUMENT_EXTENSION =
+  /\.(?:docx?|dotx?|pdf|xlsx?|pptx?|rtf|odt|txt|msg|eml|pages)$/iu;
+const NARRATIVE_EVIDENCE_LIMIT = 3;
+
+/**
+ * The few things a default description should name: documents without their
+ * file extension, titles that only repeat the matter's name dropped (the
+ * matter's own page in stella or a mail client), each once, at most three.
+ */
+export const narrativeEvidence = (
+  evidence: readonly string[],
+  matterName: string | null,
+): string[] => {
+  const matter = matterName?.trim().toLocaleLowerCase();
+  const items = evidence
+    .map((item) => item.trim().replace(DOCUMENT_EXTENSION, ""))
+    .filter(
+      (item) =>
+        item.length > 0 &&
+        (matter === undefined ||
+          matter.length === 0 ||
+          !item.toLocaleLowerCase().startsWith(matter)),
+    );
+  return [...new Set(items)].slice(0, NARRATIVE_EVIDENCE_LIMIT);
+};

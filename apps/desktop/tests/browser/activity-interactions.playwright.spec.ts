@@ -2166,7 +2166,7 @@ for (const language of ["en", "ar"] as const) {
   });
 }
 
-test("timeline and totals reuse local app visuals and keep a neutral fallback", async ({
+test("app totals reuse local app visuals and keep a neutral fallback", async ({
   page,
 }) => {
   const iconDataUrl =
@@ -2199,18 +2199,6 @@ test("timeline and totals reuse local app visuals and keep a neutral fallback", 
   const fallback = totals.getByRole("listitem").filter({ hasText: "Preview" });
   await expect(fallback.locator("img")).toHaveCount(0);
   await expect(fallback.locator("svg").first()).toBeVisible();
-  const lane = page.getByRole("region", {
-    name: enMessages.activity.reviewToday,
-  });
-  await expect(
-    lane.getByRole("button", { name: /Example Editor$/u }).locator("img"),
-  ).toHaveAttribute("src", iconDataUrl);
-  await expect(
-    lane
-      .getByRole("button", { name: /Preview$/u })
-      .locator("svg")
-      .first(),
-  ).toBeVisible();
   await page
     .getByRole("button", { name: "Stop recording Example Editor" })
     .click();
@@ -2241,7 +2229,7 @@ for (const motion of ["no-preference", "reduce"] as const) {
       }),
     ).toHaveCount(0);
     const matterSegments = preview.locator(
-      "[data-activity-matter-lane] [data-activity-segment]",
+      "[data-activity-segment][data-activity-matter]",
     );
     await expect(matterSegments).toHaveCount(previewApps.length);
     for (const segment of await matterSegments.all()) {

@@ -161,7 +161,6 @@
     "searchMatters": "Buscar asuntos",
     "searchingMatters": "Buscando asuntos…",
     "selectRange": "Seleccionar un intervalo",
-    "selectedSummary": "{selected} de {total} seleccionados · {hours} h",
     "settings": "Ajustes",
     "strongMatch": "Coincidencia clara",
     "timelineHint": "Arrastre sobre la cronología para asignar un intervalo a un asunto.",

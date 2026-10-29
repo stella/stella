@@ -161,7 +161,6 @@
     "searchMatters": "Buscar casos",
     "searchingMatters": "Buscando casos…",
     "selectRange": "Selecionar um intervalo",
-    "selectedSummary": "{selected} de {total} selecionados · {hours} h",
     "settings": "Configurações",
     "strongMatch": "Correspondência clara",
     "timelineHint": "Arraste sobre a linha do tempo para atribuir um intervalo a um caso.",

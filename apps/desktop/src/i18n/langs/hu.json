@@ -161,7 +161,6 @@
     "searchMatters": "Ügyek keresése",
     "searchingMatters": "Ügyek keresése…",
     "selectRange": "Időszak kijelölése",
-    "selectedSummary": "{selected} / {total} kijelölve · {hours} óra",
     "settings": "Beállítások",
     "strongMatch": "Biztos egyezés",
     "timelineHint": "Húzással jelöljön ki az idővonalon egy ügyhöz rendelendő időszakot.",
