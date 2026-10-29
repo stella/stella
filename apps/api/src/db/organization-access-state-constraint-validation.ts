@@ -31,5 +31,5 @@ export const ORGANIZATION_ACCESS_STATE_CONSTRAINT_VALIDATIONS =
             tables,
             constraints: [{ tableName, constraintName }],
           }),
-      } as const) satisfies OnlineRepair,
+      }) as const satisfies OnlineRepair,
   );

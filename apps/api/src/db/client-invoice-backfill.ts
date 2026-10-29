@@ -125,5 +125,5 @@ export const CLIENT_INVOICE_CONSTRAINT_VALIDATIONS =
             tables,
             constraints: [constraint],
           }),
-      } as const) satisfies OnlineRepair,
+      }) as const satisfies OnlineRepair,
   );

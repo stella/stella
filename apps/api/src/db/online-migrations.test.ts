@@ -357,7 +357,9 @@ describe("online migrations", () => {
   test("validates the account audit event check once and rejects incomplete startup", async () => {
     const { name } = ACCOUNT_AUDIT_CONSTRAINT_VALIDATION;
     const harness = createHarness({ unvalidatedConstraints: [name] });
-    const rejection = await assertOnlineMigrationsApplied(harness.pool, { lifecycle: allFinalizedOnlineWork() }).then(
+    const rejection = await assertOnlineMigrationsApplied(harness.pool, {
+      lifecycle: allFinalizedOnlineWork(),
+    }).then(
       () => null,
       (error: unknown) => error,
     );
@@ -366,7 +368,9 @@ describe("online migrations", () => {
     });
     const beforeRepair = harness.statements.length;
     await runOnlineMigrations(harness.pool);
-    await assertOnlineMigrationsApplied(harness.pool, { lifecycle: allFinalizedOnlineWork() });
+    await assertOnlineMigrationsApplied(harness.pool, {
+      lifecycle: allFinalizedOnlineWork(),
+    });
     await runOnlineMigrations(harness.pool);
     expect(
       harness.statements

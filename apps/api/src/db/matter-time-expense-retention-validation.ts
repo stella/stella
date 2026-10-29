@@ -41,5 +41,5 @@ export const MATTER_TIME_EXPENSE_RETENTION_VALIDATIONS =
             tables,
             constraints: [constraint],
           }),
-      } as const) satisfies OnlineRepair,
+      }) as const satisfies OnlineRepair,
   );
