@@ -104,7 +104,7 @@ const refineSearchEndpoint = createSafeRootHandler(
     user,
   }) {
     if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
-      return Result.err(storedAIConfigUnreadableError(undefined));
+      return Result.err(storedAIConfigUnreadableError());
     }
 
     const response = yield* Result.await(
@@ -153,7 +153,7 @@ const summarizeSearchEndpoint = createSafeRootHandler(
     user,
   }) {
     if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
-      return Result.err(storedAIConfigUnreadableError(undefined));
+      return Result.err(storedAIConfigUnreadableError());
     }
 
     const activeWorkspaceIds = yield* Result.await(

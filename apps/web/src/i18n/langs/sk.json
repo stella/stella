@@ -132,6 +132,7 @@
     "checkSpamHint": "Ak ho nevidíte, pozrite sa do priečinka Spam.",
     "chooseOrganization": "Vyberte organizáciu, v ktorej chcete pracovať",
     "codeSentAgain": "Poslali sme nový kód.",
+    "continueWithApple": "Pokračovať cez Apple",
     "continueWithEmail": "Pokračovať",
     "continueWithGoogle": "Pokračovať cez Google",
     "continueWithMicrosoft": "Pokračovať cez Microsoft",
@@ -710,10 +711,29 @@
       },
       "linkedExpenses": "Prepojené výdavky",
       "linkedTimeEntries": "Prepojené časové záznamy",
-      "markPaid": "Označiť ako uhradenú",
       "noEntries": "K tejto faktúre nie sú pripojené žiadne záznamy",
       "noInvoices": "Zatiaľ žiadne faktúry",
       "paidAt": "Uhradená",
+      "payments": {
+        "amountTooHigh": "Čiastka prevyšuje zostávajúcu dlžnú čiastku {amount}.",
+        "confirmVoid": "Platba zostane v evidencii ako zrušená a do úhrady tejto faktúry sa už nezapočíta.",
+        "empty": "Zatiaľ nie sú zaznamenané žiadne platby",
+        "method": "Spôsob platby",
+        "methods": {
+          "bank_transfer": "Bankový prevod",
+          "card": "Platobná karta",
+          "cash": "Hotovosť",
+          "other": "Iný spôsob"
+        },
+        "outstandingAmount": "Zostáva uhradiť {amount}",
+        "paidOn": "Dátum platby",
+        "partiallyPaid": "Čiastočne uhradená",
+        "record": "Zaznamenať platbu",
+        "summary": "Uhradené {paid}, zostáva uhradiť {outstanding}",
+        "title": "Platby",
+        "void": "Zrušiť platbu",
+        "voided": "Zrušená"
+      },
       "removeEntries": "Odstrániť záznamy",
       "send": "Odoslať",
       "statuses": {
@@ -895,6 +915,7 @@
     "aiMissing": "AI nie je nakonfigurovaná.",
     "availabilityUnknown": "Dostupnosť sa nepodarilo overiť.",
     "deeplMissing": "DeepL nie je nakonfigurovaný.",
+    "deeplPdfRequired": "Preklad súborov PDF vyžaduje DeepL.",
     "desktopUnavailable": "Pripojte alebo aktualizujte stella desktop.",
     "featureUnavailable": "Táto funkcia nie je k dispozícii.",
     "ocrUnavailable": "OCR nie je k dispozícii.",
@@ -2457,6 +2478,8 @@
       "aresNotFound": "Pre toto IČO sme nenašli žiadnu firmu.",
       "aresTitle": "Český register (ARES)",
       "contactName": "Názov kontaktu",
+      "displayNameOrganizationHint": "Voliteľné prepísanie; inak sa vytvorí z názvu organizácie.",
+      "displayNamePersonHint": "Voliteľné prepísanie; inak sa vytvorí z mena a priezviska.",
       "icoPlaceholder": "IČO",
       "invalidIco": "Zadajte 8-miestne IČO."
     },
@@ -2769,12 +2792,15 @@
   },
   "errors": {
     "actionAdmission": {
-      "admissionUnavailable": "Táto akcia je dočasne pozastavená. Skúste to prosím o chvíľu.",
       "concurrencyBusy": "Prebieha iná práca. Skúste to prosím o chvíľu.",
+      "configurationIncomplete": "Táto akcia nie je úplne nastavená. Obráťte sa na správcu.",
       "contact": "Kontaktujte nás",
       "featureDisabled": "Táto funkcia je dočasne vypnutá.",
+      "leaseLost": "Platnosť rezervácie akcie vypršala. Skúste to prosím znova.",
       "notEnabled": "Táto akcia nie je pre vašu organizáciu povolená.",
-      "periodExhausted": "Táto akcia je pre vašu organizáciu pozastavená."
+      "organizationStateUnreadable": "Nepodarilo sa overiť prístup organizácie. Skúste to prosím o chvíľu.",
+      "periodExhausted": "Táto akcia je pre vašu organizáciu pozastavená.",
+      "storeUnavailable": "Služba je dočasne nedostupná. Skúste to prosím o chvíľu."
     },
     "actionFailed": "Nepodarilo sa to. Skúste to znova, a ak sa to opakuje, načítajte stránku znova.",
     "api": {

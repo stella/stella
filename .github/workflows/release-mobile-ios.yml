@@ -13,7 +13,8 @@ defaults:
 # App Store profile were created once by hand and live in this repository's
 # secrets; CI never creates or changes either. The App Store Connect API key
 # it uploads with has the App Manager role and serves this workflow alone.
-# The build number is this run's number, which only grows.
+# The build number is this run's number plus 100, which only grows; builds 1
+# to 4 were uploaded by hand before this workflow existed.
 
 on:
   workflow_dispatch:
@@ -49,7 +50,6 @@ jobs:
       contents: read
     env:
       APP_VARIANT: ${{ inputs.variant }}
-      MOBILE_BUILD_NUMBER: ${{ github.run_number }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -67,6 +67,9 @@ jobs:
           fi
           sudo xcode-select --switch "$xcode"
           xcodebuild -version
+
+      - name: Number the build above the hand-uploaded ones
+        run: echo "MOBILE_BUILD_NUMBER=$((GITHUB_RUN_NUMBER + 100))" >> "$GITHUB_ENV"
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2

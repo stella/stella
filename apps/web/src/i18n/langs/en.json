@@ -132,6 +132,7 @@
     "checkSpamHint": "If you don't see it, check your spam folder.",
     "chooseOrganization": "Choose which organization to work in",
     "codeSentAgain": "We sent a new code.",
+    "continueWithApple": "Continue with Apple",
     "continueWithEmail": "Continue",
     "continueWithGoogle": "Continue with Google",
     "continueWithMicrosoft": "Continue with Microsoft",
@@ -710,10 +711,29 @@
       },
       "linkedExpenses": "Linked expenses",
       "linkedTimeEntries": "Linked time entries",
-      "markPaid": "Mark paid",
       "noEntries": "No entries linked to this invoice",
       "noInvoices": "No invoices yet",
       "paidAt": "Paid at",
+      "payments": {
+        "amountTooHigh": "The amount is more than the outstanding {amount}.",
+        "confirmVoid": "The payment stays on record as voided and no longer counts towards this invoice.",
+        "empty": "No payments recorded yet",
+        "method": "Payment method",
+        "methods": {
+          "bank_transfer": "Bank transfer",
+          "card": "Card",
+          "cash": "Cash",
+          "other": "Other method"
+        },
+        "outstandingAmount": "Outstanding {amount}",
+        "paidOn": "Payment date",
+        "partiallyPaid": "Partially paid",
+        "record": "Record payment",
+        "summary": "Paid {paid}, outstanding {outstanding}",
+        "title": "Payments",
+        "void": "Void payment",
+        "voided": "Voided"
+      },
       "removeEntries": "Remove entries",
       "send": "Send",
       "statuses": {
@@ -895,6 +915,7 @@
     "aiMissing": "AI is not configured.",
     "availabilityUnknown": "Availability could not be confirmed.",
     "deeplMissing": "DeepL is not configured.",
+    "deeplPdfRequired": "Translating PDFs requires DeepL.",
     "desktopUnavailable": "Connect or update stella desktop.",
     "featureUnavailable": "This feature is unavailable.",
     "ocrUnavailable": "OCR is unavailable.",
@@ -2457,6 +2478,8 @@
       "aresNotFound": "No company found for this IČO.",
       "aresTitle": "Czech registry (ARES)",
       "contactName": "Contact name",
+      "displayNameOrganizationHint": "Optional override; otherwise generated from the organization name.",
+      "displayNamePersonHint": "Optional override; otherwise generated from the first and last name.",
       "icoPlaceholder": "IČO",
       "invalidIco": "Enter an 8-digit IČO."
     },
@@ -2769,12 +2792,15 @@
   },
   "errors": {
     "actionAdmission": {
-      "admissionUnavailable": "This action is temporarily paused. Please try again shortly.",
       "concurrencyBusy": "Other work is in progress. Please try again shortly.",
+      "configurationIncomplete": "This action is not fully configured. Contact your administrator.",
       "contact": "Contact us",
       "featureDisabled": "This feature is temporarily turned off.",
+      "leaseLost": "The action reservation expired. Please try again.",
       "notEnabled": "This action is not enabled for your organization.",
-      "periodExhausted": "This action is paused for your organization."
+      "organizationStateUnreadable": "Organization access could not be checked. Please try again shortly.",
+      "periodExhausted": "This action is paused for your organization.",
+      "storeUnavailable": "The service is temporarily unavailable. Please try again shortly."
     },
     "actionFailed": "That didn't work. Try again, or reload the page if it keeps happening.",
     "api": {
