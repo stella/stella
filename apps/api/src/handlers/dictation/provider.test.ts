@@ -15,8 +15,10 @@ import {
   MAX_TRANSCRIPTION_VOCABULARY_TERMS,
 } from "@stll/api-contract/transcription";
 import { assertProperty } from "@stll/property-testing";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import * as capture from "@/api/lib/analytics/capture";
+import { fetchManagedOpenRouterTranscription } from "@/api/lib/chat/provider-data-policy";
 import { logger } from "@/api/lib/observability/logger";
 import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
 
@@ -62,6 +64,53 @@ const input = () => ({
 });
 
 describe("transcription request contract", () => {
+  test("the transport owner accepts only exact regional transcription endpoints", async () => {
+    const originalFetch = globalThis.fetch;
+    const transport = spyOn(globalThis, "fetch").mockImplementation(
+      Object.assign(
+        async () => Response.json({ text: TEXT, usage: { seconds: 1 } }),
+        { preconnect: originalFetch.preconnect },
+      ),
+    );
+    const init = {
+      method: "POST",
+      body: "fixture",
+      redirect: "follow",
+      timeout: { type: "headers", ms: 60_000 },
+    } as const;
+    try {
+      for (const host of ["eu.openrouter.ai", "us.openrouter.ai"]) {
+        const target = `https://${host}/api/v1/audio/transcriptions`;
+        await fetchManagedOpenRouterTranscription(target, init);
+        expect(transport).toHaveBeenLastCalledWith(
+          new URL(target),
+          expect.objectContaining({
+            redirect: "error",
+            method: "POST",
+            body: "fixture",
+          }),
+        );
+      }
+      transport.mockClear();
+      for (const target of [
+        "https://openrouter.ai/api/v1/audio/transcriptions",
+        "https://eu.openrouter.ai/api/v1/audio/transcriptions/extra",
+        "https://eu.openrouter.ai/api/v1/audio/transcriptions?region=us",
+        "https://us.openrouter.ai/api/v1/chat/completions",
+        "http://eu.openrouter.ai/api/v1/audio/transcriptions",
+      ]) {
+        expect(
+          await rejectionOf(fetchManagedOpenRouterTranscription(target, init)),
+        ).toMatchObject({
+          message: "Transcription target is outside the provider policy.",
+        });
+      }
+      expect(transport).not.toHaveBeenCalled();
+    } finally {
+      transport.mockRestore();
+    }
+  });
+
   test("every model carries the mandatory policy, vocabulary, and supported timestamps", () => {
     const expectedVocabulary = {
       none: {},

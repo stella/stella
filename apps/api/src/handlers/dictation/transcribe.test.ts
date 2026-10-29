@@ -8,10 +8,10 @@ import {
   MAX_TRANSCRIPTION_VOCABULARY_TERMS,
 } from "@stll/api-contract/transcription";
 
+import { transcribeAudio } from "@/api/handlers/dictation/provider";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { admitFixtureModelDispatch } from "@/api/lib/rate-limit/model-dispatch-admission";
-import { transcribeAudio } from "@/api/lib/transcription/provider";
 import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 import {
   createTestHandlerContext,

@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import * as fc from "fast-check";
 import * as v from "valibot";
+
+import { assertProperty } from "@stll/property-testing";
 
 import { apiRoutes } from "@/api/api-routes";
 import { fileSchema } from "@/api/lib/custom-schema";
@@ -37,10 +40,16 @@ const childSchemas = (schema: v.GenericSchema): unknown[] => {
   return children.filter(isValibotSchema);
 };
 
-const hasMaxSize = (schema: v.GenericSchema): boolean =>
-  "pipe" in schema &&
-  Array.isArray(schema.pipe) &&
-  schema.pipe.some((item) => isRecord(item) && item["type"] === "max_size");
+const hasMaxSize = (schema: v.GenericSchema): boolean => {
+  if (!("pipe" in schema) || !Array.isArray(schema.pipe)) {
+    return false;
+  }
+  return schema.pipe.some(
+    (item) =>
+      (isRecord(item) && item["type"] === "max_size") ||
+      (isValibotSchema(item) && hasMaxSize(item)),
+  );
+};
 
 /** Every file or blob schema a request schema reads, with whether it is capped. */
 const fileSchemasOf = (root: unknown): { readonly capped: boolean }[] => {
@@ -82,6 +91,30 @@ describe("file upload limits", () => {
     // The census reads the served routes, so it can never pass by finding no
     // upload at all.
     expect(files).toBeGreaterThan(0);
+  });
+
+  test("file caps remain visible through nested validation pipes", () => {
+    const wrap = (schema: v.GenericSchema, depth: number) => {
+      let wrapped = schema;
+      for (let index = 0; index < depth; index++) {
+        wrapped = v.pipe(
+          wrapped,
+          v.check(() => true),
+        );
+      }
+      return v.object({ file: wrapped });
+    };
+    assertProperty(
+      "file caps remain visible through nested validation pipes",
+      fc.property(
+        fc.integer({ min: 0, max: 32 }),
+        fc.boolean(),
+        (depth, capped) => {
+          const schema = capped ? fileSchema({ maxBytes: 1024 }) : v.file();
+          expect(fileSchemasOf(wrap(schema, depth))).toEqual([{ capped }]);
+        },
+      ),
+    );
   });
 
   test("finds an uncapped file nested in a body and accepts a capped one", () => {

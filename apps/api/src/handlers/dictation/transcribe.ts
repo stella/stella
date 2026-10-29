@@ -7,10 +7,17 @@ import {
 } from "@stll/ai-catalog/transcription";
 import { AI_FAILURE_CODES } from "@stll/api-contract";
 import { MAX_TRANSCRIPTION_MULTIPART_BYTES } from "@stll/api-contract/transcription";
+import { classifyFailure } from "@stll/errors";
 
 import type { SafeDbError } from "@/api/db/safe-db";
 import { env } from "@/api/env";
 import { consumeDictationLimit } from "@/api/handlers/dictation/limits";
+import {
+  transcribeAudio,
+  TRANSCRIPTION_AUDIO_MEDIA_TYPES,
+  transcriptionResultSchema,
+} from "@/api/handlers/dictation/provider";
+import type { TranscriptionResult } from "@/api/handlers/dictation/provider";
 import { dictationBodySchema } from "@/api/handlers/dictation/schema";
 import { orgAIConfigStatusError } from "@/api/lib/ai-config-response";
 import {
@@ -25,14 +32,9 @@ import type { MemberCaller } from "@/api/lib/auth/member-caller";
 import type { SafeId } from "@/api/lib/branded-types";
 import { getManagedOpenRouterCredential } from "@/api/lib/chat/openrouter-credential";
 import { managedProviderUnavailable } from "@/api/lib/chat/provider-data-policy";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
-import {
-  transcribeAudio,
-  TRANSCRIPTION_AUDIO_MEDIA_TYPES,
-  transcriptionResultSchema,
-} from "@/api/lib/transcription/provider";
-import type { TranscriptionResult } from "@/api/lib/transcription/provider";
 import { computeUsageUnitCost } from "@/api/lib/usage/action-weights";
 import { transcriptionUsageUnits } from "@/api/lib/usage/unit-model";
 import {
@@ -44,7 +46,7 @@ const config = {
   contract: "patch",
   description:
     "Transcribe one audio chunk without storing the audio or transcript. Upload file, modelId, optional ISO 639-1 language, a JSON array of vocabulary terms, and an optional matterId. Available through REST multipart upload; generic JSON capability transports cannot upload audio.",
-  permissions: { workspace: ["read"] },
+  permissions: { workspace: ["read"], chat: ["create"] },
   accountAccess: ACCOUNT_ACCESS.standard,
   access: "write",
   actionAdmission: { type: "handler", actionKind: "dictation.transcribe" },
@@ -97,12 +99,15 @@ const checkUsage = async ({
   );
   if (checked.isErr()) {
     return Result.err(
-      new HandlerError({
-        status: 503,
-        code: "service_unavailable",
-        message: "Usage admission is unavailable",
-        retryable: true,
-      }),
+      classifyFailure(
+        new HandlerError({
+          status: 503,
+          code: "service_unavailable",
+          message: "Usage admission is unavailable",
+          retryable: true,
+        }),
+        "organization_state_unreadable",
+      ),
     );
   }
   if (checked.value.ok) {
@@ -205,11 +210,14 @@ export const executeDictation = async (
         Result.tryPromise({
           try: async () => await ctx.getWorkspaceAccess(workspaceId),
           catch: () =>
-            new HandlerError({
-              status: 503,
-              code: "service_unavailable",
-              message: "Matter access is unavailable",
-            }),
+            classifyFailure(
+              new HandlerError({
+                status: 503,
+                code: "service_unavailable",
+                message: "Matter access is unavailable",
+              }),
+              "organization_state_unreadable",
+            ),
         }),
       );
       if (access === null || access.status === "deleting") {
@@ -229,12 +237,15 @@ export const executeDictation = async (
         "available"
     ) {
       return Result.err(
-        new HandlerError({
-          status: 503,
-          code: "transcription_model_unavailable",
-          message: "This transcription model is not available in your region",
-          hint: "Choose a transcription model available in your region.",
-        }),
+        classifyFailure(
+          new HandlerError({
+            status: 503,
+            code: "transcription_model_unavailable",
+            message: "This transcription model is not available in your region",
+            hint: "Choose a transcription model available in your region.",
+          }),
+          "model_unavailable",
+        ),
       );
     }
     yield* Result.await(
@@ -320,4 +331,12 @@ export const createDictationTranscribeEndpoint = ({
     return Result.ok(result);
   });
 
-export default createDictationTranscribeEndpoint();
+const transcribeDictation = createDictationTranscribeEndpoint();
+
+declareAggregateMutation(transcribeDictation, {
+  type: "independent",
+  reason:
+    "Transcribes transient audio and appends organization-scoped usage and audit events; it does not change matter or document aggregate state.",
+});
+
+export default transcribeDictation;

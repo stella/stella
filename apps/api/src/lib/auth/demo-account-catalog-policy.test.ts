@@ -85,6 +85,7 @@ const REVIEWED_STANDARD_OPERATIONS = [
   "apps/api/src/handlers/chat/export/create.ts",
   "apps/api/src/handlers/clauses/export.ts",
   "apps/api/src/handlers/contacts/export.ts",
+  "apps/api/src/handlers/dictation/transcribe.ts",
   "apps/api/src/handlers/document-reviews/export-run.ts",
   "apps/api/src/handlers/document-types/create.ts",
   "apps/api/src/handlers/document-types/delete.ts",

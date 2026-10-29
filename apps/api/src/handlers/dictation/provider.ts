@@ -19,12 +19,14 @@ import {
 import { TimeoutError, withTimeout } from "@stll/concurrency/with-timeout";
 import type { WithTimeoutScheduler } from "@stll/concurrency/with-timeout";
 import { classifyFailure } from "@stll/errors";
-import { fetchWithTimeout } from "@stll/fetch";
 import { isLanguageCode } from "@stll/locales";
 import { readCappedBytes } from "@stll/skills/streaming";
 
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
-import { PROVIDER_DATA_POLICY } from "@/api/lib/chat/provider-data-policy";
+import {
+  fetchManagedOpenRouterTranscription,
+  PROVIDER_DATA_POLICY,
+} from "@/api/lib/chat/provider-data-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { admittedDispatchSignal } from "@/api/lib/rate-limit/model-dispatch-admission";
 import type { ModelDispatchScope } from "@/api/lib/rate-limit/model-dispatch-admission";
@@ -88,6 +90,7 @@ const wireSchema = v.object({
   duration: v.optional(secondsSchema),
   segments: v.optional(
     v.array(v.object({ ...wireTimingSchema.entries, text: v.string() })),
+    [],
   ),
   words: v.optional(
     v.array(v.object({ ...wireTimingSchema.entries, word: v.string() })),
@@ -313,13 +316,13 @@ export const normalizeTranscriptionResponse = (
   if (audioSeconds === undefined || Math.round(audioSeconds * 1000) < 1) {
     return Result.err(invalidResponse());
   }
-  const timings = [...(segments ?? []), ...(words ?? [])];
+  const timings = words === undefined ? segments : [...segments, ...words];
   if (timings.some(({ start, end }) => end < start || end > audioSeconds)) {
     return Result.err(invalidResponse());
   }
   return Result.ok({
     text,
-    segments: (segments ?? []).map(({ start, end, text: segmentText }) => ({
+    segments: segments.map(({ start, end, text: segmentText }) => ({
       startMs: Math.round(start * 1000),
       endMs: Math.round(end * 1000),
       text: segmentText,
@@ -350,7 +353,7 @@ type TranscribeAudioOptions = {
   residency: ManagedAIResidency;
   scope: ModelDispatchScope;
   signal?: AbortSignal | undefined;
-  fetch?: typeof fetchWithTimeout | undefined;
+  fetch?: typeof fetchManagedOpenRouterTranscription | undefined;
   scheduleTimeout?: WithTimeoutScheduler | undefined;
 };
 
@@ -365,7 +368,7 @@ export const transcribeAudio = async ({
   residency,
   scope,
   signal,
-  fetch: fetchProvider = fetchWithTimeout,
+  fetch: fetchProvider = fetchManagedOpenRouterTranscription,
   scheduleTimeout,
 }: TranscribeAudioOptions): Promise<TranscribeAudioResult> => {
   const abortSignal = admittedDispatchSignal({ ...scope, abortSignal: signal });

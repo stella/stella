@@ -9,6 +9,7 @@ import {
   usagePolicies,
 } from "@/api/db/schema";
 import { createMembershipSafeDb, markRlsDatabase } from "@/api/db/scoped";
+import type { TranscriptionResult } from "@/api/handlers/dictation/provider";
 import transcribeDictation, {
   createDictationTranscribeEndpoint,
 } from "@/api/handlers/dictation/transcribe";
@@ -16,7 +17,6 @@ import { HttpStatusResponse } from "@/api/http/status";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { runWithMeasuredQueryCounter } from "@/api/lib/db-query-counter";
-import type { TranscriptionResult } from "@/api/lib/transcription/provider";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import {
   mintAuthProviderId,

@@ -157,6 +157,26 @@ export const fetchManagedOpenRouterCompletion = async (completion: Request) => {
   return Result.ok(response);
 };
 
+/** Audio requests share the regional transport boundary and refuse redirects. */
+export const fetchManagedOpenRouterTranscription = async (
+  input: string | URL,
+  init: FetchWithTimeoutInit,
+) => {
+  const target = restrictOutboundUrl({
+    rawUrl: String(input),
+    hostPolicy: { type: "exact-origin", origins: MANAGED_PROVIDER_ORIGINS },
+    pathPrefixes: ["/api/v1/audio/transcriptions"],
+  });
+  if (
+    target === null ||
+    (target.href !== `${MANAGED_EU_ORIGIN}/api/v1/audio/transcriptions` &&
+      target.href !== `${MANAGED_US_ORIGIN}/api/v1/audio/transcriptions`)
+  ) {
+    return panic("Transcription target is outside the provider policy.");
+  }
+  return await fetchWithTimeout(target, { ...init, redirect: "error" });
+};
+
 export const isManagedProviderAvailable = (
   provider: ManagedProvider,
   dataClass: AIDataClass,

@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import {
   getModelRate,
   MODEL_RATE_UNITS_PER_USD,
@@ -481,11 +482,12 @@ export const transcriptionUsageUnits = ({
     BigInt(MODEL_RATE_UNITS_PER_USD);
   const denominator = BigInt(regional.price.secondsDenominator) * 1000n;
   const raw = (numerator + denominator - 1n) / denominator;
-  if (raw > MAX_SAFE_INTEGER_BIGINT) {
+  const parsedRaw = parseIntegerToken(raw.toString(), { sign: "unsigned" });
+  if (parsedRaw.isErr()) {
     return panic("Transcription usage exceeds the safe integer range");
   }
   return unitsFromRawUsage({
-    rawUsageMicroUnits: Number(raw),
+    rawUsageMicroUnits: parsedRaw.value,
     actionType: "transcription",
     serviceTier: "standard",
     isByok,
