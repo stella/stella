@@ -739,6 +739,40 @@ describe("a docket at other courts", () => {
       ],
     });
   });
+  test("lists other holders by court in the docket's language, then date, undated last", async () => {
+    const [budejovice, olomouc] = regionalHolders();
+    if (budejovice === undefined || olomouc === undefined) {
+      panic("Missing regional fixture");
+    }
+    const undated: DecisionIdentityRow = {
+      ...budejovice,
+      id: createSafeId<"caseLawDecision">(),
+      sheetNumber: "301",
+      decisionDate: null,
+    };
+    const result = await resolveDecision({
+      admission,
+      country: "CZ",
+      identifier: "KS Praha 65 A 3/2025",
+      dependencies: {
+        lookup: lookupRows([olomouc, undated, budejovice]),
+        read: async () => panic("Wrong-court result must not fetch text"),
+      },
+    });
+    if (result.status !== "not_found") {
+      panic("Expected a wrong-court answer");
+    }
+    expect(
+      result.otherCourtCandidates?.map(({ court, decisionDate }) => [
+        court,
+        decisionDate,
+      ]),
+    ).toEqual([
+      ["Krajský soud v Českých Budějovicích", "2025-05-21"],
+      ["Krajský soud v Českých Budějovicích", null],
+      ["Krajský soud v Ostravě – pobočka v Olomouci", "2025-05-28"],
+    ]);
+  });
   test("no court leaves a shared docket ambiguous", async () => {
     const result = await resolveDecision({
       admission,

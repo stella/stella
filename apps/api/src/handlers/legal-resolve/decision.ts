@@ -14,6 +14,7 @@ import {
   PUBLIC_COUNTRY_SURFACE_OPEN,
 } from "@stll/api-contract/public-country-capability";
 import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/us-reporter-citation";
+import { compareByLocale, compareCodeUnit } from "@stll/collation";
 import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 import type { Block } from "@stll/legal-ast/document-ast";
 
@@ -150,6 +151,38 @@ const candidateLabel = (row: DecisionIdentityRow): string =>
   [row.court, row.decisionType, row.decisionDate ?? row.caseNumber]
     .filter((part) => part !== null && part !== "")
     .join(", ");
+
+/**
+ * Other-court candidates in a stable order: court name in the docket's own
+ * language, then decision date with undated decisions last, then id, so the
+ * same docket always lists the same holders in the same places whatever order
+ * the lookup returned them in.
+ */
+const compareDecisionDate = (
+  left: string | null,
+  right: string | null,
+): number => {
+  if (left === right) {
+    return 0;
+  }
+  if (left === null) {
+    return 1;
+  }
+  if (right === null) {
+    return -1;
+  }
+  return compareCodeUnit(left, right);
+};
+
+const byCourtThenDate = (
+  locale: string,
+): ((left: DecisionIdentityRow, right: DecisionIdentityRow) => number) => {
+  const compareCourt = compareByLocale(locale);
+  return (left, right) =>
+    compareCourt(left.court, right.court) ||
+    compareDecisionDate(left.decisionDate, right.decisionDate) ||
+    compareCodeUnit(left.id, right.id);
+};
 
 const candidate = (row: DecisionIdentityRow) => ({
   decisionId: row.id,
@@ -299,6 +332,7 @@ export const resolveDecision = async ({
       ? []
       : family
           .filter(({ court }) => !namedCourts.includes(court))
+          .toSorted(byCourtThenDate(family[0]?.language ?? "en"))
           .slice(0, LIMITS.caseLawLookupCandidatesMax)
           .map((row) => ({
             ...candidate(row),
