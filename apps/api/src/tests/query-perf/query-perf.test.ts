@@ -106,20 +106,24 @@ test("every measurement execution guard applies even when pages fit or carry an 
   }
 });
 
-test("corpus page markers still reflect pages within the execution guard", () => {
-  const id = "statement.legislation.candidateRows";
-  expect(
-    budgetProblem(id, {
-      sharedBlocks: READ_BUDGETS[id].pages,
-      executionTimeMs: 10_000,
-    }),
-  ).toContain("remove its overBudget marker");
-  expect(
-    budgetProblem(id, {
-      sharedBlocks: READ_BUDGETS[id].pages + 1,
-      executionTimeMs: 10_000,
-    }),
-  ).toBeUndefined();
+test("over-budget markers require every measured surface to exceed its page budget", () => {
+  for (const id of [
+    "scheduled.caseLaw.backfillProvisionState",
+    "statement.legislation.candidateRows",
+  ] as const) {
+    expect(
+      budgetProblem(id, {
+        sharedBlocks: READ_BUDGETS[id].pages,
+        executionTimeMs: 10_000,
+      }),
+    ).toContain("remove its overBudget marker");
+    expect(
+      budgetProblem(id, {
+        sharedBlocks: READ_BUDGETS[id].pages + 1,
+        executionTimeMs: 10_000,
+      }),
+    ).toBeUndefined();
+  }
   expect(
     budgetProblem("statement.documents.searchHits", {
       sharedBlocks: READ_BUDGETS["statement.documents.searchHits"].pages,

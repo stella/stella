@@ -164,10 +164,9 @@ describe("read budget declarations", () => {
     ).toBe(0);
   });
 
-  test("an over-budget entry is a measured statement with a reason", () => {
+  test("an over-budget entry is a measured surface with a reason", () => {
     for (const [id, budget] of Object.entries(READ_BUDGETS)) {
       if ("overBudget" in budget) {
-        expect(budget.surface, id).toBe("statement");
         expect(budget.overBudget.reason.trim().length, id).toBeGreaterThan(0);
       }
       expect(Number.isInteger(budget.pages) && budget.pages > 0, id).toBe(true);

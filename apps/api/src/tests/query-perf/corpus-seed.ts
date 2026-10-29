@@ -1,22 +1,26 @@
 import { sql } from "drizzle-orm";
 import * as v from "valibot";
 
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import {
   PROVISION_EXTRACTION_ADMISSION_REVISION,
   PROVISION_EXTRACTION_ADMISSION_SCOPES,
 } from "@stll/legal-atlas/provision-extraction-admission";
 
 import {
+  caseLawDecisions,
   caseLawProvisionExtractionScopes,
   corpusIndexGenerations,
 } from "@/api/db/schema";
 import type { TransactionOf } from "@/api/db/scoped";
+import { decisionDocketColumns } from "@/api/handlers/case-law/ingestion/pipeline/decision-docket-columns";
 import { type SafeId, toSafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
+import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 
 /**
@@ -104,9 +108,12 @@ export const LEGISLATION_CANDIDATE_COUNT = 300;
 
 /** Rows per seed statement, inside the fixture connection's statement timeout. */
 const SEED_CHUNK_ROWS = 20_000;
+const PROVISION_SEED_CHUNK_ROWS = 5000;
 
 const LEGISLATION_SOURCE_ID = "01990000-00a0-7000-8000-000000000001";
-const PROVISION_SOURCE_ID = "01990000-00c0-7000-8000-000000000001";
+const PROVISION_SOURCE_ID = toSafeId<"caseLawSource">(
+  "01990000-00c0-7000-8000-000000000001",
+);
 
 type SeedHandle = Pick<TransactionOf<GatedTestDb>, "execute">;
 
@@ -190,10 +197,10 @@ const uuidOf = (prefix: string, n: string) =>
 const generationPrefix = (generation: string) =>
   generation.replaceAll(/\D/gu, "").padStart(4, "0");
 
-const chunks = (rows: number) =>
-  Array.from({ length: Math.ceil(rows / SEED_CHUNK_ROWS) }, (_, index) => ({
-    first: index * SEED_CHUNK_ROWS + 1,
-    last: Math.min((index + 1) * SEED_CHUNK_ROWS, rows),
+const chunks = (rows: number, chunkRows = SEED_CHUNK_ROWS) =>
+  Array.from({ length: Math.ceil(rows / chunkRows) }, (_, index) => ({
+    first: index * chunkRows + 1,
+    last: Math.min((index + 1) * chunkRows, rows),
   }));
 
 const seedQuietChunk = async (
@@ -330,16 +337,33 @@ export const seedProvisionBackfillRows = async (
   database: GatedTestDb,
   rows: number,
 ) => {
-  await database.execute(sql`
-    INSERT INTO case_law_decisions
-      (id, source_id, case_number, court, country, language, decision_date,
-       metadata)
-    SELECT ${sql.raw(uuidOf("00c1", "n"))}, ${PROVISION_SOURCE_ID}::uuid,
-      'provision-' || n, 'Fixture court', 'CZE', 'cs', DATE '2020-01-01',
-      '{}'::jsonb
-    FROM generate_series(1, ${rows}) AS n
-    ON CONFLICT (id) DO NOTHING
-  `);
+  for (const { first, last } of chunks(rows, PROVISION_SEED_CHUNK_ROWS)) {
+    const decisions = Array.from({ length: last - first + 1 }, (_, index) => {
+      const n = first + index;
+      const caseNumber = `provision-${String(n)}`;
+      return {
+        id: toSafeId<"caseLawDecision">(
+          `01990000-00c1-7000-8000-${n.toString(16).padStart(12, "0")}`,
+        ),
+        sourceId: PROVISION_SOURCE_ID,
+        ...decisionDocketColumns({
+          caseNumber,
+          caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+          country: "CZE",
+        }),
+        court: "Fixture court",
+        country: "CZE",
+        language: "cs",
+        decisionDate: "2020-01-01",
+        metadata: {},
+      };
+    });
+    // db-await-in-loop: bounded seed chunks keep each statement inside the fixture's statement timeout.
+    await database
+      .insert(caseLawDecisions)
+      .values(decisions)
+      .onConflictDoNothing({ target: caseLawDecisions.id });
+  }
   await database.execute(sql`DELETE FROM case_law_provision_repair_cursors`);
   await database.execute(sql`DELETE FROM case_law_provision_scope_transitions`);
   await database.transaction(async (tx) => {
@@ -467,8 +491,11 @@ export const seedCorpusReadBudgets = async (database: GatedTestDb) => {
   }
   await database.execute(sql`INSERT INTO legislation_sources (id, adapter_key, name)
     VALUES (${LEGISLATION_SOURCE_ID}, 'read-budget-fixture', 'Read budget fixture')`);
-  await database.execute(sql`INSERT INTO case_law_sources (id, adapter_key, name)
-    VALUES (${PROVISION_SOURCE_ID}, 'provision-read-budget-fixture', 'Provision read budget fixture')`);
+  await database.execute(sql`INSERT INTO case_law_sources
+      (id, adapter_key, name, descriptor)
+    VALUES (${PROVISION_SOURCE_ID}, ${ADAPTER_KEYS.CZ_NS},
+      'Provision read budget fixture',
+      '{"license":"restricted","allowsDerivedAi":false,"attribution":null,"allowsRedistribution":false}'::jsonb)`);
   for (const chunk of chunks(
     LEGISLATION_WORKS * LEGISLATION_VERSIONS_PER_WORK,
   )) {

@@ -23,7 +23,7 @@ type ReadBudget = {
   pages: number;
   reason: string;
   /**
-   * Set only while a measured statement is over its budget and a change to
+   * Set only while a measured surface is over its budget and a change to
    * bring it under is in progress. The gate then requires the measurement to
    * stay above the budget, so the entry is removed as soon as it passes.
    */
@@ -44,7 +44,7 @@ export const READ_BUDGETS = {
       "A governed run checks the shared backfill checkpoint and processes at most 200 bounded provision-state units; a completed pass reads only the checkpoint. 13,200 pages is the target for a run with pending units.",
     overBudget: {
       reason:
-        "A run with pending units measures 111,179 pages at both source sizes (about 556 pages per unit), so one unit's lookups are far wider than its bounded work needs; the per-unit read is being narrowed.",
+        "A run with pending units measures more than 110,000 pages at both source sizes (about 556 pages per unit), so one unit's lookups are far wider than its bounded work needs; the per-unit read is being narrowed.",
     },
   },
   "scheduled.legislation.backfillExpressionIds": {
