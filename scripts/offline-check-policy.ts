@@ -464,17 +464,24 @@ export const offlineCheckStartupViolations = (
       !statement.expression.optional &&
       statement.expression.callee.type === "Identifier" &&
       bindings.has(statement.expression.callee.name);
-    const firstExecutable = parsed.program.body.find(
-      (statement) =>
-        ![
-          "ImportDeclaration",
-          "ExportNamedDeclaration",
-          "ExportAllDeclaration",
-          "TSTypeAliasDeclaration",
-          "TSInterfaceDeclaration",
-          "FunctionDeclaration",
-        ].includes(statement.type),
-    );
+    const declarationOnly = new Set([
+      "TSTypeAliasDeclaration",
+      "TSInterfaceDeclaration",
+      "FunctionDeclaration",
+    ]);
+    const firstExecutable = parsed.program.body.find((statement) => {
+      if (statement.type === "ExportNamedDeclaration") {
+        return (
+          statement.declaration !== null &&
+          !declarationOnly.has(statement.declaration.type)
+        );
+      }
+      return (
+        statement.type !== "ImportDeclaration" &&
+        statement.type !== "ExportAllDeclaration" &&
+        !declarationOnly.has(statement.type)
+      );
+    });
     const namesGuard = (node: Node): boolean => {
       switch (node.type) {
         case "Identifier":

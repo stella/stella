@@ -250,6 +250,14 @@ test("startup proof requires the canonical runtime binding in an executed entry 
   const cases = [
     { source: `${imported} assertOfflineCheckPreload();`, valid: true },
     {
+      source: `${imported} export const result = doCheckWork(); assertOfflineCheckPreload();`,
+      valid: false,
+    },
+    {
+      source: `${imported} export function helper() {} assertOfflineCheckPreload();`,
+      valid: true,
+    },
+    {
       source: `${imported} if (import.meta.main) { assertOfflineCheckPreload(); }`,
       valid: true,
     },
