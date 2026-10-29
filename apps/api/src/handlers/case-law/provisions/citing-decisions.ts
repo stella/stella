@@ -137,11 +137,16 @@ const workCondition = (query: ListCitingDecisionsQuery): SQL | null => {
 };
 
 /**
- * A null date sorts last under the shared descending order. The floor is
- * spelled inline, never bound: the page groups and orders by this key, which
- * PostgreSQL matches by expression, and two parameters are never equal.
+ * One date key per decision: the newest date its admitted link rows carry.
+ * Each link row copies its decision's date when it is written, so the rows
+ * of one decision agree; taking the newest keeps a decision one group, with
+ * one place in the page order and one cursor position, even where they do
+ * not. A null date sorts last under the shared descending order. The floor
+ * is spelled inline, never bound: the page selects, filters and orders by
+ * this key, which PostgreSQL matches by expression, and two parameters are
+ * never equal.
  */
-const decisionDateKeySql = sql`coalesce(${caseLawProvisionCitations.decisionDate}, '0001-01-01'::date)`;
+const decisionDateKeySql = sql<string>`max(coalesce(${caseLawProvisionCitations.decisionDate}, '0001-01-01'::date))`;
 const decisionDateCursorSql = sql<string>`to_char(${decisionDateKeySql}, 'YYYY-MM-DD')`;
 
 type CitingDecisionsCursor = {
@@ -212,15 +217,18 @@ const citingPageOrder = (
  *
  * Three steps, so a page never waits on the whole citing set:
  *
- * 1. The link rows alone, one group per decision: its date key and its
- *    mention count. Every column this step reads is a key of the anchor
- *    indexes, so a provision's subtree is one index-only range and no
- *    decision row is read. The groups leave this step in page order.
+ * 1. The link rows alone, one group per decision: its date key, its
+ *    mention count and the offset of its earliest mention. Every column
+ *    this step reads is a key of the anchor indexes, so a provision's
+ *    subtree is one index-only range and no decision row is read. The
+ *    cursor applies to the groups, so a decision is never split across
+ *    pages. The groups leave this step in page order.
  * 2. The groups joined to their decisions one at a time, in that order,
  *    until the page is full. Only the authority order ranks by a decision
  *    column, so only it reads every candidate's decision first.
  * 3. The earliest mention of each decision on the page, one lookup per row
- *    through the decision's own span index.
+ *    through the decision's own span index at that offset, so the
+ *    decision's mentions of other provisions are never read.
  *
  * `query-plans/registry.ts` holds the access paths, and
  * `citing-decisions-plan.db.test.ts` holds the decision reads to the page.
@@ -232,6 +240,9 @@ export const citingDecisionsPageQuery = ({
   sort,
   limit,
 }: CitingDecisionsPageOptions) => {
+  // The cursor compares each decision's own key, after grouping: a filter
+  // on the link rows would drop some of a decision's mentions and leave the
+  // rest to appear again on a later page.
   let continuation: SQL | undefined;
   if (cursor !== null) {
     continuation = sql`(${decisionDateCursorSql}, ${caseLawProvisionCitations.decisionId}) < (${cursor.decisionDate}::text, ${cursor.decisionId}::uuid)`;
@@ -246,11 +257,18 @@ export const citingDecisionsPageQuery = ({
         "decision_date_key",
       ),
       mentionCount: sql<number>`count(*)::integer`.as("mention_count"),
+      firstSpanStart:
+        sql<number>`min(${caseLawProvisionCitations.spanStart})`.as(
+          "first_span_start",
+        ),
     })
     .from(caseLawProvisionCitations)
-    .where(and(...conditions.links, continuation))
-    // sql-perf-allow: index case_law_provision_citations_work_subtree_page_idx (or its ELI twin), bounded by one provision's subtree read from the index alone
-    .groupBy(decisionDateKeySql, caseLawProvisionCitations.decisionId)
+    .where(and(...conditions.links))
+    // case_law_provision_citations_work_citing_idx (or its ELI twin) holds
+    // every column read here, so one provision's subtree is read from the
+    // index alone.
+    .groupBy(caseLawProvisionCitations.decisionId)
+    .having(continuation)
     // SAFETY: the groups are a subquery the page below limits; a limit here
     // would cut candidates the decision filters have not yet judged.
     // oxlint-disable-next-line require-query-limit/require-query-limit -- the enclosing page query applies the limit; see SAFETY above
@@ -266,6 +284,7 @@ export const citingDecisionsPageQuery = ({
       decisionId: citing.decisionId,
       decisionDateKey: citing.decisionDateKey,
       mentionCount: citing.mentionCount,
+      firstSpanStart: citing.firstSpanStart,
       caseNumber: publishedCaseLawDecisions.caseNumber,
       // The decision's own address, so a reader can follow the citation
       // without a second read to resolve one.
@@ -313,9 +332,12 @@ export const citingDecisionsPageQuery = ({
       spanEnd: caseLawProvisionCitations.spanEnd,
     })
     .from(caseLawProvisionCitations)
+    // The decision and the offset are the leading keys of the span index,
+    // so the lookup reads only the mentions that start there.
     .where(
       and(
         eq(caseLawProvisionCitations.decisionId, page.decisionId),
+        eq(caseLawProvisionCitations.spanStart, page.firstSpanStart),
         ...conditions.links,
       ),
     )

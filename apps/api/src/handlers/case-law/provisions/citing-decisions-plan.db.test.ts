@@ -10,6 +10,11 @@
  * must be the same at both sizes. A shape that ranks the whole citing set
  * before its limit (a window over every mention, or a join of every citing
  * decision) fails all three.
+ *
+ * The newest decision at each size also cites hundreds of other provisions
+ * ahead of its first mention of this one, a different number at each size,
+ * so a first-mention lookup that walks a decision's mentions in text order
+ * reads them and fails the same bounds.
  */
 
 import { panic } from "better-result";
@@ -48,6 +53,8 @@ const ANCHOR = "par_2910";
 /** Decisions citing the provision at the first size; each cites it twice. */
 const CITING_DECISIONS = 1500;
 const PAGE_SIZE = 20;
+/** Other provisions the newest decision cites first, at each size. */
+const UNRELATED_MENTIONS = { small: 300, large: 1200 } as const;
 
 const sourceId = createSafeId<"caseLawSource">();
 
@@ -58,9 +65,15 @@ let db: ReturnType<typeof drizzle>;
  * Decisions `from` to `to`, each citing the section and its first
  * subsection, dated one day apart so the newest decision has the highest
  * number. A neighbouring section's citation sits beside each, outside the
- * subtree.
+ * subtree. The newest decision, `to`, first cites `unrelatedMentions` other
+ * sections of the act, all of them ahead of its first mention of the
+ * section.
  */
-const seedCitingDecisions = async (from: number, to: number) => {
+const seedCitingDecisions = async (
+  from: number,
+  to: number,
+  unrelatedMentions: number,
+) => {
   await db.execute(sql`
     INSERT INTO ${caseLawDecisions}
       (id, source_id, case_number, court, country, language, source_url,
@@ -97,11 +110,25 @@ const seedCitingDecisions = async (from: number, to: number) => {
         (2911, 'par_2911', 70)
     ) AS mention(section, anchor, span_start)
   `);
+  await db.execute(sql`
+    INSERT INTO ${caseLawProvisionCitations}
+      (id, decision_id, jurisdiction, work_identifier, work_eli, work_number,
+       work_year, work_collection, unit, section, anchor, decision_date,
+       sentence_text, span_start, span_end, confidence)
+    SELECT
+      md5('citing-plan-unrelated-' || ${to}::text || '-' || k::text)::uuid,
+      md5('citing-plan-decision-' || ${to}::text)::uuid,
+      'CZE', ${WORK}::text, ${WORK_ELI}::text, 89, 2012, 'Sb.', 'section',
+      k, 'par_' || k::text, DATE '2000-01-01' + ${to}::integer,
+      'sentence par_' || k::text,
+      k % 10, k % 10 + 5, 0.9
+    FROM generate_series(1, ${unrelatedMentions}::integer) AS generated(k)
+  `);
   await db.execute(sql`VACUUM (ANALYZE) ${caseLawDecisions}`);
   await db.execute(sql`VACUUM (ANALYZE) ${caseLawProvisionCitations}`);
 };
 
-// timeout: builds the PGlite schema, then seeds and vacuums 4,500 link rows.
+// timeout: builds the PGlite schema, then seeds and vacuums 4,800 link rows.
 beforeAll(
   async () => {
     client = await createTestPglite();
@@ -111,7 +138,7 @@ beforeAll(
       .values(
         caseLawSourceRow({ adapterKey: "open", id: sourceId, name: "open" }),
       );
-    await seedCitingDecisions(1, CITING_DECISIONS);
+    await seedCitingDecisions(1, CITING_DECISIONS, UNRELATED_MENTIONS.small);
   },
   { timeout: 120_000 },
 );
@@ -283,7 +310,7 @@ const expectPageBounded = (
   expect(reads.linkHeapRows).toBeLessThanOrEqual(limit + 1);
 };
 
-// timeout: seeds and vacuums a second 4,500 link rows, then analyzes six pages.
+// timeout: seeds and vacuums a second 5,700 link rows, then analyzes six pages.
 test("a cited-by page reads decisions and link rows for the page, at any citing-set size", async () => {
   const small = await measurePages();
   expectPageBounded(small.first, PAGE_SIZE);
@@ -303,13 +330,24 @@ test("a cited-by page reads decisions and link rows for the page, at any citing-
     expect(row.spanStart).toBe(10);
   }
 
-  await seedCitingDecisions(CITING_DECISIONS + 1, CITING_DECISIONS * 2);
+  await seedCitingDecisions(
+    CITING_DECISIONS + 1,
+    CITING_DECISIONS * 2,
+    UNRELATED_MENTIONS.large,
+  );
   const large = await measurePages();
+  // The newest decision leads the page with its own first mention, past the
+  // other provisions it cites first.
+  expect(large.first.rows.at(0)).toMatchObject({
+    mentionCount: 2,
+    spanStart: 10,
+  });
   expectPageBounded(large.first, PAGE_SIZE);
   expectPageBounded(large.next, PAGE_SIZE);
   expectPageBounded(large.snapshot, PROVISION_CITING_SNAPSHOT_LIMIT);
 
-  // Twice the citing set, the same reads outside the subtree range.
+  // Twice the citing set and four times the newest decision's other
+  // mentions, the same reads outside the subtree range.
   for (const page of ["first", "next", "snapshot"] as const) {
     expect(large[page].reads.decisionRows).toBe(small[page].reads.decisionRows);
     expect(large[page].reads.linkHeapRows).toBe(small[page].reads.linkHeapRows);

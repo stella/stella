@@ -542,7 +542,7 @@
         "occurrence": 0,
         "relation": "case_law_provision_citations",
         "nodeType": "Index Only Scan",
-        "index": "case_law_provision_citations_work_subtree_page_idx"
+        "index": "case_law_provision_citations_work_citing_idx"
       },
       {
         "occurrence": 0,

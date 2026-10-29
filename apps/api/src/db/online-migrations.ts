@@ -323,22 +323,23 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     tableName: "case_law_citations",
   },
   // A provision's subtree of citing rows as one byte-ordered anchor range.
-  // The trailing date and decision let the cited-by page group a subtree per
-  // decision from the index alone.
+  // The trailing date, decision and span let the cited-by page group a
+  // subtree per decision, with its earliest mention's offset, from the index
+  // alone.
   {
-    createSql: `CREATE INDEX CONCURRENTLY "case_law_provision_citations_work_subtree_page_idx" ON public."case_law_provision_citations" USING btree ("jurisdiction", "work_identifier", "anchor" COLLATE "C", "decision_date", "decision_id")`,
+    createSql: `CREATE INDEX CONCURRENTLY "case_law_provision_citations_work_citing_idx" ON public."case_law_provision_citations" USING btree ("jurisdiction", "work_identifier", "anchor" COLLATE "C", "decision_date", "decision_id", "span_start")`,
     definitionBody:
-      'ON public.case_law_provision_citations USING btree (jurisdiction, work_identifier, anchor COLLATE "C", decision_date, decision_id)',
+      'ON public.case_law_provision_citations USING btree (jurisdiction, work_identifier, anchor COLLATE "C", decision_date, decision_id, span_start)',
     isUnique: false,
-    name: "case_law_provision_citations_work_subtree_page_idx",
+    name: "case_law_provision_citations_work_citing_idx",
     tableName: "case_law_provision_citations",
   },
   {
-    createSql: `CREATE INDEX CONCURRENTLY "case_law_provision_citations_eli_subtree_page_idx" ON public."case_law_provision_citations" USING btree ("jurisdiction", "work_eli", "anchor" COLLATE "C", "decision_date", "decision_id") WHERE "work_eli" IS NOT NULL`,
+    createSql: `CREATE INDEX CONCURRENTLY "case_law_provision_citations_eli_citing_idx" ON public."case_law_provision_citations" USING btree ("jurisdiction", "work_eli", "anchor" COLLATE "C", "decision_date", "decision_id", "span_start") WHERE "work_eli" IS NOT NULL`,
     definitionBody:
-      'ON public.case_law_provision_citations USING btree (jurisdiction, work_eli, anchor COLLATE "C", decision_date, decision_id) WHERE (work_eli IS NOT NULL)',
+      'ON public.case_law_provision_citations USING btree (jurisdiction, work_eli, anchor COLLATE "C", decision_date, decision_id, span_start) WHERE (work_eli IS NOT NULL)',
     isUnique: false,
-    name: "case_law_provision_citations_eli_subtree_page_idx",
+    name: "case_law_provision_citations_eli_citing_idx",
     tableName: "case_law_provision_citations",
   },
   // Bounded cross-publisher ruling lookup before a decision insert.
@@ -887,20 +888,20 @@ export const ONLINE_INDEX_REPLACEMENTS: readonly OnlineIndexReplacement[] = [
   // walks cannot seek under the database collation.
   {
     legacyName: "case_law_provision_citations_work_anchor_idx",
-    replacementNames: ["case_law_provision_citations_work_subtree_page_idx"],
+    replacementNames: ["case_law_provision_citations_work_citing_idx"],
   },
   {
     legacyName: "case_law_provision_citations_eli_anchor_idx",
-    replacementNames: ["case_law_provision_citations_eli_subtree_page_idx"],
+    replacementNames: ["case_law_provision_citations_eli_citing_idx"],
   },
   // The subtree ranges, now carrying the cited-by page's grouping keys.
   {
     legacyName: "case_law_provision_citations_work_subtree_idx",
-    replacementNames: ["case_law_provision_citations_work_subtree_page_idx"],
+    replacementNames: ["case_law_provision_citations_work_citing_idx"],
   },
   {
     legacyName: "case_law_provision_citations_eli_subtree_idx",
-    replacementNames: ["case_law_provision_citations_eli_subtree_page_idx"],
+    replacementNames: ["case_law_provision_citations_eli_citing_idx"],
   },
   // Better Auth 1.7.3 stopped writing `issuer`, so the account identity key is
   // (provider_id, account_id): the pair the library links accounts by. The
