@@ -170,7 +170,8 @@ describe("RIS retention projection", () => {
     );
     expect(decision.isListingOnly).not.toBe(true);
     expect(hasUsableAst(decision.documentAst)).toBe(true);
-    expect(decision.metadata?.["textFidelity"]).toEqual({
+    const fidelity: unknown = decision.metadata?.["textFidelity"];
+    expect(fidelity).toEqual({
       status: "mismatch",
       missingChars: "verloren".length,
       extraChars: 0,
