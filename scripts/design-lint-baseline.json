@@ -383,7 +383,6 @@
     "packages/ui/src/kanban/virtual-cell.tsx": 1
   },
   "no-imported-class-constant/no-imported-class-constant": {
-    "apps/web/src/components/app-sidebar.tsx": 1,
     "apps/web/src/components/chat/chat-composer-action-button.tsx": 1,
     "apps/web/src/components/chat/chat-matter-picker.tsx": 1,
     "apps/web/src/components/chat/chat-model-selector.tsx": 1,
