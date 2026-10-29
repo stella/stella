@@ -42,7 +42,7 @@ import type {
   ErrorCaptureContext,
   WebAnalyticsEvent,
 } from "@/lib/analytics/types";
-import { isCancellation } from "@/lib/errors/api";
+import { APIError, isCancellation } from "@/lib/errors/api";
 import { logDevError } from "@/lib/errors/telemetry";
 
 const isWebAnalyticsEvent = (event: string): event is WebAnalyticsEvent =>
@@ -803,6 +803,16 @@ const captureError: Analytics["captureError"] = (
   error,
   { fingerprintKey, scope, context },
 ) => {
+  // Transport failures have no HTTP response and describe client connectivity,
+  // not an application exception. Keep the fixed query owner and kind only:
+  // neither a resolved URL nor request/user content belongs in this signal.
+  if (APIError.is(error) && error.transportKind !== undefined) {
+    posthog.capture(WEB_ANALYTICS_EVENTS.clientTransient, {
+      query_owner: fingerprintKey,
+      transport_kind: error.transportKind,
+    });
+    return;
+  }
   // A cancelled request is expected control flow, not an operational failure.
   if (isCancellation(error)) {
     return;
@@ -989,6 +999,7 @@ export const createPostHogAnalytics = ({
         case WEB_ANALYTICS_EVENTS.followupShown:
         case WEB_ANALYTICS_EVENTS.followupSelected:
         case WEB_ANALYTICS_EVENTS.keyActionTimed:
+        case WEB_ANALYTICS_EVENTS.clientTransient:
           return sanitizeSdkUrlContext(event, routeTemplateHistory, "resolved");
         default: {
           event.event satisfies never;
