@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
 import { UI_LOCALES } from "@stll/locales";
+import {
+  findIcuError,
+  findPlaceholderMismatch,
+} from "@stll/scripts/src/i18n-lint";
 
 import { CATALOGS } from "./catalogs";
 
@@ -22,12 +26,6 @@ const leaves = (catalog: Catalog, prefix = ""): Map<string, string> => {
   return found;
 };
 
-/** ICU argument names a message interpolates, e.g. `{count}`. */
-const placeholders = (message: string): string[] =>
-  [...message.matchAll(/\{\s*([A-Za-z_]\w*)/gu)]
-    .map((match) => match[1] ?? "")
-    .toSorted();
-
 const english = leaves(CATALOGS.en);
 
 describe("mobile catalogues", () => {
@@ -46,10 +44,15 @@ describe("mobile catalogues", () => {
       );
       for (const [path, message] of translated) {
         const source = english.get(path) ?? "";
-        expect({ path, placeholders: placeholders(message) }).toEqual({
+        // Parsed as ICU, so words inside plural branches are not arguments.
+        expect({ path, error: findIcuError(message) }).toEqual({
           path,
-          placeholders: placeholders(source),
+          error: null,
         });
+        expect({
+          path,
+          mismatch: findPlaceholderMismatch(source, message),
+        }).toEqual({ path, mismatch: null });
         expect({ path, empty: message.trim() === "" }).toEqual({
           path,
           empty: false,
