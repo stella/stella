@@ -71,6 +71,7 @@ export const PageOrganizerSignAction = ({
                   request,
                   savedTarget,
                   closeEditor,
+                  true,
                 );
                 return null;
               });

@@ -616,7 +616,11 @@ function DocumentRoute({
   viewId: string;
   workspaceId: string;
 }) {
-  const editorPdfSignFlow = usePdfSignFlow(entityId);
+  const editorPdfSignFlow = usePdfSignFlow({
+    entityId,
+    fieldId: initialFieldId,
+    workspaceId,
+  });
 
   return (
     <RouteComponentInner

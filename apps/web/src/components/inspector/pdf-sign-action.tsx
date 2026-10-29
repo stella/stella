@@ -58,6 +58,7 @@ export type PdfSignFlow = {
     request: OrganizerOperationRequest,
     target: PdfSignTarget,
     reveal?: () => void,
+    allowSavedField?: boolean,
   ) => boolean;
   requiredDialog: DesktopRequiredDialogProps;
 };
@@ -69,36 +70,41 @@ export type PdfSignFlow = {
  * page in the PDF viewer; confirming it there hands the file to stella
  * desktop through this flow.
  */
+export type PdfSignIdentity = {
+  entityId: string;
+  fieldId: string;
+  workspaceId: string;
+};
+
 export const usePdfSignFlow = (
-  activeDocumentId: string | undefined,
+  activeIdentity: PdfSignIdentity | undefined,
 ): PdfSignFlow => {
   const t = useTranslations();
   const gate = useDesktopActionGate("sign-pdf");
   const signing = useDesktopPdfSign({ connectDesktop: gate.connect });
   const sessionRef = useRef<SigningAuthority | null>(null);
-  const activeDocumentIdRef = useRef(activeDocumentId);
+  const activeIdentityRef = useRef(activeIdentity);
   useLayoutEffect(() => {
-    activeDocumentIdRef.current = activeDocumentId;
+    activeIdentityRef.current = activeIdentity;
     const session = sessionRef.current;
-    if (
-      session !== null &&
-      (activeDocumentId === undefined ||
-        activeDocumentId !== session.documentId)
-    ) {
+    if (session !== null && !acceptsIdentity(session, activeIdentity)) {
       session.cancelled = true;
       sessionRef.current = null;
       endPdfSignPlacement();
     }
-    return () => {
-      activeDocumentIdRef.current = undefined;
+  }, [activeIdentity]);
+  useLayoutEffect(
+    () => () => {
+      activeIdentityRef.current = undefined;
       const ownedSession = sessionRef.current;
       if (ownedSession !== null) {
         ownedSession.cancelled = true;
         sessionRef.current = null;
         endPdfSignPlacement();
       }
-    };
-  }, [activeDocumentId]);
+    },
+    [],
+  );
   const run = (perform: () => void) => {
     if (signing.isSigning) {
       signing.notifyAlreadySigning();
@@ -114,7 +120,7 @@ export const usePdfSignFlow = (
     const isCurrent = () =>
       sessionRef.current === authority &&
       !authority.cancelled &&
-      activeDocumentIdRef.current === authority.documentId;
+      acceptsIdentity(authority, activeIdentityRef.current);
     const cancel = () => {
       authority.cancelled = true;
       if (sessionRef.current === authority) {
@@ -178,11 +184,15 @@ export const usePdfSignFlow = (
         );
       });
     },
-    transferToSigning: (request, target, reveal) => {
+    transferToSigning: (request, target, reveal, allowSavedField = false) => {
       if (!consumeOrganizerOperationRequest(request)) {
         return false;
       }
-      place(target);
+      const authority = createAuthority(activeIdentityRef.current ?? target);
+      if (allowSavedField && target.fieldId !== authority.fieldId) {
+        authority.allowedNextFieldId = target.fieldId;
+      }
+      place(target, authority);
       reveal?.();
       return true;
     },
@@ -191,15 +201,42 @@ export const usePdfSignFlow = (
 };
 
 type SigningAuthority = {
+  allowedNextFieldId?: string;
   cancelled: boolean;
-  documentId: string;
+  entityId: string;
+  fieldId: string;
   id: symbol;
+  workspaceId: string;
 };
-const createAuthority = (target: PdfSignTarget): SigningAuthority => ({
+const createAuthority = (target: PdfSignIdentity): SigningAuthority => ({
   cancelled: false,
-  documentId: target.entityId,
+  entityId: target.entityId,
+  fieldId: target.fieldId,
   id: Symbol("pdf-signing-session"),
+  workspaceId: target.workspaceId,
 });
+
+const acceptsIdentity = (
+  authority: SigningAuthority,
+  identity: PdfSignIdentity | undefined,
+) => {
+  if (
+    identity === undefined ||
+    identity.workspaceId !== authority.workspaceId ||
+    identity.entityId !== authority.entityId
+  ) {
+    return false;
+  }
+  if (identity.fieldId === authority.fieldId) {
+    return true;
+  }
+  if (identity.fieldId !== authority.allowedNextFieldId) {
+    return false;
+  }
+  authority.fieldId = identity.fieldId;
+  delete authority.allowedNextFieldId;
+  return true;
+};
 
 type PdfSignFromListOptions = {
   entity: WorkspaceEntity;
@@ -219,7 +256,7 @@ export const usePdfSignFromList = ({
   target,
   workspaceId,
 }: PdfSignFromListOptions) => {
-  const flow = usePdfSignFlow(target?.entityId);
+  const flow = usePdfSignFlow(target ?? undefined);
   const sign = () => {
     if (target === null) {
       return;
@@ -249,7 +286,7 @@ type PdfSignButtonProps = {
  * placement and, pressed again while placing, back out of it.
  */
 export const PdfSignButton = ({ target }: PdfSignButtonProps) => {
-  const flow = usePdfSignFlow(target.entityId);
+  const flow = usePdfSignFlow(target);
   const isPlacing = usePdfSignPlacementStore(
     (state) => state.session?.fieldId === target.fieldId,
   );
