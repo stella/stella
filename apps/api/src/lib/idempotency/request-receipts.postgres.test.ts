@@ -822,7 +822,7 @@ describe.skipIf(!enabled)("request receipt state machine (postgres)", () => {
             return Reflect.get(target, property, receiver);
           }
           return new Proxy(target.transaction, {
-            apply(transaction, thisArg, args) {
+            async apply(transaction, thisArg, args) {
               const pending: unknown = Reflect.apply(
                 transaction,
                 thisArg,
