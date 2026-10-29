@@ -143,7 +143,8 @@ const hidesUntilHover = (value: string): boolean => {
   const revealsOnTappableState = tokens.some(
     (token) =>
       SHOWN.has(classBaseName(token)) &&
-      variantsOf(token).some(isTappableStateVariant),
+      variantsOf(token).some(isTappableStateVariant) &&
+      !variantsOf(token).some(isHoverVariant),
   );
   if (revealsOnTappableState) {
     return false;
@@ -166,7 +167,10 @@ const hidesUntilHover = (value: string): boolean => {
       return false;
     }
     const shown = base.startsWith("opacity-") ? "opacity-100" : "visible";
-    return !touchBases.has(shown) && !touchBases.has(`${shown}!`);
+    return (
+      !touchBases.has(`${shown}!`) &&
+      (base.endsWith("!") || !touchBases.has(shown))
+    );
   });
 };
 
