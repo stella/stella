@@ -154,7 +154,7 @@ describe("organization settings admission request wave", () => {
           organizationSettingsAdmission: "time-billing",
         });
         const { beforeLoad } = await readRouteAdmission(
-          "@/routes/_protected.admin/route",
+          "@/routes/_protected.settings/organization",
         );
         const queryClient = new QueryClient({
           defaultOptions: { queries: { retry: false } },
@@ -260,7 +260,7 @@ describe("organization settings admission request wave", () => {
   }
   test("unrelated organization settings leave navigation to deferred chrome", async () => {
     const { beforeLoad } = await readRouteAdmission(
-      "@/routes/_protected.admin/route",
+      "@/routes/_protected.settings/organization",
     );
     const queryClient = new QueryClient();
     queryClient.setQueryData(roleOptions.queryKey, "owner");

@@ -132,6 +132,7 @@ describe("feedback area for the current route", () => {
     ["/law/cz/cases/abc", "case_law"],
     ["/law/cz/statutes/89-2012", "legislation"],
     ["/settings/organization/members", "web_app"],
+    ["/admin/members", "web_app"],
     ["/settings/account/desktop", "desktop"],
     ["/tools/anonymize", "web_app"],
     ["/onboarding", "web_app"],

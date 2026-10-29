@@ -105,6 +105,7 @@ export const FEEDBACK_DEFAULT_KIND = "bug" as const satisfies FeedbackKind;
  *  entry of their own. The longest matching pattern wins, which keeps the
  *  result independent of declaration order. */
 export const ROUTE_AREA_PATTERNS = {
+  "/admin": "web_app",
   "/settings/organization": "web_app",
   "/chat": "chat",
   "/contacts": "contacts",

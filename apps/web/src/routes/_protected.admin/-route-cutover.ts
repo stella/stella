@@ -5,6 +5,11 @@ import { routeSearchSchema } from "@/route-search-params";
 
 const ADMIN_PREFIX = "/admin";
 const ORGANIZATION_SETTINGS_PREFIX = "/settings/organization";
+const LEGACY_ADMIN_ROUTE_ID_PREFIX = "/_protected/admin";
+
+export const isLegacyAdminRouteId = (routeId: string): boolean =>
+  routeId === LEGACY_ADMIN_ROUTE_ID_PREFIX ||
+  routeId.startsWith(`${LEGACY_ADMIN_ROUTE_ID_PREFIX}/`);
 
 export const organizationSettingsSearchSchema = routeSearchSchema({
   q: optionalSearchStringSchema(),

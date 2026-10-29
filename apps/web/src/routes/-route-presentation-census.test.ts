@@ -4,6 +4,8 @@ import path from "node:path";
 
 import { repoRelativePath } from "@stll/portable-path";
 
+import { isLegacyAdminRouteId } from "@/routes/_protected.admin/-route-cutover";
+
 type RouteSource = {
   path: string;
   source: string;
@@ -24,8 +26,7 @@ const ROUTE_PRESENTATION_EXEMPTIONS: Readonly<Record<string, RouteExemption>> =
   {
     "/": { reason: "The entry route redirects into the appropriate shell." },
     "/_protected/settings/organization/": {
-      reason: "The administration layout owns the redirect title.",
-      fields: ["title"],
+      reason: "Redirects to the General organization settings page.",
     },
     "/_protected/chat/": {
       reason: "The chat layout owns the landing title.",
@@ -298,9 +299,11 @@ export function findMissingRoutePresentation({
       continue;
     }
     const absent = [];
+    const legacyAdminRedirect = isLegacyAdminRouteId(id);
     const exemptFields = ROUTE_PRESENTATION_EXEMPTIONS[id]?.fields;
     const exemptsAll =
-      id in ROUTE_PRESENTATION_EXEMPTIONS && exemptFields === undefined;
+      legacyAdminRedirect ||
+      (id in ROUTE_PRESENTATION_EXEMPTIONS && exemptFields === undefined);
     if (
       !exemptsAll &&
       !exemptFields?.includes("title") &&

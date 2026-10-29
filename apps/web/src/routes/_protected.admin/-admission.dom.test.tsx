@@ -28,7 +28,8 @@ const { isRedirect } = await import("@tanstack/react-router");
 const { roleOptions } = await import("@/lib/auth-queries");
 const { workspacesNavigationOptions } =
   await import("@/lib/workspaces/queries");
-const routeModule: unknown = await import("./route");
+const routeModule: unknown =
+  await import("@/routes/_protected.settings/organization");
 
 const readAdmission = () => {
   if (
@@ -36,11 +37,11 @@ const readAdmission = () => {
     routeModule === null ||
     !("Route" in routeModule)
   ) {
-    throw new TypeError("Missing admin route export");
+    throw new TypeError("Missing organization settings route export");
   }
   const route = routeModule.Route;
   if (typeof route !== "object" || route === null || !("options" in route)) {
-    throw new TypeError("Missing admin route options");
+    throw new TypeError("Missing organization settings route options");
   }
   const options = route.options;
   if (
@@ -49,25 +50,24 @@ const readAdmission = () => {
     !("beforeLoad" in options) ||
     typeof options.beforeLoad !== "function"
   ) {
-    throw new TypeError("Missing admin admission guard");
+    throw new TypeError("Missing organization settings admission guard");
   }
   return options.beforeLoad;
 };
 
 // Actual route declarations define the matrix, so new pages enter automatically.
-const adminPaths = [
+const routesDirectory = path.resolve(import.meta.dirname, "..");
+const organizationSettingsPaths = [
   ...new Set(
-    readdirSync(import.meta.dirname, { recursive: true, encoding: "utf-8" })
+    readdirSync(routesDirectory, { recursive: true, encoding: "utf-8" })
       .filter(
         (file) =>
+          file.startsWith(path.join("_protected.settings", "organization")) &&
           file.endsWith(".tsx") &&
           !file.split(path.sep).some((part) => part.startsWith("-")),
       )
       .flatMap((file) => {
-        const source = readFileSync(
-          path.join(import.meta.dirname, file),
-          "utf-8",
-        );
+        const source = readFileSync(path.join(routesDirectory, file), "utf-8");
         const declaration = /createFileRoute\(\s*"([^"]+)"/u.exec(source);
         const routePath = declaration?.at(1);
         return routePath === undefined
@@ -85,14 +85,18 @@ afterAll(async () => {
 
 describe("organization admin admission", () => {
   test("the admission matrix contains the root and every page", () => {
-    expect(adminPaths).toContain("/settings/organization");
-    expect(adminPaths).toContain("/settings/organization/members");
-    expect(adminPaths).toContain("/settings/organization/time-policy");
-    expect(adminPaths.length).toBeGreaterThan(1);
+    expect(organizationSettingsPaths).toContain("/settings/organization");
+    expect(organizationSettingsPaths).toContain(
+      "/settings/organization/members",
+    );
+    expect(organizationSettingsPaths).toContain(
+      "/settings/organization/time-policy",
+    );
+    expect(organizationSettingsPaths.length).toBeGreaterThan(1);
   });
 
   for (const role of ORGANIZATION_ROLE_NAMES) {
-    for (const pathname of adminPaths) {
+    for (const pathname of organizationSettingsPaths) {
       test(`${role} admission to ${pathname}`, async () => {
         const queryClient = new QueryClient({
           defaultOptions: { queries: { retry: false } },
