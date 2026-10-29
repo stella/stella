@@ -285,6 +285,9 @@ test("mixed-currency approved work remains recordable but cap status is unavaila
     currency: "USD",
     mismatchCount: "1",
     capStatus: "unavailable",
+    billedMinutes: "0",
+    approvedMinutes: "60",
+    totalMinutes: "60",
   });
   const rows = await db
     .select({ metadata: auditLogs.metadata })
@@ -896,3 +899,55 @@ test("minute cap alerts remain computable when amount cap currency is mismatched
     ),
   ).toHaveLength(1);
 });
+
+test.each([
+  {
+    name: "uncapped",
+    body: { mode: "hourly", currency: "USD" },
+    status: "uncapped",
+  },
+  { name: "amount-only", body: capped, status: "threshold_reached" },
+] as const)(
+  "$name summaries expose reserved minutes needed to correct a refused minute cap",
+  async ({ body, status }) => {
+    await set(body);
+    await seedApproved(8000);
+    const invoiceId = createSafeId<"invoice">();
+    await db.insert(invoices).values({
+      id: invoiceId,
+      workspaceId,
+      organizationId: ids.orgA,
+      invoiceDate: "2026-10-04",
+      currency: "USD",
+      status: "draft",
+    });
+    await db
+      .update(timeEntries)
+      .set({ invoiceId, status: "billed", invoiceAttachment: "charged" })
+      .where(eq(timeEntries.id, entryId));
+    const before = await summary();
+
+    expect(
+      await set({
+        mode: "hourly",
+        currency: "USD",
+        capMinutes: 59,
+        alertThresholdBps: 8000,
+      }),
+    ).toMatchObject({
+      code: 409,
+      response: { code: "billing_cap_below_reserved" },
+    });
+    const after = await summary();
+    expect(after).toMatchObject({
+      status,
+      billedAmount: "8000",
+      approvedAmount: "0",
+      totalAmount: "8000",
+      billedMinutes: "60",
+      approvedMinutes: "0",
+      totalMinutes: "60",
+    });
+    expect(after).toEqual(before);
+  },
+);

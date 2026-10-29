@@ -37,15 +37,22 @@ const readMatterBillingSummary = createSafeHandler(
           workspaceId,
           currency: arrangement.currency,
         });
+        const minuteUsage = {
+          billedMinutes: usage.billedMinutes.toString(),
+          approvedMinutes: usage.approvedMinutes.toString(),
+          totalMinutes: usage.totalMinutes.toString(),
+        };
         if (usage.currencyMismatch) {
           return {
             status: "currency_mismatch",
+            ...minuteUsage,
             currency: arrangement.currency,
             mismatchCount: usage.mismatchCount.toString(),
             capStatus: "unavailable",
           } as const;
         }
         const amounts = {
+          ...minuteUsage,
           currency: arrangement.currency,
           billedAmount: usage.billedAmount.toString(),
           approvedAmount: usage.approvedAmount.toString(),
@@ -92,9 +99,6 @@ const readMatterBillingSummary = createSafeHandler(
             ? {}
             : {
                 capMinutes: minuteCap.toString(),
-                billedMinutes: usage.billedMinutes.toString(),
-                approvedMinutes: usage.approvedMinutes.toString(),
-                totalMinutes: usage.totalMinutes.toString(),
                 remainingWipCapMinutes: (minuteCap > usage.totalMinutes
                   ? minuteCap - usage.totalMinutes
                   : 0n
