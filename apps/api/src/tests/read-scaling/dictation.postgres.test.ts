@@ -2,10 +2,18 @@ import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { and, count, eq, isNotNull } from "drizzle-orm";
 
-import { MAX_TRANSCRIPTION_AUDIO_SECONDS } from "@stll/api-contract/transcription";
+import {
+  MAX_TRANSCRIPTION_AUDIO_SECONDS,
+  TRANSCRIPTION_DURATION_TOLERANCE_MS,
+} from "@stll/api-contract/transcription";
 
 import { auditLogs, usageAllocations, usageEvents } from "@/api/db/schema";
 import { env } from "@/api/env";
+import {
+  makeM4aAudioBytes,
+  makeWavAudioBytes,
+} from "@/api/handlers/dictation/audio-fixtures.test-helper";
+import { transcribeAudio } from "@/api/handlers/dictation/provider";
 import type { TranscriptionResult } from "@/api/handlers/dictation/provider";
 import { createDictationTranscribeEndpoint } from "@/api/handlers/dictation/transcribe";
 import { HttpStatusResponse } from "@/api/http/status";
@@ -284,6 +292,152 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
               default:
                 scenario satisfies never;
             }
+          } finally {
+            await fixture.cleanup();
+          }
+        });
+      },
+      120_000,
+    );
+
+    // timeout: exercises audio admission and real PostgreSQL settlement boundaries
+    test.each([
+      {
+        name: "WAV beyond the audio duration bound",
+        audio: () =>
+          new File(
+            [
+              makeWavAudioBytes(
+                MAX_TRANSCRIPTION_AUDIO_SECONDS * 1000 +
+                  TRANSCRIPTION_DURATION_TOLERANCE_MS +
+                  1,
+              ),
+            ],
+            "hlas.wav",
+            { type: "audio/wav" },
+          ),
+      },
+      {
+        name: "M4A beyond the audio duration bound",
+        audio: () =>
+          new File(
+            [
+              makeM4aAudioBytes(
+                MAX_TRANSCRIPTION_AUDIO_SECONDS * 1000 +
+                  TRANSCRIPTION_DURATION_TOLERANCE_MS +
+                  1,
+              ),
+            ],
+            "hlas.m4a",
+            { type: "audio/mp4" },
+          ),
+      },
+      {
+        name: "truncated WAV header",
+        audio: () =>
+          new File([makeWavAudioBytes(1000).subarray(0, 20)], "hlas.wav", {
+            type: "audio/wav",
+          }),
+      },
+      {
+        name: "truncated M4A header",
+        audio: () =>
+          new File([makeM4aAudioBytes(1000).subarray(0, 12)], "hlas.m4a", {
+            type: "audio/mp4",
+          }),
+      },
+      {
+        name: "audio read failure",
+        audio: () =>
+          new (class extends File {
+            override arrayBuffer = async () =>
+              await Promise.reject(
+                new TypeError("Fixture audio cannot be read"),
+              );
+          })(["fixture audio"], "hlas.wav", { type: "audio/wav" }),
+      },
+      {
+        name: "unreadable audio contents",
+        audio: () =>
+          new File(["Návrh paní Šimůnkové."], "hlas.wav", {
+            type: "audio/wav",
+          }),
+      },
+      {
+        name: "WAV declared as M4A",
+        audio: () =>
+          new File([makeWavAudioBytes(1000)], "hlas.m4a", {
+            type: "audio/mp4",
+          }),
+      },
+      {
+        name: "M4A declared as WAV",
+        audio: () =>
+          new File([makeM4aAudioBytes(1000)], "hlas.wav", {
+            type: "audio/wav",
+          }),
+      },
+    ])(
+      "refuses $name before upstream fetch and settlement",
+      async ({ audio }) => {
+        testState.setConfig("USAGE_ENFORCEMENT_ENABLED", true);
+        testState.setConfig("FEATURE_FREE_TIER", false);
+        const databaseUrl =
+          process.env["DATABASE_URL"] ?? panic("DATABASE_URL required");
+        await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+          const { db } = openClient({ max: 1 });
+          const fixture = await seedDictationScaling(db, 10);
+          try {
+            let upstreamRequests = 0;
+            let credentialRequests = 0;
+            const endpoint = createDictationTranscribeEndpoint({
+              transcribe: async (options) =>
+                await transcribeAudio({
+                  ...options,
+                  fetch: async () => {
+                    upstreamRequests += 1;
+                    return Response.json({
+                      text: "Návrh paní Šimůnkové.",
+                      language: "cs",
+                      duration: 1.234,
+                    });
+                  },
+                }),
+              credential: async () => {
+                credentialRequests += 1;
+                return await Promise.resolve(
+                  Result.ok({ type: "static", apiKey: "recorded-credential" }),
+                );
+              },
+              limit: async () => await Promise.resolve(Result.ok(undefined)),
+            });
+            const response = await endpoint.handler(
+              createTestHandlerContext<Parameters<typeof endpoint.handler>[0]>({
+                ...fixture.context,
+                body: {
+                  file: audio(),
+                  modelId: "mistralai/voxtral-mini-transcribe",
+                },
+                route: "/v1/dictation/transcribe",
+              }),
+            );
+            if (!(response instanceof HttpStatusResponse)) {
+              panic("Invalid audio must return an HTTP refusal");
+            }
+            expect(response.code).toBeGreaterThanOrEqual(400);
+            expect(response.code).toBeLessThan(500);
+            expect(credentialRequests).toBe(1);
+            expect(upstreamRequests).toBe(0);
+            const recorded = await db
+              .select({ count: count() })
+              .from(usageEvents)
+              .where(eq(usageEvents.organizationId, fixture.organizationId));
+            const audits = await db
+              .select({ count: count() })
+              .from(auditLogs)
+              .where(eq(auditLogs.organizationId, fixture.organizationId));
+            expect(recorded).toEqual([{ count: 10 }]);
+            expect(audits).toEqual([{ count: 0 }]);
           } finally {
             await fixture.cleanup();
           }

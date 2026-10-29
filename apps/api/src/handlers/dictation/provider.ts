@@ -1,4 +1,4 @@
-import { panic, Result } from "better-result";
+import { Result } from "better-result";
 import * as v from "valibot";
 
 import {
@@ -15,6 +15,7 @@ import {
   MAX_TRANSCRIPTION_PROVIDER_BODY_BYTES,
   MAX_TRANSCRIPTION_VOCABULARY_TERM_LENGTH,
   MAX_TRANSCRIPTION_VOCABULARY_TERMS,
+  TRANSCRIPTION_AUDIO_MEDIA_TYPES,
 } from "@stll/api-contract/transcription";
 import { TimeoutError, withTimeout } from "@stll/concurrency/with-timeout";
 import type { WithTimeoutScheduler } from "@stll/concurrency/with-timeout";
@@ -22,6 +23,10 @@ import { classifyFailure } from "@stll/errors";
 import { isLanguageCode } from "@stll/locales";
 import { readCappedBytes } from "@stll/skills/streaming";
 
+import {
+  createUnreadableAudioError,
+  readAdmissibleAudioDuration,
+} from "@/api/handlers/dictation/audio-duration";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import {
   fetchManagedOpenRouterTranscription,
@@ -35,17 +40,17 @@ const MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
 const PROVIDER_TIMEOUT_MS = 60_000;
 const RETRY_AFTER_MS = 1000;
 const MAX_SAFE_SECONDS = Number.MAX_SAFE_INTEGER / 1000;
-const MIME_FORMATS = new Map([
-  ["audio/mp4", "m4a"],
-  ["audio/m4a", "m4a"],
-  ["audio/x-m4a", "m4a"],
-  ["audio/aac", "aac"],
-  ["audio/wav", "wav"],
-  ["audio/x-wav", "wav"],
-  ["audio/webm", "webm"],
-] as const);
-export const TRANSCRIPTION_AUDIO_MEDIA_TYPES = [...MIME_FORMATS.keys()];
-type AudioFormat = NonNullable<ReturnType<typeof MIME_FORMATS.get>>;
+const MIME_FORMATS = {
+  "audio/mp4": "m4a",
+  "audio/m4a": "m4a",
+  "audio/x-m4a": "m4a",
+  "audio/wav": "wav",
+  "audio/x-wav": "wav",
+} as const satisfies Record<
+  (typeof TRANSCRIPTION_AUDIO_MEDIA_TYPES)[number],
+  "wav" | "m4a"
+>;
+type AudioFormat = (typeof MIME_FORMATS)[keyof typeof MIME_FORMATS];
 const VOCABULARY_STATUS = {
   none: "not-supported",
   "groq-prompt": "applied",
@@ -110,14 +115,6 @@ const unavailable = () =>
     }),
     "model_unavailable",
   );
-
-const invalidAudio = () =>
-  new HandlerError({
-    status: 422,
-    code: "invalid_audio",
-    message: "The audio file is empty, malformed, or unsupported.",
-    hint: "Record a new audio chunk in AAC, M4A, WAV, or WebM format.",
-  });
 
 const oversize = () =>
   new HandlerError({
@@ -267,42 +264,6 @@ export const buildTranscriptionRequest = ({
   });
 };
 
-const hasAudioSignature = (bytes: Uint8Array, format: AudioFormat): boolean => {
-  switch (format) {
-    case "wav":
-      return (
-        bytes.length >= 12 &&
-        new TextDecoder().decode(bytes.subarray(0, 4)) === "RIFF" &&
-        new TextDecoder().decode(bytes.subarray(8, 12)) === "WAVE"
-      );
-    case "m4a":
-      return (
-        bytes.length >= 12 &&
-        new TextDecoder().decode(bytes.subarray(4, 8)) === "ftyp"
-      );
-    case "aac":
-      return (
-        bytes.length >= 7 &&
-        bytes[0] === 0xff &&
-        (bytes[1] === 0xf1 ||
-          bytes[1] === 0xf9 ||
-          bytes[1] === 0xf0 ||
-          bytes[1] === 0xf8)
-      );
-    case "webm":
-      return (
-        bytes.length >= 4 &&
-        bytes[0] === 0x1a &&
-        bytes[1] === 0x45 &&
-        bytes[2] === 0xdf &&
-        bytes[3] === 0xa3
-      );
-    default:
-      format satisfies never;
-      return panic("Unhandled transcription audio format");
-  }
-};
-
 export const normalizeTranscriptionResponse = (
   body: unknown,
   modelId: TranscriptionModelId,
@@ -386,21 +347,19 @@ export const transcribeAudio = async ({
     (candidate) => candidate === audio.type.split(";").at(0),
   );
   if (mime === undefined) {
-    return Result.err(invalidAudio());
+    return Result.err(createUnreadableAudioError());
   }
-  const matchedFormat = MIME_FORMATS.get(mime);
-  if (matchedFormat === undefined) {
-    return Result.err(invalidAudio());
-  }
+  const matchedFormat = MIME_FORMATS[mime];
   const loaded = await Result.tryPromise({
     try: async () => new Uint8Array(await audio.arrayBuffer()),
-    catch: () => invalidAudio(),
+    catch: () => createUnreadableAudioError(),
   });
   if (loaded.isErr()) {
     return Result.err(loaded.error);
   }
-  if (!hasAudioSignature(loaded.value, matchedFormat)) {
-    return Result.err(invalidAudio());
+  const duration = readAdmissibleAudioDuration(loaded.value, matchedFormat);
+  if (duration.isErr()) {
+    return Result.err(duration.error);
   }
   const requestBody = buildTranscriptionRequest({
     audioBytes: loaded.value,
@@ -437,7 +396,7 @@ export const transcribeAudio = async ({
             },
           );
           if (!response.ok) {
-            await Result.tryPromise(async () => await response.body?.cancel());
+            await response.body?.cancel();
             return Result.err(
               providerFailure(
                 response.status === 429 || response.status >= 500,

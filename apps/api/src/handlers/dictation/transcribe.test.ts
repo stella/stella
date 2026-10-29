@@ -15,6 +15,7 @@ import {
 } from "@stll/api-contract/transcription";
 import { assertProperty } from "@stll/property-testing";
 
+import { makeWavAudioBytes } from "@/api/handlers/dictation/audio-fixtures.test-helper";
 import { transcribeAudio } from "@/api/handlers/dictation/provider";
 import type { TranscriptionResult } from "@/api/handlers/dictation/provider";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
@@ -45,12 +46,8 @@ const TEXT = "K návrhu Žofie Černé a Ľubomíra Kováča.";
 const VOCABULARY = ["Žofia Černá", "Ľubomír Kováč"];
 const MODEL = "mistralai/voxtral-mini-transcribe";
 
-const wav = () => {
-  const bytes = new Uint8Array(46);
-  bytes.set(new TextEncoder().encode("RIFF"));
-  bytes.set(new TextEncoder().encode("WAVE"), 8);
-  return new File([bytes], "hlas.wav", { type: "audio/wav" });
-};
+const wav = () =>
+  new File([makeWavAudioBytes()], "hlas.wav", { type: "audio/wav" });
 
 const fixture = (durationMs = 1234) => {
   const context = createTestHandlerContext<DictationContext>({

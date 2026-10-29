@@ -22,7 +22,7 @@ const maximumProviderBody = (audioBytes: number) =>
     model: "\u0000".repeat(MAX_TRANSCRIPTION_MODEL_ID_LENGTH),
     input_audio: {
       data: "A".repeat(4 * Math.ceil(audioBytes / 3)),
-      format: "webm",
+      format: "m4a",
     },
     language: "aa",
     response_format: "verbose_json",

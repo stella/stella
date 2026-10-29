@@ -9,6 +9,7 @@ import { AI_FAILURE_CODES } from "@stll/api-contract";
 import {
   MAX_TRANSCRIPTION_AUDIO_SECONDS,
   MAX_TRANSCRIPTION_MULTIPART_BYTES,
+  TRANSCRIPTION_AUDIO_MEDIA_TYPES,
 } from "@stll/api-contract/transcription";
 import { classifyFailure } from "@stll/errors";
 
@@ -17,7 +18,6 @@ import { env } from "@/api/env";
 import { consumeDictationLimit } from "@/api/handlers/dictation/limits";
 import {
   transcribeAudio,
-  TRANSCRIPTION_AUDIO_MEDIA_TYPES,
   transcriptionResultSchema,
 } from "@/api/handlers/dictation/provider";
 import type { TranscriptionResult } from "@/api/handlers/dictation/provider";

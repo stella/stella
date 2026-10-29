@@ -10,9 +10,12 @@ import type { TranscriptionModelId } from "@stll/ai-catalog/transcription";
 import { AI_FAILURE_CODES } from "@stll/api-contract";
 import {
   MAX_TRANSCRIPTION_AUDIO_BYTES,
+  MAX_TRANSCRIPTION_AUDIO_SECONDS,
   MAX_TRANSCRIPTION_PROVIDER_BODY_BYTES,
   MAX_TRANSCRIPTION_VOCABULARY_TERM_LENGTH,
   MAX_TRANSCRIPTION_VOCABULARY_TERMS,
+  TRANSCRIPTION_AUDIO_MEDIA_TYPES,
+  TRANSCRIPTION_DURATION_TOLERANCE_MS,
 } from "@stll/api-contract/transcription";
 import { assertProperty } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
@@ -23,6 +26,10 @@ import { logger } from "@/api/lib/observability/logger";
 import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
 
 import {
+  makeM4aAudioBytes,
+  makeWavAudioBytes as wav,
+} from "./audio-fixtures.test-helper";
+import {
   buildTranscriptionRequest,
   normalizeTranscriptionResponse,
   transcribeAudio,
@@ -32,23 +39,6 @@ import {
 const MODEL_ID = "mistralai/voxtral-mini-transcribe";
 const TEXT = "K návrhu paní Žofii Černé a pánu Ľubomíru Kováčovi.";
 const TERMS = ["Žofia Černá", "Ľubomír Kováč", "vyporiadanie"];
-const wav = () => {
-  const bytes = new Uint8Array(46);
-  const view = new DataView(bytes.buffer);
-  bytes.set(new TextEncoder().encode("RIFF"));
-  view.setUint32(4, 38, true);
-  bytes.set(new TextEncoder().encode("WAVEfmt "), 8);
-  view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true);
-  view.setUint16(22, 1, true);
-  view.setUint32(24, 16_000, true);
-  view.setUint32(28, 32_000, true);
-  view.setUint16(32, 2, true);
-  view.setUint16(34, 16, true);
-  bytes.set(new TextEncoder().encode("data"), 36);
-  view.setUint32(40, 2, true);
-  return bytes;
-};
 const audio = () => new File([wav()], "diktát.wav", { type: "audio/wav" });
 const input = () => ({
   audio: audio(),
@@ -208,7 +198,7 @@ describe("transcription request contract", () => {
     );
     const request = buildTranscriptionRequest({
       audioBytes: new Uint8Array(MAX_TRANSCRIPTION_AUDIO_BYTES),
-      format: "webm",
+      format: "m4a",
       modelId: "microsoft/mai-transcribe-2",
       language: "sk",
       vocabulary,
@@ -218,7 +208,7 @@ describe("transcription request contract", () => {
     );
     const oversized = buildTranscriptionRequest({
       audioBytes: new Uint8Array(MAX_TRANSCRIPTION_AUDIO_BYTES + 1),
-      format: "webm",
+      format: "m4a",
       modelId: MODEL_ID,
     });
     expect(oversized.isErr()).toBe(true);
@@ -504,28 +494,25 @@ describe("transcription failure isolation", () => {
     }
   });
 
-  test("accepts each documented container signature without using the file name", async () => {
-    const m4a = new Uint8Array(12);
-    m4a.set(new TextEncoder().encode("ftyp"), 4);
-    const cases = [
-      { mime: "audio/mp4", bytes: m4a, format: "m4a" },
-      {
-        mime: "audio/aac",
-        bytes: new Uint8Array([0xff, 0xf1, 0, 0, 0, 0, 0]),
-        format: "aac",
-      },
-      {
-        mime: "audio/webm;codecs=opus",
-        bytes: new Uint8Array([0x1a, 0x45, 0xdf, 0xa3]),
-        format: "webm",
-      },
-      { mime: "audio/wav", bytes: wav(), format: "wav" },
-    ];
-    for (const { mime, bytes, format } of cases) {
+  test("accepts every admitted media type with readable duration without using the file name", async () => {
+    const fixtures = {
+      "audio/mp4": { make: makeM4aAudioBytes, format: "m4a" },
+      "audio/m4a": { make: makeM4aAudioBytes, format: "m4a" },
+      "audio/x-m4a": { make: makeM4aAudioBytes, format: "m4a" },
+      "audio/wav": { make: wav, format: "wav" },
+      "audio/x-wav": { make: wav, format: "wav" },
+    } as const satisfies Record<
+      (typeof TRANSCRIPTION_AUDIO_MEDIA_TYPES)[number],
+      { make: typeof wav; format: "m4a" | "wav" }
+    >;
+    for (const mime of TRANSCRIPTION_AUDIO_MEDIA_TYPES) {
+      let calls = 0;
+      const { make, format } = fixtures[mime];
       const result = await transcribeAudio({
         ...input(),
-        audio: new File([bytes], "názov.dat", { type: mime }),
+        audio: new File([make(1234)], "názov.dat", { type: mime }),
         fetch: async (_url, init) => {
+          calls += 1;
           if (typeof init.body !== "string") {
             throw new TypeError("Expected JSON request");
           }
@@ -537,6 +524,82 @@ describe("transcription failure isolation", () => {
         },
       });
       expect(result.isOk()).toBe(true);
+      expect(calls).toBe(1);
+    }
+  });
+
+  test("readable WAV and M4A duration boundaries govern provider dispatch", async () => {
+    for (const { make, mime } of [
+      { make: wav, mime: "audio/wav" },
+      { make: makeM4aAudioBytes, mime: "audio/mp4" },
+    ]) {
+      for (const durationMs of [
+        1234,
+        MAX_TRANSCRIPTION_AUDIO_SECONDS * 1000,
+        MAX_TRANSCRIPTION_AUDIO_SECONDS * 1000 +
+          TRANSCRIPTION_DURATION_TOLERANCE_MS,
+      ]) {
+        let calls = 0;
+        const result = await transcribeAudio({
+          ...input(),
+          audio: new File([make(durationMs)], "diktát.dat", { type: mime }),
+          fetch: async () => {
+            calls += 1;
+            return Response.json({ text: TEXT, usage: { seconds: 1 } });
+          },
+        });
+        expect(result.isOk()).toBe(true);
+        expect(calls).toBe(1);
+      }
+      let calls = 0;
+      const result = await transcribeAudio({
+        ...input(),
+        audio: new File(
+          [
+            make(
+              MAX_TRANSCRIPTION_AUDIO_SECONDS * 1000 +
+                TRANSCRIPTION_DURATION_TOLERANCE_MS +
+                1,
+            ),
+          ],
+          "dlhý.dat",
+          { type: mime },
+        ),
+        fetch: async () => {
+          calls += 1;
+          return Response.json({ text: TEXT, usage: { seconds: 1 } });
+        },
+      });
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error.code).toBe("audio_too_long");
+        expect(result.error.cause).toBeUndefined();
+      }
+      expect(calls).toBe(0);
+    }
+  });
+
+  test("failed error-body cleanup returns a redacted typed transport failure", async () => {
+    const result = await transcribeAudio({
+      ...input(),
+      fetch: async () =>
+        new Response(
+          new ReadableStream({
+            cancel: () => {
+              throw new TypeError(TEXT);
+            },
+          }),
+          { status: 400 },
+        ),
+    });
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error).toMatchObject({
+        code: AI_FAILURE_CODES.provider_unavailable,
+        retryable: true,
+      });
+      expect(result.error.cause).toBeUndefined();
+      expect(JSON.stringify(result.error)).not.toContain(TEXT);
     }
   });
 
@@ -555,30 +618,45 @@ describe("transcription failure isolation", () => {
     });
     expect(result.isErr()).toBe(true);
     if (result.isErr()) {
-      expect(result.error.code).toBe("invalid_audio");
+      expect(result.error.code).toBe("audio_unreadable");
       expect(result.error.cause).toBeUndefined();
       expect(JSON.stringify(result.error)).not.toContain(TEXT);
     }
   });
 
-  test("rejects empty, malformed, and unsupported audio before dispatch", async () => {
+  test("rejects empty, garbage, truncated, mismatched, AAC, and WebM audio before dispatch", async () => {
     for (const file of [
       new File([], "prázdný.wav", { type: "audio/wav" }),
       new File([TEXT], "vadný.wav", { type: "audio/wav" }),
+      new File([wav().subarray(0, 43)], "zkrácený.wav", { type: "audio/wav" }),
+      new File([makeM4aAudioBytes().subarray(0, 24)], "zkrácený.m4a", {
+        type: "audio/mp4",
+      }),
       new File([wav()], "vadný.mp4", { type: "audio/mp4" }),
+      new File([makeM4aAudioBytes()], "vadný.wav", { type: "audio/wav" }),
       new File([wav()], "diktát.txt", { type: "text/plain" }),
+      new File([new Uint8Array([0xff, 0xf1, 0, 0, 0, 0, 0])], "diktát.aac", {
+        type: "audio/aac",
+      }),
+      new File([new Uint8Array([0x1a, 0x45, 0xdf, 0xa3])], "diktát.webm", {
+        type: "audio/webm;codecs=opus",
+      }),
     ]) {
+      let calls = 0;
       const result = await transcribeAudio({
         ...input(),
         audio: file,
         fetch: async () => {
-          throw new TypeError("Invalid audio must never dispatch");
+          calls += 1;
+          return Response.json({ text: TEXT, usage: { seconds: 1 } });
         },
       });
       expect(result.isErr()).toBe(true);
       if (result.isErr()) {
-        expect(result.error.code).toBe("invalid_audio");
+        expect(result.error.code).toBe("audio_unreadable");
+        expect(result.error.cause).toBeUndefined();
       }
+      expect(calls).toBe(0);
     }
   });
 

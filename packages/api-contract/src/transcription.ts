@@ -3,6 +3,15 @@
 // Catalog models do not promise a processing/audio speed ratio. Use a conservative
 // real-time chunk ceiling; this is an audio policy bound, not a throughput guarantee.
 export const MAX_TRANSCRIPTION_AUDIO_SECONDS = 60;
+// MP4 and WAV timescales can round a chunk boundary by a few milliseconds.
+export const TRANSCRIPTION_DURATION_TOLERANCE_MS = 20;
+export const TRANSCRIPTION_AUDIO_MEDIA_TYPES = [
+  "audio/mp4",
+  "audio/m4a",
+  "audio/x-m4a",
+  "audio/wav",
+  "audio/x-wav",
+] as const;
 
 export const MAX_TRANSCRIPTION_PROVIDER_BODY_BYTES = 25 * 1024 * 1024;
 export const MAX_TRANSCRIPTION_VOCABULARY_TERMS = 100;
@@ -21,7 +30,7 @@ const MAX_VOCABULARY_JSON_CONTENT_BYTES =
 
 // Azure's phrase list has the largest wrapper, including list quotes and commas.
 const MAX_PROVIDER_ENVELOPE_BYTES =
-  '{"model":"","input_audio":{"data":"","format":"webm"},"language":"aa","response_format":"verbose_json","timestamp_granularities":["segment","word"],"provider":{"zdr":true,"data_collection":"deny","options":{"azure":{"phraseList":{"phrases":[]}}}}}'
+  '{"model":"","input_audio":{"data":"","format":"m4a"},"language":"aa","response_format":"verbose_json","timestamp_granularities":["segment","word"],"provider":{"zdr":true,"data_collection":"deny","options":{"azure":{"phraseList":{"phrases":[]}}}}}'
     .length +
   MAX_TRANSCRIPTION_MODEL_ID_LENGTH * MAX_JSON_BYTES_PER_CODE_UNIT +
   MAX_VOCABULARY_JSON_CONTENT_BYTES;
