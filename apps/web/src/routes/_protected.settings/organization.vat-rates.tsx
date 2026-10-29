@@ -1,7 +1,6 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
-import { SettingsPageHeader } from "@/components/settings-page-header";
 import { isTimeBillingPreviewEnabled } from "@/hooks/use-time-billing-preview";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { roleOptions } from "@/lib/auth-queries";
@@ -13,7 +12,8 @@ import {
   prefetchNonCriticalInfiniteQuery,
 } from "@/lib/react-query";
 import { routePresentation } from "@/routes/-route-presentation";
-import { VatRatesCard } from "@/routes/_protected.admin/-components/organization/vat-rates-card";
+import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
+import { VatRatesCard } from "@/routes/_protected.settings/organization/-components/organization/vat-rates-card";
 
 export const Route = createFileRoute(
   "/_protected/settings/organization/vat-rates",

@@ -10,13 +10,11 @@ import { Frame, FramePanel } from "@stll/ui/frame";
 import { Skeleton } from "@stll/ui/skeleton";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
-import { SettingsPageHeader } from "@/components/settings-page-header";
+import { createHostedUsageManagementSession } from "@/components/usage/usage-limit-modal";
 import { env } from "@/env";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics } from "@/lib/analytics/provider";
-import { api } from "@/lib/api";
-import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { queryAvailability } from "@/lib/organization/feature-access/availability";
@@ -26,8 +24,9 @@ import { prefetchRouteQuery } from "@/lib/react-query";
 import { usageEntitlementOptions } from "@/lib/usage-queries";
 import type { UsageEntitlement } from "@/lib/usage-queries";
 import { routePresentation } from "@/routes/-route-presentation";
-import { UsagePlansCard } from "@/routes/_protected.admin/-components/organization/usage-plans-card";
-import { usagePoliciesOptions } from "@/routes/_protected.admin/-queries/usage-policies";
+import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
+import { UsagePlansCard } from "@/routes/_protected.settings/organization/-components/organization/usage-plans-card";
+import { usagePoliciesOptions } from "@/routes/_protected.settings/organization/-queries/usage-policies";
 
 export const Route = createFileRoute("/_protected/settings/organization/usage")(
   {
@@ -236,10 +235,7 @@ function ManageUsageButton() {
   const t = useTranslations();
   const [pending, setPending] = useState(false);
   const mutation = useMutation({
-    mutationFn: async () => {
-      const response = await api.usage.hosted.management.post();
-      return unwrapApiResponse(response);
-    },
+    mutationFn: createHostedUsageManagementSession,
     onMutate: () => setPending(true),
     onSuccess: ({ url }) => {
       window.location.href = url;

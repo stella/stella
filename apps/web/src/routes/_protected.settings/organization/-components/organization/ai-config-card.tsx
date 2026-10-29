@@ -20,13 +20,13 @@ import {
 } from "@/components/ai-config-role-models.logic";
 import { CopyActionButton } from "@/components/copy-action-button";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
-import { SettingsPageHeader } from "@/components/settings-page-header";
 import { detached } from "@/lib/detached";
 import { providerSetupGuidance } from "@/lib/errors/provider-setup-guidance";
 import { aiConfigOptions } from "@/lib/organization/ai-config-queries";
 import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/access";
 import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
-import { AIProviderRows } from "@/routes/_protected.admin/-components/organization/ai-provider-rows";
+import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
+import { AIProviderRows } from "@/routes/_protected.settings/organization/-components/organization/ai-provider-rows";
 
 import { AIConfigAdvanced } from "./ai-config-advanced";
 import { hasCustomAIModels } from "./ai-config-form.logic";

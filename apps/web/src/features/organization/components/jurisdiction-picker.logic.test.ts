@@ -5,7 +5,7 @@ import { compareByLocale } from "@stll/collation";
 import { assertProperty } from "@stll/property-testing";
 import { foldSearchMatchText } from "@stll/text-normalize";
 
-import { filterJurisdictionOptions } from "@/components/jurisdiction-picker.logic";
+import { filterJurisdictionOptions } from "@/features/organization/components/jurisdiction-picker.logic";
 
 const countries = [
   { code: "DE", name: "Germany" },

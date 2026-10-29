@@ -32,11 +32,11 @@ import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { queryView } from "@/lib/query-view.logic";
-import { useSettingsMutation } from "@/routes/_protected.admin/-hooks/use-settings-mutation";
+import { useSettingsMutation } from "@/routes/_protected.settings/organization/-hooks/use-settings-mutation";
 import {
   organizationAnonymizationBlacklistKeys,
   organizationAnonymizationBlacklistOptions,
-} from "@/routes/_protected.admin/-queries/anonymization-blacklist";
+} from "@/routes/_protected.settings/organization/-queries/anonymization-blacklist";
 
 type OrgAnonymizationBlacklistEntry = {
   canonical: string;

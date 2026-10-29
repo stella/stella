@@ -4,7 +4,7 @@ import { useTranslations } from "use-intl";
 import { AUDIT_CHANGES_STATUS } from "@stll/api-contract/audit-log";
 import { TableCell } from "@stll/ui/table";
 
-import type { fetchAuditLogs } from "@/routes/_protected.admin/-queries/audit-logs";
+import type { fetchAuditLogs } from "@/routes/_protected.settings/organization/-queries/audit-logs";
 
 type AuditChangeDetailsProps = Pick<
   Awaited<ReturnType<typeof fetchAuditLogs>>["items"][number],

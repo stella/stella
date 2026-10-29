@@ -5,7 +5,6 @@ import { useTranslations } from "use-intl";
 import { Frame, FramePanel } from "@stll/ui/frame";
 
 import { CopyActionButton } from "@/components/copy-action-button";
-import { SettingsPageHeader } from "@/components/settings-page-header";
 import { usePermissions } from "@/hooks/use-permissions";
 import { refreshAuthQueries } from "@/lib/auth-queries";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -13,10 +12,11 @@ import { organizationOptions } from "@/lib/organization/queries";
 import { pageTitle } from "@/lib/page-title";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { routePresentation } from "@/routes/-route-presentation";
-import { OrganizationDangerZone } from "@/routes/_protected.admin/-components/organization-danger-zone";
-import { OrganizationJurisdictionsCard } from "@/routes/_protected.admin/-components/organization/jurisdictions-card";
-import { OrganizationProfileCard } from "@/routes/_protected.admin/-components/organization/profile-card";
-import { OrganizationTimeZoneCard } from "@/routes/_protected.admin/-components/organization/time-zone-card";
+import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
+import { OrganizationDangerZone } from "@/routes/_protected.settings/organization/-components/organization-danger-zone";
+import { OrganizationJurisdictionsCard } from "@/routes/_protected.settings/organization/-components/organization/jurisdictions-card";
+import { OrganizationProfileCard } from "@/routes/_protected.settings/organization/-components/organization/profile-card";
+import { OrganizationTimeZoneCard } from "@/routes/_protected.settings/organization/-components/organization/time-zone-card";
 
 export const Route = createFileRoute(
   "/_protected/settings/organization/general",

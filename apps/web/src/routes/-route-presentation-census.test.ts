@@ -4,7 +4,7 @@ import path from "node:path";
 
 import { repoRelativePath } from "@stll/portable-path";
 
-import { isLegacyAdminRouteId } from "@/routes/_protected.admin/-route-cutover";
+import { isLegacyAdminRouteId } from "@/routes/-organization-settings-route";
 
 type RouteSource = {
   path: string;

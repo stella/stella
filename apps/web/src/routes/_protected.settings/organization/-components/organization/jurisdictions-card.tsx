@@ -6,8 +6,8 @@ import { useTranslations } from "use-intl";
 
 import { Frame, FramePanel } from "@stll/ui/frame";
 
-import { JurisdictionPicker } from "@/components/jurisdiction-picker";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
+import { JurisdictionPicker } from "@/features/organization/components/jurisdiction-picker";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { unwrapApiResponse } from "@/lib/errors/api";
@@ -17,7 +17,7 @@ import {
   organizationSettingsOptions,
 } from "@/lib/organization/settings-queries";
 import { queryView } from "@/lib/query-view.logic";
-import { useSettingsMutation } from "@/routes/_protected.admin/-hooks/use-settings-mutation";
+import { useSettingsMutation } from "@/routes/_protected.settings/organization/-hooks/use-settings-mutation";
 
 export const OrganizationJurisdictionsCard = () => {
   const t = useTranslations();

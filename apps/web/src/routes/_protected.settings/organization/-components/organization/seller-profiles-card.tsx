@@ -38,9 +38,9 @@ import type {
   SellerProfileCommand,
   SellerProfileInput,
 } from "@/lib/organization/seller-profiles";
-import { SellerProfileForm } from "@/routes/_protected.admin/-components/organization/seller-profile-form";
-import { SellerProfileRefusal } from "@/routes/_protected.admin/-components/organization/seller-profile-refusal";
-import { useSettingsMutation } from "@/routes/_protected.admin/-hooks/use-settings-mutation";
+import { SellerProfileForm } from "@/routes/_protected.settings/organization/-components/organization/seller-profile-form";
+import { SellerProfileRefusal } from "@/routes/_protected.settings/organization/-components/organization/seller-profile-refusal";
+import { useSettingsMutation } from "@/routes/_protected.settings/organization/-hooks/use-settings-mutation";
 
 type ProfileDialog =
   | { type: "closed" }

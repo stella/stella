@@ -13,7 +13,7 @@ import en from "@/i18n/langs/en.json";
 import { AuthenticatedUserProvider } from "@/lib/authenticated-user-context";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 
-import { createWebTestEnvironment } from "../../../../../tests/environment.test-fixtures";
+import { createWebTestEnvironment } from "../../../../../../tests/environment.test-fixtures";
 import type { TimePolicySettings } from "./time-policy.logic";
 
 const testEnvironment = createWebTestEnvironment({ file: import.meta.path });

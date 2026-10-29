@@ -1,14 +1,14 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
-import { SettingsPageHeader } from "@/components/settings-page-header";
 import { isTimeBillingPreviewEnabled } from "@/hooks/use-time-billing-preview";
 import { roleOptions } from "@/lib/auth-queries";
 import { isBillingSettingsAccessible } from "@/lib/organization/billing-settings.logic";
 import { pageTitle } from "@/lib/page-title";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { routePresentation } from "@/routes/-route-presentation";
-import { NumberSeriesCard } from "@/routes/_protected.admin/-components/organization/number-series-card";
+import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
+import { NumberSeriesCard } from "@/routes/_protected.settings/organization/-components/organization/number-series-card";
 
 export const Route = createFileRoute(
   "/_protected/settings/organization/number-series",

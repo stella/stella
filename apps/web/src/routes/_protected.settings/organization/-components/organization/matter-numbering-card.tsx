@@ -26,7 +26,7 @@ import {
   organizationSettingsOptions,
 } from "@/lib/organization/settings-queries";
 import { queryView } from "@/lib/query-view.logic";
-import { useSettingsMutation } from "@/routes/_protected.admin/-hooks/use-settings-mutation";
+import { useSettingsMutation } from "@/routes/_protected.settings/organization/-hooks/use-settings-mutation";
 
 const PATTERN_PRESETS = [
   { value: "{SEQ}", key: "sequential" as const },

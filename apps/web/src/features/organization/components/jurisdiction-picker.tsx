@@ -11,8 +11,8 @@ import {
 } from "@stll/ui/input-group";
 import { cn } from "@stll/ui/utils";
 
-import { filterJurisdictionOptions } from "@/components/jurisdiction-picker.logic";
 import Tooltip from "@/components/tooltip";
+import { filterJurisdictionOptions } from "@/features/organization/components/jurisdiction-picker.logic";
 import { useFormatter, useFormattingLocale } from "@/i18n/formatting-context";
 import { createCountryOptions, removeJurisdiction } from "@/lib/jurisdictions";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";

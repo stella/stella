@@ -18,7 +18,6 @@ import { ScrollArea } from "@stll/ui/scroll-area";
 import { cn } from "@stll/ui/utils";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
-import { settingsNavSections } from "@/components/settings-shell/settings-nav";
 import { env } from "@/env";
 import { useTimeBillingPreviewEnabled } from "@/hooks/use-time-billing-preview";
 import { authClient } from "@/lib/auth-client";
@@ -29,6 +28,7 @@ import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/acces
 import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
 import { queryView } from "@/lib/query-view.logic";
 import { useQueryViewError } from "@/lib/use-query-view";
+import { settingsNavSections } from "@/routes/_protected.settings/-components/settings-shell/settings-nav";
 
 const NAV_ITEM_CLASS = cn(
   "hover:bg-sidebar-accent/60 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-hidden",

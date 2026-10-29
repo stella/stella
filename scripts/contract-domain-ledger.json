@@ -1124,7 +1124,7 @@
     "reason": "Existing INDIGOBOOK_MONTHS domain; contract ownership pending migration."
   },
   {
-    "id": "apps/web/src/features/case-law/citation-format.ts::POLISH_GENITIVE_MONTHS::domain:[\"stycznia\",\"lutego\",\"marca\",\"kwietnia\",\"maja\",\"czerwca\",\"lipca\",\"sierpnia\",\"wrze\u015bnia\",\"pa\u017adziernika\",\"listopada\",\"grudnia\"]::1",
+    "id": "apps/web/src/features/case-law/citation-format.ts::POLISH_GENITIVE_MONTHS::domain:[\"stycznia\",\"lutego\",\"marca\",\"kwietnia\",\"maja\",\"czerwca\",\"lipca\",\"sierpnia\",\"września\",\"października\",\"listopada\",\"grudnia\"]::1",
     "reason": "Existing POLISH_GENITIVE_MONTHS domain; contract ownership pending migration."
   },
   {
@@ -1164,7 +1164,7 @@
     "reason": "Local test input domain or bound; retained for fixture coverage."
   },
   {
-    "id": "apps/web/src/features/case-law/components/case-viewer/leading-citations.test.tsx::numerals::domain:[\"\u0660\",\"\u0662\u066c\u0660\u0664\u0668\"]::1",
+    "id": "apps/web/src/features/case-law/components/case-viewer/leading-citations.test.tsx::numerals::domain:[\"٠\",\"٢٬٠٤٨\"]::1",
     "reason": "Local test input domain or bound; retained for fixture coverage."
   },
   {
@@ -1604,94 +1604,6 @@
     "reason": "Local test input domain or bound; retained for fixture coverage."
   },
   {
-    "id": "apps/web/src/routes/_protected.admin/-components/organization/number-series-form.logic.test.ts::<module>::domain:[\"invoice\",\"advance\",\"credit_note\"]::1",
-    "reason": "Local test input domain or bound; retained for fixture coverage."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.admin/-components/organization/number-series-form.logic.ts::numberSeriesFormSchema::maxLength:128::1",
-    "reason": "Existing numberSeriesFormSchema UI validation or presentation bound; contract migration pending."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.admin/-components/organization/number-series-form.logic.ts::numberSeriesFormSchema::maxLength:128::2",
-    "reason": "Existing numberSeriesFormSchema UI validation or presentation bound; contract migration pending."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.admin/-components/organization/number-series-form.logic.ts::numberSeriesFormSchema::maxValue:6::1",
-    "reason": "Existing numberSeriesFormSchema UI validation or presentation bound; contract migration pending."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.admin/-components/organization/number-series-form.logic.ts::numberSeriesFormSchema::minLength:5::1",
-    "reason": "Existing numberSeriesFormSchema UI validation or presentation bound; contract migration pending."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.admin/-components/organization/number-series-form.logic.ts::numberSeriesFormSchema::minValue:1::1",
-    "reason": "Existing numberSeriesFormSchema UI validation or presentation bound; contract migration pending."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.admin/-components/organization/number-series-form.tsx::NumberSeriesForm::maxLength:128::1",
-    "reason": "Existing NumberSeriesForm UI validation or presentation bound; contract migration pending."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.admin/-components/organization/number-series-form.tsx::NumberSeriesForm::maxLength:128::2",
-    "reason": "Existing NumberSeriesForm UI validation or presentation bound; contract migration pending."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.admin/-components/organization/seller-profile-refusal.test.tsx::<module>::domain:[\"en\",\"ar\"]::1",
-    "reason": "Local test input domain or bound; retained for fixture coverage."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.admin/-components/organization/time-policy-card.test.tsx::<module>::domain:[\"member\",\"intern\",\"external\"]::1",
-    "reason": "Local test input domain or bound; retained for fixture coverage."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.admin/-components/organization/time-policy-card.test.tsx::<module>::domain:[\"minimumUnit\",\"minimumUnitHelp\",\"editWindow\",\"editWindowHelp\",\"lockedThrough\",\"lockedThroughHelp\",\"narrativeRequired\"]::1",
-    "reason": "Local test input domain or bound; retained for fixture coverage."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.admin/-components/organization/time-policy-card.test.tsx::<module>::domain:[\"owner\",\"admin\"]::1",
-    "reason": "Local test input domain or bound; retained for fixture coverage."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.admin/-components/organization/time-policy-card.test.tsx::ROLES::domain:[\"owner\",\"admin\",\"member\",\"intern\",\"external\"]::1",
-    "reason": "Local test input domain or bound; retained for fixture coverage."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.admin/-components/organization/time-policy.logic.ts::TIME_POLICY_FIELDS::domain:[\"timeMinimumUnitMinutes\",\"timeEditWindowDays\",\"timeLockedThroughMonth\",\"timeNarrativeRequired\"]::1",
-    "reason": "Existing TIME_POLICY_FIELDS domain; contract ownership pending migration."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.admin/-components/organization/time-policy.logic.ts::timePolicyFormSchema::maxValue:60::1",
-    "reason": "Existing timePolicyFormSchema UI validation or presentation bound; contract migration pending."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.admin/-components/organization/time-policy.logic.ts::timePolicyFormSchema::minValue:1::1",
-    "reason": "Existing timePolicyFormSchema UI validation or presentation bound; contract migration pending."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.admin/-components/organization/vat-rate-form.logic.ts::vatRateFormSchema::maxLength:128::1",
-    "reason": "Existing vatRateFormSchema UI validation or presentation bound; contract migration pending."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.admin/-components/organization/vat-rate-form.logic.ts::vatRateFormSchema::maxLength:64::1",
-    "reason": "Existing vatRateFormSchema UI validation or presentation bound; contract migration pending."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.admin/-components/organization/vat-rate-form.tsx::VatRateForm::maxLength:128::1",
-    "reason": "Existing VatRateForm UI validation or presentation bound; contract migration pending."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.admin/-components/organization/vat-rate-form.tsx::VatRateForm::maxLength:64::1",
-    "reason": "Existing VatRateForm UI validation or presentation bound; contract migration pending."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.admin/-queries/anonymization-blacklist.ts::organizationAnonymizationBlacklistKeys::domain:[\"organization-settings\",\"anonymization-blacklist\"]::1",
-    "reason": "Existing organizationAnonymizationBlacklistKeys domain; contract ownership pending migration."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.admin/-queries/usage-policies.ts::usagePoliciesKeys::domain:[\"settings\",\"usage\",\"policies\"]::1",
-    "reason": "Existing usagePoliciesKeys domain; contract ownership pending migration."
-  },
-  {
     "id": "apps/web/src/routes/_protected.contacts/-components/contact-communication-editor.tsx::ContactCommunicationEditor::maxLength:7::1",
     "reason": "Existing ContactCommunicationEditor UI validation or presentation bound; contract migration pending."
   },
@@ -1798,6 +1710,94 @@
   {
     "id": "apps/web/src/routes/_protected.settings/organization.members.tsx::SKELETON_ROW_KEYS::domain:[\"a\",\"b\",\"c\",\"d\",\"e\",\"f\",\"g\",\"h\"]::1",
     "reason": "Existing SKELETON_ROW_KEYS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/organization/-components/organization/number-series-form.logic.test.ts::<module>::domain:[\"invoice\",\"advance\",\"credit_note\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/organization/-components/organization/number-series-form.logic.ts::numberSeriesFormSchema::maxLength:128::1",
+    "reason": "Existing numberSeriesFormSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/organization/-components/organization/number-series-form.logic.ts::numberSeriesFormSchema::maxLength:128::2",
+    "reason": "Existing numberSeriesFormSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/organization/-components/organization/number-series-form.logic.ts::numberSeriesFormSchema::maxValue:6::1",
+    "reason": "Existing numberSeriesFormSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/organization/-components/organization/number-series-form.logic.ts::numberSeriesFormSchema::minLength:5::1",
+    "reason": "Existing numberSeriesFormSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/organization/-components/organization/number-series-form.logic.ts::numberSeriesFormSchema::minValue:1::1",
+    "reason": "Existing numberSeriesFormSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/organization/-components/organization/number-series-form.tsx::NumberSeriesForm::maxLength:128::1",
+    "reason": "Existing NumberSeriesForm UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/organization/-components/organization/number-series-form.tsx::NumberSeriesForm::maxLength:128::2",
+    "reason": "Existing NumberSeriesForm UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/organization/-components/organization/seller-profile-refusal.test.tsx::<module>::domain:[\"en\",\"ar\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/organization/-components/organization/time-policy-card.test.tsx::<module>::domain:[\"member\",\"intern\",\"external\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/organization/-components/organization/time-policy-card.test.tsx::<module>::domain:[\"minimumUnit\",\"minimumUnitHelp\",\"editWindow\",\"editWindowHelp\",\"lockedThrough\",\"lockedThroughHelp\",\"narrativeRequired\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/organization/-components/organization/time-policy-card.test.tsx::<module>::domain:[\"owner\",\"admin\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/organization/-components/organization/time-policy-card.test.tsx::ROLES::domain:[\"owner\",\"admin\",\"member\",\"intern\",\"external\"]::1",
+    "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/organization/-components/organization/time-policy.logic.ts::TIME_POLICY_FIELDS::domain:[\"timeMinimumUnitMinutes\",\"timeEditWindowDays\",\"timeLockedThroughMonth\",\"timeNarrativeRequired\"]::1",
+    "reason": "Existing TIME_POLICY_FIELDS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/organization/-components/organization/time-policy.logic.ts::timePolicyFormSchema::maxValue:60::1",
+    "reason": "Existing timePolicyFormSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/organization/-components/organization/time-policy.logic.ts::timePolicyFormSchema::minValue:1::1",
+    "reason": "Existing timePolicyFormSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/organization/-components/organization/vat-rate-form.logic.ts::vatRateFormSchema::maxLength:128::1",
+    "reason": "Existing vatRateFormSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/organization/-components/organization/vat-rate-form.logic.ts::vatRateFormSchema::maxLength:64::1",
+    "reason": "Existing vatRateFormSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/organization/-components/organization/vat-rate-form.tsx::VatRateForm::maxLength:128::1",
+    "reason": "Existing VatRateForm UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/organization/-components/organization/vat-rate-form.tsx::VatRateForm::maxLength:64::1",
+    "reason": "Existing VatRateForm UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/organization/-queries/anonymization-blacklist.ts::organizationAnonymizationBlacklistKeys::domain:[\"organization-settings\",\"anonymization-blacklist\"]::1",
+    "reason": "Existing organizationAnonymizationBlacklistKeys domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/organization/-queries/usage-policies.ts::usagePoliciesKeys::domain:[\"settings\",\"usage\",\"policies\"]::1",
+    "reason": "Existing usagePoliciesKeys domain; contract ownership pending migration."
   },
   {
     "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel.logic.test.ts::triggerTypes::domain:[\"direct\",\"user_dispatch\",\"agent_delegation\",\"schedule\",\"webhook\",\"credential\",\"system\"]::1",
@@ -1944,11 +1944,11 @@
     "reason": "Local test input domain or bound; retained for fixture coverage."
   },
   {
-    "id": "apps/web/src/routes/dev/-components/inspector-pane-playground.tsx::BENCH_TABLE_HEADERS::domain:[\"Polo\u017eka\",\"Rok\",\"Sazba\",\"Z\u00e1klad\",\"Koeficient\",\"\u00darok\",\"N\u00e1klady\",\"Da\u0148\",\"Celkem\",\"M\u011bna\",\"Splatnost\",\"Pozn\u00e1mka\"]::1",
+    "id": "apps/web/src/routes/dev/-components/inspector-pane-playground.tsx::BENCH_TABLE_HEADERS::domain:[\"Položka\",\"Rok\",\"Sazba\",\"Základ\",\"Koeficient\",\"Úrok\",\"Náklady\",\"Daň\",\"Celkem\",\"Měna\",\"Splatnost\",\"Poznámka\"]::1",
     "reason": "Existing BENCH_TABLE_HEADERS domain; contract ownership pending migration."
   },
   {
-    "id": "apps/web/src/routes/dev/-components/inspector-pane-playground.tsx::BENCH_TABLE_ROW::domain:[\"N\u00e1hrada nemajetkov\u00e9 \u00fajmy\",\"2022\",\"14,25 %\",\"1 240 000\",\"1,35\",\"62 400\",\"18 150\",\"21 %\",\"1 341 700\",\"CZK\",\"30. 6. 2022\",\"\u00a7 2958 odst. 1 p\u00edsm. b)\"]::1",
+    "id": "apps/web/src/routes/dev/-components/inspector-pane-playground.tsx::BENCH_TABLE_ROW::domain:[\"Náhrada nemajetkové újmy\",\"2022\",\"14,25 %\",\"1 240 000\",\"1,35\",\"62 400\",\"18 150\",\"21 %\",\"1 341 700\",\"CZK\",\"30. 6. 2022\",\"§ 2958 odst. 1 písm. b)\"]::1",
     "reason": "Existing BENCH_TABLE_ROW domain; contract ownership pending migration."
   },
   {
@@ -2020,7 +2020,7 @@
     "reason": "Local test input domain or bound; retained for fixture coverage."
   },
   {
-    "id": "apps/web/src/routes/knowledge/-components/template-markers.property.test.ts::PATH_SEGMENTS::domain:[\"buyer\",\"name\",\"fee_2\",\"sub-total\",\"d\u00edl\"]::1",
+    "id": "apps/web/src/routes/knowledge/-components/template-markers.property.test.ts::PATH_SEGMENTS::domain:[\"buyer\",\"name\",\"fee_2\",\"sub-total\",\"díl\"]::1",
     "reason": "Local test input domain or bound; retained for fixture coverage."
   },
   {

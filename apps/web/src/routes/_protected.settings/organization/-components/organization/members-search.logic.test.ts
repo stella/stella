@@ -4,7 +4,7 @@ import fc from "fast-check";
 import { assertProperty } from "@stll/property-testing";
 import { foldSearchMatchText } from "@stll/text-normalize";
 
-import { filterOrganizationLists } from "@/routes/_protected.admin/-components/organization/members-search.logic";
+import { filterOrganizationLists } from "@/routes/_protected.settings/organization/-components/organization/members-search.logic";
 
 const members = [
   { id: "name", user: { name: "Ada Lovelace", email: "ada@example.test" } },

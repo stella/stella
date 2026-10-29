@@ -33,7 +33,6 @@ import {
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
-import { SettingsPageHeader } from "@/components/settings-page-header";
 import Tooltip from "@/components/tooltip";
 import { UserIdentity } from "@/components/user-avatar";
 import { useFormattingLocale } from "@/i18n/formatting-context";
@@ -49,9 +48,10 @@ import { formatMemberDate } from "@/lib/organization/utils";
 import { pageTitle } from "@/lib/page-title";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { routePresentation } from "@/routes/-route-presentation";
-import { OrganizationListToolbar } from "@/routes/_protected.admin/-components/organization/list-toolbar";
-import { RoleCell } from "@/routes/_protected.admin/-components/organization/member-role-cell";
-import { filterOrganizationLists } from "@/routes/_protected.admin/-components/organization/members-search.logic";
+import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
+import { OrganizationListToolbar } from "@/routes/_protected.settings/organization/-components/organization/list-toolbar";
+import { RoleCell } from "@/routes/_protected.settings/organization/-components/organization/member-role-cell";
+import { filterOrganizationLists } from "@/routes/_protected.settings/organization/-components/organization/members-search.logic";
 
 type SortKey = "name" | "role" | "joined";
 type SortDir = "asc" | "desc";

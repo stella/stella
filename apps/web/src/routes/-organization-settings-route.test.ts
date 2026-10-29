@@ -9,7 +9,7 @@ import { createRouteErrorLifecycleController } from "@/lib/analytics/route-error
 import { createAppQueryClient } from "@/lib/react-query";
 import { parseRouteSearch, stringifyRouteSearch } from "@/route-search-params";
 import { WEB_ROUTE_TEMPLATES } from "@/route-templates.gen";
-import { organizationSettingsDestination } from "@/routes/_protected.admin/-route-cutover";
+import { organizationSettingsDestination } from "@/routes/-organization-settings-route";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 const EMPTY_SEARCH = {};

@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 
 import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
 
-import { settingsNavSections } from "@/components/settings-shell/settings-nav";
-import type { SettingsNavAccess } from "@/components/settings-shell/settings-nav";
+import { settingsNavSections } from "@/routes/_protected.settings/-components/settings-shell/settings-nav";
+import type { SettingsNavAccess } from "@/routes/_protected.settings/-components/settings-shell/settings-nav";
 
 const ALL_OPEN = {
   role: "owner",

@@ -11,7 +11,7 @@ import { toSafeId } from "@/lib/safe-id";
 import {
   NumberSeriesPreviewValue,
   NumberSeriesRefusal,
-} from "@/routes/_protected.admin/-components/organization/number-series-preview";
+} from "@/routes/_protected.settings/organization/-components/organization/number-series-preview";
 
 const LOCALES = [
   { locale: "en", messages: en },

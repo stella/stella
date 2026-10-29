@@ -30,8 +30,8 @@ import {
   FOLLOW_JURISDICTION,
   timeZonePickerValue,
   timeZoneToSave,
-} from "@/routes/_protected.admin/-components/organization/time-zone-card.logic";
-import { useSettingsMutation } from "@/routes/_protected.admin/-hooks/use-settings-mutation";
+} from "@/routes/_protected.settings/organization/-components/organization/time-zone-card.logic";
+import { useSettingsMutation } from "@/routes/_protected.settings/organization/-hooks/use-settings-mutation";
 
 /** The curated zones, plus the organization's own when it is not one of them. */
 const zoneOptions = (current: string): readonly string[] => {

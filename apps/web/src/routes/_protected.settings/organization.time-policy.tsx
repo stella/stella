@@ -1,13 +1,13 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
-import { SettingsPageHeader } from "@/components/settings-page-header";
 import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
 import { pageTitle } from "@/lib/page-title";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { organizationSettingsOptions } from "@/queries/organization-settings";
 import { routePresentation } from "@/routes/-route-presentation";
-import { TimePolicyCard } from "@/routes/_protected.admin/-components/organization/time-policy-card";
+import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
+import { TimePolicyCard } from "@/routes/_protected.settings/organization/-components/organization/time-policy-card";
 
 export const Route = createFileRoute(
   "/_protected/settings/organization/time-policy",

@@ -45,10 +45,10 @@ import {
   VatRatePercentage,
   VatRateRefusal,
   vatRateStatus,
-} from "@/routes/_protected.admin/-components/organization/vat-rate-display";
-import { VatRateForm } from "@/routes/_protected.admin/-components/organization/vat-rate-form";
-import { presetResultWhenCommandStarts } from "@/routes/_protected.admin/-components/organization/vat-rates-card.logic";
-import { useSettingsMutation } from "@/routes/_protected.admin/-hooks/use-settings-mutation";
+} from "@/routes/_protected.settings/organization/-components/organization/vat-rate-display";
+import { VatRateForm } from "@/routes/_protected.settings/organization/-components/organization/vat-rate-form";
+import { presetResultWhenCommandStarts } from "@/routes/_protected.settings/organization/-components/organization/vat-rates-card.logic";
+import { useSettingsMutation } from "@/routes/_protected.settings/organization/-hooks/use-settings-mutation";
 
 type RateDialog =
   | { type: "closed" }

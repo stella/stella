@@ -8,8 +8,8 @@ import { hasOrganizationManagementAccess } from "@/lib/organization/role-assignm
 import { pageTitle } from "@/lib/page-title";
 import { ensureRouteQueryData, prefetchRouteQuery } from "@/lib/react-query";
 import { organizationSettingsOptions } from "@/queries/organization-settings";
+import { organizationSettingsSearchSchema } from "@/routes/-organization-settings-route";
 import { routePresentation } from "@/routes/-route-presentation";
-import { organizationSettingsSearchSchema } from "@/routes/_protected.admin/-route-cutover";
 
 export const Route = createFileRoute("/_protected/settings/organization")({
   staticData: {

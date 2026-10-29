@@ -3,7 +3,7 @@ import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import {
   organizationSettingsDestination,
   organizationSettingsSearchSchema,
-} from "@/routes/_protected.admin/-route-cutover";
+} from "@/routes/-organization-settings-route";
 
 export const Route = createFileRoute("/_protected/admin")({
   validateSearch: organizationSettingsSearchSchema,

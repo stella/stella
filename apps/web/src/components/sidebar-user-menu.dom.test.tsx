@@ -1,9 +1,9 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
-import { settingsNavSections } from "@/components/settings-shell/settings-nav";
 import messages from "@/i18n/langs/en.json";
 import type { Role } from "@/lib/auth-client";
+import { settingsNavSections } from "@/routes/_protected.settings/-components/settings-shell/settings-nav";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });

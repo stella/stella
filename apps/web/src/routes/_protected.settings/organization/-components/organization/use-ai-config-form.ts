@@ -30,9 +30,9 @@ import {
   updateCachedAIAvailability,
 } from "@/lib/organization/ai-config-queries";
 import type { OrganizationAIConfig } from "@/lib/organization/ai-config-queries";
-import { useAISettingsKeys } from "@/routes/_protected.admin/-hooks/use-ai-settings-keys";
-import { useAISettingsToggles } from "@/routes/_protected.admin/-hooks/use-ai-settings-toggles";
-import { useSettingsMutation } from "@/routes/_protected.admin/-hooks/use-settings-mutation";
+import { useAISettingsKeys } from "@/routes/_protected.settings/organization/-hooks/use-ai-settings-keys";
+import { useAISettingsToggles } from "@/routes/_protected.settings/organization/-hooks/use-ai-settings-toggles";
+import { useSettingsMutation } from "@/routes/_protected.settings/organization/-hooks/use-settings-mutation";
 
 import { canSaveAIConfig, hasAIConfigEdits } from "./ai-config-form.logic";
 import { useAIConfigDefaults } from "./use-ai-config-defaults";

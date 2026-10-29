@@ -27,7 +27,7 @@ import { unwrapApiResponse } from "@/lib/errors/api";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import type { McpConnectorsResponse } from "@/lib/knowledge/queries";
 import { queryView } from "@/lib/query-view.logic";
-import { useSettingsMutation } from "@/routes/_protected.admin/-hooks/use-settings-mutation";
+import { useSettingsMutation } from "@/routes/_protected.settings/organization/-hooks/use-settings-mutation";
 
 export const NativeToolsList = () => {
   const t = useTranslations();

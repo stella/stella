@@ -41,13 +41,13 @@ import type {
   NumberSeriesCommand,
   NumberSeriesInput,
 } from "@/lib/organization/number-series";
-import { NumberSeriesForm } from "@/routes/_protected.admin/-components/organization/number-series-form";
-import { numberSeriesPatch } from "@/routes/_protected.admin/-components/organization/number-series-form.logic";
+import { NumberSeriesForm } from "@/routes/_protected.settings/organization/-components/organization/number-series-form";
+import { numberSeriesPatch } from "@/routes/_protected.settings/organization/-components/organization/number-series-form.logic";
 import {
   NumberSeriesPreview,
   NumberSeriesRefusal,
-} from "@/routes/_protected.admin/-components/organization/number-series-preview";
-import { useSettingsMutation } from "@/routes/_protected.admin/-hooks/use-settings-mutation";
+} from "@/routes/_protected.settings/organization/-components/organization/number-series-preview";
+import { useSettingsMutation } from "@/routes/_protected.settings/organization/-hooks/use-settings-mutation";
 
 type SeriesDialog =
   | { type: "closed" }

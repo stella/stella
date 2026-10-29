@@ -30,7 +30,7 @@
     "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
   },
   {
-    "id": "no-polling-loop::apps/web/src/routes/_protected.admin/-components/organization/jurisdictions-card.dom.test.tsx::settleAll::for",
+    "id": "no-polling-loop::apps/web/src/routes/_protected.settings/organization/-components/organization/jurisdictions-card.dom.test.tsx::settleAll::for",
     "count": 1,
     "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
   },
@@ -870,32 +870,32 @@
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
   {
-    "id": "no-real-time-wait::apps/web/src/routes/_protected.admin/-components/organization/ai-config-navigation.dom.test.tsx::<module>::@stll/concurrency/sleep#sleep",
-    "count": 1,
-    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
-  },
-  {
-    "id": "no-real-time-wait::apps/web/src/routes/_protected.admin/-components/organization/ai-provider-rows.dom.test.tsx::<module>::@stll/concurrency/sleep#sleep",
-    "count": 1,
-    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
-  },
-  {
-    "id": "no-real-time-wait::apps/web/src/routes/_protected.admin/-components/organization/jurisdictions-card.dom.test.tsx::drain::@stll/concurrency/sleep#sleep",
-    "count": 1,
-    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
-  },
-  {
-    "id": "no-real-time-wait::apps/web/src/routes/_protected.admin/-hooks/use-settings-mutation.dom.test.tsx::drain::@stll/concurrency/sleep#sleep",
-    "count": 1,
-    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
-  },
-  {
     "id": "no-real-time-wait::apps/web/src/routes/_protected.chat/-components/chat-history-page.dom.test.tsx::<module>::node:timers/promises#setTimeout",
     "count": 1,
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
   {
     "id": "no-real-time-wait::apps/web/src/routes/_protected.chat/-components/chat-thread-page.dom.test.tsx::<module>::node:timers/promises#setTimeout",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/routes/_protected.settings/organization/-components/organization/ai-config-navigation.dom.test.tsx::<module>::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/routes/_protected.settings/organization/-components/organization/ai-provider-rows.dom.test.tsx::<module>::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/routes/_protected.settings/organization/-components/organization/jurisdictions-card.dom.test.tsx::drain::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/routes/_protected.settings/organization/-hooks/use-settings-mutation.dom.test.tsx::drain::@stll/concurrency/sleep#sleep",
     "count": 1,
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
