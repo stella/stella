@@ -35,6 +35,11 @@ const VERDICT_GRACE_MINUTES = 30;
 const NEW_FINGERPRINT_MIN_OCCURRENCES = 3;
 /** How far back the previous release's fingerprints are read. */
 const BASELINE_LOOKBACK_DAYS = 14;
+/**
+ * Production events name their deployment environment from this instant on.
+ * A baseline release whose window closed earlier recorded none.
+ */
+const ENVIRONMENT_RECORDED_SINCE = "2026-10-29T04:34:50Z";
 /** Rows a result may hold; a full result may have dropped some. */
 const QUERY_ROW_LIMIT = 10_000;
 export const RELEASE_HEALTH_ASSET = "release-health.json";
@@ -170,9 +175,26 @@ type EventProperty = keyof Extract<
   { kind: "fingerprint" }
 >;
 
+type BaselineRelease = {
+  readonly ref: string;
+  readonly publishedAt: string;
+};
+
+/**
+ * Whether a baseline release's events name their environment. Only a
+ * release whose window closed before environments were recorded is the
+ * legacy case; every later release is read for production alone.
+ */
+export const baselineEnvironment = ({
+  publishedAt,
+}: BaselineRelease): "recorded" | "unrecorded" =>
+  instantMs(windowEnd(publishedAt)) < instantMs(ENVIRONMENT_RECORDED_SINCE)
+    ? "unrecorded"
+    : "recorded";
+
 type QueryOptions = {
   readonly release: string;
-  readonly previous: string | null;
+  readonly previous: BaselineRelease | null;
   /** The window's end: later events do not count. */
   readonly until: string;
 };
@@ -183,7 +205,7 @@ type QueryOptions = {
  */
 export const buildQuery = ({ release, previous, until }: QueryOptions) => {
   instantMs(until);
-  const versions = previous === null ? [release] : [release, previous];
+  const versions = previous === null ? [release] : [release, previous.ref];
   const versionPlaceholders = versions.map((_, index) => `{version_${index}}`);
   const property = (
     key:
@@ -204,7 +226,11 @@ export const buildQuery = ({ release, previous, until }: QueryOptions) => {
     `SELECT ${select.join(", ")}`,
     "FROM events",
     "WHERE event = {event}",
-    `AND ${property(RELEASE_ENVIRONMENT_PROPERTY)} = {environment}`,
+    // A legacy baseline's events carry no environment; they count toward
+    // that baseline only, never as the checked release's own failures.
+    previous !== null && baselineEnvironment(previous) === "unrecorded"
+      ? `AND (${property(RELEASE_ENVIRONMENT_PROPERTY)} = {environment} OR (${property(RELEASE_ENVIRONMENT_PROPERTY)} IS NULL AND ${property(RELEASE_VERSION_PROPERTY)} = {version_1}))`
+      : `AND ${property(RELEASE_ENVIRONMENT_PROPERTY)} = {environment}`,
     `AND ${property(RELEASE_VERSION_PROPERTY)} IN (${versionPlaceholders.join(", ")})`,
     "AND timestamp < toDateTime({until})",
     `AND timestamp >= toDateTime({until}) - INTERVAL ${BASELINE_LOOKBACK_DAYS} DAY`,
@@ -714,6 +740,7 @@ const CLI_OPTIONS = {
   previous: { type: "string" },
   releases: { type: "string" },
   "published-at": { type: "string" },
+  "previous-published-at": { type: "string" },
   until: { type: "string" },
   now: { type: "string" },
   result: { type: "string" },
@@ -752,9 +779,19 @@ const run = (argv: readonly string[]): number => {
       return 0;
     }
     case "query": {
+      const previous = optionalRef(values.previous);
       const body = buildQuery({
         release: requireStableRef(required(values.release, "release")),
-        previous: optionalRef(values.previous),
+        previous:
+          previous === null
+            ? null
+            : {
+                ref: previous,
+                publishedAt: required(
+                  values["previous-published-at"],
+                  "previous-published-at",
+                ),
+              },
         until: required(values.until, "until"),
       });
       process.stdout.write(`${JSON.stringify(body)}\n`);
