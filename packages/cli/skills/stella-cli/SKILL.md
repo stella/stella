@@ -211,7 +211,7 @@ are omitted here. Input union keys are required unless marked `?`.
   - optional: --max-chars, --page, --full, --text-version, --query, --include (details|metadata|textFields|source|citations|outline)
 - `stella case-law resolve`
   - `--country` — Country of the deciding court; alpha-2, alpha-3 or country name. Unrecognized or unsupported countries return country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
-  - `--identifier` — One docket with its sheet when known, or ECLI. Include the court name or citation alias to constrain a CZ/SK docket. Use search_case_law for descriptions. (string)
+  - `--identifier` — Docket (and sheet if known) or ECLI. For CZ/SK, add a court name or alias to constrain it; search_case_law handles descriptions. (string)
 - `stella case-law search`
   - `--country` — Required corpus country. Admitted: CZE, EU, HUN, POL, SVK. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
   - optional: --facets (court|decisionType|source|language|year|courtYear), --queries, --court, --courts, --category, --provision, --has-legal-sentence, --language, --decision-type, --source-id, --date-from, --date-to, --sort (relevance|newest), --strict

@@ -72,7 +72,7 @@ const resolveDecisionArgsSchema = nullAsAbsent(
     identifier: v.pipe(
       citationText,
       v.description(
-        "One docket with its sheet when known, or ECLI. Include the court name or citation alias to constrain a CZ/SK docket. Use search_case_law for descriptions.",
+        "Docket (and sheet if known) or ECLI. For CZ/SK, add a court name or alias to constrain it; search_case_law handles descriptions.",
       ),
     ),
   }),
@@ -158,7 +158,7 @@ const LEGAL_RESOLVE_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "Resolve one docket or ECLI; use search_case_law for descriptions. A CZ/SK court in identifier constrains the docket. otherCourtCandidates are DIFFERENT decisions at other courts, never the requested one: present them as such and let the user choose. Only elsewhere: not_found/not_at_this_court; unknown court: not_found/court_unrecognized. Resolved returns language, languageAlternates, decisionId, text; continue via read_case_law_decision. Ambiguous lists candidates. Incomplete_identifier lists missing parts. Country_unavailable: no identity surface. Missing stella:read: add via OAuth consent.",
+      "Resolve a docket or ECLI; search_case_law handles descriptions. A CZ/SK court in identifier constrains it. otherCourtCandidates are DIFFERENT decisions at other courts, not the requested one; ask the user to choose. Only elsewhere: not_found/not_at_this_court. Unknown court: not_found/court_unrecognized. Resolved gives the decision and text; continue with read_case_law_decision. Ambiguous gives candidates; incomplete_identifier gives missing parts. Country_unavailable: no identity surface. Missing stella:read requires OAuth consent.",
     inputSchema: resolveDecisionArgsSchema,
     _meta: {
       ui: {
