@@ -43,6 +43,14 @@
               "cache_control": null
             },
             {
+              "name": "list_connectable_connectors",
+              "cache_control": null
+            },
+            {
+              "name": "connect_connector",
+              "cache_control": null
+            },
+            {
               "name": "execute_typescript",
               "cache_control": null
             },
@@ -250,6 +258,14 @@
             },
             {
               "name": "use_connector_secret",
+              "cache_control": null
+            },
+            {
+              "name": "list_connectable_connectors",
+              "cache_control": null
+            },
+            {
+              "name": "connect_connector",
               "cache_control": null
             },
             {

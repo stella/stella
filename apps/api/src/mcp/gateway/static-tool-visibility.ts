@@ -252,6 +252,23 @@ export const loadOfferedStaticMcpToolDefinitions = async (
   );
 };
 
+/**
+ * The offered tools a session can finish a call to. `tools/list` keeps a
+ * compound tool discoverable on its primary scope alone; anything that depends
+ * on the tool (a skill, a reference workflow) needs every scope it needs.
+ */
+export const usableStaticMcpToolNames = (
+  offered: readonly McpToolDefinition[],
+  grantedScopes: readonly string[] | undefined,
+): ReadonlySet<string> =>
+  new Set(
+    offered.flatMap(({ additionalScopes = [], name }) =>
+      additionalScopes.every((scope) => hasGrantedScope(grantedScopes, scope))
+        ? [name]
+        : [],
+    ),
+  );
+
 /** `undefined` grants every scope (a caller that does not filter by scope). */
 export const hasGrantedScope = (
   grantedScopes: readonly string[] | undefined,

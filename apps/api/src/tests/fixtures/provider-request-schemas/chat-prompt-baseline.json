@@ -48,6 +48,10 @@
       {
         "reason": "Reflect resolved agent access policy",
         "tokens": 32439
+      },
+      {
+        "reason": "Agent access descriptions and current registry",
+        "tokens": 32907
       }
     ],
     "anthropic/extended": [
@@ -98,6 +102,10 @@
       {
         "reason": "Reflect resolved agent access policy",
         "tokens": 32928
+      },
+      {
+        "reason": "Agent access descriptions and current registry",
+        "tokens": 33396
       }
     ],
     "bedrock/default": [
@@ -144,6 +152,10 @@
       {
         "reason": "Reflect resolved agent access policy",
         "tokens": 32677
+      },
+      {
+        "reason": "Agent access descriptions and current registry",
+        "tokens": 33156
       }
     ],
     "bedrock/extended": [
@@ -190,6 +202,10 @@
       {
         "reason": "Reflect resolved agent access policy",
         "tokens": 33165
+      },
+      {
+        "reason": "Agent access descriptions and current registry",
+        "tokens": 33644
       }
     ],
     "google/default": [
@@ -232,6 +248,10 @@
       {
         "reason": "Reflect resolved agent access policy",
         "tokens": 31804
+      },
+      {
+        "reason": "Agent access descriptions and current registry",
+        "tokens": 32271
       }
     ],
     "google/extended": [
@@ -270,6 +290,10 @@
       {
         "reason": "Reflect resolved agent access policy",
         "tokens": 32281
+      },
+      {
+        "reason": "Agent access descriptions and current registry",
+        "tokens": 32749
       }
     ],
     "mistral/default": [
@@ -316,6 +340,10 @@
       {
         "reason": "Reflect resolved agent access policy",
         "tokens": 33912
+      },
+      {
+        "reason": "Agent access descriptions and current registry",
+        "tokens": 34417
       }
     ],
     "mistral/extended": [
@@ -362,6 +390,10 @@
       {
         "reason": "Reflect resolved agent access policy",
         "tokens": 34438
+      },
+      {
+        "reason": "Agent access descriptions and current registry",
+        "tokens": 34943
       }
     ],
     "openai/default": [
@@ -408,6 +440,10 @@
       {
         "reason": "Reflect resolved agent access policy",
         "tokens": 33510
+      },
+      {
+        "reason": "Agent access descriptions and current registry",
+        "tokens": 34005
       }
     ],
     "openai/extended": [
@@ -454,6 +490,10 @@
       {
         "reason": "Reflect resolved agent access policy",
         "tokens": 34025
+      },
+      {
+        "reason": "Agent access descriptions and current registry",
+        "tokens": 34519
       }
     ],
     "openrouter-anthropic/default": [
@@ -500,6 +540,10 @@
       {
         "reason": "Reflect resolved agent access policy",
         "tokens": 33756
+      },
+      {
+        "reason": "Agent access descriptions and current registry",
+        "tokens": 34257
       }
     ],
     "openrouter-anthropic/extended": [
@@ -546,6 +590,10 @@
       {
         "reason": "Reflect resolved agent access policy",
         "tokens": 34267
+      },
+      {
+        "reason": "Agent access descriptions and current registry",
+        "tokens": 34769
       }
     ],
     "openrouter/default": [
@@ -592,6 +640,10 @@
       {
         "reason": "Reflect resolved agent access policy",
         "tokens": 33756
+      },
+      {
+        "reason": "Agent access descriptions and current registry",
+        "tokens": 34257
       }
     ],
     "openrouter/extended": [
@@ -638,6 +690,10 @@
       {
         "reason": "Reflect resolved agent access policy",
         "tokens": 34267
+      },
+      {
+        "reason": "Agent access descriptions and current registry",
+        "tokens": 34769
       }
     ]
   },

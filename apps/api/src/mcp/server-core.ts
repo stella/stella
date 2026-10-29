@@ -35,6 +35,7 @@ import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { withExceptionScope } from "@/api/lib/observability/exception-scope";
 import { failureSink } from "@/api/lib/observability/failure";
+import { observeLimiterAdmissionFailure } from "@/api/lib/observability/limiter-admission-failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   ActionAdmissionError,
@@ -55,7 +56,10 @@ import { isEventStreamResponse, withSseHeartbeat } from "@/api/lib/sse";
 import type { SseStreamBinding } from "@/api/lib/sse";
 import { mcpActionPeriodIdentity } from "@/api/mcp/action-admission-identity";
 import type { AgentCallRefusal } from "@/api/mcp/agent-access";
-import { revalidateMachineApiKeySession } from "@/api/mcp/api-key-auth";
+import {
+  resolveMachineApiKeySession,
+  revalidateMachineApiKeySession,
+} from "@/api/mcp/api-key-auth";
 import type { McpAuthenticationFailure, McpSession } from "@/api/mcp/auth";
 import {
   accessibleFeatureCapabilityIds,
@@ -218,7 +222,7 @@ type McpServerDependencies = {
     token: string,
     options: {
       mode: McpMode;
-      resolveApiKeySession?: typeof revalidateMachineApiKeySession;
+      resolveApiKeySession: typeof resolveMachineApiKeySession;
     },
   ) => Promise<Result<McpSession, McpAuthenticationFailure>>;
   captureError: typeof captureApiError;
@@ -250,8 +254,8 @@ type McpServerDependencies = {
   ) => Promise<McpTool[]>;
   listMcpResources: (
     mode: McpMode,
-    context?: McpRequestResources,
-  ) => Resource[];
+    options?: { context?: McpRequestResources | undefined },
+  ) => Promise<Resource[]>;
   readMcpResource: (
     uri: string,
     mode: McpMode,
@@ -788,7 +792,6 @@ type BoundMcpToolResultOptions = {
   context: McpRequestResources;
   toolName: string;
   chargeReadBytes: typeof chargeMcpReadBytes;
-  captureError: McpServerDependencies["captureError"];
 };
 
 const boundMcpToolResult = async ({
@@ -800,7 +803,6 @@ const boundMcpToolResult = async ({
   context,
   toolName,
   chargeReadBytes,
-  captureError,
 }: BoundMcpToolResultOptions): Promise<CallToolResult> => {
   const policy = getTenantActionSizePolicy();
   const hasOutput =
@@ -839,15 +841,7 @@ const boundMcpToolResult = async ({
     if (Result.isOk(charged)) {
       return result;
     }
-    if (charged.error.reason === "unavailable") {
-      captureError(
-        charged.error,
-        handlerErrorContext("boundMcpToolResult.charged_error", {
-          phase: "read-fence",
-          source: "mcp",
-        }),
-      );
-    }
+    observeLimiterAdmissionFailure(charged.error, "mcp");
     const refusal = actionAdmissionRefusal(charged.error);
     return mcpStructuredErrorResult({
       code: refusal.code,
@@ -855,6 +849,7 @@ const boundMcpToolResult = async ({
       hint: refusal.hint,
       contactUrl: refusal.contactUrl,
       retryable: ACTION_ADMISSION_REFUSALS[refusal.code].retryable,
+      retryAfterMs: refusal.retryAfterMs,
     });
   }
   recordActionResponseOversize({
@@ -1049,7 +1044,6 @@ export const createMcpHttpRequestHandler = ({
         context,
         toolName,
         chargeReadBytes,
-        captureError,
       });
     };
     let consumesServices = definition.consumesServices;
@@ -1082,18 +1076,7 @@ export const createMcpHttpRequestHandler = ({
       return admitted.value;
     }
     if (ActionAdmissionError.is(admitted.error)) {
-      if (admitted.error.reason === "unavailable") {
-        captureError(
-          admitted.error,
-          handlerErrorContext(
-            "createMcpHttpRequestHandler.handleToolsCallRequest.admitted_error",
-            {
-              phase: "action-admission",
-              source: "mcp",
-            },
-          ),
-        );
-      }
+      observeLimiterAdmissionFailure(admitted.error, "mcp");
       const refusal = actionAdmissionRefusal(admitted.error);
       return mcpStructuredErrorResult({
         code: refusal.code,
@@ -1101,6 +1084,7 @@ export const createMcpHttpRequestHandler = ({
         hint: refusal.hint,
         contactUrl: refusal.contactUrl,
         retryable: ACTION_ADMISSION_REFUSALS[refusal.code].retryable,
+        retryAfterMs: refusal.retryAfterMs,
       });
     }
     captureError(
@@ -1116,7 +1100,7 @@ export const createMcpHttpRequestHandler = ({
     return retryableToolErrorResult(mode, context);
   };
 
-  const createMcpServer = ({
+  const createMcpServer = async ({
     context,
     mode,
     session,
@@ -1137,7 +1121,7 @@ export const createMcpHttpRequestHandler = ({
       },
       {
         capabilities: { prompts: {}, resources: {}, tools: {} },
-        instructions: getMcpInstructions(mode, context),
+        instructions: await getMcpInstructions(mode, context),
       },
     );
 
@@ -1163,8 +1147,8 @@ export const createMcpHttpRequestHandler = ({
     // Resources are static, public, tenant-independent documents (the template
     // marker grammar today); the same set is served in both modes without a
     // per-tool scope gate. Every request already carries a valid session token.
-    server.setRequestHandler("resources/list", () => ({
-      resources: listMcpResources(mode, context),
+    server.setRequestHandler("resources/list", async () => ({
+      resources: await listMcpResources(mode, { context }),
     }));
 
     server.setRequestHandler(
@@ -1247,7 +1231,7 @@ export const createMcpHttpRequestHandler = ({
     }
 
     const handler = createMcpHandler(
-      () => createMcpServer({ ...readFactoryState(), mode }),
+      async () => await createMcpServer({ ...readFactoryState(), mode }),
       {
         legacy: "reject",
         // The v2 handler converts factory/dispatch exceptions into responses
@@ -1291,7 +1275,7 @@ export const createMcpHttpRequestHandler = ({
     request: Request;
     session: McpSession;
   }): Promise<Response> => {
-    const server = createMcpServer({ context, mode, session });
+    const server = await createMcpServer({ context, mode, session });
     const transport = new WebStandardStreamableHTTPServerTransport({
       enableJsonResponse: true,
       keepAliveMs: MCP_NOTIFICATION_KEEP_ALIVE_MS,
@@ -1607,7 +1591,11 @@ export const createMcpHttpRequestHandler = ({
             try {
               const authenticated = await measureMcpPhase(
                 "auth",
-                async () => await authenticateMcpRequest(token, { mode }),
+                async () =>
+                  await authenticateMcpRequest(token, {
+                    mode,
+                    resolveApiKeySession: resolveMachineApiKeySession,
+                  }),
               );
               if (Result.isError(authenticated)) {
                 return failureResponse({

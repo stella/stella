@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 
 import { RUNTIME_MODE } from "@stll/runtime-mode";
@@ -6,6 +6,8 @@ import { RUNTIME_MODE } from "@stll/runtime-mode";
 import { env } from "@/api/env";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
+import { SEARCH_BOE_LEGISLATION_PROJECTION } from "@/api/lib/chat/projections";
+import { parseStrippingUndeclaredKeys } from "@/api/lib/chat/tool-output-degrade";
 import type { MemberRole } from "@/api/lib/member-roles";
 import { RESEARCH_ADMIN_TOOL_HANDLERS } from "@/api/mcp/research-admin-tools";
 import { DEFAULT_MCP_CLI_ANNOTATIONS } from "@/api/mcp/static-cli-metadata";
@@ -245,6 +247,48 @@ describe("search_boe_legislation feature gating", () => {
     expect(errorMessage(result)).toBe(
       "Provide law_id to read a law, or at least one search filter",
     );
+  });
+
+  test("declares every field of a search hit in the output contract", async () => {
+    const searchConsolidatedLegislation = mock(async () => ({
+      data: [
+        {
+          identificador: "BOE-A-2000-1",
+          titulo: "Ley de ejemplo",
+          fecha_actualizacion: "20000102T000000Z",
+          fecha_disposicion: "20000101",
+          fecha_publicacion: "20000102",
+          fecha_vigencia: "20000103",
+          numero_oficial: "1/2000",
+          diario: "Boletín Oficial del Estado",
+          diario_numero: "1",
+          vigencia_agotada: "N",
+          ambito: { codigo: "1", texto: "Estatal" },
+          departamento: { codigo: "1", texto: "Departamento" },
+          rango: { codigo: "1", texto: "Ley" },
+          estado_consolidacion: { codigo: "3", texto: "Finalizado" },
+          url_eli: "https://www.boe.es/eli/es/l/2000/01/01/1",
+          url_html_consolidada:
+            "https://www.boe.es/buscar/act.php?id=BOE-A-2000-1",
+        },
+      ],
+      status: { code: "200", text: "ok" },
+    }));
+    const result = await RESEARCH_ADMIN_TOOL_HANDLERS.search_boe_legislation({
+      args: { query: "ejemplo" },
+      context: {
+        ...createContext("owner"),
+        testDependencies: { searchConsolidatedLegislation },
+      },
+    });
+    if (isMcpEgressPlan(result) || result.status !== "success") {
+      throw new Error("expected a successful search");
+    }
+    const parsed = parseStrippingUndeclaredKeys(
+      SEARCH_BOE_LEGISLATION_PROJECTION,
+      result.data,
+    );
+    expect(Result.isOk(parsed) && parsed.value.undeclaredPaths).toEqual([]);
   });
 });
 

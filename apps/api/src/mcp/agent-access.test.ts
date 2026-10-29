@@ -139,6 +139,15 @@ describe("agent access is resolved in one place", () => {
 });
 
 describe("classification", () => {
+  test("every registered capability has an explicit agent access classification", () => {
+    expect(capabilityCatalog.length).toBeGreaterThan(0);
+    for (const { id } of capabilityCatalog) {
+      expect(Object.values(AGENT_ACCESS_KIND)).toContain(
+        kindOf({ type: "capability", id }),
+      );
+    }
+  });
+
   test("read tools and read capabilities are open", () => {
     for (const tool of DEFAULT_MCP_TOOL_DEFINITIONS) {
       if (tool.access === "read") {

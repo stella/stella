@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, expectTypeOf, test } from "bun:test";
 
 import { roles } from "@stll/permissions";
@@ -152,18 +152,33 @@ const noopScopedDb = asTestRaw<ScopedDb>(
 const chatWriteTools = (
   role: MemberRole,
   currentRole: MemberRole | null = role,
-) =>
-  buildChatWriteTools({
-    featureAccessSnapshot: enrolledTimeBillingSnapshot({
-      organizationId: "org_1",
-      userId: "user_1",
-    }),
+) => {
+  const featureAccessSnapshot = enrolledTimeBillingSnapshot({
+    organizationId: "org_1",
+    userId: "user_1",
+  });
+  return buildChatWriteTools({
+    featureAccessSnapshot,
     memberRole: sessionMemberRole(role),
     organizationId: toSafeId<"organization">("org_1"),
     pinServerValidatedWorkspaceId: () => true,
     refRegistry: createChatRefRegistry(),
-    resolveCurrentMembership: async () =>
-      currentRole === null ? null : { role: currentRole },
+    resolveCurrentExecutionContext: async () =>
+      await Promise.resolve(
+        Result.ok(
+          currentRole === null
+            ? null
+            : {
+                accessibleWorkspaces: [],
+                featureAccessSnapshot,
+                pinServerValidatedWorkspaceId: () => false,
+                role: currentRole,
+                safeDb: toSafeDbMock(noopScopedDb),
+                scopedDb: noopScopedDb,
+                userEmail: "member@example.test",
+              },
+        ),
+      ),
     safeDb: toSafeDbMock(noopScopedDb),
     scopedDb: noopScopedDb,
     toolDefectMemo: createChatToolDefectMemo(),
@@ -175,6 +190,7 @@ const chatWriteTools = (
     userId: toSafeId<"user">("user_1"),
     workspaceStatusById: new Map(),
   });
+};
 
 /** Run a registered chat write tool and return the refusal it throws, if any. */
 const chatExecutionFailure = async ({

@@ -804,6 +804,12 @@ const mapStatusResponse = (
           ? responseBody["hint"]
           : refusal.hint,
       retryable: refusal.retryable,
+      retryAfterMs:
+        typeof responseBody["retryAfterMs"] === "number" &&
+        Number.isFinite(responseBody["retryAfterMs"]) &&
+        responseBody["retryAfterMs"] >= 0
+          ? responseBody["retryAfterMs"]
+          : undefined,
       contactUrl:
         typeof responseBody["contactUrl"] === "string"
           ? responseBody["contactUrl"]
@@ -2397,6 +2403,19 @@ const capabilityReferenceRefusal = async ({
   return null;
 };
 
+/** Configs without permissions (session-kind) pass, exactly as their wrapper does. */
+const holdsConfigAuthority = (
+  context: McpRequestContext,
+  { permissions }: EndpointConfig,
+): boolean =>
+  permissions === undefined || hasEffectiveAuthority(context, permissions);
+
+const capabilityPermissionDenied = (id: string) =>
+  structuredErrorResult({
+    code: "permission_denied",
+    message: `Your member role does not permit capability "${id}"`,
+  });
+
 const executeInvoke = async ({
   context,
   endpoint,
@@ -2429,6 +2448,15 @@ const executeInvoke = async ({
     params: validatedParams,
     query: validatedQuery,
   } = validated;
+
+  // Static authority. The config's own grant needs nothing from the
+  // request, so it is checked before any step below reads tenant data
+  // (reference visibility, the feature probe, the stored upload purpose): a
+  // caller who may not perform the capability learns nothing about the rows
+  // it names.
+  if (!holdsConfigAuthority(context, endpoint.config)) {
+    return capabilityPermissionDenied(id);
+  }
 
   const referenceRefusal = await capabilityReferenceRefusal({
     context,
@@ -2525,10 +2553,7 @@ const executeInvoke = async ({
     purposeRequirement !== null &&
     !hasEffectiveAuthority(context, purposeRequirement.permission)
   ) {
-    return structuredErrorResult({
-      code: "permission_denied",
-      message: `Your member role does not permit capability "${id}"`,
-    });
+    return capabilityPermissionDenied(id);
   }
 
   if (validateOnly) {

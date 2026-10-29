@@ -177,11 +177,18 @@ returns a single text content of
 
 ```json
 {
-  "error": { "code": "...", "message": "...", "hint": "...", "retryable": true }
+  "error": {
+    "code": "...",
+    "message": "...",
+    "hint": "...",
+    "retryable": true,
+    "retryAfterMs": 1250
+  }
 }
 ```
 
-with `isError` set. `hint` and `retryable` are omitted when absent. Build these
+with `isError` set. `hint`, `retryable`, and `retryAfterMs` are omitted when absent;
+`action_concurrency_busy` uses `retryAfterMs` as an advisory delay in milliseconds. Build these
 with `structuredErrorResult` (or the `notFoundResult` shorthand) in
 `tool-utils.ts`; the arg parsers there already emit `validation_error`. The
 `code` set is closed and defined in [`error-codes.ts`](./error-codes.ts).

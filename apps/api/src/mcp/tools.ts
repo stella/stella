@@ -7,9 +7,16 @@ import { Panic, panic, Result } from "better-result";
 import { DOCUMENT_VERSION_UPLOAD_CAPABILITY_IDS } from "@stll/api-contract";
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 
+import { PUBLIC_READ_STATEMENT_TIMEOUT_MS } from "@/api/db/shared-pool-timeouts";
 import { captureError } from "@/api/lib/analytics/capture";
 import { runWithStatementCeiling } from "@/api/lib/db/statement-ceiling";
 import { resourcesAreVisible } from "@/api/lib/entities/resource-access";
+import {
+  ActionAdmissionError,
+  actionAdmissionRefusal,
+} from "@/api/lib/errors/action-admission-error";
+import { publicReadTimeoutError } from "@/api/lib/legal-search/public-read-timeout";
+import { runWithPublicReadScope } from "@/api/lib/legal-search/public-read-timeout-context";
 import { isSearchIndexUnavailable } from "@/api/lib/legal-search/search-index-unavailable";
 import {
   isExternalMcpToolName,
@@ -18,6 +25,7 @@ import {
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { withMcpPublicReadAdmission } from "@/api/lib/rate-limit/mcp-public-read-admission";
 import {
   AGENT_CALL_SURFACE,
   decideAgentCall,
@@ -55,6 +63,7 @@ import { observeMcpToolCall } from "@/api/mcp/observe-tool-call";
 import {
   getStaticMcpToolDefinition,
   getStaticMcpToolHandler,
+  MCP_PUBLIC_CORPUS_CLASS,
 } from "@/api/mcp/static-tool-definitions";
 import { scopeToolResultToSurface } from "@/api/mcp/surface-tool-mentions";
 import type {
@@ -67,6 +76,7 @@ import type {
 import {
   FEATURE_DISABLED_MESSAGE,
   featureDisabledHint,
+  internalFailureResult,
   MCP_INTERNAL_ERROR_HINT,
   McpOutputContractError,
   notFoundResult,
@@ -75,6 +85,7 @@ import {
   structuredErrorResult,
 } from "@/api/mcp/tool-utils";
 import {
+  type AuthorizedMcpRequestContext,
   authorizeMcpToolContext,
   mcpToolAuthorityRefusal,
 } from "@/api/mcp/write-tool-authority";
@@ -320,7 +331,10 @@ type McpToolCallArgs = {
   context: McpRequestResources;
   mode?: McpMode;
   toolName: string;
-  dependencies?: { dispatchGatewayToolCall: typeof dispatchGatewayToolCall };
+  dependencies?: {
+    dispatchGatewayToolCall: typeof dispatchGatewayToolCall;
+    admitPublicRead?: typeof withMcpPublicReadAdmission;
+  };
 };
 const unknownToolResult = (toolName: string) =>
   structuredErrorResult({
@@ -422,6 +436,36 @@ const staticToolReferenceRefusal = async ({
   return null;
 };
 
+const undeclaredToolArgumentsResult = ({
+  args,
+  inputSchema,
+  toolName,
+}: {
+  args: Record<string, unknown>;
+  inputSchema: McpToolInputSchema;
+  toolName: string;
+}): InternalToolResult | undefined => {
+  const unknownArgs = findUndeclaredArguments({ args, inputSchema });
+  if (unknownArgs === undefined) {
+    return undefined;
+  }
+  const keys = unknownArgs.undeclared.map((entry) => entry.key);
+  return structuredErrorResult({
+    code: "validation_error",
+    message: `Unknown parameter${keys.length === 1 ? "" : "s"}: ${keys.join(", ")}`,
+    issues: unknownArgs.undeclared.map((entry) => ({
+      path: entry.key,
+      message: undeclaredArgumentMessage(entry),
+    })),
+    hint: `Remove ${keys.map((key) => `'${key}'`).join(", ")}. ${toolName} accepts only: ${unknownArgs.declared.join(", ")}.`,
+  });
+};
+
+// Handlers never see the mode: they return either a finished result or an
+// egress plan. The central pipeline applies anonymization (anonymized mode)
+// before windowing; this transport boundary then serializes. Both steps run
+// inside one Result so an anonymization or windowing failure is captured like
+// any handler failure.
 const dispatchMcpToolCall = async ({
   args,
   context,
@@ -453,19 +497,16 @@ const dispatchMcpToolCall = async ({
     return unavailableResult;
   }
 
-  const gatewayResult = await callGatewayTool({
+  const gatewayCall = {
     args,
     context,
     mode,
     toolName,
     ...(dependencies === undefined ? {} : { dependencies }),
-  });
-  if (gatewayResult !== undefined) {
-    return gatewayResult;
-  }
-
+  };
   if (!staticTool) {
-    return serializeForSurface(unknownToolResult(toolName));
+    const gatewayResult = await callGatewayTool(gatewayCall);
+    return gatewayResult ?? serializeForSurface(unknownToolResult(toolName));
   }
   const outputContract = resolveMcpToolOutputContract(toolName, mode);
   if (outputContract === undefined) {
@@ -500,23 +541,13 @@ const dispatchMcpToolCall = async ({
     );
   }
 
-  const unknownArgs = findUndeclaredArguments({
+  const unknownArgsResult = undeclaredToolArgumentsResult({
     args,
     inputSchema: staticTool.inputSchema,
+    toolName,
   });
-  if (unknownArgs) {
-    const keys = unknownArgs.undeclared.map((entry) => entry.key);
-    return serializeForSurface(
-      structuredErrorResult({
-        code: "validation_error",
-        message: `Unknown parameter${keys.length === 1 ? "" : "s"}: ${keys.join(", ")}`,
-        issues: unknownArgs.undeclared.map((entry) => ({
-          path: entry.key,
-          message: undeclaredArgumentMessage(entry),
-        })),
-        hint: `Remove ${keys.map((key) => `'${key}'`).join(", ")}. ${toolName} accepts only: ${unknownArgs.declared.join(", ")}.`,
-      }),
-    );
+  if (unknownArgsResult !== undefined) {
+    return serializeForSurface(unknownArgsResult);
   }
 
   const normalized = normalizeObjectInputAtBoundary({
@@ -570,70 +601,77 @@ const dispatchMcpToolCall = async ({
     return serializeForSurface(unknownToolResult(toolName));
   }
 
-  // Handlers never see the mode: they return either a finished result or an
-  // egress plan. The central pipeline applies anonymization (anonymized mode)
-  // before windowing; this transport boundary then serializes. Both steps run
-  // inside one Result so an anonymization or windowing failure is captured like
-  // any handler failure.
-  const finished = await Result.tryPromise({
-    try: async () => {
-      const referenceRefusal = await staticToolReferenceRefusal({
-        context,
-        definition: staticTool,
-        args: normalizedArgs,
-        mode,
-        toolName,
-      });
-      if (referenceRefusal !== null) {
-        return serializeForSurface(referenceRefusal);
+  return await runAuthorizedMcpToolCall({
+    context: authorizedContext,
+    mode,
+    toolName,
+    ...(dependencies === undefined ? {} : { dependencies }),
+    run: async () => {
+      const gatewayResult = await callGatewayTool(gatewayCall);
+      if (gatewayResult !== undefined) {
+        return gatewayResult;
       }
 
-      // The deferred confirmation refusal from the agent-access decision.
-      if (decision.type === "refuse") {
-        return serializeForSurface(structuredErrorResult(decision.refusal));
-      }
+      const finished = await Result.tryPromise({
+        try: async () => {
+          const referenceRefusal = await staticToolReferenceRefusal({
+            context,
+            definition: staticTool,
+            args: normalizedArgs,
+            mode,
+            toolName,
+          });
+          if (referenceRefusal !== null) {
+            return serializeForSurface(referenceRefusal);
+          }
 
-      const executionContext =
-        decision.approval === "confirmed"
-          ? bindApprovedMcpAuditContext(authorizedContext)
-          : authorizedContext;
-      const response = await handler({
-        args: normalizedArgs,
-        context: executionContext,
+          // Reference visibility precedes the deferred confirmation refusal.
+          if (decision.type === "refuse") {
+            return serializeForSurface(structuredErrorResult(decision.refusal));
+          }
+          const executionContext =
+            decision.approval === "confirmed"
+              ? bindApprovedMcpAuditContext(authorizedContext)
+              : authorizedContext;
+          const response = await handler({
+            args: normalizedArgs,
+            context: executionContext,
+          });
+          const finalized = await finalizeToolEgress(
+            {
+              context: executionContext,
+              mode,
+              response,
+            },
+            {
+              anonymizeTextFields:
+                executionContext.testDependencies?.anonymizeTextFields,
+              loadAnonymizationAllowlistCanonicalsByWorkspace:
+                executionContext.testDependencies
+                  ?.loadAnonymizationAllowlistCanonicalsByWorkspace,
+              loadAnonymizationGazetteerEntriesByWorkspace:
+                executionContext.testDependencies
+                  ?.loadAnonymizationGazetteerEntriesByWorkspace,
+            },
+          );
+          return withInputNotes(
+            serializeForSurface(finalized, outputContract, toolName),
+            inputNotes,
+          );
+        },
+        catch: (error) => error,
       });
-      const finalized = await finalizeToolEgress(
-        {
-          context: executionContext,
+      if (Result.isError(finished)) {
+        return internalErrorResult({
           mode,
-          response,
-        },
-        {
-          anonymizeTextFields:
-            executionContext.testDependencies?.anonymizeTextFields,
-          loadAnonymizationAllowlistCanonicalsByWorkspace:
-            executionContext.testDependencies
-              ?.loadAnonymizationAllowlistCanonicalsByWorkspace,
-          loadAnonymizationGazetteerEntriesByWorkspace:
-            executionContext.testDependencies
-              ?.loadAnonymizationGazetteerEntriesByWorkspace,
-        },
-      );
-      return withInputNotes(
-        serializeForSurface(finalized, outputContract, toolName),
-        inputNotes,
-      );
+          context,
+          toolName,
+          error: finished.error,
+        });
+      }
+      return finished.value;
     },
-    catch: (error) => error,
   });
-  if (Result.isError(finished)) {
-    return internalErrorResult({
-      mode,
-      context,
-      toolName,
-      error: finished.error,
-    });
-  }
-  return finished.value;
 };
 
 const MCP_OUTPUT_CONTRACT_SINK = failureSink({
@@ -665,12 +703,25 @@ const internalErrorResult = ({
     Panic.is(error) && McpOutputContractError.is(error.cause)
       ? error.cause
       : undefined;
+  if (ActionAdmissionError.is(error)) {
+    return serializeToolResult(
+      scopeToolResultToSurface(
+        structuredErrorResult(actionAdmissionRefusal(error)),
+        { mode, context },
+      ),
+    );
+  }
   if (isSearchIndexUnavailable(error)) {
     return serializeToolResult(
       scopeToolResultToSurface(searchIndexUnavailableResult(error), {
         mode,
         context,
       }),
+    );
+  }
+  if (publicReadTimeoutError(error) !== null) {
+    return serializeToolResult(
+      internalFailureResult(error, "mcp.internalErrorResult"),
     );
   }
   if (contractViolation !== undefined) {
@@ -699,28 +750,94 @@ const internalErrorResult = ({
   );
 };
 
+const corpusBudgetByTool: ReadonlyMap<string, number> = new Map(
+  Object.entries(MCP_PUBLIC_CORPUS_CLASS).map(([name, corpusClass]) => [
+    name,
+    PUBLIC_READ_STATEMENT_TIMEOUT_MS[corpusClass],
+  ]),
+);
+
 export const handleMcpToolCall = async ({
   args,
   context,
   mode = "default",
   toolName,
   dependencies,
-}: McpToolCallArgs): Promise<CallToolResult> =>
-  await runWithStatementCeiling({
-    kind: "mcp",
-    key: toolName,
-    run: async () =>
-      observeMcpToolCall({
-        context,
-        mode,
-        toolName,
-        run: async () =>
-          await dispatchMcpToolCall({
-            args,
-            context,
-            mode,
-            toolName,
-            ...(dependencies === undefined ? {} : { dependencies }),
-          }),
-      }),
+}: McpToolCallArgs): Promise<CallToolResult> => {
+  const run = async () =>
+    await runWithStatementCeiling({
+      kind: "mcp",
+      key: toolName,
+      run: async () =>
+        observeMcpToolCall({
+          context,
+          mode,
+          toolName,
+          run: async () =>
+            await dispatchMcpToolCall({
+              args,
+              context,
+              mode,
+              toolName,
+              ...(dependencies === undefined ? {} : { dependencies }),
+            }),
+        }),
+    });
+  return await run();
+};
+
+type AuthorizedMcpToolCallOptions = Pick<
+  McpToolCallArgs,
+  "toolName" | "dependencies"
+> & {
+  context: AuthorizedMcpRequestContext;
+  mode: McpMode;
+  run: () => Promise<CallToolResult>;
+};
+
+const runAuthorizedMcpToolCall = async ({
+  context,
+  mode,
+  toolName,
+  dependencies,
+  run,
+}: AuthorizedMcpToolCallOptions): Promise<CallToolResult> => {
+  const budgetMs = corpusBudgetByTool.get(toolName);
+  if (budgetMs === undefined) {
+    return await run();
+  }
+  const admitted = await (
+    dependencies?.admitPublicRead ??
+    context.testDependencies?.admitPublicRead ??
+    withMcpPublicReadAdmission
+  )({
+    caller: context,
+    signal: context.request?.signal,
+    run: async (signal) =>
+      await runWithPublicReadScope({ budgetMs, signal }, run),
   });
+  if (Result.isOk(admitted)) {
+    const outcome = admitted.value;
+    switch (outcome.status) {
+      case "leased":
+      case "degraded":
+        return Result.isOk(outcome.value)
+          ? outcome.value.value
+          : internalErrorResult({
+              mode,
+              context,
+              toolName,
+              error: outcome.value.error,
+            });
+      default:
+        outcome satisfies never;
+        return panic("Unhandled public-read admission outcome");
+    }
+  }
+  return internalErrorResult({
+    mode,
+    context,
+    toolName,
+    error: admitted.error,
+  });
+};

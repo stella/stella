@@ -91,6 +91,7 @@ import {
   uploadMessageFilesWithRollback,
 } from "@/api/handlers/chat/send-message-side-effects";
 import listUnavailableChatSkills from "@/api/handlers/chat/skill-availability/list";
+import submitChatConnector from "@/api/handlers/chat/submit-connector";
 import submitChatSecret from "@/api/handlers/chat/submit-secret";
 import { createSuggestThreadTitle } from "@/api/handlers/chat/suggest-thread-title";
 import { RECAP_PROMPT_VERSION } from "@/api/handlers/chat/thread-recap";
@@ -106,6 +107,8 @@ import * as externalMcpToolsModule from "@/api/handlers/chat/tools/external-mcp-
 import cancelChatTurn from "@/api/handlers/chat/turns/cancel";
 import { joinChatTurn, probeChatTurn } from "@/api/handlers/chat/turns/resume";
 import updateChatThreadModel from "@/api/handlers/chat/update-thread-model";
+import createClientInvoice from "@/api/handlers/client-invoices/create";
+import prefillClientInvoice from "@/api/handlers/client-invoices/prefill";
 import readContactById from "@/api/handlers/contacts/get";
 import { createDesktopFeatureAccessReadEndpoint } from "@/api/handlers/desktop-feature-access/read";
 import readDesktopPresence from "@/api/handlers/desktop-presence/read";
@@ -353,6 +356,9 @@ const sellerProfileB = toSafeId<"sellerProfile">(
 );
 const invoiceLineB = toSafeId<"invoiceLine">(
   "22222222-2222-4222-8222-222222222259",
+);
+const clientInvoiceEntryB = toSafeId<"timeEntry">(
+  "22222222-2222-4222-8222-222222222296",
 );
 const manualInvoiceLineBody = {
   source: {
@@ -1251,6 +1257,66 @@ const isolationCases: IsolationCase[] = [
     },
   },
   {
+    name: "client invoice prefill",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(prefillClientInvoice, workspaceA, {
+        params: { clientId: testIds.contactB },
+        query: {},
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(prefillClientInvoice, workspaceB, {
+        params: { clientId: testIds.contactB },
+        query: {},
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result, { ids: testIds }) =>
+      expect(result).toMatchObject({
+        clientId: testIds.contactB,
+        matters: [expect.objectContaining({ workspaceId: testIds.wsB1 })],
+      }),
+  },
+  {
+    name: "client invoice create",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(createClientInvoice, workspaceA, {
+        params: { clientId: testIds.contactB },
+        body: {
+          invoiceDate: "2026-10-15",
+          currency: "USD",
+          matters: [
+            {
+              workspaceId: testIds.wsB1,
+              timeEntryIds: [clientInvoiceEntryB],
+              expenseIds: [],
+            },
+          ],
+        },
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(createClientInvoice, workspaceB, {
+        params: { clientId: testIds.contactB },
+        body: {
+          invoiceDate: "2026-10-15",
+          currency: "USD",
+          matters: [
+            {
+              workspaceId: testIds.wsB1,
+              timeEntryIds: [clientInvoiceEntryB],
+              expenseIds: [],
+            },
+          ],
+        },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result, { ids: testIds }) =>
+      expect(result).toMatchObject({
+        id: expect.any(String),
+        workspaceId: testIds.wsB1,
+        entryCount: 1,
+        totalAmount: 200,
+      }),
+  },
+  {
     name: "invoice read by id",
     runAAgainstB: async ({ ids: testIds, workspaceA }) =>
       await runHandler(readInvoiceById, workspaceA, {
@@ -1713,21 +1779,37 @@ const isolationCases: IsolationCase[] = [
       expectPageContainsId(result, testIds.aiMemoryFirmB),
   },
   {
-    // `pinned: false` matches the fixture, so the positive run reaches the
-    // locked row without writing.
+    // Both probes need a live firm administrator for the in-transaction
+    // authority check. `pinned: false` reaches the locked row without writing.
     name: "memory update",
-    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
-      await runHandler(updateMemory, workspaceA, {
-        featureAccessSnapshot: memoryAccess(workspaceA),
+    runAAgainstB: async ({ ids: testIds }) => {
+      const context = createWorkspaceContext({
+        activeWorkspaceIds: [testIds.wsA1],
+        organizationId: testIds.orgA,
+        userId: testIds.userAdmin,
+        workspaceId: testIds.wsA1,
+      });
+      return await runHandler(updateMemory, context, {
+        featureAccessSnapshot: memoryAccess(context),
+        memberRole: sessionMemberRole("owner"),
         params: { memoryId: testIds.aiMemoryFirmB },
         body: { pinned: false },
-      }),
-    runBPositive: async ({ ids: testIds, workspaceB }) =>
-      await runHandler(updateMemory, workspaceB, {
-        featureAccessSnapshot: memoryAccess(workspaceB),
+      });
+    },
+    runBPositive: async ({ ids: testIds }) => {
+      const context = createWorkspaceContext({
+        activeWorkspaceIds: [testIds.wsB1],
+        organizationId: testIds.orgB,
+        userId: testIds.userAdmin,
+        workspaceId: testIds.wsB1,
+      });
+      return await runHandler(updateMemory, context, {
+        featureAccessSnapshot: memoryAccess(context),
+        memberRole: sessionMemberRole("admin"),
         params: { memoryId: testIds.aiMemoryFirmB },
         body: { pinned: false },
-      }),
+      });
+    },
     expectDenied: expectStatus(404),
     expectPositive: (result, { ids: testIds }) =>
       expectRecordFieldEquals(result, "id", testIds.aiMemoryFirmB),
@@ -2177,6 +2259,23 @@ const isolationCases: IsolationCase[] = [
     runBPositive: async ({ sameUserWorkspaceB }) =>
       await runHandler(submitChatSecret, sameUserWorkspaceB, {
         body: { decision: "decline" },
+        params: { threadId: chatThreadB, toolCallId: "missing-request" },
+        query: {},
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: expectStatus(409),
+  },
+  {
+    name: "chat connector request answer",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(submitChatConnector, workspaceA, {
+        body: { decision: "declined" },
+        params: { threadId: chatThreadB, toolCallId: "missing-request" },
+        query: {},
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(submitChatConnector, sameUserWorkspaceB, {
+        body: { decision: "declined" },
         params: { threadId: chatThreadB, toolCallId: "missing-request" },
         query: {},
       }),
@@ -2790,6 +2889,21 @@ testState.beforeAll(async () => {
     organizationId: ids.orgB,
     mode: "hourly",
     currency: "USD",
+  });
+  await testDb.insert(timeEntries).values({
+    id: clientInvoiceEntryB,
+    organizationId: ids.orgB,
+    workspaceId: ids.wsB1,
+    userId: ids.userB1,
+    dateWorked: "2026-10-14",
+    timezoneId: "UTC",
+    durationMinutes: 60,
+    billedMinutes: 60,
+    rateAtEntry: cents(200),
+    currency: "USD",
+    narrative: "Client invoice isolation work",
+    billable: true,
+    status: "approved",
   });
   await testDb.insert(invoices).values({
     id: creditOriginalB,

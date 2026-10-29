@@ -169,7 +169,7 @@ type ResourceListing = {
 };
 
 const resourceListings: ResourceListing[] = [];
-for (const resource of listMcpResources("default")) {
+for (const resource of await listMcpResources("default")) {
   const listing: ResourceListing = { uri: resource.uri, name: resource.name };
   if (resource.title !== undefined) {
     listing.title = resource.title;

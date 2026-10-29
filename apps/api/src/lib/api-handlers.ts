@@ -95,6 +95,7 @@ import {
   SHADOW_SINKS,
   shadowFields,
 } from "@/api/lib/observability/failure-shadow";
+import { observeLimiterAdmissionFailure } from "@/api/lib/observability/limiter-admission-failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
@@ -2545,6 +2546,12 @@ const logAndCaptureSafeError = ({
   statusCode,
   telemetry,
 }: LogAndCaptureSafeErrorProps) => {
+  if (
+    resolveHandlerError(error)?.code === ACTION_ADMISSION_CODES.storeUnavailable
+  ) {
+    observeLimiterAdmissionFailure(error, "admission");
+    return;
+  }
   const reqCtx = getRequestContext();
   const evidence = readEvidence(error);
   const severity =

@@ -61,7 +61,7 @@ const boundary = ({
     getMcpToolRequiredScopesHint: () => undefined,
     handleMcpToolCall: async () => result,
     listMcpTools: async () => [],
-    listMcpResources: () => [],
+    listMcpResources: async () => [],
     readMcpResource: () => ({ contents: [] }),
     recordMcpSessionInitialized: () => undefined,
     resolveMcpSessionContext: async () =>
@@ -297,7 +297,7 @@ describe("MCP emitted read bytes", () => {
 
   test("refusals preserve the canonical contract and withhold the read result", async () =>
     withFence(async () => {
-      for (const reason of ["period_exhausted", "unavailable"] as const) {
+      for (const reason of ["period_exhausted", "store_unavailable"] as const) {
         const body = await call(
           boundary({
             chargeReadBytes: async () =>
@@ -311,7 +311,7 @@ describe("MCP emitted read bytes", () => {
         expect(JSON.stringify(body.result)).toContain(
           reason === "period_exhausted"
             ? "action_period_exhausted"
-            : "action_admission_unavailable",
+            : "limiter_store_unavailable",
         );
         expect(JSON.stringify(body.result)).not.toContain("Příloha");
       }

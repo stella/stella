@@ -59,6 +59,8 @@ export const MCP_ERROR_CODES = [
   "rate_limited",
   /** A named external dependency is temporarily unavailable; retry is safe. */
   "upstream_unavailable",
+  /** The public corpus read exceeded its statement budget; narrow and retry. */
+  "public_read_timeout",
   /**
    * The case-law and legislation search index could not be reached (refused
    * or reset connection, failed DNS lookup, timeout, or a 502/503/504 from
@@ -130,6 +132,7 @@ type McpRefusalOptions = {
   issues?: unknown;
   hint?: string | undefined;
   retryable?: boolean | undefined;
+  retryAfterMs?: number | undefined;
 };
 
 /** A refusal ready for the structured envelope; absent fields are omitted. */
@@ -139,6 +142,7 @@ export type McpRefusal = {
   issues: McpValidationIssue[];
   hint?: string;
   retryable?: boolean;
+  retryAfterMs?: number;
 };
 
 /** Transport classifications stay closed; handler domain codes identify issues. */
@@ -149,6 +153,7 @@ export const projectMcpRefusal = ({
   issues,
   hint,
   retryable,
+  retryAfterMs,
 }: McpRefusalOptions): McpRefusal => {
   const detailedIssues = isUnknownArray(issues)
     ? issues.flatMap((issue) => {
@@ -179,5 +184,6 @@ export const projectMcpRefusal = ({
         : detailedIssues,
     ...(hint === undefined ? {} : { hint }),
     ...(retryable === undefined ? {} : { retryable }),
+    ...(retryAfterMs === undefined ? {} : { retryAfterMs }),
   };
 };

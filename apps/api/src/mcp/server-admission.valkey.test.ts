@@ -95,7 +95,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
             })
           ).unwrap(),
         listMcpTools: async () => [],
-        listMcpResources: () => [],
+        listMcpResources: async () => [],
         readMcpResource: () => ({ contents: [] }),
         recordMcpSessionInitialized: () => undefined,
         resolveMcpSessionContext: async () =>
@@ -166,7 +166,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
           return { content: [{ type: "text", text: "ok" }] };
         },
         listMcpTools: async () => [],
-        listMcpResources: () => [],
+        listMcpResources: async () => [],
         readMcpResource: () => ({ contents: [] }),
         recordMcpSessionInitialized: () => undefined,
         resolveMcpSessionContext: async () =>

@@ -239,7 +239,7 @@ describe("tools/list scope isolation over HTTP", () => {
     getMcpToolDefinition,
     getMcpToolRequiredScopesHint,
     handleMcpToolCall,
-    listMcpResources: () => [],
+    listMcpResources: async () => [],
     listMcpTools,
     readMcpResource: () => ({ contents: [] }),
     recordMcpSessionInitialized: () => undefined,
@@ -396,21 +396,57 @@ describe("registry narrowing is resolved only for discovery", () => {
   });
 });
 
-describe("reference visibility with memoized tool mentions", () => {
-  test("each request's own tool vocabulary still decides whether a reference is served", () => {
-    const served = (context: McpRequestResources) =>
-      listMcpResources("default", context).some(
+describe("reference visibility per request", () => {
+  test("each request's own tool vocabulary still decides whether a reference is served", async () => {
+    const served = async (context: McpRequestResources) =>
+      (await listMcpResources("default", { context })).some(
         ({ uri }) => uri === TEMPLATE_WORKFLOW_REFERENCE_URI,
       );
-    const everyTool = principal({ id: "all", enrolment: "none" });
+    const everyTool = principal({
+      id: "all",
+      enrolment: "none",
+      grantedScopes: MCP_DEFAULT_RESOURCE_SCOPES,
+    });
     const withoutTemplates = principal({
       id: "no-templates",
       enrolment: "none",
       hiddenDescriptors: ["create_template"],
+      grantedScopes: MCP_DEFAULT_RESOURCE_SCOPES,
+    });
+    const readOnly = principal({
+      id: "read-only",
+      enrolment: "none",
+      grantedScopes: ["stella:read", "stella:search"],
     });
 
-    expect(served(everyTool)).toBe(true);
-    expect(served(withoutTemplates)).toBe(false);
-    expect(served(everyTool)).toBe(true);
+    expect(await served(everyTool)).toBe(true);
+    expect(await served(withoutTemplates)).toBe(false);
+    // The session's own tools/list decides, scopes included: a session that
+    // cannot create a template is not pointed at the template workflow.
+    expect(await served(readOnly)).toBe(false);
+    expect(await served(everyTool)).toBe(true);
+  });
+
+  test("a shipped skill is served only where the session can call the tools it needs", async () => {
+    const PLAYBOOK_SKILL_URI = "stella://skills/playbook-builder";
+    const servedTo = async (id: string, grantedScopes: readonly string[]) =>
+      (
+        await listMcpResources("default", {
+          context: principal({ id, enrolment: "none", grantedScopes }),
+        })
+      ).map(({ uri }) => uri);
+
+    // save_playbook is the skill's last step; a read-only session lists the
+    // skill's reads but not that write, so it is never offered the skill.
+    expect(
+      await servedTo("reader", ["stella:read", "stella:search"]),
+    ).not.toContain(PLAYBOOK_SKILL_URI);
+    expect(
+      await servedTo("knowledge-writer", [
+        "stella:read",
+        "stella:search",
+        "stella:knowledge_write",
+      ]),
+    ).toContain(PLAYBOOK_SKILL_URI);
   });
 });
