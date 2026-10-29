@@ -4,7 +4,7 @@ import { desc, sql } from "drizzle-orm";
 
 import { caseLawSources, publishedCaseLawDecisions } from "@/api/db/schema";
 import { PUBLIC_READ_STATEMENT_TIMEOUT_MS } from "@/api/db/shared-pool-timeouts";
-import { provisionDecisionPageQuery } from "@/api/handlers/case-law/decisions/search";
+import { provisionDecisionCandidatesQuery } from "@/api/handlers/case-law/decisions/search";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import {
@@ -239,7 +239,7 @@ describe.skipIf(!enabled)("widely cited provision search (postgres)", () => {
               SCOPE_LIMIT + 1,
             );
           }
-          const pageQuery = provisionDecisionPageQuery(tx, {
+          const pageQuery = provisionDecisionCandidatesQuery(tx, {
             body: { country: "CZE", query: "", provision: PROVISION },
             generation: GENERATION,
             after: undefined,
@@ -251,6 +251,11 @@ describe.skipIf(!enabled)("widely cited provision search (postgres)", () => {
           });
           const rows = await pageQuery;
           expect(rows).toHaveLength(PAGE_SIZE + 1);
+          expect(
+            rows.every(
+              ({ provisionOutcome }) => provisionOutcome.type === "match",
+            ),
+          ).toBe(true);
           const pagePlan = explainRoot(
             await db.execute(
               sql`EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${pageQuery.getSQL()}`,
@@ -353,15 +358,17 @@ describe.skipIf(!enabled)("widely cited provision search (postgres)", () => {
         );
         await db.execute(sql`SET enable_seqscan = off`);
         await db.execute(sql`SET enable_bitmapscan = off`);
-        const noMatchProbe = provisionDecisionPageQuery(tx, {
+        const noMatchProbe = provisionDecisionCandidatesQuery(tx, {
           body: { country: "CZE", query: "", provision: GAPPED_PROVISION },
           generation: GENERATION,
           after: undefined,
           orderBy: [desc(publishedCaseLawDecisions.id)],
           limit: 1,
-          decisionIds: [adversarialDecision],
+          probeDecisionId: adversarialDecision,
         });
-        expect(await noMatchProbe).toEqual([]);
+        expect((await noMatchProbe).at(0)?.provisionOutcome.type).toBe(
+          "incomplete",
+        );
         const noMatchPlan = explainRoot(
           await db.execute(
             sql`EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${noMatchProbe.getSQL()}`,

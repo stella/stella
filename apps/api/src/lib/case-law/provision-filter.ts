@@ -357,13 +357,6 @@ export const provisionLinkReadOutcomeSql = ({
   )`;
 };
 
-export const provisionCitedSql = (
-  options: ProvisionScopeOptions & {
-    /** The decision id the predicate is correlated with. */
-    decisionId: SQL;
-  },
-): SQL => sql`${provisionLinkReadOutcomeSql(options)} ->> 'type' = 'match'`;
-
 /** A complete small set, or a scope that needs candidate-by-candidate probes. */
 export type CaseLawProvisionScope =
   | { type: "decisions"; decisionIds: readonly SafeId<"caseLawDecision">[] }

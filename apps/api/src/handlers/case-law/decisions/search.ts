@@ -140,8 +140,8 @@ import { readCaseLawSourceRegistry } from "@/api/lib/case-law/non-redistributabl
 import {
   type CaseLawProvisionFilter,
   type CaseLawProvisionScope,
-  provisionCitedSql,
   provisionLinkOutcomeEmitsHit,
+  type ProvisionLinkReadOutcome,
   provisionLinkReadOutcomeSql,
   readCaseLawProvisionScope,
   readProvisionCitingSentences,
@@ -531,11 +531,11 @@ export const caseLawSearchPlan = ({
     ? sql`AND d.language = ${body.language}`
     : sql``;
   const provisionFilter = body.provision
-    ? sql`AND ${provisionCitedSql({
+    ? sql`AND (${provisionLinkReadOutcomeSql({
         decisionId: sql`d.id`,
         jurisdiction: body.country,
         provision: body.provision,
-      })}`
+      })} ->> 'type') = 'match'`
     : sql``;
 
   const scoreExpr = blendedRankSql({
@@ -1537,15 +1537,6 @@ export const caseLawSearchRowFilters = (
       sql`${decisionHasLegalSentenceSql(publishedCaseLawDecisions.metadata)} = ${body.hasLegalSentence}`,
     );
   }
-  if (body.provision !== undefined) {
-    filters.push(
-      provisionCitedSql({
-        decisionId: sql`${publishedCaseLawDecisions.id}`,
-        jurisdiction: body.country,
-        provision: body.provision,
-      }),
-    );
-  }
   filters.push(eq(publishedCaseLawDecisions.country, body.country));
   if (body.dateFrom) {
     filters.push(
@@ -1578,6 +1569,79 @@ type DecisionRowsQueryOptions = {
   body: CaseLawSearchRowFilterBody;
   generation: string;
   ids: SafeId<"caseLawDecision">[];
+  /** Membership already established while producing these candidates. */
+  provisionProofs?: ReadonlyMap<string, ProvisionLinkReadOutcome>;
+};
+
+const provisionOutcomeForRow = (
+  body: CaseLawSearchRowFilterBody,
+  proofs: ReadonlyMap<string, ProvisionLinkReadOutcome> | undefined,
+): SQL<ProvisionLinkReadOutcome> | null => {
+  if (body.provision === undefined) {
+    return null;
+  }
+  const provedMatches = [...(proofs ?? [])]
+    .filter(([, outcome]) => outcome.type === "match")
+    .map(([id]) => sql`${id}::uuid`);
+  const probe = provisionLinkReadOutcomeSql({
+    decisionId: sql`${publishedCaseLawDecisions.id}`,
+    jurisdiction: body.country,
+    provision: body.provision,
+  });
+  return provedMatches.length === 0
+    ? probe
+    : sql<ProvisionLinkReadOutcome>`CASE
+        WHEN ${publishedCaseLawDecisions.id} IN (${sql.join(provedMatches, sql`, `)})
+          THEN jsonb_build_object('type', 'match')
+        ELSE ${probe}
+      END`;
+};
+
+type ProvisionRecord<
+  Row extends { provisionOutcome: ProvisionLinkReadOutcome | null },
+> = {
+  id: string;
+  row: Row | null;
+};
+
+const partitionProvisionRecords = async <
+  Row extends { provisionOutcome: ProvisionLinkReadOutcome | null },
+>(
+  tx: CaseLawPublicReadTransaction,
+  { body }: DecisionRowsQueryOptions,
+  records: readonly ProvisionRecord<Row>[],
+) => {
+  const resolved: {
+    id: string;
+    row: Omit<Row, "provisionOutcome"> | null;
+  }[] = [];
+  for (const record of records) {
+    if (record.row === null) {
+      resolved.push(record);
+      continue;
+    }
+    const { provisionOutcome: initial, ...row } = record.row;
+    let outcome = initial;
+    while (outcome?.type === "incomplete" && body.provision !== undefined) {
+      const next = await tx
+        .select({
+          outcome: provisionLinkReadOutcomeSql({
+            decisionId: sql`${record.id}::uuid`,
+            jurisdiction: body.country,
+            provision: body.provision,
+            after: outcome.after,
+          }),
+        })
+        .from(sql`(VALUES (1)) AS membership_probe(seed)`);
+      outcome = next.at(0)?.outcome ?? null;
+    }
+    resolved.push({
+      id: record.id,
+      row:
+        body.provision === undefined || outcome?.type === "match" ? row : null,
+    });
+  }
+  return partitionReturnedCorpusRecords(resolved);
 };
 
 /**
@@ -1590,7 +1654,7 @@ type DecisionRowsQueryOptions = {
  */
 export const candidateDecisionRowsStatement = (
   tx: CaseLawPublicReadTransaction,
-  { body, generation, ids }: DecisionRowsQueryOptions,
+  { body, generation, ids, provisionProofs }: DecisionRowsQueryOptions,
 ) => {
   const requestedIds = sql`(SELECT unnest(ARRAY[${sql.join(
     ids.map((id) => sql`${id}::uuid`),
@@ -1619,6 +1683,10 @@ export const candidateDecisionRowsStatement = (
         WHERE sibling.language_group_key = ${publishedCaseLawDecisions.languageGroupKey}
           AND sibling.id <> ${publishedCaseLawDecisions.id}
       ) END`.as("can_recur"),
+      provisionOutcome:
+        sql<ProvisionLinkReadOutcome | null>`${provisionOutcomeForRow(body, provisionProofs)}`.as(
+          "provision_outcome",
+        ),
     })
     .from(publishedCaseLawDecisions)
     .innerJoin(
@@ -1645,7 +1713,9 @@ export const candidateDecisionRowsQuery = async (
   tx: CaseLawPublicReadTransaction,
   options: DecisionRowsQueryOptions,
 ) =>
-  partitionReturnedCorpusRecords(
+  partitionProvisionRecords(
+    tx,
+    options,
     await candidateDecisionRowsStatement(tx, options),
   );
 
@@ -1660,7 +1730,7 @@ type CandidateDecisionRow = Awaited<
  */
 export const pageDecisionRowsStatement = (
   tx: CaseLawPublicReadTransaction,
-  { body, generation, ids }: DecisionRowsQueryOptions,
+  { body, generation, ids, provisionProofs }: DecisionRowsQueryOptions,
 ) => {
   const requestedIds = sql`(SELECT unnest(ARRAY[${sql.join(
     ids.map((id) => sql`${id}::uuid`),
@@ -1689,6 +1759,10 @@ export const pageDecisionRowsStatement = (
         FROM ${caseLawDecisionIdentifiers} identifier
         WHERE identifier.decision_id = ${publishedCaseLawDecisions.id}
       ), '[]'::jsonb)`.as("identifiers"),
+      provisionOutcome:
+        sql<ProvisionLinkReadOutcome | null>`${provisionOutcomeForRow(body, provisionProofs)}`.as(
+          "provision_outcome",
+        ),
     })
     .from(publishedCaseLawDecisions)
     .innerJoin(
@@ -1715,7 +1789,11 @@ export const pageDecisionRowsQuery = async (
   tx: CaseLawPublicReadTransaction,
   options: DecisionRowsQueryOptions,
 ) =>
-  partitionReturnedCorpusRecords(await pageDecisionRowsStatement(tx, options));
+  partitionProvisionRecords(
+    tx,
+    options,
+    await pageDecisionRowsStatement(tx, options),
+  );
 
 type PageDecisionRow = Awaited<
   ReturnType<typeof pageDecisionRowsQuery>
@@ -3627,6 +3705,9 @@ export const listCaseLawProvisionDecisions = async ({
         body,
         generation,
         ids: pageIds,
+        provisionProofs: new Map(
+          pageIds.map((id) => [String(id), { type: "match" } as const]),
+        ),
       });
       return {
         candidateRows: examinedRows,
@@ -3649,6 +3730,9 @@ export const listCaseLawProvisionDecisions = async ({
     nextPosition = lastExamined;
   }
   const nextCursor = (() => {
+    if (rows.length > limit && last !== undefined) {
+      return order.cursorAfter(last);
+    }
     if (incompleteRow?.provisionOutcome.type === "incomplete") {
       const base = decodePaginationCursor(order.cursorAfter(incompleteRow));
       return base === null
