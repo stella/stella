@@ -102,7 +102,7 @@ const readRolePrivilegeCensus = async (database: SQL): Promise<Census> => {
              COALESCE(procedure.proacl, pg_catalog.acldefault('f', procedure.proowner))
       FROM pg_catalog.pg_proc procedure
       JOIN application_schemas namespace ON namespace.oid = procedure.pronamespace
-      WHERE procedure.prokind = 'f'
+      WHERE procedure.prokind IN ('f', 'a', 'w')
       UNION ALL
       SELECT 'procedure', namespace.nspname || '.' || procedure.proname ||
              '(' || pg_catalog.pg_get_function_identity_arguments(procedure.oid) || ')',
@@ -143,8 +143,14 @@ const readRolePrivilegeCensus = async (database: SQL): Promise<Census> => {
       SELECT DISTINCT acl.role_oid, relation.oid
       FROM effective_acl acl
       JOIN application_relations relation
-        ON acl.kind IN ('table', 'sequence')
-       AND acl.object_name = relation.nspname || '.' || relation.relname
+        ON (
+          acl.kind IN ('table', 'sequence')
+          AND acl.object_name = relation.nspname || '.' || relation.relname
+        ) OR (
+          acl.kind = 'column'
+          AND left(acl.object_name, length(relation.nspname || '.' || relation.relname) + 1) =
+              relation.nspname || '.' || relation.relname || '.'
+        )
     ),
     results AS (
       SELECT role.rolname AS role, 'attribute'::text AS kind,
@@ -407,6 +413,70 @@ describePostgres("database role privilege census", () => {
         await database.unsafe(
           `DROP OWNED BY "${role}"; DROP ROLE IF EXISTS "${role}"`,
         );
+      }
+    });
+  }, 120_000);
+
+  // timeout: the self-test applies the complete migration chain before mutating its census fixture.
+  test("reports an aggregate EXECUTE grant", async () => {
+    const expected = readExpectedCensus();
+    await withMigratedDatabase(async (database, baseline) => {
+      assertCompleteCensus(expected, baseline);
+      const suffix = Bun.randomUUIDv7().replaceAll("-", "");
+      const role = `stella_census_fixture_${suffix}`;
+      const aggregate = `stella_census_fixture_${suffix}`;
+      try {
+        await database.unsafe(`
+          CREATE ROLE "${role}" NOLOGIN;
+          CREATE AGGREGATE public."${aggregate}" (integer) (
+            SFUNC = pg_catalog.int4pl,
+            STYPE = integer,
+            INITCOND = '0'
+          );
+          REVOKE ALL ON FUNCTION public."${aggregate}"(integer) FROM PUBLIC;
+          GRANT EXECUTE ON FUNCTION public."${aggregate}"(integer) TO "${role}"
+        `);
+        const mutated = await readRolePrivilegeCensus(database);
+        expect(() => assertCompleteCensus(expected, mutated)).toThrow(
+          `${role} function:public.${aggregate}(integer):EXECUTE:GRANTABLE:false`,
+        );
+      } finally {
+        await database.unsafe(`
+          DROP AGGREGATE IF EXISTS public."${aggregate}"(integer);
+          DROP OWNED BY "${role}";
+          DROP ROLE IF EXISTS "${role}"
+        `);
+      }
+    });
+  }, 120_000);
+
+  // timeout: the self-test applies the complete migration chain before mutating its census fixture.
+  test("reports policies for a column-only grantee", async () => {
+    const expected = readExpectedCensus();
+    await withMigratedDatabase(async (database, baseline) => {
+      assertCompleteCensus(expected, baseline);
+      const suffix = Bun.randomUUIDv7().replaceAll("-", "");
+      const role = `stella_census_fixture_${suffix}`;
+      const table = `stella_census_fixture_${suffix}`;
+      const policy = `stella_census_fixture_${suffix}`;
+      try {
+        await database.unsafe(`
+          CREATE ROLE "${role}" NOLOGIN;
+          CREATE TABLE public."${table}" (id integer PRIMARY KEY);
+          ALTER TABLE public."${table}" ENABLE ROW LEVEL SECURITY;
+          CREATE POLICY "${policy}" ON public."${table}" FOR SELECT TO "${role}" USING (true);
+          GRANT SELECT (id) ON TABLE public."${table}" TO "${role}"
+        `);
+        const mutated = await readRolePrivilegeCensus(database);
+        expect(() => assertCompleteCensus(expected, mutated)).toThrow(
+          `${role} table:public.${table}:POLICY:${policy}`,
+        );
+      } finally {
+        await database.unsafe(`
+          DROP TABLE IF EXISTS public."${table}";
+          DROP OWNED BY "${role}";
+          DROP ROLE IF EXISTS "${role}"
+        `);
       }
     });
   }, 120_000);
