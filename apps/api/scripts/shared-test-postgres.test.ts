@@ -2,8 +2,8 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import {
   cpSync,
-  mkdtempSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   realpathSync,
   rmSync,

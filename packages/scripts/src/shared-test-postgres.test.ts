@@ -1,11 +1,11 @@
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
 import {
-  mkdtempSync,
-  mkdirSync,
   existsSync,
-  readFileSync,
+  mkdirSync,
+  mkdtempSync,
   readdirSync,
+  readFileSync,
   renameSync,
   rmSync,
   statSync,
@@ -17,12 +17,12 @@ import path from "node:path";
 import { sha256Hex } from "@stll/sha256/bun";
 
 import {
-  ensureContainer,
   DOCKER_FAILURE_KIND,
-  SharedPostgresDockerError,
+  ensureContainer,
   readDockerResult,
-  sharedTestDatabase,
+  SharedPostgresDockerError,
   sharedTestCredential,
+  sharedTestDatabase,
   sharedTestMigrationHistory,
   snapshotSharedTestMigrations,
 } from "./shared-test-postgres";
