@@ -1,6 +1,7 @@
 import type { ComponentProps, ReactNode } from "react";
 
 import { Button } from "@stll/ui/button";
+import { HorizontalScroller } from "@stll/ui/horizontal-scroller";
 import { cn } from "@stll/ui/utils";
 
 type SuggestedAction = {
@@ -11,15 +12,20 @@ type SuggestedAction = {
 
 export type SuggestedActionSurfaceName = "plain" | "floating" | "overlay";
 
-type SuggestedActionsProps = {
+/**
+ * `row` keeps chips on one line that scrolls sideways, with scroll controls
+ * the caller labels; `wrap` lays chips out over multiple rows; `vertical`
+ * stacks them.
+ */
+type SuggestedActionsLayout =
+  | { orientation?: "vertical" | "wrap"; scrollLabels?: never }
+  | { orientation: "row"; scrollLabels: { next: string; previous: string } };
+
+type SuggestedActionsProps = SuggestedActionsLayout & {
   actions: SuggestedAction[];
   onSelect: (id: string) => void;
   /** Accessible group label (callers pass a translated string). */
   label: string;
-  /**
-   * `wrap` lays chips out over multiple rows; `vertical` stacks them.
-   */
-  orientation?: "vertical" | "wrap";
   /**
    * `plain` suits a solid background. `floating` gives each chip an opaque
    * surface so it reads cleanly over document/editor content. `overlay` is
@@ -65,13 +71,14 @@ const SuggestedActionSurface = ({
 );
 
 /**
- * A wrapping row (or stack) of click-to-run suggested-action chips.
+ * A row, wrapping row or stack of click-to-run suggested-action chips.
  */
 export const SuggestedActions = ({
   actions,
   onSelect,
   label,
   orientation = "wrap",
+  scrollLabels,
   surface = "plain",
   keyShortcut,
   className,
@@ -80,21 +87,23 @@ export const SuggestedActions = ({
     return null;
   }
 
-  const wraps = orientation === "wrap";
+  const row = orientation === "row";
 
-  return (
+  const group = (
     <div
       aria-label={label}
       className={cn(
-        "flex max-w-full gap-1.5",
-        wraps ? "flex-wrap items-start" : "flex-col items-start",
+        "flex gap-1.5",
+        row ? "flex-nowrap items-center" : "max-w-full items-start",
+        orientation === "wrap" && "flex-wrap",
+        orientation === "vertical" && "flex-col",
         className,
       )}
       role="group"
     >
       {actions.map((action) => (
         <SuggestedActionSurface
-          className="max-w-full"
+          className={cn(row ? "shrink-0" : "max-w-full")}
           key={action.id}
           surface={surface}
         >
@@ -114,5 +123,19 @@ export const SuggestedActions = ({
         </SuggestedActionSurface>
       ))}
     </div>
+  );
+
+  if (scrollLabels === undefined) {
+    return group;
+  }
+  return (
+    <HorizontalScroller
+      nextLabel={scrollLabels.next}
+      previousLabel={scrollLabels.previous}
+      // The viewport clips; this leaves room for the chips' shadow.
+      viewportClassName="py-1"
+    >
+      {group}
+    </HorizontalScroller>
   );
 };
