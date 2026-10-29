@@ -1,0 +1,5 @@
+{
+  "metric": "lint-suppression-directives",
+  "delta": 3,
+  "reason": "The phone's thread view keys markdown blocks, list items and the tools an answer used by position: they are re-parsed from the message text on every render and carry no identity of their own, and while an answer streams its last block grows in place, which a content key would remount on every token."
+}

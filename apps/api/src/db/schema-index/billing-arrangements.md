@@ -7,7 +7,7 @@ One line per column: `table.column  builder  flags  file:line  first sentence of
 ## billing_arrangements · `billingArrangements` · billing-arrangements.ts:25
 
 ```text
-billing_arrangements.workspace_id         safeWorkspaceId     pk,not null       billing-arrangements.ts:28
+billing_arrangements.workspace_id         safeWorkspaceId     pk,fk,not null    billing-arrangements.ts:28
 billing_arrangements.organization_id      safeOrganizationId  fk,not null       billing-arrangements.ts:29
 billing_arrangements.mode                 text                not null          billing-arrangements.ts:32
 billing_arrangements.currency             varchar             not null          billing-arrangements.ts:33

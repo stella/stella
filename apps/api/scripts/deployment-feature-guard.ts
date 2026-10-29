@@ -73,6 +73,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "Release-proof route gated by the smoke secret and the staging deployment origin, not by a feature flag",
   ],
   [
+    "/v1/workspaces/:workspaceId/vocabulary",
+    "Matter vocabulary uses the normal matter read permission on every deployment",
+  ],
+  [
     "/v1/desktop/matter-candidates",
     "Desktop billing routes enforce authenticated activity and billing feature decisions on every deployment",
   ],
@@ -93,12 +97,29 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "A personal data export is available to every account on every deployment",
   ],
   [
+    "/v1/chat/threads/:threadId/connectors/:toolCallId",
+    "Authenticated chat connector receipts are available on every deployment",
+  ],
+  [
     "/v1/desktop/feature-access",
     "Desktop feature access answers per-caller decisions on every deployment",
   ],
   [
     "/v1/desktop/presence",
     "Desktop account presence supports handoff on every deployment",
+  ],
+  [
+    "/v1/tasks",
+    "Tasks are part of every matter on every deployment; legal-list placement keeps its own feature access",
+  ],
+  [
+    "/v1/mcp/oauth/mobile-client-metadata.json",
+    "The mobile app's client identity is published by every deployment it can sign in to",
+  ],
+  ["/favicon.ico", "The API host's icon is served by every deployment"],
+  [
+    "/v1/mobile/updates",
+    "Mobile builds ask every deployment for updates; one with nothing published answers 404",
   ],
   [
     "/operator",

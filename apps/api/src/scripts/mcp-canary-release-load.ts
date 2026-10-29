@@ -20,6 +20,8 @@
  * Bounded cost: a fixed duration and concurrency against the existing staging
  * stack, inside the MCP transport rate limit.
  */
+import { Result } from "better-result";
+
 import { Temporal } from "@stll/time";
 
 import { mcpToolLatencyBudgetMs } from "@/api/mcp/tool-latency-budgets";
@@ -28,6 +30,8 @@ export const RELEASE_LOAD = {
   durationMs: 60_000,
   /** Callers in flight at once; with second-long calls, about 240 per minute. */
   concurrency: 4,
+  /** Four callers starting at most twice a second leave room below 600/min. */
+  callerIntervalMs: 500,
   /** A tool with fewer answered calls has no meaningful 95th percentile. */
   minSamplesPerTool: 5,
 } as const;
@@ -98,6 +102,7 @@ type RunReleaseLoadOptions = {
   call: (call: ReleaseLoadCall) => Promise<ReleaseLoadOutcome>;
   decisionIds: readonly string[];
   now?: () => number;
+  wait?: (ms: number) => Promise<unknown>;
   /** Wall-clock milliseconds, for the window compared with job runs. */
   wallNow?: () => number;
   durationMs?: number;
@@ -117,6 +122,7 @@ export const runReleaseLoad = async ({
   call,
   decisionIds,
   now = () => performance.now(),
+  wait = Bun.sleep,
   wallNow = () => Temporal.Now.instant().epochMilliseconds,
   durationMs = RELEASE_LOAD.durationMs,
   concurrency = RELEASE_LOAD.concurrency,
@@ -144,13 +150,20 @@ export const runReleaseLoad = async ({
       const startedAt = now();
       firstStartMs ??= wallNow();
       // Each caller runs one call at a time; the concurrency is the callers.
-      const outcome = await call(planned);
+      const result = await Result.tryPromise(async () => await call(planned));
+      const outcome = result.isErr() ? "failed" : result.value;
       lastEndMs = Math.max(lastEndMs ?? 0, wallNow());
       samples.push({
         toolName: planned.toolName,
         elapsedMs: now() - startedAt,
         outcome,
       });
+      const delayMs = RELEASE_LOAD.callerIntervalMs - (now() - startedAt);
+      if (delayMs > 0 && now() + delayMs < endsAt) {
+        await wait(delayMs);
+      } else if (delayMs > 0) {
+        return;
+      }
     }
   };
   await Promise.all(Array.from({ length: concurrency }, caller));

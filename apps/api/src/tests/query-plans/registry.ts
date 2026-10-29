@@ -144,6 +144,26 @@ const DECISION_LIST_PLAN_IDS = {
   },
 } as const satisfies Record<DecisionListSort, Record<DecisionDateBand, string>>;
 
+/**
+ * The same walks with one language chosen. A language is a minority of a
+ * multilingual country's versions, which is exactly when a probe of every
+ * version in it looks cheap to the planner and a page sorts them all; the
+ * contract holds each band to the language's own walk range.
+ */
+const DECISION_LIST_LANGUAGE_PLAN_IDS = {
+  newest: {
+    dated: "case-law.decisions-list-language",
+    undated: "case-law.decisions-list-language-undated",
+  },
+  oldest: {
+    dated: "case-law.decisions-list-language-oldest",
+    undated: "case-law.decisions-list-language-oldest-undated",
+  },
+} as const satisfies Record<DecisionListSort, Record<DecisionDateBand, string>>;
+
+/** A minority language of the seed: the selective case a probe would sort. */
+const sampleListLanguage = "en";
+
 /** Curated production builders with a committed access path for each scan. */
 export const QUERY_PLAN_REGISTRY = [
   {
@@ -336,6 +356,24 @@ export const QUERY_PLAN_REGISTRY = [
         }),
       seed: "case-law" as const,
       contract: planContracts[DECISION_LIST_PLAN_IDS[sort][band]],
+    })),
+  ),
+  ...DECISION_LIST_SORTS.flatMap((sort) =>
+    DECISION_DATE_BANDS.map((band) => ({
+      id: DECISION_LIST_LANGUAGE_PLAN_IDS[sort][band],
+      class: "page" as const,
+      role: "public-law-reader" as const,
+      build: (tx: Transaction) =>
+        listDecisionsPageQuery({
+          band,
+          position: undefined,
+          take: LIMITS.caseLawSearchPageSizeDefault + 1,
+          query: { country: sampleCountry, language: sampleListLanguage },
+          sort,
+          tx,
+        }),
+      seed: "case-law" as const,
+      contract: planContracts[DECISION_LIST_LANGUAGE_PLAN_IDS[sort][band]],
     })),
   ),
   {
@@ -704,6 +742,11 @@ export const PUBLIC_LAW_PLAN_DISPOSITION = {
   [PUBLIC_LAW_SHARED_QUERY.caseLawCoverageArrivals]: {
     type: "registered",
     id: PUBLIC_LAW_SHARED_QUERY.caseLawCoverageArrivals,
+  },
+  [PUBLIC_LAW_SHARED_QUERY.caseLawCoverageSummary]: {
+    type: "excluded",
+    reason:
+      "SECURITY DEFINER hides the singleton lookup from EXPLAIN; coverage-summary.db.test.ts checks the one-statement budget at two corpus sizes and policy revocation.",
   },
   [PUBLIC_LAW_SHARED_QUERY.caseLawCoverageSources]: {
     type: "excluded",

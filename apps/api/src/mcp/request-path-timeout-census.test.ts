@@ -274,6 +274,15 @@ const resolveBudgetMs = (
   if (statement !== null) {
     return Number(statement[1]) * (statement[2] === "s" ? 1000 : 1);
   }
+  const minimum = /^Math\.min\((.*)\)$/u.exec(expression);
+  if (minimum !== null) {
+    const caps = (minimum[1] ?? "")
+      .split(",")
+      .map((operand) => resolveBudgetMs(file, operand.trim(), depth + 1))
+      .filter((value): value is number => value !== undefined);
+    // A known operand bounds the minimum even when the caller's cap is dynamic.
+    return caps.length === 0 ? undefined : Math.min(...caps);
+  }
   const replaced = expression.replaceAll(
     /\b([A-Za-z_$][\w$]*)(?:\.([A-Za-z_$][\w$]*))?\b/gu,
     (whole, name: string, property: string | undefined) => {
@@ -504,6 +513,11 @@ const CENSUS: readonly CensusEntry[] = [
     onExpiry: "fails-fast",
     why: "The whole comparison run, inside the route's request deadline.",
   },
+  {
+    site: "apps/api/src/mcp/tools.ts#budgetMs",
+    path: "off-request",
+    why: "Opens the admitted public-read scope itself from the corpus class budget; it does not add a dependency wait.",
+  },
   // --- Corpus index client and public-law reads -------------------------------
   {
     site: "apps/api/src/lib/legal-search/corpus-index-client.ts#requestBoundedTimeoutMs(request.timeoutMs)",
@@ -528,6 +542,23 @@ const CENSUS: readonly CensusEntry[] = [
     bound: "request",
     onExpiry: "fails-fast",
     why: "A corpus search with a caller's shorter timeout, clamped again to the request.",
+  },
+  {
+    site: "apps/api/src/lib/legal-search/corpus-index-client.ts#Math.min( input.timeoutMs ?? CORPUS_INDEX_SEARCH_TIMEOUT_MS, CORPUS_INDEX_SEARCH_TIMEOUT_MS, )",
+    path: "request",
+    tools: CORPUS_SEARCH_TOOLS,
+    bound: "request",
+    onExpiry: "fails-fast",
+    why: "Scored search applies the caller cap before the shared request clamp.",
+  },
+  {
+    site: "apps/api/src/lib/legal-search/corpus-index-client.ts#Math.min(timeoutMs, CORPUS_INDEX_AGGREGATION_TIMEOUT_MS)",
+    path: "request",
+    tools: ["case_law_coverage", ...CORPUS_SEARCH_TOOLS],
+    http: ["aggregate", "browse", "search"],
+    bound: "request",
+    onExpiry: "fails-fast",
+    why: "Facet requests apply the caller cap before the shared request clamp.",
   },
   {
     site: "apps/api/src/lib/legal-search/corpus-index-client.ts#CORPUS_INDEX_SEARCH_TIMEOUT_MS",

@@ -70,8 +70,8 @@ import {
 } from "@/components/inspector/file-download-service.logic";
 import { openInspectorSelection } from "@/components/inspector/inspector-actions";
 import {
-  PdfSignDialogs,
-  usePdfSignFlow,
+  PdfSignRequiredDialog,
+  usePdfSignFromList,
 } from "@/components/inspector/pdf-sign-action";
 import { resolvePdfSignTarget } from "@/components/inspector/pdf-signing.logic";
 import Tooltip from "@/components/tooltip";
@@ -154,6 +154,7 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import { getExtension } from "@/lib/files/file-extension";
 import type { Capability } from "@/lib/organization/feature-access/action-capabilities.logic";
 import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
 import type {
   OcrExportStatus,
@@ -161,7 +162,7 @@ import type {
   WorkspaceCellMetadata,
   WorkspaceEntity,
 } from "@/lib/types";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { downloadFile } from "@/lib/utils";
 import { createUuid } from "@/lib/uuid";
 import {
@@ -418,7 +419,7 @@ export const RowActions = ({
   const [translationDialogState, setTranslationDialogState] =
     useState<TranslationDialogState>({ type: "closed" });
   const propertiesQuery = useQuery(propertiesOptions(workspaceId));
-  const propertiesView = useQueryView(propertiesQuery);
+  const propertiesView = queryView(propertiesQuery);
   useQueryViewError(propertiesView, "RowActions:query");
   const properties =
     propertiesView.type === "items" ? propertiesView.items : undefined;
@@ -499,13 +500,17 @@ export const RowActions = ({
     readOnly: entity.readOnly,
   });
   const desktopEditGate = useDesktopActionGate("edit-file");
-  const pdfSignFlow = usePdfSignFlow();
   // A folder has no file; a row always shows the current version.
   const pdfSignTarget = resolvePdfSignTarget({
     canUpdateEntity: !entity.readOnly,
     entityId: entity.entityId,
     file: isBulk ? null : file,
     isCurrentVersion: true,
+    workspaceId,
+  });
+  const { flow: pdfSignFlow, sign: signPdf } = usePdfSignFromList({
+    entity,
+    target: pdfSignTarget,
     workspaceId,
   });
   const openCopyToMatterDialog = () => {
@@ -924,7 +929,6 @@ export const RowActions = ({
     const toastId = stellaToast.add({
       title: t("common.duplicating"),
       type: "loading",
-      timeout: Number.POSITIVE_INFINITY,
     });
     let failedCount = 0;
     let firstFailure: unknown;
@@ -1246,7 +1250,7 @@ export const RowActions = ({
               ? {
                   capability: "desktop",
                   label: pdfSignFlow.actionLabel,
-                  onSelect: pdfSignFlow.start,
+                  onSelect: signPdf,
                   onSetUp: pdfSignFlow.setUp,
                   status: pdfSignFlow.status,
                 }
@@ -1327,9 +1331,7 @@ export const RowActions = ({
         }
         workspaceId={workspaceId}
       />
-      {pdfSignTarget !== null && (
-        <PdfSignDialogs flow={pdfSignFlow} target={pdfSignTarget} />
-      )}
+      {pdfSignTarget !== null && <PdfSignRequiredDialog flow={pdfSignFlow} />}
       <DesktopRequiredDialog {...desktopEditGate.requiredDialog} />
     </Menu>
   );

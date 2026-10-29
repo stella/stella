@@ -307,9 +307,17 @@ const publicCursorRouteRequests: Record<string, () => Request> = {
     new Request(
       "http://localhost/case/decisions?country=CZE&cursor=not-a-cursor",
     ),
+  "GET /case/decisions/by-slug/:slug#caseFileCursor": () =>
+    new Request(
+      "http://localhost/case/decisions/by-slug/test?country=CZE&caseFileCursor=not-a-cursor",
+    ),
   "GET /case/decisions/by-slug/:slug#citationsCursor": () =>
     new Request(
       "http://localhost/case/decisions/by-slug/test?country=CZE&citationsCursor=not-a-cursor",
+    ),
+  "GET /case/decisions/:decisionId#caseFileCursor": () =>
+    new Request(
+      `http://localhost/case/decisions/${TEST_DECISION_ID}?caseFileCursor=not-a-cursor`,
     ),
   "GET /case/decisions/:decisionId#citationsCursor": () =>
     new Request(
@@ -430,7 +438,7 @@ describe("public case-law route boundary", () => {
       source.indexOf("export const configureReadTransaction"),
     );
     const readConfiguration = source.slice(
-      source.indexOf("const configureReadTransaction"),
+      source.indexOf("export const configureReadTransaction"),
       source.indexOf("const publicLawReadGuards"),
     );
     const validation = source.slice(
@@ -448,7 +456,14 @@ describe("public case-law route boundary", () => {
     expect(source).toContain(
       "connectionTimeout: EXTERNAL_PUBLIC_LAW_CONNECTION_TIMEOUT_SECONDS",
     );
-    expect(validation).toContain(".transaction(async (tx) =>");
+    expect(validation).toContain('withPublicReadIo("database", async (io) =>');
+    expect(validation).toContain(
+      "openPublicReadDatabase(external.database, io.signal)",
+    );
+    expect(validation).toContain(
+      "await io.readTransaction(resource.database, async (tx) =>",
+    );
+    expect(validation).toContain("await resource.close()");
     expect(guards).toContain('["statement_timeout", "30s"]');
     expect(guards).toContain('["lock_timeout", "1s"]');
     expect(guards).toContain('["idle_in_transaction_session_timeout", "30s"]');
@@ -471,9 +486,19 @@ describe("public case-law route boundary", () => {
     expect(sharedReadGuards).toContain("set_config('transaction_timeout',");
     expect(readConfiguration).toContain("transactionTimeoutMs:");
     expect(validation).toContain("configureReadTransaction(");
-    expect(validation).toContain("validateExternalPublicLawDatabase(tx)");
+    expect(validation).toContain(
+      "const observedTransaction = observePublicLawReadTransaction(tx)",
+    );
+    expect(validation).toContain(
+      'observedTransaction,\n          "read-committed",\n          EXTERNAL_PUBLIC_LAW_READ_GUARDS,',
+    );
+    expect(validation).toContain(
+      "validateExternalPublicLawDatabase(observedTransaction)",
+    );
     expect(validation.indexOf("configureReadTransaction(")).toBeLessThan(
-      validation.indexOf("validateExternalPublicLawDatabase(tx)"),
+      validation.indexOf(
+        "validateExternalPublicLawDatabase(observedTransaction)",
+      ),
     );
     expect(publicRead).toContain("configureReadTransaction(");
     expect(publicRead).toContain("return await fn(tx)");

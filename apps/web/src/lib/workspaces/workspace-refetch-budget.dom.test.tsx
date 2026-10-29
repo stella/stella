@@ -1,5 +1,5 @@
 import { hashKey, QueryClient, QueryObserver } from "@tanstack/react-query";
-import type { QueryKey } from "@tanstack/react-query";
+import type { QueryFunctionContext, QueryKey } from "@tanstack/react-query";
 import { expect, test } from "bun:test";
 
 import {
@@ -16,7 +16,10 @@ import {
   WORKSPACE_REALTIME_QUERY_ACTION,
 } from "@/lib/workspace-realtime";
 import type { WorkspaceRealtimeQueryAction } from "@/lib/workspace-realtime";
-import { createWorkspaceQueryActionBatch } from "@/lib/workspace-sse";
+import {
+  applyWorkspaceRealtimeQueryActions,
+  createWorkspaceQueryActionBatch,
+} from "@/lib/workspace-sse";
 import {
   invalidateDeletedEntityQueries,
   invalidateRenamedEntityQueries,
@@ -160,6 +163,52 @@ test("ending a stream applies its pending cache actions once", () => {
   batch.cancel();
   expect(applied).toEqual(actions);
   expect(cancellations).toBe(1);
+});
+
+test("realtime entity bursts never abort an in-flight tree fetch", async () => {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+  });
+  const key = VIEW_QUERY_KEYS.filesystemEntitiesOptions;
+  const treeData = { entities: [], ancestorLinks: [], isFiltered: false };
+  const resolvers: ((value: typeof treeData) => void)[] = [];
+  let fetches = 0;
+  let aborts = 0;
+  client.setQueryData(key, treeData);
+  // The query function counts fetches and aborts for the assertions; the
+  // counters are instrumentation, not part of the query's identity.
+  const queryFn = async ({ signal }: QueryFunctionContext) => {
+    fetches += 1;
+    signal.addEventListener("abort", () => {
+      aborts += 1;
+    });
+    return await new Promise<typeof treeData>((resolve) => {
+      resolvers.push(resolve);
+    });
+  };
+  const observer = new QueryObserver(client, { queryKey: key, queryFn });
+  const unsubscribe = observer.subscribe(() => undefined);
+  void observer.refetch();
+  const action = {
+    type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
+    queryKey: key,
+  } as const;
+
+  for (let index = 0; index < 50; index += 1) {
+    applyWorkspaceRealtimeQueryActions(client, [action]);
+  }
+  expect(fetches).toBe(1);
+  expect(aborts).toBe(0);
+  resolvers[0]?.(treeData);
+  await settle();
+  expect(fetches).toBe(2);
+  resolvers[1]?.(treeData);
+  await settle();
+  expect(fetches).toBe(2);
+  expect(aborts).toBe(0);
+
+  unsubscribe();
+  client.clear();
 });
 
 type MeasureBurstOptions = {

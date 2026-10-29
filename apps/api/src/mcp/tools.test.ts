@@ -27,6 +27,7 @@ import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-re
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 import { PUBLIC_COUNTRY_CAPABILITIES } from "@stll/api-contract/public-country-capability";
 import {
+  CASE_LAW_SEARCH_FACET_NAMES,
   countedSearchTotal,
   FACET_COUNT_TYPE,
   LEGISLATION_SEARCH_MATCH_TYPES,
@@ -34,6 +35,7 @@ import {
   SEARCH_PAGINATION_COMPLETE,
   SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET,
   SEARCH_SORTS,
+  SEARCH_TOTAL_NOT_COUNTED,
   SEARCH_TOTAL_TYPE,
 } from "@stll/api-contract/search";
 import type {
@@ -97,6 +99,7 @@ import { createFileKey } from "@/api/lib/file-key";
 import { corpusIndexReadTarget } from "@/api/lib/legal-search/corpus-index-group-contract";
 import type { ServingCorpusIndexTarget } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
 import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";
+import { readCorpusSearchFacets } from "@/api/lib/legal-search/corpus-index-search-facets";
 import { corpusQueryVariantCursorTarget } from "@/api/lib/legal-search/corpus-query-variant-policy";
 import { corpusRankingCursorTarget } from "@/api/lib/legal-search/corpus-ranking-policy";
 import {
@@ -654,6 +657,7 @@ const createReadDecisionResult = () => ({
     },
   ],
   citationsNextCursor: null,
+  caseFile: { items: [], nextCursor: null, limit: 50 },
   country: "CZE",
   court: "Nejvyšší soud",
   courtAbbreviation: "NS",
@@ -1489,6 +1493,13 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(searchTool?.inputSchema).toEqual({
       type: "object",
       properties: {
+        facets: {
+          type: "array",
+          items: { type: "string", enum: [...CASE_LAW_SEARCH_FACET_NAMES] },
+          maxItems: CASE_LAW_SEARCH_FACET_NAMES.length,
+          description: "Opt-in facet names; first phrasing, page one only.",
+          default: [],
+        },
         queries: {
           type: "array",
           description:
@@ -2351,6 +2362,28 @@ describe("OpenAI-compatible MCP tools", () => {
         });
       });
 
+      test.each([
+        {
+          date: { birth_date: "2099-01-01" },
+          message: "The birth date must be from 1900 through today",
+        },
+        {
+          date: { date_of_birth: { precision: "year", year: 2099 } },
+          message: "Expected a valid birth date from 1900 through today",
+        },
+      ])("rejects a future birth date in either input form", async (input) => {
+        const result = await callSanctions(
+          async () => panic("The lists must not be screened"),
+          {
+            type: "person",
+            first_name: "Ivan",
+            last_name: "Sidorov",
+            ...input.date,
+          },
+        );
+        expectValidationMessage(result, input.message);
+      });
+
       test("asks for one birth date when the two given disagree", async () => {
         const result = await callSanctions(
           async () => panic("The lists must not be screened"),
@@ -2640,6 +2673,89 @@ describe("OpenAI-compatible MCP tools", () => {
     }
   });
 
+  test.each([
+    { facets: undefined },
+    { facets: [] },
+    { facets: ["court", "year"] },
+  ] as const)(
+    "search_case_law computes requested facets for only the first phrasing (%j)",
+    async ({ facets }) => {
+      const requests: { query: string; aggs: Record<string, unknown> }[] = [];
+      searchDecisionsHandlerMock.mockImplementation(
+        async ({ body }: Parameters<typeof searchCorpusIndexDecisions>[0]) => {
+          const read = await readCorpusSearchFacets({
+            aggregate: async (request) => {
+              requests.push(request);
+              return Result.ok(
+                Object.fromEntries(
+                  Object.keys(request.aggs).map((name) => [
+                    name,
+                    name === "total" ? { value: 17 } : { buckets: [] },
+                  ]),
+                ),
+              );
+            },
+            currentYear: 2026,
+            decisionCountField: "document_id",
+            excludedSourceIds: [],
+            queryFor: () => body.query,
+            ...(body.facets === undefined
+              ? {}
+              : { requestedFacets: body.facets }),
+            totalQuery: body.query,
+          });
+          if (Result.isError(read)) {
+            panic(read.error.message);
+          }
+          return {
+            facets:
+              body.facets?.length === 0
+                ? null
+                : { ...read.value.facets, courtYear: read.value.courtYear },
+            hits: [],
+            nextCursor: null,
+            queryUsed: body.query,
+            warnings: [],
+            paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+            total: countedSearchTotal(
+              SEARCH_TOTAL_TYPE.ESTIMATE,
+              read.value.total,
+            ),
+          };
+        },
+      );
+      for (const queries of [
+        ["contract"],
+        ["contract", "damages", "liability"],
+      ]) {
+        requests.length = 0;
+        const result = await handleMcpToolCall({
+          args: {
+            country: "CZE",
+            queries,
+            ...(facets === undefined ? {} : { facets: [...facets] }),
+          },
+          context: createContext(),
+          toolName: "search_case_law",
+        });
+        expect(result.isError).not.toBe(true);
+        expect(requests).toHaveLength(queries.length);
+        expect(
+          requests.filter(({ aggs }) =>
+            Object.keys(aggs).some((name) => name !== "total"),
+          ),
+        ).toHaveLength(facets?.length ? 1 : 0);
+        expect(requests.every(({ aggs }) => !("courtYear" in aggs))).toBe(true);
+        expect(parseToolPayload(result)).toMatchObject({
+          total:
+            queries.length === 1
+              ? countedSearchTotal(SEARCH_TOTAL_TYPE.ESTIMATE, 17)
+              : SEARCH_TOTAL_NOT_COUNTED,
+        });
+      }
+    },
+  );
+
   test("search_case_law maps filters and returns decision links", async () => {
     searchDecisionsHandlerMock.mockResolvedValue({
       paginationOutcome: SEARCH_PAGINATION_COMPLETE,
@@ -2759,11 +2875,13 @@ describe("OpenAI-compatible MCP tools", () => {
         sentenceAlignedExcerpt: true,
         headnotePresentation: "expanded",
         query: "shareholder dispute",
+        facets: [],
         sort: "newest",
         sourceId: "11111111-1111-4111-8111-111111111111",
       },
       caseLawDb: caseLawPublicReadDb,
       observer,
+      signal: undefined,
     });
 
     expect(parseToolPayload(result)).toEqual({
@@ -3652,6 +3770,7 @@ describe("OpenAI-compatible MCP tools", () => {
       }),
       caseLawDb: caseLawPublicReadDb,
       observer,
+      signal: undefined,
     });
   });
 
@@ -3788,6 +3907,7 @@ describe("OpenAI-compatible MCP tools", () => {
       body: expect.objectContaining({ cursor: longestEngineCursor }),
       caseLawDb: caseLawPublicReadDb,
       observer,
+      signal: undefined,
     });
   });
 
@@ -5471,6 +5591,7 @@ describe("OpenAI-compatible MCP tools", () => {
       body: expect.objectContaining({ dateFrom: "2026-10-01" }),
       caseLawDb: caseLawPublicReadDb,
       observer,
+      signal: undefined,
     });
   });
 
@@ -10516,7 +10637,12 @@ describe("OpenAI-compatible MCP tools", () => {
 
     expect(validationEnvelope(result)).toMatchObject({
       code: "validation_error",
-      issues: [{ path: "dateOfBirth", message: "Invalid date of birth" }],
+      issues: [
+        {
+          path: "dateOfBirth",
+          message: "Expected a valid birth date from 1900 through today",
+        },
+      ],
     });
   });
 

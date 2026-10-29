@@ -52,6 +52,101 @@ const readAggregateLockRekeys = (): AggregateLockRekey[] =>
         )
     : [];
 
+/**
+ * Every advisory aggregate's first-key namespace, as the API's census test
+ * renders it. Workers of two releases run side by side during a deployment, so
+ * a namespace is a deployed contract: an aggregate keeps the one its base
+ * revision records, and a new aggregate never takes one the base already uses.
+ * Removing an aggregate removes its row.
+ */
+export const AGGREGATE_LOCK_NAMESPACES_PATH =
+  "apps/api/src/lib/db/aggregate-lock-namespaces.json";
+const AGGREGATE_LOCK_OWNER_PATH = "apps/api/src/lib/db/aggregate-lock.ts";
+const namespaceLedgerSchema = v.record(
+  v.string(),
+  v.pipe(v.string(), v.minLength(1)),
+);
+export const parseAggregateLockNamespaces = (
+  text: string,
+): Record<string, string> => v.parse(namespaceLedgerSchema, JSON.parse(text));
+
+/**
+ * The namespaces an owner revision without a ledger declares, read from its
+ * `advisoryResource` cases in the census test's notation: a hexadecimal
+ * literal or named hexadecimal constant is written out, anything else
+ * interpolated is an identity.
+ */
+export const aggregateLockNamespacesFromSource = (
+  source: string,
+): Record<string, string> => {
+  const constants = new Map(
+    [...source.matchAll(/^const ([A-Z_]+) = (0x[0-9a-f_]+);$/gmu)].map(
+      (match) => [match[1] ?? "", match[2] ?? ""] as const,
+    ),
+  );
+  const owner =
+    /\nconst advisoryResource = [\s\S]*?\n\};\n/u.exec(source)?.at(0) ??
+    panic("Missing advisory aggregate resources in the owner source");
+  return Object.fromEntries(
+    [...owner.matchAll(/case "(\w+)":[\s\S]*?first: sql`([^`]*)`/gu)].map(
+      (match) =>
+        [
+          match[1] ?? panic("Missing advisory aggregate name"),
+          (match[2] ?? "").replaceAll(
+            /\$\{([^}]*)\}/gu,
+            (_, expression: string) => {
+              const literal =
+                constants.get(expression.trim()) ?? expression.trim();
+              return /^0x[0-9a-f_]+$/iu.test(literal)
+                ? `0x${Number(literal.replaceAll("_", "")).toString(16).padStart(8, "0")}`
+                : "<identity>";
+            },
+          ),
+        ] as const,
+    ),
+  );
+};
+
+export const aggregateLockNamespaceProblems = ({
+  current,
+  previous,
+}: {
+  current: Readonly<Record<string, string>>;
+  previous: Readonly<Record<string, string>>;
+}): string[] => {
+  const problems: string[] = [];
+  const owners = new Map<string, string>();
+  for (const [aggregate, namespace] of Object.entries(current)) {
+    const other = owners.get(namespace);
+    if (other !== undefined) {
+      problems.push(
+        `${aggregate}: advisory first-key namespace ${namespace} is also ${other}'s; give each aggregate its own.`,
+      );
+    }
+    owners.set(namespace, aggregate);
+  }
+  const deployedOwners = new Map(
+    Object.entries(previous).map(
+      ([aggregate, namespace]) => [namespace, aggregate] as const,
+    ),
+  );
+  for (const [aggregate, namespace] of Object.entries(current)) {
+    const deployed = previous[aggregate];
+    if (deployed !== undefined && deployed !== namespace) {
+      problems.push(
+        `${aggregate}: advisory first-key namespace changed from ${deployed} to ${namespace}; workers of the base revision still lock ${deployed}, so keep it.`,
+      );
+    }
+    const deployedOwner = deployedOwners.get(namespace);
+    if (deployed === undefined && deployedOwner !== undefined) {
+      problems.push(
+        `${aggregate}: advisory first-key namespace ${namespace} belongs to ${deployedOwner} on the base revision; choose one no revision has used.`,
+      );
+    }
+  }
+  return problems;
+};
+
 const git = (args: string[]) => {
   const result = Bun.spawnSync(["git", ...args]);
   if (result.exitCode !== 0) {
@@ -97,14 +192,33 @@ export const parseAggregateLockGitBatch = (
   }
   return sources;
 };
-const previousAggregateLocks = (rows: readonly AggregateLockBaselineRow[]) => {
+const aggregateLockBase = () => {
   const explicitBase = process.env["BASE_SHA"];
   const requestedBase = process.env["BASE_REF"] ?? "origin/main";
-  const base = git(
+  return git(
     explicitBase
       ? ["rev-parse", "--verify", `${explicitBase}^{commit}`]
       : ["merge-base", "HEAD", requestedBase],
   ).trim();
+};
+const baseHasFile = (base: string, file: string) =>
+  Bun.spawnSync(["git", "cat-file", "-e", `${base}:${file}`]).exitCode === 0;
+const previousAggregateLockNamespaces = (base: string) => {
+  if (baseHasFile(base, AGGREGATE_LOCK_NAMESPACES_PATH)) {
+    return parseAggregateLockNamespaces(
+      git(["show", `${base}:${AGGREGATE_LOCK_NAMESPACES_PATH}`]),
+    );
+  }
+  // Bootstrap from the base owner source, so the first ledger cannot record
+  // a namespace the deployed code does not use.
+  return aggregateLockNamespacesFromSource(
+    git(["show", `${base}:${AGGREGATE_LOCK_OWNER_PATH}`]),
+  );
+};
+const previousAggregateLocks = (
+  rows: readonly AggregateLockBaselineRow[],
+  base: string,
+) => {
   const existing = Bun.spawnSync([
     "git",
     "cat-file",
@@ -148,12 +262,21 @@ export const checkAggregateLocks = () => {
   const baseline = parseAggregateLockBaseline(
     readFileSync(AGGREGATE_LOCK_BASELINE_PATH, "utf-8"),
   );
-  return aggregateLockBaselineProblems({
-    actual,
-    baseline,
-    previous: previousAggregateLocks(baseline),
-    rekeys: readAggregateLockRekeys(),
-  });
+  const base = aggregateLockBase();
+  return [
+    ...aggregateLockBaselineProblems({
+      actual,
+      baseline,
+      previous: previousAggregateLocks(baseline, base),
+      rekeys: readAggregateLockRekeys(),
+    }),
+    ...aggregateLockNamespaceProblems({
+      current: parseAggregateLockNamespaces(
+        readFileSync(AGGREGATE_LOCK_NAMESPACES_PATH, "utf-8"),
+      ),
+      previous: previousAggregateLockNamespaces(base),
+    }),
+  ];
 };
 if (import.meta.main) {
   if (Bun.argv.includes("--generate")) {
@@ -186,7 +309,7 @@ if (import.meta.main) {
     const problems = aggregateLockBaselineProblems({
       actual: rows,
       baseline: rows,
-      previous: previousAggregateLocks(rows),
+      previous: previousAggregateLocks(rows, aggregateLockBase()),
       rekeys,
     });
     if (problems.length) {

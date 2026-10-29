@@ -55,6 +55,7 @@ describe("release load", () => {
     const { samples, window } = await runReleaseLoad({
       decisionIds: ["a", "b"],
       now: clock.now,
+      wait: async (ms) => clock.advance(ms),
       wallNow: () => 1_000_000 + clock.now(),
       durationMs: 10_000,
       concurrency: 2,
@@ -68,7 +69,9 @@ describe("release load", () => {
     // The window is the calls' own span, from the first start to the last end.
     expect(window?.startMs).toBe(1_000_000);
     expect(window?.endMs).toBe(1_000_000 + clock.now());
-    expect(called.length).toBeGreaterThanOrEqual(10_000 / 250);
+    expect(called.length).toBeGreaterThanOrEqual(
+      10_000 / RELEASE_LOAD.callerIntervalMs,
+    );
     expect(new Set(called.map(({ toolName }) => toolName))).toEqual(
       new Set([
         "search_legislation",
@@ -85,6 +88,86 @@ describe("release load", () => {
     );
     expect(queries.size).toBeGreaterThan(1);
     expect(clock.now()).toBeLessThan(10_000 + 2 * 250);
+  });
+
+  test.each([0, 20, 700])(
+    "paces calls taking %s ms below the transport budget",
+    async (callMs) => {
+      const clock = fakeClock();
+      const starts: number[] = [];
+      await runReleaseLoad({
+        decisionIds: ["a"],
+        now: clock.now,
+        wallNow: clock.now,
+        wait: async (ms) => clock.advance(ms),
+        durationMs: 60_000,
+        concurrency: 1,
+        call: async () => {
+          const previous = starts.at(-1);
+          if (previous !== undefined) {
+            expect(clock.now() - previous).toBeGreaterThanOrEqual(
+              RELEASE_LOAD.callerIntervalMs,
+            );
+          }
+          starts.push(clock.now());
+          clock.advance(callMs);
+          return "answered";
+        },
+      });
+      expect(starts.length).toBeGreaterThan(1);
+      expect(starts.length * RELEASE_LOAD.concurrency).toBeLessThan(600);
+      for (let index = 1; index < starts.length; index++) {
+        expect(
+          (starts.at(index) ?? 0) - (starts.at(index - 1) ?? 0),
+        ).toBeGreaterThanOrEqual(RELEASE_LOAD.callerIntervalMs);
+      }
+    },
+  );
+
+  test("a rejected call is sampled and every concurrent caller settles", async () => {
+    const clock = fakeClock();
+    const entered = Promise.withResolvers<undefined>();
+    const finish = Promise.withResolvers<undefined>();
+    let calls = 0;
+    let settled = false;
+    const load = runReleaseLoad({
+      decisionIds: ["a"],
+      now: clock.now,
+      wallNow: clock.now,
+      durationMs: 1,
+      concurrency: 2,
+      call: async () => {
+        calls += 1;
+        if (calls === 1) {
+          throw new TypeError("Transport unavailable");
+        }
+        entered.resolve(undefined);
+        await finish.promise;
+        clock.advance(10);
+        return "answered";
+      },
+    });
+    const observed = load.then(
+      (value) => {
+        settled = true;
+        return value;
+      },
+      () => {
+        settled = true;
+        return null;
+      },
+    );
+    await entered.promise;
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    finish.resolve(undefined);
+    const result = await observed;
+    expect(result?.samples.map(({ outcome }) => outcome).toSorted()).toEqual([
+      "answered",
+      "failed",
+    ]);
+    expect(result?.window?.endMs).toBe(10);
   });
 
   test("a round without a decision to read omits that tool", () => {

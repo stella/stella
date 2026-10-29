@@ -94,6 +94,8 @@ import {
   storedObservationHasDetail,
   storedObservationIsListingOnly,
 } from "@/api/lib/legal-search/partial-observation-sql";
+import { REMOVAL_RETRY_KINDS } from "@/api/lib/legal-search/removal-reconciliation-state";
+import type { RemovalCheckpoint } from "@/api/lib/legal-search/removal-reconciliation-state";
 import { documentFetchParked } from "@/api/lib/legal-search/sk-document-parking-sql";
 import { pendingDeferredDocumentSql } from "@/api/lib/legal-search/sk-document-pending-sql";
 
@@ -374,6 +376,8 @@ export const caseLawSources = p.pgTable(
     name: p.varchar({ length: 256 }).notNull(),
     enabled: p.boolean().default(true).notNull(),
     syncCursor: p.text("sync_cursor"),
+    /** Weekly publisher-removal checkpoint; null begins the next bounded cycle. */
+    removalCheckpoint: jsonb("removal_checkpoint").$type<RemovalCheckpoint>(),
     lastSyncAt: timestamptz("last_sync_at"),
     observationOrder: p
       .bigint("observation_order", { mode: "bigint" })
@@ -528,6 +532,47 @@ const parsedSourcePendingIndex = (t: ParsedSourceSchemaColumns) =>
     .index("case_law_decisions_parse_pending_idx")
     .on(t.id)
     .where(sql`${t.parsedSourceRawS3Key} IS DISTINCT FROM ${t.sourceRawS3Key}`);
+
+type PublishedCourtDateColumns = Parameters<
+  typeof publishedCaseLawDecisionFor
+>[0] & {
+  country: PgColumn;
+  court: PgColumn;
+  decisionDate: PgColumn;
+  id: PgColumn;
+};
+const publishedCourtDateIndex = (t: PublishedCourtDateColumns) =>
+  p
+    .index("case_law_decisions_country_court_date_published_idx")
+    .on(
+      t.country,
+      t.court,
+      sql`coalesce(${t.decisionDate}, '-infinity'::date)`,
+      t.id,
+    )
+    .where(publishedCaseLawDecisionFor(t));
+
+/**
+ * The browse walk with one language chosen. Without it a language is a filter
+ * on the country's walk, which skips every newer version in another language
+ * (a multilingual court publishes most languages weeks after the first), or a
+ * probe of `case_law_decisions_provision_scope_cursor_idx`, which holds no
+ * date, so the page sorts every version in that language. Language sits
+ * between country and the sort key, so a language's walk is its own index
+ * range, read in order.
+ */
+const publishedLanguageDateIndex = (
+  t: PublishedCourtDateColumns & { language: PgColumn },
+) =>
+  p
+    .index("case_law_decisions_country_language_date_published_idx")
+    .on(
+      t.country,
+      t.language,
+      sql`coalesce(${t.decisionDate}, '-infinity'::date)`,
+      t.id,
+    )
+    .where(publishedCaseLawDecisionFor(t));
 
 export const caseLawDecisions = p.pgTable(
   "case_law_decisions",
@@ -850,6 +895,9 @@ export const caseLawDecisions = p.pgTable(
         sql`coalesce(${t.decisionDate}, '-infinity'::date)`,
         t.id,
       ),
+    // The vocabulary's loose scan needs no heap publication filter. Keep the
+    // all-row twin for administrative country/court candidate reads.
+    publishedCourtDateIndex(t),
     // The same walk with no court chosen, which is how the browse page opens.
     // Court sits between country and the sort key above, so that index orders
     // a country's rows by court first and cannot serve this walk's ORDER BY;
@@ -860,6 +908,7 @@ export const caseLawDecisions = p.pgTable(
       .index("case_law_decisions_country_date_published_idx")
       .on(t.country, sql`coalesce(${t.decisionDate}, '-infinity'::date)`, t.id)
       .where(publishedCaseLawDecisionFor(t)),
+    publishedLanguageDateIndex(t),
     p
       .index("case_law_decisions_source_generation_cursor_idx")
       .on(t.sourceId, t.createdAt, t.id),
@@ -1401,6 +1450,13 @@ export const caseLawDecisionAliases = p.pgTable(
       sql`${t.retiredDecisionId} <> ${t.canonicalDecisionId}`,
     ),
     ...caseLawIngestionOnlyPolicies(),
+    // case_law_decision_reject_retired_uuid reads aliases during owner decision INSERT/UPDATE.
+    p.pgPolicy("case_law_decision_aliases_owner", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_decision_aliases'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_decision_aliases'::regclass)`,
+    }),
   ],
 );
 
@@ -1862,6 +1918,57 @@ export const caseLawReconciliationItems = p.pgTable(
     p.check(
       "case_law_reconciliation_items_parked_is_scheduled",
       sql`${t.status} <> ${RECONCILIATION_ITEM_STATUS.PARKED} OR ${t.nextAttemptAt} IS NOT NULL`,
+    ),
+    ...globalCaseLawPolicies(),
+  ],
+);
+
+/** Removal work is physically separate from every listing worker version. */
+export const caseLawRemovalReconciliationItems = p.pgTable(
+  "case_law_removal_reconciliation_items",
+  {
+    id: pUuid<"caseLawRemovalReconciliationItem">().primaryKey(),
+    sourceId: safeUuid<"caseLawSource">("source_id").notNull(),
+    decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
+    kind: p.varchar({ length: 32, enum: REMOVAL_RETRY_KINDS }).notNull(),
+    payload: jsonb().$type<unknown>().notNull(),
+    attempts: p.integer().default(0).notNull(),
+    nextAttemptAt: timestamptz("next_attempt_at").notNull(),
+    lastError: p.text("last_error").notNull(),
+    firstSeenAt: timestamptz("first_seen_at").defaultNow().notNull(),
+    lastAttemptAt: timestamptz("last_attempt_at").notNull(),
+  },
+  (t) => [
+    p
+      .foreignKey({
+        columns: [t.sourceId],
+        foreignColumns: [caseLawSources.id],
+        name: "case_law_removal_items_source_fk",
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        columns: [t.decisionId],
+        foreignColumns: [caseLawDecisions.id],
+        name: "case_law_removal_items_decision_fk",
+      })
+      .onDelete("cascade"),
+    p
+      .uniqueIndex("case_law_removal_items_source_decision_idx")
+      .on(t.sourceId, t.decisionId),
+    p
+      .index("case_law_removal_items_due_idx")
+      .on(t.sourceId, t.kind, t.nextAttemptAt, t.id),
+    p.check(
+      "case_law_removal_items_kind_values",
+      sql`${t.kind} IN (${sql.join(
+        REMOVAL_RETRY_KINDS.map((kind) => sql`${kind}`),
+        sql`, `,
+      )})`,
+    ),
+    p.check(
+      "case_law_removal_items_attempts_nonnegative",
+      sql`${t.attempts} >= 0`,
     ),
     ...globalCaseLawPolicies(),
   ],
@@ -2471,6 +2578,37 @@ export const caseLawStatuteCitationCountState = p.pgTable(
  * Row security is forced (migration `20260927230000_case_law_sitemap_shards`)
  * so the owner-run refresh needs a policy; table privileges decide access.
  */
+const removalSnapshotPolicies = () => [
+  p.pgPolicy("case_law_removal_ingestion_select", {
+    for: "select",
+    to: "stella_ingestion",
+    using: sql`true`,
+  }),
+  p.pgPolicy("case_law_removal_ingestion_delete", {
+    for: "delete",
+    to: "stella_ingestion",
+    using: sql`true`,
+  }),
+];
+
+/** Persistent country epochs fence counts staged after a corpus removal. */
+export const caseLawSitemapCountryGenerations = p.pgTable(
+  "case_law_sitemap_country_generations",
+  {
+    country: p.varchar({ length: 3 }).primaryKey(),
+    generation: p.bigint({ mode: "bigint" }).default(0n).notNull(),
+  },
+  () => [
+    p.pgPolicy("case_law_sitemap_generation_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_sitemap_country_generations'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_sitemap_country_generations'::regclass)`,
+    }),
+    ...caseLawIngestionOnlyPolicies(),
+  ],
+);
+
 export const caseLawSitemapShards = p.pgTable(
   "case_law_sitemap_shards",
   {
@@ -2487,6 +2625,7 @@ export const caseLawSitemapShards = p.pgTable(
       columns: [t.country, t.year, t.month, t.bucket],
     }),
     p.check("case_law_sitemap_shards_total_positive", sql`${t.total} > 0`),
+    ...removalSnapshotPolicies(),
     p.pgPolicy("case_law_sitemap_shard_owner_access", {
       for: "all",
       to: "public",
@@ -2514,6 +2653,7 @@ export const caseLawSitemapShardCounts = p.pgTable(
       "case_law_sitemap_shard_counts_pages_positive",
       sql`${t.pages} > 0`,
     ),
+    ...removalSnapshotPolicies(),
     p.pgPolicy("case_law_sitemap_shard_count_owner_access", {
       for: "all",
       to: "public",
@@ -2554,6 +2694,7 @@ export const caseLawBrowseFacetCounts = p.pgTable(
       "case_law_browse_facet_counts_kind_valid",
       sql`${t.kind} IN (${sql.join(CASE_LAW_BROWSE_FACET_KIND_SQL_VALUES, sql`, `)})`,
     ),
+    ...removalSnapshotPolicies(),
     p.pgPolicy("case_law_browse_facet_count_owner_access", {
       for: "all",
       to: "public",
@@ -2592,6 +2733,7 @@ export const caseLawSourceArrivals = p.pgTable(
       "case_law_source_arrivals_added_nonnegative",
       sql`${t.addedLastWeek} >= 0`,
     ),
+    ...removalSnapshotPolicies(),
     p.pgPolicy("case_law_source_arrival_owner_access", {
       for: "all",
       to: "public",
@@ -2607,6 +2749,31 @@ export const caseLawSourceArrivals = p.pgTable(
         WHERE arrival_source.id = ${t.sourceId}
           AND ${redistributableCaseLawSourceFor(sql`arrival_source.descriptor`)}
       )`,
+    }),
+  ],
+);
+
+/** The complete coverage answer, replaced atomically by the governed refresh. */
+export const caseLawCoverageSummaries = p.pgTable(
+  "case_law_coverage_summaries",
+  {
+    key: p.text().primaryKey(),
+    sourcePolicy: p.text("source_policy").notNull(),
+    answer: jsonb().notNull(),
+    generatedAt: timestamptz("generated_at").notNull(),
+  },
+  (t) => [
+    p.check("case_law_coverage_summaries_singleton", sql`${t.key} = 'current'`),
+    p.check(
+      "case_law_coverage_summaries_policy_array",
+      sql`jsonb_typeof(${t.sourcePolicy}::text::jsonb) = 'array'`,
+    ),
+    ...removalSnapshotPolicies(),
+    p.pgPolicy("case_law_coverage_summary_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_coverage_summaries'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_coverage_summaries'::regclass)`,
     }),
   ],
 );

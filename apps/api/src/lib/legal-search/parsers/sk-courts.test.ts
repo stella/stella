@@ -7,6 +7,9 @@
 
 import { PDF, StandardFonts } from "@libpdf/core";
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
+
+import { documentAstSchema } from "@stll/legal-ast/document-ast";
 
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { markupResidueIn } from "@/api/lib/legal-search/parsers/markup-residue";
@@ -76,6 +79,37 @@ describe("unreadable PDF failures", () => {
 });
 
 describe("PDF source line retention", () => {
+  test("keeps anonymized PDF segments and printed placeholders in the AST", () => {
+    for (const placeholder of ["anonymizované", "[anonymizované]", "J. N."]) {
+      const text = `Sťažovateľ ${placeholder} podal návrh.`;
+      const blocks = buildSkDecisionPdfBlocks({
+        lines: [
+          {
+            text,
+            segments: [
+              { text: "Sťažovateľ" },
+              { text: placeholder, anonymized: true },
+              { text: "podal návrh." },
+            ],
+            bold: false,
+            fontSize: 10,
+            pageIndex: 0,
+          },
+        ],
+        metadata: { court: "Court", caseNumber: "1/2026", ecli: undefined },
+      });
+
+      expect(blocks.map((block) => block.plainText).join("\n")).toBe(text);
+      expect(blocks).toHaveLength(1);
+      expect(blocks.at(0)).toMatchObject({
+        type: "paragraph",
+        inlines: expect.arrayContaining([
+          { type: "text", text: placeholder, anonymized: true },
+        ]),
+      });
+    }
+  });
+
   const blocksFrom = (texts: string[]) =>
     buildSkDecisionPdfBlocks({
       lines: texts.map((text) => ({
@@ -238,6 +272,90 @@ test("bold Roman verdict items keep their holding role and reasoning titles beco
   expect(
     documentAst.blocks.find((block) => block.plainText === "XII. Argumentacia"),
   ).toMatchObject({ type: "heading", level: 3 });
+});
+
+describe("reader-compatible Slovak heading identities", () => {
+  const build = (texts: string[]) => {
+    const blocks = buildSkDecisionPdfBlocks({
+      lines: texts.map((text) => ({
+        text,
+        segments: [{ text, bold: true }],
+        bold: true,
+        fontSize: text === text.toUpperCase() ? 20 : 10,
+        pageIndex: 0,
+      })),
+      metadata: { court: "Court", caseNumber: "1/2026", ecli: undefined },
+    });
+    return {
+      version: 1,
+      source: {
+        system: "test",
+        documentId: "synthetic",
+        webUrl: "",
+        printUrl: "",
+      },
+      metadata: {
+        caseNumber: "1/2026",
+        ecli: null,
+        court: "Court",
+        decisionDate: null,
+        decisionType: null,
+        keywords: [],
+        statutes: [],
+      },
+      blocks,
+    };
+  };
+
+  test("consecutive bold title lines form one reader heading", () => {
+    const ast = build(["ROZSUDOK V MENE", "SLOVENSKEJ REPUBLIKY", "rozhodol:"]);
+    expect(
+      ast.blocks.filter(
+        (block) => block.type === "heading" && block.role === "decision-title",
+      ),
+    ).toMatchObject([
+      {
+        type: "heading",
+        anchorId: "h-title",
+        plainText: "ROZSUDOK V MENE SLOVENSKEJ REPUBLIKY",
+      },
+    ]);
+    expect(v.safeParse(documentAstSchema, ast).success).toBe(true);
+  });
+
+  test("repeated fixed section anchors remain unique for the reader", () => {
+    const ast = build([
+      "ROZSUDOK",
+      "Preamble",
+      "UZNESENIE",
+      "rozhodol:",
+      "Holding",
+      "rozhodol:",
+      "Odôvodnenie:",
+      "Reasoning",
+      "Odôvodnenie:",
+      "Poučenie:",
+      "Instruction",
+      "Poučenie:",
+    ]);
+    const anchors = ast.blocks.map((block) => block.anchorId);
+    expect(new Set(anchors).size).toBe(anchors.length);
+    expect(
+      ast.blocks
+        .filter((block) => block.type === "heading")
+        .map((block) => block.anchorId),
+    ).toEqual([
+      "h-title",
+      "h-title-3",
+      "h-holding",
+      "h-holding-6",
+      "h-reasoning",
+      "h-reasoning-9",
+      "h-instruction",
+      "h-instruction-12",
+    ]);
+    expect(v.safeParse(documentAstSchema, ast).success).toBe(true);
+  });
 });
 
 describe("paragraphs across the PDF's line wraps", () => {

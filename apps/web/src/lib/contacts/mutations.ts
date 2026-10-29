@@ -3,6 +3,7 @@ import { useTranslations } from "use-intl";
 
 import type { ContactType } from "@stll/api-contract";
 
+import { getTranslator } from "@/i18n/translator";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { contactsKeys } from "@/lib/contacts/queries";
@@ -104,6 +105,7 @@ type CreateContactVars = {
 
 export const useCreateContact = () => {
   const analytics = useAnalytics();
+  const t = useTranslations();
 
   return useMutation({
     mutationFn: async (vars: CreateContactVars) => {
@@ -116,6 +118,7 @@ export const useCreateContact = () => {
         fingerprintKey: "useCreateContact:failure",
         scope: { type: "handler", handlerId: "useCreateContact:failure" },
       });
+      notifyUserError(error, t("errors.actionFailed"));
     },
   });
 };
@@ -224,6 +227,7 @@ export const useDeleteContact = () => {
         fingerprintKey: "useDeleteContact:failure",
         scope: { type: "handler", handlerId: "useDeleteContact:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
