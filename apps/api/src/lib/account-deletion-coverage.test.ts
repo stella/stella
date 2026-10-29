@@ -11,7 +11,7 @@ import {
   ACCOUNT_DELETION_MANUAL_TABLES,
   ACCOUNT_DELETION_NON_FK_OWNERSHIP,
 } from "@/api/lib/account-deletion-steps";
-import { RETAINED_USER_ATTRIBUTION_COLUMNS } from "@/api/lib/user-attribution-retention";
+import { RETAINED_USER_ATTRIBUTION_COLUMNS } from "@/api/tests/helpers/user-attribution-retention";
 
 // ── Account-deletion FK coverage guard ──────────────────────────────────
 //

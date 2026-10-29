@@ -1358,7 +1358,7 @@ export const invoiceSends = p.pgTable(
     tokenHash: p.varchar("token_hash", { length: 64 }).notNull(),
     expiresAt: timestamptz("expires_at")
       .notNull()
-      .default(sql`now() + interval '60 days'`),
+      .default(sql`(now() + '60 days'::interval)`),
     deliveryStatus: p
       .text("delivery_status", { enum: INVOICE_SEND_DELIVERY_STATUSES })
       .notNull()
