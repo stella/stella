@@ -170,6 +170,9 @@ describe("resolveStellaSandboxRun", () => {
       `mcp_servers.${baseRunInput.mcp.serverName}.default_tools_approval_mode`,
       '"approve"',
     ]);
+    expect(config.config["shell_environment_policy.exclude"]).toBe(
+      '["STELLA_HARNESS_KEY"]',
+    );
     expect(JSON.stringify(config.config)).not.toContain(baseRunInput.mcp.token);
   });
 

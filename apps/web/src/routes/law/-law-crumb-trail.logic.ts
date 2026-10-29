@@ -1,6 +1,6 @@
 import { linkOptions } from "@tanstack/react-router";
 
-import { statuteActLabel } from "@stll/api-contract/statute-act-number";
+import { statuteDisplayLabel } from "@stll/api-contract/statute-display-label";
 import { toStatuteCountrySegment } from "@stll/api-contract/statute-route";
 
 import { yearDateRange } from "@/features/case-law/case-law-index-search.logic";
@@ -8,10 +8,12 @@ import { decisionYear } from "@/features/case-law/citation-format";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import type { PublicStatute } from "@/features/statutes/queries/statutes";
 import { statuteDocumentIdentity } from "@/lib/legal/statute-act-number";
+import { hasOtherCaseFileDocuments } from "@/routes/law/-components/public-decision-case-file.logic";
 
 export const statuteLawCrumbTrailOf = ({
   eli,
   title,
+  documentType,
   country,
   status,
   versionValidFrom,
@@ -26,9 +28,14 @@ export const statuteLawCrumbTrailOf = ({
   | "versionValidFrom"
   | "expressionKind"
   | "windowDisposition"
->) => {
+> & { documentType?: string | null }) => {
   const identity = statuteDocumentIdentity(eli);
-  const label = statuteActLabel({ eli, title });
+  const label = statuteDisplayLabel({
+    eli,
+    title,
+    country,
+    documentType: documentType ?? null,
+  });
   const year = identity.year === null ? null : Number(identity.year);
   return {
     kind: "statute",
@@ -36,9 +43,9 @@ export const statuteLawCrumbTrailOf = ({
     validFrom: versionValidFrom,
     expression: { expressionKind, windowDisposition },
     identity,
-    citation: label.number,
-    shortTitle: label.name,
-    fullTitle: title,
+    citation: label.identity,
+    shortTitle: label.subject,
+    fullTitle: label.text,
     yearLink:
       year === null
         ? null
@@ -55,20 +62,31 @@ export const statuteLawCrumbTrailOf = ({
 
 type DecisionLawCrumbTrailInput = Pick<
   PublicCaseLawDecision,
-  "court" | "courtAbbreviation" | "caseNumber" | "decisionDate" | "metadata"
+  | "caseFile"
+  | "court"
+  | "courtAbbreviation"
+  | "caseNumber"
+  | "decisionDate"
+  | "id"
+  | "languageGroupKey"
+  | "metadata"
 > & {
   courtTier?: PublicCaseLawDecision["courtTier"] | undefined;
 };
 
 export const decisionLawCrumbTrailOf = ({
+  caseFile,
   court,
   courtAbbreviation,
   courtTier,
   caseNumber,
   decisionDate,
+  id,
+  languageGroupKey,
   metadata,
 }: DecisionLawCrumbTrailInput) => {
   const year = decisionYear(decisionDate);
+  const current = { id, languageGroupKey };
   return {
     kind: "decision",
     court: {
@@ -90,6 +108,11 @@ export const decisionLawCrumbTrailOf = ({
             }),
           },
     caseNumber,
+    // The case number's document list: offered only when it holds somewhere
+    // to go besides the open decision.
+    caseFile: hasOtherCaseFileDocuments(caseFile, current)
+      ? { ...caseFile, current }
+      : null,
     legalArea:
       typeof metadata["legalArea"] === "string" ? metadata["legalArea"] : null,
   } as const;

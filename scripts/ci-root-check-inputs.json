@@ -446,6 +446,8 @@
       "scripts/check-desktop-release-policy.sh",
       "scripts/check-published-versions*",
       "scripts/check-npm-publish-lag.ts",
+      "scripts/promoted-release-policy.ts",
+      "scripts/changeset-entry.ts",
       ".github/workflows/journey-canary.yml",
       ".github/workflows/scheduled-run-alerts.yml",
       ".github/workflows/publish-npm.yml"
@@ -457,6 +459,14 @@
       "apps/web/e2e/staging/global-setup.ts",
       "docs/changelog/**",
       "VERSION"
+    ],
+    "Test staging proof readiness": [
+      "@stll/portable-path",
+      "apps/api/src/deploy-env-contract.ts",
+      "scripts/**",
+      ".github/workflows/**",
+      ".github/actions/setup-playwright/**",
+      ".github/actions/promote-dispatch/**"
     ],
     "Generated files manifest guard": ["**"],
     "Playwright config scope": ["**"],
@@ -503,6 +513,7 @@
     "Test promoted release resolution": [
       "@stll/collation",
       "scripts/resolve-promoted-release*",
+      "scripts/promoted-release-policy.ts",
       "scripts/offline-network-preload.ts",
       "apps/landing/src/data/changelog-release-dates.json",
       ".github/workflows/ci.yml"
@@ -710,7 +721,8 @@
       "apps/desktop/src/shared/rpc.gen.ts",
       "packages/api-contract/src/desktop-edit-file-types.ts",
       "scripts/check-bridge-version.sh"
-    ]
+    ],
+    "Test depth repository scripts": ["**"]
   },
   "ci-checks-policy": {
     "Resolve static check receipts": ["**"],

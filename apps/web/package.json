@@ -98,6 +98,7 @@
     "@stll/portable-path": "workspace:*",
     "@stll/regex-set": "catalog:",
     "@stll/regex-set-wasm": "catalog:",
+    "@stll/scan-engine": "workspace:*",
     "@stll/sha256": "workspace:*",
     "@stll/skills": "workspace:*",
     "@stll/ssr-kit": "workspace:^",
@@ -174,6 +175,7 @@
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
     "streamdown": "^2.7.0",
+    "tailwindcss": "catalog:",
     "tw-animate-css": "1.4.0",
     "uqr": "^0.1.3",
     "use-debounce": "^10.1.1",
@@ -212,7 +214,6 @@
     "happy-dom": "21.0.4",
     "oxc-transform-react": "catalog:",
     "rollup-plugin-visualizer": "^7.1.1",
-    "tailwindcss": "catalog:",
     "unified": "^11.0.5",
     "vite": "catalog:"
   },

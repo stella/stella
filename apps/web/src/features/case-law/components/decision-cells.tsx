@@ -15,6 +15,7 @@ import {
   DECISION_HEADNOTE_KEYWORDS,
   type DecisionHeadnotePreview,
   decisionHeadnoteText,
+  type DecisionTextAvailability,
   TEXT_FIELD_TYPE,
   type TextField,
 } from "@stll/api-contract/case-law-text-field";
@@ -36,6 +37,7 @@ import { cn } from "@stll/ui/utils";
 import { HighlightedText } from "@/components/workspaces/table/find-highlight";
 import { parseDecisionDate } from "@/features/case-law/citation-format";
 import { languageLabel } from "@/features/case-law/components/decision-language-select";
+import { DecisionTextAvailabilityMarker } from "@/features/case-law/components/decision-text-availability";
 import { preferredDecisionTarget } from "@/features/case-law/decision-cell-target.logic";
 import { decisionClampClassName } from "@/features/case-law/decision-columns.logic";
 import type {
@@ -67,6 +69,8 @@ const EMPTY_VALUE = "—";
 export type Decision = {
   /** Search match semantics; absent on browse rows. */
   match?: DecisionSearchMatch;
+  /** Search hits report text separately from publisher summaries. */
+  textAvailability?: DecisionTextAvailability;
   id: string;
   caseNumber: string;
   /** What `caseNumber` is: a docket, or a reporter or neutral citation. */
@@ -179,6 +183,11 @@ export const CaseNumberCell = ({
             <HighlightedText columnId="caseNumber" text={caseNumber} />
           </BidiText>
         </DecisionLink>
+        {decision.textAvailability !== undefined && (
+          <DecisionTextAvailabilityMarker
+            availability={decision.textAvailability}
+          />
+        )}
         {decision.match === "some_terms" && (
           <span className="text-muted-foreground text-xs">
             {t("caseLaw.searchWarnings.partialMatch")}

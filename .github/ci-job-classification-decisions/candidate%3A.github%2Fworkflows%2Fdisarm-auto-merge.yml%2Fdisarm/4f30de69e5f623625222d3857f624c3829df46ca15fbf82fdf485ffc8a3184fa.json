@@ -1,0 +1,5 @@
+{
+  "kind": "priority",
+  "qualifier": "Disarms auto-merge on pull requests; holds contents write.",
+  "reviewedDigest": "4f30de69e5f623625222d3857f624c3829df46ca15fbf82fdf485ffc8a3184fa"
+}

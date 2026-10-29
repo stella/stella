@@ -14,6 +14,10 @@ import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { ChatSendMode } from "@stll/anonymize-chat";
+import type {
+  ConnectConnectorDecision,
+  ConnectConnectorOutput,
+} from "@stll/api-contract/chat-connector";
 import { requiresPerCallChatApproval } from "@stll/api-contract/chat-secret";
 import type { RequestSecretOutput } from "@stll/api-contract/chat-secret";
 import type { ChatToolGrantScope } from "@stll/api-contract/chat-tool-grants";
@@ -80,6 +84,7 @@ import { openEntityInInspector } from "@/components/chat/entity-open";
 import type { CreateDocumentDestination } from "@/components/chat/needs-matter-card";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
+import { queryView } from "@/lib/query-view.logic";
 import "@/components/chat/create-document-draft-inspector";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { entityReferenceHref } from "@/components/references/reference.logic";
@@ -133,7 +138,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
 import type { ChatTimingSurface } from "@/lib/analytics/types";
-import { api } from "@/lib/api";
+import { api, chatConnectorReceipt } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import type {
   ChatEditApplyMode,
@@ -158,7 +163,7 @@ import {
 } from "@/lib/knowledge/playbook-draft-view";
 import { knowledgeKeys, playbookDetailOptions } from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { downloadFile } from "@/lib/utils";
 import { createUuid } from "@/lib/uuid";
 import {
@@ -351,7 +356,7 @@ export const useChatSession = ({
       userId,
     }),
   );
-  const chatToolGrantsView = useQueryView(chatToolGrantsQuery);
+  const chatToolGrantsView = queryView(chatToolGrantsQuery);
   useQueryViewError(chatToolGrantsView, "useChatSession:query");
   const storedChatToolGrants =
     chatToolGrantsView.type === "items"
@@ -1029,6 +1034,30 @@ export const useChatSession = ({
     },
     [addToolResult],
   );
+  // Same two steps as private input: the server confirms the connection and
+  // returns the receipt, then the chat continues with it.
+  const handleConnectConnector = useCallback(
+    async (
+      toolCallId: string,
+      decision: ConnectConnectorDecision,
+    ): Promise<ConnectConnectorOutput> =>
+      chatConnectorReceipt.submit({
+        threadId: toSafeId<"chatThread">(conversationId),
+        toolCallId,
+        decision,
+      }),
+    [conversationId],
+  );
+  const continueConnectConnector = useCallback(
+    async (toolCallId: string, receipt: ConnectConnectorOutput) => {
+      await addToolResult({
+        tool: "connect_connector",
+        toolCallId,
+        output: receipt,
+      });
+    },
+    [addToolResult],
+  );
   const resolveSecretTarget = useCallback(
     async (
       connectorSlug: string,
@@ -1142,7 +1171,7 @@ export const useChatSession = ({
     [addToolResult, getSendMode, messages, setMessages],
   );
 
-  const createDocumentMattersView = useQueryView(
+  const createDocumentMattersView = queryView(
     useQuery({
       ...workspacesNavigationOptions({ organizationId, userId }),
       select: (navigation) =>
@@ -1766,6 +1795,8 @@ export const useChatSession = ({
     handleAskUserSubmit,
     handleRequestSecret,
     continueRequestSecret,
+    handleConnectConnector,
+    continueConnectConnector,
     resolveSecretTarget,
     secretAvailabilityKey: conversationId,
     handleAskUserEditAndRerun,

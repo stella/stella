@@ -281,6 +281,7 @@ export const legislationDocuments = p.pgTable(
       .default(0)
       .notNull(),
     citationCount: p.integer("citation_count").default(0).notNull(),
+    // Retained until the next schema release; remove with its case-law counterpart.
     citationAuthorityComputedAt: timestamptz("citation_authority_computed_at"),
     textS3Key: p.varchar("text_s3_key", { length: 512 }),
     normalizedS3Key: p.varchar("normalized_s3_key", { length: 512 }),
