@@ -119,7 +119,11 @@ export const DECISION_DOCKET_FILING_YEAR_FIXTURES: readonly FilingYearFixture[] 
           ...[1632, 2406].map((zero) => ({
             jurisdiction,
             caseNumber: base.replace(/[0-9]/gu, (digit) =>
-              String.fromCodePoint(zero + Number(digit)),
+              String.fromCodePoint(
+                zero +
+                  (digit.codePointAt(0) ?? panic("Missing docket digit")) -
+                  48,
+              ),
             ),
             expected: unparseable,
           })),
