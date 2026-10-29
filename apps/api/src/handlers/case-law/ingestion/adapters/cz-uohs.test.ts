@@ -25,12 +25,13 @@ import {
 } from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
 import { publishedCaseLawDecisionIndexPredicateSql } from "@/api/lib/case-law/published-decisions-sql";
 import { savePdfRewrite } from "@/api/lib/files/pdf-signatures";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
-const originalFetch = globalThis.fetch;
+const testFetchState = createTestFetch();
 
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
 });
 
 const records = async () => parseCzUohsListing(CZ_UOHS_SYNTHETIC_LISTING);
@@ -75,8 +76,8 @@ describe("ÚOHS JSON-LD", () => {
   });
 
   test("keeps a decision from an unknown department with no collection", async () => {
-    globalThis.fetch = asFetchMock(
-      async () => new Response("unavailable", { status: 500 }),
+    testFetchState.set(
+      asFetchMock(async () => new Response("unavailable", { status: 500 })),
     );
     const unknown = (await records())[3]!;
     const decision = await buildCzUohsDecision(unknown);
@@ -89,7 +90,7 @@ describe("ÚOHS JSON-LD", () => {
 
   test("an unchanged decision keeps its fingerprint across reads", async () => {
     const bytes = czUohsSyntheticPdf();
-    globalThis.fetch = asFetchMock(async () => new Response(bytes));
+    testFetchState.set(asFetchMock(async () => new Response(bytes)));
     const record = (await records())[0]!;
     const first = await buildCzUohsDecision(record);
     const second = await buildCzUohsDecision(record);
@@ -108,7 +109,7 @@ describe("ÚOHS JSON-LD", () => {
           new URL(`__fixtures__/${fixture}`, import.meta.url),
         ).arrayBuffer(),
       );
-      globalThis.fetch = asFetchMock(async () => new Response(bytes));
+      testFetchState.set(asFetchMock(async () => new Response(bytes)));
       const decision = await buildCzUohsDecision((await records())[0]!);
       expect(decision.decisionDate).toBe(issued);
       expect(decision.metadata).toMatchObject({
@@ -119,8 +120,8 @@ describe("ÚOHS JSON-LD", () => {
   );
 
   test("a document without a letterhead date marks the date as not published", async () => {
-    globalThis.fetch = asFetchMock(
-      async () => new Response(czUohsSyntheticPdf()),
+    testFetchState.set(
+      asFetchMock(async () => new Response(czUohsSyntheticPdf())),
     );
     const decision = await buildCzUohsDecision((await records())[0]!);
     expect(decision.fulltext).toContain("Fiktivni rozhodnuti");
@@ -350,8 +351,8 @@ describe("ÚOHS JSON-LD", () => {
   });
 
   test("the date of legal force is not the decision date", async () => {
-    globalThis.fetch = asFetchMock(
-      async () => new Response("unavailable", { status: 500 }),
+    testFetchState.set(
+      asFetchMock(async () => new Response("unavailable", { status: 500 })),
     );
     const record = (await records())[0]!;
     const decision = await buildCzUohsDecision(record);
@@ -370,9 +371,13 @@ describe("ÚOHS JSON-LD", () => {
 
   test("fetches the PDF and retains both raw responses with provenance", async () => {
     const bytes = czUohsSyntheticPdf();
-    globalThis.fetch = asFetchMock(
-      async () =>
-        new Response(bytes, { headers: { "Content-Type": "application/pdf" } }),
+    testFetchState.set(
+      asFetchMock(
+        async () =>
+          new Response(bytes, {
+            headers: { "Content-Type": "application/pdf" },
+          }),
+      ),
     );
     const decision = await buildCzUohsDecision((await records())[0]!);
     expect(decision.fulltext).toContain("Fiktivni rozhodnuti");
@@ -402,7 +407,7 @@ describe("ÚOHS JSON-LD", () => {
 
   test("keeps PDF bytes when text extraction fails", async () => {
     const bytes = new Uint8Array([0x25, 0x50, 0x44, 0x46]);
-    globalThis.fetch = asFetchMock(async () => new Response(bytes));
+    testFetchState.set(asFetchMock(async () => new Response(bytes)));
     const decision = await buildCzUohsDecision((await records())[0]!);
     expect(decision.sourceRawObjects?.["document"]?.bytes).toEqual(bytes);
     expect(decision.metadata["documentExtraction"]).toEqual(
@@ -411,8 +416,8 @@ describe("ÚOHS JSON-LD", () => {
   });
 
   test("keeps an unreadable PDF as typed text absence and continues", async () => {
-    globalThis.fetch = asFetchMock(
-      async () => new Response("unavailable", { status: 500 }),
+    testFetchState.set(
+      asFetchMock(async () => new Response("unavailable", { status: 500 })),
     );
     const decision = await buildCzUohsDecision((await records())[0]!);
     expect(decision.textFields.summary).toEqual({
@@ -443,8 +448,8 @@ describe("ÚOHS JSON-LD", () => {
     const invalid = new Uint8Array([0x25, 0x50, 0x44, 0x46]);
     const valid = czUohsSyntheticPdf();
     let request = 0;
-    globalThis.fetch = asFetchMock(
-      async () => new Response(request++ === 0 ? invalid : valid),
+    testFetchState.set(
+      asFetchMock(async () => new Response(request++ === 0 ? invalid : valid)),
     );
     const decision = await buildCzUohsDecision(record);
     expect(decision.fulltext).toContain("Fiktivni rozhodnuti");
@@ -480,10 +485,12 @@ describe("ÚOHS JSON-LD", () => {
       })),
     };
     let listingRequests = 0;
-    globalThis.fetch = asFetchMock(async () => {
-      listingRequests += 1;
-      return Response.json(listing);
-    });
+    testFetchState.set(
+      asFetchMock(async () => {
+        listingRequests += 1;
+        return Response.json(listing);
+      }),
+    );
     const first = (await czUohsAdapter.fetchPage(null, {}, undefined)).unwrap();
     const second = (
       await czUohsAdapter.fetchPage(first.nextCursor, {}, undefined)
@@ -503,8 +510,10 @@ describe("ÚOHS JSON-LD", () => {
       spisová_značka: `R${id}/2026/VZ`,
       dokument: [],
     });
-    globalThis.fetch = asFetchMock(async () =>
-      Response.json({ rozhodnutí: [make("01"), make("02"), make("03")] }),
+    testFetchState.set(
+      asFetchMock(async () =>
+        Response.json({ rozhodnutí: [make("01"), make("02"), make("03")] }),
+      ),
     );
     const parked = encodeCzUohsCursor({
       version: 1,
@@ -521,10 +530,12 @@ describe("ÚOHS JSON-LD", () => {
 
   test("refuses a cursor it did not write instead of restarting the walk", async () => {
     let requests = 0;
-    globalThis.fetch = asFetchMock(async () => {
-      requests += 1;
-      return Response.json({ rozhodnutí: [] });
-    });
+    testFetchState.set(
+      asFetchMock(async () => {
+        requests += 1;
+        return Response.json({ rozhodnutí: [] });
+      }),
+    );
     const page = await czUohsAdapter.fetchPage("40", {}, undefined);
     expect(Result.isError(page)).toBe(true);
     expect(requests).toBe(0);
@@ -544,7 +555,7 @@ describe("ÚOHS JSON-LD", () => {
         make(String(index * 2).padStart(2, "0")),
       ),
     };
-    globalThis.fetch = asFetchMock(async () => Response.json(listing));
+    testFetchState.set(asFetchMock(async () => Response.json(listing)));
     const first = (await czUohsAdapter.fetchPage(null, {}, undefined)).unwrap();
     listing = { rozhodnutí: [...listing.rozhodnutí, make("39")] };
     // A process restart drops the bulk snapshot; the durable key still resumes
@@ -574,7 +585,7 @@ describe("ÚOHS JSON-LD", () => {
       odbor: [url],
       dokument: [],
     }));
-    globalThis.fetch = asFetchMock(async () => Response.json({ rozhodnutí }));
+    testFetchState.set(asFetchMock(async () => Response.json({ rozhodnutí })));
     const page = await czUohsAdapter.reconciliation.listSlicePage({
       slice: "all",
       page: 0,
@@ -591,8 +602,8 @@ describe("ÚOHS JSON-LD", () => {
   });
 
   test("returns a tagged listing error instead of throwing", async () => {
-    globalThis.fetch = asFetchMock(
-      async () => new Response("unavailable", { status: 503 }),
+    testFetchState.set(
+      asFetchMock(async () => new Response("unavailable", { status: 503 })),
     );
     const outcome = await czUohsAdapter.fetchPage(null, {}, undefined);
     expect(outcome.isErr()).toBe(true);

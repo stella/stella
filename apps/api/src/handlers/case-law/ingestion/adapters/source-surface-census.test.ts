@@ -79,14 +79,15 @@ import {
   skUsFixture,
   ukFclFixture,
 } from "@/api/tests/helpers/case-law-enrolled-fixtures";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 
 import { courtListenerConformanceFixture } from "./courtlistener/conformance-fixture";
 import { COURTLISTENER_IMPORT_KEY } from "./courtlistener/map";
 
-const originalFetch = globalThis.fetch;
+const testFetchState = createTestFetch();
 
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
 });
 
 // ── Where an envelope can be read back from ──────────────

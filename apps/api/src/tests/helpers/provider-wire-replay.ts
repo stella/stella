@@ -13,6 +13,7 @@ import type {
   ProviderWireExchange,
 } from "@/api/tests/helpers/provider-wire-cassette";
 import type { ReplayGate } from "@/api/tests/helpers/provider-wire-gate";
+import { installTestFetch } from "@/api/tests/helpers/test-fetch";
 
 /** A request the replay would not answer. */
 class ProviderWireRefusal extends TaggedError("ProviderWireRefusal")<{
@@ -600,12 +601,10 @@ export const installProviderWireReplay = ({
   const installedFetch = Object.assign(replayFetch, {
     preconnect: () => undefined,
   });
-  globalThis.fetch = installedFetch;
+  const fetchInstallation = installTestFetch(installedFetch);
 
   return {
-    install: () => {
-      globalThis.fetch = installedFetch;
-    },
+    install: fetchInstallation.install,
     /** Queues `cassette`'s exchanges, replacing anything still queued. */
     serve: (
       cassette: Pick<ProviderWireCassette, "exchanges" | "model">,
@@ -685,11 +684,7 @@ export const installProviderWireReplay = ({
       requests = [];
       return findings;
     },
-    restore: () => {
-      if (globalThis.fetch === installedFetch) {
-        globalThis.fetch = originalFetch;
-      }
-    },
+    restore: fetchInstallation.restore,
   };
 };
 

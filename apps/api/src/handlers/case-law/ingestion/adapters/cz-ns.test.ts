@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
+import { afterEach, describe, expect, mock, test } from "bun:test";
 
 import {
   buildCzNsDecision,
@@ -13,10 +13,16 @@ import {
   decodeSourceRawEnvelope,
   type StoredRawReparseInput,
 } from "@/api/lib/legal-search/ingestion-types";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
+const testFetchState = createTestFetch();
+
 describe("Domino listings distinguish publisher refusal from an empty view", () => {
-  afterEach(() => mock.restore());
+  afterEach(() => {
+    testFetchState.restore();
+    mock.restore();
+  });
 
   for (const body of [
     "<html><form><input type='password'></form></html>",
@@ -27,8 +33,8 @@ describe("Domino listings distinguish publisher refusal from an empty view", () 
     "",
   ]) {
     test(`rejects an unreadable page ${JSON.stringify(body)}`, async () => {
-      spyOn(globalThis, "fetch").mockImplementation(
-        asFetchMock(async () => new Response(body)),
+      testFetchState.set(
+        asFetchMock(mock(asFetchMock(async () => new Response(body)))),
       );
       const page = await czNsAdapter.fetchPage("1", {});
       expect(page.isErr()).toBe(true);
@@ -45,27 +51,34 @@ describe("Domino listings distinguish publisher refusal from an empty view", () 
     { entrydata: [{ text: 42 }] },
   ]) {
     test(`isolates malformed member ${JSON.stringify(member)} from the listing envelope`, async () => {
-      spyOn(globalThis, "fetch").mockImplementation(
+      testFetchState.set(
         asFetchMock(
-          async (url: string | URL | Request) =>
-            new Response(
-              (url instanceof Request ? url.url : url.toString()).includes(
-                "ReadViewEntries",
-              )
-                ? JSON.stringify({
-                    "@toplevelentries": "2",
-                    viewentry: [
-                      member,
-                      {
-                        "@unid": "0123456789abcdef0123456789abcdef",
-                        entrydata: [
-                          { "@name": "znacka", text: { "0": "1 Cdo 1/2026" } },
+          mock(
+            asFetchMock(
+              async (url: string | URL | Request) =>
+                new Response(
+                  (url instanceof Request ? url.url : url.toString()).includes(
+                    "ReadViewEntries",
+                  )
+                    ? JSON.stringify({
+                        "@toplevelentries": "2",
+                        viewentry: [
+                          member,
+                          {
+                            "@unid": "0123456789abcdef0123456789abcdef",
+                            entrydata: [
+                              {
+                                "@name": "znacka",
+                                text: { "0": "1 Cdo 1/2026" },
+                              },
+                            ],
+                          },
                         ],
-                      },
-                    ],
-                  })
-                : "<html><body><p>Rozhodnutí soudu.</p></body></html>",
+                      })
+                    : "<html><body><p>Rozhodnutí soudu.</p></body></html>",
+                ),
             ),
+          ),
         ),
       );
       const page = (await czNsAdapter.fetchPage("1", {})).unwrap();
@@ -82,8 +95,10 @@ describe("Domino listings distinguish publisher refusal from an empty view", () 
   }
 
   test("accepts the publisher's explicit small empty view", async () => {
-    spyOn(globalThis, "fetch").mockImplementation(
-      asFetchMock(async () => new Response('{"@toplevelentries":"0"}')),
+    testFetchState.set(
+      asFetchMock(
+        mock(asFetchMock(async () => new Response('{"@toplevelentries":"0"}'))),
+      ),
     );
     const page = await czNsAdapter.fetchPage("1", {});
     expect(page.isOk()).toBe(true);
@@ -95,7 +110,10 @@ describe("Domino listings distinguish publisher refusal from an empty view", () 
 });
 
 describe("decision pages the publisher did not serve", () => {
-  afterEach(() => mock.restore());
+  afterEach(() => {
+    testFetchState.restore();
+    mock.restore();
+  });
 
   const UNID = "0123456789abcdef0123456789abcdef";
   const ROW = { unid: UNID, caseNumber: "1 Cdo 1/2026" };
@@ -116,28 +134,32 @@ describe("decision pages the publisher did not serve", () => {
    * URL contains `failing` with `answer`.
    */
   const serveWith = (failing: string, answer: () => Response) => {
-    spyOn(globalThis, "fetch").mockImplementation(
-      asFetchMock(async (input: string | URL | Request) => {
-        const url = input instanceof Request ? input.url : input.toString();
-        if (url.includes(failing)) {
-          return await Promise.resolve().then(answer);
-        }
-        return new Response(
-          url.includes("ReadViewEntries")
-            ? JSON.stringify({
-                "@toplevelentries": "1",
-                viewentry: [
-                  {
-                    "@unid": UNID,
-                    entrydata: [
-                      { "@name": "znacka", text: { "0": ROW.caseNumber } },
+    testFetchState.set(
+      asFetchMock(
+        mock(
+          asFetchMock(async (input: string | URL | Request) => {
+            const url = input instanceof Request ? input.url : input.toString();
+            if (url.includes(failing)) {
+              return await Promise.resolve().then(answer);
+            }
+            return new Response(
+              url.includes("ReadViewEntries")
+                ? JSON.stringify({
+                    "@toplevelentries": "1",
+                    viewentry: [
+                      {
+                        "@unid": UNID,
+                        entrydata: [
+                          { "@name": "znacka", text: { "0": ROW.caseNumber } },
+                        ],
+                      },
                     ],
-                  },
-                ],
-              })
-            : PAGE,
-        );
-      }),
+                  })
+                : PAGE,
+            );
+          }),
+        ),
+      ),
     );
   };
 
@@ -255,16 +277,24 @@ describe("decision pages the publisher did not serve", () => {
 });
 
 describe("the source hash fingerprints every stored part", () => {
-  afterEach(() => mock.restore());
+  afterEach(() => {
+    testFetchState.restore();
+    mock.restore();
+  });
 
   const UNID = "fedcba9876543210fedcba9876543210";
   const PAGE = "<html><body><p>Rozhodnutí soudu.</p></body></html>";
 
   const built = async (row: CzNsListingRow) => {
-    spyOn(globalThis, "fetch").mockImplementation(
-      asFetchMock(async () => await Promise.resolve(new Response(PAGE))),
+    testFetchState.set(
+      asFetchMock(
+        mock(
+          asFetchMock(async () => await Promise.resolve(new Response(PAGE))),
+        ),
+      ),
     );
     const result = await buildCzNsDecision(row);
+    testFetchState.restore();
     mock.restore();
     if (result.type !== "built") {
       throw new TypeError("Expected the served pages to build a decision");
@@ -318,10 +348,16 @@ describe("the source hash fingerprints every stored part", () => {
     if (reparse === undefined) {
       throw new TypeError("Expected cz-ns to implement stored-raw replay");
     }
-    spyOn(globalThis, "fetch").mockImplementation(
-      asFetchMock(() => {
-        throw new TypeError("Stored-raw replay must not contact the publisher");
-      }),
+    testFetchState.set(
+      asFetchMock(
+        mock(
+          asFetchMock(() => {
+            throw new TypeError(
+              "Stored-raw replay must not contact the publisher",
+            );
+          }),
+        ),
+      ),
     );
 
     const replayed = await reparse({

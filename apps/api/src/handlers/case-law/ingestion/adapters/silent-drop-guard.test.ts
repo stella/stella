@@ -29,6 +29,9 @@ import {
   skUsFixture,
   ukFclFixture,
 } from "@/api/tests/helpers/case-law-enrolled-fixtures";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+
+const testFetchState = createTestFetch();
 
 type SupportedDriver = {
   driver: "html" | "xml" | "json-text";
@@ -158,9 +161,9 @@ const drivers = new Map<string, Driver>(Object.entries(DRIVERS));
 const replayAdapters = listAdapters().filter(
   ({ reparseStoredRaw }) => reparseStoredRaw !== undefined,
 );
-const originalFetch = globalThis.fetch;
+
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
 });
 
 type Slot = { path: readonly (string | number)[]; text: string };

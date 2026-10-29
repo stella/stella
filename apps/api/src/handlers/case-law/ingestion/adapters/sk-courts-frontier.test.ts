@@ -19,7 +19,10 @@ import {
 
 import { decodeSourceRawEnvelope } from "@/api/handlers/case-law/ingestion/adapter";
 import { skCourtsAdapter } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const testFetchState = createTestFetch();
 
 const NOW = new Date("2026-09-17T09:30:00.000Z");
 const YESTERDAY = "2026-09-16";
@@ -42,53 +45,55 @@ const stubPublisher = (
 ): Recorded => {
   const recorded: Recorded = { listings: [], details: [] };
 
-  globalThis.fetch = asFetchMock((input: string | URL | Request) => {
-    const url = new URL(input instanceof Request ? input.url : String(input));
-    if (url.pathname.includes("/v1/sud/")) {
-      return Promise.resolve(
-        new Response(
-          JSON.stringify({
-            registreGuid: "court-guid",
-            nazov: "Mestský súd Bratislava I",
-            typSudu: "Mestský súd",
-          }),
-        ),
-      );
-    }
-    const page = url.searchParams.get("page");
-    if (page === null) {
-      recorded.details.push(url);
-      return Promise.resolve(
-        new Response(
-          JSON.stringify({ ecli: "ECLI:SK:OSBA1:2026:1.C.1.2026" }),
-          {
-            headers: { "Content-Type": "application/json" },
-          },
-        ),
-      );
-    }
+  testFetchState.set(
+    asFetchMock((input: string | URL | Request) => {
+      const url = new URL(input instanceof Request ? input.url : String(input));
+      if (url.pathname.includes("/v1/sud/")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              registreGuid: "court-guid",
+              nazov: "Mestský súd Bratislava I",
+              typSudu: "Mestský súd",
+            }),
+          ),
+        );
+      }
+      const page = url.searchParams.get("page");
+      if (page === null) {
+        recorded.details.push(url);
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({ ecli: "ECLI:SK:OSBA1:2026:1.C.1.2026" }),
+            {
+              headers: { "Content-Type": "application/json" },
+            },
+          ),
+        );
+      }
 
-    recorded.listings.push(url);
-    const day = url.searchParams.get("vydaniaOd") ?? "";
-    const size = Number.parseInt(url.searchParams.get("size") ?? "0", 10);
-    const total = dayHoldings[day] ?? 0;
-    const start = (Math.max(1, Number.parseInt(page, 10)) - 1) * size;
-    const items = Array.from(
-      { length: Math.max(0, Math.min(size, total - start)) },
-      (_, offset) => {
-        const item = listItem(start + offset);
-        return start + offset === poisonIndex
-          ? { ...item, spisovaZnacka: "\\rtf1 rejected" }
-          : item;
-      },
-    );
-    return Promise.resolve(
-      new Response(
-        JSON.stringify({ rozhodnutieList: items, numFound: total }),
-        { headers: { "Content-Type": "application/json" } },
-      ),
-    );
-  });
+      recorded.listings.push(url);
+      const day = url.searchParams.get("vydaniaOd") ?? "";
+      const size = Number.parseInt(url.searchParams.get("size") ?? "0", 10);
+      const total = dayHoldings[day] ?? 0;
+      const start = (Math.max(1, Number.parseInt(page, 10)) - 1) * size;
+      const items = Array.from(
+        { length: Math.max(0, Math.min(size, total - start)) },
+        (_, offset) => {
+          const item = listItem(start + offset);
+          return start + offset === poisonIndex
+            ? { ...item, spisovaZnacka: "\\rtf1 rejected" }
+            : item;
+        },
+      );
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({ rozhodnutieList: items, numFound: total }),
+          { headers: { "Content-Type": "application/json" } },
+        ),
+      );
+    }),
+  );
 
   return recorded;
 };
@@ -102,14 +107,12 @@ const fetchAt = async (cursor: string | null) => {
 };
 
 describe("the sk-courts steady-state frontier", () => {
-  const originalFetch = globalThis.fetch;
-
   beforeEach(() => {
     setSystemTime(NOW);
   });
 
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
     setSystemTime();
   });
 

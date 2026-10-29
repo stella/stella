@@ -28,6 +28,9 @@ import {
   SEARCH_INDEX_UNAVAILABLE_CODE,
   searchIndexUnavailableError,
 } from "@/api/lib/legal-search/search-index-unavailable";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+
+const testFetchState = createTestFetch();
 
 describe("case-law search body preview SQL", () => {
   test("does not expand non-array sections JSONB values", () => {
@@ -131,24 +134,28 @@ describe("a search against a serving cluster that holds no index", () => {
   const originalFetch = globalThis.fetch;
 
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
   });
 
   test.each(["relevance", "newest"] as const)(
     "answers the typed retryable 503 under the %s order",
     async (sort) => {
       const requested: string[] = [];
-      globalThis.fetch = Object.assign(
-        async (input: string | URL | Request) => {
-          requested.push(input instanceof Request ? input.url : String(input));
-          return await Promise.resolve(
-            Response.json(
-              { message: "could not find indexes matching the IDs" },
-              { status: 404 },
-            ),
-          );
-        },
-        { preconnect: originalFetch.preconnect },
+      testFetchState.set(
+        Object.assign(
+          async (input: string | URL | Request) => {
+            requested.push(
+              input instanceof Request ? input.url : String(input),
+            );
+            return await Promise.resolve(
+              Response.json(
+                { message: "could not find indexes matching the IDs" },
+                { status: 404 },
+              ),
+            );
+          },
+          { preconnect: originalFetch.preconnect },
+        ),
       );
       const manifest = CORPUS_INDEX_MANIFESTS.case_law_v7;
       const resolution = corpusIndexReadTarget({
@@ -237,12 +244,14 @@ test.each(SERVING_TARGET_REFUSALS)(
   async ({ failure }) => {
     const requested: string[] = [];
     const originalFetch = globalThis.fetch;
-    globalThis.fetch = Object.assign(
-      async (input: string | URL | Request) => {
-        requested.push(input instanceof Request ? input.url : String(input));
-        return await Promise.resolve(Response.json({}, { status: 500 }));
-      },
-      { preconnect: originalFetch.preconnect },
+    testFetchState.set(
+      Object.assign(
+        async (input: string | URL | Request) => {
+          requested.push(input instanceof Request ? input.url : String(input));
+          return await Promise.resolve(Response.json({}, { status: 500 }));
+        },
+        { preconnect: originalFetch.preconnect },
+      ),
     );
     const unreadableDb = Object.assign(
       async () => panic("No serving generation must not read decision rows"),
@@ -257,7 +266,7 @@ test.each(SERVING_TARGET_REFUSALS)(
           await Promise.resolve(Result.err(failure)),
       },
     }).finally(() => {
-      globalThis.fetch = originalFetch;
+      testFetchState.restore();
     });
 
     expect(requested).toEqual([]);

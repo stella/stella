@@ -1,5 +1,5 @@
 import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
-import { describe, expect, spyOn, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
 import fc from "fast-check";
 
 import {
@@ -32,7 +32,10 @@ import { StellaOpenRouterTextAdapter } from "@/api/lib/stella-openrouter-text-ad
 import type { TanStackModelOptions } from "@/api/lib/tanstack-ai-models";
 import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 import { installScriptedProvider } from "@/api/tests/helpers/chat-scripted-provider";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { createTestState } from "@/api/tests/helpers/test-state";
+
+const testFetchState = createTestFetch();
 
 const testState = createTestState({ file: import.meta.path, config: env });
 
@@ -737,25 +740,27 @@ describe("TanStack text model resolution", () => {
       expect(png.byteLength > 3_750_000).toBe(size === "oversized");
       const bodies: unknown[] = [];
       const originalFetch = globalThis.fetch;
-      globalThis.fetch = Object.assign(
-        async (
-          input: Parameters<typeof globalThis.fetch>[0],
-          init?: RequestInit,
-        ): Promise<Response> => {
-          const request =
-            input instanceof Request
-              ? input
-              : new Request(input.toString(), init);
-          bodies.push(await request.clone().json());
-          return new Response(JSON.stringify({ message: "stop" }), {
-            status: 400,
-            headers: {
-              "content-type": "application/json",
-              "x-amzn-errortype": "ValidationException",
-            },
-          });
-        },
-        { preconnect: originalFetch.preconnect },
+      testFetchState.set(
+        Object.assign(
+          async (
+            input: Parameters<typeof globalThis.fetch>[0],
+            init?: RequestInit,
+          ): Promise<Response> => {
+            const request =
+              input instanceof Request
+                ? input
+                : new Request(input.toString(), init);
+            bodies.push(await request.clone().json());
+            return new Response(JSON.stringify({ message: "stop" }), {
+              status: 400,
+              headers: {
+                "content-type": "application/json",
+                "x-amzn-errortype": "ValidationException",
+              },
+            });
+          },
+          { preconnect: originalFetch.preconnect },
+        ),
       );
       try {
         for await (const _chunk of model.adapter.chatStream({
@@ -782,7 +787,7 @@ describe("TanStack text model resolution", () => {
           // The refusal ends the stream once the request is written.
         }
       } finally {
-        globalThis.fetch = originalFetch;
+        testFetchState.restore();
       }
 
       expect(bodies).toHaveLength(1);
@@ -827,18 +832,20 @@ describe("TanStack text model resolution", () => {
       });
       let fetchCalls = 0;
       const originalFetch = globalThis.fetch;
-      globalThis.fetch = Object.assign(
-        async () => {
-          fetchCalls += 1;
-          return new Response(JSON.stringify({ message: "stop" }), {
-            status: 400,
-            headers: {
-              "content-type": "application/json",
-              "x-amzn-errortype": "ValidationException",
-            },
-          });
-        },
-        { preconnect: originalFetch.preconnect },
+      testFetchState.set(
+        Object.assign(
+          async () => {
+            fetchCalls += 1;
+            return new Response(JSON.stringify({ message: "stop" }), {
+              status: 400,
+              headers: {
+                "content-type": "application/json",
+                "x-amzn-errortype": "ValidationException",
+              },
+            });
+          },
+          { preconnect: originalFetch.preconnect },
+        ),
       );
       try {
         const chunks = [];
@@ -873,7 +880,7 @@ describe("TanStack text model resolution", () => {
         ]);
         expect(fetchCalls).toBe(0);
       } finally {
-        globalThis.fetch = originalFetch;
+        testFetchState.restore();
       }
     },
   );
@@ -1578,27 +1585,31 @@ const orgConfigForProvider = (
 describe("Anthropic workspace dispatch", () => {
   test("every model task receives workspace headers and changed workspace invalidates the cached factory", async () => {
     const requests: Headers[] = [];
-    const fetchSpy = spyOn(globalThis, "fetch").mockImplementation(
-      Object.assign(
-        async (
-          _url: Parameters<typeof globalThis.fetch>[0],
-          init?: RequestInit,
-        ) => {
-          requests.push(new Headers(init?.headers));
-          return new Response(
-            JSON.stringify({
-              type: "error",
-              error: {
-                type: "invalid_request_error",
-                message: "Recorded transport stop",
-              },
-            }),
-            { status: 400, headers: { "content-type": "application/json" } },
-          );
-        },
-        { preconnect: globalThis.fetch.preconnect },
+    const fetchSpy = Object.assign(
+      mock(
+        Object.assign(
+          async (
+            _url: Parameters<typeof globalThis.fetch>[0],
+            init?: RequestInit,
+          ) => {
+            requests.push(new Headers(init?.headers));
+            return new Response(
+              JSON.stringify({
+                type: "error",
+                error: {
+                  type: "invalid_request_error",
+                  message: "Recorded transport stop",
+                },
+              }),
+              { status: 400, headers: { "content-type": "application/json" } },
+            );
+          },
+          { preconnect: globalThis.fetch.preconnect },
+        ),
       ),
+      { preconnect: globalThis.fetch.preconnect },
     );
+    testFetchState.set(fetchSpy);
     clearByokAdapterCache();
     try {
       for (const anthropicWorkspaceId of ["wrk_first", "wrk_second"]) {
@@ -1644,7 +1655,7 @@ describe("Anthropic workspace dispatch", () => {
         }
       }
     } finally {
-      fetchSpy.mockRestore();
+      testFetchState.restore();
       clearByokAdapterCache();
     }
   });

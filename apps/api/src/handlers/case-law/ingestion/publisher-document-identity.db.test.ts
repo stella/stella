@@ -41,7 +41,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { isRecord } from "@/api/lib/type-guards";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const testFetchState = createTestFetch();
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -76,10 +79,8 @@ const nssDetailPage = (ecli: string): string => `<html><body>
  * how well its document parses.
  */
 const installPublisherStub = (): (() => void) => {
-  const originalFetch = globalThis.fetch;
-
-  globalThis.fetch = asFetchMock(
-    (input: string | URL | Request): Promise<Response> => {
+  testFetchState.set(
+    asFetchMock((input: string | URL | Request): Promise<Response> => {
       const url = new URL(input instanceof Request ? input.url : String(input));
       if (url.pathname.startsWith("/docDownload/")) {
         return Promise.resolve(
@@ -130,11 +131,11 @@ const installPublisherStub = (): (() => void) => {
       return Promise.resolve(
         new Response(`unexpected request: ${url.toString()}`, { status: 500 }),
       );
-    },
+    }),
   );
 
   return () => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
   };
 };
 

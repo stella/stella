@@ -274,6 +274,7 @@ runtime validation, or integration tests.
 - [`require-detached-label-shape`](./require-detached-label-shape.ts) (`require-detached-label-shape`): requires monitored detached work to use stable `feature.action` labels.
 - [`require-api-error-check`](./require-api-error-check.ts) (`require-api-error-check`): requires API responses to inspect or unwrap the error channel before data is consumed or escapes.
 - [`require-fetch-timeout`](./require-fetch-timeout.ts) (`require-fetch-timeout`): requires network requests to carry a bounded timeout or an owned timeout wrapper.
+- [`no-global-fetch-replacement`](./no-global-fetch-replacement.ts) (`no-global-fetch-replacement`): confines API test `globalThis.fetch` assignment and spies to test-local `try/finally` restoration; shared setup uses the test-fetch owner.
 - [`require-toast-error-capture`](./require-toast-error-capture.ts) (`require-toast-error-capture`): requires failures shown in a toast to also reach structured error capture.
 - [`tagged-error-requires-message`](./tagged-error-requires-message.ts) (`tagged-error-requires-message`): requires every `TaggedError` payload to include a user- or operator-readable message.
 

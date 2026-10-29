@@ -7,6 +7,10 @@ import {
 import { readGzipJson } from "@/api/lib/gzip-json";
 import { toPlainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
+import {
+  rejectionOf,
+  requireReconciliation,
+} from "@/api/tests/helpers/case-law-adapter-test-utils";
 
 import {
   assembleAtRisDecision,
@@ -19,7 +23,6 @@ import {
 } from "./at-courts";
 import { AT_RIS_HEADNOTE_METADATA_URL_SCHEMA } from "./at-courts.metadata-urls";
 import { AT_UMSE_SOURCE } from "./at-umse";
-import { rejectionOf, requireReconciliation } from "./test-utils";
 
 const SOURCE_ID = "JJT_20260115_OGH0002_0010OB00001_26A0000_000";
 const SECOND_SOURCE_ID = "JJT_20260115_OGH0002_0010OB00001_26A0000_001";

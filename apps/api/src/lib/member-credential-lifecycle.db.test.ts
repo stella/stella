@@ -1,7 +1,6 @@
 import { Result } from "better-result";
 import {
   afterAll,
-  afterEach,
   beforeAll,
   beforeEach,
   describe,
@@ -9,7 +8,6 @@ import {
   type Mock,
   mock,
   setDefaultTimeout,
-  spyOn,
   test,
 } from "bun:test";
 import { randomBytes } from "node:crypto";
@@ -47,6 +45,10 @@ import type {
   RegisteredOAuthClient,
 } from "@/api/tests/helpers/oauth-grant";
 import { serveRoutesForTest } from "@/api/tests/helpers/serve-routes";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const testFetchState = createTestFetch();
 
 const routeServer = serveRoutesForTest([
   ...apiKeysRoute,
@@ -88,7 +90,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  fetchSpy.mockRestore();
+  testFetchState.restore();
   await releaseAgentAuthTestDb();
 });
 
@@ -266,11 +268,10 @@ const opensMcpContext = async (accessToken: string): Promise<boolean> => {
 };
 
 beforeEach(() => {
-  fetchSpy = spyOn(globalThis, "fetch").mockImplementation(serveJwks);
-});
-
-afterEach(() => {
-  mock.restore();
+  fetchSpy = Object.assign(mock(serveJwks), {
+    preconnect: globalThis.fetch.preconnect,
+  });
+  testFetchState.set(asFetchMock(fetchSpy));
 });
 
 describe("organization member credential lifecycle", () => {

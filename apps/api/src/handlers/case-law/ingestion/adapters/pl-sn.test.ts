@@ -28,7 +28,10 @@ import { readGzipJson } from "@/api/lib/gzip-json";
 import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { isRecord } from "@/api/lib/type-guards";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const testFetchState = createTestFetch();
 
 const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);
 
@@ -205,7 +208,6 @@ describe("the crawl cursor", () => {
 // ── Slice listing ────────────────────────────────────────
 
 describe("listing one decision date", () => {
-  const originalFetch = globalThis.fetch;
   const originalSleep = Bun.sleep;
 
   beforeEach(() => {
@@ -215,16 +217,18 @@ describe("listing one decision date", () => {
   });
 
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
     Bun.sleep = originalSleep;
   });
 
   const answerWith = (body: (url: URL) => Response): void => {
-    globalThis.fetch = asFetchMock(
-      async (input: string | URL | Request) =>
-        await Promise.resolve(
-          body(new URL(input instanceof Request ? input.url : String(input))),
-        ),
+    testFetchState.set(
+      asFetchMock(
+        async (input: string | URL | Request) =>
+          await Promise.resolve(
+            body(new URL(input instanceof Request ? input.url : String(input))),
+          ),
+      ),
     );
   };
 
@@ -325,7 +329,6 @@ describe("listing one decision date", () => {
 // ── Crawl walk ───────────────────────────────────────────
 
 describe("walking decision-date months oldest first", () => {
-  const originalFetch = globalThis.fetch;
   const originalSleep = Bun.sleep;
 
   beforeEach(() => {
@@ -335,7 +338,7 @@ describe("walking decision-date months oldest first", () => {
   });
 
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
     Bun.sleep = originalSleep;
   });
 
@@ -345,23 +348,27 @@ describe("walking decision-date months oldest first", () => {
   // holds one is exactly what a test below asserts.
   const sourceHolding = (month: string, rows: readonly unknown[]): string[] => {
     const asked: string[] = [];
-    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-      const url = new URL(input instanceof Request ? input.url : String(input));
-      const task = url.searchParams.get("task");
-      if (task !== "searchOrzeczenia") {
-        // Detail and document alike: nothing served, so the row is stored
-        // from its listing and the walk keeps going.
-        return await Promise.resolve(jsonResponse(envelope([])));
-      }
-      const from = url.searchParams.get("data_wydania_od") ?? "";
-      asked.push(from);
-      const page = Number(url.searchParams.get("strona"));
-      const size = Number(url.searchParams.get("rozmiar_strony"));
-      const matched = from.startsWith(month) ? rows : [];
-      return await Promise.resolve(
-        jsonResponse(envelope(matched.slice((page - 1) * size, page * size))),
-      );
-    });
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request) => {
+        const url = new URL(
+          input instanceof Request ? input.url : String(input),
+        );
+        const task = url.searchParams.get("task");
+        if (task !== "searchOrzeczenia") {
+          // Detail and document alike: nothing served, so the row is stored
+          // from its listing and the walk keeps going.
+          return await Promise.resolve(jsonResponse(envelope([])));
+        }
+        const from = url.searchParams.get("data_wydania_od") ?? "";
+        asked.push(from);
+        const page = Number(url.searchParams.get("strona"));
+        const size = Number(url.searchParams.get("rozmiar_strony"));
+        const matched = from.startsWith(month) ? rows : [];
+        return await Promise.resolve(
+          jsonResponse(envelope(matched.slice((page - 1) * size, page * size))),
+        );
+      }),
+    );
     return asked;
   };
 
@@ -462,10 +469,12 @@ describe("walking decision-date months oldest first", () => {
     // listed and none of them is built. A cursor advanced by the page size
     // here would checkpoint past twenty decisions nothing ever looked at.
     const controller = new AbortController();
-    globalThis.fetch = asFetchMock(async () => {
-      controller.abort();
-      return await Promise.resolve(jsonResponse(envelope(rows)));
-    });
+    testFetchState.set(
+      asFetchMock(async () => {
+        controller.abort();
+        return await Promise.resolve(jsonResponse(envelope(rows)));
+      }),
+    );
 
     const result = await plSnAdapter.fetchPage(
       "1994-03:0",
@@ -495,9 +504,11 @@ describe("walking decision-date months oldest first", () => {
     // The whole walk reports the publisher through its `Result`: a page that
     // answered with an error object must not read as a month with nothing in
     // it, or the cursor would step past records nobody listed.
-    globalThis.fetch = asFetchMock(
-      async () =>
-        await Promise.resolve(jsonResponse(envelope({ status: 500 }))),
+    testFetchState.set(
+      asFetchMock(
+        async () =>
+          await Promise.resolve(jsonResponse(envelope({ status: 500 }))),
+      ),
     );
 
     const result = await plSnAdapter.fetchPage("1994-03:0", {});
@@ -514,25 +525,27 @@ describe("walking decision-date months oldest first", () => {
   test.each(["searchOrzeczenia", "detailsOrzeczenie", "OrzeczeniePlikPdf"])(
     "a rate limit answering %s fails the page with the limit's status",
     async (refusedTask) => {
-      globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-        const url = new URL(
-          input instanceof Request ? input.url : String(input),
-        );
-        const task = url.searchParams.get("task");
-        if (task === refusedTask) {
-          return await Promise.resolve(jsonResponse(envelope(RATE_LIMIT)));
-        }
-        const rows = [
-          {
-            id: "x",
-            sygnatura_sprawy: "I CSK 1/94",
-            forma_orzeczenia: "wyrok SN",
-          },
-        ];
-        return await Promise.resolve(
-          jsonResponse(envelope(task === "searchOrzeczenia" ? rows : [])),
-        );
-      });
+      testFetchState.set(
+        asFetchMock(async (input: string | URL | Request) => {
+          const url = new URL(
+            input instanceof Request ? input.url : String(input),
+          );
+          const task = url.searchParams.get("task");
+          if (task === refusedTask) {
+            return await Promise.resolve(jsonResponse(envelope(RATE_LIMIT)));
+          }
+          const rows = [
+            {
+              id: "x",
+              sygnatura_sprawy: "I CSK 1/94",
+              forma_orzeczenia: "wyrok SN",
+            },
+          ];
+          return await Promise.resolve(
+            jsonResponse(envelope(task === "searchOrzeczenia" ? rows : [])),
+          );
+        }),
+      );
 
       const result = await plSnAdapter.fetchPage("1994-03:0", {});
 
@@ -560,10 +573,11 @@ describe("walking decision-date months oldest first", () => {
 describe("replaying a stored envelope", () => {
   test("the recorded decision rebuilds from its own raw, without the network", async () => {
     const decision = await recordedDecision();
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = asFetchMock(async () => {
-      throw new Error("a replay must not contact the publisher");
-    });
+    testFetchState.set(
+      asFetchMock(async () => {
+        throw new Error("a replay must not contact the publisher");
+      }),
+    );
 
     try {
       const outcome = await plSnAdapter.reparseStoredRaw?.({
@@ -597,7 +611,7 @@ describe("replaying a stored envelope", () => {
         }),
       ).toBe(true);
     } finally {
-      globalThis.fetch = originalFetch;
+      testFetchState.restore();
     }
   });
 

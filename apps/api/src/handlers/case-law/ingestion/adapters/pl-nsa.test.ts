@@ -68,9 +68,12 @@ import { toPlainTextIngestionResult } from "@/api/lib/legal-search/ingestion-typ
 import { rehydrateMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 import { PL_NSA_METADATA_URL_SCHEMA } from "./pl-nsa.metadata-urls";
+
+const testFetchState = createTestFetch();
 
 const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);
 const ROWS_JSON = new URL("pl-nsa-rows.json", FIXTURES_DIR);
@@ -1198,7 +1201,6 @@ describe("the document is checked against the dataset's own text", () => {
 });
 
 describe("shard download failures", () => {
-  const originalFetch = globalThis.fetch;
   const originalSleep = Bun.sleep;
   const bytes = new Uint8Array(Bun.file(ROWS_PARQUET).size);
 
@@ -1221,8 +1223,8 @@ describe("shard download failures", () => {
   ): { requests: string[] } => {
     const requests: string[] = [];
     let issued = 0;
-    globalThis.fetch = asFetchMock(
-      async (input: string | URL | Request, init?: RequestInit) => {
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request, init?: RequestInit) => {
         const url = requestUrlOf(input);
         expect(url).toMatch(/^https:\/\/[^/]*(huggingface\.co|hf\.co)\//u);
         const range = new Headers(init?.headers).get("range") ?? "";
@@ -1247,7 +1249,7 @@ describe("shard download failures", () => {
         return await Promise.resolve(
           new Response(bytes.slice(start, (end ?? 0) + 1), { status: 206 }),
         );
-      },
+      }),
     );
     return { requests };
   };
@@ -1261,7 +1263,7 @@ describe("shard download failures", () => {
     };
   });
   afterEach(async () => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
     Bun.sleep = originalSleep;
     await rm(directory, { recursive: true, force: true });
   });

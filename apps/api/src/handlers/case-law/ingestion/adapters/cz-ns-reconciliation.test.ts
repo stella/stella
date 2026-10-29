@@ -25,7 +25,6 @@ import {
   czNsListingIdentity,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import type { CzNsListingRow } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
-import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import {
   citationKeyOf,
   decisionIdentifiersFromMetadata,
@@ -36,7 +35,11 @@ import {
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,
 } from "@/api/lib/case-law/decision-text";
+import { requireReconciliation } from "@/api/tests/helpers/case-law-adapter-test-utils";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const testFetchState = createTestFetch();
 
 const reconciliation = requireReconciliation(czNsAdapter);
 
@@ -164,8 +167,6 @@ const detailPageHtml = (
 
 // ── Fetch mocking ───────────────────────────────────────────
 
-const originalFetch = globalThis.fetch;
-
 type MockOptions = {
   listing?: { body: string; status?: number | undefined } | undefined;
   detailStatus?: number | undefined;
@@ -182,39 +183,41 @@ const mockFetch = ({
   printStatus,
   summary,
 }: MockOptions) => {
-  globalThis.fetch = asFetchMock((input: string | URL | Request) => {
-    const url = input instanceof Request ? input.url : String(input);
-    requestedUrls.push(url);
-    if (url.includes("SearchView")) {
-      return Promise.resolve(
-        new Response(listing?.body ?? "", {
-          status: listing?.status ?? 200,
-          headers: { "Content-Type": "text/html" },
-        }),
-      );
-    }
-    if (url.includes("/WebPrint/")) {
-      return Promise.resolve(
-        new Response("", {
-          status: printStatus ?? 404,
-          headers: { "Content-Type": "text/html" },
-        }),
-      );
-    }
-    if (url.includes("/WebSearch/")) {
-      return Promise.resolve(
-        new Response(detailPageHtml(DOCKET.FIRST, summary), {
-          status: detailStatus ?? 200,
-          headers: { "Content-Type": "text/html" },
-        }),
-      );
-    }
-    return Promise.resolve(new Response("unexpected", { status: 500 }));
-  });
+  testFetchState.set(
+    asFetchMock((input: string | URL | Request) => {
+      const url = input instanceof Request ? input.url : String(input);
+      requestedUrls.push(url);
+      if (url.includes("SearchView")) {
+        return Promise.resolve(
+          new Response(listing?.body ?? "", {
+            status: listing?.status ?? 200,
+            headers: { "Content-Type": "text/html" },
+          }),
+        );
+      }
+      if (url.includes("/WebPrint/")) {
+        return Promise.resolve(
+          new Response("", {
+            status: printStatus ?? 404,
+            headers: { "Content-Type": "text/html" },
+          }),
+        );
+      }
+      if (url.includes("/WebSearch/")) {
+        return Promise.resolve(
+          new Response(detailPageHtml(DOCKET.FIRST, summary), {
+            status: detailStatus ?? 200,
+            headers: { "Content-Type": "text/html" },
+          }),
+        );
+      }
+      return Promise.resolve(new Response("unexpected", { status: 500 }));
+    }),
+  );
 };
 
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
   requestedUrls.length = 0;
 });
 
@@ -954,9 +957,11 @@ describe("cz-ns stored-raw replay", () => {
     if (built.type !== "built") {
       throw new TypeError("Expected the fixture decision to build");
     }
-    globalThis.fetch = asFetchMock(async () => {
-      throw new Error("a replay must not contact the publisher");
-    });
+    testFetchState.set(
+      asFetchMock(async () => {
+        throw new Error("a replay must not contact the publisher");
+      }),
+    );
 
     const outcome = await replay({
       raw: new TextEncoder().encode(built.decision.sourceRaw ?? ""),
@@ -977,9 +982,11 @@ describe("cz-ns stored-raw replay", () => {
   });
 
   test("legacy joined dockets recover every identity from the saved pages", async () => {
-    globalThis.fetch = asFetchMock(async () => {
-      throw new Error("a replay must not contact the publisher");
-    });
+    testFetchState.set(
+      asFetchMock(async () => {
+        throw new Error("a replay must not contact the publisher");
+      }),
+    );
     const joined = `${DOCKET.FIRST}, ${DOCKET.SECOND}`;
     const outcome = await replay({
       raw: new TextEncoder().encode(

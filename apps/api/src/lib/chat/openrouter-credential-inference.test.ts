@@ -22,6 +22,9 @@ import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispa
 import { resolveTanStackTextModel } from "@/api/lib/tanstack-ai-generate";
 import { createTanStackTextAdapterFactory } from "@/api/lib/tanstack-ai-models";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+
+const testFetchState = createTestFetch();
 
 const MODEL = MODEL_DEFAULTS_LEDGER.chat.openrouter.candidate.modelId;
 const POLICY_ID = "credential-inference-fixture";
@@ -212,25 +215,29 @@ const readFailure = async (adapter: AnyTextAdapter, path: RequestPath) => {
 const install401Fetch = () => {
   const originalFetch = globalThis.fetch;
   const requests: { url: URL; authorization: string | null }[] = [];
-  globalThis.fetch = Object.assign(
-    async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
-      const request =
-        input instanceof Request ? input : new Request(input.toString(), init);
-      requests.push({
-        url: new URL(request.url),
-        authorization: request.headers.get("authorization"),
-      });
-      return Response.json(
-        { error: { code: 401, message: "fixture unauthorized" } },
-        { status: 401 },
-      );
-    },
-    { preconnect: originalFetch.preconnect },
+  testFetchState.set(
+    Object.assign(
+      async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+        const request =
+          input instanceof Request
+            ? input
+            : new Request(input.toString(), init);
+        requests.push({
+          url: new URL(request.url),
+          authorization: request.headers.get("authorization"),
+        });
+        return Response.json(
+          { error: { code: 401, message: "fixture unauthorized" } },
+          { status: 401 },
+        );
+      },
+      { preconnect: originalFetch.preconnect },
+    ),
   );
   return {
     requests,
     restore: () => {
-      globalThis.fetch = originalFetch;
+      testFetchState.restore();
     },
   };
 };

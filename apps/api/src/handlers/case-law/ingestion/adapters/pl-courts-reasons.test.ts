@@ -25,9 +25,12 @@ import {
   PL_COURTS_STANDALONE_REASONS_DECISION_TYPE,
   plCourtsAdapter,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
-import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
+import { requireReconciliation } from "@/api/tests/helpers/case-law-adapter-test-utils";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+
+const testFetchState = createTestFetch();
 
 const FIXTURES = new URL("__fixtures__/", import.meta.url);
 const DUMP_PAGE = "pl-courts-dump-day.json.gz";
@@ -224,7 +227,7 @@ const requestUrl = (input: string | URL | Request): string => {
 describe("the crawl and the reconciliation hand reasons over as supplements", () => {
   const originalFetch = globalThis.fetch;
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
   });
 
   /** The dump page lists the rows; a detail answers only for `details`. */
@@ -232,20 +235,22 @@ describe("the crawl and the reconciliation hand reasons over as supplements", ()
     rows: readonly Record<string, unknown>[],
     details: readonly Record<string, unknown>[] = [],
   ) => {
-    globalThis.fetch = Object.assign(
-      async (input: string | URL | Request): Promise<Response> => {
-        const url = requestUrl(input);
-        if (url.includes("/api/dump/judgments")) {
-          return Response.json({ items: rows });
-        }
-        const detail = details.find((row) =>
-          url.endsWith(`/api/judgments/${String(row["id"])}`),
-        );
-        return detail === undefined
-          ? new Response("Not found", { status: 404 })
-          : Response.json({ data: detail });
-      },
-      { preconnect: originalFetch.preconnect.bind(originalFetch) },
+    testFetchState.set(
+      Object.assign(
+        async (input: string | URL | Request): Promise<Response> => {
+          const url = requestUrl(input);
+          if (url.includes("/api/dump/judgments")) {
+            return Response.json({ items: rows });
+          }
+          const detail = details.find((row) =>
+            url.endsWith(`/api/judgments/${String(row["id"])}`),
+          );
+          return detail === undefined
+            ? new Response("Not found", { status: 404 })
+            : Response.json({ data: detail });
+        },
+        { preconnect: originalFetch.preconnect.bind(originalFetch) },
+      ),
     );
   };
 

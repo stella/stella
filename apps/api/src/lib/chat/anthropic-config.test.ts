@@ -1,13 +1,16 @@
 import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
-import { describe, expect, spyOn, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import { env } from "@/api/env";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { createTestState } from "@/api/tests/helpers/test-state";
 
 import { createTanStackTextAdapterFactory } from "../tanstack-ai-models";
 import { anthropicWorkspaceHeaders } from "./anthropic-config";
+
+const testFetchState = createTestFetch();
 
 const testState = createTestState({ file: import.meta.path, config: env });
 
@@ -107,27 +110,34 @@ describe("Anthropic request configuration", () => {
   for (const anthropicWorkspaceId of ["wrk_fixture", undefined]) {
     test(`the SDK sends the configured workspace on requests (${String(anthropicWorkspaceId)})`, async () => {
       const requests: Headers[] = [];
-      const fetchSpy = spyOn(globalThis, "fetch").mockImplementation(
-        Object.assign(
-          async (
-            _url: Parameters<typeof globalThis.fetch>[0],
-            init?: RequestInit,
-          ) => {
-            requests.push(new Headers(init?.headers));
-            return new Response(
-              JSON.stringify({
-                type: "error",
-                error: {
-                  type: "invalid_request_error",
-                  message: "Recorded transport stop",
+      const fetchSpy = Object.assign(
+        mock(
+          Object.assign(
+            async (
+              _url: Parameters<typeof globalThis.fetch>[0],
+              init?: RequestInit,
+            ) => {
+              requests.push(new Headers(init?.headers));
+              return new Response(
+                JSON.stringify({
+                  type: "error",
+                  error: {
+                    type: "invalid_request_error",
+                    message: "Recorded transport stop",
+                  },
+                }),
+                {
+                  status: 400,
+                  headers: { "content-type": "application/json" },
                 },
-              }),
-              { status: 400, headers: { "content-type": "application/json" } },
-            );
-          },
-          { preconnect: globalThis.fetch.preconnect },
+              );
+            },
+            { preconnect: globalThis.fetch.preconnect },
+          ),
         ),
+        { preconnect: globalThis.fetch.preconnect },
       );
+      testFetchState.set(fetchSpy);
       testState.setConfig("USE_MOCK_AI", false);
       try {
         const adapter = createTanStackTextAdapterFactory({
@@ -148,7 +158,7 @@ describe("Anthropic request configuration", () => {
           anthropicWorkspaceId ?? null,
         );
       } finally {
-        fetchSpy.mockRestore();
+        testFetchState.restore();
       }
     });
   }

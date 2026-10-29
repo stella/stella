@@ -31,7 +31,6 @@ import {
 import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
 import type { SaosItem } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
 import { plCourtsAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
-import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import {
   RECONCILIATION_INGEST_BUDGET_MS,
@@ -56,10 +55,14 @@ import {
   PARTIAL_OBSERVATION_KEY,
 } from "@/api/lib/legal-search/partial-observation-sql";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import { requireReconciliation } from "@/api/tests/helpers/case-law-adapter-test-utils";
 import { planLines } from "@/api/tests/helpers/explain-plan";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
+
+const testFetchState = createTestFetch();
 
 let claimStatements = 0;
 let leaseRenewals = 0;
@@ -112,7 +115,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
   fake.stop();
 });
 
@@ -142,30 +145,32 @@ const RAPPORTEUR = "Anna Nowak";
 
 /** SAOS, with the per-judgment endpoint answering as `detail` says. */
 const serveSaos = (detail: () => Response): void => {
-  globalThis.fetch = Object.assign(
-    async (
-      input: string | URL | Request,
-      init?: RequestInit,
-    ): Promise<Response> => {
-      const url = input instanceof Request ? input.url : String(input);
-      if (!url.startsWith("https://www.saos.org.pl/")) {
-        return await originalFetch(input, init);
-      }
-      if (url.includes("/api/dump/judgments")) {
-        return Response.json({ items: [JUDGMENT] });
-      }
-      if (url.includes("/api/search/judgments")) {
-        return Response.json({
-          items: [JUDGMENT],
-          info: { totalResults: 1 },
-        });
-      }
-      if (url.endsWith(`/api/judgments/${JUDGMENT.id}`)) {
-        return detail();
-      }
-      return new Response("Not found", { status: 404 });
-    },
-    { preconnect: originalFetch.preconnect.bind(originalFetch) },
+  testFetchState.set(
+    Object.assign(
+      async (
+        input: string | URL | Request,
+        init?: RequestInit,
+      ): Promise<Response> => {
+        const url = input instanceof Request ? input.url : String(input);
+        if (!url.startsWith("https://www.saos.org.pl/")) {
+          return await originalFetch(input, init);
+        }
+        if (url.includes("/api/dump/judgments")) {
+          return Response.json({ items: [JUDGMENT] });
+        }
+        if (url.includes("/api/search/judgments")) {
+          return Response.json({
+            items: [JUDGMENT],
+            info: { totalResults: 1 },
+          });
+        }
+        if (url.endsWith(`/api/judgments/${JUDGMENT.id}`)) {
+          return detail();
+        }
+        return new Response("Not found", { status: 404 });
+      },
+      { preconnect: originalFetch.preconnect.bind(originalFetch) },
+    ),
   );
 };
 

@@ -18,7 +18,10 @@ import {
   createStellaOpenRouterText,
   StellaOpenRouterTextAdapter,
 } from "@/api/lib/stella-openrouter-text-adapter";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { createTestState } from "@/api/tests/helpers/test-state";
+
+const testFetchState = createTestFetch();
 
 const testState = createTestState({ file: import.meta.path, config: env });
 
@@ -40,12 +43,14 @@ describe("instance provider redirect policy", () => {
     const cancellation = new DOMException("Fixture cancellation", "AbortError");
     const controller = new AbortController();
     controller.abort(cancellation);
-    globalThis.fetch = Object.assign(
-      async (_input: Parameters<typeof fetch>[0], init?: RequestInit) => {
-        init?.signal?.throwIfAborted();
-        return new Response(null);
-      },
-      { preconnect: originalFetch.preconnect },
+    testFetchState.set(
+      Object.assign(
+        async (_input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+          init?.signal?.throwIfAborted();
+          return new Response(null);
+        },
+        { preconnect: originalFetch.preconnect },
+      ),
     );
     try {
       const result = await fetchManagedOpenRouterCompletion(
@@ -58,7 +63,7 @@ describe("instance provider redirect policy", () => {
         expect(result.error).toBe(cancellation);
       }
     } finally {
-      globalThis.fetch = originalFetch;
+      testFetchState.restore();
     }
   });
 
@@ -67,15 +72,17 @@ describe("instance provider redirect policy", () => {
     const previousChecks = env.FEATURE_MANAGED_PROVIDER_CHECKS;
     testState.setConfig("FEATURE_MANAGED_PROVIDER_CHECKS", false);
     let calls = 0;
-    globalThis.fetch = Object.assign(
-      async () => {
-        calls++;
-        return Response.json(
-          { error: { code: 402, message: "Insufficient credits" } },
-          { status: 402 },
-        );
-      },
-      { preconnect: originalFetch.preconnect },
+    testFetchState.set(
+      Object.assign(
+        async () => {
+          calls++;
+          return Response.json(
+            { error: { code: 402, message: "Insufficient credits" } },
+            { status: 402 },
+          );
+        },
+        { preconnect: originalFetch.preconnect },
+      ),
     );
     try {
       const options = {
@@ -107,7 +114,7 @@ describe("instance provider redirect policy", () => {
       });
       expect(calls).toBe(2);
     } finally {
-      globalThis.fetch = originalFetch;
+      testFetchState.restore();
       testState.setConfig("FEATURE_MANAGED_PROVIDER_CHECKS", previousChecks);
     }
   });
@@ -122,50 +129,57 @@ describe("instance provider redirect policy", () => {
           testState.setConfig("FEATURE_MANAGED_PROVIDER_CHECKS", false);
           const requests: Request[] = [];
           const redirectedHost = "redirected-provider.invalid";
-          globalThis.fetch = Object.assign(
-            async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
-              const request =
-                input instanceof Request
-                  ? input
-                  : new Request(input.toString(), init);
-              requests.push(request);
-              expect(await request.clone().text()).toContain("fixture request");
-              const redirect = new Response(null, {
-                status: status === "opaque" ? 307 : status,
-                headers: {
-                  location: `https://${redirectedHost}/chat/completions`,
-                },
-              });
-              if (status === "opaque") {
-                Object.defineProperties(redirect, {
-                  type: { value: "opaqueredirect" },
-                  status: { value: 0 },
+          testFetchState.set(
+            Object.assign(
+              async (
+                input: Parameters<typeof fetch>[0],
+                init?: RequestInit,
+              ) => {
+                const request =
+                  input instanceof Request
+                    ? input
+                    : new Request(input.toString(), init);
+                requests.push(request);
+                expect(await request.clone().text()).toContain(
+                  "fixture request",
+                );
+                const redirect = new Response(null, {
+                  status: status === "opaque" ? 307 : status,
+                  headers: {
+                    location: `https://${redirectedHost}/chat/completions`,
+                  },
                 });
-              }
-              // Model native fetch's redirect modes at the transport boundary.
-              switch (request.redirect) {
-                case "error":
-                  throw new TypeError("Redirect refused");
-                case "manual":
-                  return redirect;
-                case "follow":
-                  requests.push(
-                    new Request(
-                      redirect.headers.get("location") ??
-                        panic("Missing location"),
-                      request,
-                    ),
-                  );
-                  return Response.json(
-                    { error: { code: 400, message: "Fixture failure" } },
-                    { status: 400 },
-                  );
-                default:
-                  request.redirect satisfies never;
-                  return panic("Unknown redirect mode");
-              }
-            },
-            { preconnect: originalFetch.preconnect },
+                if (status === "opaque") {
+                  Object.defineProperties(redirect, {
+                    type: { value: "opaqueredirect" },
+                    status: { value: 0 },
+                  });
+                }
+                // Model native fetch's redirect modes at the transport boundary.
+                switch (request.redirect) {
+                  case "error":
+                    throw new TypeError("Redirect refused");
+                  case "manual":
+                    return redirect;
+                  case "follow":
+                    requests.push(
+                      new Request(
+                        redirect.headers.get("location") ??
+                          panic("Missing location"),
+                        request,
+                      ),
+                    );
+                    return Response.json(
+                      { error: { code: 400, message: "Fixture failure" } },
+                      { status: 400 },
+                    );
+                  default:
+                    request.redirect satisfies never;
+                    return panic("Unknown redirect mode");
+                }
+              },
+              { preconnect: originalFetch.preconnect },
+            ),
           );
           try {
             let instance;
@@ -252,7 +266,7 @@ describe("instance provider redirect policy", () => {
                 : [expectedHost],
             );
           } finally {
-            globalThis.fetch = originalFetch;
+            testFetchState.restore();
             testState.setConfig(
               "FEATURE_MANAGED_PROVIDER_CHECKS",
               previousChecks,
@@ -328,9 +342,11 @@ describe("OpenRouter document transport", () => {
         },
       );
     };
-    globalThis.fetch = Object.assign(fetchStub, {
-      preconnect: originalFetch.preconnect,
-    });
+    testFetchState.set(
+      Object.assign(fetchStub, {
+        preconnect: originalFetch.preconnect,
+      }),
+    );
 
     try {
       const base64 = Buffer.from("%PDF-1.4\nwire").toBase64();
@@ -380,7 +396,7 @@ describe("OpenRouter document transport", () => {
         ],
       });
     } finally {
-      globalThis.fetch = originalFetch;
+      testFetchState.restore();
     }
   });
 });

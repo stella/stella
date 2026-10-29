@@ -35,6 +35,7 @@ import {
   fitsDecisionSearchCandidateRow,
   sanitizeResult,
 } from "@/api/lib/legal-search/ingestion-normalization";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 import {
@@ -42,6 +43,8 @@ import {
   PL_KIO_HTML_BUDGET,
   PL_KIO_RESPONSE_BYTE_CAP,
 } from "./pl-kio-response-budget";
+
+const testFetchState = createTestFetch();
 
 const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);
 
@@ -55,7 +58,6 @@ const gzFixtureText = async (name: string): Promise<string> =>
     ),
   );
 
-const originalFetch = globalThis.fetch;
 const originalSleep = Bun.sleep;
 
 beforeEach(() => {
@@ -64,7 +66,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
   Bun.sleep = originalSleep;
 });
 
@@ -712,53 +714,55 @@ const stubPublisher = async (
   };
   const detail = await fixtureText("pl-kio-detail-30308.html");
   const content = await gzFixtureText("pl-kio-content-30308.html.gz");
-  globalThis.fetch = asFetchMock(async (input, init) => {
-    const url = input instanceof Request ? input.url : String(input);
-    const body = typeof init?.body === "string" ? init.body : "";
-    seen.push({ url, body });
-    if (url.endsWith("/Home/GetResults")) {
-      if (overrides.listingStatus !== undefined) {
-        return html("", overrides.listingStatus);
+  testFetchState.set(
+    asFetchMock(async (input, init) => {
+      const url = input instanceof Request ? input.url : String(input);
+      const body = typeof init?.body === "string" ? init.body : "";
+      seen.push({ url, body });
+      if (url.endsWith("/Home/GetResults")) {
+        if (overrides.listingStatus !== undefined) {
+          return html("", overrides.listingStatus);
+        }
+        const form = new URLSearchParams(body);
+        if (form.get("Dt") !== "01-09-2025 - 30-09-2025") {
+          return html(listingPage(0, []));
+        }
+        // Past the last page the listing serves the last page again.
+        return html(pages[form.get("Pg") ?? ""] ?? pages["2"] ?? "");
       }
-      const form = new URLSearchParams(body);
-      if (form.get("Dt") !== "01-09-2025 - 30-09-2025") {
-        return html(listingPage(0, []));
+      if (url.includes("/Home/Details/")) {
+        if (overrides.detailHtml !== undefined) {
+          return html(overrides.detailHtml);
+        }
+        return overrides.detailStatus === undefined
+          ? html(detail)
+          : html("<html>Brak strony</html>", overrides.detailStatus);
       }
-      // Past the last page the listing serves the last page again.
-      return html(pages[form.get("Pg") ?? ""] ?? pages["2"] ?? "");
-    }
-    if (url.includes("/Home/Details/")) {
-      if (overrides.detailHtml !== undefined) {
-        return html(overrides.detailHtml);
+      if (overrides.contentBytes !== undefined) {
+        let remaining = overrides.contentBytes;
+        return new Response(
+          new ReadableStream({
+            pull(controller) {
+              if (remaining === 0) {
+                controller.close();
+                return;
+              }
+              const bytes = Math.min(remaining, 64 * 1024);
+              remaining -= bytes;
+              controller.enqueue(new Uint8Array(bytes).fill(120));
+            },
+          }),
+          { headers: { "Content-Type": "text/html; charset=utf-8" } },
+        );
       }
-      return overrides.detailStatus === undefined
-        ? html(detail)
-        : html("<html>Brak strony</html>", overrides.detailStatus);
-    }
-    if (overrides.contentBytes !== undefined) {
-      let remaining = overrides.contentBytes;
-      return new Response(
-        new ReadableStream({
-          pull(controller) {
-            if (remaining === 0) {
-              controller.close();
-              return;
-            }
-            const bytes = Math.min(remaining, 64 * 1024);
-            remaining -= bytes;
-            controller.enqueue(new Uint8Array(bytes).fill(120));
-          },
-        }),
-        { headers: { "Content-Type": "text/html; charset=utf-8" } },
-      );
-    }
-    if (overrides.contentHtml !== undefined) {
-      return html(overrides.contentHtml);
-    }
-    return overrides.contentStatus === undefined
-      ? html(content)
-      : html("<html>Brak strony</html>", overrides.contentStatus);
-  });
+      if (overrides.contentHtml !== undefined) {
+        return html(overrides.contentHtml);
+      }
+      return overrides.contentStatus === undefined
+        ? html(content)
+        : html("<html>Brak strony</html>", overrides.contentStatus);
+    }),
+  );
   return seen;
 };
 
@@ -1059,24 +1063,27 @@ describe("walking a month", () => {
       "KIO 2681/25",
       "01-09-2025",
     ).replace(/<label>Organ wydający:<\/label>[^<]*/u, "");
-    globalThis.fetch = asFetchMock(async (input, init) => {
-      const url = input instanceof Request ? input.url : String(input);
-      const body = typeof init?.body === "string" ? init.body : "";
-      if (url.endsWith("/Home/GetResults")) {
-        return new URLSearchParams(body).get("Dt") === "01-09-2025 - 30-09-2025"
-          ? html(
-              listingPage(2, [
-                courtlessRow,
-                listingRow("30308", "KIO 2845/25", "01-09-2025"),
-              ]),
-            )
-          : html(listingPage(0, []));
-      }
-      if (url.endsWith("/Home/Details/30306")) {
-        return html(courtless);
-      }
-      return url.includes("/Home/Details/") ? html(plain) : html("");
-    });
+    testFetchState.set(
+      asFetchMock(async (input, init) => {
+        const url = input instanceof Request ? input.url : String(input);
+        const body = typeof init?.body === "string" ? init.body : "";
+        if (url.endsWith("/Home/GetResults")) {
+          return new URLSearchParams(body).get("Dt") ===
+            "01-09-2025 - 30-09-2025"
+            ? html(
+                listingPage(2, [
+                  courtlessRow,
+                  listingRow("30308", "KIO 2845/25", "01-09-2025"),
+                ]),
+              )
+            : html(listingPage(0, []));
+        }
+        if (url.endsWith("/Home/Details/30306")) {
+          return html(courtless);
+        }
+        return url.includes("/Home/Details/") ? html(plain) : html("");
+      }),
+    );
 
     const page = await plKioAdapter.fetchPage("2025-09:0+0", {});
     expect(Result.isOk(page)).toBe(true);
@@ -1117,31 +1124,36 @@ describe("walking the tail past the present month", () => {
       listingRow(String(100 + index), `KIO ${index + 1}/25`, "01-09-2025"),
     );
     const all = [...datedRows, ...tail];
-    globalThis.fetch = asFetchMock(async (input, init) => {
-      const url = input instanceof Request ? input.url : String(input);
-      const body = typeof init?.body === "string" ? init.body : "";
-      seen.push({ url, body });
-      if (url.endsWith("/Home/GetResults")) {
-        const form = new URLSearchParams(body);
-        const range = form.get("Dt");
-        // Unfiltered: everything; from 1900: the dated rows; a month: none.
-        let rows: readonly string[] = [];
-        if (range === null) {
-          rows = all;
-        } else if (range.startsWith("01-01-1900")) {
-          rows = datedRows;
+    testFetchState.set(
+      asFetchMock(async (input, init) => {
+        const url = input instanceof Request ? input.url : String(input);
+        const body = typeof init?.body === "string" ? init.body : "";
+        seen.push({ url, body });
+        if (url.endsWith("/Home/GetResults")) {
+          const form = new URLSearchParams(body);
+          const range = form.get("Dt");
+          // Unfiltered: everything; from 1900: the dated rows; a month: none.
+          let rows: readonly string[] = [];
+          if (range === null) {
+            rows = all;
+          } else if (range.startsWith("01-01-1900")) {
+            rows = datedRows;
+          }
+          const pageNumber = Number(form.get("Pg"));
+          const last = Math.max(1, Math.ceil(rows.length / 10));
+          const served = Math.min(pageNumber, last);
+          return html(
+            listingPage(
+              rows.length,
+              rows.slice((served - 1) * 10, served * 10),
+            ),
+          );
         }
-        const pageNumber = Number(form.get("Pg"));
-        const last = Math.max(1, Math.ceil(rows.length / 10));
-        const served = Math.min(pageNumber, last);
-        return html(
-          listingPage(rows.length, rows.slice((served - 1) * 10, served * 10)),
-        );
-      }
-      return url.includes("/Home/Details/")
-        ? html(await fixtureText("pl-kio-detail-13694.html"))
-        : html("");
-    });
+        return url.includes("/Home/Details/")
+          ? html(await fixtureText("pl-kio-detail-13694.html"))
+          : html("");
+      }),
+    );
     return seen;
   };
 
@@ -1197,19 +1209,21 @@ describe("listing one issue date for reconciliation", () => {
   test("pages come from the stated count, and a page past it lists nothing", async () => {
     const seen = await stubPublisher();
     // The stub keys its answer on the month; a day slice asks for one day.
-    globalThis.fetch = asFetchMock(async (input, init) => {
-      const url = input instanceof Request ? input.url : String(input);
-      const body = typeof init?.body === "string" ? init.body : "";
-      seen.push({ url, body });
-      const pageNumber = new URLSearchParams(body).get("Pg");
-      return html(
-        await fixtureText(
-          pageNumber === "1"
-            ? "pl-kio-listing-2025-09-01-p1.html"
-            : "pl-kio-listing-2025-09-01-p2.html",
-        ),
-      );
-    });
+    testFetchState.set(
+      asFetchMock(async (input, init) => {
+        const url = input instanceof Request ? input.url : String(input);
+        const body = typeof init?.body === "string" ? init.body : "";
+        seen.push({ url, body });
+        const pageNumber = new URLSearchParams(body).get("Pg");
+        return html(
+          await fixtureText(
+            pageNumber === "1"
+              ? "pl-kio-listing-2025-09-01-p1.html"
+              : "pl-kio-listing-2025-09-01-p2.html",
+          ),
+        );
+      }),
+    );
 
     const walk = plKioAdapter.reconciliation;
     const first = await walk.listSlicePage({ slice: "2025-09-01", page: 0 });
@@ -1227,8 +1241,10 @@ describe("listing one issue date for reconciliation", () => {
   });
 
   test("the whole corpus's count is the listing's own", async () => {
-    globalThis.fetch = asFetchMock(async () =>
-      html(await fixtureText("pl-kio-listing-undated-p1.html")),
+    testFetchState.set(
+      asFetchMock(async () =>
+        html(await fixtureText("pl-kio-listing-undated-p1.html")),
+      ),
     );
     expect(await plKioAdapter.getTotalCount(AbortSignal.timeout(5000))).toEqual(
       { type: "count", total: 35_720 },

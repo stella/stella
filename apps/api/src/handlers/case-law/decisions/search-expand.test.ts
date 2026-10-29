@@ -22,8 +22,11 @@ import {
   streamCarrying,
 } from "@/api/tests/helpers/provider-wire-answer";
 import { loadProviderWireCassettes } from "@/api/tests/helpers/provider-wire-cassette";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+const testFetchState = createTestFetch();
 
 // The expansion's own model call, with the organization's real model
 // resolution, request options, adapter and answer parsing; only `fetch` is
@@ -158,11 +161,11 @@ testState.beforeAll(() => {
 });
 
 beforeEach(() => {
-  globalThis.fetch = answeringFetch;
+  testFetchState.set(answeringFetch);
 });
 
 afterEach(() => {
-  globalThis.fetch = realFetch;
+  testFetchState.restore();
 });
 
 /** Usage is recorded through the request's database scope; none here. */

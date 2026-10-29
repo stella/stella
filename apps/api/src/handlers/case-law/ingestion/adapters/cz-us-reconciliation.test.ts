@@ -25,8 +25,11 @@ import {
   czUsListingIdentity,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
 import type { ListedDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
-import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
+import { requireReconciliation } from "@/api/tests/helpers/case-law-adapter-test-utils";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const testFetchState = createTestFetch();
 
 /** Frozen so "the current year" and "yesterday" are the same in every test. */
 const NOW = new Date("2026-08-08T12:00:00.000Z");
@@ -173,58 +176,67 @@ const installSearchMock = ({
   const bySz = new Map(
     rows.flatMap((row) => (row.sz ? [[row.sz, row] as const] : [])),
   );
-  globalThis.fetch = asFetchMock(
-    mock((input: string | URL | Request, init?: RequestInit) => {
-      const url = new URL(resolveUrl(input));
-      const method = requestMethod(input, init);
-      if (url.pathname.endsWith("/Search/Search.aspx") && method === "GET") {
-        return Promise.resolve(
-          new Response(makeSearchForm(), {
-            status: formStatus,
-            headers: { "Set-Cookie": "ASP.NET_SessionId=test-session; Path=/" },
-          }),
-        );
-      }
-      if (url.pathname.endsWith("/Search/Search.aspx")) {
-        onPost?.(
-          new URLSearchParams(typeof init?.body === "string" ? init.body : ""),
-        );
-        return Promise.resolve(
-          statedEmpty
-            ? new Response(makeNoResultsPage())
-            : new Response(null, {
-                status: 302,
-                headers: { Location: "/Search/Results.aspx" },
-              }),
-        );
-      }
-      if (url.pathname.endsWith("/Search/Results.aspx")) {
-        onResults?.(url);
-        return Promise.resolve(
-          new Response(makeResultsPage({ rows, rangeFrom, reported, banner }), {
-            status: resultsStatus,
-          }),
-        );
-      }
-      if (url.pathname.endsWith("/Search/GetText.aspx")) {
-        const row = bySz.get(url.searchParams.get("sz") ?? "");
-        if (row === undefined) {
-          return Promise.resolve(new Response("missing", { status: 404 }));
+  testFetchState.set(
+    asFetchMock(
+      mock((input: string | URL | Request, init?: RequestInit) => {
+        const url = new URL(resolveUrl(input));
+        const method = requestMethod(input, init);
+        if (url.pathname.endsWith("/Search/Search.aspx") && method === "GET") {
+          return Promise.resolve(
+            new Response(makeSearchForm(), {
+              status: formStatus,
+              headers: {
+                "Set-Cookie": "ASP.NET_SessionId=test-session; Path=/",
+              },
+            }),
+          );
         }
-        return Promise.resolve(
-          new Response(
-            unparseableText
-              ? "<html><body>detail unavailable</body></html>"
-              : makeTextPage(row, counterOf(row)),
-            { status: textStatus },
-          ),
-        );
-      }
-      if (url.pathname.endsWith("/Search/GetAbstract.aspx")) {
-        return Promise.resolve(new Response(makeAbstractPage()));
-      }
-      return Promise.resolve(new Response("unexpected", { status: 500 }));
-    }),
+        if (url.pathname.endsWith("/Search/Search.aspx")) {
+          onPost?.(
+            new URLSearchParams(
+              typeof init?.body === "string" ? init.body : "",
+            ),
+          );
+          return Promise.resolve(
+            statedEmpty
+              ? new Response(makeNoResultsPage())
+              : new Response(null, {
+                  status: 302,
+                  headers: { Location: "/Search/Results.aspx" },
+                }),
+          );
+        }
+        if (url.pathname.endsWith("/Search/Results.aspx")) {
+          onResults?.(url);
+          return Promise.resolve(
+            new Response(
+              makeResultsPage({ rows, rangeFrom, reported, banner }),
+              {
+                status: resultsStatus,
+              },
+            ),
+          );
+        }
+        if (url.pathname.endsWith("/Search/GetText.aspx")) {
+          const row = bySz.get(url.searchParams.get("sz") ?? "");
+          if (row === undefined) {
+            return Promise.resolve(new Response("missing", { status: 404 }));
+          }
+          return Promise.resolve(
+            new Response(
+              unparseableText
+                ? "<html><body>detail unavailable</body></html>"
+                : makeTextPage(row, counterOf(row)),
+              { status: textStatus },
+            ),
+          );
+        }
+        if (url.pathname.endsWith("/Search/GetAbstract.aspx")) {
+          return Promise.resolve(new Response(makeAbstractPage()));
+        }
+        return Promise.resolve(new Response("unexpected", { status: 500 }));
+      }),
+    ),
   );
 };
 
@@ -381,7 +393,6 @@ describe("czUsListingIdentity", () => {
 // ── Listing walk ─────────────────────────────────────────
 
 describe("cz-us listSlicePage", () => {
-  const originalFetch = globalThis.fetch;
   const originalSleep = Bun.sleep;
 
   beforeAll(() => {
@@ -399,7 +410,7 @@ describe("cz-us listSlicePage", () => {
   });
 
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
     Bun.sleep = originalSleep;
   });
 
@@ -505,7 +516,6 @@ describe("cz-us listSlicePage", () => {
 // ── Building one listed record ───────────────────────────
 
 describe("cz-us buildDecision", () => {
-  const originalFetch = globalThis.fetch;
   const originalSleep = Bun.sleep;
 
   beforeAll(() => {
@@ -523,7 +533,7 @@ describe("cz-us buildDecision", () => {
   });
 
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
     Bun.sleep = originalSleep;
   });
 

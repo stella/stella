@@ -65,7 +65,10 @@ import {
   setLogSinkForTesting,
 } from "@/api/lib/observability/logger";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const testFetchState = createTestFetch();
 
 const FIXTURES = new URL("__fixtures__/", import.meta.url);
 
@@ -123,10 +126,8 @@ const rejectionOf = async (promise: Promise<unknown>): Promise<string | null> =>
 const xml = (body: string, status = 200): Response =>
   new Response(body, { status, headers: { "Content-Type": "text/xml" } });
 
-const originalFetch = globalThis.fetch;
-
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
 });
 
 /** A record for any id, in the API's own shape, as the stubbed walks need. */
@@ -339,10 +340,12 @@ describe("building a judgment", () => {
     expect(supplement.document.fulltext?.length ?? 0).toBeGreaterThan(1000);
 
     // The reconciliation hands it over as a supplement too.
-    globalThis.fetch = asFetchMock(async (input: string | URL | Request) =>
-      urlOf(input).pathname.endsWith("/judgement/content")
-        ? await Promise.resolve(xml(contentXml))
-        : await Promise.resolve(xml(detailXml)),
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request) =>
+        urlOf(input).pathname.endsWith("/judgement/content")
+          ? await Promise.resolve(xml(contentXml))
+          : await Promise.resolve(xml(detailXml)),
+      ),
     );
     const reconciled = await plNcourtAdapter.reconciliation.buildDecision({
       listingXml,
@@ -395,21 +398,23 @@ describe("building a judgment", () => {
       panic("no pair row");
     const pairDetail = await fixture(`pl-ncourt-detail-${PAIR}.xml`);
     const pairContent = await fixture(`pl-ncourt-content-${PAIR}.xml.gz`);
-    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-      const url = urlOf(input);
-      const reasons = url.searchParams.get("id") === REASONS;
-      if (url.pathname.endsWith("/judgement/details")) {
-        return await Promise.resolve(xml(reasons ? detailXml : pairDetail));
-      }
-      if (url.pathname.endsWith("/judgement/content")) {
-        return await Promise.resolve(xml(reasons ? contentXml : pairContent));
-      }
-      return await Promise.resolve(
-        xml(
-          `<judgements total="2" results="2" offset="0" limit="200">${pairRow}${reasonsRow}</judgements>`,
-        ),
-      );
-    });
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request) => {
+        const url = urlOf(input);
+        const reasons = url.searchParams.get("id") === REASONS;
+        if (url.pathname.endsWith("/judgement/details")) {
+          return await Promise.resolve(xml(reasons ? detailXml : pairDetail));
+        }
+        if (url.pathname.endsWith("/judgement/content")) {
+          return await Promise.resolve(xml(reasons ? contentXml : pairContent));
+        }
+        return await Promise.resolve(
+          xml(
+            `<judgements total="2" results="2" offset="0" limit="200">${pairRow}${reasonsRow}</judgements>`,
+          ),
+        );
+      }),
+    );
     const page = await fetchPage(
       encodePlNcourtCursor({
         lane: "walk",
@@ -460,20 +465,22 @@ describe("building a judgment", () => {
     // The fixture reaches the plain-text failure before routing is asserted.
     expect(document.plainTextOutcome.type).toBe("item_build_failed");
     expect(assembled.type).toBe("built");
-    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-      const url = urlOf(input);
-      if (url.pathname.endsWith("/judgement/details")) {
-        return await Promise.resolve(xml(detailXml));
-      }
-      if (url.pathname.endsWith("/judgement/content")) {
-        return await Promise.resolve(xml(contentXml));
-      }
-      return await Promise.resolve(
-        xml(
-          `<judgements total="1" results="1" offset="0" limit="200">${reasonsRow}</judgements>`,
-        ),
-      );
-    });
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request) => {
+        const url = urlOf(input);
+        if (url.pathname.endsWith("/judgement/details")) {
+          return await Promise.resolve(xml(detailXml));
+        }
+        if (url.pathname.endsWith("/judgement/content")) {
+          return await Promise.resolve(xml(contentXml));
+        }
+        return await Promise.resolve(
+          xml(
+            `<judgements total="1" results="1" offset="0" limit="200">${reasonsRow}</judgements>`,
+          ),
+        );
+      }),
+    );
     const page = await fetchPage(
       encodePlNcourtCursor({
         lane: "walk",
@@ -536,8 +543,8 @@ describe("building a judgment", () => {
       courtId: "15252000",
       type: "SENTENCE, REASON",
     });
-    globalThis.fetch = asFetchMock(
-      async () => await Promise.resolve(xml(detailXml)),
+    testFetchState.set(
+      asFetchMock(async () => await Promise.resolve(xml(detailXml))),
     );
     const outcome = await plNcourtAdapter.reconciliation.buildDecision({
       listingXml,
@@ -560,10 +567,12 @@ describe("building a judgment", () => {
   test("a document the API answers 404 for leaves the record stored without one", async () => {
     const listed = await listingOf("pl-ncourt-listing-signature.xml");
     const detailXml = await fixture(`pl-ncourt-detail-${PAIR}.xml`);
-    globalThis.fetch = asFetchMock(async (input: string | URL | Request) =>
-      urlOf(input).pathname.endsWith("/judgement/content")
-        ? await Promise.resolve(new Response("", { status: 404 }))
-        : await Promise.resolve(xml(detailXml)),
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request) =>
+        urlOf(input).pathname.endsWith("/judgement/content")
+          ? await Promise.resolve(new Response("", { status: 404 }))
+          : await Promise.resolve(xml(detailXml)),
+      ),
     );
     const outcome = await plNcourtAdapter.reconciliation.buildDecision({
       listingXml: listed.fragments[0],
@@ -609,11 +618,11 @@ describe("building a judgment", () => {
     try {
       for (const status of [503, 429]) {
         const requests: string[] = [];
-        globalThis.fetch = asFetchMock(
-          async (input: string | URL | Request) => {
+        testFetchState.set(
+          asFetchMock(async (input: string | URL | Request) => {
             requests.push(urlOf(input).pathname);
             return await Promise.resolve(new Response("", { status }));
-          },
+          }),
         );
         const failure = await rejectionOf(
           plNcourtAdapter.reconciliation.buildDecision({
@@ -1483,8 +1492,8 @@ describe("counting a court", () => {
     // Without the check, this answer counts the whole corpus as one court.
     expect(readPlNcourtListing(ignored)?.total).toBe(total);
 
-    globalThis.fetch = asFetchMock(
-      async () => await Promise.resolve(xml(ignored)),
+    testFetchState.set(
+      asFetchMock(async () => await Promise.resolve(xml(ignored))),
     );
     const counted = await plNcourtCourtCount({
       courtId: "15999999",
@@ -1496,8 +1505,8 @@ describe("counting a court", () => {
   test("a court id the API applies is counted", async () => {
     const total = (await listingOf("pl-ncourt-total.xml")).total;
     const applied = await fixture("pl-ncourt-court-15502000.xml");
-    globalThis.fetch = asFetchMock(
-      async () => await Promise.resolve(xml(applied)),
+    testFetchState.set(
+      asFetchMock(async () => await Promise.resolve(xml(applied))),
     );
     const counted = await plNcourtCourtCount({
       courtId: "15502000",
@@ -1513,20 +1522,22 @@ describe("counting a court", () => {
 
   test("the census states every known court's count and what they leave of the total", async () => {
     const counted: string[] = [];
-    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-      const court = urlOf(input).searchParams.get("court");
-      if (court === null) {
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request) => {
+        const court = urlOf(input).searchParams.get("court");
+        if (court === null) {
+          return await Promise.resolve(
+            xml('<judgements total="5000" results="0" offset="0" limit="0"/>'),
+          );
+        }
+        counted.push(court);
         return await Promise.resolve(
-          xml('<judgements total="5000" results="0" offset="0" limit="0"/>'),
+          xml(
+            `<judgements total="3" results="1" offset="0" limit="1"><judgement><id>x</id><courtId>${court}</courtId></judgement></judgements>`,
+          ),
         );
-      }
-      counted.push(court);
-      return await Promise.resolve(
-        xml(
-          `<judgements total="3" results="1" offset="0" limit="1"><judgement><id>x</id><courtId>${court}</courtId></judgement></judgements>`,
-        ),
-      );
-    });
+      }),
+    );
     const census = await plNcourtCensus();
     const value = Result.isOk(census) ? census.value : panic("no census");
     expect(value.courts).toHaveLength(counted.length);
@@ -1535,23 +1546,25 @@ describe("counting a court", () => {
   });
 
   test("the census refuses a court whose filter did not take, rather than count it", async () => {
-    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-      const court = urlOf(input).searchParams.get("court");
-      return await Promise.resolve(
-        xml(
-          court === null
-            ? '<judgements total="5000" results="0" offset="0" limit="0"/>'
-            : '<judgements total="3" results="1" offset="0" limit="1"><judgement><id>x</id><courtId>15050000</courtId></judgement></judgements>',
-        ),
-      );
-    });
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request) => {
+        const court = urlOf(input).searchParams.get("court");
+        return await Promise.resolve(
+          xml(
+            court === null
+              ? '<judgements total="5000" results="0" offset="0" limit="0"/>'
+              : '<judgements total="3" results="1" offset="0" limit="1"><judgement><id>x</id><courtId>15050000</courtId></judgement></judgements>',
+          ),
+        );
+      }),
+    );
     expect(Result.isError(await plNcourtCensus())).toBe(true);
   });
 
   test("the corpus total is the unfiltered listing's", async () => {
     const body = await fixture("pl-ncourt-total.xml");
-    globalThis.fetch = asFetchMock(
-      async () => await Promise.resolve(xml(body)),
+    testFetchState.set(
+      asFetchMock(async () => await Promise.resolve(xml(body))),
     );
     expect(
       await plNcourtAdapter.getTotalCount(new AbortController().signal),
@@ -1583,41 +1596,46 @@ const urlOf = (input: string | URL | Request): URL => {
 
 /** Serve captured rows by offset; a window covering a poisoned one is a 404. */
 const installWalkStub = (stub: WalkStub): void => {
-  globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-    const url = urlOf(input);
-    stub.requests.push(url.toString());
-    const id = url.searchParams.get("id") ?? "";
-    const fragment = [...stub.rows.values()].find((candidate) =>
-      candidate.includes(`<id>${id}</id>`),
-    );
-    if (url.pathname.endsWith("/judgement/details")) {
-      return await Promise.resolve(
-        xml(recordFor(id, readPlNcourtListingRow(fragment ?? "") ?? {})),
+  testFetchState.set(
+    asFetchMock(async (input: string | URL | Request) => {
+      const url = urlOf(input);
+      stub.requests.push(url.toString());
+      const id = url.searchParams.get("id") ?? "";
+      const fragment = [...stub.rows.values()].find((candidate) =>
+        candidate.includes(`<id>${id}</id>`),
       );
-    }
-    if (url.pathname.endsWith("/judgement/content")) {
-      return await Promise.resolve(
-        xml(`<xPart><xBlock><xText>${id}</xText></xBlock></xPart>`),
+      if (url.pathname.endsWith("/judgement/details")) {
+        return await Promise.resolve(
+          xml(recordFor(id, readPlNcourtListingRow(fragment ?? "") ?? {})),
+        );
+      }
+      if (url.pathname.endsWith("/judgement/content")) {
+        return await Promise.resolve(
+          xml(`<xPart><xBlock><xText>${id}</xText></xBlock></xPart>`),
+        );
+      }
+      const offset = Number(url.searchParams.get("offset"));
+      const limit = Number(url.searchParams.get("limit"));
+      const window = Array.from(
+        { length: limit },
+        (_, index) => offset + index,
       );
-    }
-    const offset = Number(url.searchParams.get("offset"));
-    const limit = Number(url.searchParams.get("limit"));
-    const window = Array.from({ length: limit }, (_, index) => offset + index);
-    if (window.some((at) => stub.poisoned.has(at))) {
-      return await Promise.resolve(new Response("", { status: 404 }));
-    }
-    const listed = window.flatMap((at) => {
-      const found = stub.rows.get(at);
-      return found === undefined || stub.withheld?.has(at) === true
-        ? []
-        : [found];
-    });
-    return await Promise.resolve(
-      xml(
-        `<judgements total="${stub.total}" results="${listed.length}" offset="${offset}" limit="${limit}">${listed.join("")}</judgements>`,
-      ),
-    );
-  });
+      if (window.some((at) => stub.poisoned.has(at))) {
+        return await Promise.resolve(new Response("", { status: 404 }));
+      }
+      const listed = window.flatMap((at) => {
+        const found = stub.rows.get(at);
+        return found === undefined || stub.withheld?.has(at) === true
+          ? []
+          : [found];
+      });
+      return await Promise.resolve(
+        xml(
+          `<judgements total="${stub.total}" results="${listed.length}" offset="${offset}" limit="${limit}">${listed.join("")}</judgements>`,
+        ),
+      );
+    }),
+  );
 };
 
 /** The rows around the poisoned offset, at the offsets they were captured at. */
@@ -1981,8 +1999,8 @@ describe("the walk", () => {
     });
     // The record states no court either.
     const stubbed = globalThis.fetch;
-    globalThis.fetch = asFetchMock(
-      async (input: string | URL | Request, init?: RequestInit) => {
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request, init?: RequestInit) => {
         const url = urlOf(input);
         return url.searchParams.get("id") === idOf(listed) &&
           url.pathname.endsWith("/judgement/details")
@@ -1992,7 +2010,7 @@ describe("the walk", () => {
               ),
             )
           : await stubbed(input, init);
-      },
+      }),
     );
     const { decisions } = await walkToTip(WALK_START);
     const kept = decisions.find(
@@ -2039,8 +2057,8 @@ describe("the walk", () => {
     const controller = new AbortController();
     let documents = 0;
     const stubbed = globalThis.fetch;
-    globalThis.fetch = asFetchMock(
-      async (input: string | URL | Request, init?: RequestInit) => {
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request, init?: RequestInit) => {
         const response = await stubbed(input, init);
         if (urlOf(input).pathname.endsWith("/judgement/content")) {
           documents += 1;
@@ -2049,7 +2067,7 @@ describe("the walk", () => {
           }
         }
         return response;
-      },
+      }),
     );
     const page = await fetchPage(
       encodePlNcourtCursor({
@@ -2112,14 +2130,16 @@ describe("the tip", () => {
   test("a lap lists closed days only, from where the walk stopped to today", async () => {
     const body = await tipPage();
     const requests: URL[] = [];
-    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-      requests.push(urlOf(input));
-      return await Promise.resolve(
-        urlOf(input).pathname.endsWith("/judgements")
-          ? xml(body)
-          : new Response("", { status: 503 }),
-      );
-    });
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request) => {
+        requests.push(urlOf(input));
+        return await Promise.resolve(
+          urlOf(input).pathname.endsWith("/judgements")
+            ? xml(body)
+            : new Response("", { status: 503 }),
+        );
+      }),
+    );
     await plNcourtAdapter.fetchPage(
       encodePlNcourtCursor({
         lane: "tip",
@@ -2159,8 +2179,8 @@ describe("the tip", () => {
 
   test("the tip refuses rows published outside its days: the filter did not apply", async () => {
     const body = await tipPage();
-    globalThis.fetch = asFetchMock(
-      async () => await Promise.resolve(xml(body)),
+    testFetchState.set(
+      asFetchMock(async () => await Promise.resolve(xml(body))),
     );
     const page = await plNcourtAdapter.fetchPage(
       encodePlNcourtCursor({
@@ -2184,14 +2204,16 @@ describe("the tip", () => {
   test("a quiet cycle on the day the last lap ended makes no request and keeps its cursor", async () => {
     const body = await tipPage();
     const requests: string[] = [];
-    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-      requests.push(urlOf(input).toString());
-      return await Promise.resolve(
-        urlOf(input).pathname.endsWith("/judgements")
-          ? xml(body)
-          : xml(recordFor(urlOf(input).searchParams.get("id") ?? "", {})),
-      );
-    });
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request) => {
+        requests.push(urlOf(input).toString());
+        return await Promise.resolve(
+          urlOf(input).pathname.endsWith("/judgements")
+            ? xml(body)
+            : xml(recordFor(urlOf(input).searchParams.get("id") ?? "", {})),
+        );
+      }),
+    );
     const today = new Date().toISOString().slice(0, 10);
     const parked = encodePlNcourtCursor({
       lane: "tip",
@@ -2210,13 +2232,15 @@ describe("the tip", () => {
 
 describe("a page answered by something other than the API's XML", () => {
   test("fails the page", async () => {
-    globalThis.fetch = asFetchMock(
-      async () =>
-        await Promise.resolve(
-          new Response("<html><body>Request unsuccessful.</body></html>", {
-            headers: { "Content-Type": "text/html" },
-          }),
-        ),
+    testFetchState.set(
+      asFetchMock(
+        async () =>
+          await Promise.resolve(
+            new Response("<html><body>Request unsuccessful.</body></html>", {
+              headers: { "Content-Type": "text/html" },
+            }),
+          ),
+      ),
     );
     expect(Result.isError(await plNcourtAdapter.fetchPage(null, {}))).toBe(
       true,
@@ -2290,8 +2314,8 @@ describe("a judgment date", () => {
       /total="\d+"/u,
       'total="10"',
     );
-    globalThis.fetch = asFetchMock(
-      async () => await Promise.resolve(xml(other)),
+    testFetchState.set(
+      asFetchMock(async () => await Promise.resolve(xml(other))),
     );
     const failure = await rejectionOf(
       plNcourtAdapter.reconciliation.listSlicePage({

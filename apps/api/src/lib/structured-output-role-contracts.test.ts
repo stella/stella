@@ -28,7 +28,10 @@ import {
   STRUCTURED_OUTPUT_ROLE_FIXTURES,
   type StructuredOutputRoleFixture,
 } from "@/api/tests/helpers/structured-output-role-fixtures";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { createTestState } from "@/api/tests/helpers/test-state";
+
+const testFetchState = createTestFetch();
 
 // Every structured-output role against every provider it reaches in
 // production: the role's own schema, a recorded model answer for it, and the
@@ -58,11 +61,11 @@ testState.beforeAll(() => {
 });
 
 beforeEach(() => {
-  globalThis.fetch = answeringFetch;
+  testFetchState.set(answeringFetch);
 });
 
 afterEach(() => {
-  globalThis.fetch = realFetch;
+  testFetchState.restore();
 });
 
 // --- Which roles exist ------------------------------------------------------

@@ -4,8 +4,8 @@ import {
   afterAll,
   describe,
   expect,
+  mock,
   setDefaultTimeout,
-  spyOn,
   test,
 } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
@@ -51,9 +51,12 @@ import {
   initAgentAuthTestDb,
   releaseAgentAuthTestDb,
 } from "@/api/tests/helpers/mock-agent-auth-db";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { serveForTest } from "@/api/tests/helpers/test-server";
 import { createTestState } from "@/api/tests/helpers/test-state";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
+
+const testFetchState = createTestFetch();
 
 const testState = createTestState({ file: import.meta.path, config: env });
 setDefaultTimeout(120_000);
@@ -386,24 +389,28 @@ describe("professional-use acceptance", () => {
       }),
       "fixture-signature",
     ].join(".");
-    const providerFetch = spyOn(globalThis, "fetch").mockImplementation(
-      Object.assign(
-        async (input: string | URL | Request) => {
-          const requestUrl =
-            input instanceof Request ? input.url : String(input);
-          if (requestUrl.includes("oauth2.googleapis.com/token")) {
-            return Response.json({
-              access_token: "professional-use-access-token",
-              token_type: "Bearer",
-              expires_in: 3600,
-              id_token: idToken,
-            });
-          }
-          return new Response("Unexpected provider request", { status: 500 });
-        },
-        { preconnect: globalThis.fetch.preconnect },
+    const providerFetch = Object.assign(
+      mock(
+        Object.assign(
+          async (input: string | URL | Request) => {
+            const requestUrl =
+              input instanceof Request ? input.url : String(input);
+            if (requestUrl.includes("oauth2.googleapis.com/token")) {
+              return Response.json({
+                access_token: "professional-use-access-token",
+                token_type: "Bearer",
+                expires_in: 3600,
+                id_token: idToken,
+              });
+            }
+            return new Response("Unexpected provider request", { status: 500 });
+          },
+          { preconnect: globalThis.fetch.preconnect },
+        ),
       ),
+      { preconnect: globalThis.fetch.preconnect },
     );
+    testFetchState.set(providerFetch);
     try {
       const callback = await auth.handler(
         new Request(
@@ -413,7 +420,7 @@ describe("professional-use acceptance", () => {
       );
       expect(callback.status).toBe(302);
     } finally {
-      providerFetch.mockRestore();
+      testFetchState.restore();
     }
     const createdUser = await testDb
       .select({ id: user.id })

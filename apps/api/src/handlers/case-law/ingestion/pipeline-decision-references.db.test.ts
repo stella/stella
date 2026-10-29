@@ -61,8 +61,11 @@ import {
   skCourtsFixture,
 } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 import { readReferenceHolders } from "@/api/tests/helpers/citation-reference-holders";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
+
+const testFetchState = createTestFetch();
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 const connect = (pglite: Awaited<ReturnType<typeof createTestPglite>>) =>
@@ -615,9 +618,8 @@ afterAll(async () => {
 const expectRowsFollowReferences = async (
   scenario: Scenario,
 ): Promise<void> => {
-  const fetchBefore = globalThis.fetch;
   const base = await scenario.build().finally(() => {
-    globalThis.fetch = fetchBefore;
+    testFetchState.restore();
   });
   expect(base.country).toBe(scenario.jurisdiction);
   await seedHolders(scenario.holders);

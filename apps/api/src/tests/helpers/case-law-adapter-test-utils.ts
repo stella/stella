@@ -1,3 +1,7 @@
+import type {
+  SourceAdapter,
+  SourceReconciliation,
+} from "@/api/handlers/case-law/ingestion/adapter";
 /**
  * Shared test utilities for case-law adapter tests.
  *
@@ -25,13 +29,12 @@
  * afterEach(restore);
  * ```
  */
+import { installTestFetch } from "@/api/tests/helpers/test-fetch";
 
-import type {
-  SourceAdapter,
-  SourceReconciliation,
-} from "@/api/handlers/case-law/ingestion/adapter";
-
-const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);
+const FIXTURES_DIR = new URL(
+  "../../handlers/case-law/ingestion/adapters/__fixtures__/",
+  import.meta.url,
+);
 
 /** Load a fixture file as a string. */
 const loadFixture = async (filename: string): Promise<string> => {
@@ -140,11 +143,7 @@ export const mockFetchWithFixtures = async (
       preconnect: originalFetch.preconnect.bind(originalFetch),
     },
   );
-  globalThis.fetch = mockedFetch;
-
-  return () => {
-    globalThis.fetch = originalFetch;
-  };
+  return installTestFetch(mockedFetch).restore;
 };
 
 /**
