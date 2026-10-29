@@ -83,15 +83,15 @@ const receipts = [
   },
 ] as const;
 
+const replayTableNames = (names: readonly string[]) =>
+  names.filter((name) => name.startsWith("case_law_replay_")).toSorted();
+
 test("replay owner-only role coverage includes every declared replay table", () => {
-  const declared = Object.values(replaySchema)
-    .flatMap((value) => (is(value, PgTable) ? [getTableName(value)] : []))
-    .toSorted();
-  expect(declared).toEqual(
-    receipts
-      .map(({ table }) => table)
-      .filter((name) => name.startsWith("case_law_replay_"))
-      .toSorted(),
+  const declared = Object.values(replaySchema).flatMap((value) =>
+    is(value, PgTable) ? [getTableName(value)] : [],
+  );
+  expect(replayTableNames(declared)).toEqual(
+    replayTableNames(receipts.map(({ table }) => table)),
   );
 });
 
