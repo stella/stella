@@ -5909,7 +5909,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "destructiveHint": "List audit log does not change state.",
       "openWorldHint": "List audit log is confined to the private workspace or a bounded computation."
     },
-    "description": "Read the organization's audit trail (compliance view). Returns audit entries newest first, each with its action, resource type and id, actor user id, matter, timestamp, and change detail. changesStatus is visible, feature_unavailable, or unrecognized_resource; non-visible changes are null. Filter by matter_id, action, resource_type (with optional resource_id), user_id, and a created-at range (from/to, ISO date-time). Paginate with limit and cursor. Requires organization audit-log access.",
+    "description": "Read the organization's audit trail (compliance view). Returns audit entries newest first, each with its action, resource type and id, actor user id, matter, timestamp, and change detail (null unless changesStatus is \\"visible\\"). Filter by matter_id, action, resource_type (with optional resource_id), user_id, and a created-at range (from/to, ISO date-time). Paginate with limit and cursor. Requires organization audit-log access.",
     "annotations": {
       "title": "List audit log",
       "destructiveHint": false,
@@ -12570,7 +12570,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "destructiveHint": "List audit log does not change state.",
       "openWorldHint": "List audit log is confined to the private workspace or a bounded computation."
     },
-    "description": "Read the organization's audit trail (compliance view). Returns audit entries newest first, each with its action, resource type and id, actor user id, matter, timestamp, and change detail. changesStatus is visible, feature_unavailable, or unrecognized_resource; non-visible changes are null. Filter by matter_id, action, resource_type (with optional resource_id), user_id, and a created-at range (from/to, ISO date-time). Paginate with limit and cursor. Requires organization audit-log access.",
+    "description": "Read the organization's audit trail (compliance view). Returns audit entries newest first, each with its action, resource type and id, actor user id, matter, timestamp, and change detail (null unless changesStatus is \\"visible\\"). Filter by matter_id, action, resource_type (with optional resource_id), user_id, and a created-at range (from/to, ISO date-time). Paginate with limit and cursor. Requires organization audit-log access.",
     "annotations": {
       "title": "List audit log",
       "destructiveHint": false,

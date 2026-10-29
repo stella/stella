@@ -204,9 +204,8 @@ const LIST_AUDIT_LOG_TOOL_DEFINITION = defineValibotMcpTool({
   description:
     "Read the organization's audit trail (compliance view). Returns audit " +
     "entries newest first, each with its action, resource type and id, actor " +
-    "user id, matter, timestamp, and change detail. changesStatus is visible, " +
-    "feature_unavailable, or unrecognized_resource; non-visible changes are " +
-    "null. Filter by matter_id, " +
+    "user id, matter, timestamp, and change detail (null unless " +
+    'changesStatus is "visible"). Filter by matter_id, ' +
     "action, resource_type (with optional resource_id), user_id, and a " +
     "created-at range (from/to, ISO date-time). Paginate with limit and " +
     "cursor. Requires organization audit-log access.",
