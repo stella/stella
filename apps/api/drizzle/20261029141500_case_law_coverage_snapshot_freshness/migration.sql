@@ -13,7 +13,7 @@ SET statement_timeout = '5s';--> statement-breakpoint
 -- stella-migration-safety: reviewed security-definer - fixed search path and qualified relations, PUBLIC execute revoked; returns only the singleton summary, refused while it counts a source that is no longer redistributable
 CREATE FUNCTION public.stella_case_law_coverage_summary_v2() RETURNS jsonb
   LANGUAGE sql STABLE SECURITY DEFINER
-  SET search_path = pg_catalog, public
+  SET search_path = pg_catalog, public, pg_temp
   AS $function$
     WITH withheld AS (
       SELECT source.id::text AS id, source.adapter_key, source.created_at
@@ -49,4 +49,9 @@ CREATE FUNCTION public.stella_case_law_coverage_summary_v2() RETURNS jsonb
       )
   $function$;--> statement-breakpoint
 REVOKE ALL ON FUNCTION public.stella_case_law_coverage_summary_v2() FROM PUBLIC;--> statement-breakpoint
-GRANT EXECUTE ON FUNCTION public.stella_case_law_coverage_summary_v2() TO stella_public_law_reader;
+GRANT EXECUTE ON FUNCTION public.stella_case_law_coverage_summary_v2() TO stella_public_law_reader;--> statement-breakpoint
+-- Without pg_temp listed, PostgreSQL searches the caller's temporary schema
+-- first, so a role with TEMP could shadow an unqualified relation inside the
+-- definer's body. Listing it last closes that for the original reader too;
+-- only the function's configuration changes, its body stays as deployed.
+ALTER FUNCTION public.stella_case_law_coverage_summary() SET search_path = pg_catalog, public, pg_temp;

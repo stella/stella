@@ -158,6 +158,63 @@ describe.skipIf(!runPostgresTests)(
       });
     });
 
+    // A definer function that does not name pg_temp searches the caller's
+    // temporary schema first for relations; the reader may create one.
+    test("relations the public reader creates in its temporary schema do not change either answer", async () => {
+      const forgedSourceId = createSafeId<"caseLawSource">();
+      await withSummaryRole({
+        role: stellaPublicLawReader.name,
+        read: async (tx) => {
+          // TEMP is granted to PUBLIC by default and no migration revokes it.
+          await tx.execute(sql`
+            CREATE TEMP TABLE case_law_coverage_summaries (
+              key text, source_policy text, answer jsonb, generated_at timestamptz
+            ) ON COMMIT DROP
+          `);
+          await tx.execute(sql`
+            INSERT INTO case_law_coverage_summaries
+            VALUES ('current', '[]', '{"forged":true}', now())
+          `);
+          await tx.execute(sql`
+            CREATE TEMP TABLE case_law_sources (
+              id uuid, adapter_key text, descriptor jsonb, created_at timestamptz
+            ) ON COMMIT DROP
+          `);
+          await tx.execute(sql`
+            INSERT INTO case_law_sources
+            VALUES (${forgedSourceId}, 'forged-feed', ${JSON.stringify(WITHHELD_DESCRIPTOR)}::text::jsonb, now())
+          `);
+          const current = await tx.execute(
+            sql`SELECT public.stella_case_law_coverage_summary_v2() AS summary`,
+          );
+          expect(current.at(0)?.["summary"]).toEqual({
+            answer: CASE_LAW_COVERAGE_SNAPSHOT_FIXTURE,
+            policyCurrent: true,
+          });
+          const previous = await tx.execute(
+            sql`SELECT public.stella_case_law_coverage_summary() AS answer`,
+          );
+          expect(previous.at(0)?.["answer"]).toEqual(
+            CASE_LAW_COVERAGE_SNAPSHOT_FIXTURE,
+          );
+          // Both bodies qualify their relations, so the answers above hold
+          // either way; the configuration is what keeps a later unqualified
+          // reference from reading the caller's temporary schema.
+          for (const reader of [
+            "public.stella_case_law_coverage_summary()",
+            "public.stella_case_law_coverage_summary_v2()",
+          ]) {
+            const rows = await tx.execute(
+              sql`SELECT proconfig AS config FROM pg_proc WHERE oid = ${reader}::regprocedure`,
+            );
+            expect(rows.at(0)?.["config"]).toEqual([
+              "search_path=pg_catalog, public, pg_temp",
+            ]);
+          }
+        },
+      });
+    });
+
     for (const role of [stellaPublicLawReader.name, stella.name]) {
       test(`${role} cannot select the stored summary table`, async () => {
         const failure = await rejectionOf(

@@ -180,3 +180,46 @@ test("a source the snapshot counted that is no longer redistributable refuses it
     { summary: { answer: ANSWER, policyCurrent: false } },
   ]);
 });
+
+const COVERAGE_READERS = [
+  "stella_case_law_coverage_summary",
+  "stella_case_law_coverage_summary_v2",
+] as const;
+
+// Unless pg_temp is named, PostgreSQL searches the caller's temporary schema
+// before every other one for relations, so a definer function must list it.
+test("both summary functions search the caller's temporary schema last", async () => {
+  await using db = await migratedDatabase();
+  for (const reader of COVERAGE_READERS) {
+    const { rows } = await db.query<{ config: string[] | null }>(
+      `SELECT proconfig AS config FROM pg_proc WHERE oid = $1::regprocedure`,
+      [`public.${reader}()`],
+    );
+    expect(rows).toEqual([
+      { config: ["search_path=pg_catalog, public, pg_temp"] },
+    ]);
+  }
+});
+
+test("relations the reader creates in its temporary schema do not change either answer", async () => {
+  await using db = await migratedDatabase();
+  await storeSummary(db, { policy: [] });
+  await db.exec("SET ROLE stella_public_law_reader");
+  await db.exec(`
+    CREATE TEMP TABLE case_law_coverage_summaries (
+      key text, source_policy text, answer jsonb, generated_at timestamptz
+    );
+    INSERT INTO case_law_coverage_summaries
+      VALUES ('current', '[]', '{"forged":true}', now());
+    CREATE TEMP TABLE case_law_sources (
+      id uuid, adapter_key text, descriptor jsonb, created_at timestamptz
+    );
+    INSERT INTO case_law_sources
+      VALUES ('${LATER_SOURCE}', 'forged-feed', '${WITHHELD}', now());
+  `);
+  await db.exec("RESET ROLE");
+  expect(await readSummary(db)).toEqual([
+    { summary: { answer: ANSWER, policyCurrent: true } },
+  ]);
+  expect(await readPreviousSummary(db)).toEqual([{ answer: ANSWER }]);
+});
