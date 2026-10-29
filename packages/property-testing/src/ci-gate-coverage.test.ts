@@ -56,7 +56,6 @@ const LOCAL_ONLY_GATES = new Set<string>([
   // Intentional contract regeneration writes reviewed fixtures; CI runs the read-only check.
   "STELLA_UPDATE_PLAN_CONTRACTS",
   // Regenerates the reviewed role and policy censuses; CI runs the read-only comparison.
-  "STELLA_UPDATE_ROLE_PRIVILEGE_CENSUS",
   // Physical statistics are a local comparison; CI reports the synthetic profile.
   "STELLA_QUERY_PLAN_SCALE_PROFILE",
   // Regenerates the read-fault baseline locally; CI runs the read-only comparison.

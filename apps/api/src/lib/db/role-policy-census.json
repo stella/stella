@@ -486,8 +486,8 @@
     "command": "ALL",
     "roles": ["stella"],
     "permissive": "RESTRICTIVE",
-    "using": "(((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text)))) AND ((entity_feature_workspace_ids = '{}'::uuid[]) OR (entity_feature_workspace_ids <@ ( SELECT (COALESCE((NULLIF(current_setting('app.workspace_ids'::text, true), ''::text))::uuid[], '{}'::uuid[]) || COALESCE(array_agg(stella_authorized_workspaces.authorized_workspace_id), '{}'::uuid[]))\n   FROM stella_authorized_workspaces))))",
-    "withCheck": "(((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text)))) AND ((entity_feature_workspace_ids = '{}'::uuid[]) OR (entity_feature_workspace_ids <@ ( SELECT (COALESCE((NULLIF(current_setting('app.workspace_ids'::text, true), ''::text))::uuid[], '{}'::uuid[]) || COALESCE(array_agg(stella_authorized_workspaces.authorized_workspace_id), '{}'::uuid[]))\n   FROM stella_authorized_workspaces))))"
+    "using": "\nCASE\n    WHEN (entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = anonymization_allowlist_entries.entity_id)))\nEND",
+    "withCheck": "\nCASE\n    WHEN (entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = anonymization_allowlist_entries.entity_id)))\nEND"
   },
   {
     "schema": "public",
@@ -2506,8 +2506,8 @@
     "command": "ALL",
     "roles": ["stella"],
     "permissive": "RESTRICTIVE",
-    "using": "(((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text)))) AND ((entity_feature_workspace_ids = '{}'::uuid[]) OR (entity_feature_workspace_ids <@ ( SELECT (COALESCE((NULLIF(current_setting('app.workspace_ids'::text, true), ''::text))::uuid[], '{}'::uuid[]) || COALESCE(array_agg(stella_authorized_workspaces.authorized_workspace_id), '{}'::uuid[]))\n   FROM stella_authorized_workspaces))))",
-    "withCheck": "(((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text)))) AND ((entity_feature_workspace_ids = '{}'::uuid[]) OR (entity_feature_workspace_ids <@ ( SELECT (COALESCE((NULLIF(current_setting('app.workspace_ids'::text, true), ''::text))::uuid[], '{}'::uuid[]) || COALESCE(array_agg(stella_authorized_workspaces.authorized_workspace_id), '{}'::uuid[]))\n   FROM stella_authorized_workspaces))))"
+    "using": "\nCASE\n    WHEN (entity_version_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entity_versions v\n      WHERE (v.id = cell_metadata.entity_version_id)))\nEND",
+    "withCheck": "\nCASE\n    WHEN (entity_version_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entity_versions v\n      WHERE (v.id = cell_metadata.entity_version_id)))\nEND"
   },
   {
     "schema": "public",
@@ -3776,8 +3776,8 @@
     "command": "ALL",
     "roles": ["stella"],
     "permissive": "RESTRICTIVE",
-    "using": "((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text))))",
-    "withCheck": "((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text))))"
+    "using": "\nCASE\n    WHEN (source_entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = correspondence.source_entity_id)))\nEND",
+    "withCheck": "\nCASE\n    WHEN (source_entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = correspondence.source_entity_id)))\nEND"
   },
   {
     "schema": "public",
@@ -3996,8 +3996,8 @@
     "command": "ALL",
     "roles": ["stella"],
     "permissive": "RESTRICTIVE",
-    "using": "((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text))))",
-    "withCheck": "((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text))))"
+    "using": "(\nCASE\n    WHEN (entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = correspondence_attachments.entity_id)))\nEND AND\nCASE\n    WHEN (correspondence_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM correspondence parent_row\n      WHERE (parent_row.id = correspondence_attachments.correspondence_id)))\nEND)",
+    "withCheck": "(\nCASE\n    WHEN (entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = correspondence_attachments.entity_id)))\nEND AND\nCASE\n    WHEN (correspondence_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM correspondence parent_row\n      WHERE (parent_row.id = correspondence_attachments.correspondence_id)))\nEND)"
   },
   {
     "schema": "public",
@@ -4156,8 +4156,8 @@
     "command": "ALL",
     "roles": ["stella"],
     "permissive": "RESTRICTIVE",
-    "using": "((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text))))",
-    "withCheck": "((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text))))"
+    "using": "\nCASE\n    WHEN (correspondence_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM correspondence parent_row\n      WHERE (parent_row.id = correspondence_filers.correspondence_id)))\nEND",
+    "withCheck": "\nCASE\n    WHEN (correspondence_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM correspondence parent_row\n      WHERE (parent_row.id = correspondence_filers.correspondence_id)))\nEND"
   },
   {
     "schema": "public",
@@ -4216,8 +4216,8 @@
     "command": "ALL",
     "roles": ["stella"],
     "permissive": "RESTRICTIVE",
-    "using": "(((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text)))) AND ((entity_feature_workspace_ids = '{}'::uuid[]) OR (entity_feature_workspace_ids <@ ( SELECT (COALESCE((NULLIF(current_setting('app.workspace_ids'::text, true), ''::text))::uuid[], '{}'::uuid[]) || COALESCE(array_agg(stella_authorized_workspaces.authorized_workspace_id), '{}'::uuid[]))\n   FROM stella_authorized_workspaces))))",
-    "withCheck": "(((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text)))) AND ((entity_feature_workspace_ids = '{}'::uuid[]) OR (entity_feature_workspace_ids <@ ( SELECT (COALESCE((NULLIF(current_setting('app.workspace_ids'::text, true), ''::text))::uuid[], '{}'::uuid[]) || COALESCE(array_agg(stella_authorized_workspaces.authorized_workspace_id), '{}'::uuid[]))\n   FROM stella_authorized_workspaces))))"
+    "using": "(\nCASE\n    WHEN (entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = desktop_edit_handoffs.entity_id)))\nEND AND\nCASE\n    WHEN (desktop_session_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM desktop_edit_sessions parent_row\n      WHERE (parent_row.id = desktop_edit_handoffs.desktop_session_id)))\nEND)",
+    "withCheck": "(\nCASE\n    WHEN (entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = desktop_edit_handoffs.entity_id)))\nEND AND\nCASE\n    WHEN (desktop_session_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM desktop_edit_sessions parent_row\n      WHERE (parent_row.id = desktop_edit_handoffs.desktop_session_id)))\nEND)"
   },
   {
     "schema": "public",
@@ -4276,8 +4276,8 @@
     "command": "ALL",
     "roles": ["stella"],
     "permissive": "RESTRICTIVE",
-    "using": "(((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text)))) AND ((entity_feature_workspace_ids = '{}'::uuid[]) OR (entity_feature_workspace_ids <@ ( SELECT (COALESCE((NULLIF(current_setting('app.workspace_ids'::text, true), ''::text))::uuid[], '{}'::uuid[]) || COALESCE(array_agg(stella_authorized_workspaces.authorized_workspace_id), '{}'::uuid[]))\n   FROM stella_authorized_workspaces))))",
-    "withCheck": "(((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text)))) AND ((entity_feature_workspace_ids = '{}'::uuid[]) OR (entity_feature_workspace_ids <@ ( SELECT (COALESCE((NULLIF(current_setting('app.workspace_ids'::text, true), ''::text))::uuid[], '{}'::uuid[]) || COALESCE(array_agg(stella_authorized_workspaces.authorized_workspace_id), '{}'::uuid[]))\n   FROM stella_authorized_workspaces))))"
+    "using": "(\nCASE\n    WHEN (base_version_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entity_versions v\n      WHERE (v.id = desktop_edit_sessions.base_version_id)))\nEND AND\nCASE\n    WHEN (finalized_version_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entity_versions v\n      WHERE (v.id = desktop_edit_sessions.finalized_version_id)))\nEND AND\nCASE\n    WHEN (entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = desktop_edit_sessions.entity_id)))\nEND)",
+    "withCheck": "(\nCASE\n    WHEN (base_version_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entity_versions v\n      WHERE (v.id = desktop_edit_sessions.base_version_id)))\nEND AND\nCASE\n    WHEN (finalized_version_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entity_versions v\n      WHERE (v.id = desktop_edit_sessions.finalized_version_id)))\nEND AND\nCASE\n    WHEN (entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = desktop_edit_sessions.entity_id)))\nEND)"
   },
   {
     "schema": "public",
@@ -4526,8 +4526,8 @@
     "command": "ALL",
     "roles": ["stella"],
     "permissive": "RESTRICTIVE",
-    "using": "(((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text)))) AND ((entity_feature_workspace_ids = '{}'::uuid[]) OR (entity_feature_workspace_ids <@ ( SELECT (COALESCE((NULLIF(current_setting('app.workspace_ids'::text, true), ''::text))::uuid[], '{}'::uuid[]) || COALESCE(array_agg(stella_authorized_workspaces.authorized_workspace_id), '{}'::uuid[]))\n   FROM stella_authorized_workspaces))))",
-    "withCheck": "(((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text)))) AND ((entity_feature_workspace_ids = '{}'::uuid[]) OR (entity_feature_workspace_ids <@ ( SELECT (COALESCE((NULLIF(current_setting('app.workspace_ids'::text, true), ''::text))::uuid[], '{}'::uuid[]) || COALESCE(array_agg(stella_authorized_workspaces.authorized_workspace_id), '{}'::uuid[]))\n   FROM stella_authorized_workspaces))))"
+    "using": "(\nCASE\n    WHEN (entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = document_processing_runs.entity_id)))\nEND AND\nCASE\n    WHEN (entity_version_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entity_versions v\n      WHERE (v.id = document_processing_runs.entity_version_id)))\nEND AND\nCASE\n    WHEN (field_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM fields f\n      WHERE (f.id = document_processing_runs.field_id)))\nEND)",
+    "withCheck": "(\nCASE\n    WHEN (entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = document_processing_runs.entity_id)))\nEND AND\nCASE\n    WHEN (entity_version_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entity_versions v\n      WHERE (v.id = document_processing_runs.entity_version_id)))\nEND AND\nCASE\n    WHEN (field_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM fields f\n      WHERE (f.id = document_processing_runs.field_id)))\nEND)"
   },
   {
     "schema": "public",
@@ -4696,8 +4696,8 @@
     "command": "ALL",
     "roles": ["stella"],
     "permissive": "RESTRICTIVE",
-    "using": "(((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text)))) AND ((entity_feature_workspace_ids = '{}'::uuid[]) OR (entity_feature_workspace_ids <@ ( SELECT (COALESCE((NULLIF(current_setting('app.workspace_ids'::text, true), ''::text))::uuid[], '{}'::uuid[]) || COALESCE(array_agg(stella_authorized_workspaces.authorized_workspace_id), '{}'::uuid[]))\n   FROM stella_authorized_workspaces))))",
-    "withCheck": "(((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text)))) AND ((entity_feature_workspace_ids = '{}'::uuid[]) OR (entity_feature_workspace_ids <@ ( SELECT (COALESCE((NULLIF(current_setting('app.workspace_ids'::text, true), ''::text))::uuid[], '{}'::uuid[]) || COALESCE(array_agg(stella_authorized_workspaces.authorized_workspace_id), '{}'::uuid[]))\n   FROM stella_authorized_workspaces))))"
+    "using": "(\nCASE\n    WHEN (entity_version_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entity_versions v\n      WHERE (v.id = document_review_parties.entity_version_id)))\nEND AND\nCASE\n    WHEN (entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = document_review_parties.entity_id)))\nEND)",
+    "withCheck": "(\nCASE\n    WHEN (entity_version_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entity_versions v\n      WHERE (v.id = document_review_parties.entity_version_id)))\nEND AND\nCASE\n    WHEN (entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = document_review_parties.entity_id)))\nEND)"
   },
   {
     "schema": "public",
@@ -4756,8 +4756,8 @@
     "command": "ALL",
     "roles": ["stella"],
     "permissive": "RESTRICTIVE",
-    "using": "((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text))))",
-    "withCheck": "((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text))))"
+    "using": "\nCASE\n    WHEN (entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = document_review_reference_passages.entity_id)))\nEND",
+    "withCheck": "\nCASE\n    WHEN (entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = document_review_reference_passages.entity_id)))\nEND"
   },
   {
     "schema": "public",
@@ -4856,8 +4856,8 @@
     "command": "ALL",
     "roles": ["stella"],
     "permissive": "RESTRICTIVE",
-    "using": "(((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text)))) AND ((entity_feature_workspace_ids = '{}'::uuid[]) OR (entity_feature_workspace_ids <@ ( SELECT (COALESCE((NULLIF(current_setting('app.workspace_ids'::text, true), ''::text))::uuid[], '{}'::uuid[]) || COALESCE(array_agg(stella_authorized_workspaces.authorized_workspace_id), '{}'::uuid[]))\n   FROM stella_authorized_workspaces))))",
-    "withCheck": "(((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text)))) AND ((entity_feature_workspace_ids = '{}'::uuid[]) OR (entity_feature_workspace_ids <@ ( SELECT (COALESCE((NULLIF(current_setting('app.workspace_ids'::text, true), ''::text))::uuid[], '{}'::uuid[]) || COALESCE(array_agg(stella_authorized_workspaces.authorized_workspace_id), '{}'::uuid[]))\n   FROM stella_authorized_workspaces))))"
+    "using": "\nCASE\n    WHEN (entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = document_translation_runs.entity_id)))\nEND",
+    "withCheck": "\nCASE\n    WHEN (entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = document_translation_runs.entity_id)))\nEND"
   },
   {
     "schema": "public",
@@ -4916,8 +4916,8 @@
     "command": "ALL",
     "roles": ["stella"],
     "permissive": "RESTRICTIVE",
-    "using": "(((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text)))) AND ((entity_feature_workspace_ids = '{}'::uuid[]) OR (entity_feature_workspace_ids <@ ( SELECT (COALESCE((NULLIF(current_setting('app.workspace_ids'::text, true), ''::text))::uuid[], '{}'::uuid[]) || COALESCE(array_agg(stella_authorized_workspaces.authorized_workspace_id), '{}'::uuid[]))\n   FROM stella_authorized_workspaces))))",
-    "withCheck": "(((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text)))) AND ((entity_feature_workspace_ids = '{}'::uuid[]) OR (entity_feature_workspace_ids <@ ( SELECT (COALESCE((NULLIF(current_setting('app.workspace_ids'::text, true), ''::text))::uuid[], '{}'::uuid[]) || COALESCE(array_agg(stella_authorized_workspaces.authorized_workspace_id), '{}'::uuid[]))\n   FROM stella_authorized_workspaces))))"
+    "using": "\nCASE\n    WHEN (run_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM document_translation_runs parent_row\n      WHERE (parent_row.id = document_translation_units.run_id)))\nEND",
+    "withCheck": "\nCASE\n    WHEN (run_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM document_translation_runs parent_row\n      WHERE (parent_row.id = document_translation_units.run_id)))\nEND"
   },
   {
     "schema": "public",
@@ -4986,8 +4986,8 @@
     "command": "ALL",
     "roles": ["stella"],
     "permissive": "RESTRICTIVE",
-    "using": "((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text))))",
-    "withCheck": "((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text))))"
+    "using": "\nCASE\n    WHEN (entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = docx_suggestions.entity_id)))\nEND",
+    "withCheck": "\nCASE\n    WHEN (entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = docx_suggestions.entity_id)))\nEND"
   },
   {
     "schema": "public",
@@ -5116,8 +5116,8 @@
     "command": "ALL",
     "roles": ["stella"],
     "permissive": "RESTRICTIVE",
-    "using": "(((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text)))) AND ((entity_feature_workspace_ids = '{}'::uuid[]) OR (entity_feature_workspace_ids <@ ( SELECT (COALESCE((NULLIF(current_setting('app.workspace_ids'::text, true), ''::text))::uuid[], '{}'::uuid[]) || COALESCE(array_agg(stella_authorized_workspaces.authorized_workspace_id), '{}'::uuid[]))\n   FROM stella_authorized_workspaces))))",
-    "withCheck": "(((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text)))) AND ((entity_feature_workspace_ids = '{}'::uuid[]) OR (entity_feature_workspace_ids <@ ( SELECT (COALESCE((NULLIF(current_setting('app.workspace_ids'::text, true), ''::text))::uuid[], '{}'::uuid[]) || COALESCE(array_agg(stella_authorized_workspaces.authorized_workspace_id), '{}'::uuid[]))\n   FROM stella_authorized_workspaces))))"
+    "using": "(\nCASE\n    WHEN (source_entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = entity_links.source_entity_id)))\nEND AND\nCASE\n    WHEN (target_entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = entity_links.target_entity_id)))\nEND)",
+    "withCheck": "(\nCASE\n    WHEN (source_entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = entity_links.source_entity_id)))\nEND AND\nCASE\n    WHEN (target_entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = entity_links.target_entity_id)))\nEND)"
   },
   {
     "schema": "public",
@@ -5206,8 +5206,8 @@
     "command": "ALL",
     "roles": ["stella"],
     "permissive": "RESTRICTIVE",
-    "using": "(((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text)))) AND ((entity_feature_workspace_ids = '{}'::uuid[]) OR (entity_feature_workspace_ids <@ ( SELECT (COALESCE((NULLIF(current_setting('app.workspace_ids'::text, true), ''::text))::uuid[], '{}'::uuid[]) || COALESCE(array_agg(stella_authorized_workspaces.authorized_workspace_id), '{}'::uuid[]))\n   FROM stella_authorized_workspaces))))",
-    "withCheck": "(((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text)))) AND ((entity_feature_workspace_ids = '{}'::uuid[]) OR (entity_feature_workspace_ids <@ ( SELECT (COALESCE((NULLIF(current_setting('app.workspace_ids'::text, true), ''::text))::uuid[], '{}'::uuid[]) || COALESCE(array_agg(stella_authorized_workspaces.authorized_workspace_id), '{}'::uuid[]))\n   FROM stella_authorized_workspaces))))"
+    "using": "(\nCASE\n    WHEN (entity_version_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entity_versions v\n      WHERE (v.id = entity_version_ai_summaries.entity_version_id)))\nEND AND\nCASE\n    WHEN (entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = entity_version_ai_summaries.entity_id)))\nEND)",
+    "withCheck": "(\nCASE\n    WHEN (entity_version_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entity_versions v\n      WHERE (v.id = entity_version_ai_summaries.entity_version_id)))\nEND AND\nCASE\n    WHEN (entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = entity_version_ai_summaries.entity_id)))\nEND)"
   },
   {
     "schema": "public",
@@ -5236,8 +5236,8 @@
     "command": "ALL",
     "roles": ["stella"],
     "permissive": "RESTRICTIVE",
-    "using": "((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text))))",
-    "withCheck": "((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text))))"
+    "using": "\nCASE\n    WHEN (entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = entity_versions.entity_id)))\nEND",
+    "withCheck": "\nCASE\n    WHEN (entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = entity_versions.entity_id)))\nEND"
   },
   {
     "schema": "public",
@@ -5446,8 +5446,8 @@
     "command": "ALL",
     "roles": ["stella"],
     "permissive": "RESTRICTIVE",
-    "using": "(((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text)))) AND ((entity_feature_workspace_ids = '{}'::uuid[]) OR (entity_feature_workspace_ids <@ ( SELECT (COALESCE((NULLIF(current_setting('app.workspace_ids'::text, true), ''::text))::uuid[], '{}'::uuid[]) || COALESCE(array_agg(stella_authorized_workspaces.authorized_workspace_id), '{}'::uuid[]))\n   FROM stella_authorized_workspaces))))",
-    "withCheck": "(((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text)))) AND ((entity_feature_workspace_ids = '{}'::uuid[]) OR (entity_feature_workspace_ids <@ ( SELECT (COALESCE((NULLIF(current_setting('app.workspace_ids'::text, true), ''::text))::uuid[], '{}'::uuid[]) || COALESCE(array_agg(stella_authorized_workspaces.authorized_workspace_id), '{}'::uuid[]))\n   FROM stella_authorized_workspaces))))"
+    "using": "(\nCASE\n    WHEN (source_entity_version_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entity_versions v\n      WHERE (v.id = extracted_content.source_entity_version_id)))\nEND AND\nCASE\n    WHEN (source_field_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM fields f\n      WHERE (f.id = extracted_content.source_field_id)))\nEND AND\nCASE\n    WHEN (entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = extracted_content.entity_id)))\nEND)",
+    "withCheck": "(\nCASE\n    WHEN (source_entity_version_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entity_versions v\n      WHERE (v.id = extracted_content.source_entity_version_id)))\nEND AND\nCASE\n    WHEN (source_field_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM fields f\n      WHERE (f.id = extracted_content.source_field_id)))\nEND AND\nCASE\n    WHEN (entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = extracted_content.entity_id)))\nEND)"
   },
   {
     "schema": "public",
@@ -5566,8 +5566,8 @@
     "command": "ALL",
     "roles": ["stella"],
     "permissive": "RESTRICTIVE",
-    "using": "(((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text)))) AND ((entity_feature_workspace_ids = '{}'::uuid[]) OR (entity_feature_workspace_ids <@ ( SELECT (COALESCE((NULLIF(current_setting('app.workspace_ids'::text, true), ''::text))::uuid[], '{}'::uuid[]) || COALESCE(array_agg(stella_authorized_workspaces.authorized_workspace_id), '{}'::uuid[]))\n   FROM stella_authorized_workspaces))))",
-    "withCheck": "(((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text)))) AND ((entity_feature_workspace_ids = '{}'::uuid[]) OR (entity_feature_workspace_ids <@ ( SELECT (COALESCE((NULLIF(current_setting('app.workspace_ids'::text, true), ''::text))::uuid[], '{}'::uuid[]) || COALESCE(array_agg(stella_authorized_workspaces.authorized_workspace_id), '{}'::uuid[]))\n   FROM stella_authorized_workspaces))))"
+    "using": "\nCASE\n    WHEN (entity_version_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entity_versions v\n      WHERE (v.id = fields.entity_version_id)))\nEND",
+    "withCheck": "\nCASE\n    WHEN (entity_version_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entity_versions v\n      WHERE (v.id = fields.entity_version_id)))\nEND"
   },
   {
     "schema": "public",
@@ -5656,8 +5656,8 @@
     "command": "ALL",
     "roles": ["stella"],
     "permissive": "RESTRICTIVE",
-    "using": "(((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text)))) AND ((entity_feature_workspace_ids = '{}'::uuid[]) OR (entity_feature_workspace_ids <@ ( SELECT (COALESCE((NULLIF(current_setting('app.workspace_ids'::text, true), ''::text))::uuid[], '{}'::uuid[]) || COALESCE(array_agg(stella_authorized_workspaces.authorized_workspace_id), '{}'::uuid[]))\n   FROM stella_authorized_workspaces))))",
-    "withCheck": "(((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text)))) AND ((entity_feature_workspace_ids = '{}'::uuid[]) OR (entity_feature_workspace_ids <@ ( SELECT (COALESCE((NULLIF(current_setting('app.workspace_ids'::text, true), ''::text))::uuid[], '{}'::uuid[]) || COALESCE(array_agg(stella_authorized_workspaces.authorized_workspace_id), '{}'::uuid[]))\n   FROM stella_authorized_workspaces))))"
+    "using": "(\nCASE\n    WHEN (entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = file_chat_threads.entity_id)))\nEND AND\nCASE\n    WHEN (field_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM fields f\n      WHERE (f.id = file_chat_threads.field_id)))\nEND)",
+    "withCheck": "(\nCASE\n    WHEN (entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = file_chat_threads.entity_id)))\nEND AND\nCASE\n    WHEN (field_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM fields f\n      WHERE (f.id = file_chat_threads.field_id)))\nEND)"
   },
   {
     "schema": "public",
@@ -5766,8 +5766,8 @@
     "command": "ALL",
     "roles": ["stella"],
     "permissive": "RESTRICTIVE",
-    "using": "(((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text)))) AND ((entity_feature_workspace_ids = '{}'::uuid[]) OR (entity_feature_workspace_ids <@ ( SELECT (COALESCE((NULLIF(current_setting('app.workspace_ids'::text, true), ''::text))::uuid[], '{}'::uuid[]) || COALESCE(array_agg(stella_authorized_workspaces.authorized_workspace_id), '{}'::uuid[]))\n   FROM stella_authorized_workspaces))))",
-    "withCheck": "(((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text)))) AND ((entity_feature_workspace_ids = '{}'::uuid[]) OR (entity_feature_workspace_ids <@ ( SELECT (COALESCE((NULLIF(current_setting('app.workspace_ids'::text, true), ''::text))::uuid[], '{}'::uuid[]) || COALESCE(array_agg(stella_authorized_workspaces.authorized_workspace_id), '{}'::uuid[]))\n   FROM stella_authorized_workspaces))))"
+    "using": "\nCASE\n    WHEN (review_task_entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = flow_run_steps.review_task_entity_id)))\nEND",
+    "withCheck": "\nCASE\n    WHEN (review_task_entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = flow_run_steps.review_task_entity_id)))\nEND"
   },
   {
     "schema": "public",
@@ -5866,8 +5866,8 @@
     "command": "ALL",
     "roles": ["stella"],
     "permissive": "RESTRICTIVE",
-    "using": "((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text))))",
-    "withCheck": "((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text))))"
+    "using": "(\nCASE\n    WHEN (entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = folio_collab_contributions.entity_id)))\nEND AND\nCASE\n    WHEN (since_version_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entity_versions v\n      WHERE (v.id = folio_collab_contributions.since_version_id)))\nEND AND\nCASE\n    WHEN (room_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM folio_collab_rooms parent_row\n      WHERE (parent_row.id = folio_collab_contributions.room_id)))\nEND)",
+    "withCheck": "(\nCASE\n    WHEN (entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = folio_collab_contributions.entity_id)))\nEND AND\nCASE\n    WHEN (since_version_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entity_versions v\n      WHERE (v.id = folio_collab_contributions.since_version_id)))\nEND AND\nCASE\n    WHEN (room_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM folio_collab_rooms parent_row\n      WHERE (parent_row.id = folio_collab_contributions.room_id)))\nEND)"
   },
   {
     "schema": "public",
@@ -5926,8 +5926,8 @@
     "command": "ALL",
     "roles": ["stella"],
     "permissive": "RESTRICTIVE",
-    "using": "((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text))))",
-    "withCheck": "((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text))))"
+    "using": "(\nCASE\n    WHEN (entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = folio_collab_publications.entity_id)))\nEND AND\nCASE\n    WHEN (entity_version_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entity_versions v\n      WHERE (v.id = folio_collab_publications.entity_version_id)))\nEND AND\nCASE\n    WHEN (room_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM folio_collab_rooms parent_row\n      WHERE (parent_row.id = folio_collab_publications.room_id)))\nEND)",
+    "withCheck": "(\nCASE\n    WHEN (entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = folio_collab_publications.entity_id)))\nEND AND\nCASE\n    WHEN (entity_version_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entity_versions v\n      WHERE (v.id = folio_collab_publications.entity_version_id)))\nEND AND\nCASE\n    WHEN (room_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM folio_collab_rooms parent_row\n      WHERE (parent_row.id = folio_collab_publications.room_id)))\nEND)"
   },
   {
     "schema": "public",
@@ -5986,8 +5986,8 @@
     "command": "ALL",
     "roles": ["stella"],
     "permissive": "RESTRICTIVE",
-    "using": "((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text))))",
-    "withCheck": "((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text))))"
+    "using": "\nCASE\n    WHEN (room_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM folio_collab_rooms parent_row\n      WHERE (parent_row.id = folio_collab_room_tokens.room_id)))\nEND",
+    "withCheck": "\nCASE\n    WHEN (room_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM folio_collab_rooms parent_row\n      WHERE (parent_row.id = folio_collab_room_tokens.room_id)))\nEND"
   },
   {
     "schema": "public",
@@ -6046,8 +6046,8 @@
     "command": "ALL",
     "roles": ["stella"],
     "permissive": "RESTRICTIVE",
-    "using": "((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text))))",
-    "withCheck": "((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text))))"
+    "using": "(\nCASE\n    WHEN (entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = folio_collab_rooms.entity_id)))\nEND AND\nCASE\n    WHEN (base_version_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entity_versions v\n      WHERE (v.id = folio_collab_rooms.base_version_id)))\nEND AND\nCASE\n    WHEN (source_version_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entity_versions v\n      WHERE (v.id = folio_collab_rooms.source_version_id)))\nEND)",
+    "withCheck": "(\nCASE\n    WHEN (entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = folio_collab_rooms.entity_id)))\nEND AND\nCASE\n    WHEN (base_version_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entity_versions v\n      WHERE (v.id = folio_collab_rooms.base_version_id)))\nEND AND\nCASE\n    WHEN (source_version_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entity_versions v\n      WHERE (v.id = folio_collab_rooms.source_version_id)))\nEND)"
   },
   {
     "schema": "public",
@@ -6456,8 +6456,8 @@
     "command": "ALL",
     "roles": ["stella"],
     "permissive": "RESTRICTIVE",
-    "using": "(((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text)))) AND ((entity_feature_workspace_ids = '{}'::uuid[]) OR (entity_feature_workspace_ids <@ ( SELECT (COALESCE((NULLIF(current_setting('app.workspace_ids'::text, true), ''::text))::uuid[], '{}'::uuid[]) || COALESCE(array_agg(stella_authorized_workspaces.authorized_workspace_id), '{}'::uuid[]))\n   FROM stella_authorized_workspaces))))",
-    "withCheck": "(((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text)))) AND ((entity_feature_workspace_ids = '{}'::uuid[]) OR (entity_feature_workspace_ids <@ ( SELECT (COALESCE((NULLIF(current_setting('app.workspace_ids'::text, true), ''::text))::uuid[], '{}'::uuid[]) || COALESCE(array_agg(stella_authorized_workspaces.authorized_workspace_id), '{}'::uuid[]))\n   FROM stella_authorized_workspaces))))"
+    "using": "\nCASE\n    WHEN (field_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM fields f\n      WHERE (f.id = justifications.field_id)))\nEND",
+    "withCheck": "\nCASE\n    WHEN (field_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM fields f\n      WHERE (f.id = justifications.field_id)))\nEND"
   },
   {
     "schema": "public",
@@ -6536,8 +6536,8 @@
     "command": "ALL",
     "roles": ["stella"],
     "permissive": "RESTRICTIVE",
-    "using": "(((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text)))) AND ((entity_feature_organization_ids = '{}'::text[]) OR (entity_feature_organization_ids <@ ARRAY[( SELECT current_setting('app.organization_id'::text, true) AS current_setting)])))",
-    "withCheck": "(((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text)))) AND ((entity_feature_organization_ids = '{}'::text[]) OR (entity_feature_organization_ids <@ ARRAY[( SELECT current_setting('app.organization_id'::text, true) AS current_setting)])))"
+    "using": "\nCASE\n    WHEN (claim_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM legal_list_claims parent_row\n      WHERE (parent_row.id = legal_list_claim_review_events.claim_id)))\nEND",
+    "withCheck": "\nCASE\n    WHEN (claim_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM legal_list_claims parent_row\n      WHERE (parent_row.id = legal_list_claim_review_events.claim_id)))\nEND"
   },
   {
     "schema": "public",
@@ -6586,8 +6586,8 @@
     "command": "ALL",
     "roles": ["stella"],
     "permissive": "RESTRICTIVE",
-    "using": "(((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text)))) AND ((entity_feature_organization_ids = '{}'::text[]) OR (entity_feature_organization_ids <@ ARRAY[( SELECT current_setting('app.organization_id'::text, true) AS current_setting)])))",
-    "withCheck": "(((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text)))) AND ((entity_feature_organization_ids = '{}'::text[]) OR (entity_feature_organization_ids <@ ARRAY[( SELECT current_setting('app.organization_id'::text, true) AS current_setting)])))"
+    "using": "\nCASE\n    WHEN (run_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM legal_list_verification_runs parent_row\n      WHERE (parent_row.id = legal_list_claims.run_id)))\nEND",
+    "withCheck": "\nCASE\n    WHEN (run_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM legal_list_verification_runs parent_row\n      WHERE (parent_row.id = legal_list_claims.run_id)))\nEND"
   },
   {
     "schema": "public",
@@ -6696,8 +6696,8 @@
     "command": "ALL",
     "roles": ["stella"],
     "permissive": "RESTRICTIVE",
-    "using": "((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text))))",
-    "withCheck": "((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text))))"
+    "using": "\nCASE\n    WHEN (item_entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = legal_list_fact_details.item_entity_id)))\nEND",
+    "withCheck": "\nCASE\n    WHEN (item_entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = legal_list_fact_details.item_entity_id)))\nEND"
   },
   {
     "schema": "public",
@@ -6766,8 +6766,8 @@
     "command": "ALL",
     "roles": ["stella"],
     "permissive": "RESTRICTIVE",
-    "using": "(((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text)))) AND ((entity_feature_workspace_ids = '{}'::uuid[]) OR (entity_feature_workspace_ids <@ ( SELECT (COALESCE((NULLIF(current_setting('app.workspace_ids'::text, true), ''::text))::uuid[], '{}'::uuid[]) || COALESCE(array_agg(stella_authorized_workspaces.authorized_workspace_id), '{}'::uuid[]))\n   FROM stella_authorized_workspaces))))",
-    "withCheck": "(((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text)))) AND ((entity_feature_workspace_ids = '{}'::uuid[]) OR (entity_feature_workspace_ids <@ ( SELECT (COALESCE((NULLIF(current_setting('app.workspace_ids'::text, true), ''::text))::uuid[], '{}'::uuid[]) || COALESCE(array_agg(stella_authorized_workspaces.authorized_workspace_id), '{}'::uuid[]))\n   FROM stella_authorized_workspaces))))"
+    "using": "(\nCASE\n    WHEN (source_entity_version_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entity_versions v\n      WHERE (v.id = legal_list_generation_candidate_sources.source_entity_version_id)))\nEND AND\nCASE\n    WHEN (source_entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = legal_list_generation_candidate_sources.source_entity_id)))\nEND AND\nCASE\n    WHEN (candidate_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM legal_list_generation_candidates parent_row\n      WHERE (parent_row.id = legal_list_generation_candidate_sources.candidate_id)))\nEND)",
+    "withCheck": "(\nCASE\n    WHEN (source_entity_version_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entity_versions v\n      WHERE (v.id = legal_list_generation_candidate_sources.source_entity_version_id)))\nEND AND\nCASE\n    WHEN (source_entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = legal_list_generation_candidate_sources.source_entity_id)))\nEND AND\nCASE\n    WHEN (candidate_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM legal_list_generation_candidates parent_row\n      WHERE (parent_row.id = legal_list_generation_candidate_sources.candidate_id)))\nEND)"
   },
   {
     "schema": "public",
@@ -6816,8 +6816,8 @@
     "command": "ALL",
     "roles": ["stella"],
     "permissive": "RESTRICTIVE",
-    "using": "(((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text)))) AND ((entity_feature_workspace_ids = '{}'::uuid[]) OR (entity_feature_workspace_ids <@ ( SELECT (COALESCE((NULLIF(current_setting('app.workspace_ids'::text, true), ''::text))::uuid[], '{}'::uuid[]) || COALESCE(array_agg(stella_authorized_workspaces.authorized_workspace_id), '{}'::uuid[]))\n   FROM stella_authorized_workspaces))))",
-    "withCheck": "(((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text)))) AND ((entity_feature_workspace_ids = '{}'::uuid[]) OR (entity_feature_workspace_ids <@ ( SELECT (COALESCE((NULLIF(current_setting('app.workspace_ids'::text, true), ''::text))::uuid[], '{}'::uuid[]) || COALESCE(array_agg(stella_authorized_workspaces.authorized_workspace_id), '{}'::uuid[]))\n   FROM stella_authorized_workspaces))))"
+    "using": "\nCASE\n    WHEN (accepted_entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = legal_list_generation_candidates.accepted_entity_id)))\nEND",
+    "withCheck": "\nCASE\n    WHEN (accepted_entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = legal_list_generation_candidates.accepted_entity_id)))\nEND"
   },
   {
     "schema": "public",
@@ -6926,8 +6926,8 @@
     "command": "ALL",
     "roles": ["stella"],
     "permissive": "RESTRICTIVE",
-    "using": "((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text))))",
-    "withCheck": "((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text))))"
+    "using": "(\nCASE\n    WHEN (source_entity_version_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entity_versions v\n      WHERE (v.id = legal_list_generation_sources.source_entity_version_id)))\nEND AND\nCASE\n    WHEN (source_entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = legal_list_generation_sources.source_entity_id)))\nEND)",
+    "withCheck": "(\nCASE\n    WHEN (source_entity_version_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entity_versions v\n      WHERE (v.id = legal_list_generation_sources.source_entity_version_id)))\nEND AND\nCASE\n    WHEN (source_entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = legal_list_generation_sources.source_entity_id)))\nEND)"
   },
   {
     "schema": "public",
@@ -6976,8 +6976,8 @@
     "command": "ALL",
     "roles": ["stella"],
     "permissive": "RESTRICTIVE",
-    "using": "((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text))))",
-    "withCheck": "((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text))))"
+    "using": "\nCASE\n    WHEN (item_entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = legal_list_item_comments.item_entity_id)))\nEND",
+    "withCheck": "\nCASE\n    WHEN (item_entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = legal_list_item_comments.item_entity_id)))\nEND"
   },
   {
     "schema": "public",
@@ -7046,8 +7046,8 @@
     "command": "ALL",
     "roles": ["stella"],
     "permissive": "RESTRICTIVE",
-    "using": "((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text))))",
-    "withCheck": "((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text))))"
+    "using": "\nCASE\n    WHEN (item_entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = legal_list_item_reviews.item_entity_id)))\nEND",
+    "withCheck": "\nCASE\n    WHEN (item_entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = legal_list_item_reviews.item_entity_id)))\nEND"
   },
   {
     "schema": "public",
@@ -7106,8 +7106,8 @@
     "command": "ALL",
     "roles": ["stella"],
     "permissive": "RESTRICTIVE",
-    "using": "((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text))))",
-    "withCheck": "((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text))))"
+    "using": "(\nCASE\n    WHEN (item_entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = legal_list_item_sources.item_entity_id)))\nEND AND\nCASE\n    WHEN (source_entity_version_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entity_versions v\n      WHERE (v.id = legal_list_item_sources.source_entity_version_id)))\nEND AND\nCASE\n    WHEN (source_entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = legal_list_item_sources.source_entity_id)))\nEND)",
+    "withCheck": "(\nCASE\n    WHEN (item_entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = legal_list_item_sources.item_entity_id)))\nEND AND\nCASE\n    WHEN (source_entity_version_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entity_versions v\n      WHERE (v.id = legal_list_item_sources.source_entity_version_id)))\nEND AND\nCASE\n    WHEN (source_entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = legal_list_item_sources.source_entity_id)))\nEND)"
   },
   {
     "schema": "public",
@@ -7166,8 +7166,8 @@
     "command": "ALL",
     "roles": ["stella"],
     "permissive": "RESTRICTIVE",
-    "using": "((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text))))",
-    "withCheck": "((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text))))"
+    "using": "\nCASE\n    WHEN (entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = legal_list_items.entity_id)))\nEND",
+    "withCheck": "\nCASE\n    WHEN (entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = legal_list_items.entity_id)))\nEND"
   },
   {
     "schema": "public",
@@ -7266,8 +7266,8 @@
     "command": "ALL",
     "roles": ["stella"],
     "permissive": "RESTRICTIVE",
-    "using": "(((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text)))) AND ((entity_feature_organization_ids = '{}'::text[]) OR (entity_feature_organization_ids <@ ARRAY[( SELECT current_setting('app.organization_id'::text, true) AS current_setting)])))",
-    "withCheck": "(((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text)))) AND ((entity_feature_organization_ids = '{}'::text[]) OR (entity_feature_organization_ids <@ ARRAY[( SELECT current_setting('app.organization_id'::text, true) AS current_setting)])))"
+    "using": "\nCASE\n    WHEN (run_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM legal_list_verification_runs parent_row\n      WHERE (parent_row.id = legal_list_verification_blocks.run_id)))\nEND",
+    "withCheck": "\nCASE\n    WHEN (run_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM legal_list_verification_runs parent_row\n      WHERE (parent_row.id = legal_list_verification_blocks.run_id)))\nEND"
   },
   {
     "schema": "public",
@@ -7416,8 +7416,8 @@
     "command": "ALL",
     "roles": ["stella"],
     "permissive": "RESTRICTIVE",
-    "using": "((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text))))",
-    "withCheck": "((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text))))"
+    "using": "\nCASE\n    WHEN (run_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM legal_list_verification_runs parent_row\n      WHERE (parent_row.id = legal_list_verification_read_receipts.run_id)))\nEND",
+    "withCheck": "\nCASE\n    WHEN (run_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM legal_list_verification_runs parent_row\n      WHERE (parent_row.id = legal_list_verification_read_receipts.run_id)))\nEND"
   },
   {
     "schema": "public",
@@ -7486,8 +7486,8 @@
     "command": "ALL",
     "roles": ["stella"],
     "permissive": "RESTRICTIVE",
-    "using": "((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text))))",
-    "withCheck": "((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text))))"
+    "using": "\nCASE\n    WHEN (entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = legal_list_verification_runs.entity_id)))\nEND",
+    "withCheck": "\nCASE\n    WHEN (entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = legal_list_verification_runs.entity_id)))\nEND"
   },
   {
     "schema": "public",
@@ -8726,8 +8726,8 @@
     "command": "ALL",
     "roles": ["stella"],
     "permissive": "RESTRICTIVE",
-    "using": "(((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text)))) AND ((entity_feature_workspace_ids = '{}'::uuid[]) OR (entity_feature_workspace_ids <@ ( SELECT (COALESCE((NULLIF(current_setting('app.workspace_ids'::text, true), ''::text))::uuid[], '{}'::uuid[]) || COALESCE(array_agg(stella_authorized_workspaces.authorized_workspace_id), '{}'::uuid[]))\n   FROM stella_authorized_workspaces))))",
-    "withCheck": "(((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text)))) AND ((entity_feature_workspace_ids = '{}'::uuid[]) OR (entity_feature_workspace_ids <@ ( SELECT (COALESCE((NULLIF(current_setting('app.workspace_ids'::text, true), ''::text))::uuid[], '{}'::uuid[]) || COALESCE(array_agg(stella_authorized_workspaces.authorized_workspace_id), '{}'::uuid[]))\n   FROM stella_authorized_workspaces))))"
+    "using": "(\nCASE\n    WHEN (entity_version_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entity_versions v\n      WHERE (v.id = office_file_evidence.entity_version_id)))\nEND AND\nCASE\n    WHEN (entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = office_file_evidence.entity_id)))\nEND AND\nCASE\n    WHEN (field_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM fields f\n      WHERE (f.id = office_file_evidence.field_id)))\nEND)",
+    "withCheck": "(\nCASE\n    WHEN (entity_version_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entity_versions v\n      WHERE (v.id = office_file_evidence.entity_version_id)))\nEND AND\nCASE\n    WHEN (entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = office_file_evidence.entity_id)))\nEND AND\nCASE\n    WHEN (field_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM fields f\n      WHERE (f.id = office_file_evidence.field_id)))\nEND)"
   },
   {
     "schema": "public",
@@ -9066,8 +9066,8 @@
     "command": "ALL",
     "roles": ["stella"],
     "permissive": "RESTRICTIVE",
-    "using": "(((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text)))) AND ((entity_feature_workspace_ids = '{}'::uuid[]) OR (entity_feature_workspace_ids <@ ( SELECT (COALESCE((NULLIF(current_setting('app.workspace_ids'::text, true), ''::text))::uuid[], '{}'::uuid[]) || COALESCE(array_agg(stella_authorized_workspaces.authorized_workspace_id), '{}'::uuid[]))\n   FROM stella_authorized_workspaces))))",
-    "withCheck": "(((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text)))) AND ((entity_feature_workspace_ids = '{}'::uuid[]) OR (entity_feature_workspace_ids <@ ( SELECT (COALESCE((NULLIF(current_setting('app.workspace_ids'::text, true), ''::text))::uuid[], '{}'::uuid[]) || COALESCE(array_agg(stella_authorized_workspaces.authorized_workspace_id), '{}'::uuid[]))\n   FROM stella_authorized_workspaces))))"
+    "using": "(\nCASE\n    WHEN (base_version_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entity_versions v\n      WHERE (v.id = pdf_signing_sessions.base_version_id)))\nEND AND\nCASE\n    WHEN (entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = pdf_signing_sessions.entity_id)))\nEND AND\nCASE\n    WHEN (finalized_version_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entity_versions v\n      WHERE (v.id = pdf_signing_sessions.finalized_version_id)))\nEND)",
+    "withCheck": "(\nCASE\n    WHEN (base_version_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entity_versions v\n      WHERE (v.id = pdf_signing_sessions.base_version_id)))\nEND AND\nCASE\n    WHEN (entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = pdf_signing_sessions.entity_id)))\nEND AND\nCASE\n    WHEN (finalized_version_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entity_versions v\n      WHERE (v.id = pdf_signing_sessions.finalized_version_id)))\nEND)"
   },
   {
     "schema": "public",
@@ -9426,8 +9426,8 @@
     "command": "ALL",
     "roles": ["stella"],
     "permissive": "RESTRICTIVE",
-    "using": "(((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text)))) AND ((entity_feature_workspace_ids = '{}'::uuid[]) OR (entity_feature_workspace_ids <@ ( SELECT (COALESCE((NULLIF(current_setting('app.workspace_ids'::text, true), ''::text))::uuid[], '{}'::uuid[]) || COALESCE(array_agg(stella_authorized_workspaces.authorized_workspace_id), '{}'::uuid[]))\n   FROM stella_authorized_workspaces))))",
-    "withCheck": "(((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text)))) AND ((entity_feature_workspace_ids = '{}'::uuid[]) OR (entity_feature_workspace_ids <@ ( SELECT (COALESCE((NULLIF(current_setting('app.workspace_ids'::text, true), ''::text))::uuid[], '{}'::uuid[]) || COALESCE(array_agg(stella_authorized_workspaces.authorized_workspace_id), '{}'::uuid[]))\n   FROM stella_authorized_workspaces))))"
+    "using": "(\nCASE\n    WHEN (result_entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = report_exports.result_entity_id)))\nEND AND\nCASE\n    WHEN (result_field_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM fields f\n      WHERE (f.id = report_exports.result_field_id)))\nEND)",
+    "withCheck": "(\nCASE\n    WHEN (result_entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = report_exports.result_entity_id)))\nEND AND\nCASE\n    WHEN (result_field_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM fields f\n      WHERE (f.id = report_exports.result_field_id)))\nEND)"
   },
   {
     "schema": "public",
@@ -10136,8 +10136,8 @@
     "command": "ALL",
     "roles": ["stella"],
     "permissive": "RESTRICTIVE",
-    "using": "(((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text)))) AND ((entity_feature_workspace_ids = '{}'::uuid[]) OR (entity_feature_workspace_ids <@ ( SELECT (COALESCE((NULLIF(current_setting('app.workspace_ids'::text, true), ''::text))::uuid[], '{}'::uuid[]) || COALESCE(array_agg(stella_authorized_workspaces.authorized_workspace_id), '{}'::uuid[]))\n   FROM stella_authorized_workspaces))))",
-    "withCheck": "(((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text)))) AND ((entity_feature_workspace_ids = '{}'::uuid[]) OR (entity_feature_workspace_ids <@ ( SELECT (COALESCE((NULLIF(current_setting('app.workspace_ids'::text, true), ''::text))::uuid[], '{}'::uuid[]) || COALESCE(array_agg(stella_authorized_workspaces.authorized_workspace_id), '{}'::uuid[]))\n   FROM stella_authorized_workspaces))))"
+    "using": "\nCASE\n    WHEN (entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = search_document_preview_passages.entity_id)))\nEND",
+    "withCheck": "\nCASE\n    WHEN (entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = search_document_preview_passages.entity_id)))\nEND"
   },
   {
     "schema": "public",
@@ -10196,8 +10196,8 @@
     "command": "ALL",
     "roles": ["stella"],
     "permissive": "RESTRICTIVE",
-    "using": "(((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text)))) AND ((entity_feature_workspace_ids = '{}'::uuid[]) OR (entity_feature_workspace_ids <@ ( SELECT (COALESCE((NULLIF(current_setting('app.workspace_ids'::text, true), ''::text))::uuid[], '{}'::uuid[]) || COALESCE(array_agg(stella_authorized_workspaces.authorized_workspace_id), '{}'::uuid[]))\n   FROM stella_authorized_workspaces))))",
-    "withCheck": "(((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text)))) AND ((entity_feature_workspace_ids = '{}'::uuid[]) OR (entity_feature_workspace_ids <@ ( SELECT (COALESCE((NULLIF(current_setting('app.workspace_ids'::text, true), ''::text))::uuid[], '{}'::uuid[]) || COALESCE(array_agg(stella_authorized_workspaces.authorized_workspace_id), '{}'::uuid[]))\n   FROM stella_authorized_workspaces))))"
+    "using": "\nCASE\n    WHEN (entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = search_documents.entity_id)))\nEND",
+    "withCheck": "\nCASE\n    WHEN (entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = search_documents.entity_id)))\nEND"
   },
   {
     "schema": "public",
@@ -10836,8 +10836,8 @@
     "command": "ALL",
     "roles": ["stella"],
     "permissive": "RESTRICTIVE",
-    "using": "(((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text)))) AND ((entity_feature_workspace_ids = '{}'::uuid[]) OR (entity_feature_workspace_ids <@ ( SELECT (COALESCE((NULLIF(current_setting('app.workspace_ids'::text, true), ''::text))::uuid[], '{}'::uuid[]) || COALESCE(array_agg(stella_authorized_workspaces.authorized_workspace_id), '{}'::uuid[]))\n   FROM stella_authorized_workspaces))))",
-    "withCheck": "(((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text)))) AND ((entity_feature_workspace_ids = '{}'::uuid[]) OR (entity_feature_workspace_ids <@ ( SELECT (COALESCE((NULLIF(current_setting('app.workspace_ids'::text, true), ''::text))::uuid[], '{}'::uuid[]) || COALESCE(array_agg(stella_authorized_workspaces.authorized_workspace_id), '{}'::uuid[]))\n   FROM stella_authorized_workspaces))))"
+    "using": "\nCASE\n    WHEN (entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = task_assignees.entity_id)))\nEND",
+    "withCheck": "\nCASE\n    WHEN (entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = task_assignees.entity_id)))\nEND"
   },
   {
     "schema": "public",
@@ -12036,8 +12036,8 @@
     "command": "ALL",
     "roles": ["stella"],
     "permissive": "RESTRICTIVE",
-    "using": "((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text))))",
-    "withCheck": "((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text))))"
+    "using": "\nCASE\n    WHEN (obligation_entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = work_obligation_events.obligation_entity_id)))\nEND",
+    "withCheck": "\nCASE\n    WHEN (obligation_entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = work_obligation_events.obligation_entity_id)))\nEND"
   },
   {
     "schema": "public",
@@ -12066,8 +12066,8 @@
     "command": "ALL",
     "roles": ["stella"],
     "permissive": "RESTRICTIVE",
-    "using": "((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text))))",
-    "withCheck": "((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text))))"
+    "using": "\nCASE\n    WHEN (entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = work_obligations.entity_id)))\nEND",
+    "withCheck": "\nCASE\n    WHEN (entity_id IS NULL) THEN true\n    ELSE (EXISTS ( SELECT 1\n       FROM entities e\n      WHERE (e.id = work_obligations.entity_id)))\nEND"
   },
   {
     "schema": "public",
