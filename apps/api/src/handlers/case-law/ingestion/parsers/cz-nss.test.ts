@@ -147,11 +147,13 @@ describe("parseNssDecisionHtml", () => {
           block.type === "heading" && block.role === "decision-title",
       );
 
-      expect(titles.map((title) => title.plainText)).toEqual([
-        "ROZSUDEK",
-        "JMÉNEM REPUBLIKY",
-      ]);
-      expect(titles.map((title) => title.level)).toEqual([1, 1]);
+      expect(titles.map((title) => title.plainText)).toEqual(["ROZSUDEK"]);
+      expect(titles.map((title) => title.level)).toEqual([1]);
+      expect(
+        documentAst.blocks.find(
+          (block) => block.plainText === "JMÉNEM REPUBLIKY",
+        ),
+      ).toMatchObject({ type: "paragraph", role: "intro" });
     });
   });
 
@@ -292,10 +294,8 @@ describe("parseNssDecisionHtml", () => {
       const input = baseInput(nssUnitDecisionHtml);
       const { documentAst } = parseNssDecisionHtml(input);
 
-      const headings = findAllByType(documentAst.blocks, "heading");
-      const takto = headings.find((h) => h.plainText === "takto:");
-      expect(takto).toBeDefined();
-      expect(takto?.type).toBe("heading");
+      const takto = documentAst.blocks.find((b) => b.plainText === "takto:");
+      expect(takto).toMatchObject({ type: "paragraph", role: "intro" });
     });
 
     test("normalizes Odůvodnění to canonical form", () => {
@@ -889,8 +889,8 @@ describe("parseNssDecisionHtml", () => {
       );
 
       expect(republicTitle).toMatchObject({
-        type: "heading",
-        role: "decision-title",
+        type: "paragraph",
+        role: "intro",
       });
       expect(holding?.plainText).toContain("se zrušuje");
       expect(holding?.inlines).toContainEqual({

@@ -1,3 +1,5 @@
+import { normalizeUnicode } from "@stll/text-normalize";
+
 import type { Block, ParagraphBlock } from "./document-ast.js";
 
 /** Closing formula: `V Brně dne 6. ledna 2016`, `Brno 15. května 2023`. */
@@ -14,6 +16,52 @@ export const CZ_JUDGE_NAME_RE =
  */
 export const CZ_JUDGE_TITLE_RE =
   /(?:předsed(?:a|kyně|y)\s+senátu:?|samosoudce|samosoudkyně|soud(?:ce|kyně)\s+zpravodaj|v\.\s*r\.\s*$)/iu;
+
+const compactUpper = (text: string): string =>
+  normalizeUnicode(text, "NFKC")
+    .toLocaleUpperCase("cs-CZ")
+    .replaceAll(/\s+/gu, "");
+
+/**
+ * The lines a Czech decision opens with beside its title: the state and the
+ * formula the court decides under. They are the court's words, not its
+ * title, so none of them is a `decision-title`. Spacing is not significant
+ * (`J M É N E M   R E P U B L I K Y`).
+ */
+const OPENING_FORMULAE: ReadonlySet<string> = new Set([
+  "JMÉNEMREPUBLIKY",
+  "JMÉNEMČESKÉREPUBLIKY",
+  "ČESKÁREPUBLIKA",
+]);
+
+export const isCzechOpeningFormula = (text: string): boolean =>
+  OPENING_FORMULAE.has(compactUpper(text));
+
+/** The lead-in to the operative part, alone on its line. */
+const TAKTO_LINE_RE = /^t\s*a\s*k\s*t\s*o\s*(?::\s*)?$/iu;
+
+/** The lead-in as it ends a sentence naming the bench and the parties. */
+export const CZ_TAKTO_TAIL_RE = /(?:^|[\s,])t\s*a\s*k\s*t\s*o\s*(?::\s*)?$/iu;
+
+/** The canonical text of the lead-in, whatever its spacing. */
+export const CZ_TAKTO = "takto:";
+
+export const isCzechTaktoLine = (text: string): boolean =>
+  TAKTO_LINE_RE.test(text.trim());
+
+const JUDGE_SIGNATURE_SUFFIX_RE = /\s*,?\s*v\.\s*r\.\s*$/iu;
+
+/**
+ * A judge's name as the signature block prints it: layout whitespace
+ * collapsed and the `v. r.` (vlastní rukou) signature mark removed. The mark
+ * says how the decision was signed, not who signed it.
+ */
+export const normalizeCzechJudgeName = (printed: string): string =>
+  printed
+    .replaceAll(/\s+/gu, " ")
+    .trim()
+    .replace(JUDGE_SIGNATURE_SUFFIX_RE, "")
+    .trim();
 
 /** An office printed beside a signed name in Czech public documents. */
 const CZ_PUBLIC_OFFICE_TITLE_RE = /^(?:vice)?guvernér(?:ka)?\s*:?$/iu;

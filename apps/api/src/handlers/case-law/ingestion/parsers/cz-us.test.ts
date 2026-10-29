@@ -323,9 +323,8 @@ describe("parseUsDecisionHtml", () => {
       const input = baseInput(rtfDecisionHtml);
       const { documentAst } = parseUsDecisionHtml(input);
 
-      const headings = findAllByType(documentAst.blocks, "heading");
-      const takto = headings.find((h) => h.plainText === "takto:");
-      expect(takto).toBeDefined();
+      const takto = documentAst.blocks.find((b) => b.plainText === "takto:");
+      expect(takto).toMatchObject({ type: "paragraph", role: "intro" });
     });
 
     test("detects Odůvodnění separator (spaced variant)", () => {

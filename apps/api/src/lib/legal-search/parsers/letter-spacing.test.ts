@@ -1,10 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import type { Block } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
 import { normalizeUnicode } from "@stll/text-normalize";
 
-import { collapseLetterSpacing } from "./letter-spacing";
+import {
+  collapseLetterSpacing,
+  withAttestedLetterSpacing,
+} from "./letter-spacing";
 
 /** Spell words the way the court emphasises them: letters apart, words wider. */
 const spaceOut = (words: readonly string[]): string =>
@@ -228,4 +232,55 @@ test("ordinary one-letter words beside spaced emphasis remain separate", () => {
 
 test("a wholly spaced phrase retains the unambiguous emphasis context", () => {
   expect(collapseLetterSpacing("a i   v e r d i k t")).toBe("ai verdikt");
+});
+
+describe("withAttestedLetterSpacing", () => {
+  const paragraphOf = (plainText: string): Block => ({
+    id: "b1",
+    anchorId: "p-1",
+    type: "paragraph",
+    inlines: [{ type: "text", text: plainText }],
+    plainText,
+  });
+
+  const witness = paragraphOf("Povinný může podat návrh.");
+
+  test("reads a word spaced unevenly inside a sentence as the word the decision prints intact elsewhere", () => {
+    const [spaced] = withAttestedLetterSpacing([
+      paragraphOf("Nesplní-li povinný, m ů že oprávněný podat návrh."),
+      witness,
+    ]);
+    expect(spaced?.plainText).toBe(
+      "Nesplní-li povinný, může oprávněný podat návrh.",
+    );
+    expect(spaced?.type === "paragraph" ? spaced.inlines : []).toEqual([
+      { type: "text", text: "Nesplní-li povinný, může oprávněný podat návrh." },
+    ]);
+  });
+
+  test("leaves the same spacing when the decision never prints the word", () => {
+    const blocks = [paragraphOf("Nesplní-li povinný, m ů že oprávněný.")];
+    expect(withAttestedLetterSpacing(blocks)).toEqual(blocks);
+  });
+
+  test("never changes a character that is not whitespace, and is idempotent", () => {
+    assertProperty(
+      "attested letter spacing never changes a character that is not whitespace",
+      fc.property(
+        fc.constantFrom("m ů že", "m ůže", "m ů ž e", "mů ž e", "může"),
+        fc.array(czechWord, { minLength: 0, maxLength: 4 }),
+        fc.array(czechWord, { minLength: 0, maxLength: 4 }),
+        (spelled, before, after) => {
+          const text = [...before, spelled, ...after].join(" ");
+          const blocks = [paragraphOf(text), witness];
+          const once = withAttestedLetterSpacing(blocks);
+          const [first] = once;
+          expect(first?.plainText.replaceAll(/\s/gu, "")).toBe(
+            text.replaceAll(/\s/gu, ""),
+          );
+          expect(withAttestedLetterSpacing(once)).toEqual(once);
+        },
+      ),
+    );
+  });
 });

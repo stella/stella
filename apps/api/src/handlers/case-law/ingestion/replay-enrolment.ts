@@ -24,9 +24,9 @@ export type ReplayEnrolment =
 
 // Enrolment is a reviewed code change, never an environment override.
 export const REPLAY_ENROLMENT = {
-  [ADAPTER_KEYS.CZ_REGIONAL]: { mode: "off" },
-  [ADAPTER_KEYS.CZ_NS]: { mode: "off" },
-  [ADAPTER_KEYS.CZ_NSS]: { mode: "off" },
+  [ADAPTER_KEYS.CZ_REGIONAL]: { mode: "dry-run", dailyBudget: 10_000 },
+  [ADAPTER_KEYS.CZ_NS]: { mode: "dry-run", dailyBudget: 10_000 },
+  [ADAPTER_KEYS.CZ_NSS]: { mode: "dry-run", dailyBudget: 10_000 },
   [ADAPTER_KEYS.CZ_US]: { mode: "dry-run", dailyBudget: 10_000 },
   [ADAPTER_KEYS.SK_COURTS]: { mode: "off" },
   [ADAPTER_KEYS.SK_US]: { mode: "off" },

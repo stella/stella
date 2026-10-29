@@ -109,35 +109,35 @@ export const storedFeaturesForParserReparseScope = <
 
 export const PARSER_VERSION_SCOPES = {
   [ADAPTER_KEYS.CZ_REGIONAL]: {
-    version: 15,
+    version: 16,
     scope: {
       type: "all",
       reason:
-        "running headers, soft hyphens, misplaced opening quotes, title lines and paragraph numbers are recomputed from the stored decision, and none of them has feature storage of its own",
+        "running headers, soft hyphens, misplaced opening quotes, letter-spaced words, title and formula lines, the takto lead-in, the court's own Poučení label and paragraph numbers are recomputed from the stored decision, and none of them has feature storage of its own",
     },
   },
   [ADAPTER_KEYS.CZ_NS]: {
-    version: 20,
+    version: 21,
     scope: {
       type: "all",
       reason:
-        "running headers, page numbers, soft hyphens, captions and paragraph numbers are recomputed from the stored print page, and none of them has feature storage of its own",
+        "running headers, page numbers, soft hyphens, captions, the formula lines, section headings, letter-spaced words, the signing judge's name and paragraph numbers are recomputed from the stored print page, and none of them has feature storage of its own",
     },
   },
   [ADAPTER_KEYS.CZ_NSS]: {
-    version: 23,
+    version: 24,
     scope: {
       type: "all",
       reason:
-        "Rebuild decision text, structure and paragraph identities from archived pages or registry originals; read current scalar metadata separately from related-record evidence and retain conflicting scalar values. Discovering an uncaptured original requires a normal re-crawl.",
+        "Rebuild decision text, structure and paragraph identities from archived pages or registry originals; read current scalar metadata separately from related-record evidence and retain conflicting scalar values. Section headings, the formula lines, the takto lead-in and letter-spaced words are recomputed with them. Discovering an uncaptured original requires a normal re-crawl.",
     },
   },
   [ADAPTER_KEYS.CZ_US]: {
-    version: 31,
+    version: 32,
     scope: {
       type: "all",
       reason:
-        "the record card's affected constitutional and other provisions are read one listed act per value, so the stored provision lists are recomputed from the stored card; paragraph text, ruling roles, separate-opinion headings, letter-spaced words and paragraph numbers are recomputed from the stored page, and none of them has feature storage of its own",
+        "the plenary ruling roles, the formula lines, the takto lead-in and the record card's affected constitutional and other provisions are read one listed act per value, so the stored provision lists are recomputed from the stored card; paragraph text, ruling roles, separate-opinion headings, letter-spaced words and paragraph numbers are recomputed from the stored page, and none of them has feature storage of its own",
     },
   },
   [ADAPTER_KEYS.SK_COURTS]: {

@@ -96,10 +96,17 @@ describe("scheduled replay entrypoint", () => {
     expect(stderr).not.toContain("S3_BUCKET");
   });
 
-  test("committed enrolment previews only the Constitutional Court and enrols nothing", () => {
+  test("committed enrolment previews only the Czech courts and enrols nothing", () => {
     expect(
       Object.entries(REPLAY_ENROLMENT).filter(([, { mode }]) => mode !== "off"),
-    ).toEqual([[ADAPTER_KEYS.CZ_US, { mode: "dry-run", dailyBudget: 10_000 }]]);
+    ).toEqual(
+      [
+        ADAPTER_KEYS.CZ_REGIONAL,
+        ADAPTER_KEYS.CZ_NS,
+        ADAPTER_KEYS.CZ_NSS,
+        ADAPTER_KEYS.CZ_US,
+      ].map((key) => [key, { mode: "dry-run", dailyBudget: 10_000 }]),
+    );
   });
 
   test("default-off environment, global kill and unenrolled sources perform no setup", async () => {

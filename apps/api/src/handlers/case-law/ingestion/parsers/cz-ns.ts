@@ -13,10 +13,12 @@
 import * as cheerio from "cheerio";
 import { type AnyNode, Element, isTag, isText, Text } from "domhandler";
 
+import { labelledHeading } from "@stll/legal-ast/case-law-heading";
 import {
   CZ_CLOSING_RE as CLOSING_RE,
   CZ_JUDGE_NAME_RE as SIGNATURE_RE,
   CZ_JUDGE_TITLE_RE as PREDSEDA_RE,
+  isCzechOpeningFormula,
 } from "@stll/legal-ast/czech-document-roles";
 // parser-output-unchanged: imports the document AST from its package owner
 // parser-output-unchanged: The output is typed as a decision document AST; the emitted AST is unchanged.
@@ -31,6 +33,7 @@ import type {
 import { hasInlineChildren } from "@stll/legal-ast/inline";
 
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
+import { withAttestedLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
 import {
   isPageNumberLine,
   isRunningHeaderLine,
@@ -71,7 +74,9 @@ export const parseNsDecisionHtml = (
   const { canonical, source, relatedProceedingsTable } = extractNsMetadata($);
   const rawChunks = extractRawChunks($);
   const blocks = courtParagraphNumbers(
-    classifyBlocks(rawChunks, relatedProceedingsTable),
+    withAttestedLetterSpacing(
+      classifyBlocks(rawChunks, relatedProceedingsTable),
+    ),
     {
       parser: "cz-ns",
       caseNumber: canonical.caseNumber ?? input.documentId,
@@ -547,6 +552,16 @@ export const extractRawChunks = ($: cheerio.CheerioAPI): RawChunk[] => {
     if (tag === "p" || tag === "div") {
       flushBuffer();
       const centered = parentCentered || isCentered($node);
+      // A centred caption or heading block holds one element per line
+      // (`<div><p>Odůvodnění:<p>I. Dosavadní průběh</div>`): each is its own
+      // chunk, never one run with the line break between them.
+      if (centered && $node.children("p, div").length > 0) {
+        $node.contents().each((_, child) => {
+          processNode(child, true);
+        });
+        flushBuffer();
+        return;
+      }
       const inlines = walkInlines($, $node);
       flushInlines(inlines, centered);
       return;
@@ -684,6 +699,11 @@ const shouldMerge = (prev: Block, next: Block): prev is ParagraphBlock => {
     (text.length < 80 && PREDSEDA_RE.test(text));
 
   if (isClosingOrSig(prevText) || isClosingOrSig(nextText)) {
+    return false;
+  }
+
+  // The state and the formula are lines of their own, however short.
+  if (isCzechOpeningFormula(prevText) || isCzechOpeningFormula(nextText)) {
     return false;
   }
 
@@ -913,6 +933,16 @@ const mergeBlocks = (
 
 // ── Classification ────────────────────────────────────────
 
+const withoutLineBreaks = (inlines: readonly Inline[]): Inline[] =>
+  inlines.map((node): Inline => {
+    if (node.type === "line-break") {
+      return { type: "text", text: " " };
+    }
+    return hasInlineChildren(node)
+      ? { ...node, children: withoutLineBreaks(node.children) }
+      : node;
+  });
+
 const makeAnchorId = (index: number): string => `p-${index}`;
 
 const classifyBlocks = (
@@ -999,6 +1029,20 @@ const classifyBlocks = (
       continue;
     }
 
+    // The state and the formula open the decision beside its title; they
+    // are the court's words, not a title of their own.
+    if (isCzechOpeningFormula(plainText)) {
+      blocks.push({
+        id,
+        anchorId,
+        type: "paragraph",
+        role: "intro",
+        inlines,
+        plainText,
+      });
+      continue;
+    }
+
     // Section heading: Odůvodnění
     if (isSectionHeading(plainText)) {
       blocks.push({
@@ -1009,6 +1053,25 @@ const classifyBlocks = (
         role: "section-heading",
         inlines,
         plainText,
+      });
+      continue;
+    }
+
+    // A numeral and its title, set on two lines of one centred block,
+    // are one heading.
+    const labelled = centered ? labelledHeading(plainText) : null;
+    if (labelled !== null) {
+      const joined = withoutLineBreaks(inlines);
+      blocks.push({
+        id,
+        anchorId,
+        type: "heading",
+        level: 3,
+        inlines:
+          inlinesToPlainText(joined).trim() === labelled.text
+            ? joined
+            : [{ type: "text", text: labelled.text }],
+        plainText: labelled.text,
       });
       continue;
     }

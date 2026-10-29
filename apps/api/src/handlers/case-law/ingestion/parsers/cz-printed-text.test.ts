@@ -255,7 +255,10 @@ describe("structure", () => {
           ? [block.plainText]
           : [],
       ),
-    ).toEqual(["ROZSUDEK", "JMÉNEM REPUBLIKY"]);
+    ).toEqual(["ROZSUDEK"]);
+    expect(
+      ast.blocks.find((block) => block.plainText === "JMÉNEM REPUBLIKY"),
+    ).toMatchObject({ type: "paragraph", role: "intro" });
   });
 
   test("Nejvyšší soud: a caption below the court's name is split into docket and title", async () => {

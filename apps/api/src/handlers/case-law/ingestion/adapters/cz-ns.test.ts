@@ -346,3 +346,43 @@ describe("the source hash fingerprints every stored part", () => {
     expect(replayed.result.rawHash).toBe(decision.rawHash);
   });
 });
+
+describe("the judge a decision is signed by", () => {
+  afterEach(() => mock.restore());
+
+  test("is the name, without the layout spaces and the signature mark the print prints", async () => {
+    const print = new TextDecoder().decode(
+      Bun.gunzipSync(
+        await Bun.file(
+          new URL(
+            "../parsers/__fixtures__/cz-ns-29-odo-231-2002.print.html.gz",
+            import.meta.url,
+          ),
+        ).bytes(),
+      ),
+    );
+    spyOn(globalThis, "fetch").mockImplementation(
+      asFetchMock(async (input: string | URL | Request) => {
+        const url = input instanceof Request ? input.url : input.toString();
+        return await Promise.resolve(
+          new Response(
+            url.includes("/WebPrint/")
+              ? print
+              : "<html><body><p>Rozhodnutí soudu.</p></body></html>",
+          ),
+        );
+      }),
+    );
+
+    const built = await buildCzNsDecision({
+      unid: "0123456789abcdef0123456789abcdef",
+      caseNumber: "29 Odo 231/2002",
+    });
+
+    expect(built.type).toBe("built");
+    if (built.type !== "built") {
+      return;
+    }
+    expect(built.decision.metadata["judge"]).toBe("JUDr. Zdeněk Krčmář");
+  });
+});

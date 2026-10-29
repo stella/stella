@@ -31,11 +31,15 @@ import { isComment, isText } from "domhandler";
 import type { AnyNode } from "domhandler";
 
 import { parseDecimalToken } from "@stll/agent-input/numeric-token";
+import { labelledHeading } from "@stll/legal-ast/case-law-heading";
 import { closedQuotationParagraphStarts } from "@stll/legal-ast/closed-quotation-paragraphs";
 import { opensWithCourtParagraphMarker } from "@stll/legal-ast/court-paragraph-numbers";
 import {
   CZ_CLOSING_RE as CLOSING_RE,
   CZ_JUDGE_TITLE_RE as SIGNATURE_RE,
+  CZ_TAKTO,
+  CZ_TAKTO_TAIL_RE,
+  isCzechTaktoLine,
 } from "@stll/legal-ast/czech-document-roles";
 // parser-output-unchanged: imports the document AST from its package owner
 // parser-output-unchanged: The output is typed as a decision document AST; the emitted AST is unchanged.
@@ -49,7 +53,10 @@ import { normalizeInlineLine } from "@stll/legal-ast/inline-line";
 import { normalizeUnicode } from "@stll/text-normalize";
 
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
-import { collapseLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
+import {
+  collapseLetterSpacing,
+  withAttestedLetterSpacing,
+} from "@/api/lib/legal-search/parsers/letter-spacing";
 import {
   continuesAcrossPageBreak,
   CZ_RUNNING_HEADER_SOURCE,
@@ -91,11 +98,14 @@ export const parseNssDecisionHtml = (
 ): ParseNssDecisionOutput => {
   const $ = cheerio.load(input.html);
   const chunks = extractChunks($);
-  const blocks = courtParagraphNumbers(classifyChunks(chunks), {
-    parser: "cz-nss",
-    caseNumber: input.caseNumber,
-    url: input.sourceUrl,
-  });
+  const blocks = courtParagraphNumbers(
+    withAttestedLetterSpacing(classifyChunks(chunks)),
+    {
+      parser: "cz-nss",
+      caseNumber: input.caseNumber,
+      url: input.sourceUrl,
+    },
+  );
 
   const fulltext = blocks
     .flatMap((b) => (b.plainText ? [b.plainText] : []))
@@ -644,11 +654,13 @@ const extractChunks = ($: cheerio.CheerioAPI): PChunk[] => {
           return;
         }
 
+        // A centred bold item is the court's numbered section heading.
+        const itemStyle = $li.attr("style") ?? "";
         chunks.push({
           inlines,
           plainText,
-          centered: false,
-          bold: false,
+          centered: itemStyle.includes("text-align:center"),
+          bold: itemStyle.includes("font-weight:bold"),
           letterSpacing: false,
           fontSize: 12,
           paragraphLayout: "unknown",
@@ -746,10 +758,13 @@ const stripPageFurniture = (chunk: PChunk): ChunkContent | null => {
  * letters. Comparing the compact form keeps that presentation noise out of
  * the AST while preserving one canonical title for readers and search.
  */
+/** The formula beside the title, in the one spelling the AST carries. */
+const OPENING_FORMULA = "JMÉNEM REPUBLIKY";
+
 const DECISION_TITLE_BY_COMPACT_TEXT = {
   ROZSUDEK: "ROZSUDEK",
   USNESENÍ: "USNESENÍ",
-  JMÉNEMREPUBLIKY: "JMÉNEM REPUBLIKY",
+  JMÉNEMREPUBLIKY: OPENING_FORMULA,
 } as const;
 
 type CanonicalDecisionTitle =
@@ -771,10 +786,6 @@ const canonicalDecisionTitle = (
     ? DECISION_TITLE_BY_COMPACT_TEXT[compact]
     : null;
 };
-
-/** "takto:" alone, or at the end of introductory prose. */
-const TAKTO_STANDALONE_RE = /^t\s*a\s*k\s*t\s*o\s*(?::\s*)?$/iu;
-const TAKTO_SUFFIX_RE = /(?:^|\s)t\s*a\s*k\s*t\s*o\s*(?::\s*)?$/iu;
 
 /** "Odůvodnění:" separator. */
 const ODUVODNENI_RE =
@@ -948,6 +959,62 @@ const finishesCutParagraph = ({
   return true;
 };
 
+/**
+ * A centred bold list item after Odůvodnění is the court's numbered section
+ * heading (`1. Vymezení věci`), not a numbered paragraph.
+ */
+const numberedListHeading = (
+  chunk: PChunk,
+  content: ChunkContent,
+  phase: DocumentPhase,
+) =>
+  chunk.listItemIndex !== null &&
+  chunk.decimalList &&
+  chunk.centered &&
+  chunk.bold &&
+  REASONING_PHASES.has(phase)
+    ? labelledHeading(withListMarker(chunk, content).plainText)
+    : null;
+
+/** How the preamble hands over to the operative part, if this line does. */
+const taktoLead = (
+  phase: DocumentPhase,
+  plainText: string,
+): "line" | "tail" | null => {
+  if (phase !== DOCUMENT_PHASE.PREAMBLE) {
+    return null;
+  }
+  if (isCzechTaktoLine(plainText)) {
+    return "line";
+  }
+  return CZ_TAKTO_TAIL_RE.test(plainText) ? "tail" : null;
+};
+
+/** The title is a heading; the formula is the court's wording under it. */
+const decisionTitleBlock = (
+  title: CanonicalDecisionTitle,
+  id: string,
+  index: number,
+): Block =>
+  title === OPENING_FORMULA
+    ? {
+        id,
+        anchorId: makeAnchorId("p", index),
+        type: "paragraph",
+        role: "intro",
+        inlines: [{ type: "text", text: title }],
+        plainText: title,
+      }
+    : {
+        id,
+        anchorId: makeAnchorId("h", index),
+        type: "heading",
+        level: 1,
+        role: "decision-title",
+        inlines: [{ type: "text", text: title }],
+        plainText: title,
+      };
+
 const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
   let blockCounter = 0;
   const makeBlockId = (): string => {
@@ -1048,37 +1115,25 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
       continue;
     }
 
-    // Decision title: ROZSUDEK, USNESENÍ, JMÉNEM REPUBLIKY
+    // Decision title (ROZSUDEK, USNESENÍ) or the formula beneath it
     if (decisionTitle !== null) {
       sawTitle = true;
       blockIndex += 1;
-      blocks.push({
-        id: makeBlockId(),
-        anchorId: makeAnchorId("h", blockIndex),
-        type: "heading",
-        level: 1,
-        role: "decision-title",
-        inlines: [{ type: "text", text: decisionTitle }],
-        plainText: decisionTitle,
-      });
+      blocks.push(decisionTitleBlock(decisionTitle, makeBlockId(), blockIndex));
       continue;
     }
 
     // "takto:" separator (centered, bold, letter-spaced)
-    if (
-      phase === DOCUMENT_PHASE.PREAMBLE &&
-      TAKTO_STANDALONE_RE.test(plainText)
-    ) {
+    if (taktoLead(phase, plainText) === "line") {
       phase = DOCUMENT_PHASE.HOLDING;
       blockIndex += 1;
       blocks.push({
         id: makeBlockId(),
-        anchorId: makeAnchorId("h", blockIndex),
-        type: "heading",
-        level: 2,
-        role: "section-heading",
-        inlines: [{ type: "text", text: "takto:" }],
-        plainText: "takto:",
+        anchorId: makeAnchorId("p", blockIndex),
+        type: "paragraph",
+        role: "intro",
+        inlines: [{ type: "text", text: CZ_TAKTO }],
+        plainText: CZ_TAKTO,
       });
       continue;
     }
@@ -1086,7 +1141,7 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
     // Some exports keep the introductory sentence and separator in one
     // paragraph. Preserve that prose as prose, then open the same structural
     // zone for the ordered or unnumbered holdings that follow it.
-    if (phase === DOCUMENT_PHASE.PREAMBLE && TAKTO_SUFFIX_RE.test(plainText)) {
+    if (taktoLead(phase, plainText) === "tail") {
       blockIndex += 1;
       blocks.push({
         id: makeBlockId(),
@@ -1248,6 +1303,22 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
         });
         continue;
       }
+    }
+
+    // A centred bold list item after Odůvodnění is the court's numbered
+    // section heading (`1. Vymezení věci`), not a numbered paragraph.
+    const listHeading = numberedListHeading(chunk, content, phase);
+    if (listHeading !== null) {
+      blockIndex += 1;
+      blocks.push({
+        id: makeBlockId(),
+        anchorId: makeAnchorId("h", blockIndex),
+        type: "heading",
+        level: 3,
+        inlines: [{ type: "text", text: listHeading.text }],
+        plainText: listHeading.text,
+      });
+      continue;
     }
 
     // <ol> list items: holding paragraphs before Odůvodnění,

@@ -63,6 +63,10 @@ import {
   CZ_CLOSING_RE as CLOSING_RE,
   CZ_JUDGE_NAME_RE as JUDGE_NAME_RE,
   CZ_JUDGE_TITLE_RE as SIGNATURE_RE,
+  CZ_TAKTO,
+  CZ_TAKTO_TAIL_RE,
+  isCzechOpeningFormula,
+  isCzechTaktoLine,
 } from "@stll/legal-ast/czech-document-roles";
 // parser-output-unchanged: cached DocContent and direct paragraph validation preserve extracted content; the output retains its decision-specific AST type.
 import {
@@ -70,6 +74,7 @@ import {
   type DecisionDocumentAst,
   hasInlineChildren,
   type Inline,
+  type ParagraphBlock,
   plainTextOf,
 } from "@stll/legal-ast/document-ast";
 // parser-output-unchanged: mapInlineText moved unchanged to the shared inline-line module.
@@ -93,7 +98,10 @@ import {
   printedLine,
   readHardWrap,
 } from "@/api/lib/legal-search/parsers/hard-wrapped-lines";
-import { collapseLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
+import {
+  collapseLetterSpacing,
+  withAttestedLetterSpacing,
+} from "@/api/lib/legal-search/parsers/letter-spacing";
 import { readRtfString } from "@/api/lib/legal-search/parsers/rtf-reader";
 import { runContentVisibleText } from "@/api/lib/legal-search/parsers/run-content-text";
 import { separateOpinionHeadingTail } from "@/api/lib/legal-search/parsers/separate-opinion-heading";
@@ -139,10 +147,13 @@ export const parseUsDecisionHtml = (
   const crossReferences = extractCrossReferences($, docContent);
 
   const lines = extractLines($, docContent);
-  const blocks = courtParagraphNumbers(classifyUsDocumentLines(lines), {
-    parser: "cz-us",
-    caseNumber: input.caseNumber,
-  });
+  const blocks = courtParagraphNumbers(
+    withAttestedLetterSpacing(classifyUsDocumentLines(lines)),
+    {
+      parser: "cz-us",
+      caseNumber: input.caseNumber,
+    },
+  );
 
   // Synthesize decision title heading if none was parsed.
   // The RTF docContentHidden doesn't include decorative
@@ -633,21 +644,21 @@ const DECORATIVE_LINE_RE = /^(?:Česká republika|ČESKÁ REPUBLIKA)$/u;
 
 /** Decision title (level 1). */
 const TITLE_RE =
-  /^(?:N\s*[ÁA]\s*L\s*[ÉE]\s*Z|U\s*S\s*N\s*E\s*S\s*E\s*N\s*[ÍI]|Ústavního soudu|Jménem republiky)$/iu;
+  /^(?:N\s*[ÁA]\s*L\s*[ÉE]\s*Z|U\s*S\s*N\s*E\s*S\s*E\s*N\s*[ÍI]|Ústavního soudu)$/iu;
 
 /** Normalize spaced text like "t a k t o" -> "takto". */
 const collapseSpaces = (text: string): string =>
   text.replace(/(?<keep>\S)\s+(?=\S)/gu, "$<keep>");
 
-/** "takto:" separator (with spaced variants). */
-const TAKTO_RE = /^t\s*a\s*k\s*t\s*o\s*(?::\s*)?$/iu;
-
 /**
- * The opening sentence of a decision ending in "takto:". Since the court
- * stopped setting the word on a line of its own, the ruling follows the
- * sentence that names the parties directly.
+ * The plenary's bench sentence (`pléna Ústavního soudu složeného z …`). The
+ * plenary prints no "takto:" after it: the ruling follows, under a `Výrok`
+ * label or directly.
  */
-const TAKTO_TAIL_RE = /(?:^|[\s,])takto\s*:$/u;
+const PLENARY_BENCH_RE = /^pléna Ústavního soudu(?=\s)/u;
+
+/** The label a plenary nález prints above its ruling. */
+const RULING_LABEL_RE = /^V\s*ý\s*r\s*o\s*k\s*:?$/iu;
 
 /** "Odůvodnění:" separator (with spaced variants). */
 const ODUVODNENI_RE =
@@ -771,8 +782,41 @@ const classifyUsBodyLine = ({
     return;
   }
 
+  // The formula is the court's wording under its title, not a second title.
+  if (isCzechOpeningFormula(plainText)) {
+    state.blockIndex += 1;
+    blocks.push({
+      id: makeUsBlockId(state),
+      anchorId: makeAnchorId("p", state.blockIndex),
+      type: "paragraph",
+      role: "intro",
+      inlines,
+      plainText,
+    });
+    return;
+  }
+
   // "takto:" separator
-  if (TAKTO_RE.test(plainText) || TAKTO_RE.test(collapsed)) {
+  if (isCzechTaktoLine(plainText) || isCzechTaktoLine(collapsed)) {
+    state.inRuling = true;
+    state.blockIndex += 1;
+    blocks.push({
+      id: makeUsBlockId(state),
+      anchorId: makeAnchorId("p", state.blockIndex),
+      type: "paragraph",
+      role: "intro",
+      inlines: textInline(CZ_TAKTO),
+      plainText: CZ_TAKTO,
+    });
+    return;
+  }
+
+  // The plenary's own label above its ruling
+  if (
+    RULING_LABEL_RE.test(plainText) &&
+    !state.inOduvodneni &&
+    !state.inDissent
+  ) {
     state.inRuling = true;
     state.blockIndex += 1;
     blocks.push({
@@ -781,8 +825,8 @@ const classifyUsBodyLine = ({
       type: "heading",
       level: 2,
       role: "section-heading",
-      inlines: textInline("takto:"),
-      plainText: "takto:",
+      inlines,
+      plainText,
     });
     return;
   }
@@ -979,7 +1023,7 @@ const classifyUsBodyLine = ({
     id: makeUsBlockId(state),
     anchorId: makeAnchorId("p", state.blockIndex),
     type: "paragraph",
-    role: state.inDissent ? "dissent" : undefined,
+    role: paragraphRole(state, plainText),
     inlines,
     plainText,
   });
@@ -998,12 +1042,27 @@ const closesRuling = (
   state.sawHolding &&
   FIRST_REASONING_PARAGRAPH_RE.test(plainText);
 
-/** The opening sentence ends in "takto:", and the ruling follows it. */
+/**
+ * The sentence naming the bench and the parties opens the ruling: it ends
+ * in "takto:", or it is the plenary's, which prints the ruling after it.
+ */
 const opensRuling = (
   state: UsClassificationState,
   plainText: string,
 ): boolean =>
-  !state.inOduvodneni && !state.inDissent && TAKTO_TAIL_RE.test(plainText);
+  !state.inOduvodneni &&
+  !state.inDissent &&
+  (CZ_TAKTO_TAIL_RE.test(plainText) || PLENARY_BENCH_RE.test(plainText));
+
+const paragraphRole = (
+  state: UsClassificationState,
+  plainText: string,
+): ParagraphBlock["role"] => {
+  if (state.inDissent) {
+    return "dissent";
+  }
+  return opensRuling(state, plainText) ? "intro" : undefined;
+};
 
 /**
  * What follows the title of a separate opinion's heading on its line, or
