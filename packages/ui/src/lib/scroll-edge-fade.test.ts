@@ -15,6 +15,8 @@ type ScrollerOptions = {
 
 const scroller = ({ direction, scrollLeft, scrollWidth }: ScrollerOptions) => {
   const node = document.createElement("div");
+  // Computed direction is resolved only for a connected element.
+  document.body.append(node);
   node.style.direction = direction;
   Object.defineProperties(node, {
     clientWidth: { value: 100 },

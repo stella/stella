@@ -273,6 +273,7 @@ export const NO_NATIVE_UI_REGISTRY = {
     OVERFLOW_RULE,
     "raw overflow scrolling is reported there",
   ),
+  "scroll-edge-fade": notComponent("scroll edge mask helpers"),
   "scroll-to-top": noNative(
     "a floating Button bound to a scroll container; its markup is the button rule's",
   ),
