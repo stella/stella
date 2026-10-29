@@ -288,24 +288,35 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
           served: ServedCaseLaw,
         ) => {
           await serveCaseLaw(db, served);
-          const generation = describeServed(served);
-          const run = await measureScheduledJobRun({
+          const measurement =
+            SCHEDULED_JOB_MEASUREMENTS[jobId] ??
+            panic(`No measurement for ${jobId}`);
+          const release = await measurement.prepare?.({
             database: db,
+            served,
             openClient,
-            jobId,
-            task,
           });
-          log({
-            event: "read_budget_job_run",
-            jobId,
-            generation,
-            ...run.metrics,
-            statements: run.statements,
-          });
-          for (const violation of run.planViolations) {
-            note(violation.message);
+          try {
+            const generation = describeServed(served);
+            const run = await measureScheduledJobRun({
+              database: db,
+              jobId,
+              task,
+            });
+            log({
+              event: "read_budget_job_run",
+              jobId,
+              generation,
+              ...run.metrics,
+              statements: run.statements,
+            });
+            for (const violation of run.planViolations) {
+              note(violation.message);
+            }
+            return run.metrics;
+          } finally {
+            await release?.();
           }
-          return run.metrics;
         };
         // Every job that declares a budget, judged against the budget its own
         // registration names; the census makes each one have a measurement.

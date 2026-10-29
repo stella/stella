@@ -434,6 +434,11 @@ export const LIMITS = {
   searchPreviewResponseCharacterLimit: 16_000,
   /** Messages surrounding the best match in a global-search chat preview. */
   searchChatPreviewMessageLimit: 6,
+  searchChatCandidateThreadsMax: 100,
+  searchChatCandidateBatchesMax: 16,
+  searchChatCandidateSourceMessagesMax: 500,
+  searchChatCandidateSourceBytesMax: 256 * 1024,
+  searchChatCandidateBytesMax: 8 * 1024 * 1024,
   savedSearchesPerUser: 100,
   savedSearchesPageSizeDefault: 50,
   savedSearchesPageSizeMax: 100,
@@ -532,6 +537,9 @@ export const LIMITS = {
    *  folio conversion of a single document. Mirrors `extractionTimeoutMs`'s
    *  budget for the same class of work (one document-sized file). */
   docxMarkdownConversionTimeoutMs: 30_000,
+  /** Bounded process-local Markdown and session-redacted window sources. */
+  mcpWindowTextCacheMaxBytes: 64 * 1024 * 1024,
+  mcpWindowAnonymizationCacheMaxBytes: 64 * 1024 * 1024,
   /** Wall-clock ceiling for writing one generated chat export to object storage. */
   chatExportObjectIoTimeoutMs: 30_000,
   clauseExportLimit: 500,
@@ -736,6 +744,9 @@ export const LIMITS = {
    * rather than one request per item.
    */
   legislationProvisionReadConcurrency: 6,
+  /** Estimated heap retained for parsed decisions and compact section references. */
+  caseLawDecisionAstCacheMaxHeapBytes: 96 * 1024 * 1024,
+  caseLawDecisionSectionCacheMaxHeapBytes: 16 * 1024 * 1024,
   /**
    * Estimated heap the process keeps for parsed consolidation ASTs between
    * requests. A large code's consolidation parses to roughly 10 MiB, so this

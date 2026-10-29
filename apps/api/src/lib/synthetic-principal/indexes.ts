@@ -1,9 +1,14 @@
+import type { OnlineStepIntroduction } from "@/api/db/online-migration-connection";
 import type { RequiredMigrationIndex } from "@/api/lib/db/migration-history";
 
 import { SYNTHETIC_SESSION_PREFIX } from "./constants";
 
 export const MONITORING_SESSION_INDEXES = [
   {
+    introducedBy: {
+      type: "code",
+      owner: "src/lib/synthetic-principal/indexes.ts",
+    },
     createSql: `CREATE INDEX CONCURRENTLY "session_monitoring_id_idx" ON public."session" USING btree ("id") WHERE "id" LIKE '${SYNTHETIC_SESSION_PREFIX}%'`,
     definitionBody: `ON public.session USING btree (id) WHERE (id ~~ '${SYNTHETIC_SESSION_PREFIX}%'::text)`,
     isUnique: false,
@@ -11,6 +16,10 @@ export const MONITORING_SESSION_INDEXES = [
     tableName: "session",
   },
   {
+    introducedBy: {
+      type: "code",
+      owner: "src/lib/synthetic-principal/indexes.ts",
+    },
     createSql:
       'CREATE INDEX CONCURRENTLY "folio_collab_room_tokens_source_session_idx" ON public."folio_collab_room_tokens" USING btree ("source_session_id") WHERE "source_session_id" IS NOT NULL',
     definitionBody:
@@ -21,4 +30,5 @@ export const MONITORING_SESSION_INDEXES = [
   },
 ] as const satisfies readonly (RequiredMigrationIndex & {
   createSql: string;
+  introducedBy: OnlineStepIntroduction;
 })[];

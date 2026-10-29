@@ -62,7 +62,7 @@ const FULL_SEED = migrationPath(
   "20260918210100_case_law_court_weight_seed_hun",
 );
 const GBR_SEED = migrationPath("20261024190100_case_law_court_weight_seed_gbr");
-const BRA_SEED = migrationPath("20261029045400_case_law_court_weight_seed_bra");
+const BRA_SEED = migrationPath("20261029221600_case_law_court_weight_seed_bra");
 const USA_SEED = migrationPath("20260927200200_case_law_court_weight_seed_usa");
 const SVK_SEED = migrationPath("20261003122700_case_law_court_weight_seed_svk");
 
