@@ -1,19 +1,19 @@
 import { expect, test } from "bun:test";
 
-import { createSafeId } from "@/api/lib/branded-types";
 import {
   createInvoiceEmailAdmission,
   INVOICE_EMAIL_BUDGET,
 } from "@/api/lib/rate-limit/invoice-email-admission";
 import { InMemoryRateLimitContext } from "@/api/lib/rate-limit/rate-limit";
+import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 
 const now = new Date("2026-10-29T12:00:00Z");
 const mature = new Date(
   now.getTime() - INVOICE_EMAIL_BUDGET.youngOrganizationAgeMs,
 );
 const options = () => ({
-  organizationId: createSafeId<"organization">(),
-  userId: createSafeId<"user">(),
+  organizationId: mintAuthProviderId<"organization">(),
+  userId: mintAuthProviderId<"user">(),
   organizationCreatedAt: mature,
   recipientCount: 10,
   now,
@@ -62,7 +62,7 @@ test("the sender's daily cap counts recipients across organizations, not send ca
         (
           await admit({
             ...request,
-            organizationId: createSafeId<"organization">(),
+            organizationId: mintAuthProviderId<"organization">(),
           })
         ).isOk(),
       ).toBe(true);
@@ -76,7 +76,7 @@ test("the sender's daily cap counts recipients across organizations, not send ca
       (
         await admit({
           ...request,
-          userId: createSafeId<"user">(),
+          userId: mintAuthProviderId<"user">(),
           recipientCount: 1,
         })
       ).isOk(),
@@ -121,7 +121,7 @@ test("organizations younger than fourteen days have a ten-email cap shared acros
       (
         await admit({
           ...request,
-          userId: createSafeId<"user">(),
+          userId: mintAuthProviderId<"user">(),
           recipientCount: 1,
         })
       ).isErr(),

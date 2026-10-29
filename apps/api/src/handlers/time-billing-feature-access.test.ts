@@ -305,10 +305,10 @@ describe("time billing admission census", () => {
     expect(served).toHaveLength(invoiceSendCleanupRoute.length);
     for (const entry of served) {
       expect(entry.definition.access).toBe("workspace");
-      expect(entry.definition.config.permissions).toEqual({
+      expect(entry.definition.config["permissions"]).toEqual({
         invoice: ["update"],
       });
-      expect(entry.definition.config.featureAccess).toBeUndefined();
+      expect(entry.definition.config["featureAccess"]).toBeUndefined();
       expect(
         entry.middleware.some(
           (stage) =>

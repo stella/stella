@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
@@ -225,11 +225,15 @@ describe("invoice send mutation authority", () => {
         ),
     );
     expect(executedRows(result)).toEqual([{ live: true }]);
-    const [first] = await testDb
-      .select({ firstViewedAt: invoiceSends.firstViewedAt })
-      .from(invoiceSends)
-      .where(eq(invoiceSends.id, sendId));
-    expect(first?.firstViewedAt).toBeInstanceOf(Date);
+    const first =
+      (
+        await testDb
+          .select({ firstViewedAt: invoiceSends.firstViewedAt })
+          .from(invoiceSends)
+          .where(eq(invoiceSends.id, sendId))
+      ).at(0) ??
+      panic("The seeded invoice send must remain after its view gate");
+    expect(first.firstViewedAt).toBeInstanceOf(Date);
     await tokenScope(
       async (tx) =>
         await tx.execute(

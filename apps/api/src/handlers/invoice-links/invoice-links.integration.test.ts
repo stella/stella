@@ -883,15 +883,21 @@ describe("sending an invoice by link", () => {
           }),
         ),
       );
+      const transportedMessage = transported.at(0);
+      if (transportedMessage === undefined) {
+        return panic(
+          "Expected one transport attempt before checking its outcome",
+        );
+      }
       if (outcome === "delivered") {
         expect(result).toMatchObject({
           deliveryStatus: outcome,
           invoiceStatus: status,
         });
-        expect(delivered).toContainEqual(transported.at(0));
+        expect(delivered).toContainEqual(transportedMessage);
       } else {
         expect(result).toMatchObject({ code: 502 });
-        expect(delivered).not.toContainEqual(transported.at(0));
+        expect(delivered).not.toContainEqual(transportedMessage);
       }
       expect(transported).toHaveLength(1);
       expect(revokedDuringTransport).toHaveLength(1);
@@ -906,11 +912,17 @@ describe("sending an invoice by link", () => {
       expect(row?.revokedAt).toEqual(revokedDuringTransport.at(0));
       expect(row?.revokedByUserId).toBe(ids.userA1);
       expect(
-        auditEvents.filter((event) => event.changes?.linkRevoked?.new === true),
+        auditEvents.filter(
+          (event) =>
+            event.resourceType === AUDIT_RESOURCE_TYPE.INVOICE &&
+            event.changes?.["linkRevoked"]?.new === true,
+        ),
       ).toMatchObject([{ metadata: { invoiceSendId: row?.id } }]);
       expect(
         auditEvents.filter(
-          (event) => event.changes?.emailDelivery !== undefined,
+          (event) =>
+            event.resourceType === AUDIT_RESOURCE_TYPE.INVOICE &&
+            event.changes?.["emailDelivery"] !== undefined,
         ),
       ).toMatchObject([
         {
@@ -918,7 +930,7 @@ describe("sending an invoice by link", () => {
           metadata: { invoiceSendId: row?.id },
         },
       ]);
-      const token = transported.at(0)?.link.split("#").at(1);
+      const token = transportedMessage.link.split("#").at(1);
       if (token === undefined) {
         return panic("The transport did not receive an invoice link");
       }
@@ -1747,7 +1759,9 @@ describe("opening an invoice link", () => {
         .from(auditLogs)
         .where(eq(auditLogs.resourceId, invoiceId));
       expect(
-        audits.filter(({ metadata }) => metadata?.invoiceSendId !== undefined),
+        audits.filter(
+          ({ metadata }) => metadata?.["invoiceSendId"] !== undefined,
+        ),
       ).toHaveLength(shouldRevoke ? 2 : 0);
     },
   );
@@ -1836,9 +1850,9 @@ describe("opening an invoice link", () => {
         .filter(
           (event) =>
             event.resourceType === AUDIT_RESOURCE_TYPE.INVOICE &&
-            event.changes?.linkRevoked?.new === true,
+            event.changes?.["linkRevoked"]?.new === true,
         )
-        .map((event) => event.metadata?.invoiceSendId)
+        .map((event) => event.metadata?.["invoiceSendId"])
         .toSorted(),
     ).toEqual(revoked.map(({ id }) => id).toSorted());
     expect(
@@ -1910,7 +1924,7 @@ describe("opening an invoice link", () => {
       revocationAudits.filter(
         (event) =>
           event.resourceType === AUDIT_RESOURCE_TYPE.INVOICE &&
-          event.changes?.linkRevoked?.new === true,
+          event.changes?.["linkRevoked"]?.new === true,
       ),
     ).toHaveLength(2);
     expect((await post(server, "view", { token: closed.token })).status).toBe(

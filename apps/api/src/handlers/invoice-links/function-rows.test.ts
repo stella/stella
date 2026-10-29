@@ -177,16 +177,24 @@ const parsedRows: {
 
 describe("invoice link function rows", () => {
   test("time document rows omit internal notes, identity, workflow and coding metadata", () => {
-    expect(
-      parseInvoiceLinkTimeRow({
-        ...timeRow,
-        narrative: "Internal privileged note",
-        userId: "internal-timekeeper",
-        status: "approved",
-        taskCode: "private-task",
-        activityCode: "private-activity",
-      }),
-    ).toEqual(timeRow);
+    const projected = parseInvoiceLinkTimeRow({
+      ...timeRow,
+      narrative: "Internal privileged note",
+      userId: "internal-timekeeper",
+      status: "approved",
+      taskCode: "private-task",
+      activityCode: "private-activity",
+    });
+    for (const field of [
+      "narrative",
+      "userId",
+      "status",
+      "taskCode",
+      "activityCode",
+    ]) {
+      expect(projected).not.toHaveProperty(field);
+    }
+    expect(projected.invoiceNarrative).toBeNull();
   });
   for (const { name, parse, row } of parsedRows) {
     test(`${name} decoded rows preserve selected fields and strip extras`, () => {
