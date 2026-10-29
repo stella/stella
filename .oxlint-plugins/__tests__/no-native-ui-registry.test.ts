@@ -31,8 +31,8 @@ const readJson = (file: string): unknown =>
 
 const uiManifest = readJson("packages/ui/package.json");
 const uiExports =
-  isRecord(uiManifest) && isRecord(uiManifest["exports"])
-    ? uiManifest["exports"]
+  isRecord(uiManifest) && isRecord(uiManifest.exports)
+    ? uiManifest.exports
     : {};
 
 /** Where one export resolves: the string target, or its import condition. */
@@ -161,7 +161,7 @@ describe("no-native-ui production scope", () => {
     ].toSorted();
     const uncovered = workspaces.flatMap((manifestPath) => {
       const manifest = readJson(manifestPath);
-      if (!isRecord(manifest) || manifest["name"] === UI_PACKAGE) {
+      if (!isRecord(manifest) || manifest.name === UI_PACKAGE) {
         return [];
       }
       const dependsOnUi = [
