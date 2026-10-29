@@ -10,10 +10,7 @@ import { ebsBalance } from "@stll/db-load-gate/indicators";
 
 import { readReplayTickEnvironment } from "@/api/env-replay";
 import type { BackgroundReplayTickReport } from "@/api/handlers/case-law/ingestion/background-replay";
-import {
-  REPLAY_ENROLMENT,
-  REPLAY_HEALTH_CONFIG,
-} from "@/api/handlers/case-law/ingestion/replay-enrolment";
+import { REPLAY_HEALTH_CONFIG } from "@/api/handlers/case-law/ingestion/replay-enrolment";
 import { createSafeId } from "@/api/lib/branded-types";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import {
@@ -21,8 +18,14 @@ import {
   createReplayPreflightGate,
   readReplayGate,
   replayTickMetricRecord,
-  runReplayTickScript,
+  runReplayTickScript as runReplayTickCommand,
 } from "@/api/scripts/replay-tick-command";
+import { OFF_REPLAY_ENROLMENT_FIXTURE } from "@/api/tests/helpers/replay-enrolment";
+
+const runReplayTickScript = (
+  options: Parameters<typeof runReplayTickCommand>[0] = {},
+) =>
+  runReplayTickCommand({ enrolment: OFF_REPLAY_ENROLMENT_FIXTURE, ...options });
 
 const enabledEnvironment = {
   CASE_LAW_REPLAY_ENABLED: true,
@@ -96,10 +99,33 @@ describe("scheduled replay entrypoint", () => {
     expect(stderr).not.toContain("S3_BUCKET");
   });
 
-  test("committed enrolment previews only the Constitutional Court and enrols nothing", () => {
-    expect(
-      Object.entries(REPLAY_ENROLMENT).filter(([, { mode }]) => mode !== "off"),
-    ).toEqual([[ADAPTER_KEYS.CZ_US, { mode: "dry-run", dailyBudget: 10_000 }]]);
+  test("tick admission and execution share the injected source enrolment", async () => {
+    for (const adapterKey of [ADAPTER_KEYS.CZ_US, ADAPTER_KEYS.EU_ECJ]) {
+      const enrolment = {
+        ...OFF_REPLAY_ENROLMENT_FIXTURE,
+        [adapterKey]: { mode: "dry-run", dailyBudget: 1 },
+      } as const;
+      let ticks = 0;
+      expect(
+        await runReplayTickScript({
+          args: [],
+          environment: enabledEnvironment,
+          enrolment,
+          runEnabled: async (_signal, selectedEnrolment) => {
+            ticks++;
+            expect(selectedEnrolment).toBe(enrolment);
+            expect(
+              Object.entries(selectedEnrolment)
+                .filter(([, policy]) => policy.mode !== "off")
+                .map(([key]) => key),
+            ).toEqual([adapterKey]);
+            return report("complete");
+          },
+          log: () => undefined,
+        }),
+      ).toBe(0);
+      expect(ticks).toBe(1);
+    }
   });
 
   test("default-off environment, global kill and unenrolled sources perform no setup", async () => {
@@ -117,7 +143,10 @@ describe("scheduled replay entrypoint", () => {
         await runReplayTickScript({
           args: [],
           environment,
-          policies: [{ mode: "dry-run", dailyBudget: 1 }],
+          enrolment: {
+            ...OFF_REPLAY_ENROLMENT_FIXTURE,
+            [ADAPTER_KEYS.CZ_US]: { mode: "dry-run", dailyBudget: 1 },
+          },
           runEnabled,
           log: (record) => {
             records.push(record);
@@ -132,7 +161,7 @@ describe("scheduled replay entrypoint", () => {
       await runReplayTickScript({
         args: [],
         environment: enabledEnvironment,
-        policies: [{ mode: "off" }, { mode: "off" }],
+        enrolment: OFF_REPLAY_ENROLMENT_FIXTURE,
         runEnabled,
         log: () => undefined,
       }),
@@ -171,7 +200,10 @@ describe("scheduled replay entrypoint", () => {
         await runReplayTickScript({
           args: [],
           environment: enabledEnvironment,
-          policies: [{ mode: "dry-run", dailyBudget: 1 }],
+          enrolment: {
+            ...OFF_REPLAY_ENROLMENT_FIXTURE,
+            [ADAPTER_KEYS.CZ_US]: { mode: "dry-run", dailyBudget: 1 },
+          },
           runEnabled: async () => report(status),
           log: () => undefined,
         }),
@@ -182,7 +214,10 @@ describe("scheduled replay entrypoint", () => {
       await runReplayTickScript({
         args: [],
         environment: enabledEnvironment,
-        policies: [{ mode: "dry-run", dailyBudget: 1 }],
+        enrolment: {
+          ...OFF_REPLAY_ENROLMENT_FIXTURE,
+          [ADAPTER_KEYS.CZ_US]: { mode: "dry-run", dailyBudget: 1 },
+        },
         runEnabled: async () => {
           throw new TypeError("fixture setup failure");
         },
@@ -216,7 +251,10 @@ describe("scheduled replay entrypoint", () => {
     const exit = await runReplayTickScript({
       args: [],
       environment: enabledEnvironment,
-      policies: [{ mode: "dry-run", dailyBudget: 1 }],
+      enrolment: {
+        ...OFF_REPLAY_ENROLMENT_FIXTURE,
+        [ADAPTER_KEYS.CZ_US]: { mode: "dry-run", dailyBudget: 1 },
+      },
       timeoutSignal: (duration) => {
         expect(duration).toBeGreaterThan(0);
         steps.push("deadline");
@@ -238,7 +276,10 @@ describe("scheduled replay entrypoint", () => {
       await runReplayTickScript({
         args: [],
         environment: enabledEnvironment,
-        policies: [{ mode: "dry-run", dailyBudget: 1 }],
+        enrolment: {
+          ...OFF_REPLAY_ENROLMENT_FIXTURE,
+          [ADAPTER_KEYS.CZ_US]: { mode: "dry-run", dailyBudget: 1 },
+        },
         timeoutSignal: () => controller.signal,
         runEnabled: async () => {
           started = true;
@@ -256,7 +297,10 @@ describe("scheduled replay entrypoint", () => {
       await runReplayTickScript({
         args: ["--apply"],
         environment: enabledEnvironment,
-        policies: [{ mode: "dry-run", dailyBudget: 1 }],
+        enrolment: {
+          ...OFF_REPLAY_ENROLMENT_FIXTURE,
+          [ADAPTER_KEYS.CZ_US]: { mode: "dry-run", dailyBudget: 1 },
+        },
         runEnabled: async () => {
           started = true;
           return report("complete");
@@ -278,7 +322,7 @@ describe("scheduled replay entrypoint", () => {
         args: ["--reset-dry-run", adapterKey],
         environment: enabledEnvironment,
         enrolment: {
-          ...REPLAY_ENROLMENT,
+          ...OFF_REPLAY_ENROLMENT_FIXTURE,
           [adapterKey]: { mode: "dry-run", dailyBudget: 1 },
         },
         timeoutSignal: () => controller.signal,
@@ -336,7 +380,10 @@ describe("scheduled replay entrypoint", () => {
         await runReplayTickScript({
           args: ["--reset-dry-run", ADAPTER_KEYS.EU_ECJ],
           environment: enabledEnvironment,
-          enrolment: { ...REPLAY_ENROLMENT, [ADAPTER_KEYS.EU_ECJ]: policy },
+          enrolment: {
+            ...OFF_REPLAY_ENROLMENT_FIXTURE,
+            [ADAPTER_KEYS.EU_ECJ]: policy,
+          },
           resetDryRun,
           log: () => undefined,
         }),
@@ -364,7 +411,7 @@ describe("scheduled replay entrypoint", () => {
           args: ["--reset-dry-run", ADAPTER_KEYS.EU_ECJ],
           environment,
           enrolment: {
-            ...REPLAY_ENROLMENT,
+            ...OFF_REPLAY_ENROLMENT_FIXTURE,
             [ADAPTER_KEYS.EU_ECJ]: { mode: "dry-run", dailyBudget: 1 },
           },
           resetDryRun,
@@ -383,7 +430,7 @@ describe("scheduled replay entrypoint", () => {
         args: ["--reset-dry-run", adapterKey],
         environment: enabledEnvironment,
         enrolment: {
-          ...REPLAY_ENROLMENT,
+          ...OFF_REPLAY_ENROLMENT_FIXTURE,
           [adapterKey]: { mode: "dry-run", dailyBudget: 1 },
         },
         resetDryRun: async () => false,
@@ -407,7 +454,7 @@ describe("scheduled replay entrypoint", () => {
         args: ["--reset-dry-run", adapterKey],
         environment: enabledEnvironment,
         enrolment: {
-          ...REPLAY_ENROLMENT,
+          ...OFF_REPLAY_ENROLMENT_FIXTURE,
           [adapterKey]: { mode: "dry-run", dailyBudget: 1 },
         },
         timeoutSignal: () => controller.signal,

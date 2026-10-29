@@ -47,10 +47,7 @@ import {
   type ReplayRowReport,
   selectScopeEnd,
 } from "@/api/handlers/case-law/ingestion/replay";
-import {
-  BACKGROUND_REPLAY_LIMITS,
-  REPLAY_ENROLMENT,
-} from "@/api/handlers/case-law/ingestion/replay-enrolment";
+import { BACKGROUND_REPLAY_LIMITS } from "@/api/handlers/case-law/ingestion/replay-enrolment";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import {
   absentDecisionTextFields,
@@ -73,6 +70,7 @@ import {
   withGatedTestClients,
 } from "@/api/tests/gated-test-database";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import { OFF_REPLAY_ENROLMENT_FIXTURE } from "@/api/tests/helpers/replay-enrolment";
 import {
   explainRoot,
   scanOccurrences,
@@ -618,7 +616,7 @@ if (!databaseUrl || !enabled) {
         .delete(databaseBackfillStates)
         .where(eq(databaseBackfillStates.name, "case-law-replay:round-robin"));
       const enrolment = {
-        ...REPLAY_ENROLMENT,
+        ...OFF_REPLAY_ENROLMENT_FIXTURE,
         [ADAPTER_KEYS.EU_ECJ]: { mode: "dry-run", dailyBudget: 3 },
         [ADAPTER_KEYS.CZ_NSS]: {
           mode: "enrolled",
@@ -2959,7 +2957,7 @@ if (!databaseUrl || !enabled) {
       };
       sources.push(actual);
       const enrolment = {
-        ...REPLAY_ENROLMENT,
+        ...OFF_REPLAY_ENROLMENT_FIXTURE,
         [ADAPTER_KEYS.EU_ECJ]: {
           mode: "enrolled",
           dailyBudget: 10,
