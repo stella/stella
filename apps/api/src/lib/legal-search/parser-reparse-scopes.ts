@@ -197,7 +197,7 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_NCOURT]: {
-    version: 17,
+    version: 18,
     scope: {
       type: "all",
       reason:
