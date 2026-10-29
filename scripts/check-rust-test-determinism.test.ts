@@ -4,8 +4,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
+  createRustTestBaseline,
   discoverRustTestFiles,
   evaluateRustTestBaseline,
+  parseReviewedRustBoundaries,
   RUST_TEST_DISCOVERY_INPUTS,
 } from "./check-rust-test-determinism.ts";
 import { parseTestBaseline } from "./check-test-state-baseline.ts";
@@ -278,6 +280,65 @@ test("a listed reasoned kit-allow is reviewed without consuming the budget", () 
       reviewedBoundaryText: JSON.stringify([boundary]),
     }),
   ).toEqual([]);
+});
+
+test("a baseline write followed by a check ignores reviewed boundaries", () => {
+  const source =
+    "#[test] fn example() { Instant::now(); } // kit-allow: exercise deadline";
+  const escapedHits = scanRustTestDeterminism({
+    source,
+    integrationTest: false,
+  });
+  const reviewedBoundaryText = JSON.stringify([
+    { file: FILE, line: source, reason: "exercise deadline" },
+  ]);
+  const files = new Map([[FILE, escapedHits]]);
+  const sources = new Map([[FILE, source]]);
+  const baseline = createRustTestBaseline({
+    sources: [{ file: FILE, crate: "crates/example" }],
+    files,
+    sourceText: sources,
+    reviewedBoundaryText,
+  });
+  expect(baseline).toEqual({});
+  expect(
+    evaluateRustTestBaseline({
+      files,
+      sources,
+      baselineText: JSON.stringify(baseline),
+      reviewedBoundaryText,
+    }),
+  ).toEqual([]);
+});
+
+test("an indented reviewed boundary matches its source hit", () => {
+  const source =
+    "  #[test] fn example() { Instant::now(); } // kit-allow: exercise deadline";
+  expect(
+    evaluateRustTestBaseline({
+      files: new Map([
+        [FILE, scanRustTestDeterminism({ source, integrationTest: false })],
+      ]),
+      sources: new Map([[FILE, source]]),
+      baselineText: "{}",
+      reviewedBoundaryText: JSON.stringify([
+        {
+          file: FILE,
+          line: `  ${source.trim()}  `,
+          reason: "exercise deadline",
+        },
+      ]),
+    }),
+  ).toEqual([]);
+});
+
+test("reviewed boundaries reject lines that are empty after trimming", () => {
+  expect(() =>
+    parseReviewedRustBoundaries(
+      JSON.stringify([{ file: FILE, line: "  ", reason: "documented" }]),
+      "boundaries",
+    ),
+  ).toThrow("must contain reviewed Rust boundaries");
 });
 
 test("an unlisted reasoned kit-allow still fails the determinism guard", () => {

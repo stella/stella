@@ -51,7 +51,7 @@ const isReviewedBoundary = (value: unknown): value is ReviewedBoundary => {
 };
 
 const boundaryId = ({ file, line }: Pick<ReviewedBoundary, "file" | "line">) =>
-  `${file}::${line}`;
+  `${file}::${line.trim()}`;
 
 export const parseReviewedRustBoundaries = (
   text: string,
@@ -183,6 +183,77 @@ type EvaluateRustTestBaselineOptions = {
   reviewedBoundaryText?: string;
 };
 
+type BudgetedRustTestHitsOptions = {
+  file: string;
+  hits: readonly RustTestDeterminismHit[];
+  source: string;
+  reviewed: ReadonlySet<string>;
+};
+
+const budgetedRustTestHits = ({
+  file,
+  hits,
+  source,
+  reviewed,
+}: BudgetedRustTestHitsOptions) => {
+  const sourceLines = source.split("\n");
+  return hits.filter(
+    (hit) =>
+      !hit.escaped ||
+      !reviewed.has(
+        boundaryId({
+          file,
+          line: sourceLines.at(hit.line - 1) ?? "",
+        }),
+      ),
+  );
+};
+
+type RustTestBaselineSource = { file: string; crate: string };
+
+type CreateRustTestBaselineOptions = {
+  sources: readonly RustTestBaselineSource[];
+  files: ReadonlyMap<string, readonly RustTestDeterminismHit[]>;
+  sourceText: ReadonlyMap<string, string>;
+  reviewedBoundaryText: string;
+};
+
+export const createRustTestBaseline = ({
+  sources,
+  files,
+  sourceText,
+  reviewedBoundaryText,
+}: CreateRustTestBaselineOptions) => {
+  const reviewed = new Set(
+    parseReviewedRustBoundaries(
+      reviewedBoundaryText,
+      REVIEWED_BOUNDARIES_REL,
+    ).map(boundaryId),
+  );
+  return Object.fromEntries(
+    sources.flatMap(({ file, crate }) => {
+      const count = budgetedRustTestHits({
+        file,
+        hits: files.get(file) ?? [],
+        source: sourceText.get(file) ?? "",
+        reviewed,
+      }).length;
+      return count === 0
+        ? []
+        : [
+            [
+              file,
+              {
+                count,
+                owner: crate,
+                reason: "pre-kit census; inject clocks and isolate test state",
+              },
+            ],
+          ];
+    }),
+  );
+};
+
 export const evaluateRustTestBaseline = ({
   files,
   sources = new Map(),
@@ -206,17 +277,12 @@ export const evaluateRustTestBaseline = ({
   const diagnostics: { file: string; line: number; message: string }[] = [];
   for (const file of new Set([...files.keys(), ...budgets.keys()])) {
     const hits = files.get(file) ?? [];
-    const sourceLines = sources.get(file)?.split("\n") ?? [];
-    const budgetedHits = hits.filter(
-      (hit) =>
-        !hit.escaped ||
-        !reviewed.has(
-          boundaryId({
-            file,
-            line: sourceLines.at(hit.line - 1)?.trim() ?? "",
-          }),
-        ),
-    );
+    const budgetedHits = budgetedRustTestHits({
+      file,
+      hits,
+      source: sources.get(file) ?? "",
+      reviewed,
+    });
     const budget = budgets.get(file) ?? 0;
     if (budgetedHits.length < budget) {
       diagnostics.push({
@@ -275,25 +341,17 @@ if (import.meta.main) {
       }),
     ]),
   );
+  const reviewedBoundaryText = readFileSync(
+    path.join(ROOT, REVIEWED_BOUNDARIES_REL),
+    "utf-8",
+  );
   if (process.argv.includes("--write")) {
-    const baseline = Object.fromEntries(
-      sources.flatMap(({ file, crate }) => {
-        const count = files.get(file)?.length ?? 0;
-        return count === 0
-          ? []
-          : [
-              [
-                file,
-                {
-                  count,
-                  owner: crate,
-                  reason:
-                    "pre-kit census; inject clocks and isolate test state",
-                },
-              ],
-            ];
-      }),
-    );
+    const baseline = createRustTestBaseline({
+      sources,
+      files,
+      sourceText,
+      reviewedBoundaryText,
+    });
     writeFileSync(
       path.join(ROOT, BASELINE_REL),
       `${JSON.stringify(baseline, null, 2)}\n`,
@@ -302,10 +360,6 @@ if (import.meta.main) {
       `Rust test census: ${new Set(sources.map(({ crate }) => crate)).size} crates, ${Object.keys(baseline).length} files with nondeterminism.`,
     );
   } else {
-    const reviewedBoundaryText = readFileSync(
-      path.join(ROOT, REVIEWED_BOUNDARIES_REL),
-      "utf-8",
-    );
     const reviewedBoundaries = parseReviewedRustBoundaries(
       reviewedBoundaryText,
       REVIEWED_BOUNDARIES_REL,
