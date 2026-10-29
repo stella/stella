@@ -12,6 +12,7 @@ import {
   readLegislationAmendments,
   readLegislationAmendmentSnapshot,
 } from "@/api/lib/legal-search/legislation-amendments";
+import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { publicLawReadDb } from "@/api/lib/public-law-read-db";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
@@ -253,7 +254,7 @@ describe.skipIf(!enabled)("public corpus owner behaviour", () => {
         await tx.execute(sql`COPY legislation_amendments FROM STDIN`);
       }),
     );
-    expect(denied).toMatchObject({ cause: { errno: "42501" } });
+    expect(getPgErrorCode(denied)).toBe(PG_ERROR.INSUFFICIENT_PRIVILEGE);
   });
 
   test("owner inserts reject a retired decision UUID", async () => {

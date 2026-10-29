@@ -525,9 +525,8 @@ type ConfigurableReadTransaction = {
  * What every public read runs under.
  *
  * Read-only is set here rather than with `SET TRANSACTION` so the whole guard
- * set fits in one statement. Postgres accepts the switch to read-only at any
- * point in a transaction, and this is the transaction's first statement, so
- * nothing that could write ever runs outside it.
+ * set fits in one statement. Role and isolation setup may precede it; no
+ * consumer query runs before these guards.
  */
 const PUBLIC_LAW_READ_GUARDS = [
   ["transaction_read_only", "on"],
@@ -592,6 +591,15 @@ export const configureReadTransaction = async (
       ? {}
       : { idleInTransactionTimeoutMs }),
   });
+};
+
+/** Shared-pool reads downgrade their role before any query binds a snapshot. */
+export const setSharedPublicLawReaderRole = async (
+  tx: ConfigurableReadTransaction,
+): Promise<void> => {
+  await tx.execute(
+    sql`SET LOCAL ROLE ${sql.identifier(stellaPublicLawReader.name)}`,
+  );
 };
 
 /** A separate database is reached over a network the shared one is not. */
@@ -738,9 +746,7 @@ export const publicLawReadDb = async <T>(
         async (transaction) => {
           const tx = observePublicLawReadTransaction(transaction);
           if (envBase.PUBLIC_LAW_DATABASE_URL === undefined) {
-            await tx.execute(
-              sql`SET LOCAL ROLE ${sql.identifier(stellaPublicLawReader.name)}`,
-            );
+            await setSharedPublicLawReaderRole(tx);
           }
           await configureReadTransaction(tx, isolation, publicLawReadGuards());
 
