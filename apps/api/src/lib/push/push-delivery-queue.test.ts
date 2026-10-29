@@ -28,10 +28,8 @@ const ids = (count: number) =>
 describe("queueing push alerts", () => {
   test("one job per notification, identified by the notification", async () => {
     const { batches, queue } = recordingQueue();
-    const [first, second] = ids(2) as [
-      SafeId<"notification">,
-      SafeId<"notification">,
-    ];
+    const first = createSafeId<"notification">();
+    const second = createSafeId<"notification">();
 
     await enqueuePushDeliveries([first, second, first], queue);
 
