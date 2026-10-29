@@ -2,6 +2,10 @@ import { useId, useState } from "react";
 
 import { useTranslations } from "use-intl";
 
+import {
+  CONTACT_BIRTH_YEAR_MIN,
+  isValidContactBirthDate,
+} from "@stll/api-contract/contact-date";
 import { isCountryCode } from "@stll/country-codes";
 import type { CountryCode } from "@stll/country-codes";
 import { Temporal } from "@stll/time";
@@ -19,7 +23,6 @@ import {
 import { Field, FieldLabel } from "@stll/ui/field";
 import { SearchIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
-
 import {
   Select,
   SelectItem,
@@ -53,6 +56,7 @@ export const PersonDetailsFields = ({
 }: PersonDetailsFieldsProps) => {
   const t = useTranslations();
   const birthDateLabelId = useId();
+  const precisionLabelId = useId();
   const parsedBirthDate = parseBirthDateDraft(birthDate);
   const pickerValue =
     parsedBirthDate?.precision === "day"
@@ -86,8 +90,16 @@ export const PersonDetailsFields = ({
               className="w-auto max-w-full"
               dateInputLabel={t("common.anonymizationLabels.dateOfBirth")}
               labelledBy={birthDateLabelId}
-              minDate="1000-01-01"
-              noFuture
+              minDate={`${CONTACT_BIRTH_YEAR_MIN}-01-01`}
+              isDateDisabled={(value) => {
+                const { year, month, day } = Temporal.PlainDate.from(value);
+                return !isValidContactBirthDate({
+                  precision: "day",
+                  year,
+                  month,
+                  day,
+                });
+              }}
               onChange={(value) => {
                 if (value === null) {
                   onBirthDateChange({
@@ -147,36 +159,43 @@ export const PersonDetailsFields = ({
               />
             </>
           )}
-          <Select
-            onValueChange={(precision) => {
-              if (precision === null) {
-                return;
-              }
-              onBirthDateChange({
-                ...birthDate,
-                precision,
-                ...(precision !== "day" && { day: "" }),
-                ...(precision === "year" && { month: "" }),
-              });
-            }}
-            value={birthDate.precision}
-          >
-            <SelectTrigger
-              aria-label={t("contacts.datePrecision")}
-              className="w-32"
+          <Field>
+            <FieldLabel className="sr-only" id={precisionLabelId}>
+              {t("contacts.datePrecision")}
+            </FieldLabel>
+            <Select
+              onValueChange={(precision) => {
+                if (precision === null) {
+                  return;
+                }
+                onBirthDateChange({
+                  ...birthDate,
+                  precision,
+                  ...(precision !== "day" && { day: "" }),
+                  ...(precision === "year" && { month: "" }),
+                });
+              }}
+              value={birthDate.precision}
             >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectPopup>
-              <SelectItem value="year">
-                {t("contacts.precision.year")}
-              </SelectItem>
-              <SelectItem value="month">
-                {t("contacts.precision.month")}
-              </SelectItem>
-              <SelectItem value="day">{t("contacts.precision.day")}</SelectItem>
-            </SelectPopup>
-          </Select>
+              <SelectTrigger
+                aria-labelledby={precisionLabelId}
+                className="w-32"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectPopup>
+                <SelectItem value="year">
+                  {t("contacts.precision.year")}
+                </SelectItem>
+                <SelectItem value="month">
+                  {t("contacts.precision.month")}
+                </SelectItem>
+                <SelectItem value="day">
+                  {t("contacts.precision.day")}
+                </SelectItem>
+              </SelectPopup>
+            </Select>
+          </Field>
         </div>
       </Field>
       <Field>

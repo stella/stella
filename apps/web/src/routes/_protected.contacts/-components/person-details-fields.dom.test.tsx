@@ -149,9 +149,19 @@ test("full birth dates use the calendar and preserve the stored date precision",
     fireEvent.keyDown(date, { key: "Enter" });
   });
   await act(async () => {
-    fireEvent.change(
+    fireEvent.click(
       screen.getByRole("combobox", { name: messages.contacts.datePrecision }),
-      { target: { value: "month" } },
+    );
+  });
+  await act(async () => {
+    fireEvent.pointerDown(
+      screen.getByRole("option", { name: messages.contacts.precision.month }),
+      {
+        pointerType: "mouse",
+      },
+    );
+    fireEvent.click(
+      screen.getByRole("option", { name: messages.contacts.precision.month }),
     );
   });
   expect(
@@ -168,9 +178,19 @@ test("empty birth dates start with a calendar while partial dates remain editabl
     screen.getByRole("button", { name: /Date of birth/u }).textContent,
   ).toContain(messages.common.selectDate);
   await act(async () => {
-    fireEvent.change(
+    fireEvent.click(
       screen.getByRole("combobox", { name: messages.contacts.datePrecision }),
-      { target: { value: "year" } },
+    );
+  });
+  await act(async () => {
+    fireEvent.pointerDown(
+      screen.getByRole("option", { name: messages.contacts.precision.year }),
+      {
+        pointerType: "mouse",
+      },
+    );
+    fireEvent.click(
+      screen.getByRole("option", { name: messages.contacts.precision.year }),
     );
   });
   const year = screen.getByRole("textbox", {

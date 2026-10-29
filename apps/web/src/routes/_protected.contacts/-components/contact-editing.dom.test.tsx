@@ -698,20 +698,28 @@ const warmPage = (client: Client) => {
   }
 };
 const dirtyPage = (view: ReturnType<typeof testing.render>) => {
+  testing.fireEvent.click(
+    view.getByRole("combobox", { name: messages.contacts.datePrecision }),
+  );
+  testing.fireEvent.pointerDown(
+    view.getByRole("option", { name: messages.contacts.precision.year }),
+    { pointerType: "mouse" },
+  );
+  testing.fireEvent.click(
+    view.getByRole("option", { name: messages.contacts.precision.year }),
+  );
+  const year = view.getByPlaceholderText(messages.contacts.fields.year);
+  testing.fireEvent.change(year, { target: { value: "1990" } });
   testing.fireEvent.click(view.getByRole("button", { name: "Alice" }));
   testing.fireEvent.change(view.getByDisplayValue("Alice"), {
     target: { value: "Edited Alice" },
   });
   testing.fireEvent.change(
     view.getByRole("textbox", { name: messages.common.notes }),
-    { target: { value: "Edited notes" } },
+    {
+      target: { value: "Edited notes" },
+    },
   );
-  testing.fireEvent.change(
-    view.getByRole("combobox", { name: messages.contacts.datePrecision }),
-    { target: { value: "year" } },
-  );
-  const year = view.getByPlaceholderText(messages.contacts.fields.year);
-  testing.fireEvent.change(year, { target: { value: "1990" } });
   expect(document.activeElement).toBe(view.getByDisplayValue("Edited Alice"));
 };
 const settlePosts = async (client: Client) => {
