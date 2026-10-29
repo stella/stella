@@ -710,10 +710,29 @@
       },
       "linkedExpenses": "Seotud kulud",
       "linkedTimeEntries": "Seotud ajakirjed",
-      "markPaid": "Märgi makstuks",
       "noEntries": "Selle arvega pole kirjeid seotud",
       "noInvoices": "Arveid pole veel",
       "paidAt": "Tasutud",
+      "payments": {
+        "amountTooHigh": "Summa ületab tasumata jäägi {amount}.",
+        "confirmVoid": "Makse jääb arvele tühistatuna ega lähe enam selle arve tasumise arvestusse.",
+        "empty": "Makseid pole veel registreeritud",
+        "method": "Makseviis",
+        "methods": {
+          "bank_transfer": "Pangaülekanne",
+          "card": "Kaart",
+          "cash": "Sularaha",
+          "other": "Muu viis"
+        },
+        "outstandingAmount": "Tasumata {amount}",
+        "paidOn": "Makse kuupäev",
+        "partiallyPaid": "Osaliselt makstud",
+        "record": "Registreeri makse",
+        "summary": "Makstud {paid}, tasumata {outstanding}",
+        "title": "Maksed",
+        "void": "Tühista makse",
+        "voided": "Tühistatud"
+      },
       "removeEntries": "Eemalda kirjed",
       "send": "Saada",
       "statuses": {

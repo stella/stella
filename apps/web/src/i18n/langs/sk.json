@@ -710,10 +710,29 @@
       },
       "linkedExpenses": "Prepojené výdavky",
       "linkedTimeEntries": "Prepojené časové záznamy",
-      "markPaid": "Označiť ako uhradenú",
       "noEntries": "K tejto faktúre nie sú pripojené žiadne záznamy",
       "noInvoices": "Zatiaľ žiadne faktúry",
       "paidAt": "Uhradená",
+      "payments": {
+        "amountTooHigh": "Čiastka prevyšuje zostávajúcu dlžnú čiastku {amount}.",
+        "confirmVoid": "Platba zostane v evidencii ako zrušená a do úhrady tejto faktúry sa už nezapočíta.",
+        "empty": "Zatiaľ nie sú zaznamenané žiadne platby",
+        "method": "Spôsob platby",
+        "methods": {
+          "bank_transfer": "Bankový prevod",
+          "card": "Platobná karta",
+          "cash": "Hotovosť",
+          "other": "Iný spôsob"
+        },
+        "outstandingAmount": "Zostáva uhradiť {amount}",
+        "paidOn": "Dátum platby",
+        "partiallyPaid": "Čiastočne uhradená",
+        "record": "Zaznamenať platbu",
+        "summary": "Uhradené {paid}, zostáva uhradiť {outstanding}",
+        "title": "Platby",
+        "void": "Zrušiť platbu",
+        "voided": "Zrušená"
+      },
       "removeEntries": "Odstrániť záznamy",
       "send": "Odoslať",
       "statuses": {

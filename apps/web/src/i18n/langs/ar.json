@@ -710,10 +710,29 @@
       },
       "linkedExpenses": "المصروفات المرتبطة",
       "linkedTimeEntries": "إدخالات الوقت المرتبطة",
-      "markPaid": "وضع علامة مدفوع",
       "noEntries": "لا توجد إدخالات مرتبطة بهذه الفاتورة",
       "noInvoices": "لا توجد فواتير بعد",
       "paidAt": "تاريخ الدفع",
+      "payments": {
+        "amountTooHigh": "المبلغ أكبر من المبلغ المتبقي {amount}.",
+        "confirmVoid": "تبقى الدفعة مسجلة كدفعة ملغاة ولن تُحتسب بعد الآن ضمن سداد هذه الفاتورة.",
+        "empty": "لم تُسجَّل أي دفعات بعد",
+        "method": "طريقة الدفع",
+        "methods": {
+          "bank_transfer": "تحويل مصرفي",
+          "card": "بطاقة",
+          "cash": "نقدًا",
+          "other": "طريقة أخرى"
+        },
+        "outstandingAmount": "المتبقي {amount}",
+        "paidOn": "تاريخ الدفع",
+        "partiallyPaid": "مدفوعة جزئيًا",
+        "record": "تسجيل دفعة",
+        "summary": "المدفوع {paid}، المتبقي {outstanding}",
+        "title": "الدفعات",
+        "void": "إلغاء الدفعة",
+        "voided": "ملغاة"
+      },
       "removeEntries": "إزالة الإدخالات",
       "send": "إرسال",
       "statuses": {

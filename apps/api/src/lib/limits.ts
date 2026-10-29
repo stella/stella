@@ -363,6 +363,8 @@ export const LIMITS = {
   invoicesPageSizeMax: 100,
   // An invoice read returns every line, so the count stays bounded.
   invoiceLinesPerInvoice: 1000,
+  // An invoice read returns every payment, voided ones included.
+  invoicePaymentsPerInvoice: 200,
   exportRowLimit: 10_000,
   /** One reader's highlights and comments on one decision or statute
    *  version, read whole when the reader opens the document. */

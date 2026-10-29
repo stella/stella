@@ -710,10 +710,29 @@
       },
       "linkedExpenses": "Susietos išlaidos",
       "linkedTimeEntries": "Susieti laiko įrašai",
-      "markPaid": "Pažymėti kaip apmokėtą",
       "noEntries": "Nėra įrašų, susietų su šia sąskaita",
       "noInvoices": "Sąskaitų dar nėra",
       "paidAt": "Apmokėta",
+      "payments": {
+        "amountTooHigh": "Suma viršija likusią mokėti sumą {amount}.",
+        "confirmVoid": "Mokėjimas liks užregistruotas kaip anuliuotas ir nebebus įskaitomas į šios sąskaitos apmokėjimą.",
+        "empty": "Mokėjimų dar neužregistruota",
+        "method": "Mokėjimo būdas",
+        "methods": {
+          "bank_transfer": "Banko pavedimas",
+          "card": "Kortelė",
+          "cash": "Grynieji",
+          "other": "Kitas būdas"
+        },
+        "outstandingAmount": "Liko sumokėti {amount}",
+        "paidOn": "Mokėjimo data",
+        "partiallyPaid": "Iš dalies apmokėta",
+        "record": "Užregistruoti mokėjimą",
+        "summary": "Sumokėta {paid}, liko sumokėti {outstanding}",
+        "title": "Mokėjimai",
+        "void": "Anuliuoti mokėjimą",
+        "voided": "Anuliuotas"
+      },
       "removeEntries": "Pašalinti įrašus",
       "send": "Siųsti",
       "statuses": {
