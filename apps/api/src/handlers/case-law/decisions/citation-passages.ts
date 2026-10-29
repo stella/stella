@@ -260,6 +260,11 @@ type DecisionText = {
   sections: Awaited<ReturnType<typeof readDecisionSectionIndex>>;
 };
 
+type DecisionTextRead = {
+  textWithheldReason: DecisionTextWithheldReason | null;
+  text: DecisionText | null;
+};
+
 /** The section a citation row was extracted from, when the row kept one. */
 const sectionBlockIdsAt = (
   { ast, sections }: DecisionText,
@@ -292,7 +297,7 @@ const readDecisionTextGroup = async ({
   caseLawDb,
   pointers,
   attempt,
-}: DecisionTextGroupOptions): Promise<Map<string, DecisionText>> => {
+}: DecisionTextGroupOptions): Promise<Map<string, DecisionTextRead>> => {
   // Every lazy miss in this bounded group shares one version-qualified read.
   // Storage-backed AST hits never start the Postgres AST read.
   const payloadBatch = <K extends DecisionPayloadColumn>(column: K) => {
@@ -302,7 +307,9 @@ const readDecisionTextGroup = async ({
         async (tx) =>
           await readDecisionVersionedPayloads({
             tx,
-            versions: pointers,
+            versions: pointers.filter(
+              ({ textWithheldReason }) => textWithheldReason === null,
+            ),
             column,
           }),
       );
@@ -369,10 +376,18 @@ const readDecisionTextGroup = async ({
         : { status: "found" as const, ...read.value };
     }),
   );
-  const textByDecision = new Map<string, DecisionText>();
+  const textByDecision = new Map<string, DecisionTextRead>(
+    pointers.map(({ id, textWithheldReason }) => [
+      String(id),
+      { textWithheldReason, text: null },
+    ]),
+  );
   for (const entry of entries) {
     if (entry?.status === "found") {
-      textByDecision.set(entry.id, entry.text);
+      textByDecision.set(entry.id, {
+        textWithheldReason: null,
+        text: entry.text,
+      });
     }
   }
   if (changed.size === 0 || attempt >= PASSAGE_VERSION_ATTEMPTS) {
@@ -384,11 +399,12 @@ const readDecisionTextGroup = async ({
   // Reapply source policy before any refreshed payload enters a cache or reply.
   const retried = await readDecisionTextGroup({
     caseLawDb,
-    pointers: fresh.filter(
-      ({ textWithheldReason }) => textWithheldReason === null,
-    ),
+    pointers: fresh,
     attempt: attempt + 1,
   });
+  for (const id of changed) {
+    textByDecision.delete(id);
+  }
   for (const [id, text] of retried) {
     textByDecision.set(id, text);
   }
@@ -398,8 +414,8 @@ const readDecisionTextGroup = async ({
 const readDecisionTextByDecision = async (
   caseLawDb: CaseLawPublicReadDb,
   pointers: readonly PassageSourcePointer[],
-): Promise<Map<string, DecisionText>> => {
-  const textByDecision = new Map<string, DecisionText>();
+): Promise<Map<string, DecisionTextRead>> => {
+  const textByDecision = new Map<string, DecisionTextRead>();
   for (const group of chunkItems(pointers, PASSAGE_AST_GROUP_SIZE)) {
     const entries = await readDecisionTextGroup({
       caseLawDb,
@@ -504,31 +520,23 @@ export const readGatedDecisionCitations = defineWindowedRead(
 
     const textByDecision = await readDecisionTextByDecision(
       caseLawDb,
-      gated.sources.filter(
-        ({ textWithheldReason }) => textWithheldReason === null,
-      ),
-    );
-    const withholdingByDecision = new Map(
-      gated.sources.map(
-        ({ id, textWithheldReason }) =>
-          [String(id), textWithheldReason] as const,
-      ),
+      gated.sources,
     );
     const items = gated.page.items.map((item): CitationWithPassage => {
       const citingId =
         direction === "cites" ? String(decisionId) : String(item.decision?.id);
-      const text = textByDecision.get(citingId);
-      const textWithheldReason = withholdingByDecision.get(citingId);
-      if (textWithheldReason === undefined) {
+      const current = textByDecision.get(citingId);
+      if (current === undefined) {
         return panic(`No source disposition for citing decision ${citingId}`);
       }
+      const { text, textWithheldReason } = current;
       const { evidenceQuote, ...citation } = item;
       return {
         ...citation,
         citationText: textWithheldReason === null ? item.citationText : null,
         textWithheldReason,
         passage:
-          textWithheldReason !== null || text === undefined
+          textWithheldReason !== null || text === null
             ? null
             : citationPassageIn({
                 evidenceQuote:
