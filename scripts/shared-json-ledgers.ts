@@ -2,7 +2,9 @@ import { BASELINE_PATHS } from "./baseline-paths";
 
 export const SHARED_LEDGER_PATHS = [
   ".oxlint-plugins/no-hand-rolled-concurrency-exceptions.json",
+  ".oxlint-plugins/no-native-ui-exceptions.json",
   ".oxlint-plugins/require-audit-on-mutation-ledger.json",
+  ".oxlint-plugins/ui-usage-ledger.json",
   "apps/api/capability-description-ledger.json",
   "apps/api/src/mcp/write-tool-authority-ledger.json",
   "apps/api/src/tests/export-dropping-mock-ledger.json",
