@@ -9,6 +9,7 @@ import {
   resolveInvoiceLink,
 } from "@/api/lib/billing/invoice-links";
 import type { InvoiceLinkScope } from "@/api/lib/billing/invoice-links";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { admitInvoiceLinkToken } from "@/api/lib/rate-limit/invoice-link-admission";
 import type { TokenScopedDatabase } from "@/api/lib/root-scoped-db";
@@ -45,7 +46,10 @@ export const verifyInvoiceLinkCaller =
   async ({ body }) => {
     // A deployment without the feature answers like a dead link, before any
     // lookup.
-    if (!isAvailable()) {
+    if (
+      !isDeploymentFeatureEnabled("FEATURE_INVOICE_LINKS") ||
+      !isAvailable()
+    ) {
       return Result.err(linkUnavailable());
     }
     const token = isRecord(body) ? body["token"] : undefined;

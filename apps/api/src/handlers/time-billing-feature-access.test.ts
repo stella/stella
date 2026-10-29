@@ -65,7 +65,13 @@ import {
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
 import { serveForTest } from "@/api/tests/helpers/test-server";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+const testState = createTestState({ file: import.meta.path, config: env });
+testState.beforeAll(() => {
+  testState.setConfig("FEATURE_INVOICE_LINKS", true);
+});
 
 const capabilityCatalog = parseCatalog(readCapabilityCatalog());
 

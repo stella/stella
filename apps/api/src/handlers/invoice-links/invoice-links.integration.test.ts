@@ -1,12 +1,5 @@
 import { panic, Result } from "better-result";
-import {
-  afterAll,
-  beforeAll,
-  describe,
-  expect,
-  setDefaultTimeout,
-  test,
-} from "bun:test";
+import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import * as v from "valibot";
 
@@ -18,6 +11,7 @@ import {
 import { compareCodeUnit } from "@stll/collation";
 import { buildCzechQrPaymentPayload, variableSymbolOf } from "@stll/invoicing";
 import { waitForExternalState } from "@stll/property-testing/external-state";
+import { RUNTIME_MODE } from "@stll/runtime-mode";
 import { sha256Hex } from "@stll/sha256/bun";
 
 import { member, user as authUser } from "@/api/db/auth-schema";
@@ -40,6 +34,7 @@ import {
   createScopedDb,
   createTenantlessDb,
 } from "@/api/db/scoped";
+import { env } from "@/api/env";
 import {
   INVOICE_LINK_DOCUMENT_PROJECTION,
   loadLinkedInvoiceData,
@@ -112,6 +107,7 @@ import {
   scopedGenerator,
 } from "@/api/lib/rate-limit/rate-limit";
 import type { TokenScopedDatabase } from "@/api/lib/root-scoped-db";
+import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
@@ -122,7 +118,9 @@ import {
 } from "@/api/tests/helpers/recording-telemetry";
 import { serveForTest } from "@/api/tests/helpers/test-server";
 import type { TestServer } from "@/api/tests/helpers/test-server";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { withTimeBillingEnrolment } from "@/api/tests/helpers/time-billing-enrolment";
 import {
   getRlsFixture,
   releaseRlsFixture,
@@ -132,6 +130,8 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 // timeout: the shared PGlite fixture applies every migration on first use.
 setDefaultTimeout(120_000);
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 let testDb: TestDatabase;
 let ids: TestIds;
@@ -179,6 +179,7 @@ type LinkRouteOptions = {
   budget: ReturnType<typeof rateLimit>;
   database?: TokenScopedDatabase;
   isAvailable?: () => boolean;
+  admitToken?: ReturnType<typeof createInvoiceLinkTokenAdmission>;
   renderInvoice?: InvoicePdfRenderer;
   buildEInvoice?: typeof buildLinkedEInvoice;
 };
@@ -187,7 +188,8 @@ type LinkRouteOptions = {
 const linkRoutes = ({
   budget,
   database = tokenDb(),
-  isAvailable = () => true,
+  isAvailable,
+  admitToken = createInvoiceLinkTokenAdmission(new InMemoryRateLimitContext()),
   buildEInvoice = buildLinkedEInvoice,
   renderInvoice = async () =>
     Result.ok({
@@ -196,16 +198,13 @@ const linkRoutes = ({
       compileMs: 1,
       peakRssBytes: 1,
     }),
-}: LinkRouteOptions) => {
-  const admitToken = createInvoiceLinkTokenAdmission(
-    new InMemoryRateLimitContext(),
-  );
-  return routes(
+}: LinkRouteOptions) =>
+  routes(
     {
       "/view": {
         POST: createViewInvoiceLink({
           db: database,
-          isAvailable,
+          ...(isAvailable === undefined ? {} : { isAvailable }),
           buildEInvoice,
           admitToken,
         }),
@@ -213,7 +212,7 @@ const linkRoutes = ({
       "/download": {
         POST: createDownloadInvoiceLinkFile({
           db: database,
-          isAvailable,
+          ...(isAvailable === undefined ? {} : { isAvailable }),
           renderInvoice,
           buildEInvoice,
           admitToken,
@@ -225,7 +224,6 @@ const linkRoutes = ({
       middleware: [invoiceLinkResponsePolicy, budget],
     },
   );
-};
 
 const budgetOf = (max: number) =>
   rateLimit({
@@ -235,7 +233,9 @@ const budgetOf = (max: number) =>
     max,
   });
 
-beforeAll(async () => {
+testState.beforeAll(async () => {
+  testState.setConfig("FEATURE_INVOICE_LINKS", true);
+  testState.setConfig("FEATURE_TIME_BILLING", true);
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
   ids = fixture.ids;
@@ -333,9 +333,11 @@ const tenantOf = (tenant: Tenant) =>
 const seedInvoice = async ({
   tenant = "A",
   status,
+  lineCount = 1,
 }: {
   tenant?: Tenant;
   status: InvoiceStatus;
+  lineCount?: number;
 }) => {
   const { organizationId, workspaceId } = tenantOf(tenant);
   const invoiceId = createSafeId<"invoice">();
@@ -359,26 +361,28 @@ const seedInvoice = async ({
     buyerPostalCode: "602 00",
     buyerCountry: "CZ",
     finalizedAt: status === INVOICE_STATUS.DRAFT ? null : new Date(),
-    netAmount: cents(100_000),
+    netAmount: cents(100_000 * lineCount),
     vatAmount: cents(0),
-    totalAmount: cents(100_000),
+    totalAmount: cents(100_000 * lineCount),
   });
-  await testDb.insert(invoiceLines).values({
-    organizationId,
-    workspaceId,
-    invoiceId,
-    position: 0,
-    description: "Contract review",
-    quantity: "1",
-    unit: "h",
-    unitPrice: cents(100_000),
-    vatRateBps: 0,
-    vatTreatment: "not_vat_payer",
-    netAmount: cents(100_000),
-    vatAmount: cents(0),
-    grossAmount: cents(100_000),
-    source: INVOICE_LINE_SOURCE.MANUAL,
-  });
+  await testDb.insert(invoiceLines).values(
+    Array.from({ length: lineCount }, (_, position) => ({
+      organizationId,
+      workspaceId,
+      invoiceId,
+      position,
+      description: "Contract review",
+      quantity: "1",
+      unit: "h",
+      unitPrice: cents(100_000),
+      vatRateBps: 0,
+      vatTreatment: "not_vat_payer" as const,
+      netAmount: cents(100_000),
+      vatAmount: cents(0),
+      grossAmount: cents(100_000),
+      source: INVOICE_LINE_SOURCE.MANUAL,
+    })),
+  );
   return invoiceId;
 };
 
@@ -716,7 +720,104 @@ const invoiceStatus = async (invoiceId: SafeId<"invoice">) =>
       .where(eq(invoices.id, invoiceId))
   ).at(0)?.status;
 
+const DISABLED_INVOICE_LINK_CASES = [
+  RUNTIME_MODE.strict,
+  RUNTIME_MODE.open,
+].flatMap((mode) => [10, 100].map((lineCount) => ({ mode, lineCount })));
+
 describe("sending an invoice by link", () => {
+  test.each(DISABLED_INVOICE_LINK_CASES)(
+    "a disabled deployment refuses sending before reservation, email or invoice changes in $mode mode with $lineCount invoice lines",
+    async ({ mode, lineCount }) => {
+      const restoreMode = setRuntimeModeForTesting({ mode });
+      try {
+        const invoiceId = await seedInvoice({
+          status: INVOICE_STATUS.FINALIZED,
+          lineCount,
+        });
+        expect(
+          await testDb
+            .select({ id: invoiceLines.id })
+            .from(invoiceLines)
+            .where(eq(invoiceLines.invoiceId, invoiceId)),
+        ).toHaveLength(lineCount);
+        const before = await testDb
+          .select()
+          .from(invoices)
+          .where(eq(invoices.id, invoiceId));
+        const auditEvents: AuditEvent[] = [];
+        let admissions = 0;
+        let deliveries = 0;
+        let databaseCalls = 0;
+        const gated = createSendInvoice({
+          isDeliveryConfigured: () => true,
+          admitEmail: async () => {
+            admissions += 1;
+            return Result.ok({
+              release: async () => {},
+              commit: async () => {},
+            });
+          },
+          deliver: async () => {
+            deliveries += 1;
+          },
+        });
+        testState.setConfig("FEATURE_INVOICE_LINKS", false);
+        const context = withTimeBillingEnrolment(
+          memberContext({
+            tenant: "A",
+            invoiceId,
+            route: "/v1/invoices/:workspaceId/:invoiceId/sends",
+            body: { recipients: ["disabled@example.test"] },
+            auditEvents,
+          }),
+        );
+        const refuseDatabase = async () => {
+          databaseCalls += 1;
+          return panic("A disabled invoice send reached the database");
+        };
+        const result = await gated.handler(
+          asTestRaw<Parameters<typeof gated.handler>[0]>({
+            ...context,
+            safeDb: refuseDatabase,
+            scopedDb: refuseDatabase,
+          }),
+        );
+        expect(result).toMatchObject({
+          code: 503,
+          response: { code: "feature_disabled" },
+        });
+        expect(databaseCalls).toBe(0);
+        expect(admissions).toBe(0);
+        expect(deliveries).toBe(0);
+        expect(auditEvents).toEqual([]);
+        expect(await sendRows(invoiceId)).toEqual([]);
+        expect(
+          await testDb
+            .select()
+            .from(invoices)
+            .where(eq(invoices.id, invoiceId)),
+        ).toEqual(before);
+      } finally {
+        restoreMode();
+      }
+    },
+  );
+
+  test("disabling invoice links preserves authenticated history and revocation", async () => {
+    const invoiceId = await seedInvoice({ status: INVOICE_STATUS.FINALIZED });
+    const sent = await send(invoiceId, ["disabled-cleanup@example.test"]);
+    if (!("id" in sent) || typeof sent.id !== "string") {
+      panic("Expected a delivered invoice link before disabling it");
+    }
+    testState.setConfig("FEATURE_INVOICE_LINKS", false);
+    expect(await listSendHistory(invoiceId)).toMatchObject({
+      items: [{ id: sent.id }],
+    });
+    expect(await revoke(invoiceId, sent.id)).toMatchObject({ id: sent.id });
+    expect((await sendRows(invoiceId)).at(0)?.revokedAt).toBeInstanceOf(Date);
+  });
+
   test("unenrolling keeps existing link history and revocation available while refusing new sends", async () => {
     const invoiceId = await seedInvoice({ status: INVOICE_STATUS.FINALIZED });
     const firstSend = await send(invoiceId, [
@@ -2044,8 +2145,11 @@ describe("opening an invoice link", () => {
     }
   });
 
-  const sentInvoice = async (to: string) => {
-    const invoiceId = await seedInvoice({ status: INVOICE_STATUS.FINALIZED });
+  const sentInvoice = async (to: string, lineCount = 1) => {
+    const invoiceId = await seedInvoice({
+      status: INVOICE_STATUS.FINALIZED,
+      lineCount,
+    });
     await send(invoiceId, [to]);
     return { invoiceId, token: tokenSentTo(to) };
   };
@@ -2710,6 +2814,100 @@ describe("opening an invoice link", () => {
     const [still] = await sendRows(own.invoiceId);
     expect(still?.revokedAt).toBeNull();
   });
+
+  test.each(DISABLED_INVOICE_LINK_CASES)(
+    "disabled invoice links refuse public access before admission or lookup in $mode mode with $lineCount invoice lines",
+    async ({ mode, lineCount }) => {
+      const restoreMode = setRuntimeModeForTesting({ mode });
+      try {
+        const { invoiceId, token } = await sentInvoice(
+          `disabled-${mode}-${lineCount}@example.test`,
+          lineCount,
+        );
+        expect(
+          await testDb
+            .select({ id: invoiceLines.id })
+            .from(invoiceLines)
+            .where(eq(invoiceLines.invoiceId, invoiceId)),
+        ).toHaveLength(lineCount);
+        const missing = await post(server, "view", {
+          token: createInvoiceLinkToken(),
+        });
+        expect(missing.status).toBe(404);
+        const unavailable = await missing.json();
+        const database = tokenDb();
+        let lookups = 0;
+        let scopes = 0;
+        let admissions = 0;
+        let availabilityChecks = 0;
+        const measuredDatabase = {
+          scoped: (scope) => {
+            scopes += 1;
+            return database.scoped(scope);
+          },
+          tenantless: async (read) => {
+            lookups += 1;
+            return await database.tenantless(read);
+          },
+        } satisfies TokenScopedDatabase;
+        const admit = createInvoiceLinkTokenAdmission(
+          new InMemoryRateLimitContext(),
+        );
+        await using target = serveForTest(
+          createHttpApp({
+            routes: linkRoutes({
+              budget: budgetOf(1000),
+              database: measuredDatabase,
+              // Even an injected availability check cannot open a disabled deployment.
+              isAvailable: () => {
+                availabilityChecks += 1;
+                return true;
+              },
+              admitToken: async (hash) => {
+                admissions += 1;
+                return await admit(hash);
+              },
+            }),
+            middleware: [errorBoundary],
+          }),
+        );
+        testState.setConfig("FEATURE_INVOICE_LINKS", false);
+        for (const candidate of [
+          token,
+          createInvoiceLinkToken(),
+          "not-a-token",
+        ]) {
+          const responses = [
+            await post(target, "view", { token: candidate }),
+            await post(target, "download", { token: candidate, file: "pdf" }),
+            await post(target, "download", {
+              token: candidate,
+              file: "e_invoice",
+            }),
+          ];
+          for (const response of responses) {
+            expect(response.status).toBe(404);
+            expect(await response.json()).toEqual(unavailable);
+            expect(response.headers.get("cache-control")).toContain("no-store");
+            expect(response.headers.get("referrer-policy")).toBe("no-referrer");
+          }
+        }
+        expect({ lookups, scopes, admissions, availabilityChecks }).toEqual({
+          lookups: 0,
+          scopes: 0,
+          admissions: 0,
+          availabilityChecks: 0,
+        });
+        testState.setConfig("FEATURE_INVOICE_LINKS", true);
+        expect((await post(target, "view", { token })).status).toBe(200);
+        expect(admissions).toBe(1);
+        expect(lookups).toBeGreaterThan(0);
+        expect(scopes).toBeGreaterThan(0);
+      } finally {
+        restoreMode();
+      }
+    },
+  );
 
   test("a deployment without time billing answers like a dead link", async () => {
     const { token } = await sentInvoice("disabled@example.test");

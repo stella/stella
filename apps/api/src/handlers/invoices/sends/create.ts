@@ -49,6 +49,7 @@ import {
 } from "@/api/lib/db/aggregate-lock";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { executedRows } from "@/api/lib/db/executed-rows";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import {
   isTransactionalEmailConfigured,
   sendInvoiceLinkEmail,
@@ -611,6 +612,18 @@ export const createSendInvoice = ({
       body,
       recordAuditEvent,
     }) {
+      if (!isDeploymentFeatureEnabled("FEATURE_INVOICE_LINKS")) {
+        return Result.err(
+          classifyFailure(
+            new HandlerError({
+              status: 503,
+              code: "feature_disabled",
+              message: "This feature is not enabled on this deployment",
+            }),
+            "invoice_links_disabled",
+          ),
+        );
+      }
       if (!isDeliveryConfigured()) {
         return Result.err(
           classifyFailure(

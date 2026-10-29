@@ -90,7 +90,7 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
   ],
   [
     "/public/invoice-links",
-    "Invoice links have no member to enrol; each handler answers a deployment without time billing like a dead link",
+    "Invoice links have no member to enrol; their token verifier requires FEATURE_INVOICE_LINKS and time billing, answering disabled deployments like dead links",
   ],
   [
     "/v1/search-history",

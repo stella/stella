@@ -20,6 +20,7 @@ import {
   createTenantlessDb,
   markRlsDatabase,
 } from "@/api/db/scoped";
+import { env } from "@/api/env";
 import { createSendInvoice } from "@/api/handlers/invoices/sends/create";
 import { HttpStatusResponse } from "@/api/http/status";
 import { AUDIT_RESOURCE_TYPE, createAuditRecorder } from "@/api/lib/audit-log";
@@ -38,7 +39,13 @@ import {
   createTestHandlerContext,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
+
+const testState = createTestState({ file: import.meta.path, config: env });
+testState.beforeAll(() => {
+  testState.setConfig("FEATURE_INVOICE_LINKS", true);
+});
 
 const transportGate = () => ({
   reached: Promise.withResolvers<string>(),
