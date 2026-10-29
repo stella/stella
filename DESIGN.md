@@ -172,7 +172,7 @@ Icons: **lucide-react**.
 ### Key Components
 
 Accordion, AlertDialog, Avatar, Breadcrumb, Button, Checkbox,
-Combobox, Dialog, Field, Form, Input, InputGroup, InputOTP, Label,
+Collapsible, Combobox, Dialog, Field, Form, Input, InputGroup, InputOTP, Label,
 Menu, Pagination, Popover, PreviewCard, ScrollArea, Select,
 Separator, Sheet, Skeleton, Table, Tabs, Textarea, Toast, Tooltip.
 
