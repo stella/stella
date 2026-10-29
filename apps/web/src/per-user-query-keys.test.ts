@@ -708,7 +708,7 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     ],
   },
   // Matter visibility depends on the caller; a future cache key needs org + user.
-  "time-timers/settings/organization/list.ts": {
+  "time-timers/admin/list.ts": {
     kind: "no-web-caller",
     calls: ['api["time-timers"].admin.get'],
   },
