@@ -30,7 +30,7 @@ export const BOOTSTRAP_PAGE_SIZE = 1000;
 const PROVISION_BACKFILL_UNITS_PER_RUN = 200;
 const SCOPE_PAGE_SIZE = 50;
 const LOCK_TIMEOUT_MS = 30_000;
-const STATEMENT_TIMEOUT_MS = 60_000;
+export const PROVISION_BACKFILL_STATEMENT_TIMEOUT_MS = 60_000;
 
 type ScopeKey = { country: string; language: string };
 
@@ -75,7 +75,7 @@ const readBoolean = (row: unknown, key: string): boolean => {
 
 const PAGE_BUDGET = {
   lockTimeout: LOCK_TIMEOUT_MS,
-  statementTimeout: STATEMENT_TIMEOUT_MS,
+  statementTimeout: PROVISION_BACKFILL_STATEMENT_TIMEOUT_MS,
 } as const;
 
 const inTransaction = async (
