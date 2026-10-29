@@ -94,7 +94,8 @@ export const SuggestedActions = ({
       aria-label={label}
       className={cn(
         "flex gap-1.5",
-        row ? "flex-nowrap items-center" : "max-w-full items-start",
+        // The scroller's viewport clips; the padding keeps the chips' shadow.
+        row ? "flex-nowrap items-center py-1" : "max-w-full items-start",
         orientation === "wrap" && "flex-wrap",
         orientation === "vertical" && "flex-col",
         className,
@@ -132,8 +133,6 @@ export const SuggestedActions = ({
     <HorizontalScroller
       nextLabel={scrollLabels.next}
       previousLabel={scrollLabels.previous}
-      // The viewport clips; this leaves room for the chips' shadow.
-      viewportClassName="py-1"
     >
       {group}
     </HorizontalScroller>
