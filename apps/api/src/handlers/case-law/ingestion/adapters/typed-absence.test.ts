@@ -94,12 +94,13 @@ for (const { key } of listSourceRegistrations()) {
     expect(
       normalized.metadata[DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY],
     ).toBe(DECISION_TEXT_ABSENCE_SCHEMA_VERSION);
-    expect(
-      caseLawCanonicalPayload({
-        ...normalized,
-        metadata: toPlainTextMetadataObject(legacyMetadata).unwrap(),
-      }),
-    ).toEqual(caseLawCanonicalPayload(normalized));
+    const legacyObservation = {
+      ...normalized,
+      metadata: toPlainTextMetadataObject(legacyMetadata).unwrap(),
+    };
+    expect(caseLawCanonicalPayload(legacyObservation)).toEqual(
+      caseLawCanonicalPayload(normalized),
+    );
     expect(
       shouldSkipRefresh({
         existingMetadata: legacyMetadata,

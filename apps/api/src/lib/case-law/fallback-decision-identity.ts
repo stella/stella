@@ -17,12 +17,14 @@ import {
   payloadCarriesDocument,
   rowHoldsDocumentFor,
 } from "@/api/lib/case-law/stored-payload";
+import type { CorpusPayload } from "@/api/lib/legal-search/corpus-content-hash";
 import { corpusContentHash } from "@/api/lib/legal-search/corpus-content-hash";
 import {
   decisionIdentifiersFromPersistedMetadata,
   storeDecisionIdentifiersInMetadata,
 } from "@/api/lib/legal-search/decision-identifier-metadata";
 import { caseLawCanonicalPayload } from "@/api/lib/legal-search/decision-payload";
+import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { PARTIAL_OBSERVATION_KEY } from "@/api/lib/legal-search/partial-observation-sql";
 import { sortDeep } from "@/api/lib/sort-deep";
@@ -518,7 +520,37 @@ export const decisionStorageIdentity = (
   };
 };
 
-type StoredFallbackState = {
+type StoredInlineDocument = {
+  fulltext?: string | null;
+  sections?: CorpusPayload["sections"];
+  documentAst?: CorpusPayload["ast"];
+};
+
+/** Reconstruct proof only from the stored payload, using the corpus canonicalization and hash owner. */
+const storedInlineDocumentProof = (stored: StoredInlineDocument) => {
+  const payload = caseLawCanonicalPayload({
+    fulltext: stored.fulltext ?? undefined,
+    sections: stored.sections ?? undefined,
+    documentAst: stored.documentAst ?? EMPTY_AST,
+  });
+  return payloadCarriesDocument(payload) ? corpusContentHash(payload) : null;
+};
+
+export const decisionStoredDocumentMatches = (
+  storage: DecisionStorageIdentity,
+  stored: StoredInlineDocument & {
+    contentHash: string | null;
+    fallbackDocumentHash: string | null;
+  },
+) =>
+  (storage.type === "content" || storage.type === "strong") &&
+  storage.publishedContentHash !== null &&
+  storage.publishedContentHash ===
+    (stored.fallbackDocumentHash ??
+      stored.contentHash ??
+      storedInlineDocumentProof(stored));
+
+type StoredFallbackState = StoredInlineDocument & {
   fallbackIdentityKey: string | null;
   fallbackCohortKey: string | null;
   fallbackPublicationHash: string | null;
@@ -540,7 +572,9 @@ type DecisionFallbackStateOptions = {
 
 const previousDocumentProof = (previous: StoredFallbackState | undefined) =>
   previous?.hasStoredDocument
-    ? (previous.fallbackDocumentHash ?? previous.contentHash)
+    ? (previous.fallbackDocumentHash ??
+      previous.contentHash ??
+      storedInlineDocumentProof(previous))
     : null;
 
 const incomingDocumentProof = (
@@ -818,6 +852,13 @@ export const decisionStorageEnrichmentMatch = (
           OR: [
             { fallbackDocumentHash: storage.publishedContentHash },
             { contentHash: storage.publishedContentHash },
+            {
+              ...legacy,
+              contentHash: ABSENT_FIELD,
+              fallbackDocumentHash: ABSENT_FIELD,
+              fallbackContentHash: ABSENT_FIELD,
+              RAW: rowHoldsDocumentFor,
+            },
             {
               fallbackContentHash: scopedDocumentHash({
                 identity: storage.identity,

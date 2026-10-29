@@ -30,7 +30,12 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 const OBSERVATIONS = ["textless", "weak-full", "ecli", "sheet"] as const;
-const INITIAL_STATES = ["empty", "legacy-textless", "legacy-full"] as const;
+const INITIAL_STATES = [
+  "empty",
+  "legacy-textless",
+  "legacy-full",
+  "legacy-unhashed-full",
+] as const;
 type Observation = (typeof OBSERVATIONS)[number];
 const observation = (type: Observation) =>
   plainTextIngestionResult({
@@ -93,11 +98,12 @@ test(
               name: "Publication sequence fixture",
             });
             let originalId: SafeId<"caseLawDecision"> | undefined;
-            let documentSeen = initial === "legacy-full";
+            let documentSeen =
+              initial === "legacy-full" || initial === "legacy-unhashed-full";
             const strongKinds = new Set<Observation>();
             if (initial !== "empty") {
               const input = observation(
-                initial === "legacy-full" ? "weak-full" : "textless",
+                documentSeen ? "weak-full" : "textless",
               );
               originalId = createSafeId<"caseLawDecision">();
               await db.insert(caseLawDecisions).values({
@@ -105,9 +111,10 @@ test(
                 id: originalId,
                 sourceId,
                 fulltext: input.fulltext || null,
-                contentHash: documentSeen
-                  ? corpusContentHash(caseLawCanonicalPayload(input))
-                  : null,
+                contentHash:
+                  initial === "legacy-full"
+                    ? corpusContentHash(caseLawCanonicalPayload(input))
+                    : null,
               });
             }
             let order = 0n;
@@ -185,6 +192,94 @@ test(
   propertyTestTimeout(120_000),
 );
 
+test("legacy inline fulltext without persisted proof is adopted before sibling insertion", async () => {
+  const client = await createTestPglite();
+  const db = drizzle({
+    client,
+    relations: { ...relations, ...authRelationsPart },
+  });
+  const scopedDb: ScopedDb = async (callback) =>
+    await db.transaction(async (tx) => await callback(asTestRaw(tx)));
+  const sourceId = createSafeId<"caseLawSource">();
+  const originalId = createSafeId<"caseLawDecision">();
+  const input = observation("weak-full");
+  const ingest = async (fulltext: string, observationOrder: bigint) =>
+    await processDecision({
+      input: plainTextIngestionResult({
+        ...input,
+        fulltext,
+        rawHash: fulltext,
+      }),
+      scopedDb,
+      sourceId,
+      corpus: {
+        mode: "off",
+        transfer: {
+          layout: "packs",
+          putPacks: () => panic("Inline fixture must not transfer documents"),
+        },
+      },
+      observationOrder,
+      observedAt: new Date("2026-10-29T08:00:00Z"),
+    });
+  const stored = async () =>
+    await db
+      .select()
+      .from(caseLawDecisions)
+      .where(eq(caseLawDecisions.sourceId, sourceId));
+  try {
+    await db.insert(caseLawSources).values({
+      id: sourceId,
+      adapterKey: `legacy-${sourceId}`,
+      name: "Legacy inline fixture",
+    });
+    await db
+      .insert(caseLawDecisions)
+      .values({ ...input, id: originalId, sourceId, contentHash: null });
+    const before = (await stored()).at(0) ?? panic("Legacy row missing");
+    expect(before.fulltext).toBe("Výrok rozhodnutí.");
+    expect(before.contentHash).toBeNull();
+    expect(before.fallbackIdentityKey).toBeNull();
+    expect(before.fallbackCohortKey).toBeNull();
+    expect(before.fallbackPublicationHash).toBeNull();
+    expect(before.fallbackContentHash).toBeNull();
+    expect(before.fallbackDocumentHash).toBeNull();
+    // Keep the old unique index: an accidental insert must fail here.
+    expect((await ingest(input.fulltext ?? "", 1n)).status).toBe(
+      PROCESS_DECISION_STATUS.COMPLETE,
+    );
+    const adopted = await stored();
+    expect(adopted).toHaveLength(1);
+    const row = adopted.at(0) ?? panic("Adopted row missing");
+    expect(row.id).toBe(originalId);
+    expect(row.fallbackIdentityKey).toBeNull();
+    expect(row.fallbackCohortKey).not.toBeNull();
+    expect(row.fallbackPublicationHash).not.toBeNull();
+    expect(row.fallbackContentHash).not.toBeNull();
+    expect(row.fallbackDocumentHash).toBe(
+      corpusContentHash(caseLawCanonicalPayload(input)),
+    );
+    // Different weak documents are siblings once the contract release removes the docket index.
+    await db.execute(
+      sql`DROP INDEX case_law_decisions_source_case_lang_null_idx`,
+    );
+    expect((await ingest("Výrok druhého rozhodnutí.", 2n)).status).toBe(
+      PROCESS_DECISION_STATUS.COMPLETE,
+    );
+    const siblings = await stored();
+    expect(siblings).toHaveLength(2);
+    expect(siblings.find(({ id }) => id === originalId)?.fulltext).toBe(
+      input.fulltext,
+    );
+    expect(
+      siblings.find(({ fulltext }) => fulltext === "Výrok druhého rozhodnutí.")
+        ?.id,
+    ).not.toBe(originalId);
+  } finally {
+    await client.close();
+  }
+});
+
 const SIBLING_KINDS = ["same-text-conflicting-ecli", "different-text"] as const;
 const siblingSequences = [0, 1].flatMap((first) =>
   [0, 1].flatMap((second) => [
@@ -192,19 +287,27 @@ const siblingSequences = [0, 1].flatMap((first) =>
     ...[0, 1].map((third) => [first, second, third]),
   ]),
 );
-const siblingExamples: [(typeof SIBLING_KINDS)[number], boolean, number[]][] =
-  SIBLING_KINDS.flatMap((kind) =>
-    [false, true].flatMap((legacy) =>
-      siblingSequences.map(
-        (steps) =>
-          [kind, legacy, steps] satisfies [
-            (typeof SIBLING_KINDS)[number],
-            boolean,
-            number[],
-          ],
-      ),
+const SIBLING_STARTS = [
+  "empty",
+  "legacy-full",
+  "legacy-unhashed-full",
+] as const;
+const siblingExamples: [
+  (typeof SIBLING_KINDS)[number],
+  (typeof SIBLING_STARTS)[number],
+  number[],
+][] = SIBLING_KINDS.flatMap((kind) =>
+  SIBLING_STARTS.flatMap((legacy) =>
+    siblingSequences.map(
+      (steps) =>
+        [kind, legacy, steps] satisfies [
+          (typeof SIBLING_KINDS)[number],
+          (typeof SIBLING_STARTS)[number],
+          number[],
+        ],
     ),
-  );
+  ),
+);
 
 test(
   "generated fallback sequences preserve contradictory and different-document siblings",
@@ -225,7 +328,7 @@ test(
         "fallback sibling transition sequences preserve each decision",
         fc.asyncProperty(
           fc.constantFrom(...SIBLING_KINDS),
-          fc.boolean(),
+          fc.constantFrom(...SIBLING_STARTS),
           fc.array(fc.integer({ min: 0, max: 1 }), {
             minLength: 2,
             maxLength: 3,
@@ -254,13 +357,16 @@ test(
             });
             const publications = [first, second];
             const ids = new Map<number, SafeId<"caseLawDecision">>();
-            if (legacy) {
+            if (legacy !== "empty") {
               const id = createSafeId<"caseLawDecision">();
               await db.insert(caseLawDecisions).values({
                 ...first,
                 id,
                 sourceId,
-                contentHash: corpusContentHash(caseLawCanonicalPayload(first)),
+                contentHash:
+                  legacy === "legacy-full"
+                    ? corpusContentHash(caseLawCanonicalPayload(first))
+                    : null,
               });
               ids.set(0, id);
             }

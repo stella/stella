@@ -33,6 +33,7 @@ import {
   decisionStorageEnrichmentMatch,
   decisionStorageIdentity,
   decisionStorageIdentityMatch,
+  decisionStoredDocumentMatches,
   fallbackDecisionCourtMatch,
   fallbackEcliComparisonKey,
 } from "@/api/lib/case-law/fallback-decision-identity";
@@ -208,6 +209,9 @@ const IDENTITY_COLUMNS = {
   sourceObservationHash: true,
   redactedAt: true,
   corpusMirrorStatus: true,
+  fulltext: true,
+  sections: true,
+  documentAst: true,
   // The write the row records for its canonical payload, so the corpus
   // upload can refuse re-PUTting objects a settled row already proved.
   contentHash: true,
@@ -542,6 +546,11 @@ export const findFallbackDecisionTx = async (
     where: { sourceId: { eq: sourceId }, ...enrichmentMatch },
     columns: {
       id: true,
+      fulltext: true,
+      sections: true,
+      documentAst: true,
+      contentHash: true,
+      fallbackDocumentHash: true,
       decisionDate: true,
       ecli: true,
       sheetNumber: true,
@@ -568,7 +577,8 @@ export const findFallbackDecisionTx = async (
       (storageIdentity.type === "content" &&
         storageIdentity.documentState === "document")) &&
     row.hasStoredDocument
-      ? decisionContentEvidenceCompatible(storageIdentity, row)
+      ? decisionStoredDocumentMatches(storageIdentity, row) &&
+        decisionContentEvidenceCompatible(storageIdentity, row)
       : decisionPublicationCompatible(storageIdentity, row),
   );
   const candidate = compatible.length === 1 ? compatible.at(0) : undefined;

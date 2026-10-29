@@ -5,7 +5,9 @@ import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { segmentDecision } from "@/api/lib/legal-search/segment-decision";
 
-export const decisionSections = (result: IngestionResult): DecisionSection[] =>
+export const decisionSections = (
+  result: Pick<IngestionResult, "sections" | "fulltext">,
+): DecisionSection[] =>
   result.sections ?? (result.fulltext ? segmentDecision(result.fulltext) : []);
 
 /**
@@ -14,7 +16,10 @@ export const decisionSections = (result: IngestionResult): DecisionSection[] =>
  * already stored asks the same question the corpus write does.
  */
 export const caseLawCanonicalPayload = (
-  result: IngestionResult,
+  result: Pick<
+    IngestionResult,
+    "sections" | "fulltext" | "documentAst" | "parserVersion"
+  >,
 ): CorpusPayload => {
   const sections = decisionSections(result);
   return {
