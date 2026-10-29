@@ -391,7 +391,7 @@ test("a citation never displays stale loose keyword hits while its phrase search
   expect(
     testing.screen
       .getAllByRole("option")
-      .some((option) => option.textContent?.includes(hit.title)),
+      .some((option) => option.textContent.includes(hit.title)),
   ).toBe(false);
   await testing.act(async () => {
     gate.resolve(undefined);
@@ -400,7 +400,7 @@ test("a citation never displays stale loose keyword hits while its phrase search
     expect(
       testing.screen
         .getAllByRole("option")
-        .some((option) => option.textContent?.includes(hit.title)),
+        .some((option) => option.textContent.includes(hit.title)),
     ).toBe(true);
   });
 });
