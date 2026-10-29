@@ -531,12 +531,12 @@ describe("online migrations", () => {
       newestAppliedMigration: introducedBy,
       pending: [
         ...missingIndexes.map((name) => ({
-          kind: "index",
+          kind: "index" as const,
           name,
           introducedBy,
         })),
         ...legacyNames.map((name) => ({
-          kind: "replacement_drop",
+          kind: "replacement_drop" as const,
           name,
           introducedBy,
         })),
