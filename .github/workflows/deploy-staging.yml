@@ -728,6 +728,7 @@ jobs:
             scripts/staging-owner.sh
             scripts/check-api-deployment.ts
             scripts/api-health.ts
+            apps/api/src/deploy-env-contract.ts
           sparse-checkout-cone-mode: false
 
       - name: Preserve GitHub API tooling across source checkouts
@@ -739,8 +740,10 @@ jobs:
         run: |
           cp "$GITHUB_WORKSPACE/.gh-retry/scripts/post-staging-verification.sh" "$RUNNER_TEMP/post-staging-verification.sh"
           echo "STAGING_STATUS_WRITER=$RUNNER_TEMP/post-staging-verification.sh" >> "$GITHUB_ENV"
-          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/check-api-deployment.ts" "$RUNNER_TEMP/check-api-deployment.ts"
-          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/api-health.ts" "$RUNNER_TEMP/api-health.ts"
+          mkdir -p "$RUNNER_TEMP/scripts" "$RUNNER_TEMP/apps/api/src"
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/check-api-deployment.ts" "$RUNNER_TEMP/scripts/check-api-deployment.ts"
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/api-health.ts" "$RUNNER_TEMP/scripts/api-health.ts"
+          cp "$GITHUB_WORKSPACE/.gh-retry/apps/api/src/deploy-env-contract.ts" "$RUNNER_TEMP/apps/api/src/deploy-env-contract.ts"
           cp "$GITHUB_WORKSPACE/.gh-retry/scripts/staging-owner.sh" "$RUNNER_TEMP/staging-owner.sh"
           echo "STAGING_OWNER_SCRIPT=$RUNNER_TEMP/staging-owner.sh" >> "$GITHUB_ENV"
 
@@ -789,7 +792,7 @@ jobs:
           # first lease bridges until it starts, the second covers every later
           # step's timeout-minutes (scripts/staging-proof-lease.test.ts).
           staging-lease-before-hours: ${{ inputs.release_ref != '' && '1' || '' }}
-          staging-lease-after-hours: ${{ inputs.release_ref != '' && '3' || '' }}
+          staging-lease-after-hours: ${{ inputs.release_ref != '' && '4' || '' }}
           staging-lease-sha: ${{ inputs.release_ref != '' && needs.resolve.outputs.sha || '' }}
 
       # The commit staging is running, recorded where it outlives this run.
@@ -863,7 +866,7 @@ jobs:
           API_DEPLOYMENT_URL: https://api-staging.stll.app
           EDGE_HEADER_NAME: x-stella-edge-token
           EDGE_HEADER_VALUE: ${{ secrets.STAGING_VIEWER_ACCESS_TOKEN }}
-        run: bun --no-install "$RUNNER_TEMP/check-api-deployment.ts"
+        run: bun --no-install "$RUNNER_TEMP/scripts/check-api-deployment.ts"
 
       - name: Install dependencies
         timeout-minutes: 5
@@ -1063,7 +1066,7 @@ jobs:
           API_DEPLOYMENT_URL: https://api-staging.stll.app
           EDGE_HEADER_NAME: x-stella-edge-token
           EDGE_HEADER_VALUE: ${{ secrets.STAGING_VIEWER_ACCESS_TOKEN }}
-        run: bun --no-install "$RUNNER_TEMP/check-api-deployment.ts"
+        run: bun --no-install "$RUNNER_TEMP/scripts/check-api-deployment.ts"
 
       - name: Upload Playwright report
         timeout-minutes: 5

@@ -132,6 +132,7 @@
     "checkSpamHint": "Se você não o vir, verifique a pasta de spam.",
     "chooseOrganization": "Escolha em qual organização trabalhar",
     "codeSentAgain": "Enviamos um novo código.",
+    "continueWithApple": "Continuar com a Apple",
     "continueWithEmail": "Continuar",
     "continueWithGoogle": "Continuar com o Google",
     "continueWithMicrosoft": "Continuar com a Microsoft",
@@ -546,6 +547,14 @@
     },
     "approve": "Aprovar",
     "approveSelected": "Aprovar selecionados",
+    "arrangement": {
+      "alertThreshold": "Limite de alerta (%)",
+      "amountCap": "Limite de honorários",
+      "flatFee": "Honorários fixos",
+      "invalidCap": "Informe limites positivos e um limite de alerta entre 0,01% e 100%.",
+      "minuteCap": "Limite de tempo (minutos)",
+      "title": "Contrato de honorários"
+    },
     "batchActions": "Ações em lote",
     "billable": "Faturável",
     "billedAmount": "Valor faturado",
@@ -710,10 +719,29 @@
       },
       "linkedExpenses": "Despesas vinculadas",
       "linkedTimeEntries": "Entradas de tempo vinculadas",
-      "markPaid": "Marcar como pago",
       "noEntries": "Nenhuma entrada vinculada a esta fatura",
       "noInvoices": "Ainda não há faturas",
       "paidAt": "Pago em",
+      "payments": {
+        "amountTooHigh": "O valor é maior que o saldo em aberto de {amount}.",
+        "confirmVoid": "O pagamento continua registrado como cancelado e deixa de ser abatido desta fatura.",
+        "empty": "Nenhum pagamento registrado ainda",
+        "method": "Forma de pagamento",
+        "methods": {
+          "bank_transfer": "Transferência bancária",
+          "card": "Cartão",
+          "cash": "Dinheiro",
+          "other": "Outra forma"
+        },
+        "outstandingAmount": "Em aberto {amount}",
+        "paidOn": "Data do pagamento",
+        "partiallyPaid": "Paga parcialmente",
+        "record": "Registrar pagamento",
+        "summary": "Pago {paid}, em aberto {outstanding}",
+        "title": "Pagamentos",
+        "void": "Cancelar pagamento",
+        "voided": "Cancelado"
+      },
       "removeEntries": "Remover entradas",
       "send": "Enviar",
       "statuses": {
@@ -895,6 +923,7 @@
     "aiMissing": "A IA não está configurada.",
     "availabilityUnknown": "Não foi possível confirmar a disponibilidade.",
     "deeplMissing": "O DeepL não está configurado.",
+    "deeplPdfRequired": "A tradução de arquivos PDF requer o DeepL.",
     "desktopUnavailable": "Conecte ou atualize o stella desktop.",
     "featureUnavailable": "Este recurso está indisponível.",
     "ocrUnavailable": "O OCR está indisponível.",
@@ -1551,6 +1580,12 @@
     "loadEarlierMessagesError": "Não foi possível carregar as mensagens anteriores",
     "loadingEarlierMessages": "Carregando mensagens anteriores…",
     "maxAttachmentsReached": "Máximo de arquivos {count} por mensagem",
+    "mcpReconnect": {
+      "additional": "{count, plural, one {+# mais} many {+# mais} other {+# mais}}",
+      "dismiss": "Ocultar aviso de conexão",
+      "stoppedWorking": "Sua conexão com <name>{server}</name> parou de funcionar.",
+      "waitingApproval": "Sua conexão com <name>{server}</name> está aguardando aprovação."
+    },
     "mention": {
       "category": {
         "entities": "Neste caso",
@@ -2457,6 +2492,8 @@
       "aresNotFound": "Nenhuma empresa encontrada para este IČO.",
       "aresTitle": "Registro Tcheco (ARES)",
       "contactName": "Nome do contato",
+      "displayNameOrganizationHint": "Substituição opcional; caso contrário, gerado a partir do nome da organização.",
+      "displayNamePersonHint": "Substituição opcional; caso contrário, gerado a partir do nome e sobrenome.",
       "icoPlaceholder": "IČO",
       "invalidIco": "Insira um IČO de 8 dígitos."
     },
@@ -5035,6 +5072,16 @@
       "preferredNamePlaceholder": "Seu nome",
       "profileDescription": "Gerencie suas preferências pessoais",
       "sendOtpCode": "Enviar código de verificação",
+      "signInMethods": {
+        "confirmDescription": "Digite um novo código enviado para seu e-mail para desconectar este método de login.",
+        "confirmTitle": "Desconectar {provider}?",
+        "description": "Conecte contas que usam o mesmo endereço de e-mail verificado.",
+        "emailCode": "Código por e-mail",
+        "emailCodeDescription": "Você sempre pode entrar com um código enviado para seu e-mail.",
+        "lastMethod": "Conecte outra conta antes de desconectar esta.",
+        "title": "Métodos de login",
+        "unavailable": "O envio de e-mails precisa estar configurado para desconectar métodos de login."
+      },
       "timezone": "Fuso horário",
       "timezoneDescription": "Usado para carimbos de data/hora em notificações e e-mails",
       "timezoneSaved": "Fuso horário atualizado",

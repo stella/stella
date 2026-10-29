@@ -125,6 +125,8 @@ const appConfigBase = ({
   version: APP_VERSION,
   orientation: "default",
   scheme: VARIANT_CONFIG[variant].scheme,
+  // The web's favicon edge to edge (`scripts/generate-mobile-app-icon.ts`).
+  icon: "./assets/icon.png",
   userInterfaceStyle: "automatic",
   ios: {
     bundleIdentifier: VARIANT_CONFIG[variant].identifier,
@@ -133,6 +135,12 @@ const appConfigBase = ({
     // The app's only cryptography is HTTPS and the platform keychain, which
     // are exempt; declaring it spares every TestFlight upload the question.
     config: { usesNonExemptEncryption: false },
+    infoPlist: {
+      // The document camera (modules/document-scanner) scans paper into a
+      // matter's documents.
+      NSCameraUsageDescription:
+        "stella scans paper documents with the camera to add them to a matter.",
+    },
   },
   android: {
     package: VARIANT_CONFIG[variant].identifier,
@@ -145,7 +153,22 @@ const appConfigBase = ({
   },
   runtimeVersion,
   updates: updatesFor(variant, signingCertificatePresent),
-  plugins: ["expo-router"],
+  plugins: [
+    "expo-router",
+    // DM Sans, the web's typeface, embedded in the build.
+    [
+      "expo-font",
+      {
+        fonts: [
+          "@expo-google-fonts/dm-sans/300Light/DMSans_300Light.ttf",
+          "@expo-google-fonts/dm-sans/400Regular/DMSans_400Regular.ttf",
+          "@expo-google-fonts/dm-sans/500Medium/DMSans_500Medium.ttf",
+          "@expo-google-fonts/dm-sans/600SemiBold/DMSans_600SemiBold.ttf",
+          "@expo-google-fonts/dm-sans/700Bold/DMSans_700Bold.ttf",
+        ],
+      },
+    ],
+  ],
   experiments: {
     typedRoutes: true,
     reactCompiler: true,
@@ -170,7 +193,7 @@ const readVariant = (value: string | undefined): Variant =>
     : (VARIANTS.find((variant) => variant === value) ??
       panic(`APP_VARIANT must be one of ${VARIANTS.join(", ")}`));
 
-/** `MOBILE_BUILD_NUMBER`: the store build number; the release workflow passes its run number. */
+/** `MOBILE_BUILD_NUMBER`: the store build number; the release workflow passes its run number plus 100. */
 const readBuildNumber = (value: string | undefined): number => {
   if (value === undefined) {
     return 1;

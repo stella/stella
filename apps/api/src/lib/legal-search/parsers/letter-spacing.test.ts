@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import { collapseLetterSpacing } from "./letter-spacing";
 
@@ -12,6 +13,82 @@ const spaceOut = (words: readonly string[]): string =>
 const czechWord = fc.stringMatching(
   /^[A-Za-zÁČĎÉĚÍŇÓŘŠŤÚŮÝŽáčďéěíňóřšťúůýž]{2,12}$/u,
 );
+
+test("attested uneven chunks retain ordinary word boundaries", () => {
+  const options = {
+    setApart: true,
+    attestedWords: new Set(["vylúčený", "dokonca", "avzoski"]),
+    spacedWords: new Set(["rozhodol", "odôvodnenie", "poučenie"]),
+  };
+  expect(collapseLetterSpacing("vy l ú čen ý", options)).toBe("vylúčený");
+  expect(collapseLetterSpacing("rozh od ol :", options)).toBe("rozhodol:");
+  expect(collapseLetterSpacing("O d ôvod n eni e:", options)).toBe(
+    "Odôvodnenie:",
+  );
+  expect(collapseLetterSpacing("Pou čen i e:", options)).toBe("Poučenie:");
+  for (const text of [
+    "a v z o s k i",
+    "do konca",
+    "v znení",
+    "a i",
+    "o s",
+    "k i",
+    "vy l ú čen á",
+  ]) {
+    expect(collapseLetterSpacing(text, options)).toBe(text);
+  }
+});
+
+test("uneven attested spacing ignores chunk and Unicode boundaries", () => {
+  assertProperty(
+    "uneven attested spacing ignores chunk and Unicode boundaries",
+    fc.property(
+      fc.array(fc.boolean(), { minLength: 6, maxLength: 6 }),
+      fc.constantFrom("NFC", "NFD"),
+      (cuts, normalization) => {
+        const letters = Array.from("vylúčen");
+        let spaced = "";
+        for (const [index, letter] of letters.entries()) {
+          spaced += letter + (cuts[index] === true ? " " : "");
+        }
+        spaced = normalizeUnicode(`${spaced.trimEnd()} ý`, normalization);
+        const options = {
+          setApart: true,
+          attestedWords: new Set(["vylúčený"]),
+        };
+        const result = collapseLetterSpacing(spaced, options);
+        expect(normalizeUnicode(result, "NFC")).toBe("vylúčený");
+        expect(collapseLetterSpacing(result, options)).toBe(result);
+      },
+    ),
+  );
+});
+
+test("ordinary one-letter words retain every separator and punctuation", () => {
+  assertProperty(
+    "ordinary one-letter words retain every separator and punctuation",
+    fc.property(
+      fc.array(fc.constantFrom("a", "v", "z", "o", "s", "k", "i"), {
+        minLength: 2,
+        maxLength: 12,
+      }),
+      fc.constantFrom(" ", "  ", "\u00a0"),
+      fc.constantFrom("", ".", ":", "!"),
+      (words, gap, punctuation) => {
+        const text = words.join(gap) + punctuation;
+        expect(
+          collapseLetterSpacing(text, {
+            setApart: true,
+            attestedWords: new Set([words.join("")]),
+          }),
+        ).toBe(text);
+        expect(
+          collapseLetterSpacing(`n i e   ${text}`, { setApart: true }),
+        ).toBe(`nie ${text}`);
+      },
+    ),
+  );
+});
 
 describe("letter-spaced emphasis", () => {
   test.each([

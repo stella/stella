@@ -50,7 +50,7 @@ export const readerAnswerRequest = ({
     return available;
   }
   if (managedAIResidency === null) {
-    return Result.err(storedAIConfigUnreadableError(undefined));
+    return Result.err(storedAIConfigUnreadableError());
   }
   const scope = {
     organizationId: session.activeOrganizationId,
