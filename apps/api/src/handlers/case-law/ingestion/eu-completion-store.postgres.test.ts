@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { and, eq, inArray, sql, TransactionRollbackError } from "drizzle-orm";
 
@@ -1189,6 +1189,38 @@ if (!databaseUrl || !enabled) {
       const outcome = await Result.tryPromise({
         try: async () =>
           await db.transaction(async (tx) => {
+            // This checks read plans over settled rows. Clone the migrated
+            // tables and their actual indexes without replaying ingestion
+            // triggers for the bulk fixture, as the other plan suites do.
+            for (const table of [
+              "case_law_decisions",
+              "eu_completion_receipts",
+              "case_law_index_jobs",
+            ]) {
+              // db-await-in-loop: each private fixture table retains every migrated index.
+              await tx.execute(sql`CREATE TEMPORARY TABLE ${sql.identifier(table)}
+                (LIKE public.${sql.identifier(table)} INCLUDING ALL EXCLUDING INDEXES)
+                ON COMMIT DROP`);
+              const indexes = await tx.execute(sql`
+                SELECT indexdef FROM pg_indexes
+                WHERE schemaname = 'public' AND tablename = ${table}
+                ORDER BY indexname
+              `);
+              for (const { indexdef } of indexes) {
+                if (
+                  typeof indexdef !== "string" ||
+                  !indexdef.includes(" ON public.")
+                ) {
+                  panic(
+                    "The migrated fixture index has no public table definition",
+                  );
+                }
+                // db-await-in-loop: build each live index definition on its temporary table.
+                await tx.execute(
+                  sql.raw(indexdef.replace(" ON public.", " ON pg_temp.")),
+                );
+              }
+            }
             await tx.insert(caseLawSources).values({
               id: sourceId,
               adapterKey: `completion-scale-${sourceId}`,
