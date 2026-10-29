@@ -27,6 +27,7 @@ export class ReaderAnswerCorpusError extends TaggedError(
 type ReaderAnswerParagraph = { paragraphId: string; text: string };
 export type ReaderAnswerDecision = {
   decisionId: SafeId<"caseLawDecision">;
+  language: string;
   paragraphs: ReaderAnswerParagraph[];
   decisionDate: string | null;
   court: string | null;
@@ -159,6 +160,7 @@ export const readReaderAnswerDecision = async (
       }
       return {
         decisionId: read.decision.id,
+        language: read.decision.language,
         court: read.decision.court,
         decisionDate: read.decision.decisionDate,
         // Exactly the pieces the reader shows, headings and table cells

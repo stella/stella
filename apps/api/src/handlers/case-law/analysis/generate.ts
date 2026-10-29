@@ -811,8 +811,8 @@ export const generateAnalysis = async ({
   if (!derivedAi) {
     return Result.ok(
       unavailable(
-        "analysis_unavailable",
-        "Analysis is unavailable for this decision",
+        "analysis_disabled",
+        "Analysis generation is disabled on this deployment",
       ),
     );
   }
@@ -855,8 +855,8 @@ export const generateAnalysis = async ({
   if (!allowsDerivedAiAnalysis(decision)) {
     return Result.ok(
       unavailable(
-        "analysis_unavailable",
-        "Analysis is unavailable for this decision",
+        "source_restricted",
+        "The source does not permit AI analysis",
       ),
     );
   }
@@ -965,7 +965,7 @@ const config = {
     "from it. Returns status done with the stored analysis and aiDisclosure, " +
     "generating while a run is in flight (poll until it is done), or error " +
     "with a code: decision_not_found, document_unparseable, " +
-    "language_unsupported or analysis_unavailable when no analysis can be " +
+    "language_unsupported, analysis_disabled or source_restricted when no analysis can be " +
     "made; answer_incomplete, timed_out, provider_refused, " +
     "provider_unavailable or failed when the last run failed, with key " +
     "naming whose AI key it used (the organization's own, or the platform's). " +
