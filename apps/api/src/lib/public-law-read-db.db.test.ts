@@ -393,7 +393,7 @@ test("a configured transaction refuses to write", async () => {
 
   expect(isRecord(failure)).toBe(true);
   expect(String(isRecord(failure) ? failure["cause"] : "")).toContain(
-    "read-only transaction",
+    "permission denied for database",
   );
 });
 
