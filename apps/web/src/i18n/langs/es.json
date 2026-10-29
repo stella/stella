@@ -1580,6 +1580,12 @@
     "loadEarlierMessagesError": "No se pudieron cargar los mensajes anteriores",
     "loadingEarlierMessages": "Cargando mensajes anteriores…",
     "maxAttachmentsReached": "Máximo {count} archivos por mensaje",
+    "mcpReconnect": {
+      "additional": "{count, plural, one {+# más} many {+# más} other {+# más}}",
+      "dismiss": "Ocultar aviso de conexión",
+      "stoppedWorking": "Tu conexión con <name>{server}</name> ha dejado de funcionar.",
+      "waitingApproval": "Tu conexión con <name>{server}</name> está pendiente de aprobación."
+    },
     "mention": {
       "category": {
         "entities": "En este asunto",

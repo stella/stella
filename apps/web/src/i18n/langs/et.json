@@ -1580,6 +1580,12 @@
     "loadEarlierMessagesError": "Varasemate sõnumite laadimine ebaõnnestus",
     "loadingEarlierMessages": "Varasemate sõnumite laadimine…",
     "maxAttachmentsReached": "Maksimaalselt {count} faili sõnumi kohta",
+    "mcpReconnect": {
+      "additional": "{count, plural, one {+# veel} other {+# veel}}",
+      "dismiss": "Peida ühenduse teade",
+      "stoppedWorking": "Teie ühendus teenusega <name>{server}</name> lakkas töötamast.",
+      "waitingApproval": "Teie ühendus teenusega <name>{server}</name> ootab kinnitamist."
+    },
     "mention": {
       "category": {
         "entities": "Selles toimikus",
