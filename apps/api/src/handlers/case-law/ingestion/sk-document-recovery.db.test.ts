@@ -3,6 +3,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { DECISION_TEXT_FAILURE } from "@stll/api-contract/case-law-fulltext-state";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -10,9 +11,12 @@ import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import { pendingDecisionText } from "@/api/lib/case-law/fulltext-state";
 import { claimDecisionTextWork } from "@/api/lib/case-law/fulltext-state-store";
+import { readPresent } from "@/api/lib/errors/read-outcome";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import {
   claimDocumentFetch,
+  DOCUMENT_FETCH_FAILURE,
+  fetchDecisionDocument,
   storeBackfilledDocument,
 } from "@/api/lib/legal-search/sk-document-backfill";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
@@ -232,3 +236,44 @@ test.each(concurrentChanges)(
     expect(await snapshot()).toEqual(newer);
   },
 );
+
+test("recovery returns the parser failure to its fenced state owner", async () => {
+  const { target, decision } = await seedTarget();
+  await db
+    .update(caseLawDecisions)
+    .set({
+      documentFetchAttemptedAt: null,
+      documentUrl: "https://obcan.justice.sk/content/public/item/fixture.pdf",
+    })
+    .where(eq(caseLawDecisions.id, decision.id));
+  const fetched = await Result.tryPromise({
+    try: async () =>
+      await fetchDecisionDocument({
+        decisionId: decision.id,
+        recoveryTarget: target,
+        scopedDb,
+        signal: new AbortController().signal,
+        fetchDocument: async () =>
+          readPresent(new Response("<html>Publisher error page</html>")),
+      }),
+    catch: (error) => error,
+  });
+  expect(fetched.isOk()).toBe(true);
+  if (fetched.isOk()) {
+    expect(fetched.value).toMatchObject({
+      status: "deferred",
+      failure: DOCUMENT_FETCH_FAILURE.UNPARSEABLE,
+      cause: {
+        kind: DECISION_TEXT_FAILURE.PARSER_REFUSAL,
+        code: "AdapterFetchError",
+      },
+    });
+  }
+  const stored = (
+    await db
+      .select(identityColumns)
+      .from(caseLawDecisions)
+      .where(eq(caseLawDecisions.id, decision.id))
+  ).at(0);
+  expect(stored?.textState).toEqual(target.textState);
+});

@@ -2031,6 +2031,14 @@ const runDecisionDocumentFetch = async ({
     });
   }
   if (Result.isError(result)) {
+    if (recoveryTarget !== undefined && cause !== null) {
+      return {
+        status: "deferred",
+        failure: failureForCause(cause),
+        cause,
+        detail: errorTag(result.error),
+      };
+    }
     throw result.error instanceof DocumentParserFailureError
       ? result.error.original
       : result.error;
