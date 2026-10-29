@@ -9,7 +9,7 @@ const runtimeFiles = [
 test("runtime census includes every package entry point", () => {
   expect(runtimeFiles.length).toBeGreaterThan(0);
   for (const entry of Object.values(manifest.exports)) {
-    expect(runtimeFiles).toContain(String(entry).replace("./src/", ""));
+    expect(runtimeFiles).toContain(entry.replace("./src/", ""));
   }
 });
 

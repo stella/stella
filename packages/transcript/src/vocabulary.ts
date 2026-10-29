@@ -106,12 +106,12 @@ export const budgetVocabulary = ({
     if (seen.has(key)) {
       continue;
     }
-    seen.add(key);
     const nextScalarCount =
       scalarCount + Array.from(term).length + (terms.length > 0 ? 2 : 0);
     if (Math.ceil(nextScalarCount / 3) > tokenLimit) {
       continue;
     }
+    seen.add(key);
     terms.push(term);
     scalarCount = nextScalarCount;
   }

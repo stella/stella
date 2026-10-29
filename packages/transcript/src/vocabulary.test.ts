@@ -178,3 +178,24 @@ test("vocabulary always respects count and token budgets with unique stable term
     ),
   );
 });
+
+test("vocabulary accepts an equivalent spelling when the higher-ranked form exceeds budget", () => {
+  const decomposed = "e\u0301".repeat(600);
+  const composed = "é".repeat(600);
+  expect(foldSearchMatchText(decomposed)).toBe(foldSearchMatchText(composed));
+  expect(estimateVocabularyTokens(decomposed)).toBeGreaterThan(
+    VOCABULARY_BUDGETS["groq-prompt"].tokenLimit,
+  );
+  expect(estimateVocabularyTokens(composed)).toBe(
+    VOCABULARY_BUDGETS["groq-prompt"].tokenLimit,
+  );
+  const selected = budgetVocabulary({
+    mechanism: "groq-prompt",
+    candidates: [
+      { term: decomposed, kind: "glossary", weight: 2 },
+      { term: composed, kind: "glossary", weight: 1 },
+    ],
+  }).unwrap();
+  expect(selected.terms).toEqual([composed]);
+  expect(selected.estimatedTokens).toBe(200);
+});
