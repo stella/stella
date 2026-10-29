@@ -261,6 +261,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/auth/feature-access/view-eligibility.ts",
     "apps/api/src/lib/bilingual/contract.ts",
     "apps/api/src/lib/billing/*",
+    "apps/api/src/lib/billing/invoice-pdf/**",
     "apps/api/src/lib/business-registries/*",
     "apps/api/src/lib/business-registries/desktop/config.ts",
     "apps/api/src/lib/business-registries/desktop/link-grant-store.ts",

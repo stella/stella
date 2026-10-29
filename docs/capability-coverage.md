@@ -254,8 +254,8 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `invoices.pdf.export` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices pdf-export` |
 | `invoices.prefill` | read | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices prefill` |
 | `invoices.sends.create` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices sends-create` |
-| `invoices.sends.list` | read | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices sends-list` |
-| `invoices.sends.revoke` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices sends-revoke` |
+| `invoices.sends.list` | read | stella:read | — | generic invoke → `stella capability invoices sends-list` |
+| `invoices.sends.revoke` | write | stella:billing_write | — | generic invoke → `stella capability invoices sends-revoke` |
 | `invoices.transition` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices transition` |
 | `invoices.update` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices update` |
 
