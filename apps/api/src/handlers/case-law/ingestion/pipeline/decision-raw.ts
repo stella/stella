@@ -29,6 +29,8 @@ import { logger } from "@/api/lib/observability/logger";
 import { pgErrorFields } from "@/api/lib/pg-error";
 import type { S3CredentialRefreshOptions } from "@/api/lib/s3/credential-guard";
 
+import type { DecisionInputProvenance } from "./types";
+
 /** The raw writes one decision attempt makes under its decision. */
 export type RawWriteState = {
   /**
@@ -97,6 +99,7 @@ export type SourceRawArtifact = {
 };
 
 type AcquireSourceRawArtifactOptions = {
+  inputProvenance: DecisionInputProvenance;
   signal?: AbortSignal;
   s3Policy?: S3CredentialRefreshOptions;
   result: IngestionResult;
@@ -113,6 +116,7 @@ type AcquireSourceRawArtifactOptions = {
  * key and carries a retryable failure through the eventual row outcome.
  */
 export const acquireSourceRawArtifact = async ({
+  inputProvenance,
   result,
   existing,
   preservesExistingDetail,
@@ -122,6 +126,16 @@ export const acquireSourceRawArtifact = async ({
   signal,
   s3Policy,
 }: AcquireSourceRawArtifactOptions) => {
+  if (inputProvenance.type === "stored-replay") {
+    return {
+      type: "acquired" as const,
+      artifact: {
+        s3UploadFailed: false,
+        sourceRawS3Key: inputProvenance.sourceRawS3Key,
+        sourceRawContentType: existing?.sourceRawContentType ?? null,
+      },
+    };
+  }
   const rawContentType = result.sourceRawContentType ?? "text/plain";
   const storedRawKey = existing?.sourceRawS3Key ?? null;
   const storedRawContentType = existing?.sourceRawContentType ?? null;

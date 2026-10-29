@@ -177,3 +177,76 @@ describe("where every row's result is written", () => {
     expect(rejection(...argv)).toBe(message);
   });
 });
+
+describe("one stored decision is an exact replay scope", () => {
+  const decisionId = "019a2df3-f302-7c9b-a832-fcae1e03b135";
+
+  test("an exact id is bounded to one decision, including with --all", () => {
+    for (const extra of [[], ["--all"], ["--limit", "20"]]) {
+      expect(
+        parsed("--adapter", "pl-sn", "--decision-id", decisionId, ...extra),
+      ).toMatchObject({
+        scope: { type: "decision", decisionId },
+        bound: { type: "at-most", limit: 1 },
+        apply: false,
+      });
+    }
+    expect(
+      parsed("--adapter", "pl-sn", "--decision-id", decisionId, "--apply")
+        .apply,
+    ).toBe(true);
+  });
+
+  test.each(["court", "celex"])(
+    "an id cannot be combined with --%s",
+    (flag) => {
+      expect(
+        rejection(
+          "--adapter",
+          "pl-sn",
+          "--decision-id",
+          decisionId,
+          `--${flag}`,
+          "value",
+        ),
+      ).toBe(
+        "--decision-id, --court and --celex are mutually exclusive replay scopes",
+      );
+    },
+  );
+
+  test("an exact decision cannot silently be skipped by a resume cursor", () => {
+    expect(
+      rejection(
+        "--adapter",
+        "pl-sn",
+        "--decision-id",
+        decisionId,
+        "--after",
+        decisionId,
+      ),
+    ).toBe("--decision-id and --after are mutually exclusive");
+  });
+
+  test.each(["", "\ud800"])("invalid id %p is refused", (value) => {
+    expect(rejection("--adapter", "pl-sn", "--decision-id", value)).toBe(
+      "--decision-id must be a valid decision id",
+    );
+  });
+
+  test("missing and repeated ids are refused", () => {
+    expect(rejection("--adapter", "pl-sn", "--decision-id")).toBe(
+      "--decision-id requires a value",
+    );
+    expect(
+      rejection(
+        "--adapter",
+        "pl-sn",
+        "--decision-id",
+        decisionId,
+        "--decision-id",
+        decisionId,
+      ),
+    ).toBe("--decision-id was given more than once");
+  });
+});

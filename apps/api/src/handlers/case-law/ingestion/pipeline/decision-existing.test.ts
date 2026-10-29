@@ -91,6 +91,7 @@ describe("an observation that completes a listing-only row", () => {
     expect(shape.upgradesStoredDetail).toBe(true);
     expect(
       await resolveExistingDecisionPolicy({
+        inputProvenance: { type: "observation" },
         scopedDb: unreachableDb,
         existing,
         result: complete,

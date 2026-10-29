@@ -19,6 +19,7 @@ import type {
   SourceAdapter,
   StoredRawReader,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import { caseLawCanonicalPayload } from "@/api/handlers/case-law/ingestion/pipeline/corpus-mirror";
 import {
   CASE_LAW_REPLAY_SCOPE,
   countReplayability,
@@ -41,9 +42,11 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   absentDecisionTextFields,
+  splitStoredDecisionTextMetadata,
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -70,7 +73,6 @@ let db: ReturnType<typeof connect>;
 const scopedDb: ScopedDb = async (callback) =>
   // SAFETY: pglite stands in for the transaction the walk expects; the walk
   // only issues reads under this test.
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the pglite handle is the test's transaction
   await callback(db as unknown as Transaction);
 
 /** Same millisecond for every row; only the last three digits differ. */
@@ -775,7 +777,7 @@ describe("replay of a source", () => {
     expect(reads).toHaveLength(1);
   });
 
-  test("a dry run classifies each row by its re-parsed hash and writes nothing", async () => {
+  test("a dry run classifies derived output while preserving publisher hashes", async () => {
     const sourceId = await createSource();
     const unchangedId = createSafeId<"caseLawDecision">();
     const changedId = createSafeId<"caseLawDecision">();
@@ -796,6 +798,31 @@ describe("replay of a source", () => {
       sourceHash: "stored-hash-2",
     });
 
+    // Seed every derived field through its owner, so the unchanged fixture
+    // matches an ingest rather than a handwritten approximation of its output.
+    const unchanged = sanitizeResult(
+      plainTextIngestionResult({
+        caseNumber: "C-1/26",
+        court: "Court of Justice",
+        country: "EU",
+        language: "en",
+        metadata: { celex: "celex-C-1/26" },
+        textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+        rawHash: "parser-hash-C-1/26",
+        documentAst: EMPTY_AST,
+      }),
+    );
+    const unchangedPayload = caseLawCanonicalPayload(unchanged);
+    await db
+      .update(caseLawDecisions)
+      .set({
+        metadata: unchanged.metadata,
+        fulltext: unchangedPayload.text,
+        sections: unchangedPayload.sections,
+        documentAst: unchangedPayload.ast,
+      })
+      .where(eq(caseLawDecisions.id, unchangedId));
+
     const ran = await replayCaseLawSource({
       adapter: stubAdapter({
         // The first row re-parses to what is stored (the fixed point a
@@ -807,12 +834,12 @@ describe("replay of a source", () => {
             court: stored.court,
             country: "EU",
             language: stored.language,
-            metadata: stored.metadata,
-            textFields: absentDecisionTextFields(
-              TEXT_ABSENCE_REASON.NOT_PUBLISHED,
-            ),
-            rawHash:
-              stored.caseNumber === "C-1/26" ? "stored-hash-1" : "new-hash-2",
+            ...splitStoredDecisionTextMetadata(stored.metadata),
+            rawHash: `parser-hash-${stored.caseNumber}`,
+            fulltext:
+              stored.caseNumber === "C-1/26"
+                ? undefined
+                : "New derived document.",
             documentAst: EMPTY_AST,
           }),
         }),
@@ -845,7 +872,10 @@ describe("replay of a source", () => {
     expect(rows.map(({ sourceHash }) => String(sourceHash)).toSorted()).toEqual(
       ["stored-hash-1", "stored-hash-2"],
     );
-    expect(rows.every(({ fulltext }) => fulltext === null)).toBe(true);
+    expect(rows.find(({ id }) => id === unchangedId)?.fulltext).toBe(
+      unchangedPayload.text,
+    );
+    expect(rows.find(({ id }) => id === changedId)?.fulltext).toBeNull();
   });
 
   test("a reparse cannot redirect a replay to another decision identity", async () => {
@@ -1090,6 +1120,7 @@ describe("replay of a source", () => {
                     TEXT_ABSENCE_REASON.NOT_PUBLISHED,
                   ),
                   rawHash: `new-${stored.caseNumber}`,
+                  fulltext: `New derived document ${stored.caseNumber}.`,
                   documentAst: EMPTY_AST,
                 }),
               }

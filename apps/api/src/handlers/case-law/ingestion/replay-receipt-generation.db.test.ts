@@ -172,7 +172,7 @@ test("completion cannot credit a different current input", async () => {
         id: toSafeId<"caseLawSource">(SOURCE_ID),
         adapterKey: "eu-ecj",
         currentParserVersion: 2,
-        dailyBudget: 1,
+
         mode: "enrolled",
         rowsBehind: 1,
       },

@@ -8,10 +8,10 @@ import {
   isNull,
   lt,
   lte,
-  ne,
   or,
   sql,
 } from "drizzle-orm";
+import { unionAll } from "drizzle-orm/pg-core";
 
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import {
@@ -31,9 +31,11 @@ import {
   caseLawReplayBatches,
   caseLawReplayBlocked,
   caseLawReplayDailyRows,
+  caseLawReplayReportedDecisions,
   caseLawReplaySourceProgress,
   caseLawSources,
   databaseBackfillStates,
+  type ReplayDryRunDiffSample,
   type ReplayMaintenanceAuditDetails,
 } from "@/api/db/schema";
 import {
@@ -73,13 +75,13 @@ import {
   CASE_LAW_REPLAY_SCOPE,
   parsedReplayInputPredicate,
   REPLAY_ROW_OUTCOME,
-  replayBatchReadmissionPredicate,
   replayCapability,
   type ReplayDecisionRow,
   replayReadmissionInputPredicate,
   type ReplayRowReport,
   type ReplayRowResult,
   replayRowResult,
+  replaySelectionPredicate,
   selectReplayPage,
   selectScopeEnd,
 } from "./replay";
@@ -94,6 +96,7 @@ import {
   type ReplayFailure,
   replayFailure,
 } from "./replay-failure";
+import { replayPriority, replayPriorityRank } from "./replay-priority";
 
 const withReplayTransaction = async <T>(
   db: CaseLawRootHandle,
@@ -179,7 +182,6 @@ type ReplayStoreOptions = {
   now: () => number;
   enrolment?: Readonly<Record<keyof typeof PARSER_VERSIONS, ReplayEnrolment>>;
   onLag?: (source: BackgroundReplaySource) => void;
-  onBudgetExhausted?: (source: BackgroundReplaySource) => void;
   sourceEnabled?: (key: keyof typeof PARSER_VERSIONS) => boolean;
   beforeCheckpoint?: (tx: Transaction) => Promise<void>;
   beforeComplete?: () => Promise<void>;
@@ -192,7 +194,6 @@ type ReplayStoreContext = {
   now: () => number;
   enrolment: Readonly<Record<keyof typeof PARSER_VERSIONS, ReplayEnrolment>>;
   onLag: ReplayStoreOptions["onLag"];
-  onBudgetExhausted: ReplayStoreOptions["onBudgetExhausted"];
   beforeCheckpoint: ReplayStoreOptions["beforeCheckpoint"];
   sourceEnabled: ReplayStoreOptions["sourceEnabled"];
   beforeComplete: ReplayStoreOptions["beforeComplete"];
@@ -200,109 +201,151 @@ type ReplayStoreContext = {
   onHeld: ReplayStoreOptions["onHeld"];
 };
 
-type DailyAllowanceOptions = {
-  db: CaseLawRootHandle;
-  source: BackgroundReplaySource;
-  utcDay: string;
-  currentTime: number;
-};
-const hasDailyAllowance = async ({
-  db,
-  source,
-  utcDay,
-  currentTime,
-}: DailyAllowanceOptions) =>
-  await withReplayTransaction(db, async (tx) => {
-    const usage =
-      (
-        await tx
-          .select({ count: sql<number>`count(*)::int` })
-          .from(caseLawReplayDailyRows)
-          .where(
-            and(
-              eq(caseLawReplayDailyRows.sourceId, source.id),
-              eq(caseLawReplayDailyRows.budgetDay, utcDay),
-            ),
-          )
-      ).at(0)?.count ?? 0;
-    if (usage < source.dailyBudget) {
-      return true;
-    }
-    const recoverable = await tx
-      .select({ id: caseLawReplayBatches.id })
-      .from(caseLawReplayBatches)
-      .innerJoin(
-        caseLawReplayDailyRows,
-        eq(caseLawReplayBatches.id, caseLawReplayDailyRows.batchId),
-      )
-      .leftJoin(
-        caseLawDecisions,
-        and(
-          eq(caseLawDecisions.id, caseLawReplayBatches.firstDecisionId),
-          eq(caseLawDecisions.sourceId, source.id),
-          eq(
-            caseLawDecisions.sourceRawS3Key,
-            caseLawReplayBatches.sourceRawS3Key,
-          ),
-          replayReadmissionInputPredicate(source.currentParserVersion),
-        ),
-      )
-      .where(
-        and(
-          eq(caseLawReplayBatches.sourceId, source.id),
-          source.mode === "dry-run"
-            ? and(
-                eq(caseLawReplayBatches.status, "completed"),
-                eq(caseLawReplayBatches.failed, 1),
-                or(
-                  isNull(caseLawReplayBatches.outcome),
-                  ne(
-                    caseLawReplayBatches.outcome,
-                    REPLAY_PREVIEW_FAILURE.RETRY_EXHAUSTED,
-                  ),
-                ),
-                sql`${caseLawReplayBatches.id} LIKE ${`${escapeLike(`${source.id}:${source.currentParserVersion}:`)}%${escapeLike(BACKGROUND_REPLAY_PREVIEW_SUFFIX)}`}`,
-              )
-            : or(
-                inArray(caseLawReplayBatches.status, [
-                  "reserved",
-                  "retry-exhausted",
-                ]),
-                and(
-                  replayBatchReadmissionPredicate(),
-                  lt(
-                    caseLawReplayBatches.readmissions,
-                    BACKGROUND_REPLAY_LIMITS.maxRowReadmissions,
-                  ),
-                  isNotNull(caseLawDecisions.id),
-                ),
-              ),
-          or(
-            isNull(caseLawReplayBatches.retryAt),
-            lte(
-              caseLawReplayBatches.retryAt,
-              sql`${new Date(currentTime)}::timestamptz`,
-            ),
-          ),
-          eq(caseLawReplayBatches.parserVersionTo, source.currentParserVersion),
-          eq(caseLawReplayDailyRows.budgetDay, utcDay),
-        ),
-      )
-      .limit(1);
-    return recoverable.length > 0;
-  });
-
 const ROUND_ROBIN_CHECKPOINT = "case-law-replay:round-robin";
 const previewCheckpointName = (source: BackgroundReplaySource) =>
   `${checkpointName(source)}:dry-run`;
 
+const markFullReplayCompleted = async (
+  { db, now }: ReplayStoreContext,
+  source: BackgroundReplaySource,
+) => {
+  if (source.mode !== "enrolled") {
+    return;
+  }
+  await withReplayTransaction(db, async (tx) => {
+    await lockCheckpoint(tx, source);
+    const pending = await tx
+      .select({ id: caseLawReplayBatches.id })
+      .from(caseLawReplayBatches)
+      .where(
+        and(
+          eq(caseLawReplayBatches.sourceId, source.id),
+          eq(caseLawReplayBatches.parserVersionTo, source.currentParserVersion),
+          inArray(caseLawReplayBatches.status, ["reserved", "retry-exhausted"]),
+        ),
+      )
+      .limit(1);
+    if (
+      pending.length > 0 ||
+      (
+        await buildBackgroundReplayProbe(tx, {
+          sourceId: source.id,
+          adapterKey: source.adapterKey,
+          currentParserVersion: source.currentParserVersion,
+          mode: source.mode,
+        })
+      ).length > 0
+    ) {
+      return;
+    }
+    await tx
+      .insert(caseLawReplaySourceProgress)
+      .values({
+        sourceId: source.id,
+        lastFullReplayParserVersion: source.currentParserVersion,
+        lastFullReplayAt: new Date(now()),
+      })
+      .onConflictDoUpdate({
+        target: caseLawReplaySourceProgress.sourceId,
+        set: {
+          lastFullReplayParserVersion: source.currentParserVersion,
+          lastFullReplayAt: new Date(now()),
+        },
+        where: sql`${caseLawReplaySourceProgress.lastFullReplayParserVersion} IS NULL OR ${caseLawReplaySourceProgress.lastFullReplayParserVersion} < ${source.currentParserVersion}`,
+      });
+  });
+};
+
+const readReplaySourcePriorities = async (
+  { db }: ReplayStoreContext,
+  ordered: readonly BackgroundReplaySource["adapterKey"][],
+) => {
+  const sources = await withReplayTransaction(
+    db,
+    async (tx) =>
+      await tx
+        .select({
+          id: caseLawSources.id,
+          adapterKey: caseLawSources.adapterKey,
+          lastFullReplayParserVersion:
+            caseLawReplaySourceProgress.lastFullReplayParserVersion,
+        })
+        .from(caseLawSources)
+        .leftJoin(
+          caseLawReplaySourceProgress,
+          eq(caseLawReplaySourceProgress.sourceId, caseLawSources.id),
+        )
+        .where(inArray(caseLawSources.adapterKey, ordered)),
+  );
+
+  return sources;
+};
+
+type ReadReportedSourcesOptions = {
+  sources: Awaited<ReturnType<typeof readReplaySourcePriorities>>;
+  ordered: readonly BackgroundReplaySource["adapterKey"][];
+  gateStates: ReadonlyMap<string, BatchState>;
+};
+const readReportedSources = async (
+  { db, enrolment, now, sourceEnabled }: ReplayStoreContext,
+  { sources, ordered, gateStates }: ReadReportedSourcesOptions,
+) => {
+  const candidates = ordered.flatMap((adapterKey) => {
+    const policy = enrolment[adapterKey];
+    const source = sources.find((row) => row.adapterKey === adapterKey);
+    if (
+      source === undefined ||
+      policy.mode === "off" ||
+      sourceEnabled?.(adapterKey) === false
+    ) {
+      return [];
+    }
+    const state = gateStates.get(
+      checkpointName({
+        id: source.id,
+        currentParserVersion: PARSER_VERSIONS[adapterKey],
+      }),
+    );
+    if (
+      state?.holdUntil !== null &&
+      state?.holdUntil !== undefined &&
+      state.holdUntil > now()
+    ) {
+      return [];
+    }
+    return [
+      {
+        id: source.id,
+        adapterKey,
+        currentParserVersion: PARSER_VERSIONS[adapterKey],
+        mode: policy.mode,
+        rowsBehind: 1,
+      },
+    ];
+  });
+  const reported = await withReplayTransaction(db, async (tx) => {
+    const [first, second, ...rest] = candidates.map((source) =>
+      reportedDecisionQuery(tx, source),
+    );
+    if (first === undefined) {
+      return [];
+    }
+    return second === undefined
+      ? await first
+      : await unionAll(first, second, ...rest);
+  });
+  return new Set(reported.map((row) => row.sourceId));
+};
+
 const chooseSource = async (
   context: ReplayStoreContext,
 ): Promise<BackgroundReplaySource | null> => {
-  const { db, now, enrolment, onLag, onBudgetExhausted, sourceEnabled, gate } =
-    context;
-  if (gate && (await gate()).kind !== "normal") {
-    return null;
+  const { db, now, enrolment, onLag, sourceEnabled, gate } = context;
+  if (gate) {
+    const verdict = await gate();
+    if (verdict.kind !== "normal" && verdict.kind !== "degraded") {
+      return null;
+    }
   }
   const previous = await withReplayTransaction(
     db,
@@ -323,17 +366,7 @@ const chooseSource = async (
     ...keys.slice(previousIndex + 1),
     ...keys.slice(0, previousIndex + 1),
   ];
-  const availableSources = await withReplayTransaction(
-    db,
-    async (tx) =>
-      await tx
-        .select({
-          id: caseLawSources.id,
-          adapterKey: caseLawSources.adapterKey,
-        })
-        .from(caseLawSources)
-        .where(inArray(caseLawSources.adapterKey, ordered)),
-  );
+  const availableSources = await readReplaySourcePriorities(context, ordered);
   const sourceByAdapter = new Map(
     availableSources.map((source) => [source.adapterKey, source]),
   );
@@ -393,6 +426,26 @@ const chooseSource = async (
       };
     },
   );
+  const reportedSources = await readReportedSources(context, {
+    sources: availableSources,
+    ordered,
+    gateStates,
+  });
+  ordered.sort((left, right) => {
+    const priorityOf = (adapterKey: keyof typeof PARSER_VERSIONS) => {
+      const source = sourceByAdapter.get(adapterKey);
+      return replayPriorityRank(
+        replayPriority({
+          reportedDecisionPending:
+            source === undefined ? false : reportedSources.has(source.id),
+          currentParserVersion: PARSER_VERSIONS[adapterKey],
+          lastFullReplayParserVersion:
+            source?.lastFullReplayParserVersion ?? null,
+        }),
+      );
+    };
+    return priorityOf(left) - priorityOf(right);
+  });
   for (const adapterKey of ordered) {
     const policy = enrolment[adapterKey];
     if (policy.mode === "off" || sourceEnabled?.(adapterKey) === false) {
@@ -414,7 +467,6 @@ const chooseSource = async (
         id: source.id,
         adapterKey,
         currentParserVersion: PARSER_VERSIONS[adapterKey],
-        dailyBudget: policy.dailyBudget,
         mode: policy.mode,
         // A bounded existence probe supplies a lower bound, not a corpus census.
         rowsBehind: 1,
@@ -445,21 +497,10 @@ const chooseSource = async (
         );
       }
       if (!probe) {
+        await markFullReplayCompleted(context, candidate);
         return null;
       }
       onLag?.(candidate);
-      if (
-        // db-await-in-loop: Check allowance only for a lagging candidate, stopping the ordered source walk immediately when one is eligible.
-        !(await hasDailyAllowance({
-          db,
-          source: candidate,
-          utcDay: new Date(now()).toISOString().slice(0, 10),
-          currentTime: now(),
-        }))
-      ) {
-        onBudgetExhausted?.(candidate);
-        return null;
-      }
       return candidate;
     });
     if (result.isErr()) {
@@ -500,6 +541,58 @@ type SelectNextOptions = {
   after: BackgroundReplayBatch["decisionId"] | null;
 };
 
+const reportedDecisionQuery = (
+  tx: Transaction,
+  source: BackgroundReplaySource,
+) =>
+  tx
+    .select({
+      id: caseLawDecisions.id,
+      sourceId: caseLawReplayReportedDecisions.sourceId,
+    })
+    .from(caseLawReplayReportedDecisions)
+    .innerJoin(
+      caseLawDecisions,
+      and(
+        eq(caseLawDecisions.id, caseLawReplayReportedDecisions.decisionId),
+        eq(caseLawDecisions.sourceId, caseLawReplayReportedDecisions.sourceId),
+      ),
+    )
+    .where(
+      and(
+        eq(caseLawReplayReportedDecisions.sourceId, source.id),
+        lte(
+          caseLawReplayReportedDecisions.targetParserVersion,
+          source.currentParserVersion,
+        ),
+        isNull(caseLawReplayReportedDecisions.completedAt),
+        source.mode === "dry-run"
+          ? isNull(caseLawReplayReportedDecisions.previewedAt)
+          : undefined,
+        isNull(caseLawDecisions.redactedAt),
+        isNotNull(caseLawDecisions.sourceRawS3Key),
+        replaySelectionPredicate(
+          {
+            type: "background",
+            adapterKey: source.adapterKey,
+            currentParserVersion: source.currentParserVersion,
+            mode: source.mode,
+          },
+          tx,
+        ),
+      ),
+    )
+    .orderBy(
+      asc(caseLawReplayReportedDecisions.queuedAt),
+      asc(caseLawReplayReportedDecisions.decisionId),
+    )
+    .limit(1);
+
+const selectReportedDecision = async (
+  tx: Transaction,
+  source: BackgroundReplaySource,
+) => (await reportedDecisionQuery(tx, source)).at(0);
+
 const selectNext = async (
   tx: Transaction,
   { source, after }: SelectNextOptions,
@@ -512,6 +605,22 @@ const selectNext = async (
     currentParserVersion: source.currentParserVersion,
     mode: source.mode,
   } as const;
+  const reported = await selectReportedDecision(tx, source);
+  if (reported !== undefined) {
+    return (
+      (
+        await selectReplayPage({
+          scopedDb,
+          sourceId: source.id,
+          scope: { type: "decision", decisionId: reported.id },
+          selection,
+          after: null,
+          until: reported.id,
+          limit: 1,
+        })
+      ).at(0) ?? null
+    );
+  }
   const until = await selectScopeEnd({
     scopedDb,
     sourceId: source.id,
@@ -545,7 +654,7 @@ const previewBatch = async (
   { source, after }: PreviewBatchOptions,
 ): Promise<BackgroundReplayReservation | { type: "waiting" }> =>
   await withReplayTransaction(db, async (tx) => {
-    // Preview and apply serialize their shared source/day allowance here.
+    // Preview and apply serialize their source checkpoint here.
     await lockCheckpoint(tx, source);
     const persisted =
       after ??
@@ -597,34 +706,6 @@ const previewBatch = async (
       baseMs: BACKGROUND_REPLAY_LIMITS.rowRetryBaseMs,
       maxMs: BACKGROUND_REPLAY_LIMITS.rowRetryMaxMs,
     });
-    const usage =
-      (
-        await tx
-          .select({ count: sql<number>`count(*)::int` })
-          .from(caseLawReplayDailyRows)
-          .where(
-            and(
-              eq(caseLawReplayDailyRows.sourceId, source.id),
-              eq(caseLawReplayDailyRows.budgetDay, utcDay),
-            ),
-          )
-      ).at(0)?.count ?? 0;
-    const charged =
-      (
-        await tx
-          .select({ id: caseLawReplayDailyRows.batchId })
-          .from(caseLawReplayDailyRows)
-          .where(
-            and(
-              eq(caseLawReplayDailyRows.batchId, id),
-              eq(caseLawReplayDailyRows.budgetDay, utcDay),
-            ),
-          )
-          .limit(1)
-      ).length > 0;
-    if (!charged && usage >= source.dailyBudget) {
-      return { type: "budget-exhausted" };
-    }
     // Preview bookkeeping has a separate identity and stays terminal in the
     // apply receipt lifecycle, including for workers deployed before this code.
     // Its attempt/retry fields recover failed or interrupted inspections.
@@ -662,9 +743,7 @@ const previewBatch = async (
           completedAt: new Date(now()),
         },
       });
-    if (!(await admitDailyRow(tx, { source, batchId: id, utcDay }))) {
-      return panic("Preview budget changed under checkpoint lock");
-    }
+    await admitDailyRow(tx, { source, batchId: id, utcDay });
     await recordReplayMaintenanceAuditEvent(tx, {
       sourceId: source.id,
       action: "receipt-reserved",
@@ -710,21 +789,6 @@ const admitDailyRow = async (
     ).length > 0;
   if (charged) {
     return true;
-  }
-  const usage =
-    (
-      await tx
-        .select({ count: sql<number>`count(*)::int` })
-        .from(caseLawReplayDailyRows)
-        .where(
-          and(
-            eq(caseLawReplayDailyRows.sourceId, source.id),
-            eq(caseLawReplayDailyRows.budgetDay, utcDay),
-          ),
-        )
-    ).at(0)?.count ?? 0;
-  if (usage >= source.dailyBudget) {
-    return false;
   }
   // accounts for one maintenance row per UTC day, including recovery
   await tx
@@ -810,12 +874,10 @@ const pendingInTransaction = async (
     });
     return { type: "empty" } as const;
   }
-  if (!(await admitDailyRow(tx, { source, batchId: row.id, utcDay }))) {
-    return { type: "budget-exhausted" } as const;
-  }
+  await admitDailyRow(tx, { source, batchId: row.id, utcDay });
   let reserved = row;
   if (row.status === "retry-exhausted") {
-    // The checkpoint lock serializes readmission and daily budget admission.
+    // The checkpoint lock serializes readmission and attempt accounting.
     const updated = (
       await tx
         .update(caseLawReplayBatches)
@@ -1007,9 +1069,7 @@ const readmitReplayBatch = async (
     }
     return { type: "empty" } as const;
   }
-  if (!(await admitDailyRow(tx, { source, batchId: id, utcDay }))) {
-    return { type: "budget-exhausted" } as const;
-  }
+  await admitDailyRow(tx, { source, batchId: id, utcDay });
   const readmissions = previous.readmissions + 1;
   const transition = await transitionLifecycle({
     tx,
@@ -1073,18 +1133,6 @@ const reserveBatch = async (
     if (pending.type !== "empty") {
       return pending;
     }
-    const usage =
-      (
-        await tx
-          .select({ count: sql<number>`count(*)::int` })
-          .from(caseLawReplayDailyRows)
-          .where(
-            and(
-              eq(caseLawReplayDailyRows.sourceId, source.id),
-              eq(caseLawReplayDailyRows.budgetDay, utcDay),
-            ),
-          )
-      ).at(0)?.count ?? 0;
     const after = state.cursor;
     // Cursor strings originate from branded database IDs, never external input.
     const cursorRow =
@@ -1124,10 +1172,7 @@ const reserveBatch = async (
       }
       return await readmitReplayBatch(tx, { source, previous, utcDay, now });
     }
-    if (usage >= source.dailyBudget) {
-      return { type: "budget-exhausted" } as const;
-    }
-    // deterministic maintenance reservation and daily budget charge
+    // deterministic maintenance reservation and daily attempt accounting
     const reserved = (
       await tx
         .insert(caseLawReplayBatches)
@@ -1185,9 +1230,7 @@ const reserveBatch = async (
       details: { parserVersion: source.currentParserVersion },
       createdAt: new Date(now()),
     });
-    if (!(await admitDailyRow(tx, { source, batchId: id, utcDay }))) {
-      return panic("Replay budget changed under checkpoint lock");
-    }
+    await admitDailyRow(tx, { source, batchId: id, utcDay });
     return {
       type: "reserved",
       batch: reservationBatch(source, reserved),
@@ -1306,7 +1349,7 @@ type ReplayBlockedReceipt = typeof caseLawReplayBlocked.$inferInsert;
 
 /** Writes the generation-specific terminal receipt inside its caller's transaction. */
 const recordReplayBlockedReceipt = async (
-  tx: Pick<Transaction, "insert">,
+  tx: Pick<Transaction, "insert" | "update">,
   receipt: ReplayBlockedReceipt,
 ) => {
   if (receipt.sourceRawS3Key === null || receipt.sourceRawS3Key === undefined) {
@@ -1328,6 +1371,20 @@ const recordReplayBlockedReceipt = async (
         detail: receipt.detail,
       },
     });
+  await tx
+    .update(caseLawReplayReportedDecisions)
+    .set({ completedAt: sql`now()` })
+    .where(
+      and(
+        eq(caseLawReplayReportedDecisions.sourceId, receipt.sourceId),
+        eq(caseLawReplayReportedDecisions.decisionId, receipt.decisionId),
+        lte(
+          caseLawReplayReportedDecisions.targetParserVersion,
+          receipt.parserVersionTo,
+        ),
+        isNull(caseLawReplayReportedDecisions.completedAt),
+      ),
+    );
 };
 
 type VerifiedProgressOptions = {
@@ -1960,6 +2017,20 @@ const advancePreview = async (
       completedAt: new Date(now()),
       kind: "reviewed",
     });
+    await tx
+      .update(caseLawReplayReportedDecisions)
+      .set({ previewedAt: new Date(now()) })
+      .where(
+        and(
+          eq(caseLawReplayReportedDecisions.sourceId, batch.source.id),
+          eq(caseLawReplayReportedDecisions.decisionId, batch.decisionId),
+          lte(
+            caseLawReplayReportedDecisions.targetParserVersion,
+            batch.targetParserVersion,
+          ),
+          isNull(caseLawReplayReportedDecisions.completedAt),
+        ),
+      );
   });
 
 const resetDryRunCursor = async (
@@ -1988,6 +2059,24 @@ const resetDryRunCursor = async (
             REPLAY_PREVIEW_FAILURE.RETRY_EXHAUSTED,
           ),
           sql`${caseLawReplayBatches.id} LIKE ${`${escapeLike(`${source.id}:${source.currentParserVersion}:`)}%${escapeLike(BACKGROUND_REPLAY_PREVIEW_SUFFIX)}`}`,
+        ),
+      );
+    await tx
+      .update(caseLawReplaySourceProgress)
+      .set({
+        dryRunParserVersion: source.currentParserVersion,
+        dryRunDiffSamples: [],
+      })
+      .where(
+        and(
+          eq(caseLawReplaySourceProgress.sourceId, source.id),
+          or(
+            isNull(caseLawReplaySourceProgress.dryRunParserVersion),
+            lte(
+              caseLawReplaySourceProgress.dryRunParserVersion,
+              source.currentParserVersion,
+            ),
+          ),
         ),
       );
     // explicit reset of owner-only dry-run progress
@@ -2212,6 +2301,174 @@ const recordTick = async (
   });
 };
 
+const MAX_DRY_RUN_DIFF_SAMPLES = 20;
+const dryRunDiffSamples = async (
+  tx: Transaction,
+  source: BackgroundReplaySource,
+) => {
+  const progress = (
+    await tx
+      .select({
+        parserVersion: caseLawReplaySourceProgress.dryRunParserVersion,
+        samples: caseLawReplaySourceProgress.dryRunDiffSamples,
+      })
+      .from(caseLawReplaySourceProgress)
+      .where(eq(caseLawReplaySourceProgress.sourceId, source.id))
+      .limit(1)
+  ).at(0);
+  if (
+    progress?.parserVersion !== undefined &&
+    progress.parserVersion !== null &&
+    progress.parserVersion > source.currentParserVersion
+  ) {
+    return { type: "superseded" } as const;
+  }
+  return {
+    type: "current",
+    samples:
+      progress?.parserVersion === source.currentParserVersion
+        ? progress.samples
+        : [],
+  } as const;
+};
+
+type NeedsDryRunDiffSampleOptions = {
+  source: BackgroundReplaySource;
+  decisionId: BackgroundReplayBatch["decisionId"];
+};
+const needsDryRunDiffSample = async (
+  { db }: ReplayStoreContext,
+  { source, decisionId }: NeedsDryRunDiffSampleOptions,
+) => {
+  if (source.mode !== "dry-run") {
+    panic("Only dry-run replay can sample derived diffs");
+  }
+  return await withReplayTransaction(db, async (tx) => {
+    const manifest = await dryRunDiffSamples(tx, source);
+    if (manifest.type === "superseded") {
+      return false;
+    }
+    const { samples } = manifest;
+    return (
+      !samples.some((sample) => sample.decisionId === decisionId) &&
+      samples.length < MAX_DRY_RUN_DIFF_SAMPLES
+    );
+  });
+};
+
+type RecordDryRunDiffSampleOptions = {
+  source: BackgroundReplaySource;
+  sample: ReplayDryRunDiffSample;
+};
+const recordDryRunDiffSample = async (
+  { db }: ReplayStoreContext,
+  { source, sample }: RecordDryRunDiffSampleOptions,
+) => {
+  if (source.mode !== "dry-run") {
+    panic("Only dry-run replay can sample derived diffs");
+  }
+  await withReplayTransaction(db, async (tx) => {
+    await lockCheckpoint(tx, source);
+    const manifest = await dryRunDiffSamples(tx, source);
+    if (manifest.type === "superseded") {
+      return;
+    }
+    const { samples } = manifest;
+    const previous = samples.findIndex(
+      (existing) => existing.decisionId === sample.decisionId,
+    );
+    if (previous !== -1) {
+      return;
+    } else if (samples.length < MAX_DRY_RUN_DIFF_SAMPLES) {
+      samples.push(sample);
+    } else {
+      return;
+    }
+    await tx
+      .insert(caseLawReplaySourceProgress)
+      .values({
+        sourceId: source.id,
+        dryRunParserVersion: source.currentParserVersion,
+        dryRunDiffSamples: samples,
+      })
+      .onConflictDoUpdate({
+        target: caseLawReplaySourceProgress.sourceId,
+        set: {
+          dryRunParserVersion: source.currentParserVersion,
+          dryRunDiffSamples: samples,
+        },
+      });
+  });
+};
+
+type EnqueueReportedDecisionOptions = {
+  sourceId: BackgroundReplaySource["id"];
+  decisionId: BackgroundReplayBatch["decisionId"];
+  targetParserVersion: number;
+};
+
+const enqueueReportedDecision = async (
+  { db, now }: ReplayStoreContext,
+  { sourceId, decisionId, targetParserVersion }: EnqueueReportedDecisionOptions,
+) =>
+  await withReplayTransaction(db, async (tx) => {
+    await lockCaseLawDecisionRows({ tx, decisionIds: [decisionId] });
+    const decision = (
+      await tx
+        .select({
+          id: caseLawDecisions.id,
+          adapterKey: caseLawSources.adapterKey,
+          parsedInputCurrent: parsedReplayInputPredicate(targetParserVersion),
+        })
+        .from(caseLawDecisions)
+        .innerJoin(
+          caseLawSources,
+          eq(caseLawSources.id, caseLawDecisions.sourceId),
+        )
+        .where(
+          and(
+            eq(caseLawDecisions.id, decisionId),
+            eq(caseLawDecisions.sourceId, sourceId),
+            isNull(caseLawDecisions.redactedAt),
+            isNotNull(caseLawDecisions.sourceRawS3Key),
+          ),
+        )
+        .limit(1)
+    ).at(0);
+    if (decision === undefined) {
+      return { type: "unavailable" } as const;
+    }
+    const adapterKey = Object.values(ADAPTER_KEYS).find(
+      (key) => key === decision.adapterKey,
+    );
+    if (
+      adapterKey === undefined ||
+      targetParserVersion !== PARSER_VERSIONS[adapterKey]
+    ) {
+      return { type: "parser-mismatch" } as const;
+    }
+    // An already proved parse needs no CPU work. A later parser bump has a new queue identity.
+    const completedAt = decision.parsedInputCurrent ? new Date(now()) : null;
+    await tx
+      .insert(caseLawReplayReportedDecisions)
+      .values({
+        sourceId,
+        decisionId,
+        targetParserVersion,
+        queuedAt: new Date(now()),
+        completedAt,
+      })
+      .onConflictDoNothing();
+    await recordReplayMaintenanceAuditEvent(tx, {
+      sourceId,
+      action: "reported-decision-queued",
+      resourceId: decisionId,
+      details: { parserVersion: targetParserVersion },
+      createdAt: new Date(now()),
+    });
+    return { type: completedAt === null ? "queued" : "current" } as const;
+  });
+
 /** Owner-only state for a public-corpus maintenance task; no tenant data. */
 export const createBackgroundReplayStore = ({
   db,
@@ -2220,7 +2477,6 @@ export const createBackgroundReplayStore = ({
   onLag,
   beforeCheckpoint,
   sourceEnabled,
-  onBudgetExhausted,
   beforeComplete,
   gate,
   onHeld,
@@ -2232,12 +2488,21 @@ export const createBackgroundReplayStore = ({
     onLag,
     beforeCheckpoint,
     sourceEnabled,
-    onBudgetExhausted,
     beforeComplete,
     gate,
     onHeld,
   };
   return {
+    needsDryRunDiffSample: async (
+      source: BackgroundReplaySource,
+      decisionId: BackgroundReplayBatch["decisionId"],
+    ) => await needsDryRunDiffSample(context, { source, decisionId }),
+    recordDryRunDiffSample: async (
+      source: BackgroundReplaySource,
+      sample: ReplayDryRunDiffSample,
+    ) => await recordDryRunDiffSample(context, { source, sample }),
+    enqueueReportedDecision: async (options: EnqueueReportedDecisionOptions) =>
+      await enqueueReportedDecision(context, options),
     chooseSource: async () => await chooseSource(context),
     pickUpBatch: async (batch: BackgroundReplayBatch) =>
       await pickUpBatch(context, batch),

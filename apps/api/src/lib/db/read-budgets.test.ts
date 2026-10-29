@@ -8,6 +8,7 @@ import {
 } from "@/api/lib/db/read-budgets";
 import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
 import { DECLARED_SCHEDULER_JOBS } from "@/api/lib/scheduler/jobs";
+import { REPLAY_CASE_LAW_STORED_JOB } from "@/api/lib/scheduler/tasks/case-law-stored-replay";
 import { ONLINE_WORK_RUNNER_TASK } from "@/api/lib/scheduler/tasks/online-work-runner";
 import { MCP_STATIC_TOOL_NAMES } from "@/api/mcp/static-tool-names";
 import {
@@ -39,6 +40,7 @@ describe("read budget declarations", () => {
     const governed = new Set<string>([
       ...Object.values(SCHEDULER_BACKFILL_IDS),
       `${ONLINE_WORK_RUNNER_TASK}.minutely`,
+      REPLAY_CASE_LAW_STORED_JOB,
     ]);
     const violations = DECLARED_SCHEDULER_JOBS.flatMap((job) => {
       const listed = unmeasured.has(`job:${job.id}`);

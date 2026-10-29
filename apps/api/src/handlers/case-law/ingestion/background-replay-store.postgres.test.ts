@@ -15,6 +15,7 @@ import {
   caseLawReplayBatches,
   caseLawReplayBlocked,
   caseLawReplayDailyRows,
+  caseLawReplayReportedDecisions,
   caseLawReplaySourceProgress,
   caseLawSources,
   databaseBackfillStates,
@@ -106,6 +107,9 @@ if (!databaseUrl || !enabled) {
     cleanUp(async () => {
       for (const source of sources) {
         await db
+          .delete(caseLawReplayReportedDecisions)
+          .where(eq(caseLawReplayReportedDecisions.sourceId, source.id));
+        await db
           .delete(caseLawReplayAuditEvents)
           .where(eq(caseLawReplayAuditEvents.sourceId, source.id));
         await db
@@ -139,12 +143,11 @@ if (!databaseUrl || !enabled) {
         await db.delete(caseLawSources).where(eq(caseLawSources.id, source.id));
       }
     });
-    const fixture = async (dailyBudget: number) => {
+    const fixture = async () => {
       const source = {
         id: createSafeId<"caseLawSource">(),
         adapterKey: ADAPTER_KEYS.EU_ECJ,
         currentParserVersion: 2,
-        dailyBudget,
         mode: "enrolled",
         rowsBehind: 3,
       } as const satisfies BackgroundReplaySource;
@@ -223,9 +226,230 @@ if (!databaseUrl || !enabled) {
           .where(eq(caseLawDecisions.id, batch.decisionId));
       });
 
+    test("dry-run diff manifests are bounded, retryable, versioned and reset explicitly", async () => {
+      const { source: enrolled, store } = await fixture();
+      const source = { ...enrolled, mode: "dry-run" } as const;
+      const ids = Array.from({ length: 21 }, () =>
+        createSafeId<"caseLawDecision">(),
+      );
+      for (const decisionId of ids.slice(0, 20)) {
+        expect(await store.needsDryRunDiffSample(source, decisionId)).toBe(
+          true,
+        );
+        await store.recordDryRunDiffSample(source, {
+          decisionId,
+          key: `fixture/diff/${decisionId}`,
+        });
+      }
+      const overflow = ids[20];
+      const existing = ids[0];
+      if (!overflow || !existing) {
+        panic("Expected sample manifest fixtures");
+      }
+      expect(await store.needsDryRunDiffSample(source, overflow)).toBe(false);
+      expect(await store.needsDryRunDiffSample(source, existing)).toBe(false);
+      await store.recordDryRunDiffSample(source, {
+        decisionId: overflow,
+        key: "fixture/overflow",
+      });
+      await store.recordDryRunDiffSample(source, {
+        decisionId: existing,
+        key: "fixture/replacement-must-not-overwrite-review",
+      });
+      const manifest = (
+        await db
+          .select()
+          .from(caseLawReplaySourceProgress)
+          .where(eq(caseLawReplaySourceProgress.sourceId, source.id))
+      ).at(0);
+      expect(manifest?.dryRunDiffSamples).toHaveLength(20);
+      expect(
+        manifest?.dryRunDiffSamples.find(
+          (sample) => sample.decisionId === existing,
+        )?.key,
+      ).toBe(`fixture/diff/${existing}`);
+      expect(
+        await store.needsDryRunDiffSample(
+          { ...source, currentParserVersion: source.currentParserVersion + 1 },
+          overflow,
+        ),
+      ).toBe(true);
+      const newerSource = {
+        ...source,
+        currentParserVersion: source.currentParserVersion + 1,
+      };
+      await store.recordDryRunDiffSample(newerSource, {
+        decisionId: overflow,
+        key: "fixture/new-parser",
+      });
+      expect(await store.needsDryRunDiffSample(source, existing)).toBe(false);
+      await store.resetDryRunCursor(source);
+      expect(
+        (
+          await db
+            .select()
+            .from(caseLawReplaySourceProgress)
+            .where(eq(caseLawReplaySourceProgress.sourceId, source.id))
+        ).at(0)?.dryRunDiffSamples,
+      ).toEqual([{ decisionId: overflow, key: "fixture/new-parser" }]);
+      await store.resetDryRunCursor(newerSource);
+      expect(await store.needsDryRunDiffSample(newerSource, overflow)).toBe(
+        true,
+      );
+      expect(
+        (
+          await db
+            .select()
+            .from(caseLawReplaySourceProgress)
+            .where(eq(caseLawReplaySourceProgress.sourceId, source.id))
+        ).at(0)?.dryRunDiffSamples,
+      ).toEqual([]);
+    });
+
+    test("reported rows precede parser waves and completed waves precede only remaining work", async () => {
+      const setups = await Promise.all([fixture(), fixture(), fixture()]);
+      const [reportedSetup, bumpedSetup, remainingSetup] = setups;
+      if (!reportedSetup || !bumpedSetup || !remainingSetup) {
+        panic("Expected all priority fixtures");
+      }
+      const makeSource = async (
+        setup: typeof reportedSetup,
+        adapterKey:
+          | typeof ADAPTER_KEYS.EU_ECJ
+          | typeof ADAPTER_KEYS.CZ_NSS
+          | typeof ADAPTER_KEYS.SK_COURTS,
+      ) => {
+        await db
+          .update(caseLawSources)
+          .set({ adapterKey })
+          .where(eq(caseLawSources.id, setup.source.id));
+        const source = {
+          ...setup.source,
+          adapterKey,
+          currentParserVersion: PARSER_VERSIONS[adapterKey],
+        };
+        sources.push(source);
+        return source;
+      };
+      const reported = await makeSource(reportedSetup, ADAPTER_KEYS.EU_ECJ);
+      const bumped = await makeSource(bumpedSetup, ADAPTER_KEYS.CZ_NSS);
+      const remaining = await makeSource(
+        remainingSetup,
+        ADAPTER_KEYS.SK_COURTS,
+      );
+      await db.insert(caseLawReplaySourceProgress).values([
+        {
+          sourceId: reported.id,
+          lastFullReplayParserVersion: reported.currentParserVersion,
+        },
+        {
+          sourceId: remaining.id,
+          lastFullReplayParserVersion: remaining.currentParserVersion,
+        },
+      ]);
+      const enrolment = {
+        ...REPLAY_ENROLMENT,
+        [ADAPTER_KEYS.EU_ECJ]: { mode: "enrolled", reviewedDryRun: "fixture" },
+        [ADAPTER_KEYS.CZ_NSS]: { mode: "enrolled", reviewedDryRun: "fixture" },
+        [ADAPTER_KEYS.SK_COURTS]: {
+          mode: "enrolled",
+          reviewedDryRun: "fixture",
+        },
+      } as const;
+      const store = createBackgroundReplayStore({
+        db,
+        now: () => Date.UTC(2026, 9, 1),
+        enrolment,
+        sourceEnabled: (key) =>
+          [
+            ADAPTER_KEYS.EU_ECJ,
+            ADAPTER_KEYS.CZ_NSS,
+            ADAPTER_KEYS.SK_COURTS,
+          ].some((allowed) => key === allowed),
+      });
+      const reportedId = reportedSetup.ids[2];
+      expect(
+        await store.enqueueReportedDecision({
+          sourceId: reported.id,
+          decisionId: reportedId,
+          targetParserVersion: reported.currentParserVersion,
+        }),
+      ).toEqual({ type: "queued" });
+      expect(
+        await store.enqueueReportedDecision({
+          sourceId: bumped.id,
+          decisionId: reportedId,
+          targetParserVersion: bumped.currentParserVersion,
+        }),
+      ).toEqual({ type: "unavailable" });
+      await db
+        .update(caseLawDecisions)
+        .set({
+          parserVersion: reported.currentParserVersion,
+          parsedSourceHash: caseLawDecisions.sourceHash,
+          parsedSourceHashVersion: caseLawDecisions.sourceHashVersion,
+          parsedSourceRawS3Key: caseLawDecisions.sourceRawS3Key,
+        })
+        .where(eq(caseLawDecisions.id, reportedId));
+      expect((await store.chooseSource())?.id).toBe(bumped.id);
+      await db
+        .update(caseLawDecisions)
+        .set({ parsedSourceRawS3Key: null })
+        .where(eq(caseLawDecisions.id, reportedId));
+      expect((await store.chooseSource())?.id).toBe(reported.id);
+      const reservation = await store.reserveBatch(
+        reported,
+        "2026-10-01",
+        verdict(),
+      );
+      if (reservation.type !== "reserved") {
+        panic("Expected reported replay reservation");
+      }
+      expect(reservation.batch.decisionId).toBe(reportedId);
+      await persistParsedFixture(reservation.batch);
+      expect(
+        await store.completeBatch(
+          reservation.batch,
+          applied(reservation.batch),
+        ),
+      ).toBe("applied");
+      const queued = await db
+        .select()
+        .from(caseLawReplayReportedDecisions)
+        .where(eq(caseLawReplayReportedDecisions.sourceId, reported.id));
+      expect(queued).toHaveLength(1);
+      expect(queued.at(0)?.completedAt).not.toBeNull();
+      const removedId = reportedSetup.ids[0];
+      expect(
+        await store.enqueueReportedDecision({
+          sourceId: reported.id,
+          decisionId: removedId,
+          targetParserVersion: reported.currentParserVersion,
+        }),
+      ).toEqual({ type: "queued" });
+      await db
+        .delete(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, removedId));
+      expect((await store.chooseSource())?.id).toBe(bumped.id);
+      // Emptying the wave records completion only after every reserved row is terminal.
+      await db
+        .update(caseLawDecisions)
+        .set({ parserVersion: bumped.currentParserVersion + 1 })
+        .where(eq(caseLawDecisions.sourceId, bumped.id));
+      expect((await store.chooseSource())?.id).toBe(remaining.id);
+      expect(
+        (
+          await db
+            .select()
+            .from(caseLawReplaySourceProgress)
+            .where(eq(caseLawReplaySourceProgress.sourceId, bumped.id))
+        ).at(0)?.lastFullReplayParserVersion,
+      ).toBe(bumped.currentParserVersion);
+    });
+
     test("restored raw input readmits old writers without downgrading newer parsers", async () => {
       for (const parserVersion of [null, 1, 2, 3]) {
-        const { source, ids, store } = await fixture(1);
+        const { source, ids, store } = await fixture();
         for (const id of ids.slice(1)) {
           await db
             .update(caseLawDecisions)
@@ -340,7 +564,7 @@ if (!databaseUrl || !enabled) {
     });
 
     test("reopened claims fence every stale callback and retain cumulative row quotas", async () => {
-      const { source, ids, store } = await fixture(1);
+      const { source, ids, store } = await fixture();
       for (const id of ids.slice(1)) {
         await db
           .update(caseLawDecisions)
@@ -467,9 +691,6 @@ if (!databaseUrl || !enabled) {
         .update(caseLawDecisions)
         .set({ sourceRawS3Key: "fixture/new-generation" })
         .where(eq(caseLawDecisions.id, first.batch.decisionId));
-      expect(await store.reserveBatch(source, "2026-10-02", verdict())).toEqual(
-        { type: "budget-exhausted" },
-      );
       const newInput = await store.reserveBatch(
         source,
         "2026-10-03",
@@ -489,7 +710,7 @@ if (!databaseUrl || !enabled) {
     });
 
     test("an exact rejected input remains terminal when its raw key returns", async () => {
-      const { source, ids, store } = await fixture(1);
+      const { source, ids, store } = await fixture();
       for (const id of ids.slice(1)) {
         await db
           .update(caseLawDecisions)
@@ -549,7 +770,7 @@ if (!databaseUrl || !enabled) {
     });
 
     test("concurrent reopened reservations return one persisted claim epoch", async () => {
-      const { source, ids, store } = await fixture(1);
+      const { source, ids, store } = await fixture();
       for (const id of ids.slice(1)) {
         await db
           .update(caseLawDecisions)
@@ -603,8 +824,8 @@ if (!databaseUrl || !enabled) {
     });
 
     test("persisted round-robin serves dry-run and enrolled sources fairly with bounded probes", async () => {
-      const eu = await fixture(3);
-      const cz = await fixture(3);
+      const eu = await fixture();
+      const cz = await fixture();
       await db
         .update(caseLawSources)
         .set({ adapterKey: ADAPTER_KEYS.EU_ECJ })
@@ -619,10 +840,10 @@ if (!databaseUrl || !enabled) {
         .where(eq(databaseBackfillStates.name, "case-law-replay:round-robin"));
       const enrolment = {
         ...REPLAY_ENROLMENT,
-        [ADAPTER_KEYS.EU_ECJ]: { mode: "dry-run", dailyBudget: 3 },
+        [ADAPTER_KEYS.EU_ECJ]: { mode: "dry-run" },
         [ADAPTER_KEYS.CZ_NSS]: {
           mode: "enrolled",
-          dailyBudget: 3,
+
           reviewedDryRun: "fixture",
         },
       } as const;
@@ -685,7 +906,7 @@ if (!databaseUrl || !enabled) {
     });
 
     test("charges reservations once, reuses pending work, and resets the daily allowance", async () => {
-      const { source, store } = await fixture(1);
+      const { source, store } = await fixture();
       const first = await store.reserveBatch(source, "2026-10-01", verdict());
       expect(first.type).toBe("reserved");
       if (first.type !== "reserved") {
@@ -727,9 +948,6 @@ if (!databaseUrl || !enabled) {
         ticksWithoutProgress: 0,
         lastCompletedAt: new Date(Date.UTC(2026, 9, 1)),
       });
-      expect(await store.reserveBatch(source, "2026-10-01", verdict())).toEqual(
-        { type: "budget-exhausted" },
-      );
       const next = await store.reserveBatch(source, "2026-10-02", verdict());
       expect(next.type).toBe("reserved");
       if (next.type !== "reserved") {
@@ -754,7 +972,7 @@ if (!databaseUrl || !enabled) {
     });
 
     test("pending recovery consumes the new day's allowance only once", async () => {
-      const { source, store } = await fixture(1);
+      const { source, store } = await fixture();
       const reserved = await store.reserveBatch(
         source,
         "2026-10-01",
@@ -775,13 +993,13 @@ if (!databaseUrl || !enabled) {
       ).toEqual(["2026-10-01", "2026-10-02"]);
       await persistParsedFixture(reserved.batch);
       await store.completeBatch(reserved.batch, applied(reserved.batch));
-      expect(await store.reserveBatch(source, "2026-10-02", verdict())).toEqual(
-        { type: "budget-exhausted" },
-      );
+      expect(
+        (await store.reserveBatch(source, "2026-10-02", verdict())).type,
+      ).toBe("reserved");
     });
 
     test("an applied pipeline write survives receipt failure and recovery never applies it twice", async () => {
-      const { source, store } = await fixture(2);
+      const { source, store } = await fixture();
       const reserved = await store.reserveBatch(
         source,
         "2026-10-01",
@@ -985,7 +1203,7 @@ if (!databaseUrl || !enabled) {
       }
       const fake = startFakeS3();
       try {
-        const { source, store } = await fixture(1);
+        const { source, store } = await fixture();
         const reserved = await store.reserveBatch(
           source,
           "2026-10-01",
@@ -1209,7 +1427,7 @@ if (!databaseUrl || !enabled) {
       const fake = startFakeS3();
       try {
         for (const rejection of Object.values(STORED_RAW_REPARSE_REJECTION)) {
-          const { source, store } = await fixture(1);
+          const { source, store } = await fixture();
           const reserved = await store.reserveBatch(
             source,
             "2026-10-01",
@@ -1282,7 +1500,7 @@ if (!databaseUrl || !enabled) {
     });
 
     test("a pending older generation is superseded before reserving the newer parser", async () => {
-      const { source, store } = await fixture(1);
+      const { source, store } = await fixture();
       const old = await store.reserveBatch(source, "2026-10-01", verdict());
       expect(old.type).toBe("reserved");
       if (old.type !== "reserved") {
@@ -1315,7 +1533,7 @@ if (!databaseUrl || !enabled) {
     });
 
     test("backend death rolls receipt and blocked outcome back together, then resumes twice", async () => {
-      const { source, store } = await fixture(2);
+      const { source, store } = await fixture();
       const reserved = await store.reserveBatch(
         source,
         "2026-10-01",
@@ -1423,8 +1641,8 @@ if (!databaseUrl || !enabled) {
       expect(settled?.cursor).toBe(reserved.batch.decisionId);
     });
 
-    test("independent workers share one daily budget charge under concurrent reservation", async () => {
-      const { source, store } = await fixture(1);
+    test("independent workers share one daily accounting charge per reservation", async () => {
+      const { source, store } = await fixture();
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const firstStore = createBackgroundReplayStore({
           db: openClient().db,
@@ -1458,20 +1676,18 @@ if (!databaseUrl || !enabled) {
         ).toHaveLength(1);
         await persistParsedFixture(first.batch);
         await store.completeBatch(first.batch, applied(first.batch));
-        const denied = await Promise.all([
+        const next = await Promise.all([
           firstStore.reserveBatch(source, "2026-10-01", verdict()),
           secondStore.reserveBatch(source, "2026-10-01", verdict()),
         ]);
-        expect(denied).toEqual([
-          { type: "budget-exhausted" },
-          { type: "budget-exhausted" },
-        ]);
+        expect(next.at(0)?.type).toBe("reserved");
+        expect(next.at(1)).toEqual(next.at(0));
         expect(
           await db
             .select()
             .from(caseLawReplayDailyRows)
             .where(eq(caseLawReplayDailyRows.sourceId, source.id)),
-        ).toHaveLength(1);
+        ).toHaveLength(2);
       });
     });
 
@@ -1481,7 +1697,7 @@ if (!databaseUrl || !enabled) {
         "raw-input",
         "parser-version",
       ] as const) {
-        const { source, store } = await fixture(3);
+        const { source, store } = await fixture();
         const reserved = await store.reserveBatch(
           source,
           "2026-10-01",
@@ -1542,7 +1758,7 @@ if (!databaseUrl || !enabled) {
     test("every registered jurisdiction receipts all terminal outcomes and only reselects after a parser bump", async () => {
       const outcomes = ["changed", "unchanged", "rejected"] as const;
       for (const registered of listAdapters()) {
-        const { source: baseSource, ids, store } = await fixture(3);
+        const { source: baseSource, ids, store } = await fixture();
         const source = { ...baseSource, adapterKey: registered.key };
         for (const outcome of outcomes) {
           const reserved = await store.reserveBatch(
@@ -1671,7 +1887,7 @@ if (!databaseUrl || !enabled) {
     });
 
     test("rejected completion is idempotent and removes only the current blocked generation from selection", async () => {
-      const { source, store } = await fixture(3);
+      const { source, store } = await fixture();
       const reserved = await store.reserveBatch(
         source,
         "2026-10-01",
@@ -1773,7 +1989,7 @@ if (!databaseUrl || !enabled) {
     });
 
     test("a known raw key remains an exact terminal identity without a source hash", async () => {
-      const { source, store } = await fixture(1);
+      const { source, store } = await fixture();
       const decision = (
         await db
           .select({ id: caseLawDecisions.id })
@@ -1819,7 +2035,7 @@ if (!databaseUrl || !enabled) {
       ).toBe(reserved.batch.sourceRawS3Key);
     });
     test("an incomplete reported write stays reserved until the persisted stamp proves recovery", async () => {
-      const { source } = await fixture(10);
+      const { source } = await fixture();
       let time = Date.UTC(2026, 9, 1);
       const store = createBackgroundReplayStore({ db, now: () => time });
       const reserved = await store.reserveBatch(
@@ -1881,7 +2097,7 @@ if (!databaseUrl || !enabled) {
     });
 
     test("backoff skips poison rows, persists classified reasons and bounds attempts", async () => {
-      const { source, ids } = await fixture(30);
+      const { source, ids } = await fixture();
       let currentTime = Date.UTC(2026, 9, 1);
       const store = createBackgroundReplayStore({ db, now: () => currentTime });
       const first = await store.reserveBatch(source, "2026-10-01", verdict());
@@ -1988,7 +2204,7 @@ if (!databaseUrl || !enabled) {
     });
 
     test("crashed pickups wait seven days between bounded readmissions and remain visible when terminal", async () => {
-      const { source } = await fixture(30);
+      const { source } = await fixture();
       let time = Date.UTC(2026, 9, 1);
       const store = createBackgroundReplayStore({ db, now: () => time });
       const first = await store.reserveBatch(source, "2026-10-01", verdict());
@@ -2121,7 +2337,7 @@ if (!databaseUrl || !enabled) {
     });
 
     test("systemic failure refunds only its pickup and persists a source hold without settling a pending mirror", async () => {
-      const { source } = await fixture(30);
+      const { source } = await fixture();
       const time = Date.UTC(2026, 9, 1);
       const store = createBackgroundReplayStore({ db, now: () => time });
       const first = await store.reserveBatch(source, "2026-10-01", verdict());
@@ -2170,7 +2386,7 @@ if (!databaseUrl || !enabled) {
     });
 
     test("systemic queue samples healthy rows and isolates poison only with fresh verified progress", async () => {
-      const { source } = await fixture(30);
+      const { source } = await fixture();
       let time = Date.UTC(2026, 9, 1);
       const store = createBackgroundReplayStore({ db, now: () => time });
       const poison = await store.reserveBatch(source, "2026-10-01", verdict());
@@ -2249,7 +2465,7 @@ if (!databaseUrl || !enabled) {
     });
 
     test("a real systemic outage rotates the pending queue without exhausting any row", async () => {
-      const { source } = await fixture(30);
+      const { source } = await fixture();
       let time = Date.UTC(2026, 9, 1);
       const store = createBackgroundReplayStore({ db, now: () => time });
       const failure = {
@@ -2295,7 +2511,7 @@ if (!databaseUrl || !enabled) {
     });
 
     test("a moved stamp settles applied after a receipt failure on the final allowed attempt", async () => {
-      const { source, store } = await fixture(10);
+      const { source, store } = await fixture();
       const reserved = await store.reserveBatch(
         source,
         "2026-10-01",
@@ -2380,7 +2596,7 @@ if (!databaseUrl || !enabled) {
     });
 
     test("dry-run cursor resumes across fresh stores while receipts never enter apply recovery", async () => {
-      const { source: enrolled, ids } = await fixture(10);
+      const { source: enrolled, ids } = await fixture();
       const source = { ...enrolled, mode: "dry-run" } as const;
       let clock = Date.UTC(2026, 9, 1);
       const store = createBackgroundReplayStore({ db, now: () => clock });
@@ -2448,40 +2664,40 @@ if (!databaseUrl || !enabled) {
       expect(apply.batch.id.endsWith(":dry-run")).toBe(false);
     });
 
-    test("dry-run daily budget survives restart and resumes at the UTC day boundary", async () => {
-      const { source: enrolled, ids } = await fixture(1);
+    test("dry-run previews continue after restart without a daily operating cap", async () => {
+      const { source: enrolled, ids } = await fixture();
       const source = { ...enrolled, mode: "dry-run" } as const;
       let clock = Date.UTC(2026, 9, 1, 23, 59, 59);
       const store = createBackgroundReplayStore({ db, now: () => clock });
       const first = await store.previewBatch(source, null);
       if (first.type !== "reserved") {
-        throw new TypeError("Expected budgeted preview");
+        throw new TypeError("Expected preview");
       }
       await store.advancePreview(first.batch);
       const restarted = createBackgroundReplayStore({ db, now: () => clock });
-      expect(await restarted.previewBatch(source, null)).toEqual({
-        type: "budget-exhausted",
-      });
-      expect(
-        await restarted.reserveBatch(enrolled, "2026-10-01", verdict()),
-      ).toEqual({ type: "budget-exhausted" });
-      clock += 1000;
-      const next = await restarted.previewBatch(source, null);
-      if (next.type !== "reserved") {
-        throw new TypeError("Expected next UTC day's preview");
+      const second = await restarted.previewBatch(source, null);
+      if (second.type !== "reserved") {
+        throw new TypeError("Expected same-day preview after restart");
       }
-      expect(next.batch.decisionId).toBe(ids[1]);
+      expect(second.batch.decisionId).toBe(ids[1]);
+      await restarted.advancePreview(second.batch);
+      clock += 1000;
+      const third = await restarted.previewBatch(source, null);
+      if (third.type !== "reserved") {
+        throw new TypeError("Expected preview after midnight");
+      }
+      expect(third.batch.decisionId).toBe(ids[2]);
       const charges = await db
         .select()
         .from(caseLawReplayDailyRows)
         .where(eq(caseLawReplayDailyRows.sourceId, source.id));
       expect(
         charges.map((row) => row.budgetDay).toSorted(compareCodeUnit),
-      ).toEqual(["2026-10-01", "2026-10-02"]);
+      ).toEqual(["2026-10-01", "2026-10-01", "2026-10-02"]);
     });
 
-    test("concurrent preview and apply workers cannot exceed their shared daily allowance", async () => {
-      const { source } = await fixture(1);
+    test("concurrent preview and apply retain independent accounting identities", async () => {
+      const { source } = await fixture();
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const preview = createBackgroundReplayStore({
           db: openClient().db,
@@ -2496,22 +2712,19 @@ if (!databaseUrl || !enabled) {
           apply.reserveBatch(source, "2026-10-01", verdict()),
         ]);
         expect(results.filter((row) => row.type === "reserved")).toHaveLength(
-          1,
+          2,
         );
-        expect(
-          results.filter((row) => row.type === "budget-exhausted"),
-        ).toHaveLength(1);
         expect(
           await db
             .select()
             .from(caseLawReplayDailyRows)
             .where(eq(caseLawReplayDailyRows.sourceId, source.id)),
-        ).toHaveLength(1);
+        ).toHaveLength(2);
       });
     });
 
     test("exhausted previews advance durably until an explicit reset re-admits them without excluding apply", async () => {
-      const { source: enrolled, ids } = await fixture(10);
+      const { source: enrolled, ids } = await fixture();
       const source = { ...enrolled, mode: "dry-run" } as const;
       let clock = Date.UTC(2026, 9, 1);
       const restart = () =>
@@ -2588,7 +2801,7 @@ if (!databaseUrl || !enabled) {
       if (!terminal) {
         throw new TypeError("Expected exhausted preview receipt");
       }
-      const { source: otherSource } = await fixture(10);
+      const { source: otherSource } = await fixture();
       const otherSourceReceipt = {
         ...terminal,
         id: `${otherSource.id}:2:${terminal.firstDecisionId}:dry-run`,
@@ -2651,7 +2864,7 @@ if (!databaseUrl || !enabled) {
         "writer-retryable",
         "tick-deadline",
       ] as const) {
-        const { source: enrolled, ids } = await fixture(10);
+        const { source: enrolled, ids } = await fixture();
         const source = { ...enrolled, mode: "dry-run" } as const;
         let clock = Date.UTC(2026, 9, 1);
         const restart = () =>
@@ -2728,7 +2941,7 @@ if (!databaseUrl || !enabled) {
         succeedsAt < BACKGROUND_REPLAY_LIMITS.maxRowAttempts;
         succeedsAt++
       ) {
-        const { source: enrolled, ids } = await fixture(10);
+        const { source: enrolled, ids } = await fixture();
         const source = { ...enrolled, mode: "dry-run" } as const;
         let clock = Date.UTC(2026, 9, 1);
         const restart = () =>
@@ -2772,7 +2985,7 @@ if (!databaseUrl || !enabled) {
     });
 
     test("compaction generation retires never-reserved-again receipts while preserving the latest generation", async () => {
-      const { source, store } = await fixture(10);
+      const { source, store } = await fixture();
       const reserved = await store.reserveBatch(
         source,
         "2026-10-01",
@@ -2826,7 +3039,7 @@ if (!databaseUrl || !enabled) {
     });
 
     test("audit retention prunes a bounded old page and preserves recent observations", async () => {
-      const { source, store } = await fixture(10);
+      const { source, store } = await fixture();
       await db.insert(caseLawReplayAuditEvents).values([
         {
           id: `old-audit-${source.id}`,
@@ -2856,7 +3069,7 @@ if (!databaseUrl || !enabled) {
     });
 
     test("a tick that changed rows records one system audit run and an idle tick none", async () => {
-      const { source, store } = await fixture(10);
+      const { source, store } = await fixture();
       const replayRuns = async () =>
         await db
           .select()
@@ -2901,7 +3114,7 @@ if (!databaseUrl || !enabled) {
     });
 
     test("no-progress ticks survive process restarts and only verified applies reset them", async () => {
-      const { source, store } = await fixture(10);
+      const { source, store } = await fixture();
       const report = {
         source,
         status: "row-limit",
@@ -2948,7 +3161,7 @@ if (!databaseUrl || !enabled) {
       });
     });
     test("held source selection performs no decision scan even while the corpus table is locked", async () => {
-      const { source } = await fixture(10);
+      const { source } = await fixture();
       await db
         .update(caseLawSources)
         .set({ adapterKey: ADAPTER_KEYS.EU_ECJ })
@@ -2962,7 +3175,7 @@ if (!databaseUrl || !enabled) {
         ...REPLAY_ENROLMENT,
         [ADAPTER_KEYS.EU_ECJ]: {
           mode: "enrolled",
-          dailyBudget: 10,
+
           reviewedDryRun: "fixture",
         },
       } as const;
@@ -2995,7 +3208,7 @@ if (!databaseUrl || !enabled) {
     });
 
     test("source progress is forced owner-only and the database rejects unclassified failures", async () => {
-      const { source, store } = await fixture(10);
+      const { source, store } = await fixture();
       const row = await store.reserveBatch(source, "2026-10-01", verdict());
       if (row.type !== "reserved") {
         throw new TypeError("Expected failure fixture");

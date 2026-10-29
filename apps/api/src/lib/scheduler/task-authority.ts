@@ -81,6 +81,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "bilingual-run-reconcile.ts",
     "Hands queued runs back to their queue, whose worker resolves the requester's run actor.",
   ),
+  "caseLaw.replayStored": platform(
+    "case-law-stored-replay.ts",
+    "Rebuild derived public legal corpus fields from stored source payloads.",
+  ),
   "caseLaw.backfillProvisionState": platform(
     "case-law-provision-state-backfill.ts",
     "Public legal corpus maintenance.",

@@ -29,6 +29,8 @@ import type {
 } from "@/api/lib/legal-search/corpus-storage";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 
+import { storedReplayUpdate } from "./stored-replay-write";
+
 /**
  * Where this decision's canonical payload ends up.
  *
@@ -54,6 +56,7 @@ type SettleCaseLawCorpusMirrorTxOptions = {
   decisionId: SafeId<"caseLawDecision">;
   persistedSourceHash: string | null;
   observationOrder: bigint;
+  observationPredicate?: SQL;
   mirrorCarriesDocument: boolean;
   mode: CorpusStorageMode;
   /** Null when the payload carried no document and nothing was stored. */
@@ -72,6 +75,7 @@ export const settleCaseLawCorpusMirrorTx = async ({
   decisionId,
   persistedSourceHash,
   observationOrder,
+  observationPredicate,
   mirrorCarriesDocument,
   mode,
   tx,
@@ -80,23 +84,26 @@ export const settleCaseLawCorpusMirrorTx = async ({
   // audit: skip — background corpus storage; derived state, not user actions
   const settled = await tx
     .update(caseLawDecisions)
-    .set({
-      // Read off the storage mode rather than off the write plan: the plan
-      // is derived from the mode, and a second derivation here is a mirror
-      // that can go stale.
-      ...(corpusPayloadDisposition({ mode, written }) === "trim"
-        ? TRIMMED_CORPUS_PAYLOAD_COLUMNS
-        : {}),
-      ...corpusMirrorColumns({
-        status: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
-        written,
+    .set(
+      storedReplayUpdate({
+        // Read off the storage mode rather than off the write plan: the plan
+        // is derived from the mode, and a second derivation here is a mirror
+        // that can go stale.
+        ...(corpusPayloadDisposition({ mode, written }) === "trim"
+          ? TRIMMED_CORPUS_PAYLOAD_COLUMNS
+          : {}),
+        ...corpusMirrorColumns({
+          status: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+          written,
+        }),
       }),
-    })
+    )
     .where(
       and(
         eq(caseLawDecisions.id, decisionId),
         sql`${caseLawDecisions.sourceHash} IS NOT DISTINCT FROM ${persistedSourceHash}`,
-        eq(caseLawDecisions.sourceObservationOrder, observationOrder),
+        observationPredicate ??
+          eq(caseLawDecisions.sourceObservationOrder, observationOrder),
         eq(
           caseLawDecisions.corpusMirrorStatus,
           CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,

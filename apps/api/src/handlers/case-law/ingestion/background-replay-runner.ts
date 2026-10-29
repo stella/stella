@@ -25,6 +25,7 @@ import {
   type ReplayRowReport,
   replaySingleRowReport,
 } from "./replay";
+import { saveReplayDiffSample } from "./replay-diff-sample";
 import { BACKGROUND_REPLAY_LIMITS } from "./replay-enrolment";
 
 type BackgroundReplayRunnerOptions = {
@@ -160,6 +161,8 @@ export const createBackgroundReplayRunner = ({
   const readRaw: StoredRawReader =
     readStoredRaw ??
     (async (key) => await readBackgroundStoredRaw(key, signal));
+  const sampleSignal =
+    signal ?? AbortSignal.timeout(BACKGROUND_REPLAY_LIMITS.hardDurationMs);
   const reports = new Map<string, ReplayRowReport>();
   const reportKey = (
     batch: Parameters<BackgroundReplayDependencies["replay"]>[0],
@@ -241,6 +244,18 @@ export const createBackgroundReplayRunner = ({
       // Every apply is preceded by a preview; rejection never reaches the writer.
       const preview = await replayCaseLawSource({
         ...options,
+        onDerivedOutput: async (after) => {
+          if (batch.source.mode !== "dry-run") {
+            return;
+          }
+          await saveReplayDiffSample({
+            batch,
+            after,
+            scopedDb: ingestionDb,
+            store,
+            signal: sampleSignal,
+          });
+        },
         sourceLease: null,
       });
       if (preview.type !== "ran") {

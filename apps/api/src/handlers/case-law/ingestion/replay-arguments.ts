@@ -44,6 +44,9 @@ export const REPLAY_USAGE = `Usage: bun run src/scripts/replay-case-law-source.t
   --court <name>    Replay only decisions from this exact court.
   --celex <value>   Replay only the decision stored under this publisher id
                     (metadata.celex).
+  --decision-id <id>
+                    Replay exactly this stored decision, within the adapter's
+                    source. Mutually exclusive with --court, --celex and --after.
   --after <id>      Resume strictly after this decision id.
   --page-size <n>   Rows read per query (default ${DEFAULT_PAGE_SIZE}).
   --lease-wait <minutes>
@@ -192,6 +195,28 @@ const readScope = (
   if (Result.isError(court)) {
     return court;
   }
+  const decisionId = readValue(argv, "decision-id");
+  if (Result.isError(decisionId)) {
+    return decisionId;
+  }
+  if (decisionId.value !== undefined) {
+    if (court.value !== undefined || celex.value !== undefined) {
+      return invalid(
+        "--decision-id, --court and --celex are mutually exclusive replay scopes",
+      );
+    }
+    const rawDecisionId = decisionId.value;
+    const branded = Result.try(() =>
+      brandPersistedCaseLawDecisionId(rawDecisionId),
+    );
+    if (Result.isError(branded)) {
+      return invalid("--decision-id must be a valid decision id");
+    }
+    return Result.ok({
+      type: "decision",
+      decisionId: branded.value,
+    } as const satisfies CaseLawReplayScope);
+  }
   if (celex.value?.length === 0) {
     return invalid("--celex requires a non-empty value");
   }
@@ -257,6 +282,9 @@ export const parseReplayArguments = (
   if (Result.isError(after)) {
     return after;
   }
+  if (scope.value.type === "decision" && after.value !== undefined) {
+    return invalid("--decision-id and --after are mutually exclusive");
+  }
   const resultsOut = readValue(argv, "results-out");
   if (Result.isError(resultsOut)) {
     return resultsOut;
@@ -272,7 +300,10 @@ export const parseReplayArguments = (
         ? null
         : brandPersistedCaseLawDecisionId(after.value),
     apply: hasFlag(argv, "apply"),
-    bound: bound.value,
+    bound:
+      scope.value.type === "decision"
+        ? { type: "at-most", limit: 1 }
+        : bound.value,
     leaseWaitMinutes: leaseWaitMinutes.value,
     pageSize: pageSize.value,
     rejectionPolicy: hasFlag(argv, "withdraw-rejected")

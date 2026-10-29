@@ -18,12 +18,11 @@ import {
   ReplayStageError,
 } from "./replay-failure";
 
-const fixture = (dailyBudget = 3) => {
+const fixture = (availableRows = 3) => {
   const source: BackgroundReplaySource = {
     id: createSafeId<"caseLawSource">(),
     adapterKey: "cz-nss",
     currentParserVersion: 3,
-    dailyBudget,
     mode: "enrolled",
     rowsBehind: 20,
   };
@@ -64,6 +63,7 @@ const fixture = (dailyBudget = 3) => {
       "raw-fidelity-lost": 0,
       "unsupported-content": 0,
       "no-document": 0,
+      "metadata-only": 0,
       supplement: 0,
     },
     problems: [],
@@ -97,13 +97,14 @@ const fixture = (dailyBudget = 3) => {
       writes += 1;
     },
     gate: async () => ({ kind: "normal", signals: [] }),
+    latencyAdmission: () => ({ status: "admit", p95Ms: 0, samples: 20 }),
     pendingBatch: async () =>
       pending === null
         ? { type: "empty" }
         : { type: "reserved", batch: pending },
     reserveBatch: async () => {
-      if (spent >= source.dailyBudget) {
-        return { type: "budget-exhausted" };
+      if (spent >= availableRows) {
+        return { type: "empty" };
       }
       spent += 1;
       pending = batch();
@@ -112,8 +113,8 @@ const fixture = (dailyBudget = 3) => {
     },
     previewBatch: async () => {
       if (preview === null) {
-        if (spent >= source.dailyBudget) {
-          return { type: "budget-exhausted" };
+        if (spent >= availableRows) {
+          return { type: "empty" };
         }
         spent += 1;
         preview = batch();
@@ -171,7 +172,7 @@ const fixture = (dailyBudget = 3) => {
   };
 };
 
-test("every tick respects both the daily reservation budget and its own bound", async () => {
+test("finite replay input and an explicit invocation bound both stop the tick", async () => {
   for (let budget = 1; budget <= 8; budget += 1) {
     for (let limit = 1; limit <= 8; limit += 1) {
       const state = fixture(budget);
@@ -239,9 +240,9 @@ test("an empty selection exits without acquiring ownership or charging rows", as
   });
 });
 
-test("budget exhaustion exits and a fresh UTC day's budget permits more work", async () => {
+test("exhausted input exits and replenished input permits more work", async () => {
   const state = fixture(2);
-  expect((await state.run()).status).toBe("budget-exhausted");
+  expect((await state.run()).status).toBe("complete");
   expect((await state.run()).applied).toBe(0);
   state.nextDay();
   expect((await state.run()).applied).toBe(2);
@@ -257,6 +258,47 @@ test("a gate stop after one row holds without reserving the next row", async () 
   expect(report.status).toBe("held");
   expect(state.counts().spent).toBe(1);
   expect(state.counts().completed).toBe(1);
+});
+
+test("a latency brake holds between rows and resumes from the persisted boundary", async () => {
+  const state = fixture(3);
+  let held: ReturnType<typeof initialBatchState> | null = null;
+  let latencyHeld = false;
+  state.dependencies.loadGateState = async () => held;
+  state.dependencies.saveGateState = async (_, next) => {
+    held = next;
+  };
+  state.dependencies.latencyAdmission = () =>
+    latencyHeld
+      ? { status: "hold", reason: "p95-exceeded", p95Ms: 501, samples: 20 }
+      : { status: "admit", p95Ms: 10, samples: 20 };
+  const complete = state.dependencies.completeBatch;
+  state.dependencies.completeBatch = async (...args) => {
+    const result = await complete(...args);
+    latencyHeld = true;
+    return result;
+  };
+  expect(await state.run()).toMatchObject({
+    status: "held",
+    attempted: 1,
+    applied: 1,
+  });
+  expect(state.counts().spent).toBe(1);
+  expect(await state.run()).toMatchObject({ status: "held", attempted: 0 });
+  latencyHeld = false;
+  state.nextDay();
+  state.dependencies.completeBatch = complete;
+  expect(await state.run()).toMatchObject({ status: "complete", applied: 3 });
+});
+
+test("governed ticks have no implicit row operating cap", async () => {
+  const state = fixture(150);
+  const report = await runBackgroundReplayTick({
+    dependencies: state.dependencies,
+    maxDurationMs: 60_000,
+    healthConfig: { ...defaultConfig, minSleepMs: 0 },
+  });
+  expect(report).toMatchObject({ status: "complete", applied: 150 });
 });
 
 test("kill switches at batch boundaries and during health I/O prevent new reservations", async () => {
@@ -842,21 +884,21 @@ test("dry-run admission propagates exhaustion and deferred retries without using
   }
 });
 
-test("dry-run ticks share a durable UTC-day budget with apply reservations", async () => {
+test("dry-run ticks exhaust the same finite fixture input as apply reservations", async () => {
   const state = fixture(3);
   state.source.mode = "dry-run";
   expect((await state.run(2)).attempted).toBe(2);
   expect(await state.run(2)).toMatchObject({
-    status: "budget-exhausted",
+    status: "complete",
     attempted: 1,
   });
   expect(await state.run(2)).toMatchObject({
-    status: "budget-exhausted",
+    status: "complete",
     attempted: 0,
   });
   state.source.mode = "enrolled";
   expect(await state.run(2)).toMatchObject({
-    status: "budget-exhausted",
+    status: "complete",
     attempted: 0,
   });
   expect(state.counts().spent).toBe(3);

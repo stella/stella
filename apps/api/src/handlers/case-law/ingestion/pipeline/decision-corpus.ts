@@ -20,6 +20,8 @@ import { openCorpusPackBatch } from "@/api/lib/legal-search/corpus-pack-batch";
 import type { CorpusPackBatch } from "@/api/lib/legal-search/corpus-pack-batch";
 import { storedCorpusWrite } from "@/api/lib/legal-search/corpus-storage";
 
+import { storedReplayObservationPredicate } from "./stored-replay-write";
+
 type EnqueueCorpusMirrorOptions = {
   scopedDb: ScopedDb;
   write: DecisionRowWrite;
@@ -59,14 +61,16 @@ export const enqueueCorpusMirror = async ({
     // updates only apply while the row still carries it. The upload helper
     // holds the same row fence as redaction across the bounded object write.
     const persistedSourceHash =
-      preservesExistingDetail || s3UploadFailed
+      write.inputProvenance.type === "stored-replay" ||
+      preservesExistingDetail ||
+      s3UploadFailed
         ? (existing?.sourceHash ?? null)
         : result.rawHash;
     {
       const ownerPredicate = and(
         eq(caseLawDecisions.id, decisionId),
         sql`${caseLawDecisions.sourceHash} IS NOT DISTINCT FROM ${persistedSourceHash}`,
-        eq(caseLawDecisions.sourceObservationOrder, observationOrder),
+        storedReplayObservationPredicate(write),
         eq(
           caseLawDecisions.corpusMirrorStatus,
           CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
@@ -107,6 +111,7 @@ export const enqueueCorpusMirror = async ({
                 mode: corpus.mode,
                 tx,
                 written: settled,
+                observationPredicate: storedReplayObservationPredicate(write),
               });
               if (!applied) {
                 return { type: "superseded" };

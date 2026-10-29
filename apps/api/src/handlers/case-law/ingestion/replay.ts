@@ -36,14 +36,12 @@ import type {
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { metadataUrlSchemaForAdapter } from "@/api/handlers/case-law/ingestion/metadata-url-schemas";
 import { caseLawCanonicalPayload } from "@/api/handlers/case-law/ingestion/pipeline/corpus-mirror";
-import { processStoredDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
+import { processStoredReplayDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import {
   createSourceContractResolver,
   type SourceContractResolver,
 } from "@/api/handlers/case-law/ingestion/pipeline/source-contract";
-import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
-import { shouldSkipRefresh } from "@/api/handlers/case-law/ingestion/refresh-policy";
 import { composeWithStoredSupplements } from "@/api/handlers/case-law/ingestion/supplement-composition";
 import { withdrawCaseLawDecisionDocument } from "@/api/handlers/case-law/withdraw-document";
 import type { WithdrawCaseLawDecisionDocumentOutcome } from "@/api/handlers/case-law/withdraw-document";
@@ -58,12 +56,9 @@ import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-la
 import { corpusContentHash } from "@/api/lib/legal-search/corpus-storage";
 import type { CorpusPayload } from "@/api/lib/legal-search/corpus-storage";
 import { decisionReplayIdentity } from "@/api/lib/legal-search/decision-language-identity";
-import { parsePrimaryReferenceType } from "@/api/lib/legal-search/decision-primary-reference";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
-import {
-  sanitizeResult,
-  storedCaseNumberOf,
-} from "@/api/lib/legal-search/ingestion-normalization";
+import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
+import { DOCUMENT_DELIVERY } from "@/api/lib/legal-search/ingestion-types";
 import {
   PARSER_REPARSE_FEATURES,
   PARSER_VERSION_SCOPES,
@@ -72,6 +67,11 @@ import {
 import type { ParserReparseScope } from "@/api/lib/legal-search/parser-reparse-scopes";
 import type { S3CredentialRefreshOptions } from "@/api/lib/s3/credential-guard";
 
+import { CITATION_SCOPE_METADATA_KEY } from "./citation-scopes";
+import {
+  STORED_REPLAY_INPUT_TOKEN,
+  STORED_REPLAY_METADATA_KEYS,
+} from "./pipeline/stored-replay-write";
 import {
   classifyReplayFailure,
   REPLAY_PREVIEW_FAILURE,
@@ -86,7 +86,7 @@ import {
  *
  * Two properties shape everything below.
  *
- * The re-parsed result goes through `processStoredDecision`, the same
+ * The re-parsed result goes through `processStoredReplayDecision`, the same
  * persistence owner a crawl feeds, with the captured raw input fenced. Corpus-object storage, the content hash, the search
  * projection's staleness marker and citation extraction therefore behave
  * exactly as they do on a live crawl. Writing `fulltext`/`document_ast`
@@ -566,7 +566,7 @@ export const buildReplayPageQuery = (
       sourceHash: caseLawDecisions.sourceHash,
       contentHash: caseLawDecisions.contentHash,
       parserVersion: caseLawDecisions.parserVersion,
-      updateToken: sql<string>`${caseLawDecisions.updatedAt}::text`,
+      updateToken: STORED_REPLAY_INPUT_TOKEN,
       sourceRawS3Key: caseLawDecisions.sourceRawS3Key,
       sourceRawContentType: caseLawDecisions.sourceRawContentType,
       corpusMirrorStatus: caseLawDecisions.corpusMirrorStatus,
@@ -834,6 +834,7 @@ const emptyOutcomeCounts = (): Record<ReplayRowOutcome, number> => ({
 });
 
 const emptyRejectionCounts = (): Record<StoredRawReparseRejection, number> => ({
+  [STORED_RAW_REPARSE_REJECTION.METADATA_ONLY]: 0,
   [STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA]: 0,
   [STORED_RAW_REPARSE_REJECTION.IDENTITY_MISMATCH]: 0,
   [STORED_RAW_REPARSE_REJECTION.RAW_FIDELITY_LOST]: 0,
@@ -899,6 +900,7 @@ const storedInputFor = (
 });
 
 type ReplayRowOptions = {
+  onDerivedOutput?: (payload: CorpusPayload) => Promise<void>;
   signal?: AbortSignal;
   s3Policy?: S3CredentialRefreshOptions;
   resolveSourceContract: SourceContractResolver;
@@ -1097,38 +1099,6 @@ export const parsedOutputRequiresWrite = (
 ): boolean => storedHash !== parsedHash;
 
 /**
- * Whether the write would change a described column the row holds.
- *
- * Read as the write stores them: an unstated field leaves the column as it
- * is, and a stated date the sanitizer rejects clears it.
- */
-const describedColumnsChanged = ({
-  input,
-  result,
-  row,
-}: {
-  input: IngestionResult;
-  result: IngestionResult;
-  row: ReplayDecisionRow;
-}): boolean => {
-  const decisionDate =
-    result.decisionDate === undefined && input.decisionDate !== undefined
-      ? null
-      : result.decisionDate;
-  const described = [
-    [row.court, result.court],
-    [row.ecli, result.ecli],
-    [row.decisionDate, decisionDate],
-    [row.decisionType, result.decisionType],
-    [row.sourceUrl, result.sourceUrl],
-    [row.documentUrl, result.documentUrl],
-  ] as const;
-  return described.some(
-    ([stored, incoming]) => incoming !== undefined && incoming !== stored,
-  );
-};
-
-/**
  * Whether replaying this result would change what the row holds.
  *
  * The source-side refresh check and sanitized canonical payload are compared
@@ -1157,25 +1127,13 @@ const replayWouldChangeRow = async ({
   if (row.corpusMirrorStatus === CASE_LAW_CORPUS_MIRROR_STATUS.PENDING) {
     return true;
   }
-  // Derived from the payload like the text is, so a parser that reads the
-  // reference or its kind differently changes the row. Read as the write
-  // stores it, so a replay of an unchanged payload reaches a fixed point.
   if (
-    row.caseNumber !== storedCaseNumberOf(result) ||
-    row.caseNumberType !== parsePrimaryReferenceType(result.caseNumberType)
+    STORED_REPLAY_METADATA_KEYS.some(
+      (key) =>
+        key !== CITATION_SCOPE_METADATA_KEY &&
+        !Bun.deepEquals(row.metadata?.[key], result.metadata[key]),
+    )
   ) {
-    return true;
-  }
-  if (describedColumnsChanged({ input, result, row })) {
-    return true;
-  }
-  const sourceChanged = !shouldSkipRefresh({
-    existingMetadata: row.metadata,
-    existingSourceHash: row.sourceHash,
-    incomingMetadata: result.metadata,
-    incomingRawHash: result.rawHash,
-  });
-  if (sourceChanged) {
     return true;
   }
   // The stored hash answers what reading the stored payload back would.
@@ -1194,7 +1152,7 @@ const replayWouldChangeRow = async ({
 
 type ProvedReplayInputOptions = Pick<
   ReplayRowOptions,
-  "row" | "sourceId" | "scopedDb" | "resolveSourceContract"
+  "row" | "sourceId" | "scopedDb"
 > & { result: IngestionResult };
 
 /** Parser changes invalidate the tuple; the final stamp binds its parser again. */
@@ -1202,10 +1160,8 @@ const alreadyProvedReplayInput = async ({
   row,
   sourceId,
   scopedDb,
-  resolveSourceContract,
   result,
 }: ProvedReplayInputOptions) => {
-  const { sourceFingerprintVersion } = await resolveSourceContract(sourceId);
   const parserVersion = result.parserVersion ?? 0;
   return (
     (
@@ -1219,10 +1175,8 @@ const alreadyProvedReplayInput = async ({
               eq(caseLawDecisions.id, row.id),
               eq(caseLawDecisions.sourceId, sourceId),
               eq(caseLawDecisions.sourceRawS3Key, row.sourceRawS3Key),
-              sql`${caseLawDecisions.updatedAt}::text = ${row.updateToken}`,
+              sql`${STORED_REPLAY_INPUT_TOKEN} = ${row.updateToken}`,
               eq(caseLawDecisions.parserVersion, parserVersion),
-              eq(caseLawDecisions.sourceHash, result.rawHash),
-              eq(caseLawDecisions.sourceHashVersion, sourceFingerprintVersion),
               parsedReplayInputPredicate(parserVersion),
               eq(
                 caseLawDecisions.corpusMirrorStatus,
@@ -1259,6 +1213,7 @@ const replayRow = async ({
   withdraw,
   signal,
   s3Policy,
+  onDerivedOutput,
 }: ReplayRowOptions): Promise<ReplayRowReport> => {
   signal?.throwIfAborted();
   const base = {
@@ -1291,6 +1246,18 @@ const replayRow = async ({
     });
   }
 
+  if (
+    reparsed.result.documentDelivery === DOCUMENT_DELIVERY.DEFERRED &&
+    !payloadCarriesDocument(caseLawCanonicalPayload(reparsed.result))
+  ) {
+    return {
+      ...base,
+      outcome: REPLAY_ROW_OUTCOME.REJECTED,
+      rejection: STORED_RAW_REPARSE_REJECTION.METADATA_ONLY,
+      detail: "Stored raw contains metadata but no retained document input",
+    };
+  }
+
   // A legacy spelling the adapter vouched for stands in for the regenerated
   // docket, and only on a row the write locates by publisher document: one
   // keyed by its docket would be inserted again under the new spelling.
@@ -1314,18 +1281,22 @@ const replayRow = async ({
     };
   }
 
+  const composed = await composeWithStoredSupplements({
+    metadataUrlSchema,
+    scopedDb,
+    sourceId,
+    decisionId: row.id,
+    observation: reparsed.result,
+  });
+  if (sourceLease === null && onDerivedOutput !== undefined) {
+    await onDerivedOutput(
+      caseLawCanonicalPayload(sanitizeResult(composed, metadataUrlSchema)),
+    );
+  }
   const changed = await replayWouldChangeRow({
     metadataUrlSchema,
     row,
-    // The row holds the document its supplements were composed into, which
-    // is what the write would store again.
-    result: await composeWithStoredSupplements({
-      metadataUrlSchema,
-      scopedDb,
-      sourceId,
-      decisionId: row.id,
-      observation: reparsed.result,
-    }),
+    result: composed,
     scopedDb,
   });
 
@@ -1336,7 +1307,6 @@ const replayRow = async ({
         row,
         sourceId,
         scopedDb,
-        resolveSourceContract,
         result: reparsed.result,
       })))
   ) {
@@ -1349,6 +1319,7 @@ const replayRow = async ({
     sourceRawContentType: row.sourceRawContentType,
     sourceRawS3Key: row.sourceRawS3Key,
     decisionId: row.id,
+    updateToken: row.updateToken,
   } as const satisfies ReplayWriteCandidate;
   if (sourceLease === null) {
     return { ...base, outcome: candidate.outcome };
@@ -1378,6 +1349,7 @@ const replayRow = async ({
 };
 
 type ReplayWriteCandidate = {
+  updateToken: string;
   outcome: typeof REPLAY_ROW_OUTCOME.WOULD_APPLY;
   result: IngestionResult;
   raw: Uint8Array;
@@ -1405,18 +1377,9 @@ const writeReplayCandidate = async ({
   sourceId,
   resolveSourceContract,
 }: WriteReplayCandidateOptions) => {
-  // Ordered on the source's own counter, under its lease: the row guards
-  // compare observation orders, so a replay numbering itself independently
-  // could overwrite a crawl observation newer than the payload it replayed.
   await sourceLease.beforeDatabaseMark();
-  const observationOrder = await allocateSourceObservationOrder({
-    leaseToken: sourceLease.leaseToken,
-    scopedDb,
-    sourceId,
-  });
-
   signal?.throwIfAborted();
-  return await processStoredDecision(
+  return await processStoredReplayDecision(
     {
       ...(signal === undefined ? {} : { signal }),
       ...(s3Policy === undefined ? {} : { s3Policy }),
@@ -1429,6 +1392,7 @@ const writeReplayCandidate = async ({
       // the key the row already holds and skips the re-upload.
       sourceRawS3Key: candidate.sourceRawS3Key,
       decisionId: candidate.decisionId,
+      updateToken: candidate.updateToken,
       input: {
         ...candidate.result,
         sourceRawBytes: candidate.raw,
@@ -1438,16 +1402,13 @@ const writeReplayCandidate = async ({
       },
       sourceId,
       scopedDb,
-      // The replay observed the stored payload now. The pipeline records this
-      // as the observation's time, which is what orders it against a crawl.
-      observedAt: new Date(),
-      observationOrder,
     },
     resolveSourceContract,
   );
 };
 
 type ReplayOneRowOptions = {
+  onDerivedOutput?: (payload: CorpusPayload) => Promise<void>;
   signal?: AbortSignal;
   s3Policy?: S3CredentialRefreshOptions;
   resolveSourceContract: SourceContractResolver;
@@ -1486,6 +1447,7 @@ const replayOneRow = async ({
   withdraw,
   signal,
   s3Policy,
+  onDerivedOutput,
 }: ReplayOneRowOptions): Promise<Result<ReplayRowReport, unknown>> => {
   signal?.throwIfAborted();
   if (
@@ -1551,6 +1513,7 @@ const replayOneRow = async ({
         resolveSourceContract,
         metadataUrlSchema,
         reparsed: parsed.value,
+        ...(onDerivedOutput === undefined ? {} : { onDerivedOutput }),
         rejectionPolicy,
         scopedDb,
         sourceId,
@@ -1665,6 +1628,7 @@ export type ReplayVisitBound =
   { type: "all" } | { type: "at-most"; limit: number };
 
 export type ReplayCaseLawSourceOptions = {
+  onDerivedOutput?: (payload: CorpusPayload) => Promise<void>;
   signal?: AbortSignal;
   s3Policy?: S3CredentialRefreshOptions;
   adapter: SourceAdapter;
@@ -1774,6 +1738,7 @@ export const replayCaseLawSource = async ({
   recordRow,
   signal,
   s3Policy,
+  onDerivedOutput,
 }: ReplayCaseLawSourceOptions): Promise<ReplayRun> => {
   signal?.throwIfAborted();
   const capability = replayCapability(adapter);
@@ -1838,6 +1803,7 @@ export const replayCaseLawSource = async ({
           resolveSourceContract,
           metadataUrlSchema: metadataUrlSchemaForAdapter(adapter.key),
           capability,
+          ...(onDerivedOutput === undefined ? {} : { onDerivedOutput }),
           readStoredRaw,
           ...(expectedRawS3Key === undefined ? {} : { expectedRawS3Key }),
           row,

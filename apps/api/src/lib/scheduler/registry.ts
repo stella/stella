@@ -57,6 +57,10 @@ import {
   refreshCaseLawSourceArrivalsTask,
 } from "@/api/lib/scheduler/tasks/case-law-source-arrivals-refresh";
 import {
+  REPLAY_CASE_LAW_STORED_TASK,
+  replayCaseLawStoredTask,
+} from "@/api/lib/scheduler/tasks/case-law-stored-replay";
+import {
   SWEEP_CHAT_RUN_LOGS_TASK,
   sweepChatRunLogs,
 } from "@/api/lib/scheduler/tasks/chat-run-log-retention";
@@ -256,6 +260,7 @@ const SCHEDULER_TASKS = {
   [BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK]:
     backfillCaseLawRedactionTombstones,
   [BACKFILL_CASE_LAW_PROVISION_STATE_TASK]: backfillCaseLawProvisionState,
+  [REPLAY_CASE_LAW_STORED_TASK]: replayCaseLawStoredTask,
   [BACKFILL_CORPUS_INDEX_JOB_DETAIL_TASK]: backfillCorpusIndexJobDetail,
   [RECONCILE_CASE_LAW_CORPUS_UPLOAD_INTENTS_TASK]:
     reconcileCaseLawCorpusUploadIntentsTask,

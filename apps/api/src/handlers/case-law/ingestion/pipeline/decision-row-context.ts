@@ -29,6 +29,11 @@ import type { ActiveCorpusProjectionSourceLock } from "@/api/lib/legal-search/co
 import { logger } from "@/api/lib/observability/logger";
 import type { S3CredentialRefreshOptions } from "@/api/lib/s3/credential-guard";
 
+import {
+  storedReplayObservationPredicate,
+  type StoredReplayUpdate,
+} from "./stored-replay-write";
+
 /** Everything one decision's row write reads, decided before it runs. */
 export type DecisionRowWrite = Omit<DecisionIdentity, "decisionId"> &
   Pick<ObservedDecision, "persistedDecisionDate"> & {
@@ -148,7 +153,6 @@ export const recordParsedGenerationTx = async (
 ): Promise<void> => {
   const {
     decisionId,
-    observationOrder,
     inputProvenance,
     sourceFingerprintVersion,
     result,
@@ -175,7 +179,7 @@ export const recordParsedGenerationTx = async (
   // Homing an old object changes the canonical input identity. That new key
   // requires its own real parse; an old-key reservation cannot credit it.
   if (
-    inputProvenance.type === "stored" &&
+    inputProvenance.type !== "observation" &&
     inputProvenance.sourceRawS3Key !== sourceRawS3Key
   ) {
     return;
@@ -184,20 +188,31 @@ export const recordParsedGenerationTx = async (
   await tx
     .update(caseLawDecisions)
     .set({
-      parsedSourceHash: result.rawHash,
-      parsedSourceHashVersion: sourceFingerprintVersion,
+      parsedSourceHash:
+        inputProvenance.type === "stored-replay"
+          ? write.existing?.sourceHash
+          : result.rawHash,
+      parsedSourceHashVersion:
+        inputProvenance.type === "stored-replay"
+          ? write.existing?.sourceHashVersion
+          : sourceFingerprintVersion,
       parsedSourceRawS3Key: sourceRawS3Key,
       updatedAt: sql`${caseLawDecisions.updatedAt}`,
-    })
+    } satisfies StoredReplayUpdate)
     .where(
       and(
         eq(caseLawDecisions.id, decisionId),
         eq(caseLawDecisions.sourceId, write.sourceId),
         eq(caseLawDecisions.parserVersion, result.parserVersion ?? 0),
-        eq(caseLawDecisions.sourceHash, result.rawHash),
-        eq(caseLawDecisions.sourceHashVersion, sourceFingerprintVersion),
+        sql`${caseLawDecisions.sourceHash} IS NOT DISTINCT FROM ${inputProvenance.type === "stored-replay" ? (write.existing?.sourceHash ?? null) : result.rawHash}`,
+        eq(
+          caseLawDecisions.sourceHashVersion,
+          inputProvenance.type === "stored-replay"
+            ? (write.existing?.sourceHashVersion ?? sourceFingerprintVersion)
+            : sourceFingerprintVersion,
+        ),
         eq(caseLawDecisions.sourceRawS3Key, sourceRawS3Key),
-        eq(caseLawDecisions.sourceObservationOrder, observationOrder),
+        storedReplayObservationPredicate(write),
         eq(
           caseLawDecisions.corpusMirrorStatus,
           CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
