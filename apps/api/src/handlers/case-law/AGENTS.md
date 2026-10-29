@@ -66,12 +66,11 @@ hours of parsing heuristics later.
    - Print/export views (`?format=pdf`, `?print=true`)
    - RSS/Atom feeds for recent decisions
 4. **Check PDF structure with `@libpdf/core`.** If the court
-   only serves PDFs, its per-line text layer (font name for
-   bold, font size for titles, positions) is far richer than
-   `unpdf`'s merged plaintext. Read it through the shared
-   reader in `lib/legal-search/parsers/libpdf-utils.ts`, never
-   with `page.extractText()` in the parser: `confine-owner`
-   rejects a new reader (see "Printed text" below).
+   only serves PDFs, use `page.extractText()` which gives
+   per-line text with font name (bold detection) and font
+   size (title detection). This is far richer than `unpdf`'s
+   merged plaintext. Always extract without `mergePages` to
+   preserve line breaks.
 5. **Test multiple decision types.** A Rozsudok (judgment)
    often has different structure than an Uznesenie
    (resolution) or Trestný rozkaz (criminal order). Download
@@ -374,36 +373,6 @@ never repairs: where the adapter decoded wrongly, fix its decoding
 (`@stll/mojibake/declared-charset` honours the BOM, the HTTP charset and the
 document's declaration, in that order) and re-fetch; where the publisher
 serves the damage, the pair it names is the transform to apply.
-
-### 11c. Printed text goes through the shared owners
-
-A decision printed on pages reaches its publisher with the page's layout in
-it: lines broken at a margin, words hyphenated there, running headers and
-page numbers between paragraphs, display type in spaced letters. What those
-mean is the same in every jurisdiction, so it is decided once, in
-`lib/legal-search/parsers/` (`bun scripts/ownership.ts --print`):
-
-| Capability                                   | Owner                     |
-| -------------------------------------------- | ------------------------- |
-| A PDF's text layer: lines, fonts, positions  | `libpdf-utils.ts`         |
-| Printed lines back into paragraphs           | `hard-wrapped-lines.ts`   |
-| Running headers, page numbers, page cuts     | `page-furniture.ts`       |
-| Spaced letters (`r o z h o d l`) as words    | `letter-spacing.ts`       |
-
-A parser asks the owners; a jurisdiction's own form (its running header, its
-operative verbs) is added to the owner. A rule written inside one parser
-fixes that source and leaves the defect in the others, which is how a class
-fixed for Czech courts stayed open in Polish and Slovak ones.
-
-Rules like these import nothing a lint rule can confine, so the guard reads
-their output: `parsers/structure-fidelity-guard.test.ts` replays every
-registered source's recorded fixtures through its current parser
-(`scripts/parser-output-fixtures.ts`) and counts what `structure-fidelity.ts`
-finds: page-number paragraphs, sentences cut across paragraphs, numbers
-pushed to a paragraph's start, holding after the signatures, and text stored
-without a readable AST. The baseline only shrinks. A source with no recorded
-fixture states why in the guard's coverage map, so a new source cannot
-arrive unread.
 
 ### 12. Check a parser against the publisher, not against yourself
 
