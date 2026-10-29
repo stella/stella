@@ -1,0 +1,18 @@
+{
+  "plain-button": {},
+  "raw-kbd": {
+    "apps/desktop/src/clipboard/ClipboardApp.tsx": 4,
+    "apps/desktop/src/shared/Keycaps.tsx": 1,
+    "apps/web/src/components/app-sidebar.tsx": 2,
+    "apps/web/src/components/keyboard-shortcuts-dialog.tsx": 3,
+    "apps/web/src/components/public-workspace-shell.tsx": 1,
+    "apps/web/src/components/search-dialog-controls.tsx": 1,
+    "apps/web/src/components/search-dialog-results.tsx": 1,
+    "apps/web/src/components/search-dialog.tsx": 1,
+    "apps/web/src/components/shortcut-echo-hud.tsx": 1,
+    "apps/web/src/routes/_protected.settings/account.desktop.tsx": 1,
+    "apps/web/src/routes/onboarding/-components/clipboard-workflow-preview.tsx": 2,
+    "apps/web/src/routes/onboarding/-components/sidebar-preview.tsx": 1,
+    "apps/web/src/routes/onboarding/-components/steps/download-step.tsx": 1
+  }
+}
