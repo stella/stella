@@ -11,7 +11,7 @@ import fc from "fast-check";
 import { assertProperty } from "@stll/property-testing";
 
 import {
-  queryHighlightTokens,
+  queryFindTokens,
   queryMarkRanges,
   wordPrefixMatchEnd,
 } from "./query-marks";
@@ -113,7 +113,7 @@ const queryArb = fc.oneof(
   fc
     .array(
       fc
-        .tuple(fc.constantFrom(...WORDS), fc.integer({ min: 2, max: 12 }))
+        .tuple(fc.constantFrom(...WORDS), fc.integer({ min: 1, max: 12 }))
         .map(([word, length]) => word.slice(0, length)),
       { minLength: 1, maxLength: 3 },
     )
@@ -126,7 +126,7 @@ const scanResults = (
   index: ReturnType<typeof createReaderSearchIndex>,
   query: string,
 ): SearchResults => {
-  const tokens = queryHighlightTokens(query);
+  const tokens = queryFindTokens(query);
   const rangesByPieceId: Record<string, ReaderSearchMatchRange[]> = {};
   let matchCount = 0;
   if (tokens.length === 0) {
@@ -185,7 +185,7 @@ describe("indexed reader search", () => {
           createReaderSearchIndex(pieces),
           query,
         );
-        const tokens = queryHighlightTokens(query);
+        const tokens = queryFindTokens(query);
         for (const piece of pieces) {
           expect(
             (rangesByPieceId[piece.id] ?? []).map(({ end, start }) => ({
