@@ -350,7 +350,7 @@ const assertMonetaryAdmission = async ({
     const config = asTestRaw<HandlerConfig>(definition.config);
     if (
       config.access !== "read" ||
-      !config.permissions?.billing?.includes("read")
+      !config.permissions.billing?.includes("read")
     ) {
       continue;
     }
@@ -383,7 +383,7 @@ const assertMonetaryAdmission = async ({
       paths.length === 0 ||
       definition.permissions.type !== "all" ||
       !("billing" in definition.permissions.permissions) ||
-      !definition.permissions.permissions.billing?.includes("read")
+      !definition.permissions.permissions.billing.includes("read")
     ) {
       continue;
     }

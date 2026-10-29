@@ -3122,21 +3122,34 @@ export const lockMemberBillingAccessRows = async ({
   organizationId: SafeId<"organization">;
   actorUserId: SafeId<"user">;
   targetMemberId: string;
-}) =>
-  await tx
-    .select({
-      id: member.id,
-      userId: member.userId,
-      role: member.role,
-      billingAccess: member.billingAccess,
-    })
-    .from(member)
-    .where(
-      and(
-        eq(member.organizationId, organizationId),
-        or(eq(member.userId, actorUserId), eq(member.id, targetMemberId)),
-      ),
-    )
-    .orderBy(member.id)
-    .limit(2)
-    .for("update");
+}) => {
+  const result = await readBounded(
+    {
+      limit: (cap) =>
+        tx
+          .select({
+            id: member.id,
+            userId: member.userId,
+            role: member.role,
+            billingAccess: member.billingAccess,
+          })
+          .from(member)
+          .where(
+            and(
+              eq(member.organizationId, organizationId),
+              or(eq(member.userId, actorUserId), eq(member.id, targetMemberId)),
+            ),
+          )
+          .orderBy(member.id)
+          .limit(cap)
+          .for("update"),
+    },
+    2,
+  );
+  if (result.type === "overflow") {
+    return panic(
+      "A membership access change can lock at most its actor and target",
+    );
+  }
+  return result.rows;
+};

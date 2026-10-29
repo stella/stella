@@ -256,10 +256,10 @@
     {
       "name": "list_time_entries",
       "nameChars": 17,
-      "descriptionChars": 616,
+      "descriptionChars": 587,
       "inputSchemaChars": 1597,
-      "totalChars": 2230,
-      "estimatedTokens": 877
+      "totalChars": 2201,
+      "estimatedTokens": 867
     },
     {
       "name": "lookup_business_registry",
@@ -623,7 +623,7 @@
     }
   ],
   "totals": {
-    "characters": 127392,
-    "estimatedTokens": 50498
+    "characters": 127363,
+    "estimatedTokens": 50488
   }
 }

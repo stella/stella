@@ -102,7 +102,6 @@ export const BILLING_ACCESS_MEMBER_FIELDS = {
     required: true,
     defaultValue: false,
     input: false,
-    fieldName: "billing_access",
   },
 } as const;
 

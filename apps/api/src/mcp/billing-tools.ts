@@ -1728,7 +1728,7 @@ export const BILLING_TOOL_DEFINITIONS = [
       "list the matter's entries, optionally filtered by entity_id (the " +
       "item the time was logged against), user_id, a date-worked range (date_from/" +
       "date_to, ISO YYYY-MM-DD), and status. Returns each entry's id, entity, " +
-      "user, date, minutes, rate (minor currency units, null without billing access), currency, narrative, " +
+      "user, date, minutes, rate (minor currency units), currency, narrative, " +
       "and status. The response includes visibility: all_entries for billing " +
       "reviewers, or own_entries when the caller can see only their own time; " +
       "own_entries is not a matter total.",

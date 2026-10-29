@@ -11,6 +11,7 @@ import { Checkbox } from "@stll/ui/checkbox";
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
 import { activeMemberOptions } from "@/lib/auth-queries";
+import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { organizationKeys } from "@/lib/organization/queries";
@@ -34,12 +35,19 @@ export const MemberBillingAccessCell = ({
     permissions: BILLING_MATTER_READ_PERMISSION,
   });
   const mutation = useMutation({
-    mutationFn: async (next: boolean) => {
-      const memberApi = api["organization-settings"].members({ memberId });
-      return unwrapApiResponse(
-        await memberApi["billing-access"].put({ billingAccess: next }),
-      );
-    },
+    mutationFn: async (next: boolean) =>
+      await invokeCapability(
+        "organization-settings.members.billing-access.update",
+        async (request) => {
+          const memberApi = api["organization-settings"].members({ memberId });
+          return unwrapApiResponse(
+            await memberApi["billing-access"].put(
+              { billingAccess: next },
+              request,
+            ),
+          );
+        },
+      ),
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: organizationKeys.all }),

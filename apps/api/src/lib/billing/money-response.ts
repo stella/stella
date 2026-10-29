@@ -2,12 +2,12 @@ import { MONEY_SCHEMA_BRAND } from "@stll/api-contract/billing-money";
 
 import { isRecord } from "@/api/lib/type-guards";
 
-type MoneyPath = { path: readonly string[]; nullable: boolean };
+type MoneyPath = { path: readonly (string | number)[]; nullable: boolean };
 
 /** Inspect schema actions rather than field names, including nested and renamed money. */
 type WalkMoneyOptions = {
   schema: unknown;
-  path: readonly string[];
+  path: readonly (string | number)[];
   nullable: boolean;
 };
 const walkMoney = ({
@@ -63,7 +63,7 @@ const walkMoney = ({
     return items.flatMap((child, index) =>
       walkMoney({
         schema: child,
-        path: [...path, index.toString()],
+        path: [...path, index],
         nullable: false,
       }),
     );
@@ -83,7 +83,10 @@ const walkMoney = ({
 export const moneyPaths = (schema: unknown): MoneyPath[] =>
   walkMoney({ schema, path: [], nullable: false });
 
-const hasValueAtPath = (value: unknown, path: readonly string[]): boolean => {
+const hasValueAtPath = (
+  value: unknown,
+  path: readonly (string | number)[],
+): boolean => {
   if (value === null || value === undefined) {
     return false;
   }
@@ -103,8 +106,10 @@ const hasValueAtPath = (value: unknown, path: readonly string[]): boolean => {
       Object.values(value).some((item) => hasValueAtPath(item, path.slice(1)))
     );
   }
-  if (Array.isArray(value)) {
-    return hasValueAtPath(value.at(Number(segment)), path.slice(1));
+  if (typeof segment === "number") {
+    return (
+      Array.isArray(value) && hasValueAtPath(value.at(segment), path.slice(1))
+    );
   }
   return isRecord(value) && hasValueAtPath(value[segment], path.slice(1));
 };

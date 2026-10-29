@@ -1,14 +1,9 @@
 import * as v from "valibot";
 
 export const MONEY_SCHEMA_BRAND = "Money";
-export const MONEY_SCHEMA_KEYWORD = "x-stella-money";
 
 /** Monetary response values retain their domain identity in schemas and static types. */
-export const moneySchema = v.pipe(
-  v.number(),
-  v.safeInteger(),
-  v.brand(MONEY_SCHEMA_BRAND),
-);
+export const moneySchema = v.pipe(v.number(), v.brand(MONEY_SCHEMA_BRAND));
 /** The classification applies to numeric amounts, decimal text, and financial artifacts. */
 export type Money = v.Brand<typeof MONEY_SCHEMA_BRAND>;
 export const moneyTextSchema = v.pipe(

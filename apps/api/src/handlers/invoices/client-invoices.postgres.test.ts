@@ -218,6 +218,7 @@ if (!databaseUrl || !runPostgres) {
           organizationId: orgId,
           userId,
           role: kind === "owner" || kind === "admin" ? kind : "member",
+          billingAccess: kind === "full" || kind === "partial",
           createdAt: new Date(),
         })),
       );
@@ -450,7 +451,7 @@ if (!databaseUrl || !runPostgres) {
           audit: async (_tx, event) => {
             events.push(event);
           },
-          memberRole: sessionMemberRole("member"),
+          memberRole: sessionMemberRole("member", true),
           session: { activeOrganizationId: scenario.orgId },
           user: { id: scenario.actors.full },
           workspaceId: scenario.firstMatterId,
@@ -1228,7 +1229,7 @@ if (!databaseUrl || !runPostgres) {
                 .from(sql`(SELECT 1) quota`),
           );
         expect(await readQuota()).toEqual([{ first: "1", second: "1" }]);
-        const memberRole = sessionMemberRole("member");
+        const memberRole = sessionMemberRole("member", true);
         expect(
           hasMemberPermission(memberRole, { invoice: ["create", "update"] }),
         ).toBe(true);
@@ -1828,7 +1829,7 @@ if (!databaseUrl || !runPostgres) {
           .where(eq(invoiceLines.id, scenario.secondLineId));
       });
       const userId = scenario.actors.full;
-      const memberRole = sessionMemberRole("member");
+      const memberRole = sessionMemberRole("member", true);
       expect(hasMemberPermission(memberRole, { invoice: ["update"] })).toBe(
         true,
       );
@@ -1958,7 +1959,7 @@ if (!databaseUrl || !runPostgres) {
             }),
             scopedDb,
             audit: async () => {},
-            memberRole: sessionMemberRole(role),
+            memberRole: sessionMemberRole(role, true),
             session: { activeOrganizationId: scenario.orgId },
             user: { id: actor },
             workspaceId,
@@ -2084,7 +2085,7 @@ if (!databaseUrl || !runPostgres) {
             organizationId: scenario.orgId,
             userId,
             userEmail: "invoice-reader@example.test",
-            memberRole: sessionMemberRole(actor),
+            memberRole: sessionMemberRole(actor, true),
             featureAccessSnapshot: enrolledTimeBillingSnapshot({
               organizationId: scenario.orgId,
               userId,
@@ -2259,7 +2260,7 @@ if (!databaseUrl || !runPostgres) {
           safeDb,
           scopedDb,
           audit: async () => {},
-          memberRole: sessionMemberRole(actor),
+          memberRole: sessionMemberRole(actor, true),
           session: { activeOrganizationId: scenario.orgId },
           user: { id: userId },
           workspaceId: scenario.firstMatterId,
@@ -2321,7 +2322,7 @@ if (!databaseUrl || !runPostgres) {
                 organizationId: scenario.orgId,
                 userId,
                 userEmail: "invoice-reader@example.test",
-                memberRole: sessionMemberRole(actor),
+                memberRole: sessionMemberRole(actor, true),
                 featureAccessSnapshot: enrolledTimeBillingSnapshot({
                   organizationId: scenario.orgId,
                   userId,
@@ -2419,6 +2420,7 @@ if (!databaseUrl || !runPostgres) {
         const userId = scenario.actors[actor];
         const memberRole = sessionMemberRole(
           actor === "owner" || actor === "admin" ? actor : "member",
+          true,
         );
         const accessibleWorkspaceIds = [scenario.firstMatterId];
         if (actor !== "partial") {

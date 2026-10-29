@@ -3,6 +3,7 @@ import fc from "fast-check";
 import * as v from "valibot";
 
 import { AGENT_INPUT_NORMALIZATION_KEY } from "@stll/agent-input";
+import { moneySchema } from "@stll/api-contract/billing-money";
 import { propertyConfig } from "@stll/property-testing";
 
 import { ANALYSIS_OUTPUT_JSON_SCHEMA } from "@/api/handlers/case-law/analysis/analysis-output";
@@ -331,4 +332,8 @@ describe("emitted production schemas", () => {
   test("the case-law analysis output schema carries only JSON Schema keywords", () => {
     expect(findNonKeywordKeys(ANALYSIS_OUTPUT_JSON_SCHEMA)).toEqual([]);
   });
+});
+
+test("Money retains numeric validation without adding wire-schema keywords", () => {
+  expect(toJsonSchema(moneySchema)).toEqual(toJsonSchema(v.number()));
 });

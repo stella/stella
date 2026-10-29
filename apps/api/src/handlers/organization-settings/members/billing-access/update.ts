@@ -14,6 +14,7 @@ export const createMemberBillingAccessHandler = (
         "Set a member's additional billing visibility in the active organization. Only owners and admins may change it. Their role grants billing visibility independently of this field.",
       permissions: { member: ["update"] },
       accountAccess: ACCOUNT_ACCESS.standard,
+      featureAccess: { featureId: "time-billing", type: "required" },
       mcp: {
         type: "capability",
         reason: "billing_admin",

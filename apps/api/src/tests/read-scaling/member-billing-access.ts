@@ -20,6 +20,7 @@ import {
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 
 export const seedMemberBillingScaling = async (
   db: GatedTestDb,
@@ -92,10 +93,16 @@ export const memberBillingScalingScenario = {
       const response = await endpoint.handler(
         asTestRaw(
           createTestHandlerContext({
-            audit: async () => undefined,
+            audit: async () => {
+              await Promise.resolve();
+            },
             safeDb: NO_DB,
             scopedDb: NO_DB,
             user: { id: actorUserId },
+            featureAccessSnapshot: enrolledTimeBillingSnapshot({
+              organizationId,
+              userId: actorUserId,
+            }),
             session: { activeOrganizationId: organizationId },
             memberRole: sessionMemberRole("owner"),
             params: { memberId: targetMemberId },

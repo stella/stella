@@ -131,7 +131,7 @@ const useTimeEntryFormState = ({
   userId,
   defaultValues,
   onSubmit,
-  contextState = "available",
+  contextState,
 }: TimeEntryFormStateOptions) => {
   const t = useTranslations();
   const canReadBilling = usePermissions(BILLING_MATTER_READ_PERMISSION);
