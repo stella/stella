@@ -16,23 +16,14 @@ import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
 import { isPlainPrimaryClick } from "@/components/inspector/case-decision-view";
+import type { DecisionCitationMetadata } from "@/components/references/decision-citation-chip.logic";
 import { DECISION_CITATION_PRESENTATION } from "@/components/references/decision-citation-presentation.logic";
 import type { DecisionCitationPresentation } from "@/components/references/decision-citation-presentation.logic";
 import { env } from "@/env";
 import { useFormatter } from "@/i18n/formatting-context";
 import { formatDecisionDate } from "@/lib/decision-date";
 
-export type DecisionCitationMetadata = {
-  decisionId: string;
-  court: string;
-  courtShortCode: string;
-  caseNumber: string;
-  decisionDate: string | null;
-  readerUrl: string;
-  originalUrl: string | null;
-};
-
-type DecisionCitationChipProps = {
+export type DecisionCitationChipProps = {
   decision: DecisionCitationMetadata;
   passage?: ReactNode;
   /** A complete, lazily mounted preview for surfaces with richer metadata. */
@@ -53,6 +44,8 @@ type DecisionCitationChipProps = {
    * not only its badge.
    */
   citingText?: ReactNode;
+  /** The citation range owner emits the badge; later text runs do not. */
+  showBadge?: boolean | undefined;
 };
 
 const DecisionCitationLabel = ({
@@ -136,11 +129,15 @@ const DecisionCitationTriggerContent = ({
   label,
   paragraph,
   presentation,
-}: Pick<DecisionCitationChipProps, "citingText" | "decision" | "label"> & {
+  showBadge,
+}: Pick<
+  DecisionCitationChipProps,
+  "citingText" | "decision" | "label" | "showBadge"
+> & {
   /** The court's number, already in the reader's formatting locale. */
   paragraph: string | null;
   presentation: DecisionCitationPresentation;
-}) => {
+}): ReactNode => {
   const t = useTranslations();
   const badge = (
     <DecisionCitationLabel
@@ -164,6 +161,9 @@ const DecisionCitationTriggerContent = ({
   if (citingText === undefined) {
     return badge;
   }
+  if (!showBadge) {
+    return citingText;
+  }
   return (
     <>
       {citingText}
@@ -175,7 +175,10 @@ const DecisionCitationTriggerContent = ({
   );
 };
 
-/** The same decision annotation in answers, provenance cards and reader text. */
+/**
+ * The same decision annotation in answers, provenance cards and reader text.
+ * Surfaces render it through `CitationChip`, which owns citation kinds.
+ */
 export const DecisionCitationChip = ({
   decision,
   passage,
@@ -185,6 +188,7 @@ export const DecisionCitationChip = ({
   onOpen,
   label,
   citingText,
+  showBadge = true,
 }: DecisionCitationChipProps) => {
   const t = useTranslations();
   const format = useFormatter();
@@ -261,7 +265,6 @@ export const DecisionCitationChip = ({
             ref={triggerRef}
           />
         }
-        tooltip={false}
       >
         <DecisionCitationTriggerContent
           citingText={citingText}
@@ -269,6 +272,7 @@ export const DecisionCitationChip = ({
           label={label}
           paragraph={paragraph}
           presentation={presentation}
+          showBadge={showBadge}
         />
       </PopoverTrigger>
       <PopoverPanel

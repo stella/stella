@@ -175,7 +175,7 @@ const courts = v.pipe(
 export const corpusStatusResponseSchema = v.object({
   decisions: v.number(),
   updatedAt: date,
-  courts,
+  health: v.enum(CASE_LAW_COVERAGE_HEALTH),
 } satisfies Record<
   keyof Success<typeof readCaseLawCorpusStatusHandler>,
   v.GenericSchema
@@ -325,6 +325,16 @@ const countryCoverage = {
         decisionYearTo: numberOrNull,
         pendingTextCount: v.number(),
         storedDecisions: numberOrNull,
+        publishedDecisions: v.number(),
+        courts: v.pipe(
+          v.array(
+            v.object({
+              court: v.nullable(identity.court),
+              decisions: v.number(),
+            }),
+          ),
+          v.maxLength(LIMITS.caseLawFacetLimit + 1),
+        ),
         knownGaps: v.union([
           v.object({
             type: v.literal("not_reconciled"),
@@ -408,7 +418,11 @@ export const coverageResponseSchema = v.object({
     ),
     v.maxLength(CASE_LAW_JURISDICTIONS.length),
   ),
-  totals: v.object({ searchable: v.number(), stored }),
+  totals: v.object({
+    addedLastWeek: v.nullable(v.number()),
+    searchable: v.nullable(v.number()),
+    stored,
+  }),
   countries: v.pipe(
     v.array(
       v.union([

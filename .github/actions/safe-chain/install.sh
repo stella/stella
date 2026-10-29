@@ -44,7 +44,8 @@ fi
 # not run: its own binary download has no retry. Its baked-in asset
 # hash becomes the binary's pin, so there is one hash to maintain.
 # Upstream skips verification when that hash is empty; we never do.
-expected_binary="$(sed -nE 's/^SHA256_LINUXSTATIC_X64="([0-9a-f]{64})"$/\1/p' "$installer" | head -n1)"
+expected_binary="$(sed -nE 's/^SHA256_LINUXSTATIC_X64="([0-9a-f]{64})"$/\1/p' "$installer")"
+expected_binary="${expected_binary%%$'\n'*}"
 if [[ ! "$expected_binary" =~ ^[0-9a-f]{64}$ ]]; then
   echo "::error::No SHA256_LINUXSTATIC_X64 hash in the Safe Chain ${SAFE_CHAIN_RELEASE_VERSION} installer;" \
        "refusing to install an unverified binary"

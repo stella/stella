@@ -125,6 +125,22 @@ const responses = {
     },
   ],
   not_found: [
+    {
+      status: "not_found",
+      reason: "not_at_this_court",
+      otherCourtCandidates: [
+        {
+          decisionId: identity.decisionId,
+          identifier: "52 A 6/2023",
+          label: "Krajský soud v Hradci Králové, rozsudek, 2023-06-01",
+          readerUrl: identity.readerUrl,
+          court: "Krajský soud v Hradci Králové",
+          decisionDate: "2023-06-01",
+          decisionType: "rozsudek",
+          subjectSummary: "Synthetic classification",
+        },
+      ],
+    },
     { status: "not_found", reason: "unknown_document" },
     { status: "not_found", reason: "unknown_section" },
     { status: "not_found", reason: "no_exact_identity" },

@@ -118,7 +118,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
     pending.resolve(-1);
     expect(Result.isError(outcome)).toBe(true);
     if (Result.isError(outcome)) {
-      expect(outcome.error.reason).toBe("unavailable");
+      expect(outcome.error.reason).toBe("store_unavailable");
     }
     const charge = await sent.promise;
     const count = Number(charge.at(1));
@@ -376,7 +376,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
         if (!Result.isError(outcome)) {
           panic("Expected store refusal");
         }
-        expect(outcome.error.reason).toBe("unavailable");
+        expect(outcome.error.reason).toBe("store_unavailable");
         expect(
           await client.send("ZCARD", [
             key(organizationId, "tenant:organization"),

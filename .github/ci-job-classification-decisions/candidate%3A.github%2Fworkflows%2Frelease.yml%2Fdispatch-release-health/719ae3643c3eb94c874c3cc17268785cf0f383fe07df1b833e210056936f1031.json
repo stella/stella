@@ -1,0 +1,5 @@
+{
+  "kind": "support",
+  "qualifier": "Dispatches health evaluation after successful stable production promotion to supply evidence for the next release gate.",
+  "reviewedDigest": "719ae3643c3eb94c874c3cc17268785cf0f383fe07df1b833e210056936f1031"
+}

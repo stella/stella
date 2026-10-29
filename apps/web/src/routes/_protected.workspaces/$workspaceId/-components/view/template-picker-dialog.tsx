@@ -51,7 +51,7 @@ import {
   CapabilityAction,
   useActionCapabilities,
 } from "@/lib/organization/feature-access/capability-actions";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 import { createUuid } from "@/lib/uuid";
 import { useCreateView } from "@/lib/workspaces/mutations/views";
 import type { WorkspaceViewTemplate } from "@/lib/workspaces/queries/view-templates";
@@ -108,7 +108,7 @@ export const TemplatePickerDialog = ({
     enabled: open,
   });
   const { isPending } = templatesQuery;
-  const templatesView = useQueryView(templatesQuery);
+  const templatesView = queryView(templatesQuery);
   const templates =
     templatesView.type === "items" ? templatesView.items : undefined;
   const visibleTemplates = templates?.filter(

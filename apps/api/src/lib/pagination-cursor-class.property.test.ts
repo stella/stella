@@ -20,6 +20,7 @@ import fc from "fast-check";
 
 import { propertyConfig } from "@stll/property-testing";
 
+import { decisionDatePositionOf } from "@/api/lib/case-law/decision-date-order";
 import { encodeDecisionSearchCursor } from "@/api/lib/case-law/decision-search-cursor";
 import { encodeEntitiesWindowCursor } from "@/api/lib/entities/window-cursor";
 import { encodeCorpusSearchCursor } from "@/api/lib/legal-search/corpus-search-cursor";
@@ -109,7 +110,7 @@ describe("every cursor encoder emits a cursor the surface recognizes", () => {
         (score, id, seen) =>
           expect(
             isIssuablePaginationCursor(
-              encodeGlobalSearchCursor({ score, id, seen }),
+              encodeGlobalSearchCursor({ tier: 2, score, id, seen }),
             ),
           ).toBe(true),
       ),
@@ -142,16 +143,24 @@ describe("every cursor encoder emits a cursor the surface recognizes", () => {
     );
   });
 
-  test("encodeDecisionSearchCursor, over its order segment", () => {
+  test("encodeDecisionSearchCursor, in every order", () => {
     fc.assert(
       fc.property(
         scoreArbitrary,
         uuidArbitrary,
+        fc.option(fc.constantFrom("1791-02-01", "2024-03-05", "2999-12-31")),
         fc.constantFrom(...SEARCH_SORTS),
-        (sortKey, id, sort) =>
+        (sortKey, id, decisionDate, sort) =>
           expect(
             isIssuablePaginationCursor(
-              encodeDecisionSearchCursor({ id, sort, sortKey }),
+              encodeDecisionSearchCursor(
+                sort === "relevance"
+                  ? { sort, sortKey, id }
+                  : {
+                      sort,
+                      position: decisionDatePositionOf({ decisionDate, id }),
+                    },
+              ),
             ),
           ).toBe(true),
       ),

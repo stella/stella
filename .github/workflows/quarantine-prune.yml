@@ -51,15 +51,16 @@ jobs:
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
-      # The script only reads bunfig.toml and bun.lock, so no install is needed.
+      # The scripts only read repository policy and lockfiles, so no install is needed.
       - name: Prune expired excludes
         id: prune
         run: |
           set -euo pipefail
 
-          bun scripts/check-stll-quarantine-excludes.ts --prune
+          mapfile -d '' tracked_bunfigs < <(git ls-files -z '*bunfig.toml')
+          bun scripts/check-stll-quarantine-excludes.ts --prune "${tracked_bunfigs[@]}"
 
-          if git diff --quiet -- bunfig.toml; then
+          if git diff --quiet -- bunfig.toml ':(glob)**/bunfig.toml'; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "Nothing expired." >> "$GITHUB_STEP_SUMMARY"
             exit 0
@@ -70,6 +71,7 @@ jobs:
           # The pruned file must satisfy the guard, or the PR would land a
           # bunfig.toml that fails CI for a different reason.
           bun scripts/check-stll-quarantine-excludes.ts
+          bun scripts/check-standalone-lockfiles.ts
 
       - name: Mint app token
         if: steps.prune.outputs.changed == 'true'
@@ -83,41 +85,30 @@ jobs:
           permission-contents: write
           permission-pull-requests: write
 
-      - name: Disarm existing removal proposal
+      - name: Decide removal proposal update
+        id: decision
         if: steps.prune.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           set -euo pipefail
-
-          armed_pr="$(gh pr list --repo "$GITHUB_REPOSITORY" \
-            --state open --base main --head "$PRUNE_BRANCH" \
-            --json number,isCrossRepository,autoMergeRequest \
-            --jq 'map(select(.isCrossRepository == false and .autoMergeRequest != null))[0].number // empty')"
-          if [[ -z "$armed_pr" ]]; then
-            echo "Existing quarantine removal proposal is not armed."
-            exit 0
-          fi
-
-          # A proposal already in the merge queue leaves it when the refresh
-          # pushes a new head, and under a merge hold the queue's required
-          # result refuses it, so disarming is what remains to do here.
-
-          gh pr merge "$armed_pr" --repo "$GITHUB_REPOSITORY" --disable-auto
+          bash scripts/quarantine-prune-decision.sh
 
       # The commit is created through the API so GitHub signs it. The branch
       # name is reserved for this job alone: re-running replaces its own
       # proposal with one computed from current main.
       - name: Open or update the removal PR
         id: removal-pr
-        if: steps.prune.outputs.changed == 'true'
+        if: steps.decision.outputs.outcome == 'write'
         uses: stella/.github/.github/actions/signed-commit@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
         with:
           token: ${{ steps.app-token.outputs.token }}
           mode: refresh-pr
           branch: ${{ env.PRUNE_BRANCH }}
           base: main
-          paths: bunfig.toml
+          paths: |
+            bunfig.toml
+            **/bunfig.toml
           commit-message: |
             chore(deps): remove expired quarantine excludes
 
@@ -132,20 +123,13 @@ jobs:
             Opened automatically. The removal is what `bun scripts/check-stll-quarantine-excludes.ts --prune` produces.
 
       - name: Arm automatic removal
-        if: steps.prune.outputs.changed == 'true'
+        if: steps.prune.outputs.changed == 'true' && steps.decision.outputs.outcome != 'queued'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          PR_NUMBER: ${{ steps.removal-pr.outputs.pull-request-number }}
-          WRITTEN_HEAD: ${{ steps.removal-pr.outputs.commit-sha }}
-          MERGE_HOLD: ${{ vars.STELLA_MERGE_HOLD }}
+          PR_NUMBER: ${{ steps.removal-pr.outputs.pull-request-number || steps.decision.outputs.pull-request-number }}
+          WRITTEN_HEAD: ${{ steps.removal-pr.outputs.commit-sha || steps.decision.outputs.head }}
         run: |
           set -euo pipefail
-
-          if [[ -n "$MERGE_HOLD" ]]; then
-            echo "::notice::Automatic quarantine removal is held by STELLA_MERGE_HOLD."
-            echo "Automatic quarantine removal is held by STELLA_MERGE_HOLD." >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
 
           # refresh-pr may report no operation for an unchanged proposal.
           if [[ -z "$PR_NUMBER" ]]; then

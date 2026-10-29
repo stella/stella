@@ -40,7 +40,7 @@ const migration = await Bun.file(MIGRATION).text();
 // Later sources replace the URL contract function; install the shipped one.
 const urlContractMigration = await Bun.file(
   new URL(
-    "../../../drizzle/20261020093000_cz_uohs_metadata_url_contract/migration.sql",
+    "../../../drizzle/20261027160100_uk_fcl_metadata_url_contract/migration.sql",
     import.meta.url,
   ),
 ).text();

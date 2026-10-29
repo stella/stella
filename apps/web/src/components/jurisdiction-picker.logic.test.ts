@@ -3,6 +3,7 @@ import fc from "fast-check";
 
 import { compareByLocale } from "@stll/collation";
 import { assertProperty } from "@stll/property-testing";
+import { foldSearchMatchText } from "@stll/text-normalize";
 
 import { filterJurisdictionOptions } from "@/components/jurisdiction-picker.logic";
 
@@ -16,6 +17,20 @@ const PROPERTY_TEXT_PARTS_MAX = 24;
 const PROPERTY_COUNTRIES_MAX = 16;
 const PROPERTY_SELECTED_CODES_MAX = 8;
 const PROPERTY_SUGGESTED_CODES_MAX = 8;
+
+/**
+ * The search contract: a field matches when it contains the trimmed query once
+ * both are folded for search (case, accents, ligatures, Arabic variants).
+ */
+const matchesFolded = (field: string | null | undefined, query: string) => {
+  const needle = foldSearchMatchText(query.trim().toWellFormed());
+  return (
+    needle === "" ||
+    (field !== null &&
+      field !== undefined &&
+      foldSearchMatchText(field.toWellFormed()).includes(needle))
+  );
+};
 
 const filter = (
   query: string,
@@ -38,15 +53,16 @@ const filter = (
   });
 
 describe("jurisdiction search", () => {
-  test("trims and case-folds a query against names or codes independently", () => {
+  test("trims and folds a query against names or codes independently", () => {
     expect(filter("  at ").map(({ code }) => code)).toEqual(["AT"]);
     expect(filter("  ger ").map(({ code }) => code)).toEqual(["DE"]);
     expect(filter("a be")).toEqual([]);
     expect(filter("   ")).toHaveLength(countries.length);
   });
 
-  test("keeps accents significant and preserves selected, suggested, then locale order", () => {
-    expect(filter("ces")).toEqual([]);
+  test("ignores accents and preserves selected, suggested, then locale order", () => {
+    expect(filter("cesko").map(({ code }) => code)).toEqual(["CZ"]);
+    expect(filter("ČESKO").map(({ code }) => code)).toEqual(["CZ"]);
     expect(
       filter("", {
         selectedCodes: ["BE"],
@@ -73,7 +89,7 @@ describe("jurisdiction search", () => {
   });
 });
 
-test("jurisdiction filtering preserves the previous substring and order rules", () => {
+test("jurisdiction filtering keeps the folded matches in selection order", () => {
   const text = fc
     .array(
       fc.constantFrom(
@@ -98,7 +114,7 @@ test("jurisdiction filtering preserves the previous substring and order rules", 
     .map((parts) => parts.join(""));
 
   assertProperty(
-    "jurisdiction filtering preserves the previous substring and order rules",
+    "jurisdiction filtering keeps the folded matches in selection order",
     fc.property(
       fc.array(fc.record({ code: text, name: text }), {
         maxLength: PROPERTY_COUNTRIES_MAX,
@@ -124,15 +140,11 @@ test("jurisdiction filtering preserves the previous substring and order rules", 
           }
           return compareName(a.name, b.name);
         });
-        const needle = query.trim().toLowerCase().toWellFormed();
-        const expected =
-          needle.length === 0
-            ? sorted
-            : sorted.filter(
-                (country) =>
-                  country.name.toLowerCase().toWellFormed().includes(needle) ||
-                  country.code.toLowerCase().toWellFormed().includes(needle),
-              );
+        const expected = sorted.filter(
+          (country) =>
+            matchesFolded(country.name, query) ||
+            matchesFolded(country.code, query),
+        );
 
         expect(
           filterJurisdictionOptions({

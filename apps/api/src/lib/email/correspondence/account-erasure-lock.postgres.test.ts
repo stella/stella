@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
 import type { ParsedCorrespondence } from "@stll/api-contract/correspondence";
+import { waitForExternalState } from "@stll/property-testing/external-state";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -38,22 +39,20 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const WRITER_GATE_SETTING = "test.correspondence_writer_gate";
-const BLOCK_OBSERVATION_ATTEMPTS = 200;
 
 const waitForWriterGate = async (
   tx: Transaction,
   writerPid: number,
 ): Promise<void> => {
-  for (let attempt = 0; attempt < BLOCK_OBSERVATION_ATTEMPTS; attempt += 1) {
-    const rows = await tx.execute<{ blocked: boolean }>(sql`
-      SELECT pg_backend_pid() = ANY(pg_blocking_pids(${writerPid})) AS blocked
-    `);
-    if (rows.at(0)?.blocked) {
-      return;
-    }
-    await Bun.sleep(10);
-  }
-  throw new Error("The production writer did not reach the insert gate");
+  await waitForExternalState({
+    description: "the production writer reaches the insert gate",
+    read: async () =>
+      (
+        await tx.execute<{ blocked: boolean }>(sql`
+          SELECT pg_backend_pid() = ANY(pg_blocking_pids(${writerPid})) AS blocked
+        `)
+      ).at(0)?.blocked === true,
+  });
 };
 
 if (!databaseUrl || !runPostgresTests) {
