@@ -100,6 +100,10 @@ export const NO_NATIVE_UI_REGISTRY = {
   "animated-count": noNative("animates a number's digits"),
   "application-rail": noNative("app navigation chrome built from Button"),
   avatar: owned(AVATAR_RULE, "user avatars render through UserIdentity"),
+  badge: noNative(
+    "HTML has no badge element or role; a hand-styled pill is a span no " +
+      "lexical pattern tells apart from other inline text",
+  ),
   "bidi-text": owned(
     "require-dir-on-rendered-name/require-dir-on-rendered-name",
     "raw <bdi>, <bdo> and dir on rendered names are reported there",
@@ -371,6 +375,10 @@ export const NO_NATIVE_UI_REGISTRY = {
       },
     ],
   }),
+  "truncated-text": owned(
+    nativeRuleId("tooltip"),
+    "a title on truncated text is reported by the tooltip rule",
+  ),
   "typed-character": notComponent("keystroke classification"),
   "use-contained-handler": notComponent("a React hook"),
   "use-content-dir": notComponent("a React hook"),
