@@ -4,6 +4,7 @@ import {
   SIDEBAR_STATE_COOKIE,
   SIDEBAR_STATE_VALUES,
 } from "../../src/components/sidebar/sidebar-state-cookie";
+import { PALETTE_STORAGE_KEY, THEME_STORAGE_KEY } from "../../src/consts";
 import { openGlobalSearchDatePicker } from "../helpers/global-search";
 import { expect, test } from "../helpers/test";
 import { createTestWorkspace, deleteTestWorkspace } from "../helpers/workspace";
@@ -90,6 +91,45 @@ test("authenticated law pages retain the user's recent matters", async ({
     await deleteTestWorkspace(request, workspace.id);
   }
 });
+
+for (const theme of ["light", "dark"] as const) {
+  test(`the sidebar paints the same surface on matters and law pages: ${theme}`, async ({
+    page,
+  }) => {
+    await page.addInitScript(
+      ({ paletteKey, themeKey, value }) => {
+        window.localStorage.setItem(themeKey, value);
+        window.localStorage.setItem(paletteKey, "flexoki");
+      },
+      {
+        paletteKey: PALETTE_STORAGE_KEY,
+        themeKey: THEME_STORAGE_KEY,
+        value: theme,
+      },
+    );
+    const inner = page.locator(
+      '[data-slot="sidebar"] [data-slot="sidebar-inner"]',
+    );
+    // The locator re-resolves on every read, so a sidebar that hydration or
+    // the jurisdiction redirect replaces is read again instead of detached.
+    const sidebarFill = async () =>
+      await inner.evaluate(
+        (element) => getComputedStyle(element).backgroundColor,
+      );
+    const openPage = async (url: string) => {
+      await page.goto(url, { waitUntil: "domcontentloaded" });
+      const html = expect(page.locator("html"));
+      await (theme === "dark" ? html : html.not).toHaveClass(/\bdark\b/u);
+      await expect(inner).toBeVisible();
+    };
+
+    await openPage("/workspaces");
+    await expect.poll(sidebarFill).not.toMatch(/^(?:|rgba\(0, 0, 0, 0\))$/u);
+    const matters = await sidebarFill();
+    await openPage("/law?country=cze");
+    await expect.poll(sidebarFill).toBe(matters);
+  });
+}
 
 test.describe("public law hydration", () => {
   test.use({

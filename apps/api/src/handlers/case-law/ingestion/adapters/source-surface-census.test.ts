@@ -79,6 +79,7 @@ import {
   skUsFixture,
   ukFclFixture,
 } from "@/api/tests/helpers/case-law-enrolled-fixtures";
+import { nssRecoveryFixture } from "@/api/tests/helpers/cz-nss-recovery";
 
 import { courtListenerConformanceFixture } from "./courtlistener/conformance-fixture";
 import { COURTLISTENER_IMPORT_KEY } from "./courtlistener/map";
@@ -126,7 +127,10 @@ const SURFACE_EVIDENCE = {
     { kind: "built", fixture: czNsFixture },
     { kind: "page-recording", file: "cz-ns-page.json.gz" },
   ],
-  [ADAPTER_KEYS.CZ_NSS]: [{ kind: "built", fixture: czNssFixture }],
+  [ADAPTER_KEYS.CZ_NSS]: [
+    { kind: "built", fixture: czNssFixture },
+    { kind: "built", fixture: nssRecoveryFixture },
+  ],
   [ADAPTER_KEYS.CZ_US]: [
     { kind: "built", fixture: czUsFixture },
     { kind: "page-recording", file: "cz-us-page.json.gz" },

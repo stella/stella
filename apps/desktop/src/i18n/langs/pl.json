@@ -299,7 +299,7 @@
     "moreOptions": "Więcej opcji",
     "moreItemActions": "Więcej działań dla elementu {number}",
     "noResults": "Brak pasujących wycinków",
-    "noResultsDescription": "Czy zamiast tego wyszukać „{query}” w rejestrach?",
+    "noResultsSearchRegistries": "Szukaj „{query}” w rejestrach",
     "noGroup": "Bez grupy",
     "newGroupOption": "Nowa grupa…",
     "copyItem": "Kopiuj element {number}",
@@ -368,7 +368,8 @@
     "welcomeShortcutDescription": "Naciśnij {shortcut}, aby przejrzeć historię i wybrać wycinek.",
     "welcomeShortcutTitle": "Otwórz go z dowolnego miejsca.",
     "welcomeStart": "Zacznij kopiować",
-    "welcomeTitle": "Poznaj swój schowek"
+    "welcomeTitle": "Poznaj swój schowek",
+    "registryIdentifierSearchHint": "Wprowadź {identifiers}."
   },
   "activity": {
     "title": "Aktywność",

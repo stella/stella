@@ -309,7 +309,7 @@ export const KanbanColumn = ({
         dragHandle={
           isDraggable ? (
             <div
-              className="text-muted-foreground hover:text-foreground shrink-0 cursor-grab opacity-0 transition-opacity group-hover/column:opacity-100"
+              className="text-muted-foreground hover:text-foreground shrink-0 cursor-grab opacity-0 transition-opacity group-hover/column:opacity-100 pointer-coarse:opacity-100"
               ref={dragHandleRef}
             >
               <GripVerticalIcon className="size-3.5" />
@@ -723,7 +723,7 @@ export const ColumnCalculations = ({
         />
       ))}
       {onChange && properties.length > 0 && (
-        <span className="opacity-0 transition-opacity group-hover/column:opacity-100 focus-within:opacity-100">
+        <span className="opacity-0 transition-opacity group-hover/column:opacity-100 focus-within:opacity-100 pointer-coarse:opacity-100">
           <CalculationPicker
             labels={labels}
             onChange={onChange}
