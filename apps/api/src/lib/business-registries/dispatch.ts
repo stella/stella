@@ -1834,6 +1834,10 @@ type RegistryWebSearchResult = Result<RegistryWebSearch | null, Error>;
 export type LoadRegistryWebSearch = () =>
   RegistryWebSearchResult | Promise<RegistryWebSearchResult>;
 
+/** Explicit capability value for lookup surfaces that cannot provide web search. */
+export const NO_REGISTRY_WEB_SEARCH: LoadRegistryWebSearch = () =>
+  Result.ok(null);
+
 const unexpectedRegistryLookupFailure = (
   registry: BusinessRegistrySlug,
   cause: unknown,
@@ -1878,7 +1882,7 @@ export const executeRegistryLookup = async ({
    * silently clamped to the adapter's max.
    */
   limit?: number;
-  loadWebSearch?: LoadRegistryWebSearch | undefined;
+  loadWebSearch: LoadRegistryWebSearch;
 }): Promise<RegistryLookupResponse | HandlerError> => {
   const trimmed = query.trim();
   if (trimmed.length === 0) {
@@ -1897,7 +1901,7 @@ export const executeRegistryLookup = async ({
       return { type: "lookup", registry: handler.slug, hit };
     }
     if (!searchFn && handler.webCandidateNameSearch) {
-      const availability = (await loadWebSearch?.()) ?? Result.ok(null);
+      const availability = await loadWebSearch();
       if (availability.isErr()) {
         return HandlerError.is(availability.error)
           ? availability.error
@@ -1923,6 +1927,7 @@ export const executeRegistryLookup = async ({
     if (!searchFn) {
       return new HandlerError({
         status: 400,
+        code: "name_search_unsupported",
         message: `Registry '${handler.slug}' does not support name search; provide a canonical identifier`,
       });
     }

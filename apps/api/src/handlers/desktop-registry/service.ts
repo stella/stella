@@ -1,7 +1,10 @@
 import { Result } from "better-result";
 import { and, desc, eq } from "drizzle-orm";
 
-import type { BusinessRegistrySlug } from "@stll/api-contract";
+import {
+  BUSINESS_REGISTRY_SEARCH_CAPABILITIES,
+  type BusinessRegistrySlug,
+} from "@stll/api-contract";
 import type {
   DesktopRegistryConfig,
   DesktopRegistryDefaultFormat,
@@ -19,10 +22,12 @@ import {
   getOrganizationRegistryDispatch,
   getOrganizationRegistryHandler,
 } from "@/api/lib/business-registries/credentials";
-import type { BusinessRegistryHit } from "@/api/lib/business-registries/dispatch";
 import {
   BUSINESS_REGISTRY_SLUGS,
+  type BusinessRegistryHit,
   executeRegistryLookup,
+  type LoadRegistryWebSearch,
+  NO_REGISTRY_WEB_SEARCH,
 } from "@/api/lib/business-registries/dispatch";
 import { loadPracticeJurisdictions } from "@/api/lib/db/practice-jurisdictions";
 import {
@@ -37,6 +42,7 @@ import {
   ACTION_COST_CALL_KIND,
   actionRequestObserver,
 } from "@/api/lib/usage/action-costs/context";
+import { loadWebSearchProvidersForOrg } from "@/api/lib/web-search/load-org-keys";
 
 import { getDefaultDesktopRegistry } from "./default-registry";
 
@@ -50,6 +56,8 @@ export type DesktopRegistryContext = {
   scopedDb: ScopedDb;
   testDependencies?: {
     getOrganizationRegistryHandler?: typeof getOrganizationRegistryHandler;
+    loadWebSearch?: LoadRegistryWebSearch;
+    loadFormats?: typeof loadFormats;
   };
 };
 
@@ -132,6 +140,7 @@ export const getDesktopRegistryConfig = async (
           id,
           name: `${handler.country} · ${handler.displayName}`,
           formatType: BUSINESS_REGISTRY_FORMAT_CAPABILITIES[id].type,
+          searchCapabilities: BUSINESS_REGISTRY_SEARCH_CAPABILITIES[id],
         }
       : null;
   });
@@ -185,7 +194,33 @@ export const searchDesktopRegistry = async (
       }),
     );
   }
+  const loadWebSearch: LoadRegistryWebSearch =
+    context.testDependencies?.loadWebSearch ??
+    (async () =>
+      await Result.tryPromise({
+        try: async () => {
+          const { webSearchProvider } = await context.scopedDb(async (tx) =>
+            loadWebSearchProvidersForOrg(tx, context.organizationId),
+          );
+          return webSearchProvider === null
+            ? null
+            : {
+                provider: webSearchProvider,
+                observer: actionRequestObserver(
+                  context.organizationId,
+                  ACTION_COST_CALL_KIND.webSearchRequest,
+                ).onRequest,
+              };
+        },
+        catch: (cause) =>
+          new HandlerError({
+            status: 500,
+            message: "Could not load web search configuration",
+            cause,
+          }),
+      }));
   const lookup = await executeRegistryLookup({
+    loadWebSearch,
     observer,
     permit: grantThirdPartyOutboundPermit(),
     handler: configured.value,
@@ -205,7 +240,10 @@ export const searchDesktopRegistry = async (
       }),
     );
   }
-  const formats = await loadFormats(context, registry);
+  const formats = await (context.testDependencies?.loadFormats ?? loadFormats)(
+    context,
+    registry,
+  );
   const results: DesktopRegistrySearchResult[] = [];
   const toResult = (hit: BusinessRegistryHit): DesktopRegistrySearchResult => {
     const rendered = renderLookupOutput(formats.defaultFormat, hit);
@@ -233,6 +271,7 @@ export const searchDesktopRegistry = async (
           return Result.ok(hit);
         }
         const detail = await executeRegistryLookup({
+          loadWebSearch,
           observer,
           permit: grantThirdPartyOutboundPermit(),
           handler: configured.value,
@@ -397,6 +436,7 @@ export const formatDesktopRegistry = async (
     );
   }
   const lookup = await executeRegistryLookup({
+    loadWebSearch: NO_REGISTRY_WEB_SEARCH,
     observer,
     permit: grantThirdPartyOutboundPermit(),
     handler: configured.value,
