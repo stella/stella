@@ -8,6 +8,7 @@ OR (chunk->>'type' = 'TEXT_MESSAGE_CHUNK' AND chunk ? 'role'))`;
 /** Retained starts leave the uninitialized predicate in committed, restartable batches. */
 export const CHAT_RUN_TEXT_BOUNDARIES = {
   name: "chat-run-text-boundaries",
+  introducedBy: "20261029140700_chat_run_text_boundaries",
   readCompletion: async (connection) => {
     const pending = await connection.query(
       `SELECT 1 ${PENDING_TEXT_BOUNDARIES} LIMIT 1`,

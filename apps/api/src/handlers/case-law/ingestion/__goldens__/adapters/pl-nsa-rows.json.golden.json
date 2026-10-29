@@ -68,7 +68,7 @@
         "anchorId": "h-thesis",
         "type": "heading",
         "level": 2,
-        "role": "section-heading",
+        "role": "publisher-heading",
         "inlines": [
           {
             "type": "text",
@@ -186,5 +186,5 @@
       }
     ]
   },
-  "parserVersion": 9
+  "parserVersion": 10
 }

@@ -2011,6 +2011,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-shared-checkout-mutation.ts",
     "./.oxlint-plugins/no-centered-scroll-column.ts",
     "./.oxlint-plugins/no-raw-overflow-scroll.ts",
+    "./.oxlint-plugins/no-hover-only-reveal.ts",
     "./.oxlint-plugins/no-imported-class-constant.ts",
     "./.oxlint-plugins/no-static-devtools-import.ts",
     "./.oxlint-plugins/no-static-catalogue-route-import.ts",
@@ -6750,6 +6751,22 @@ const config = defineConfig({
       ],
       rules: {
         "no-raw-overflow-scroll/no-raw-overflow-scroll": "error",
+      },
+    },
+    {
+      // Touch screens have no hover, so a control that is transparent until
+      // hovered never appears on a phone or tablet. Whatever hides until
+      // hover says what coarse pointers see instead.
+      files: [
+        "apps/web/src/**/*.tsx",
+        "apps/desktop/src/**/*.tsx",
+        "packages/ui/src/**/*.tsx",
+        "packages/workspace-ui/src/**/*.tsx",
+        ".oxlint-plugins/__fixtures__/no-hover-only-reveal.fixture.tsx",
+      ],
+      excludeFiles: ["**/*.{test,spec}.tsx", "**/__tests__/**"],
+      rules: {
+        "no-hover-only-reveal/no-hover-only-reveal": "error",
       },
     },
     {

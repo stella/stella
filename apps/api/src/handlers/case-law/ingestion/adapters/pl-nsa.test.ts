@@ -131,7 +131,8 @@ const blocksOf = (decision: IngestionResult) =>
 
 const headingsOf = (decision: IngestionResult): string[] =>
   blocksOf(decision).flatMap((block) =>
-    block.type === "heading" && block.role === "section-heading"
+    block.type === "heading" &&
+    (block.role === "section-heading" || block.role === "publisher-heading")
       ? [block.plainText]
       : [],
   );
