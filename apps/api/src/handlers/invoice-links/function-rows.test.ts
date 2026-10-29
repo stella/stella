@@ -160,7 +160,7 @@ const originalRow = {
   invoiceDate,
 };
 
-const settlementRow = { latestPaidOn: invoiceDate };
+const settlementRow = { latestPaidOn: invoiceDate, paidAmount: 12_345 };
 
 const parsedRows: {
   name: string;

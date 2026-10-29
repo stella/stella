@@ -10,6 +10,7 @@ import {
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { INVOICE_LINE_SOURCE } from "@stll/api-contract";
+import { buildCzechQrPaymentPayload, variableSymbolOf } from "@stll/invoicing";
 import { sha256Hex } from "@stll/sha256/bun";
 
 import { member, user as authUser } from "@/api/db/auth-schema";
@@ -39,7 +40,10 @@ import {
   loadInvoiceExport,
   toExportRecords,
 } from "@/api/handlers/invoices/export-records";
+import readInvoiceById from "@/api/handlers/invoices/get";
 import { INVOICE_DOCUMENT_PROJECTION } from "@/api/handlers/invoices/invoice-detail";
+import { createInvoiceFormatters } from "@/api/handlers/invoices/pdf/render-helpers";
+import { qrSvg } from "@/api/handlers/invoices/pdf/typst/data";
 import type { InvoiceLinkMessage } from "@/api/handlers/invoices/sends/create";
 import { createSendInvoice } from "@/api/handlers/invoices/sends/create";
 import listInvoiceSends from "@/api/handlers/invoices/sends/list";
@@ -193,6 +197,7 @@ beforeAll(async () => {
     postalCode: "110 00",
     email: "billing@firm.example.test",
     defaultCurrency: "CZK",
+    iban: "CZ3301000000000002970297",
   });
   server = serveForTest(
     createHttpApp({
@@ -1103,6 +1108,80 @@ describe("opening an invoice link", () => {
   });
 });
 
+describe("invoice payment requests", () => {
+  test("email and public payment details/QR use the authenticated outstanding balance and restore it after voiding", async () => {
+    const invoiceId = await seedInvoice({ status: INVOICE_STATUS.SENT });
+    await addPayment(invoiceId, { amount: 60_000, paidOn: "2026-10-02" });
+    const { money } = createInvoiceFormatters({
+      currency: "CZK",
+      locale: "cs",
+    });
+    const firstSend = await send(invoiceId, ["outstanding@example.test"]);
+    expect(firstSend).toMatchObject({ deliveryStatus: "delivered" });
+    expect(
+      delivered.findLast(({ to }) => to === "outstanding@example.test")
+        ?.amountDue,
+    ).toBe(money(40_000));
+    const token = tokenSentTo("outstanding@example.test");
+    const assertBalance = async (outstandingAmount: number) => {
+      const authenticated = await readInvoiceById.handler(
+        asTestRaw<Parameters<typeof readInvoiceById.handler>[0]>(
+          memberContext({
+            tenant: "A",
+            invoiceId,
+            route: "/v1/invoices/:workspaceId/:invoiceId",
+          }),
+        ),
+      );
+      expect(authenticated).toMatchObject({ outstandingAmount });
+      const response = await post(server, "view", { token });
+      expect(response.status).toBe(200);
+      const page: unknown = await response.json();
+      expect(page).not.toHaveProperty("paidAmount");
+      const variableSymbol = variableSymbolOf({
+        number: numberOf(invoiceId),
+        reference: null,
+      });
+      const payload = buildCzechQrPaymentPayload({
+        documentType: "invoice",
+        iban: "CZ3301000000000002970297",
+        amountMinor: cents(outstandingAmount),
+        currency: "CZK",
+        dueDate: "2026-10-15",
+        message: numberOf(invoiceId),
+        ...(variableSymbol === null ? {} : { variableSymbol }),
+      }).unwrap();
+      if (payload.status !== "payable") {
+        return panic("Expected a payable Czech invoice QR");
+      }
+      expect(page).toMatchObject({
+        outstandingAmount,
+        totals: expect.arrayContaining([
+          { label: expect.any(String), value: money(100_000) },
+        ]),
+        payment: {
+          fields: expect.arrayContaining([
+            { label: expect.any(String), value: money(outstandingAmount) },
+          ]),
+          qrSvg: qrSvg(payload.payload, "M"),
+        },
+      });
+    };
+    await assertBalance(40_000);
+    await testDb
+      .update(invoicePayments)
+      .set({ voidedAt: new Date(), voidedBy: ids.userA1 })
+      .where(eq(invoicePayments.invoiceId, invoiceId));
+    expect(await send(invoiceId, ["restored@example.test"])).toMatchObject({
+      deliveryStatus: "delivered",
+    });
+    expect(
+      delivered.findLast(({ to }) => to === "restored@example.test")?.amountDue,
+    ).toBe(money(100_000));
+    await assertBalance(100_000);
+  });
+});
+
 describe("public invoice settlement projection", () => {
   const expectPaidDateParity = async (
     invoiceId: SafeId<"invoice">,
@@ -1117,7 +1196,9 @@ describe("public invoice settlement projection", () => {
     const unpaid = await seedInvoice({ status: INVOICE_STATUS.SENT });
     const unpaidLink = await createStandaloneLink(unpaid);
     expect(await expectPaidDateParity(unpaid, unpaidLink.token)).toBeNull();
-    expect(await readSettlementFunction("A", unpaidLink.tokenHash)).toEqual([]);
+    expect(
+      await readSettlementFunction("A", unpaidLink.tokenHash),
+    ).toMatchObject([{ latest_paid_on: null }]);
 
     const partial = await seedInvoice({ status: INVOICE_STATUS.SENT });
     await addPayment(partial, { amount: 25_000, paidOn: "2026-10-02" });
@@ -1163,7 +1244,9 @@ describe("public invoice settlement projection", () => {
       .set({ status: INVOICE_STATUS.SENT, paidAt: null })
       .where(eq(invoices.id, invoiceId));
     expect(await expectPaidDateParity(invoiceId, link.token)).toBeNull();
-    expect(await readSettlementFunction("A", link.tokenHash)).toEqual([]);
+    expect(await readSettlementFunction("A", link.tokenHash)).toMatchObject([
+      { latest_paid_on: null },
+    ]);
   });
 
   test("a zero-total send uses the legacy paidAt date", async () => {
@@ -1188,6 +1271,9 @@ describe("public invoice settlement projection", () => {
     });
     const token = tokenSentTo("zero-settlement@example.test");
     expect(await expectPaidDateParity(invoiceId, token)).not.toBeNull();
+    const page: unknown = await (await post(server, "view", { token })).json();
+    expect(page).toMatchObject({ outstandingAmount: 0, payment: null });
+    expect(page).not.toHaveProperty("paidAmount");
   });
 
   test("legacy payment rows retain their recorded paid date", async () => {

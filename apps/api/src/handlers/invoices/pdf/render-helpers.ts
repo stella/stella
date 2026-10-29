@@ -22,6 +22,8 @@ import { formatMoneyCents } from "@stll/money";
 import { parsePlainDate } from "@stll/time";
 
 export type RenderInvoicePdfOptions = {
+  /** A payment request may use the remaining balance while the document retains its original totals. */
+  paymentAmountMinor?: number;
   invoice: {
     status: InvoiceStatus;
     documentType: InvoiceDocumentType;
@@ -88,6 +90,7 @@ export const buildInvoicePaymentPayload = ({
   invoice,
   seller,
   totals,
+  paymentAmountMinor = totals.grossAmountMinor,
 }: RenderInvoicePdfOptions): InvoicingResult<
   | (CzechQrPaymentResult & { errorCorrection: "M"; scheme: "spayd" })
   | (PayBySquareResult & { errorCorrection: "M"; scheme: "pay_by_square" })
@@ -95,7 +98,7 @@ export const buildInvoicePaymentPayload = ({
 > | null => {
   if (
     invoice.documentType === "credit_note" ||
-    totals.grossAmountMinor <= 0 ||
+    paymentAmountMinor <= 0 ||
     !seller?.iban
   ) {
     return null;
@@ -107,7 +110,7 @@ export const buildInvoicePaymentPayload = ({
   const payment = {
     documentType: invoice.documentType,
     iban: seller.iban,
-    amountMinor: totals.grossAmountMinor,
+    amountMinor: paymentAmountMinor,
     currency: invoice.currency,
     ...(invoice.dueDate === null ? {} : { dueDate: invoice.dueDate }),
     ...(variableSymbol === null ? {} : { variableSymbol }),

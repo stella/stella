@@ -1,6 +1,8 @@
+import { sql } from "drizzle-orm";
 import { createSelectSchema } from "drizzle-orm/valibot";
 import * as v from "valibot";
 
+import type { Transaction } from "@/api/db/root";
 import {
   expenses,
   invoiceLines,
@@ -238,7 +240,28 @@ export const parseInvoiceLinkOriginalRow = (row: unknown) =>
   v.parse(originalFunctionRowSchema, row);
 
 const settlementFunctionRowSchema = v.object({
+  paidAmount: v.pipe(
+    v.number(),
+    v.integer(),
+    v.minValue(0),
+    v.maxValue(Number.MAX_SAFE_INTEGER),
+    v.transform(cents),
+  ),
   latestPaidOn: v.nullable(v.pipe(v.string(), v.isoDate())),
 });
 export const parseInvoiceLinkSettlementRow = (row: unknown) =>
   v.parse(settlementFunctionRowSchema, row);
+
+/** The token and tenant checks stay inside the function; only aggregate payment scalars cross this boundary. */
+export const readInvoiceLinkSettlement = async (
+  tx: Transaction,
+  tokenHash: string,
+) => {
+  const rows = await tx
+    .select({
+      latestPaidOn: sql`latest_paid_on::text`,
+      paidAmount: sql`paid_amount`.mapWith(Number),
+    })
+    .from(sql`public.invoice_link_settlement(${tokenHash})`);
+  return rows.map(parseInvoiceLinkSettlementRow).at(0);
+};

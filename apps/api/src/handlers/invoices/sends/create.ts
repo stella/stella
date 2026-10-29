@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, count, eq, gt, sql } from "drizzle-orm";
 import * as v from "valibot";
 
@@ -25,10 +25,17 @@ import {
   invoiceLinkExpiresAt,
   invoiceLinkUrl,
 } from "@/api/lib/billing/invoice-links";
+import {
+  invoicePaidAmountSql,
+  invoicePaymentAmounts,
+} from "@/api/lib/billing/invoice-payments";
 import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
-import { lockInvoiceInStatus } from "@/api/lib/db/aggregate-lock";
+import {
+  lockInvoiceInStatus,
+  withAggregateLock,
+} from "@/api/lib/db/aggregate-lock";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import {
@@ -40,7 +47,6 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { readOrganizationTimeZone } from "@/api/lib/organization-time-zone";
-import { isRecord } from "@/api/lib/type-guards";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
 /** Issued documents only: a draft has no number, a void one is not owed. */
@@ -123,12 +129,19 @@ const sendLimitError = (scope: "invoice" | "organization") =>
     hint: "Try again later, or download the PDF and send it yourself.",
   });
 
-const organizationSendCount = (rows: unknown[]) => {
-  const row = rows.at(0);
-  return isRecord(row) && typeof row["sends"] === "number" ? row["sends"] : 0;
-};
+const organizationSendCountRowSchema = v.object({
+  sends: v.pipe(
+    v.number(),
+    v.integer(),
+    v.minValue(0),
+    v.maxValue(Number.MAX_SAFE_INTEGER),
+  ),
+});
 
-/** The send limits, read under the invoice lock so concurrent sends queue. */
+const organizationSendCount = (rows: unknown[]) =>
+  v.parse(organizationSendCountRowSchema, rows.at(0)).sends;
+
+/** The send limits, read after taking the organization capacity and invoice locks. */
 const sendLimitReached = async (
   tx: Transaction,
   invoiceId: SafeId<"invoice">,
@@ -144,7 +157,10 @@ const sendLimitReached = async (
         gt(invoiceSends.createdAt, since),
       ),
     );
-  if ((perInvoice?.sends ?? 0) >= INVOICE_SENDS_PER_INVOICE_PER_DAY) {
+  if (
+    v.parse(organizationSendCountRowSchema, perInvoice).sends >=
+    INVOICE_SENDS_PER_INVOICE_PER_DAY
+  ) {
     return sendLimitError("invoice");
   }
   // Counts the whole organization, matters this member cannot read included.
@@ -171,6 +187,7 @@ type PreparedSend = {
   replyTo: string;
   firmName: string;
   timeZone: string;
+  outstandingAmount: number;
   invoice: LockedInvoice & { invoiceNumber: string };
 };
 
@@ -244,10 +261,25 @@ const readSender = async (
  * and a send past the limits, locks the invoice, and inserts the send with
  * its link's hash. Returns what the emails print.
  */
-const prepareSend = async (
+export const prepareInvoiceSend = async (
   tx: Transaction,
   options: PrepareSendOptions,
 ): Promise<Result<PreparedSend, HandlerError>> => {
+  const capacity = await withAggregateLock({
+    tx,
+    aggregate: "invoiceSendCapacity",
+    id: { organizationId: options.organizationId },
+  });
+  switch (capacity.status) {
+    case "locked":
+      break;
+    case "missing":
+    case "busy":
+      return panic("A blocking invoice-send capacity lock was not acquired");
+    default:
+      capacity satisfies never;
+      return panic("Unhandled invoice-send capacity lock status");
+  }
   const unsendable = await refuseUnsendable(tx, options);
   if (unsendable !== null) {
     return Result.err(unsendable);
@@ -301,7 +333,18 @@ const prepareSend = async (
       expiresAt: expiresAt.toISOString(),
     },
   });
+  const [paymentRow] = await tx
+    .select({
+      totalAmount: invoices.totalAmount,
+      paidAmount: invoicePaidAmountSql(invoices),
+    })
+    .from(invoices)
+    .where(eq(invoices.id, options.invoiceId));
+  if (paymentRow === undefined) {
+    return panic("Locked invoice disappeared while preparing its email");
+  }
   return Result.ok({
+    outstandingAmount: invoicePaymentAmounts(paymentRow).outstandingAmount,
     sendId,
     expiresAt,
     replyTo,
@@ -325,14 +368,14 @@ const emailFor = (
   const owed =
     invoice.status !== INVOICE_STATUS.PAID &&
     invoice.documentType !== "credit_note" &&
-    invoice.totalAmount > 0;
+    prepared.outstandingAmount > 0;
   return {
     replyTo: prepared.replyTo,
     lang: invoice.language,
     documentType: invoice.documentType,
     invoiceNumber: invoice.invoiceNumber,
     firmName: prepared.firmName,
-    amountDue: owed ? money(invoice.totalAmount) : null,
+    amountDue: owed ? money(prepared.outstandingAmount) : null,
     dueDate: owed && invoice.dueDate !== null ? date(invoice.dueDate) : null,
     // The last day the link opens, in the firm's own time zone.
     expiresOn: date(
@@ -505,7 +548,7 @@ export const createSendInvoice = ({
         resultTx(
           safeDb,
           async (tx) =>
-            await prepareSend(tx, {
+            await prepareInvoiceSend(tx, {
               invoiceId: params.invoiceId,
               workspaceId,
               organizationId: session.activeOrganizationId,
@@ -567,7 +610,7 @@ export const createSendInvoice = ({
 const sendInvoice = createSendInvoice();
 declareAggregateMutation(sendInvoice, {
   type: "aggregate",
-  aggregates: ["workspace"],
+  aggregates: ["invoiceSendCapacity", "workspace"],
 });
 
 export default sendInvoice;

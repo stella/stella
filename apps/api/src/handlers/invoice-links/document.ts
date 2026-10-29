@@ -4,7 +4,6 @@ import { asc, sql } from "drizzle-orm";
 import type { Transaction } from "@/api/db/root";
 import {
   expenses,
-  INVOICE_STATUS,
   invoiceLines,
   invoices,
   timeEntries,
@@ -17,8 +16,8 @@ import {
   parseInvoiceLinkMattersRow,
   parseInvoiceLinkOriginalRow,
   parseInvoiceLinkSellerRow,
-  parseInvoiceLinkSettlementRow,
   parseInvoiceLinkTimeRow,
+  readInvoiceLinkSettlement,
 } from "@/api/handlers/invoice-links/function-rows";
 import type { InvoiceLinkCaller } from "@/api/handlers/invoice-links/link-access";
 import {
@@ -27,6 +26,7 @@ import {
 } from "@/api/handlers/invoices/invoice-detail";
 import type { INVOICE_LINE_COLUMNS } from "@/api/lib/billing/invoice-lines";
 import { readInvoiceLinkScope } from "@/api/lib/billing/invoice-links";
+import { invoicePaymentAmounts } from "@/api/lib/billing/invoice-payments";
 import { invoiceSettledOn } from "@/api/lib/billing/invoice-settlement-date";
 import {
   selectTimekeeperNames,
@@ -155,16 +155,13 @@ export const loadLinkedInvoiceData = async (
     })
     .from(sql`public.invoice_link_original(${caller.tokenHash}) AS invoices`);
   const original = originalRows.map(parseInvoiceLinkOriginalRow);
-  const settlementRows = await tx
-    .select({ latestPaidOn: sql`latest_paid_on::text` })
-    .from(sql`public.invoice_link_settlement(${caller.tokenHash})`);
-  const settlement = settlementRows.map(parseInvoiceLinkSettlementRow).at(0);
+  const settlement = await readInvoiceLinkSettlement(tx, caller.tokenHash);
   const stillLive = await readInvoiceLinkScope(tx, caller.tokenHash);
   if (!stillLive) {
     return null;
   }
-  if (invoice.status === INVOICE_STATUS.PAID && settlement === undefined) {
-    return panic("Live settled invoice has no settlement projection");
+  if (settlement === undefined) {
+    return panic("Live invoice has no payment summary projection");
   }
   const matterMap = new Map(matters.map((matter) => [matter.id, matter]));
   const workspaceId =
@@ -201,6 +198,10 @@ export const loadLinkedInvoiceData = async (
         });
   const timeZone = await readOrganizationTimeZone(tx, caller.organizationId);
   return {
+    outstandingAmount: invoicePaymentAmounts({
+      totalAmount: invoice.totalAmount,
+      paidAmount: settlement.paidAmount,
+    }).outstandingAmount,
     send,
     document: {
       invoice: linkedInvoice,
@@ -218,7 +219,7 @@ export const loadLinkedInvoiceData = async (
           paidDate: invoiceSettledOn({
             status: invoice.status,
             paidAt: invoice.paidAt,
-            latestPaidOn: settlement?.latestPaidOn ?? null,
+            latestPaidOn: settlement.latestPaidOn,
             timeZone,
           }),
         },

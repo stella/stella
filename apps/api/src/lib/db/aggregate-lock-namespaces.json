@@ -10,6 +10,7 @@
   "desktopBatch": "0x0f10ccac::integer",
   "expenseCapacity": "hashtext('expense-capacity')",
   "fileComparisonCapacity": "0x0f10ccb2::integer",
+  "invoiceSendCapacity": "hashtext('invoice-send-capacity')",
   "legislationAmendmentWork": "0x0f10ccad::integer",
   "mcpOAuthState": "0x4d43504f::integer",
   "orgFeatureAdmission": "0x0f10ccaa::integer",

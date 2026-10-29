@@ -428,7 +428,10 @@ export const buildInvoiceTemplateData = (options: RenderInvoicePdfOptions) => {
         : {
             // What a payer needs beside the QR code: amount, due date, reference.
             fields: fields([
-              [l.total, money(totals.grossAmountMinor)],
+              [
+                l.total,
+                money(options.paymentAmountMinor ?? totals.grossAmountMinor),
+              ],
               [
                 l.dueDate,
                 invoice.dueDate === null ? null : date(invoice.dueDate),

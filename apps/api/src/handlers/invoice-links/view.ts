@@ -107,9 +107,10 @@ const openLinkedInvoice = async (
     if (unavailable !== null) {
       return Result.err(unavailable);
     }
-    const data = buildInvoiceTemplateData(
-      invoiceDocumentRenderOptions(document),
-    );
+    const data = buildInvoiceTemplateData({
+      ...invoiceDocumentRenderOptions(document),
+      paymentAmountMinor: linked.outstandingAmount,
+    });
     if (data.isErr()) {
       return Result.err(
         new HandlerError({ status: 409, message: data.error.message }),
@@ -134,7 +135,9 @@ const openLinkedInvoice = async (
     const { invoice } = document;
     const paid = invoice.status === INVOICE_STATUS.PAID;
     const payable =
-      paid || invoice.documentType === "credit_note"
+      paid ||
+      invoice.documentType === "credit_note" ||
+      linked.outstandingAmount === 0
         ? null
         : data.value.payment;
     return Result.ok({
@@ -143,6 +146,7 @@ const openLinkedInvoice = async (
       documentType: invoice.documentType,
       title: data.value.title,
       paid,
+      outstandingAmount: linked.outstandingAmount,
       seller: data.value.seller?.name ?? null,
       buyer: data.value.buyer.name,
       meta: data.value.meta,

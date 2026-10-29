@@ -71,6 +71,7 @@ export const AGGREGATE_LOCKS = {
   organization: { rank: 0, kind: "row" },
   professionalUseAcceptance: { rank: 5, kind: "advisory" },
   orgFeatureAdmission: { rank: 10, kind: "advisory" },
+  invoiceSendCapacity: { rank: 15, kind: "advisory" },
   schedulerClaim: { rank: 20, kind: "row" },
   definitionCap: { rank: 30, kind: "advisory" },
   definition: { rank: 40, kind: "row" },
@@ -237,6 +238,7 @@ export const AGGREGATE_CHAINS = {
   ],
   signal: ["signal"],
   automatedFlowRunCap: ["automatedFlowRunCap"],
+  invoiceSends: ["invoiceSendCapacity", "workspace"],
   contactCapacity: ["contactCapacity"],
   fileComparisonCapacity: ["fileComparisonCapacity"],
   billingCodeCapacity: ["billingCodeCapacity"],
@@ -406,6 +408,7 @@ type AggregateIdentities = {
     id: SafeId<"documentProcessingRun">;
     workspaceId: SafeId<"workspace">;
   };
+  invoiceSendCapacity: { organizationId: SafeId<"organization"> };
   contactCapacity: { organizationId: SafeId<"organization"> };
   chatToolGrants: {
     organizationId: SafeId<"organization">;
@@ -1465,6 +1468,12 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
         first: sql`${0x0f_10_cc_a9}::integer`,
         second: sql`hashtext(${options.id})`,
         order: [options.aggregate, options.id],
+      };
+    case "invoiceSendCapacity":
+      return {
+        first: sql`hashtext('invoice-send-capacity')`,
+        second: sql`hashtext(${options.id.organizationId})`,
+        order: [options.aggregate, options.id.organizationId],
       };
     case "contactCapacity":
       return {
