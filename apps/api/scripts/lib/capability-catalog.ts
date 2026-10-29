@@ -52,15 +52,15 @@ export const reviewedInvoiceCleanupEndpoints = <
   classify,
 }: ReviewedInvoiceCleanupOptions<TEndpoint>): TEndpoint[] =>
   routes.map(({ definition, middleware }) => {
-    const permissions = definition.config.permissions;
+    const permissions = definition.config["permissions"];
     if (
       definition.access !== "workspace" ||
-      definition.config.featureAccess !== undefined ||
+      definition.config["featureAccess"] !== undefined ||
       !isRecord(permissions) ||
       Object.keys(permissions).length !== 1 ||
-      !Array.isArray(permissions.invoice) ||
-      permissions.invoice.length !== 1 ||
-      permissions.invoice.at(0) !== "update" ||
+      !Array.isArray(permissions["invoice"]) ||
+      permissions["invoice"].length !== 1 ||
+      permissions["invoice"].at(0) !== "update" ||
       middleware.some((stage) => classify(stage).kind !== "budget")
     ) {
       return panic(
