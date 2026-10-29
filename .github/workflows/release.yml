@@ -1503,6 +1503,7 @@ jobs:
             scripts/gh-retry.sh
             scripts/check-api-deployment.ts
             scripts/api-health.ts
+            apps/api/src/db-components.ts
             apps/api/src/deploy-env-contract.ts
           sparse-checkout-cone-mode: false
 
@@ -1521,6 +1522,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/scripts" "$RUNNER_TEMP/apps/api/src"
           cp "$GITHUB_WORKSPACE/.gh-retry/scripts/check-api-deployment.ts" "$RUNNER_TEMP/scripts/check-api-deployment.ts"
           cp "$GITHUB_WORKSPACE/.gh-retry/scripts/api-health.ts" "$RUNNER_TEMP/scripts/api-health.ts"
+          cp "$GITHUB_WORKSPACE/.gh-retry/apps/api/src/db-components.ts" "$RUNNER_TEMP/apps/api/src/db-components.ts"
           cp "$GITHUB_WORKSPACE/.gh-retry/apps/api/src/deploy-env-contract.ts" "$RUNNER_TEMP/apps/api/src/deploy-env-contract.ts"
 
       - name: Checkout workflow source

@@ -16,11 +16,6 @@
   },
   {
     "id": "no-polling-loop::apps/web/src/features/knowledge/playbook-editor/playbook-editor-lifecycle.dom.test.tsx::<module>::while",
-    "count": 3,
-    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
-  },
-  {
-    "id": "no-polling-loop::apps/web/src/features/knowledge/playbook-editor/playbook-editor-lifecycle.dom.test.tsx::disposeLifecycleFixture::while",
     "count": 1,
     "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
   },
@@ -206,11 +201,6 @@
   },
   {
     "id": "no-real-time-wait::apps/api/src/lib/chat/run-log.db.test.ts::<module>::Bun.sleep",
-    "count": 2,
-    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
-  },
-  {
-    "id": "no-real-time-wait::apps/api/src/lib/chat/run-log.postgres.test.ts::<module>::Bun.sleep",
     "count": 1,
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
@@ -2592,16 +2582,6 @@
   {
     "id": "no-unreasoned-timeout::apps/api/src/lib/case-law/reader-answer-corpus.postgres.test.ts::<module>::test timeout",
     "count": 1,
-    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
-  },
-  {
-    "id": "no-unreasoned-timeout::apps/api/src/lib/case-law/sitemap-shard-refresh.test.ts::<module>::beforeAll timeout",
-    "count": 1,
-    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
-  },
-  {
-    "id": "no-unreasoned-timeout::apps/api/src/lib/case-law/sitemap-shard-refresh.test.ts::<module>::test timeout",
-    "count": 13,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {

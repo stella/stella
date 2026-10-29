@@ -2,7 +2,9 @@
 export { isConnectionFailure } from "./connection-failure";
 
 export type FetchTimeout =
-  { type: "headers"; ms: number } | { type: "idle"; ms: number };
+  | { type: "total"; ms: number }
+  | { type: "headers"; ms: number }
+  | { type: "idle"; ms: number };
 
 export type TransportRequestInit = RequestInit & {
   timeout?: FetchTimeout;
@@ -17,10 +19,10 @@ export type Fetcher = (
 export type FetchWithTimeoutInit = Omit<RequestInit, "signal"> & {
   signal?: AbortSignal | undefined;
 } & (
-    | { timeout: FetchTimeout; timeoutMs?: never }
+    | { timeout: FetchTimeout; timeoutMs?: number }
     // Existing numeric callers are enumerated by the transfer-window guard.
     | {
-        /** Choose a headers or idle timeout for new callers. */
+        /** Use an explicit timeout policy for new callers. */
         timeoutMs: number;
         timeout?: never;
       }
@@ -36,18 +38,13 @@ const executeFetchWithTimeout = async (
     input instanceof Request ? input.signal : undefined,
   ].filter((candidate): candidate is AbortSignal => candidate !== undefined);
   const activeFetcher = fetcher ?? globalThis.fetch;
-  if (timeout === undefined) {
-    const total = AbortSignal.timeout(timeoutMs);
-    return await activeFetcher(input, {
-      ...init,
-      signal: AbortSignal.any([...callerSignals, total]),
-    });
-  }
+  const duration = timeout?.ms ?? timeoutMs;
 
   if (
-    !Number.isFinite(timeout.ms) ||
-    timeout.ms < 0 ||
-    timeout.ms > 2_147_483_647
+    typeof duration !== "number" ||
+    !Number.isFinite(duration) ||
+    duration < 0 ||
+    duration > 2_147_483_647
   ) {
     throw new DOMException(
       "Invalid fetch timeout duration",
@@ -66,19 +63,47 @@ const executeFetchWithTimeout = async (
   };
   const reset = () => {
     clear();
-    timer = setTimeout(expire, timeout.ms);
+    timer = setTimeout(expire, duration);
   };
   reset();
   const response = await Promise.resolve()
-    .then(async () => await activeFetcher(input, { ...init, signal: combined }))
-    .finally(clear);
-  if (combined.aborted) {
+    .then(
+      async () =>
+        await activeFetcher(input, {
+          ...init,
+          signal: combined,
+          ...(timeout === undefined ? {} : { timeout }),
+          timeoutMs: duration,
+        }),
+    )
+    .catch((error: unknown) => {
+      clear();
+      throw error;
+    })
+    .finally(() => {
+      if (timeout !== undefined && timeout.type !== "total") {
+        clear();
+      }
+    });
+  if (controller.signal.aborted) {
     // The abort reason is the failure. Cancelling only releases the body, and
     // a body the abort already errored rejects with that same stored reason.
     await Promise.allSettled([response.body?.cancel(combined.reason)]);
     throw combined.reason;
   }
-  if (timeout.type === "headers" || response.body === null) {
+  if (combined.aborted) {
+    if (timeout === undefined || timeout.type === "total") {
+      // Total deadlines historically delegated this settlement race to the
+      // transport. Keep a response that wins a caller abort so resumable
+      // consumers can use work completed before they observe the signal.
+      clear();
+      return response;
+    }
+    await Promise.allSettled([response.body?.cancel(combined.reason)]);
+    throw combined.reason;
+  }
+  if (timeout?.type === "headers" || response.body === null) {
+    clear();
     return response;
   }
 
@@ -117,10 +142,16 @@ const executeFetchWithTimeout = async (
         await cancellation;
         return;
       }
-      reset();
+      if (timeout?.type === "idle") {
+        reset();
+      }
       await reader
         .read()
-        .finally(clear)
+        .finally(() => {
+          if (timeout?.type === "idle") {
+            clear();
+          }
+        })
         .then(
           ({ done, value }) => {
             if (stopped) {

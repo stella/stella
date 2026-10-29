@@ -360,6 +360,46 @@ describe("validateOwnership", () => {
   });
 });
 
+describe("AI config decrypt ownership", () => {
+  const boundary = OWNERSHIP.find(({ id }) => id === "ai-config-decrypt");
+  const ruleOptions = { entries: [boundary] };
+
+  test.each([
+    [
+      "a non-allowlisted importer",
+      'import { decryptAIConfig } from "@/api/lib/ai-config-crypto";',
+    ],
+    ["an export-all barrel", 'export * from "@/api/lib/ai-config-crypto";'],
+    [
+      "a local import-then-export barrel",
+      'import { decryptAIConfig } from "@/api/lib/ai-config-crypto"; export { decryptAIConfig };',
+    ],
+  ])("rejects %s", async (_label, source) => {
+    expect(
+      await lintSingleRule("confine-owner", source, {
+        ruleOptions,
+        sourcePath: "apps/api/src/lib/unapproved-ai-config-reader.ts",
+      }),
+    ).toEqual([1]);
+  });
+
+  test("admits every explicitly allowlisted importer", async () => {
+    if (boundary?.enforcement.kind !== "import") {
+      throw new TypeError("AI config decryption must be import-confined");
+    }
+    const source =
+      'import { decryptAIConfig } from "@/api/lib/ai-config-crypto";';
+    for (const { path: sourcePath } of boundary.enforcement.allowed) {
+      expect(
+        await lintSingleRule("confine-owner", source, {
+          ruleOptions,
+          sourcePath,
+        }),
+      ).toEqual([]);
+    }
+  });
+});
+
 test("the run actor allowlist names exactly the member-run modules", () => {
   const row = OWNERSHIP.find(({ id }) => id === "member-run-actor");
   const allowed =
