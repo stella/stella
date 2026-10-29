@@ -194,6 +194,33 @@ test("a newer request aborts every controller owned by the superseded request", 
   expect(upload.signal.aborted).toBe(true);
 });
 
+test("releasing a completed transform leaves the same request upload live", () => {
+  const operationOwner = createPageOrganizerOperationOwner();
+  const uploadOwner = createPageOrganizerUploadOwner();
+  const request = operationOwner.beginRequest(operationOwner.operation);
+  const transform = new AbortController();
+  const upload = new AbortController();
+  operationOwner.ownController(request, transform);
+  operationOwner.ownController(request, upload);
+  const pending = uploadOwner.begin(request);
+
+  operationOwner.releaseController(request, transform);
+
+  expect(upload.signal.aborted).toBe(false);
+  const provisional = uploadOwner.prepareCompletion(pending, receipt("saved"));
+  if (provisional.type !== "provisional") {
+    throw new Error("Expected the live upload to be provisional");
+  }
+  const completed = uploadOwner.commit(provisional);
+  operationOwner.releaseController(request, upload);
+
+  expect(completed).toMatchObject({
+    type: "completed",
+    fileId: "file-saved",
+  });
+  expect(operationOwner.isCurrent(request)).toBe(true);
+});
+
 test("a receipt is single-use and bound to its request and upload owner", () => {
   const operationOwner = createPageOrganizerOperationOwner();
   const uploadOwner = createPageOrganizerUploadOwner();
