@@ -2087,6 +2087,7 @@
     "description": "Description",
     "details": "Détails",
     "detailsHiddenFeatureUnavailable": "Détails masqués : fonctionnalité non activée",
+    "detailsHiddenUnrecognizedResource": "Des modifications ont été enregistrées pour un type de ressource que cette version ne reconnaît pas.",
     "detailsUnavailable": "Détails indisponibles",
     "disconnect": "Déconnecter",
     "dismiss": "Ignorer",

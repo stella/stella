@@ -2087,6 +2087,7 @@
     "description": "الوصف",
     "details": "التفاصيل",
     "detailsHiddenFeatureUnavailable": "التفاصيل مخفية: الميزة غير مفعّلة",
+    "detailsHiddenUnrecognizedResource": "تم تسجيل تغييرات لنوع مورد لا يتعرّف عليه هذا الإصدار.",
     "detailsUnavailable": "التفاصيل غير متاحة",
     "disconnect": "قطع الاتصال",
     "dismiss": "تجاهل",

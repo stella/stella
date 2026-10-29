@@ -2087,6 +2087,7 @@
     "description": "Opis",
     "details": "Szczegóły",
     "detailsHiddenFeatureUnavailable": "Szczegóły ukryte: funkcja nie jest włączona",
+    "detailsHiddenUnrecognizedResource": "Zarejestrowano zmiany typu zasobu, którego ta wersja nie rozpoznaje.",
     "detailsUnavailable": "Szczegóły niedostępne",
     "disconnect": "Rozłącz",
     "dismiss": "Odrzuć",

@@ -2087,6 +2087,7 @@
     "description": "Aprašymas",
     "details": "Detalės",
     "detailsHiddenFeatureUnavailable": "Išsami informacija paslėpta: funkcija neįjungta",
+    "detailsHiddenUnrecognizedResource": "Užregistruoti ištekliaus tipo, kurio ši versija neatpažįsta, pakeitimai.",
     "detailsUnavailable": "Išsami informacija nepasiekiama",
     "disconnect": "Atjungti",
     "dismiss": "Atmesti",

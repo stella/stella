@@ -51,8 +51,9 @@ const config = {
     "Read one list item's activity trail, newest first with cursor " +
     "pagination: the audit entries recorded against the item and against the " +
     "task behind it, each with its action, the actor's name, the recorded " +
-    "changes, and the operation label. changesStatus is visible or " +
-    "feature_unavailable; unavailable changes and operation are null.",
+    "changes, and the operation label. changesStatus is visible, " +
+    "feature_unavailable, or unrecognized_resource; non-visible changes and " +
+    "operation are null.",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",

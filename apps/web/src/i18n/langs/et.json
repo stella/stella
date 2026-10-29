@@ -2087,6 +2087,7 @@
     "description": "Kirjeldus",
     "details": "Üksikasjad",
     "detailsHiddenFeatureUnavailable": "Üksikasjad on peidetud: funktsioon pole lubatud",
+    "detailsHiddenUnrecognizedResource": "Muudatused salvestati ressursitüübi kohta, mida see versioon ei tunne.",
     "detailsUnavailable": "Üksikasjad pole saadaval",
     "disconnect": "Katkesta ühendus",
     "dismiss": "Jäta kõrvale",

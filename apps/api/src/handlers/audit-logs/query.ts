@@ -372,7 +372,10 @@ export const queryAuditLogPage = async function* ({
               })
             : {
                 changes: null,
-                changesStatus: AUDIT_CHANGES_STATUS.visible,
+                changesStatus:
+                  row.changes === null
+                    ? AUDIT_CHANGES_STATUS.visible
+                    : AUDIT_CHANGES_STATUS.unrecognizedResource,
               }),
           createdAtCursor: row.createdAtCursor,
           userId: row.userId,

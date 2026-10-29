@@ -19,6 +19,12 @@ export const AuditChangeDetails = ({
 }: AuditChangeDetailsProps) => {
   const t = useTranslations();
   switch (changesStatus) {
+    case AUDIT_CHANGES_STATUS.unrecognizedResource:
+      return (
+        <TableCell className="text-muted-foreground max-w-[200px] text-xs">
+          {t("common.detailsHiddenUnrecognizedResource")}
+        </TableCell>
+      );
     case AUDIT_CHANGES_STATUS.featureUnavailable:
       return (
         <TableCell className="text-muted-foreground max-w-[200px] text-xs">

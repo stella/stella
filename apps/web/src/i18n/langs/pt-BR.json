@@ -2087,6 +2087,7 @@
     "description": "Descrição",
     "details": "Detalhes",
     "detailsHiddenFeatureUnavailable": "Detalhes ocultos: recurso não ativado",
+    "detailsHiddenUnrecognizedResource": "Foram registradas alterações em um tipo de recurso que esta versão não reconhece.",
     "detailsUnavailable": "Detalhes indisponíveis",
     "disconnect": "Desconectar",
     "dismiss": "Descartar",

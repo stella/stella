@@ -2087,6 +2087,7 @@
     "description": "Popis",
     "details": "Detaily",
     "detailsHiddenFeatureUnavailable": "Podrobnosti sú skryté: funkcia nie je zapnutá",
+    "detailsHiddenUnrecognizedResource": "Boli zaznamenané zmeny typu prostriedku, ktorý táto verzia nerozpoznáva.",
     "detailsUnavailable": "Podrobnosti nie sú dostupné",
     "disconnect": "Odpojiť",
     "dismiss": "Zamietnuť",

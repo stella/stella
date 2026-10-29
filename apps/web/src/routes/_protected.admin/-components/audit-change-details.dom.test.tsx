@@ -57,6 +57,18 @@ test("visible entries without changes keep their empty marker", () => {
   ).toBeNull();
 });
 
+test("changes for an unrecognized resource show a withheld note", () => {
+  const view = mount({
+    changes: null,
+    changesStatus: AUDIT_CHANGES_STATUS.unrecognizedResource,
+  });
+  const cell = view.getByRole("cell");
+  expect(cell.textContent).toBe(
+    messages.common.detailsHiddenUnrecognizedResource,
+  );
+  expect(cell.classList.contains("text-muted-foreground")).toBe(true);
+});
+
 test("visible changes render old and new envelopes", () => {
   const changes = {
     amount: { old: 100, new: 200 },

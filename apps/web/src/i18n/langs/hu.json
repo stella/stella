@@ -2087,6 +2087,7 @@
     "description": "Leírás",
     "details": "Részletek",
     "detailsHiddenFeatureUnavailable": "A részletek rejtve vannak: a funkció nincs bekapcsolva",
+    "detailsHiddenUnrecognizedResource": "Olyan erőforrástípus módosításai lettek rögzítve, amelyet ez a verzió nem ismer fel.",
     "detailsUnavailable": "A részletek nem érhetők el",
     "disconnect": "Leválasztás",
     "dismiss": "Elvetés",
