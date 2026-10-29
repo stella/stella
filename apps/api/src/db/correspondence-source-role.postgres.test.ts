@@ -169,6 +169,10 @@ describe.skipIf(!runPostgresTests)(
         expect([...routinePrivileges]).toEqual([
           { routine: "correspondence_has_other_sources", privilege: "EXECUTE" },
           { routine: "next_correspondence_source", privilege: "EXECUTE" },
+          {
+            routine: "register_uploaded_correspondence_source",
+            privilege: "EXECUTE",
+          },
           { routine: "remove_correspondence_source", privilege: "EXECUTE" },
           {
             routine: "remove_entity_correspondence_sources",
