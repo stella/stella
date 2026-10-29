@@ -76,7 +76,7 @@ describe("mapDriveChildrenToPage", () => {
 });
 
 test("Graph account and drive reads use pinned outbound transport and byte ceilings", async () => {
-  const limits: number[] = [];
+  const limits: (number | undefined)[] = [];
   const fetchBytes: typeof safeOutboundFetchBytes = async (input) => {
     limits.push(input.maxBytes);
     expect(input.redirect).toBe("error");

@@ -123,29 +123,91 @@ const AUTO_SELECT_FAMILY_OPTIONS = {
   autoSelectFamily: true,
 } as const satisfies Pick<TcpSocketConnectOpts, "autoSelectFamily">;
 
-const executeResolvedAddressRequest = async ({
-  addresses,
-  body,
-  headers,
-  maxBytes,
-  method = "GET",
-  redirect = "error",
-  signal,
-  timeoutMs,
-  timeoutPolicy = "total",
-  url,
-}: {
+/** Finite authentication metadata keeps a total deadline and a fixed 64 KiB cap. */
+export type BoundedMetadataTransferPolicy = {
+  readonly type: "bounded-metadata";
+  readonly totalTimeoutMs: number;
+};
+
+const BOUNDED_METADATA_MAX_BYTES = 65_536;
+
+type BoundedMetadataByteOptions = {
+  transfer: BoundedMetadataTransferPolicy;
+  maxBytes?: never;
+  redirect?: never;
+  timeout?: never;
+  timeoutMs?: never;
+  timeoutPolicy?: never;
+};
+
+type ByteTransferBudgetInput =
+  | BoundedMetadataByteOptions
+  | ({
+      transfer?: never;
+      maxBytes: number;
+      redirect?: SafeOutboundRedirectMode | undefined;
+    } & (
+      | {
+          timeoutMs: number;
+          timeout?: never;
+          timeoutPolicy?: "headers" | "total";
+        }
+      | {
+          timeout: { type: "headers"; ms: number };
+          timeoutMs?: never;
+          timeoutPolicy?: never;
+        }
+    ));
+
+const byteTransferBudget = (options: ByteTransferBudgetInput) => {
+  if (options.transfer !== undefined) {
+    return {
+      maxBytes: BOUNDED_METADATA_MAX_BYTES,
+      timeoutMs: options.transfer.totalTimeoutMs,
+      timeoutPolicy: "total",
+      redirect: "error",
+    } as const;
+  }
+  if (options.timeout !== undefined) {
+    return {
+      maxBytes: options.maxBytes,
+      timeoutMs: options.timeout.ms,
+      timeoutPolicy: "headers",
+      redirect: options.redirect ?? "error",
+    } as const;
+  }
+  return {
+    maxBytes: options.maxBytes,
+    timeoutMs: options.timeoutMs,
+    timeoutPolicy: options.timeoutPolicy ?? "total",
+    redirect: options.redirect ?? "error",
+  } as const;
+};
+
+type ResolvedAddressByteOptions = {
   addresses: readonly SafeOutboundAddress[];
   body?: SafeOutboundFetchBody | undefined;
   headers?: SafeOutboundHeaders | undefined;
-  maxBytes: number;
   method?: string | undefined;
-  redirect?: SafeOutboundRedirectMode | undefined;
   signal?: AbortSignal | undefined;
-  timeoutMs: number;
-  timeoutPolicy?: "headers" | "total";
   url: URL;
-}): Promise<Result<SafeOutboundFetchResponse, SafeOutboundFetchError>> => {
+} & (
+  | BoundedMetadataByteOptions
+  | {
+      transfer?: never;
+      maxBytes: number;
+      redirect?: SafeOutboundRedirectMode | undefined;
+      timeoutMs: number;
+      timeoutPolicy?: "headers" | "total";
+    }
+);
+
+const executeResolvedAddressRequest = async (
+  options: ResolvedAddressByteOptions,
+): Promise<Result<SafeOutboundFetchResponse, SafeOutboundFetchError>> => {
+  const { addresses, body, headers, method = "GET", signal, url } = options;
+  const { maxBytes, timeoutMs, timeoutPolicy, redirect } =
+    byteTransferBudget(options);
   const primaryAddress = addresses.at(0);
   if (!primaryAddress) {
     return Result.err(
@@ -192,15 +254,22 @@ const executeResolvedAddressRequest = async ({
             }
             const status = response.statusCode ?? 0;
             const responseHeaders = headersFromIncoming(response.headers);
+            response.on("error", (cause) => {
+              guards?.cleanup();
+              reject(cause);
+            });
 
             if (status >= 300 && status < 400 && redirect === "error") {
-              response.resume();
-              guards?.cleanup();
-              reject(
-                new SafeOutboundFetchError({
-                  message: "Redirects are not allowed",
-                }),
-              );
+              const refusal = new SafeOutboundFetchError({
+                message: "Redirects are not allowed",
+              });
+              if (options.transfer !== undefined) {
+                response.destroy(refusal);
+              } else {
+                response.resume();
+                guards?.cleanup();
+                reject(refusal);
+              }
               return;
             }
 
@@ -217,10 +286,6 @@ const executeResolvedAddressRequest = async ({
                 return;
               }
               chunks.push(chunk);
-            });
-            response.on("error", (cause) => {
-              guards?.cleanup();
-              reject(cause);
             });
             response.on("end", () => {
               guards?.cleanup();
@@ -678,29 +743,30 @@ export const validateOutboundFetchTarget = async (
   return Result.ok({ addresses: addresses.value, url: parsed.value });
 };
 
-const executeOutboundBytesRequest = async ({
-  body,
-  headers,
-  maxBytes,
-  method,
-  redirect,
-  signal,
-  timeoutMs,
-  timeout,
-  url,
-}: {
+type OutboundBytesRequestOptions = {
   body?: SafeOutboundFetchBody | undefined;
   headers?: SafeOutboundHeaders | undefined;
-  maxBytes: number;
   method?: string | undefined;
-  redirect?: SafeOutboundRedirectMode | undefined;
   signal?: AbortSignal | undefined;
   url: string | URL;
 } & (
-  | { timeoutMs: number; timeout?: never }
-  | { timeout: { type: "headers"; ms: number }; timeoutMs?: never }
-)): Promise<Result<SafeOutboundFetchResponse, SafeOutboundFetchError>> => {
-  const durationMs = timeout === undefined ? timeoutMs : timeout.ms;
+  | BoundedMetadataByteOptions
+  | ({
+      transfer?: never;
+      maxBytes: number;
+      redirect?: SafeOutboundRedirectMode | undefined;
+    } & (
+      | { timeoutMs: number; timeout?: never }
+      | { timeout: { type: "headers"; ms: number }; timeoutMs?: never }
+    ))
+);
+
+const executeOutboundBytesRequest = async (
+  options: OutboundBytesRequestOptions,
+): Promise<Result<SafeOutboundFetchResponse, SafeOutboundFetchError>> => {
+  const { body, headers, method, signal, url } = options;
+  const budget = byteTransferBudget(options);
+  const durationMs = budget.timeoutMs;
   const startedAt = Temporal.Now.instant().epochMilliseconds;
   const target = await validateOutboundFetchTarget(url, {
     signal,
@@ -716,18 +782,29 @@ const executeOutboundBytesRequest = async ({
       new SafeOutboundFetchError({ message: "Request timed out" }),
     );
   }
-
-  return await executeResolvedAddressRequest({
+  const resolved = {
     addresses: target.value.addresses,
     body,
     headers,
-    maxBytes,
     method,
-    redirect,
     signal,
-    timeoutMs: remainingTimeoutMs,
-    timeoutPolicy: timeout?.type ?? "total",
     url: target.value.url,
+  };
+  if (options.transfer !== undefined) {
+    return await executeResolvedAddressRequest({
+      ...resolved,
+      transfer: {
+        type: "bounded-metadata",
+        totalTimeoutMs: remainingTimeoutMs,
+      },
+    });
+  }
+  return await executeResolvedAddressRequest({
+    ...resolved,
+    maxBytes: budget.maxBytes,
+    redirect: budget.redirect,
+    timeoutMs: remainingTimeoutMs,
+    timeoutPolicy: budget.timeoutPolicy,
   });
 };
 

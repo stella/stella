@@ -354,7 +354,7 @@ test("calendar continuations reject non-numeric $skip offsets", async () => {
 test("calendar responses enforce the byte ceiling before parsing", async () => {
   // Recorded rather than asserted in the transport: the client converts a
   // throwing transport into the same upstream error this test expects.
-  const ceilings: number[] = [];
+  const ceilings: (number | undefined)[] = [];
   const result = await listCalendarEvents(range, {
     accessToken,
     permit,

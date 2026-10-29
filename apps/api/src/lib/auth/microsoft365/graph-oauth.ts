@@ -29,10 +29,14 @@ import {
 import { graphResponseFailureReason } from "@/api/lib/auth/microsoft365/graph-response-failure";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { BoundedMetadataTransferPolicy } from "@/api/lib/safe-outbound-fetch";
 import type { RefreshToken } from "@/api/lib/secret-brands";
 
 const GRAPH_OAUTH_TIMEOUT_MS = 10_000;
-const GRAPH_TOKEN_RESPONSE_MAX_BYTES = 64 * 1024;
+const GRAPH_TOKEN_TRANSFER_POLICY = {
+  type: "bounded-metadata",
+  totalTimeoutMs: GRAPH_OAUTH_TIMEOUT_MS,
+} as const satisfies BoundedMetadataTransferPolicy;
 const FILE_DELEGATED_SCOPES = delegatedReadScopes(LEGACY_FILE_CAPABILITIES);
 
 type SharepointOAuthConfig = {
@@ -175,11 +179,9 @@ const requestToken = async ({
             Accept: "application/json",
           },
           body,
-          maxBytes: GRAPH_TOKEN_RESPONSE_MAX_BYTES,
           permit,
           signal,
-          timeoutMs: GRAPH_OAUTH_TIMEOUT_MS,
-          redirect: "error",
+          transfer: GRAPH_TOKEN_TRANSFER_POLICY,
         }),
       catch: mapError,
     })

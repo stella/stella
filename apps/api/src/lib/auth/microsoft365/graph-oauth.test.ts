@@ -65,9 +65,10 @@ test("refresh requests only the reviewed scopes through bounded outbound transpo
   const fetchBytes: typeof safeOutboundFetchBytes = async (input) => {
     expect(new URL(input.url).hostname).toBe("login.microsoftonline.com");
     expect(input.method).toBe("POST");
-    expect(input.maxBytes).toBe(64 * 1024);
-    expect(input.timeoutMs).toBe(10_000);
-    expect(input.redirect).toBe("error");
+    expect(input.transfer).toEqual({
+      type: "bounded-metadata",
+      totalTimeoutMs: 10_000,
+    });
     expect(input.body).toBeInstanceOf(URLSearchParams);
     if (!(input.body instanceof URLSearchParams)) {
       return panic("Expected URL-encoded token request");

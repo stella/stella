@@ -8776,28 +8776,12 @@
         "job": "measure-3"
       }
     },
-    "src/handlers/sharepoint/crypto.test.ts": {
-      "peakMb": 202,
-      "baselineMb": 202,
-      "source": {
-        "runId": "40155324346",
-        "job": "measure-1"
-      }
-    },
     "src/handlers/sharepoint/graph-client.test.ts": {
       "peakMb": 216,
       "baselineMb": 216,
       "source": {
         "runId": "40155324346",
         "job": "measure-2"
-      }
-    },
-    "src/handlers/sharepoint/graph-oauth.test.ts": {
-      "peakMb": 218,
-      "baselineMb": 218,
-      "source": {
-        "runId": "40155324346",
-        "job": "measure-3"
       }
     },
     "src/handlers/sharepoint/oauth-callback.test.ts": {

@@ -33,6 +33,7 @@ import { requireRequestExceptionScope } from "@/api/lib/observability/request-co
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 const STATE_TTL_MS = 10 * 60 * 1000;
+const CONNECTED_STATUS = "connected";
 
 const requestQuery = v.object({
   code: v.optional(v.string()),
@@ -83,6 +84,103 @@ export type SharepointOAuthCallbackDependencies = {
 const defaultSharepointOAuthCallbackDependencies = {
   deploymentEnabled: isDeploymentFeatureEnabled,
 } satisfies SharepointOAuthCallbackDependencies;
+
+const OAUTH_STATE_FIELDS = {
+  organizationId: sharepointOAuthState.organizationId,
+  userId: sharepointOAuthState.userId,
+  codeVerifier: sharepointOAuthState.codeVerifier,
+  redirectUri: sharepointOAuthState.redirectUri,
+  requestedScope: sharepointOAuthState.requestedScope,
+  createdAt: sharepointOAuthState.createdAt,
+};
+
+type PrepareSharepointGrantOptions = {
+  code: string;
+  dependencies: SharepointOAuthCallbackDependencies;
+  row: Pick<
+    typeof sharepointOAuthState.$inferSelect,
+    keyof typeof OAUTH_STATE_FIELDS
+  >;
+  signal: AbortSignal;
+};
+
+// Network and encryption finish before the callback acquires its policy lock.
+const prepareSharepointGrant = async ({
+  code,
+  dependencies,
+  row,
+  signal,
+}: PrepareSharepointGrantOptions) => {
+  const oauthConfig = (
+    dependencies.getSharepointOAuthConfig ?? getSharepointOAuthConfig
+  )();
+  if (Result.isError(oauthConfig)) {
+    return { type: "refused", reason: "not-configured" } as const;
+  }
+
+  // Pending states created by older tasks contain no scope column.
+  // Their issued consent request was file-only, never calendar.
+  const requestedScope =
+    row.requestedScope ?? delegatedReadScopes(LEGACY_FILE_CAPABILITIES);
+
+  const permit = grantThirdPartyOutboundPermit();
+  const token = await (
+    dependencies.exchangeAuthorizationCode ??
+    exchangeSharepointAuthorizationCode
+  )({
+    clientId: oauthConfig.value.clientId,
+    clientSecret: oauthConfig.value.clientSecret,
+    tenantId: oauthConfig.value.tenantId,
+    code,
+    codeVerifier: row.codeVerifier,
+    permit,
+    redirectUri: row.redirectUri,
+    scope: requestedScope,
+    signal,
+  });
+  if (Result.isError(token)) {
+    return { type: "refused", reason: "token-exchange" } as const;
+  }
+
+  const rowUserId = brandPersistedUserId(row.userId);
+  const accountLabelResult = await (
+    dependencies.fetchAccountLabel ?? fetchAccountLabel
+  )({
+    accessToken: token.value.access_token,
+    permit,
+    signal,
+  });
+  // A display label is optional; its typed lookup failure is already
+  // observed, and it does not invalidate the granted token.
+  const accountLabel = Result.isOk(accountLabelResult)
+    ? accountLabelResult.value
+    : null;
+
+  const encryptedAccess = await encryptSharepointSecret({
+    purpose: "sharepoint_access_token",
+    secret: token.value.access_token,
+    organizationId: row.organizationId,
+    userId: rowUserId,
+  });
+  const encryptedRefresh = token.value.refresh_token
+    ? await encryptSharepointSecret({
+        purpose: "sharepoint_refresh_token",
+        secret: token.value.refresh_token,
+        organizationId: row.organizationId,
+        userId: rowUserId,
+      })
+    : null;
+
+  return {
+    type: "ready",
+    requestedScope,
+    rowUserId,
+    token,
+    accountLabel,
+    encryptedAccess,
+    encryptedRefresh,
+  } as const;
+};
 
 export const createSharepointOAuthCallback = (
   dependencies: SharepointOAuthCallbackDependencies = defaultSharepointOAuthCallbackDependencies,
@@ -139,14 +237,7 @@ export const createSharepointOAuthCallback = (
         try {
           const stateRowsResult = await safeDb((tx) =>
             tx
-              .select({
-                organizationId: sharepointOAuthState.organizationId,
-                userId: sharepointOAuthState.userId,
-                codeVerifier: sharepointOAuthState.codeVerifier,
-                redirectUri: sharepointOAuthState.redirectUri,
-                requestedScope: sharepointOAuthState.requestedScope,
-                createdAt: sharepointOAuthState.createdAt,
-              })
+              .select(OAUTH_STATE_FIELDS)
               .from(sharepointOAuthState)
               .where(eq(sharepointOAuthState.state, state))
               .limit(1),
@@ -170,69 +261,31 @@ export const createSharepointOAuthCallback = (
             );
           }
 
-          const oauthConfig = (
-            dependencies.getSharepointOAuthConfig ?? getSharepointOAuthConfig
-          )();
-          if (Result.isError(oauthConfig)) {
-            return Result.ok(
-              redirect({ status: "error", reason: "not-configured" }),
-            );
-          }
-
-          // Pending states created by older tasks contain no scope column.
-          // Their issued consent request was file-only, never calendar.
-          const requestedScope =
-            row.requestedScope ?? delegatedReadScopes(LEGACY_FILE_CAPABILITIES);
-
-          const permit = grantThirdPartyOutboundPermit();
-          const token = await (
-            dependencies.exchangeAuthorizationCode ??
-            exchangeSharepointAuthorizationCode
-          )({
-            clientId: oauthConfig.value.clientId,
-            clientSecret: oauthConfig.value.clientSecret,
-            tenantId: oauthConfig.value.tenantId,
+          const prepared = await prepareSharepointGrant({
             code,
-            codeVerifier: row.codeVerifier,
-            permit,
-            redirectUri: row.redirectUri,
-            scope: requestedScope,
+            dependencies,
+            row,
             signal: request.signal,
           });
-          if (Result.isError(token)) {
-            return Result.ok(
-              redirect({ status: "error", reason: "token-exchange" }),
-            );
+          switch (prepared.type) {
+            case "refused":
+              return Result.ok(
+                redirect({ status: "error", reason: prepared.reason }),
+              );
+            case "ready":
+              break;
+            default:
+              prepared satisfies never;
+              return panic(`Unhandled value: ${String(prepared)}`);
           }
-
-          const rowUserId = brandPersistedUserId(row.userId);
-          const accountLabelResult = await (
-            dependencies.fetchAccountLabel ?? fetchAccountLabel
-          )({
-            accessToken: token.value.access_token,
-            permit,
-            signal: request.signal,
-          });
-          // A display label is optional; its typed lookup failure is already
-          // observed, and it does not invalidate the granted token.
-          const accountLabel = Result.isOk(accountLabelResult)
-            ? accountLabelResult.value
-            : null;
-
-          const encryptedAccess = await encryptSharepointSecret({
-            purpose: "sharepoint_access_token",
-            secret: token.value.access_token,
-            organizationId: row.organizationId,
-            userId: rowUserId,
-          });
-          const encryptedRefresh = token.value.refresh_token
-            ? await encryptSharepointSecret({
-                purpose: "sharepoint_refresh_token",
-                secret: token.value.refresh_token,
-                organizationId: row.organizationId,
-                userId: rowUserId,
-              })
-            : null;
+          const {
+            requestedScope,
+            rowUserId,
+            token,
+            accountLabel,
+            encryptedAccess,
+            encryptedRefresh,
+          } = prepared;
 
           const connectResult = await safeDb(async (tx) =>
             withAggregateSavepoint(tx, async (innerTx) => {
@@ -284,20 +337,23 @@ export const createSharepointOAuthCallback = (
                 return { status: "capability-not-granted" as const };
               }
 
+              const connectionGrant = {
+                accessTokenEncrypted: encryptedAccess.ciphertext,
+                accessTokenIv: encryptedAccess.iv,
+                refreshTokenEncrypted: encryptedRefresh?.ciphertext ?? null,
+                refreshTokenIv: encryptedRefresh?.iv ?? null,
+                tokenType: token.value.token_type ?? "Bearer",
+                scope,
+                accountLabel,
+                expiresAt: tokenExpiresAt(token.value),
+              };
               await innerTx
                 .insert(sharepointConnections)
                 .values({
                   organizationId: row.organizationId,
                   userId: rowUserId,
-                  accessTokenEncrypted: encryptedAccess.ciphertext,
-                  accessTokenIv: encryptedAccess.iv,
-                  refreshTokenEncrypted: encryptedRefresh?.ciphertext ?? null,
-                  refreshTokenIv: encryptedRefresh?.iv ?? null,
-                  tokenType: token.value.token_type ?? "Bearer",
-                  scope,
-                  accountLabel,
-                  expiresAt: tokenExpiresAt(token.value),
-                  status: "connected",
+                  ...connectionGrant,
+                  status: CONNECTED_STATUS,
                 })
                 .onConflictDoUpdate({
                   target: [
@@ -305,15 +361,8 @@ export const createSharepointOAuthCallback = (
                     sharepointConnections.userId,
                   ],
                   set: {
-                    accessTokenEncrypted: encryptedAccess.ciphertext,
-                    accessTokenIv: encryptedAccess.iv,
-                    refreshTokenEncrypted: encryptedRefresh?.ciphertext ?? null,
-                    refreshTokenIv: encryptedRefresh?.iv ?? null,
-                    tokenType: token.value.token_type ?? "Bearer",
-                    scope,
-                    accountLabel,
-                    expiresAt: tokenExpiresAt(token.value),
-                    status: "connected",
+                    ...connectionGrant,
+                    status: CONNECTED_STATUS,
                     updatedAt: new Date(),
                   },
                 });

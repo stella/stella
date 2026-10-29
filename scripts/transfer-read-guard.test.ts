@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 
+import type { BoundedMetadataTransferPolicy } from "../apps/api/src/lib/safe-outbound-fetch";
 import { addedEntries } from "./ledger-membership.ts";
 import {
   compareTransferBaseline,
@@ -80,6 +81,31 @@ test("numeric timeout streaming and unchecked export fixtures are rejected", () 
   expect(
     compareTransferBaseline([...streaming, ...exporting], []).unlisted,
   ).toHaveLength(3);
+});
+
+test("the owned bounded metadata contract replaces a legacy numeric body deadline", () => {
+  const transfer = {
+    type: "bounded-metadata",
+    totalTimeoutMs: 10_000,
+  } as const satisfies BoundedMetadataTransferPolicy;
+  const policy = `transfer: ${JSON.stringify(transfer)}`;
+  const source = `
+    import { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
+    export const fetchMetadata = async () => {
+      const result = await safeOutboundFetchBytes({ url, permit, ${policy} });
+      if (result.isErr()) return result;
+      return JSON.parse(new TextDecoder().decode(result.value.body));
+    };
+  `;
+  expect(findTransferReads(file, source)).toEqual([]);
+  expect(
+    findTransferReads(
+      file,
+      source.replace(policy, "maxBytes: 65_536, timeoutMs: 10_000"),
+    )
+      .map(({ kind }) => kind)
+      .toSorted(),
+  ).toEqual(["numeric-timeout", "total-timeout-body"]);
 });
 
 test("explicit idle policy and bounded owner fixtures pass", () => {

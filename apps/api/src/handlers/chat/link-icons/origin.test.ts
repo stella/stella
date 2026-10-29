@@ -224,7 +224,7 @@ test("does not begin another hop after the total deadline", async () => {
 });
 
 test("redirect bodies consume the same wire byte budget", async () => {
-  const limits: number[] = [];
+  const limits: (number | undefined)[] = [];
   const origin = createLinkIconOrigin({
     fetchBytes: async ({ maxBytes }) => {
       limits.push(maxBytes);

@@ -791,20 +791,6 @@
     "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
   },
   {
-    "file": "apps/api/src/handlers/sharepoint/graph-oauth.ts",
-    "function": "module/requestToken",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/sharepoint/graph-oauth.ts",
-    "function": "module/requestToken",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
     "file": "apps/api/src/handlers/skills/commands/list.ts",
     "function": "module/listSkillCommands/createSafeRootHandler[1]",
     "kind": "constant-limit",

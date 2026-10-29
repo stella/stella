@@ -21,6 +21,133 @@ import {
 import { outboundPermitContract } from "@/api/lib/safe-outbound-fetch.type-test";
 import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
+const fetchMetadataAt = ({
+  port,
+  totalTimeoutMs = HAPPY_PATH_TIMEOUT_MS,
+  signal,
+}: {
+  port: number;
+  totalTimeoutMs?: number;
+  signal?: AbortSignal;
+}) =>
+  fetchWithResolvedAddress({
+    permit: grantThirdPartyOutboundPermit(),
+    addresses: [{ address: "127.0.0.1", family: 4 }],
+    transfer: { type: "bounded-metadata", totalTimeoutMs },
+    signal,
+    url: new URL(`http://metadata.example.test:${port}/metadata`),
+  });
+
+describe("bounded metadata transfers", () => {
+  test("a progressing slow-drip body still expires at the total deadline", async () => {
+    let chunks = 0;
+    const completeAfter = 40;
+    await withHttpServer(
+      (_request, response) => {
+        response.writeHead(200);
+        response.write("start");
+        chunks++;
+        const drip = setInterval(() => {
+          chunks++;
+          response.write(".");
+          if (chunks === completeAfter) {
+            clearInterval(drip);
+            response.end();
+          }
+        }, 10);
+        response.on("close", () => clearInterval(drip));
+      },
+      async (port) => {
+        const result = await fetchMetadataAt({ port, totalTimeoutMs: 200 });
+        expect(result.isErr()).toBe(true);
+        if (result.isErr()) {
+          expect(result.error.message).toBe("Request timed out");
+        }
+        expect(chunks).toBeGreaterThan(1);
+        expect(chunks).toBeLessThan(completeAfter);
+      },
+    );
+  });
+
+  test("the fixed 64 KiB cap rejects even one extra byte", async () => {
+    await withHttpServer(
+      (_request, response) => response.end("x".repeat(64 * 1024 + 1)),
+      async (port) => {
+        const result = await fetchMetadataAt({ port });
+        expect(result.isErr()).toBe(true);
+        if (result.isErr()) {
+          expect(result.error.message).toBe(
+            "Response body exceeded size limit",
+          );
+        }
+      },
+    );
+  });
+
+  test("redirects are refused without following a new destination", async () => {
+    let requests = 0;
+    let host: string | undefined;
+    const closed = Promise.withResolvers<boolean>();
+    await withHttpServer(
+      (request, response) => {
+        requests++;
+        host = request.headers.host;
+        response.writeHead(302, {
+          Location: "https://elsewhere.example/target",
+        });
+        response.write("redirect body");
+        const drip = setInterval(() => response.write("."), 10);
+        response.on("close", () => {
+          clearInterval(drip);
+          closed.resolve(true);
+        });
+      },
+      async (port) => {
+        const result = await fetchMetadataAt({ port, totalTimeoutMs: 200 });
+        expect(result.isErr()).toBe(true);
+        if (result.isErr()) {
+          expect(result.error.message).toBe("Redirects are not allowed");
+        }
+        const closeDeadline = setTimeout(
+          () => closed.resolve(false),
+          HAPPY_PATH_TIMEOUT_MS,
+        );
+        const observedClosed = await closed.promise;
+        clearTimeout(closeDeadline);
+        expect(observedClosed).toBe(true);
+        expect(requests).toBe(1);
+        expect(host).toBe(`metadata.example.test:${port}`);
+      },
+    );
+  });
+
+  test("caller abort ends an admitted body and preserves its reason", async () => {
+    const controller = new AbortController();
+    const reason = new Error("metadata caller stopped");
+    let admitted = false;
+    await withHttpServer(
+      (_request, response) => {
+        admitted = true;
+        response.writeHead(200);
+        response.write("partial");
+        controller.abort(reason);
+      },
+      async (port) => {
+        const result = await fetchMetadataAt({
+          port,
+          totalTimeoutMs: 200,
+          signal: controller.signal,
+        });
+        expect(admitted).toBe(true);
+        expect(result.isErr()).toBe(true);
+        if (result.isErr()) {
+          expect(result.error.cause).toBe(reason);
+        }
+      },
+    );
+  });
+});
+
 describe("fetchWithResolvedAddress", () => {
   test("connects to the pre-resolved address while preserving the URL host", async () => {
     await withHttpServer(
@@ -778,6 +905,7 @@ const withHttpServer = async (
         }
         resolve();
       });
+      server.closeAllConnections();
     });
   }
 };

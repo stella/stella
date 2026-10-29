@@ -45,7 +45,7 @@ export const SharepointGroup = () => {
   const { id: userId, activeOrganizationId: organizationId } =
     useAuthenticatedUser();
   const options = sharepointConnectionOptions({ organizationId, userId });
-  const { data, error, refetch } = useQuery(options);
+  const { data, error, isError, refetch } = useQuery(options);
   const canManage = usePermissions({ organizationSettings: ["update"] });
   const onError = (failure: unknown) => {
     notifyUserError(failure, t("errors.actionFailed"));
@@ -81,7 +81,7 @@ export const SharepointGroup = () => {
     onError,
   });
 
-  if (error && !(APIError.is(error) && error.status === 404)) {
+  if (isError && !(APIError.is(error) && error.status === 404)) {
     return (
       <RecoverableErrorStatus
         className="flex items-center gap-2"
