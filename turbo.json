@@ -190,6 +190,7 @@
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
         "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",
         "$TURBO_ROOT$/scripts/oxlint-rule-ids.ts",
+        "$TURBO_ROOT$/scripts/ci-install-preinstall-files.ts",
         "$TURBO_ROOT$/apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
         "$TURBO_ROOT$/apps/api/src/lib/db/read-bounded.ts",
         "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
@@ -260,6 +261,7 @@
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
         "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",
         "$TURBO_ROOT$/scripts/oxlint-rule-ids.ts",
+        "$TURBO_ROOT$/scripts/ci-install-preinstall-files.ts",
         "$TURBO_ROOT$/apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
         "$TURBO_ROOT$/apps/api/src/lib/db/read-bounded.ts",
         "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
@@ -487,6 +489,7 @@
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
         "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",
         "$TURBO_ROOT$/scripts/oxlint-rule-ids.ts",
+        "$TURBO_ROOT$/scripts/ci-install-preinstall-files.ts",
         "$TURBO_ROOT$/apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
         "$TURBO_ROOT$/apps/api/src/lib/db/read-bounded.ts",
         "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
@@ -561,6 +564,7 @@
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
         "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",
         "$TURBO_ROOT$/scripts/oxlint-rule-ids.ts",
+        "$TURBO_ROOT$/scripts/ci-install-preinstall-files.ts",
         "$TURBO_ROOT$/apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
         "$TURBO_ROOT$/apps/api/src/lib/db/read-bounded.ts",
         "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
@@ -626,6 +630,7 @@
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
         "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",
         "$TURBO_ROOT$/scripts/oxlint-rule-ids.ts",
+        "$TURBO_ROOT$/scripts/ci-install-preinstall-files.ts",
         "$TURBO_ROOT$/apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
         "$TURBO_ROOT$/apps/api/src/lib/db/read-bounded.ts",
         "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
@@ -688,6 +693,7 @@
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
         "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",
         "$TURBO_ROOT$/scripts/oxlint-rule-ids.ts",
+        "$TURBO_ROOT$/scripts/ci-install-preinstall-files.ts",
         "$TURBO_ROOT$/apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
         "$TURBO_ROOT$/apps/api/src/lib/db/read-bounded.ts",
         "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
@@ -814,6 +820,7 @@
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
         "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",
         "$TURBO_ROOT$/scripts/oxlint-rule-ids.ts",
+        "$TURBO_ROOT$/scripts/ci-install-preinstall-files.ts",
         "$TURBO_ROOT$/apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
         "$TURBO_ROOT$/apps/api/src/lib/db/read-bounded.ts",
         "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
@@ -957,6 +964,8 @@
       ],
       "outputs": [
         "src/*/generated/app.html.txt",
+        "src/*/generated/app.js.txt",
+        "src/*/generated/app.css.txt",
         "src/shared/generated/messages.json",
         "src/shared/generated/schemas.json",
         "src/shared/generated/reader-messages.json",
@@ -964,6 +973,8 @@
         "src/shared/generated/contracts.js",
         "src/shared/generated/contracts.d.ts",
         "src/shared/generated/style.css",
+        "src/generated/runtime.js.txt",
+        "src/generated/runtime.css.txt",
         "src/generated/bundles.ts"
       ]
     },
@@ -986,6 +997,7 @@
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
         "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",
         "$TURBO_ROOT$/scripts/oxlint-rule-ids.ts",
+        "$TURBO_ROOT$/scripts/ci-install-preinstall-files.ts",
         "$TURBO_ROOT$/apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
         "$TURBO_ROOT$/apps/api/src/lib/db/read-bounded.ts",
         "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
@@ -1061,6 +1073,8 @@
       ],
       "outputs": [
         "src/*/generated/app.html.txt",
+        "src/*/generated/app.js.txt",
+        "src/*/generated/app.css.txt",
         "src/shared/generated/messages.json",
         "src/shared/generated/schemas.json",
         "src/shared/generated/reader-messages.json",
@@ -1068,6 +1082,8 @@
         "src/shared/generated/contracts.js",
         "src/shared/generated/contracts.d.ts",
         "src/shared/generated/style.css",
+        "src/generated/runtime.js.txt",
+        "src/generated/runtime.css.txt",
         "src/generated/bundles.ts"
       ]
     },
@@ -1145,6 +1161,7 @@
         "$TURBO_ROOT$/packages/mcp-kit/**",
         "$TURBO_ROOT$/packages/mojibake/**",
         "$TURBO_ROOT$/packages/money/**",
+        "$TURBO_ROOT$/packages/parameter-store/**",
         "$TURBO_ROOT$/packages/permissions/**",
         "$TURBO_ROOT$/packages/playwright-tools/**",
         "$TURBO_ROOT$/packages/portable-path/**",
@@ -1223,6 +1240,7 @@
         "$TURBO_ROOT$/packages/mcp-kit/**",
         "$TURBO_ROOT$/packages/mojibake/**",
         "$TURBO_ROOT$/packages/money/**",
+        "$TURBO_ROOT$/packages/parameter-store/**",
         "$TURBO_ROOT$/packages/permissions/**",
         "$TURBO_ROOT$/packages/portable-path/**",
         "$TURBO_ROOT$/packages/property-testing/**",
@@ -1371,6 +1389,7 @@
         "$TURBO_ROOT$/packages/mcp-kit/**",
         "$TURBO_ROOT$/packages/mojibake/**",
         "$TURBO_ROOT$/packages/money/**",
+        "$TURBO_ROOT$/packages/parameter-store/**",
         "$TURBO_ROOT$/packages/permissions/**",
         "$TURBO_ROOT$/packages/playwright-tools/**",
         "$TURBO_ROOT$/packages/portable-path/**",
@@ -1452,6 +1471,7 @@
         "$TURBO_ROOT$/packages/mcp-kit/**",
         "$TURBO_ROOT$/packages/mojibake/**",
         "$TURBO_ROOT$/packages/money/**",
+        "$TURBO_ROOT$/packages/parameter-store/**",
         "$TURBO_ROOT$/packages/permissions/**",
         "$TURBO_ROOT$/packages/redis-config/**",
         "$TURBO_ROOT$/packages/runtime-mode/**",
@@ -1552,6 +1572,7 @@
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
         "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",
         "$TURBO_ROOT$/scripts/oxlint-rule-ids.ts",
+        "$TURBO_ROOT$/scripts/ci-install-preinstall-files.ts",
         "$TURBO_ROOT$/apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
         "$TURBO_ROOT$/apps/api/src/lib/db/read-bounded.ts",
         "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
@@ -1653,6 +1674,18 @@
         "$TURBO_ROOT$/packages/**",
         "$TURBO_ROOT$/oxlint.config.ts",
         "$TURBO_ROOT$/scripts/product-frontend-files.ts"
+      ]
+    },
+    // The app is held to the web it is styled from: its tests read the web's
+    // sign-in backdrop, navigation, icons and button variants.
+    "@stll/mobile#test": {
+      "dependsOn": ["transit"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/apps/web/src/routes/auth/route.tsx",
+        "$TURBO_ROOT$/apps/web/src/components/workspace-primary-nav.ts",
+        "$TURBO_ROOT$/apps/web/src/components/sidebar-user-menu.tsx",
+        "$TURBO_ROOT$/packages/ui/src/**"
       ]
     },
     "@stll/web#test": {

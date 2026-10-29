@@ -2,8 +2,16 @@ import { panic, Result } from "better-result";
 
 import { sleep } from "@stll/concurrency/sleep";
 
+import {
+  INVOICE_LEGACY_PAYMENT_BACKFILL,
+  INVOICE_SENT_AT_BACKFILL,
+} from "@/api/lib/billing/invoice-payment-backfill";
 import { CASE_LAW_COURT_DATE_PUBLISHED_INDEX } from "@/api/lib/case-law/court-date-index";
-import { CASE_LAW_COVERAGE_INDEX } from "@/api/lib/case-law/coverage-index";
+import {
+  CASE_LAW_COVERAGE_COURT_INDEX,
+  CASE_LAW_COVERAGE_FILING_DATE_INDEX,
+  CASE_LAW_COVERAGE_INDEX,
+} from "@/api/lib/case-law/coverage-index";
 import {
   publishedCaseLawDecisionIndexDefinitionPredicateSql,
   publishedCaseLawDecisionIndexPredicateSql,
@@ -20,11 +28,19 @@ import {
 } from "../lib/db/migration-history";
 import { isRecord } from "../lib/type-guards";
 import {
+  ACCOUNT_AUDIT_CONSTRAINT,
+  ACCOUNT_AUDIT_CONSTRAINT_VALIDATION,
+} from "./account-audit-constraint-validation";
+import {
   AGENT_SKILL_BINDING_CONSTRAINT_VALIDATIONS,
   AGENT_SKILL_BINDING_CONSTRAINTS,
 } from "./agent-skill-binding-constraint-validation";
 import { BackfillHeldError } from "./backfill-runtime";
 import { BETTER_AUTH_OAUTH_RESOURCE_REPAIR } from "./better-auth-oauth-resource-repair";
+import {
+  BILLING_ACTIVITY_HOUR_CAP_CONSTRAINT_VALIDATIONS,
+  BILLING_ACTIVITY_HOUR_CAP_CONSTRAINTS,
+} from "./billing-activity-hour-cap-constraint-validation";
 import {
   CASE_LAW_PARSE_PENDING_INDEX,
   CASE_LAW_PARSED_SOURCE_CONSTRAINT,
@@ -54,6 +70,7 @@ import {
   DECISION_DATE_CEILING_CONSTRAINTS,
   DECISION_DATE_CEILING_REPAIR,
 } from "./decision-date-ceiling-repair";
+import { DOCUMENT_REVIEW_FINDING_DECISION_BACKFILL } from "./document-review-finding-decision-backfill";
 import {
   EMAIL_UNDELIVERABLE_CONSTRAINT_VALIDATION,
   EMAIL_UNDELIVERABLE_CONSTRAINTS,
@@ -104,6 +121,10 @@ import {
   READER_ANNOTATION_CONSTRAINT_VALIDATIONS,
   READER_ANNOTATION_CONSTRAINTS,
 } from "./reader-annotation-constraint-validation";
+import {
+  READER_ANSWER_CONSTRAINT_VALIDATION,
+  READER_ANSWER_CONSTRAINTS,
+} from "./reader-answer-constraint-validation";
 import {
   SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS,
   SANCTIONS_MONITORING_CONSTRAINTS,
@@ -304,6 +325,8 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     tableName,
   })),
   CASE_LAW_COVERAGE_INDEX,
+  CASE_LAW_COVERAGE_FILING_DATE_INDEX,
+  CASE_LAW_COVERAGE_COURT_INDEX,
   // Reviewed doctrine per cited decision: few rows carry a finding.
   {
     createSql: `CREATE INDEX CONCURRENTLY "case_law_citations_doctrine_cited_idx" ON public."case_law_citations" USING btree ("cited_decision_id") WHERE "doctrinal_treatment" IN ('distinguishes', 'limits')`,
@@ -370,6 +393,13 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     definitionBody: `ON public.case_law_decisions USING btree (country, COALESCE(decision_date, '-infinity'::date), id) WHERE ${PUBLISHED_CASE_LAW_DECISION_INDEX_DEFINITION}`,
     isUnique: false,
     name: "case_law_decisions_country_date_published_idx",
+    tableName: "case_law_decisions",
+  },
+  {
+    createSql: `CREATE INDEX CONCURRENTLY "case_law_decisions_country_language_date_published_idx" ON public."case_law_decisions" USING btree ("country", "language", coalesce("decision_date", '-infinity'::date), "id") WHERE ${PUBLISHED_CASE_LAW_DECISION_INDEX_PREDICATE}`,
+    definitionBody: `ON public.case_law_decisions USING btree (country, language, COALESCE(decision_date, '-infinity'::date), id) WHERE ${PUBLISHED_CASE_LAW_DECISION_INDEX_DEFINITION}`,
+    isUnique: false,
+    name: "case_law_decisions_country_language_date_published_idx",
     tableName: "case_law_decisions",
   },
   {
@@ -911,6 +941,7 @@ export const ONLINE_VALIDATED_INDEX_NAMES: ReadonlySet<string> = new Set([
  * skips the ones already complete, and validates their completion.
  */
 export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
+  ACCOUNT_AUDIT_CONSTRAINT_VALIDATION,
   CLIENT_INVOICE_TENANT_KEY,
   CLIENT_INVOICE_BACKFILL,
   ...CLIENT_INVOICE_CONSTRAINT_VALIDATIONS,
@@ -924,10 +955,14 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
   LIST_VERIFICATION_CONSTRAINT_VALIDATION,
   ...ORGANIZATION_ACCESS_STATE_CONSTRAINT_VALIDATIONS,
   ...READER_ANNOTATION_CONSTRAINT_VALIDATIONS,
+  READER_ANSWER_CONSTRAINT_VALIDATION,
   ...INVOICE_LANGUAGE_CONSTRAINT_VALIDATIONS,
+  ...BILLING_ACTIVITY_HOUR_CAP_CONSTRAINT_VALIDATIONS,
   EMAIL_UNDELIVERABLE_CONSTRAINT_VALIDATION,
   TIME_ENTRY_SUBMITTED_CONSTRAINT_VALIDATION,
   CONTACT_VAT_ID_REPAIR,
+  INVOICE_SENT_AT_BACKFILL,
+  INVOICE_LEGACY_PAYMENT_BACKFILL,
   ENTITY_FEATURE_GATE_REPAIR,
   CORPUS_PROJECTION_CLEANUP_STALL_REPAIR,
   // Not behind one migration: the OAuth resource set is derived from the MCP
@@ -936,6 +971,7 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
   // widens the audience set is the one that reconciles them, without an
   // operator step.
   BETTER_AUTH_OAUTH_RESOURCE_REPAIR,
+  DOCUMENT_REVIEW_FINDING_DECISION_BACKFILL,
 ];
 
 /**
@@ -945,6 +981,7 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
  */
 export const ONLINE_CONSTRAINT_VALIDATIONS: readonly OnlineConstraintValidation[] =
   [
+    ACCOUNT_AUDIT_CONSTRAINT,
     ...CLIENT_INVOICE_CONSTRAINTS,
     ...MATTER_TIME_EXPENSE_RETENTION_CONSTRAINTS,
     CASE_LAW_PARSED_SOURCE_CONSTRAINT,
@@ -956,7 +993,9 @@ export const ONLINE_CONSTRAINT_VALIDATIONS: readonly OnlineConstraintValidation[
     ...LIST_VERIFICATION_CONSTRAINTS,
     ...ORGANIZATION_ACCESS_STATE_CONSTRAINTS,
     ...READER_ANNOTATION_CONSTRAINTS,
+    ...READER_ANSWER_CONSTRAINTS,
     ...INVOICE_LANGUAGE_CONSTRAINTS,
+    ...BILLING_ACTIVITY_HOUR_CAP_CONSTRAINTS,
     ...EMAIL_UNDELIVERABLE_CONSTRAINTS,
     ...TIME_ENTRY_SUBMITTED_CONSTRAINTS,
     ...CORPUS_PROJECTION_CLEANUP_STALL_CONSTRAINTS,

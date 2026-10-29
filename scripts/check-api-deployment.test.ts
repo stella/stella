@@ -570,7 +570,7 @@ describe("API deployment health receipt", () => {
     expect(webBuild).toContain("cancel-in-progress: true");
     expect(promoteJob).toContain("cancel-in-progress: false");
     expect(promoteJob).toContain(
-      "needs: [resolve, staging-health, staging-wake, build-api, build-web]",
+      "needs:\n      [resolve, staging-health, staging-wake, rc-manifest, build-api, build-web]",
     );
     expect(promoteJob).not.toContain("Confirm this SHA is still main");
     expect(promoteJob).toContain("web-image-digest:");
@@ -1474,6 +1474,7 @@ describe("deployment environment verification", () => {
           return new Response("Forbidden", { status: 403 });
         }
         return Response.json({
+          status: "ok",
           commit,
           deployEnvironment: reportedEnvironment,
         });
@@ -1541,6 +1542,17 @@ describe("deployment environment verification", () => {
       });
     }
   }
+
+  test("a missing contract readiness field refuses an otherwise matching deployment", async () => {
+    const result = await probe({
+      expectedEnvironment: "production",
+      reportedEnvironment: undefined,
+    });
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toContain(
+      "deployEnvironment must be production; observed unset",
+    );
+  });
 
   test("commit-only probes still accept a web version marker without a deployment environment", async () => {
     const result = await probe({

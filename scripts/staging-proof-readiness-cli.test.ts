@@ -326,3 +326,86 @@ test("current deployment initialization failures stop proof with an escaped summ
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+for (const status of ["ok", "unavailable"]) {
+  test(`preflight uses the deployment checker's stable readiness probes for ${status}`, async () => {
+    const { mkdtemp, readFile, rm, writeFile } =
+      await import("node:fs/promises");
+    const { default: path } = await import("node:path");
+    const directory = await mkdtemp(
+      path.resolve(import.meta.dir, "../.proof-wait-test-"),
+    );
+    const statePath = path.join(directory, "state.json");
+    const output = path.join(directory, "output");
+    let reads = 0;
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch: (request) => {
+        expect(new URL(request.url).pathname).toBe("/ready");
+        expect(request.headers.get("x-fixture-edge-token")).toBe(
+          "fixture-access-token",
+        );
+        reads += 1;
+        return Response.json({
+          status,
+          commit: COMMIT,
+          deployEnvironment: "staging",
+        });
+      },
+    });
+    try {
+      await writeFile(
+        `${statePath}.ecs.json`,
+        JSON.stringify({
+          commit: COMMIT,
+          scope: ["api"],
+          services: [
+            {
+              service: "api",
+              deploymentId: "ecs-svc/current",
+              tasks: [{ startedBy: "ecs-svc/current", lastStatus: "RUNNING" }],
+            },
+          ],
+        }),
+      );
+      const child = Bun.spawn(
+        [
+          process.execPath,
+          path.join(import.meta.dir, "staging-proof-readiness-cli.ts"),
+          "wait",
+        ],
+        {
+          env: {
+            PATH: process.env["PATH"] ?? "",
+            STAGING_PROOF_STATE_PATH: statePath,
+            EXPECTED_COMMIT: COMMIT,
+            E2E_API_URL: server.url.toString(),
+            E2E_EDGE_HEADER_NAME: "x-fixture-edge-token",
+            E2E_EDGE_HEADER_VALUE: "fixture-access-token",
+            API_DEPLOYMENT_ATTEMPTS: "5",
+            API_DEPLOYMENT_DELAY_MS: "1",
+            GITHUB_OUTPUT: output,
+          },
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
+      const [exitCode, stdout, stderr] = await Promise.all([
+        child.exited,
+        new Response(child.stdout).text(),
+        new Response(child.stderr).text(),
+      ]);
+      expect(reads).toBe(5);
+      expect(exitCode, stderr).toBe(status === "ok" ? 0 : 78);
+      expect(await readFile(output, "utf-8")).toBe(
+        `status=${status === "ok" ? "ready" : "environment-unavailable"}\n`,
+      );
+      expect(stdout).not.toContain("fixture-access-token");
+      expect(stderr).not.toContain("fixture-access-token");
+    } finally {
+      await server.stop(true);
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+}

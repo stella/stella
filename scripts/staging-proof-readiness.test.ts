@@ -3,7 +3,6 @@ import { expect, test } from "bun:test";
 import {
   monitorStagingReadiness,
   type ReadinessSource,
-  waitForStagingReadiness,
 } from "./staging-proof-readiness";
 
 const fakeClock = () => {
@@ -27,55 +26,6 @@ const timing = {
   intervalMs: 30,
   readTimeoutMs: 20,
 };
-
-test("healthy readiness proceeds without waiting", async () => {
-  const clock = fakeClock();
-  const outcome = await waitForStagingReadiness({
-    ...timing,
-    ...clock,
-    read: async () => ({ status: "ready" }),
-  });
-  expect(outcome).toEqual({ status: "ready" });
-  expect(clock.waits).toEqual([]);
-});
-
-test("readiness waits until a healthy sample within its deadline", async () => {
-  const clock = fakeClock();
-  const outcome = await waitForStagingReadiness({
-    ...timing,
-    ...clock,
-    read: async () => ({ status: clock.now() >= 60 ? "ready" : "not-ready" }),
-  });
-  expect(outcome).toEqual({ status: "ready" });
-  expect(clock.waits).toEqual([30, 30]);
-});
-
-test("never healthy readiness ends at its bounded deadline", async () => {
-  const clock = fakeClock();
-  const timeouts: number[] = [];
-  const read: ReadinessSource = async ({ timeoutMs }) => {
-    timeouts.push(timeoutMs);
-    return { status: "not-ready" };
-  };
-  const outcome = await waitForStagingReadiness({ ...timing, ...clock, read });
-  expect(outcome).toEqual({ status: "environment-unavailable" });
-  expect(clock.now()).toBe(timing.deadlineMs);
-  expect(clock.waits).toEqual([30, 30, 30, 10]);
-  expect(timeouts).toEqual([20, 20, 20, 10]);
-});
-
-test("a read completing at the deadline cannot admit the proof", async () => {
-  const clock = fakeClock();
-  const outcome = await waitForStagingReadiness({
-    ...timing,
-    ...clock,
-    read: async () => {
-      clock.advance(timing.deadlineMs);
-      return { status: "ready" };
-    },
-  });
-  expect(outcome).toEqual({ status: "environment-unavailable" });
-});
 
 test("healthy proof monitoring performs a final readiness check", async () => {
   const clock = fakeClock();
@@ -154,7 +104,7 @@ test("monitoring has a bounded lifetime even when readiness stays healthy", asyn
   expect(timeouts).toEqual([20, 20, 20, 10]);
 });
 
-test("expired gates and monitors never start a readiness read", async () => {
+test("expired monitors never start a readiness read", async () => {
   const clock = fakeClock();
   let reads = 0;
   const options = {
@@ -166,9 +116,6 @@ test("expired gates and monitors never start a readiness read", async () => {
       return { status: "ready" } as const;
     },
   };
-  expect(await waitForStagingReadiness(options)).toEqual({
-    status: "environment-unavailable",
-  });
   expect(
     await monitorStagingReadiness({
       ...options,

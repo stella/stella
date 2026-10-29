@@ -34,6 +34,10 @@ import {
   lockDraftInvoiceForLines,
   recalculateInvoiceTotals,
 } from "@/api/lib/billing/invoice-lines";
+import {
+  hasActiveInvoicePayments,
+  settleSentInvoice,
+} from "@/api/lib/billing/invoice-payments";
 import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import {
   allocateNumber,
@@ -60,8 +64,8 @@ import { cents } from "@/api/lib/money";
 import { PG_ERROR } from "@/api/lib/pg-error";
 import type { AssertNoExtraFields } from "@/api/lib/projection-totality";
 
-type TransitionAction =
-  "finalize" | "send" | "mark_paid" | "void" | "revert_to_draft";
+// Settlement belongs to `lib/billing/invoice-payments`, including zero totals on send.
+type TransitionAction = "finalize" | "send" | "void" | "revert_to_draft";
 
 const TRANSITIONS = {
   finalize: {
@@ -71,10 +75,6 @@ const TRANSITIONS = {
   send: {
     from: [INVOICE_STATUS.FINALIZED],
     to: INVOICE_STATUS.SENT,
-  },
-  mark_paid: {
-    from: [INVOICE_STATUS.SENT],
-    to: INVOICE_STATUS.PAID,
   },
   void: {
     from: [INVOICE_STATUS.FINALIZED, INVOICE_STATUS.SENT, INVOICE_STATUS.PAID],
@@ -90,13 +90,7 @@ const TRANSITIONS = {
 >;
 
 const transitionInvoiceBodySchema = v.object({
-  action: v.picklist([
-    "finalize",
-    "send",
-    "mark_paid",
-    "void",
-    "revert_to_draft",
-  ]),
+  action: v.picklist(["finalize", "send", "void", "revert_to_draft"]),
 });
 
 const invoiceParamsSchema = workspaceParams({
@@ -606,6 +600,41 @@ const unconvertedVatError = async (
       });
 };
 
+/**
+ * Voiding or reverting an issued invoice waits until nothing still depends on
+ * it: no unvoided credit note against it and no unvoided payment on it.
+ */
+const linkedRecordsRefusal = async (
+  tx: Transaction,
+  {
+    action,
+    invoiceId,
+    workspaceId,
+  }: {
+    action: "void" | "revert_to_draft";
+    invoiceId: SafeId<"invoice">;
+    workspaceId: SafeId<"workspace">;
+  },
+): Promise<HandlerError | null> => {
+  if (await hasActiveInvoiceCredit(tx, { invoiceId, workspaceId })) {
+    return new HandlerError({
+      status: 409,
+      message:
+        "Void linked credit notes before changing their original invoice",
+    });
+  }
+  if (await hasActiveInvoicePayments(tx, invoiceId)) {
+    return new HandlerError({
+      status: 409,
+      message:
+        action === "void"
+          ? "Void the invoice's payments before voiding the invoice"
+          : "Void the invoice's payments before reverting it to draft",
+    });
+  }
+  return null;
+};
+
 type ApplyTransitionOptions = {
   action: TransitionAction;
   actorUserId: SafeId<"user">;
@@ -651,26 +680,21 @@ const applyTransition = async (
     );
   }
   if (options.action === "void" || options.action === "revert_to_draft") {
-    const hasCredit = await hasActiveInvoiceCredit(tx, {
+    const linked = await linkedRecordsRefusal(tx, {
+      action: options.action,
       invoiceId: existing.id,
       workspaceId: options.workspaceId,
     });
-    if (hasCredit) {
-      return Result.err(
-        new HandlerError({
-          status: 409,
-          message:
-            "Void linked credit notes before changing their original invoice",
-        }),
-      );
+    if (linked !== null) {
+      return Result.err(linked);
     }
   }
   const set: Partial<typeof invoices.$inferInsert> = {
     status: options.transition.to,
     updatedAt: options.now,
   };
-  if (options.action === "mark_paid") {
-    set.paidAt = options.now;
+  if (options.action === "send") {
+    set.sentAt = options.now;
   }
   if (options.action === "void") {
     set.paidAt = null;
@@ -802,6 +826,14 @@ const applyTransition = async (
       },
     });
   }
+  if (options.action === "send") {
+    return (
+      await settleSentInvoice(tx, {
+        scope: options,
+        invoice: existing,
+      })
+    ).map(() => ({ id: row.id }));
+  }
   return Result.ok({ id: row.id });
 };
 
@@ -810,12 +842,13 @@ const transitionInvoiceHandler = (rateSource: VatRateSource) =>
     {
       contract: "patch",
       description:
-        "Move an invoice through finalize, send, mark_paid, void, or revert_to_draft. " +
+        "Move an invoice through finalize, send, void, or revert_to_draft; " +
+        "recording payments that reach its total marks it paid. " +
         "Finalize assigns an omitted number from the document type's default series, " +
         "using the issue date; configure a default number series first. Manual numbers " +
         "and numbers kept after reverting to draft are preserved. A credit note must " +
         "reference an eligible original and cannot exceed its total. Voiding releases " +
-        "attached entries and clears the paid timestamp. Finalizing a VAT invoice in a " +
+        "attached entries; it and reverting are refused while unvoided payments remain. Finalizing a VAT invoice in a " +
         "currency other than its seller country's VAT currency (EUR for Slovakia, CZK " +
         "for Czechia, PLN for Poland) records the official exchange rate for its tax " +
         "point and states the VAT in that currency; it is refused when the rate cannot " +

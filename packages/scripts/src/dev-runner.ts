@@ -2203,29 +2203,40 @@ export const buildPersistentSteps = ({
   }
 
   // Uploads only become searchable, extractable, and readable by AI once the
-  // document-processing worker drains their runs; without it every upload
-  // stays queued forever. It has no HTTP surface, so it goes after the
-  // readiness-checked steps: checks pair with steps by position. Seeded stacks
+  // document-processing and file-derivative workers drain their runs; without
+  // them every upload stays queued forever. Workers have no HTTP surface, so
+  // they follow readiness-checked steps: checks pair with steps by position. Seeded stacks
   // keep the scheduler disabled in the API process, but run the
-  // queue worker separately so uploaded document text is indexed locally.
+  // queue workers separately so uploaded documents are processed locally.
   if (
     modeIncludesApi(mode) &&
     (seeded || apiEnv["SCHEDULED_JOBS_MODE"] !== "disabled")
   ) {
-    primary.push({
-      cmd: [
-        resolveCommandPath("bun"),
-        "--no-clear-screen",
-        "--no-env-file",
-        "--preload",
-        "./src/dev/register-mock-ai.ts",
-        ...watchArgs,
-        "src/scripts/document-processing-worker.ts",
-      ],
-      cwd: path.resolve(rootDir, "apps/api"),
-      env: seeded ? { ...apiEnv, SCHEDULED_JOBS_MODE: "enabled" } : apiEnv,
-      label: "Document processing worker",
-    });
+    for (const { entrypoint, label } of [
+      {
+        entrypoint: "src/scripts/document-processing-worker.ts",
+        label: "Document processing worker",
+      },
+      {
+        entrypoint: "src/scripts/file-derivative-worker.ts",
+        label: "File derivative worker",
+      },
+    ]) {
+      primary.push({
+        cmd: [
+          resolveCommandPath("bun"),
+          "--no-clear-screen",
+          "--no-env-file",
+          "--preload",
+          "./src/dev/register-mock-ai.ts",
+          ...watchArgs,
+          entrypoint,
+        ],
+        cwd: path.resolve(rootDir, "apps/api"),
+        env: seeded ? { ...apiEnv, SCHEDULED_JOBS_MODE: "enabled" } : apiEnv,
+        label,
+      });
+    }
   }
 
   if (modeIncludesDesktop(mode)) {

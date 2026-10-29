@@ -1,17 +1,15 @@
 import { existsSync } from "node:fs";
 import { appendFile, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 
 import { readApiDeployment } from "./check-api-deployment";
 import { readStagingEcsReadiness } from "./staging-ecs-readiness";
 import {
   monitorStagingReadiness,
-  type ReadinessGateOutcome,
   type ReadinessMonitorOutcome,
   type ReadinessSample,
-  waitForStagingReadiness,
 } from "./staging-proof-readiness";
 
-const WAIT_DEADLINE_MS = 5 * 60_000;
 const MONITOR_DEADLINE_MS = 180 * 60_000;
 const FINISH_DEADLINE_MS = 45_000;
 const SAMPLE_INTERVAL_MS = 10_000;
@@ -50,7 +48,7 @@ export const readStagingReadiness = async ({
 };
 
 type ProofStatus =
-  | ReadinessGateOutcome["status"]
+  | "environment-unavailable"
   | ReadinessMonitorOutcome["status"]
   | "proof-tooling-failure";
 type MonitorState =
@@ -197,13 +195,27 @@ const run = async (): Promise<number> => {
     if (ecs.status === "environment-unavailable") {
       return await report(ecs.status, ecs.reason);
     }
+    const child = Bun.spawn(
+      [
+        process.execPath,
+        fileURLToPath(new URL("check-api-deployment.ts", import.meta.url)),
+      ],
+      {
+        env: {
+          ...process.env,
+          API_DEPLOYMENT_URL: apiUrl,
+          API_DEPLOYMENT_EXPECTED_COMMIT: expectedCommit,
+          API_DEPLOYMENT_EXPECTED_ENVIRONMENT: "staging",
+          API_DEPLOYMENT_PROBE_PATH: "ready",
+          EDGE_HEADER_NAME: edgeName,
+          EDGE_HEADER_VALUE: edgeValue,
+        },
+        stdout: "inherit",
+        stderr: "inherit",
+      },
+    );
     return await report(
-      (
-        await waitForStagingReadiness({
-          ...options,
-          deadlineMs: performance.now() + WAIT_DEADLINE_MS,
-        })
-      ).status,
+      (await child.exited) === 0 ? "ready" : "environment-unavailable",
     );
   }
   await writeMonitorState(statePath, { status: "monitoring" });

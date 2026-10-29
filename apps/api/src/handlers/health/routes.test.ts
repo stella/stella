@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { DEPLOY_ENV_CONTRACT } from "@/api/deploy-env-contract";
 import { envBase } from "@/api/env-base";
 import { createHealthRoute } from "@/api/handlers/health/routes";
 import { createHttpApp } from "@/api/http/app";
@@ -49,9 +50,20 @@ describe("health routes", () => {
 
     const response = await server.fetch(new Request("http://localhost/ready"));
     expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({
+    const body = await response.json();
+    expect(body).toMatchObject({
       deployEnvironment: envBase.DEPLOY_ENVIRONMENT ?? null,
     });
+    expect(
+      DEPLOY_ENV_CONTRACT.flatMap(({ readinessField }) =>
+        readinessField === undefined ? [] : [readinessField],
+      ),
+    ).toEqual(["deployEnvironment"]);
+    for (const { readinessField } of DEPLOY_ENV_CONTRACT) {
+      if (readinessField !== undefined) {
+        expect(body).toHaveProperty(readinessField);
+      }
+    }
   });
 
   for (const deployEnvironment of [
@@ -159,9 +171,25 @@ describe("startup probe", () => {
     expect(await response.json()).toMatchObject({ status: "starting" });
   });
 
+  test("stays closed while sanctions warm and opens after every list is terminal", async () => {
+    let sanctions: "warming" | "terminal" = "warming";
+    await using server = serveHealth({
+      probeReadiness: async () => ({ status: "ready" }),
+      probeSanctionsStartup: () => sanctions,
+    });
+
+    expect((await server.fetch(startedRequest())).status).toBe(503);
+    expect(
+      (await server.fetch(new Request("http://localhost/live"))).status,
+    ).toBe(200);
+    sanctions = "terminal";
+    expect((await server.fetch(startedRequest())).status).toBe(200);
+  });
+
   test("opens after one readiness success and reports build metadata", async () => {
     await using server = serveHealth({
       probeReadiness: async () => ({ status: "ready" }),
+      probeSanctionsStartup: () => "terminal",
     });
 
     const response = await server.fetch(startedRequest());
@@ -177,6 +205,7 @@ describe("startup probe", () => {
     let readiness: ReadinessOutcome = { status: "ready" };
     await using server = serveHealth({
       probeReadiness: async () => readiness,
+      probeSanctionsStartup: () => "terminal",
     });
 
     expect((await server.fetch(startedRequest())).status).toBe(200);
@@ -194,12 +223,28 @@ describe("startup probe", () => {
         readinessCalls++;
         return { status: "ready" };
       },
+      probeSanctionsStartup: () => "terminal",
     });
 
     await server.fetch(startedRequest());
     expect(readinessCalls).toBe(1);
     await server.fetch(startedRequest());
     await server.fetch(startedRequest());
+    expect(readinessCalls).toBe(1);
+  });
+
+  test("caches dependency probes while sanctions are still warming", async () => {
+    let readinessCalls = 0;
+    await using server = serveHealth({
+      probeReadiness: async () => {
+        readinessCalls++;
+        return { status: "ready" };
+      },
+      probeSanctionsStartup: () => "warming",
+    });
+
+    expect((await server.fetch(startedRequest())).status).toBe(503);
+    expect((await server.fetch(startedRequest())).status).toBe(503);
     expect(readinessCalls).toBe(1);
   });
 });

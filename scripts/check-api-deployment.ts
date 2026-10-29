@@ -1,3 +1,4 @@
+import { DEPLOY_ENV_CONTRACT } from "../apps/api/src/deploy-env-contract";
 import { getApiHealthUrl, parseHealthCommit } from "./api-health";
 
 const DEFAULT_ATTEMPTS = 30;
@@ -109,14 +110,19 @@ export const readApiDeployment = async ({
     );
   }
   if (expectedEnvironment !== undefined) {
-    const observedEnvironment =
-      typeof body === "object" && body !== null
-        ? Reflect.get(body, "deployEnvironment")
-        : undefined;
-    if (observedEnvironment !== expectedEnvironment) {
-      throw new ApiDeploymentError(
-        `${probeUrl.toString()} deployEnvironment must be ${expectedEnvironment}; observed ${String(observedEnvironment ?? "unset")}`,
-      );
+    for (const { readinessField } of DEPLOY_ENV_CONTRACT) {
+      if (readinessField === undefined) {
+        continue;
+      }
+      const observedEnvironment =
+        typeof body === "object" && body !== null
+          ? Reflect.get(body, readinessField)
+          : undefined;
+      if (observedEnvironment !== expectedEnvironment) {
+        throw new ApiDeploymentError(
+          `${probeUrl.toString()} ${readinessField} must be ${expectedEnvironment}; observed ${String(observedEnvironment ?? "unset")}`,
+        );
+      }
     }
   }
   return {
@@ -170,13 +176,20 @@ const main = async () => {
   let consecutiveMatches = 0;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
-      lastObservedCommit = (
-        await readApiDeployment({
-          url: getApiHealthUrl(apiUrl, probePath),
-          expectedEnvironment,
-          headers,
-        })
-      ).commit;
+      const probe = await readApiDeployment({
+        url: getApiHealthUrl(apiUrl, probePath),
+        expectedEnvironment,
+        headers,
+      });
+      if (
+        probePath === "ready" &&
+        (probe.statusCode !== 200 || probe.status !== "ready")
+      ) {
+        throw new ApiDeploymentError(
+          "Readiness probe must return HTTP 200 and status ok",
+        );
+      }
+      lastObservedCommit = probe.commit;
       const stability = advanceDeploymentStability({
         consecutiveMatches,
         expectedCommit,

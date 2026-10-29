@@ -951,6 +951,10 @@
     "Test staging proof readiness": {
       "minutes": 30,
       "samples": 0
+    },
+    "Test depth repository scripts": {
+      "minutes": 30,
+      "samples": 0
     }
   },
   "code-quality-web-rest": {

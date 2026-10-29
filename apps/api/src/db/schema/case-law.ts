@@ -85,6 +85,7 @@ import {
 import type { ConstantMap } from "@/api/lib/constant-map";
 import {
   CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT,
+  decisionDateNotBeforeFilingYearSql,
   decisionDateWithinBoundsSql,
 } from "@/api/lib/decision-date-bounds-sql";
 import { liveCaseLawLegacyReferenceSql } from "@/api/lib/legal-search/case-law-legacy-reference-sql";
@@ -552,6 +553,53 @@ const publishedCourtDateIndex = (t: PublishedCourtDateColumns) =>
     )
     .where(publishedCaseLawDecisionFor(t));
 
+const publishedCoverageIndexes = (
+  t: PublishedCourtDateColumns & { sourceId: PgColumn; caseNumber: PgColumn },
+) => [
+  // A source without facet rows still needs exact court counts; cover its
+  // published population so that fallback never needs a full-corpus scan.
+  p
+    .index("case_law_decisions_source_court_coverage_idx")
+    .on(t.sourceId, t.court)
+    .where(publishedCaseLawDecisionFor(t)),
+  // Filing-year filtering must be in the index: an entire source may have
+  // invalid dates, so filtering each endpoint candidate walks its full heap.
+  p
+    .index("case_law_decisions_source_filing_date_coverage_idx")
+    .on(t.sourceId, t.decisionDate, t.id)
+    .where(
+      sql`${publishedCaseLawDecisionFor(t)} AND ${decisionDateNotBeforeFilingYearSql(
+        {
+          date: t.decisionDate,
+          country: t.country,
+          caseNumber: t.caseNumber,
+        },
+      )}`,
+    ),
+];
+
+/**
+ * The browse walk with one language chosen. Without it a language is a filter
+ * on the country's walk, which skips every newer version in another language
+ * (a multilingual court publishes most languages weeks after the first), or a
+ * probe of `case_law_decisions_provision_scope_cursor_idx`, which holds no
+ * date, so the page sorts every version in that language. Language sits
+ * between country and the sort key, so a language's walk is its own index
+ * range, read in order.
+ */
+const publishedLanguageDateIndex = (
+  t: PublishedCourtDateColumns & { language: PgColumn },
+) =>
+  p
+    .index("case_law_decisions_country_language_date_published_idx")
+    .on(
+      t.country,
+      t.language,
+      sql`coalesce(${t.decisionDate}, '-infinity'::date)`,
+      t.id,
+    )
+    .where(publishedCaseLawDecisionFor(t));
+
 export const caseLawDecisions = p.pgTable(
   "case_law_decisions",
   {
@@ -886,6 +934,7 @@ export const caseLawDecisions = p.pgTable(
       .index("case_law_decisions_country_date_published_idx")
       .on(t.country, sql`coalesce(${t.decisionDate}, '-infinity'::date)`, t.id)
       .where(publishedCaseLawDecisionFor(t)),
+    publishedLanguageDateIndex(t),
     p
       .index("case_law_decisions_source_generation_cursor_idx")
       .on(t.sourceId, t.createdAt, t.id),
@@ -929,6 +978,7 @@ export const caseLawDecisions = p.pgTable(
       .index("case_law_decisions_source_decision_date_coverage_idx")
       .on(t.sourceId, t.decisionDate, t.id)
       .where(publishedCaseLawDecisionFor(t)),
+    ...publishedCoverageIndexes(t),
     // The sitemap shard refresh: the public countries' published decisions,
     // counted per month and bucket with their newest `updated_at`.
     // Partial on the publication gate so the gate costs nothing per row, and
@@ -1427,6 +1477,13 @@ export const caseLawDecisionAliases = p.pgTable(
       sql`${t.retiredDecisionId} <> ${t.canonicalDecisionId}`,
     ),
     ...caseLawIngestionOnlyPolicies(),
+    // case_law_decision_reject_retired_uuid reads aliases during owner decision INSERT/UPDATE.
+    p.pgPolicy("case_law_decision_aliases_owner", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_decision_aliases'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_decision_aliases'::regclass)`,
+    }),
   ],
 );
 

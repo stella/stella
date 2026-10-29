@@ -1,6 +1,7 @@
 import { apiKey } from "@better-auth/api-key";
 import { createCimdClientDiscovery } from "@better-auth/cimd";
 import { fetchClientMetadataResource } from "@better-auth/cimd/node";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import { tryGetCurrentAuthEndpointContext } from "@better-auth/core/context";
 import type {
   AuthContext,
@@ -61,6 +62,7 @@ import {
 } from "@/api/db/scoped";
 import type { TransactionOf } from "@/api/db/scoped";
 import { env } from "@/api/env";
+import type { AppleSignIn } from "@/api/env-apple-sign-in";
 import { appendSetCookieHeaders } from "@/api/http/context";
 import type { RequestContext, ResponseHeaders } from "@/api/http/context";
 import { status } from "@/api/http/status";
@@ -90,6 +92,12 @@ import {
   authenticateApiAccessToken,
   readAccessTokenBearer,
 } from "@/api/lib/auth/api-access-token";
+import { withAppleFormPostOrigin } from "@/api/lib/auth/apple-callback";
+import {
+  createAppleClientSecretSource,
+  createAppleProviderOptions,
+} from "@/api/lib/auth/apple-sign-in";
+import { configuredAppleSignIn } from "@/api/lib/auth/apple-sign-in-env";
 import { authCookiePolicy } from "@/api/lib/auth/auth-cookie-name";
 import {
   AUTH_API_PATH,
@@ -108,6 +116,7 @@ import {
   recordClientMetadataValidated,
   withStaleIfError,
 } from "@/api/lib/auth/cimd-stale-if-error";
+import { sendManageOtp } from "@/api/lib/auth/confirmation-email";
 import {
   checkConfiguredDemoAccountAccess,
   checkDemoAccountOperation,
@@ -223,11 +232,13 @@ import {
 import { createSocialLinkHintPlugin } from "@/api/lib/auth/social-link-hint";
 import {
   classifySocialCallback,
+  completesSocialCallback,
   socialCallbackErrorUrl,
   socialSignInProvider,
 } from "@/api/lib/auth/social-sign-in-outcome";
 import { readCurrentLiveSseSessions } from "@/api/lib/auth/sse-session-liveness-reader";
 import { withoutTrustedDeviceBypass } from "@/api/lib/auth/two-factor-trusted-device";
+import { unlinkAccountWithConfirmation } from "@/api/lib/auth/unlink-account-runtime";
 import { AUTH_USER_ADDITIONAL_FIELDS } from "@/api/lib/auth/user-additional-fields";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -412,6 +423,7 @@ type SocialProviderSettings = {
   microsoftClientId: string | undefined;
   microsoftClientSecret: string | undefined;
   microsoftTenantId: string | undefined;
+  apple: AppleSignIn;
 };
 
 export const createSocialProviders = (settings: SocialProviderSettings) => ({
@@ -435,6 +447,16 @@ export const createSocialProviders = (settings: SocialProviderSettings) => ({
             settings.microsoftTenantId,
           ),
         }),
+      }
+    : {}),
+  // Not through `createSocialProvider`: its spread would freeze the client
+  // secret the options' getter mints and renews.
+  ...(settings.apple.type === "enabled"
+    ? {
+        apple: createAppleProviderOptions(
+          settings.apple,
+          createAppleClientSecretSource(settings.apple),
+        ),
       }
     : {}),
 });
@@ -667,6 +689,7 @@ export const OAUTH_PROVIDER_SESSION_PATHS = {
     "no-browser-session",
   "/admin/oauth2/update-client": "no-browser-session",
   "/oauth2/authorize": "browser-session",
+  "/oauth2/client/rotate-keys": "browser-session",
   "/oauth2/client/rotate-secret": "browser-session",
   "/oauth2/consent": "browser-session",
   "/oauth2/continue": "browser-session",
@@ -976,6 +999,10 @@ const revokeUnprovenCredentials = async (
     });
   }
 };
+const SIGN_IN_METHOD_CONFIRMATION_FAILED = failureSink({
+  event: "auth.sign_in_method_confirmation_failed",
+  expected: [],
+});
 
 /** Session lifetime in seconds (7 days). */
 const SESSION_LIFETIME_SECONDS = 60 * 60 * 24 * 7;
@@ -1301,8 +1328,7 @@ const socialSignInOutcomePlugin = {
   hooks: {
     after: [
       {
-        matcher: (ctx: HookEndpointContext) =>
-          isSocialSignInCallbackPath(ctx.path),
+        matcher: (ctx: HookEndpointContext) => completesSocialCallback(ctx),
         handler: createAuthMiddleware(async (ctx) => {
           logger.info("auth.social_sign_in", {
             outcome: classifySocialCallback(
@@ -2048,15 +2074,16 @@ export const createAuth = (
     // The route table mounts the handler at this path; one constant for both.
     basePath: AUTH_API_PATH,
     logger: errorOutputLogger,
-    trustedOrigins: [
-      ...frontendOrigins({
-        frontendUrl: env.FRONTEND_URL,
-        runtimeMode: runtimeMode(),
-      }),
-      ...(isLocalDevOpen() ? ["chrome-extension://*"] : []),
-      ...(isLocalDevOpen() ? DEV_INSPECTOR_ORIGINS : []),
-      ...(env.EXTENSION_ORIGIN ? [env.EXTENSION_ORIGIN] : []),
-    ],
+    trustedOrigins: (request) =>
+      withAppleFormPostOrigin(request, [
+        ...frontendOrigins({
+          frontendUrl: env.FRONTEND_URL,
+          runtimeMode: runtimeMode(),
+        }),
+        ...(isLocalDevOpen() ? ["chrome-extension://*"] : []),
+        ...(isLocalDevOpen() ? DEV_INSPECTOR_ORIGINS : []),
+        ...(env.EXTENSION_ORIGIN ? [env.EXTENSION_ORIGIN] : []),
+      ]),
     disabledPaths: [
       "/token",
       // The API key plugin ships its own HTTP CRUD, and it authorizes on
@@ -2074,14 +2101,6 @@ export const createAuth = (
       "/api-key/delete",
       "/api-key/get",
       "/api-key/list",
-      // Account unlinking is not a Stella feature: there is no UI and no
-      // server-side `auth.api.unlinkAccount` caller. Better Auth still mounts
-      // `/unlink-account` and protects it with `freshSessionMiddleware`, so
-      // once `session.freshAge` is 0 (below) that freshness no longer applies.
-      // Rather than let an unused, state-changing endpoint stay reachable with
-      // weaker protection, disable the path outright — removing the surface is
-      // strictly stronger than the freshness it used to carry.
-      "/unlink-account",
       "/organization/leave",
       // OAuth client management Stella has no use for; see
       // `OAUTH_ENDPOINT_POLICY`.
@@ -2119,10 +2138,10 @@ export const createAuth = (
       // sessions) that the account page loads eagerly, so the gate turned it
       // into a 403 for any day-old login and crashed the page; and revoking a
       // session — the actual sensitive action — is not freshness-gated anyway,
-      // so gating only the read made no sense. `unlink-account` is unused and is
-      // disabled in `disabledPaths` above, so nothing reachable relies on this
-      // knob. Genuinely sensitive flows use Stella's own controls (OTP-verified
-      // account deletion, TOTP two-factor). `0` removes the footgun without
+      // so gating only the read made no sense. Unlinking uses a live session,
+      // fresh email code and serialized keep-one check in the before hook.
+      // Sensitive flows use Stella's own controls (OTP-verified account
+      // deletion, TOTP two-factor). `0` removes the footgun without
       // weakening anything real. Guarded by the freshAge invariant in
       // `auth.test.ts`.
       freshAge: 0,
@@ -2300,8 +2319,44 @@ export const createAuth = (
       microsoftClientId: env.MICROSOFT_AUTH_CLIENT_ID,
       microsoftClientSecret: env.MICROSOFT_AUTH_CLIENT_SECRET,
       microsoftTenantId: env.MICROSOFT_AUTH_TENANT_ID,
+      apple: configuredAppleSignIn(),
     }),
     plugins: [
+      {
+        id: "sign-in-method-confirmation",
+        endpoints: {
+          sendSignInMethodConfirmation: createAuthEndpoint(
+            "/sign-in-methods/send-otp",
+            { method: "POST" },
+            async (ctx) => {
+              const session = await getAuthoritativeSessionFromCtx(ctx);
+              if (!session) {
+                throw new APIError("UNAUTHORIZED", { message: "Unauthorized" });
+              }
+              const sent = await sendManageOtp({
+                purpose: "unlink-account",
+                email: session.user.email,
+                request: ctx.request,
+              });
+              if (Result.isError(sent)) {
+                observeFailure(sent.error, {
+                  sink: SIGN_IN_METHOD_CONFIRMATION_FAILED,
+                });
+                throw new APIError(
+                  sent.error.status >= 500
+                    ? "INTERNAL_SERVER_ERROR"
+                    : "BAD_REQUEST",
+                  {
+                    message: "Could not send confirmation code",
+                    cause: sent.error,
+                  },
+                );
+              }
+              return ctx.json(sent.value);
+            },
+          ),
+        },
+      },
       REGISTRATION_RETENTION_SCHEMA_PLUGIN,
       CLIENT_METADATA_VALIDATION_SCHEMA_PLUGIN,
       sessionLifetime.plugin,
@@ -2684,6 +2739,17 @@ export const createAuth = (
           }
         }
         await assertSelfhostEmailOtpAllowed(ctx.path);
+        if (ctx.path === "/unlink-account") {
+          const result = await unlinkAccountWithConfirmation({
+            session: await getAuthoritativeSessionFromCtx(ctx),
+            body: ctx.body,
+            request: ctx.request,
+          });
+          if (Result.isError(result)) {
+            throw result.error;
+          }
+          return ctx.json({ status: true });
+        }
         const resetConfirmation = await requireEmailOtpResetConfirmation({
           path: ctx.path,
           body: ctx.body,

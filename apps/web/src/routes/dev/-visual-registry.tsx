@@ -14,6 +14,13 @@ type VisualLoader = {
 };
 
 const visualLoaders = {
+  "mcp-reconnect": {
+    load: async () => {
+      const { McpReconnectPlayground } =
+        await import("./-components/mcp-reconnect-playground");
+      return { default: McpReconnectPlayground };
+    },
+  },
   "task-metadata": {
     load: async () => {
       const { TaskMetadataPlayground } =
