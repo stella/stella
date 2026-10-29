@@ -22,13 +22,12 @@ import {
   entityFeaturePolicyDefinitions,
 } from "@/api/db/entity-feature-policies";
 import * as schema from "@/api/db/schema";
-import {
-  latestEntityFeaturePolicies,
-  readEntityFeatureMigrations,
-} from "@/api/tests/fixtures/entity-feature-migrations";
 import { createPolicyStatementsOf } from "@/api/tests/helpers/lock-taking-sql";
 
-import { updateEntityFeatureGateMigration } from "../../scripts/generate-entity-feature-gate-propagation";
+import {
+  effectiveEntityFeatureGateDefinitions,
+  readEffectiveEntityFeatureGateDefinitions,
+} from "./entity-feature-gate-migrations";
 
 const scopePolicies = (tableName: string) => {
   const workspaceScope = sql`CASE WHEN workspace_id = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting('app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[])) THEN true ELSE workspace_id IN (SELECT aw.authorized_workspace_id FROM public.stella_authorized_workspaces aw) END`;
@@ -41,6 +40,21 @@ const scopePolicies = (tableName: string) => {
     }),
   ];
 };
+
+test("effective gate definitions use the last migration event", () => {
+  const first = `CREATE OR REPLACE FUNCTION public.entity_feature_gate_graph() RETURNS jsonb LANGUAGE sql AS $graph$ SELECT '{"version":1}'::jsonb $graph$;
+CREATE POLICY workspace_entity_feature ON public.fixture USING (false);`;
+  const replacement = `DROP POLICY workspace_entity_feature ON public.fixture;
+CREATE OR REPLACE FUNCTION public.entity_feature_gate_graph() RETURNS jsonb LANGUAGE sql AS $graph$ SELECT '{"version":2}'::jsonb $graph$;`;
+  const effective = effectiveEntityFeatureGateDefinitions([first, replacement]);
+
+  expect(effective.functions.get("entity_feature_gate_graph")).toContain(
+    '"version":2',
+  );
+  expect(effective.policies.has("fixture.workspace_entity_feature")).toBe(
+    false,
+  );
+});
 
 const entityReader = (tableName: string, policy: ReturnType<typeof pgPolicy>) =>
   pgTable(
@@ -448,11 +462,12 @@ test("a classified reference without a foreign key does not prove parent existen
   ]);
 });
 
-test("the migration trigger graph exactly matches the schema-derived census", () => {
-  const migration = readEntityFeatureMigrations();
-  const graphText = [...migration.matchAll(/\$metadata\$(.+)\$metadata\$/gu)]
-    .at(-1)
-    ?.at(1);
+test("the migration trigger graph exactly matches the schema-derived census", async () => {
+  const migration =
+    (await readEffectiveEntityFeatureGateDefinitions()).functions.get(
+      "entity_feature_gate_graph",
+    ) ?? "";
+  const graphText = /\$metadata\$(.+)\$metadata\$/u.exec(migration)?.at(1);
   expect(graphText).toBeDefined();
   const graph: unknown = JSON.parse(graphText ?? "null");
   const tables = Object.values(schema).filter((table) => is(table, PgTable));
@@ -467,33 +482,34 @@ test("the migration trigger graph exactly matches the schema-derived census", ()
   );
 });
 
-test("migration propagation plans are derived from the complete gate census", () => {
-  const migration = readEntityFeatureMigrations();
+test("migration propagation plans are derived from the complete gate census", async () => {
+  const migration =
+    (await readEffectiveEntityFeatureGateDefinitions()).functions.get(
+      "entity_feature_gate_propagate",
+    ) ?? "";
   const tables = Object.values(schema).filter((table) => is(table, PgTable));
   const expected = entityFeatureGatePropagationSql(
     entityFeatureGateMetadata(tables),
   );
-  const actual = [
-    ...migration.matchAll(
-      /CREATE OR REPLACE FUNCTION public\.entity_feature_gate_propagate\(\)[\s\S]+?\$function\$;/gu,
-    ),
-  ]
-    .at(-1)
-    ?.at(0);
+  const actual =
+    /CREATE OR REPLACE FUNCTION public\.entity_feature_gate_propagate\(\)[\s\S]+?\$function\$;/u
+      .exec(migration)
+      ?.at(0);
   expect(actual).toBe(expected);
 });
 
 test("the migration grants maintenance policies only to the dedicated gate role", async () => {
-  const migration = readEntityFeatureMigrations();
+  const effective = await readEffectiveEntityFeatureGateDefinitions();
+  const migration = [...effective.policies.values()].join("\n");
   const tables = Object.values(schema).filter((table) => is(table, PgTable));
   const descriptors = entityFeatureGateMetadata(tables);
   const expected = await createPolicyStatementsOf(
     entityFeaturePolicyDefinitions(tables, "entity_feature_gate_maintenance"),
   );
-  const actual = latestEntityFeaturePolicies(
-    migration,
-    "entity_feature_gate_maintenance",
-  );
+  const actual =
+    migration.match(
+      /CREATE POLICY "entity_feature_gate_maintenance"[^;]+;/gu,
+    ) ?? [];
   const schemaPolicies = tables.flatMap((table) =>
     getTableConfig(table).policies.filter(
       (policy) => policy.name === "entity_feature_gate_maintenance",
@@ -511,6 +527,7 @@ test("the migration grants maintenance policies only to the dedicated gate role"
     );
   };
 
+  expect(descriptors).toHaveLength(actual.length);
   expect(schemaPolicies).toHaveLength(descriptors.length);
   expect(schemaPolicies.every((policy) => targetsGateRole(policy.to))).toBe(
     true,
@@ -534,6 +551,9 @@ test("the migration grants maintenance policies only to the dedicated gate role"
   expect(migration).not.toMatch(
     /CREATE POLICY "entity_feature_gate_maintenance"[^;]+\bTO\s+(?:PUBLIC|"public")\b/iu,
   );
+  // A later CREATE OR REPLACE keeps a routine's privileges, so the revokes
+  // where the routines were first created still hold.
+  const created = effective.revokes;
   for (const signature of [
     "entity_feature_gate_value(text, jsonb)",
     "entity_feature_gate_write()",
@@ -541,14 +561,14 @@ test("the migration grants maintenance policies only to the dedicated gate role"
     "entity_feature_gate_repair_missing()",
     "entity_feature_gate_backfill(text, text, integer)",
   ]) {
-    expect(migration).toContain(
-      `REVOKE ALL ON FUNCTION public.${signature} FROM PUBLIC;`,
-    );
+    expect(created).toContain(signature);
   }
 });
 
-test("migration maintenance grants match each descriptor's read and write columns", () => {
-  const migration = readEntityFeatureMigrations();
+test("migration maintenance grants match each descriptor's read and write columns", async () => {
+  const migration = [
+    ...(await readEffectiveEntityFeatureGateDefinitions()).grants.values(),
+  ].join("\n");
   const tables = Object.values(schema).filter((table) => is(table, PgTable));
   const descriptors = entityFeatureGateMetadata(tables);
   const grants = [
@@ -618,41 +638,4 @@ test("the version gate's direct parent lookup covers its complete inherited scop
     ],
   });
   expect(versions?.refs).toHaveLength(1);
-});
-
-test("migration regeneration preserves surrounding fences and is a fixed point", () => {
-  const source = `-- requires: fixture_source
-SET lock_timeout = '1s';
-CREATE OR REPLACE FUNCTION public.entity_feature_gate_graph() RETURNS jsonb LANGUAGE sql AS $graph$ SELECT $metadata\${}$metadata$::jsonb $graph$;
--- lifecycle policies and grants stay here
-CREATE OR REPLACE FUNCTION public.entity_feature_gate_propagate() RETURNS trigger LANGUAGE plpgsql AS $function$ BEGIN RETURN NULL; END $function$;
--- source lifecycle trigger stays here
-`;
-  const tables = Object.values(schema).filter((table) => is(table, PgTable));
-  const descriptors = entityFeatureGateMetadata(tables);
-  for (const selected of [[], descriptors.slice(0, 1), descriptors]) {
-    const updated = updateEntityFeatureGateMigration(source, selected);
-    expect(updateEntityFeatureGateMigration(updated, selected)).toBe(updated);
-    expect(
-      updated.startsWith(
-        "-- requires: fixture_source\nSET lock_timeout = '1s';\n",
-      ),
-    ).toBe(true);
-    expect(updated).toContain("-- lifecycle policies and grants stay here");
-    expect(updated.endsWith("-- source lifecycle trigger stays here\n")).toBe(
-      true,
-    );
-    expect(updated).toContain(entityFeatureGatePropagationSql(selected));
-    expect(() =>
-      updateEntityFeatureGateMigration(source + source, selected),
-    ).toThrow("Expected exactly one generated entity feature routine");
-  }
-});
-
-test("migration regeneration refuses absent generated routines", () => {
-  for (const source of ["", "-- migration without generated routines"]) {
-    expect(() => updateEntityFeatureGateMigration(source, [])).toThrow(
-      "Expected exactly one generated entity feature routine",
-    );
-  }
 });

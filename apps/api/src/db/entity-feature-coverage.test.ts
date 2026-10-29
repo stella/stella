@@ -15,11 +15,9 @@ import {
 } from "@/api/db/entity-feature-policies";
 import { wsPolicies } from "@/api/db/rls";
 import * as schema from "@/api/db/schema";
-import {
-  latestEntityFeaturePolicies,
-  readEntityFeatureMigrations,
-} from "@/api/tests/fixtures/entity-feature-migrations";
 import { createPolicyStatementsOf } from "@/api/tests/helpers/lock-taking-sql";
+
+import { readEffectiveEntityFeatureGateDefinitions } from "./entity-feature-gate-migrations";
 
 test("every app-readable entity relation inherits feature visibility", () => {
   const tables = Object.values(schema).filter((table) => is(table, PgTable));
@@ -191,14 +189,16 @@ test("a record owned by an unfenced parent needs no fence", () => {
 });
 
 test("the committed migration matches every schema-owned visibility policy", async () => {
-  const migration = readEntityFeatureMigrations();
-  const statements = latestEntityFeaturePolicies(
-    migration,
-    "workspace_entity_feature",
-  );
+  const effective = await readEffectiveEntityFeatureGateDefinitions();
+  const statements = [...effective.policies]
+    .filter(([key]) => key.endsWith(".workspace_entity_feature"))
+    .map(([, statement]) => statement)
+    .toSorted();
   const tables = Object.values(schema).filter((table) => is(table, PgTable));
   expect(statements).toEqual(
-    await createPolicyStatementsOf(entityFeaturePolicyDefinitions(tables)),
+    (
+      await createPolicyStatementsOf(entityFeaturePolicyDefinitions(tables))
+    ).toSorted(),
   );
   expect(
     statements.some((statement) =>

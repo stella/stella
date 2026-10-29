@@ -1,116 +1,33 @@
-import { panic } from "better-result";
 import { is } from "drizzle-orm";
 import { PgTable } from "drizzle-orm/pg-core";
-import { execFileSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
-import path from "node:path";
 
-import { repoRelativePath } from "@stll/portable-path";
-
-import {
-  entityFeatureGateMetadata,
-  entityFeatureGatePropagationSql,
-} from "../src/db/entity-feature-gate-metadata";
-import type { EntityFeatureGateDescriptor } from "../src/db/entity-feature-gate-metadata";
+import { entityFeatureGateMetadata } from "../src/db/entity-feature-gate-metadata";
+import { readEffectiveEntityFeatureGateDefinitions } from "../src/db/entity-feature-gate-migrations";
 import * as schema from "../src/db/schema";
+import { entityFeatureGateTableSql } from "./entity-feature-gate-ddl";
 
-/** Replace only the two generated routines; migration-specific fences remain intact. */
-export const updateEntityFeatureGateMigration = (
-  migration: string,
-  descriptors: readonly EntityFeatureGateDescriptor[],
-) => {
-  const graph = Object.fromEntries(
-    descriptors.map((descriptor, order) => [
-      descriptor.tableName,
-      { ...descriptor, order },
-    ]),
+const tables = Object.values(schema).filter((table) => is(table, PgTable));
+const descriptors = entityFeatureGateMetadata(tables);
+const effective = await readEffectiveEntityFeatureGateDefinitions();
+const changed = entityFeatureGateTableSql(tables, descriptors, effective);
+
+if (changed.length > 0) {
+  const drizzle = new URL("../drizzle/", import.meta.url);
+  const newest = (
+    await Array.fromAsync(
+      new Bun.Glob("*/migration.sql").scan({ cwd: drizzle.pathname }),
+    )
+  )
+    .map((path) => path.split("/").at(0) ?? "")
+    .toSorted()
+    .at(-1);
+  const stamp = String(
+    Number.parseInt(newest?.slice(0, 14) ?? "0", 10) + 1,
+  ).padStart(14, "0");
+  const folder = new URL(`${stamp}_entity_feature_gate_registry/`, drizzle);
+  await Bun.write(
+    new URL("migration.sql", folder),
+    `SET lock_timeout = '2s';\nSET statement_timeout = '5min';\n--> statement-breakpoint\n${changed.join("\n--> statement-breakpoint\n")}\n`,
   );
-  const graphSql = `CREATE OR REPLACE FUNCTION public.entity_feature_gate_graph() RETURNS jsonb LANGUAGE sql IMMUTABLE SET search_path = pg_catalog AS $graph$ SELECT $metadata$${JSON.stringify(graph)}$metadata$::jsonb $graph$;`;
-  const replacements = [
-    {
-      pattern:
-        /CREATE OR REPLACE FUNCTION public\.entity_feature_gate_graph\(\)[\s\S]+?\$graph\$;/gu,
-      sql: graphSql,
-    },
-    {
-      pattern:
-        /CREATE OR REPLACE FUNCTION public\.entity_feature_gate_propagate\(\)[\s\S]+?\$function\$;/gu,
-      sql: entityFeatureGatePropagationSql(descriptors),
-    },
-  ];
-  let updated = migration;
-  for (const replacement of replacements) {
-    if ([...updated.matchAll(replacement.pattern)].length !== 1) {
-      panic(
-        "Expected exactly one generated entity feature routine",
-        replacement.pattern.source,
-      );
-    }
-    updated = updated.replace(replacement.pattern, () => replacement.sql);
-  }
-  return updated;
-};
-
-if (import.meta.main) {
-  const tables = Object.values(schema).filter((table) => is(table, PgTable));
-  const descriptors = entityFeatureGateMetadata(tables);
-  const args = Bun.argv.slice(2);
-  if (args.length === 0) {
-    // Print for a new migration; merged migration files are immutable.
-    process.stdout.write(`${entityFeatureGatePropagationSql(descriptors)}\n`);
-  } else {
-    const [mode, migrationPath] = args;
-    if (
-      args.length !== 2 ||
-      (mode !== "--write-migration" && mode !== "--check-migration") ||
-      migrationPath === undefined
-    ) {
-      panic(
-        "Usage: generate-entity-feature-gate-propagation.ts [--write-migration|--check-migration apps/api/drizzle/<migration>/migration.sql]",
-      );
-    }
-    const repoRoot = path.resolve(import.meta.dir, "../../..");
-    const relativePath = repoRelativePath(
-      repoRoot,
-      path.resolve(repoRoot, migrationPath),
-    );
-    if (
-      !/^apps\/api\/drizzle\/\d{14}_[a-z0-9_]+\/migration\.sql$/u.test(
-        relativePath,
-      )
-    ) {
-      panic("Expected a repository migration.sql path", migrationPath);
-    }
-    if (mode === "--write-migration") {
-      const merged = execFileSync(
-        "git",
-        [
-          "ls-tree",
-          "-r",
-          "--name-only",
-          "origin/main",
-          "--",
-          path.dirname(relativePath),
-        ],
-        { cwd: repoRoot, encoding: "utf-8", maxBuffer: 32 * 1024 * 1024 },
-      );
-      if (merged.trim() !== "") {
-        panic(
-          "Cannot regenerate a migration already present on origin/main",
-          relativePath,
-        );
-      }
-    }
-    const absolutePath = path.join(repoRoot, relativePath);
-    const current = readFileSync(absolutePath, "utf-8");
-    const generated = updateEntityFeatureGateMigration(current, descriptors);
-    if (mode === "--write-migration") {
-      writeFileSync(absolutePath, generated);
-    } else if (current !== generated) {
-      panic(
-        "Entity feature migration does not match canonical schema metadata",
-        relativePath,
-      );
-    }
-  }
+  console.log(folder.pathname);
 }
