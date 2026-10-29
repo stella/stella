@@ -14,6 +14,7 @@ import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
+import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
 import type {
   GatedTestClientScope,
@@ -427,6 +428,9 @@ type SeedSitemapReadBudgetOptions = {
   openClient: GatedTestClientScope["openClient"];
 };
 
+/** The sitemap fixture's source; any registered adapter serves, its rows are synthetic. */
+const SITEMAP_FIXTURE_ADAPTER_KEY = ADAPTER_KEYS.CZ_REGIONAL;
+
 /** One available dirty month beside a growing backlog held by another run. */
 export const seedSitemapReadBudget = async ({
   database,
@@ -437,8 +441,10 @@ export const seedSitemapReadBudget = async ({
     SCENARIO_GENERATIONS.find(({ generation }) => generation === serving) ??
     panic(`Unknown sitemap scenario ${serving}`);
   const sourceId = "01990000-00c0-7000-8000-000000000001";
+  // A registered adapter key: the coverage refresh reads every source through
+  // the adapter registry, and an unregistered key is reported as an error.
   await database.execute(sql`INSERT INTO case_law_sources (id, adapter_key, name, enabled)
-    VALUES (${sourceId}::uuid, 'query-perf-sitemap', 'Sitemap fixture', false)
+    VALUES (${sourceId}::uuid, ${SITEMAP_FIXTURE_ADAPTER_KEY}, 'Sitemap fixture', false)
     ON CONFLICT (id) DO NOTHING`);
   await database.execute(
     sql`DELETE FROM case_law_decisions WHERE source_id = ${sourceId}::uuid`,

@@ -18,9 +18,19 @@ export const QUERY_PERF_TABLE_SIZES = {
   workspaces: "large",
 } as const satisfies Record<string, "large" | "small">;
 
-const queryPerfTableSizesByName = new Map(
-  Object.entries(QUERY_PERF_TABLE_SIZES),
-);
+/**
+ * System catalogs a measured statement reads, by size class. They are not
+ * schema tables, so they are declared apart from the fixture's tables.
+ */
+export const QUERY_PERF_CATALOG_SIZES = {
+  // One row per database in the cluster; the load governor's indicator read.
+  pg_database: "small",
+} as const satisfies Record<string, "large" | "small">;
+
+const queryPerfTableSizesByName = new Map([
+  ...Object.entries(QUERY_PERF_TABLE_SIZES),
+  ...Object.entries(QUERY_PERF_CATALOG_SIZES),
+]);
 
 export const isLargeQueryPerfRelation = (relation: string) =>
   queryPerfTableSizesByName.get(relation) !== "small";
