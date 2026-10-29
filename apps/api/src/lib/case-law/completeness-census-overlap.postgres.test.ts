@@ -55,7 +55,6 @@ describe.skipIf(!enabled)("overlapping publisher slices (postgres)", () => {
           identities: [
             { type: "document" as const, sourceDocumentId: "shared" },
           ],
-          listed: 1,
           publisherCount: 1,
           observedAt,
         };

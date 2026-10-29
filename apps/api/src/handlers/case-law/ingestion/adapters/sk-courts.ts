@@ -84,6 +84,8 @@ import {
   toOptionalValue,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
+// parser-output-unchanged: Census court evidence is carried beside listing identity and payload; parsed decisions and persisted reconciliation keys are unchanged.
+import { observedCensusCourt } from "@/api/lib/case-law/census-listing-identity";
 import {
   absentDecisionTextFields,
   checkedDecisionMetadata,
@@ -1501,10 +1503,20 @@ const listSkCourtsSlicePage = async ({
     signal,
   });
   return {
-    items: listed.map((item) => ({
-      identity: skCourtsListingIdentity(item),
-      payload: item,
-    })),
+    items: listed.map((item) => {
+      const identity = skCourtsListingIdentity(item);
+      return {
+        identity,
+        payload: item,
+        ...(identity.type === "case-number"
+          ? {
+              censusCourtEvidence: observedCensusCourt(
+                skCourtsIdentityFields(item)?.court,
+              ),
+            }
+          : {}),
+      };
+    }),
     totalPages: Math.ceil(total / LISTING_PAGE_SIZE),
     publisherCount: total,
   };

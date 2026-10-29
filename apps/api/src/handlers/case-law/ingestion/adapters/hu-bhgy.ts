@@ -113,6 +113,8 @@ import {
 } from "@/api/handlers/case-law/ingestion/parsers/hu-bhgy";
 import type { HuBhgyHeaderLabel } from "@/api/handlers/case-law/ingestion/parsers/hu-bhgy";
 import { arrayOrEmpty } from "@/api/lib/array";
+// parser-output-unchanged: Census court evidence is carried beside listing identity and payload; parsed decisions and persisted reconciliation keys are unchanged.
+import { observedCensusCourt } from "@/api/lib/case-law/census-listing-identity";
 import {
   absentDecisionTextFields,
   checkedDecisionMetadata,
@@ -1453,10 +1455,19 @@ const listHuBhgySlicePage = async ({
     );
   }
 
-  const items = rows.map((row) => ({
-    identity: huBhgyListingIdentity(normalizeHuBhgyRow(row)),
-    payload: row,
-  }));
+  const items = rows.map((row) => {
+    const normalized = normalizeHuBhgyRow(row);
+    const identity = huBhgyListingIdentity(normalized);
+    return {
+      identity,
+      payload: row,
+      ...(identity.type === "case-number"
+        ? {
+            censusCourtEvidence: observedCensusCourt(normalized.MeghozoBirosag),
+          }
+        : {}),
+    };
+  });
   return {
     items,
     totalPages: Math.ceil(count / MAX_PAGE_SIZE),

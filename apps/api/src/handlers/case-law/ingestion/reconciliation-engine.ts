@@ -1653,8 +1653,7 @@ const walkSlice = async ({
     leaseToken: lease.leaseToken,
     slice,
     scope: publisherScope,
-    identities: items.map(({ identity }) => identity),
-    listed: listing.value.keyed.size + listing.value.unidentifiable,
+    identities: listing.value.censusIdentities,
     publisherCount: listing.value.publisherCount,
     observedAt: now(),
   });

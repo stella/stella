@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, count, eq, gte, lte, or, sql } from "drizzle-orm";
+import { and, count, eq, gte, inArray, lte, or, sql } from "drizzle-orm";
 
 import { caseLawCompletenessCensus as census } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -11,7 +11,10 @@ import {
   censusVerdictFromSummary,
 } from "@/api/lib/case-law/completeness-census-contract";
 import type { SourceCensus } from "@/api/lib/case-law/completeness-census-contract";
-import { CENSUS_AGGREGATE_UNIT } from "@/api/lib/case-law/completeness-census-values";
+import {
+  CENSUS_AGGREGATE_UNIT,
+  CENSUS_MEASURED_OUTCOMES,
+} from "@/api/lib/case-law/completeness-census-values";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { CASE_LAW_SOURCE_ROWS_BOUND } from "@/api/lib/legal-search/ingestion-constants";
 import type { SourceSliceWalk } from "@/api/lib/legal-search/ingestion-types";
@@ -104,18 +107,24 @@ export const unmeasuredSourceCensus = (adapterKey: string): SourceCensus => {
   };
 };
 
-const short = sql`${census.publisherCount} IS NOT NULL AND (${census.storedCount} < ${census.publisherCount} OR ${census.textCount}::bigint * 1000 < ${census.storedCount}::bigint * 999)`;
+const measuredOutcome = inArray(census.outcome, CENSUS_MEASURED_OUTCOMES);
+const short = sql`${measuredOutcome} AND ${census.publisherCount} IS NOT NULL AND (${census.storedCount} < ${census.publisherCount} OR ${census.textCount}::bigint * 1000 < ${census.storedCount}::bigint * 999)`;
 
 type CensusOutcomeSummary = {
   noneExposed: number;
+  unproven: number;
   stated: number;
   measured: number;
 };
 const censusOutcomeFromSummary = ({
   noneExposed,
+  unproven,
   stated,
   measured,
 }: CensusOutcomeSummary): SourceCensus["outcome"] => {
+  if (unproven > 0) {
+    return "identity-unproven";
+  }
   if (noneExposed > 0) {
     return "none-exposed";
   }
@@ -147,7 +156,8 @@ export const readCompletenessCensusQuery = async (
       .select({
         sourceId: census.sourceId,
         measured: count(),
-        unknown: sql<number>`count(*) FILTER (WHERE ${census.outcome} = 'none-exposed' OR ${census.scopeExtent} = 'partial-publisher')::int`,
+        unknown: sql<number>`count(*) FILTER (WHERE NOT (${measuredOutcome}) OR ${census.scopeExtent} = 'partial-publisher')::int`,
+        unproven: sql<number>`count(*) FILTER (WHERE ${census.outcome} = 'identity-unproven')::int`,
         noneExposed: sql<number>`count(*) FILTER (WHERE ${census.outcome} = 'none-exposed')::int`,
         partial: sql<number>`count(*) FILTER (WHERE ${census.scopeExtent} = 'partial-publisher')::int`,
         stated: sql<number>`count(*) FILTER (WHERE ${census.outcome} = 'publisher-count')::int`,
@@ -208,7 +218,7 @@ export const readCompletenessCensusQuery = async (
       ),
     })
     .from(census)
-    .where(and(where, sql`(${short} OR ${census.outcome} = 'none-exposed')`))
+    .where(and(where, sql`(${short} OR NOT (${measuredOutcome}))`))
     .as("ranked_census");
   const worstRead = await readBounded(
     tx

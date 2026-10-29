@@ -25,7 +25,7 @@ import { recordCompletenessCensus } from "@/api/lib/case-law/completeness-census
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
 import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
 import type {
-  ListingIdentity,
+  CensusListingIdentity,
   SourceSliceWalk,
 } from "@/api/lib/legal-search/ingestion-types";
 import { publicLawDatabaseRolePermissionsSql } from "@/api/lib/public-law-read-db";
@@ -105,7 +105,6 @@ describe.skipIf(!enabled)(
               type: "document" as const,
               sourceDocumentId: `threshold-${index + 1}`,
             })),
-            listed: 1000,
             publisherCount: 1000,
             observedAt,
           };
@@ -113,7 +112,6 @@ describe.skipIf(!enabled)(
             ...options,
             slice: "0000",
             identities: [],
-            listed: 0,
             publisherCount: 0,
           });
           await recordCompletenessCensus(scopedDb, options);
@@ -178,7 +176,6 @@ describe.skipIf(!enabled)(
                 sourceDocumentId: "partial-document",
               },
             ],
-            listed: 1,
             publisherCount: 2,
           };
           await recordCompletenessCensus(scopedDb, partialOptions);
@@ -270,7 +267,6 @@ describe.skipIf(!enabled)(
                 { type: "document", sourceDocumentId: "held" },
                 { type: "document", sourceDocumentId: "missing" },
               ],
-              listed: 2,
               publisherCount,
               observedAt: new Date("2026-10-16T12:00:00Z"),
             });
@@ -455,7 +451,6 @@ describe.skipIf(!enabled)(
                   sourceDocumentId: "folded",
                 })),
               ],
-              listed: identities.length,
               publisherCount: identities.length,
               observedAt: at,
             });
@@ -623,7 +618,6 @@ describe.skipIf(!enabled)(
                 slice,
                 scope: initialScope,
                 identities: [],
-                listed: 0,
                 publisherCount: 0,
                 observedAt,
               });
@@ -827,9 +821,18 @@ describe.skipIf(!enabled)(
           ]);
           const identities = [
             { type: "document", sourceDocumentId: "has-text" },
-            { type: "case-number", caseNumber: "empty", language: "cs" },
+            {
+              type: "case-number",
+              caseNumber: "empty",
+              language: "cs",
+              censusCourtEvidence: {
+                type: "known",
+                court: "Fixture",
+                courtId: null,
+              },
+            },
             { type: "document", sourceDocumentId: "missing" },
-          ] satisfies ListingIdentity[];
+          ] satisfies CensusListingIdentity[];
           const options = {
             sourceId,
             leaseToken,
@@ -837,7 +840,6 @@ describe.skipIf(!enabled)(
             slice: "2026",
             scope: { first: "2026", last: "2026", expectedSlices: 1 },
             identities,
-            listed: 3,
             publisherCount: 3,
             observedAt,
           };
@@ -877,7 +879,6 @@ describe.skipIf(!enabled)(
           const complete = {
             ...options,
             identities: identities.slice(0, 2),
-            listed: 2,
             publisherCount: 2,
             observedAt: new Date(observedAt.getTime() + 1),
           };
@@ -912,7 +913,6 @@ describe.skipIf(!enabled)(
             scope,
             slice: "2025",
             identities: [],
-            listed: 0,
             publisherCount: undefined,
           });
           expect(await read()).toMatchObject({
@@ -951,7 +951,6 @@ describe.skipIf(!enabled)(
             sourceId: unknownSourceId,
             adapterKey: "pl-nsa",
             identities: [],
-            listed: 0,
             publisherCount: undefined,
           });
           const countrySources = await readCompletenessCensusQuery(db, [

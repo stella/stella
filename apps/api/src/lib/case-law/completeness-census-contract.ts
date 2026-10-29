@@ -3,6 +3,7 @@ import * as v from "valibot";
 
 import {
   CENSUS_AGGREGATE_UNIT,
+  CENSUS_MEASURED_OUTCOMES,
   CENSUS_OUTCOMES,
   CENSUS_SCOPE_STATUSES,
 } from "@/api/lib/case-law/completeness-census-values";
@@ -162,17 +163,21 @@ export const censusVerdict = ({
         ? Math.max(1, slices.length)
         : slices.filter(
             (slice) =>
-              slice.outcome === "none-exposed" || slice.publisher === null,
+              !CENSUS_MEASURED_OUTCOMES.some(
+                (outcome) => outcome === slice.outcome,
+              ) || slice.publisher === null,
           ).length,
     shortSlices: slices.filter(censusSliceIsShort).length,
   });
 
 export const censusSliceIsShort = ({
+  outcome,
   publisher,
   stored,
   withText,
 }: CensusSlice): boolean =>
   // ceil(999 * stored / 1000), without multiplying beyond safe integer precision.
+  CENSUS_MEASURED_OUTCOMES.some((measured) => measured === outcome) &&
   publisher !== null &&
   (stored < publisher || withText < stored - Math.floor(stored / 1000));
 

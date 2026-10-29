@@ -12,7 +12,7 @@ import {
 import { createSafeId } from "@/api/lib/branded-types";
 import { readCompletenessCensusQuery } from "@/api/lib/case-law/completeness-census";
 import { recordCompletenessCensus } from "@/api/lib/case-law/completeness-census-writer";
-import type { ListingIdentity } from "@/api/lib/legal-search/ingestion-types";
+import type { CensusListingIdentity } from "@/api/lib/legal-search/ingestion-types";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -85,7 +85,6 @@ describe.skipIf(!enabled)("retained publisher identities (postgres)", () => {
                 sourceDocumentId,
               }),
             ),
-            listed: 2,
             publisherCount: 2,
             observedAt: new Date(Date.UTC(2026, 9, 16, 12, 0, 0, offset)),
           });
@@ -217,7 +216,7 @@ describe.skipIf(!enabled)("retained publisher identities (postgres)", () => {
         });
         const record = async (
           offset: number,
-          identities: readonly ListingIdentity[],
+          identities: readonly CensusListingIdentity[],
         ) => {
           await recordCompletenessCensus(scopedDb, {
             sourceId,
@@ -226,7 +225,6 @@ describe.skipIf(!enabled)("retained publisher identities (postgres)", () => {
             slice: "2026",
             scope,
             identities,
-            listed: identities.length,
             publisherCount: identities.length,
             observedAt: new Date(Date.UTC(2026, 9, 19, 12, 0, 0, offset)),
           });
@@ -241,6 +239,11 @@ describe.skipIf(!enabled)("retained publisher identities (postgres)", () => {
           type: "case-number" as const,
           caseNumber: "12 C 3/2026",
           language: "cs",
+          censusCourtEvidence: {
+            type: "known" as const,
+            court: "Fixture",
+            courtId: null,
+          },
         };
         expect(await record(0, [caseNumber])).toMatchObject({
           verdict: "complete",

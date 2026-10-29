@@ -1100,9 +1100,20 @@ export const parseListingIdentityKey = (
   };
 };
 
+/** Court evidence qualifies census observations, independently of persisted reconciliation keys. */
+export type CensusCourtEvidence =
+  | { type: "known"; court: string; courtId: string | null }
+  | { type: "unknown" };
+
+export type CensusListingIdentity = ListingIdentity & {
+  censusCourtEvidence?: CensusCourtEvidence;
+};
+
 /** One item as the publisher lists it, plus how the ingest would key it. */
 export type ReconciliationListingItem = {
   identity: ListingIdentity;
+  /** Absent evidence is explicitly unmeasured for a case-number census entry. */
+  censusCourtEvidence?: CensusCourtEvidence;
   /** Verbatim listing payload, JSON-serializable; replayed into buildDecision. */
   payload: unknown;
 };

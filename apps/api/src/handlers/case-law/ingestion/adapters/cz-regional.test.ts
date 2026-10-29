@@ -792,7 +792,21 @@ describe("the crawl keeps a refused row as its listing", () => {
         slice: "2025-06-11",
         page: 0,
       });
-      expect(slice.items).toEqual([{ identity, payload: raw }]);
+      expect(slice.items).toEqual([
+        {
+          identity,
+          payload: raw,
+          ...(identity.type === "case-number"
+            ? {
+                censusCourtEvidence: {
+                  type: "known",
+                  court: raw["soud"],
+                  courtId: null,
+                },
+              }
+            : {}),
+        },
+      ]);
       const page = (
         await czRegionalAdapter.fetchPage("2025-06-11:0", {})
       ).unwrap();

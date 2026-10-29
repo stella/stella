@@ -22,8 +22,9 @@ CREATE TABLE "case_law_completeness_census" (
     AND "enumerated_count" >= 0
     AND ("publisher_stated_count" IS NULL OR "publisher_stated_count" >= 0)
     AND "scope_status" IN ('full-publisher', 'partial-publisher')
-    AND (("outcome" IN ('publisher-count', 'listing-enumerated') AND "publisher_count" >= 0 AND "publisher_count" IS NOT NULL AND ("year" IS NOT NULL OR "slice" LIKE '0000%'))
+    AND (("outcome" IN ('publisher-count', 'listing-enumerated', 'identity-unproven') AND "publisher_count" >= 0 AND "publisher_count" IS NOT NULL AND ("year" IS NOT NULL OR "slice" LIKE '0000%'))
       OR ("outcome" = 'none-exposed' AND "publisher_count" IS NULL))
+    AND ("outcome" <> 'identity-unproven' OR "publisher_count" >= "enumerated_count")
     AND ("outcome" <> 'publisher-count' OR (
       "publisher_stated_count" IS NOT NULL
       AND "publisher_count" = "publisher_stated_count"

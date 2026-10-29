@@ -959,6 +959,7 @@ export const computeCaseLawCoverageAnswer = async (
         });
         return await caseLawDb(
           async (tx) => await readCompletenessCensusQuery(tx, scopes),
+          { isolation: "repeatable-read" },
         );
       },
       readYearCompleteness: async (sources) =>

@@ -115,6 +115,7 @@ test("census-short-or-unmeasured-never-complete", () => {
         "short",
         "textless",
         "none-exposed",
+        "identity-unproven",
         "missing-count",
         "missing-slice",
         "partial-publisher",
@@ -136,6 +137,9 @@ test("census-short-or-unmeasured-never-complete", () => {
             break;
           case "textless":
             affected = slice({ publisher, stored: publisher, withText: 0 });
+            break;
+          case "identity-unproven":
+            affected = { ...complete, outcome: "identity-unproven" };
             break;
           case "none-exposed":
             affected = { ...complete, outcome: "none-exposed" };
@@ -194,4 +198,20 @@ test("census-text-threshold-exact-safe-integers", () => {
       },
     ),
   );
+});
+
+test("unproven court identity cannot establish a missing decision or completeness", () => {
+  const observation = slice({
+    outcome: "identity-unproven",
+    publisher: 1,
+    stored: 0,
+    withText: 0,
+  });
+  expect(
+    censusVerdict({
+      slices: [observation],
+      expectedSlices: 1,
+      scopeStatus: "full-publisher",
+    }),
+  ).toBe("unmeasured");
 });

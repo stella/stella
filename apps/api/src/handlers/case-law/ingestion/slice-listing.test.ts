@@ -289,3 +289,63 @@ test("verification refuses a changed publisher denominator with identical identi
   });
   expect(Result.isError(listed)).toBe(true);
 });
+
+test("verification refuses a changed unidentifiable denominator", async () => {
+  let calls = 0;
+  const listed = await listWith(async () => {
+    calls += 1;
+    return {
+      items: [
+        documentItem("a"),
+        ...Array.from({ length: calls }, () => ({
+          identity: { type: "unidentifiable" as const },
+          payload: null,
+        })),
+      ],
+      totalPages: 1,
+    };
+  });
+  expect(Result.isError(listed)).toBe(true);
+});
+
+test("census court evidence retains two entries without changing the reconciliation key", async () => {
+  const listing = unwrapListing(
+    await listWith(async () => ({
+      totalPages: 1,
+      items: ["Court A", "Court B"].map((court) => ({
+        identity: {
+          type: "case-number" as const,
+          caseNumber: "12 C 3/2026",
+          language: "cs",
+        },
+        censusCourtEvidence: { type: "known" as const, court, courtId: null },
+        payload: court,
+      })),
+    })),
+  );
+  expect([...listing.keyed.keys()]).toEqual(["case-number:cs:12 C 3/2026"]);
+  expect(listing.censusIdentities).toHaveLength(2);
+});
+
+test("verification refuses changing census court evidence while keeping the same reconciliation key", async () => {
+  let calls = 0;
+  const listed = await listWith(async () => ({
+    totalPages: 1,
+    items: [
+      {
+        identity: {
+          type: "case-number",
+          caseNumber: "12 C 3/2026",
+          language: "cs",
+        },
+        censusCourtEvidence: {
+          type: "known",
+          court: String(++calls),
+          courtId: null,
+        },
+        payload: null,
+      },
+    ],
+  }));
+  expect(Result.isError(listed)).toBe(true);
+});

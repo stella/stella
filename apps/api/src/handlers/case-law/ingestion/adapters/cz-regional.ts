@@ -77,6 +77,8 @@ import { parseRegionalDecision } from "@/api/handlers/case-law/ingestion/parsers
 import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import { stripAcademicTitles } from "@/api/handlers/case-law/judges/judge-name";
+// parser-output-unchanged: Census court evidence is carried beside listing identity and payload; parsed decisions and persisted reconciliation keys are unchanged.
+import { observedCensusCourt } from "@/api/lib/case-law/census-listing-identity";
 import {
   absentDecisionTextFields,
   checkedDecisionMetadata,
@@ -1765,10 +1767,16 @@ const listCzRegionalSlicePage = async ({
     ...(signal === undefined ? {} : { signal }),
   });
   return {
-    items: items.map((item) => ({
-      identity: czRegionalListingIdentity(item),
-      payload: item,
-    })),
+    items: items.map((item) => {
+      const identity = czRegionalListingIdentity(item);
+      return {
+        identity,
+        payload: item,
+        ...(identity.type === "case-number"
+          ? { censusCourtEvidence: observedCensusCourt(item.soud) }
+          : {}),
+      };
+    }),
     totalPages,
   };
 };

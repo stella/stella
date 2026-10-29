@@ -64,7 +64,7 @@ import type {
 } from "@/api/handlers/case-law/polarity/consts";
 import { CITATION_DIRECTIONS } from "@/api/lib/case-law/citation-vocabulary";
 import {
-  CENSUS_MEASURED_OUTCOMES,
+  CENSUS_COUNTED_OUTCOMES,
   CENSUS_OUTCOMES,
   CENSUS_SCOPE_STATUSES,
 } from "@/api/lib/case-law/completeness-census-values";
@@ -1850,10 +1850,11 @@ export const caseLawCompletenessCensus = p.pgTable(
         sql`, `,
       )})
       AND ((${t.outcome} IN (${sql.join(
-        CENSUS_MEASURED_OUTCOMES.map((outcome) => sql`${outcome}`),
+        CENSUS_COUNTED_OUTCOMES.map((outcome) => sql`${outcome}`),
         sql`, `,
       )}) AND ${t.publisherCount} >= 0 AND ${t.publisherCount} IS NOT NULL AND (${t.year} IS NOT NULL OR ${t.slice} LIKE '0000%'))
         OR (${t.outcome} = 'none-exposed' AND ${t.publisherCount} IS NULL))
+      AND (${t.outcome} <> 'identity-unproven' OR ${t.publisherCount} >= ${t.enumeratedCount})
       AND (${t.outcome} <> 'publisher-count' OR (
         ${t.publisherStatedCount} IS NOT NULL
         AND ${t.publisherCount} = ${t.publisherStatedCount}

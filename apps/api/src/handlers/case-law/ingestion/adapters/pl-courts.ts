@@ -77,6 +77,8 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
+// parser-output-unchanged: Census court evidence is carried beside listing identity and payload; parsed decisions and persisted reconciliation keys are unchanged.
+import { observedCensusCourt } from "@/api/lib/case-law/census-listing-identity";
 import {
   absentDecisionTextFields,
   checkedDecisionMetadata,
@@ -1986,10 +1988,21 @@ const listPlCourtsSlicePage = async ({
     ...(signal === undefined ? {} : { signal }),
   });
   return {
-    items: records.map((record) => ({
-      identity: plCourtsListingIdentity(normalizeSaosDumpItem(record)),
-      payload: record,
-    })),
+    items: records.map((record) => {
+      const normalized = normalizeSaosDumpItem(record);
+      const identity = plCourtsListingIdentity(normalized);
+      return {
+        identity,
+        payload: record,
+        ...(identity.type === "case-number"
+          ? {
+              censusCourtEvidence: observedCensusCourt(
+                normalized.division?.court?.name,
+              ),
+            }
+          : {}),
+      };
+    }),
     totalPages,
     publisherCount,
   };

@@ -4,8 +4,12 @@ export const CENSUS_MEASURED_OUTCOMES = [
   "publisher-count",
   "listing-enumerated",
 ] as const;
-export const CENSUS_OUTCOMES = [
+export const CENSUS_COUNTED_OUTCOMES = [
   ...CENSUS_MEASURED_OUTCOMES,
+  "identity-unproven",
+] as const;
+export const CENSUS_OUTCOMES = [
+  ...CENSUS_COUNTED_OUTCOMES,
   "none-exposed",
 ] as const;
 export const CENSUS_SCOPE_STATUSES = [

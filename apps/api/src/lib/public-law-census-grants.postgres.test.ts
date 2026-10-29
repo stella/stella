@@ -143,7 +143,6 @@ describe.skipIf(!enabled)("staged public-law grants (postgres)", () => {
         }
       });
     },
-    120_000,
   );
 
   test("keeps expansion readers available while census readers require every census column", async () => {
@@ -256,5 +255,5 @@ describe.skipIf(!enabled)("staged public-law grants (postgres)", () => {
         }
       }
     });
-  }, 120_000);
+  });
 });

@@ -7,26 +7,27 @@ import { chunk } from "@stll/concurrency/chunk";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawCompletenessCensus as census } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { censusListingEvidenceKey } from "@/api/lib/case-law/census-listing-identity";
 import type { censusScope } from "@/api/lib/case-law/completeness-census";
 import { censusCapabilityFor } from "@/api/lib/case-law/completeness-census-capabilities";
-import { measureCensusCounts } from "@/api/lib/case-law/completeness-census-contract";
-import { readStoredListingIdentities } from "@/api/lib/case-law/stored-listing-identities";
+import {
+  measureCensusCounts,
+  type SourceCensus,
+} from "@/api/lib/case-law/completeness-census-contract";
+import {
+  CENSUS_IDENTITY_BATCH_SIZE,
+  readStoredListingIdentities,
+} from "@/api/lib/case-law/stored-listing-identities";
 import { lockCaseLawSourceIngestionLease } from "@/api/lib/db/aggregate-lock";
-import type { ListingIdentity } from "@/api/lib/legal-search/ingestion-types";
-import { listingIdentityKey } from "@/api/lib/legal-search/ingestion-types";
+import type { CensusListingIdentity } from "@/api/lib/legal-search/ingestion-types";
 import {
   createUnrecognizedSourceReporter,
   SOURCE_REPORT_FEATURE,
 } from "@/api/lib/legal-search/source-registry-membership";
 
-const CENSUS_IDENTITY_BATCH_SIZE = 500;
-
-type CensusIdentityMatch = {
-  identity: ListingIdentity;
-  decisions: Awaited<
-    ReturnType<typeof readStoredListingIdentities>
-  >[number]["decisions"];
-};
+type CensusIdentityMatch = Awaited<
+  ReturnType<typeof readStoredListingIdentities>
+>[number];
 
 /**
  * A stored decision answers for one listed entry. Document entries claim theirs
@@ -35,14 +36,14 @@ type CensusIdentityMatch = {
  */
 const countCensusMatches = (matches: readonly CensusIdentityMatch[]) => {
   const claimed = new Set(
-    matches.flatMap(({ identity, decisions }) =>
-      identity.type === "document" ? decisions.map(({ id }) => id) : [],
+    matches.flatMap(({ kind, decisions }) =>
+      kind === "document" ? decisions.map(({ id }) => id) : [],
     ),
   );
   let storedCount = 0;
   let textCount = 0;
-  for (const { identity, decisions } of matches) {
-    const counted = countedDecisions({ identity, decisions, claimed });
+  for (const { kind, decisions } of matches) {
+    const counted = countedDecisions({ kind, decisions, claimed });
     if (counted.length === 0) {
       continue;
     }
@@ -55,19 +56,19 @@ const countCensusMatches = (matches: readonly CensusIdentityMatch[]) => {
 };
 
 const countedDecisions = ({
-  identity,
+  kind,
   decisions,
   claimed,
-}: CensusIdentityMatch & { claimed: ReadonlySet<string> }) => {
-  switch (identity.type) {
+}: Pick<CensusIdentityMatch, "kind" | "decisions"> & {
+  claimed: ReadonlySet<string>;
+}) => {
+  switch (kind) {
     case "document":
       return decisions;
     case "case-number":
       return decisions.filter(({ id }) => !claimed.has(id));
-    case "unidentifiable":
-      return panic("Census lookup matched an unkeyable listing entry");
     default:
-      identity satisfies never;
+      kind satisfies never;
       return panic("Unhandled listing identity type");
   }
 };
@@ -78,9 +79,7 @@ type RecordCensusOptions = {
   adapterKey: string;
   slice: string;
   scope: ReturnType<typeof censusScope>;
-  identities: readonly ListingIdentity[];
-  /** Includes unkeyable entries: they must never vanish from the denominator. */
-  listed: number;
+  identities: readonly CensusListingIdentity[];
   publisherCount: number | undefined;
   observedAt: Date;
 };
@@ -105,12 +104,6 @@ export const recordCompletenessCensus = async (
   if (Result.isError(year)) {
     panic(`Census slice has an invalid year: ${options.slice}`);
   }
-  const measured = measureCensusCounts(options);
-  const outcome =
-    capability.type === "none-exposed" ? capability.type : measured.outcome;
-  // A stated total cannot erase identities already enumerated by the publisher.
-  const publisherCount =
-    outcome === "none-exposed" ? null : measured.publisherCount;
   await scopedDb(async (tx) => {
     if (
       !(await lockCaseLawSourceIngestionLease({
@@ -121,14 +114,17 @@ export const recordCompletenessCensus = async (
     ) {
       return;
     }
-    const identitiesByKey = new Map<string, ListingIdentity>();
+    const identitiesByKey = new Map<string, CensusListingIdentity>();
+    let unidentifiable = 0;
     for (const identity of options.identities) {
-      const key = listingIdentityKey(identity);
-      if (key !== null) {
+      const key = censusListingEvidenceKey(identity);
+      if (key === null) {
+        unidentifiable += 1;
+      } else {
         identitiesByKey.set(key, identity);
       }
     }
-    const matches: CensusIdentityMatch[] = [];
+    const canonical = new Map<string, CensusIdentityMatch>();
     for (const batch of chunk(
       [...identitiesByKey.values()],
       CENSUS_IDENTITY_BATCH_SIZE,
@@ -138,15 +134,28 @@ export const recordCompletenessCensus = async (
         sourceId: options.sourceId,
         identities: batch,
       });
-      for (const { key, decisions } of rows) {
-        matches.push({
-          identity:
-            identitiesByKey.get(key) ??
-            panic(`Census lookup returned an unlisted identity: ${key}`),
-          decisions,
-        });
+      for (const row of rows) {
+        const previous = canonical.get(row.key);
+        if (previous === undefined) {
+          canonical.set(row.key, row);
+        } else {
+          previous.decisions.push(...row.decisions);
+        }
       }
     }
+    const matches = [...canonical.values()];
+    const measured = measureCensusCounts({
+      listed: matches.length + unidentifiable,
+      publisherCount: options.publisherCount,
+    });
+    let outcome: SourceCensus["outcome"] = measured.outcome;
+    if (capability.type === "none-exposed") {
+      outcome = capability.type;
+    } else if (matches.some(({ evidence }) => evidence === "unmeasured")) {
+      outcome = "identity-unproven";
+    }
+    const publisherCount =
+      outcome === "none-exposed" ? null : measured.publisherCount;
     const { storedCount, textCount } = countCensusMatches(matches);
     const observation = {
       sourceId: options.sourceId,
