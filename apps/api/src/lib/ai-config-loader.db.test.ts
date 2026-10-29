@@ -7,7 +7,15 @@
  */
 
 import { panic } from "better-result";
-import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  setDefaultTimeout,
+  test,
+} from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
 import { member, organization } from "@/api/db/auth-schema";
@@ -56,6 +64,14 @@ import {
   NO_AUDIT,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
+import {
+  installRecordingAnalytics,
+  installRecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
+import type {
+  RecordingAnalytics,
+  RecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
 import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -99,6 +115,22 @@ const corruptOrgId = mintAuthProviderId<"organization">();
 /** An organization with no settings row at all. */
 const unsetOrgId = mintAuthProviderId<"organization">();
 const seededOrgId = mintAuthProviderId<"organization">();
+const unreadableMarker = "fake-provider-key-must-not-escape";
+const unreadableFixtures = [
+  {
+    name: "ciphertext only",
+    organizationId: mintAuthProviderId<"organization">(),
+  },
+  { name: "IV only", organizationId: mintAuthProviderId<"organization">() },
+  {
+    name: "invalid JSON",
+    organizationId: mintAuthProviderId<"organization">(),
+  },
+  {
+    name: "schema-invalid JSON",
+    organizationId: mintAuthProviderId<"organization">(),
+  },
+] as const;
 
 /** The request scope authentication builds for a member of `organizationId`. */
 const requestScope = (
@@ -187,10 +219,21 @@ testState.beforeAll(async () => {
       slug: `no-settings-${unsetOrgId}`,
       createdAt: new Date(),
     },
+    ...unreadableFixtures.map(({ name, organizationId }) => ({
+      id: organizationId,
+      name: `Unreadable settings: ${name}`,
+      slug: `unreadable-settings-${organizationId}`,
+      createdAt: new Date(),
+    })),
   ]);
   // Each scope below belongs to a current organization member.
   await testDb.insert(member).values(
-    [corruptOrgId, unsetOrgId, seededOrgId].map((organizationId) => ({
+    [
+      corruptOrgId,
+      unsetOrgId,
+      seededOrgId,
+      ...unreadableFixtures.map(({ organizationId }) => organizationId),
+    ].map((organizationId) => ({
       id: mintAuthProviderIdValue(),
       organizationId,
       userId: ids.userA1,
@@ -209,12 +252,47 @@ testState.beforeAll(async () => {
     promptCachingEnabled: false,
     managedAIResidency: "us",
   });
+  const invalidJson = await encryptContent(
+    unreadableFixtures[2].organizationId,
+    `{"apiKey":"${unreadableMarker}"`,
+  );
+  const invalidSchema = await encryptContent(
+    unreadableFixtures[3].organizationId,
+    JSON.stringify({ providers: [{ apiKey: unreadableMarker }] }),
+  );
+  await testDb.insert(organizationSettings).values([
+    {
+      organizationId: unreadableFixtures[0].organizationId,
+      aiConfigEncrypted: Buffer.from(unreadableMarker),
+    },
+    {
+      organizationId: unreadableFixtures[1].organizationId,
+      aiConfigIv: Buffer.from(unreadableMarker),
+    },
+    {
+      organizationId: unreadableFixtures[2].organizationId,
+      aiConfigEncrypted: invalidJson.ciphertext,
+      aiConfigIv: invalidJson.iv,
+    },
+    {
+      organizationId: unreadableFixtures[3].organizationId,
+      aiConfigEncrypted: invalidSchema.ciphertext,
+      aiConfigIv: invalidSchema.iv,
+    },
+  ]);
 });
 
 afterAll(async () => {
   await testDb
     .delete(organization)
-    .where(inArray(organization.id, [corruptOrgId, unsetOrgId, seededOrgId]));
+    .where(
+      inArray(organization.id, [
+        corruptOrgId,
+        unsetOrgId,
+        seededOrgId,
+        ...unreadableFixtures.map(({ organizationId }) => organizationId),
+      ]),
+    );
   await releaseTestDb();
 });
 
@@ -442,6 +520,19 @@ test("a jurisdiction-only settings row keeps the default chat provider available
 });
 
 describe("absent and unreadable settings", () => {
+  let analytics: RecordingAnalytics;
+  let logs: RecordingLogger;
+
+  beforeEach(() => {
+    analytics = installRecordingAnalytics();
+    logs = installRecordingLogger();
+  });
+
+  afterEach(() => {
+    analytics.restore();
+    logs.restore();
+  });
+
   test("an organization with no settings row reads as defaults", async () => {
     const scope = requestScope(unsetOrgId, ids.userA1);
 
@@ -514,6 +605,42 @@ describe("absent and unreadable settings", () => {
       error: { status: 503, code: AI_CONFIG_UNREADABLE_ERROR_CODE },
     });
   });
+
+  test.each(unreadableFixtures)(
+    "$name remains content-free through every settings reader",
+    async ({ organizationId }) => {
+      const scope = requestScope(organizationId, ids.userA1);
+      const reader = { organizationId, userId: ids.userA1 };
+      const [config, settings, auth] = await scope(
+        async (tx) =>
+          await Promise.all([
+            loadOrgAIConfig(tx, reader),
+            loadOrgAISettings(tx, reader),
+            loadOrgSettingsForAuth(tx, reader),
+          ]),
+      );
+
+      for (const result of [config, settings]) {
+        expect(result).toMatchObject({
+          status: "error",
+          error: { status: 503, code: AI_CONFIG_UNREADABLE_ERROR_CODE },
+        });
+      }
+      expect(auth).toEqual({
+        orgAIConfig: null,
+        orgAIConfigStatus: ORG_AI_CONFIG_STATUS.unreadable,
+        managedAIResidency: null,
+        promptCachingEnabled: null,
+      });
+      expect(
+        JSON.stringify({
+          capturedErrors: analytics.exceptions(),
+          logRecords: logs.records,
+          responseBodies: [config, settings, auth],
+        }),
+      ).not.toContain(unreadableMarker);
+    },
+  );
 });
 
 test("auth settings reads leave the database reusable for later transactions", async () => {
