@@ -9,6 +9,7 @@ import {
   unreadableOrgAIConfig,
 } from "@/api/lib/ai-config-crypto";
 import {
+  installDiscardedProviderErrorObserverForTest,
   loadOrgAIConfig,
   loadOrgAISettings,
   loadOrgSettingsForAuth,
@@ -25,8 +26,10 @@ import {
   installRecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
 import {
+  assertCanonicalStoredAIConfigError,
   assertClassifiedSettingsFailure,
   assertSettingsAnalyticsFrame,
+  assertSettingsErrorLocations,
   assertSettingsFailureConfidential,
 } from "@/api/tests/helpers/settings-failure-confidentiality";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -128,6 +131,11 @@ describe("loadOrgAIConfig", () => {
           reason === "missing-key" ? undefined : key;
         for (const [name, load] of Object.entries(loaders)) {
           const classified: unknown[] = [];
+          const discarded: unknown[] = [];
+          const restoreDiscardedObserver =
+            installDiscardedProviderErrorObserverForTest((error) => {
+              discarded.push(error);
+            });
           const decryptRow = aiConfigLoaderCore.decryptOrgAIConfigRow;
           const decrypt = spyOn(
             aiConfigLoaderCore,
@@ -175,7 +183,14 @@ describe("loadOrgAIConfig", () => {
             });
             expect(classified).toHaveLength(1);
             assertClassifiedSettingsFailure(classified.at(0), reason);
+            if (name === "loadOrgSettingsForAuth") {
+              expect(discarded).toHaveLength(1);
+              assertCanonicalStoredAIConfigError(discarded.at(0));
+            } else {
+              expect(discarded).toEqual([]);
+            }
           } finally {
+            restoreDiscardedObserver();
             decrypt.mockRestore();
             devErrors.mockRestore();
             capture.mockRestore();
@@ -336,6 +351,35 @@ describe("loadOrgAIConfig", () => {
     expect(() =>
       assertSettingsAnalyticsFrame("apps/api/src/lib/ai-config.ts:12:3"),
     ).toThrow("apps/api/src/lib/ai-config-response.ts:[line]:[column]");
+  });
+
+  test.each([
+    {
+      name: "an extra valid content-derived frame",
+      mutate: (stack: string) =>
+        `${stack}\n    at stored (${import.meta.dir}/ai-config-loader.ts:1:1)`,
+    },
+    {
+      name: "a content-derived function token in a valid frame",
+      mutate: (stack: string) => stack.replace("at trusted", "at stored"),
+    },
+    {
+      name: "a valid frame in another source file",
+      mutate: (stack: string) =>
+        stack.replace("ai-config-loader.ts", "ai-config.ts"),
+    },
+  ])("rejects $name", ({ mutate }) => {
+    const sourceURL = `${import.meta.dir}/ai-config-loader.ts`;
+    const trusted = new Error("canonical");
+    const hostile = new Error("canonical");
+    trusted.stack = `Error: canonical\n    at trusted (${sourceURL}:10:20)`;
+    hostile.stack = mutate(trusted.stack);
+    Object.defineProperty(trusted, "sourceURL", { value: sourceURL });
+    Object.defineProperty(hostile, "sourceURL", { value: sourceURL });
+
+    expect(() => assertSettingsErrorLocations(hostile, trusted)).toThrow(
+      "expect(received).toBe(expected)",
+    );
   });
 });
 

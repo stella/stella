@@ -144,6 +144,10 @@ describe("AI config handlers with an undecryptable stored config", () => {
             },
           );
           const logServerDevError = errorUtils.logServerDevError;
+          const jsonlRecords: unknown[] = [];
+          const jsonl = errorUtils.installDevErrorJsonlObserverForTest(
+            (record) => jsonlRecords.push(record),
+          );
           const devLog = spyOn(
             errorUtils,
             "logServerDevError",
@@ -175,6 +179,7 @@ describe("AI config handlers with an undecryptable stored config", () => {
                       safeDb: db.safeDb,
                     }),
                   );
+            await jsonl.drain();
             assertSettingsFailureConfidential({
               reason,
               organizationId,
@@ -183,6 +188,12 @@ describe("AI config handlers with an undecryptable stored config", () => {
                 captureEntries: capture.mock.calls,
                 developmentEntries: devErrors.mock.calls,
                 developmentLogInputs: devLog.mock.calls,
+                developmentJsonlEntries: jsonlRecords,
+                trustedDevelopmentStack: [
+                  "HandlerError: Stored AI configuration could not be read",
+                  `    at storedAIConfigUnreadableError (${new URL("../../lib/ai-config-response.ts", import.meta.url).pathname}:[line]:[column])`,
+                  `    at <anonymous> (${import.meta.dir}/${reader}-ai-config.ts:[line]:[column])`,
+                ].join("\n"),
                 groupIdentifies: analytics.groupIdentifies,
                 logRecords: logs.records,
                 returned,
@@ -194,6 +205,7 @@ describe("AI config handlers with an undecryptable stored config", () => {
               expect(db.operationCount()).toBe(1);
             }
           } finally {
+            jsonl.restore();
             decrypt.mockRestore();
             devLog.mockRestore();
             devErrors.mockRestore();
