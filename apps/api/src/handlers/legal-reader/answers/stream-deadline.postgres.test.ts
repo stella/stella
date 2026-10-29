@@ -141,6 +141,7 @@ const seedFixture = async (db: GatedTestDb) => {
       deadlineAt: readerAnswerDeadlineAt(assistant.updatedAt),
       history,
       decision: {
+        language: "cs",
         decisionId,
         court: "Test court",
         decisionDate: "2026-01-01",

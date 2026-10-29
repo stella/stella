@@ -869,10 +869,10 @@ describe("serializeDispatchModule", () => {
       },
     ]);
     expect(out).toContain(
-      '"time-entries.create": { load: async () => await import("@/api/handlers/time-entries/create") },',
+      '"time-entries.create": { load: async (): Promise<Record<string, unknown>> => await import("@/api/handlers/time-entries/create") },',
     );
     expect(out).toContain(
-      '"views.export.read": { load: async () => await import("@/api/handlers/views/export"), exportName: "readViewExport" },',
+      '"views.export.read": { load: async (): Promise<Record<string, unknown>> => await import("@/api/handlers/views/export"), exportName: "readViewExport" },',
     );
     expect(out).toContain("export const CAPABILITY_DISPATCH");
     expect(out.endsWith("\n")).toBe(true);
@@ -970,7 +970,7 @@ describe("serializeDispatchModule sanitization (rebuild from segments)", () => {
       },
     ]);
     expect(out).toContain(
-      '"case-law.ingestion.get": { load: async () => await import("@/api/handlers/case-law/ingestion/get") },',
+      '"case-law.ingestion.get": { load: async (): Promise<Record<string, unknown>> => await import("@/api/handlers/case-law/ingestion/get") },',
     );
   });
 

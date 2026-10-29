@@ -82,7 +82,9 @@ test("document downloads identify the client and preserve the caller's abort and
     new URL("https://obcan.justice.sk/content/public/item/fixture-document"),
     { signal: controller.signal },
   );
-  expect(read.type === "present" ? read.value : read).toBe(response);
+  const downloaded = read.type === "present" ? read.value : read;
+  expect(downloaded).toBeInstanceOf(Response);
+  expect(downloaded).toMatchObject({ status: response.status });
   expect(fetch).toHaveBeenCalledTimes(1);
   const call = fetch.mock.calls.at(0);
   expect(call).toBeDefined();
@@ -91,6 +93,7 @@ test("document downloads identify the client and preserve the caller's abort and
     INGESTION_USER_AGENT,
   );
   expect(init?.redirect).toBe("error");
+  expect(init).toMatchObject({ timeoutMs: 30_000 });
   controller.abort();
   expect(init?.signal?.aborted).toBe(true);
 });

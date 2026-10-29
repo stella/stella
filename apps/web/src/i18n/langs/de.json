@@ -941,12 +941,16 @@
         "reasoning": "Argumentation"
       },
       "errors": {
+        "analysisDisabled": "Die KI-Analyse ist auf diesem Server deaktiviert. Lesen Sie den Entscheidungstext oder versuchen Sie es später erneut.",
         "answerIncomplete": "{source, select, organization {Der {provider}-Schlüssel Ihrer Organisation hat eine unvollständige Antwort geliefert.} other {Das KI-Modell hat eine unvollständige Antwort geliefert.}}",
+        "decisionNotFound": "Diese Entscheidung wurde nicht gefunden. Öffnen Sie sie erneut über die Suche.",
+        "documentUnparseable": "Der Entscheidungstext ist noch nicht für die Analyse bereit. Lesen Sie die Originalquelle.",
+        "languageUnsupported": "Die KI-Analyse unterstützt die Sprache dieser Entscheidung noch nicht. Lesen Sie den Entscheidungstext oder die Originalquelle.",
         "providerRefused": "{source, select, organization {{provider} hat die Anfrage mit dem Schlüssel Ihrer Organisation abgelehnt. Prüfen Sie den Schlüssel, sein Kontingent und die Abrechnung in den Organisationseinstellungen.} other {Der KI-Anbieter hat die Anfrage abgelehnt.}}",
         "providerUnavailable": "{source, select, organization {{provider} ist für den Schlüssel Ihrer Organisation gerade nicht verfügbar.} other {Der KI-Anbieter ist gerade nicht verfügbar.}}",
         "retryAfter": "Sie können es ab {time} erneut versuchen.",
-        "timedOut": "{source, select, organization {{provider} hat mit dem Schlüssel Ihrer Organisation nicht rechtzeitig geantwortet.} other {Das KI-Modell hat nicht rechtzeitig geantwortet.}}",
-        "unavailable": "Für diese Entscheidung ist keine KI-Analyse verfügbar."
+        "sourceRestricted": "Die Quelle erlaubt keine KI-Analyse. Lesen Sie den Entscheidungstext oder die Originalquelle.",
+        "timedOut": "{source, select, organization {{provider} hat mit dem Schlüssel Ihrer Organisation nicht rechtzeitig geantwortet.} other {Das KI-Modell hat nicht rechtzeitig geantwortet.}}"
       },
       "generate": "KI-Leitsätze erzeugen",
       "invitation": "Mit einem kostenlosen Konto erstellt die KI Arbeitsnotizen zu dieser Entscheidung.",
@@ -1151,7 +1155,7 @@
     "reader": {
       "documentUpdated": "Das Dokument wurde aktualisiert.",
       "expandProvisions": "Bestimmungen aufklappen",
-      "headMatter": "Rubrum",
+      "headMatter": "Angaben zum Verfahren",
       "sourceAttribution": "Die Quelldaten sind frei verfügbar unter <link>{source}</link>."
     },
     "research": {
@@ -4886,7 +4890,9 @@
     "viewOnGithub": "Auf GitHub ansehen"
   },
   "readerAnswers": {
+    "answerLanguage": "Antwortsprache",
     "budgetError": "Das Budget für Antworten ist aufgebraucht.",
+    "documentLanguage": "Dokumentsprache ({language})",
     "expand": "Antwort aufklappen",
     "explain": "Erklären",
     "followUp": "Rückfrage stellen",

@@ -368,7 +368,8 @@
     "welcomeShortcutDescription": "Stlačením {shortcut} prechádzajte históriu a vyberte výstrižok.",
     "welcomeShortcutTitle": "Otvorte ju odkiaľkoľvek.",
     "welcomeStart": "Začať kopírovať",
-    "welcomeTitle": "Zoznámte sa so schránkou"
+    "welcomeTitle": "Zoznámte sa so schránkou",
+    "registryIdentifierSearchHint": "Zadajte {identifiers}."
   },
   "activity": {
     "title": "Aktivita",

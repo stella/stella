@@ -748,7 +748,9 @@ export const CAPABILITY_DISPATCH = {
               exportName: record.exportName,
               id: record.id,
             });
-      const loader = `load: async () => await import(${JSON.stringify(importPath)})`;
+      // The registry exposes opaque modules; retaining handler return types would
+      // pull runtime routes into consumers that only need capability ids.
+      const loader = `load: async (): Promise<Record<string, unknown>> => await import(${JSON.stringify(importPath)})`;
       const named =
         exportName === undefined
           ? ""
