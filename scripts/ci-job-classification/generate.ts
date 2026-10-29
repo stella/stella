@@ -362,12 +362,17 @@ const reviewJobs = ({
     node.jobs = Object.entries(parsed.jobs).flatMap(([jobId, job]) => {
       const key = `${node.repository}:${node.path}/${jobId}`;
       observedJobs.add(key);
+      const callsReusableWorkflow = Object.values(job.dependencies).includes(
+        "reusable-workflow",
+      );
       const dependencyDigests = Object.fromEntries(
         Object.keys(job.dependencies)
           .toSorted(compareCodeUnit)
           .flatMap((reference) => {
             const target = node.edges[reference];
-            return target && nodes.get(target)?.type === "metadata"
+            return !callsReusableWorkflow &&
+              target &&
+              nodes.get(target)?.type === "metadata"
               ? [[reference, documentDigest(target)]]
               : [];
           }),

@@ -63,6 +63,10 @@ export type MetadataReader = {
   workflows: () => string[];
   read: (repository: string, path: string) => string;
 };
+type MetadataNode = Extract<
+  PublicMetadata["nodes"][number],
+  { type: "metadata" }
+>;
 // An explicit type annotation lets control-flow analysis narrow after calls.
 const reject: (message: string) => never = (message) => {
   throw new AdmissionError({ message });
@@ -79,6 +83,44 @@ const safePath = (path: string) => {
   ) {
     reject("unsafe metadata path");
   }
+};
+
+type JobDigestMatchesOptions = {
+  definition: ParsedDocument["jobs"][string];
+  digest: string;
+  documentDigest: (id: string) => string;
+  node: MetadataNode;
+  nodes: ReadonlyMap<string, PublicMetadata["nodes"][number]>;
+};
+const jobDigestMatches = ({
+  definition,
+  digest,
+  documentDigest,
+  node,
+  nodes,
+}: JobDigestMatchesOptions) => {
+  const callsReusableWorkflow = Object.values(definition.dependencies).includes(
+    "reusable-workflow",
+  );
+  const dependencies = Object.fromEntries(
+    Object.keys(definition.dependencies)
+      .toSorted(compareCodeUnit)
+      .flatMap((reference) => {
+        const target = node.edges[reference];
+        return !callsReusableWorkflow &&
+          target &&
+          nodes.get(target)?.type === "metadata"
+          ? [[reference, documentDigest(target)]]
+          : [];
+      }),
+  );
+  return [definition.digest, definition.privilegedDigest]
+    .map((definitionDigest) =>
+      Object.keys(dependencies).length
+        ? sha256(JSON.stringify({ digest: definitionDigest, dependencies }))
+        : definitionDigest,
+    )
+    .includes(digest);
 };
 type ReferenceOptions = {
   callerRepository: string;
@@ -346,25 +388,13 @@ export const verifyPublicMetadata = ({ manifest, reader }: MetadataOptions) =>
           if (!definition) {
             return true;
           }
-          const dependencies = Object.fromEntries(
-            Object.keys(definition.dependencies)
-              .toSorted(compareCodeUnit)
-              .flatMap((reference) => {
-                const target = node.edges[reference];
-                return target && nodes.get(target)?.type === "metadata"
-                  ? [[reference, documentDigest(target)]]
-                  : [];
-              }),
-          );
-          const digests = [definition.digest, definition.privilegedDigest].map(
-            (definitionDigest) =>
-              Object.keys(dependencies).length
-                ? sha256(
-                    JSON.stringify({ digest: definitionDigest, dependencies }),
-                  )
-                : definitionDigest,
-          );
-          return !digests.includes(job.digest);
+          return !jobDigestMatches({
+            definition,
+            digest: job.digest,
+            documentDigest,
+            node,
+            nodes,
+          });
         });
         if (changedJobs.length) {
           reject(

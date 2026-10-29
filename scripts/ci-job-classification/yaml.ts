@@ -405,6 +405,26 @@ const privilegedJobSurface = (
   return surface;
 };
 
+const REUSABLE_WORKFLOW_CALL_KEYS = [
+  "uses",
+  "with",
+  "secrets",
+  "permissions",
+  "runs-on",
+  "environment",
+  "if",
+  "concurrency",
+  "needs",
+  "strategy",
+] as const;
+
+const reusableWorkflowCallSurface = (job: JsonRecord) =>
+  Object.fromEntries(
+    REUSABLE_WORKFLOW_CALL_KEYS.flatMap((key) =>
+      key in job ? [[key, job[key]]] : [],
+    ),
+  );
+
 const stepShapes = (value: unknown): JsonRecord[] => {
   if (!Array.isArray(value)) {
     throw new AdmissionError({ message: "steps must be array" });
@@ -581,13 +601,18 @@ const parse = (text: string): ParsedDocument => {
       }
       addActionDependencies(jobDependencies, steps, {});
       const isPrivileged = jobIsPrivileged(job, data);
+      const callSurface =
+        typeof job["uses"] === "string"
+          ? reusableWorkflowCallSurface(job)
+          : undefined;
       const workflowSurface =
         isPrivileged && "on" in data ? { on: data["on"] } : {};
-      const jobShape = privilegedJobSurface(job, data);
+      const jobShape = callSurface ?? privilegedJobSurface(job, data);
       const jobContext = { document: workflowSurface, job: jobShape };
       const privilegedJobContext = {
-        document: "on" in data ? { on: data["on"] } : {},
-        job: privilegedJobSurface(job, data, true),
+        document:
+          callSurface === undefined && "on" in data ? { on: data["on"] } : {},
+        job: callSurface ?? privilegedJobSurface(job, data, true),
       };
       jobs[id] = {
         digest: digest(jobContext),
