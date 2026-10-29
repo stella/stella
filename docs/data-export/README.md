@@ -49,7 +49,7 @@ matters/<matter name> [<reference>]/
 
 Each export stores one path plan before packing. Matter directories, record
 files, document versions, templates and per-part metadata draw from the same
-namespace across all parts. Resumed attempts reuse those paths even if names
+namespace across all parts. The stored plan also fixes document versions and file identities, including the version selected by `versions="current"`. Packing and resumed attempts read those identities and report unavailable planned items in `problems`. Resumed attempts reuse those paths even if names
 change; files and folders added after planning belong to a later export.
 Extracting all ZIP parts into one directory preserves every planned file.
 
@@ -64,10 +64,13 @@ Extracting all ZIP parts into one directory preserves every planned file.
   in the archive as stored, and `recordedSha256` is the checksum recorded
   when it was uploaded. A `matter_unavailable` entry names a matter that
   was planned for the part but could no longer be read when the part was
-  built (deleted, or no longer visible); none of it is in the archive.
-- `documents[].currentVersionId` names the current version; `versions` is
-  ordered by `versionNumber` and excludes deleted versions. With
-  `scope.versions: "current"` only the current version is present.
+  built (deleted, or no longer visible); none of it is in the archive. A
+  `planned_item_unavailable` entry identifies a planned document, version or
+  folder that can no longer be read.
+- `documents[].currentVersionId` names the version current when the plan was
+  stored; `versions` follows the planned version order. With
+  `scope.versions: "current"` only that planned current version is present.
+  Planned versions deleted before packing are reported in `problems`.
 - JSON record files are arrays of objects, one per stored row, with
   camelCase keys, ISO 8601 UTC timestamps, dates as `YYYY-MM-DD`, and money
   as integer minor units next to a `currency`. JSON is canonical.

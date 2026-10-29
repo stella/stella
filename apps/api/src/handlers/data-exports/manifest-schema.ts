@@ -8,6 +8,12 @@ import * as v from "valibot";
 
 import { API_STORABLE_INSTANT_CHECK } from "@stll/api-contract/api-date";
 
+import {
+  dataExportArchivePathSchema as archivePathSchema,
+  dataExportIdSchema as idSchema,
+  dataExportSha256Schema as sha256Schema,
+} from "@/api/lib/data-export/manifest-values";
+import { dataExportProblemSchema as problemSchema } from "@/api/lib/data-export/problem-schema";
 import { DATA_EXPORT_VERSION_SCOPE_VALUES } from "@/api/lib/data-export/version-scope";
 
 export const DATA_EXPORT_FORMAT = "stella-data-export";
@@ -22,28 +28,11 @@ export type DataExportVersionScope =
  *  tasks are exported as records; `link` entities are not exported. */
 const EXPORTED_DOCUMENT_KINDS = ["document", "message"] as const;
 
-/** Why a stored file could not be put in the archive. */
-const ABSENT_FILE_REASONS = ["missing", "fetch_failed"] as const;
-
-const idSchema = v.pipe(v.string(), v.minLength(1), v.maxLength(255));
 const timestampSchema = v.pipe(
   v.string(),
   v.isoTimestamp(),
   API_STORABLE_INSTANT_CHECK,
   v.description("ISO 8601 timestamp in UTC."),
-);
-const sha256Schema = v.pipe(
-  v.string(),
-  v.regex(/^[0-9a-f]{64}$/u),
-  v.description("Lowercase hex SHA-256 of the file bytes."),
-);
-const archivePathSchema = v.pipe(
-  v.string(),
-  v.minLength(1),
-  v.maxLength(4096),
-  v.description(
-    "Path inside the part's ZIP archive, `/`-separated, NFC-normalised.",
-  ),
 );
 const byteCountSchema = v.pipe(v.number(), v.integer(), v.minValue(0));
 const countSchema = byteCountSchema;
@@ -151,33 +140,6 @@ const organizationRecordsSchema = v.strictObject({
   invoices: recordFileSchema,
   templateFiles: v.array(templateFileSchema),
 });
-
-/**
- * Something that needs attention. `missing` and `fetch_failed` files are
- * not in the archive. A `checksum_mismatch` file is in the archive as
- * stored; its file record carries the SHA-256 of those bytes, and
- * `recordedSha256` is the checksum recorded when it was uploaded. A
- * `matter_unavailable` matter was planned for this part but could no
- * longer be read (deleted, or no longer visible to the requester), so none
- * of it is in the archive.
- */
-const problemSchema = v.variant("reason", [
-  v.strictObject({
-    reason: v.picklist(ABSENT_FILE_REASONS),
-    path: archivePathSchema,
-    fileId: idSchema,
-  }),
-  v.strictObject({
-    reason: v.literal("checksum_mismatch"),
-    path: archivePathSchema,
-    fileId: idSchema,
-    recordedSha256: sha256Schema,
-  }),
-  v.strictObject({
-    reason: v.literal("matter_unavailable"),
-    matterId: idSchema,
-  }),
-]);
 
 const commonFields = {
   $schema: v.literal(DATA_EXPORT_SCHEMA_ID),

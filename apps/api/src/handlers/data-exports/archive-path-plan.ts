@@ -196,26 +196,37 @@ const planMatterPaths = ({
       document.parentId === null
         ? historyRoot
         : (history.get(document.parentId) ?? historyRoot);
-    const versions = new Map<string, { files: Record<string, string> }>();
+    const versions = new Map<
+      string,
+      DataExportDocumentPaths["versions"][string]
+    >();
     for (const version of document.versions.toSorted(
       (a, b) =>
         a.versionNumber - b.versionNumber || compareCodeUnit(a.id, b.id),
     )) {
-      const files = new Map<string, string>();
+      const files = new Map<
+        string,
+        DataExportDocumentPaths["versions"][string]["files"][string]
+      >();
       for (const file of version.files) {
-        files.set(
-          file.fieldId,
-          version.id === document.currentVersionId
-            ? allocator.allocate(currentDirectory, file.fileName)
-            : allocator.allocate(
-                historyDirectory,
-                versionedFileName(file.fileName, version.versionNumber),
-              ),
-        );
+        files.set(file.fieldId, {
+          fileId: file.fileId,
+          mimeType: file.mimeType,
+          path:
+            version.id === document.currentVersionId
+              ? allocator.allocate(currentDirectory, file.fileName)
+              : allocator.allocate(
+                  historyDirectory,
+                  versionedFileName(file.fileName, version.versionNumber),
+                ),
+        });
       }
       versions.set(version.id, { files: Object.fromEntries(files) });
     }
-    documents.set(document.id, { versions: Object.fromEntries(versions) });
+    documents.set(document.id, {
+      currentVersionId: document.currentVersionId,
+      versions: Object.fromEntries(versions),
+    });
   }
   return {
     directory,

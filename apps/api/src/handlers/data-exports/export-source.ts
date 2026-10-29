@@ -61,6 +61,7 @@ import type {
   SourceMatterSummary,
   SourceOrganizationRecords,
   SourceTemplateFile,
+  SourceVersionSelection,
 } from "@/api/handlers/data-exports/build-export";
 import type { DataExportVersionScope } from "@/api/handlers/data-exports/manifest-schema";
 import { dataExportRecordScope } from "@/api/handlers/data-exports/record-scopes";
@@ -94,7 +95,10 @@ import { createFileKey } from "@/api/lib/files/utils";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { openS3ObjectStream } from "@/api/lib/s3";
-import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
+import {
+  brandPersistedEntityVersionId,
+  brandPersistedWorkspaceId,
+} from "@/api/lib/safe-id-boundaries";
 
 const dataExportReadFileFailed = failureSink({
   event: "data_export.read_file",
@@ -290,7 +294,7 @@ const listMatters = async (
 const readMatterEntities = async (
   { db, readAll, readForParents }: PagedReader,
   workspaceId: SafeId<"workspace">,
-  scope: DataExportVersionScope,
+  selection: SourceVersionSelection,
 ) => {
   const readEntityRowsPage = async (cursor: string | null) =>
     await db(
@@ -311,39 +315,95 @@ const readMatterEntities = async (
   const documentRows = entityRows.filter(
     (row) => row.kind === "document" || row.kind === "message",
   );
+  const plannedOwnerByVersionId = new Map<string, string>();
+  const plannedFileIdsByVersion = new Map<string, Map<string, string>>();
+  const plannedVersionIds: SafeId<"entityVersion">[] = [];
+  if (typeof selection === "object") {
+    for (const document of documentRows) {
+      const documentPlan = selection.documents[String(document.id)];
+      if (documentPlan === undefined) {
+        continue;
+      }
+      for (const [versionId, versionPlan] of Object.entries(
+        documentPlan.versions,
+      )) {
+        plannedVersionIds.push(brandPersistedEntityVersionId(versionId));
+        plannedOwnerByVersionId.set(versionId, String(document.id));
+        plannedFileIdsByVersion.set(
+          versionId,
+          new Map(
+            Object.entries(versionPlan.files).map(([fieldId, file]) => [
+              fieldId,
+              file.fileId,
+            ]),
+          ),
+        );
+      }
+    }
+  }
   const currentVersionIds = new Set(
     documentRows.flatMap((row) =>
       row.currentVersionId === null ? [] : [String(row.currentVersionId)],
     ),
   );
-  const versionRows = await readForParents(
-    documentRows.map((row) => row.id),
-    async (entityIds) =>
-      await db(
-        async (tx) =>
-          await tx
-            .select({
-              id: entityVersions.id,
-              entityId: entityVersions.entityId,
-              versionNumber: entityVersions.versionNumber,
-              stamp: entityVersions.stamp,
-              label: entityVersions.label,
-              description: entityVersions.description,
-              createdAt: entityVersions.createdAt,
-              createdBy: entityVersions.createdBy,
-            })
-            .from(entityVersions)
-            .where(
-              and(
-                eq(entityVersions.workspaceId, workspaceId),
-                inArray(entityVersions.entityId, entityIds),
-                isNull(entityVersions.deletedAt),
-              ),
+  const versionSelect = async (ids: readonly SafeId<"entityVersion">[]) =>
+    await db(
+      async (tx) =>
+        await tx
+          .select({
+            id: entityVersions.id,
+            entityId: entityVersions.entityId,
+            versionNumber: entityVersions.versionNumber,
+            stamp: entityVersions.stamp,
+            label: entityVersions.label,
+            description: entityVersions.description,
+            createdAt: entityVersions.createdAt,
+            createdBy: entityVersions.createdBy,
+          })
+          .from(entityVersions)
+          .where(
+            and(
+              eq(entityVersions.workspaceId, workspaceId),
+              inArray(entityVersions.id, ids),
+              isNull(entityVersions.deletedAt),
             ),
-      ),
-  );
+          ),
+    );
+  const versionRows =
+    typeof selection === "object"
+      ? (await readForParents(plannedVersionIds, versionSelect)).filter(
+          (row) =>
+            plannedOwnerByVersionId.get(String(row.id)) ===
+            String(row.entityId),
+        )
+      : await readForParents(
+          documentRows.map((row) => row.id),
+          async (entityIds) =>
+            await db(
+              async (tx) =>
+                await tx
+                  .select({
+                    id: entityVersions.id,
+                    entityId: entityVersions.entityId,
+                    versionNumber: entityVersions.versionNumber,
+                    stamp: entityVersions.stamp,
+                    label: entityVersions.label,
+                    description: entityVersions.description,
+                    createdAt: entityVersions.createdAt,
+                    createdBy: entityVersions.createdBy,
+                  })
+                  .from(entityVersions)
+                  .where(
+                    and(
+                      eq(entityVersions.workspaceId, workspaceId),
+                      inArray(entityVersions.entityId, entityIds),
+                      isNull(entityVersions.deletedAt),
+                    ),
+                  ),
+            ),
+        );
   const exportedVersions =
-    scope === "current"
+    selection === "current"
       ? versionRows.filter((row) => currentVersionIds.has(String(row.id)))
       : versionRows;
   const fileRows = await readForParents(
@@ -367,7 +427,26 @@ const readMatterEntities = async (
             ),
       ),
   );
-  return { entityRows, documentRows, exportedVersions, fileRows };
+  const selectedFileRows =
+    typeof selection === "object"
+      ? fileRows.filter((row) => {
+          const expectedFileIds = plannedFileIdsByVersion.get(
+            String(row.entityVersionId),
+          );
+          return (
+            row.content.type === "file" &&
+            expectedFileIds?.get(String(row.id)) === row.content.id
+          );
+        })
+      : fileRows;
+  return {
+    entityRows,
+    documentRows,
+    exportedVersions,
+    fileRows: selectedFileRows,
+    plannedDocuments:
+      typeof selection === "object" ? selection.documents : null,
+  };
 };
 
 /** Contact links, task assignees and time entries for one matter. */
@@ -535,6 +614,7 @@ const assembleDocuments = ({
   documentRows,
   exportedVersions,
   fileRows,
+  plannedDocuments,
 }: MatterEntityRows): SourceDocument[] => {
   const files = fileRows
     .toSorted((a, b) => (a.id < b.id ? -1 : 1))
@@ -564,14 +644,19 @@ const assembleDocuments = ({
     if (row.kind !== "document" && row.kind !== "message") {
       continue;
     }
+    const liveCurrentVersionId =
+      row.currentVersionId === null ? null : String(row.currentVersionId);
+    const currentVersionId =
+      plannedDocuments === null
+        ? liveCurrentVersionId
+        : (plannedDocuments[String(row.id)]?.currentVersionId ?? null);
     documents.push({
       id: String(row.id),
       kind: row.kind,
       parentId: row.parentId === null ? null : String(row.parentId),
       name: row.name,
       docSequence: row.docSequence,
-      currentVersionId:
-        row.currentVersionId === null ? null : String(row.currentVersionId),
+      currentVersionId,
       createdAt: row.createdAt,
       createdBy: row.createdBy,
       updatedAt: row.updatedAt,
@@ -598,7 +683,7 @@ const assembleDocuments = ({
 const loadMatter = async (
   reader: PagedReader,
   matterId: string,
-  scope: DataExportVersionScope,
+  selection: SourceVersionSelection,
 ): Promise<SourceMatter | null> => {
   const workspaceId = brandPersistedWorkspaceId(matterId);
   const matterRows = await reader.db(
@@ -619,7 +704,7 @@ const loadMatter = async (
   if (matter === undefined) {
     return null;
   }
-  const entityRows = await readMatterEntities(reader, workspaceId, scope);
+  const entityRows = await readMatterEntities(reader, workspaceId, selection);
   const taskRows = entityRows.entityRows.filter(
     (row) => row.kind === TASK_KIND,
   );
@@ -1129,9 +1214,8 @@ export const createExportSource = (
   // Filled by `loadOrganizationRecords`; template bytes are addressed by
   // their stored key, which never leaves this module.
   const templateKeys = new Map<string, string>();
-  // Planning and part 1 both need the organisation records; read them once
-  // per attempt.
-  let organizationRecords: Promise<SourceOrganizationRecords> | null = null;
+  // Each read refreshes template rows and keys so packing sees source changes
+  // made since the plan was stored.
 
   const readFile = async (ref: ExportFileRef): Promise<FileRead> => {
     switch (ref.type) {
@@ -1164,8 +1248,8 @@ export const createExportSource = (
     measureRecords: async (matterIds) =>
       await measureRecords(reader, matterIds),
     loadOrganizationRecords: async () => {
-      organizationRecords ??= loadOrganizationRecords(reader, templateKeys);
-      return await organizationRecords;
+      templateKeys.clear();
+      return await loadOrganizationRecords(reader, templateKeys);
     },
     readFile,
   };

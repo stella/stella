@@ -25,6 +25,7 @@ import type {
   SourceMatter,
   SourceMatterSummary,
   SourceOrganizationRecords,
+  SourceVersionSelection,
 } from "@/api/handlers/data-exports/build-export";
 import { buildDataExportJsonSchema } from "@/api/handlers/data-exports/manifest-json-schema";
 import {
@@ -111,10 +112,55 @@ const found = (data: Uint8Array): FileRead => ({
   })(),
 });
 
+const selectedMatter = (
+  matter: SourceMatter,
+  selection: SourceVersionSelection,
+): SourceMatter => {
+  if (selection === "all") {
+    return matter;
+  }
+  const documents =
+    selection === "current"
+      ? matter.documents.map((document) => ({
+          ...document,
+          versions: document.versions.filter(
+            (version) => version.id === document.currentVersionId,
+          ),
+        }))
+      : matter.documents.flatMap((document) => {
+          const documentPaths = selection.documents[document.id];
+          if (documentPaths === undefined) {
+            return [];
+          }
+          return [
+            {
+              ...document,
+              versions: document.versions.flatMap((version) => {
+                const versionPaths = documentPaths.versions[version.id];
+                if (versionPaths === undefined) {
+                  return [];
+                }
+                return [
+                  {
+                    ...version,
+                    files: version.files.filter(
+                      (file) => versionPaths.files[file.fieldId] !== undefined,
+                    ),
+                  },
+                ];
+              }),
+            },
+          ];
+        });
+  return { ...matter, documents };
+};
+
 const fakeSource = (world: FakeWorld): ExportSource => ({
   listMatters: async () => world.matters.map((m) => m.summary),
-  loadMatter: async (matterId) =>
-    world.matters.find((m) => m.summary.id === matterId)?.matter ?? null,
+  loadMatter: async (matterId, selection) => {
+    const matter = world.matters.find((m) => m.summary.id === matterId)?.matter;
+    return matter === undefined ? null : selectedMatter(matter, selection);
+  },
   loadOrganizationRecords: async () => world.organization,
   measureRecords: async () =>
     world.recordBytes ?? { organizationBytes: 0, matterBytes: new Map() },
@@ -238,6 +284,7 @@ type RunOptions = {
   beforePart?: () => Promise<void>;
   source?: ExportSource;
   plan?: ExportPlan;
+  versionScope?: "all" | "current";
 };
 
 const run = async (
@@ -248,6 +295,7 @@ const run = async (
     beforePart = async () => {},
     source = fakeSource(world),
     plan: persistedPlan,
+    versionScope = "all",
   }: RunOptions = {},
 ) => {
   const memory = memorySink();
@@ -258,7 +306,7 @@ const run = async (
         source,
         partTargetBytes,
         recordBytesCap: DATA_EXPORT_RECORD_BYTES_CAP,
-        scope: { versions: "all" },
+        scope: { versions: versionScope },
         pace: async () => {},
       })
     ).unwrap();
@@ -269,7 +317,7 @@ const run = async (
     organization: { id: "org-1", name: "Kancelář" },
     requestedBy: "user-1",
     createdAt: CREATED_AT,
-    scope: { versions: "all" },
+    scope: { versions: versionScope },
     plan,
     completedParts,
     source,
@@ -681,7 +729,8 @@ describe("organisation data export builder", () => {
     const { manifest, zips } = await run(world);
     expect(
       manifest.problems.map((problem) =>
-        problem.reason === "matter_unavailable"
+        problem.reason === "matter_unavailable" ||
+        problem.reason === "planned_item_unavailable"
           ? { matterId: problem.matterId, reason: problem.reason }
           : { fileId: problem.fileId, reason: problem.reason },
       ),
@@ -691,8 +740,11 @@ describe("organisation data export builder", () => {
       { fileId: "file-4", reason: "checksum_mismatch" },
     ]);
     for (const problem of manifest.problems) {
-      if (problem.reason === "matter_unavailable") {
-        throw new Error("no matter was planned away in this world");
+      if (
+        problem.reason === "matter_unavailable" ||
+        problem.reason === "planned_item_unavailable"
+      ) {
+        throw new Error("no planned item was removed in this world");
       }
       const entry = zips[0]?.file(problem.path) ?? null;
       if (problem.reason === "checksum_mismatch") {
@@ -777,6 +829,191 @@ describe("organisation data export builder", () => {
         .map((entry) => entry.name)
         .toSorted();
     expect(filePaths(resumedSecondZip)).toEqual(filePaths(originalSecondZip));
+  });
+
+  test("resumes a current-version plan after the document is promoted", async () => {
+    const world = basicWorld();
+    const firstMatter = world.matters.find(
+      ({ summary }) => summary.id === "m-1",
+    );
+    const secondMatter = world.matters.find(
+      ({ summary }) => summary.id === "m-2",
+    );
+    const plannedDocument = firstMatter?.matter.documents.at(0);
+    if (
+      firstMatter === undefined ||
+      secondMatter === undefined ||
+      plannedDocument === undefined
+    ) {
+      throw new Error("expected the planned document fixture");
+    }
+    firstMatter.matter = { ...firstMatter.matter, documents: [] };
+    firstMatter.summary.estimatedBytes = 0;
+    firstMatter.matter.summary.estimatedBytes = 0;
+    secondMatter.matter = {
+      ...secondMatter.matter,
+      documents: [{ ...plannedDocument, currentVersionId: "ver-1" }],
+    };
+    const estimatedBytes = plannedDocument.versions
+      .flatMap((version) => version.files)
+      .reduce((total, file) => total + file.sizeBytes, 0);
+    secondMatter.summary.estimatedBytes = estimatedBytes;
+    secondMatter.matter.summary.estimatedBytes = estimatedBytes;
+
+    const first = await run(world, {
+      partTargetBytes: 10,
+      versionScope: "current",
+    });
+    expect(first.plan.parts.map((planned) => planned.matterIds)).toEqual([
+      ["m-1"],
+      ["m-2"],
+    ]);
+    const completedFirstPart = first.checkpoints.at(0);
+    if (completedFirstPart === undefined) {
+      throw new Error("expected the first part checkpoint");
+    }
+    const persistedPlan = structuredClone(first.plan);
+    secondMatter.matter = {
+      ...secondMatter.matter,
+      documents: [{ ...plannedDocument, currentVersionId: "ver-2" }],
+    };
+    const promotedCurrent =
+      secondMatter.matter.documents.at(0)?.currentVersionId;
+    expect(promotedCurrent).toBe("ver-2");
+
+    const resumed = await run(world, {
+      plan: persistedPlan,
+      completedParts: [completedFirstPart],
+      versionScope: "current",
+    });
+    const part = resumed.partManifests.at(0);
+    const zip = resumed.zips.at(0);
+    const document = part?.matters
+      .flatMap((matter) => matter.documents)
+      .find((row) => row.id === plannedDocument.id);
+    expect(document?.currentVersionId).toBe("ver-1");
+    expect(document?.versions.map((version) => version.id)).toEqual(["ver-1"]);
+    const file = document?.versions.at(0)?.files.at(0);
+    if (file === undefined || zip === undefined) {
+      throw new Error("expected the planned current-version file");
+    }
+    const expectedFile = world.files.get("file-1");
+    if (
+      expectedFile === undefined ||
+      expectedFile === "missing" ||
+      expectedFile === "failed"
+    ) {
+      throw new Error("expected planned current-version file bytes");
+    }
+    expect(await zip.file(file.path)?.async("uint8array")).toEqual(
+      expectedFile.bytes,
+    );
+  });
+
+  test("reports every planned document folder and template lost before packing", async () => {
+    const world = basicWorld();
+    const initial = await run(world);
+    const firstMatter = world.matters.at(0);
+    if (firstMatter === undefined) {
+      throw new Error("expected planned matter fixture");
+    }
+    const matterPlan = initial.plan.paths.matters[firstMatter.summary.id];
+    if (matterPlan === undefined) {
+      throw new Error("expected persisted matter paths");
+    }
+    expect(Object.keys(matterPlan.documents).length).toBeGreaterThan(0);
+    expect(Object.keys(matterPlan.folders).length).toBeGreaterThan(0);
+    expect(
+      Object.keys(initial.plan.paths.organization.templateFiles).length,
+    ).toBeGreaterThan(0);
+    firstMatter.matter = { ...firstMatter.matter, documents: [], folders: [] };
+    world.organization.templateFiles = [];
+    const result = await run(world, { plan: structuredClone(initial.plan) });
+    const expectedProblems = [
+      ...Object.keys(matterPlan.documents).map((itemId) => ({
+        reason: "planned_item_unavailable",
+        matterId: firstMatter.summary.id,
+        itemType: "document",
+        itemId,
+      })),
+      ...Object.keys(matterPlan.folders).map((itemId) => ({
+        reason: "planned_item_unavailable",
+        matterId: firstMatter.summary.id,
+        itemType: "folder",
+        itemId,
+      })),
+      ...Object.entries(initial.plan.paths.organization.templateFiles).map(
+        ([fileId, path]) => ({ reason: "missing", fileId, path }),
+      ),
+    ];
+    expect(result.manifest.problems).toEqual(
+      expect.arrayContaining(expectedProblems),
+    );
+    expect(result.manifest.problems).toHaveLength(expectedProblems.length);
+  });
+
+  test("reports planned versions and files that disappear or change identity", async () => {
+    const world = basicWorld();
+    const baseSource = fakeSource(world);
+    const source: ExportSource = {
+      ...baseSource,
+      loadMatter: async (matterId, selection) => {
+        const matter = await baseSource.loadMatter(matterId, selection);
+        if (
+          matter === null ||
+          matterId !== "m-1" ||
+          selection === "all" ||
+          selection === "current"
+        ) {
+          return matter;
+        }
+        return {
+          ...matter,
+          documents: matter.documents.map((document) => ({
+            ...document,
+            versions: document.versions.flatMap((version) => {
+              if (version.id === "ver-3") {
+                return [];
+              }
+              if (version.id === "ver-2") {
+                return [
+                  {
+                    ...version,
+                    files: version.files.map((file) => ({
+                      ...file,
+                      fileId: "replacement-file-id",
+                    })),
+                  },
+                ];
+              }
+              if (version.id === "ver-1") {
+                return [{ ...version, files: [] }];
+              }
+              return [version];
+            }),
+          })),
+        };
+      },
+    };
+    const { partManifests } = await run(world, { source });
+    const problems = partManifests.flatMap((part) => part.problems);
+    expect(problems).toContainEqual({
+      reason: "planned_item_unavailable",
+      matterId: "m-1",
+      itemType: "version",
+      itemId: "ver-3",
+    });
+    expect(problems).toContainEqual({
+      reason: "missing",
+      path: expect.any(String),
+      fileId: "file-1",
+    });
+    expect(problems).toContainEqual({
+      reason: "missing",
+      path: expect.any(String),
+      fileId: "file-2",
+    });
+    expect(problems).toHaveLength(3);
   });
 
   test("stops between files when its signal aborts", async () => {

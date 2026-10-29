@@ -17,7 +17,6 @@
 
 import { panic, Result, TaggedError } from "better-result";
 
-import { compareCodeUnit } from "@stll/collation";
 import { createSha256 } from "@stll/sha256/bun";
 import type { Sha256Hasher } from "@stll/sha256/types";
 
@@ -53,6 +52,7 @@ import type {
   ZipEntryInput,
 } from "@/api/handlers/data-exports/zip-writer";
 import type {
+  DataExportDocumentPaths,
   DataExportMatterPaths,
   DataExportMatterRecordKind,
   DataExportOrganizationPaths,
@@ -153,6 +153,10 @@ export type SourceOrganizationRecords = Record<
   templateFiles: readonly SourceTemplateFile[];
 };
 
+export type SourceVersionSelection =
+  | DataExportVersionScope
+  | { type: "planned"; documents: DataExportMatterPaths["documents"] };
+
 export type ExportSource = {
   /**
    * Every matter in the export, in any order, sized for `scope`. Personal
@@ -164,7 +168,7 @@ export type ExportSource = {
   /** `null` when the matter is gone since the export was planned. */
   loadMatter: (
     matterId: string,
-    scope: DataExportVersionScope,
+    scope: SourceVersionSelection,
   ) => Promise<SourceMatter | null>;
   loadOrganizationRecords: () => Promise<SourceOrganizationRecords>;
   /**
@@ -193,7 +197,10 @@ export const DATA_EXPORT_RECORD_BYTES_CAP = 256 * 1024 ** 2;
 /** The export's records exceed the cap. */
 export class DataExportRecordsTooLargeError extends TaggedError(
   "DataExportRecordsTooLargeError",
-)<{ message: string; bytes: number }> {}
+)<{
+  message: string;
+  bytes: number;
+}> {}
 
 /** Receives one part's bytes, in order. */
 type PartSink = {
@@ -424,6 +431,102 @@ const fileEntry = async function* ({
   return { sha256, sizeBytes };
 };
 
+type DocumentEntriesArgs = {
+  context: PartContext;
+  matterId: string;
+  document: SourceDocument;
+  paths: DataExportDocumentPaths;
+};
+
+// Traverse the durable identities, so missing metadata cannot erase a planned file.
+const documentEntries = async function* ({
+  context,
+  matterId,
+  document,
+  paths,
+}: DocumentEntriesArgs): AsyncGenerator<ZipEntryInput, ManifestDocument> {
+  const versions: ManifestDocument["versions"] = [];
+  const sourceVersions = new Map(
+    document.versions.map((version) => [version.id, version]),
+  );
+  for (const [versionId, versionPaths] of Object.entries(paths.versions)) {
+    const version = sourceVersions.get(versionId);
+    if (version === undefined) {
+      context.problems.push({
+        reason: "planned_item_unavailable",
+        matterId,
+        itemType: "version",
+        itemId: versionId,
+      });
+      continue;
+    }
+    const files: ManifestDocument["versions"][number]["files"] = [];
+    const sourceFiles = new Map(
+      version.files.map((file) => [file.fieldId, file]),
+    );
+    for (const [fieldId, plannedFile] of Object.entries(versionPaths.files)) {
+      const file = sourceFiles.get(fieldId);
+      if (
+        file === undefined ||
+        file.fileId !== plannedFile.fileId ||
+        file.mimeType !== plannedFile.mimeType
+      ) {
+        context.problems.push({
+          reason: "missing",
+          path: plannedFile.path,
+          fileId: plannedFile.fileId,
+        });
+        continue;
+      }
+      const written = yield* fileEntry({
+        context,
+        ref: {
+          type: "document",
+          workspaceId: matterId,
+          fileId: plannedFile.fileId,
+          mimeType: file.mimeType,
+        },
+        path: plannedFile.path,
+        fileId: plannedFile.fileId,
+        mimeType: file.mimeType,
+        modifiedAt: version.createdAt,
+        recordedSha256: file.sha256,
+      });
+      if (written !== null) {
+        files.push({
+          ...file,
+          sha256: written.sha256,
+          sizeBytes: written.sizeBytes,
+          path: plannedFile.path,
+        });
+      }
+    }
+    versions.push({
+      id: version.id,
+      versionNumber: version.versionNumber,
+      stamp: version.stamp,
+      label: version.label,
+      description: version.description,
+      createdAt: version.createdAt.toISOString(),
+      createdBy: version.createdBy,
+      files,
+    });
+  }
+  return {
+    id: document.id,
+    kind: document.kind,
+    parentId: document.parentId,
+    name: document.name,
+    docSequence: document.docSequence,
+    currentVersionId: paths.currentVersionId,
+    createdAt: document.createdAt.toISOString(),
+    createdBy: document.createdBy,
+    updatedAt: document.updatedAt?.toISOString() ?? null,
+    lastEditedBy: document.lastEditedBy,
+    versions,
+  };
+};
+
 type MatterEntriesArgs = {
   context: PartContext;
   matter: SourceMatter;
@@ -466,75 +569,49 @@ const matterEntries = async function* ({
   yield* invoices.entries;
 
   const documents: ManifestDocument[] = [];
-  for (const document of matter.documents.toSorted(compareArchiveNames)) {
-    // The durable plan freezes path-bearing identities. Later additions belong
-    // to a later export rather than acquiring new paths during a resume.
-    const documentPaths = paths.documents[document.id];
-    if (documentPaths === undefined) {
+  const sourceDocuments = new Map(
+    matter.documents.map((document) => [document.id, document]),
+  );
+  for (const [documentId, documentPaths] of Object.entries(paths.documents)) {
+    const document = sourceDocuments.get(documentId);
+    if (document === undefined) {
+      context.problems.push({
+        reason: "planned_item_unavailable",
+        matterId: summary.id,
+        itemType: "document",
+        itemId: documentId,
+      });
       continue;
     }
-    const versions: ManifestDocument["versions"] = [];
-    const orderedVersions = document.versions.toSorted(
-      (a, b) =>
-        a.versionNumber - b.versionNumber || compareCodeUnit(a.id, b.id),
+    documents.push(
+      yield* documentEntries({
+        context,
+        matterId: summary.id,
+        document,
+        paths: documentPaths,
+      }),
     );
-    for (const version of orderedVersions) {
-      const versionPaths = documentPaths.versions[version.id];
-      if (versionPaths === undefined) {
-        continue;
-      }
-      const files: ManifestDocument["versions"][number]["files"] = [];
-      for (const file of version.files) {
-        const path = versionPaths.files[file.fieldId];
-        if (path === undefined) {
-          continue;
-        }
-        const written = yield* fileEntry({
-          context,
-          ref: {
-            type: "document",
-            workspaceId: summary.id,
-            fileId: file.fileId,
-            mimeType: file.mimeType,
-          },
-          path,
-          fileId: file.fileId,
-          mimeType: file.mimeType,
-          modifiedAt: version.createdAt,
-          recordedSha256: file.sha256,
-        });
-        if (written !== null) {
-          files.push({
-            ...file,
-            sha256: written.sha256,
-            sizeBytes: written.sizeBytes,
-            path,
-          });
-        }
-      }
-      versions.push({
-        id: version.id,
-        versionNumber: version.versionNumber,
-        stamp: version.stamp,
-        label: version.label,
-        description: version.description,
-        createdAt: version.createdAt.toISOString(),
-        createdBy: version.createdBy,
-        files,
+  }
+  const sourceFolders = new Map(
+    matter.folders.map((folder) => [folder.id, folder]),
+  );
+  const folders: ManifestMatter["folders"] = [];
+  for (const [folderId, folderPaths] of Object.entries(paths.folders)) {
+    const folder = sourceFolders.get(folderId);
+    if (folder === undefined) {
+      context.problems.push({
+        reason: "planned_item_unavailable",
+        matterId: summary.id,
+        itemType: "folder",
+        itemId: folderId,
       });
+      continue;
     }
-    documents.push({
-      id: document.id,
-      kind: document.kind,
-      parentId: document.parentId,
-      name: document.name,
-      docSequence: document.docSequence,
-      currentVersionId: document.currentVersionId,
-      createdAt: document.createdAt.toISOString(),
-      createdBy: document.createdBy,
-      updatedAt: document.updatedAt?.toISOString() ?? null,
-      lastEditedBy: document.lastEditedBy,
-      versions,
+    folders.push({
+      id: folder.id,
+      parentId: folder.parentId,
+      name: folder.name,
+      path: folderPaths.current,
     });
   }
 
@@ -552,19 +629,7 @@ const matterEntries = async function* ({
       expenses: expenses.ref,
       invoices: invoices.ref,
     },
-    folders: matter.folders.flatMap((folder) => {
-      const folderPaths = paths.folders[folder.id];
-      return folderPaths === undefined
-        ? []
-        : [
-            {
-              id: folder.id,
-              parentId: folder.parentId,
-              name: folder.name,
-              path: folderPaths.current,
-            },
-          ];
-    }),
+    folders,
     documents,
   };
 };
@@ -602,15 +667,17 @@ const organizationEntries = async function* ({
   }
 
   const templateFiles: ManifestTemplateFile[] = [];
-  const orderedFiles = records.templateFiles.toSorted(
-    (a, b) =>
-      compareCodeUnit(a.templateName, b.templateName) ||
-      compareCodeUnit(a.templateId, b.templateId) ||
-      a.version - b.version,
+  const sourceFiles = new Map(
+    records.templateFiles.map((file) => [file.templateVersionId, file]),
   );
-  for (const file of orderedFiles) {
-    const path = paths.templateFiles[file.templateVersionId];
-    if (path === undefined) {
+  for (const [templateVersionId, path] of Object.entries(paths.templateFiles)) {
+    const file = sourceFiles.get(templateVersionId);
+    if (file === undefined) {
+      context.problems.push({
+        reason: "missing",
+        path,
+        fileId: templateVersionId,
+      });
       continue;
     }
     const written = yield* fileEntry({
@@ -892,7 +959,13 @@ export const buildDataExport = async ({
       }
       for (const matterId of planned.matterIds) {
         signal.throwIfAborted();
-        const matter = await source.loadMatter(matterId, scope.versions);
+        const paths =
+          plan.paths.matters[matterId] ??
+          panic(`Matter ${matterId} has no planned paths`);
+        const matter = await source.loadMatter(matterId, {
+          type: "planned",
+          documents: paths.documents,
+        });
         await pace();
         // Planned but no longer readable: deleted since the plan was made, or
         // out of the requester's reach. Recorded, never dropped silently.
@@ -903,9 +976,7 @@ export const buildDataExport = async ({
             yield* matterEntries({
               context,
               matter,
-              paths:
-                plan.paths.matters[matterId] ??
-                panic(`Matter ${matterId} has no planned paths`),
+              paths,
             }),
           );
           partBytesDone += matter.summary.estimatedBytes;

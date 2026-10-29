@@ -1,4 +1,5 @@
 import type { DataExportPlanRecord } from "@/api/lib/data-export/archive-plan";
+import type { DataExportProblemRecord } from "@/api/lib/data-export/problem-schema";
 import { DATA_EXPORT_VERSION_SCOPE_VALUES } from "@/api/lib/data-export/version-scope";
 
 import { reviewResetOwnerPolicies } from "../review-reset-policies";
@@ -15,6 +16,7 @@ import {
 } from "./common";
 
 export type { DataExportPlanRecord } from "@/api/lib/data-export/archive-plan";
+export type { DataExportProblemRecord } from "@/api/lib/data-export/problem-schema";
 
 /** Lifecycle of one organisation data export. `queued` on insert, `running`
  *  while the worker packs parts, then `ready` or `failed`; a `ready` export
@@ -34,17 +36,6 @@ export const ACTIVE_DATA_EXPORT_STATUSES = [
   "queued",
   "running",
 ] as const satisfies readonly DataExportStatus[];
-
-/** Something that needs attention; mirrors the manifest's `problems`. */
-export type DataExportProblemRecord =
-  | { reason: "missing" | "fetch_failed"; path: string; fileId: string }
-  | { reason: "matter_unavailable"; matterId: string }
-  | {
-      reason: "checksum_mismatch";
-      path: string;
-      fileId: string;
-      recordedSha256: string;
-    };
 
 /** One finished part: the checkpoint a resumed run starts after. */
 export type DataExportPartRecord = {

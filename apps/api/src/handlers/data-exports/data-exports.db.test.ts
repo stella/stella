@@ -251,7 +251,7 @@ const assertCompleteStoredPlan = (plan: DataExportPlanRecord | null) => {
       for (const document of Object.values(matter.documents)) {
         for (const version of Object.values(document.versions)) {
           for (const path of Object.values(version.files)) {
-            expect(path.length).toBeGreaterThan(0);
+            expect(path.path.length).toBeGreaterThan(0);
           }
         }
       }
@@ -370,6 +370,35 @@ const runFor = async (
     },
   );
   return { outcome, memory, manifest, now, storageAttempts };
+};
+
+const readStoredPartManifest = async (
+  exportId: SafeId<"dataExport">,
+  memory: ReturnType<typeof memorySink>,
+) => {
+  const [row] = await testDb
+    .select()
+    .from(organizationDataExports)
+    .where(eq(organizationDataExports.id, exportId));
+  const manifestPath = row?.plan?.parts.at(0)?.paths.manifest;
+  const partChunks = [...memory.parts.values()].at(0);
+  if (
+    row === undefined ||
+    manifestPath === undefined ||
+    partChunks === undefined
+  ) {
+    panic("The completed export must store its part manifest and bytes");
+  }
+  const zip = await JSZip.loadAsync(Buffer.concat(partChunks));
+  const file = zip.file(manifestPath);
+  if (file === null) {
+    panic(`The stored part must include ${manifestPath}`);
+  }
+  return {
+    row,
+    zip,
+    part: v.parse(partManifestSchema, JSON.parse(await file.async("string"))),
+  };
 };
 
 const planFor = async (userId: SafeId<"user">): Promise<ExportPlan> => {
@@ -552,6 +581,126 @@ describe("data export run", () => {
     expect(row?.expiresAt?.getTime()).toBe(
       now.getTime() + DATA_EXPORT_RETENTION_MS,
     );
+  });
+
+  test("a current-version export keeps its planned version after promotion", async () => {
+    const exportId = await insertExport({
+      organizationId: ids.orgA,
+      requestedBy: ids.userAdmin,
+      versionScope: "current",
+    });
+    const plannedVersionId = versionIds[0];
+    const promotedVersionId = versionIds[1];
+    const originallyCurrentVersionId = versionIds[2];
+    if (
+      plannedVersionId === undefined ||
+      promotedVersionId === undefined ||
+      originallyCurrentVersionId === undefined
+    ) {
+      panic(
+        "The fixture must include planned, promoted, and original versions",
+      );
+    }
+    let promoted = false;
+    try {
+      await testDb
+        .update(entities)
+        .set({ currentVersionId: plannedVersionId })
+        .where(eq(entities.id, documentId));
+      const { outcome, memory } = await runFor(ids.userAdmin, exportId, {
+        wrapSource: (source) => ({
+          ...source,
+          loadMatter: async (matterId, selection) => {
+            if (
+              matterId === ids.wsA1 &&
+              typeof selection === "object" &&
+              !promoted
+            ) {
+              await testDb
+                .update(entities)
+                .set({ currentVersionId: promotedVersionId })
+                .where(eq(entities.id, documentId));
+              promoted = true;
+            }
+            return await source.loadMatter(matterId, selection);
+          },
+        }),
+      });
+      expect(promoted).toBe(true);
+      expect(outcome).toBe(DATA_EXPORT_RUN_OUTCOME.READY);
+      const { row, part, zip } = await readStoredPartManifest(exportId, memory);
+      const document = part.matters
+        .flatMap((matter) => matter.documents)
+        .find((entry) => entry.id === documentId);
+      expect(document?.currentVersionId).toBe(plannedVersionId);
+      expect(document?.versions.map((version) => version.id)).toEqual([
+        plannedVersionId,
+      ]);
+      const file = document?.versions.at(0)?.files.at(0);
+      if (file === undefined) {
+        panic("The planned current version must retain its file");
+      }
+      expect(await zip.file(file.path)?.async("uint8array")).toEqual(
+        fileBytes[0],
+      );
+      expect(row.status).toBe("ready");
+      expect(row.problemCount).toBe(part.problems.length);
+    } finally {
+      await testDb
+        .update(entities)
+        .set({ currentVersionId: originallyCurrentVersionId })
+        .where(eq(entities.id, documentId));
+    }
+  });
+
+  test("a deleted planned version is reported in the ready export problem count", async () => {
+    const exportId = await insertExport({
+      organizationId: ids.orgA,
+      requestedBy: ids.userAdmin,
+    });
+    const plannedVersionId = versionIds[0];
+    if (plannedVersionId === undefined) {
+      panic("The planned-version fixture must include its first version");
+    }
+    let deleted = false;
+    try {
+      const { outcome, memory } = await runFor(ids.userAdmin, exportId, {
+        wrapSource: (source) => ({
+          ...source,
+          loadMatter: async (matterId, selection) => {
+            if (
+              matterId === ids.wsA1 &&
+              typeof selection === "object" &&
+              !deleted
+            ) {
+              await testDb
+                .update(entityVersions)
+                .set({ deletedAt: new Date("2026-10-29T00:00:00.000Z") })
+                .where(eq(entityVersions.id, plannedVersionId));
+              deleted = true;
+            }
+            return await source.loadMatter(matterId, selection);
+          },
+        }),
+      });
+      expect(deleted).toBe(true);
+      expect(outcome).toBe(DATA_EXPORT_RUN_OUTCOME.READY);
+      const { row, part } = await readStoredPartManifest(exportId, memory);
+      expect(part.problems).toContainEqual({
+        reason: "planned_item_unavailable",
+        matterId: ids.wsA1,
+        itemType: "version",
+        itemId: String(plannedVersionId),
+      });
+      expect(row.status).toBe("ready");
+      expect(row.problemCount).toBe(part.problems.length);
+      expect(row.problemCount).toBeGreaterThan(0);
+    } finally {
+      await testDb
+        .update(entityVersions)
+        .set({ deletedAt: null })
+        .where(eq(entityVersions.id, plannedVersionId));
+    }
   });
 
   test("refuses to run once the requester is no longer an owner or admin", async () => {

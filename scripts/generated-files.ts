@@ -871,6 +871,8 @@ const GENERATOR_DECLARATIONS = [
       "bunfig.toml",
       "apps/api/src/handlers/data-exports/manifest-json-schema.ts",
       "apps/api/src/handlers/data-exports/manifest-schema.ts",
+      "apps/api/src/lib/data-export/manifest-values.ts",
+      "apps/api/src/lib/data-export/problem-schema.ts",
       "apps/api/src/lib/data-export/version-scope.ts",
       "apps/api/src/lib/custom-schema.ts",
       "apps/api/src/lib/type-guards.ts",

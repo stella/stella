@@ -874,6 +874,30 @@
                 "type": "object",
                 "properties": {
                   "reason": {
+                    "const": "planned_item_unavailable"
+                  },
+                  "matterId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
+                  },
+                  "itemType": {
+                    "enum": ["document", "version", "folder"],
+                    "type": "string"
+                  },
+                  "itemId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
+                  }
+                },
+                "required": ["reason", "matterId", "itemType", "itemId"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "reason": {
                     "enum": ["missing", "fetch_failed"],
                     "type": "string"
                   },
@@ -1104,6 +1128,30 @@
           "type": "array",
           "items": {
             "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "const": "planned_item_unavailable"
+                  },
+                  "matterId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
+                  },
+                  "itemType": {
+                    "enum": ["document", "version", "folder"],
+                    "type": "string"
+                  },
+                  "itemId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
+                  }
+                },
+                "required": ["reason", "matterId", "itemType", "itemId"],
+                "additionalProperties": false
+              },
               {
                 "type": "object",
                 "properties": {

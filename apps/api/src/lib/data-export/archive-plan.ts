@@ -24,7 +24,13 @@ export type DataExportOrganizationRecordKind =
   keyof typeof DATA_EXPORT_ORGANIZATION_RECORD_NAMES;
 export type DataExportRecordPaths = { json: string; csv: string };
 export type DataExportDocumentPaths = {
-  versions: Record<string, { files: Record<string, string> }>;
+  currentVersionId: string | null;
+  versions: Record<
+    string,
+    {
+      files: Record<string, { path: string; fileId: string; mimeType: string }>;
+    }
+  >;
 };
 export type DataExportMatterPaths = {
   directory: string;

@@ -4,28 +4,28 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## organization_data_exports · `organizationDataExports` · data-exports.ts:89 · rls
+## organization_data_exports · `organizationDataExports` · data-exports.ts:80 · rls
 
 ```text
-organization_data_exports.id               pUuid               pk,not null       data-exports.ts:92
-organization_data_exports.organization_id  safeOrganizationId  fk,not null       data-exports.ts:93
-organization_data_exports.requested_by     text                fk,null           data-exports.ts:97   Set null on account deletion: the export history outlives its requester.
-organization_data_exports.status           text                default,not null  data-exports.ts:100
-organization_data_exports.version_scope    text                not null          data-exports.ts:104
-organization_data_exports.matters_total    integer             default,not null  data-exports.ts:108  Progress, planned from stored file sizes before packing starts.
-organization_data_exports.matters_done     integer             default,not null  data-exports.ts:109
-organization_data_exports.bytes_total      bigint              default,not null  data-exports.ts:110
-organization_data_exports.bytes_done       bigint              default,not null  data-exports.ts:114
-organization_data_exports.part_count       integer             null              data-exports.ts:115
-organization_data_exports.plan             jsonb               null              data-exports.ts:117  Fixed on the first attempt; null until then.
-organization_data_exports.parts            jsonb               default,not null  data-exports.ts:119  Finished parts, appended as each one is committed: the checkpoint.
-organization_data_exports.attempt          integer             default,not null  data-exports.ts:122  Runs started for this export, resumes included.
-organization_data_exports.failures         integer             default,not null  data-exports.ts:125  Attempts that ended in an error or a lost worker; bounded by DATA_EXPORT_MAX_FAILURES.
-organization_data_exports.problem_count    integer             default,not null  data-exports.ts:127  Files the manifest lists under `problems`.
-organization_data_exports.error            text                null              data-exports.ts:128
-organization_data_exports.created_at       timestamptz         default,not null  data-exports.ts:129
-organization_data_exports.started_at       timestamptz         null              data-exports.ts:130
-organization_data_exports.heartbeat_at     timestamptz         null              data-exports.ts:132  Bumped while the worker runs; a stale heartbeat marks a lost job.
-organization_data_exports.completed_at     timestamptz         null              data-exports.ts:133
-organization_data_exports.expires_at       timestamptz         null              data-exports.ts:134
+organization_data_exports.id               pUuid               pk,not null       data-exports.ts:83
+organization_data_exports.organization_id  safeOrganizationId  fk,not null       data-exports.ts:84
+organization_data_exports.requested_by     text                fk,null           data-exports.ts:88   Set null on account deletion: the export history outlives its requester.
+organization_data_exports.status           text                default,not null  data-exports.ts:91
+organization_data_exports.version_scope    text                not null          data-exports.ts:95
+organization_data_exports.matters_total    integer             default,not null  data-exports.ts:99   Progress, planned from stored file sizes before packing starts.
+organization_data_exports.matters_done     integer             default,not null  data-exports.ts:100
+organization_data_exports.bytes_total      bigint              default,not null  data-exports.ts:101
+organization_data_exports.bytes_done       bigint              default,not null  data-exports.ts:105
+organization_data_exports.part_count       integer             null              data-exports.ts:106
+organization_data_exports.plan             jsonb               null              data-exports.ts:108  Fixed on the first attempt; null until then.
+organization_data_exports.parts            jsonb               default,not null  data-exports.ts:110  Finished parts, appended as each one is committed: the checkpoint.
+organization_data_exports.attempt          integer             default,not null  data-exports.ts:113  Runs started for this export, resumes included.
+organization_data_exports.failures         integer             default,not null  data-exports.ts:116  Attempts that ended in an error or a lost worker; bounded by DATA_EXPORT_MAX_FAILURES.
+organization_data_exports.problem_count    integer             default,not null  data-exports.ts:118  Files the manifest lists under `problems`.
+organization_data_exports.error            text                null              data-exports.ts:119
+organization_data_exports.created_at       timestamptz         default,not null  data-exports.ts:120
+organization_data_exports.started_at       timestamptz         null              data-exports.ts:121
+organization_data_exports.heartbeat_at     timestamptz         null              data-exports.ts:123  Bumped while the worker runs; a stale heartbeat marks a lost job.
+organization_data_exports.completed_at     timestamptz         null              data-exports.ts:124
+organization_data_exports.expires_at       timestamptz         null              data-exports.ts:125
 ```
