@@ -115,10 +115,24 @@ const repository = (base: Fixture, head: Fixture, commit = false) => {
     }
   };
   const git = (...args: string[]) => {
-    const result = Bun.spawnSync(["git", "-C", root, ...args], {
-      stdout: "pipe",
-      stderr: "pipe",
-    });
+    const result = Bun.spawnSync(
+      [
+        "git",
+        "-c",
+        "user.name=Classification Test",
+        "-c",
+        "user.email=classification-test@example.invalid",
+        "-c",
+        "commit.gpgsign=false",
+        "-C",
+        root,
+        ...args,
+      ],
+      {
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
     expect(result.exitCode, decoder.decode(result.stderr)).toBe(0);
   };
   const commitAll = (message: string) => {
@@ -519,10 +533,24 @@ test("independent privileged approvals merge without conflict", () => {
     { workflow: baseWorkflow, decisions },
   );
   const git = (...args: string[]) => {
-    const result = Bun.spawnSync(["git", "-C", root, ...args], {
-      stdout: "pipe",
-      stderr: "pipe",
-    });
+    const result = Bun.spawnSync(
+      [
+        "git",
+        "-c",
+        "user.name=Classification Test",
+        "-c",
+        "user.email=classification-test@example.invalid",
+        "-c",
+        "commit.gpgsign=false",
+        "-C",
+        root,
+        ...args,
+      ],
+      {
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
     expect(result.exitCode, decoder.decode(result.stderr)).toBe(0);
   };
 

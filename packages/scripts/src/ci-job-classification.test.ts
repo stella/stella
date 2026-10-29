@@ -20,6 +20,7 @@ import {
 import {
   decisionKeyFromPath,
   readDecisions,
+  writeApproval,
   writeDecision,
 } from "../../../scripts/ci-job-classification/decisions";
 import {
@@ -27,6 +28,7 @@ import {
   readClassificationInputs,
 } from "../../../scripts/ci-job-classification/generate";
 import {
+  approvalPathForKey,
   CLASSIFICATION_DECISIONS_PATH,
   CLASSIFICATION_INPUT_PATHS,
   decisionPathForKey,
@@ -58,6 +60,23 @@ const repositoryRoot = path.resolve(import.meta.dir, "../../..");
 const githubExpression = (expression: string) =>
   ["$", "{{ ", expression, " }}"].join("");
 
+type FixtureDecision = {
+  kind: (typeof CLASSIFICATIONS)[number];
+  qualifier: string;
+  approvedDigests: string[];
+};
+
+const writeFixtureDecision = (
+  root: string,
+  key: string,
+  decision: FixtureDecision,
+) => {
+  writeDecision(root, key, decision);
+  for (const digest of decision.approvedDigests) {
+    writeApproval(root, key, digest, decision);
+  }
+};
+
 test("every committed decision key has a unique reversible path", () => {
   const decisions = readDecisions({
     type: "working-tree",
@@ -80,6 +99,11 @@ test("revision decision reads support both the directory and legacy file", () =>
     qualifier: "Reviewed",
     reviewedDigest: "0".repeat(64),
   };
+  const normalized = {
+    kind: value.kind,
+    qualifier: value.qualifier,
+    approvedDigests: [value.reviewedDigest],
+  };
   const git = (args: string[]) => Bun.spawnSync(["git", "-C", root, ...args]);
   try {
     expect(git(["init", "--quiet"]).exitCode).toBe(0);
@@ -99,7 +123,7 @@ test("revision decision reads support both the directory and legacy file", () =>
     ).toBe(0);
     expect(
       readDecisions({ type: "git-revision", root, revision: "HEAD" }),
-    ).toEqual({ [key]: value });
+    ).toEqual({ [key]: normalized });
 
     rmSync(path.join(root, CLASSIFICATION_DECISIONS_PATH), {
       recursive: true,
@@ -149,7 +173,15 @@ test("committed classifications cover the repository and its pinned metadata cal
       ),
     ),
   );
-  expect(fixtureDecisions(manifest)).toEqual(decisions);
+  for (const [key, decision] of Object.entries(fixtureDecisions(manifest))) {
+    expect(decisions[key]).toMatchObject({
+      kind: decision.kind,
+      qualifier: decision.qualifier,
+    });
+    expect(decisions[key]?.approvedDigests).toContain(
+      decision.approvedDigests[0],
+    );
+  }
   expect(manifest.workflows.length).toBeGreaterThan(0);
   expect(
     manifest.nodes.some(
@@ -999,7 +1031,7 @@ const fixtureDecisions = (manifest: PublicMetadata) =>
             {
               kind: job.kind,
               qualifier: job.qualifier,
-              reviewedDigest: job.digest,
+              approvedDigests: [job.digest],
             },
           ])
         : [],
@@ -1054,35 +1086,38 @@ const fixtureGenerationOptions = (f: ReturnType<typeof fixture>) => {
           {
             kind: ORDINARY,
             qualifier: "Reviewed checks",
-            reviewedDigest: (() => {
-              const dependencies = Object.fromEntries(
-                Object.keys(job.dependencies)
-                  .toSorted()
-                  .flatMap((reference) => {
-                    let target = node.edges[reference];
-                    const local =
-                      reference.startsWith("./") || reference.startsWith("$/");
-                    if (
-                      !target &&
-                      local &&
-                      job.dependencies[reference] === "action"
-                    ) {
-                      target = "action";
-                    } else if (
-                      !target &&
-                      job.dependencies[reference] === "reusable-workflow"
-                    ) {
-                      target = "callee";
-                    }
-                    return target && nodes.get(target)?.type === "metadata"
-                      ? [[reference, documentDigest(target)]]
-                      : [];
-                  }),
-              );
-              return Object.keys(dependencies).length
-                ? sha256(JSON.stringify({ digest: job.digest, dependencies }))
-                : job.digest;
-            })(),
+            approvedDigests: [
+              (() => {
+                const dependencies = Object.fromEntries(
+                  Object.keys(job.dependencies)
+                    .toSorted()
+                    .flatMap((reference) => {
+                      let target = node.edges[reference];
+                      const local =
+                        reference.startsWith("./") ||
+                        reference.startsWith("$/");
+                      if (
+                        !target &&
+                        local &&
+                        job.dependencies[reference] === "action"
+                      ) {
+                        target = "action";
+                      } else if (
+                        !target &&
+                        job.dependencies[reference] === "reusable-workflow"
+                      ) {
+                        target = "callee";
+                      }
+                      return target && nodes.get(target)?.type === "metadata"
+                        ? [[reference, documentDigest(target)]]
+                        : [];
+                    }),
+                );
+                return Object.keys(dependencies).length
+                  ? sha256(JSON.stringify({ digest: job.digest, dependencies }))
+                  : job.digest;
+              })(),
+            ],
           },
         ]);
       }),
@@ -1794,9 +1829,13 @@ for (const job of [
     if (!definition) {
       throw new AdmissionError({ message: "privileged fixture job missing" });
     }
-    expect(isPrivilegedJob({ kind: ORDINARY, shape: definition.shape })).toBe(
-      true,
-    );
+    expect(
+      isPrivilegedJob({
+        kind: ORDINARY,
+        privileged: definition.privileged,
+        shape: definition.shape,
+      }),
+    ).toBe(true);
   });
 }
 
@@ -1806,12 +1845,20 @@ test("priority decisions are sensitive even for an unprivileged derived shape", 
   if (!definition) {
     throw new AdmissionError({ message: "priority fixture job missing" });
   }
-  expect(isPrivilegedJob({ kind: "priority", shape: definition.shape })).toBe(
-    true,
-  );
-  expect(isPrivilegedJob({ kind: ORDINARY, shape: definition.shape })).toBe(
-    false,
-  );
+  expect(
+    isPrivilegedJob({
+      kind: "priority",
+      privileged: definition.privileged,
+      shape: definition.shape,
+    }),
+  ).toBe(true);
+  expect(
+    isPrivilegedJob({
+      kind: ORDINARY,
+      privileged: definition.privileged,
+      shape: definition.shape,
+    }),
+  ).toBe(false);
 });
 
 for (const review of ["missing", "stale"] as const) {
@@ -1843,14 +1890,14 @@ for (const review of ["missing", "stale"] as const) {
     if (!current) {
       throw new AdmissionError({ message: "review fixture job missing" });
     }
-    expect(current.digest).not.toBe(decision.reviewedDigest);
+    expect(current.digest).not.toBe(decision.approvedDigests[0]);
     const action = parseDocument(
       f.reader.read("candidate", ".github/actions/local/action.yml"),
     );
     if (action.isErr()) {
       throw action.error;
     }
-    const reviewedDigest = sha256(
+    const approvedDigest = sha256(
       JSON.stringify({
         digest: current.digest,
         dependencies: { "$/.github/actions/local": action.value.digest },
@@ -1861,7 +1908,7 @@ for (const review of ["missing", "stale"] as const) {
     if (result.isErr()) {
       expect(result.error).toBeInstanceOf(ReviewRequiredError);
       expect(result.error.message).toContain(
-        `${decisionPathForKey(key)}\n${JSON.stringify(
+        `${decisionPathForKey(key)}\n${approvalPathForKey(key, approvedDigest)}\n${JSON.stringify(
           {
             kind:
               review === "missing"
@@ -1871,7 +1918,7 @@ for (const review of ["missing", "stale"] as const) {
               review === "missing"
                 ? "<describe the reviewed classification>"
                 : decision.qualifier,
-            reviewedDigest,
+            approvedDigest,
           },
           null,
           2,
@@ -1910,9 +1957,9 @@ test("the CLI emits a sensitive annotation and machine output until review is up
     const decision = {
       kind: ORDINARY,
       qualifier: "Reviewed checks",
-      reviewedDigest: originalJob.digest,
+      approvedDigests: [originalJob.digest],
     };
-    writeDecision(root, key, decision);
+    writeFixtureDecision(root, key, decision);
     const git = (args: string[]) =>
       Bun.spawnSync(["git", "-C", root, ...args], {
         stdout: "pipe",
@@ -1967,9 +2014,9 @@ test("the CLI emits a sensitive annotation and machine output until review is up
     );
     // The job now writes the repository, so the reviewer records it as
     // publication; keeping it ordinary at the new digest is refused.
-    writeDecision(root, key, {
+    writeFixtureDecision(root, key, {
       ...decision,
-      reviewedDigest: changedJob.digest,
+      approvedDigests: [changedJob.digest],
     });
     const keptOrdinary = check();
     expect(keptOrdinary.exitCode).toBe(1);
@@ -1977,10 +2024,10 @@ test("the CLI emits a sensitive annotation and machine output until review is up
       "must be classified priority",
     );
     writeFileSync(outputPath, "");
-    writeDecision(root, key, {
+    writeFixtureDecision(root, key, {
       kind: CLASSIFICATIONS[2],
       qualifier: "Reviewed publication",
-      reviewedDigest: changedJob.digest,
+      approvedDigests: [changedJob.digest],
     });
     const reviewed = check();
     expect(reviewed.exitCode).toBe(0);
@@ -2046,10 +2093,10 @@ test("a reviewed publish change in a reachable composite action stays sensitive"
       path.join(root, ".github/ci-job-classification-sources.json"),
       "{}",
     );
-    writeDecision(root, key, {
+    writeFixtureDecision(root, key, {
       kind: ORDINARY,
       qualifier: "Reviewed",
-      reviewedDigest: digest(beforeAction),
+      approvedDigests: [digest(beforeAction)],
     });
     const git = (args: string[]) => Bun.spawnSync(["git", "-C", root, ...args]);
     expect(git(["init", "--quiet"]).exitCode).toBe(0);
@@ -2070,10 +2117,10 @@ test("a reviewed publish change in a reachable composite action stays sensitive"
       .decode(git(["rev-parse", "HEAD"]).stdout)
       .trim();
     writeFileSync(actionPath, afterAction);
-    writeDecision(root, key, {
+    writeFixtureDecision(root, key, {
       kind: ORDINARY,
       qualifier: "Reviewed",
-      reviewedDigest: digest(afterAction),
+      approvedDigests: [digest(afterAction)],
     });
     const result = Bun.spawnSync(
       [
@@ -2113,10 +2160,10 @@ test("the CLI defaults its root and base when invoked without arguments", () => 
       "{}",
     );
     const key = "candidate:.github/workflows/ci.yml/check";
-    writeDecision(root, key, {
+    writeFixtureDecision(root, key, {
       kind: ORDINARY,
       qualifier: "Reviewed",
-      reviewedDigest: parsed.value.jobs["check"].digest,
+      approvedDigests: [parsed.value.jobs["check"].digest],
     });
     const git = (args: string[]) => Bun.spawnSync(["git", "-C", root, ...args]);
     expect(git(["init", "--quiet"]).exitCode).toBe(0);
@@ -2149,10 +2196,10 @@ test("the CLI defaults its root and base when invoked without arguments", () => 
     );
 
     // A check that fails for any reason reports the change as sensitive.
-    writeDecision(root, "candidate:.github/workflows/ci.yml/removed", {
+    writeFixtureDecision(root, "candidate:.github/workflows/ci.yml/removed", {
       kind: ORDINARY,
       qualifier: "Reviewed",
-      reviewedDigest: parsed.value.jobs["check"].digest,
+      approvedDigests: [parsed.value.jobs["check"].digest],
     });
     const outputPath = path.join(root, "output");
     const failed = Bun.spawnSync(
@@ -2216,10 +2263,10 @@ for (const scenario of [
         };
         writeFileSync(workflow, scenario.before);
         writeFileSync(sources, "{}");
-        writeDecision(root, key, {
+        writeFixtureDecision(root, key, {
           kind: ORDINARY,
           qualifier: "Reviewed",
-          reviewedDigest: digest(scenario.before),
+          approvedDigests: [digest(scenario.before)],
         });
         const git = (args: string[]) =>
           Bun.spawnSync(["git", "-C", root, ...args]);
@@ -2265,10 +2312,10 @@ for (const scenario of [
         expect(readFileSync(output, "utf-8")).toBe(
           "privileged_classification_change=true\n",
         );
-        writeDecision(root, key, {
+        writeFixtureDecision(root, key, {
           kind: ORDINARY,
           qualifier: "Reviewed",
-          reviewedDigest: digest(scenario.after),
+          approvedDigests: [digest(scenario.after)],
         });
         const result = run();
         expect(result.exitCode).toBe(0);
@@ -2297,14 +2344,14 @@ test("downgrading a priority decision with an unchanged digest is a sensitive ch
     const decide = (kind: (typeof CLASSIFICATIONS)[number]) => ({
       kind,
       qualifier: "Reviewed",
-      reviewedDigest: job.digest,
+      approvedDigests: [job.digest],
     });
     writeFileSync(path.join(root, ".github/workflows/ci.yml"), workflow);
     writeFileSync(
       path.join(root, ".github/ci-job-classification-sources.json"),
       "{}",
     );
-    writeDecision(root, key, decide(CLASSIFICATIONS[2]));
+    writeFixtureDecision(root, key, decide(CLASSIFICATIONS[2]));
     const git = (args: string[]) => Bun.spawnSync(["git", "-C", root, ...args]);
     expect(git(["init", "--quiet"]).exitCode).toBe(0);
     expect(git(["add", "."]).exitCode).toBe(0);
@@ -2323,7 +2370,7 @@ test("downgrading a priority decision with an unchanged digest is a sensitive ch
     const base = new TextDecoder()
       .decode(git(["rev-parse", "HEAD"]).stdout)
       .trim();
-    writeDecision(root, key, decide(ORDINARY));
+    writeFixtureDecision(root, key, decide(ORDINARY));
     const output = path.join(root, "output");
     const removedOutput = path.join(root, "removed-output");
     const result = Bun.spawnSync(
@@ -2356,10 +2403,10 @@ test("downgrading a priority decision with an unchanged digest is a sensitive ch
       throw new AdmissionError({ message: "removal fixture parse failed" });
     }
     rmSync(path.join(root, decisionPathForKey(key)));
-    writeDecision(root, "candidate:.github/workflows/ci.yml/other", {
+    writeFixtureDecision(root, "candidate:.github/workflows/ci.yml/other", {
       kind: ORDINARY,
       qualifier: "Reviewed",
-      reviewedDigest: otherJob.digest,
+      approvedDigests: [otherJob.digest],
     });
     const removed = Bun.spawnSync(
       [
@@ -2412,7 +2459,7 @@ test("decisions for removed jobs fail without changing sibling job digests", () 
   if (!reusableDecision) {
     throw new AdmissionError({ message: "reusable decision missing" });
   }
-  expect(
+  expect(reusableDecision.approvedDigests).toContain(
     sha256(
       JSON.stringify({
         digest: parsed.value.jobs["reusable"]?.digest,
@@ -2422,7 +2469,7 @@ test("decisions for removed jobs fail without changing sibling job digests", () 
         },
       }),
     ),
-  ).toBe(reusableDecision.reviewedDigest);
+  );
   const result = generateClassification(options);
   expect(result.isErr()).toBe(true);
   if (result.isErr()) {
