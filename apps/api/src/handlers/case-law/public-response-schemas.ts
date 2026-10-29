@@ -36,6 +36,7 @@ import type {
 } from "@/api/handlers/case-law/decisions/sitemap";
 import type { readCaseLawCorpusStatusHandler } from "@/api/handlers/case-law/decisions/status";
 import { CITATION_TREATMENTS } from "@/api/lib/case-law/citation-vocabulary";
+import { CASE_LAW_COVERAGE_FRESHNESS } from "@/api/lib/case-law/coverage-freshness";
 import { decisionHeadnotePreviewSchema } from "@/api/lib/case-law/decision-headnote-schema";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { CASE_LAW_SOURCE_ROWS_BOUND } from "@/api/lib/legal-search/ingestion-constants";
@@ -325,6 +326,16 @@ const countryCoverage = {
         decisionYearTo: numberOrNull,
         pendingTextCount: v.number(),
         storedDecisions: numberOrNull,
+        publishedDecisions: v.number(),
+        courts: v.pipe(
+          v.array(
+            v.object({
+              court: v.nullable(identity.court),
+              decisions: v.number(),
+            }),
+          ),
+          v.maxLength(LIMITS.caseLawFacetLimit + 1),
+        ),
         knownGaps: v.union([
           v.object({
             type: v.literal("not_reconciled"),
@@ -397,7 +408,7 @@ const provisionProcessingState = v.union([
   }),
 ]);
 
-export const coverageResponseSchema = v.object({
+const coverageSnapshotEntries = {
   generatedAt: boundedString(128),
   provisionProcessing: v.pipe(
     v.array(
@@ -408,7 +419,11 @@ export const coverageResponseSchema = v.object({
     ),
     v.maxLength(CASE_LAW_JURISDICTIONS.length),
   ),
-  totals: v.object({ searchable: v.number(), stored }),
+  totals: v.object({
+    addedLastWeek: v.nullable(v.number()),
+    searchable: v.nullable(v.number()),
+    stored,
+  }),
   countries: v.pipe(
     v.array(
       v.union([
@@ -428,6 +443,17 @@ export const coverageResponseSchema = v.object({
     ),
     v.maxLength(CASE_LAW_JURISDICTIONS.length),
   ),
+};
+
+/** The answer the scheduler stores, before a reader states its age. */
+export const coverageSnapshotSchema = v.object(coverageSnapshotEntries);
+
+export const coverageResponseSchema = v.object({
+  ...coverageSnapshotEntries,
+  freshness: v.object({
+    status: v.picklist(Object.values(CASE_LAW_COVERAGE_FRESHNESS)),
+    ageSeconds: v.number(),
+  }),
 } satisfies Record<
   keyof Success<typeof readCaseLawCoverageHandler>,
   v.GenericSchema

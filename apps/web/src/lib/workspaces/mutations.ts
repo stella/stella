@@ -6,6 +6,7 @@ import {
 import { useRouter } from "@tanstack/react-router";
 import { panic } from "better-result";
 
+import { getTranslator } from "@/i18n/translator";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
@@ -14,8 +15,9 @@ import {
   toAPIError,
   unwrapApiResponse,
 } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { toSafeId } from "@/lib/safe-id";
-import { createUuid } from "@/lib/uuid";
 import { workspacesKeys } from "@/lib/workspaces/queries";
 import { useTableStore } from "@/lib/workspaces/table-store";
 
@@ -36,9 +38,9 @@ export const useCreateWorkspace = () => {
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
 
-  return useMutation({
-    mutationFn: async (vars: CreateWorkspaceVars) => {
-      const id = createUuid();
+  return useIdempotentMutation({
+    mutationFn: async (vars: CreateWorkspaceVars, request) => {
+      const id = request.headers["Idempotency-Key"];
       const response = await api.workspaces.put({
         id: toSafeId<"workspace">(id),
         ...(vars.clientId !== undefined && {
@@ -67,6 +69,7 @@ export const useCreateWorkspace = () => {
         fingerprintKey: "useCreateWorkspace:failure",
         scope: { type: "handler", handlerId: "useCreateWorkspace:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -182,6 +185,7 @@ export const useUpdateWorkspace = () => {
         fingerprintKey: "useUpdateWorkspace:failure",
         scope: { type: "handler", handlerId: "useUpdateWorkspace:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -214,6 +218,7 @@ export const useUnarchiveWorkspace = () => {
         fingerprintKey: "useUnarchiveWorkspace:failure",
         scope: { type: "handler", handlerId: "useUnarchiveWorkspace:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -244,6 +249,7 @@ export const useDeleteWorkspace = () => {
         fingerprintKey: "useDeleteWorkspace:failure",
         scope: { type: "handler", handlerId: "useDeleteWorkspace:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -257,7 +263,7 @@ export const useDuplicateWorkspace = () => {
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useIdempotentMutation({
     mutationFn: async ({
       includeContent,
       workspaceId,
@@ -281,6 +287,7 @@ export const useDuplicateWorkspace = () => {
         fingerprintKey: "useDuplicateWorkspace:failure",
         scope: { type: "handler", handlerId: "useDuplicateWorkspace:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };

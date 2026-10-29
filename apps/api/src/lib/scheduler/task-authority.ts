@@ -57,6 +57,10 @@ const platform = (module: string, reason: string) =>
   }) as const satisfies SchedulerTaskAuthorityEntry;
 
 export const SCHEDULER_TASK_AUTHORITY = {
+  "caseLaw.reconcilePublisherRemovals": platform(
+    "case-law-publisher-removals.ts",
+    "Reconciles publisher removals in the public legal corpus.",
+  ),
   "actions.sweepCosts": platform(
     "action-cost-retention.ts",
     "Retention sweep of usage records past their window.",
@@ -92,6 +96,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
   "caseLaw.censusRawObjects": platform(
     "case-law-raw-storage.ts",
     "Public legal corpus storage census.",
+  ),
+  "caseLaw.refreshCoverage": platform(
+    "case-law-coverage-refresh.ts",
+    "Precomputes the public legal corpus coverage summary.",
   ),
   "caseLaw.reportFreshness": platform(
     "case-law-freshness-report.ts",
@@ -254,6 +262,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
   "reportExports.reconcileQueued": platform(
     "report-export-reconcile.ts",
     "Recovers stuck exports and hands queued ones back to their queue, whose worker resolves the requester's run actor.",
+  ),
+  "requests.sweepReceipts": platform(
+    "request-receipt-retention.ts",
+    "Retention sweep of expired technical request receipts under each receipt's organization and user scope.",
   ),
   "sanctions.backfillMonitoring": platform(
     "sanctions-monitoring-backfill.ts",

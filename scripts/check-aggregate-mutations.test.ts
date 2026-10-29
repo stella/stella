@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 
 import {
   aggregateMutationBaseline,
@@ -13,6 +14,13 @@ const fixture = () =>
     [
       "apps/api/src/lib/db/aggregate-lock.ts",
       "export const AGGREGATE_LOCKS = {workspace: {rank: 1}} as const;",
+    ],
+    [
+      "apps/api/src/lib/api-handlers.ts",
+      readFileSync(
+        new URL("../apps/api/src/lib/api-handlers.ts", import.meta.url),
+        "utf-8",
+      ),
     ],
   ]);
 /** Verifies every declaration site in the fixture; returns how many it found. */
@@ -262,6 +270,218 @@ describe("aggregate declaration sites", () => {
       "Cannot resolve declared aggregate handler implementation",
     );
   });
+
+  test.each([
+    [
+      "createSafeRootHandler",
+      "{}, CALLBACK, { authorize: async () => undefined }",
+    ],
+    ["createSafeHandler", "{}, CALLBACK, { authorize: async () => undefined }"],
+    [
+      "createSafeSessionHandler",
+      "{}, CALLBACK, { checkAccountOperation: async () => undefined }",
+    ],
+    ["createSafeTokenHandler", "{}, async () => ({}), CALLBACK"],
+  ])(
+    "resolves %s implementations from the owning factory contract",
+    (factory, args) => {
+      const sources = fixture();
+      const declaration = `import { ${factory} as create } from "@/api/lib/api-handlers"; ${imports}`;
+      const body =
+        'async () => { await withAggregateLock({aggregate: "workspace", id, tx}); }';
+      const endpoint = (callback: string) => `${declaration}
+      const existing = create(${args.replace("CALLBACK", () => callback)});
+      declareAggregateMutation(existing, {type: "aggregate", aggregates: ["workspace"]});`;
+      sources.set(routes, endpoint(body));
+      expect(verify(sources)).toBe(1);
+      sources.set(routes, endpoint("async () => {}"));
+      expect(() => verify(sources)).toThrow("must await withAggregateLock");
+    },
+  );
+
+  test.each([
+    {
+      imported: "withInvoiceMatterLocks as acquire",
+      body: "await acquire(tx, ids);",
+    },
+    {
+      imported: "lockInvoiceInStatus as acquire",
+      body: "await acquire(tx, {invoiceId: invoiceId, workspaceId: workspaceId, status: status, matterLocks: {type: 'acquire'}});",
+    },
+    {
+      imported: "withAggregateParentBatch as acquire",
+      body: "await acquire({tx, organizationIds: [], workspaceIds: ids, mode: 'no key update'});",
+    },
+    {
+      imported: "withAggregateParentBatch as acquire",
+      body: "await acquire({tx, organizationIds: [], 'workspaceIds': [id], mode: 'no key update'});",
+    },
+  ])(
+    "canonical awaited matter batches cover their declared workspace owner: $body",
+    ({ imported, body }) => {
+      const sources = fixture();
+      sources.set(
+        "apps/api/src/handlers/example/create.ts",
+        `import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration"; import { createSafeHandler } from "@/api/lib/api-handlers"; import { ${imported} } from "@/api/lib/db/aggregate-lock"; const existing = createSafeHandler({}, async ({safeDb}) => { await safeDb(async (tx) => { ${body} }); }); declareAggregateMutation(existing, {type: "aggregate", aggregates: ["workspace"]}); export default existing;`,
+      );
+      expect(verify(sources)).toBe(1);
+    },
+  );
+
+  test.each([
+    {
+      module: "@/api/lib/db/aggregate-lock",
+      body: "acquire(tx, {invoiceId: invoiceId, workspaceId: workspaceId, status: status, matterLocks: {type: 'acquire'}});",
+      imported: "lockInvoiceInStatus as acquire",
+    },
+    {
+      module: "@/api/lib/db/aggregate-lock",
+      body: "await acquire(tx, {invoiceId: invoiceId, workspaceId: workspaceId, status: status, matterLocks: {type: 'acquired'}});",
+      imported: "lockInvoiceInStatus as acquire",
+    },
+    {
+      module: "@/api/lib/db/aggregate-lock",
+      body: "await acquire(tx, {invoiceId: invoiceId, workspaceId: null, status: status, matterLocks: {type: 'acquire'}});",
+      imported: "lockInvoiceInStatus as acquire",
+    },
+    {
+      module: "@/api/lib/db/aggregate-lock",
+      body: "await acquire(tx, {invoiceId: invoiceId, workspaceId: workspaceId, status: status, matterLocks: {type: 'acquire'}, ...other});",
+      imported: "lockInvoiceInStatus as acquire",
+    },
+    {
+      module: "@/api/lib/db/aggregate-lock",
+      body: "await acquire(tx, {invoiceId: invoiceId, workspaceId: workspaceId, status: status, matterLocks: {type: 'acquire'}, [key]: other});",
+      imported: "lockInvoiceInStatus as acquire",
+    },
+    {
+      module: "@/api/lib/db/aggregate-lock",
+      body: "const acquire = async () => {}; await acquire(tx, {invoiceId: invoiceId, workspaceId: workspaceId, status: status, matterLocks: {type: 'acquire'}});",
+      imported: "lockInvoiceInStatus as acquire",
+    },
+    {
+      module: "@/api/lib/db/fake-lock",
+      body: "await acquire(tx, {invoiceId: invoiceId, workspaceId: workspaceId, status: status, matterLocks: {type: 'acquire'}});",
+      imported: "lockInvoiceInStatus as acquire",
+    },
+    {
+      module: "@/api/lib/db/aggregate-lock",
+      body: "acquire(tx, ids);",
+      imported: "withInvoiceMatterLocks as acquire",
+    },
+    {
+      module: "@/api/lib/db/aggregate-lock",
+      body: "await acquire(tx);",
+      imported: "withInvoiceMatterLocks as acquire",
+    },
+    {
+      module: "@/api/lib/db/aggregate-lock",
+      body: "await acquire(tx, []);",
+      imported: "withInvoiceMatterLocks as acquire",
+    },
+    {
+      module: "@/api/lib/db/aggregate-lock",
+      body: "await acquire(tx, undefined);",
+      imported: "withInvoiceMatterLocks as acquire",
+    },
+    {
+      module: "@/api/lib/db/aggregate-lock",
+      body: "await acquire(tx, null);",
+      imported: "withInvoiceMatterLocks as acquire",
+    },
+    {
+      module: "@/api/lib/db/aggregate-lock",
+      body: "const acquire = async () => {}; await acquire(tx, ids);",
+      imported: "withInvoiceMatterLocks as acquire",
+    },
+    {
+      module: "@/api/lib/db/fake-lock",
+      body: "await acquire(tx, ids);",
+      imported: "withInvoiceMatterLocks as acquire",
+    },
+    {
+      module: "@/api/lib/db/aggregate-lock",
+      body: "acquire({tx, workspaceIds: ids});",
+      imported: "withAggregateParentBatch as acquire",
+    },
+    {
+      module: "@/api/lib/db/aggregate-lock",
+      body: "await acquire({tx, organizationIds: ids});",
+      imported: "withAggregateParentBatch as acquire",
+    },
+    {
+      module: "@/api/lib/db/aggregate-lock",
+      body: "await acquire({tx, workspaceIds: []});",
+      imported: "withAggregateParentBatch as acquire",
+    },
+    {
+      module: "@/api/lib/db/aggregate-lock",
+      body: "await acquire({tx, workspaceIds: ids, ...other});",
+      imported: "withAggregateParentBatch as acquire",
+    },
+    {
+      module: "@/api/lib/db/aggregate-lock",
+      body: "await acquire({tx, workspaceIds: ids, [key]: []});",
+      imported: "withAggregateParentBatch as acquire",
+    },
+    {
+      module: "@/api/lib/db/aggregate-lock",
+      body: "const acquire = async () => {}; await acquire({tx, workspaceIds: ids});",
+      imported: "withAggregateParentBatch as acquire",
+    },
+    {
+      module: "@/api/lib/db/fake-lock",
+      body: "await acquire({tx, workspaceIds: ids});",
+      imported: "withAggregateParentBatch as acquire",
+    },
+  ])(
+    "refuses unproven matter batch ownership: $module $body",
+    ({ module, imported, body }) => {
+      const sources = fixture();
+      sources.set(
+        "apps/api/src/handlers/example/create.ts",
+        `import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration"; import { createSafeHandler } from "@/api/lib/api-handlers"; import { ${imported} } from "${module}"; const existing = createSafeHandler({}, async ({safeDb}) => { await safeDb(async (tx) => { ${body} }); }); declareAggregateMutation(existing, {type: "aggregate", aggregates: ["workspace"]}); export default existing;`,
+      );
+      expect(() => verify(sources)).toThrow("must await withAggregateLock");
+    },
+  );
+
+  test.each([
+    {
+      module: "@/api/db/safe-db",
+      joined: true,
+      call: "await resultTx(safeDb, async (tx) => { await withInvoiceMatterLocks(tx, ids); });",
+    },
+    {
+      module: "@/api/db/safe-db",
+      joined: false,
+      call: "resultTx(safeDb, async (tx) => { await withInvoiceMatterLocks(tx, ids); });",
+    },
+    {
+      module: "@/api/db/fake-safe-db",
+      joined: false,
+      call: "await resultTx(safeDb, async (tx) => { await withInvoiceMatterLocks(tx, ids); });",
+    },
+    {
+      module: "@/api/db/safe-db",
+      joined: false,
+      call: "const resultTx = async () => {}; await resultTx(safeDb, async (tx) => { await withInvoiceMatterLocks(tx, ids); });",
+    },
+  ])(
+    "a result transaction joins its lock callback only through the actual awaited owner: $module $call",
+    ({ module, joined, call }) => {
+      const sources = fixture();
+      sources.set(
+        "apps/api/src/handlers/example/create.ts",
+        `import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration"; import { createSafeRootHandler } from "@/api/lib/api-handlers"; import { resultTx } from "${module}"; import { withInvoiceMatterLocks } from "@/api/lib/db/aggregate-lock"; const existing = createSafeRootHandler({}, async function* ({safeDb}) { ${call} }); declareAggregateMutation(existing, {type: "aggregate", aggregates: ["workspace"]}); export default existing;`,
+      );
+      if (joined) {
+        expect(verify(sources)).toBe(1);
+      } else {
+        expect(() => verify(sources)).toThrow("must await withAggregateLock");
+      }
+    },
+  );
 
   test("a declaration through a local endpoint factory checks the factory's handler", () => {
     const sources = fixture();

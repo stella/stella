@@ -60,7 +60,8 @@ globalThis.fetch = Object.assign(
 );
 
 const testing = await import("@testing-library/react");
-const query = await import("@tanstack/react-query");
+const { QueryClient, QueryClientProvider, QueryObserver, useSuspenseQuery } =
+  await import("@tanstack/react-query");
 const router = await import("@tanstack/react-router");
 const { IntlProvider } = await import("use-intl");
 const { default: messages } = await import("@/i18n/langs/en.json");
@@ -182,13 +183,13 @@ const mountPage = async (children: () => ReactNode, client: Client) => {
   });
   await appRouter.load();
   const view = testing.render(
-    <query.QueryClientProvider client={client}>
+    <QueryClientProvider client={client}>
       <IntlProvider locale="en" messages={messages} timeZone="UTC">
         <FormattingProvider locale="en" timeZone="UTC">
           <router.RouterProvider router={appRouter} />
         </FormattingProvider>
       </IntlProvider>
-    </query.QueryClientProvider>,
+    </QueryClientProvider>,
   );
   return {
     view,
@@ -201,7 +202,7 @@ const mountPage = async (children: () => ReactNode, client: Client) => {
 };
 
 const createClient = () =>
-  new query.QueryClient({
+  new QueryClient({
     defaultOptions: {
       queries: { retry: false, staleTime: Infinity },
       mutations: { retry: false },
@@ -217,19 +218,17 @@ const nextPost = async (index = 0) => {
   return post;
 };
 
-const notesPage = () => {
+const NotesPage = () => {
   const contactId = router.useParams({
     from: "/_protected/contacts/$contactId",
     select: (params) => params.contactId,
   });
-  const { data } = query.useSuspenseQuery(
-    contactOptions(ORGANIZATION, contactId),
-  );
+  const { data } = useSuspenseQuery(contactOptions(ORGANIZATION, contactId));
   return <ContactNotesEditor contact={data} />;
 };
 
-const vatPayerPage = () => {
-  const { data } = query.useSuspenseQuery(contactOptions(ORGANIZATION, A));
+const VatPayerPage = () => {
+  const { data } = useSuspenseQuery(contactOptions(ORGANIZATION, A));
   return <VatPayerSelect contact={data} />;
 };
 
@@ -239,7 +238,7 @@ test("VAT payer selection submits the nullable contact field", async () => {
     contactOptions(ORGANIZATION, A).queryKey,
     contact(A, null),
   );
-  const { view } = await mountPage(vatPayerPage, client);
+  const { view } = await mountPage(VatPayerPage, client);
 
   testing.fireEvent.click(
     view.getByRole("combobox", { name: messages.contacts.fields.vatPayer }),
@@ -262,8 +261,8 @@ test("VAT payer selection submits the nullable contact field", async () => {
   client.clear();
 });
 
-const ratePage = () => {
-  const { data } = query.useSuspenseQuery(contactOptions(ORGANIZATION, A));
+const RatePage = () => {
+  const { data } = useSuspenseQuery(contactOptions(ORGANIZATION, A));
   return (
     <EditableRow
       key={`default-hourly-rate-${data.currency ?? "none"}`}
@@ -283,7 +282,7 @@ for (const currency of ["EUR", "JPY", "KWD", null]) {
       defaultHourlyRate: cents(100),
     };
     client.setQueryData(contactOptions(ORGANIZATION, A).queryKey, original);
-    const { view } = await mountPage(ratePage, client);
+    const { view } = await mountPage(RatePage, client);
     testing.fireEvent.click(view.getByRole("button"));
     testing.fireEvent.change(view.getByRole("textbox"), {
       target: { value: "150.50" },
@@ -310,7 +309,7 @@ test("ordinary page unmount commits an active hourly-rate draft", async () => {
     currency: "GBP",
     defaultHourlyRate: cents(100),
   });
-  const { view } = await mountPage(ratePage, client);
+  const { view } = await mountPage(RatePage, client);
   testing.fireEvent.click(view.getByRole("button"));
   testing.fireEvent.change(view.getByRole("textbox"), {
     target: { value: "150.50" },
@@ -330,7 +329,7 @@ test("a same-contact refetch preserves an active notes draft", async () => {
     contactOptions(ORGANIZATION, A).queryKey,
     contact(A, "original"),
   );
-  const { view } = await mountPage(notesPage, client);
+  const { view } = await mountPage(NotesPage, client);
   testing.fireEvent.change(view.getByRole("textbox"), {
     target: { value: "active draft" },
   });
@@ -371,7 +370,7 @@ test("contact drafts belong to the current route identity", async () => {
           contactOptions(ORGANIZATION, B).queryKey,
           contact(B, bNotes),
         );
-        const { view, appRouter } = await mountPage(notesPage, client);
+        const { view, appRouter } = await mountPage(NotesPage, client);
         try {
           testing.fireEvent.change(view.getByRole("textbox"), {
             target: { value: `${aNotes ?? ""} changed` },
@@ -830,7 +829,7 @@ test("two quick data-box additions build on refreshed detail while lists refetch
   warmPage(client);
   const listResponse = Promise.withResolvers<string[]>();
   const fetchList = async () => await listResponse.promise;
-  const observer = new query.QueryObserver(client, {
+  const observer = new QueryObserver(client, {
     queryKey: contactsKeys.lists(ORGANIZATION),
     queryFn: fetchList,
     initialData: [],

@@ -28,6 +28,7 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 
@@ -55,6 +56,7 @@ export const useCompanyFormatLibrary = ({
   draftFormat: string | null;
   onSelect: (format: string) => void;
 }) => {
+  const submit = useIdempotentSubmit();
   const t = useTranslations();
   const { activeOrganizationId, id: userId } = useAuthenticatedUser();
   const queryClient = useQueryClient();
@@ -137,7 +139,11 @@ export const useCompanyFormatLibrary = ({
   const create = useMutation({
     mutationFn: async (draft: { name: string; format: string }) =>
       unwrapApiResponse(
-        await api.templates["lookup-formats"].post({ registry, ...draft }),
+        await submit.run({
+          operation: "lookup-format-create",
+          body: { registry, ...draft },
+          send: api.templates["lookup-formats"].post,
+        }),
       ),
     onSuccess: async (item) => {
       setSelectedId(item.id);

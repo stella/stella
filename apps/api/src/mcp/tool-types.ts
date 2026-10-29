@@ -9,6 +9,7 @@ import type { SearchPaginationOutcome } from "@stll/api-contract/search";
 import type { AccountAccess } from "@/api/lib/api-handlers";
 import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
 import type { FeatureId } from "@/api/lib/feature-access/registry";
+import type { WindowedReadSurface } from "@/api/lib/files/windowed-read-surface";
 import type {
   MCP_ADVANCED_RESOURCE_SCOPES,
   MCP_ALL_RESOURCE_SCOPES,
@@ -497,6 +498,7 @@ export type McpStructuredTextField = {
  * entity name can never be split across a window edge.
  */
 export type McpStructuredWindow = {
+  surface: WindowedReadSurface;
   apply: (window: TextWindowResult) => void;
   cursor: string | undefined;
   maxChars: number;
@@ -521,6 +523,7 @@ export type InternalToolStructuredError = {
   hint?: string;
   issues?: readonly McpValidationIssue[];
   retryable?: boolean;
+  retryAfterMs?: number;
   contactUrl?: string;
   requestId?: string;
 } & (

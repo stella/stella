@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { is } from "drizzle-orm";
+import { is, TransactionRollbackError } from "drizzle-orm";
 import {
   boolean,
   getTableConfig,
@@ -60,6 +60,10 @@ const classificationSchema = v.variant("status", [
     reason: reasonSchema,
   }),
   v.strictObject({ status: v.literal("cleartext"), reason: reasonSchema }),
+  v.strictObject({
+    status: v.literal("resource_content"),
+    reason: reasonSchema,
+  }),
 ]);
 const registrySchema = v.record(v.string(), classificationSchema);
 type ClassificationRegistry = v.InferOutput<typeof registrySchema>;
@@ -102,6 +106,7 @@ const OPAQUE_CREDENTIAL_COLUMNS = new Set([
   "sharepoint_oauth_state.state",
   "mcp_oauth_clients.registration_response",
   "business_registry_credentials.ciphertext",
+  "request_idempotency_receipts.response_body",
 ]);
 
 const discoverTables = async () => {
@@ -242,7 +247,10 @@ const organizationCredentialTables = () => {
   const credentialTables = new Set(
     Object.entries(classifications)
       .filter(
-        ([, classification]) => classification.status !== "public_by_design",
+        ([, classification]) =>
+          classification.status === "hashed" ||
+          classification.status === "encrypted" ||
+          classification.status === "cleartext",
       )
       .map(([column]) => column.split(".").at(0)),
   );
@@ -295,13 +303,24 @@ const handledMemberTables = async (omittedDelete?: PgTable) => {
     if (query.includes("AS aggregate_context")) {
       return { rows: [["fixture_owner", "", "", "", "", ""]] };
     }
+    // Advisory fences report their physical identity and acquisition.
+    if (query.includes("AS key1")) {
+      return { rows: [{ acquired: true, key1: 1, key2: 2 }] };
+    }
     return { rows: query.startsWith("select count(*)") ? [[0]] : [] };
   });
-  const transaction = new Proxy(database, {
+  const transactionHandle = Object.assign(database, {
+    rollback() {
+      throw new TransactionRollbackError();
+    },
+  });
+  const transaction = new Proxy(transactionHandle, {
     get: (target, property, receiver) => {
       if (property === "transaction") {
+        // Each savepoint is its own handle, as the driver's are, so the
+        // aggregate lock history of the enclosing transaction stays open.
         return async (run: (savepoint: typeof database) => Promise<unknown>) =>
-          await run(transaction);
+          await run(new Proxy(transaction, {}));
       }
       if (property === "delete") {
         return (table: PgTable) =>

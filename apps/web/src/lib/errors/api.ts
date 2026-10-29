@@ -8,6 +8,8 @@ import {
   CLAUSE_DIRECTIVES_INVALID_CODE,
   CLAUSE_VERSION_LIMIT_ERROR_CODE,
   ENCRYPTED_CONTENT_ERROR_CODE,
+  IDEMPOTENCY_IN_PROGRESS_CODE,
+  IDEMPOTENCY_KEY_REUSED_CODE,
   MEMBER_REMOVAL_BUSY_CODE,
   normalizeApiError,
   parseApiErrorValue,
@@ -28,6 +30,7 @@ import {
   publicCountryUnavailableSchema,
   type PublicLawDomain,
 } from "@stll/api-contract/public-country-capability";
+import { GLOBAL_SEARCH_RANK_WORK_LIMIT_CODE } from "@stll/api-contract/search";
 import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
 import type { VerificationRunCapCode } from "@stll/api-contract/verification-run-caps";
 import { MATTER_CONTACT_CAPACITY_CODE } from "@stll/api-contract/workspace-contacts";
@@ -51,7 +54,15 @@ export class APIError extends TaggedError(API_ERROR_TAG)<{
   rawMessage?: string | undefined;
   details?: Record<string, unknown> | undefined;
   providerDiagnostic?: ProviderDiagnostic | undefined;
+  transportKind?: "network" | "timeout" | "aborted" | undefined;
+  cause?: unknown;
 }> {}
+
+export const isCancellation = (error: unknown): boolean =>
+  (APIError.is(error) && error.transportKind === "aborted") ||
+  (typeof DOMException !== "undefined" &&
+    error instanceof DOMException &&
+    error.name === "AbortError");
 
 const MAX_API_RETRY_COUNT = 3;
 const CLIENT_ERROR_STATUS = 400;
@@ -74,6 +85,11 @@ export const shouldRetryAPIRequest = (
       ACTION_ADMISSION_REFUSALS[error.code].retryable
     );
   }
+  if (APIError.is(error) && error.transportKind !== undefined) {
+    return (
+      failureCount < MAX_API_RETRY_COUNT && error.transportKind !== "aborted"
+    );
+  }
   // Any other typed error is a deliberate outcome (a disabled surface, a
   // refused operation), never a transient one: asking again cannot change it.
   if (!APIError.is(error) && isTaggedError(error)) {
@@ -90,11 +106,12 @@ export const shouldRetryAPIRequest = (
 export type ToAPIErrorProps = {
   status: number;
   value: unknown;
+  kind?: "network" | "timeout" | "aborted" | undefined;
+  cause?: unknown;
 };
 
 export type ApiResponse<T> =
-  | { data: T; error: null }
-  | { data: null; error: { status: number; value: unknown } };
+  { data: T; error: null } | { data: null; error: ToAPIErrorProps };
 
 /**
  * Unwraps an API client response: throws a localized {@link APIError} when the
@@ -111,7 +128,32 @@ export function unwrapApiResponse<T>(response: ApiResponse<T>): T {
   return response.data;
 }
 
-export const toAPIError = ({ status, value }: ToAPIErrorProps) => {
+export const toAPIError = (error: ToAPIErrorProps): APIError => {
+  if (error.kind !== undefined) {
+    const t = getTranslator();
+    let message: string;
+    switch (error.kind) {
+      case "network":
+        message = t("common.networkError");
+        break;
+      case "timeout":
+        message = t("transportErrors.timeout");
+        break;
+      case "aborted":
+        message = "Request aborted";
+        break;
+      default:
+        error.kind satisfies never;
+        panic("Unknown API transport kind", error.kind);
+    }
+    return new APIError({
+      status: error.status,
+      transportKind: error.kind,
+      cause: error.cause,
+      message,
+    });
+  }
+  const { status, value } = error;
   const normalized = normalizeApiError({
     status,
     value: parseApiErrorValue(value),
@@ -189,6 +231,9 @@ const VERIFICATION_RUN_CAP_ERROR_KEYS = {
 } as const satisfies Record<VerificationRunCapCode, TranslationKey>;
 
 const CODE_ERROR_KEYS = {
+  [IDEMPOTENCY_IN_PROGRESS_CODE]: "errors.apiCodes.idempotencyInProgress",
+  [IDEMPOTENCY_KEY_REUSED_CODE]: "errors.apiCodes.idempotencyKeyReused",
+  [GLOBAL_SEARCH_RANK_WORK_LIMIT_CODE]: "caseLaw.pagination.refineForMore",
   ...AI_FAILURE_ERROR_KEYS,
   ...VERIFICATION_RUN_CAP_ERROR_KEYS,
   [FILE_PROPERTY_TYPE_IMMUTABLE_CODE]:

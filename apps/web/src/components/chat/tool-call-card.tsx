@@ -38,7 +38,8 @@ import { useFormatter } from "@/i18n/formatting-context";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { mcpConnectorsOptions, skillsOptions } from "@/lib/knowledge/queries";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 type ToolPart = ChatToolCallPart;
 
@@ -442,7 +443,7 @@ const ToolCallCardComponent = ({
     ...mcpConnectorsOptions(activeOrganizationId),
     enabled: mcpToolInfo !== null,
   });
-  const catalogDataView = useQueryView(catalogDataQuery);
+  const catalogDataView = queryView(catalogDataQuery);
   useQueryViewError(catalogDataView, "ToolCallCard:query");
   const catalogData =
     catalogDataView.type === "items" ? catalogDataView.items : undefined;
@@ -642,7 +643,7 @@ const ToolCallCardComponent = ({
           <button
             aria-label={t("chat.toolCall.toggleDetails")}
             className={cn(
-              "text-muted-foreground hover:text-foreground focus-visible:ring-ring/50 flex size-11 shrink-0 items-center justify-center rounded opacity-0 transition-opacity duration-150 group-hover/tool-step:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:outline-none",
+              "text-muted-foreground hover:text-foreground focus-visible:ring-ring/50 flex size-11 shrink-0 items-center justify-center rounded opacity-0 transition-opacity duration-150 group-hover/tool-step:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:outline-none pointer-coarse:opacity-100",
               expanded && "opacity-100",
             )}
             onClick={() => {

@@ -238,3 +238,6 @@ export const normalizeApiError = ({
     status,
   };
 };
+
+export const IDEMPOTENCY_IN_PROGRESS_CODE = "idempotency_in_progress" as const;
+export const IDEMPOTENCY_KEY_REUSED_CODE = "idempotency_key_reused" as const;

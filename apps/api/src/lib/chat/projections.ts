@@ -41,6 +41,7 @@ import {
   SANCTIONS_COMPANY_REGISTRIES,
 } from "@/api/lib/business-registries/sanctions-check-vocabulary";
 import type { CITATION_TREATMENTS } from "@/api/lib/case-law/citation-vocabulary";
+import { CASE_LAW_COVERAGE_FRESHNESS } from "@/api/lib/case-law/coverage-freshness";
 import {
   DECISION_READ_ABSENCE_STATUSES,
   DECISION_READ_STATUS,
@@ -1221,22 +1222,38 @@ export const RESOLVE_RATE_PROJECTION = v.strictObject({
 /** One invoiced line item's matter entity card (`{ id, name }`). */
 const invoiceLineEntityProjection = () =>
   v.strictObject({
-    id: chatEntityRef({ from: "outputPath", path: "invoice.workspaceId" }),
+    id: chatEntityRef({ from: "sibling", key: "workspaceId" }),
+    workspaceId: chatRef("matter"),
     name: v.string(),
   });
+
+const invoiceEntityReferenceProjection = () =>
+  v.nullable(
+    v.union([
+      projectionBranch(
+        v.strictObject({
+          type: v.literal("available"),
+          workspaceId: chatRef("matter"),
+          id: chatEntityRef({ from: "sibling", key: "workspaceId" }),
+        }),
+      ),
+      projectionBranch(v.strictObject({ type: v.literal("unavailable") })),
+    ]),
+  );
 
 /**
  * list_invoices. Source of truth: `handleListInvoicesTool`
  * (`billing-tools.ts`). Detail mode (invoice_id) may omit matter_id, so every
- * line item's entity recovers its workspace from the invoice's own resolved
- * `workspaceId` rather than from the (absent) input arg; list mode returns no
- * line items.
+ * line item carries its own matter for reference mediation; list mode returns
+ * no line items.
  */
 /** list_invoices, list branch: invoice cards, no line items. */
 export const LIST_INVOICES_LIST_PROJECTION = v.strictObject({
   invoices: v.array(
     v.strictObject({
       id: passthroughId(),
+      clientId: v.nullable(passthroughId()),
+      matterShare: v.number(),
       invoiceNumber: v.nullable(v.string()),
       documentType: v.picklist(NUMBER_SERIES_DOCUMENT_TYPES),
       originalInvoiceId: v.nullable(passthroughId()),
@@ -1246,6 +1263,8 @@ export const LIST_INVOICES_LIST_PROJECTION = v.strictObject({
       dueDate: v.nullable(v.string()),
       currency: v.string(),
       totalAmount: v.number(),
+      paidAmount: v.number(),
+      outstandingAmount: v.number(),
     }),
   ),
   // Opaque `[createdAt, id]` cursor, not UUID-formatted.
@@ -1259,8 +1278,9 @@ export const LIST_INVOICES_LIST_PROJECTION = v.strictObject({
 export const LIST_INVOICES_DETAIL_PROJECTION = v.strictObject({
   invoice: v.strictObject({
     id: passthroughId(),
-    // The detail invoice's own owning workspace is a matter ref.
+    // A participating matter anchors invoice navigation; each source keeps its own.
     workspaceId: chatRef("matter"),
+    clientId: v.nullable(passthroughId()),
     invoiceNumber: v.nullable(v.string()),
     documentType: v.picklist(NUMBER_SERIES_DOCUMENT_TYPES),
     originalInvoiceId: v.nullable(passthroughId()),
@@ -1271,6 +1291,8 @@ export const LIST_INVOICES_DETAIL_PROJECTION = v.strictObject({
     dueDate: v.nullable(v.string()),
     currency: v.string(),
     totalAmount: v.number(),
+    paidAmount: v.number(),
+    outstandingAmount: v.number(),
     notes: v.nullable(contentText()),
     sellerProfileId: v.nullable(passthroughId()),
     buyerName: v.nullable(v.string()),
@@ -1287,16 +1309,14 @@ export const LIST_INVOICES_DETAIL_PROJECTION = v.strictObject({
     timeEntries: v.array(
       v.strictObject({
         id: passthroughId(),
+        workspaceId: chatRef("matter"),
         entityId: v.nullable(
           chatEntityRef({
-            from: "outputPath",
-            path: "invoice.workspaceId",
+            from: "sibling",
+            key: "workspaceId",
           }),
         ),
-        entityReference: contextEntityReference({
-          from: "outputPath",
-          path: "invoice.workspaceId",
-        }),
+        entityReference: invoiceEntityReferenceProjection(),
         dateWorked: v.string(),
         billedMinutes: v.number(),
         rateAtEntry: v.number(),
@@ -1311,16 +1331,14 @@ export const LIST_INVOICES_DETAIL_PROJECTION = v.strictObject({
     expenses: v.array(
       v.strictObject({
         id: passthroughId(),
+        workspaceId: chatRef("matter"),
         entityId: v.nullable(
           chatEntityRef({
-            from: "outputPath",
-            path: "invoice.workspaceId",
+            from: "sibling",
+            key: "workspaceId",
           }),
         ),
-        entityReference: contextEntityReference({
-          from: "outputPath",
-          path: "invoice.workspaceId",
-        }),
+        entityReference: invoiceEntityReferenceProjection(),
         dateIncurred: v.string(),
         amount: v.number(),
         currency: v.string(),
@@ -1335,6 +1353,17 @@ export const LIST_INVOICES_DETAIL_PROJECTION = v.strictObject({
     lines: v.array(
       v.strictObject({
         id: passthroughId(),
+        workspaceId: chatRef("matter"),
+        workspace: v.strictObject({
+          id: chatRef("matter"),
+          name: v.string(),
+          color: v.nullable(v.string()),
+        }),
+        recordedDescription: v.nullable(v.string()),
+        recordedQuantity: v.nullable(v.string()),
+        recordedUnit: v.nullable(v.string()),
+        recordedUnitPrice: v.nullable(v.number()),
+        recordedNetAmount: v.nullable(v.number()),
         position: v.number(),
         description: v.string(),
         quantity: v.string(),
@@ -1423,6 +1452,11 @@ const decisionIdentifiersProjection = v.optional(
 const CASE_LAW_COVERAGE_COUNTRIES_PROJECTION = projectionBranch(
   v.strictObject({
     asOf: v.string(),
+    // refresh_pending: the figures are the last permitted answer, not a fresh one.
+    freshness: v.strictObject({
+      status: v.picklist(Object.values(CASE_LAW_COVERAGE_FRESHNESS)),
+      ageSeconds: v.number(),
+    }),
     countries: v.array(
       v.strictObject({
         country: v.string(),
@@ -1999,6 +2033,18 @@ export const SEARCH_BOE_LEGISLATION_PROJECTION = v.union([
             titulo: v.optional(v.string()),
             fecha_publicacion: v.optional(v.string()),
             fecha_disposicion: v.optional(v.string()),
+            fecha_actualizacion: v.optional(v.string()),
+            fecha_vigencia: v.optional(v.string()),
+            numero_oficial: v.optional(v.string()),
+            diario: v.optional(v.string()),
+            diario_numero: v.optional(v.string()),
+            vigencia_agotada: v.optional(v.string()),
+            ambito: v.optional(
+              v.strictObject({
+                codigo: v.optional(v.string()),
+                texto: v.optional(v.string()),
+              }),
+            ),
             departamento: v.optional(
               v.strictObject({
                 codigo: v.optional(v.string()),

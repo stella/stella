@@ -11,7 +11,7 @@ import { fetchWithTimeout } from "@stll/fetch";
 import { api } from "@/lib/api";
 import { getApiRequestHeaders } from "@/lib/api-request-context";
 import { apiUrl } from "@/lib/api-url";
-import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
+import { APIError, toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { readQueryResult } from "@/lib/errors/query-result";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -53,20 +53,27 @@ export const readerAnswersOptions = ({
           ),
         );
         if (fetched.isErr()) {
-          // A refusal is an APIError and passes through; a TypeError is the
-          // network failing.
+          // Preserve refused responses and programming failures; only the
+          // typed network branch becomes this query's request failure.
           const { cause } = fetched.error;
-          return readQueryResult(
-            Result.err(
-              cause instanceof TypeError || !(cause instanceof Error)
-                ? new ReaderAnswerFailure({
-                    kind: "request",
-                    message: "Reader answer request failed",
-                    cause,
-                  })
-                : cause,
-            ),
-          );
+          const requestCause =
+            APIError.is(cause) && cause.transportKind === "network"
+              ? cause.cause
+              : cause;
+          const failure =
+            requestCause instanceof Error &&
+            !(
+              APIError.is(cause) &&
+              cause.transportKind === "network" &&
+              requestCause instanceof TypeError
+            )
+              ? requestCause
+              : new ReaderAnswerFailure({
+                  kind: "request",
+                  message: "Reader answer request failed",
+                  cause: requestCause,
+                });
+          return readQueryResult(Result.err(failure));
         }
         const page = fetched.value;
         answers.push(...page.items);

@@ -1,13 +1,5 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import {
-  afterAll,
-  afterEach,
-  describe,
-  expect,
-  jest,
-  setDefaultTimeout,
-  test,
-} from "bun:test";
+import { afterAll, afterEach, describe, expect, jest, test } from "bun:test";
 import { setTimeout as sleep } from "node:timers/promises";
 
 import { restoreRealTimers } from "@stll/property-testing/fake-timers";
@@ -25,11 +17,11 @@ GlobalRegistrator.register({
 // A hung test fails instead of holding the run. Assertions compare strings
 // and booleans, never DOM nodes: a failing match on a node makes the runner
 // print the whole document graph.
-setDefaultTimeout(10_000);
 
 const previousFetch = globalThis.fetch;
 const testing = await import("@testing-library/react");
-const query = await import("@tanstack/react-query");
+const { QueryClient, QueryClientProvider } =
+  await import("@tanstack/react-query");
 const router = await import("@tanstack/react-router");
 const { useSyncExternalStore } = await import("react");
 const { IntlProvider } = await import("use-intl");
@@ -135,7 +127,7 @@ const fullServer = (): Server => ({
 const listRequests: URL[] = [];
 const deleteRequests: URL[] = [];
 const unexpected: string[] = [];
-const clients: InstanceType<typeof query.QueryClient>[] = [];
+const clients: InstanceType<typeof QueryClient>[] = [];
 
 type ServedThread = {
   slice: ThreadSlice;
@@ -258,7 +250,7 @@ afterAll(async () => {
 });
 
 const createClient = () => {
-  const client = new query.QueryClient({
+  const client = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
   clients.push(client);
@@ -341,7 +333,7 @@ const openHistory = async (initial: ChatHistorySearch = {}) => {
   const ui = testing.render(
     <AnalyticsContext value={noopAnalytics}>
       <RenderLoopGuard>
-        <query.QueryClientProvider client={createClient()}>
+        <QueryClientProvider client={createClient()}>
           {/* Pin calendar grouping without freezing Date.now(), which the
               debounce uses to decide whether its trailing timer can fire. */}
           <IntlProvider
@@ -356,7 +348,7 @@ const openHistory = async (initial: ChatHistorySearch = {}) => {
               </AuthenticatedUserProvider>
             </FormattingProvider>
           </IntlProvider>
-        </query.QueryClientProvider>
+        </QueryClientProvider>
       </RenderLoopGuard>
     </AnalyticsContext>,
   );

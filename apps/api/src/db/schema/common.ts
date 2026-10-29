@@ -354,6 +354,11 @@ export const tsvector = customType<{ data: string }>({
   dataType: () => "tsvector",
 });
 
+/** A full transaction id, read as its decimal text. */
+export const xid8 = customType<{ data: string }>({
+  dataType: () => "xid8",
+});
+
 export const safeWorkspaceId = (name: string) =>
   p.uuid(name).$type<SafeId<"workspace">>();
 

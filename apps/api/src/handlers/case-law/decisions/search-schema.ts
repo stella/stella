@@ -4,8 +4,12 @@ import { apiDateSchema } from "@stll/api-contract/api-date";
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { caseLawCourtYearSchema } from "@stll/api-contract/case-law-court-year";
 import { DECISION_TYPE_KINDS } from "@stll/api-contract/case-law-decision-types";
-import { DECISION_TEXT_WITHHELD_REASON } from "@stll/api-contract/case-law-text-field";
 import {
+  DECISION_TEXT_AVAILABILITY,
+  DECISION_TEXT_WITHHELD_REASON,
+} from "@stll/api-contract/case-law-text-field";
+import {
+  CASE_LAW_SEARCH_FACET_NAMES,
   CASE_LAW_SEARCH_WARNING_CODES,
   DECISION_SEARCH_MATCHES,
   FACET_COUNT_TYPE,
@@ -54,6 +58,12 @@ export const searchDecisionsBodySchema = v.object({
     v.string(),
     v.minLength(1),
     v.maxLength(LIMITS.searchQueryMaxLength),
+  ),
+  facets: v.optional(
+    v.pipe(
+      v.array(v.picklist(CASE_LAW_SEARCH_FACET_NAMES)),
+      v.maxLength(CASE_LAW_SEARCH_FACET_NAMES.length),
+    ),
   ),
   limit: v.optional(paginationLimitSchema(LIMITS.caseLawSearchPageSizeMax)),
   cursor: v.optional(
@@ -239,6 +249,7 @@ export const searchDecisionsSuccessResponseSchema = v.object({
         headnote: decisionHeadnotePreviewSchema,
         keywords: v.union([decisionKeywordsPreviewSchema, v.null()]),
         headline: nullableBoundedString(bytes.headline),
+        textAvailability: v.picklist(Object.values(DECISION_TEXT_AVAILABILITY)),
         textWithheldReason: v.union([
           v.literal(DECISION_TEXT_WITHHELD_REASON.SOURCE_LICENCE),
           v.null(),

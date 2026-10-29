@@ -1,3 +1,5 @@
+import type { PageCleanScan } from "./clean-scan-placement";
+
 type PageRotation = 0 | 90 | 180 | 270;
 
 export type NormalizedCrop = {
@@ -13,6 +15,8 @@ export type PagePlanEntry = {
   sourcePageIndex: number;
   rotation: PageRotation;
   crop?: NormalizedCrop;
+  /** Replaces the source page with a cleaned scan on a page of its size. */
+  scan?: PageCleanScan;
 };
 
 export type PageTransformSource = { id: string; bytes: ArrayBuffer };
@@ -32,6 +36,9 @@ export const MAX_PAGE_EDITOR_SOURCE_BYTES = 100 * 1024 * 1024;
 export const MAX_PAGE_EDITOR_SOURCES = 100;
 export const MAX_PAGE_EDITOR_PAGES = 20_000;
 const MAX_PAGE_EDITOR_OUTPUT_PAGE_REFS = 100_000;
+// The scan engine rejects larger images, so a bigger buffer is never genuine.
+const MAX_CLEAN_SCAN_PIXELS = 40_000_000;
+const MAX_PAGE_EDITOR_SCAN_BYTES = 512 * 1024 * 1024;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
@@ -55,6 +62,36 @@ const isCrop = (value: unknown): value is NormalizedCrop =>
   value["x"] + value["width"] <= 1 &&
   value["y"] + value["height"] <= 1;
 
+const isPositiveFinite = (value: unknown): value is number =>
+  isFiniteNumber(value) && value > 0;
+
+const isPositiveInteger = (value: unknown): value is number =>
+  Number.isInteger(value) && isPositiveFinite(value);
+
+const isCleanScan = (value: unknown): value is PageCleanScan => {
+  if (!isRecord(value) || !isPositiveFinite(value["dpi"])) {
+    return false;
+  }
+  const image = value["image"];
+  const pageSize = value["pageSize"];
+  if (
+    !isRecord(image) ||
+    !isRecord(pageSize) ||
+    !isPositiveFinite(pageSize["widthPoints"]) ||
+    !isPositiveFinite(pageSize["heightPoints"]) ||
+    !isPositiveInteger(image["width"]) ||
+    !isPositiveInteger(image["height"]) ||
+    (image["format"] !== "grayscale" && image["format"] !== "binary") ||
+    !(image["pixels"] instanceof Uint8Array)
+  ) {
+    return false;
+  }
+  const pixelCount = image["width"] * image["height"];
+  return (
+    pixelCount <= MAX_CLEAN_SCAN_PIXELS && image["pixels"].length === pixelCount
+  );
+};
+
 const isPage = (value: unknown): value is PagePlanEntry =>
   isRecord(value) &&
   typeof value["id"] === "string" &&
@@ -63,7 +100,8 @@ const isPage = (value: unknown): value is PagePlanEntry =>
   Number.isInteger(value["sourcePageIndex"]) &&
   value["sourcePageIndex"] >= 0 &&
   isRotation(value["rotation"]) &&
-  (value["crop"] === undefined || isCrop(value["crop"]));
+  (value["crop"] === undefined || isCrop(value["crop"])) &&
+  (value["scan"] === undefined || isCleanScan(value["scan"]));
 
 const isSourceArray = (
   value: unknown,
@@ -121,6 +159,14 @@ export const isPageTransformRequest = (
     0,
   );
   if (totalOutputPageRefs > MAX_PAGE_EDITOR_OUTPUT_PAGE_REFS) {
+    return false;
+  }
+  const scanImages = new Set(pages.map((page) => page.scan?.image.pixels));
+  let totalScanBytes = 0;
+  for (const pixels of scanImages) {
+    totalScanBytes += pixels?.byteLength ?? 0;
+  }
+  if (totalScanBytes > MAX_PAGE_EDITOR_SCAN_BYTES) {
     return false;
   }
   return new Set(sources.map((source) => source.id)).size === sources.length;

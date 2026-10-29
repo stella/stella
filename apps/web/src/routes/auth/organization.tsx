@@ -60,6 +60,7 @@ import {
 } from "@/lib/oauth-provider";
 import { organizationListOptions } from "@/lib/organization/queries";
 import { createSlug, getOrganizationSchema } from "@/lib/organization/utils";
+import { queryView } from "@/lib/query-view.logic";
 import {
   destinationNavigation,
   isAcceptInvitationRedirect,
@@ -71,7 +72,6 @@ import {
   schemaFormOptions,
   toFormErrors,
 } from "@/lib/schema";
-import { useQueryView } from "@/lib/use-query-view";
 import { routeSearchSchema } from "@/route-search-params";
 
 const searchSchema = routeSearchSchema({
@@ -171,9 +171,7 @@ const OrganizationSkeleton = () => (
 
 const OrganizationFlow = ({ hydrated }: { hydrated: boolean }) => {
   const userId = Route.useRouteContext({ select: (ctx) => ctx.userId });
-  const organizationView = useQueryView(
-    useQuery(organizationListOptions(userId)),
-  );
+  const organizationView = queryView(useQuery(organizationListOptions(userId)));
   const redirectTo = Route.useSearch({ select: (search) => search.redirectTo });
   const isOauthPostLoginFromSearch = Route.useRouteContext({
     select: (context) => context.isOauthPostLoginFromSearch,

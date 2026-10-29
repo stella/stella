@@ -35,6 +35,7 @@ import {
   mcpUserConnections,
   mcpWebHandoff,
   pdfSigningSessions,
+  requestIdempotencyReceipts,
   searchHistoryEntries,
   searchHistoryOwners,
   searchHistoryTombstones,
@@ -61,7 +62,14 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { removeOrganizationMemberWithAuthArtifacts } from "@/api/lib/auth-artifacts";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { lockOpenSigningPage } from "@/api/lib/db/aggregate-lock";
+import {
+  lockChatOwnerStoredContentTransitionOnTx,
+  tryLockAccountChatOwnerStoredContentTransitionsOnTx,
+} from "@/api/lib/chat/thread-stored-content-egress";
+import {
+  lockOpenSigningPage,
+  lockRequestReceiptPrincipalRows,
+} from "@/api/lib/db/aggregate-lock";
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transitionBatch } from "@/api/lib/db/transitions";
 import { clearOrganizationCorrespondenceAssignments } from "@/api/lib/email/correspondence/offboarding";
@@ -810,6 +818,50 @@ const clearMemberTimeEntryApprovals = async ({
   }
 };
 
+/** Membership loss clears user-owned request results before the roster change commits. */
+const clearMemberRequestReceipts = async ({
+  tx,
+  scope,
+  userId,
+}: ClearMemberAssignmentsOptions) => {
+  // Matter removal retains organization-owned coordination for other matters;
+  // account erasure deletes every receipt through the user FK cascade.
+  if (scope.type !== "organization") {
+    return;
+  }
+  const { organizationId } = scope;
+  await runScopedWorkInTransaction({
+    tx,
+    organizationId,
+    userId,
+    workspaceScope: { type: WORKSPACE_ACCESS_MODE.explicit, workspaceIds: [] },
+    fn: async (scopedTx) => {
+      const locked = await lockRequestReceiptPrincipalRows({
+        tx: scopedTx,
+        organizationId,
+        userId,
+      });
+      if (locked.status === "busy") {
+        abortTransaction(removalBusy());
+      }
+      if (locked.rows.length === 0) {
+        return;
+      }
+      // audit: skip - the enclosing membership removal records its lifecycle audit in this transaction.
+      await scopedTx.delete(requestIdempotencyReceipts).where(
+        and(
+          eq(requestIdempotencyReceipts.organizationId, organizationId),
+          eq(requestIdempotencyReceipts.userId, userId),
+          inArray(
+            requestIdempotencyReceipts.id,
+            locked.rows.map(({ id }) => id),
+          ),
+        ),
+      );
+    },
+  });
+};
+
 /** Caller holds the departing memberships until cleanup and deletion commit. */
 export const clearMemberAssignments = async (
   options: ClearMemberAssignmentsOptions,
@@ -827,6 +879,7 @@ export const clearMemberAssignments = async (
   await clearMemberTimeEntryApprovals(options);
   await closeMemberExchanges(options);
   await clearMemberContactAssignments(options);
+  await clearMemberRequestReceipts(options);
 };
 
 type MemberCleanupWorkspaceOptions = {
@@ -1046,16 +1099,25 @@ export const selectMemberCleanupWorkspaceIds = async ({
 };
 
 /**
- * Account erasure holds the user's organization memberships first, as it
- * always has, then every matter it changes without waiting: organization
- * removal and grants take a matter before a membership, so a busy matter is a
- * typed retryable refusal rather than an inverted wait. Re-entrant: a caller
- * that already holds the prefix takes nothing new.
+ * Account erasure tries the account's chat egress fences, then holds the
+ * user's organization memberships, then every matter it changes without
+ * waiting: organization removal and grants take a matter before a membership,
+ * so a busy fence or matter is a typed retryable refusal rather than an
+ * inverted wait. Re-entrant: a caller that already holds the prefix takes
+ * nothing new.
  */
 export const tryLockAccountMemberCleanup = async (
   tx: Transaction,
   userId: SafeId<"user">,
 ) => {
+  // Chat egress fences precede every membership row lock; a compaction in
+  // flight for any of the account's organizations is a busy refusal.
+  if (
+    (await tryLockAccountChatOwnerStoredContentTransitionsOnTx(tx, userId)) ===
+    "busy"
+  ) {
+    abortTransaction(removalBusy());
+  }
   await tx
     .select({ id: member.id })
     .from(member)
@@ -1452,6 +1514,10 @@ export const removeOrganizationMemberInTransaction = async (
     reassignTo,
   }: Omit<RemoveOrganizationMemberOptions, "tx">,
 ) => {
+  await lockChatOwnerStoredContentTransitionOnTx(tx, {
+    organizationId,
+    userId,
+  });
   const timerClose = await closeRemovedMemberActiveTimer({
     organizationId,
     tx,
@@ -1652,6 +1718,8 @@ export type MemberCleanupDisposition =
  * schema coverage guard derives its census from this list.
  */
 export const ORGANIZATION_MEMBER_CLEANUP_COLUMNS = [
+  [requestIdempotencyReceipts.userId, "cleared"],
+  [requestIdempotencyReceipts.responseBody, "cleared"],
   [member.userId, "cleared"],
   [desktopPresence.userId, "cleared"],
   [searchHistoryEntries.userId, "cleared"],

@@ -1,6 +1,9 @@
 import { panic } from "better-result";
 
-import type { CaseLawAnalysisFailureCode as AnalysisFailureCode } from "@stll/api-contract";
+import type {
+  CaseLawAnalysisFailureCode as AnalysisFailureCode,
+  CaseLawAnalysisUnavailableCode,
+} from "@stll/api-contract";
 
 import {
   PROVIDER_KEYS,
@@ -27,6 +30,14 @@ export const ANALYSIS_KEYED_FAILURE_MESSAGE = {
   TranslationKey
 >;
 
+const ANALYSIS_UNAVAILABLE_MESSAGE = {
+  decision_not_found: "caseLaw.analysis.errors.decisionNotFound",
+  document_unparseable: "caseLaw.analysis.errors.documentUnparseable",
+  language_unsupported: "caseLaw.analysis.errors.languageUnsupported",
+  analysis_disabled: "caseLaw.analysis.errors.analysisDisabled",
+  source_restricted: "caseLaw.analysis.errors.sourceRestricted",
+} as const satisfies Record<CaseLawAnalysisUnavailableCode, TranslationKey>;
+
 type KeyedFailureCode = keyof typeof ANALYSIS_KEYED_FAILURE_MESSAGE;
 
 /** What the reader is told about an analysis that is not there. */
@@ -37,7 +48,10 @@ export type AnalysisErrorMessage =
       values: { source: AnalysisFailureKey["source"]; provider: string };
     }
   | { kind: "generic" }
-  | { kind: "unavailable" };
+  | {
+      kind: "unavailable";
+      key: (typeof ANALYSIS_UNAVAILABLE_MESSAGE)[CaseLawAnalysisUnavailableCode];
+    };
 
 const isProviderKey = (
   provider: string,
@@ -73,7 +87,10 @@ export const analysisErrorMessage = (
 ): AnalysisErrorMessage => {
   switch (error.kind) {
     case "unavailable":
-      return { kind: "unavailable" };
+      return {
+        kind: "unavailable",
+        key: ANALYSIS_UNAVAILABLE_MESSAGE[error.code],
+      };
     case "unreadable":
       return { kind: "generic" };
     case "failed": {

@@ -21,6 +21,7 @@ const createBillingCodeBodySchema = v.object({
 
 const config = {
   contract: "patch",
+  idempotency: { type: "replay" },
   description:
     "Add one task or activity billing code to a matter's code list. The code " +
     "string must be unique within the matter for its type, so the same " +

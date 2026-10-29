@@ -1,11 +1,19 @@
 import { Result } from "better-result";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc } from "drizzle-orm";
 import * as v from "valibot";
 
 import { numberFromString } from "@stll/api-contract/http-input";
 
 import { invoices } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
+import {
+  invoicePaidAmountSql,
+  invoicePaymentAmounts,
+} from "@/api/lib/billing/invoice-payments";
+import {
+  invoiceMatterShare,
+  invoiceTouchesMatter,
+} from "@/api/lib/billing/invoice-scope";
 import { paginationCursorSchema } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -47,7 +55,7 @@ const readInvoices = createSafeHandler(
     description:
       "List a matter's invoices oldest first with cursor pagination, " +
       "returning each invoice's number (null before numbering), document type, original invoice id, reference, status, dates, currency, language, " +
-      "and total, but not its line items. Use invoices.get to read the " +
+      "total, and paid and outstanding amounts, but not its line items. Use invoices.get to read the " +
       "attached time entries and expenses.",
     permissions: { workspace: ["read"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
@@ -60,7 +68,7 @@ const readInvoices = createSafeHandler(
     const limit = normalizeTenantPageLimit(
       query.limit ?? LIMITS.invoicesPageSizeDefault,
     );
-    const conditions = [eq(invoices.workspaceId, workspaceId)];
+    const conditions = [invoiceTouchesMatter(invoices, workspaceId)];
 
     if (query.cursor) {
       const cursor = invoiceCursor.decode(query.cursor);
@@ -86,6 +94,8 @@ const readInvoices = createSafeHandler(
       safeDb((tx) =>
         tx
           .select({
+            clientId: invoices.clientId,
+            matterShare: invoiceMatterShare(invoices, workspaceId),
             id: invoices.id,
             invoiceNumber: invoices.invoiceNumber,
             documentType: invoices.documentType,
@@ -97,6 +107,7 @@ const readInvoices = createSafeHandler(
             currency: invoices.currency,
             language: invoices.language,
             totalAmount: invoices.totalAmount,
+            paidAmount: invoicePaidAmountSql(invoices),
             billingMode: invoices.billingMode,
             flatFeeAmount: invoices.flatFeeAmount,
             createdAt: invoices.createdAt,
@@ -120,6 +131,8 @@ const readInvoices = createSafeHandler(
     return Result.ok({
       ...page,
       items: page.items.map((row) => ({
+        clientId: row.clientId,
+        matterShare: row.matterShare,
         id: row.id,
         invoiceNumber: row.invoiceNumber,
         documentType: row.documentType,
@@ -131,6 +144,7 @@ const readInvoices = createSafeHandler(
         currency: row.currency,
         language: row.language,
         totalAmount: row.totalAmount,
+        ...invoicePaymentAmounts(row),
         billingMode: row.billingMode,
         flatFeeAmount: row.flatFeeAmount,
         createdAt: row.createdAt.toISOString(),

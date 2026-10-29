@@ -12,11 +12,15 @@ export const LEGACY_CLASSIFICATION_DECISIONS_PATH =
 export type ClassificationDecision = {
   kind: unknown;
   qualifier: unknown;
+  approvedDigests?: unknown;
   reviewedDigest?: unknown;
 };
 
 export const decisionPathForKey = (key: string) =>
-  `${CLASSIFICATION_DECISIONS_PATH}/${encodeURIComponent(key)}.json`;
+  `${CLASSIFICATION_DECISIONS_PATH}/${encodeURIComponent(key)}/decision.json`;
+
+export const approvalPathForKey = (key: string, digest: string) =>
+  `${CLASSIFICATION_DECISIONS_PATH}/${encodeURIComponent(key)}/${digest}.json`;
 
 export const CLASSIFICATION_INPUT_PATHS = [
   ".github/workflows",

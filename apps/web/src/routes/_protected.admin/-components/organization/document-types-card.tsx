@@ -36,9 +36,9 @@ import {
 } from "@/lib/drag-and-drop/element-registration";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { documentTypesOptions, knowledgeKeys } from "@/lib/knowledge/queries";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
-import { useQueryView } from "@/lib/use-query-view";
 import { useSettingsMutation } from "@/routes/_protected.admin/-hooks/use-settings-mutation";
 
 const DOCUMENT_TYPE_DRAG_TYPE = "stella/document-type";
@@ -62,7 +62,7 @@ export const DocumentTypesCard = () => {
   });
 
   const settingsQuery = useQuery(documentTypesOptions(activeOrganizationId));
-  const settingsView = useQueryView(settingsQuery, {
+  const settingsView = queryView(settingsQuery, {
     isEmpty: (data) => data.items.length === 0,
   });
   const data = settingsView.type === "items" ? settingsView.items : undefined;
@@ -77,8 +77,8 @@ export const DocumentTypesCard = () => {
       type: "handler",
       handlerId: "DocumentTypesCard.createMutation.useSettingsMutation",
     },
-    mutationFn: async (label: string) =>
-      unwrapApiResponse(await api["document-types"].post({ label })),
+    mutationFn: async (label: string, request) =>
+      unwrapApiResponse(await api["document-types"].post({ label }, request)),
     invalidate: documentTypesInvalidationKey,
     errorToast: {
       title: t("errors.actionFailed"),

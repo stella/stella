@@ -26,7 +26,7 @@ import { filterMatterPickerItems } from "@/components/matter-picker-search.logic
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useFormatter, useFormattingLocale } from "@/i18n/formatting-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 
 /**
@@ -219,7 +219,7 @@ export const ChatMatterPicker = ({
   // — the navigation list is already in flight on any workspace
   // page.
   const { activeOrganizationId, id: userId } = useAuthenticatedUser();
-  const workspacesView = useQueryView(
+  const workspacesView = queryView(
     useQuery(
       workspacesNavigationOptions({
         organizationId: activeOrganizationId,

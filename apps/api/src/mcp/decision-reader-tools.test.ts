@@ -577,6 +577,7 @@ describe("decision reader tool contracts", () => {
         expect(anchor).toBe("par_1");
         expect(citedAnchor).toBe("par_1-odst_1");
         return {
+          country: "CZE",
           url: "https://example.test/law/cze/statutes/fixture/v/2026-01-01#par_1-odst_1",
           documentId,
           language: "cs",

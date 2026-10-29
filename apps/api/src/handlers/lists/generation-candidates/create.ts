@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
 import { apiDateSchema } from "@stll/api-contract/api-date";
+import { spotTargetSchema } from "@stll/api-contract/spot";
 
 import {
   legalListGenerationCandidates,
@@ -28,17 +29,7 @@ import { includes } from "@/api/lib/type-guards";
 const sourceSchema = v.object({
   entityId: resourceIdSchema("entity"),
   entityVersionId: resourceIdSchema("entityVersion"),
-  locator: v.union([
-    v.object({ type: v.literal("document") }),
-    v.object({
-      type: v.literal("docx-block"),
-      blockId: v.pipe(v.string(), v.minLength(1), v.maxLength(512)),
-    }),
-    v.object({
-      type: v.literal("pdf-page"),
-      pageNumber: v.pipe(v.number(), v.integer(), v.minValue(1)),
-    }),
-  ]),
+  locator: spotTargetSchema,
   quote: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(5000)))),
 });
 const candidateSchema = v.object({
@@ -71,6 +62,7 @@ const bodySchema = v.object({
 });
 const config = {
   contract: "patch",
+  idempotency: { type: "replay" },
   featureAccess: { type: "required", featureId: LEGAL_LISTS_FEATURE_ID },
   description:
     "Submit the candidates a generation run produced: per candidate a name, " +
