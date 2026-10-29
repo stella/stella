@@ -268,7 +268,7 @@ const ContactMethodRow = ({
       <div className="flex min-w-0 flex-1 items-baseline gap-2">{children}</div>
       <Button
         aria-label={t("common.delete")}
-        className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+        className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
         disabled={disabled}
         onClick={onRemove}
         size="icon-xs"

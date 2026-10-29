@@ -941,12 +941,16 @@
         "reasoning": "Razonamiento"
       },
       "errors": {
+        "analysisDisabled": "La generación de análisis con IA está desactivada en este servidor. Consulte el texto de la resolución o inténtelo más tarde.",
         "answerIncomplete": "{source, select, organization {La clave de {provider} de tu organización devolvió una respuesta incompleta.} other {El modelo de IA devolvió una respuesta incompleta.}}",
+        "decisionNotFound": "No se encontró esta resolución. Vuelva a abrirla desde la búsqueda.",
+        "documentUnparseable": "El texto de la resolución no está listo para el análisis. Consulte la fuente original.",
+        "languageUnsupported": "El análisis con IA aún no admite el idioma de esta resolución. Consulte el texto de la resolución o la fuente original.",
         "providerRefused": "{source, select, organization {{provider} rechazó la solicitud hecha con la clave de tu organización. Revisa la clave, su cuota y la facturación en la configuración de la organización.} other {El proveedor de IA rechazó la solicitud.}}",
         "providerUnavailable": "{source, select, organization {{provider} no está disponible ahora mismo para la clave de tu organización.} other {El proveedor de IA no está disponible ahora mismo.}}",
         "retryAfter": "Podrá intentarlo de nuevo a partir del {time}.",
-        "timedOut": "{source, select, organization {{provider} no respondió a tiempo con la clave de tu organización.} other {El modelo de IA no respondió a tiempo.}}",
-        "unavailable": "El análisis con IA no está disponible para esta resolución."
+        "sourceRestricted": "La fuente no permite el análisis con IA. Consulte el texto de la resolución o la fuente original.",
+        "timedOut": "{source, select, organization {{provider} no respondió a tiempo con la clave de tu organización.} other {El modelo de IA no respondió a tiempo.}}"
       },
       "generate": "Generar sumarios con IA",
       "invitation": "Con una cuenta gratuita, la IA prepara notas de trabajo sobre esta resolución.",
@@ -1151,7 +1155,7 @@
     "reader": {
       "documentUpdated": "El documento se ha actualizado.",
       "expandProvisions": "Ampliar disposiciones",
-      "headMatter": "Encabezamiento",
+      "headMatter": "Información del caso",
       "sourceAttribution": "Los datos de origen están disponibles libremente en <link>{source}</link>."
     },
     "research": {
@@ -4886,7 +4890,9 @@
     "viewOnGithub": "Ver en GitHub"
   },
   "readerAnswers": {
+    "answerLanguage": "Idioma de respuesta",
     "budgetError": "Se ha agotado el presupuesto para respuestas.",
+    "documentLanguage": "Idioma del documento ({language})",
     "expand": "Expandir respuesta",
     "explain": "Explicar",
     "followUp": "Hacer una pregunta de seguimiento",

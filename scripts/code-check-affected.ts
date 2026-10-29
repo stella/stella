@@ -145,7 +145,6 @@ export const OXLINT_CONFIGURATION_CACHE_INPUTS = [
   "$TURBO_ROOT$/scripts/fill-diagnostics-ledger.json",
   "$TURBO_ROOT$/scripts/generated-artifacts.ts",
   "$TURBO_ROOT$/scripts/oxlint-config-scopes.ts",
-  "$TURBO_ROOT$/scripts/parser-validator-call-ledger.json",
   "$TURBO_ROOT$/scripts/swallowed-item-error-ledger.json",
   "$TURBO_ROOT$/scripts/tailwind-lint-cache.ts",
   "$TURBO_ROOT$/scripts/test-timing-ledger.json",

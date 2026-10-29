@@ -14,7 +14,11 @@ import path from "node:path";
 import { sha256Hex } from "@stll/sha256/node";
 
 import { resolveGitleaks } from "./gitleaks";
-import { GITLEAKS_SHA256, GITLEAKS_VERSION } from "./gitleaks-pins";
+import {
+  GITLEAKS_BINARY_SHA256,
+  GITLEAKS_SHA256,
+  GITLEAKS_VERSION,
+} from "./gitleaks-pins";
 
 const root = mkdtempSync(path.join(tmpdir(), "gitleaks-provision-test-"));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
@@ -145,6 +149,82 @@ test("a PATH scanner is accepted only after verifying the release archive", asyn
   }
   expect(result.value).toBe(binary);
   expect(existsSync(path.join(dir, "stella"))).toBe(true);
+});
+
+const pinnedBytes = (binary: string) => {
+  const digest = sha256Hex(readFileSync(binary));
+  return {
+    "linux-x64": digest,
+    "linux-arm64": digest,
+    "darwin-x64": digest,
+    "darwin-arm64": digest,
+  };
+};
+
+test("an installed scanner with the pinned bytes is used offline, without a cache", async () => {
+  const { dir, options } = fixture();
+  const binary = path.join(dir, "gitleaks");
+  const result = await resolveGitleaks({
+    ...options,
+    pathBinary: binary,
+    binaryChecksums: pinnedBytes(binary),
+    download: noNetwork,
+  });
+  if (result.isErr()) {
+    throw result.error;
+  }
+  expect(result.value).toBe(binary);
+  expect(existsSync(path.join(dir, "stella"))).toBe(false);
+});
+
+test("a cached scanner with the pinned bytes needs no archive", async () => {
+  const { dir, bytes, options } = fixture();
+  const provisioned = await resolveGitleaks({
+    ...options,
+    download: async () => bytes,
+  });
+  if (provisioned.isErr()) {
+    throw provisioned.error;
+  }
+  rmSync(path.join(path.dirname(provisioned.value), "archive.tar.gz"));
+  const result = await resolveGitleaks({
+    ...options,
+    binaryChecksums: pinnedBytes(path.join(dir, "gitleaks")),
+    download: noNetwork,
+  });
+  if (result.isErr()) {
+    throw result.error;
+  }
+  expect(result.value).toBe(provisioned.value);
+});
+
+test("an installed scanner with other bytes still needs the verified archive", async () => {
+  const { dir, options } = fixture();
+  const binary = path.join(dir, "gitleaks");
+  const other = path.join(dir, "other");
+  writeFileSync(other, `#!/bin/sh\necho ${GITLEAKS_VERSION} \n`, {
+    mode: 0o700,
+  });
+  const result = await resolveGitleaks({
+    ...options,
+    pathBinary: binary,
+    binaryChecksums: pinnedBytes(other),
+    download: noNetwork,
+  });
+  expect(result.isErr()).toBe(true);
+  if (result.isOk()) {
+    throw new Error("unpinned executable accepted offline");
+  }
+  expect(result.error.message).toContain("network must not be used");
+});
+
+test("binary pins cover every archive pin", () => {
+  expect(Object.keys(GITLEAKS_BINARY_SHA256).toSorted()).toEqual(
+    Object.keys(GITLEAKS_SHA256).toSorted(),
+  );
+  for (const digest of Object.values(GITLEAKS_BINARY_SHA256)) {
+    expect(digest).toMatch(/^[0-9a-f]{64}$/u);
+  }
 });
 
 test("a matching PATH version cannot substitute for the pinned executable", async () => {
