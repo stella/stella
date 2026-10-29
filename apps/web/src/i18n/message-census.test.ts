@@ -73,15 +73,29 @@ const flattenMessages = (catalog: unknown, prefix = ""): Message[] => {
 
 type Analysis = {
   arguments: Set<string>;
+  argumentTypes: Map<string, Set<ArgumentType>>;
   numericArguments: Set<string>;
   dateArguments: Set<string>;
   plurals: PluralElement[];
   tags: Set<string>;
 };
 
+type ArgumentType = "numeric" | "date" | "string";
+
+const addArgumentType = (
+  argumentTypes: Map<string, Set<ArgumentType>>,
+  argument: string,
+  type: ArgumentType,
+) => {
+  const types = argumentTypes.get(argument) ?? new Set<ArgumentType>();
+  types.add(type);
+  argumentTypes.set(argument, types);
+};
+
 export const analyzeMessage = (message: string): Analysis => {
   const analysis: Analysis = {
     arguments: new Set(),
+    argumentTypes: new Map(),
     numericArguments: new Set(),
     dateArguments: new Set(),
     plurals: [],
@@ -103,11 +117,18 @@ export const analyzeMessage = (message: string): Analysis => {
       }
       if (isArgumentElement(element)) {
         plainArguments.add(element.value);
+        addArgumentType(analysis.argumentTypes, element.value, "numeric");
       } else if (isNumberElement(element)) {
         analysis.numericArguments.add(element.value);
+        addArgumentType(analysis.argumentTypes, element.value, "numeric");
+      } else if (isSelectElement(element)) {
+        addArgumentType(analysis.argumentTypes, element.value, "string");
+      } else if (isPluralElement(element)) {
+        addArgumentType(analysis.argumentTypes, element.value, "numeric");
       }
       if (isDateElement(element) || isTimeElement(element)) {
         analysis.dateArguments.add(element.value);
+        addArgumentType(analysis.argumentTypes, element.value, "date");
       }
       if (isTagElement(element)) {
         analysis.tags.add(element.value);
@@ -160,10 +181,25 @@ export const censusErrors = (
     );
   }
 
-  const categories = new Intl.PluralRules(locale).resolvedOptions()
-    .pluralCategories;
-  if (categories.length > 1) {
-    for (const [index, plural] of translationAnalysis.plurals.entries()) {
+  for (const argument of sourceAnalysis.arguments) {
+    const sourceTypes = sorted(
+      sourceAnalysis.argumentTypes.get(argument) ?? [],
+    );
+    const translationTypes = sorted(
+      translationAnalysis.argumentTypes.get(argument) ?? [],
+    );
+    if (JSON.stringify(sourceTypes) !== JSON.stringify(translationTypes)) {
+      errors.push(
+        `argument ${argument} types: expected ${sourceTypes.join(", ")}; received ${translationTypes.join(", ")}`,
+      );
+    }
+  }
+
+  for (const [index, plural] of translationAnalysis.plurals.entries()) {
+    const categories = new Intl.PluralRules(locale, {
+      type: plural.pluralType,
+    }).resolvedOptions().pluralCategories;
+    if (categories.length > 1) {
       const missing = categories.filter(
         (category) => !(category in plural.options),
       );
@@ -178,24 +214,32 @@ export const censusErrors = (
   return errors;
 };
 
+const PLURAL_CANDIDATES = [
+  0, 1, 2, 3, 4, 5, 6, 11, 12, 21, 22, 101, 1_000_000, 1_000_001, 1.5,
+] as const;
+
+type PluralRepresentatives = {
+  missing: Intl.LDMLPluralRule[];
+  values: Map<Intl.LDMLPluralRule, number>;
+};
+
 const pluralRepresentatives = (
   locale: string,
-): Map<Intl.LDMLPluralRule, number> => {
-  const rules = new Intl.PluralRules(locale);
+  type: Intl.PluralRuleType,
+): PluralRepresentatives => {
+  const rules = new Intl.PluralRules(locale, { type });
   const categories = rules.resolvedOptions().pluralCategories;
   const representatives = new Map<Intl.LDMLPluralRule, number>();
-  for (
-    let tenth = 0;
-    tenth <= 100_000 && representatives.size < categories.length;
-    tenth += 1
-  ) {
-    const value = tenth < 10_000 ? tenth : tenth / 10;
+  for (const value of PLURAL_CANDIDATES) {
     const category = rules.select(value);
     if (!representatives.has(category)) {
       representatives.set(category, value);
     }
   }
-  return representatives;
+  return {
+    missing: categories.filter((category) => !representatives.has(category)),
+    values: representatives,
+  };
 };
 
 const render = (
@@ -264,39 +308,53 @@ export const renderingErrors = (
   ]);
   const errors: string[] = [];
   for (const controllingArgument of controllingArguments) {
-    for (const [category, value] of pluralRepresentatives(locale)) {
-      const sourceResult = render(
-        source,
-        locale,
-        sourceAnalysis,
-        numericArguments,
-        controllingArgument,
-        value,
-      );
-      const translationResult = render(
-        translation,
-        locale,
-        translationAnalysis,
-        numericArguments,
-        controllingArgument,
-        value,
-      );
-      for (const argument of numericArguments) {
-        if (argument === controllingArgument) {
-          continue;
-        }
-        const argumentValue = sourceResult.arguments_[argument];
-        if (typeof argumentValue !== "number") {
-          continue;
-        }
-        const formatted = new Intl.NumberFormat(locale).format(argumentValue);
-        if (
-          sourceResult.rendered.includes(formatted) &&
-          !translationResult.rendered.includes(formatted)
-        ) {
-          errors.push(
-            `${controllingArgument}=${value} (${category}) renders ${JSON.stringify(translationResult.rendered)} without ${argument}=${formatted}`,
-          );
+    const pluralTypes = new Set(
+      [...sourceAnalysis.plurals, ...translationAnalysis.plurals]
+        .filter(({ value }) => value === controllingArgument)
+        .map(({ pluralType }) => pluralType ?? "cardinal"),
+    );
+    for (const pluralType of pluralTypes) {
+      const representatives = pluralRepresentatives(locale, pluralType);
+      if (representatives.missing.length > 0) {
+        const ruleType = pluralType === "ordinal" ? "ordinal" : "cardinal";
+        errors.push(
+          `${ruleType} plural representatives are missing ${representatives.missing.join(", ")}`,
+        );
+      }
+      for (const [category, value] of representatives.values) {
+        const sourceResult = render(
+          source,
+          locale,
+          sourceAnalysis,
+          numericArguments,
+          controllingArgument,
+          value,
+        );
+        const translationResult = render(
+          translation,
+          locale,
+          translationAnalysis,
+          numericArguments,
+          controllingArgument,
+          value,
+        );
+        for (const argument of numericArguments) {
+          if (argument === controllingArgument) {
+            continue;
+          }
+          const argumentValue = sourceResult.arguments_[argument];
+          if (typeof argumentValue !== "number") {
+            continue;
+          }
+          const formatted = new Intl.NumberFormat(locale).format(argumentValue);
+          if (
+            sourceResult.rendered.includes(formatted) &&
+            !translationResult.rendered.includes(formatted)
+          ) {
+            errors.push(
+              `${controllingArgument}=${value} (${category}) renders ${JSON.stringify(translationResult.rendered)} without ${argument}=${formatted}`,
+            );
+          }
         }
       }
     }
@@ -360,6 +418,16 @@ test("every translation preserves source arguments and complete plural forms", a
 
 test("census rejects argument and plural regressions", () => {
   expect(censusErrors("{count}", "done", "de")).not.toEqual([]);
+  expect(censusErrors("{count, number}", "{count, date}", "en")).not.toEqual(
+    [],
+  );
+  expect(
+    censusErrors(
+      "{count, number}",
+      "{count, plural, one {# item} other {# items}}",
+      "en",
+    ),
+  ).toEqual([]);
   expect(
     censusErrors(
       "{count, plural, one {# item} other {# items}}",
@@ -395,4 +463,13 @@ test("census rejects argument and plural regressions", () => {
       "en",
     ),
   ).toEqual(['count=1 (one) renders "1 of 1" without total=5']);
+  expect(
+    renderingErrors(
+      "{count, plural, one {# of {total}} other {# of {total}}}",
+      "{count, plural, one {# sur {total}} many {# sur #} other {# sur {total}}}",
+      "fr",
+    ),
+  ).toEqual([
+    'count=1000000 (many) renders "1\u202f000\u202f000 sur 1\u202f000\u202f000" without total=5',
+  ]);
 });
