@@ -238,13 +238,19 @@ test("publisher headings and caption information share one translated disclosure
           />
         </DecisionReaderProvider>,
       );
-      expect(markup.match(/<details\b/gu)).toHaveLength(1);
+      expect(markup.match(/<details class="reader-apparatus"/gu)).toHaveLength(
+        1,
+      );
+      expect(markup.match(/<details\b/gu)).toHaveLength(2);
       expect(markup).toContain(
         `class="reader-apparatus-summary">${label}</summary>`,
       );
+      const disclosureStart = markup.indexOf(
+        '<details class="reader-apparatus"',
+      );
       const disclosure = markup.slice(
-        markup.indexOf("<details"),
-        markup.indexOf("</details>"),
+        disclosureStart,
+        markup.indexOf("</details>", disclosureStart),
       );
       for (const block of blocks) {
         if (block.type === "heading" || block.role === "apparatus") {
