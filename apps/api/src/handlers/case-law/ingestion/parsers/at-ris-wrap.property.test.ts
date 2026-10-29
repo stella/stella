@@ -1,7 +1,8 @@
 /**
  * Printed lines of a RIS transcript join into paragraphs only at a boundary
  * that is a margin's, never across a paragraph break, a content type, a short
- * line, a finished sentence or the opening of a point.
+ * line, a finished sentence or the opening of a point, and never within a
+ * register section, whose entries each stand alone.
  */
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
@@ -21,9 +22,16 @@ import type { RisItem } from "@/api/handlers/case-law/ingestion/parsers/at-ris-m
 const config = (numRuns: number) =>
   propertyConfig({ numRuns, seed: propertySeed() });
 
+/** Apparatus sections: citing decisions and norms, one entry per line. */
+const REGISTER_CONTENT_TYPES = ["entscheidungstexte", "norm"] as const;
+
 const printedLineArb = fc.record({
   type: fc.constant("line" as const),
-  contentType: fc.constantFrom("text", "begruendung"),
+  contentType: fc.constantFrom(
+    "text",
+    "begruendung",
+    ...REGISTER_CONTENT_TYPES,
+  ),
   length: fc.integer({ min: 8, max: 120 }),
   ending: fc.constantFrom("", ",", "."),
   opensPoint: fc.boolean(),
@@ -99,6 +107,7 @@ describe("RIS wrapped lines", () => {
             expect(below?.type).toBe("line");
             if (above?.type === "line" && below?.type === "line") {
               expect(above.contentType).toBe(below.contentType);
+              expect(REGISTER_CONTENT_TYPES).not.toContain(above.contentType);
               expect(textOf(id, above).length).toBeGreaterThanOrEqual(
                 MIN_WRAPPED_LINE_CHARS,
               );

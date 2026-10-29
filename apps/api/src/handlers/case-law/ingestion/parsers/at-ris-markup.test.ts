@@ -177,6 +177,24 @@ describe("RIS markup read as text", () => {
     // Header and footer each print a few lines; the body is not merged.
     expect(blocks.length).toBeGreaterThan(absaetze / 2);
   });
+
+  test("each entry of a register section stays a paragraph of its own", async () => {
+    const xml = await fixtureXml("at-ris-justiz-headnote");
+    const $ = cheerio.load(xml, { xml: true });
+    const entries = $('absatz[ct="entscheidungstexte"]')
+      .toArray()
+      .filter((element) => $(element).text().trim() !== "");
+    const parsed = parseXml(xml).unwrap();
+    expect(parsed.sections["entscheidungstexte"]?.split("\n\n")).toHaveLength(
+      entries.length,
+    );
+    const texts = parsed.documentAst.blocks.map(({ plainText }) => plainText);
+    expect(
+      texts.filter((text) => text.startsWith("nur T1; nur: Es sei denn")),
+    ).toEqual([
+      "nur T1; nur: Es sei denn, dem übertragenden Gericht käme zur Entscheidung eine besondere Sachkenntnis zu. (T4)",
+    ]);
+  });
 });
 
 describe("RIS text fidelity", () => {

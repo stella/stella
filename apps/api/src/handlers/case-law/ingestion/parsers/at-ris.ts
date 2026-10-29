@@ -157,20 +157,25 @@ const continuesLine = (above: string, below: string): boolean =>
   !SENTENCE_END_RE.test(above) &&
   !STRUCTURAL_START_RE.test(below);
 
+/**
+ * An apparatus section (citing decisions, norms, numbers) is a register:
+ * each `absatz` is an entry of its own, however it ends, so none wraps.
+ */
 const wrappableText = (item: RisItem | undefined): string | undefined =>
   item?.type === "paragraph" &&
   item.element === "absatz" &&
-  item.layout !== "pre"
+  item.layout !== "pre" &&
+  paragraphRole(item.contentType) !== "apparatus"
     ? plainTextOf(item.inlines)
     : undefined;
 
 /**
  * Join the printed lines of a transcript into paragraphs: consecutive
- * `absatz` lines of one content type, with no `abstand` between them, belong
- * to one paragraph when the first fills a line and stops mid-sentence and the
- * second does not open a point, list item or field. Each boundary is judged
- * on the printed line before it, never on the paragraph joined so far: a
- * short line ends its paragraph even after long lines were joined into it.
+ * `absatz` lines of one prose content type, with no `abstand` between them,
+ * belong to one paragraph when the first fills a line and stops mid-sentence
+ * and the second does not open a point, list item or field. Each boundary is
+ * judged on the printed line before it, never on the paragraph joined so far:
+ * a short line ends its paragraph even after long lines were joined into it.
  */
 export const joinWrappedLines = (items: readonly RisItem[]): RisItem[] => {
   const joined: RisItem[] = [];
