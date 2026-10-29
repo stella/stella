@@ -828,7 +828,7 @@ describe("desktop proof replay ownership", () => {
 test("generated artefact provenance census stays within its transition list", async () => {
   const { checkArtefactProvenance } =
     await import("./generated-artefact-provenance");
-  expect(await checkArtefactProvenance({ root: repoRoot })).toEqual([]);
+  expect(checkArtefactProvenance({ root: repoRoot })).toEqual([]);
 });
 
 test("generated artefact provenance detector rejects new raw calls and writes", async () => {
@@ -842,4 +842,87 @@ test("generated artefact provenance detector rejects new raw calls and writes", 
         'import { collectTanStackTextRun } from "@/api/lib/tanstack-ai-generate"; collectTanStackTextRun({});',
     }),
   ).toMatchObject({ modelImport: true, legacyCalls: 1 });
+});
+
+test("generated artefact provenance rejects new consumers and transition growth in a real diff", async () => {
+  const { checkArtefactProvenance } =
+    await import("./generated-artefact-provenance");
+  const { MODEL_OPERATION_BOUNDARIES } =
+    await import("../apps/api/src/lib/model-operation-registry");
+  const { default: operations } =
+    await import("./ownership/model-operation-callers");
+  withDirectory((root) => {
+    const write = (file: string, source: string) => {
+      mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+      writeFileSync(path.join(root, file), source);
+    };
+    const ledger = "scripts/generated-artefact-provenance-transition.json";
+    write(ledger, "{}");
+    const facade = "apps/api/src/lib/tanstack-ai-generate.ts";
+    write(
+      facade,
+      MODEL_OPERATION_BOUNDARIES.facade
+        .map((name) => `export const ${name} = () => {};`)
+        .join("\n"),
+    );
+    write(
+      "apps/api/src/lib/chat/tanstack-chat-runtime.ts",
+      MODEL_OPERATION_BOUNDARIES.runtime
+        .map((name) => `export const ${name} = () => {};`)
+        .join("\n"),
+    );
+    run(root, ["git", "init", "--quiet"]);
+    run(root, ["git", "add", "."]);
+    run(root, [
+      "git",
+      "-c",
+      "user.name=Fixture",
+      "-c",
+      "user.email=fixture@example.test",
+      "commit",
+      "-qm",
+      "base",
+    ]);
+    const check = () => checkArtefactProvenance({ root, base: "HEAD" });
+    expect(check()).toEqual([]);
+    const unknown = "apps/api/src/unregistered.ts";
+    write(
+      unknown,
+      'import { generateArtefact } from "@/api/lib/generated-artefact-provenance"; generateArtefact({ generator: "example", sources: { decisionIds: [], inputs: [] }, generate: () => "text" });',
+    );
+    expect(
+      check().some((error) => error.includes("unregistered model generator")),
+    ).toBe(true);
+    rmSync(path.join(root, unknown));
+    const known = operations.owner[0];
+    write(
+      known,
+      'import { collectTanStackTextRun } from "@/api/lib/tanstack-ai-generate"; collectTanStackTextRun({});',
+    );
+    expect(
+      check().some((error) => error.includes("raw generation count 1")),
+    ).toBe(true);
+    write(ledger, JSON.stringify({ [known]: 1 }));
+    expect(check().some((error) => error.includes("may only shrink"))).toBe(
+      true,
+    );
+    rmSync(path.join(root, known));
+    write(ledger, "{}");
+    write(unknown, "db.update(table).set({ generationProvenance: {} });");
+    expect(
+      check().some((error) =>
+        error.includes("writes belong to the artefact owner"),
+      ),
+    ).toBe(true);
+    rmSync(path.join(root, unknown));
+    write(
+      facade,
+      `${readFileSync(path.join(root, facade), "utf-8")}\nexport const generateUnregistered = () => {};\n`,
+    );
+    expect(
+      check().some((error) =>
+        error.includes("registry does not match generation exports"),
+      ),
+    ).toBe(true);
+  });
 });

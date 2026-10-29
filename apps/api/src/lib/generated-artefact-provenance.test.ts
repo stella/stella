@@ -64,36 +64,41 @@ test("authored, recorded empty and legacy values remain readable", async () => {
   for (const metadata of [null, undefined, { version: 1, slots: {} }]) {
     const origin = readArtefactOrigin(metadata, "title");
     expect(origin).toEqual({ type: "legacy" });
+    for (const key of ["constructor", "toString", "__proto__"]) {
+      expect(readArtefactOrigin(metadata, key)).toEqual({ type: "legacy" });
+    }
     expect(readArtefactText({ value: text, origin, projection })).toBe(text);
   }
 });
 
 test("source unions are invariant under duplicates and input order", async () => {
   for (const ids of [
-    [first, second],
+    [],
+    [first],
+    [first, first],
     [second, first],
-    [first, first, second],
-    [second, second, first],
+    [first, second],
   ]) {
-    for (const decision of [first, second]) {
-      const inherited = {
-        type: "generated",
-        generator,
-        decisionIds: [decision],
-        coverage: "complete",
-      } satisfies ArtefactOrigin;
-      const artefact = await generateArtefact({
-        generator,
-        sources: { decisionIds: ids, inputs: [inherited] },
-        generate: () => text,
-      });
-      expect(
-        projectArtefactText({
-          artefact,
-          projection: new WithdrawnCopyProjection([decision], "Unavailable"),
-        }),
-      ).toBe("Unavailable");
-    }
+    const inherited = {
+      type: "generated",
+      generator,
+      decisionIds: [second],
+      coverage: "complete",
+    } satisfies ArtefactOrigin;
+    const artefact = await generateArtefact({
+      generator,
+      sources: { decisionIds: ids, inputs: [inherited] },
+      generate: () => text,
+    });
+    expect(
+      projectArtefactText({
+        artefact,
+        projection: new WithdrawnCopyProjection([second], "Unavailable"),
+      }),
+    ).toBe("Unavailable");
+    expect(projectArtefactText({ artefact, projection })).toBe(
+      ids.includes(first) ? "Unavailable" : text,
+    );
   }
 });
 

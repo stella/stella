@@ -143,7 +143,9 @@ export const readArtefactOrigin = (
   if (!parsed.success) {
     return panic("Invalid stored artefact provenance");
   }
-  return parsed.output.slots[slot] ?? { type: "legacy" };
+  return (
+    new Map(Object.entries(parsed.output.slots)).get(slot) ?? { type: "legacy" }
+  );
 };
 
 type ReadArtefactTextOptions = {
