@@ -4,7 +4,9 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 
+import { getTranslator } from "@/i18n/translator";
 import { useAnalytics } from "@/lib/analytics/provider";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { invoicesKeys } from "@/lib/workspaces/queries/invoices";
 import { myTimeEntriesKeys } from "@/lib/workspaces/queries/my-time-entries";
@@ -65,6 +67,7 @@ export const useApproveTimeEntries = () => {
         fingerprintKey: "useApproveTimeEntries:failure",
         scope: { type: "handler", handlerId: "useApproveTimeEntries:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -94,6 +97,7 @@ export const useReturnTimeEntries = () => {
         fingerprintKey: "useReturnTimeEntries:failure",
         scope: { type: "handler", handlerId: "useReturnTimeEntries:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -137,6 +141,7 @@ export const useCreateTimeEntry = () => {
         fingerprintKey: "useCreateTimeEntry:failure",
         scope: { type: "handler", handlerId: "useCreateTimeEntry:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -185,6 +190,7 @@ export const useUpdateTimeEntry = () => {
         fingerprintKey: "useUpdateTimeEntry:failure",
         scope: { type: "handler", handlerId: "useUpdateTimeEntry:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -236,6 +242,7 @@ export const useDecideTimeSuggestion = () => {
           handlerId: "useDecideTimeSuggestion:failure",
         },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -263,6 +270,7 @@ export const useDeleteTimeEntry = () => {
         fingerprintKey: "useDeleteTimeEntry:failure",
         scope: { type: "handler", handlerId: "useDeleteTimeEntry:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -297,6 +305,7 @@ export const useBatchUpdateTimeEntries = () => {
           handlerId: "useBatchUpdateTimeEntries:failure",
         },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -327,6 +336,7 @@ export const useBatchDeleteTimeEntries = () => {
           handlerId: "useBatchDeleteTimeEntries:failure",
         },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -358,6 +368,7 @@ export const useSplitTimeEntry = () => {
         fingerprintKey: "useSplitTimeEntry:failure",
         scope: { type: "handler", handlerId: "useSplitTimeEntry:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };

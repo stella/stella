@@ -3,7 +3,7 @@
 // release-tag.yml ends with one verdict over its gates. A gate that can only
 // fail there leaves a version commit nobody can tag, so every gate on that
 // verdict line is classified here: `pre-cut` gates run on the base tree, with
-// the same command the tag runs, before the cut writes a file; `post-cut`
+// the same guard the tag runs, before the cut writes a file; `post-cut`
 // gates name why only the version commit can decide them. The cut adds its
 // own pre-cut gates (source `cut`), which the verdict line does not have.
 // prepare-maintenance-release-gates.test.ts holds this table equal to the
@@ -15,6 +15,10 @@ export type CutGateCheck =
       /** Runs on the base tree; any exit status but 0 fails the gate. */
       readonly kind: "command";
       readonly command: readonly string[];
+    }
+  | {
+      /** The resolved newest final release must already be published on npm. */
+      readonly kind: "npm-publish-lag";
     }
   | {
       /** main/heavy and main/pr-depth green on the base commit. */
@@ -43,6 +47,16 @@ export type CutGate = PreCutGate | PostCutGate;
 
 export const MAINTENANCE_CUT_GATES: readonly CutGate[] = [
   {
+    name: "deploy-env-contract",
+    source: "cut",
+    stage: "pre-cut",
+    check: {
+      kind: "command",
+      command: ["bun", "scripts/check-deploy-env-contract.ts"],
+    },
+    overriddenByAllowUnprovenMain: false,
+  },
+  {
     name: "main-health",
     source: "cut",
     stage: "pre-cut",
@@ -54,7 +68,7 @@ export const MAINTENANCE_CUT_GATES: readonly CutGate[] = [
     source: "release-tag",
     stage: "post-cut",
     reason:
-      "staging/verified and the merge-group receipt are read on the version commit, which the cut creates",
+      "the cut creates the release PR head whose identity and source tree the RC tag verifies",
   },
   {
     name: "dependency-audit",
@@ -77,14 +91,16 @@ export const MAINTENANCE_CUT_GATES: readonly CutGate[] = [
     name: "npm-publish-lag",
     source: "release-tag",
     stage: "pre-cut",
+    check: { kind: "npm-publish-lag" },
+    overriddenByAllowUnprovenMain: false,
+  },
+  {
+    name: "npm-publish-readiness",
+    source: "release-tag",
+    stage: "pre-cut",
     check: {
       kind: "command",
-      command: [
-        "bun",
-        "scripts/check-npm-publish-lag.ts",
-        "--previous-release-of",
-        "HEAD",
-      ],
+      command: ["bun", "scripts/check-npm-publish-readiness.ts"],
     },
     overriddenByAllowUnprovenMain: false,
   },

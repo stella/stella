@@ -73,21 +73,21 @@ const decisionText = (
 
     const returnedBlocks: Block[] = [];
     let returnedChars = 0;
-    for (const block of blocks) {
+    for (const [index, block] of blocks.entries()) {
+      const served = servedBlockText(block, blocks[index - 1]);
       const separatorChars =
         returnedChars > 0 && block.plainText !== "" ? 2 : 0;
-      // Counted as the served text prints the block, number and all, so the
-      // extent agrees with `totalChars`.
+      // Counted as the served text prints the block, with its number and
+      // note mark, so the extent agrees with `totalChars`.
       const candidateChars =
         returnedChars +
         separatorChars +
-        (block.plainText === "" ? 0 : servedBlockText(block).length);
+        (block.plainText === "" ? 0 : served.length);
       if (candidateChars > MCP_CONTENT_MAX_CHARS) {
         if (returnedChars === 0) {
-          // The number the served text prints before the block shares the
-          // window with its words.
-          const numberChars =
-            servedBlockText(block).length - block.plainText.length;
+          // The number or note mark the served text prints before the block
+          // shares the window with its words.
+          const numberChars = served.length - block.plainText.length;
           const { end } = resolveTextWindowBounds({
             text: block.plainText,
             offset: 0,

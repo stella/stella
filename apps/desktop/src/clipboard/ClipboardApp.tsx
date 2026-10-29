@@ -2944,14 +2944,17 @@ const ClipboardApp = () => {
                     </p>
                     {filterQuery ? (
                       <Button
-                        className="text-muted-foreground h-auto max-w-sm px-2 py-1 text-wrap"
+                        className="h-auto min-h-11 max-w-sm rounded-xl px-4 py-2 text-wrap"
                         onClick={() =>
                           applyScope({ next: "registry", focusSearch: true })
                         }
-                        size="sm"
-                        variant="link"
                       >
-                        {t("noResultsDescription", { query: filterQuery })}
+                        <Building2Icon aria-hidden="true" className="size-4" />
+                        <span className="min-w-0 wrap-break-word">
+                          {t("noResultsSearchRegistries", {
+                            query: filterQuery,
+                          })}
+                        </span>
                       </Button>
                     ) : null}
                   </div>

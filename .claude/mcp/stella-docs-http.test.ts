@@ -7,8 +7,12 @@ import { connect, createServer } from "node:net";
 
 const children = new Set<ReturnType<typeof Bun.spawn>>();
 const UNBOUNDED_UPLOAD_ITERATIONS = 200;
-const DECLARED_UPLOAD_BYTES = 100 * 1024 * 1024;
-const SENT_UPLOAD_BYTES = 10 * 1024 * 1024;
+// The repeated-upload server runs with a smaller body limit, so each round
+// keeps the same shape (past the 8x drain bound, never complete) without
+// pushing gigabytes through loopback inside one test timeout.
+const REPEATED_UPLOAD_LIMIT_BYTES = 64 * 1024;
+const DECLARED_UPLOAD_BYTES = 100 * REPEATED_UPLOAD_LIMIT_BYTES;
+const SENT_UPLOAD_BYTES = 10 * REPEATED_UPLOAD_LIMIT_BYTES;
 
 const getFreePort = async () =>
   await new Promise<number>((resolve, reject) => {
@@ -80,11 +84,11 @@ const getSessionCount = async (baseUrl: string) => {
   return body.sessions;
 };
 
-const startHttpServer = async () => {
+const startHttpServer = async (env: Record<string, string> = {}) => {
   const port = await getFreePort();
   const child = Bun.spawn([process.execPath, "run", "stella-docs-http.ts"], {
     cwd: import.meta.dir,
-    env: { ...process.env, STELLA_DOCS_PORT: String(port) },
+    env: { ...process.env, ...env, STELLA_DOCS_PORT: String(port) },
     stdin: "ignore",
     stdout: "ignore",
     stderr: "pipe",
@@ -131,8 +135,8 @@ const readEarlyUploadResponse = async (port: string) =>
       socket.write(
         `POST /mcp HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\ncontent-type: application/json\r\ncontent-length: ${DECLARED_UPLOAD_BYTES}\r\n\r\n`,
       );
-      // Ten MiB of a declared hundred: past the drain bound, while the upload
-      // remains incomplete. Receiving a response proves the server stopped reading.
+      // Ten body limits of a declared hundred: past the drain bound, while the
+      // upload remains incomplete. Receiving a response proves the server stopped reading.
       socket.write(Buffer.alloc(SENT_UPLOAD_BYTES, 120));
     });
     const settleFromResponse = () => {
@@ -343,7 +347,9 @@ describe("shared documentation MCP HTTP server", () => {
   });
 
   test("answers every repeated unbounded upload with a 413 status line first", async () => {
-    const { baseUrl } = await startHttpServer();
+    const { baseUrl } = await startHttpServer({
+      STELLA_DOCS_MAX_REQUEST_BYTES: String(REPEATED_UPLOAD_LIMIT_BYTES),
+    });
     const { port } = new URL(baseUrl);
     expect(SENT_UPLOAD_BYTES).toBeLessThan(DECLARED_UPLOAD_BYTES);
     for (
@@ -426,4 +432,30 @@ describe("shared documentation MCP HTTP server", () => {
     expect(stdout).toBe("");
     expect(stderr).toContain("must be 127.0.0.1");
   });
+
+  test.each(["0", "-1", "1.5", "lots"])(
+    "refuses a body limit of %p",
+    async (limit) => {
+      const child = Bun.spawn(
+        [process.execPath, "run", "stella-docs-http.ts"],
+        {
+          cwd: import.meta.dir,
+          env: { ...process.env, STELLA_DOCS_MAX_REQUEST_BYTES: limit },
+          stdin: "ignore",
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
+      const [exitCode, stdout, stderr] = await Promise.all([
+        child.exited,
+        new Response(child.stdout).text(),
+        new Response(child.stderr).text(),
+      ]);
+      expect(exitCode).not.toBe(0);
+      expect(stdout).toBe("");
+      expect(stderr).toContain(
+        `Invalid STELLA_DOCS_MAX_REQUEST_BYTES: ${limit}.`,
+      );
+    },
+  );
 });
