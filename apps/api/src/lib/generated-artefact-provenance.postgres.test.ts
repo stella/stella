@@ -447,6 +447,54 @@ describe.skipIf(!enabled)("generated artefact storage (postgres)", () => {
     expect(small.statements).toBeGreaterThan(0);
     expect(large).toEqual(small);
   });
+  test.each(["null", '{"version":1,"slots":{}}'])(
+    "writing a legacy metadata envelope %s records generated origin",
+    async (metadata) => {
+      const id = createSafeId<"chatThread">();
+      await db.insert(chatThreads).values({
+        id,
+        organizationId,
+        userId,
+        title: "Legacy envelope",
+        titleSource: "default",
+      });
+      await db.execute(
+        sql`UPDATE chat_threads SET generation_provenance = ${metadata}::text::jsonb WHERE id = ${id}`,
+      );
+      const artefact = await generateArtefact({
+        generator,
+        sources: { decisionIds: [sourceId], inputs: [] },
+        generate: () => text,
+      });
+      expect(
+        await scopedDb(
+          async (tx) =>
+            await writeThreadArtefactTitle({
+              tx,
+              threadId: id,
+              expected: { title: "Legacy envelope", source: "default" },
+              artefact,
+              recordAuditEvent,
+            }),
+        ),
+      ).toBe(true);
+      const row =
+        (
+          await db
+            .select()
+            .from(chatThreads)
+            .where(eq(chatThreads.id, id))
+            .limit(1)
+        ).at(0) ?? panic("Missing legacy envelope fixture");
+      expect(
+        readArtefactText({
+          value: row.title,
+          origin: readArtefactOrigin(row.generationProvenance, "title"),
+          projection,
+        }),
+      ).toBe("Unavailable");
+    },
+  );
   test("one value update preserves the other value's provenance", async () => {
     const recap = {
       type: "generated",

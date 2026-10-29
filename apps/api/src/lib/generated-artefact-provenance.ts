@@ -203,7 +203,7 @@ export const writeThreadArtefactTitle = async ({
     .set({
       title: value,
       titleSource: generated ? CHAT_TITLE_SOURCE.AI : CHAT_TITLE_SOURCE.USER,
-      generationProvenance: sql`jsonb_set(coalesce(${chatThreads.generationProvenance}, '{"version":1,"slots":{}}'::jsonb), '{slots,title}', ${JSON.stringify(origin)}::text::jsonb, true)`,
+      generationProvenance: sql`jsonb_set(coalesce(nullif(${chatThreads.generationProvenance}, 'null'::jsonb), '{"version":1,"slots":{}}'::jsonb), '{slots,title}', ${JSON.stringify(origin)}::text::jsonb, true)`,
     })
     .where(
       and(
