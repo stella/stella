@@ -1,6 +1,11 @@
 {
+  "apps/desktop/src/clipboard/ClipboardApp.tsx": 2,
+  "apps/mobile/src/components/case-law-list.tsx": 1,
+  "apps/mobile/src/components/chats-list.tsx": 1,
+  "apps/mobile/src/components/header-search.tsx": 1,
   "apps/web/src/components/ai-suggestions/host.tsx": 1,
   "apps/web/src/components/chat/ask-user-card.tsx": 2,
+  "apps/web/src/components/chat/mcp-reconnect-notice.tsx": 1,
   "apps/web/src/components/inspector/skill-resource-panel.tsx": 4,
   "apps/web/src/components/inspector/use-markdown-file-draft.ts": 4,
   "apps/web/src/components/inspector/versions-facet.tsx": 5,
@@ -21,5 +26,8 @@
   "apps/web/src/routes/knowledge/-components/link-clause-dialog.tsx": 2,
   "apps/web/src/routes/knowledge/-components/skill-editor.tsx": 6,
   "apps/web/src/routes/knowledge/-components/template-studio.tsx": 1,
-  "apps/web/src/routes/law/-case-detail.tsx": 1
+  "apps/web/src/routes/law/-case-detail.tsx": 1,
+  "packages/ui/src/components/animated-count.tsx": 1,
+  "packages/ui/src/components/hex-color-picker.tsx": 2,
+  "packages/ui/src/components/swap-text.tsx": 1
 }

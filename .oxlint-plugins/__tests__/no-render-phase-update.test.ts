@@ -1,8 +1,14 @@
 import { expect, test } from "bun:test";
 
+import { NO_RENDER_PHASE_UPDATE_GOVERNED_PATHS } from "../../oxlint.config.ts";
 import { lintSingleRule } from "./lint-single-rule.ts";
 
 const RULE = "no-render-phase-update";
+const CENSUS_PATHS = ["apps", "packages"] as const;
+
+test("the render-phase update census covers every governed path", () => {
+  expect(CENSUS_PATHS).toEqual(NO_RENDER_PHASE_UPDATE_GOVERNED_PATHS);
+});
 
 test("rejects state updates and navigation in component and hook render bodies", async () => {
   expect(

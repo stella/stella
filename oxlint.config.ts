@@ -65,6 +65,11 @@ const fixtureRuleOverride = (file: string, rules: readonly string[]) => ({
   rules: Object.fromEntries(rules.map((rule) => [rule, "error"] as const)),
 });
 
+export const NO_RENDER_PHASE_UPDATE_GOVERNED_PATHS = [
+  "apps",
+  "packages",
+] as const;
+
 // Only the rows that declare an enforcement kind reach the lint rule; the rest
 // document an owner that no rule can yet prove.
 const enforcedOwnershipEntries = OWNERSHIP.filter(
@@ -1295,7 +1300,7 @@ const config = defineConfig({
     // and scripts/check-oxlint-effective-config.ts fails on that.
     "stella-lowercase/stella-lowercase": "error",
     "no-first-observer-entry/no-first-observer-entry": "error",
-    "no-render-phase-update/no-render-phase-update": "error",
+    "no-render-phase-update/no-render-phase-update": "off",
     "no-raw-colors/no-raw-colors": "error",
     "no-useless-assignment": "error",
     "promise/no-return-in-finally": "error",
@@ -2089,6 +2094,14 @@ const config = defineConfig({
   ],
 
   overrides: [
+    {
+      files: NO_RENDER_PHASE_UPDATE_GOVERNED_PATHS.map(
+        (directory) => `${directory}/**/*.{ts,tsx}`,
+      ),
+      rules: {
+        "no-render-phase-update/no-render-phase-update": "error",
+      },
+    },
     {
       // Page-level narrative copy owns a readable measure. Reusable component
       // internals and task-shaped surfaces are outside this narrow enrolment.

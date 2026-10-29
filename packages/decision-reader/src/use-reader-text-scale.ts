@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 
 import { Result, TaggedError } from "better-result";
@@ -99,17 +99,28 @@ export const useReaderTextScale = ({
   analytics,
   storage = null,
 }: ReaderTextScaleOptions = {}): ReaderTextScale => {
-  // Hosts supply storage after hydration so server and client markup agree.
-  const [storedScale, setStoredScale] = useState<number | null>(null);
-  const [readFrom, setReadFrom] = useState<ReaderTextScaleStorage | null>(null);
-  if (storage !== null && readFrom !== storage) {
-    setReadFrom(storage);
+  const initialStorage = useRef(storage);
+  const [storedScale, setStoredScale] = useState(() => {
+    if (storage === null) {
+      return null;
+    }
+    const read = readStoredScale(storage);
+    if (Result.isError(read)) {
+      analytics?.captureError(read.error, "read");
+    }
+    return read.unwrapOr(READER_TEXT_SCALE_DEFAULT);
+  });
+  useEffect(() => {
+    if (storage === null || initialStorage.current === storage) {
+      return;
+    }
+    initialStorage.current = storage;
     const read = readStoredScale(storage);
     if (Result.isError(read)) {
       analytics?.captureError(read.error, "read");
     }
     setStoredScale(read.unwrapOr(READER_TEXT_SCALE_DEFAULT));
-  }
+  }, [analytics, storage]);
 
   const scale = storedScale ?? READER_TEXT_SCALE_DEFAULT;
   const applyScale = (next: number) => {
