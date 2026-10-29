@@ -1,7 +1,5 @@
 import type { ReactNode } from "react";
 
-import { useFormatter, useLocale } from "use-intl";
-
 import type {
   CalculationKind,
   CalculationResult,
@@ -29,6 +27,7 @@ import type {
 import { formatCalculationResult } from "./calculation-format";
 import { applyCalculationSelection } from "./calculation-selection";
 import type { CalculationSelection } from "./calculation-selection";
+import { useFormatter, useFormattingLocale } from "./formatting";
 
 /** A property a view can calculate over, with the reductions its values allow. */
 export type CalculationProperty = {
@@ -238,7 +237,7 @@ export type { CalculationResult };
 
 const useCalculationFormatters = (): CalculationFormatters => {
   const format = useFormatter();
-  const locale = useLocale();
+  const locale = useFormattingLocale();
 
   return {
     number: (value) => format.number(value),

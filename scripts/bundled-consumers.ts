@@ -1,4 +1,8 @@
-import ts from "typescript6";
+import {
+  type Expression,
+  parseSource,
+  walk,
+} from "../packages/scripts/src/syntax-tree";
 
 export type BundledConsumerSite = Readonly<{
   file: string;
@@ -96,53 +100,47 @@ const runScripts = (node: unknown): string[] => {
 // A `Bun.build(...)` call anywhere in the program: read from the syntax tree,
 // so a mention in a string or comment never counts and a call never hides
 // behind other code on its line.
-const isBunBuildCallee = (callee: ts.Expression): boolean => {
-  if (ts.isPropertyAccessExpression(callee)) {
-    return (
-      ts.isIdentifier(callee.expression) &&
-      callee.expression.text === "Bun" &&
-      callee.name.text === "build"
-    );
-  }
-  return (
-    ts.isElementAccessExpression(callee) &&
-    ts.isIdentifier(callee.expression) &&
-    callee.expression.text === "Bun" &&
-    ts.isStringLiteralLike(callee.argumentExpression) &&
-    callee.argumentExpression.text === "build"
-  );
-};
+const isBunBuildCallee = (callee: Expression): boolean =>
+  callee.type === "MemberExpression" &&
+  callee.object.type === "Identifier" &&
+  callee.object.name === "Bun" &&
+  (callee.computed
+    ? (callee.property.type === "Literal" &&
+        callee.property.value === "build") ||
+      (callee.property.type === "TemplateLiteral" &&
+        callee.property.expressions.length === 0 &&
+        callee.property.quasis.at(0)?.value.cooked === "build")
+    : callee.property.type === "Identifier" &&
+      callee.property.name === "build");
 
 // One site per call, named by what it builds (its `entrypoints`, else its
 // whole argument), so a second build in a registered script is a new site.
 const bunBuildCalls = (path: string, contents: string): string[] => {
-  const source = ts.createSourceFile(
-    path,
-    contents,
-    ts.ScriptTarget.Latest,
-    true,
-  );
+  const source = parseSource(path, contents);
   const calls: string[] = [];
-  const visit = (node: ts.Node): void => {
-    if (ts.isCallExpression(node) && isBunBuildCallee(node.expression)) {
-      const [options] = node.arguments;
-      const entrypoints =
-        options !== undefined && ts.isObjectLiteralExpression(options)
-          ? options.properties.find(
-              (property): property is ts.PropertyAssignment =>
-                ts.isPropertyAssignment(property) &&
-                property.name.getText(source) === "entrypoints",
-            )
-          : undefined;
-      const built =
-        entrypoints === undefined
-          ? (options?.getText(source) ?? "")
-          : `entrypoints: ${entrypoints.initializer.getText(source)}`;
-      calls.push(`${BUN_BUILD_CALL}${normalizeCommand(built)})`);
+  walk(source.program, (node) => {
+    if (node.type !== "CallExpression" || !isBunBuildCallee(node.callee)) {
+      return;
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(source);
+    const options = node.arguments.at(0);
+    const entrypoints =
+      options?.type === "ObjectExpression"
+        ? options.properties.find(
+            (property) =>
+              property.type === "Property" &&
+              !property.method &&
+              !property.shorthand &&
+              property.kind === "init" &&
+              contents.slice(property.key.start, property.key.end) ===
+                "entrypoints",
+          )
+        : undefined;
+    let built = options ? contents.slice(options.start, options.end) : "";
+    if (entrypoints?.type === "Property") {
+      built = `entrypoints: ${contents.slice(entrypoints.value.start, entrypoints.value.end)}`;
+    }
+    calls.push(`${BUN_BUILD_CALL}${normalizeCommand(built)})`);
+  });
   return calls;
 };
 
@@ -308,7 +306,7 @@ export const BUNDLED_CONSUMERS = [
   {
     file: "apps/api/Dockerfile",
     command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --sourcemap=inline --outdir /app/bundles --entry-naming file-derivative-worker.js apps/api/src/scripts/file-derivative-worker.ts",
+      "bun build --define __STELLA_RELEASE__=true --minify --keep-names --target bun --sourcemap=linked --outdir /app/bundles --public-path /app/ --entry-naming file-derivative-worker.js apps/api/src/scripts/file-derivative-worker.ts",
     bootCheck: { type: "ci-job", jobId: "api-image-smoke" },
   },
   {

@@ -5,6 +5,7 @@ import path from "node:path";
 
 import { ENV_CATALOG, ENV_OWNER } from "./env-catalog";
 import {
+  RELEASE_ARTIFACT,
   renderSelfhostCompose,
   SELFHOST_APPLICATION_IMAGE_EXPRESSION,
   SELFHOST_COMPOSE_ENV,
@@ -256,29 +257,29 @@ describe("release manifest contract", () => {
     reference: `ghcr.io/stella/stella-api@sha256:${"a".repeat(64)}`,
   };
 
+  const artifacts = Object.fromEntries(
+    Object.values(RELEASE_ARTIFACT).map(({ manifestKey }) => [
+      manifestKey,
+      digestArtifact,
+    ]),
+  );
+
   test("accepts digest-qualified artifact references", () => {
-    expect(
-      releaseManifestIssues({
-        image: digestArtifact,
-        webImage: digestArtifact,
-      }),
-    ).toEqual([]);
+    expect(releaseManifestIssues(artifacts)).toEqual([]);
   });
 
-  test.each(["image", "webImage"])(
-    "rejects a mutable %s reference",
-    (manifestKey) => {
-      expect(
-        releaseManifestIssues({
-          image: digestArtifact,
-          webImage: digestArtifact,
-          [manifestKey]: { reference: "ghcr.io/stella/stella:latest" },
-        }),
-      ).toContain(
-        `Release manifest ${manifestKey}.reference must be a digest-qualified image reference.`,
-      );
-    },
-  );
+  test.each(
+    Object.values(RELEASE_ARTIFACT).map(({ manifestKey }) => manifestKey),
+  )("rejects a mutable %s reference", (manifestKey) => {
+    expect(
+      releaseManifestIssues({
+        ...artifacts,
+        [manifestKey]: { reference: "ghcr.io/stella/stella:latest" },
+      }),
+    ).toContain(
+      `Release manifest ${manifestKey}.reference must be a digest-qualified image reference.`,
+    );
+  });
 });
 
 describe("self-host workflow contract", () => {

@@ -54,8 +54,8 @@ import { detached } from "@/lib/detached";
 import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView } from "@/lib/use-query-view";
 import { createUuid } from "@/lib/uuid";
 import { useUpdateWorkspace } from "@/lib/workspaces/mutations";
 import {
@@ -226,7 +226,7 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
 
 const PartiesList = ({ workspaceId }: PartiesSectionProps) => {
   const t = useTranslations();
-  const view = useQueryView(useQuery(workspaceContactsOptions(workspaceId)), {
+  const view = queryView(useQuery(workspaceContactsOptions(workspaceId)), {
     isEmpty: ({ contacts, overflow }) => contacts.length === 0 && !overflow,
   });
   switch (view.type) {

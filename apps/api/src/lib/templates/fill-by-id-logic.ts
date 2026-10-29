@@ -171,6 +171,7 @@ export const fillByIdLogic = async function* ({
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "PDF conversion failed",
         }),
       );

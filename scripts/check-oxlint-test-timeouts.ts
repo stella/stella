@@ -1,6 +1,12 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript6";
+
+import {
+  type Node,
+  type ParsedSource,
+  parseSource,
+  walk,
+} from "../packages/scripts/src/syntax-tree";
 
 const TEST_DIRECTORY = path.resolve(
   import.meta.dirname,
@@ -13,63 +19,220 @@ const TIMEOUT_ALLOWLIST: Readonly<Record<string, string>> = {
 };
 const TEST_APIS = new Set(["test", "it", "describe", "setDefaultTimeout"]);
 
-const memberPath = (expression: ts.Expression): string[] => {
-  if (ts.isIdentifier(expression)) {
-    return [expression.text];
+/** A string literal or a template literal without substitutions. */
+const stringLiteralText = (node: Node): string | undefined => {
+  if (node.type === "Literal" && typeof node.value === "string") {
+    return node.value;
   }
-  if (ts.isPropertyAccessExpression(expression)) {
-    const members = memberPath(expression.expression);
-    members.push(expression.name.text);
-    return members;
+  if (node.type === "TemplateLiteral" && node.expressions.length === 0) {
+    return node.quasis.at(0)?.value.cooked ?? undefined;
   }
-  if (ts.isElementAccessExpression(expression)) {
-    const members = memberPath(expression.expression);
-    if (ts.isStringLiteralLike(expression.argumentExpression)) {
-      members.push(expression.argumentExpression.text);
+  return undefined;
+};
+
+const memberPath = (expression: Node): string[] => {
+  if (expression.type === "Identifier") {
+    return [expression.name];
+  }
+  if (expression.type === "MemberExpression") {
+    const members = memberPath(expression.object);
+    if (!expression.computed) {
+      members.push(
+        expression.property.type === "PrivateIdentifier"
+          ? `#${expression.property.name}`
+          : expression.property.name,
+      );
+    } else {
+      const text = stringLiteralText(expression.property);
+      if (text !== undefined) {
+        members.push(text);
+      }
     }
     return members;
   }
-  if (
-    ts.isCallExpression(expression) ||
-    ts.isTaggedTemplateExpression(expression)
-  ) {
-    return memberPath(
-      ts.isCallExpression(expression) ? expression.expression : expression.tag,
-    );
+  if (expression.type === "CallExpression") {
+    return memberPath(expression.callee);
   }
-  if (ts.isParenthesizedExpression(expression)) {
+  if (expression.type === "TaggedTemplateExpression") {
+    return memberPath(expression.tag);
+  }
+  // An optional chain's wrapper is transparent, as in the chain it wraps.
+  if (
+    expression.type === "ParenthesizedExpression" ||
+    expression.type === "ChainExpression"
+  ) {
     return memberPath(expression.expression);
   }
   return [];
 };
 
-const testPolicyViolation = (file: ts.SourceFile): string | undefined => {
+const PATTERNS = new Set([
+  "ObjectPattern",
+  "ArrayPattern",
+  "AssignmentPattern",
+  "RestElement",
+  "Property",
+]);
+
+/**
+ * Whether the pattern holding the node at `index` of `ancestors` assigns to
+ * existing bindings (`({ a } = b)`, `for ([a] of b)`) rather than declaring.
+ */
+const isAssignmentPattern = (
+  ancestors: readonly Node[],
+  index: number,
+): boolean => {
+  let child = ancestors[index];
+  for (let at = index - 1; at >= 0; at -= 1) {
+    const ancestor = ancestors[at];
+    if (ancestor === undefined || child === undefined) {
+      return false;
+    }
+    if (!PATTERNS.has(ancestor.type)) {
+      return (
+        (ancestor.type === "AssignmentExpression" && ancestor.left === child) ||
+        ((ancestor.type === "ForOfStatement" ||
+          ancestor.type === "ForInStatement") &&
+          ancestor.left === child)
+      );
+    }
+    child = ancestor;
+  }
+  return false;
+};
+
+const NAMED_DECLARATIONS = new Set([
+  "VariableDeclarator",
+  "FunctionDeclaration",
+  "FunctionExpression",
+  "TSDeclareFunction",
+  "TSEmptyBodyFunctionExpression",
+  "ClassDeclaration",
+  "ClassExpression",
+  "TSInterfaceDeclaration",
+  "TSTypeAliasDeclaration",
+  "TSEnumDeclaration",
+  "TSEnumMember",
+  "TSModuleDeclaration",
+  "TSImportEqualsDeclaration",
+  "TSNamespaceExportDeclaration",
+  "TSTypeParameter",
+  "CatchClause",
+  "TSParameterProperty",
+  "MetaProperty",
+]);
+const NAMED_MEMBERS = new Set([
+  "MethodDefinition",
+  "PropertyDefinition",
+  "AccessorProperty",
+  "TSAbstractMethodDefinition",
+  "TSAbstractPropertyDefinition",
+  "TSAbstractAccessorProperty",
+  "TSPropertySignature",
+  "TSMethodSignature",
+]);
+
+type IdentifierRole = "name" | "reference" | "duplicate";
+
+/**
+ * Classifies an identifier the way a declaration's `name` slot does: a
+ * declared, member or property name is no reference to the test API. oxc
+ * repeats a shorthand property as key and value; the key is the duplicate.
+ */
+const identifierRole = (
+  node: Node,
+  ancestors: readonly Node[],
+): IdentifierRole => {
+  const parentIndex = ancestors.length - 1;
+  const parent = ancestors[parentIndex];
+  if (parent === undefined) {
+    return "reference";
+  }
+  if (parent.type === "MemberExpression") {
+    return !parent.computed && parent.property === node ? "name" : "reference";
+  }
+  if (parent.type === "Property") {
+    if (parent.computed && parent.key === node) {
+      return "reference";
+    }
+    const isKey = parent.key === node;
+    if (ancestors[parentIndex - 1]?.type !== "ObjectPattern") {
+      if (parent.shorthand) {
+        return isKey ? "duplicate" : "reference";
+      }
+      return isKey ? "name" : "reference";
+    }
+    const assigns = isAssignmentPattern(ancestors, parentIndex);
+    if (parent.shorthand) {
+      if (!assigns) {
+        return "name";
+      }
+      return isKey ? "duplicate" : "reference";
+    }
+    // `{ key: value }` names the key when it assigns, the value when it
+    // declares.
+    return isKey === assigns ? "name" : "reference";
+  }
+  if (
+    parent.type === "ArrayPattern" ||
+    (parent.type === "AssignmentPattern" && parent.left === node) ||
+    (parent.type === "RestElement" && parent.argument === node)
+  ) {
+    return isAssignmentPattern(ancestors, parentIndex) ? "reference" : "name";
+  }
+  return declarationRole(node, parent);
+};
+
+/** Names in declarations, signatures and class members. */
+const declarationRole = (node: Node, parent: Node): IdentifierRole => {
+  if (
+    ("params" in parent &&
+      parent.params.some((parameter: Node) => parameter === node)) ||
+    parent.type === "TSIndexSignature"
+  ) {
+    return "name";
+  }
+  if (NAMED_DECLARATIONS.has(parent.type)) {
+    const isValue =
+      ("init" in parent && parent.init === node) ||
+      ("body" in parent && parent.body === node) ||
+      ("superClass" in parent && parent.superClass === node) ||
+      ("initializer" in parent && parent.initializer === node) ||
+      ("moduleReference" in parent && parent.moduleReference === node);
+    return isValue ? "reference" : "name";
+  }
+  const isMemberName =
+    NAMED_MEMBERS.has(parent.type) &&
+    "key" in parent &&
+    parent.key === node &&
+    !("computed" in parent && parent.computed);
+  return isMemberName ? "name" : "reference";
+};
+
+const testPolicyViolation = (file: ParsedSource): string | undefined => {
   const bindings = new Map<string, string>();
   const namespaces = new Set<string>();
-  for (const statement of file.statements) {
+  for (const statement of file.program.body) {
     if (
-      !ts.isImportDeclaration(statement) ||
-      !ts.isStringLiteral(statement.moduleSpecifier) ||
-      statement.moduleSpecifier.text !== "bun:test"
+      statement.type !== "ImportDeclaration" ||
+      statement.source.value !== "bun:test"
     ) {
       continue;
     }
-    const named = statement.importClause?.namedBindings;
-    if (named === undefined) {
-      continue;
-    }
-    if (ts.isNamespaceImport(named)) {
-      namespaces.add(named.name.text);
-      continue;
-    }
-    for (const binding of named.elements) {
-      bindings.set(
-        binding.name.text,
-        binding.propertyName?.text ?? binding.name.text,
-      );
+    for (const specifier of statement.specifiers) {
+      if (specifier.type === "ImportNamespaceSpecifier") {
+        namespaces.add(specifier.local.name);
+      } else if (specifier.type === "ImportSpecifier") {
+        bindings.set(
+          specifier.local.name,
+          specifier.imported.type === "Identifier"
+            ? specifier.imported.name
+            : specifier.imported.value,
+        );
+      }
     }
   }
-  const apiFor = (expression: ts.Expression): string | undefined => {
+  const apiFor = (expression: Node): string | undefined => {
     const members = memberPath(expression);
     const root = members.at(0);
     if (root === undefined) {
@@ -77,7 +240,7 @@ const testPolicyViolation = (file: ts.SourceFile): string | undefined => {
     }
     return namespaces.has(root) ? members.at(1) : bindings.get(root);
   };
-  const isTestReference = (expression: ts.Expression): boolean => {
+  const isTestReference = (expression: Node): boolean => {
     const api = apiFor(expression);
     if (api !== undefined && TEST_APIS.has(api)) {
       return true;
@@ -85,46 +248,69 @@ const testPolicyViolation = (file: ts.SourceFile): string | undefined => {
     const members = memberPath(expression);
     return members.length === 1 && namespaces.has(members.at(0) ?? "");
   };
-  const isFactoryValue = (expression: ts.Expression): boolean => {
+  const isFactoryValue = (expression: Node): boolean => {
     if (
-      !ts.isCallExpression(expression) &&
-      !ts.isTaggedTemplateExpression(expression)
+      expression.type !== "CallExpression" &&
+      expression.type !== "TaggedTemplateExpression"
     ) {
       return false;
     }
-    let target: ts.Expression = ts.isCallExpression(expression)
-      ? expression.expression
-      : expression.tag;
-    while (ts.isParenthesizedExpression(target)) {
+    let target =
+      expression.type === "CallExpression" ? expression.callee : expression.tag;
+    while (
+      target.type === "ParenthesizedExpression" ||
+      target.type === "ChainExpression"
+    ) {
       target = target.expression;
     }
     return (
-      !ts.isCallExpression(target) &&
-      !ts.isTaggedTemplateExpression(target) &&
+      target.type !== "CallExpression" &&
+      target.type !== "TaggedTemplateExpression" &&
       ["each", "if", "skipIf"].includes(memberPath(target).at(-1) ?? "")
     );
   };
-  const isTimeoutFreeOptions = (expression: ts.Expression): boolean => {
-    if (!ts.isObjectLiteralExpression(expression)) {
+  const isTimeoutFreeOptions = (expression: Node): boolean => {
+    if (expression.type !== "ObjectExpression") {
       return false;
     }
     return expression.properties.every((property) => {
-      const name = property.name;
+      if (property.type !== "Property" || property.computed) {
+        return false;
+      }
+      if (property.key.type === "Identifier") {
+        return property.key.name !== "timeout";
+      }
       return (
-        name !== undefined &&
-        (ts.isIdentifier(name) || ts.isStringLiteral(name)) &&
-        name.text !== "timeout"
+        property.key.type === "Literal" &&
+        typeof property.key.value === "string" &&
+        property.key.value !== "timeout"
       );
     });
   };
 
-  const isIndirectReference = (expression: ts.Expression): boolean => {
+  type Position = {
+    /** The node, or the optional chain wrapping it. */
+    self: Node;
+    parent: Node | undefined;
+  };
+  const position = (node: Node, ancestors: readonly Node[]): Position => {
+    const wrapper = ancestors.at(-1);
+    return wrapper?.type === "ChainExpression" && wrapper.expression === node
+      ? { self: wrapper, parent: ancestors.at(-2) }
+      : { self: node, parent: wrapper };
+  };
+
+  const isIndirectReference = (
+    expression: Node,
+    ancestors: readonly Node[],
+  ): boolean => {
     if (!isTestReference(expression)) {
       return false;
     }
     if (
-      ts.isElementAccessExpression(expression) &&
-      !ts.isStringLiteralLike(expression.argumentExpression)
+      expression.type === "MemberExpression" &&
+      expression.computed &&
+      stringLiteralText(expression.property) === undefined
     ) {
       return true;
     }
@@ -135,23 +321,20 @@ const testPolicyViolation = (file: ts.SourceFile): string | undefined => {
     ) {
       return true;
     }
-    const parent = expression.parent;
+    const { self, parent } = position(expression, ancestors);
     const isName =
-      "name" in parent &&
-      parent.name === expression &&
-      !ts.isShorthandPropertyAssignment(parent) &&
-      !ts.isExportSpecifier(parent);
+      expression.type === "Identifier" &&
+      identifierRole(expression, ancestors) === "name";
     const isChainPart =
-      (ts.isPropertyAccessExpression(parent) ||
-        ts.isElementAccessExpression(parent) ||
-        ts.isParenthesizedExpression(parent)) &&
-      parent.expression === expression;
+      (parent?.type === "MemberExpression" && parent.object === self) ||
+      (parent?.type === "ParenthesizedExpression" &&
+        parent.expression === self);
     const isCallTarget =
-      (ts.isCallExpression(parent) && parent.expression === expression) ||
-      (ts.isTaggedTemplateExpression(parent) && parent.tag === expression);
+      (parent?.type === "CallExpression" && parent.callee === self) ||
+      (parent?.type === "TaggedTemplateExpression" && parent.tag === self);
     const isCall =
-      ts.isCallExpression(expression) ||
-      ts.isTaggedTemplateExpression(expression);
+      expression.type === "CallExpression" ||
+      expression.type === "TaggedTemplateExpression";
     return (
       !isName &&
       !isChainPart &&
@@ -160,43 +343,58 @@ const testPolicyViolation = (file: ts.SourceFile): string | undefined => {
     );
   };
 
-  const visit = (node: ts.Node): string | undefined => {
-    if (ts.isImportDeclaration(node)) {
+  let violation: string | undefined;
+  walk(file.program, (node, ancestors) => {
+    if (violation !== undefined || node.type === "ImportDeclaration") {
+      return "skip-children";
+    }
+    if (
+      node.type === "Identifier" &&
+      identifierRole(node, ancestors) === "duplicate"
+    ) {
       return undefined;
     }
-    if (ts.isExpression(node) && isIndirectReference(node)) {
-      return "call test APIs directly";
+    if (
+      node.type !== "ChainExpression" &&
+      isIndirectReference(node, ancestors)
+    ) {
+      violation = "call test APIs directly";
+      return "skip-children";
     }
-    if (ts.isCallExpression(node)) {
+    if (node.type === "CallExpression") {
       // The data call in test.each(cases)(...) has no test arguments.
+      const { self, parent } = position(node, ancestors);
       const isFactory =
-        (ts.isCallExpression(node.parent) && node.parent.expression === node) ||
-        (ts.isTaggedTemplateExpression(node.parent) &&
-          node.parent.tag === node);
-      const api = apiFor(node.expression);
+        (parent?.type === "CallExpression" && parent.callee === self) ||
+        (parent?.type === "TaggedTemplateExpression" && parent.tag === self);
+      const api = apiFor(node.callee);
       if (!isFactory && api !== undefined && TEST_APIS.has(api)) {
         const secondArgument = node.arguments.at(1);
         const thirdArgument = node.arguments.at(2);
         const optionsFirst =
           secondArgument !== undefined &&
-          (ts.isObjectLiteralExpression(secondArgument) ||
+          (secondArgument.type === "ObjectExpression" ||
             (thirdArgument !== undefined &&
-              (ts.isArrowFunction(thirdArgument) ||
-                ts.isFunctionExpression(thirdArgument))));
+              (thirdArgument.type === "ArrowFunctionExpression" ||
+                thirdArgument.type === "FunctionExpression")));
         const optionsArgument = optionsFirst ? secondArgument : thirdArgument;
         if (
           api === "setDefaultTimeout" ||
-          node.arguments.some(ts.isSpreadElement) ||
+          node.arguments.some(
+            (argument) => argument.type === "SpreadElement",
+          ) ||
           (optionsArgument !== undefined &&
             !isTimeoutFreeOptions(optionsArgument))
         ) {
-          return "pass test options inline without timeout keys or spreads";
+          violation =
+            "pass test options inline without timeout keys or spreads";
+          return "skip-children";
         }
       }
     }
-    return ts.forEachChild(node, visit);
-  };
-  return visit(file);
+    return undefined;
+  });
+  return violation;
 };
 
 type CustomLintTestTimeoutOptions = {
@@ -213,13 +411,7 @@ export const customLintTestTimeoutViolations = ({
     "**/*.{ts,tsx,js,jsx,mts,cts,mjs,cjs}",
   ).scanSync(directory)) {
     const source = readFileSync(path.join(directory, filename), "utf-8");
-    const file = ts.createSourceFile(
-      filename,
-      source,
-      ts.ScriptTarget.Latest,
-      true,
-    );
-    const violation = testPolicyViolation(file);
+    const violation = testPolicyViolation(parseSource(filename, source));
     if (violation === undefined) {
       continue;
     }

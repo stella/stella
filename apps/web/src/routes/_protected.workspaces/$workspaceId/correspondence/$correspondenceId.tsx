@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -13,9 +13,10 @@ import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
+import { queryView } from "@/lib/query-view.logic";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import {
   CORRESPONDENCE_AUTH_LABEL_KEYS,
   correspondenceByIdOptions,
@@ -23,6 +24,7 @@ import {
 } from "@/lib/workspaces/queries/correspondence";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { selectAvailableWorkspaceViews } from "@/lib/workspaces/queries/views.logic";
+import { getCurrentWorkspaceDocument } from "@/lib/workspaces/use-workspace-view-params";
 import { correspondenceViewId } from "@/lib/workspaces/view-layout";
 import { CorrespondenceAssigneeField } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-assignee-field";
 import { CorrespondenceProvenance } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-provenance";
@@ -44,6 +46,7 @@ export const Route = createFileRoute(
 
 function CorrespondenceDetailPage() {
   const t = useTranslations();
+  const router = useRouter();
   const format = useFormatter();
   const { workspaceId, correspondenceId } = Route.useParams({
     select: (params) => ({
@@ -207,11 +210,14 @@ function CorrespondenceDetailPage() {
                       className="min-w-0"
                       onClick={() =>
                         detached(
-                          openEntityInInspector(
-                            attachment.entityId,
-                            attachment.filename,
+                          openEntityInInspector({
+                            documentOnScreen: getCurrentWorkspaceDocument(
+                              router.state.matches,
+                            ),
+                            entityId: attachment.entityId,
+                            label: attachment.filename,
                             workspaceId,
-                          ),
+                          }),
                           "correspondence.open-attachment",
                         )
                       }
@@ -289,7 +295,7 @@ const BackToCorrespondenceLink = ({ workspaceId }: { workspaceId: string }) => {
     select: (views) =>
       correspondenceViewId(selectAvailableWorkspaceViews(views)),
   });
-  const viewIdView = useQueryView(viewIdQuery);
+  const viewIdView = queryView(viewIdQuery);
   useQueryViewError(viewIdView, "BackToCorrespondenceLink:query");
   const viewId = viewIdView.type === "items" ? viewIdView.items : null;
   const label = (

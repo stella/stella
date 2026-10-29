@@ -26,7 +26,7 @@ import { gotenbergConvertTarget } from "@/api/lib/files/converter-settings";
 import { restrictSkCourtDocumentUrl } from "@/api/lib/legal-search/sk-court-document-url";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { getCorpusS3, getS3 } from "@/api/lib/s3";
-import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
+import { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
 
 import * as http from "../../packages/fetch/src/index.ts";
 
