@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { AI_FAILURE_CODES } from "@stll/api-contract";
+import {
+  AI_FAILURE_CODES,
+  API_VALIDATION_ERROR_CODE,
+} from "@stll/api-contract";
 
 import messages from "@/i18n/langs/en.json";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
@@ -47,6 +50,10 @@ describe("AI API failures", () => {
     ],
     [AI_FAILURE_CODES.unknown, messages.errors.apiCodes.aiUnknown],
     [
+      AI_FAILURE_CODES.deadline_exceeded,
+      messages.errors.apiCodes.aiDeadlineExceeded,
+    ],
+    [
       AI_FAILURE_CODES.provider_task_unsupported,
       messages.errors.apiCodes.aiProviderTaskUnsupported,
     ],
@@ -73,4 +80,60 @@ describe("server errors outside AI", () => {
 
     expect(userErrorFromThrown(error, "Action failed")).toBe("Action failed");
   });
+});
+
+describe("transport failures", () => {
+  test.each([
+    ["network", messages.common.networkError],
+    ["timeout", messages.transportErrors.timeout],
+  ] as const)("localizes %s failures", (kind, expectedMessage) => {
+    const error = toAPIError({ status: 0, value: null, kind });
+
+    expect(error.message).toBe(expectedMessage);
+  });
+
+  test("keeps an aborted request distinct from a network failure", () => {
+    const error = toAPIError({
+      status: 0,
+      value: null,
+      kind: "aborted",
+      cause: new DOMException("Cancelled", "AbortError"),
+    });
+
+    expect(error.transportKind).toBe("aborted");
+    expect(error.message).not.toBe(messages.common.networkError);
+  });
+});
+
+describe("validation API failures", () => {
+  test.each([
+    [302, messages.errors.api.unknown],
+    [422, messages.errors.apiCodes.validationTooLong],
+    [503, messages.errors.api.serviceUnavailable],
+  ])("maps validation code at status %i", (status, expectedMessage) => {
+    const error = toAPIError({
+      status,
+      value: {
+        code: API_VALIDATION_ERROR_CODE,
+        message: "Private validation detail",
+        issues: [{ field: "name", constraint: "maxLength", limit: 256 }],
+      },
+    });
+
+    expect(error.message).toBe(
+      expectedMessage.replace("{limit, number}", "256"),
+    );
+  });
+});
+
+test("search work limits provide the translated refinement action", () => {
+  const error = toAPIError({
+    status: 422,
+    value: {
+      code: "global_search_rank_work_limit",
+      message: "Search work limit",
+    },
+  });
+  expect(error.message).toBe(messages.caseLaw.pagination.refineForMore);
+  expect(isDisplayableAPIError(error)).toBe(true);
 });

@@ -4,8 +4,8 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import {
-  resolveChatComposerAction,
   type ChatComposerActionState,
+  resolveChatComposerAction,
 } from "@stll/chat/composer";
 import { Button } from "@stll/ui/button";
 import {

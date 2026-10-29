@@ -10,13 +10,13 @@ import { JurisdictionPicker } from "@/components/jurisdiction-picker";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
 import {
   organizationSettingsKeys,
   organizationSettingsOptions,
 } from "@/lib/organization/settings-queries";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 import { useSettingsMutation } from "@/routes/_protected.admin/-hooks/use-settings-mutation";
 
 export const OrganizationJurisdictionsCard = () => {
@@ -28,7 +28,7 @@ export const OrganizationJurisdictionsCard = () => {
       userId,
     }),
   );
-  const settingsView = useQueryView(settingsQuery);
+  const settingsView = queryView(settingsQuery);
   const settings =
     settingsView.type === "items" ? settingsView.items : undefined;
   const serverSelected = settings ? settings.practiceJurisdictions : [];
@@ -50,8 +50,13 @@ export const OrganizationJurisdictionsCard = () => {
   const [, startSelectionTransition] = useTransition();
 
   const updateMutation = useSettingsMutation({
+    exceptionScope: {
+      type: "handler",
+      handlerId:
+        "OrganizationJurisdictionsCard.updateMutation.useSettingsMutation",
+    },
     mutationFn: async (next: PracticeJurisdiction[]) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api["organization-settings"]["practice-jurisdictions"].post({
           practiceJurisdictions: next,
         }),

@@ -38,7 +38,7 @@ type SuggestedFollowupChipsProps = {
 };
 
 /**
- * Suggested follow-up prompts, shown as a single horizontally scrolling row
+ * Suggested follow-up prompts, shown as one row that scrolls sideways
  * after the shared availability policy supplies prompts. Placement is the
  * caller's choice: `surface="overlay"` (default) for a row floating above the
  * composer on a veiled docked column, `surface="floating"` where no veil sits
@@ -105,7 +105,13 @@ export const SuggestedFollowupChips = ({
           });
           onSelect(prompt);
         }}
-        orientation="horizontal"
+        // One line: a wrapped set grows by a row per chip that overflows and
+        // pushes the composer's context away.
+        orientation="row"
+        scrollLabels={{
+          next: t("common.next"),
+          previous: t("common.previous"),
+        }}
         surface={surface ?? "overlay"}
       />
     </div>

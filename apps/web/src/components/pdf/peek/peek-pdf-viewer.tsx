@@ -9,6 +9,7 @@ import {
 import type { ReactNode, RefObject } from "react";
 
 import { useQuery } from "@tanstack/react-query";
+import type { Plugin } from "@tiptap/pm/state";
 import { useTranslations } from "use-intl";
 
 import { resolveFindMatchRange } from "@stll/folio-core/prosemirror/findReplaceSelection";
@@ -41,10 +42,17 @@ import {
 } from "@/components/docx-preview-zoom";
 import { useDocxBlockScroll } from "@/components/docx/use-docx-block-scroll";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
+import {
+  PdfSignPlacementBar,
+  PdfSignPlacementLayer,
+} from "@/components/inspector/pdf-sign-placement-viewer";
 import { ZoomControls } from "@/components/inspector/zoom-controls";
 import type { ZoomDirection } from "@/components/inspector/zoom-controls";
+import { DocumentMarkPageLayer } from "@/components/pdf/annotations/document-marks-layer";
 import { PageAnonymization } from "@/components/pdf/page-anonymization";
 import { PageCitation } from "@/components/pdf/page-citation";
+import { PdfSelectionActions } from "@/components/pdf/pdf-selection-actions";
+import { PDF_SELECTION_CHAT } from "@/components/pdf/pdf-selection-toolbar";
 import { resolvePendingPdfCitationPageId } from "@/components/pdf/peek/pdf-citation-navigation.logic";
 import {
   fetchPrintPdf,
@@ -61,11 +69,12 @@ import type { DocumentSearchResult } from "@/lib/document-search";
 import { fileOptions } from "@/lib/files/queries";
 import {
   PDF_COLOR_MODES,
-  resolvePDFInvertColors,
   type PDFColorMode,
+  resolvePDFInvertColors,
 } from "@/lib/pdf/pdf-color-mode";
 import { usePDFStore } from "@/lib/pdf/pdf-context";
 import { PDFPage } from "@/lib/pdf/pdf-page";
+import type { PDFPageSource } from "@/lib/pdf/pdf-page-source";
 import { PDFViewport } from "@/lib/pdf/pdf-viewport";
 import type { SearchMatchSummary } from "@/lib/search-match-navigation";
 import { MAX_SEARCH_PREVIEW_MATCHES } from "@/lib/search-match-navigation";
@@ -124,8 +133,7 @@ type PeekPdfViewerProps = {
   searchText?: SearchTextQuery | undefined;
   activeSearchMatchIndex?: number | undefined;
   onSearchMatchSummaryChange?:
-    | ((summary: SearchMatchSummary) => void)
-    | undefined;
+    ((summary: SearchMatchSummary) => void) | undefined;
   /** Called when navigating from peek to fullscreen PDF (e.g. inspector close). */
   onPeekNavigate?: (() => void) | undefined;
   docxPrintActionsRef?: RefObject<Map<string, () => void>> | undefined;
@@ -137,6 +145,19 @@ type PeekPdfViewerProps = {
    * page inside the panel so narrow previews never scroll horizontally.
    */
   docxFitMode?: "text-area" | "page" | undefined;
+  /**
+   * Host ProseMirror plugins for a DOCX, handed to Folio as they are. Folio
+   * keeps them across document replacement, so the array must keep its
+   * identity for as long as the viewer is mounted.
+   */
+  docxPlugins?: readonly Plugin[] | undefined;
+  /**
+   * Extra marks over each rendered PDF page, after the viewer's own
+   * overlays, positioned against the page box like any `PDFPage` overlay.
+   */
+  pdfPageOverlay?: ((pageId: string) => ReactNode) | undefined;
+  /** Which pages a PDF shows: its own, or the PDFs a portfolio attaches. */
+  pdfPageSource: PDFPageSource;
   errorFallback?: ((props: { reset: () => void }) => ReactNode) | undefined;
   onError?: ((error: Error) => void) | undefined;
   colorMode?: PDFColorMode | undefined;
@@ -185,6 +206,9 @@ const PeekPdfViewerContent = ({
   onDocxScrollTopChange,
   onWheelZoom,
   docxFitMode = "text-area",
+  docxPlugins,
+  pdfPageOverlay,
+  pdfPageSource,
   colorMode = "system",
 }: PeekPdfViewerProps) => {
   const isImageOrigin = mimeType?.startsWith("image/") ?? false;
@@ -202,17 +226,32 @@ const PeekPdfViewerContent = ({
 
   const renderPageOverlay = useCallback(
     (pageId: string) => (
-      <PeekPageOverlays
-        activePropertyId={activePropertyId}
-        entityId={entityId}
-        fieldId={fieldId}
-        onPeekNavigate={onPeekNavigate}
-        pageId={pageId}
-        viewId={viewId}
-        workspaceId={workspaceId}
-      />
+      <>
+        <PeekPageOverlays
+          activePropertyId={activePropertyId}
+          entityId={entityId}
+          fieldId={fieldId}
+          onPeekNavigate={onPeekNavigate}
+          pageId={pageId}
+          viewId={viewId}
+          workspaceId={workspaceId}
+        />
+        {pdfPageOverlay?.(pageId)}
+        {interactionMode === "preview-only" ? null : (
+          <PdfSignPlacementLayer pageId={pageId} />
+        )}
+      </>
     ),
-    [activePropertyId, entityId, fieldId, onPeekNavigate, viewId, workspaceId],
+    [
+      activePropertyId,
+      entityId,
+      fieldId,
+      interactionMode,
+      onPeekNavigate,
+      pdfPageOverlay,
+      viewId,
+      workspaceId,
+    ],
   );
 
   if (fileQuery.isError) {
@@ -230,6 +269,7 @@ const PeekPdfViewerContent = ({
           activeSearchMatchIndex={activeSearchMatchIndex}
           fieldId={fieldId}
           fitMode={docxFitMode}
+          plugins={docxPlugins}
           printActionsRef={docxPrintActionsRef}
           onScrollTopChange={onDocxScrollTopChange}
           onSearchMatchSummaryChange={onSearchMatchSummaryChange}
@@ -255,6 +295,7 @@ const PeekPdfViewerContent = ({
         className="document-preview-surface h-full"
         contentClassName="relative space-y-2 px-2 pt-2"
         fileId={fieldId}
+        pageSource={pdfPageSource}
         invertColors={resolvePDFInvertColors({
           colorMode,
           isImageOrigin,
@@ -280,7 +321,17 @@ const PeekPdfViewerContent = ({
       activeFile={{ entityId, fileFieldId: fieldId, fileName: file.fileName }}
       workspaceId={workspaceId}
     >
-      {viewport}
+      <PdfSignPlacementBar fieldId={fieldId} key={fieldId} />
+      <PdfSelectionActions
+        chat={PDF_SELECTION_CHAT.fileChat}
+        entityId={entityId}
+        file={file}
+        fileFieldId={fieldId}
+        fileName={file.fileName}
+        workspaceId={workspaceId}
+      >
+        {viewport}
+      </PdfSelectionActions>
     </FileViewerWithAI>
   );
 };
@@ -434,6 +485,7 @@ const PeekDocxViewer = ({
   fitMode,
   onScrollTopChange,
   onSearchMatchSummaryChange,
+  plugins,
   printActionsRef,
   scaleOffset,
   searchText,
@@ -443,10 +495,10 @@ const PeekDocxViewer = ({
   buffer: ArrayBuffer;
   fieldId: string;
   fitMode: "text-area" | "page";
+  plugins: readonly Plugin[] | undefined;
   onScrollTopChange?: ((scrollTop: number) => void) | undefined;
   onSearchMatchSummaryChange?:
-    | ((summary: SearchMatchSummary) => void)
-    | undefined;
+    ((summary: SearchMatchSummary) => void) | undefined;
   printActionsRef?: RefObject<Map<string, () => void>> | undefined;
   scaleOffset: number;
   searchText: SearchTextQuery | undefined;
@@ -561,8 +613,13 @@ const PeekDocxViewer = ({
 
   const handleDocumentReady = useCallback(() => {
     searchResultCacheRef.current = null;
+    // Folio paints a read-only document before it builds the editor view, and
+    // host plugins only see the document through that view.
+    if (plugins !== undefined) {
+      editorRef.current?.ensureEditorView({ focus: false });
+    }
     scheduleSearchHighlight();
-  }, [scheduleSearchHighlight]);
+  }, [plugins, scheduleSearchHighlight]);
 
   const handleEditorViewReady = useCallback(() => {
     searchResultCacheRef.current = null;
@@ -586,7 +643,13 @@ const PeekDocxViewer = ({
         fetchPrintPdf({ workspaceId, fieldId })
           .then(printPdfBuffer)
           .catch((error: unknown) => {
-            analytics.captureError(error);
+            analytics.captureError(error, {
+              fingerprintKey: "PeekDocxViewer.print:failure",
+              scope: {
+                type: "handler",
+                handlerId: "PeekDocxViewer.print:failure",
+              },
+            });
           }),
         "peek-pdf-viewer.fetch-print-pdf",
       );
@@ -611,6 +674,7 @@ const PeekDocxViewer = ({
         loadingIndicator={null}
         onCompatibilityChange={handleDocumentReady}
         onEditorViewReady={handleEditorViewReady}
+        plugins={plugins}
         readOnly
         showToolbar={false}
         showZoomControl={false}
@@ -670,6 +734,7 @@ const PeekPageOverlays = ({
         pageNumber={page.proxy.pageNumber}
         scale={page.viewport.scale}
       />
+      <DocumentMarkPageLayer pageId={pageId} />
     </>
   );
 };

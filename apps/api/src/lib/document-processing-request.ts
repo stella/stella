@@ -18,8 +18,8 @@ import {
 } from "@/api/lib/db/aggregate-lock";
 import { lockForWrite } from "@/api/lib/db/lock-for-write";
 import {
-  DOCUMENT_PROCESSING_MAX_ATTEMPTS,
   DOCUMENT_OCR_PROCESSOR_VERSION,
+  DOCUMENT_PROCESSING_MAX_ATTEMPTS,
 } from "@/api/lib/document-processing-contract";
 
 const RETRYABLE_MANUAL_OCR_CANCELLATION_CODES = [

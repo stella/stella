@@ -22,16 +22,18 @@ branch, naming the PR's branch:
 gh workflow run marketing-screenshots-update.yml -f branch=<pr-branch>
 ```
 
-That run only starts **Capture marketing screenshots**
+That run starts **Capture marketing screenshots**
 (`marketing-screenshots-capture.yml`) on the branch's own ref. The capture
 runs the branch's app and spec code, holds no release secret, refuses to run
 on `main`, and uploads the regenerated PNGs as its `marketing-screenshots`
-artifact. When it completes, **Publish marketing screenshots**
-(`marketing-screenshots-publish.yml`) runs from `main`: it executes nothing
-from the branch, accepts only flat, regular `*.png` files with a PNG
-signature, mints the release App token, and appends one signed commit on the
-head the capture ran on, so a push that landed on the branch in the meantime
-makes it fail. The push re-runs the PR's checks against the new head.
+artifact. When it succeeds, the update run starts **Publish marketing
+screenshots** (`marketing-screenshots-publish.yml`) on `main` for exactly
+that capture run: it executes nothing from the branch, accepts only flat,
+regular `*.png` files with a PNG signature, mints the release App token, and
+appends one signed commit on the head the capture ran on, so a push that
+landed on the branch in the meantime makes it fail. The push re-runs the PR's
+checks against the new head. The update run follows both runs and fails when
+either fails or does not finish in time.
 
 The capture body is the composite action `.github/actions/marketing-capture`
 resolved from the branch, and GitHub runs the capture workflow from the
@@ -41,10 +43,11 @@ existed on `main` has no such copy, so the update dispatch fails for it with a
 again.
 
 You can also start the capture directly on the branch, skipping the update
-dispatch; the publish run follows the same way:
+dispatch, and then publish that capture run yourself:
 
 ```sh
 gh workflow run marketing-screenshots-capture.yml --ref <pr-branch>
+gh workflow run marketing-screenshots-publish.yml -f capture_run_id=<capture run id>
 ```
 
 Because baselines and comparison render on the same runner image, the pixel

@@ -3,10 +3,10 @@ import type { QueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
 
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 import {
-  organizationSettingsOptions,
   optionalOrganizationSettingsOptions,
+  organizationSettingsOptions,
 } from "@/queries/organization-settings";
 
 import { callerFeatureEnabled, runForCallerFeature } from "./access.logic";
@@ -31,7 +31,7 @@ export const useCallerFeatureEnabled = (
     retry: false,
     staleTime: 30_000,
   });
-  const view = useQueryView(query);
+  const view = queryView(query);
   switch (view.type) {
     case "pending":
     case "error":

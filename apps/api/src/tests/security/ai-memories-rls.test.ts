@@ -241,8 +241,8 @@ describe("ai_memories source-data gating", () => {
   });
 });
 
-describe("ai_memories archive-only", () => {
-  test("direct DELETE affects zero rows and leaves the memory intact", async () => {
+describe("ai_memories lifecycle", () => {
+  test("direct DELETE removes a visible memory", async () => {
     const deleted = await scopedQuery(
       [ids.wsA1],
       ids.orgA,
@@ -253,7 +253,7 @@ describe("ai_memories archive-only", () => {
           .returning({ id: aiMemories.id }),
       ids.userA1,
     );
-    expect(deleted).toHaveLength(0);
+    expect(deleted).toEqual([{ id: mem.wsA1 }]);
 
     const stillThere = await countMemory(
       [ids.wsA1],
@@ -261,7 +261,7 @@ describe("ai_memories archive-only", () => {
       ids.userA1,
       mem.wsA1,
     );
-    expect(stillThere).toBe(1);
+    expect(stillThere).toBe(0);
   });
 
   test("archived rows remain deduplication tombstones", async () => {

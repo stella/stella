@@ -20,9 +20,8 @@
 // budgets and the security budget rises on its own.
 
 import { panic } from "better-result";
-import ts from "typescript";
 
-import { parseSource } from "./parse-memo";
+import { type Node, parseSource } from "../packages/scripts/src/syntax-tree";
 
 // --- Tracked rules ----------------------------------------------------------
 
@@ -305,8 +304,7 @@ export type LintDirective = {
   readonly rules: readonly string[];
 };
 
-const parseFile = (content: string, file: string): ts.SourceFile =>
-  parseSource({ fileName: file, text: content });
+const parseFile = (content: string, file: string) => parseSource(file, content);
 
 // The rules a directive names, or `[]` for a bare directive. The rule list
 // ends at the `--` reason trailer or the block-comment close, whichever comes
@@ -335,25 +333,8 @@ const scanDirectives = (
   file: string,
 ): readonly LintDirective[] => {
   const source = parseFile(content, file);
-  const comments = new Map<string, ts.CommentRange>();
-  const collect = (ranges: readonly ts.CommentRange[] | undefined) => {
-    for (const range of ranges ?? []) {
-      comments.set(`${range.pos}:${range.end}`, range);
-    }
-  };
-  const visit = (node: ts.Node): void => {
-    collect(ts.getLeadingCommentRanges(content, node.pos));
-    collect(ts.getTrailingCommentRanges(content, node.end));
-    for (const child of node.getChildren(source)) {
-      visit(child);
-    }
-  };
-  visit(source);
-
   const directives: LintDirective[] = [];
-  for (const { pos, end } of [...comments.values()].toSorted(
-    (left, right) => left.pos - right.pos,
-  )) {
+  for (const { start: pos, end } of source.comments) {
     const text = content.slice(pos, end);
     if (!LINT_DISABLE_DIRECTIVE.test(text)) {
       continue;
@@ -434,50 +415,56 @@ const MODULE_ANCHOR = "<module>";
 // declarations are named by their module specifier rather than their bindings,
 // so adding or removing an imported symbol does not rekey the entry.
 const declarationName = (
-  statement: ts.Statement,
+  statement: Node,
   directivePos: number,
 ): string | null => {
-  if (ts.isVariableStatement(statement)) {
-    // `const a = ..., b = () => { ... }` is one statement with two names. Key
-    // on the declarator the directive actually sits in, or two suppressions in
-    // the same statement would collapse onto one waiver identity.
-    const { declarations } = statement.declarationList;
-    const containing = declarations.find(
-      (declaration) =>
-        declaration.pos <= directivePos && directivePos < declaration.end,
-    );
-    const declarator = containing ?? declarations.at(0);
-    return declarator && ts.isIdentifier(declarator.name)
-      ? declarator.name.text
+  if (statement.type === "ExportNamedDeclaration") {
+    return statement.declaration
+      ? declarationName(statement.declaration, directivePos)
       : null;
   }
-  if (ts.isModuleDeclaration(statement) && ts.isIdentifier(statement.name)) {
-    return statement.name.text;
+  if (statement.type === "ExportDefaultDeclaration") {
+    return statement.declaration.type === "FunctionDeclaration" ||
+      statement.declaration.type === "ClassDeclaration"
+      ? declarationName(statement.declaration, directivePos)
+      : "export default";
   }
-  if (ts.isImportDeclaration(statement)) {
-    return ts.isStringLiteral(statement.moduleSpecifier)
-      ? `import ${statement.moduleSpecifier.text}`
-      : null;
-  }
-  if (ts.isExportAssignment(statement)) {
+  if (statement.type === "TSExportAssignment") {
     return "export default";
   }
+  if (statement.type === "VariableDeclaration") {
+    const { declarations } = statement;
+    const containing = declarations.find((declaration, index) => {
+      const previous = declarations.at(index - 1);
+      const pos =
+        index === 0 ? statement.start : (previous?.end ?? statement.start) + 1;
+      return pos <= directivePos && directivePos < declaration.end;
+    });
+    const declarator = containing ?? declarations.at(0);
+    return declarator?.id.type === "Identifier" ? declarator.id.name : null;
+  }
+  if (statement.type === "TSModuleDeclaration") {
+    return statement.id.type === "Identifier" ? statement.id.name : null;
+  }
+  if (statement.type === "ImportDeclaration") {
+    return `import ${statement.source.value}`;
+  }
   if (
-    ts.isFunctionDeclaration(statement) ||
-    ts.isClassDeclaration(statement) ||
-    ts.isInterfaceDeclaration(statement) ||
-    ts.isTypeAliasDeclaration(statement) ||
-    ts.isEnumDeclaration(statement)
+    statement.type === "FunctionDeclaration" ||
+    statement.type === "TSDeclareFunction" ||
+    statement.type === "ClassDeclaration" ||
+    statement.type === "TSInterfaceDeclaration" ||
+    statement.type === "TSTypeAliasDeclaration" ||
+    statement.type === "TSEnumDeclaration"
   ) {
-    const { name } = statement;
-    return name && ts.isIdentifier(name) ? name.text : null;
+    return statement.id?.name ?? null;
   }
   return null;
 };
 
 // A statement with no usable name (a bare expression, an `export {}` list)
 // anchors to the module itself. The key stays total, never absent.
-const anchorNameFor = (statement: ts.Statement, directivePos: number): string =>
+const anchorNameFor = (statement: Node, directivePos: number): string =>
   declarationName(statement, directivePos) ?? MODULE_ANCHOR;
 
 export const resolveDirectiveAnchors = (
@@ -486,14 +473,13 @@ export const resolveDirectiveAnchors = (
   directives: readonly LintDirective[],
 ): readonly string[] => {
   const source = parseFile(content, file);
-  const lineOf = (pos: number): number =>
-    source.getLineAndCharacterOfPosition(pos).line;
+  const lineOf = (pos: number): number => source.locate(pos).line - 1;
 
-  const statements = source.statements.map((statement) => ({
+  const statements = source.program.body.map((statement, index, body) => ({
     statement,
-    pos: statement.pos,
+    pos: index === 0 ? 0 : (body.at(index - 1)?.end ?? 0),
     end: statement.end,
-    startLine: lineOf(statement.getStart(source)),
+    startLine: lineOf(statement.start),
     endLine: lineOf(statement.end),
   }));
 

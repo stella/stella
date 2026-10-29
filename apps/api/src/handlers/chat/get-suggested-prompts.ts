@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { normalizePersistedChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
 import {
@@ -10,6 +10,7 @@ import { buildRecapTranscript } from "@/api/handlers/chat/thread-recap-transcrip
 import { loadRecapMessageWindow } from "@/api/handlers/chat/thread-recap-window";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import { resolveCaching } from "@/api/lib/ai-config";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { isUnanticipatedAIFailure } from "@/api/lib/ai-error";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
@@ -21,8 +22,9 @@ import {
 } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { THREAD_STORED_CONTENT_SEND_MODE } from "@/api/lib/chat/thread-stored-content-send-mode";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { cloneOperationInput } from "@/api/lib/proofs/checked-transaction";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
@@ -46,8 +48,8 @@ const config = {
   permissions: { chat: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "assistant_chat" },
-  params: t.Object({ threadId: tSafeId("chatThread") }),
-  query: t.Object({ workspaceId: t.Optional(tSafeId("workspace")) }),
+  params: v.object({ threadId: resourceIdSchema("chatThread") }),
+  query: v.object({ workspaceId: v.optional(resourceIdSchema("workspace")) }),
 } satisfies HandlerConfig;
 
 type SuggestedPromptsResult = { prompts: string[] };
@@ -97,7 +99,9 @@ export const latestAssistantTurnAwaitsUser = (
       return true;
     }
     return (
-      (part.name === "ask-user" || part.name === "request_secret") &&
+      (part.name === "ask-user" ||
+        part.name === "request_secret" ||
+        part.name === "connect_connector") &&
       ASK_USER_STATE_AWAITS_USER[part.state]
     );
   });
@@ -151,6 +155,10 @@ const getSuggestedPrompts = createSafeRootHandler(
       session,
       user,
     } = ctx;
+    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+      return Result.ok<SuggestedPromptsResult>({ prompts: [] });
+    }
+
     if (
       Result.isError(
         requireTanStackAIAvailableForTask({
@@ -287,6 +295,7 @@ const getSuggestedPrompts = createSafeRootHandler(
 
           try {
             const text = await generateTanStackTextForTask({
+              userId: modelAdmission.userId,
               dataClass: "customer",
               finishPolicy: "allow-incomplete",
               task: "short-text",
@@ -316,10 +325,13 @@ const getSuggestedPrompts = createSafeRootHandler(
           } catch (error) {
             aiAnalytics.captureError(error);
             if (isUnanticipatedAIFailure(error)) {
-              captureError(error, {
-                threadId: checked.threadId,
-                feature: "chat.suggested_prompts",
-              });
+              captureError(
+                error,
+                handlerErrorContext("chat.suggestPrompts", {
+                  threadId: checked.threadId,
+                  feature: "chat.suggested_prompts",
+                }),
+              );
             }
             return Result.ok<SuggestedPromptsResult>({ prompts: [] });
           }

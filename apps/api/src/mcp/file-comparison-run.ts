@@ -28,6 +28,7 @@ import type {
 } from "@/api/handlers/documents/compare";
 import { captureError } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { ownerSyntheticSessionAuthorityReader } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resolveDocxEditAuthorName } from "@/api/lib/entity-versions/resolve-docx-edit-author-name";
 import {
@@ -41,8 +42,9 @@ import {
   detectFileEncryption,
   ENCRYPTED_CONTENT_MESSAGE,
 } from "@/api/lib/files/detect-file-encryption";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
-import { headObject } from "@/api/lib/s3-presign";
+import { headObject, S3ObjectMissingError } from "@/api/lib/s3-presign";
 import {
   DEFAULT_DELIVER_TEMPORARY_REDLINE_DEPENDENCIES,
   deliverTemporaryRedline,
@@ -54,9 +56,9 @@ import type {
 } from "@/api/lib/uploads/file-comparison/deliver-redline";
 import { fileComparisonObjectKey } from "@/api/lib/uploads/file-comparison/uploads";
 import { withTimeout } from "@/api/lib/with-timeout";
-import type { McpRequestContext } from "@/api/mcp/context";
 import type { InternalToolErrorResult } from "@/api/mcp/tool-types";
 import { notFoundResult, structuredErrorResult } from "@/api/mcp/tool-utils";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const PREPARE_HINT =
@@ -102,7 +104,7 @@ const DEFAULT_FILE_COMPARISON_RUN_DEPENDENCIES: FileComparisonRunDependencies =
 export type FileComparisonRunOptions = {
   baseTrackedChanges: TrackedChangeDisposition;
   baseUploadId: SafeId<"fileComparisonUpload">;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   granularity: CompareGranularity;
   mode: CompareMode;
   outputMode: UploadsOutputMode;
@@ -165,7 +167,7 @@ const discardInput = async ({
   status,
   uploadId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   deleteObject: FileComparisonRunDependencies["deleteObject"];
   signal: AbortSignal;
   status: "consumed" | "failed";
@@ -209,10 +211,13 @@ const discardInput = async ({
   );
   if (Result.isError(removed)) {
     // The object is gone and the row is expired, so the sweep removes it.
-    captureError(removed.error, {
-      fileComparisonUploadId: uploadId,
-      stage: "file-comparison.discard-row",
-    });
+    captureError(
+      removed.error,
+      handlerErrorContext("mcp.discardInput.removed_error", {
+        fileComparisonUploadId: uploadId,
+        stage: "file-comparison.discard-row",
+      }),
+    );
   }
 };
 
@@ -233,7 +238,7 @@ const loadInput = async ({
   row,
   signal,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   dependencies: FileComparisonRunDependencies;
   path: string;
   row: InputRow;
@@ -269,10 +274,17 @@ const loadInput = async ({
   if (Result.isError(head)) {
     return {
       status: "error",
-      response: notFoundResult(
-        "One of the files to compare was never uploaded",
-        `PUT the bytes to the url prepare_file_comparison returned before comparing. ${PREPARE_HINT}`,
-      ),
+      response: S3ObjectMissingError.is(head.error)
+        ? notFoundResult(
+            "One of the files to compare was never uploaded",
+            `PUT the bytes to the url prepare_file_comparison returned before comparing. ${PREPARE_HINT}`,
+          )
+        : structuredErrorResult({
+            code: "internal_error",
+            message: "One of the files to compare could not be read",
+            hint: "Retry the comparison; if it repeats, stage the files again.",
+            retryable: true,
+          }),
     };
   }
   if (head.value.contentLength !== row.declaredSize) {
@@ -409,7 +421,7 @@ const deliver = async ({
   targetName,
 }: {
   compared: CompareResult;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   dependencies: FileComparisonRunDependencies;
   outputMode: UploadsOutputMode;
   signal: AbortSignal;
@@ -425,17 +437,22 @@ const deliver = async ({
       bytes: new Uint8Array(compared.buffer),
       fileName,
       organizationId: context.organizationId,
+      readSessionAuthority: ownerSyntheticSessionAuthorityReader,
       scopedDb: context.scopedDb,
       signal,
+      source: { kind: "background", reason: "MCP credential request" },
       userId: context.userId,
     },
     dependencies,
   );
   if (Result.isError(delivered)) {
-    captureError(delivered.error.cause, {
-      stage: "file-comparison.deliver",
-      step: delivered.error.step,
-    });
+    captureError(
+      delivered.error.cause,
+      handlerErrorContext("mcp.deliver.delivered_error_cause", {
+        stage: "file-comparison.deliver",
+        step: delivered.error.step,
+      }),
+    );
     return {
       status: "error",
       response: structuredErrorResult({
@@ -461,7 +478,7 @@ const recordComparisonAudit = async ({
 }: {
   base: InputRow;
   changeCount: number | null;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   target: InputRow;
 }): Promise<void> => {
   const recorded = await Result.tryPromise(
@@ -485,10 +502,13 @@ const recordComparisonAudit = async ({
       }),
   );
   if (Result.isError(recorded)) {
-    captureError(recorded.error, {
-      fileComparisonUploadId: base.id,
-      stage: "file-comparison.audit",
-    });
+    captureError(
+      recorded.error,
+      handlerErrorContext("mcp.recordComparisonAudit.recorded_error", {
+        fileComparisonUploadId: base.id,
+        stage: "file-comparison.audit",
+      }),
+    );
   }
 };
 
@@ -498,7 +518,7 @@ const loadInputRows = async ({
   targetUploadId,
 }: {
   baseUploadId: SafeId<"fileComparisonUpload">;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   targetUploadId: SafeId<"fileComparisonUpload">;
 }): Promise<Result<InputRow[], unknown>> =>
   await Result.tryPromise(

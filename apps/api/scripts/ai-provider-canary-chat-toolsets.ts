@@ -4,11 +4,14 @@ import { panic } from "better-result";
 
 import {
   BROWSER_CONTROL_PROTOCOL_VERSION,
-  BUSINESS_REGISTRY_SLUGS,
   BUILT_IN_CHAT_TOOL_POLICY_KINDS,
+  BUSINESS_REGISTRY_SLUGS,
   CHAT_EDIT_APPLY_MODE,
 } from "@stll/api-contract";
-import type { ChatEditApplyMode } from "@stll/api-contract";
+import type {
+  BusinessRegistrySlug,
+  ChatEditApplyMode,
+} from "@stll/api-contract";
 import {
   DOCX_SUGGESTION_SURFACE,
   type DocxSuggestionSurface,
@@ -20,11 +23,13 @@ import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-wo
 import { getChatTools } from "@/api/handlers/chat/tools/chat-tools";
 import { PAST_CHAT_SCOPE_TYPE } from "@/api/handlers/chat/tools/past-chat-tools";
 import { createVisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
+import { UNBOUND } from "@/api/lib/agent-skills/binding";
 import { offerSkillsToModel } from "@/api/lib/agent-skills/invocation";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
+import type { RegistryHandler } from "@/api/lib/business-registries/dispatch";
 import { chatToolMapToArray } from "@/api/lib/chat/chat-tool-types";
 import { projectChatToolSchemasForProvider } from "@/api/lib/chat/provider-tool-projection";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
@@ -89,6 +94,7 @@ const activeSkillContext: ActiveChatSkillContext = {
   excludedChatTools: [],
   id: skillId,
   origin: "authored",
+  binding: UNBOUND,
   requiredTools: [],
   resources: [{ path: "references/canary.md" }],
   source: "installed",
@@ -96,7 +102,9 @@ const activeSkillContext: ActiveChatSkillContext = {
   version: null,
 };
 
-const canaryRegistryDispatch = { ...BUSINESS_REGISTRY_DISPATCH };
+const canaryRegistryDispatch: Record<BusinessRegistrySlug, RegistryHandler> = {
+  ...BUSINESS_REGISTRY_DISPATCH,
+};
 for (const slug of BUSINESS_REGISTRY_SLUGS) {
   canaryRegistryDispatch[slug] = {
     ...BUSINESS_REGISTRY_DISPATCH[slug],

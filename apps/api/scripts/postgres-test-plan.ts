@@ -15,8 +15,10 @@ export const EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS: ReadonlySet<string> =
     "src/db/entity-feature-search-budget.postgres.test.ts",
     "src/handlers/case-law/ingestion/background-replay-store.postgres.test.ts",
     "src/handlers/case-law/ingestion/reconciliation-listing-revisions.postgres.test.ts",
+    "src/handlers/entities/versions/list.postgres.test.ts",
     "src/lib/account-export/store.postgres.test.ts",
     "src/lib/business-registries/desktop/proof.postgres.test.ts",
+    "src/lib/case-law/sitemap-removal-refresh.postgres.test.ts",
     "src/lib/hosted-usage-provider/replay.postgres.test.ts",
     "src/lib/lists/sanctions/monitoring-concurrency.postgres.test.ts",
     "src/lib/lists/sanctions/monitoring-migrations.postgres.test.ts",
@@ -137,10 +139,45 @@ export const findSharedTableDdlViolations = ({
     })
     .toSorted((left, right) => compareCodeUnit(left.testPath, right.testPath));
 
-export const assertSharedTableDdlIsolated = async (
+const isMigrationRunnerModule = (testPath: string, specifier: string) => {
+  if (specifier === "@/api/db/migration-runner") {
+    return true;
+  }
+  return (
+    specifier.startsWith(".") &&
+    path.posix
+      .normalize(path.posix.join(path.posix.dirname(testPath), specifier))
+      .replace(/\.[cm]?[jt]sx?$/u, "") === "src/db/migration-runner"
+  );
+};
+
+// Bun's scan lists the modules a file loads at run time: value imports,
+// `require` calls and dynamic `import()`, never type-only imports.
+const runtimeImports = new Bun.Transpiler({ loader: "ts" });
+
+/** Migration bundles can change roles shared by every database in the cluster. */
+export const clusterExclusiveMigrationTests = (
+  sources: ReadonlyMap<string, string>,
+): Set<string> => {
+  const paths = new Set<string>();
+  for (const [testPath, source] of sources) {
+    if (
+      runtimeImports
+        .scanImports(source)
+        .some(({ path: specifier }) =>
+          isMigrationRunnerModule(testPath, specifier),
+        )
+    ) {
+      paths.add(testPath);
+    }
+  }
+  return paths;
+};
+
+export const classifyPostgresTestIsolation = async (
   apiRoot: string,
   testPaths: readonly string[],
-): Promise<void> => {
+): Promise<Set<string>> => {
   const sources = new Map(
     await Promise.all(
       testPaths.map(
@@ -157,9 +194,9 @@ export const assertSharedTableDdlIsolated = async (
     sharedTables: readSharedTableNames(apiRoot),
   });
   if (violations.length === 0) {
-    return;
+    return clusterExclusiveMigrationTests(sources);
   }
-  panic(
+  return panic(
     `PostgreSQL tests that run DDL on shared tables require an exclusive test process:\n${violations
       .map(({ testPath, tables }) => `  ${testPath}: ${tables.join(", ")}`)
       .join("\n")}\nAdd each path to EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS.`,

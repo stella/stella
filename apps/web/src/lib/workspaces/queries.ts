@@ -1,10 +1,8 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 
-import { Temporal } from "@stll/time";
-
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import {
   fetchWorkspaceNavigationPage,
@@ -61,7 +59,7 @@ const readOverviewActivity = async ({
       ...(cursor ? { cursor } : {}),
     },
   });
-  return unwrapEden(response);
+  return unwrapApiResponse(response);
 };
 
 export type MatterActivityItem = Awaited<
@@ -88,7 +86,7 @@ export const exportOverviewActivity = async ({
         format,
       },
     });
-  return unwrapEden(response);
+  return unwrapApiResponse(response);
 };
 
 const readOverviewActivityActors = async ({
@@ -112,7 +110,7 @@ const readOverviewActivityActors = async ({
         ...(search === "" ? {} : { search }),
       },
     });
-  return unwrapEden(response);
+  return unwrapApiResponse(response);
 };
 
 export type MatterActivityActor = Awaited<
@@ -149,7 +147,7 @@ const readWorkspaces = async (signal?: AbortSignal) => {
     signal ? { fetch: { signal } } : {},
   );
 
-  return unwrapEden(response);
+  return unwrapApiResponse(response);
 };
 
 export type WorkspacesData = Awaited<ReturnType<typeof readWorkspaces>>;
@@ -193,7 +191,7 @@ export const workspaceOptions = (workspaceId: string) =>
         .workspaces({ workspaceId })
         .get({ fetch: { signal } });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
@@ -216,7 +214,7 @@ export const workspaceActivityOptions = ({
           query,
         });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     initialPageParam: getInitialWorkspaceActivityCursor(),
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
@@ -240,17 +238,11 @@ export const overviewOptions = (workspaceId: string) =>
   queryOptions({
     queryKey: workspacesKeys.overview(workspaceId),
     queryFn: async ({ signal }) => {
-      // The agenda starts at the reader's own date, read at fetch time; the
-      // overview drops deadlines that pass before the next fetch.
-      const agendaFrom = Temporal.Now.instant()
-        .toZonedDateTimeISO(Temporal.Now.timeZoneId())
-        .toPlainDate()
-        .toString();
       const response = await api
         .workspaces({ workspaceId })
-        .overview.get({ query: { agendaFrom }, fetch: { signal } });
+        .overview.get({ query: {}, fetch: { signal } });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });

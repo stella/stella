@@ -12,6 +12,8 @@
  * suite using this restores the original in an `afterEach`.
  */
 
+import { sha256Hex } from "@stll/sha256/node";
+
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
   decodeSourceRawEnvelope,
@@ -28,7 +30,9 @@ import {
   czNsFixture,
   czNssFixture,
   czRegionalFixture,
+  czUohsFixture,
   czUsFixture,
+  type EnrolledAdapterFixture,
   euEcjFixture,
   huBhgyFixture,
   plCourtsFixture,
@@ -44,7 +48,7 @@ import {
   plUokikRulingFixture,
   skCourtsFixture,
   skUsFixture,
-  type EnrolledAdapterFixture,
+  ukFclFixture,
 } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 
 /** One way of building a decision of a source, named for the baseline key. */
@@ -69,6 +73,7 @@ export const SOURCE_FINGERPRINT_DRIVERS = {
   [ADAPTER_KEYS.CZ_NSS]: one(czNssFixture),
   [ADAPTER_KEYS.CZ_US]: one(czUsFixture),
   [ADAPTER_KEYS.CZ_REGIONAL]: one(czRegionalFixture),
+  [ADAPTER_KEYS.CZ_UOHS]: one(czUohsFixture),
   [ADAPTER_KEYS.SK_COURTS]: one(skCourtsFixture),
   [ADAPTER_KEYS.SK_US]: one(skUsFixture),
   [ADAPTER_KEYS.PL_COURTS]: [
@@ -94,6 +99,7 @@ export const SOURCE_FINGERPRINT_DRIVERS = {
   [ADAPTER_KEYS.AT_FINDOK]: one(atFindokFixture),
   [ADAPTER_KEYS.EU_ECJ]: one(euEcjFixture),
   [ADAPTER_KEYS.HU_BHGY]: one(huBhgyFixture),
+  [ADAPTER_KEYS.UK_FCL]: one(ukFclFixture),
   [ADAPTER_KEYS.PL_KIS]: one(plKisFixture),
   [ADAPTER_KEYS.PL_UODO]: one(plUodoFixture),
   [ADAPTER_KEYS.PL_UOKIK]: [
@@ -174,7 +180,27 @@ export type FingerprintCensusRow = {
   /** `<registration>::<driver>`; no line numbers, so it survives edits. */
   readonly key: string;
   readonly finding: FingerprintFinding;
+  /** Adapter fingerprint persisted and compared by ingestion. */
+  readonly fingerprint: string;
+  /** Stable identity of the stored fields, independent of the fingerprint implementation. */
+  readonly storedInputIdentity: string;
 };
+
+const storedInputIdentity = ({
+  sourceRaw,
+  sourceRawObjects,
+}: {
+  readonly sourceRaw: string;
+  readonly sourceRawObjects?: IngestionResult["sourceRawObjects"];
+}): string =>
+  sha256Hex(
+    JSON.stringify([
+      sourceRaw,
+      ...Object.values(sourceRawObjects ?? {}).map(({ bytes }) =>
+        sha256Hex(bytes),
+      ),
+    ]),
+  );
 
 /** Every driver of every registration, with what its decision's hash covers. */
 export const sourceFingerprintCensus = async (): Promise<
@@ -187,9 +213,18 @@ export const sourceFingerprintCensus = async (): Promise<
     for (const { name, fixture } of drivers) {
       // Sequential: fixtures replace the shared fetch while they build.
       const decision = await fixture().buildDecision();
+      const envelope = emittedEnvelope(decision);
       rows.push({
         key: `${registration}::${name}`,
         finding: fingerprintFinding(decision),
+        fingerprint: decision.rawHash,
+        storedInputIdentity:
+          envelope === undefined
+            ? sha256Hex(decision.rawHash)
+            : storedInputIdentity({
+                sourceRaw: envelope,
+                sourceRawObjects: decision.sourceRawObjects,
+              }),
       });
     }
   }

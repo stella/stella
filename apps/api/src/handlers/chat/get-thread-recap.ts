@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import type { Transaction } from "@/api/db/root";
 import { chatThreads } from "@/api/db/schema";
@@ -16,6 +16,7 @@ import {
   RECAP_PROMPT_VERSION,
 } from "@/api/handlers/chat/thread-recap";
 import { loadRecapMessageWindow } from "@/api/handlers/chat/thread-recap-window";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { captureError } from "@/api/lib/analytics/capture";
 import {
   ACCOUNT_ACCESS,
@@ -25,8 +26,9 @@ import {
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { THREAD_STORED_CONTENT_SEND_MODE } from "@/api/lib/chat/thread-stored-content-send-mode";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { requireTanStackAIAvailableForTask } from "@/api/lib/tanstack-ai-models";
 
 type CacheThreadRecapOptions = {
@@ -71,8 +73,8 @@ const config = {
   permissions: { chat: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "assistant_chat" },
-  params: t.Object({ threadId: tSafeId("chatThread") }),
-  query: t.Object({ workspaceId: t.Optional(tSafeId("workspace")) }),
+  params: v.object({ threadId: resourceIdSchema("chatThread") }),
+  query: v.object({ workspaceId: v.optional(resourceIdSchema("workspace")) }),
 } satisfies HandlerConfig;
 
 type ThreadRecapResult = { recap: string | null };
@@ -90,6 +92,10 @@ const getThreadRecap = createSafeRootHandler(config, async function* (ctx) {
     session,
     user,
   } = ctx;
+  if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+    return Result.ok<ThreadRecapResult>({ recap: null });
+  }
+
   // The recap is a non-critical nicety: when AI is unavailable we
   // return no recap rather than blocking the thread view.
   if (
@@ -150,6 +156,12 @@ const getThreadRecap = createSafeRootHandler(config, async function* (ctx) {
   );
   if (messageWindow.sendMode === THREAD_STORED_CONTENT_SEND_MODE.anonymized) {
     return Result.ok<ThreadRecapResult>({ recap: null });
+  }
+
+  if (messageWindow.withdrawnMarker !== null) {
+    return Result.ok<ThreadRecapResult>({
+      recap: messageWindow.withdrawnMarker,
+    });
   }
 
   // Only recap a completed exchange the user is returning to after a
@@ -232,7 +244,12 @@ const getThreadRecap = createSafeRootHandler(config, async function* (ctx) {
       }),
   );
   if (Result.isError(persistResult)) {
-    captureError(persistResult.error, { threadId });
+    captureError(
+      persistResult.error,
+      handlerErrorContext("chat.getThreadRecap.persistResult_error", {
+        threadId,
+      }),
+    );
   }
 
   return Result.ok<ThreadRecapResult>({ recap });

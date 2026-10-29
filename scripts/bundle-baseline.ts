@@ -13,11 +13,18 @@
 // annotates the grown groups and writes them to the job summary, and a nightly
 // run lists every group over budget. An improvement prompts a ratchet down.
 //
+// Policy: ordinary size growth under --check is warning-only. Worker-only
+// groups appearing in the main bundle are blocking because their budget is
+// exactly zero. The duplicate-content guard (--check-duplicates) is a separate,
+// blocking check: a chunk that carries the same large block twice is a build
+// defect with a known fix, not growth to weigh against a budget.
+//
 // Modes:
-//   bun scripts/bundle-baseline.ts                 report groups + gzip sizes
-//   bun scripts/bundle-baseline.ts --write-baseline regenerate the baseline
-//   bun scripts/bundle-baseline.ts --check          CI report (warns on growth; fails only when it cannot measure)
-//   bun scripts/bundle-baseline.ts --self-test      prove the comparison logic fires
+//   bun scripts/bundle-baseline.ts                    report groups + gzip sizes
+//   bun scripts/bundle-baseline.ts --write-baseline    regenerate the baseline
+//   bun scripts/bundle-baseline.ts --check             size budget (warns on growth; fails only when it cannot measure)
+//   bun scripts/bundle-baseline.ts --check-duplicates  duplicate-content guard (blocking)
+//   bun scripts/bundle-baseline.ts --self-test         prove the comparison logic fires
 //
 // CI-only by design: it needs a completed `bun --filter @stll/web build` first,
 // so it is too slow for the local lint/pre-commit loop. Wired into
@@ -78,7 +85,7 @@ const HASH = "[A-Za-z0-9_-]{8}";
 // groups (vendor-anonymize-data, wasm-vendor) currently have no
 // client-graph chunk because those deps load inside web workers, not the main
 // bundle; they are tracked at 0 so that if one ever leaks into the client graph
-// the guard forces a deliberate baseline update.
+// the guard fails.
 const VENDOR_GROUPS = [
   "vendor-react",
   "vendor-tanstack",
@@ -106,6 +113,13 @@ const GROUP_KEYS = [
 type GroupKey = (typeof GROUP_KEYS)[number];
 type VendorGroup = (typeof VENDOR_GROUPS)[number];
 type Sizes = Record<GroupKey, number>;
+
+const WORKER_ONLY_GROUPS = [
+  "vendor-anonymize-data",
+  "wasm-vendor",
+] as const satisfies readonly GroupKey[];
+type WorkerOnlyGroup = (typeof WORKER_ONLY_GROUPS)[number];
+const WORKER_ENTRY = "apps/web/src/workers/anonymize-chat-worker.ts";
 
 // --- Classification ---------------------------------------------------------
 // Entry = the client bootstrap (`index-<hash>.js`, the __root__ script that
@@ -168,7 +182,43 @@ const emptySizes = (): Sizes => ({
 const gzipSize = (absPath: string): number =>
   Bun.gzipSync(readFileSync(absPath)).length;
 
-type MeasureResult = { ok: true; sizes: Sizes } | { ok: false; error: string };
+// --- Duplicated content -----------------------------------------------------
+// Rolldown inlines imported constants where they are used, with no size
+// limit. A dependency that exports a large data string from its own module
+// (tldts' public-suffix label table) was copied into its chunk once per use,
+// and gzip cannot fold copies that sit further apart than its 32 KiB window.
+// Size budgets only see such a copy as ordinary growth, so this measures it
+// directly: every aligned window of a chunk that occurs again later in the
+// same chunk counts as duplicated. Real chunks repeat at most ~20 KiB (theme
+// strings, numeric tables); a copied data blob is far above the limit.
+const DUPLICATE_WINDOW_BYTES = 2048;
+const DUPLICATE_LIMIT_BYTES = 32 * 1024;
+
+const duplicatedBytes = (content: Uint8Array): number => {
+  const buffer = Buffer.from(
+    content.buffer,
+    content.byteOffset,
+    content.byteLength,
+  );
+  let duplicated = 0;
+  for (
+    let start = 0;
+    start + 2 * DUPLICATE_WINDOW_BYTES <= buffer.length;
+    start += DUPLICATE_WINDOW_BYTES
+  ) {
+    const window = buffer.subarray(start, start + DUPLICATE_WINDOW_BYTES);
+    if (buffer.includes(window, start + DUPLICATE_WINDOW_BYTES)) {
+      duplicated += DUPLICATE_WINDOW_BYTES;
+    }
+  }
+  return duplicated;
+};
+
+type DuplicatedChunk = { file: string; bytes: number };
+
+type MeasureResult =
+  | { ok: true; sizes: Sizes; duplicated: DuplicatedChunk[] }
+  | { ok: false; error: string };
 
 const measure = (assetsDir: string): MeasureResult => {
   if (!existsSync(assetsDir)) {
@@ -199,12 +249,18 @@ const measure = (assetsDir: string): MeasureResult => {
   }
   sizes["scan-engine-wasm"] = gzipSize(SCAN_ENGINE_WASM);
   let largestRoute = 0;
+  const duplicated: DuplicatedChunk[] = [];
 
   for (const file of files) {
     const absPath = path.join(assetsDir, file);
-    const gz = gzipSize(absPath);
+    const content = readFileSync(absPath);
+    const repeated = duplicatedBytes(content);
+    if (repeated > DUPLICATE_LIMIT_BYTES) {
+      duplicated.push({ file, bytes: repeated });
+    }
+    const gz = Bun.gzipSync(content).length;
     sizes.total += gz;
-    const source = INDEX_RE.test(file) ? readFileSync(absPath, "utf-8") : "";
+    const source = INDEX_RE.test(file) ? content.toString("utf-8") : "";
     const group = classifyChunk(file, source);
     if (group === "routes") {
       sizes.routes += gz;
@@ -215,7 +271,7 @@ const measure = (assetsDir: string): MeasureResult => {
   }
   sizes["largest-route"] = largestRoute;
 
-  return { ok: true, sizes };
+  return { ok: true, sizes, duplicated };
 };
 
 // --- Baseline IO ------------------------------------------------------------
@@ -376,14 +432,30 @@ const runCheck = (): number => {
     );
     return 1;
   }
+  return checkSizeBudget(
+    measured.sizes,
+    readBaseline(),
+    process.env["GITHUB_STEP_SUMMARY"],
+    console.log,
+  );
+};
 
-  const baseline = readBaseline();
-  const diffs = diffAll(measured.sizes, baseline);
+// The size budget warns on ordinary growth, but enforces the worker boundary.
+const checkSizeBudget = (
+  sizes: Sizes,
+  baseline: Sizes,
+  summaryPath: string | undefined,
+  log: (line: string) => void,
+): number => {
+  if (checkWorkerOnlyGroups(sizes, log) !== 0) {
+    return 1;
+  }
+  const diffs = diffAll(sizes, baseline);
   const regressions = diffs.filter((d) => d.status === "regressed");
   const drops = diffs.filter((d) => d.status === "dropped");
 
   for (const d of drops) {
-    console.log(
+    log(
       `bundle: ${d.key} shrank ${kib(d.baseline)} -> ${kib(d.current)} ` +
         `(${pct(d.current, d.baseline)}). Nice — run \`${WRITE_HINT}\` and ` +
         `commit ${BASELINE_REL} to ratchet it down.`,
@@ -391,18 +463,70 @@ const runCheck = (): number => {
   }
 
   if (regressions.length === 0) {
-    console.log(
+    log(
       `bundle --check: OK. ${GROUP_KEYS.length} group(s) within ` +
         `${Math.round((HEADROOM - 1) * 100)}% of baseline.`,
     );
     return 0;
   }
 
-  return reportRegressions(
-    regressions,
-    process.env["GITHUB_STEP_SUMMARY"],
-    console.log,
+  return reportRegressions(regressions, summaryPath, log);
+};
+
+export const checkWorkerOnlyGroups = (
+  sizes: Pick<Sizes, WorkerOnlyGroup>,
+  log: (line: string) => void,
+): number => {
+  const leaks = WORKER_ONLY_GROUPS.filter((group) => sizes[group] > 0);
+  if (leaks.length === 0) {
+    return 0;
+  }
+
+  for (const group of leaks) {
+    log(
+      `::error title=Worker-only bundle group: ${group}::${group} contributes ${kib(sizes[group])} to main-thread chunks. Keep this group out of the main build's manualChunks and import worker-only dependencies from ${WORKER_ENTRY} instead.`,
+    );
+  }
+  return 1;
+};
+
+const runCheckDuplicates = (): number => {
+  const measured = measure(ASSETS_DIR);
+  if (!measured.ok) {
+    console.error(measured.error);
+    return 1;
+  }
+  return checkDuplicates(measured.duplicated, console.log);
+};
+
+// The blocking duplicate-content guard. A chunk that repeats a large block is
+// a build defect, not growth to budget for, so it fails on its own exit path.
+const checkDuplicates = (
+  duplicated: readonly DuplicatedChunk[],
+  log: (line: string) => void,
+): number => {
+  if (duplicated.length === 0) {
+    log(
+      `bundle --check-duplicates: OK. No chunk repeats more than ` +
+        `${kib(DUPLICATE_LIMIT_BYTES)} of identical content.`,
+    );
+    return 0;
+  }
+  log(
+    `\nbundle --check-duplicates: chunk(s) repeat more than ${kib(DUPLICATE_LIMIT_BYTES)} of identical content:\n`,
   );
+  for (const { file, bytes } of duplicated) {
+    log(`  ${file}: ${kib(bytes)} repeated`);
+    log(
+      `::error title=Bundle duplicate: ${file}::${file} repeats ${kib(bytes)} of identical content.`,
+    );
+  }
+  log(
+    "\nA large constant imported from another module is usually inlined at\n" +
+      "each use. Keep it a local binding, for example by resolving the\n" +
+      "dependency to its prebuilt single-module build.",
+  );
+  return 1;
 };
 
 // Growth past the headroom is reported, never blocking: an annotation per
@@ -569,6 +693,71 @@ const runSelfTest = (): number => {
     );
   }
 
+  // A chunk carrying one large block twice must be flagged; distinct content
+  // of the same size must not be.
+  let seed = 1;
+  const noise = (length: number): Uint8Array =>
+    Uint8Array.from({ length }, () => {
+      seed = (seed * 48_271) % 2_147_483_647;
+      return 32 + (seed % 95);
+    });
+  const block = noise(48 * 1024);
+  const copied = new Uint8Array([...block, ...noise(4096), ...block]);
+  if (duplicatedBytes(copied) <= DUPLICATE_LIMIT_BYTES) {
+    failures.push(
+      `duplicatedBytes missed a copied 48 KiB block (${duplicatedBytes(copied)} bytes)`,
+    );
+  }
+  const distinct = noise(100 * 1024);
+  if (duplicatedBytes(distinct) !== 0) {
+    failures.push(
+      `duplicatedBytes flagged distinct content (${duplicatedBytes(distinct)} bytes)`,
+    );
+  }
+  const flagged: string[] = [];
+  if (
+    checkDuplicates([{ file: "link-Ds-2pgSG.js", bytes: 65_536 }], (line) => {
+      flagged.push(line);
+    }) !== 1 ||
+    !flagged.some((line) =>
+      line.startsWith("::error title=Bundle duplicate: link-Ds-2pgSG.js::"),
+    )
+  ) {
+    failures.push("checkDuplicates did not fail on a repeated block");
+  }
+  if (
+    checkDuplicates([], (line) => {
+      flagged.push(line);
+    }) !== 0
+  ) {
+    failures.push("checkDuplicates failed without a repeated block");
+  }
+
+  // Size overage alone only warns: the size budget exits 0 however far a
+  // group is over, and says so as a warning, never an error.
+  const overSizes: Sizes = { ...emptySizes(), entry: 100_000, total: 500_000 };
+  const overCurrent: Sizes = { ...overSizes, entry: 300_000, total: 900_000 };
+  const budgetLines: string[] = [];
+  const budgetExit = checkSizeBudget(
+    overCurrent,
+    overSizes,
+    undefined,
+    (line) => {
+      budgetLines.push(line);
+    },
+  );
+  if (budgetExit !== 0) {
+    failures.push(`checkSizeBudget exited ${budgetExit} on overage, want 0`);
+  }
+  if (
+    !budgetLines.some((line) =>
+      line.startsWith("::warning title=Bundle size: total::"),
+    ) ||
+    budgetLines.some((line) => line.startsWith("::error"))
+  ) {
+    failures.push("checkSizeBudget did not report overage as a warning only");
+  }
+
   if (failures.length > 0) {
     console.error("bundle --self-test: FAIL");
     for (const f of failures) {
@@ -664,6 +853,9 @@ const main = (): number => {
   }
   if (process.argv.includes("--write-baseline")) {
     return runWrite();
+  }
+  if (process.argv.includes("--check-duplicates")) {
+    return runCheckDuplicates();
   }
   if (process.argv.includes("--check")) {
     return runCheck();

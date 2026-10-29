@@ -1,24 +1,23 @@
 import { Result } from "better-result";
 
+import type { GuidanceKind } from "@stll/legal-ast/document-kind";
+
 import {
-  type SoftLawAuthority,
-  type SoftLawMetadata,
-  type SOFT_LAW_KINDS,
-  SoftLawItemError,
   isTextlessExtraction,
+  type SoftLawAuthority,
   type SoftLawDocumentInput,
+  SoftLawItemError,
+  type SoftLawMetadata,
 } from "./soft-law-types";
 
 type KindDisposition =
-  | { type: "eligible" }
-  | { type: "excluded"; reason: string };
+  { type: "eligible" } | { type: "excluded"; reason: string };
 type AuthorityPolicy = {
   expression: "optional" | "required";
   referenceStyle: "literal" | "wp_number";
   identitySeries:
-    | { type: "none" }
-    | { type: "source-kind"; values: readonly string[] };
-  kinds: Record<(typeof SOFT_LAW_KINDS)[number], KindDisposition>;
+    { type: "none" } | { type: "source-kind"; values: readonly string[] };
+  kinds: Record<GuidanceKind, KindDisposition>;
 };
 
 const eligible = { type: "eligible" } as const;
@@ -117,7 +116,23 @@ export const SOFT_LAW_AUTHORITY_POLICIES = {
   "ee-aki": pendingPolicy,
   "fi-ombudsman": pendingPolicy,
   "fr-cnil": pendingPolicy,
-  "de-bfdi": pendingPolicy,
+  "de-bfdi": {
+    expression: "required",
+    referenceStyle: "literal",
+    identitySeries: { type: "none" },
+    kinds: {
+      methodology: excluded,
+      recommendation: eligible,
+      opinion: excluded,
+      faq: excluded,
+      guideline: excluded,
+      position: excluded,
+      statement: excluded,
+      inspection_report: excluded,
+      annual_report: excluded,
+      other: excluded,
+    },
+  },
   "el-hdpa": pendingPolicy,
   "hu-naih": pendingPolicy,
   "is-personuvernd": pendingPolicy,

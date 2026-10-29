@@ -1,18 +1,19 @@
 import * as cheerio from "cheerio";
 
 import {
-  formatChatCorpusId,
-  parseChatCorpusId,
-  resourceRef,
-  SKILL_REF_HREF_PREFIX,
-  RESOURCE_TYPE,
-  toChatCorpusHref,
-  toChatMentionResourceHref,
-  toChatResourceHref,
+  chatSourceScopeKey,
   isChatMentionCategory,
   isChatReferenceCategory,
+  isChatSourceScopeKind,
+  parseChatSourceScopeId,
+  RESOURCE_TYPE,
+  resourceRef,
+  SKILL_REF_HREF_PREFIX,
+  toChatMentionResourceHref,
+  toChatResourceHref,
+  toChatSourceScopeHref,
 } from "@stll/api-contract";
-import type { ChatCorpusScope } from "@stll/api-contract";
+import type { ChatSourceScope } from "@stll/api-contract";
 
 import type { ChatMention, ChatMentionHref } from "@/api/lib/chat/references";
 import { htmlToMarkdown } from "@/api/lib/markdown/html-to-markdown";
@@ -107,11 +108,11 @@ const toDecisionReferenceHref = (id: string) =>
     }),
   });
 
-const dedupeCorpusScopes = (
-  scopes: readonly ChatCorpusScope[],
-): ChatCorpusScope[] => [
+const dedupeSourceScopes = (
+  scopes: readonly ChatSourceScope[],
+): ChatSourceScope[] => [
   ...new Map(
-    scopes.map((scope) => [formatChatCorpusId(scope), scope]),
+    scopes.map((scope) => [chatSourceScopeKey(scope), scope]),
   ).values(),
 ];
 
@@ -159,13 +160,13 @@ const replaceMentionsWithAnchors = (
   html: string,
   accessibleWorkspaceIds: string[],
 ): {
-  corpusScopes: ChatCorpusScope[];
   html: string;
   mentions: ChatMention[];
+  sourceScopes: ChatSourceScope[];
 } => {
   const $ = cheerio.load(html, undefined, false);
   const mentions: ChatMention[] = [];
-  const corpusScopes: ChatCorpusScope[] = [];
+  const sourceScopes: ChatSourceScope[] = [];
 
   $("entity-mention").each((_, node) => {
     const id = $(node).attr("data-id");
@@ -180,19 +181,20 @@ const replaceMentionsWithAnchors = (
       return;
     }
 
-    // A corpus chip scopes the turn's corpus tools. It is a reference, not a
-    // mention, so it never widens the thread's workspace data scope.
-    if (referenceCategory === "corpus") {
-      const scope = parseChatCorpusId(id);
-      // An id that names no scope keeps the label the user saw, as plain text.
+    // A source chip (a public corpus, a business registry, an MCP connector)
+    // scopes the turn's source tools. It is a reference, not a mention, so it
+    // never widens the thread's workspace data scope.
+    if (isChatSourceScopeKind(referenceCategory)) {
+      const scope = parseChatSourceScopeId(referenceCategory, id);
+      // An id that names no source keeps the label the user saw, as plain text.
       if (scope === null) {
         $(node).text(label);
         $(node).replaceWith($(node).contents());
         return;
       }
-      corpusScopes.push(scope);
+      sourceScopes.push(scope);
       const anchor = $("<a></a>")
-        .attr("href", toChatCorpusHref(scope))
+        .attr("href", toChatSourceScopeHref(scope))
         .text(label);
       $(node).replaceWith(anchor);
       return;
@@ -241,9 +243,9 @@ const replaceMentionsWithAnchors = (
   });
 
   return {
-    corpusScopes: dedupeCorpusScopes(corpusScopes),
     html: $.html(),
     mentions: dedupeMentions(mentions),
+    sourceScopes: dedupeSourceScopes(sourceScopes),
   };
 };
 
@@ -251,25 +253,25 @@ export const normalizeChatMessageHtml = (
   html: string,
   accessibleWorkspaceIds: string[],
 ): {
-  corpusScopes: ChatCorpusScope[];
   mentions: ChatMention[];
+  sourceScopes: ChatSourceScope[];
   text: string;
 } => {
   if (!html.trim()) {
-    return { corpusScopes: [], mentions: [], text: "" };
+    return { mentions: [], sourceScopes: [], text: "" };
   }
 
   const sanitizedHtml = sanitizeHtml(html);
   const {
-    corpusScopes,
     html: parsedHtml,
     mentions,
+    sourceScopes,
   } = replaceMentionsWithAnchors(sanitizedHtml, accessibleWorkspaceIds);
   const text = htmlToMarkdown(parsedHtml).trim();
 
   return {
-    corpusScopes,
     mentions,
+    sourceScopes,
     text,
   };
 };

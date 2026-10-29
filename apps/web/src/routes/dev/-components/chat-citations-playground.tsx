@@ -25,27 +25,28 @@ const TEXT_CHUNK_MS = 90;
 
 type Frame = { isGenerating: boolean; messages: ChatUIMessage[] };
 
-const [QUESTION, ANSWER] = CHAT_CITATIONS_CASSETTE;
+type Cassette = readonly PersistedChatMessage[];
 
 // What the stream had delivered at each step: every process part one at a
 // time, then the answer text in chunks, then the settled turn.
-const buildFrames = (): Frame[] => {
-  if (QUESTION === undefined || ANSWER === undefined) {
+const buildFrames = (cassette: Cassette): Frame[] => {
+  const [question, answer] = cassette;
+  if (question === undefined || answer === undefined) {
     return [];
   }
   const frames: Frame[] = [];
   const withParts = (parts: PersistedChatMessage["parts"]) =>
-    projectCanonicalChatUIMessages([QUESTION, { ...ANSWER, parts }]);
-  const textIndex = ANSWER.parts.findIndex((part) => part.type === "text");
+    projectCanonicalChatUIMessages([question, { ...answer, parts }]);
+  const textIndex = answer.parts.findIndex((part) => part.type === "text");
   const processParts =
-    textIndex === -1 ? ANSWER.parts : ANSWER.parts.slice(0, textIndex);
+    textIndex === -1 ? answer.parts : answer.parts.slice(0, textIndex);
   for (let count = 0; count <= processParts.length; count += 1) {
     frames.push({
       isGenerating: true,
       messages: withParts(processParts.slice(0, count)),
     });
   }
-  const textPart = textIndex === -1 ? undefined : ANSWER.parts[textIndex];
+  const textPart = textIndex === -1 ? undefined : answer.parts[textIndex];
   if (textPart?.type === "text") {
     for (let chunk = 1; chunk <= TEXT_CHUNKS; chunk += 1) {
       const length = Math.ceil((textPart.content.length * chunk) / TEXT_CHUNKS);
@@ -60,13 +61,10 @@ const buildFrames = (): Frame[] => {
   }
   frames.push({
     isGenerating: false,
-    messages: projectCanonicalChatUIMessages(CHAT_CITATIONS_CASSETTE),
+    messages: projectCanonicalChatUIMessages([...cassette]),
   });
   return frames;
 };
-
-const FRAMES = buildFrames();
-const LAST_FRAME = FRAMES.length - 1;
 
 const noop = () => {
   /* no-op in playground */
@@ -84,25 +82,32 @@ const STREAMDOWN_COMPONENTS = {
 };
 
 /**
- * A recorded case-law answer through the real transcript renderer: inline
- * decision citations, quoted passages, and the process run before them.
- * "Settled" is what a reload shows; "Replay" streams the same turn.
+ * A recorded answer through the real transcript renderer: inline citations,
+ * quoted passages, the source tray, and the process run before them. The
+ * default is the case-law turn. "Settled" is what a reload shows; "Replay"
+ * streams the same turn.
  */
-export function ChatCitationsPlayground() {
+export function ChatCitationsPlayground({
+  cassette = CHAT_CITATIONS_CASSETTE,
+}: {
+  cassette?: Cassette;
+}) {
+  const [frames] = useState(() => buildFrames(cassette));
+  const lastFrame = frames.length - 1;
   const [replaying, setReplaying] = useState(false);
   const [run, setRun] = useState(0);
-  const [frameIndex, setFrameIndex] = useState(LAST_FRAME);
+  const [frameIndex, setFrameIndex] = useState(lastFrame);
   const [activitySession] = useState(() => ({
     reportedUnknownActivityTypes: new Set<string>(),
   }));
 
   useExternalSyncEffect(() => {
     // The replay's clock is the external system.
-    if (!replaying || frameIndex >= LAST_FRAME) {
+    if (!replaying || frameIndex >= lastFrame) {
       return undefined;
     }
     const inText =
-      FRAMES[frameIndex + 1]?.messages[1]?.parts.some(
+      frames[frameIndex + 1]?.messages[1]?.parts.some(
         (part) => part.type === "text",
       ) === true;
     const timeout = setTimeout(
@@ -114,9 +119,9 @@ export function ChatCitationsPlayground() {
     return () => {
       clearTimeout(timeout);
     };
-  }, [frameIndex, replaying, run]);
+  }, [frameIndex, frames, lastFrame, replaying, run]);
 
-  const frame = FRAMES[frameIndex];
+  const frame = frames[frameIndex];
   if (frame === undefined) {
     return null;
   }
@@ -145,7 +150,7 @@ export function ChatCitationsPlayground() {
             <Button
               onClick={() => {
                 setReplaying(false);
-                setFrameIndex(LAST_FRAME);
+                setFrameIndex(lastFrame);
               }}
               size="sm"
               variant="ghost"

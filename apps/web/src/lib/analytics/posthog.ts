@@ -1,5 +1,5 @@
 import { CancelledError } from "@tanstack/react-query";
-import { isTaggedError, panic } from "better-result";
+import { panic } from "better-result";
 import { posthog } from "posthog-js";
 import type {
   CaptureResult,
@@ -12,22 +12,37 @@ import {
   API_FILE_SECURITY_REJECTED_ERROR_CODE,
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
 } from "@stll/api-contract";
+import { PROVIDER_SETUP_ERROR_CODE } from "@stll/api-contract/provider-setup";
+import { MAX_EXCEPTION_CAUSE_DEPTH } from "@stll/errors/exception-cause-chain";
 
 import { env } from "@/env";
+import { sanitizeHandoffUrl } from "@/lib/account/handoff-url";
 import { normalizeTelemetryErrorTypeName } from "@/lib/analytics/error-diagnostics";
 import { isErrorReference } from "@/lib/analytics/error-reference";
-import { fingerprintExceptionEvent } from "@/lib/analytics/exception-fingerprint";
-import type { ApiErrorIdentity } from "@/lib/analytics/exception-fingerprint";
+import {
+  automaticExceptionKey,
+  capturedApiErrorIdentity,
+  capturedExceptionIdentity,
+  fingerprintExceptionEvent,
+  fingerprintExceptionScope,
+  isApiErrorCode,
+  isExceptionFingerprintKey,
+  isExceptionScopeFingerprint,
+  readApiErrorIdentity,
+  sanitizeFingerprintFields,
+} from "@/lib/analytics/exception-fingerprint";
+import { sanitizeHangDiagnosticEvent } from "@/lib/analytics/posthog-hang-diagnostics";
 import { pickIngestionRequired } from "@/lib/analytics/posthog-ingestion";
 import type { sanitizeRouteErrorLifecycleEvent } from "@/lib/analytics/posthog-route-error";
 import { captureRedactedException } from "@/lib/analytics/stack-redaction";
 import { WEB_ANALYTICS_EVENTS } from "@/lib/analytics/types";
 import type {
   Analytics,
+  AnalyticsResetOptions,
   ErrorCaptureContext,
   WebAnalyticsEvent,
 } from "@/lib/analytics/types";
-import { API_ERROR_TAG } from "@/lib/errors/api-tag";
+import { APIError, isCancellation } from "@/lib/errors/api";
 import { logDevError } from "@/lib/errors/telemetry";
 
 const isWebAnalyticsEvent = (event: string): event is WebAnalyticsEvent =>
@@ -154,8 +169,9 @@ const ENVIRONMENT_NOISE_PATTERNS: readonly RegExp[] = [
 const EXTENSION_FRAME = /^(?:chrome|moz|safari(?:-web)?)-extension:\/\//u;
 
 // API answers the UI already turns into a state (sign in, no access, not
-// found, a rejected provider key or continuation, a file the upload scan
-// refused). Other 4xx and every 5xx stay reported.
+// found, a rejected provider key or continuation, a provider key that needs
+// more setup, a file the upload scan refused). Other 4xx and every 5xx stay
+// reported.
 const API_ERROR_TYPES: ReadonlySet<string> = new Set([
   "ApiError",
   "StreamReadError",
@@ -163,6 +179,7 @@ const API_ERROR_TYPES: ReadonlySet<string> = new Set([
 const EXPECTED_API_STATUSES: ReadonlySet<number> = new Set([401, 403, 404]);
 const EXPECTED_API_CODES: ReadonlySet<string> = new Set([
   "ai_config_provider_validation_failed",
+  ...Object.values(PROVIDER_SETUP_ERROR_CODE),
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
   API_FILE_SECURITY_REJECTED_ERROR_CODE,
 ]);
@@ -202,6 +219,9 @@ const NOISE_PATTERNS = [
 export const isNoiseException = (event: {
   properties?: Record<string, unknown>;
 }): boolean => {
+  if (event.properties?.["user_visible"] === true) {
+    return false;
+  }
   const list = event.properties?.["$exception_list"];
   if (!Array.isArray(list) || list.length === 0) {
     return false;
@@ -226,6 +246,46 @@ export const isNoiseException = (event: {
 // (`ClientTelemetryError.area`). The pattern rejects anything free-form so
 // no dynamic string can ride along.
 const TELEMETRY_AREA = /^[a-z][a-z0-9-]{0,39}$/u;
+const USER_VISIBLE_FEATURE = /^[a-z][a-z0-9-]{0,39}$/u;
+const ROUTE_TEMPLATE = /^(?:unknown|\/[A-Za-z0-9_.$/-]*)$/u;
+
+declare const exceptionCodeBrand: unique symbol;
+type ExceptionCode = string & { readonly [exceptionCodeBrand]: true };
+declare const telemetryAreaBrand: unique symbol;
+type TelemetryArea = string & { readonly [telemetryAreaBrand]: true };
+
+type ExceptionValueFields = {
+  /** Already a class token: `normalizeTelemetryErrorTypeName` output. */
+  type: string;
+  code?: ExceptionCode;
+  status?: number;
+  area?: TelemetryArea;
+};
+
+/** Renders only structural fields that have already crossed their allowlist. */
+const exceptionValue = ({
+  type,
+  code,
+  status,
+  area,
+}: ExceptionValueFields): string =>
+  `${type}${code === undefined ? "" : `[${code}]`}${
+    status === undefined ? "" : ` ${status}`
+  }${area === undefined ? "" : ` area=${area}`}`;
+
+// The allowlists narrow by predicate, so a branded value only ever comes from
+// a string that passed its pattern.
+const isExceptionCode = (value: string): value is ExceptionCode =>
+  isApiErrorCode(value);
+
+const isTelemetryArea = (value: string): value is TelemetryArea =>
+  TELEMETRY_AREA.test(value);
+
+const exceptionCode = (value: string | undefined): ExceptionCode | undefined =>
+  value !== undefined && isExceptionCode(value) ? value : undefined;
+
+const telemetryArea = (value: unknown): TelemetryArea | undefined =>
+  typeof value === "string" && isTelemetryArea(value) ? value : undefined;
 
 const telemetryAreaProperty = (
   error: unknown,
@@ -239,76 +299,16 @@ const telemetryAreaProperty = (
     : undefined;
 };
 
-// API error codes are stable server-declared slugs (`usage_limit_exceeded`).
-// Anything else is treated as free text and dropped, so a server that echoed
-// input into `code` could not smuggle it into telemetry.
-const API_ERROR_CODE = /^[a-z][a-z0-9_]{0,63}$/u;
-const HTTP_STATUS_MIN = 100;
-const HTTP_STATUS_MAX = 599;
-
-const isHttpStatus = (value: unknown): value is number =>
-  typeof value === "number" &&
-  Number.isInteger(value) &&
-  value >= HTTP_STATUS_MIN &&
-  value <= HTTP_STATUS_MAX;
-
-const isApiError = (error: unknown): error is Record<string, unknown> =>
-  isTaggedError(error) && error._tag === API_ERROR_TAG && isRecord(error);
-
-// Error boundaries wrap the failure they caught (`ClientTelemetryError` with
-// the `ApiError` as its cause), so the API error is found anywhere in the
-// cause chain. `cause` is writable, so the walk is bounded against cycles.
-const apiErrorInChain = (
-  error: unknown,
-): Record<string, unknown> | undefined => {
-  const seen = new Set<unknown>();
-  let current = error;
-  while (isRecord(current) && !seen.has(current)) {
-    if (isApiError(current)) {
-      return current;
-    }
-    seen.add(current);
-    current = current["cause"];
-  }
-  return undefined;
-};
-
-// The status and code of an `ApiError` are the only parts of a failed API
-// response that identify the outcome without carrying its payload, so they
-// ride along as flat properties and feed the grouping identity below. The
-// class is recognized by its tag: importing it would close an import cycle
-// through the localized error module.
 const apiErrorTelemetryProperties = (
   error: unknown,
 ): Record<string, number | string> | undefined => {
-  const apiError = apiErrorInChain(error);
-  if (apiError === undefined) {
-    return undefined;
-  }
-  const status = apiError["status"];
-  const code = apiError["code"];
-  if (!isHttpStatus(status)) {
+  const identity = capturedApiErrorIdentity(error);
+  if (identity === undefined) {
     return undefined;
   }
   return {
-    error_status: status,
-    ...(typeof code === "string" && API_ERROR_CODE.test(code)
-      ? { error_code: code }
-      : {}),
-  };
-};
-
-const apiErrorIdentity = (
-  properties: Record<string, unknown>,
-): ApiErrorIdentity | undefined => {
-  const status = properties["error_status"];
-  if (!isHttpStatus(status)) {
-    return undefined;
-  }
-  const code = properties["error_code"];
-  return {
-    status,
-    ...(typeof code === "string" && API_ERROR_CODE.test(code) ? { code } : {}),
+    error_status: identity.status,
+    ...(identity.code === undefined ? {} : { error_code: identity.code }),
   };
 };
 
@@ -370,7 +370,10 @@ export const sanitizeFrame = (frame: unknown): SanitizedFrame => {
   };
 };
 
-const sanitizeExceptionEntry = (entry: unknown) => {
+const sanitizeExceptionEntry = (
+  entry: unknown,
+  fields: Omit<ExceptionValueFields, "type">,
+) => {
   const type = domExceptionClass(
     normalizeTelemetryErrorTypeName(readStringField(entry, "type")),
     readStringField(entry, "value"),
@@ -379,7 +382,7 @@ const sanitizeExceptionEntry = (entry: unknown) => {
   const frames = isRecord(stacktrace) ? stacktrace["frames"] : undefined;
   return {
     type,
-    value: "",
+    value: exceptionValue({ type, ...fields }),
     ...(Array.isArray(frames)
       ? { stacktrace: { type: "raw", frames: frames.map(sanitizeFrame) } }
       : {}),
@@ -410,7 +413,7 @@ const templateUrl = (
   return { url: `${parsed.origin}${template}`, pathname: template };
 };
 
-const sanitizeExceptionEvent = (
+export const sanitizeExceptionEvent = (
   event: CaptureResult,
   history: RouteTemplateHistory,
 ): CaptureResult => {
@@ -419,16 +422,45 @@ const sanitizeExceptionEvent = (
   const appVersion = properties["app_version"];
   const area = properties["area"];
   const errorReference = properties["error_reference"];
+  const feature = properties["feature"];
+  const routeTemplate = properties["route_template"];
+  const userVisible = properties["user_visible"] === true;
   const exceptionList = properties["$exception_list"];
   const entries: unknown[] = Array.isArray(exceptionList) ? exceptionList : [];
+  const safeArea = telemetryArea(area);
+  const http = readApiErrorIdentity({
+    status: properties["error_status"],
+    code: properties["error_code"],
+  });
+  const safeCode = exceptionCode(http?.code);
+  const valueFields = {
+    ...(safeArea === undefined ? {} : { area: safeArea }),
+    ...(http === undefined
+      ? {}
+      : {
+          status: http.status,
+          ...(safeCode === undefined ? {} : { code: safeCode }),
+        }),
+  };
   const sanitizedList =
     entries.length > 0
-      ? entries.map(sanitizeExceptionEntry)
-      : [sanitizeExceptionEntry(undefined)];
+      ? entries.map((entry) => sanitizeExceptionEntry(entry, valueFields))
+      : [sanitizeExceptionEntry(undefined, valueFields)];
   const type = sanitizedList.at(0)?.type ?? normalizeTelemetryErrorTypeName("");
-  const safeArea =
-    typeof area === "string" && TELEMETRY_AREA.test(area) ? area : undefined;
-  const http = apiErrorIdentity(properties);
+  const fields = sanitizeFingerprintFields(properties["exception_fields"]);
+  const causalTypes = properties["exception_error_types"];
+  const declaredKey = properties["exception_key"];
+  const key = isExceptionFingerprintKey(declaredKey)
+    ? declaredKey
+    : automaticExceptionKey({
+        entries: sanitizedList,
+        message: readStringField(entries.at(-1), "value"),
+        firstPartyOrigin: env.VITE_PUBLIC_APP_URL,
+      });
+  const declaredScope = properties["exception_scope"];
+  const scopeIdentity = isExceptionScopeFingerprint(declaredScope)
+    ? declaredScope
+    : fingerprintExceptionScope({ type: "handler", handlerId: key });
   // Session and window ids join an exception to the page views and actions
   // around it; they are random SDK ids that carry no user content.
   const sessionId = properties["$session_id"];
@@ -445,16 +477,29 @@ const sanitizeExceptionEvent = (
       ...(route === undefined
         ? {}
         : { $current_url: route.url, $pathname: route.pathname }),
-      // Grouping identity derived from the sanitized list, so nothing the
-      // redaction removed can reach it.
+      // Explicit owners are preferred; SDK captures use asset ownership and an
+      // opaque normalized message shape. Source positions remain diagnostic.
       $exception_fingerprint: fingerprintExceptionEvent({
-        area: safeArea,
-        entries: sanitizedList,
-        firstPartyOrigin: env.VITE_PUBLIC_APP_URL,
+        key,
+        scopeIdentity,
+        entries:
+          Array.isArray(causalTypes) && causalTypes.length > 0
+            ? causalTypes
+                .slice(0, MAX_EXCEPTION_CAUSE_DEPTH)
+                .map((causalType) => ({
+                  type: normalizeTelemetryErrorTypeName(
+                    typeof causalType === "string" ? causalType : "",
+                  ),
+                }))
+            : sanitizedList,
+        fields,
         http,
       }),
       $exception_list: sanitizedList,
       $exception_type: type,
+      ...(properties["exception_identity_status"] === "read_failed"
+        ? { exception_identity_status: "read_failed" }
+        : {}),
       ...(typeof appCommit === "string" ? { app_commit: appCommit } : {}),
       ...(typeof appVersion === "string" ? { app_version: appVersion } : {}),
       ...(safeArea === undefined ? {} : { area: safeArea }),
@@ -466,6 +511,17 @@ const sanitizeExceptionEvent = (
           }),
       ...(isErrorReference(errorReference)
         ? { error_reference: errorReference }
+        : {}),
+      ...(userVisible ? { user_visible: true } : {}),
+      ...(userVisible &&
+      typeof feature === "string" &&
+      USER_VISIBLE_FEATURE.test(feature)
+        ? { feature }
+        : {}),
+      ...(userVisible &&
+      typeof routeTemplate === "string" &&
+      ROUTE_TEMPLATE.test(routeTemplate)
+        ? { route_template: routeTemplate }
         : {}),
     },
   };
@@ -667,17 +723,42 @@ const sanitizeSdkUrlContext = (
   ) {
     delete properties["$session_entry_referrer"];
   }
-  return { ...event, properties };
+  return {
+    ...event,
+    properties: {
+      ...properties,
+      ...Object.fromEntries(
+        ["$referrer", "$session_entry_referrer"].flatMap((key) => {
+          const value = properties[key];
+          return typeof value === "string"
+            ? [[key, sanitizeHandoffUrl(value)]]
+            : [];
+        }),
+      ),
+    },
+  };
 };
 
 const errorContextProperties = (
   context: ErrorCaptureContext | undefined,
-): Record<string, string> | undefined => {
-  if (context?.type !== "recovery") {
-    return undefined;
+): Record<string, string | boolean> | undefined => {
+  switch (context?.type) {
+    case "recovery":
+      return { error_reference: context.reference };
+    case "user-visible":
+      return {
+        feature: context.feature,
+        route_template: context.routeTemplate,
+        user_visible: true,
+      };
+    case "detached":
+    case undefined:
+      return undefined;
+    default: {
+      context satisfies never;
+      return panic(`Unhandled context: ${String(context)}`);
+    }
   }
-
-  return { error_reference: context.reference };
 };
 
 const devErrorContext = (
@@ -692,6 +773,12 @@ const devErrorContext = (
       return { detached: context.operation };
     case "recovery":
       return { error_reference: context.reference };
+    case "user-visible":
+      return {
+        feature: context.feature,
+        route_template: context.routeTemplate,
+        user_visible: "true",
+      };
     default: {
       context satisfies never;
       return panic(`Unhandled context: ${String(context)}`);
@@ -705,6 +792,60 @@ const devErrorContext = (
 export const signedInAnonymousId = (userId: string): string =>
   `signed-in:${userId}`;
 
+const registerBuildProperties = () => {
+  posthog.register({
+    app_commit: __APP_COMMIT_SHA__,
+    app_version: __APP_VERSION__,
+  });
+};
+
+const captureError: Analytics["captureError"] = (
+  error,
+  { fingerprintKey, scope, context },
+) => {
+  // Transport failures have no HTTP response and describe client connectivity,
+  // not an application exception. Keep the fixed query owner and kind only:
+  // neither a resolved URL nor request/user content belongs in this signal.
+  if (APIError.is(error) && error.transportKind !== undefined) {
+    posthog.capture(WEB_ANALYTICS_EVENTS.clientTransient, {
+      query_owner: fingerprintKey,
+      transport_kind: error.transportKind,
+    });
+    return;
+  }
+  // A cancelled request is expected control flow, not an operational failure.
+  if (isCancellation(error)) {
+    return;
+  }
+  // Cheap guards before the SDK call: a stray `captureError(null)`
+  // or `captureError(undefined)` would otherwise reach PostHog as
+  // `Error: "undefined"` noise that the `before_send` filter then
+  // has to clean up.
+  if (
+    error === null ||
+    error === undefined ||
+    error instanceof CancelledError
+  ) {
+    return;
+  }
+  logDevError(error, devErrorContext(context));
+  const identity = capturedExceptionIdentity(error);
+  captureRedactedException(error, (redacted) => {
+    posthog.captureException(redacted, {
+      exception_key: fingerprintKey,
+      exception_scope: fingerprintExceptionScope(scope),
+      exception_error_types: identity.types,
+      exception_fields: identity.fields,
+      ...(identity.status === "read_failed"
+        ? { exception_identity_status: identity.status }
+        : {}),
+      ...errorContextProperties(context),
+      ...telemetryAreaProperty(error),
+      ...apiErrorTelemetryProperties(error),
+    });
+  });
+};
+
 /**
  * Initialize PostHog and return an Analytics adapter.
  *
@@ -714,6 +855,7 @@ export const signedInAnonymousId = (userId: string): string =>
  * rather than relying on deployment-specific environment settings.
  */
 type CreatePostHogAnalyticsOptions = {
+  routeTemplates?: readonly string[];
   key: string;
   host: string;
   /**
@@ -724,10 +866,62 @@ type CreatePostHogAnalyticsOptions = {
   uiHost?: string | undefined;
 };
 
+// Events whose properties are already typed for PostHog go straight to the
+// SDK; keeping them out of the factory keeps its body to the stateful parts.
+const forwardedCaptures: Pick<
+  Analytics,
+  | "capturePageHangSuspected"
+  | "captureLongAnimationFrame"
+  | "captureGuideStepSkipped"
+  | "captureFeedbackDialogOpened"
+  | "captureFeedbackReportSubmitted"
+  | "captureProvisionPlacementGaps"
+  | "captureCaseLawAnalysisTiming"
+  | "captureInspectorRestoreRecovered"
+  | "captureFollowupShown"
+  | "captureFollowupSelected"
+  | "captureKeyActionTiming"
+> = {
+  capturePageHangSuspected: (properties) => {
+    posthog.capture(WEB_ANALYTICS_EVENTS.pageHangSuspected, properties);
+  },
+  captureLongAnimationFrame: (properties) => {
+    posthog.capture(WEB_ANALYTICS_EVENTS.longAnimationFrame, properties);
+  },
+  captureGuideStepSkipped: (properties) => {
+    posthog.capture(WEB_ANALYTICS_EVENTS.guideStepSkipped, properties);
+  },
+  captureFeedbackDialogOpened: (properties) => {
+    posthog.capture(WEB_ANALYTICS_EVENTS.feedbackDialogOpened, properties);
+  },
+  captureFeedbackReportSubmitted: (properties) => {
+    posthog.capture(WEB_ANALYTICS_EVENTS.feedbackReportSubmitted, properties);
+  },
+  captureProvisionPlacementGaps: (properties) => {
+    posthog.capture(WEB_ANALYTICS_EVENTS.provisionPlacementGaps, properties);
+  },
+  captureCaseLawAnalysisTiming: (properties) => {
+    posthog.capture(WEB_ANALYTICS_EVENTS.caseLawAnalysisTiming, properties);
+  },
+  captureInspectorRestoreRecovered: (properties) => {
+    posthog.capture(WEB_ANALYTICS_EVENTS.inspectorRestoreRecovered, properties);
+  },
+  captureFollowupShown: (properties) => {
+    posthog.capture(WEB_ANALYTICS_EVENTS.followupShown, properties);
+  },
+  captureFollowupSelected: (properties) => {
+    posthog.capture(WEB_ANALYTICS_EVENTS.followupSelected, properties);
+  },
+  captureKeyActionTiming: (properties) => {
+    posthog.capture(WEB_ANALYTICS_EVENTS.keyActionTimed, properties);
+  },
+};
+
 export const createPostHogAnalytics = ({
   host,
   key,
   uiHost,
+  routeTemplates = [],
 }: CreatePostHogAnalyticsOptions): {
   analytics: Analytics;
   client: typeof posthog | undefined;
@@ -769,7 +963,7 @@ export const createPostHogAnalytics = ({
       if (import.meta.env.DEV && !localDebugEnabled) {
         return null;
       }
-      if (!event || !isWebAnalyticsEvent(event.event)) {
+      if (!isWebAnalyticsEvent(event.event)) {
         return null;
       }
       switch (event.event) {
@@ -779,6 +973,13 @@ export const createPostHogAnalytics = ({
             : sanitizeExceptionEvent(event, routeTemplateHistory);
         case WEB_ANALYTICS_EVENTS.routeErrorRecovery:
           return routeErrorLifecycleSanitizer?.(event) ?? null;
+        case WEB_ANALYTICS_EVENTS.pageHangSuspected:
+        case WEB_ANALYTICS_EVENTS.longAnimationFrame:
+          return sanitizeHangDiagnosticEvent({
+            event,
+            appUrl: env.VITE_PUBLIC_APP_URL,
+            routeTemplates,
+          });
         case WEB_ANALYTICS_EVENTS.webVitals:
           return sanitizeWebVitalsEvent(event, routeTemplateHistory);
         case WEB_ANALYTICS_EVENTS.pageViewed:
@@ -793,9 +994,12 @@ export const createPostHogAnalytics = ({
         case WEB_ANALYTICS_EVENTS.feedbackDialogOpened:
         case WEB_ANALYTICS_EVENTS.feedbackReportSubmitted:
         case WEB_ANALYTICS_EVENTS.provisionPlacementGaps:
+        case WEB_ANALYTICS_EVENTS.caseLawAnalysisTiming:
         case WEB_ANALYTICS_EVENTS.inspectorRestoreRecovered:
         case WEB_ANALYTICS_EVENTS.followupShown:
         case WEB_ANALYTICS_EVENTS.followupSelected:
+        case WEB_ANALYTICS_EVENTS.keyActionTimed:
+        case WEB_ANALYTICS_EVENTS.clientTransient:
           return sanitizeSdkUrlContext(event, routeTemplateHistory, "resolved");
         default: {
           event.event satisfies never;
@@ -809,12 +1013,6 @@ export const createPostHogAnalytics = ({
   // event carries the exact deployed build. `reset` clears super-properties,
   // so every identity change goes through `resetIdentity`, which registers
   // them again.
-  const registerBuildProperties = () => {
-    posthog.register({
-      app_commit: __APP_COMMIT_SHA__,
-      app_version: __APP_VERSION__,
-    });
-  };
   registerBuildProperties();
 
   // Persistence is off, so every page load starts with a fresh anonymous
@@ -853,27 +1051,7 @@ export const createPostHogAnalytics = ({
   };
 
   const analytics: Analytics = {
-    captureError: (error, context) => {
-      // Cheap guards before the SDK call: a stray `captureError(null)`
-      // or `captureError(undefined)` would otherwise reach PostHog as
-      // `Error: "undefined"` noise that the `before_send` filter then
-      // has to clean up.
-      if (
-        error === null ||
-        error === undefined ||
-        error instanceof CancelledError
-      ) {
-        return;
-      }
-      logDevError(error, devErrorContext(context));
-      captureRedactedException(error, (redacted) => {
-        posthog.captureException(redacted, {
-          ...errorContextProperties(context),
-          ...telemetryAreaProperty(error),
-          ...apiErrorTelemetryProperties(error),
-        });
-      });
-    },
+    captureError,
     capturePageViewed: ({ path }) => {
       // `path` is the matched route template (`/workspaces/$workspaceId`),
       // never a resolved URL. Overriding the SDK's own `$current_url` and
@@ -897,30 +1075,7 @@ export const createPostHogAnalytics = ({
         path,
       });
     },
-    captureGuideStepSkipped: (properties) => {
-      posthog.capture(WEB_ANALYTICS_EVENTS.guideStepSkipped, properties);
-    },
-    captureFeedbackDialogOpened: (properties) => {
-      posthog.capture(WEB_ANALYTICS_EVENTS.feedbackDialogOpened, properties);
-    },
-    captureFeedbackReportSubmitted: (properties) => {
-      posthog.capture(WEB_ANALYTICS_EVENTS.feedbackReportSubmitted, properties);
-    },
-    captureProvisionPlacementGaps: (properties) => {
-      posthog.capture(WEB_ANALYTICS_EVENTS.provisionPlacementGaps, properties);
-    },
-    captureInspectorRestoreRecovered: (properties) => {
-      posthog.capture(
-        WEB_ANALYTICS_EVENTS.inspectorRestoreRecovered,
-        properties,
-      );
-    },
-    captureFollowupShown: (properties) => {
-      posthog.capture(WEB_ANALYTICS_EVENTS.followupShown, properties);
-    },
-    captureFollowupSelected: (properties) => {
-      posthog.capture(WEB_ANALYTICS_EVENTS.followupSelected, properties);
-    },
+    ...forwardedCaptures,
     captureRouteErrorLifecycle: async (properties) =>
       import("@/lib/analytics/posthog-route-error")
         .then((module) => {
@@ -930,8 +1085,17 @@ export const createPostHogAnalytics = ({
         })
         .catch((error: unknown) => {
           analytics.captureError(error, {
-            operation: "posthog.route-error-lifecycle",
-            type: "detached",
+            fingerprintKey:
+              "createPostHogAnalytics.captureRouteErrorLifecycle:failure",
+            scope: {
+              type: "handler",
+              handlerId:
+                "createPostHogAnalytics.captureRouteErrorLifecycle:failure",
+            },
+            context: {
+              operation: "posthog.route-error-lifecycle",
+              type: "detached",
+            },
           });
         }),
     identifyUser: (user) => {
@@ -953,7 +1117,7 @@ export const createPostHogAnalytics = ({
       // via groupIdentify; the browser only attaches the opaque key.
       posthog.group(POSTHOG_ORGANIZATION_GROUP_TYPE, user.activeOrganizationId);
     },
-    reset: ({ onlyIfIdentified } = {}) => {
+    reset: ({ onlyIfIdentified }: AnalyticsResetOptions = {}) => {
       signedOutVisitorSeen = true;
       if (onlyIfIdentified && !posthog._isIdentified()) {
         return;

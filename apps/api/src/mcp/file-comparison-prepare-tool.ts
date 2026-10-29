@@ -25,7 +25,6 @@ import {
   fileComparisonObjectKey,
 } from "@/api/lib/uploads/file-comparison/uploads";
 import { PRESIGN_URL_EXPIRY_SECONDS } from "@/api/lib/uploads/runtime";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import type {
   InternalToolErrorResult,
@@ -43,6 +42,7 @@ import {
   defineMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 /** The enforced ceiling, and the number every staging description renders. */
@@ -206,6 +206,7 @@ const DEFAULT_PREPARE_FILE_COMPARISON_DEPENDENCIES: PrepareFileComparisonDepende
   { presignUploadUrl };
 
 const presignInput = async ({
+  userId,
   dependencies,
   file,
   organizationId,
@@ -213,14 +214,16 @@ const presignInput = async ({
   dependencies: PrepareFileComparisonDependencies;
   file: FileComparisonInputFile;
   organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
 }): Promise<Result<ReservedUpload, unknown>> => {
   const id = createSafeId<"fileComparisonUpload">();
   const presigned = await dependencies.presignUploadUrl({
+    userId,
     key: fileComparisonObjectKey({ organizationId, uploadId: id }),
     expiresIn: PRESIGN_URL_EXPIRY_SECONDS,
     contentType: DOCX_MIME_TYPE,
     contentLength: file.size,
-    sha256Base64: Buffer.from(file.sha256Hex, "hex").toString("base64"),
+    sha256Base64: Buffer.from(file.sha256Hex, "hex").toBase64(),
     scope: { organizationId, workspaceId: null },
     tagAsTemporaryUpload: true,
   });
@@ -255,20 +258,30 @@ export const reserveFileComparisonInputs = async ({
   target,
 }: {
   base: FileComparisonInputFile;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   dependencies: PrepareFileComparisonDependencies;
   target: FileComparisonInputFile;
 }): Promise<Result<ReservedFileComparisonInputs, InternalToolErrorResult>> => {
   const { organizationId, userId } = context;
   const [reservedBase, reservedTarget] = await Promise.all([
-    presignInput({ dependencies, file: base, organizationId }),
-    presignInput({ dependencies, file: target, organizationId }),
+    presignInput({ dependencies, file: base, organizationId, userId }),
+    presignInput({ dependencies, file: target, organizationId, userId }),
   ]);
   if (Result.isError(reservedBase)) {
-    return Result.err(internalFailureResult(reservedBase.error));
+    return Result.err(
+      internalFailureResult(
+        reservedBase.error,
+        "mcp.reserveFileComparisonInputs.reservedBase_error",
+      ),
+    );
   }
   if (Result.isError(reservedTarget)) {
-    return Result.err(internalFailureResult(reservedTarget.error));
+    return Result.err(
+      internalFailureResult(
+        reservedTarget.error,
+        "mcp.reserveFileComparisonInputs.reservedTarget_error",
+      ),
+    );
   }
 
   const expiresAt = fileComparisonExpiry(FILE_COMPARISON_INPUT_TTL_SECONDS);
@@ -305,7 +318,12 @@ export const reserveFileComparisonInputs = async ({
       }),
   );
   if (Result.isError(inserted)) {
-    return Result.err(internalFailureResult(inserted.error));
+    return Result.err(
+      internalFailureResult(
+        inserted.error,
+        "mcp.reserveFileComparisonInputs.inserted_error",
+      ),
+    );
   }
 
   return Result.ok({
@@ -340,7 +358,7 @@ export const handlePrepareFileComparisonTool = async (
   {
     args,
     context,
-  }: { args: Record<string, unknown>; context: McpRequestContext },
+  }: { args: Record<string, unknown>; context: AuthorizedMcpRequestContext },
   dependencies: PrepareFileComparisonDependencies = DEFAULT_PREPARE_FILE_COMPARISON_DEPENDENCIES,
 ): Promise<TypedMcpToolResponse<PrepareFileComparisonOutput>> => {
   const parsed = v.safeParse(PREPARE_FILE_COMPARISON_INPUT_SCHEMA, args);

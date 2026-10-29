@@ -1,6 +1,6 @@
-import { Value } from "@sinclair/typebox/value";
 import { expect, test } from "bun:test";
 import fc from "fast-check";
+import * as v from "valibot";
 
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import { DECISION_JUDGE_ROLES } from "@stll/api-contract/case-law-judges";
@@ -15,6 +15,17 @@ import {
   projectDecisionReader,
   readDecisionSuccessResponseSchema,
 } from "./read-response";
+
+/** Where and why a reader answer breaks its declared schema; empty when it holds. */
+const schemaIssues = (response: unknown) => {
+  const parsed = v.safeParse(readDecisionSuccessResponseSchema, response);
+  return parsed.success
+    ? []
+    : parsed.issues.map((issue) => ({
+        path: v.getDotPath(issue),
+        message: issue.message,
+      }));
+};
 
 const UUID = "00000000-0000-4000-8000-000000000001";
 const decisionId = toSafeId<"caseLawDecision">(UUID);
@@ -48,6 +59,7 @@ const decisionWithText = (text: string) => {
     languageGroupKey: text,
     decisionDate: text,
     decisionType: text,
+    citationCount: 17,
     documentAst: {
       version: 1,
       source: {
@@ -78,7 +90,7 @@ const decisionWithText = (text: string) => {
     fulltext: text,
     projectionDigest: text,
     documentAstSource: "row",
-    sections: [{ index: 0, type: "header", title: text, text }],
+    sections: [{ index: 0, type: "header", title: text, blockIndices: [0] }],
     sourceUrl: text,
     sourceAttributionUrl: text,
     documentUrl: text,
@@ -128,6 +140,7 @@ const decisionWithText = (text: string) => {
       },
     ],
     citationsNextCursor: null,
+    caseFile: { items: [], nextCursor: null, limit: 50 },
     languageAlternates: [
       {
         id: text,
@@ -164,20 +177,15 @@ test("decision readers bound every non-document Unicode field and retain officia
         const text = characters.join("").repeat(80_000);
         const original = decisionWithText(text);
         const response = projectDecisionReader(original);
-        const errors = [
-          ...Value.Errors(readDecisionSuccessResponseSchema, response),
-        ];
-        expect(errors.map(({ path, message }) => ({ path, message }))).toEqual(
-          [],
-        );
+        expect(schemaIssues(response)).toEqual([]);
         expect(response.fulltext).toBe(text);
         expect(response.documentAst).toBe(original.documentAst);
         const { documentAst, fulltext, sections, ...nonDocument } = response;
         expect(documentAst).toBe(original.documentAst);
         expect(fulltext).toBe(text);
         const coordinates = (
-          list: readonly { index: number; text: string }[] | null,
-        ) => list?.map((section) => [section.index, section.text]);
+          list: readonly { index: number; blockIndices: number[] }[] | null,
+        ) => list?.map((section) => [section.index, section.blockIndices]);
         expect(coordinates(sections)).toEqual(coordinates(original.sections));
         expect(
           Buffer.byteLength(JSON.stringify(nonDocument)),
@@ -188,12 +196,12 @@ test("decision readers bound every non-document Unicode field and retain officia
   );
 });
 
-test("decision readers keep every section whole so citation section indices resolve", () => {
+test("decision readers preserve section block references so citation section indices resolve", () => {
   const sections = Array.from({ length: 300 }, (_, index) => ({
     index,
     type: "argumentation" as const,
     title: null,
-    text: `${index}:${"ř".repeat(70_000)}`,
+    blockIndices: [index],
   }));
   const response = projectDecisionReader({
     ...decisionWithText("text"),
@@ -201,7 +209,27 @@ test("decision readers keep every section whole so citation section indices reso
   });
 
   expect(response.sections).toEqual(sections);
-  expect([
-    ...Value.Errors(readDecisionSuccessResponseSchema, response),
-  ]).toEqual([]);
+  expect(schemaIssues(response)).toEqual([]);
 });
+
+test.each([
+  { indices: [0, 1, 300], valid: true },
+  { indices: ["0"], valid: false },
+  { indices: [-1], valid: false },
+  { indices: [1.5], valid: false },
+  { indices: [null], valid: false },
+  { indices: [true], valid: false },
+])(
+  "decision section block references validate $indices",
+  ({ indices, valid }) => {
+    const response = projectDecisionReader(decisionWithText("text"));
+    expect(
+      v.safeParse(readDecisionSuccessResponseSchema, {
+        ...response,
+        sections: [
+          { index: 0, type: "header", title: null, blockIndices: indices },
+        ],
+      }).success,
+    ).toBe(valid);
+  },
+);

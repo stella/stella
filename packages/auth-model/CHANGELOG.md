@@ -1,5 +1,23 @@
 # @stll/auth-model
 
+## 0.3.0
+
+### Minor Changes
+
+- [#7236](https://github.com/stella/stella/pull/7236) [`52590f6`](https://github.com/stella/stella/commit/52590f6353c040428264ad26386d7a5e6492ad5b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `apple` to the social provider identifiers and export `AuthSocialProviderId`.
+
+- [#6315](https://github.com/stella/stella/pull/6315) [`a21a5e7`](https://github.com/stella/stella/commit/a21a5e7d9a41efbc874e06450be60e9818cf2cf6) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Remove the session startup header constant from the portable authentication contract.
+
+### Patch Changes
+
+- [#7359](https://github.com/stella/stella/pull/7359) [`fa2397d`](https://github.com/stella/stella/commit/fa2397d59e8a09dc9d412a102f18c5c449341876) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Align the schema contract version with Better Auth 1.7.12 after confirming the core and organization schemas are unchanged.
+
+## 0.2.7
+
+### Patch Changes
+
+- [#5704](https://github.com/stella/stella/pull/5704) [`c57c0e8`](https://github.com/stella/stella/commit/c57c0e833228f6351c5f7c9a5519e4bbebcf980f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Include OAuth consent references in the authentication model contract.
+
 ## 0.2.6
 
 ### Patch Changes

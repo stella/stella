@@ -6,6 +6,7 @@ import { childExitStatus } from "@stll/scripts/src/child-exit-status";
 
 import packageJson from "../package.json" with { type: "json" };
 import { buildApiTestCommand } from "./api-test-command";
+import { discoverGatedTestFiles } from "./gated-test-files";
 import { parseGatedTestSelection } from "./gated-test-selection";
 import {
   mergeJunitReports,
@@ -18,6 +19,8 @@ import {
   selectTestPaths,
 } from "./test-path-filters";
 
+export { discoverGatedTestFiles } from "./gated-test-files";
+
 type GatedTestScript = keyof typeof packageJson.ciGateTestRunners;
 
 type RunGatedTestsOptions = {
@@ -29,12 +32,22 @@ type RunGatedTestsOptions = {
   selection?: string | undefined;
   exclusiveTestPaths?: ReadonlySet<string> | undefined;
   spawnTestProcess?: RunTestBatchesOptions["spawn"];
-  shardTestFiles?:
-    | ((testFiles: readonly string[]) => readonly string[])
+  runnerArguments?: readonly string[] | undefined;
+  runTestFiles?:
+    | ((options: {
+        bunArguments: readonly string[];
+        files: readonly string[];
+        gate: string;
+        gateValue: string;
+        preload?: string | undefined;
+      }) => Promise<number>)
     | undefined;
+  shardTestFiles?:
+    ((testFiles: readonly string[]) => readonly string[]) | undefined;
   validateTestPlan?:
     | ((apiRoot: string, testPaths: readonly string[]) => Promise<void>)
     | undefined;
+  prepare?: (() => Promise<void>) | undefined;
 };
 
 const apiRoot = path.resolve(import.meta.dir, "..");
@@ -136,34 +149,6 @@ export const runTestBatches = async ({
   }
 };
 
-type DiscoverGatedTestFilesOptions = {
-  apiRoot: string;
-  testFileGlob: string;
-  gate: string;
-};
-
-export const discoverGatedTestFiles = async ({
-  apiRoot: testRoot,
-  testFileGlob,
-  gate,
-}: DiscoverGatedTestFilesOptions) => {
-  const files = [
-    ...new Bun.Glob(testFileGlob).scanSync({ cwd: testRoot, onlyFiles: true }),
-  ];
-  const sources = await Promise.all(
-    files.map(async (testFile) => ({
-      testFile,
-      isGated: (await Bun.file(path.join(testRoot, testFile)).text()).includes(
-        gate,
-      ),
-    })),
-  );
-  return sources
-    .filter(({ isGated }) => isGated)
-    .map(({ testFile }) => testFile)
-    .toSorted();
-};
-
 /**
  * Runs every test file that declares the script's gate, with the gate set.
  * Discovery reads the same `ciGateTestRunners` declaration the CI coverage
@@ -176,7 +161,10 @@ export const runGatedTests = async ({
   selection,
   exclusiveTestPaths = new Set(),
   spawnTestProcess,
+  runnerArguments = Bun.argv.slice(2),
+  runTestFiles,
   validateTestPlan,
+  prepare,
   shardTestFiles,
 }: RunGatedTestsOptions): Promise<number> => {
   const runner = packageJson.ciGateTestRunners[script];
@@ -201,9 +189,7 @@ export const runGatedTests = async ({
     plan.mode === "selected" ? plan.files : discoveredGatedFiles;
   await validateTestPlan?.(apiRoot, discoveredGatedFiles);
 
-  const { bunArguments, patterns } = partitionRunnerArguments(
-    Bun.argv.slice(2),
-  );
+  const { bunArguments, patterns } = partitionRunnerArguments(runnerArguments);
   const selectedPaths = selectTestPaths(
     plannedFiles,
     normalizeAbsoluteTestPatterns(patterns, apiRoot),
@@ -226,6 +212,8 @@ export const runGatedTests = async ({
     );
     return 0;
   }
+
+  await prepare?.();
 
   // The same derived sources the package `test` script generates first: the
   // suites import the capability runtime, which is never committed.
@@ -250,6 +238,15 @@ export const runGatedTests = async ({
     }
   }
 
+  if (runTestFiles !== undefined) {
+    return runTestFiles({
+      bunArguments,
+      files: testFiles,
+      gate: runner.gate,
+      gateValue: runner.gateValue,
+      preload,
+    });
+  }
   const batches = isolateSharedTableDdlTests(testFiles, exclusiveTestPaths);
   console.log(
     `Running ${String(testFiles.length)} ${runner.gate} test files in ${String(batches.length)} process batches.`,

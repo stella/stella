@@ -18,13 +18,10 @@ import {
 } from "@stll/ui/composer";
 import { cn } from "@stll/ui/utils";
 
-import {
-  ChatSubmitPreservedError,
-  useChatComposerWiring,
-} from "@/components/chat-editor-provider";
+import { useChatComposerWiring } from "@/components/chat-editor-provider";
 import type {
   ChatEditorController,
-  ChatInputDraft,
+  ChatSend,
 } from "@/components/chat-editor-provider";
 import { ChatComposerActionButton } from "@/components/chat/chat-composer-action-button";
 import { ChatDraftAttachmentChips } from "@/components/chat/chat-draft-attachment-chips";
@@ -32,8 +29,8 @@ import type { ComposerModelsMenuProps } from "@/components/chat/chat-model-optio
 import { ChatPromptImproveButton } from "@/components/chat/chat-prompt-improve-button";
 import { ComposerControlSlot } from "@/components/chat/composer-control-slot";
 import {
-  ComposerPlusMenu,
   type ComposerContextMenuProps,
+  ComposerPlusMenu,
 } from "@/components/chat/composer-plus-menu";
 import { PromptEditorContent } from "@/components/prompt-editor";
 import { ReferenceRenderScope } from "@/components/references/reference-chip";
@@ -52,6 +49,7 @@ type ChatInputSurfaceProps = {
   className?: string;
   controller: ChatEditorController;
   disabled?: boolean;
+  sendDisabled?: boolean;
   /** Register this as the canonical main-chat guide surface. Shared and
    * nested chat composers leave this off so tours cannot target duplicates. */
   guideAnchorsEnabled?: boolean;
@@ -62,7 +60,7 @@ type ChatInputSurfaceProps = {
    * Both variants keep the (+) at the start of the bottom action row.
    */
   variant?: "compact" | "large";
-  onSubmit: (draft: ChatInputDraft) => Promise<void> | void;
+  onSubmit: ChatSend;
   onFocusChange?: ((focused: boolean) => void) | undefined;
   /**
    * When set, the surface renders an in-line stop button while
@@ -130,7 +128,8 @@ export const ChatInputSurface = ({
   autoFocus,
   className,
   controller,
-  disabled = false,
+  disabled,
+  sendDisabled,
   guideAnchorsEnabled = false,
   variant = "compact",
   onSubmit,
@@ -163,11 +162,11 @@ export const ChatInputSurface = ({
     placeholder,
     removeFile,
   } = controller;
-  const inputDisabled = disabled;
+  const inputDisabled = Boolean(disabled);
   // Submitting stays enabled while the assistant streams: a send
   // during a turn is queued by `useChatSession` and dispatched once
   // the response finishes, so overlapping requests can't happen.
-  const submitDisabled = disabled;
+  const submitDisabled = Boolean(disabled || sendDisabled);
 
   // A failed send has already restored the draft (see `submit` in
   // chat-editor-provider), so the only thing missing is a user-visible
@@ -175,10 +174,10 @@ export const ChatInputSurface = ({
   // failure into telemetry alone leaves the send silently lost.
   const handleSubmitError = useCallback(
     (error: unknown): void => {
-      if (ChatSubmitPreservedError.is(error)) {
-        return;
-      }
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "ChatInputSurface:failure",
+        scope: { type: "handler", handlerId: "ChatInputSurface:failure" },
+      });
       notifyUserError(error, t("common.somethingWentWrong"));
     },
     [t],

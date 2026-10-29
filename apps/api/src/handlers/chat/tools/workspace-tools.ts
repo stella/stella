@@ -77,8 +77,7 @@ export type ChatFieldWriter = {
   userId: SafeId<"user">;
   /** Writes are refused unless the matter's status here is "active". */
   workspaceStatusById:
-    | ReadonlyMap<string, AccessibleWorkspace["status"]>
-    | undefined;
+    ReadonlyMap<string, AccessibleWorkspace["status"]> | undefined;
 };
 
 type WorkspaceToolsContext = {

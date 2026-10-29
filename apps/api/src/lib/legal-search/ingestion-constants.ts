@@ -1,9 +1,12 @@
+// parser-output-unchanged: UK_FCL entries extend the key, parser-version and fingerprint maps; existing adapter keys and values are unchanged.
+// parser-output-unchanged: the ÚOHS adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 /** Adapter keys for all supported court data sources. */
 export const ADAPTER_KEYS = {
   CZ_REGIONAL: "cz-regional",
   CZ_NS: "cz-ns",
   CZ_NSS: "cz-nss",
   CZ_US: "cz-us",
+  CZ_UOHS: "cz-uohs",
   SK_COURTS: "sk-courts",
   SK_US: "sk-us",
   PL_COURTS: "pl-courts",
@@ -26,6 +29,7 @@ export const ADAPTER_KEYS = {
   AT_FINDOK: "at-findok",
   EU_ECJ: "eu-ecj",
   HU_BHGY: "hu-bhgy",
+  UK_FCL: "uk-fcl",
   PL_KIS: "pl-kis",
   PL_UODO: "pl-uodo",
   PL_UOKIK: "pl-uokik",
@@ -49,36 +53,84 @@ export type ImportSourceKey =
  * of every court corpus.
  */
 export const PARSER_VERSIONS = {
-  [ADAPTER_KEYS.CZ_REGIONAL]: 13,
-  [ADAPTER_KEYS.CZ_NS]: 18,
-  [ADAPTER_KEYS.CZ_NSS]: 20,
-  [ADAPTER_KEYS.CZ_US]: 25,
-  [ADAPTER_KEYS.SK_COURTS]: 16,
-  [ADAPTER_KEYS.SK_US]: 11,
-  [ADAPTER_KEYS.PL_COURTS]: 13,
-  [ADAPTER_KEYS.PL_SN]: 6,
-  [ADAPTER_KEYS.PL_KIO]: 6,
-  [ADAPTER_KEYS.PL_TK]: 7,
-  [ADAPTER_KEYS.PL_NSA]: 8,
-  [ADAPTER_KEYS.PL_NCOURT]: 12,
-  [ADAPTER_KEYS.AT_COURTS]: 8,
-  [ADAPTER_KEYS.AT_VFGH]: 8,
-  [ADAPTER_KEYS.AT_VWGH]: 8,
-  [ADAPTER_KEYS.AT_BVWG]: 8,
-  [ADAPTER_KEYS.AT_LVWG]: 8,
-  [ADAPTER_KEYS.AT_ASYLGH]: 8,
-  [ADAPTER_KEYS.AT_UBAS]: 8,
-  [ADAPTER_KEYS.AT_UVS]: 8,
-  [ADAPTER_KEYS.AT_VERG]: 8,
-  [ADAPTER_KEYS.AT_UMSE]: 8,
-  [ADAPTER_KEYS.AT_BKS]: 8,
-  [ADAPTER_KEYS.AT_FINDOK]: 9,
-  [ADAPTER_KEYS.EU_ECJ]: 15,
-  [ADAPTER_KEYS.HU_BHGY]: 18,
-  [ADAPTER_KEYS.PL_KIS]: 8,
-  [ADAPTER_KEYS.PL_UODO]: 12,
-  [ADAPTER_KEYS.PL_UOKIK]: 10,
+  [ADAPTER_KEYS.CZ_REGIONAL]: 16,
+  [ADAPTER_KEYS.CZ_NS]: 21,
+  [ADAPTER_KEYS.CZ_NSS]: 24,
+  [ADAPTER_KEYS.CZ_US]: 32,
+  [ADAPTER_KEYS.CZ_UOHS]: 5,
+  [ADAPTER_KEYS.SK_COURTS]: 20,
+  [ADAPTER_KEYS.SK_US]: 17,
+  [ADAPTER_KEYS.PL_COURTS]: 17,
+  [ADAPTER_KEYS.PL_SN]: 10,
+  [ADAPTER_KEYS.PL_KIO]: 11,
+  [ADAPTER_KEYS.PL_TK]: 10,
+  [ADAPTER_KEYS.PL_NSA]: 10,
+  [ADAPTER_KEYS.PL_NCOURT]: 16,
+  [ADAPTER_KEYS.AT_COURTS]: 9,
+  [ADAPTER_KEYS.AT_VFGH]: 9,
+  [ADAPTER_KEYS.AT_VWGH]: 9,
+  [ADAPTER_KEYS.AT_BVWG]: 9,
+  [ADAPTER_KEYS.AT_LVWG]: 9,
+  [ADAPTER_KEYS.AT_ASYLGH]: 9,
+  [ADAPTER_KEYS.AT_UBAS]: 9,
+  [ADAPTER_KEYS.AT_UVS]: 9,
+  [ADAPTER_KEYS.AT_VERG]: 9,
+  [ADAPTER_KEYS.AT_UMSE]: 9,
+  [ADAPTER_KEYS.AT_BKS]: 9,
+  [ADAPTER_KEYS.AT_FINDOK]: 11,
+  [ADAPTER_KEYS.EU_ECJ]: 18,
+  [ADAPTER_KEYS.HU_BHGY]: 22,
+  [ADAPTER_KEYS.UK_FCL]: 4,
+  [ADAPTER_KEYS.PL_KIS]: 11,
+  [ADAPTER_KEYS.PL_UODO]: 15,
+  [ADAPTER_KEYS.PL_UOKIK]: 12,
 } as const satisfies Record<AdapterKey, number>;
+
+// parser-output-unchanged: adds the source fingerprint versions; no parser reads them, so parser output is unchanged.
+/**
+ * Source fingerprint version for each source.
+ *
+ * Increment only when a source's fingerprint changes over the same stored
+ * bytes: either the adapter changes which already-stored bytes it passes to
+ * `sourceFingerprint`, or the hashing itself changes. Changing which bytes an
+ * adapter stores is not fingerprint-only: those rows take the normal changed
+ * path when next observed, and the parser version changes only when parser
+ * output changes.
+ */
+export const SOURCE_FINGERPRINT_VERSIONS = {
+  [IMPORT_SOURCE_KEYS.COURTLISTENER]: 0,
+  [ADAPTER_KEYS.CZ_REGIONAL]: 0,
+  [ADAPTER_KEYS.CZ_NS]: 0,
+  [ADAPTER_KEYS.CZ_NSS]: 0,
+  [ADAPTER_KEYS.CZ_US]: 0,
+  [ADAPTER_KEYS.CZ_UOHS]: 0,
+  [ADAPTER_KEYS.SK_COURTS]: 0,
+  [ADAPTER_KEYS.SK_US]: 0,
+  [ADAPTER_KEYS.PL_COURTS]: 0,
+  [ADAPTER_KEYS.PL_SN]: 0,
+  [ADAPTER_KEYS.PL_KIO]: 0,
+  [ADAPTER_KEYS.PL_TK]: 0,
+  [ADAPTER_KEYS.PL_NSA]: 0,
+  [ADAPTER_KEYS.PL_NCOURT]: 0,
+  [ADAPTER_KEYS.AT_COURTS]: 0,
+  [ADAPTER_KEYS.AT_VFGH]: 0,
+  [ADAPTER_KEYS.AT_VWGH]: 0,
+  [ADAPTER_KEYS.AT_BVWG]: 0,
+  [ADAPTER_KEYS.AT_LVWG]: 0,
+  [ADAPTER_KEYS.AT_ASYLGH]: 0,
+  [ADAPTER_KEYS.AT_UBAS]: 0,
+  [ADAPTER_KEYS.AT_UVS]: 0,
+  [ADAPTER_KEYS.AT_VERG]: 0,
+  [ADAPTER_KEYS.AT_UMSE]: 0,
+  [ADAPTER_KEYS.AT_BKS]: 0,
+  [ADAPTER_KEYS.AT_FINDOK]: 0,
+  [ADAPTER_KEYS.EU_ECJ]: 0,
+  [ADAPTER_KEYS.HU_BHGY]: 0,
+  [ADAPTER_KEYS.UK_FCL]: 0,
+  [ADAPTER_KEYS.PL_KIS]: 0,
+  [ADAPTER_KEYS.PL_UODO]: 0,
+  [ADAPTER_KEYS.PL_UOKIK]: 0,
+} as const satisfies Record<AdapterKey | ImportSourceKey, number>;
 
 /**
  * Capacity bound for a complete `case_law_sources` read, and nothing more.

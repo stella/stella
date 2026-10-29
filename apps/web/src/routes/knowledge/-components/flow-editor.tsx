@@ -2,7 +2,7 @@ import { useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
 import {
@@ -33,6 +33,7 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 import { Skeleton } from "@stll/ui/skeleton";
+import { Switch } from "@stll/ui/switch";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
 
@@ -48,18 +49,18 @@ import {
   type FlowStepKind,
   type FlowTriggerType,
 } from "@/components/flows/flow-meta";
-import { FlowSwitch } from "@/components/flows/flow-switch";
 import { MatterOptionLabel } from "@/components/matter-option-label";
 import { guideAnchor } from "@/features/guides/guide-anchor";
 import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 import { usePermissions } from "@/hooks/use-permissions";
+import { useFormatter } from "@/i18n/formatting-context";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { flowDetailOptions, knowledgeKeys } from "@/lib/knowledge/queries";
 import { WEEKDAY_NAME_FORMAT } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
@@ -381,29 +382,29 @@ const FlowEditorForm = ({
   const handleSave = async () => {
     const trimmedName = name.trim();
     if (trimmedName === "") {
-      notifyUserError(undefined, t("flows.nameRequired"));
+      notifyUserProblem(t("flows.nameRequired"));
       return;
     }
     if (steps.length === 0) {
-      notifyUserError(undefined, t("flows.steps.required"));
+      notifyUserProblem(t("flows.steps.required"));
       return;
     }
     for (const step of steps) {
       if (step.name.trim() === "") {
-        notifyUserError(undefined, t("flows.steps.nameRequired"));
+        notifyUserProblem(t("flows.steps.nameRequired"));
         return;
       }
       if (step.kind === "ai" && step.prompt.trim() === "") {
-        notifyUserError(undefined, t("flows.steps.promptRequired"));
+        notifyUserProblem(t("flows.steps.promptRequired"));
         return;
       }
       if (step.kind === "create-document" && step.documentTitle.trim() === "") {
-        notifyUserError(undefined, t("flows.steps.documentTitleRequired"));
+        notifyUserProblem(t("flows.steps.documentTitleRequired"));
         return;
       }
     }
     if (trigger.type === "schedule" && trigger.schedule.workspaceId === "") {
-      notifyUserError(undefined, t("flows.schedule.workspaceRequired"));
+      notifyUserProblem(t("flows.schedule.workspaceRequired"));
       return;
     }
 
@@ -578,7 +579,7 @@ const FlowEditorForm = ({
               {t("flows.enabledDescription")}
             </p>
           </div>
-          <FlowSwitch
+          <Switch
             aria-label={
               enabled ? t("flows.disableFlow") : t("flows.enableFlow")
             }
@@ -652,7 +653,9 @@ const WorkspaceOptionsNotice = ({
     case "failed":
       return (
         <div className="flex items-center gap-2 p-2 text-xs">
-          <span className="text-muted-foreground">{t("common.error")}</span>
+          <span className="text-muted-foreground">
+            {t("common.loadFailed")}
+          </span>
           <Button onClick={workspaces.retry} size="sm" variant="ghost">
             {t("common.retry")}
           </Button>

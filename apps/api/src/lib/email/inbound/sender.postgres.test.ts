@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
+import { waitForExternalState } from "@stll/property-testing/external-state";
+
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import {
@@ -56,8 +58,8 @@ if (!databaseUrl || !runPostgresTests) {
           adminId,
         );
         const allowedSenderId = createSafeId<"correspondenceAllowedSender">();
-        const firstToken = generateInboundAddressToken();
-        const secondToken = generateInboundAddressToken();
+        const firstToken = generateInboundAddressToken({ userId: null });
+        const secondToken = generateInboundAddressToken({ userId: null });
         const sender = "office@example.test";
         const approverEmail = `approver-${Bun.randomUUIDv7()}@example.test`;
         const receivedAt = "2026-09-26T12:00:00.000Z";
@@ -287,22 +289,25 @@ if (!databaseUrl || !runPostgresTests) {
           }).then((result) => result.unwrap());
           activeDeliveries.push(second);
           const secondPid = await secondTransactionStarted.promise;
-          let secondBlocked = false;
+          // The second delivery either reaches its candidate here or waits on
+          // the first one's lock, which only the server's lock graph shows.
           let secondReachedCandidate = false;
-          for (let attempt = 0; attempt < 100; attempt += 1) {
-            const [wait] = await observerDb.execute<{ blocked: boolean }>(sql`
-              SELECT cardinality(pg_blocking_pids(${secondPid})) > 0 AS blocked
-            `);
-            secondBlocked = wait?.blocked ?? false;
-            secondReachedCandidate = await Promise.race([
-              secondAtCandidate.promise.then(() => true),
-              Bun.sleep(20).then(() => false),
-            ]);
-            if (secondBlocked || secondReachedCandidate) {
-              break;
-            }
-          }
-          expect(secondBlocked || secondReachedCandidate).toBe(true);
+          void secondAtCandidate.promise.then(() => {
+            secondReachedCandidate = true;
+            return undefined;
+          });
+          await waitForExternalState({
+            description:
+              "the second delivery waits on a lock or reaches its candidate",
+            intervalMs: 20,
+            read: async () =>
+              secondReachedCandidate ||
+              (
+                await observerDb.execute<{ blocked: boolean }>(sql`
+                  SELECT cardinality(pg_blocking_pids(${secondPid})) > 0 AS blocked
+                `)
+              ).at(0)?.blocked === true,
+          });
           releaseCandidates.resolve(undefined);
           const outcomes = await Promise.allSettled([first, second]);
           expect(

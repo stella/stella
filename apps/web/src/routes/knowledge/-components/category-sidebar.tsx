@@ -18,9 +18,9 @@ import { ContextMenu } from "@stll/ui/context-menu";
 import type { ContextMenuAction } from "@stll/ui/context-menu";
 import {
   Dialog,
-  DialogFormState,
   DialogClose,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
@@ -564,7 +564,7 @@ const CategoryRow = ({
             <DropdownMenuTrigger
               render={
                 <Button
-                  className="invisible shrink-0 group-hover:visible"
+                  className="invisible shrink-0 group-hover:visible pointer-coarse:visible"
                   size="icon-xs"
                   variant="ghost"
                 />

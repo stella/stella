@@ -11,9 +11,9 @@ import {
   legislationSources,
 } from "@/api/db/schema";
 import {
-  rehydrateLegislationCandidates,
-  readLegislationCandidateRows,
   legislationCandidateRowsStatement,
+  readLegislationCandidateRows,
+  rehydrateLegislationCandidates,
 } from "@/api/handlers/legislation/search";
 import { createSafeId } from "@/api/lib/branded-types";
 import { createCorpusHitDispositionCounter } from "@/api/lib/legal-search/corpus-hit-telemetry";

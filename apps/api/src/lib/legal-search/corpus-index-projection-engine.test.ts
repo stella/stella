@@ -5,20 +5,20 @@ import { Buffer } from "node:buffer";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   CORPUS_INDEX_ENGINE_INGEST_MAX_BYTES,
-  CorpusIndexError,
   corpusIndexCommittedIngestTimeoutMs,
+  CorpusIndexError,
 } from "@/api/lib/legal-search/corpus-index-client";
 import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   appendCorpusProjectionBatch,
   censusCorpusProjectionRevisions,
-  corpusIndexUnknownAppendBarrierAt,
-  corpusProjectionRevisionsQuery,
-  CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
   CORPUS_PROJECTION_APPEND_MAX_REQUEST_BYTES,
   CORPUS_PROJECTION_APPEND_MAX_REVISION_BYTES,
   CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES,
+  CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
   CORPUS_PROJECTION_UNKNOWN_APPEND_MARGIN_MS,
+  corpusIndexUnknownAppendBarrierAt,
+  corpusProjectionRevisionsQuery,
   planCorpusProjectionAppendRequests,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import { LIMITS } from "@/api/lib/limits";

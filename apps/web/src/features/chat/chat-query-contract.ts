@@ -122,8 +122,7 @@ export type ChatThreadOptionsContext = {
   getContextMatterIds?: (() => string[]) | undefined;
   getEditApplyMode?: (() => ChatEditApplyMode) | undefined;
   getDocxEditRepresentation?:
-    | (() => DocxEditRepresentation | undefined)
-    | undefined;
+    (() => DocxEditRepresentation | undefined) | undefined;
   getSendMode?: (() => ChatSendMode) | undefined;
   getUserContext?: (() => ChatUserContext) | undefined;
   /**
@@ -231,6 +230,11 @@ export const chatKeys = {
     search ?? "",
     workspaceId ?? "",
   ],
+  toolGrants: (
+    activeOrganizationId: string,
+    userId: string,
+    threadId: string,
+  ) => [...chatKeys.all, activeOrganizationId, userId, "tool-grants", threadId],
   modelOptions: (activeOrganizationId: string) => [
     ...chatKeys.all,
     activeOrganizationId,

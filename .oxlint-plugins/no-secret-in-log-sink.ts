@@ -39,6 +39,7 @@
 import { eslintCompatPlugin, type Variable } from "@oxlint/plugins";
 
 import {
+  type AstNode,
   filenameForContext,
   getPropertyName,
   invokedCallee,
@@ -52,7 +53,6 @@ import {
   resolveVariable,
   stableInitializer,
   unwrapExpression,
-  type AstNode,
 } from "./utils.ts";
 
 // Words that name a credential on their own.

@@ -10,13 +10,15 @@ import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import { lockAccountRowByEmail } from "@/api/lib/db/account-row";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { checkSessionCredentialIssuer } from "@/api/lib/synthetic-principal/credential-policy";
 
 /**
  * Discriminates which flow a confirmation OTP belongs to. Scopes the
  * verification-table identifier (`${purpose}:${email}`) so codes issued for
  * different flows never collide, even for the same email.
  */
-type ConfirmationOtpPurpose = "delete-account" | "two-factor-manage";
+type ConfirmationOtpPurpose =
+  "delete-account" | "two-factor-manage" | "unlink-account";
 
 const CONFIRMATION_OTP_EXPIRY_MS = 5 * 60 * 1000;
 
@@ -49,8 +51,15 @@ type CreateConfirmationOtpParams = {
 export const createConfirmationOtp = async ({
   purpose,
   email,
-}: CreateConfirmationOtpParams): Promise<Result<string, HandlerError>> =>
-  await Result.tryPromise({
+}: CreateConfirmationOtpParams): Promise<Result<string, HandlerError>> => {
+  const access = checkSessionCredentialIssuer("confirmationCode", {
+    userId: null,
+    email,
+  });
+  if (Result.isError(access)) {
+    return Result.err(access.error);
+  }
+  return await Result.tryPromise({
     try: async () => {
       const identifier = confirmationOtpIdentifier(purpose, email);
       const otp = generateSixDigitOtp();
@@ -85,6 +94,7 @@ export const createConfirmationOtp = async ({
         cause: err,
       }),
   });
+};
 
 /**
  * Purpose-specific error codes. Threaded in by callers whose frontend maps
@@ -135,8 +145,15 @@ type ConfirmationOtpConsumeDb = {
 export const consumeConfirmationOtp = async (
   db: ConfirmationOtpConsumeDb,
   { purpose, email, code, errorCode }: VerifyConfirmationOtpParams,
-): Promise<Result<void, HandlerError>> =>
-  await Result.tryPromise({
+): Promise<Result<void, HandlerError>> => {
+  const access = checkSessionCredentialIssuer("confirmationCode", {
+    userId: null,
+    email,
+  });
+  if (Result.isError(access)) {
+    return Result.err(access.error);
+  }
+  return await Result.tryPromise({
     try: async () => {
       const identifier = confirmationOtpIdentifier(purpose, email);
 
@@ -172,6 +189,7 @@ export const consumeConfirmationOtp = async (
             cause: err,
           }),
   });
+};
 
 /**
  * Verifies and consumes a confirmation OTP for the given purpose. A single
@@ -220,8 +238,15 @@ export const runConfirmedTransaction = async <T>({
   confirmation,
   beforeConsume,
   afterConsume,
-}: ConfirmedTransactionOptions<T>): Promise<Result<T, HandlerError>> =>
-  await rootDb.transaction(async (tx) => {
+}: ConfirmedTransactionOptions<T>): Promise<Result<T, HandlerError>> => {
+  const access = checkSessionCredentialIssuer("confirmationCode", {
+    userId: null,
+    email: confirmation.email,
+  });
+  if (Result.isError(access)) {
+    return Result.err(access.error);
+  }
+  return await rootDb.transaction(async (tx) => {
     await beforeConsume(tx);
     const consumed = await consumeConfirmationOtp(tx, confirmation);
     if (Result.isError(consumed)) {
@@ -229,3 +254,4 @@ export const runConfirmedTransaction = async <T>({
     }
     return Result.ok(await afterConsume(tx));
   });
+};

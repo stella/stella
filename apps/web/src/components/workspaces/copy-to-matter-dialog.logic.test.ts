@@ -2,10 +2,10 @@ import { describe, expect, test } from "bun:test";
 
 import {
   buildSelectionParentLookup,
-  getCopyToMatterRootEntities,
-  getCopyToMatterErrorKey,
-  resolveAncestorIds,
   type CopyToMatterEntity,
+  getCopyToMatterErrorKey,
+  getCopyToMatterRootEntities,
+  resolveAncestorIds,
 } from "@/components/workspaces/copy-to-matter-dialog.logic";
 
 describe("move refusal messages", () => {

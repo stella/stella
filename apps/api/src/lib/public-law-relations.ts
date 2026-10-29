@@ -1,5 +1,9 @@
 import { panic } from "better-result";
 
+// Relative with its extension: the oxlint plugin loads this file in plain Node,
+// which does not resolve the `@/api` path alias.
+import { REVIEW_COLUMN_GRANTS_BY_RELATION } from "./case-law/review-column-grants.ts";
+
 /**
  * Exact PostgreSQL columns required or permitted for the public-law reader role.
  *
@@ -11,9 +15,11 @@ import { panic } from "better-result";
 export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
   caseLawCitationDoctrineReviews: "case_law_citation_doctrine_reviews",
   caseLawCitations: "case_law_citations",
+  caseLawWithdrawalStatus: "case_law_withdrawal_status",
   caseLawCorpusTombstones: "case_law_corpus_tombstones",
   caseLawCourtDirectoryRanks: "case_law_court_directory_ranks",
   caseLawCourtWeights: "case_law_court_weights",
+  caseLawCoverageSlices: "case_law_coverage_slices",
   caseLawDecisionAliases: "case_law_decision_aliases",
   caseLawDecisionIdentifiers: "case_law_decision_identifiers",
   caseLawDecisionJudges: "case_law_decision_judges",
@@ -49,6 +55,7 @@ export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
   legislationSearchDocuments: "legislation_search_documents",
   legislationSources: "legislation_sources",
   legislationWorkNames: "legislation_work_names",
+  legislationWorkIdentifiers: "legislation_work_identifiers",
   statuteSitemapShards: "statute_sitemap_shards",
 } as const;
 
@@ -178,7 +185,7 @@ export const PROVISION_LINK_STATUS_COLUMN_GRANTS_BY_RELATION = {
  * `permitted` first, revoke in a later release, so both releases serve while
  * the two steps are apart.
  */
-const CASE_LAW_DECISION_VIEW_COLUMN_GRANTS = {
+const CASE_LAW_DECISION_INITIAL_VIEW_COLUMN_GRANTS = {
   id: "required",
   source_id: "required",
   case_number: "required",
@@ -215,6 +222,13 @@ const CASE_LAW_DECISION_VIEW_COLUMN_GRANTS = {
   updated_at: "required",
 } as const;
 
+// Later column migrations own their grants; regenerating the initial view
+// migration must never refer to a column that does not exist at that point.
+const CASE_LAW_DECISION_VIEW_COLUMN_GRANTS = {
+  ...CASE_LAW_DECISION_INITIAL_VIEW_COLUMN_GRANTS,
+  text_state: "permitted",
+} as const;
+
 /**
  * Expand phase: the previous release reads the base table, so the role keeps
  * its grants on it while this release reads the views. Every column is
@@ -237,7 +251,7 @@ export const CASE_LAW_DECISION_VIEWS = [
 export const CASE_LAW_DECISION_VIEW_SELECT_GRANTS_BY_ROLE = {
   stella_public_law_reader: {
     kind: "columns",
-    columns: CASE_LAW_DECISION_VIEW_COLUMN_GRANTS,
+    columns: CASE_LAW_DECISION_INITIAL_VIEW_COLUMN_GRANTS,
   },
   stella_caselaw_reader: { kind: "table" },
   stella: { kind: "table" },
@@ -277,7 +291,13 @@ export const caseLawDecisionViewGrantStatements = () =>
   );
 
 export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
+  case_law_withdrawal_status: {
+    decision_id: "required",
+    status: "required",
+    withdrawn_at: "required",
+  },
   ...CENSUS_COLUMN_GRANTS_BY_RELATION,
+  ...REVIEW_COLUMN_GRANTS_BY_RELATION,
   ...LEGISLATION_WORK_IDENTIFIER_COLUMN_GRANTS_BY_RELATION,
   case_law_citation_doctrine_reviews:
     DOCTRINE_COLUMN_GRANTS_BY_RELATION.case_law_citation_doctrine_reviews,
@@ -312,6 +332,14 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     tier: "required",
     tier_label: "required",
     weight: "required",
+  },
+  // Publisher-reported slice totals aggregated into the public coverage page.
+  case_law_coverage_slices: {
+    source_id: "required",
+    slice: "required",
+    reported: "required",
+    collected: "required",
+    checked_at: "required",
   },
   // Accept the future reader grant before a later release grants and reads it.
   case_law_decision_aliases: {
@@ -603,6 +631,11 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
   legislation_sources: {
     id: "required",
     descriptor: "required",
+  },
+  legislation_work_identifiers: {
+    source_id: "required",
+    identifier: "required",
+    eli: "required",
   },
   // The name lookup a legislation search places named acts first by: the
   // match keys and what they point at, not the names' text.

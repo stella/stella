@@ -1,16 +1,17 @@
 import { and, eq } from "drizzle-orm";
-import { status, t } from "elysia";
+import * as v from "valibot";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 
 import { desktopEditSessions } from "@/api/db/schema";
+import { status } from "@/api/http/status";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
   createAuditRecorder,
 } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { closeSessionConnections } from "@/api/lib/desktop-edit-session-notifications";
 import {
   authorizeDesktopEditSession,
@@ -24,13 +25,13 @@ import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { broadcastSessionEvent } from "@/api/lib/sse";
 
-export const respondDesktopEditTakeoverParamsSchema = t.Object({
-  sessionId: tSafeId("desktopEditSession"),
+export const respondDesktopEditTakeoverParamsSchema = v.object({
+  sessionId: resourceIdSchema("desktopEditSession"),
 });
 
-export const respondDesktopEditTakeoverBodySchema = t.Object({
-  sessionToken: t.String({ minLength: 64, maxLength: 64 }),
-  approved: t.Boolean(),
+export const respondDesktopEditTakeoverBodySchema = v.object({
+  sessionToken: v.pipe(v.string(), v.minLength(64), v.maxLength(64)),
+  approved: v.boolean(),
 });
 
 type RespondDesktopEditTakeoverHandlerProps = {
@@ -109,7 +110,9 @@ export const respondDesktopEditTakeoverHandler = async ({
     }
 
     if (approved) {
-      const newToken = createDesktopEditSessionToken();
+      const newToken = createDesktopEditSessionToken({
+        userId: session.takeoverRequestedBy,
+      });
       const newTokenHash = hashDesktopEditSessionToken(newToken);
 
       await tx

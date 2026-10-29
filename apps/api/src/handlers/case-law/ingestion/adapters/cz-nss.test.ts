@@ -29,13 +29,13 @@ import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { StoredRawReparseInput } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   buildCzNssDecision,
+  CZ_NSS_CONTINUATION_PAGE_ROWS,
+  CZ_NSS_FIRST_PAGE_ROWS,
+  CZ_NSS_FIRST_SLICE,
   czNssAdapter,
   czNssExpectedRows,
   czNssListingIdentity,
   czNssTotalPages,
-  CZ_NSS_CONTINUATION_PAGE_ROWS,
-  CZ_NSS_FIRST_SLICE,
-  CZ_NSS_FIRST_PAGE_ROWS,
   parseCzNssDetailMetadata,
   parseResultRows,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
@@ -45,12 +45,12 @@ import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliatio
 import { shouldSkipRefresh } from "@/api/handlers/case-law/ingestion/refresh-policy";
 import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import {
+  absentDecisionTextFields,
+  readDecisionTextMetadata,
+  splitStoredDecisionTextMetadata,
+  storeDecisionTextFields,
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,
-  absentDecisionTextFields,
-  storeDecisionTextFields,
-  splitStoredDecisionTextMetadata,
-  readDecisionTextMetadata,
 } from "@/api/lib/case-law/decision-text";
 import { toPlainText } from "@/api/lib/case-law/plain-text";
 import {
@@ -325,8 +325,9 @@ const installStub = ({
   htmlDocumentStatus = documentStatus,
   legalSentence,
   search = [],
-}: StubOptions): { requests: RecordedRequest[] } => {
+}: StubOptions): { requests: RecordedRequest[]; timeouts: number[] } => {
   const requests: RecordedRequest[] = [];
+  const timeouts: number[] = [];
   let searchCalls = 0;
   let continuationCalls = 0;
 
@@ -334,6 +335,9 @@ const installStub = ({
     async (input: string | URL | Request, init?: RequestInit) => {
       const url = new URL(input instanceof Request ? input.url : String(input));
       const method = init?.method ?? "GET";
+      if (init && "timeoutMs" in init && typeof init.timeoutMs === "number") {
+        timeouts.push(init.timeoutMs);
+      }
       requests.push({
         method,
         url: url.toString(),
@@ -374,6 +378,14 @@ const installStub = ({
             ? utf16Response(DOCUMENT_TEXT)
             : new Response(null, { status: documentStatus });
         }
+        if (
+          url.hostname === "www.nssoud.cz" &&
+          url.pathname === "/rozhodovaci-cinnost/rozsireny-senat"
+        ) {
+          return htmlResponse(
+            "<table><tbody><tr><td>Nebyl nalezen žádný záznam.</td></tr></tbody></table>",
+          );
+        }
         if (url.pathname === "/") {
           return htmlResponse(SESSION_PAGE);
         }
@@ -384,7 +396,7 @@ const installStub = ({
     },
   );
 
-  return { requests };
+  return { requests, timeouts };
 };
 
 /**
@@ -414,21 +426,22 @@ test("allows the NSS listing endpoints to use their source-specific budget", asy
   expect(invalidation.isErr()).toBe(true);
 
   const originalTimeout = AbortSignal.timeout;
-  const timeouts: number[] = [];
+  const pageDeadlines: number[] = [];
   const timeoutSpy = spyOn(AbortSignal, "timeout").mockImplementation(
     (milliseconds) => {
-      timeouts.push(milliseconds);
+      pageDeadlines.push(milliseconds);
       return originalTimeout(milliseconds);
     },
   );
   try {
-    installStub({ search: [htmlResponse("", 503)] });
+    const failedStub = installStub({ search: [htmlResponse("", 503)] });
     const failed = await czNssAdapter.fetchPage("2026-08-20:0", {});
     expect(failed.isErr()).toBe(true);
-    expect(timeouts).toEqual([90_000, 60_000, 60_000]);
-    timeouts.length = 0;
+    expect(pageDeadlines).toEqual([90_000]);
+    expect(failedStub.timeouts).toEqual([60_000, 60_000]);
+    pageDeadlines.length = 0;
 
-    installStub({
+    const pageStub = installStub({
       search: [
         htmlResponse(
           searchPage({
@@ -442,7 +455,8 @@ test("allows the NSS listing endpoints to use their source-specific budget", asy
     const page = await czNssAdapter.fetchPage(`${SLICE}:1`, {});
 
     expect(page.isOk()).toBe(true);
-    expect(timeouts.slice(0, 4)).toEqual([90_000, 60_000, 60_000, 60_000]);
+    expect(pageDeadlines).toEqual([90_000]);
+    expect(pageStub.timeouts.slice(0, 3)).toEqual([60_000, 60_000, 60_000]);
   } finally {
     timeoutSpy.mockRestore();
   }

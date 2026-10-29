@@ -5,6 +5,7 @@ import {
   getDocumentAstMetadata,
   hasUsableAst,
   HEADING_ROLES,
+  headMatterPrecedesBody,
   isApparatusRole,
   isDocumentAst,
   omitDerivablePlainText,
@@ -123,6 +124,28 @@ describe("document anchor resolution", () => {
 describe("isDocumentAst", () => {
   test("accepts a well-formed v1 document AST", () => {
     expect(isDocumentAst(documentAst)).toBe(true);
+  });
+
+  test("rejects duplicate block ids and anchor ids", () => {
+    const first = documentAst.blocks.at(0);
+    const second = documentAst.blocks.at(1);
+    expect(first).toBeDefined();
+    expect(second).toBeDefined();
+    if (first === undefined || second === undefined) {
+      return;
+    }
+    expect(isDocumentAst({ ...documentAst, blocks: [first, first] })).toBe(
+      false,
+    );
+    expect(
+      isDocumentAst({
+        ...documentAst,
+        blocks: [first, { ...second, anchorId: first.anchorId }],
+      }),
+    ).toBe(false);
+    expect(
+      parseDocumentAst({ ...documentAst, blocks: [first, first] }),
+    ).toBeNull();
   });
 
   test("rejects an AST missing required source and metadata", () => {
@@ -494,7 +517,7 @@ describe("persisted roles outside the declared sets", () => {
 
   test("invariant: every declared role survives the persisted reader unchanged", () => {
     for (const role of PARAGRAPH_ROLES) {
-      const stored = withRoles(undefined, role);
+      const stored = withRoles("decision-title", role);
       expect(roleOf(parseDocumentAst(stored)?.blocks[1])).toBe(role);
       expect(persistedAstDegradations(stored)).toEqual([]);
     }
@@ -881,5 +904,84 @@ describe("persisted kinds outside the declared sets", () => {
       { kind: "inline-type", blockId: "p1", type: "ornament" },
       { kind: "inline-type", blockId: "t1", type: "ruby" },
     ]);
+  });
+});
+
+describe("head matter ordering", () => {
+  const paragraph = (role: ParagraphRole, id: string) => ({
+    id,
+    anchorId: id,
+    type: "paragraph" as const,
+    role,
+    plainText: id,
+    inlines: [{ type: "text" as const, text: id }],
+  });
+
+  for (const role of APPARATUS_ROLES) {
+    test(`${role} cannot interrupt or follow any substantive body role`, () => {
+      for (const bodyRole of [
+        "argumentation",
+        "holding",
+        "dissent",
+        "closing",
+        "signature",
+        "unknown",
+      ] as const) {
+        const head = paragraph(role, "head");
+        const body = paragraph(bodyRole, "body");
+        const invalid = {
+          ...documentAst,
+          blocks: [head, body, { ...head, id: "late", anchorId: "late" }],
+        };
+        expect(headMatterPrecedesBody([head, body])).toBe(true);
+        expect(headMatterPrecedesBody(invalid.blocks)).toBe(false);
+        expect(isDocumentAst(invalid)).toBe(false);
+        expect(parseDocumentAst(invalid)).toBeNull();
+        expect(parseDocumentAst(JSON.stringify(invalid))).toBeNull();
+      }
+    });
+  }
+
+  test("section headings and unroled text start the body; participants and notes do not become head matter", () => {
+    const head = paragraph("apparatus", "head");
+    const body: Block = { ...paragraph("unknown", "body"), role: undefined };
+    const heading: Block = {
+      id: "section",
+      anchorId: "section",
+      type: "heading",
+      role: "section-heading",
+      level: 2,
+      inlines: [],
+      plainText: "Reasons",
+    };
+    expect(headMatterPrecedesBody([heading, head])).toBe(false);
+    const publisherHeading = { ...heading, role: "publisher-heading" } as const;
+    expect(headMatterPrecedesBody([publisherHeading, head, body])).toBe(true);
+    expect(headMatterPrecedesBody([body, publisherHeading])).toBe(false);
+    expect(
+      headMatterPrecedesBody([
+        {
+          id: "table",
+          anchorId: "table",
+          type: "table",
+          rows: [],
+          plainText: "",
+        },
+        head,
+      ]),
+    ).toBe(false);
+    expect(headMatterPrecedesBody([body, head])).toBe(false);
+    expect(
+      headMatterPrecedesBody([paragraph("counsel", "counsel"), head, body]),
+    ).toBe(true);
+    expect(
+      headMatterPrecedesBody([
+        body,
+        { ...head, type: "paragraph", note: { type: "footnote", label: "1" } },
+      ]),
+    ).toBe(true);
+    expect(
+      headMatterPrecedesBody([body, paragraph("publisher-note", "publisher")]),
+    ).toBe(true);
   });
 });

@@ -147,11 +147,26 @@ describe("literal targets", () => {
     ]);
   });
 
+  test("stops expanding at the cap", () => {
+    const expanded = expandBraces("{a,b,c}".repeat(40));
+    expect(expanded).toHaveLength(64);
+    expect(expanded.at(0)).toBe("a".repeat(40));
+    expect(expanded.at(1)).toBe(`${"a".repeat(39)}b`);
+  });
+
   test("reduces a glob to the tree it scans", () => {
     expect(literalTargets("{apps,packages}/**/*.test.ts")).toEqual([
       { fromGlob: true, path: "apps" },
       { fromGlob: true, path: "packages" },
     ]);
+  });
+
+  test("bounds a product of many brace alternatives before materializing it", () => {
+    const expansions = expandBraces("{a,b}".repeat(80));
+    expect(expansions).toHaveLength(64);
+    expect(new Set(expansions).size).toBe(64);
+    expect(expansions.at(0)).toBe("a".repeat(80));
+    expect(expansions.at(-1)).toBe("a".repeat(74) + "b".repeat(6));
   });
 
   test("a wildcard with no directory before it names no path", () => {
@@ -327,8 +342,11 @@ describe("test input coverage", () => {
   test("ignores a path compared by a matcher rather than read", () => {
     const root = createRoot({
       files: {
-        "apps/alpha/src/guard.test.ts":
-          'expect(config).toContain("apps/beta/src/route.ts");\n',
+        "apps/alpha/src/guard.test.ts": [
+          'expect(config).toContain("apps/beta/src/route.ts");',
+          'expect(config).toMatchInlineSnapshot("apps/beta/src/route.ts");',
+          'expect(config).toMatchSnapshot("apps/beta/src/route.ts");',
+        ].join("\n"),
       },
       tasks: {},
     });

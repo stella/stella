@@ -323,7 +323,12 @@ for (const [locale, messages] of [
     );
     const ui = await mount({ client, locale, messages, filters });
 
-    expect(ui.queryByText((_, element) => element?.tagName === "P")).toBeNull();
+    // The row's snippet is the only paragraph: no cap notice beside the list.
+    expect(
+      ui
+        .queryAllByText((_, element) => element?.tagName === "P")
+        .map((element) => element.textContent),
+    ).toEqual([firstDecision.sentenceText]);
     expect(
       ui.queryByRole("button", { name: messages.common.loadMore }),
     ).toBeNull();

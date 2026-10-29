@@ -29,6 +29,7 @@ import { Textarea } from "@stll/ui/textarea";
 import { contentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
 
+import { matchesComboboxItem } from "@/components/combobox-filter.logic";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import {
   REGISTRY_DEFAULT_FORMAT,
@@ -45,17 +46,17 @@ import {
   type TemplateDateFormat,
 } from "@/components/templates/template-date-format";
 import {
-  isInputType,
   type InputType,
+  isInputType,
   type LookupRegistry,
 } from "@/components/templates/template-field-manifest";
 import Tooltip from "@/components/tooltip";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import { LANG_ENDONYMS } from "@/i18n/i18n-store";
 import type { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
 import { bindingCatalogOptions } from "@/lib/knowledge/queries/binding-catalog";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 import { inputTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
 import type {
   EditableField,
@@ -371,7 +372,7 @@ const CompanyLookupConfig = ({
   onUpdate: (patch: Partial<TemplateEditableField>) => void;
 }) => {
   const t = useTranslations();
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   const registry = field.lookup?.registry ?? preferredRegistry(locale);
   const formats = optionalArray(field.lookup?.formats);
   const options = orderedRegistryOptions(locale);
@@ -421,6 +422,7 @@ const CompanyLookupConfig = ({
         <FieldLabel>{t("templates.fieldLookupRegistry")}</FieldLabel>
         <Combobox<LookupRegistryOption>
           autoHighlight
+          filter={matchesComboboxItem}
           items={options}
           itemToStringLabel={(option) => option.label}
           onValueChange={(option) => {
@@ -810,7 +812,7 @@ type BindingCatalogData = Exclude<
 
 /** One pickable source in the binding catalog (the matter's client, a party, the
  *  matter, an attorney, or the firm), with its bindable fields and any extra
- *  selector (party `roles`, attorney `refs`). Derived from the Eden response so
+ *  selector (party `roles`, attorney `refs`). Derived from the API response so
  *  it tracks the backend catalog. */
 type CatalogSource = BindingCatalogData["sources"][number];
 
@@ -868,7 +870,7 @@ const BindingSourceConfigControl = ({
 }) => {
   const t = useTranslations();
   const dataQuery = useQuery(bindingCatalogOptions());
-  const dataView = useQueryView(dataQuery);
+  const dataView = queryView(dataQuery);
   const data = dataView.type === "items" ? dataView.items : undefined;
   const sources = optionalArray(data?.sources);
   const firstSource = sources.at(0);
@@ -1102,7 +1104,7 @@ export const FieldConfigEditor = ({
   defaultDateLocale?: string | undefined;
 }) => {
   const t = useTranslations();
-  const appLocale = useLocale();
+  const appLocale = useFormattingLocale();
   const isFormula = field.formula !== undefined;
   const typeChoice = fieldTypeChoice(field);
 

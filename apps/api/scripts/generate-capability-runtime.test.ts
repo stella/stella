@@ -6,10 +6,11 @@ import { pathToFileURL } from "node:url";
 import { Script } from "node:vm";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { createProgram } from "@stll/scripts/src/typescript-program";
 
 import {
-  generateCapabilityRuntime,
   generateCapabilityCatalogRuntime,
+  generateCapabilityRuntime,
 } from "./generate-capability-runtime";
 import { serializeDispatchModule } from "./lib/capability-catalog";
 
@@ -196,3 +197,50 @@ process.stdout.write(JSON.stringify({ features: [...CAPABILITY_FEATURE_BINDINGS]
     }
   },
 );
+
+test("capability registry declarations retain ids without importing handler types", async () => {
+  const directory = await mkdtemp(
+    path.join(tmpdir(), "capability-declarations-"),
+  );
+  try {
+    const dispatch = path.join(directory, "dispatch.ts");
+    await writeFile(
+      path.join(directory, "handler.ts"),
+      'export default { config: { path: "/fixture" } };',
+    );
+    await writeFile(
+      dispatch,
+      serializeDispatchModule([
+        {
+          id: "widgets.list",
+          importPath: "@/api/handler",
+          exportName: undefined,
+        },
+      ]),
+    );
+    const opened = await createProgram({
+      rootNames: [dispatch],
+      compilerOptions: {
+        declaration: true,
+        emitDeclarationOnly: true,
+        noCheck: true,
+        types: [],
+        paths: { "@/api/*": [path.join(directory, "*")] },
+      },
+    });
+    try {
+      const emitted = await opened.program.getDeclarationEmit([dispatch]);
+      expect(emitted.diagnostics).toEqual([]);
+      const declaration = [...emitted.outputFiles.values()]
+        .map(({ text }) => text)
+        .join("\n");
+      expect(declaration).toContain('"widgets.list"');
+      expect(declaration).toContain("Promise<Record<string, unknown>>");
+      expect(declaration).not.toContain("handler");
+    } finally {
+      await opened.close();
+    }
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});

@@ -28,6 +28,7 @@ import {
   type CitationResolutionDrainTiming,
   type CitationResolutionStep,
   runCitationResolutionDrain,
+  tryResolveCitationBatch,
 } from "./citation-resolution-drain";
 
 const TIMING = {
@@ -63,9 +64,75 @@ const DRAINED: CitationResolutionStep = {
 };
 const BUSY: CitationResolutionStep = { type: CITATION_RESOLUTION_STEP.BUSY };
 
+test("a citation batch without a signal stays one database batch", async () => {
+  const limits: number[] = [];
+  const outcome = await tryResolveCitationBatch({
+    limit: 100,
+    resolveBatch: async (limit) => {
+      limits.push(limit);
+      return {
+        ...counts({ scanned: limit, resolved: limit }),
+        cursor: { citingDecisionId: "decision", citationId: "citation" },
+      };
+    },
+  });
+
+  expect(outcome).toEqual({
+    type: "settled",
+    counts: counts({ scanned: 100, resolved: 100 }),
+  });
+  expect(limits).toEqual([100]);
+});
+
+test("an abort between citation chunks returns committed progress", async () => {
+  const controller = new AbortController();
+  const limits: number[] = [];
+  const outcome = await tryResolveCitationBatch({
+    limit: 100,
+    signal: controller.signal,
+    resolveBatch: async (limit) => {
+      limits.push(limit);
+      controller.abort();
+      return {
+        ...counts({ scanned: limit, resolved: limit }),
+        cursor: { citingDecisionId: "decision", citationId: "citation" },
+      };
+    },
+  });
+
+  expect(outcome).toEqual({
+    type: "aborted",
+    counts: counts({ scanned: 25, resolved: 25 }),
+  });
+  expect(limits).toEqual([25]);
+});
+
+test("a short citation chunk settles without another empty query", async () => {
+  const limits: number[] = [];
+  let calls = 0;
+  const outcome = await tryResolveCitationBatch({
+    limit: 100,
+    signal: new AbortController().signal,
+    resolveBatch: async (limit) => {
+      limits.push(limit);
+      calls += 1;
+      const scanned = calls === 1 ? limit : 10;
+      return {
+        ...counts({ scanned, resolved: scanned }),
+        cursor: { citingDecisionId: "decision", citationId: "citation" },
+      };
+    },
+  });
+
+  expect(outcome).toEqual({
+    type: "settled",
+    counts: counts({ scanned: 35, resolved: 35 }),
+  });
+  expect(limits).toEqual([25, 25]);
+});
+
 type DrainEvent =
-  | { type: "batch"; atMs: number }
-  | { type: "sleep"; ms: number };
+  { type: "batch"; atMs: number } | { type: "sleep"; ms: number };
 
 type DrainRun = {
   events: DrainEvent[];

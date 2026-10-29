@@ -1,15 +1,16 @@
 "use client";
 
-import type * as React from "react";
+import type { ButtonHTMLAttributes, ReactNode } from "react";
 
 import { mergeProps } from "@base-ui/react/merge-props";
 import { useRender } from "@base-ui/react/use-render";
+import { panic } from "better-result";
 import { cva, type VariantProps } from "class-variance-authority";
 
 import {
-  BUTTON_DISPOSITION,
   blockDisabledActivation,
   blockDisabledKeyActivation,
+  BUTTON_DISPOSITION,
   resolveButtonDisposition,
 } from "../lib/button-disposition";
 import { MENU_ROW_CLASS_NAME } from "../lib/menu-row";
@@ -40,11 +41,13 @@ const buttonAccessibleDisabledClass = "cursor-not-allowed opacity-64";
 const buttonPressClass =
   "motion-safe:transition-transform motion-safe:duration-150 ease-out motion-safe:active:scale-[0.98]";
 
+const BUTTON_DEFAULT_SIZE = "default";
+
 const buttonVariants = cva(
   "focus-visible:ring-ring focus-visible:ring-offset-background relative inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 rounded-lg border text-base font-medium whitespace-nowrap outline-none select-none before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-lg)-1px)] focus-visible:ring-2 focus-visible:ring-offset-1 disabled:pointer-events-none disabled:opacity-64 sm:text-sm pointer-coarse:after:absolute pointer-coarse:after:size-full pointer-coarse:after:min-h-11 pointer-coarse:after:min-w-11 [&_svg]:pointer-events-none [&_svg]:-mx-0.5 [&_svg]:shrink-0 [&_svg:not([class*='opacity-'])]:opacity-80 [&_svg:not([class*='size-'])]:size-4.5 sm:[&_svg:not([class*='size-'])]:size-4",
   {
     defaultVariants: {
-      size: "default",
+      size: BUTTON_DEFAULT_SIZE,
       variant: "default",
     },
     variants: {
@@ -97,11 +100,67 @@ const buttonVariants = cva(
   },
 );
 
+type ButtonSize = NonNullable<VariantProps<typeof buttonVariants>["size"]>;
+
+/** What a button's box holds: a glyph alone, or a visible label. */
+const BUTTON_CONTENT = {
+  icon: "icon",
+  text: "text",
+} as const;
+
+/**
+ * An icon size is a square that fits a glyph and no label, so the button shows
+ * no text, and its accessible name doubles as its tooltip. A text size shows
+ * its own label and gets a tooltip only from an explicit `tooltip`: an implicit
+ * one would repeat or contradict the label, and because a tooltip opens on
+ * focus, it would take the first Escape from a popover or dialog that focuses
+ * the button.
+ *
+ * Icon sizes are exactly the `icon`-prefixed ones; the type below enforces it,
+ * because the `icon-button-requires-tooltip` lint rule reads the same prefix.
+ */
+const BUTTON_SIZE_CONTENT = {
+  chip: BUTTON_CONTENT.text,
+  default: BUTTON_CONTENT.text,
+  icon: BUTTON_CONTENT.icon,
+  "icon-lg": BUTTON_CONTENT.icon,
+  "icon-sm": BUTTON_CONTENT.icon,
+  "icon-xl": BUTTON_CONTENT.icon,
+  "icon-xs": BUTTON_CONTENT.icon,
+  lg: BUTTON_CONTENT.text,
+  row: BUTTON_CONTENT.text,
+  sm: BUTTON_CONTENT.text,
+  xl: BUTTON_CONTENT.text,
+  xs: BUTTON_CONTENT.text,
+} as const satisfies {
+  [Size in ButtonSize]: Size extends `icon${string}`
+    ? typeof BUTTON_CONTENT.icon
+    : typeof BUTTON_CONTENT.text;
+};
+
+const implicitTooltip = (
+  size: ButtonSize | null | undefined,
+  accessibleName: string | undefined,
+): string | undefined => {
+  const content = BUTTON_SIZE_CONTENT[size ?? BUTTON_DEFAULT_SIZE];
+  switch (content) {
+    case BUTTON_CONTENT.icon:
+      return accessibleName;
+    case BUTTON_CONTENT.text:
+      return undefined;
+    default:
+      content satisfies never;
+      return panic(`Unhandled button content: ${String(content)}`);
+  }
+};
+
 type ButtonProps = {
   variant?: VariantProps<typeof buttonVariants>["variant"];
   size?: VariantProps<typeof buttonVariants>["size"];
   loading?: boolean;
-  tooltip?: React.ReactNode;
+  icon?: ReactNode;
+  tooltip?: ReactNode;
+  "data-accessible-disabled"?: "";
 } & useRender.ComponentProps<"button">;
 
 function Button({
@@ -110,17 +169,20 @@ function Button({
   size,
   render,
   loading,
+  icon,
   children,
   disabled,
   tooltip,
+  "data-accessible-disabled": accessibleDisabled,
   ...props
 }: ButtonProps) {
-  const typeValue: React.ButtonHTMLAttributes<HTMLButtonElement>["type"] =
-    render ? undefined : "button";
-
+  const typeValue: ButtonHTMLAttributes<HTMLButtonElement>["type"] = render
+    ? undefined
+    : "button";
   // Same value `renderTooltipTrigger` mounts below, so the disposition and the
   // popup cannot disagree about whether this button has a tooltip.
-  const tooltipContent = tooltip ?? props["aria-label"] ?? props.title;
+  const tooltipContent =
+    tooltip ?? implicitTooltip(size, props["aria-label"] ?? props.title);
   const disposition = resolveButtonDisposition({
     disabled,
     loading,
@@ -128,37 +190,41 @@ function Button({
   });
   const isAccessibleDisabled =
     disposition === BUTTON_DISPOSITION.accessibleDisabled;
+  const isActivationPreservingDisabled = accessibleDisabled !== undefined;
 
   const defaultProps = {
-    children: loading ? (
+    children: (
       <>
-        <Loader
-          className="[transition:opacity_150ms_ease-out,scale_320ms_var(--ease-spring)] motion-reduce:transition-none starting:scale-50 starting:opacity-0"
-          data-slot="button-loader"
-          size="sm"
-          variant="decorative"
-        />
+        {loading ? (
+          <Loader
+            animation="none"
+            className="[transition:opacity_150ms_ease-out,scale_320ms_var(--ease-spring)] motion-reduce:transition-none starting:scale-50 starting:opacity-0"
+            data-slot="button-loader"
+            size="sm"
+            variant="decorative"
+          />
+        ) : (
+          icon
+        )}
         {children}
       </>
-    ) : (
-      children
     ),
     className: cn(
       disposition === BUTTON_DISPOSITION.enabled &&
+        !isActivationPreservingDisabled &&
         size !== "row" &&
         variant !== "link" &&
         buttonPressClass,
       buttonVariants({ className, size, variant }),
-      // While loading, the loader is the button's only icon: a caller's own
-      // leading icon would otherwise sit beside it as a second spinner.
-      loading && "[&_svg:not([data-slot=button-loader]_svg)]:hidden",
-      isAccessibleDisabled && buttonAccessibleDisabledClass,
+      (isAccessibleDisabled || isActivationPreservingDisabled) &&
+        buttonAccessibleDisabledClass,
     ),
     "data-slot": "button",
     "aria-busy": loading || undefined,
-    ...(isAccessibleDisabled
+    ...(isAccessibleDisabled || isActivationPreservingDisabled
       ? { "aria-disabled": true, "data-disabled": "", tabIndex: 0 }
       : { disabled: disposition === BUTTON_DISPOSITION.nativeDisabled }),
+    "data-accessible-disabled": accessibleDisabled,
     type: typeValue,
   };
 
@@ -185,4 +251,10 @@ function Button({
   });
 }
 
-export { Button, buttonAccessibleDisabledClass, buttonVariants };
+export {
+  Button,
+  BUTTON_CONTENT,
+  BUTTON_SIZE_CONTENT,
+  buttonAccessibleDisabledClass,
+  buttonVariants,
+};

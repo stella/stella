@@ -25,9 +25,10 @@ import { logger } from "@/api/lib/observability/logger";
 import { withFreshIndicatorDatabase } from "@/api/tests/database-load-indicator-fixture";
 import {
   copyIngestionTablePrivileges,
-  withGatedTestClients,
   type GatedTestDb,
+  withGatedTestClients,
 } from "@/api/tests/gated-test-database";
+import { installPgliteDecisionDocketFilingYear } from "@/api/tests/pglite-schema";
 
 import { czNsAdapter } from "./adapters/cz-ns";
 import { runIngestionPipeline } from "./pipeline";
@@ -48,6 +49,8 @@ const installCorpusTables = async (
   sourceDatabaseUrl: string,
 ) => {
   await db.execute(sql`CREATE EXTENSION IF NOT EXISTS pg_trgm`);
+  // Generated coverage indexes depend on this committed immutable function.
+  await installPgliteDecisionDocketFilingYear(db);
   const { generateDrizzleJson, generateMigration } =
     await import("drizzle-kit/api-postgres");
   const empty = await generateDrizzleJson({});
@@ -166,7 +169,7 @@ describe.skipIf(!enabled)(
           expect(remainingCycleMs(deadline)).toBeGreaterThan(130_000);
         } finally {
           await holder.unsafe(CORPUS_SCHEMA_LANE_UNLOCK_SQL);
-          holder.release();
+          await holder.release();
         }
       });
     }, 60_000);
@@ -451,7 +454,7 @@ describe.skipIf(!enabled)(
             monotonic.mockRestore();
             releaseAdmission.resolve(undefined);
             await holder.unsafe(CORPUS_SCHEMA_LANE_UNLOCK_SQL);
-            holder.release();
+            await holder.release();
           }
         });
       }, 60_000);

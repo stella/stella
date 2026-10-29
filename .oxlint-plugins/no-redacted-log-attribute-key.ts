@@ -38,7 +38,7 @@ const LOGGER_IDENTIFIER = "logger";
 const LOGGER_METHODS = new Set(["debug", "error", "info", "warn"]);
 
 export const SENSITIVE_LOG_ATTRIBUTE_KEY_PATTERN =
-  /(?:body|content|email|fileName|message|name|title|password|secret|credential|authorization|cookie|bearer|api[_-]?key|prompt(?!_?token)|snippet|subject|phone)/iu;
+  /(?:body|content|email|fileName|message|name|title|password|secret|credential|authorization|cookie|bearer|api[_-]?key|synthetic[_-]?key|prompt(?!_?token)|snippet|subject|phone)/iu;
 
 export const FAILURE_CONTEXT_KEYS = [
   "adapterKey",
@@ -53,6 +53,7 @@ export const FAILURE_CONTEXT_KEYS = [
   "modelId",
   "operation",
   "organizationId",
+  "parameterStoreReason",
   "phase",
   "queue",
   "requestId",

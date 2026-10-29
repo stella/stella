@@ -1,20 +1,20 @@
 import { Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
-import { status, t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import { desktopEditSessions, workspaces } from "@/api/db/schema";
+import { status } from "@/api/http/status";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
   createAuditRecorder,
 } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { fileSchema, resourceIdSchema } from "@/api/lib/custom-schema";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { desktopEditMimeTypeForFileType } from "@/api/lib/desktop-edit-file-types";
 import {
@@ -29,7 +29,7 @@ import { validateDesktopEditFileBuffer } from "@/api/lib/entity-versions/validat
 import { scanFile } from "@/api/lib/file-scan/scan";
 import { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
 import { createFileKey } from "@/api/lib/files/utils";
-import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
+import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { writeS3ObjectWithRetry } from "@/api/lib/s3";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
@@ -37,19 +37,17 @@ import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 export const hashDesktopEditCheckpoint = (buffer: ArrayBuffer): string =>
   hashSha256Hex(new Uint8Array(buffer));
 
-export const checkpointDesktopEditSessionParamsSchema = t.Object({
-  sessionId: tSafeId("desktopEditSession"),
+export const checkpointDesktopEditSessionParamsSchema = v.object({
+  sessionId: resourceIdSchema("desktopEditSession"),
 });
 
-export const checkpointDesktopEditSessionBodySchema = t.Object({
-  file: t.File({
-    maxSize: FILE_SIZE_LIMITS.document,
-  }),
-  sessionToken: t.String({ minLength: 64, maxLength: 64 }),
+export const checkpointDesktopEditSessionBodySchema = v.object({
+  file: fileSchema({ maxBytes: FILE_SIZE_LIMIT_BYTES.document }),
+  sessionToken: v.pipe(v.string(), v.minLength(64), v.maxLength(64)),
 });
 
 type CheckpointDesktopEditSessionHandlerProps = {
-  body: Static<typeof checkpointDesktopEditSessionBodySchema>;
+  body: v.InferOutput<typeof checkpointDesktopEditSessionBodySchema>;
   sessionId: SafeId<"desktopEditSession">;
   request: Request;
   server: Parameters<typeof createAuditRecorder>[0]["server"];
@@ -293,7 +291,9 @@ export const checkpointDesktopEditSessionHandler = async ({
     const checkpointedAt = new Date();
 
     // Rotate token on each successful checkpoint
-    const nextSessionToken = createDesktopEditSessionToken();
+    const nextSessionToken = createDesktopEditSessionToken({
+      userId: authorizedSession.value.userId,
+    });
     const nextSessionTokenHash = hashDesktopEditSessionToken(nextSessionToken);
     const nextTokenExpiresAt = computeTokenExpiresAt();
 

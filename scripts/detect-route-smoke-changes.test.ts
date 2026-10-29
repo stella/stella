@@ -3,10 +3,32 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { computeChangedFileScope, DEFAULT_DETECTORS } from "./ci-plan-scope";
 import {
   routeSmokeAffected,
   routeSmokeImportClosure,
 } from "./detect-route-smoke-changes";
+
+const routeSmokePlanned = (file: string, root: string) =>
+  computeChangedFileScope(
+    {
+      changedFiles: [file],
+      comparisonBase: "base",
+      scopeUnknown: false,
+      eventName: "pull_request",
+      suiteDepth: "fast",
+      heavyOnly: false,
+      prTitle: "",
+      root,
+    },
+    {
+      ...DEFAULT_DETECTORS,
+      packageChecks: () => true,
+      landingBuild: () => false,
+      landingDeploy: () => false,
+      desktopBrowser: () => false,
+    },
+  ).route_smoke_required === "true";
 
 const writeFixture = (root: string, file: string, source: string): void => {
   const absolute = path.join(root, file);
@@ -104,10 +126,10 @@ describe("route traffic changes require the route smoke", () => {
         newlyImported,
         'import "../helper"; export const helper = () => import("./deleted");',
       );
-      expect(routeSmokeAffected([newlyImported], root)).toBe(true);
-      expect(routeSmokeAffected(["tools/deep/deleted.ts"], root)).toBe(true);
+      expect(routeSmokePlanned(newlyImported, root)).toBe(true);
+      expect(routeSmokePlanned("tools/deep/deleted.ts", root)).toBe(true);
       rmSync(path.join(root, newlyImported));
-      expect(routeSmokeAffected([newlyImported], root)).toBe(true);
+      expect(routeSmokePlanned(newlyImported, root)).toBe(true);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

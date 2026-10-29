@@ -2,8 +2,8 @@ import {
   ClockIcon as Clock,
   MessageSquareIcon as MessageSquare,
   PlusIcon as Plus,
-  UploadIcon as Upload,
   SquareCheckIcon as SquareCheck,
+  UploadIcon as Upload,
 } from "@stll/ui/icons";
 
 import type { CommandAction } from "./types";

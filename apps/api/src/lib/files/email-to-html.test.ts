@@ -14,14 +14,14 @@ import {
   EmailParseError,
   emailToHtml,
   emailToPreview,
+  isEmailAttachmentPreviewable,
+  type ParsedEmail,
   parsedEmailToText,
   parseEmail,
-  type ParsedEmail,
   renderEmailBodyHtml,
   renderEmailHtml,
-  sanitizeEmailBodyHtml,
   resolveEmailAttachmentMimeType,
-  isEmailAttachmentPreviewable,
+  sanitizeEmailBodyHtml,
 } from "./email-to-html";
 
 const toArrayBuffer = (value: string): ArrayBuffer => {
@@ -36,7 +36,7 @@ const PNG_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII=";
 const SVG_BASE64 = Buffer.from(
   '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>',
-).toString("base64");
+).toBase64();
 
 test("email parsing preserves typed failures and their cause", async () => {
   const cause = new Error("Parser unavailable");
@@ -822,7 +822,7 @@ describe("renderEmailHtml", () => {
       "Visible beforeHidden option visible after",
     );
     expect(preview.bodyHtml).toContain("Closed dialog");
-    expect(preview.bodyHtml).toContain("Template content");
+    expect(preview.bodyHtml).not.toContain("Template content");
     expect(preview.bodyHtml).toContain("Closed popover");
     expect(preview.bodyHtml).toContain("Hidden option");
   });

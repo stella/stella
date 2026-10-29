@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { createRedisClient } from "@/api/lib/redis-client";
+import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 import {
   createPublisherGateSlot,
@@ -10,8 +11,8 @@ import {
 import {
   abortableSleep,
   createPublisherRequestSlot,
-  publisherGateKeys,
   type PublisherGateClient,
+  publisherGateKeys,
   type PublisherRequestGateDependencies,
 } from "./publisher-request-gate";
 import { PublisherRateLimitRefusalError, retryPublisherRequest } from "./retry";
@@ -240,7 +241,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
           {
             adapterKey: ADAPTER_KEYS.EU_ECJ,
             fetchStage: "listing",
-            timeoutMs: 1000,
+            timeoutMs: HAPPY_PATH_TIMEOUT_MS,
           },
           {
             request: async (_url, init) => {
@@ -305,7 +306,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
           {
             adapterKey: ADAPTER_KEYS.EU_ECJ,
             fetchStage: "listing",
-            timeoutMs: 1000,
+            timeoutMs: HAPPY_PATH_TIMEOUT_MS,
           },
           {
             request: async (_url, init) => {

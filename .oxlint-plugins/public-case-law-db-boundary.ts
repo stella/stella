@@ -43,7 +43,7 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import ts from "typescript";
+import ts from "typescript6";
 
 import { repoRelativePath } from "@stll/portable-path";
 
@@ -75,6 +75,10 @@ const canUseUnredactedView = (filename: string): boolean =>
   UNREDACTED_VIEW_ALLOWED_MODULES.some((modulePath) =>
     filename.endsWith(modulePath),
   );
+
+const WITHDRAWAL_VIEW_OWNER = "apps/api/src/lib/case-law/withdrawn-copies.ts";
+const canUseWithdrawalView = (filename: string): boolean =>
+  filename.endsWith(WITHDRAWAL_VIEW_OWNER);
 
 const CASE_LAW_READ_MODULE_OWNERS: readonly string[] = [
   PUBLIC_READ_DB_MODULE,
@@ -121,6 +125,10 @@ const RESTRICTED_SCHEMA_IMPORTS = {
   caseLawDecisions: {
     allowed: (_filename: string) => false,
     messageId: "baseCaseLawRead",
+  },
+  caseLawWithdrawalStatus: {
+    allowed: canUseWithdrawalView,
+    messageId: "withdrawalView",
   },
   unredactedCaseLawDecisions: {
     allowed: canUseUnredactedView,
@@ -1510,6 +1518,8 @@ export default eslintCompatPlugin({
             "Raw SQL in a public-law read must be text the rule can read: a literal, a constant this file defines, a literal-union parameter, a constant in REVIEWED_SQL_CONSTANTS, or a producer in REVIEWED_SQL_PRODUCERS.",
           baseCaseLawRead:
             "Public case-law reads must use the published decisions view, not the base decision table.",
+          withdrawalView:
+            "Withdrawal status reads belong to the withdrawn-copy projection owner.",
           unredactedView:
             "The unredacted decisions view is reserved for the public subject owner.",
           namedSchemaImport: "Import schema tables by name.",
@@ -1539,7 +1549,8 @@ export default eslintCompatPlugin({
             | "producerArgument"
             | "shadowingCte"
             | "baseCaseLawRead"
-            | "unredactedView",
+            | "unredactedView"
+            | "withdrawalView",
           relation = "",
         ) => {
           const key = `${String(node.range[0])}:${messageId}:${relation}`;
@@ -1572,6 +1583,14 @@ export default eslintCompatPlugin({
               !canUseUnredactedView(importerRepoPath)
             ) {
               report(reportNode(reference.token.owner), "unredactedView");
+              return;
+            }
+            if (
+              inCaseLawReadBoundary &&
+              reference.relation === "case_law_withdrawal_status" &&
+              !canUseWithdrawalView(importerRepoPath)
+            ) {
+              report(reportNode(reference.token.owner), "withdrawalView");
               return;
             }
             if (decisionSurfaceOnly) {
@@ -1671,6 +1690,12 @@ export default eslintCompatPlugin({
                 if (
                   identity === "unredactedCaseLawDecisions" &&
                   canUseUnredactedView(`${importedModule}.ts`)
+                ) {
+                  continue;
+                }
+                if (
+                  identity === "caseLawWithdrawalStatus" &&
+                  canUseWithdrawalView(`${importedModule}.ts`)
                 ) {
                   continue;
                 }

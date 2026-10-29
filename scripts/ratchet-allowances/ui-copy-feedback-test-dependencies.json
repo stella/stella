@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 2,
+  "reason": "packages/ui now tests the shared copied-feedback hook's reset timer with renderHook, so it declares the same @testing-library/react and @testing-library/dom dev versions that apps/web and packages/mcp-apps already use."
+}

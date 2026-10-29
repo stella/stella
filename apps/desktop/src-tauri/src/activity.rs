@@ -5,6 +5,9 @@
 //! time. Window titles and documents require a separate, default-off opt-in.
 //! Consecutive samples of one app merge into a segment; five idle minutes end
 //! it, and idle time is never recorded. Excluded apps are recorded as nothing.
+//! While a known call app holds the microphone (`activity_calls`), the time
+//! is the call's instead: whatever is in front, and however long the user
+//! only listens. A call segment ends at its last sample.
 //! Segments are written to encrypted per-day files at most once a minute and
 //! whenever recording stops. Nothing here reaches the network: the data is
 //! read only by the activity window, through `ActivityCaller`.
@@ -20,6 +23,7 @@ use std::{
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 
 use crate::{
+  activity_calls::{Call, CallDetector},
   activity_details::{CapturedWindowPrivacy, WindowDetails},
   activity_store::ActivityStore,
   config::APP_DATA_DIR_NAME,
@@ -28,6 +32,7 @@ use crate::{
   keychain::{self, LocalDataKey, LocalDataKeyLookup},
   local_store::{self, StoreKey},
   local_window::ActivityCaller,
+  logging::with_cause_logged,
 };
 
 pub const CHANGED_EVENT: &str = "activity-timeline-changed";
@@ -102,6 +107,9 @@ pub struct ActivitySettings {
   pub app_name_only_apps: Vec<AppExclusion>,
   #[serde(default)]
   pub browser_title_apps: Vec<AppExclusion>,
+  /// Calls are detected unless the user turned it off.
+  #[serde(default)]
+  pub ignore_calls: bool,
   #[serde(flatten)]
   pub extra: BTreeMap<String, serde_json::Value>,
 }
@@ -117,6 +125,9 @@ pub struct ActivitySegment {
   pub document: Option<String>,
   #[serde(default)]
   pub matter_id: Option<String>,
+  /// Time on a call in this app, whatever was in front.
+  #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+  pub call: bool,
   pub start: DateTime<Utc>,
   pub end: DateTime<Utc>,
 }
@@ -148,6 +159,14 @@ pub enum Observation {
     name: String,
     window_title: Option<String>,
     document: Option<String>,
+    privacy: CapturedWindowPrivacy,
+  },
+  /// A known call app holds the microphone. The title is its own window's,
+  /// when it was in front and details are on.
+  Call {
+    identifier: String,
+    name: String,
+    window_title: Option<String>,
     privacy: CapturedWindowPrivacy,
   },
   /// No input for at least the idle threshold, for `idle` in total.
@@ -391,6 +410,7 @@ pub struct ActivityDaySnapshot {
   excluded_apps: Vec<AppExclusion>,
   other_account_history_days: usize,
   capture_details: bool,
+  detect_calls: bool,
   app_name_only_apps: Vec<AppExclusion>,
   details_access: ActivityDetailsAccess,
   browser_title_apps: Vec<AppExclusion>,
@@ -509,7 +529,7 @@ fn store_root() -> Option<PathBuf> {
 
 pub fn parse_date(raw: &str) -> Result<NaiveDate, String> {
   NaiveDate::parse_from_str(raw, DATE_FORMAT)
-    .map_err(|_| "activity date is invalid".to_string())
+    .map_err(with_cause_logged("activity date is invalid"))
 }
 
 pub fn format_date(date: NaiveDate) -> String {
@@ -526,10 +546,10 @@ fn validate_draftable_range<T: TimeZone>(
   drafted: &[ActivityInterval],
 ) -> Result<ActivityInterval, String> {
   let start = DateTime::parse_from_rfc3339(start)
-    .map_err(|_| "invalid activity range".to_string())?
+    .map_err(with_cause_logged("invalid activity range"))?
     .with_timezone(&Utc);
   let end = DateTime::parse_from_rfc3339(end)
-    .map_err(|_| "invalid activity range".to_string())?
+    .map_err(with_cause_logged("invalid activity range"))?
     .with_timezone(&Utc);
   if start >= end
     || start.with_timezone(zone).date_naive() != date
@@ -622,6 +642,7 @@ fn split_by_day_in<T: TimeZone>(
         window_title: segment.window_title.clone(),
         document: segment.document.clone(),
         matter_id: segment.matter_id.clone(),
+        call: segment.call,
         start,
         end,
       },
@@ -655,6 +676,7 @@ fn push_merged(segments: &mut Vec<ActivitySegment>, mut segment: ActivitySegment
     && last.window_title == segment.window_title
     && last.document == segment.document
     && last.matter_id == segment.matter_id
+    && last.call == segment.call
     && last.end == segment.start
   {
     last.end = segment.end;
@@ -874,6 +896,19 @@ impl ActivityManager {
     self.settings.capture_details
   }
 
+  pub fn set_detect_calls(
+    &mut self,
+    enabled: bool,
+    now: DateTime<Utc>,
+  ) -> Result<(), String> {
+    self.require_writable()?;
+    if self.settings.ignore_calls != enabled {
+      return Ok(());
+    }
+    self.stop(now)?;
+    self.update_settings(|settings| settings.ignore_calls = !enabled)
+  }
+
   /// The caller prompts for permission only after a persisted false→true
   /// transition, outside this manager's lock.
   pub fn set_capture_details(
@@ -1090,6 +1125,17 @@ impl ActivityManager {
     if self.wall_floor.is_some_and(|floor| now < floor) {
       return closed;
     }
+    // A call's time was the call's whatever input says: it ends at its last
+    // sample, before idle evidence from this one can shorten it.
+    let continues_call = match (&observation, self.open.as_ref()) {
+      (Observation::Call { identifier, .. }, Some(open)) => {
+        open.segment.call && open.segment.app_identifier == *identifier
+      }
+      _ => false,
+    };
+    if !continues_call && self.open.as_ref().is_some_and(|open| open.segment.call) {
+      closed |= self.close_open_at_last_sample();
+    }
     self.wall_floor = Some(now);
     let last_input = chrono::Duration::from_std(idle)
       .ok()
@@ -1136,6 +1182,57 @@ impl ActivityManager {
         closed |= self.close_open(idle_since);
       }
       Observation::Unattributed => closed |= self.close_open(now),
+      Observation::Call {
+        identifier,
+        name,
+        window_title,
+        privacy,
+      } => {
+        if self.is_excluded(&identifier) {
+          return closed | self.close_open(now);
+        }
+        let details = if details_enabled(
+          &self.settings,
+          DetailCaptureApp {
+            identifier: &identifier,
+            name: &name,
+          },
+        ) {
+          crate::activity_details::sanitized_details(window_title, None)
+        } else {
+          WindowDetails::default()
+        };
+        let window_title = (privacy == CapturedWindowPrivacy::Ordinary
+          && details.privacy == CapturedWindowPrivacy::Ordinary)
+          .then_some(details.window_title)
+          .flatten();
+        if continues_call && let Some(open) = self.open.as_mut() {
+          open.segment.end = now;
+          open.last_seen = now;
+          if open.segment.window_title.is_none() {
+            open.segment.window_title = window_title;
+          }
+          return closed;
+        }
+        closed |= self.close_open(now);
+        self.open = Some(OpenSegment {
+          segment: ActivitySegment {
+            app_identifier: identifier,
+            app_name: name,
+            window_title,
+            document: None,
+            matter_id: None,
+            call: true,
+            start: segment_start,
+            end: now,
+          },
+          last_seen: now,
+          last_input: now,
+          idle_since: None,
+          partition,
+          privacy: CapturedWindowPrivacy::Ordinary,
+        });
+      }
       Observation::Active {
         identifier,
         name,
@@ -1188,6 +1285,7 @@ impl ActivityManager {
             window_title,
             document,
             matter_id: None,
+            call: false,
             start: segment_start,
             end: now.min(last_input),
           },
@@ -1722,7 +1820,10 @@ impl ActivityManager {
     for range in pending.ranges.iter().flatten() {
       intervals.push(
         validate_draftable_range(zone, date, &range.start, &range.end, &drafted)
-          .map_err(|_| BatchReservationError::InvalidRange)?,
+          .map_err(crate::logging::replaced_logged(
+            "activity range cannot be drafted",
+            BatchReservationError::InvalidRange,
+          ))?,
       );
     }
     intervals.sort_by_key(|(start, _)| *start);
@@ -1862,10 +1963,10 @@ impl ActivityManager {
       .iter()
       .map(|marker| {
         let start = DateTime::parse_from_rfc3339(&marker.start)
-          .map_err(|_| "invalid drafted activity range".to_string())?
+          .map_err(with_cause_logged("invalid drafted activity range"))?
           .with_timezone(&Utc);
         let end = DateTime::parse_from_rfc3339(&marker.end)
-          .map_err(|_| "invalid drafted activity range".to_string())?
+          .map_err(with_cause_logged("invalid drafted activity range"))?
           .with_timezone(&Utc);
         Ok((start, end))
       })
@@ -1938,7 +2039,7 @@ impl ActivityManager {
       &self.other_account_store_root()?,
       namespace,
     )
-    .map_err(|_| "activity history could not be listed".to_string())
+    .map_err(with_cause_logged("activity history could not be listed"))
   }
 
   pub fn delete_other_account_history(
@@ -2173,6 +2274,7 @@ impl ActivityManager {
       excluded_apps: self.settings.excluded_apps.clone(),
       other_account_history_days,
       capture_details: self.settings.capture_details,
+      detect_calls: !self.settings.ignore_calls,
       app_name_only_apps: self.settings.app_name_only_apps.clone(),
       details_access,
       browser_title_apps: self.settings.browser_title_apps.clone(),
@@ -2317,6 +2419,7 @@ pub fn tray_snapshot(app: &AppHandle) -> Option<TrayActivitySnapshot> {
   let manager = state.lock().ok()?;
   manager.require_account_binding(&binding).ok()?;
   let snapshot = manager.tray_snapshot(Utc::now())?;
+  drop(manager);
   if gates
     .account_binding(DesktopFeature::ActivityTimeline)
     .as_ref()
@@ -2348,7 +2451,7 @@ pub fn set_recording_from_tray(
     .ok_or_else(|| "activity timeline is unavailable".to_string())?;
   let mut manager = state
     .lock()
-    .map_err(|_| "activity timeline is unavailable".to_string())?;
+    .map_err(with_cause_logged("activity timeline is unavailable"))?;
   manager.require_account_binding(&binding)?;
   if gates
     .account_binding(DesktopFeature::ActivityTimeline)
@@ -2453,7 +2556,7 @@ pub fn unload_account(app: &AppHandle) {
 fn disable_feature(state: &ActivityAppState, now: DateTime<Utc>) -> Result<(), String> {
   state
     .lock()
-    .map_err(|_| "activity timeline is unavailable".to_string())?
+    .map_err(with_cause_logged("activity timeline is unavailable"))?
     .stop(now)
 }
 
@@ -2540,7 +2643,31 @@ fn observe_now(
   }
 }
 
-fn sample(app: &AppHandle, state: &ActivityAppState) {
+/// What a sample attributes to a call. The call app's own window names the
+/// call when it is in front.
+fn call_observation(
+  app: &AppHandle,
+  call: Call,
+  settings: &ActivitySettings,
+) -> Observation {
+  let (window_title, privacy) = match observe_now(app, Duration::ZERO, settings) {
+    Observation::Active {
+      identifier,
+      window_title,
+      privacy,
+      ..
+    } if identifier == call.identifier => (window_title, privacy),
+    _ => (None, CapturedWindowPrivacy::Ordinary),
+  };
+  Observation::Call {
+    identifier: call.identifier,
+    name: call.name,
+    window_title,
+    privacy,
+  }
+}
+
+fn sample(app: &AppHandle, state: &ActivityAppState, calls: &mut CallDetector) {
   let enabled = is_enabled(app);
   let (generation, settings) = {
     let Ok(mut manager) = state.lock() else {
@@ -2550,6 +2677,7 @@ fn sample(app: &AppHandle, state: &ActivityAppState) {
       if manager.open.is_some() && manager.stop(Utc::now()).is_err() {
         tracing::warn!("activity timeline could not be written");
       }
+      calls.reset();
       return;
     }
     (manager.observation_generation, manager.settings.clone())
@@ -2558,10 +2686,25 @@ fn sample(app: &AppHandle, state: &ActivityAppState) {
   // lock and commands never wait on it.
   let now = Utc::now();
   let monotonic = Instant::now();
-  let idle = crate::idle_time::since_last_input();
-  let observation = idle.map_or(Observation::Unattributed, |idle| {
-    observe_now(app, idle, &settings)
-  });
+  let call = if settings.ignore_calls {
+    calls.reset();
+    None
+  } else {
+    calls
+      .sample()
+      .filter(|call| !is_excluded(&settings.excluded_apps, &call.identifier))
+  };
+  // Time on a call is never idle.
+  let (idle, observation) = match call {
+    Some(call) => (Some(Duration::ZERO), call_observation(app, call, &settings)),
+    None => {
+      let idle = crate::idle_time::since_last_input();
+      let observation = idle.map_or(Observation::Unattributed, |idle| {
+        observe_now(app, idle, &settings)
+      });
+      (idle, observation)
+    }
+  };
   let matter_id = match &observation {
     Observation::Active {
       document: Some(document),
@@ -2648,9 +2791,10 @@ pub fn start(app: AppHandle, state: ActivityAppState) {
     .name("stella-activity-sampler".to_string())
     .spawn(move || {
       let mut last_tray_refresh = Instant::now();
+      let mut calls = CallDetector::default();
       loop {
         std::thread::sleep(SAMPLE_INTERVAL);
-        sample(&app, &state);
+        sample(&app, &state, &mut calls);
         if last_tray_refresh.elapsed() >= TRAY_REFRESH_INTERVAL {
           refresh_tray(&app);
           last_tray_refresh = Instant::now();
@@ -4012,6 +4156,7 @@ mod tests {
       window_title: None,
       document: None,
       matter_id: None,
+      call: false,
       start: midnight - chrono::Duration::minutes(10),
       end: midnight + chrono::Duration::minutes(5),
     });
@@ -4553,6 +4698,7 @@ mod tests {
             while !*released {
               released = ready.wait(released).unwrap();
             }
+            drop(released);
             let key = existing.unwrap_or_else(|| {
               let generation = creations.fetch_add(1, Ordering::SeqCst) + 1;
               let key = [u8::try_from(generation).unwrap(); 32];
@@ -4589,6 +4735,7 @@ mod tests {
     manager.observe(at(0), active("word"));
     manager.observe(at(5), active("word"));
     manager.stop(at(5)).unwrap();
+    drop(manager);
     let key = stored_key.lock().unwrap().unwrap();
     let reopened = ActivityStore::new(key, root.clone());
     let segments = reopened.load_day(local_date(at(0))).unwrap();
@@ -4646,6 +4793,7 @@ mod tests {
           )
           .unwrap()
       );
+      drop(manager);
       assert!(store.load_day(local_date(at(0))).unwrap().is_empty());
       ActivityStore::remove(&root).unwrap();
     }
@@ -4831,6 +4979,7 @@ mod tests {
       let manager = manager.lock().unwrap();
       assert!(manager.open.is_none(), "{transition}");
       assert!(manager.days.is_empty(), "{transition}");
+      drop(manager);
     }
   }
 
@@ -5110,6 +5259,7 @@ mod tests {
           window_title: None,
           document: None,
           matter_id: None,
+          call: false,
           start: at(0),
           end: at(10),
         }],
@@ -5141,6 +5291,7 @@ mod tests {
       window_title: Some(format!("{app} title")),
       document: Some(format!("/private/{app}.docx")),
       matter_id: None,
+      call: false,
       start: at(start),
       end: at(end),
     };
@@ -5305,6 +5456,7 @@ mod tests {
         window_title: None,
         document: None,
         matter_id: None,
+        call: false,
         start: transition - chrono::Duration::seconds(5),
         end: transition + chrono::Duration::seconds(5),
       };
@@ -5519,6 +5671,7 @@ mod tests {
           window_title: None,
           document: None,
           matter_id: None,
+          call: false,
           start: at(0),
           end: at(5),
         }],
@@ -5593,5 +5746,152 @@ mod tests {
       serde_json::Value::Array(statuses)
     );
     assert_eq!(contract["changedEvent"], CHANGED_EVENT);
+  }
+
+  fn call(identifier: &str, window_title: Option<&str>) -> Observation {
+    Observation::Call {
+      identifier: identifier.to_string(),
+      name: identifier.to_uppercase(),
+      window_title: window_title.map(str::to_string),
+      privacy: CapturedWindowPrivacy::Ordinary,
+    }
+  }
+
+  /// Samples every five seconds from `from` to `to` inclusive with fresh
+  /// input, as the sampler reports both foreground apps and calls.
+  fn observe_span(
+    manager: &mut ActivityManager,
+    from: i64,
+    to: i64,
+    observation: impl Fn(i64) -> Observation,
+  ) {
+    for second in (from..=to).step_by(5) {
+      manager.observe(at(second), observation(second));
+    }
+  }
+
+  fn call_flags(manager: &ActivityManager) -> Vec<bool> {
+    manager
+      .days
+      .values()
+      .flatten()
+      .map(|segment| segment.call)
+      .collect()
+  }
+
+  #[test]
+  fn a_listened_call_counts_whole_and_ends_at_its_last_sample() {
+    let mut manager = recording_manager();
+    observe_span(&mut manager, 0, 60, |_| active("word"));
+    observe_span(&mut manager, 65, 2465, |_| call("teams", None));
+    // The first sample after the call reports 40 minutes without input.
+    manager.observe(
+      at(2470),
+      Observation::Idle {
+        idle: Duration::from_secs(2410),
+      },
+    );
+    manager.stop(at(2470)).unwrap();
+    assert_eq!(
+      segments(&manager),
+      [("word".to_string(), 0, 65), ("teams".to_string(), 65, 2465)]
+    );
+    assert_eq!(call_flags(&manager), [false, true]);
+  }
+
+  #[test]
+  fn a_call_stays_apart_from_the_same_app_in_front() {
+    let mut manager = recording_manager();
+    observe_span(&mut manager, 0, 30, |_| active("teams"));
+    observe_span(&mut manager, 35, 90, |_| call("teams", None));
+    observe_span(&mut manager, 95, 120, |_| active("teams"));
+    manager.stop(at(120)).unwrap();
+    assert_eq!(
+      segments(&manager),
+      [
+        ("teams".to_string(), 0, 35),
+        ("teams".to_string(), 35, 90),
+        ("teams".to_string(), 95, 120),
+      ]
+    );
+    assert_eq!(call_flags(&manager), [false, true, false]);
+  }
+
+  #[test]
+  fn an_excluded_call_app_records_nothing() {
+    let mut manager = recording_manager();
+    manager.settings.excluded_apps = vec![AppExclusion::new("teams", "Teams").unwrap()];
+    observe_span(&mut manager, 0, 60, |_| call("teams", None));
+    manager.stop(at(60)).unwrap();
+    assert!(segments(&manager).is_empty());
+  }
+
+  #[test]
+  fn a_call_keeps_the_first_title_its_window_showed() {
+    let mut manager = recording_manager();
+    manager.settings.capture_details = true;
+    observe_span(&mut manager, 0, 60, |second| match second {
+      0..=15 => call("teams", None),
+      20..=40 => call("teams", Some("Novák v. ABC | Microsoft Teams")),
+      _ => call("teams", Some("Chat | Microsoft Teams")),
+    });
+    manager.stop(at(60)).unwrap();
+    let recorded: Vec<_> = manager.days.values().flatten().collect();
+    assert_eq!(recorded.len(), 1);
+    assert_eq!(
+      recorded[0].window_title.as_deref(),
+      Some("Novák v. ABC | Microsoft Teams")
+    );
+  }
+
+  #[test]
+  fn files_written_before_calls_read_as_no_call_and_detection_on() {
+    let segment: ActivitySegment = serde_json::from_value(serde_json::json!({
+      "appIdentifier": "word",
+      "appName": "Word",
+      "start": "2026-03-10T12:00:00Z",
+      "end": "2026-03-10T12:30:00Z",
+    }))
+    .unwrap();
+    assert!(!segment.call);
+    // Only call segments carry the field, so other segments stay unchanged.
+    assert!(
+      serde_json::to_value(&segment)
+        .unwrap()
+        .get("call")
+        .is_none()
+    );
+    let call = ActivitySegment {
+      call: true,
+      ..segment
+    };
+    let written = serde_json::to_value(&call).unwrap();
+    assert_eq!(written["call"], true);
+    assert!(
+      serde_json::from_value::<ActivitySegment>(written)
+        .unwrap()
+        .call
+    );
+
+    let settings: ActivitySettings = serde_json::from_value(serde_json::json!({
+      "recordingStatus": "recording",
+      "retention": "month",
+    }))
+    .unwrap();
+    assert!(!settings.ignore_calls);
+  }
+
+  #[test]
+  fn turning_call_detection_off_ends_an_ongoing_call_and_persists() {
+    let mut manager = recording_manager();
+    observe_span(&mut manager, 0, 60, |_| call("teams", None));
+    manager.set_detect_calls(false, at(65)).unwrap();
+    assert!(manager.settings.ignore_calls);
+    assert_eq!(segments(&manager), [("teams".to_string(), 0, 60)]);
+    // Repeating the choice changes nothing; turning it back on restores it.
+    manager.set_detect_calls(false, at(70)).unwrap();
+    assert!(manager.settings.ignore_calls);
+    manager.set_detect_calls(true, at(75)).unwrap();
+    assert!(!manager.settings.ignore_calls);
   }
 }

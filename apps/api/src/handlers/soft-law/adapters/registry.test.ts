@@ -1,19 +1,18 @@
 import { expect, expectTypeOf, test } from "bun:test";
 
+import { GUIDANCE_KINDS } from "@stll/legal-ast/document-kind";
+
 import { validateSoftLawAuthorityMetadata } from "@/api/lib/legal-search/soft-law-authority-policy";
-import {
-  SOFT_LAW_KINDS,
-  type SoftLawMetadata,
-} from "@/api/lib/legal-search/soft-law-types";
+import type { SoftLawMetadata } from "@/api/lib/legal-search/soft-law-types";
 
 import {
-  SOFT_LAW_ADMISSIONS,
   type RegisteredSoftLawAuthority,
+  SOFT_LAW_ADMISSIONS,
 } from "./registry";
 
 test("unregistered authorities cannot enter the sync contract", () => {
   expectTypeOf<"eu-edps">().not.toExtend<RegisteredSoftLawAuthority>();
-  expectTypeOf<"de-bfdi">().not.toExtend<RegisteredSoftLawAuthority>();
+  expectTypeOf<"de-bfdi">().toExtend<RegisteredSoftLawAuthority>();
 });
 
 test("every registered adapter belongs to its authority; pending kinds are refused", () => {
@@ -27,7 +26,7 @@ test("every registered adapter belongs to its authority; pending kinds are refus
     expect(disposition).not.toHaveProperty("adapter");
   }
   for (const authority of ["eu-edps", "de-bfdi"] as const) {
-    for (const kind of SOFT_LAW_KINDS) {
+    for (const kind of GUIDANCE_KINDS) {
       const metadata = {
         title: "Guidance",
         kind,
@@ -46,7 +45,7 @@ test("every registered adapter belongs to its authority; pending kinds are refus
       } as const satisfies SoftLawMetadata;
       expect(
         validateSoftLawAuthorityMetadata(authority, metadata).isErr(),
-      ).toBe(true);
+      ).toBe(authority !== "de-bfdi" || kind !== "recommendation");
     }
   }
 });

@@ -78,6 +78,9 @@ export const QuestionCell = ({
   let failure: ReactNode;
   if (answer !== undefined) {
     switch (answer.state) {
+      case "withdrawn":
+        value = <span>{t("caseLaw.withdrawnByPublisher")}</span>;
+        break;
       case "answered":
         value = (
           <FieldValue
@@ -164,9 +167,7 @@ const WithProvenance = ({
       </PreviewCardTrigger>
       <PreviewCardPopup align="start" className="w-80">
         <div className="flex flex-col gap-2 text-xs leading-relaxed">
-          <p className="text-muted-foreground text-justify hyphens-auto">
-            {run.rationale}
-          </p>
+          <p className="text-muted-foreground hyphens-auto">{run.rationale}</p>
           {run.justification.blocks.length > 0 && (
             <div className="text-foreground-strong-muted wrap-break-word">
               <Justification

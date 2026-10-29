@@ -7,6 +7,7 @@ This file is a generated inventory of detected third-party components and declar
 Some licenses may require additional attribution text or redistribution steps.
 
 Project: desktop-tauri
+- addr2line 0.25.1 — Apache-2.0 OR MIT
 - adler2 2.0.1 — 0BSD OR Apache-2.0 OR MIT
 - aead 0.6.1 — Apache-2.0 OR MIT
 - aes 0.8.4 — Apache-2.0 OR MIT
@@ -15,7 +16,7 @@ Project: desktop-tauri
 - aho-corasick 1.1.5 — MIT OR Unlicense
 - alloc-no-stdlib 3.0.0 — BSD-3-Clause
 - alloc-stdlib 0.3.0 — BSD-3-Clause
-- ammonia 4.2.3 — Apache-2.0 OR MIT
+- ammonia 4.2.4 — Apache-2.0 OR MIT
 - android_system_properties 0.1.6 — Apache-2.0 OR MIT
 - anyhow 1.0.104 — Apache-2.0 OR MIT
 - apple-native-keyring-store 1.0.2 — Apache-2.0 OR MIT
@@ -40,6 +41,7 @@ Project: desktop-tauri
 - aws-lc-sys 0.44.0 — ISC AND (Apache-2.0 OR ISC) AND Apache-2.0 AND MIT AND BSD-3-Clause AND (Apache-2.0 OR ISC OR MIT) AND (Apache-2.0 OR ISC OR MIT-0)
 - axum 0.8.9 — MIT
 - axum-core 0.5.6 — MIT
+- backtrace 0.3.76 — Apache-2.0 OR MIT
 - base64 0.21.7 — Apache-2.0 OR MIT
 - base64 0.22.1 — Apache-2.0 OR MIT
 - base64 0.23.1 — Apache-2.0 OR MIT
@@ -78,7 +80,7 @@ Project: desktop-tauri
 - cipher 0.4.4 — Apache-2.0 OR MIT
 - cipher 0.5.2 — Apache-2.0 OR MIT
 - clipboard-rs 0.3.5 — MIT
-- clipboard-win 5.4.1 — BSL-1.0
+- clipboard-win 5.4.3 — BSL-1.0
 - cmake 0.1.58 — Apache-2.0 OR MIT
 - cmov 0.5.4 — Apache-2.0 OR MIT
 - color_quant 1.1.0 — MIT
@@ -108,7 +110,7 @@ Project: desktop-tauri
 - cssparser-macros 0.7.1 — MPL-2.0
 - ctor 1.0.13 — Apache-2.0 OR MIT
 - ctr 0.10.1 — Apache-2.0 OR MIT
-- ctutils 0.4.2 — Apache-2.0 OR MIT
+- ctutils 0.4.5 — Apache-2.0 OR MIT
 - darling 0.23.0 — MIT
 - darling_core 0.23.0 — MIT
 - darling_macro 0.23.0 — MIT
@@ -118,6 +120,7 @@ Project: desktop-tauri
 - derive_arbitrary 1.4.2 — Apache-2.0 OR MIT
 - derive_more 2.1.1 — MIT
 - derive_more-impl 2.1.1 — MIT
+- dhat 0.3.3 — Apache-2.0 OR MIT
 - digest 0.10.7 — Apache-2.0 OR MIT
 - digest 0.11.3 — Apache-2.0 OR MIT
 - dirs 6.0.0 — Apache-2.0 OR MIT
@@ -187,6 +190,7 @@ Project: desktop-tauri
 - getrandom 0.4.3 — Apache-2.0 OR MIT
 - ghash 0.6.0 — Apache-2.0 OR MIT
 - gif 0.14.2 — Apache-2.0 OR MIT
+- gimli 0.32.3 — Apache-2.0 OR MIT
 - gio 0.18.4 — MIT
 - gio-sys 0.18.1 — MIT
 - glib 0.18.5 — MIT
@@ -224,7 +228,7 @@ Project: desktop-tauri
 - iana-time-zone 0.1.65 — Apache-2.0 OR MIT
 - iana-time-zone-haiku 0.1.2 — Apache-2.0 OR MIT
 - icns 0.5.0 — MIT
-- ico 0.5.0 — MIT
+- ico 0.6.0 — MIT
 - icu_collections 2.2.0 — Unicode-3.0
 - icu_locale_core 2.2.0 — Unicode-3.0
 - icu_normalizer 2.2.0 — Unicode-3.0
@@ -262,7 +266,7 @@ Project: desktop-tauri
 - jsonptr 0.7.1 — Apache-2.0 OR MIT
 - keyboard-types 0.7.0 — Apache-2.0 OR MIT
 - keyboard-types 0.8.3 — Apache-2.0 OR MIT
-- keyring-core 1.0.0 — Apache-2.0 OR MIT
+- keyring-core 1.0.1 — Apache-2.0 OR MIT
 - kqueue 1.2.1 — MIT
 - kqueue-sys 1.1.2 — MIT
 - lazy_static 1.5.0 — Apache-2.0 OR MIT
@@ -288,8 +292,9 @@ Project: desktop-tauri
 - memoffset 0.9.1 — MIT
 - mime 0.3.17 — Apache-2.0 OR MIT
 - mime_guess 2.0.5 — MIT
-- minisign-verify 0.2.5 — MIT
+- minisign-verify 0.3.0 — MIT
 - miniz_oxide 0.8.9 — Apache-2.0 OR MIT OR Zlib
+- mintex 0.1.4 — Apache-2.0
 - mio 1.2.2 — MIT
 - moxcms 0.8.1 — Apache-2.0 OR BSD-3-Clause
 - muda 0.20.0 — Apache-2.0 OR MIT
@@ -335,6 +340,7 @@ Project: desktop-tauri
 - objc2-ui-kit 0.3.2 — Apache-2.0 OR MIT OR Zlib
 - objc2-user-notifications 0.3.2 — Apache-2.0 OR MIT OR Zlib
 - objc2-web-kit 0.3.2 — Apache-2.0 OR MIT OR Zlib
+- object 0.37.3 — Apache-2.0 OR MIT
 - once_cell 1.21.4 — Apache-2.0 OR MIT
 - open 5.4.1 — MIT
 - opener 0.9.0 — Apache-2.0 OR MIT
@@ -365,8 +371,7 @@ Project: desktop-tauri
 - pin-project-lite 0.2.17 — Apache-2.0 OR MIT
 - piper 0.2.5 — Apache-2.0 OR MIT
 - pkg-config 0.3.33 — Apache-2.0 OR MIT
-- plist 1.10.1 — MIT
-- png 0.17.16 — Apache-2.0 OR MIT
+- plist 1.10.3 — MIT
 - png 0.18.1 — Apache-2.0 OR MIT
 - polling 3.11.0 — Apache-2.0 OR MIT
 - polyval 0.7.3 — Apache-2.0 OR MIT
@@ -406,7 +411,9 @@ Project: desktop-tauri
 - regex-syntax 0.8.11 — Apache-2.0 OR MIT
 - reqwest 0.13.5 — Apache-2.0 OR MIT
 - ring 0.17.14 — Apache-2.0 AND ISC
-- rust-ini 0.21.3 — MIT
+- rust-ini 0.21.1 — MIT
+- rustc-demangle 0.1.28 — MIT/Apache-2.0
+- rustc-hash 1.1.0 — Apache-2.0/MIT
 - rustc-hash 2.1.3 — Apache-2.0 OR MIT
 - rustc_version 0.4.1 — Apache-2.0 OR MIT
 - rustix 1.1.4 — Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT
@@ -415,7 +422,7 @@ Project: desktop-tauri
 - rustls-pki-types 1.15.1 — Apache-2.0 OR MIT
 - rustls-platform-verifier 0.7.0 — Apache-2.0 OR MIT
 - rustls-platform-verifier-android 0.1.1 — Apache-2.0 OR MIT
-- rustls-webpki 0.103.15 — ISC
+- rustls-webpki 0.103.16 — ISC
 - rustversion 1.0.23 — Apache-2.0 OR MIT
 - ryu 1.0.23 — Apache-2.0 OR BSL-1.0
 - same-file 1.0.6 — Unlicense/MIT
@@ -435,7 +442,7 @@ Project: desktop-tauri
 - serde_core 1.0.229 — Apache-2.0 OR MIT
 - serde_derive 1.0.229 — Apache-2.0 OR MIT
 - serde_derive_internals 0.29.1 — Apache-2.0 OR MIT
-- serde_json 1.0.151 — Apache-2.0 OR MIT
+- serde_json 1.0.154 — Apache-2.0 OR MIT
 - serde_path_to_error 0.1.20 — Apache-2.0 OR MIT
 - serde_repr 0.1.21 — Apache-2.0 OR MIT
 - serde_spanned 0.6.9 — Apache-2.0 OR MIT
@@ -447,7 +454,7 @@ Project: desktop-tauri
 - serialize-to-javascript-impl 0.1.2 — Apache-2.0 OR MIT
 - servo_arc 0.4.3 — Apache-2.0 OR MIT
 - sha2 0.10.9 — Apache-2.0 OR MIT
-- sha2 0.11.0 — Apache-2.0 OR MIT
+- sha2 0.11.1 — Apache-2.0 OR MIT
 - sharded-slab 0.1.7 — MIT
 - shlex 2.0.1 — Apache-2.0 OR MIT
 - signal-hook-registry 1.4.8 — Apache-2.0 OR MIT
@@ -463,13 +470,14 @@ Project: desktop-tauri
 - soup3 0.5.0 — MIT
 - soup3-sys 0.5.0 — MIT
 - stable_deref_trait 1.2.1 — Apache-2.0 OR MIT
+- static_vcruntime 3.0.0 — Apache-2.0 OR MIT OR Zlib
 - string_cache 0.11.0 — Apache-2.0 OR MIT
 - string_cache 0.9.0 — Apache-2.0 OR MIT
 - string_cache_codegen 0.11.2 — Apache-2.0 OR MIT
 - string_cache_codegen 0.6.1 — Apache-2.0 OR MIT
 - strsim 0.11.1 — MIT
 - subtle 2.6.1 — BSD-3-Clause
-- swift-rs 1.0.8 — Apache-2.0 OR MIT
+- swift-rs 1.0.9 — Apache-2.0 OR MIT
 - syn 1.0.109 — Apache-2.0 OR MIT
 - syn 2.0.119 — Apache-2.0 OR MIT
 - syn 3.0.3 — Apache-2.0 OR MIT
@@ -483,23 +491,23 @@ Project: desktop-tauri
 - tao-macros 0.1.4 — Apache-2.0 OR MIT
 - tar 0.4.46 — Apache-2.0 OR MIT
 - target-lexicon 0.12.16 — Apache-2.0 WITH LLVM-exception
-- tauri 2.12.2 — Apache-2.0 OR MIT
-- tauri-build 2.7.1 — Apache-2.0 OR MIT
-- tauri-codegen 2.7.1 — Apache-2.0 OR MIT
-- tauri-macros 2.7.1 — Apache-2.0 OR MIT
+- tauri 2.12.5 — Apache-2.0 OR MIT
+- tauri-build 2.7.4 — Apache-2.0 OR MIT
+- tauri-codegen 2.7.4 — Apache-2.0 OR MIT
+- tauri-macros 2.7.4 — Apache-2.0 OR MIT
 - tauri-plugin 2.7.1 — Apache-2.0 OR MIT
 - tauri-plugin-autostart 2.7.0 — Apache-2.0 OR MIT
-- tauri-plugin-clipboard-manager 2.4.1 — Apache-2.0 OR MIT
-- tauri-plugin-deep-link 2.6.1 — Apache-2.0 OR MIT
-- tauri-plugin-global-shortcut 2.4.0 — Apache-2.0 OR MIT
-- tauri-plugin-notification 2.5.1 — Apache-2.0 OR MIT
-- tauri-plugin-opener 2.7.0 — Apache-2.0 OR MIT
+- tauri-plugin-clipboard-manager 2.5.0 — Apache-2.0 OR MIT
+- tauri-plugin-deep-link 2.6.2 — Apache-2.0 OR MIT
+- tauri-plugin-global-shortcut 2.4.1 — Apache-2.0 OR MIT
+- tauri-plugin-notification 2.7.0 — Apache-2.0 OR MIT
+- tauri-plugin-opener 2.7.2 — Apache-2.0 OR MIT
 - tauri-plugin-process 2.4.0 — Apache-2.0 OR MIT
-- tauri-plugin-single-instance 2.5.2 — Apache-2.0 OR MIT
-- tauri-plugin-updater 2.13.2 — Apache-2.0 OR MIT
-- tauri-runtime 2.12.1 — Apache-2.0 OR MIT
-- tauri-runtime-wry 2.12.1 — Apache-2.0 OR MIT
-- tauri-utils 2.10.1 — Apache-2.0 OR MIT
+- tauri-plugin-single-instance 2.5.4 — Apache-2.0 OR MIT
+- tauri-plugin-updater 2.14.0 — Apache-2.0 OR MIT
+- tauri-runtime 2.12.2 — Apache-2.0 OR MIT
+- tauri-runtime-wry 2.12.3 — Apache-2.0 OR MIT
+- tauri-utils 2.10.2 — Apache-2.0 OR MIT
 - tauri-winres 0.3.6 — MIT
 - tauri-winrt-notification 0.7.3 — Apache-2.0 OR MIT
 - tempfile 3.27.0 — Apache-2.0 OR MIT
@@ -509,6 +517,7 @@ Project: desktop-tauri
 - thiserror 2.0.20 — Apache-2.0 OR MIT
 - thiserror-impl 1.0.69 — Apache-2.0 OR MIT
 - thiserror-impl 2.0.20 — Apache-2.0 OR MIT
+- thousands 0.2.0 — MIT/Apache-2.0
 - thread_local 1.1.10 — Apache-2.0 OR MIT
 - tiff 0.11.3 — MIT
 - time 0.3.55 — Apache-2.0 OR MIT
@@ -518,7 +527,7 @@ Project: desktop-tauri
 - tinystr 0.8.3 — Unicode-3.0
 - tinyvec 1.12.0 — Apache-2.0 OR MIT OR Zlib
 - tinyvec_macros 0.1.1 — Apache-2.0 OR MIT OR Zlib
-- tokio 1.53.2 — MIT
+- tokio 1.54.1 — MIT
 - tokio-macros 2.7.2 — MIT
 - tokio-rustls 0.26.4 — Apache-2.0 OR MIT
 - tokio-util 0.7.19 — MIT
@@ -542,6 +551,7 @@ Project: desktop-tauri
 - tracing-subscriber 0.3.23 — MIT
 - tray-icon 0.25.1 — Apache-2.0 OR MIT
 - tree_magic_mini 3.2.2 — MIT
+- trim-in-place 0.1.8 — MIT
 - try-lock 0.2.5 — MIT
 - ts-rs 12.0.1 — MIT
 - ts-rs-macros 12.0.1 — MIT
@@ -586,7 +596,7 @@ Project: desktop-tauri
 - web_atoms 0.3.0 — Apache-2.0 OR MIT
 - webkit2gtk 2.0.2 — MIT
 - webkit2gtk-sys 2.0.2 — MIT
-- webpki-root-certs 1.0.9 — CDLA-Permissive-2.0
+- webpki-root-certs 1.0.10 — CDLA-Permissive-2.0
 - webview2-com 0.39.1 — MIT
 - webview2-com-macros 0.8.1 — MIT
 - webview2-com-sys 0.39.1 — MIT
@@ -611,13 +621,17 @@ Project: desktop-tauri
 - windows-implement 0.60.2 — Apache-2.0 OR MIT
 - windows-interface 0.59.3 — Apache-2.0 OR MIT
 - windows-link 0.1.3 — Apache-2.0 OR MIT
+- windows-link 0.100.0 — Apache-2.0 OR MIT
 - windows-link 0.2.1 — Apache-2.0 OR MIT
 - windows-native-keyring-store 1.1.0 — Apache-2.0 OR MIT
 - windows-numerics 0.2.0 — Apache-2.0 OR MIT
 - windows-numerics 0.3.1 — Apache-2.0 OR MIT
+- windows-registry 0.100.0 — Apache-2.0 OR MIT
 - windows-registry 0.6.1 — Apache-2.0 OR MIT
+- windows-result 0.100.0 — Apache-2.0 OR MIT
 - windows-result 0.3.4 — Apache-2.0 OR MIT
 - windows-result 0.4.1 — Apache-2.0 OR MIT
+- windows-strings 0.100.0 — Apache-2.0 OR MIT
 - windows-strings 0.3.1 — Apache-2.0 OR MIT
 - windows-strings 0.4.2 — Apache-2.0 OR MIT
 - windows-strings 0.5.1 — Apache-2.0 OR MIT
@@ -685,7 +699,7 @@ Project: desktop-tauri
 - zerovec 0.11.6 — Unicode-3.0
 - zerovec-derive 0.11.3 — Unicode-3.0
 - zip 4.6.1 — MIT
-- zip 9.0.0 — MIT
+- zip 9.0.5 — MIT
 - zmij 1.0.23 — MIT
 - zune-core 0.5.3 — Apache-2.0 OR MIT OR Zlib
 - zune-jpeg 0.5.15 — Apache-2.0 OR MIT OR Zlib

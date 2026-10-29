@@ -66,35 +66,37 @@ const result = screen(
 `screen` returns every entry scoring at or above the cutoff as a possible
 match for human review, with the evidence per field. Names match regardless of
 word order, diacritics, Cyrillic or Latin script, transcription conventions,
-legal forms, omitted middle names and small typos. A matching identifier is
+legal forms, omitted middle names and small typos. Listed names and queries
+are also read without their bracketed parts ("KOREA KWANGSON BANKING
+CORPORATION (KKBC)") and with dotted acronyms as one word ("K.K.B.C."), so a
+name matches whichever side carries the qualifier; a bracketed part never
+counts on its own, and these further readings do not change token
+frequencies. A matching identifier is
 decisive unless the list marks the document false; birth date, nationality and
 entity type raise or lower the score. A near-exact name whose client fields
 contradict the listing stays reported at the cutoff, with the conflicts named
 in its evidence. `totalMatches` and `truncated` say when the limit cut results.
 
-Free-text queries may contain at most 24 normalized tokens before
-deduplication. Excess input returns `excess-query-tokens`; register-resolved
-names bypass this input cap because callers cannot correct a publisher's name.
-Repeated query and alias spellings retain their original adjacency graph.
+Names may contain at most 512 UTF-16 code units. Free-text queries may contain
+at most 24 normalized tokens before deduplication; register-resolved names
+bypass the token cap. Excess input returns `excess-query-characters` or
+`excess-query-tokens`. Repeated query and alias spellings retain their original
+adjacency graph.
 
-A cheap optimistic score filters candidates that cannot reach the cutoff and
-ranks the rest using the entry's birth-date, nationality and entity-type
-evidence, with exact names first. Equivalent aliases share a score; their
-group uses its best entry's evidence for selection, so
-a frequent spelling never consumes the candidate allowance repeatedly. Each
-query unit retains its exact vocabulary token and at most 64 fuzzy spellings,
-ranked by shared bigrams before edit distance. Exact name patterns bypass the
-full-alignment cap. At
-most 256 distinct name patterns receive full alignment per reading. A
-2,000,000-unit screening budget covers vocabulary expansion, postings, ranking,
-scoring, identifiers and sorting across both readings of an unknown party.
-Exhaustion returns `ScreeningWorkLimitError` (`work-limit`); both API paths
-report the affected list unavailable with the existing `load-failed` reason.
+The edition build creates an `@stll/fuzzy-search` entity index with folded and
+raw spelling forms, token-position weights and original adjacent-name joins.
+The index bounds candidates conservatively; sanctions verifies token hits with
+its Damerau-Levenshtein metric and retains its alignment and identity scoring.
+Weak-alias quality applies once, in final scoring. Equivalent aliases share a
+score. Neither vocabulary matches nor candidate patterns have a top-k cap.
 
-`truncated` also marks candidate selection that omitted viable patterns;
-`totalMatches` is then the number found, a lower bound. Partial results retain
-possible matches for review. A truncated search with no possible matches is
-unavailable, never clear. Index construction remains cached separately.
+The defensive work ceiling derives from the edition and validated input,
+including repeated-join posting impact, scorer alignment, identity fields and
+sorting. Exhaustion returns `ScreeningWorkLimitError` (`work-limit`); the API
+reports it and returns the affected edition as typed `incomplete`, never clear.
+`totalMatches` is exact for a completed scan; `truncated` means the response limit
+cut displayed results. Each screened list emits a complete/incomplete metric.
+
 The shared API service yields to the event loop between list screenings;
 anonymous screenings additionally allow at most two active requests per API
 process and reject excess work before database reads. The work budget is a
@@ -104,7 +106,17 @@ worker. Its 250 ms total screening deadline includes queueing and database reads
 expiry or a worker crash reports unavailable and recycles the worker. Large cold
 editions are rebuilt without identity input in a bounded 10-second background
 lease after expiry. Edition changes replace the worker cache on the next check.
-The product path retains its existing cache and work-budget behavior.
+Edition caches retain the built index; serialization is measured separately.
+
+## Completion proof
+
+`bun run prove:real-editions` screens common names and input boundaries against
+committed fixtures for every source, without publisher requests. Unloadable
+fixtures emit typed `NOT COVERED` reports. `--generated` also measures the largest
+generated edition bundle, including a repeated-name join on every entry:
+build time, serialized size, native storage, peak process memory and screening
+work. Peak memory must fit the default API 2 GiB budget. The nightly workflow
+runs this proof from fixtures.
 
 ## Evaluation
 

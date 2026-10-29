@@ -1,21 +1,23 @@
 import { Result } from "better-result";
 import { and, asc, eq, inArray, isNull, or } from "drizzle-orm";
-import type { Static } from "elysia";
+import type * as v from "valibot";
 
 import { READER_ANSWER_MAX_MESSAGES } from "@stll/api-contract/reader-answers";
 import type { ReaderAnswer } from "@stll/api-contract/reader-answers";
 
-import { legalReaderAnswers, legalReaderAnswerMessages } from "@/api/db/schema";
-import type { AnnotationAuthorScope } from "@/api/handlers/legal-reader/annotations/target";
+import { legalReaderAnswerMessages, legalReaderAnswers } from "@/api/db/schema";
+import { readerAnswerSpansOf } from "@/api/handlers/legal-reader/answers/operation";
 import { listAnswersQuerySchema } from "@/api/handlers/legal-reader/answers/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { AnnotationAuthorScope } from "@/api/lib/legal-search/reader-annotations/target";
 import { createCursorPage } from "@/api/lib/pagination";
 import type {
-  UnprojectedColumns,
   UnbackedProjectionKeys,
+  UnprojectedColumns,
 } from "@/api/lib/projection-totality";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import {
@@ -48,6 +50,7 @@ const ANSWER_PROJECTION = {
   quote: legalReaderAnswers.quote,
   startOffset: legalReaderAnswers.startOffset,
   endOffset: legalReaderAnswers.endOffset,
+  continuationSpans: legalReaderAnswers.continuationSpans,
   createdAt: legalReaderAnswers.createdAt,
   updatedAt: legalReaderAnswers.updatedAt,
 } as const;
@@ -108,12 +111,13 @@ true satisfies UnexpectedMessageColumn extends never ? true : never;
 type ListReaderAnswersOptions = Omit<
   AnnotationAuthorScope,
   "recordAuditEvent"
-> & { query: Static<typeof listAnswersQuerySchema> };
+> & { query: v.InferOutput<typeof listAnswersQuerySchema> };
 export const listReaderAnswersHandler = async function* ({
   query,
   organizationId,
   userId,
   safeDb,
+  readCopies = readWithdrawnCopyProjection,
 }: ListReaderAnswersOptions) {
   const limit = normalizeTenantPageLimit(query.limit ?? 20);
   const conditions = [
@@ -183,49 +187,67 @@ export const listReaderAnswersHandler = async function* ({
               .limit(limit * READER_ANSWER_MAX_MESSAGES),
           ),
         );
-  const items = page.items.map(({ answer }): ReaderAnswer => ({
-    id: answer.id,
-    decisionId: answer.decisionId,
-    authorId: brandPersistedUserId(answer.userId),
-    mine: answer.userId === userId,
-    kind: answer.kind,
-    visibility: answer.visibility,
-    anchor: {
-      paragraphId: answer.paragraphId,
-      quote: answer.quote,
-      startOffset: answer.startOffset,
-      endOffset: answer.endOffset,
-    },
-    createdAt: answer.createdAt.toISOString(),
-    updatedAt: answer.updatedAt.toISOString(),
-    messages: messages
-      .filter(({ message }) => message.answerId === answer.id)
-      .map(({ message }) => ({
-        id: message.id,
-        role: message.role,
-        content: message.content,
-        citations: message.citations,
-        model: message.model,
-        usage: message.usage,
-        status: message.status,
-        errorCode: message.errorCode,
-        invalidCitationCount: message.invalidCitationCount,
-        createdAt: message.createdAt.toISOString(),
-        updatedAt: message.updatedAt.toISOString(),
-      })),
-  }));
+  const projection = yield* Result.await(
+    Result.tryPromise(async () =>
+      readCopies({ values: [page.items, messages] }),
+    ),
+  );
+  const items = page.items.map(({ answer: storedAnswer }): ReaderAnswer => {
+    const answer = projection.answer(storedAnswer);
+    return {
+      id: answer.id,
+      decisionId: answer.decisionId,
+      authorId: brandPersistedUserId(answer.userId),
+      mine: answer.userId === userId,
+      kind: answer.kind,
+      visibility: answer.visibility,
+      anchor: { spans: readerAnswerSpansOf(answer) },
+      createdAt: answer.createdAt.toISOString(),
+      updatedAt: answer.updatedAt.toISOString(),
+      messages: messages
+        .filter(({ message }) => message.answerId === answer.id)
+        .map(({ message: storedMessage }) => {
+          const message = projection.answerMessage(
+            storedMessage,
+            answer.decisionId,
+          );
+          return {
+            id: message.id,
+            role: message.role,
+            content: message.content,
+            citations: message.citations,
+            model: message.model,
+            usage: message.usage,
+            status: message.status,
+            errorCode: message.errorCode,
+            invalidCitationCount: message.invalidCitationCount,
+            createdAt: message.createdAt.toISOString(),
+            updatedAt: message.updatedAt.toISOString(),
+          };
+        }),
+    };
+  });
   return Result.ok({ items, nextCursor: page.nextCursor, limit: page.limit });
 };
 
-const listReaderAnswers = createSafeRootHandler(
-  config,
-  async function* ({ query, safeDb, session, user }) {
-    return yield* listReaderAnswersHandler({
-      query,
-      safeDb,
-      organizationId: session.activeOrganizationId,
-      userId: user.id,
-    });
-  },
-);
-export default listReaderAnswers;
+type ReadDependencies = Pick<
+  Parameters<typeof listReaderAnswersHandler>[0],
+  "readCopies"
+>;
+
+export const createListReaderAnswers = ({
+  readCopies,
+}: ReadDependencies = {}) =>
+  createSafeRootHandler(
+    config,
+    async function* ({ query, safeDb, session, user }) {
+      return yield* listReaderAnswersHandler({
+        query,
+        safeDb,
+        readCopies,
+        organizationId: session.activeOrganizationId,
+        userId: user.id,
+      });
+    },
+  );
+export default createListReaderAnswers();

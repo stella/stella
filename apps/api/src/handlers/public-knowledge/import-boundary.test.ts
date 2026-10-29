@@ -8,20 +8,22 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import ts from "typescript";
 
 import { repoRelativePath } from "@stll/portable-path";
+import { type Node, parseSource } from "@stll/scripts/src/syntax-tree";
 
 const repoRoot = path.resolve(import.meta.dir, "../../../../..");
 const apiRoot = path.join(repoRoot, "apps/api/src");
 const routeFile = path.join(apiRoot, "handlers/public-knowledge/routes.ts");
 
-// The factory, env, the feature-flag owner, and error translator are trusted
-// boundary modules. Their broad shared dependency graphs do not grant a public
-// handler access to data.
+// The factory, env, the HTTP route core, the feature-flag owner and its route
+// gate, and error translator are trusted boundary modules. Their broad shared
+// dependency graphs do not grant a public handler access to data.
 const boundaryLeaves = new Set([
   "env.ts",
+  "http/route.ts",
   "lib/deployment-feature.ts",
+  "lib/deployment-feature-route.ts",
   "lib/api-handlers.ts",
   "lib/errors/tagged-errors.ts",
 ]);
@@ -33,6 +35,8 @@ const allowedModules = new Set([
   "lib/security-headers.ts",
   "lib/array.ts",
   "lib/docx-archive.ts",
+  // Request-local byte/work telemetry has no database or document-access dependency.
+  "lib/observability/request-work.ts",
   "lib/docx/block-directives.ts",
   "lib/docx/discover-clause-slots.ts",
   "lib/docx/discover-placeholders.ts",
@@ -53,6 +57,7 @@ const allowedModules = new Set([
   "lib/file-scan/attached-template.ts",
   "lib/file-scan/document-parsers.ts",
   "lib/file-scan/magic.ts",
+  "lib/file-scan/media-type.ts",
   "lib/file-scan/pipeline.ts",
   "lib/file-scan/rejection.ts",
   "lib/file-scan/scan-upload.ts",
@@ -81,18 +86,20 @@ const allowedExternal = new Set([
   "@stll/api-contract",
   "@stll/collation",
   "@stll/docx-utils",
+  // Pure error classifications do not expose storage or data access.
+  "@stll/errors/fingerprint-fields",
   "@stll/folio-core",
   "@stll/folio-core/server",
   "@stll/template-conditions",
   "@stll/template-packs",
   "@stll/text-normalize",
   "better-result",
-  "elysia",
-  "elysia/error",
   "jszip",
+  "node:async_hooks",
   "node:fs",
   "node:path",
   "node:stream",
+  "node:stream/web",
   "node:zlib",
   "slimdom",
   "valibot",
@@ -103,27 +110,35 @@ const importsOf = (file: string): string[] =>
     .scan(readFileSync(file, "utf-8"))
     .imports.map(({ path: specifier }) => specifier);
 
-const isLiteralData = (node: ts.Expression): boolean => {
-  if (ts.isAsExpression(node)) {
+const isLiteralData = (node: Node | null): boolean => {
+  if (node?.type === "TSAsExpression") {
     return isLiteralData(node.expression);
   }
-  if (ts.isObjectLiteralExpression(node)) {
+  if (node?.type === "ObjectExpression") {
     return node.properties.every(
       (property) =>
-        ts.isPropertyAssignment(property) &&
-        (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)) &&
-        isLiteralData(property.initializer),
+        property.type === "Property" &&
+        property.kind === "init" &&
+        !property.method &&
+        !property.shorthand &&
+        !property.computed &&
+        (property.key.type === "Identifier" ||
+          (property.key.type === "Literal" &&
+            typeof property.key.value === "string")) &&
+        isLiteralData(property.value),
     );
   }
-  if (ts.isArrayLiteralExpression(node)) {
+  if (node?.type === "ArrayExpression") {
     return node.elements.every(isLiteralData);
   }
   return (
-    ts.isStringLiteral(node) ||
-    ts.isNumericLiteral(node) ||
-    node.kind === ts.SyntaxKind.TrueKeyword ||
-    node.kind === ts.SyntaxKind.FalseKeyword ||
-    node.kind === ts.SyntaxKind.NullKeyword
+    node?.type === "Literal" &&
+    // Strings, numbers, booleans and null; bigint and regular expression
+    // literals are not data.
+    (typeof node.value === "string" ||
+      typeof node.value === "number" ||
+      typeof node.value === "boolean" ||
+      (node.value === null && !("regex" in node)))
   );
 };
 
@@ -131,38 +146,32 @@ const isConstantsOnly = (
   source: string,
   isConstantDependency: (specifier: string) => boolean = () => false,
 ): boolean => {
-  const parsed = ts.createSourceFile("leaf.ts", source, ts.ScriptTarget.Latest);
+  const { body } = parseSource("leaf.ts", source).program;
   return (
-    parsed.statements.length > 0 &&
-    parsed.statements.every((statement) => {
-      if (ts.isImportDeclaration(statement)) {
-        const clause = statement.importClause;
-        const bindings = clause?.namedBindings;
+    body.length > 0 &&
+    body.every((statement) => {
+      if (statement.type === "ImportDeclaration") {
         const typeOnly =
-          clause?.phaseModifier === ts.SyntaxKind.TypeKeyword ||
-          (clause?.name === undefined &&
-            bindings !== undefined &&
-            ts.isNamedImports(bindings) &&
-            bindings.elements.length > 0 &&
-            bindings.elements.every((element) => element.isTypeOnly));
-        return (
-          typeOnly ||
-          (ts.isStringLiteral(statement.moduleSpecifier) &&
-            isConstantDependency(statement.moduleSpecifier.text))
-        );
+          statement.importKind === "type" ||
+          (statement.specifiers.length > 0 &&
+            statement.specifiers.every(
+              (specifier) =>
+                specifier.type === "ImportSpecifier" &&
+                specifier.importKind === "type",
+            ));
+        return typeOnly || isConstantDependency(statement.source.value);
       }
+      const declaration =
+        statement.type === "ExportNamedDeclaration"
+          ? statement.declaration
+          : null;
       return (
-        ts.isVariableStatement(statement) &&
-        statement.declarationList.getFirstToken(parsed)?.kind ===
-          ts.SyntaxKind.ConstKeyword &&
-        statement.modifiers?.some(
-          (modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword,
-        ) === true &&
-        statement.declarationList.declarations.every(
-          (declaration) =>
-            ts.isIdentifier(declaration.name) &&
-            declaration.initializer !== undefined &&
-            isLiteralData(declaration.initializer),
+        declaration?.type === "VariableDeclaration" &&
+        declaration.kind === "const" &&
+        declaration.declarations.every(
+          (declarator) =>
+            declarator.id.type === "Identifier" &&
+            isLiteralData(declarator.init),
         )
       );
     })

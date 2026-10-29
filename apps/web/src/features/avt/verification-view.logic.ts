@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 
 import type { ParagraphBlock } from "@stll/legal-ast/document-ast";
+import type { TextMarkState } from "@stll/ui/text-mark";
 
 import type {
   ClaimAnchor,
@@ -24,6 +25,50 @@ export const spanPresentation = ({
   dim: filterActive && !matches,
   highlight: filterActive && matches,
 });
+
+/**
+ * How one claim is marked over the original document: the selected claim is
+ * active, a claim the active filter matches is picked out, and a claim the
+ * filter leaves out is not drawn (a highlight cannot fade its words the way
+ * the reading view dims them).
+ */
+export const claimMark = ({
+  selected,
+  dim,
+  highlight,
+}: {
+  selected: boolean;
+  dim: boolean;
+  highlight: boolean;
+}): TextMarkState | null => {
+  if (selected) {
+    return "active";
+  }
+  if (dim) {
+    return null;
+  }
+  return highlight ? "matched" : "rest";
+};
+
+/**
+ * Which original the claims can be laid over: a DOCX read through Folio
+ * (block ids), or a PDF read page by page (page text offsets). A run with no
+ * stored text, or a mix the server never writes, has none.
+ */
+export const originalKind = (
+  blocks: readonly Pick<VerificationRun["blocks"][number], "kind">[],
+): "docx" | "pdf" | null => {
+  if (blocks.length === 0) {
+    return null;
+  }
+  if (blocks.every((block) => block.kind === "docx-block")) {
+    return "docx";
+  }
+  if (blocks.every((block) => block.kind === "pdf-page")) {
+    return "pdf";
+  }
+  return null;
+};
 
 /**
  * A run of claims that sit in the same DOCX block or on the same PDF page,

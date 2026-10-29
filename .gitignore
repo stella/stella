@@ -32,8 +32,9 @@ apps/landing/public/media/products/*-poster.jpg
 # Claude Code worktrees (local state)
 .claude/worktrees/
 
-# QA reports (ephemeral, local-only)
+# QA reports and implementation plans (local-only)
 .agents/reports/
+.agents/plans/
 
 # Tan Stack
 .nitro
@@ -93,6 +94,7 @@ packages/cli/src/generated/tool-annotations.ts
 
 # Derived TanStack route tree, restored by the web generation task.
 apps/web/src/routeTree.gen.ts
+apps/web/src/route-templates.gen.ts
 apps/web/src/i18n/langs/messages.gen.ts
 
 # MCP runtime and browser outputs are prepared before use.
@@ -101,3 +103,6 @@ packages/mcp-apps/src/*/generated/*
 !packages/mcp-apps/src/shared/generated/style.css.d.ts
 !packages/mcp-apps/src/shared/generated/tsconfig.json
 packages/mcp-apps/src/generated/
+
+# Per-run build directories of the rule catalog test.
+/.oxlint-rule-ids-*/

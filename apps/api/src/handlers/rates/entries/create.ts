@@ -1,11 +1,11 @@
 import { Result } from "better-result";
 import { and, eq, gte, isNull, lte, or, sql } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
-import type { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
+import { apiDateSchema } from "@stll/api-contract/api-date";
+import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
 
-import { abortableTx } from "@/api/db/safe-db";
+import { resultTx } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
 import { rateEntries } from "@/api/db/schema";
 import { rateRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
@@ -14,9 +14,9 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  tMinorUnitAmount,
-  tSafeId,
-  tUserId,
+  minorUnitAmountSchema,
+  resourceIdSchema,
+  userIdSchema,
   workspaceParams,
 } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -25,30 +25,18 @@ import { cents } from "@/api/lib/money";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { validateOrgUserId } from "@/api/lib/validated-org-user-id";
 
-type LiteralSchemas<Values extends readonly string[]> = {
-  [Index in keyof Values]: ReturnType<typeof t.Literal<Values[Index]>>;
-};
-
-// A tuple preserves TypeBox's static union; the canonical role tuple binds its
-// membership and order so adding a role cannot silently omit its input schema.
-const roleSchemas = [
-  t.Literal("owner"),
-  t.Literal("admin"),
-  t.Literal("member"),
-  t.Literal("intern"),
-  t.Literal("external"),
-] satisfies LiteralSchemas<typeof ORGANIZATION_ROLE_NAMES>;
-
-const createRateEntryBodySchema = t.Object({
-  userId: t.Optional(t.Nullable(tUserId)),
-  role: t.Optional(t.Nullable(t.Union(roleSchemas))),
-  hourlyRate: tMinorUnitAmount(0),
-  effectiveFrom: t.String({ format: "date" }),
-  effectiveTo: t.Optional(t.Nullable(t.String({ format: "date" }))),
+const createRateEntryBodySchema = v.object({
+  activityCodeId: v.optional(v.nullable(resourceIdSchema("billingCode"))),
+  userId: v.optional(v.nullable(userIdSchema)),
+  // The canonical role tuple, so adding a role cannot silently omit it here.
+  role: v.optional(v.nullable(v.picklist(ORGANIZATION_ROLE_NAMES))),
+  hourlyRate: minorUnitAmountSchema(0),
+  effectiveFrom: apiDateSchema,
+  effectiveTo: v.optional(v.nullable(apiDateSchema)),
 });
 
 const rateEntryParamsSchema = workspaceParams({
-  rateTableId: tSafeId("rateTable"),
+  rateTableId: resourceIdSchema("rateTable"),
 });
 
 export type CreateRateEntryHandlerProps = {
@@ -56,7 +44,7 @@ export type CreateRateEntryHandlerProps = {
   workspaceId: SafeId<"workspace">;
   session: { activeOrganizationId: SafeId<"organization"> };
   params: { rateTableId: SafeId<"rateTable"> };
-  body: Static<typeof createRateEntryBodySchema>;
+  body: v.InferOutput<typeof createRateEntryBodySchema>;
   recordAuditEvent: AuditRecorder;
 };
 
@@ -72,6 +60,7 @@ export const createRateEntryHandler = async function* ({
 }: CreateRateEntryHandlerProps) {
   const selectedUserId = body.userId ?? null;
   const selectedRole = body.role ?? null;
+  const selectedActivityCodeId = body.activityCodeId ?? null;
   if (selectedUserId !== null && selectedRole !== null) {
     return Result.err(
       new HandlerError({
@@ -149,6 +138,9 @@ export const createRateEntryHandler = async function* ({
     selectedRole === null
       ? isNull(rateEntries.role)
       : eq(rateEntries.role, selectedRole),
+    selectedActivityCodeId === null
+      ? isNull(rateEntries.activityCodeId)
+      : eq(rateEntries.activityCodeId, selectedActivityCodeId),
     overlapToCondition,
   ];
   if (overlapFromCondition) {
@@ -156,10 +148,29 @@ export const createRateEntryHandler = async function* ({
   }
 
   const txResult = yield* Result.await(
-    abortableTx(safeDb, async (tx) => {
+    resultTx(safeDb, async (tx) => {
       await tx.execute(
         sql`SELECT pg_advisory_xact_lock(hashtext(${params.rateTableId}))`,
       );
+
+      if (selectedActivityCodeId !== null) {
+        const activity = await tx.query.billingCodes.findFirst({
+          where: {
+            id: { eq: selectedActivityCodeId },
+            workspaceId: { eq: workspaceId },
+            type: { eq: "activity" },
+          },
+          columns: { id: true },
+        });
+        if (!activity) {
+          return Result.err(
+            new HandlerError({
+              status: 400,
+              message: "Activity code not found in this matter",
+            }),
+          );
+        }
+      }
 
       const totalEntries = await tx.$count(
         rateEntries,
@@ -167,10 +178,12 @@ export const createRateEntryHandler = async function* ({
       );
 
       if (totalEntries >= LIMITS.rateEntriesPerTable) {
-        throw new HandlerError({
-          status: 400,
-          message: "Rate entries limit reached for this table",
-        });
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "Rate entries limit reached for this table",
+          }),
+        );
       }
 
       const overlapRows = await tx
@@ -181,11 +194,13 @@ export const createRateEntryHandler = async function* ({
       const overlap = overlapRows.at(0);
 
       if (overlap) {
-        throw new HandlerError({
-          status: 400,
-          message:
-            "Date range overlaps with an existing entry for this person, role, or table default",
-        });
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message:
+              "Date range overlaps with an existing entry for this person, role, or table default",
+          }),
+        );
       }
 
       const [entry] = await tx
@@ -195,6 +210,7 @@ export const createRateEntryHandler = async function* ({
           rateTableId: params.rateTableId,
           userId: body.userId ?? null,
           role: body.role ?? null,
+          activityCodeId: body.activityCodeId ?? null,
           hourlyRate: cents(body.hourlyRate),
           effectiveFrom: body.effectiveFrom,
           effectiveTo: body.effectiveTo ?? null,
@@ -202,10 +218,12 @@ export const createRateEntryHandler = async function* ({
         .returning({ id: rateEntries.id });
 
       if (!entry) {
-        throw new HandlerError({
-          status: 500,
-          message: "Failed to create rate entry",
-        });
+        return Result.err(
+          new HandlerError({
+            status: 500,
+            message: "Failed to create rate entry",
+          }),
+        );
       }
 
       await recordAuditEvent(tx, {
@@ -219,6 +237,7 @@ export const createRateEntryHandler = async function* ({
               rateTableId: params.rateTableId,
               userId: body.userId ?? null,
               role: body.role ?? null,
+              activityCodeId: body.activityCodeId ?? null,
               hourlyRate: cents(body.hourlyRate),
               effectiveFrom: body.effectiveFrom,
               effectiveTo: body.effectiveTo ?? null,
@@ -227,7 +246,7 @@ export const createRateEntryHandler = async function* ({
         },
       });
 
-      return { id: entry.id };
+      return Result.ok({ id: entry.id });
     }),
   );
 
@@ -241,7 +260,8 @@ const createRateEntry = createSafeHandler(
       "Add one rate line to a rate table: an hourly rate in integer minor " +
       "currency units, effective from a date and optionally until another. " +
       "Pass userId for a person-specific rate, role for an organization-role rate, " +
-      "or omit both for the table fallback. Set at most one selector. " +
+      "or omit both for the table fallback. Set at most one person or role; " +
+      "optionally pass activityCodeId for an activity-only or person/role plus activity rate. " +
       "Refused when dates overlap a line for the same selector or userId is not an organization member, " +
       "or when the table is at its line limit.",
     permissions: { rate: ["create"] },

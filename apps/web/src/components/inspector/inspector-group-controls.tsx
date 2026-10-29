@@ -3,14 +3,14 @@ import type { RefObject } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
 
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
-  DialogFormState,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
@@ -20,8 +20,8 @@ import { FolderPlusIcon, ListTreeIcon, UngroupIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
 import {
-  MATTER_SWATCHES,
   getMatterSwatch,
+  MATTER_SWATCHES,
   resolveMatterColor,
 } from "@stll/ui/matter-colors";
 import { MatterIcon } from "@stll/ui/matter-icon";
@@ -38,8 +38,10 @@ import { getInspectorTabGroupId } from "@/components/inspector/inspector-groups.
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
+import { useFormatter } from "@/i18n/formatting-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import {
   workspacesNavigationOptions,
   workspacesRouteOptions,
@@ -60,8 +62,8 @@ export const useInspectorGroups = () => {
       userId,
     }),
   );
-  const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  const dataView = queryView(dataQuery);
+  useQueryViewError(dataView, "useInspectorGroups:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
   const state = useInspectorTabsStore(
     useShallow((s) => ({
@@ -340,8 +342,8 @@ const InspectorGroupDestinations = ({
 }) => {
   const { activeOrganizationId } = useAuthenticatedUser();
   const dataQuery = useQuery(workspacesRouteOptions(activeOrganizationId));
-  const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  const dataView = queryView(dataQuery);
+  useQueryViewError(dataView, "InspectorGroupDestinations:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
   const customGroups = useInspectorTabsStore((state) => state.groups);
   const destinations: InspectorGroupPresentation[] = [];

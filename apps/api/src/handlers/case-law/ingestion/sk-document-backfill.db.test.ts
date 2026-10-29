@@ -30,8 +30,8 @@ import {
   fetchDecisionDocument,
   hasPendingDeferredDocumentsForSource,
   loadPendingDocuments,
-  loadRequestedDocuments,
   loadRemainingDocuments,
+  loadRequestedDocuments,
   markDocumentUnavailable,
   MAX_DOCUMENT_FETCH_ATTEMPTS,
   MAX_DOCUMENT_PDF_BYTES,
@@ -39,7 +39,10 @@ import {
   recordDocumentFetchRequest,
   storeBackfilledDocument,
 } from "@/api/lib/legal-search/sk-document-backfill";
-import type { PendingDocument } from "@/api/lib/legal-search/sk-document-backfill";
+import type {
+  PendingDocument,
+  SkDocumentRetentionCheck,
+} from "@/api/lib/legal-search/sk-document-backfill";
 import { SkDocumentNonPdfError } from "@/api/lib/legal-search/sk-document-fetch-diagnostics";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 import { readOfResponse } from "@/api/tests/helpers/publisher-read";
@@ -831,6 +834,8 @@ if (!databaseUrl || !runPostgresTests) {
         await fetchDecisionDocument({
           decisionId: id,
           fetchDocument: async () => readOfResponse(await answer()),
+          // These cases settle a failed download; nothing is stored to measure.
+          checkRetention: () => undefined,
           scopedDb,
           signal: new AbortController().signal,
         });
@@ -891,8 +896,12 @@ if (!databaseUrl || !runPostgresTests) {
           expect(buffered.documentUrl).not.toBe(currentUrl);
           expect(buffered.caseNumber).not.toBe(metadata.caseNumber);
           const urls: string[] = [];
+          const checked: Parameters<SkDocumentRetentionCheck>[0][] = [];
           const outcome = await fetchDecisionDocument({
             decisionId: buffered.id,
+            checkRetention: (input) => {
+              checked.push(input);
+            },
             fetchDocument: async (url) => {
               urls.push(url.href);
               return readOfResponse(
@@ -928,6 +937,13 @@ if (!databaseUrl || !runPostgresTests) {
             fulltext: outcome.document.fulltext,
             sourceHash: "source-v2",
           });
+          // The stored document is measured against the bytes it came from.
+          expect(checked).toHaveLength(1);
+          expect(checked[0]?.decision.caseNumber).toBe(metadata.caseNumber);
+          expect(checked[0]?.pdfBytes).toEqual(new Uint8Array(bytes));
+          expect(checked[0]?.blocks).toEqual(
+            outcome.document.documentAst.blocks,
+          );
         }
       });
 

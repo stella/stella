@@ -6,12 +6,13 @@ import {
   DECISION_IDENTIFIER_TYPES,
 } from "@stll/legal-ast/decision-identifier";
 import type {
-  DecisionIdentifierType,
   DecisionIdentifiers,
+  DecisionIdentifierType,
 } from "@stll/legal-ast/decision-identifier";
 import { propertyConfig } from "@stll/property-testing";
 import { normalizeUnicode } from "@stll/text-normalize";
 
+import { czUohsDecisionIdentifiers } from "@/api/handlers/case-law/ingestion/adapters/cz-uohs";
 import {
   normalizeHuBhgyRow,
   readHuBhgySearch,
@@ -19,10 +20,10 @@ import {
 import { plUokikDecisionIdentifiers } from "@/api/handlers/case-law/ingestion/adapters/pl-uokik";
 import {
   bareCitationKey,
+  citationKeyOf,
   decisionCitationKeyOf,
   decisionIdentifiersFromMetadata,
   decisionIdentifiersFromStoredMetadata,
-  citationKeyOf,
   extractCitations,
   hungarianCitationForm,
   isSelfCitation,
@@ -34,6 +35,21 @@ import { CITATION_STORAGE_WIDTHS } from "@/api/lib/case-law/citation-storage-bou
 import { storeDecisionIdentifiersInMetadata } from "@/api/lib/legal-search/decision-identifier-metadata";
 
 describe("extractCitations", () => {
+  test("an ÚOHS citation normalizes to the adapter's emitted identifier", () => {
+    const [citation] = extractCitations([
+      { index: 0, text: "ÚOHS ÚOHS-R0901/2026/VZ" },
+    ]);
+    const emitted = czUohsDecisionIdentifiers({
+      spisová_značka: "R0901/2026/VZ",
+      číslo_jednací: "90001/2026/163",
+    });
+    expect(
+      normalizeDecisionIdentifierValue(
+        citation!.identifierType,
+        citation!.citationText,
+      ),
+    ).toBe(emitted[0].value);
+  });
   test.each([
     ["ÚOHS ÚOHS-S123/2024/VZ", "ÚOHS-S123/2024/VZ"],
     ["OHS ÚOHS-R456/2025/VZ", "ÚOHS-R456/2025/VZ"],
@@ -1446,6 +1462,20 @@ describe("extractCitations", () => {
     ).toBe("sygn. akt IA Ca 835/97");
   });
 
+  test("extracts a Polish case number whose division code carries a trailing dot", () => {
+    const single = "w wyroku z 3 maja 2001 r. (sygn. akt II P. 123/01) sąd";
+    const twoWord = "postanowieniem sygn. akt III A Ua. 45/10 oddalono";
+    const citations = extractCitations([{ index: 0, text: single }]);
+    expect(citations).toHaveLength(1);
+    expect(citations[0]?.citationText).toBe("sygn. akt II P. 123/01");
+    expect(bareCitationKey(citations[0]?.citationText ?? "")).toBe(
+      bareCitationKey("sygn. akt II P 123/01"),
+    );
+    expect(
+      extractCitations([{ index: 0, text: twoWord }])[0]?.citationText,
+    ).toBe("sygn. akt III A Ua. 45/10");
+  });
+
   test("dedupes a Polish case number cited both glued and spaced", () => {
     // The same civil-division case is cited once with the roman numeral
     // glued to the registry letter ("IC 1523/96") and once spaced ("I C
@@ -1757,6 +1787,48 @@ describe("extractCitations", () => {
     ]) {
       expect(extractCitations([{ index: 0, text }])).toEqual([]);
     }
+  });
+
+  test("extracts the dotted spelling of a seated administrative register", () => {
+    const cases: [text: string, expected: string[]][] = [
+      [
+        "wyrok NSA z 2002 r., sygn. akt II S.A./Po 1234/01, dalej",
+        ["sygn. akt II S.A./Po 1234/01"],
+      ],
+      [
+        "wyrok WSA, sygn. akt. I S.A./Wr 123/2003.",
+        ["sygn. akt. I S.A./Wr 123/2003"],
+      ],
+      [
+        "por. S.A./Kr 55/99 oraz III S. A. / Gd 7/02",
+        ["S.A./Kr 55/99", "III S. A. / Gd 7/02"],
+      ],
+      // No administrative court sits at `Xy`, and none has a ninth division.
+      ["sprawa S.A./Xy 12/20", []],
+      ["sprawa IX S.A./Wa 1/05", []],
+    ];
+    for (const [text, expected] of cases) {
+      expect(
+        extractCitations([{ index: 0, text }]).map((c) => c.citationText),
+      ).toEqual(expected);
+    }
+  });
+
+  test("keys a dotted administrative register as its undotted spelling", () => {
+    expect(bareCitationKey("sygn. akt II S.A./Po 1234/01")).toBe(
+      bareCitationKey("II SA/Po 1234/01"),
+    );
+    expect(bareCitationKey("III S. A. / Gd 7/02")).toBe(
+      bareCitationKey("III SA/Gd 7/02"),
+    );
+    expect(
+      extractCitations([
+        {
+          index: 0,
+          text: "sygn. akt II S.A./Po 1234/01 oraz II SA/Po 1234/01",
+        },
+      ]),
+    ).toHaveLength(1);
   });
 
   test("keys a non-ASCII seat the way it keys an ASCII one", () => {

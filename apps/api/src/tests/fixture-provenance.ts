@@ -20,7 +20,8 @@
  * Synthetic inline fixtures — the template-literal HTML in cz-ns,
  * cz-nss, cz-us, pl-courts and friends — are deliberately out of scope.
  * They are constructed inputs, authored to isolate one behavior, and
- * editing them is the point.
+ * editing them is the point. Synthetic files use a hashed `synthetic` sidecar
+ * with a note identifying their authored origin.
  */
 
 import path from "node:path";
@@ -69,7 +70,14 @@ type LegacyProvenance = {
   note: string;
 };
 
-export type FixtureProvenance = RecordedProvenance | LegacyProvenance;
+type SyntheticProvenance = {
+  capture: "synthetic";
+  sha256: string;
+  note: string;
+};
+
+export type FixtureProvenance =
+  RecordedProvenance | LegacyProvenance | SyntheticProvenance;
 
 /**
  * Every captured fixture still lacking a recorded origin.
@@ -132,7 +140,7 @@ export const provenancePathOf = (fixturePath: string): string =>
 /**
  * Serialize a sidecar.
  *
- * Two-space indent and a trailing newline is also oxfmt's own JSON
+ * Two-space indent and a trailing newline is also bun fmt's own JSON
  * spelling, so the formatter and this generator agree and a freshly
  * captured sidecar never lands unformatted. Sidecars are ordinary
  * generated JSON — unlike the fixtures they describe, reformatting one
@@ -171,6 +179,9 @@ export const parseProvenance = (raw: string): FixtureProvenance | undefined => {
   const note = stringField(payload, "note");
   const capture = stringField(payload, "capture");
 
+  if (capture === "synthetic") {
+    return note === undefined ? undefined : { capture, sha256, note };
+  }
   if (capture === "legacy") {
     return note === undefined ? undefined : { capture: "legacy", sha256, note };
   }

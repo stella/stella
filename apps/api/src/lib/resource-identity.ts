@@ -84,6 +84,10 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   caseLawPolarityRule: { type: "non_resource", reason: "policy" },
   caseLawProvisionCitation: { type: "non_resource", reason: "association" },
   caseLawReconciliationItem: { type: "non_resource", reason: "workflow" },
+  caseLawRemovalReconciliationItem: {
+    type: "non_resource",
+    reason: "workflow",
+  },
   // Which run owns a pending answer cell; a lease, never addressed by a client.
   caseLawResearchAnswerClaim: { type: "non_resource", reason: "workflow" },
   // A question the organization asks of every decision it looks at;
@@ -106,6 +110,8 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
     type: "resource",
     resourceType: RESOURCE_TYPE.CHAT_THREAD,
   },
+  // A stored approval grant: the caller's own standing tool-approval policy.
+  chatToolGrant: { type: "non_resource", reason: "policy" },
   fileChatThread: { type: "non_resource", reason: "association" },
   templateChatThread: { type: "non_resource", reason: "association" },
   templateDeletionCleanupRequest: { type: "non_resource", reason: "job" },
@@ -165,6 +171,10 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   documentTranslationRun: { type: "non_resource", reason: "job" },
   documentTranslationUnit: { type: "non_resource", reason: "subresource" },
   documentReviewFinding: { type: "non_resource", reason: "subresource" },
+  documentReviewFindingDecision: {
+    type: "non_resource",
+    reason: "subresource",
+  },
   // Detected parties are recomputed from the entity version and its prompt
   // version, like `entityVersionAiSummary`: nothing addresses one directly.
   documentReviewParty: { type: "non_resource", reason: "projection" },
@@ -200,6 +210,7 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   infoSoudTrackedCase: { type: "non_resource", reason: "workflow" },
   invoice: { type: "resource", resourceType: RESOURCE_TYPE.INVOICE },
   invoiceLine: { type: "non_resource", reason: "subresource" },
+  invoicePayment: { type: "non_resource", reason: "subresource" },
   justification: { type: "non_resource", reason: "subresource" },
   legislationDocument: {
     type: "resource",

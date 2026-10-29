@@ -36,10 +36,14 @@ import {
   getAuthIssuerUrl,
 } from "@/api/lib/auth/auth-paths";
 import { reserveRegistration } from "@/api/lib/auth/registration-budget";
+import { createSignedSessionCookieValue } from "@/api/lib/auth/signed-session-cookie";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { readAccountEmail } from "@/api/lib/db/account-row";
+import { normalizeEmail } from "@/api/lib/email/normalized-email";
+import type { NormalizedEmail } from "@/api/lib/email/normalized-email";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getBetterAuthOAuthResources } from "@/api/lib/oauth-resource-policy";
+import { requireSessionCredentialIssuer } from "@/api/lib/synthetic-principal/credential-policy";
 import { getMcpResourceUrl } from "@/api/mcp/constants";
 import type { McpMode } from "@/api/mcp/constants";
 
@@ -542,7 +546,9 @@ const confirmerEmailMatchesHint = async (
   loginHint: string,
 ): Promise<boolean> => {
   const email = await readAccountEmail(userId);
-  return email !== undefined && email.toLowerCase() === loginHint.toLowerCase();
+  return (
+    email !== undefined && normalizeEmail(email) === normalizeEmail(loginHint)
+  );
 };
 
 export class AuthorizeCodeError extends Error {
@@ -569,6 +575,7 @@ export const mintInternalSessionCookieHeader = async ({
   userId: SafeId<"user">;
   organizationId: SafeId<"organization">;
 }): Promise<string> => {
+  requireSessionCredentialIssuer("agentDelegation", { userId, organizationId });
   const now = new Date();
   const token = `${Bun.randomUUIDv7()}${Bun.randomUUIDv7()}`.replaceAll(
     "-",
@@ -587,11 +594,10 @@ export const mintInternalSessionCookieHeader = async ({
     userAgent: "stella-agent-auth/id-jag",
   });
 
-  const signature = new Bun.CryptoHasher("sha256", env.BETTER_AUTH_SECRET)
-    .update(token)
-    .digest("base64");
-
-  return `${getSessionCookieName()}=${token}.${signature}`;
+  return `${getSessionCookieName()}=${createSignedSessionCookieValue(
+    token,
+    env.BETTER_AUTH_SECRET,
+  )}`;
 };
 
 /**
@@ -869,7 +875,7 @@ export const startAnonymousUpgrade = async ({
   email,
 }: {
   claimToken: string;
-  email: string;
+  email: NormalizedEmail;
 }): Promise<Result<ServiceAuthCeremony, AgentTokenError | HandlerError>> => {
   const tokenHash = hashClaimToken(claimToken);
   const rows = await rootDb

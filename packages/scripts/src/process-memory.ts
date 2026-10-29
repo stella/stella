@@ -181,8 +181,7 @@ type WatchTestProcessMemoryOptions = {
   sampleGroup?: typeof sampleProcessGroupMemory;
   signalPid?: (pid: number, signal: NodeJS.Signals | 0) => void;
   windowsProcesses?:
-    | Pick<WindowsProcessOwnership, "readMemory" | "signal">
-    | undefined;
+    Pick<WindowsProcessOwnership, "readMemory" | "signal"> | undefined;
 };
 
 type KillMemoryProcessTreeOptions = Pick<

@@ -1,7 +1,7 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { EventType } from "@tanstack/ai";
 import type { StreamChunk } from "@tanstack/ai";
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -12,13 +12,20 @@ import {
 } from "bun:test";
 
 import { sleep } from "@stll/concurrency/sleep";
+import { installRenderProbe, RENDER_CAUSES } from "@stll/render-probe";
+import type { RenderSnapshot } from "@stll/render-probe";
+import { formatRenderReport } from "@stll/render-probe/report";
+import { reactCompilerBunPlugin } from "@stll/scripts/src/react-compiler-bun-plugin";
 
+import type { ChatInputDraft } from "@/components/chat-editor-provider";
+import type { ChatThreadDomSession } from "@/components/chat/chat-thread-dom-page";
 import {
   STREAM_CHUNK_COMMIT_BUDGET,
   STREAM_EVENT_KIND,
   streamChunkKindOf,
 } from "@/features/chat/stream-chunk-commit-budget";
 import type { StreamChunkKind } from "@/features/chat/stream-chunk-commit-budget";
+import translations from "@/i18n/langs/en.json";
 import { browserStorage } from "@/lib/account/browser-storage";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
@@ -33,10 +40,19 @@ const sessionArea = () =>
 // of tiny deltas, a few milliseconds apart, through the page's real runtime
 // and messages view; a fake server stands where the network is, and a
 // `Profiler` at the page's root counts its commits while the deltas arrive.
+// The render probe names what each of those commits rendered, so a failure
+// says which components a kind kept re-rendering.
 
 // A DOM for this file only. Everything that touches the DOM is loaded after
 // it exists.
 GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
+// React DOM reads its DevTools hook once, when it loads: before any import
+// below reaches it.
+const probe = installRenderProbe();
+// The page renders as it ships: compiled by the React Compiler, as the Vite
+// build compiles it. Without it the page would render far wider than in the
+// app, and a width budget would hold the wrong program.
+Bun.plugin(reactCompilerBunPlugin);
 
 const ORACLE = "chat.render.stream-commits-bounded";
 
@@ -57,9 +73,30 @@ globalThis.fetch = Object.assign(
 const testing = await import("@testing-library/react");
 const { openChatThreadDomPage } =
   await import("@/components/chat/chat-thread-dom-page");
+const { ChatInputSurface } = await import("@/components/chat-input-surface");
+const { CHAT_SEND_SENT, useChatEditor } =
+  await import("@/components/chat-editor-provider");
+const { buildChatRequestMessage } =
+  await import("@/features/chat/lib/build-chat-request-message");
+const { useLatestCallback } = await import("@/hooks/use-latest-callback");
+const { toChatThreadId } = await import("@/lib/chat-thread-ref");
+const { ComposerPlusMenu } =
+  await import("@/components/chat/composer-plus-menu");
+const { ChatPromptImproveButton } =
+  await import("@/components/chat/chat-prompt-improve-button");
+const { ChatComposerActionButton } =
+  await import("@/components/chat/chat-composer-action-button");
 const { __resetChatRequestStateForTests } =
   await import("@/features/chat/chat-runtime-registry");
 const { toSafeId } = await import("@/lib/safe-id");
+
+const UNTOUCHED_COMPONENTS = {
+  ComposerPlusMenu,
+  ChatPromptImproveButton,
+  ChatComposerActionButton,
+} satisfies Parameters<
+  (typeof STREAM_CHUNK_COMMIT_BUDGET)[StreamChunkKind]["untouched"]
+>[0];
 
 const actEnvironment: unknown = Reflect.get(
   globalThis,
@@ -307,7 +344,13 @@ const eventsOfKind = (
 
 // --- The fake server --------------------------------------------------------
 
-type Burst = { firstAt: number | undefined; lastAt: number | undefined };
+type Burst = {
+  firstAt: number | undefined;
+  lastAt: number | undefined;
+  before: RenderSnapshot | undefined;
+  after: RenderSnapshot | undefined;
+  stopEnabled: boolean;
+};
 
 /**
  * Answers the page's chat request with `events` of `kind`, one event every
@@ -318,9 +361,17 @@ const createStreamingServer = (
   kind: StreamChunkKind,
   events: readonly StreamChunk[],
 ) => {
-  const burst: Burst = { firstAt: undefined, lastAt: undefined };
+  const burst: Burst = {
+    firstAt: undefined,
+    lastAt: undefined,
+    before: undefined,
+    after: undefined,
+    stopEnabled: false,
+  };
   const unexpected: string[] = [];
   let finished = false;
+  // Settles when the chat stream has delivered its last event and closed.
+  const streamClosed = Promise.withResolvers<undefined>();
 
   const threadPage = () =>
     Response.json({
@@ -359,17 +410,43 @@ const createStreamingServer = (
         timestamp: TIMESTAMP,
       },
     ];
+    const firstKindIndex = stream.findIndex(
+      (event) => streamChunkKindOf(event) === kind,
+    );
+    const lastKindIndex = stream.findLastIndex(
+      (event) => streamChunkKindOf(event) === kind,
+    );
     const encoder = new TextEncoder();
     let index = 0;
     return new Response(
       new ReadableStream<Uint8Array>({
         pull: async (controller) => {
+          // real-time: the budget is commits per second, so the deltas arrive
+          // at a real pace, as the network delivers them.
           await sleep(DELTA_INTERVAL_MS);
+          // Sending and finishing legitimately change the primary action.
+          // Measure only the chunk burst, after the run-start state settles,
+          // and flush its last throttled update before the run can finish.
+          if (index === firstKindIndex) {
+            // real-time: exclude the run-start notification's throttle window from the chunk sample.
+            await sleep(100);
+            const stop = testing.screen.queryByRole("button", {
+              name: translations.chat.stopResponse,
+            });
+            burst.stopEnabled = stop !== null && !stop.hasAttribute("disabled");
+            burst.before = probe.snapshot();
+          }
+          if (index === lastKindIndex + 1) {
+            // real-time: include the last delta's real-clock throttled notification before the run ends.
+            await sleep(100);
+            burst.after = probe.snapshot();
+          }
           const event = stream[index];
           index += 1;
           if (event === undefined) {
             finished = true;
             controller.close();
+            streamClosed.resolve(undefined);
             return;
           }
           if (streamChunkKindOf(event) === kind) {
@@ -414,7 +491,58 @@ const createStreamingServer = (
     return Response.json({ message: "Not served" }, { status: 404 });
   };
 
-  return { burst, fetch, finished: () => finished, unexpected };
+  return {
+    burst,
+    closed: streamClosed.promise,
+    fetch,
+    finished: () => finished,
+    unexpected,
+  };
+};
+
+// This file is loaded before installing the compiler plugin. Keep the fixture's
+// static inputs outside render and use the same stable submit bridge as the
+// thread page, so the fixture does not introduce uncompiled prop churn.
+const COMPOSER_THREAD_REF = {
+  scope: "global",
+  threadId: toChatThreadId(THREAD_ID),
+} as const;
+const COMPOSER_CONTEXT = {
+  activeOrganizationId: ORGANIZATION_ID,
+  threadRef: COMPOSER_THREAD_REF,
+};
+const RESERVED_COMMANDS = {
+  empty: { hasPersistedThread: false },
+  persisted: { hasPersistedThread: true },
+} as const;
+
+// Include the real composer only in this render budget. The shared thread
+// fixture otherwise exercises the transcript without mounting an editor.
+const Composer = ({
+  session: { isGenerating, sendMessage, stop, messages },
+}: {
+  session: ChatThreadDomSession;
+}) => {
+  const controller = useChatEditor({ threadRef: COMPOSER_THREAD_REF });
+  const onSubmit = useLatestCallback(async (draft: ChatInputDraft) => {
+    await sendMessage(await buildChatRequestMessage(draft));
+    return CHAT_SEND_SENT;
+  });
+  return (
+    <ChatInputSurface
+      controller={controller}
+      context={COMPOSER_CONTEXT}
+      isGenerating={isGenerating}
+      skillsOrganizationId={ORGANIZATION_ID}
+      reservedCommands={
+        messages.length > 0
+          ? RESERVED_COMMANDS.persisted
+          : RESERVED_COMMANDS.empty
+      }
+      onStop={stop}
+      onSubmit={onSubmit}
+    />
+  );
 };
 
 // --- The measurement --------------------------------------------------------
@@ -422,17 +550,27 @@ const createStreamingServer = (
 /** Streams `kind` to a freshly loaded page; returns the page's commit rate
  *  while the kind's deltas arrived. */
 const commitRateWhileStreaming = async (kind: StreamChunkKind) => {
+  probe.reset();
   const events = STREAMS[kind]();
   const server = createStreamingServer(kind, events);
   routeRequest = server.fetch;
   const commitTimes: number[] = [];
   const page = await openChatThreadDomPage({
+    renderComposer: (session) => <Composer session={session} />,
     onRender: (_id, _phase, _actual, _base, _start, commitTime) => {
       commitTimes.push(commitTime);
     },
     organizationId: ORGANIZATION_ID,
     threadId: THREAD_ID,
   });
+  const mounted = probe.snapshot();
+  for (const component of Object.values(UNTOUCHED_COMPONENTS)) {
+    expect(
+      mounted.components[component.name]?.renders ?? 0,
+      `${component.name} mounted`,
+    ).toBeGreaterThan(0);
+  }
+  probe.reset();
   const sent = Result.tryPromise(
     async () =>
       await page.session().sendMessage({
@@ -440,12 +578,20 @@ const commitRateWhileStreaming = async (kind: StreamChunkKind) => {
         id: toSafeId<"chatMessage">(USER_MESSAGE_ID),
       }),
   );
-  for (let wait = 0; wait < 2000 && !server.finished(); wait += 1) {
-    await sleep(5);
-  }
+  await server.closed;
   // Let the page settle what the end of the run started.
   await sleep(100);
   expect(await sent).toEqual(Result.ok(undefined));
+  expect(server.burst.stopEnabled, "Stop is enabled during the burst").toBe(
+    true,
+  );
+  await testing.waitFor(() => {
+    expect(
+      testing
+        .within(page.view.container)
+        .queryByRole("button", { name: translations.chat.sendPrompt }),
+    ).not.toBeNull();
+  });
   const { firstAt, lastAt } = server.burst;
   if (firstAt === undefined || lastAt === undefined) {
     return expect.unreachable(`No ${kind} event reached the page`);
@@ -453,8 +599,32 @@ const commitRateWhileStreaming = async (kind: StreamChunkKind) => {
   const commits = commitTimes.filter(
     (at) => at >= firstAt && at <= lastAt,
   ).length;
+  const renders = probe.snapshot();
+  const before =
+    server.burst.before ?? panic("No chunk burst start was measured");
+  const after = server.burst.after ?? panic("No chunk burst end was measured");
+  const controls = Object.fromEntries(
+    Object.values(UNTOUCHED_COMPONENTS).map(({ name }) => {
+      const previous = before.components[name];
+      const next = after.components[name];
+      return [
+        name,
+        {
+          renders: (next?.renders ?? 0) - (previous?.renders ?? 0),
+          causes: Object.fromEntries(
+            RENDER_CAUSES.map((cause) => [
+              cause,
+              (next?.causes[cause] ?? 0) - (previous?.causes[cause] ?? 0),
+            ]),
+          ),
+        },
+      ] as const;
+    }),
+  );
   return {
     commits,
+    controls,
+    renders,
     commitsPerSecond: Math.round((commits * 1000) / (lastAt - firstAt)),
     finished: server.finished(),
     kindEvents: eventsOfKind(events, kind).length,
@@ -488,14 +658,39 @@ describe(`${ORACLE}: the thread page's commit rate while each kind of chunk stre
   });
 
   for (const kind of KINDS) {
-    const { commitsPerSecond: budget, streams } =
-      STREAM_CHUNK_COMMIT_BUDGET[kind];
+    const {
+      commitsPerSecond: budget,
+      streams,
+      unchangedPropsRendersPerCommit,
+      untouched,
+    } = STREAM_CHUNK_COMMIT_BUDGET[kind];
     test(`the thread page commits at a bounded rate while ${kind} streams`, async () => {
       const measured = await commitRateWhileStreaming(kind);
+      console.info(
+        JSON.stringify({
+          kind,
+          commits: measured.commits,
+          commitsPerSecond: measured.commitsPerSecond,
+          controls: measured.controls,
+        }),
+      );
       expect(measured.unexpected).toEqual([]);
       expect(measured.finished).toBe(true);
-      const detail = `${ORACLE}: ${String(measured.commits)} commits while ${streams} streamed (${String(measured.kindEvents)} events), budget ${String(budget)}/s`;
+      // The probe saw the page's commits: React loaded after it.
+      expect(measured.renders.commits).toBeGreaterThan(0);
+      const detail = `${ORACLE}: ${String(measured.commits)} commits while ${streams} streamed (${String(measured.kindEvents)} events), budget ${String(budget)}/s\n${formatRenderReport(measured.renders)}`;
+      for (const name of untouched(UNTOUCHED_COMPONENTS)) {
+        expect(
+          measured.controls[name]?.renders ??
+            panic(`No measurement for ${name}`),
+          `${name} must stay untouched\n${JSON.stringify(measured.controls, null, 2)}\n${detail}`,
+        ).toBe(0);
+      }
       expect(measured.commitsPerSecond, detail).toBeLessThanOrEqual(budget);
-    }, 30_000);
+      expect(
+        measured.renders.causes.parent / measured.renders.commits,
+        `${ORACLE}: components rendered with unchanged props while ${streams} streamed, budget ${String(unchangedPropsRendersPerCommit)} a commit\n${formatRenderReport(measured.renders)}`,
+      ).toBeLessThanOrEqual(unchangedPropsRendersPerCommit);
+    });
   }
 });

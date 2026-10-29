@@ -4,10 +4,10 @@ import type { SQL } from "drizzle-orm";
 
 import { isDocumentReferenceQuery } from "@stll/api-contract";
 import {
-  normalizeUnicode,
   applyArabicFolds,
-  foldToAscii,
   arabicNormalize,
+  foldToAscii,
+  normalizeUnicode,
 } from "@stll/text-normalize";
 
 const PREFIX_QUERY_TOKEN_LIMIT = 8;
@@ -582,6 +582,60 @@ const astToTsQuery = (ast: SearchAst): string => {
       return panic(`Unhandled ast: ${String(ast)}`);
     }
   }
+};
+
+type PositiveSearchAst =
+  | Extract<SearchAst, { type: "term" }>
+  | { type: "and" | "or"; left: PositiveSearchAst; right: PositiveSearchAst };
+
+/** NULL represents an unrestricted branch, so dropping a negation from OR widens to true. */
+const positiveCandidateAst = (
+  ast: SearchAst,
+  negated = false,
+): PositiveSearchAst | null => {
+  switch (ast.type) {
+    case "term":
+      return negated ? null : ast;
+    case "not":
+      return positiveCandidateAst(ast.child, !negated);
+    case "and":
+    case "or": {
+      let type = ast.type;
+      if (negated) {
+        type = ast.type === "and" ? "or" : "and";
+      }
+      const left = positiveCandidateAst(ast.left, negated);
+      const right = positiveCandidateAst(ast.right, negated);
+      if (type === "or" && (left === null || right === null)) {
+        return null;
+      }
+      if (left === null) {
+        return right;
+      }
+      if (right === null) {
+        return left;
+      }
+      return { type, left, right };
+    }
+    default:
+      ast satisfies never;
+      return panic("Unknown search candidate AST");
+  }
+};
+
+/** Candidates may contain text removed before admission; only positive constraints are safe here. */
+export const buildSearchCandidateTsQuery = (query: string): SQL | null => {
+  if (!isAdvancedQuery(query.trim())) {
+    return buildSearchTsQuery(query);
+  }
+  const ast = parseAdvancedSearchAst(query, "compatible");
+  if (ast === null || !hasPositiveTerm(ast)) {
+    return buildSearchTsQuery(query);
+  }
+  const candidate = positiveCandidateAst(ast);
+  return candidate === null
+    ? null
+    : sql`to_tsquery('simple', unaccent(${astToTsQuery(candidate)}))`;
 };
 
 const lexemeGroupToTsQuery = (lexemes: string[]): string => {

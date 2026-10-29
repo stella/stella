@@ -1,19 +1,30 @@
 import { entityContextProjection } from "@/api/db/entity-feature-policies";
 import { expenses, timeEntries } from "@/api/db/schema";
-import { INVOICE_LINE_COLUMNS } from "@/api/handlers/invoices/invoice-lines";
+import { INVOICE_LINE_COLUMNS } from "@/api/lib/billing/invoice-lines";
+import {
+  INVOICE_PAYMENT_COLUMNS,
+  INVOICE_PAYMENT_ORDER,
+} from "@/api/lib/billing/invoice-payments";
 
 const timeEntryContext = entityContextProjection(timeEntries.workItemId);
 const expenseContext = entityContextProjection(expenses.matterId);
 
-/** The line items an invoice detail read loads with the invoice row. */
+/** The line items and payments an invoice detail read loads with the invoice row. */
 export const INVOICE_DETAIL_RELATIONS = {
+  // Bounded by LIMITS.invoicePaymentsPerInvoice, enforced when one is recorded.
+  payments: {
+    columns: INVOICE_PAYMENT_COLUMNS,
+    orderBy: INVOICE_PAYMENT_ORDER,
+  },
   lines: {
     columns: INVOICE_LINE_COLUMNS,
+    with: { workspace: { columns: { id: true, name: true, color: true } } },
     orderBy: { position: "asc", id: "asc" },
   },
   timeEntries: {
     columns: {
       id: true,
+      workspaceId: true,
       dateWorked: true,
       billedMinutes: true,
       rateAtEntry: true,
@@ -24,6 +35,7 @@ export const INVOICE_DETAIL_RELATIONS = {
       status: true,
       invoiceAttachment: true,
     },
+    orderBy: { dateWorked: "asc", id: "asc" },
     extras: {
       workItemId: (table: typeof timeEntries) =>
         timeEntryContext.id(table.workItemId),
@@ -35,6 +47,7 @@ export const INVOICE_DETAIL_RELATIONS = {
   expenses: {
     columns: {
       id: true,
+      workspaceId: true,
       dateIncurred: true,
       amount: true,
       currency: true,
@@ -44,6 +57,7 @@ export const INVOICE_DETAIL_RELATIONS = {
       billable: true,
       markup: true,
     },
+    orderBy: { dateIncurred: "asc", id: "asc" },
     extras: {
       matterId: (table: typeof expenses) => expenseContext.id(table.matterId),
       matterReference: (table: typeof expenses) =>

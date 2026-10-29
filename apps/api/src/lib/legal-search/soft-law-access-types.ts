@@ -1,6 +1,8 @@
 import { TaggedError } from "better-result";
 import type { Result } from "better-result";
 
+import { declareFingerprintFields } from "@stll/errors";
+
 export const SOFT_LAW_BLOCK_REASONS = [
   "forbidden",
   "rate_limited",
@@ -11,7 +13,11 @@ export type SoftLawResponse = { bytes: Uint8Array; contentType: string };
 export class SoftLawBlockedError extends TaggedError("SoftLawBlockedError")<{
   message: string;
   reason: SoftLawBlockReason;
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 export class SoftLawAccessError extends TaggedError("SoftLawAccessError")<{
   message: string;
   cause?: unknown;
@@ -23,9 +29,7 @@ export class SoftLawContentTypeMismatchError extends TaggedError(
   contentType: string;
 }> {}
 export type SoftLawFetchError =
-  | SoftLawBlockedError
-  | SoftLawAccessError
-  | SoftLawContentTypeMismatchError;
+  SoftLawBlockedError | SoftLawAccessError | SoftLawContentTypeMismatchError;
 export type SoftLawFetch = ((
   url: string,
   options?: { expectedContentTypes: readonly string[] },

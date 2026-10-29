@@ -3,6 +3,7 @@ import { describe, expect, mock, spyOn, test } from "bun:test";
 
 import { env } from "@/api/env";
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -197,6 +198,7 @@ test("suggested prompts usage refusal calls no model and persists nothing", asyn
   const userId = toSafeId<"user">("user_prompts_refused");
   const threadId = toSafeId<"chatThread">("thread_prompts_refused");
   let entitlementReads = 0;
+  let sourceReads = 0;
   let threadReads = 0;
   let messageReads = 0;
   const persist = mock(() =>
@@ -234,6 +236,10 @@ test("suggested prompts usage refusal calls no model and persists nothing", asyn
       if ("usedAnonymization" in fields) {
         return createSelectQueryMock([{ usedAnonymization: false }]);
       }
+      if ("subjectDecisionId" in fields) {
+        sourceReads += 1;
+        return createSelectQueryMock([]);
+      }
       entitlementReads += 1;
       return createSelectQueryMock([]);
     },
@@ -262,7 +268,8 @@ test("suggested prompts usage refusal calls no model and persists nothing", asyn
         promptCachingEnabled: false,
         query: {},
         request: new Request("https://example.test/prompts"),
-        route: "/prompts",
+        route:
+          "/v1/chat/threads/:threadId/suggested-prompts" satisfies ApiRoutePath,
         safeDb: db.safeDb,
         session: { activeOrganizationId: organizationId },
         user: { id: userId },
@@ -277,6 +284,7 @@ test("suggested prompts usage refusal calls no model and persists nothing", asyn
       },
     });
     expect(entitlementReads).toBe(1);
+    expect(sourceReads).toBe(1);
     expect(threadReads).toBe(1);
     expect(messageReads).toBe(2);
     expect(generator).not.toHaveBeenCalled();

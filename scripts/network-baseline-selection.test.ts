@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import {
-  mkdtempSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -60,8 +60,11 @@ const replay = ({
     `#!/bin/bash
 set -euo pipefail
 endpoint=''
+slurp=false
 for argument in "$@"; do
   case "$argument" in
+    --slurp) slurp=true ;;
+    status=*) echo "the API status filter is unreliable; select by conclusion" >&2; exit 1 ;;
     name=network-baseline-main-*) endpoint="artifacts-\${argument#name=network-baseline-main-}" ;;
     repos/*/actions/workflows/*/runs) endpoint=record-runs ;;
     repos/*/actions/runs/*) endpoint="run-\${argument##*/}" ;;
@@ -76,7 +79,8 @@ if [[ "$endpoint" == "\${REPLAY_MALFORMED:-}" ]]; then
   printf 'not JSON'
   exit 0
 fi
-jq -e --arg key "$endpoint" '.[$key] // error("unrecorded API request: " + $key)' "$REPLAY_DIR/responses.json"
+jq -e --arg key "$endpoint" --argjson slurp "$slurp" '.[$key] // error("unrecorded API request: " + $key)
+  | if $slurp then (if type == "array" then . else [.] end) else . end' "$REPLAY_DIR/responses.json"
 `,
   );
   try {
@@ -229,6 +233,48 @@ for (const event of ["schedule", "workflow_dispatch"]) {
   });
 }
 
+test("only a successful recording run makes its commit a candidate", () => {
+  const runs = { total_count: 1, workflow_runs: [] as unknown[] };
+  for (const conclusion of ["failure", "cancelled", null]) {
+    runs.workflow_runs = [
+      { event: "workflow_dispatch", head_sha: fixture.expected, conclusion },
+    ];
+    const result = replay({ overrides: { "record-runs": runs } });
+    expect(result.code, String(conclusion)).toBe(0);
+    expect(result.stdout, String(conclusion)).toContain("recorded=false");
+    expect(result.summary, String(conclusion)).toContain(
+      `candidate=${fixture.expected} artifacts=not-queried verdict=no-successful-record-run`,
+    );
+  }
+});
+
+test("a successful recording behind a full page of unsuccessful runs is found", () => {
+  const failed = Array.from({ length: 100 }, () => ({
+    event: "schedule",
+    head_sha: fixture.base,
+    conclusion: "failure",
+  }));
+  const result = replay({
+    overrides: {
+      "record-runs": [
+        { total_count: 101, workflow_runs: failed },
+        {
+          total_count: 101,
+          workflow_runs: [
+            {
+              event: "push",
+              head_sha: fixture.expected,
+              conclusion: "success",
+            },
+          ],
+        },
+      ],
+    },
+  });
+  expect(result.code).toBe(0);
+  expect(result.stdout).toContain(`selected=${fixture.expected} recorded=true`);
+});
+
 test("a recording artifact cannot claim a different main commit", () => {
   const result = replay({
     walk: fixture.walk.slice(0, fixture.walk.indexOf(fixture.expected) + 1),
@@ -251,7 +297,9 @@ test("a retained delivery from an earlier push recorder remains eligible", () =>
     overrides: {
       "record-runs": {
         total_count: 1,
-        workflow_runs: [{ event: "push", head_sha: fixture.expected }],
+        workflow_runs: [
+          { event: "push", head_sha: fixture.expected, conclusion: "success" },
+        ],
       },
     },
   });

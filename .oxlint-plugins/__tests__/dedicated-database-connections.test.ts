@@ -22,17 +22,26 @@ describe("dedicated connection ownership", () => {
   });
 
   test("admits the owner and each lifecycle consumer", async () => {
-    for (const sourcePath of [
-      ...ownership.owner,
-      ...ownership.enforcement.allowed.map(({ path }) => path),
-    ]) {
-      expect(
-        await lintSingleRule("confine-owner", source, {
-          ruleOptions: { entries: [ownership] },
-          sourcePath,
-        }),
-      ).toEqual([]);
-    }
+    const results = await Promise.all(
+      [
+        ...ownership.owner,
+        ...ownership.enforcement.allowed.map(({ path }) => path),
+      ].map(async (lintCase, index) => {
+        const sourcePath = lintCase;
+
+        return {
+          label: `case ${index + 1}: ${JSON.stringify(lintCase)}`,
+          result: await lintSingleRule("confine-owner", source, {
+            ruleOptions: { entries: [ownership] },
+            sourcePath,
+          }),
+          expected: [],
+        };
+      }),
+    );
+    expect(results.map(({ label, result }) => ({ label, result }))).toEqual(
+      results.map(({ label, expected }) => ({ label, result: expected })),
+    );
   });
 });
 

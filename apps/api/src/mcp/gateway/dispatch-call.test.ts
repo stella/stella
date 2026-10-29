@@ -3,10 +3,10 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import type { LoadedChatSkill } from "@/api/lib/agent-skills/skills";
 import { toSafeId } from "@/api/lib/branded-types";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { dispatchGatewayToolCall } from "@/api/mcp/gateway/dispatch-call";
 import type { ResolvedSkillTool } from "@/api/mcp/gateway/skills";
 import { structuredErrorResult } from "@/api/mcp/tool-utils";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 // Mock the two dispatch collaborators so this file exercises only
@@ -27,7 +27,7 @@ const dependencies = {
   resolveSkillTool: resolveSkillToolMock,
 };
 
-const context = asTestRaw<McpRequestContext>({
+const context = asTestRaw<AuthorizedMcpRequestContext>({
   organizationId: toSafeId<"organization">("org_1"),
   userId: toSafeId<"user">("user_1"),
 });
@@ -44,6 +44,7 @@ const resolvedSkill = asTestRaw<ResolvedSkillTool>({
 const loadedSkill = {
   body: "# Alpha skill body",
   compatibility: "stella>=1",
+  contentHash: "0".repeat(64),
   description: "Alpha",
   id: toSafeId<"agentSkill">("skill_alpha"),
   license: "MIT",
@@ -154,7 +155,7 @@ describe("dispatchGatewayToolCall", () => {
 
     const result = await dispatchGatewayToolCall({
       args: {},
-      context: asTestRaw<McpRequestContext>({
+      context: asTestRaw<AuthorizedMcpRequestContext>({
         ...context,
         grantedScopes: ["stella:skills"],
       }),

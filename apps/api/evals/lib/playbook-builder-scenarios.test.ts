@@ -7,8 +7,8 @@ import type { Position } from "@/api/lib/workflow/playbook-positions";
 import type { InternalToolResult } from "@/api/mcp/tool-types";
 
 import {
-  BUILDER_SCENARIOS,
   answerMatterTool,
+  BUILDER_SCENARIOS,
   scoreScenario,
 } from "./playbook-builder-scenarios";
 import type {

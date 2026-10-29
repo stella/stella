@@ -386,7 +386,7 @@ const presentOr = (text: string | undefined) =>
 /** The court's own paragraph, plus whatever publisher matter a case adds. */
 const astWith = (blocks: readonly ParagraphBlock[]) => ({
   ...ast,
-  blocks: [...ast.blocks, ...blocks],
+  blocks: [...blocks, ...ast.blocks],
 });
 
 const publisherParagraph = (
@@ -409,44 +409,47 @@ const renderTopMatter = ({
   documentAst = ast,
   fields = {},
   notesByAnchorId,
-}: Partial<
-  Pick<TextDecision, "courtAbbreviation" | "courtTier" | "documentAst">
-> & {
+}: Partial<Pick<TextDecision, "courtAbbreviation" | "courtTier">> & {
   analysis?: DecisionAnalysis;
+  documentAst?: DocumentAst | null;
   fields?: TextFieldOverrides;
   notesByAnchorId?: ReadonlyMap<string, ReactNode>;
 } = {}): string =>
   renderToStaticMarkup(
-    <IntlProvider locale="en" messages={messages} timeZone="UTC">
-      <FormattingProvider locale="en" timeZone="UTC">
-        <WebReaderPresentationProvider>
-          <DecisionText
-            surface="development"
-            aiHeadnotes={
-              analysis === undefined ? null : (
-                <AiHeadnotes
-                  analysis={analysis}
-                  onAnchorClick={() => undefined}
-                />
-              )
-            }
-            decision={textDecision({
-              courtAbbreviation,
-              courtTier,
-              documentAst,
-              textFields: {
-                abstract: presentOr(fields.abstract),
-                headnote: absent,
-                legalSentence: presentOr(fields.legalSentence),
-                summary: presentOr(fields.summary),
-              },
-            })}
-            decisionId="dec-1"
-            notesByAnchorId={notesByAnchorId}
-          />
-        </WebReaderPresentationProvider>
-      </FormattingProvider>
-    </IntlProvider>,
+    <QueryClientProvider client={new QueryClient()}>
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
+        <FormattingProvider locale="en" timeZone="UTC">
+          <WebReaderPresentationProvider>
+            <DecisionText
+              surface="development"
+              aiHeadnotes={
+                analysis === undefined ? null : (
+                  <AiHeadnotes
+                    analysis={analysis}
+                    blocks={documentAst?.blocks ?? []}
+                    language="en"
+                    onAnchorClick={() => undefined}
+                  />
+                )
+              }
+              decision={textDecision({
+                courtAbbreviation,
+                courtTier,
+                documentAst,
+                textFields: {
+                  abstract: presentOr(fields.abstract),
+                  headnote: absent,
+                  legalSentence: presentOr(fields.legalSentence),
+                  summary: presentOr(fields.summary),
+                },
+              })}
+              decisionId="dec-1"
+              notesByAnchorId={notesByAnchorId}
+            />
+          </WebReaderPresentationProvider>
+        </FormattingProvider>
+      </IntlProvider>
+    </QueryClientProvider>,
   );
 
 describe("a decision opened at a passage", () => {
@@ -575,12 +578,12 @@ describe("what a decision opens with", () => {
       documentAst: astWith([
         publisherParagraph("p-h", "headnotes", headnote),
         publisherParagraph("p-s", "syllabus", "Publisher syllabus."),
-        publisherParagraph("p-c", "counsel", "For the applicant: counsel."),
+        publisherParagraph("p-c", "apparatus", "Publisher case information."),
       ]),
     });
     const fold = markup.slice(markup.indexOf("reader-apparatus"));
 
-    expect(fold).toContain("For the applicant: counsel.");
+    expect(fold).toContain("Publisher case information.");
     expect(fold).not.toContain(headnote);
     expect(fold).not.toContain("Publisher syllabus.");
     expect(occurrences(markup, "Publisher syllabus.")).toBe(1);
@@ -625,13 +628,19 @@ const sectionMark = (markup: string, text: string): string => {
 // would also rank one author above the other.
 describe("a headnote the court wrote and one a model wrote", () => {
   const analysis = {
-    version: 3,
+    version: 4,
     generatedAt: "2026-02-01T00:00:00.000Z",
     model: "test-model",
     inputFingerprint: "fingerprint-1",
     tree: [],
-    holding: { anchors: [], language: "cs", text: "Model holding sentence." },
-    abstract: { language: "cs", text: "Model abstract sentence." },
+    holding: {
+      spans: [{ text: "Model holding sentence.", anchors: [] }],
+      language: "cs",
+    },
+    abstract: {
+      spans: [{ text: "Model abstract sentence.", anchors: [] }],
+      language: "cs",
+    },
     topics: [],
   } satisfies DecisionAnalysis;
   const courtHeadnote = "Publisher headnote sentence.";

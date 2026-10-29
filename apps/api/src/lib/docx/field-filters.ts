@@ -47,13 +47,13 @@ import {
 } from "@/api/lib/template-binding/binding-sources";
 
 import {
-  fieldMetaSchema,
-  LOOKUP_REGISTRIES,
-  SMALLEST_MAXIMUM,
   type FieldLookupFormat,
   type FieldMeta,
-  type FieldValidation,
+  fieldMetaSchema,
   type FieldSource,
+  type FieldValidation,
+  LOOKUP_REGISTRIES,
+  SMALLEST_MAXIMUM,
 } from "./types";
 
 // ── The catalogue ────────────────────────────────────────

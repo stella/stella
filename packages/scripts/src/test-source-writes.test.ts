@@ -236,6 +236,12 @@ test("only Bun.write is treated as the filesystem write API", () => {
   ).toEqual([]);
   expect(
     inspectSourceWrites(
+      `let save; ({ writeFileSync: save } = fixture()); save(${destination}, "");`,
+      "packages/scripts/src/example.test.ts",
+    ),
+  ).toEqual([]);
+  expect(
+    inspectSourceWrites(
       `fixture.write(${destination}, "");`,
       "packages/scripts/src/example.test.ts",
     ),
@@ -252,6 +258,8 @@ test("the census rejects every writer through direct and derived source destinat
   const destinations = [
     'import.meta.dir + "/mutation.ts"',
     'path.join(__dirname, "mutation.ts")',
+    'path?.join(import.meta.dir, "mutation.ts")',
+    'import.meta?.dir + "/mutation.ts"',
     'path.resolve(import.meta.dir, "nested", name)',
     'path.join("apps/api/src", name)',
     '"src/mutation.ts"',
@@ -268,6 +276,15 @@ test("the census rejects every writer through direct and derived source destinat
       expect(
         inspectSourceWrites(fixture, "apps/api/src/tests/example.test.ts"),
         fixture,
+      ).toHaveLength(argumentIndexes.length);
+      const alias = writer === "write" ? "Bun?.write" : `fs?.${writer}`;
+      const aliasedFixture = `const target = ${destination}; const save = ${alias}; save(${arguments_.join(", ")});`;
+      expect(
+        inspectSourceWrites(
+          aliasedFixture,
+          "apps/api/src/tests/example.test.ts",
+        ),
+        aliasedFixture,
       ).toHaveLength(argumentIndexes.length);
     }
   }

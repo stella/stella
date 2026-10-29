@@ -14,10 +14,10 @@ import {
 } from "@/api/handlers/chat/chat-message-parts";
 import {
   canAcceptChatTurnOnTx,
-  cutShortAssistantMessage,
   ChatTurnNotOwnedError,
   ChatTurnStopRequestedError,
   claimChatTurnForExecutionOnTx,
+  cutShortAssistantMessage,
   insertChatTurnAcceptanceOnTx,
   reservePlannedChatTurnOnTx,
   settleChatTurnOnTx,
@@ -50,7 +50,7 @@ import type {
   PersistableChatMessage,
   PersistableTerminalAssistantMessage,
 } from "@/api/handlers/chat/types";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, createErrorCapture } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -64,8 +64,10 @@ import {
   type ChatThreadNamesRead,
   recordChatThreadNamesOnTx,
 } from "@/api/lib/chat/thread-names";
-import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import { lockThreadStoredContentTransitionOnTx } from "@/api/lib/chat/thread-stored-content-egress";
 import { HandlerError, TelemetryError } from "@/api/lib/errors/tagged-errors";
+import { isThreadMemoryEnabled } from "@/api/lib/memory/memory-access";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import type { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
@@ -251,7 +253,15 @@ const insertMessages = async ({
     return Result.ok(NO_TURN_WRITES);
   }
 
+  const marksUsedAnonymization = shouldMarkThreadUsedAnonymization({
+    messages,
+    sendMode: acceptedSendMode,
+  });
+
   const insertResult = await safeDb(async (tx) => {
+    if (marksUsedAnonymization) {
+      await lockThreadStoredContentTransitionOnTx(tx, threadId);
+    }
     if (
       !(await reserveChatTurnAcceptanceOnTx({
         acceptance: turnAcceptance,
@@ -268,6 +278,7 @@ const insertMessages = async ({
       workspaceId,
     });
     await applyThreadNamesOnTx({ names: threadNames, threadId, tx });
+    const memoryEnabled = await isThreadMemoryEnabled({ tx, threadId, userId });
     await tx.insert(chatMessages).values(
       messages.map((persistedMessage) => ({
         id: persistedMessage.id,
@@ -276,20 +287,14 @@ const insertMessages = async ({
         userId,
         role: persistedMessage.role,
         content: chatMessageContentFromMessage(persistedMessage),
-        memoryExtractionEligible:
-          isDeploymentFeatureEnabled("FEATURE_AI_MEMORY"),
+        memoryExtractionEligible: memoryEnabled,
       })),
     );
     await tx
       .update(chatThreads)
       .set({
         updatedAt: new Date(),
-        ...(shouldMarkThreadUsedAnonymization({
-          messages,
-          sendMode: acceptedSendMode,
-        })
-          ? { usedAnonymization: true }
-          : {}),
+        ...(marksUsedAnonymization ? { usedAnonymization: true } : {}),
       })
       .where(eq(chatThreads.id, threadId));
 
@@ -347,7 +352,13 @@ export const persistMessage = async (props: PersistMessageProps) => {
   // actually changed. Fire-and-forget: indexing must never block or
   // fail a chat turn.
   if (Result.isOk(result) && props.persistencePlan.type !== "none") {
-    props.indexThread(props.threadId).catch(captureError);
+    props
+      .indexThread(props.threadId)
+      .catch(
+        createErrorCapture(
+          handlerErrorContext("persistMessage.props_indexThread"),
+        ),
+      );
   }
   return result;
 };
@@ -669,11 +680,11 @@ const reportStoredTurnDefects = ({
       new ChatTurnUnsettledToolCallError({
         message: "A settled chat turn stored a tool call without its result",
       }),
-      {
+      handlerErrorContext("chat.storedTurn.unsettledToolCall", {
         outcome,
         tool_call_states: unsettled.map(({ state }) => state).join(","),
         unsettled_count: String(unsettled.length),
-      },
+      }),
     );
   }
   const dropped =
@@ -685,11 +696,11 @@ const reportStoredTurnDefects = ({
       new ChatTurnDroppedPartsError({
         message: "A continuation stored its message without earlier parts",
       }),
-      {
+      handlerErrorContext("chat.storedTurn.droppedParts", {
         dropped_tool_calls: String(dropped.droppedToolCallIds.length),
         outcome,
         part_count_drop: String(dropped.partCountDrop),
-      },
+      }),
     );
   }
 };
@@ -865,7 +876,14 @@ const runPersistMessage = async ({
   }
 
   if (persistencePlan.type === "update") {
+    const marksUsedAnonymization = shouldMarkThreadUsedAnonymization({
+      messages: [persistencePlan.message],
+      sendMode: acceptedSendMode,
+    });
     const updateResult = await safeDb(async (tx) => {
+      if (marksUsedAnonymization) {
+        await lockThreadStoredContentTransitionOnTx(tx, threadId);
+      }
       if (
         !(await reserveChatTurnAcceptanceOnTx({
           acceptance: turnAcceptance,
@@ -926,7 +944,7 @@ const runPersistMessage = async ({
         .set({
           role: persistencePlan.message.role,
           content: chatMessageContentFromMessage(persistencePlan.message),
-          ...(!isDeploymentFeatureEnabled("FEATURE_AI_MEMORY") && {
+          ...(!(await isThreadMemoryEnabled({ tx, threadId, userId })) && {
             memoryExtractionEligible: false,
           }),
         })
@@ -935,12 +953,7 @@ const runPersistMessage = async ({
         .update(chatThreads)
         .set({
           updatedAt: new Date(),
-          ...(shouldMarkThreadUsedAnonymization({
-            messages: [persistencePlan.message],
-            sendMode: acceptedSendMode,
-          })
-            ? { usedAnonymization: true }
-            : {}),
+          ...(marksUsedAnonymization ? { usedAnonymization: true } : {}),
         })
         .where(eq(chatThreads.id, threadId));
 
@@ -987,6 +1000,9 @@ const runPersistMessage = async ({
       return Result.ok(NO_TURN_WRITES);
     }
     const turnResult = await safeDb(async (tx) => {
+      if (marksUsedAnonymization) {
+        await lockThreadStoredContentTransitionOnTx(tx, threadId);
+      }
       if (
         !(await reserveChatTurnAcceptanceOnTx({
           acceptance: turnAcceptance,
@@ -1029,7 +1045,14 @@ const runPersistMessage = async ({
     );
   }
 
+  const marksUsedAnonymization = shouldMarkThreadUsedAnonymization({
+    messages: [persistencePlan.insertMessage],
+    sendMode: acceptedSendMode,
+  });
   const replaceResult = await safeDb(async (tx) => {
+    if (marksUsedAnonymization) {
+      await lockThreadStoredContentTransitionOnTx(tx, threadId);
+    }
     if (
       !(await reserveChatTurnAcceptanceOnTx({
         acceptance: turnAcceptance,
@@ -1079,18 +1102,17 @@ const runPersistMessage = async ({
       threadId,
       userId,
       workspaceId,
-      memoryExtractionEligible: isDeploymentFeatureEnabled("FEATURE_AI_MEMORY"),
+      memoryExtractionEligible: await isThreadMemoryEnabled({
+        tx,
+        threadId,
+        userId,
+      }),
     });
     await tx
       .update(chatThreads)
       .set({
         updatedAt: new Date(),
-        ...(shouldMarkThreadUsedAnonymization({
-          messages: [insertedMessage],
-          sendMode: acceptedSendMode,
-        })
-          ? { usedAnonymization: true }
-          : {}),
+        ...(marksUsedAnonymization ? { usedAnonymization: true } : {}),
       })
       .where(eq(chatThreads.id, threadId));
     await recordAuditEvent(tx, {
@@ -1209,7 +1231,15 @@ export const persistAcceptedMessageWithClaim = async ({
   if (Result.isError(result.value)) {
     return Result.err(result.value.error);
   }
-  persistenceProps.indexThread(persistenceProps.threadId).catch(captureError);
+  persistenceProps
+    .indexThread(persistenceProps.threadId)
+    .catch(
+      createErrorCapture(
+        handlerErrorContext(
+          "persistAcceptedMessageWithClaim.persistenceProps_indexThread",
+        ),
+      ),
+    );
   return Result.ok(result.value.value);
 };
 
@@ -1244,6 +1274,14 @@ export const persistClaimedReplayMessage = async ({
   if (result.value === null) {
     return Result.ok(null);
   }
-  persistenceProps.indexThread(persistenceProps.threadId).catch(captureError);
+  persistenceProps
+    .indexThread(persistenceProps.threadId)
+    .catch(
+      createErrorCapture(
+        handlerErrorContext(
+          "persistClaimedReplayMessage.persistenceProps_indexThread",
+        ),
+      ),
+    );
   return Result.ok(result.value.execution);
 };

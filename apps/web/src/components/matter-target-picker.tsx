@@ -36,9 +36,9 @@ import { filterMatterPickerItems } from "@/components/matter-picker-search.logic
 import {
   canMoveMatterFolder,
   discardPendingMatterFolder,
-  MAX_FOLDER_NAME_LENGTH,
-  matterFolderPath,
   matterFolderMoveDestinations,
+  matterFolderPath,
+  MAX_FOLDER_NAME_LENGTH,
   reparentPendingMatterFolder,
   resolveMatterTarget,
   selectExistingMatterTarget,
@@ -59,7 +59,8 @@ import {
   dropTargetForElements,
 } from "@/lib/drag-and-drop/element-registration";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import {
   useCreateEntities,
   useMoveEntity,
@@ -440,8 +441,8 @@ export const MatterTargetPicker = ({
   const [search, setSearch] = useState("");
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const dataQuery = useQuery(workspacesOptions(activeOrganizationId));
-  const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  const dataView = queryView(dataQuery);
+  useQueryViewError(dataView, "MatterTargetPicker:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
 
   // The endpoint returns matters ordered by most recent activity; keep that
@@ -564,8 +565,7 @@ type FolderPickerProps = {
 };
 
 type FolderDraft =
-  | { type: "create"; name: string }
-  | { type: "edit"; name: string };
+  { type: "create"; name: string } | { type: "edit"; name: string };
 
 const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
   const t = useTranslations();

@@ -220,12 +220,3 @@ export const formatContextualTimestamp = ({
     MEDIUM_DATE_SHORT_TIME_FORMAT,
   );
 };
-
-/** Whether `date` lies within the last `seconds`; false for an unparsable date. */
-export const isWithinLast = (date: Date | string, seconds: number): boolean => {
-  const then = toInstant(date)?.epochMilliseconds;
-  if (then === undefined) {
-    return false;
-  }
-  return Temporal.Now.instant().epochMilliseconds - then <= seconds * 1000;
-};

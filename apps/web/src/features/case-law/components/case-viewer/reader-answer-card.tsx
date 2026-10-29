@@ -1,5 +1,8 @@
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 
+import { useQuery } from "@tanstack/react-query";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { ReaderAnnotationVisibility } from "@stll/api-contract/legal-reader-annotations";
@@ -14,10 +17,66 @@ import { Textarea } from "@stll/ui/textarea";
 import { cn } from "@stll/ui/utils";
 
 import { CopyActionButton } from "@/components/copy-action-button";
+import { CitationChip } from "@/components/references/citation-chip";
+import { decisionOptions } from "@/features/case-law/queries/decisions";
 
 import { AnnotationVisibilityToggle } from "./analysis/annotation-visibility-toggle";
-import { readerAnswerErrorCodeKind } from "./reader-answers.logic";
-import type { ReaderAnswerFailureKind } from "./reader-answers.logic";
+import type { ReaderAnswerCitationTarget } from "./reader-answer-citation.logic";
+import { ReaderAnswerMarkdown } from "./reader-answer-markdown";
+
+type ReaderAnswerCitationChipProps = {
+  citation: ReaderAnswerCitation;
+  /** The open decision's language, for the paragraph text a chip previews. */
+  language: string;
+  onCitation: (citation: ReaderAnswerCitation) => void;
+  target: ReaderAnswerCitationTarget;
+};
+
+/**
+ * Fetches a cited decision while its chip is on screen; the workspace observes
+ * the same cache entry and redraws the chip once the decision arrives.
+ */
+const PendingCitedDecisionChip = ({ decisionId }: { decisionId: string }) => {
+  useQuery(decisionOptions(decisionId));
+  return <Skeleton className="h-4 w-16 rounded-sm" />;
+};
+
+/** Both chips follow the citation the way the card always has. */
+const ReaderAnswerCitationChip = ({
+  citation,
+  language,
+  onCitation,
+  target,
+}: ReaderAnswerCitationChipProps) => {
+  switch (target.type) {
+    case "paragraph":
+      return (
+        <CitationChip
+          kind="paragraph"
+          language={language}
+          onAnchorClick={() => onCitation(citation)}
+          reference={target.reference}
+        />
+      );
+    case "decision":
+      return (
+        <CitationChip
+          kind="decision"
+          decision={target.decision}
+          onOpen={() => onCitation(citation)}
+          paragraphNumber={target.paragraphNumber}
+          presentation="inline"
+        />
+      );
+    case "pending":
+      return <PendingCitedDecisionChip decisionId={citation.decisionId} />;
+    case "unresolved":
+      return null;
+    default:
+      target satisfies never;
+      return panic("Unhandled reader answer citation target");
+  }
+};
 
 export type ReaderAnswerCardProps = {
   answer: ReaderAnswer;
@@ -29,10 +88,14 @@ export type ReaderAnswerCardProps = {
   onCitation: (citation: ReaderAnswerCitation) => void;
   active: boolean;
   openRevision: number;
-  citationLabel: (citation: ReaderAnswerCitation) => string;
+  citationTarget: (
+    citation: ReaderAnswerCitation,
+  ) => ReaderAnswerCitationTarget;
+  /** The open decision's language. */
+  language: string;
   onOpen: () => void;
-  error?: ReaderAnswerFailureKind | undefined;
   busy: boolean;
+  languagePicker?: ReactNode;
 };
 
 export const ReaderAnswerCard = ({
@@ -45,10 +108,11 @@ export const ReaderAnswerCard = ({
   onCitation,
   active,
   openRevision,
-  citationLabel,
+  citationTarget,
+  language,
   onOpen,
-  error,
   busy,
+  languagePicker,
 }: ReaderAnswerCardProps) => {
   const t = useTranslations();
   const [display, setDisplay] = useState<"expanded" | "minimised">("expanded");
@@ -134,19 +198,10 @@ export const ReaderAnswerCard = ({
   const lastAssistant = answer.messages.findLast(
     (message) => message.role === "assistant",
   );
-  const failure =
-    error ?? readerAnswerErrorCodeKind(lastAssistant?.errorCode ?? null);
   const invalidCitationCount = answer.messages.reduce(
     (count, message) => count + message.invalidCitationCount,
     0,
   );
-  const errorMessages = {
-    budget: t("readerAnswers.budgetError"),
-    model: t("readerAnswers.modelError"),
-    network: t("readerAnswers.networkError"),
-    timeout: t("readerAnswers.timeoutError"),
-  } satisfies Record<NonNullable<ReaderAnswerCardProps["error"]>, string>;
-  const errorText = failure === undefined ? undefined : errorMessages[failure];
   return (
     <section
       aria-label={t("readerAnswers.title")}
@@ -157,7 +212,7 @@ export const ReaderAnswerCard = ({
     >
       <div className="flex items-center justify-between gap-1">
         <span className="text-foreground-muted line-clamp-1">
-          {answer.anchor.quote}
+          {answer.anchor.spans.map(({ quote }) => quote).join(" ")}
         </span>
         <Button
           className="min-h-11 shrink-0"
@@ -189,36 +244,40 @@ export const ReaderAnswerCard = ({
                     : "text-foreground",
                 )}
               >
-                <p className="wrap-break-word whitespace-pre-wrap">
-                  {message.content}
-                </p>
+                {message.content !== "" &&
+                  (message.role === "assistant" ? (
+                    <ReaderAnswerMarkdown
+                      content={message.content}
+                      status={message.status}
+                      citations={message.citations}
+                      renderCitation={(citation) => (
+                        <ReaderAnswerCitationChip
+                          citation={citation}
+                          language={language}
+                          onCitation={onCitation}
+                          target={citationTarget(citation)}
+                        />
+                      )}
+                    />
+                  ) : (
+                    <p className="wrap-break-word whitespace-pre-wrap">
+                      {message.content}
+                    </p>
+                  ))}
                 {message.status === "streaming" && message.content === "" && (
-                  <div role="status" aria-label={t("readerAnswers.loading")}>
-                    <Skeleton className="h-12 rounded-sm" />
+                  <div
+                    role="status"
+                    aria-label={t("readerAnswers.loading")}
+                    className="space-y-2 py-1"
+                  >
+                    <Skeleton className="h-3 w-full rounded-sm" />
+                    <Skeleton className="h-3 w-5/6 rounded-sm" />
+                    <Skeleton className="h-3 w-2/3 rounded-sm" />
                   </div>
                 )}
-                <div className="flex flex-wrap gap-1">
-                  {message.citations.map((citation) => (
-                    <Button
-                      key={`${citation.decisionId}:${citation.paragraphId}`}
-                      className="min-h-11 max-w-full break-all"
-                      size="sm"
-                      type="button"
-                      variant="outline"
-                      onClick={() => onCitation(citation)}
-                    >
-                      {citationLabel(citation)}
-                    </Button>
-                  ))}
-                </div>
               </div>
             ))}
           </div>
-          {errorText && (
-            <p role="alert" className="text-destructive mt-2">
-              {errorText}
-            </p>
-          )}
           {invalidCitationCount > 0 && (
             <p className="text-foreground-muted mt-1">
               {t("readerAnswers.invalidCitations", {
@@ -226,8 +285,11 @@ export const ReaderAnswerCard = ({
               })}
             </p>
           )}
+          {languagePicker}
           <div className="flex flex-wrap items-center gap-1">
             <CopyActionButton
+              variant="ghost"
+              size="sm"
               text={answer.messages
                 .map((message) => message.content)
                 .join("\n\n")}
@@ -257,6 +319,7 @@ export const ReaderAnswerCard = ({
                 </Button>
                 <AnnotationVisibilityToggle
                   shareLabel={t("readerAnswers.share")}
+                  targetType="decision"
                   visibility={answer.visibility}
                   disabled={busy}
                   onToggle={() =>

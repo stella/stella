@@ -19,24 +19,22 @@ import { resolveAccessToken } from "./auth/resolve-access-token.js";
 import { resolveServerUrl } from "./auth/server-resolution.js";
 import { buildApp } from "./build-cli-tree.js";
 import { normalizeProcessExitCode } from "./cli-exit-code.js";
+import { buildVersionNudge } from "./cli-version-nudge.js";
 import { commandNeedsRegistry } from "./command-locality.js";
 import { HOME, XDG_CACHE_HOME } from "./env.js";
 import type { CallerFeatureAccess } from "./feature-command-projection.js";
+import { CLI_VERSION } from "./generated/cli-version.js";
 import { generatedRouteMap } from "./generated/route-map.js";
 import { reportFatalError } from "./main-error-boundary.js";
 import { EXIT_CODES, resolveMcpErrorCodeExit } from "./mcp-constants.js";
 import { preparseServerFlag } from "./preparse-server-flag.js";
-import {
-  formatRegistryDrift,
-  preparseVerboseFlag,
-  removedCommandError,
-  shouldReportRegistryDrift,
-} from "./registry-drift.js";
+import { cachePathFor, readCacheFile } from "./registry-cache.js";
+import { removedCommandError } from "./registry-drift.js";
 import type { CurrentRegistry } from "./registry-refresh.js";
 import {
   refreshRegistryCache,
-  resolveCommandTree,
   requiresFeatureAccessRefresh,
+  resolveCommandTree,
 } from "./registry-refresh.js";
 
 const resolvePreamble = async (
@@ -111,6 +109,34 @@ const refuseAdmission = (
   process.exitCode = resolveMcpErrorCodeExit(refusal.code) ?? EXIT_CODES.server;
 };
 
+const isVersionAdmissionExempt = (argv: readonly string[]): boolean =>
+  argv.length === 0 ||
+  argv.includes("--help") ||
+  argv.includes("-h") ||
+  argv.includes("--version") ||
+  argv.at(0) === "help" ||
+  argv.at(0) === "update";
+
+const cachedUnsupportedLine = async ({
+  serverUrl,
+  cacheEnv,
+}: {
+  serverUrl: string;
+  cacheEnv: { XDG_CACHE_HOME: string | undefined; HOME: string | undefined };
+}): Promise<string | undefined> => {
+  const cached = await readCacheFile(cachePathFor(serverUrl, cacheEnv));
+  if (cached === undefined) {
+    return undefined;
+  }
+  const policy = buildVersionNudge({
+    current: CLI_VERSION,
+    latest: cached.cliLatest,
+    minimum: cached.cliMinimum,
+    lastNudged: cached.lastNudgedVersion,
+  });
+  return policy.unsupported === true ? policy.line : undefined;
+};
+
 const main = async (): Promise<void> => {
   const argv = process.argv.slice(2);
   const isAuthLogin = argv.at(0) === "auth" && argv.at(1) === "login";
@@ -128,6 +154,8 @@ const main = async (): Promise<void> => {
   // rather than only on the ones that resolve a server themselves.
   const serverFlag = preparseServerFlag(argv);
   const { configDir, serverUrl, token } = await resolvePreamble(serverFlag);
+  const versionExempt = isVersionAdmissionExempt(argv);
+  let unsupportedLine: string | undefined;
 
   // Keep an EXISTING per-origin cache current before building the tree; a
   // missing cache stays offline-instant (seeded at `auth login` below). Any
@@ -149,6 +177,9 @@ const main = async (): Promise<void> => {
     if (outcome.status === "refreshed") {
       featureAccess = outcome.featureAccess;
       currentRegistry = outcome.registry;
+      if (outcome.unsupported === true) {
+        unsupportedLine = outcome.nudge;
+      }
     }
     if (outcome.status === "admission-refused") {
       refuseAdmission(outcome.refusal, argv);
@@ -159,6 +190,15 @@ const main = async (): Promise<void> => {
     } else if (outcome.status === "refreshed" && outcome.nudge !== undefined) {
       process.stderr.write(`${outcome.nudge}\n`);
     }
+  }
+
+  if (serverUrl !== undefined && unsupportedLine === undefined) {
+    unsupportedLine = await cachedUnsupportedLine({ serverUrl, cacheEnv });
+  }
+  if (!versionExempt && unsupportedLine !== undefined) {
+    process.stderr.write(`${unsupportedLine}\n`);
+    process.exitCode = EXIT_CODES.server;
+    return;
   }
 
   // Only this invocation's validated response can project caller commands.
@@ -173,14 +213,6 @@ const main = async (): Promise<void> => {
     // The one place the drift is reported, so "once per process" is structural
     // rather than a latch. Always stderr: a `--json` caller pipes stdout into a
     // parser, and a warning mixed in there is a parse error.
-    if (shouldReportRegistryDrift(argv)) {
-      process.stderr.write(
-        formatRegistryDrift({
-          delta: drift,
-          verbose: preparseVerboseFlag(argv),
-        }),
-      );
-    }
     // Quieting the background noise must not quiet the one case that stops this
     // command: its tool is gone from the server. Reported whatever the command,
     // `--help` included, because there is nothing left to help with.

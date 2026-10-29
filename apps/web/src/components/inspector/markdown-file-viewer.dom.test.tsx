@@ -4,6 +4,7 @@ import { afterAll, afterEach, expect, jest, test } from "bun:test";
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
+import { restoreRealTimers } from "@stll/property-testing/fake-timers";
 
 import type { MarkdownHybridEditorHandle } from "@/components/markdown/markdown-hybrid-editor";
 import englishMessages from "@/i18n/langs/en.json";
@@ -228,6 +229,11 @@ const advance = async (ms: number) => {
     });
   });
 };
+const restoreRealTimersWithPendingRequest = () => {
+  // Flush short UI cleanup without advancing as far as the API's live 30s
+  // total deadline. restoreRealTimers() deliberately drains every timer.
+  restoreRealTimers({ advanceMs: 1000 });
+};
 const startTransport = async () => {
   // Eden's browser multipart path uses two FileReader timer stages. Each
   // stage is scheduled after an async continuation, independently of debounce.
@@ -257,7 +263,7 @@ const publish = async () => {
 };
 
 afterEach(async () => {
-  jest.useRealTimers();
+  restoreRealTimers();
   await act(async () => cleanup());
   requests.length = 0;
   publishedText = "Server text";
@@ -280,7 +286,7 @@ test("publication captures the displayed source inside the debounce interval", a
   edit(view.container, "Draft B");
   fireEvent.click(view.getByRole("button", { name: "Save" }));
   await startTransport();
-  jest.useRealTimers();
+  restoreRealTimersWithPendingRequest();
   expect(await requests.at(0)?.file.text()).toBe("Draft B");
   await publish();
   expect(view.container.textContent).toContain("Draft B");
@@ -312,7 +318,7 @@ test.each([true, false])(
     fireEvent.keyDown(editor, { key: "e", metaKey: true });
     edit(view.container, "Draft C");
     expect(view.container.textContent).not.toContain("Draft C");
-    jest.useRealTimers();
+    restoreRealTimersWithPendingRequest();
     if (succeeded) {
       await publish();
       await waitFor(() =>
@@ -368,7 +374,7 @@ test("cancel restores the model and cancels a pending emission before later inpu
   await advance(400);
   fireEvent.click(view.getByRole("button", { name: "Save" }));
   await startTransport();
-  jest.useRealTimers();
+  restoreRealTimersWithPendingRequest();
   expect(await requests.at(0)?.file.text()).toBe("Server text appended");
 });
 
@@ -376,7 +382,7 @@ test("a failed background refetch keeps the retained draft publishable", async (
   const view = await mount();
   edit(view.container, "Draft A");
   await advance(400);
-  jest.useRealTimers();
+  restoreRealTimers();
   storageFails = true;
   await act(async () =>
     view.client.refetchQueries({
@@ -398,7 +404,7 @@ test("rename metadata owns the name used by subsequent publication", async () =>
   const view = await mount();
   edit(view.container, "Draft A");
   await advance(400);
-  jest.useRealTimers();
+  restoreRealTimers();
   fireEvent.click(view.getByRole("button", { name: "Rename" }));
   await waitFor(() =>
     expect(useInspectorTabsStore.getState().tabs.at(0)).toMatchObject({
@@ -423,7 +429,7 @@ test("publication settlement preserves metadata confirmed while it was pending",
   await advance(400);
   fireEvent.click(view.getByRole("button", { name: "Save" }));
   await startTransport();
-  jest.useRealTimers();
+  restoreRealTimersWithPendingRequest();
   fireEvent.click(view.getByRole("button", { name: "Rename" }));
   await waitFor(() =>
     expect(useInspectorTabsStore.getState().tabs.at(0)).toMatchObject({
@@ -470,7 +476,7 @@ test("editor resets are fixed points for source and pending notifications", asyn
       expect(changes).toEqual([source, source]);
       await act(async () => view.unmount());
       expect(changes).toEqual([source, source]);
-      jest.useRealTimers();
+      restoreRealTimers();
     }),
     { numRuns: 25 },
   );

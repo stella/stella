@@ -3,8 +3,8 @@ import { afterEach, describe, expect, test } from "bun:test";
 import {
   existsSync,
   lstatSync,
-  mkdtempSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   readlinkSync,
   rmSync,
@@ -25,8 +25,8 @@ import {
   createDesktopEnv,
   createWebEnv,
   describeFailedProbes,
-  dockerComposeDownCommand,
   dockerComposeCommand,
+  dockerComposeDownCommand,
   dockerProjectBelongsToWorktree,
   dockerProjectName,
   ensureWorktreeEnvLinks,
@@ -40,15 +40,15 @@ import {
   loadEnvFile,
   MAX_HASH_OFFSET,
   migrateLegacyS3DevCredentials,
-  projectsForDeletedWorktrees,
   parseDockerComposePsJson,
   parseForeignPortOwners,
   parseStellaDockerProject,
   portsForOffset,
+  projectsForDeletedWorktrees,
+  reportGroupStopFailure,
   requiredPortsForMode,
   resolveAutoInfraOffset,
   resolveMainRootFromCommonDir,
-  reportGroupStopFailure,
   resolveOffset,
   runMainAndExit,
   shouldAutoOpenBrowser,
@@ -1366,8 +1366,12 @@ describe("dev env factories", () => {
         seeded,
       }).primary.map((step) => step.env?.["LEGAL_SEARCH_PROVIDER"]);
 
-    expect(apiProviders(true)).toEqual(["pg-fts"]);
-    expect(apiProviders(false)).toEqual(["corpus-index", "corpus-index"]);
+    expect(apiProviders(true)).toEqual(["pg-fts", "pg-fts", "pg-fts"]);
+    expect(apiProviders(false)).toEqual([
+      "corpus-index",
+      "corpus-index",
+      "corpus-index",
+    ]);
   });
 
   test("seeded stacks disable scheduled writes while normal dev keeps schedules enabled", () => {
@@ -1388,17 +1392,29 @@ describe("dev env factories", () => {
       }).primary;
     const scheduledJobsModes = (seeded: boolean) =>
       primarySteps(seeded).map((step) => step.env?.["SCHEDULED_JOBS_MODE"]);
-    // Every process the mode starts hosts background writers; a step missing
-    // from this list would keep writing after the seed. A seeded stack starts
-    // no document-processing worker: with its writers disabled it would exit
-    // at once, which the runner treats as a crash of the whole stack.
-    expect(scheduledJobsModes(true)).toEqual(["disabled"]);
-    expect(scheduledJobsModes(false)).toEqual(["enabled", "enabled"]);
-    expect(primarySteps(true).map((step) => step.label)).not.toContain(
+    // The API process stays scheduler-disabled after seeding, while the
+    // separately started queue worker drains uploaded documents.
+    expect(scheduledJobsModes(true)).toEqual([
+      "disabled",
+      "enabled",
+      "enabled",
+    ]);
+    expect(scheduledJobsModes(false)).toEqual([
+      "enabled",
+      "enabled",
+      "enabled",
+    ]);
+    expect(primarySteps(true).map((step) => step.label)).toContain(
       "Document processing worker",
     );
     expect(primarySteps(false).map((step) => step.label)).toContain(
       "Document processing worker",
+    );
+    expect(primarySteps(true).map((step) => step.label)).toContain(
+      "File derivative worker",
+    );
+    expect(primarySteps(false).map((step) => step.label)).toContain(
+      "File derivative worker",
     );
   });
 
@@ -1423,6 +1439,9 @@ describe("dev env factories", () => {
     ]);
     expect(primary.map((step) => step.label)).not.toContain(
       "Document processing worker",
+    );
+    expect(primary.map((step) => step.label)).not.toContain(
+      "File derivative worker",
     );
   });
 
@@ -1469,16 +1488,20 @@ describe("dev env factories", () => {
       "API server",
       "Web server",
       "Document processing worker",
+      "File derivative worker",
     ]);
     expect(build("dev:api").primary.map((step) => step.label)).toEqual([
       "API server",
       "Document processing worker",
+      "File derivative worker",
     ]);
     expect(build("dev:web").primary.map((step) => step.label)).toEqual([
       "Web server",
     ]);
 
-    const worker = build("dev").primary.at(-1);
+    const worker = build("dev").primary.find(
+      (step) => step.label === "Document processing worker",
+    );
     expect(worker?.cmd.slice(1)).toEqual([
       "--no-clear-screen",
       "--no-env-file",
@@ -1492,6 +1515,16 @@ describe("dev env factories", () => {
       DATABASE_URL: "postgres://postgres:postgres@localhost:5442/stella",
       REDIS_URL: "redis://localhost:6389",
     });
+    const derivativeWorker = build("dev").primary.find(
+      (step) => step.label === "File derivative worker",
+    );
+    expect(derivativeWorker?.cmd.slice(0, -1)).toEqual(
+      worker?.cmd.slice(0, -1),
+    );
+    expect(derivativeWorker?.cmd.at(-1)).toBe(
+      "src/scripts/file-derivative-worker.ts",
+    );
+    expect(derivativeWorker?.env).toEqual(worker?.env);
   });
 
   test("only interactive dev watches files; seeded stacks run without --watch", () => {
@@ -1509,9 +1542,40 @@ describe("dev env factories", () => {
         .primary.filter((step) => step.label !== "Web server")
         .map((step) => step.cmd.includes("--watch"));
 
-    expect(watching(false)).toEqual([true, true]);
-    // A seeded stack starts only the API: its document worker is not started.
-    expect(watching(true)).toEqual([false]);
+    expect(watching(false)).toEqual([true, true, true]);
+    expect(watching(true)).toEqual([false, false, false]);
+  });
+
+  test("only a seeded stack preloads the seeded organization's feature grants", () => {
+    const rootDir = createTempDir();
+    mkdirSync(path.resolve(rootDir, "apps/api"), { recursive: true });
+    const apiPreloads = (seeded: boolean) => {
+      const api = buildPersistentSteps({
+        infraOffset: 0,
+        infraPorts: infraPortsForOffset(0),
+        mode: "dev:api",
+        ports: portsForOffset(0),
+        rootDir,
+        seeded,
+      }).primary.find((step) => step.label === "API server");
+      return (api?.cmd ?? []).flatMap((arg, index, cmd) =>
+        cmd[index - 1] === "--preload" ? [arg] : [],
+      );
+    };
+
+    expect(apiPreloads(false)).toEqual(["./src/dev/register-mock-ai.ts"]);
+    const seededPreloads = apiPreloads(true);
+    expect(seededPreloads).toEqual([
+      "./src/dev/register-mock-ai.ts",
+      "./scripts/grant-seeded-organization-features.ts",
+    ]);
+    for (const preload of seededPreloads) {
+      expect(
+        existsSync(
+          path.resolve(import.meta.dirname, "../../../apps/api", preload),
+        ),
+      ).toBe(true);
+    }
   });
 
   test("prepares API databases by applying migrations", () => {
@@ -1578,6 +1642,7 @@ describe("dev env factories", () => {
       DB_LOAD_GATE_EBS_SIGNAL: "disabled",
       FRONTEND_URL: "http://localhost:3100",
       KEEP_ME: "1",
+      DEPLOY_ENVIRONMENT: "development",
       NODE_ENV: "development",
       STELLA_API_PORT: "3101",
       STELLA_LOCAL_DEV: "1",

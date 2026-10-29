@@ -1,9 +1,10 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
   AresAPIError,
-  AresRequestError,
   type AresCompany,
+  AresRequestError,
 } from "@stll/business-registries/ares";
 import {
   BrregAPIError,
@@ -31,6 +32,7 @@ import {
 } from "@stll/business-registries/recherche-entreprises";
 import { RpoAPIError, RpoRequestError } from "@stll/business-registries/rpo";
 import { ViesAPIError, ViesRequestError } from "@stll/business-registries/vies";
+import { readFailureBrand } from "@stll/errors";
 
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import {
@@ -40,9 +42,11 @@ import {
   executeRegistryLookup,
   getRegistryHandlerByCountry,
   isBusinessRegistryNativeToolDeployAvailable,
+  NO_REGISTRY_WEB_SEARCH,
   type RegistryHandler,
 } from "@/api/lib/business-registries/dispatch";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { WebSearchProvider } from "@/api/lib/web-search/types";
 
 const permit = grantThirdPartyOutboundPermit();
 
@@ -86,6 +90,7 @@ describe("executeRegistryLookup — details channel", () => {
     });
 
     const result = await executeRegistryLookup({
+      loadWebSearch: NO_REGISTRY_WEB_SEARCH,
       observer: "unobserved",
       permit,
       handler,
@@ -120,6 +125,7 @@ describe("executeRegistryLookup — details channel", () => {
     });
 
     const result = await executeRegistryLookup({
+      loadWebSearch: NO_REGISTRY_WEB_SEARCH,
       observer: "unobserved",
       permit,
       handler,
@@ -141,6 +147,7 @@ describe("executeRegistryLookup — details channel", () => {
       "sensitive transport detail",
     );
     const result = await executeRegistryLookup({
+      loadWebSearch: NO_REGISTRY_WEB_SEARCH,
       observer: "unobserved",
       permit,
       handler: stubHandler({
@@ -210,6 +217,7 @@ describe("ORSR lookup detail", () => {
     );
     try {
       const result = await executeRegistryLookup({
+        loadWebSearch: NO_REGISTRY_WEB_SEARCH,
         observer: "unobserved",
         permit,
         handler: BUSINESS_REGISTRY_DISPATCH.orsr,
@@ -339,6 +347,7 @@ describe("VIES handler wiring", () => {
 
   test("name search is rejected with a useful error", async () => {
     const result = await executeRegistryLookup({
+      loadWebSearch: NO_REGISTRY_WEB_SEARCH,
       observer: "unobserved",
       permit,
       handler: BUSINESS_REGISTRY_DISPATCH.vies,
@@ -347,6 +356,14 @@ describe("VIES handler wiring", () => {
     expect(result).toBeInstanceOf(Error);
     if (result instanceof Error) {
       expect(result.message).toContain("does not support name search");
+      expect(result).toMatchObject({
+        status: 400,
+        code: "name_search_unsupported",
+      });
+      expect(readFailureBrand(result)).toEqual({
+        reason: "request_invalid",
+        source: "instance",
+      });
     }
   });
 });
@@ -532,6 +549,7 @@ describe("DENUE deployment gating", () => {
 describe("executeRegistryLookup — canonical-id guard", () => {
   test("maps an isCanonicalId failure to a handler error instead of throwing", async () => {
     const result = await executeRegistryLookup({
+      loadWebSearch: NO_REGISTRY_WEB_SEARCH,
       observer: "unobserved",
       permit,
       handler: stubHandler({
@@ -546,6 +564,300 @@ describe("executeRegistryLookup — canonical-id guard", () => {
       throw new TypeError("expected a handler error");
     }
     expect(result.status).toBe(500);
+  });
+});
+
+const webProviderWith = (
+  values: readonly { title: string; snippet?: string; url?: string }[],
+): WebSearchProvider => ({
+  name: "tavily",
+  search: async () => ({
+    results: values.map((value, index) => ({
+      id: `fixture-${index}`,
+      title: value.title,
+      snippet: value.snippet ?? "",
+      url: value.url ?? `https://example.invalid/result-${index}`,
+      source: "fixture",
+    })),
+  }),
+});
+
+const krsWebHandler = (lookup: RegistryHandler["lookup"]): RegistryHandler => ({
+  ...BUSINESS_REGISTRY_DISPATCH.krs,
+  lookup,
+});
+
+const krsHit = (id: string, name: string) => ({
+  registry: "krs" as const,
+  id,
+  name,
+  legalForm: "spółka z ograniczoną odpowiedzialnością",
+  address: null,
+  registryUrl: `https://example.invalid/krs/${id}`,
+});
+
+describe("executeRegistryLookup — verified web candidates", () => {
+  test("returns only an officially verified KRS record with provenance", async () => {
+    let metered = 0;
+    let providerLoads = 0;
+    const result = await executeRegistryLookup({
+      observer: "unobserved",
+      permit,
+      handler: krsWebHandler(async (id) =>
+        id === "0000123456" ? krsHit(id, "Żółć sp. z o.o.") : null,
+      ),
+      query: "Zolc spółka z ograniczoną odpowiedzialnością",
+      loadWebSearch: () => {
+        providerLoads += 1;
+        return Result.ok({
+          provider: webProviderWith([
+            { title: "Noise KRS 0000999999" },
+            { title: "Żółć", snippet: "Numer KRS: 0000123456" },
+          ]),
+          observer: () => {
+            metered += 1;
+          },
+        });
+      },
+    });
+
+    expect(result).toEqual({
+      type: "search",
+      registry: "krs",
+      hits: [
+        {
+          ...krsHit("0000123456", "Żółć sp. z o.o."),
+          provenance: {
+            identifierSource: "web-search",
+            recordSource: "official-registry",
+          },
+        },
+      ],
+    });
+    expect(metered).toBe(1);
+    expect(providerLoads).toBe(1);
+  });
+
+  test("reports an unrelated official candidate as a name mismatch", async () => {
+    const result = await executeRegistryLookup({
+      observer: "unobserved",
+      permit,
+      handler: krsWebHandler(async (id) => krsHit(id, "Inna Firma S.A.")),
+      query: "Szukana Firma sp. z o.o.",
+      loadWebSearch: () =>
+        Result.ok({
+          provider: webProviderWith([{ title: "KRS 0000123456" }]),
+          observer: () => undefined,
+        }),
+    });
+
+    expect(result).toEqual({
+      type: "name-search-not-found",
+      registry: "krs",
+      candidates: [
+        {
+          id: "0000123456",
+          reason: "name-mismatch",
+          officialName: "Inna Firma S.A.",
+        },
+      ],
+    });
+  });
+
+  test.each([
+    ["sp. z o.o.", "Fikcyjna Firma sp. z o.o."],
+    ["Fikcyjna Firma sp. z o.o.", "S.A."],
+  ])(
+    "rejects an empty normalized name on either side",
+    async (query, officialName) => {
+      const result = await executeRegistryLookup({
+        observer: "unobserved",
+        permit,
+        handler: krsWebHandler(async (id) => krsHit(id, officialName)),
+        query,
+        loadWebSearch: () =>
+          Result.ok({
+            provider: webProviderWith([{ title: "KRS 0000123456" }]),
+            observer: () => undefined,
+          }),
+      });
+
+      expect(result).toMatchObject({
+        type: "name-search-not-found",
+        candidates: [{ id: "0000123456", reason: "name-mismatch" }],
+      });
+    },
+  );
+
+  test("preserves a failed configuration load as a lookup failure", async () => {
+    const cause = new Error("configuration read unavailable");
+    let candidateLookups = 0;
+    const failure = new HandlerError({
+      status: 500,
+      message: "Could not load registry web-search settings",
+      cause,
+    });
+    const result = await executeRegistryLookup({
+      observer: "unobserved",
+      permit,
+      handler: krsWebHandler(async () => {
+        candidateLookups += 1;
+        return null;
+      }),
+      query: "Company name",
+      loadWebSearch: async () => Result.err(failure),
+    });
+    expect(result).toBeInstanceOf(HandlerError);
+    if (!(result instanceof HandlerError)) {
+      throw new TypeError("Expected a lookup failure");
+    }
+    expect(candidateLookups).toBe(0);
+    expect(result).toBe(failure);
+    expect(result.status).toBe(500);
+    expect(result.cause).toBe(cause);
+  });
+
+  test("the registry failure owner retains a settings database error", async () => {
+    const cause = new DatabaseError({ message: "Settings read unavailable" });
+    let candidateLookups = 0;
+    const result = await executeRegistryLookup({
+      observer: "unobserved",
+      permit,
+      handler: krsWebHandler(async () => {
+        candidateLookups += 1;
+        return null;
+      }),
+      query: "Company name",
+      loadWebSearch: async () => Result.err(cause),
+    });
+    expect(result).toBeInstanceOf(HandlerError);
+    if (!(result instanceof HandlerError)) {
+      throw new TypeError("Expected a lookup failure");
+    }
+    expect(candidateLookups).toBe(0);
+    expect(result.status).toBe(500);
+    expect(result.cause).toBe(cause);
+  });
+
+  test("maps a rejected web search to retryable upstream unavailability", async () => {
+    const cause = new Error("provider unavailable");
+    const result = await executeRegistryLookup({
+      observer: "unobserved",
+      permit,
+      handler: krsWebHandler(async () => null),
+      query: "Fikcyjna Firma",
+      loadWebSearch: () =>
+        Result.ok({
+          provider: {
+            name: "tavily",
+            search: async () => {
+              throw cause;
+            },
+          },
+          observer: () => undefined,
+        }),
+    });
+
+    expect(result).toBeInstanceOf(HandlerError);
+    if (!(result instanceof HandlerError)) {
+      throw new TypeError("expected a handler error");
+    }
+    expect(result).toMatchObject({
+      status: 502,
+      code: "upstream_unavailable",
+      cause,
+    });
+  });
+
+  test("deduplicates candidates and verifies no more than the cap", async () => {
+    const lookedUp: string[] = [];
+    const ids = Array.from({ length: 7 }, (_, index) =>
+      String(index + 1).padStart(10, "0"),
+    );
+    const result = await executeRegistryLookup({
+      observer: "unobserved",
+      permit,
+      handler: krsWebHandler(async (id) => {
+        lookedUp.push(id);
+        return null;
+      }),
+      query: "Missing Company",
+      loadWebSearch: () =>
+        Result.ok({
+          provider: webProviderWith([
+            { title: `${String(ids[0])} ${String(ids[0])} ${String(ids[1])}` },
+            { title: ids.slice(2).join(" ") },
+          ]),
+          observer: () => undefined,
+        }),
+    });
+
+    expect(lookedUp).toEqual(ids.slice(0, 5));
+    expect(result).toMatchObject({
+      type: "name-search-not-found",
+      candidates: ids.slice(0, 5).map((id) => ({
+        id,
+        reason: "no-official-record",
+      })),
+    });
+  });
+
+  test("returns typed unavailability with the explicit no-web-search capability", async () => {
+    const result = await executeRegistryLookup({
+      loadWebSearch: NO_REGISTRY_WEB_SEARCH,
+      observer: "unobserved",
+      permit,
+      handler: krsWebHandler(async () => null),
+      query: "Missing Company",
+    });
+    expect(result).toEqual({
+      type: "name-search-unavailable",
+      registry: "krs",
+      reason: "web-search-unavailable",
+    });
+  });
+
+  test("native name search does not load web search configuration", async () => {
+    let providerLoads = 0;
+    const result = await executeRegistryLookup({
+      observer: "unobserved",
+      permit,
+      handler: { ...BUSINESS_REGISTRY_DISPATCH.brreg, search: async () => [] },
+      query: "Native company search",
+      loadWebSearch: () => {
+        providerLoads += 1;
+        return Result.ok(null);
+      },
+    });
+    expect(result).toEqual({ type: "search", registry: "brreg", hits: [] });
+    expect(providerLoads).toBe(0);
+  });
+
+  test("keeps canonical KRS lookup independent of web search", async () => {
+    let webCalls = 0;
+    let providerLoads = 0;
+    const result = await executeRegistryLookup({
+      observer: "unobserved",
+      permit,
+      handler: krsWebHandler(async (id) => krsHit(id, "Direct Company")),
+      query: "0000123456",
+      loadWebSearch: () => {
+        providerLoads += 1;
+        return Result.ok({
+          provider: webProviderWith([]),
+          observer: () => {
+            webCalls += 1;
+          },
+        });
+      },
+    });
+    expect(result).toEqual({
+      type: "lookup",
+      registry: "krs",
+      hit: krsHit("0000123456", "Direct Company"),
+    });
+    expect(webCalls).toBe(0);
+    expect(providerLoads).toBe(0);
   });
 });
 

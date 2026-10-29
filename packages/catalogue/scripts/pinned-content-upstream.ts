@@ -10,12 +10,12 @@ import { parseSkillFile } from "@stll/skills/frontmatter";
 import { readCappedBytes } from "@stll/skills/streaming";
 
 import {
-  PinnedContentError,
   assertCompleteGithubContentsListing,
-  projectFrontmatter,
-  type GithubTarget,
   type GithubContentItem,
+  type GithubTarget,
+  PinnedContentError,
   type PinnedSource,
+  projectFrontmatter,
 } from "./pinned-content-facts";
 
 const FETCH_TIMEOUT_MS = 10_000;

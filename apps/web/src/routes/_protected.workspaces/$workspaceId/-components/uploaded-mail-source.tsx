@@ -1,9 +1,11 @@
+import { useRouter } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import { detached } from "@/lib/detached";
+import { getCurrentWorkspaceDocument } from "@/lib/workspaces/use-workspace-view-params";
 
 import { OriginalSignature } from "./original-signature";
 
@@ -16,13 +18,13 @@ export const UploadedSource = ({
   workspaceId,
 }: {
   uploader:
-    | { userName: string | null; userStatus: "active" | "deleted" }
-    | undefined;
+    { userName: string | null; userStatus: "active" | "deleted" } | undefined;
   signatureDomain: string | null;
   sourceEntityId: string;
   workspaceId: string;
 }) => {
   const t = useTranslations();
+  const router = useRouter();
   let uploaderName = t("common.unknownUser");
   if (uploader?.userStatus === "deleted") {
     uploaderName = t("tasks.deletedAccount");
@@ -46,11 +48,14 @@ export const UploadedSource = ({
         className="min-h-11"
         onClick={() =>
           detached(
-            openEntityInInspector(
-              sourceEntityId,
-              t("correspondence.uploadedFile"),
+            openEntityInInspector({
+              documentOnScreen: getCurrentWorkspaceDocument(
+                router.state.matches,
+              ),
+              entityId: sourceEntityId,
+              label: t("correspondence.uploadedFile"),
               workspaceId,
-            ),
+            }),
             "correspondence.open-source-file",
           )
         }

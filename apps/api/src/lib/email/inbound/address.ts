@@ -1,6 +1,9 @@
 import { Result, TaggedError } from "better-result";
 import { randomBytes } from "node:crypto";
 
+import { requireSessionCredentialIssuer } from "@/api/lib/synthetic-principal/credential-policy";
+import type { CredentialPrincipal } from "@/api/lib/synthetic-principal/credential-policy";
+
 const TOKEN_BYTES = 32;
 const TOKEN_PATTERN = /^[a-f0-9]{64}$/u;
 
@@ -8,8 +11,10 @@ class InboundAddressError extends TaggedError("InboundAddressError")<{
   message: string;
 }> {}
 
-export const generateInboundAddressToken = () =>
-  randomBytes(TOKEN_BYTES).toString("hex");
+export const generateInboundAddressToken = (principal: CredentialPrincipal) => {
+  requireSessionCredentialIssuer("inboundEmail", principal);
+  return randomBytes(TOKEN_BYTES).toHex();
+};
 
 // Only a case-normalized envelope recipient routes mail; display names, suffix matches,
 // plus addressing, and sender-controlled To/Cc headers cannot select a matter.

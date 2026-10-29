@@ -1,11 +1,16 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { childExitStatus } from "../packages/scripts/src/child-exit-status.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
-const DEADLINE_MS = 30_000;
+// Lint reads the committed Tailwind cache; this probe drives the design-system
+// workers that scripts/generate-tailwind-classes.ts uses to fill it, under Node,
+// with a throwaway cache so it never writes the committed one. Phase timings go
+// to stderr.
 const CHILD_MODE = "--probe";
 const RULE = "no-conflicting-classes";
 const BENIGN = "size-[1em] object-contain";
@@ -72,28 +77,34 @@ if (process.argv.at(2) === CHILD_MODE) {
   await probe();
 } else {
   const started = performance.now();
+  const cache = mkdtempSync(path.join(tmpdir(), "stella-tailwind-probe-"));
   const result = spawnSync(
     process.execPath,
     [import.meta.filename, CHILD_MODE],
     {
+      maxBuffer: 2 ** 30,
       cwd: ROOT,
       encoding: "utf-8",
-      timeout: DEADLINE_MS,
-      killSignal: "SIGKILL",
+      env: {
+        ...process.env,
+        OXLINT_TAILWINDCSS_CACHE_DIR: cache,
+        OXLINT_TAILWINDCSS_CACHE_READ_ONLY: "0",
+      },
     },
   );
+  rmSync(cache, { recursive: true, force: true });
   process.stderr.write(result.stderr);
   const status = childExitStatus(result);
   if (status !== 0) {
     process.stderr.write(
-      `Design-system worker probe failed (signal=${result.signal ?? "none"}, deadline=${DEADLINE_MS}ms).\n`,
+      `Design-system worker probe failed (signal=${result.signal ?? "none"}).\n`,
     );
     process.exitCode = status;
   } else {
     const receipt = JSON.parse(result.stdout);
     assert.equal(receipt.conflict, "conflictUnordered");
     process.stdout.write(
-      `${JSON.stringify({ ...receipt, totalMs: Math.round(performance.now() - started), deadlineMs: DEADLINE_MS })}\n`,
+      `${JSON.stringify({ ...receipt, totalMs: Math.round(performance.now() - started) })}\n`,
     );
   }
 }

@@ -4,9 +4,9 @@ import * as v from "valibot";
 import { DECISION_UNDECIDED_REASON_CODES } from "@stll/api-contract/ai-decision-provider";
 
 import {
+  TEMPLATE_CONDITION_DECISION_OUTPUT_SCHEMA,
   toFillConditionDecision,
   toPreviewConditionDecision,
-  TEMPLATE_CONDITION_DECISION_OUTPUT_SCHEMA,
 } from "./template-condition-decisions";
 
 const base = {

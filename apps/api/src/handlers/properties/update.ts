@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   FILE_PROPERTY_TYPE_IMMUTABLE_CODE,
@@ -24,13 +24,15 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tConditionNode } from "@/api/lib/conditions/contract";
 import {
-  tDefaultVarchar,
-  tSafeId,
+  defaultVarcharSchema,
+  resourceIdSchema,
   workspaceParams,
 } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { serializeAITool } from "@/api/lib/markdown/ai-tool";
+import { requireComputedColumnInputs } from "@/api/lib/properties/computed-column-input";
+import { computedColumnInputHandlerError } from "@/api/lib/properties/computed-column-input-handler-error";
 import {
   DOCUMENT_TYPE_CLASSIFIER_ROLE,
   isDocumentTypeClassifierProperty,
@@ -213,22 +215,21 @@ const hasCircularDependency = ({
   return false;
 };
 
-const updatePropertyBodySchema = t.Object({
-  name: tDefaultVarchar,
+const updatePropertyBodySchema = v.object({
+  name: defaultVarcharSchema,
   content: propertyContentSchema,
-  tool: t.Union([
-    t.Intersect([
+  tool: v.union([
+    v.intersect([
       aiModelToolSchema,
-      t.Object({
-        // Bounded by the structural ceiling, not the write cap: a list stored
-        // under an earlier, larger cap must round-trip. The handler rejects a
-        // list that grows past the cap once it knows the stored count.
-        dependencies: t.Array(
-          t.Object({
-            dependsOnPropertyId: tSafeId("property"),
-            condition: t.Nullable(tConditionNode),
-          }),
-          { maxItems: PROPERTY_DEPENDENCY_LIMITS.perProperty },
+      v.object({
+        dependencies: v.pipe(
+          v.array(
+            v.object({
+              dependsOnPropertyId: resourceIdSchema("property"),
+              condition: v.nullable(tConditionNode),
+            }),
+          ),
+          v.maxLength(PROPERTY_DEPENDENCY_LIMITS.perProperty),
         ),
       }),
     ]),
@@ -261,7 +262,7 @@ const config = {
     reason: "workspace_schema",
     consumesServices: false,
   },
-  params: workspaceParams({ propertyId: tSafeId("property") }),
+  params: workspaceParams({ propertyId: resourceIdSchema("property") }),
   body: updatePropertyBodySchema,
 } satisfies WorkspaceHandlerConfig;
 
@@ -292,7 +293,7 @@ const updateProperty = createSafeHandler(
     const tool =
       body.tool.type === "ai-model" ? serializeAITool(body.tool) : body.tool;
 
-    const dependencies =
+    let dependencies =
       body.tool.type === "ai-model" ? body.tool.dependencies : [];
 
     // Strip dependencies from the tool for DB storage
@@ -386,25 +387,8 @@ const updateProperty = createSafeHandler(
           };
         }
 
-        const isStale = comparePropertiesForStale({
-          oldProperty: {
-            content: oldProperty.content,
-            // Manual-input and verdict columns both compare as a plain manual
-            // single-select; the update body cannot set a verdict tool, so an
-            // existing verdict is treated like a manual column for staleness.
-            tool:
-              oldProperty.tool.type === "ai-model"
-                ? {
-                    ...oldProperty.tool,
-                    dependencies: oldDependencies,
-                  }
-                : { version: 1, type: "manual-input" },
-          },
-          newProperty: { content, tool },
-        });
-
-        const allProperties =
-          body.tool.type === "ai-model" || isStale
+        let allProperties =
+          body.tool.type === "ai-model"
             ? await tx.query.properties.findMany({
                 where: { workspaceId: { eq: workspaceId } },
                 columns: {
@@ -468,14 +452,61 @@ const updateProperty = createSafeHandler(
           };
         }
 
+        if (body.tool.type === "ai-model") {
+          const resolved = requireComputedColumnInputs({
+            candidates: allProperties.filter(({ id }) => id !== propertyId),
+            inputs: dependencies,
+          });
+          if (Result.isError(resolved)) {
+            return Result.err(computedColumnInputHandlerError(resolved.error));
+          }
+          dependencies = [...resolved.value];
+        }
+
+        const resolvedTool =
+          tool.type === "ai-model" ? { ...tool, dependencies } : tool;
+        const isStale = comparePropertiesForStale({
+          oldProperty: {
+            content: oldProperty.content,
+            // Manual-input and verdict columns both compare as a plain manual
+            // single-select; the update body cannot set a verdict tool, so an
+            // existing verdict is treated like a manual column for staleness.
+            tool:
+              oldProperty.tool.type === "ai-model"
+                ? {
+                    ...oldProperty.tool,
+                    dependencies: oldDependencies,
+                  }
+                : { version: 1, type: "manual-input" },
+          },
+          newProperty: { content, tool: resolvedTool },
+        });
+
+        if (body.tool.type !== "ai-model" && isStale) {
+          allProperties = await tx.query.properties.findMany({
+            where: { workspaceId: { eq: workspaceId } },
+            columns: {
+              id: true,
+              name: true,
+              content: true,
+              tool: true,
+              role: true,
+            },
+            limit: LIMITS.propertiesCount,
+            with: {
+              dependencies: {
+                columns: { dependsOnPropertyId: true },
+              },
+            },
+          });
+        }
+
         if (
           body.tool.type === "ai-model" &&
           hasCircularDependency({
             propertyId,
             allProperties,
-            proposedInputs: body.tool.dependencies.map(
-              (d) => d.dependsOnPropertyId,
-            ),
+            proposedInputs: dependencies.map((d) => d.dependsOnPropertyId),
           })
         ) {
           return {
@@ -573,16 +604,20 @@ const updateProperty = createSafeHandler(
       }),
     );
 
-    if (!txResult.ok) {
+    if ("status" in txResult && txResult.status === "error") {
+      return txResult;
+    }
+    const transactionValue = txResult;
+    if (!transactionValue.ok) {
       return Result.err(
         new HandlerError({
-          status: txResult.status,
-          message: txResult.message,
-          ...("code" in txResult
+          status: transactionValue.status,
+          message: transactionValue.message,
+          ...("code" in transactionValue
             ? {
-                code: txResult.code,
-                retryable: txResult.retryable,
-                hint: txResult.hint,
+                code: transactionValue.code,
+                retryable: transactionValue.retryable,
+                hint: transactionValue.hint,
               }
             : {}),
         }),

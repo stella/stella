@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 
 import {
   isCaseLawPublicReadModule,
@@ -35,6 +35,39 @@ const lint = async (
   });
 
 describe.serial("public-law relation scan", () => {
+  test("withdrawal verdicts are read through their owner", async () => {
+    const cases = [
+      'import { caseLawWithdrawalStatus } from "@/api/db/schema"; void caseLawWithdrawalStatus;',
+      'import { sql } from "drizzle-orm"; export const query = sql`select decision_id from case_law_withdrawal_status`;',
+    ];
+    const results = await Promise.all(
+      cases.map(
+        async (read) =>
+          await lint(
+            [
+              'import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db"; void caseLawPublicReadDb;',
+              read,
+            ].join("\n"),
+            "apps/api/src/lib/case-law/other-read.ts",
+          ),
+      ),
+    );
+    for (const result of results) {
+      expect(result).toHaveLength(1);
+    }
+  });
+
+  test("withdrawal status is readable through the public boundary", async () => {
+    const source = [
+      'import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";',
+      'import { caseLawWithdrawalStatus } from "@/api/db/schema/case-law";',
+      "export const read = () => caseLawPublicReadDb((tx) => tx.select({ decisionId: caseLawWithdrawalStatus.decisionId, status: caseLawWithdrawalStatus.status, withdrawnAt: caseLawWithdrawalStatus.withdrawnAt }).from(caseLawWithdrawalStatus));",
+    ].join("\n");
+    expect(
+      await lint(source, "apps/api/src/lib/case-law/withdrawn-copies.ts"),
+    ).toEqual([]);
+  });
+
   test("public case-law reads cannot name the base decision table", async () => {
     const source = [
       'import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";',
@@ -48,118 +81,128 @@ describe.serial("public-law relation scan", () => {
   });
 
   test("public case-law reads allow type-only base schema imports", async () => {
-    for (const declaration of [
+    const declarations = [
       'import type { caseLawDecisions as decisions } from "@/api/db/schema/case-law";',
       'import { type caseLawDecisions as decisions } from "@/api/db/schema/case-law";',
-    ]) {
-      const source = [
-        'import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";',
+    ];
+    const results = await Promise.all(
+      declarations.map(async (declaration) => ({
         declaration,
-        "export type DecisionTable = typeof decisions;",
-        "void caseLawPublicReadDb;",
-      ].join("\n");
-      expect(
-        await lint(source, "apps/api/src/handlers/case-law/read.ts"),
-      ).toEqual([]);
-    }
+        lines: await lint(
+          [
+            'import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";',
+            declaration,
+            "export type DecisionTable = typeof decisions;",
+            "void caseLawPublicReadDb;",
+          ].join("\n"),
+          "apps/api/src/handlers/case-law/read.ts",
+        ),
+      })),
+    );
+    expect(results).toEqual(
+      declarations.map((declaration) => ({ declaration, lines: [] })),
+    );
   });
 
   test("decision-surface mode checks base reads without private relation checks", async () => {
     const options = { scope: "decision-surface" };
-    const directSchema = [
-      'import { caseLawDecisions as decisions } from "@/api/db/schema/case-law";',
-      "void decisions;",
-    ].join("\n");
-    expect(
-      await lint(
-        directSchema,
-        "apps/api/src/handlers/chat/chat-prompt.ts",
-        options,
-      ),
-    ).toHaveLength(1);
-
-    const rawBaseRead = [
-      'import { sql } from "drizzle-orm";',
-      "export const query = sql`select id from case_law_decisions`;",
-    ].join("\n");
-    expect(
-      await lint(
-        rawBaseRead,
-        "apps/api/src/handlers/chat/chat-prompt.ts",
-        options,
-      ),
-    ).toHaveLength(1);
-
-    const rawUnredactedRead = [
-      'import { sql } from "drizzle-orm";',
-      "export const query = sql`select id from case_law_unredacted_decisions`;",
-    ].join("\n");
-    expect(
-      await lint(
-        rawUnredactedRead,
-        "apps/api/src/handlers/chat/chat-prompt.ts",
-        options,
-      ),
-    ).toHaveLength(1);
-
-    const unredactedAlias = [
-      'import { unredactedCaseLawDecisions as rows } from "@/api/db/schema";',
-      "void rows;",
-    ].join("\n");
-    expect(
-      await lint(
-        unredactedAlias,
-        "apps/api/src/handlers/chat/chat-prompt.ts",
-        options,
-      ),
-    ).toHaveLength(1);
-
-    const privateRelation = [
-      'import { sql } from "drizzle-orm";',
-      "export const query = sql`select id from users`;",
-    ].join("\n");
-    expect(
-      await lint(
-        privateRelation,
-        "apps/api/src/handlers/chat/chat-prompt.ts",
-        options,
-      ),
-    ).toEqual([]);
+    const cases = [
+      {
+        label: "direct schema import",
+        source: [
+          'import { caseLawDecisions as decisions } from "@/api/db/schema/case-law";',
+          "void decisions;",
+        ].join("\n"),
+        reported: 1,
+      },
+      {
+        label: "raw base read",
+        source: [
+          'import { sql } from "drizzle-orm";',
+          "export const query = sql`select id from case_law_decisions`;",
+        ].join("\n"),
+        reported: 1,
+      },
+      {
+        label: "raw unredacted read",
+        source: [
+          'import { sql } from "drizzle-orm";',
+          "export const query = sql`select id from case_law_unredacted_decisions`;",
+        ].join("\n"),
+        reported: 1,
+      },
+      {
+        label: "unredacted alias",
+        source: [
+          'import { unredactedCaseLawDecisions as rows } from "@/api/db/schema";',
+          "void rows;",
+        ].join("\n"),
+        reported: 1,
+      },
+      {
+        label: "private relation",
+        source: [
+          'import { sql } from "drizzle-orm";',
+          "export const query = sql`select id from users`;",
+        ].join("\n"),
+        reported: 0,
+      },
+    ];
+    const results = await Promise.all(
+      cases.map(async ({ label, source }) => ({
+        label,
+        reported: (
+          await lint(
+            source,
+            "apps/api/src/handlers/chat/chat-prompt.ts",
+            options,
+          )
+        ).length,
+      })),
+    );
+    expect(results).toEqual(
+      cases.map(({ label, reported }) => ({ label, reported })),
+    );
   });
 
   test("public and mixed reads import runtime schema tables by name", async () => {
-    for (const modulePath of [
+    const cases = [
       "@/api/db/schema",
       path.resolve(
         import.meta.dir,
         "../__fixtures__/case-law-schema-barrel-chain.fixture.ts",
       ),
-    ]) {
-      for (const binding of ["* as schema", "schema"]) {
-        for (const mode of ["public-law", "decision-surface"]) {
+    ].flatMap((modulePath) =>
+      ["* as schema", "schema"].flatMap((binding) =>
+        ["public-law", "decision-surface"].flatMap((mode) => {
           const source = [
             'import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";',
             `import ${binding} from "${modulePath}";`,
             "void caseLawPublicReadDb;",
             "void schema;",
           ].join("\n");
-          expect(
-            await lint(source, "apps/api/src/handlers/chat/chat-prompt.ts", {
-              scope: mode,
-            }),
-          ).toEqual([2]);
-          expect(
-            await lint(
-              source
-                .replace(`import ${binding}`, () => `import type ${binding}`)
-                .replace("void schema;", "export type Schema = typeof schema;"),
-              "apps/api/src/handlers/chat/chat-prompt.ts",
-              { scope: mode },
-            ),
-          ).toEqual([]);
-        }
-      }
-    }
+          const typeOnly = source
+            .replace(`import ${binding}`, () => `import type ${binding}`)
+            .replace("void schema;", "export type Schema = typeof schema;");
+          const label = `${modulePath} ${binding} ${mode}`;
+          return [
+            { label, mode, source, lines: [2] },
+            { label: `${label} type-only`, mode, source: typeOnly, lines: [] },
+          ];
+        }),
+      ),
+    );
+    const results = await Promise.all(
+      cases.map(async ({ label, mode, source }) => ({
+        label,
+        lines: await lint(source, "apps/api/src/handlers/chat/chat-prompt.ts", {
+          scope: mode,
+        }),
+      })),
+    );
+    expect(results).toEqual(
+      cases.map(({ label, lines }) => ({ label, lines })),
+    );
   });
 
   test("decision-surface config covers each mixed public-law module", () => {
@@ -221,7 +264,13 @@ describe.serial("public-law relation scan", () => {
       moduleRestrictedSchemaReads(
         ".oxlint-plugins/__fixtures__/case-law-namespace-helper.fixture",
       ),
-    ).toEqual(new Set(["caseLawDecisions", "unredactedCaseLawDecisions"]));
+    ).toEqual(
+      new Set([
+        "caseLawDecisions",
+        "unredactedCaseLawDecisions",
+        "caseLawWithdrawalStatus",
+      ]),
+    );
     expect(
       moduleRestrictedSchemaReads(
         ".oxlint-plugins/__fixtures__/case-law-reexport-helper.fixture",
@@ -392,7 +441,7 @@ describe.serial("public-law relation scan", () => {
   });
 
   test("schema re-exports and helper reads keep the restricted view boundary", async () => {
-    for (const binding of [
+    const cases = [
       {
         fixture: "case-law-unredacted-reexport",
         name: "decisionRows",
@@ -413,26 +462,48 @@ describe.serial("public-law relation scan", () => {
         name: "baseDecisions",
         subjectAllowed: false,
       },
-    ]) {
+    ].flatMap((binding) => {
       const source = [
         'import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";',
         `import { ${binding.name} as rows } from ${JSON.stringify(path.resolve(import.meta.dir, `../__fixtures__/${binding.fixture}.fixture.ts`))};`,
         "void caseLawPublicReadDb;",
         "void rows;",
       ].join("\n");
+      const label = `${binding.fixture} ${binding.name}`;
       const expectedOutsideOwner = [2];
-      expect(
-        await lint(source, "apps/api/src/handlers/case-law/read.ts"),
-      ).toEqual(expectedOutsideOwner);
-      expect(
-        await lint(source, "apps/api/src/handlers/chat/chat-prompt.ts", {
-          scope: "decision-surface",
-        }),
-      ).toEqual(expectedOutsideOwner);
-      expect(
-        await lint(source, "apps/api/src/lib/case-law/public-subject.ts"),
-      ).toEqual(binding.subjectAllowed ? [] : [2]);
-    }
+      return [
+        {
+          label: `${label} case-law read`,
+          source,
+          sourcePath: "apps/api/src/handlers/case-law/read.ts",
+          options: undefined,
+          lines: expectedOutsideOwner,
+        },
+        {
+          label: `${label} decision surface`,
+          source,
+          sourcePath: "apps/api/src/handlers/chat/chat-prompt.ts",
+          options: { scope: "decision-surface" },
+          lines: expectedOutsideOwner,
+        },
+        {
+          label: `${label} subject owner`,
+          source,
+          sourcePath: "apps/api/src/lib/case-law/public-subject.ts",
+          options: undefined,
+          lines: binding.subjectAllowed ? [] : [2],
+        },
+      ];
+    });
+    const results = await Promise.all(
+      cases.map(async ({ label, source, sourcePath, options }) => ({
+        label,
+        lines: await lint(source, sourcePath, options),
+      })),
+    );
+    expect(results).toEqual(
+      cases.map(({ label, lines }) => ({ label, lines })),
+    );
   });
 
   test("every production public-read module is in the rule boundary", () => {
@@ -522,41 +593,41 @@ describe.serial("public-law relation scan", () => {
         "void readHandle;",
         "export const query = sql`select id from case_law_decisions`;",
       ].join("\n");
-    for (const typeName of [
-      "CaseLawPublicReadDb",
-      "CaseLawPublicReadTransaction",
-    ]) {
-      expect(
-        await lint(
-          caseLawReadTypeSource(typeName),
-          `apps/api/src/handlers/case-law/${typeName}.ts`,
-        ),
-      ).toHaveLength(1);
-    }
-    const registeredQuery = [
-      'import { definePublicLawSharedQuery, PUBLIC_LAW_SHARED_QUERY } from "@/api/lib/public-law-shared-query";',
-      'import { sql } from "drizzle-orm";',
-      "export const query = definePublicLawSharedQuery(",
-      "  PUBLIC_LAW_SHARED_QUERY.caseLawAnalysis,",
-      "  async () => await sql`select id from case_law_decisions`,",
-      ");",
-    ].join("\n");
-    expect(
-      await lint(
-        registeredQuery,
-        "apps/api/src/handlers/case-law/registered-query.ts",
+    const cases = [
+      ...["CaseLawPublicReadDb", "CaseLawPublicReadTransaction"].map(
+        (typeName) => ({
+          source: caseLawReadTypeSource(typeName),
+          sourcePath: `apps/api/src/handlers/case-law/${typeName}.ts`,
+        }),
       ),
-    ).toHaveLength(1);
-    const sharedQueryRegistry = [
-      'import { sql } from "drizzle-orm";',
-      "export const query = sql`select id from case_law_decisions`;",
-    ].join("\n");
-    expect(
-      await lint(
-        sharedQueryRegistry,
-        "apps/api/src/lib/public-law-shared-query.ts",
-      ),
-    ).toHaveLength(1);
+      {
+        source: [
+          'import { definePublicLawSharedQuery, PUBLIC_LAW_SHARED_QUERY } from "@/api/lib/public-law-shared-query";',
+          'import { sql } from "drizzle-orm";',
+          "export const query = definePublicLawSharedQuery(",
+          "  PUBLIC_LAW_SHARED_QUERY.caseLawAnalysis,",
+          "  async () => await sql`select id from case_law_decisions`,",
+          ");",
+        ].join("\n"),
+        sourcePath: "apps/api/src/handlers/case-law/registered-query.ts",
+      },
+      {
+        source: [
+          'import { sql } from "drizzle-orm";',
+          "export const query = sql`select id from case_law_decisions`;",
+        ].join("\n"),
+        sourcePath: "apps/api/src/lib/public-law-shared-query.ts",
+      },
+    ];
+    const results = await Promise.all(
+      cases.map(async ({ source, sourcePath }) => ({
+        sourcePath,
+        reported: (await lint(source, sourcePath)).length,
+      })),
+    );
+    expect(results).toEqual(
+      cases.map(({ sourcePath }) => ({ sourcePath, reported: 1 })),
+    );
   });
 
   test("covers a legislation read", async () => {

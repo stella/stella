@@ -1,7 +1,7 @@
-import { useCallback, useState } from "react";
 import type { ComponentProps, ReactNode } from "react";
 
 import { Button } from "@stll/ui/button";
+import { HorizontalScroller } from "@stll/ui/horizontal-scroller";
 import { cn } from "@stll/ui/utils";
 
 type SuggestedAction = {
@@ -12,16 +12,20 @@ type SuggestedAction = {
 
 export type SuggestedActionSurfaceName = "plain" | "floating" | "overlay";
 
-type SuggestedActionsProps = {
+/**
+ * `row` keeps chips on one line that scrolls sideways, with scroll controls
+ * the caller labels; `wrap` lays chips out over multiple rows; `vertical`
+ * stacks them.
+ */
+type SuggestedActionsLayout =
+  | { orientation?: "vertical" | "wrap"; scrollLabels?: never }
+  | { orientation: "row"; scrollLabels: { next: string; previous: string } };
+
+type SuggestedActionsProps = SuggestedActionsLayout & {
   actions: SuggestedAction[];
   onSelect: (id: string) => void;
   /** Accessible group label (callers pass a translated string). */
   label: string;
-  /**
-   * `horizontal` lays the chips out in a single scrolling row (each chip
-   * keeps its full label); `vertical` stacks them, truncating long labels.
-   */
-  orientation?: "horizontal" | "vertical";
   /**
    * `plain` suits a solid background. `floating` gives each chip an opaque
    * surface so it reads cleanly over document/editor content. `overlay` is
@@ -67,108 +71,70 @@ const SuggestedActionSurface = ({
 );
 
 /**
- * A row (or stack) of click-to-run "suggested action" chips. Horizontal
- * chips scroll sideways so the list never wraps or overflows its container.
- * While chips remain past the row's inline end, that edge fades so a clipped
- * chip reads as "more to scroll" instead of a hard cut; at the end of the
- * scroll the fade lifts so the last chip shows whole. The row shows no
- * scrollbar: the fade carries the overflow signal, and a scrollbar track
- * would add height only when the chips overflow, so the gap to the composer
- * below would depend on content.
+ * A row, wrapping row or stack of click-to-run suggested-action chips.
  */
 export const SuggestedActions = ({
   actions,
   onSelect,
   label,
-  orientation = "horizontal",
+  orientation = "wrap",
+  scrollLabels,
   surface = "plain",
   keyShortcut,
   className,
 }: SuggestedActionsProps) => {
-  // Whether chips remain past the row's inline end: DOM state (overflow and
-  // scroll position), so it is measured through a callback ref whose
-  // observer lives exactly as long as the node. The row is keyed on the chip
-  // set, so a new set of chips remounts it and re-measures from the start.
-  const [moreInlineEnd, setMoreInlineEnd] = useState(false);
-  const horizontalRowRef = useCallback((row: HTMLDivElement | null) => {
-    if (!row) {
-      return undefined;
-    }
-    const measure = () => {
-      // `scrollLeft` runs negative in RTL; the remaining distance does not.
-      const remaining =
-        row.scrollWidth - row.clientWidth - Math.abs(row.scrollLeft);
-      setMoreInlineEnd(remaining > 1);
-    };
-    const observer = new ResizeObserver(measure);
-    observer.observe(row);
-    row.addEventListener("scroll", measure, { passive: true });
-    measure();
-    return () => {
-      observer.disconnect();
-      row.removeEventListener("scroll", measure);
-    };
-  }, []);
-
   if (actions.length === 0) {
     return null;
   }
 
-  const horizontal = orientation === "horizontal";
+  const row = orientation === "row";
 
-  return (
+  const group = (
     <div
       aria-label={label}
       className={cn(
-        "flex max-w-full gap-1.5",
-        horizontal
-          ? [
-              "scrollbar-none overflow-x-auto [&_button]:focus-visible:ring-offset-0 [&_button]:focus-visible:ring-inset",
-              moreInlineEnd &&
-                "[mask-image:linear-gradient(to_right,black_calc(100%-2.5rem),transparent)] focus-within:[mask-image:none] not-focus-within:rtl:[mask-image:linear-gradient(to_left,black_calc(100%-2.5rem),transparent)]",
-            ]
-          : "flex-col items-start",
+        "flex gap-1.5",
+        // The scroller's viewport clips; the padding keeps the chips' shadow.
+        row ? "flex-nowrap items-center py-1" : "max-w-full items-start",
+        orientation === "wrap" && "flex-wrap",
+        orientation === "vertical" && "flex-col",
         className,
       )}
-      key={
-        horizontal ? actions.map((action) => action.id).join("\n") : undefined
-      }
-      onFocusCapture={({ target }) => {
-        if (horizontal && target instanceof HTMLElement) {
-          target.scrollIntoView({
-            block: "nearest",
-            inline: "nearest",
-            behavior: "instant",
-          });
-        }
-      }}
-      ref={horizontal ? horizontalRowRef : undefined}
       role="group"
     >
       {actions.map((action) => (
         <SuggestedActionSurface
-          className={cn(horizontal ? "shrink-0" : "max-w-full")}
+          className={cn(row ? "shrink-0" : "max-w-full")}
           key={action.id}
           surface={surface}
         >
           <Button
             aria-keyshortcuts={keyShortcut}
-            className={cn(
-              "text-foreground font-normal",
-              !horizontal && "max-w-full",
-            )}
+            className={cn("text-foreground font-normal", "max-w-full")}
             onClick={() => onSelect(action.id)}
             size="chip"
             type="button"
             variant={surface === "plain" ? "outline" : "ghost"}
           >
             {action.icon}
-            <span className={cn(!horizontal && "min-w-0 truncate")} dir="auto">
+            <span className="min-w-0 truncate" dir="auto" title={action.label}>
               {action.label}
             </span>
           </Button>
         </SuggestedActionSurface>
       ))}
     </div>
+  );
+
+  if (scrollLabels === undefined) {
+    return group;
+  }
+  return (
+    <HorizontalScroller
+      nextLabel={scrollLabels.next}
+      previousLabel={scrollLabels.previous}
+    >
+      {group}
+    </HorizontalScroller>
   );
 };

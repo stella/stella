@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   mergeJunitReports,
+  missingBatchReport,
   planBatchReporterArguments,
 } from "./junit-batch-report";
 
@@ -97,4 +98,18 @@ describe("JUnit batch merging", () => {
       mergeJunitReports([{ source: "missing.xml", xml: "" }]),
     ).toThrow("Unparseable JUnit report missing.xml");
   });
+});
+
+test("a batch without a report merges as one errored case", () => {
+  const merged = mergeJunitReports([
+    {
+      source: "a.xml",
+      xml: '<testsuites tests="2" failures="0" errors="0"><testsuite name="a" tests="2" /></testsuites>',
+    },
+    { source: "batch-2.xml", xml: missingBatchReport("/tmp/r/batch-2.xml") },
+    { source: "odd.xml", xml: missingBatchReport('/tmp/r/b"<&>.xml') },
+  ]);
+  expect(merged).toStartWith('<testsuites tests="4" failures="0" errors="2">');
+  expect(merged).toContain('<testsuite name="batch-2.xml"');
+  expect(merged).toContain('name="b&quot;&lt;&amp;&gt;.xml"');
 });

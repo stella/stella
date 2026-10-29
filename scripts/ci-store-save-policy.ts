@@ -134,13 +134,24 @@ const assertPinnedStoreRuntime = ({
   const setups = steps
     .slice(0, steps.indexOf(step))
     .filter((entry) => String(entry["uses"]).startsWith("oven-sh/setup-bun@"));
+  // Every setup pins a package.json runtime: the checkout's, or the copy the
+  // trusted tooling fetch holds at workflow_sha for steps that run before the
+  // checkout. The setup the store caller actually runs under is the
+  // checkout's.
+  const pinsPackageJson = (entry: Record<string, unknown>, files: string[]) =>
+    isRecord(entry["with"]) &&
+    files.includes(String(entry["with"]["bun-version-file"])) &&
+    entry["with"]["bun-version"] === undefined;
+  const pinnedSetup = setups.at(-1);
   if (
-    setups.length === 0 ||
+    pinnedSetup === undefined ||
+    !pinsPackageJson(pinnedSetup, ["package.json"]) ||
     setups.some(
       (entry) =>
-        !isRecord(entry["with"]) ||
-        entry["with"]["bun-version-file"] !== "package.json" ||
-        entry["with"]["bun-version"] !== undefined,
+        !pinsPackageJson(entry, [
+          "package.json",
+          ".workflow-tooling/package.json",
+        ]),
     )
   ) {
     panic(

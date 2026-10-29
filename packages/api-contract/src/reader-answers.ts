@@ -21,8 +21,10 @@ export const READER_ANSWER_MESSAGE_STATUSES = [
   "failed",
 ] as const;
 export const READER_ANSWER_QUESTION_MAX_LENGTH = 10_000;
-export const READER_ANSWER_QUOTE_MAX_LENGTH = 2000;
 export const READER_ANSWER_MAX_MESSAGES = 40;
+/** A selection whose offsets or quote do not match the anchored reader text. */
+export const READER_ANSWER_ANCHOR_MISMATCH_CODE =
+  "reader_answer_anchor_mismatch";
 
 /** Streaming message updatedAt is the non-renewing server claim timestamp. */
 export const READER_ANSWER_DEADLINE_MS = 120_000;
@@ -34,12 +36,16 @@ export type ReaderAnswerMessageStatus =
   (typeof READER_ANSWER_MESSAGE_STATUSES)[number];
 
 /** Offsets are UTF-16 offsets into the reader paragraph's plain text. */
-export type ReaderAnswerAnchor = {
+export type ReaderAnswerSpan = {
   paragraphId: string;
   quote: string;
   startOffset: number;
   endOffset: number;
 };
+
+/** A selection's spans, one per paragraph, in reading order; never empty. */
+export type ReaderAnswerSpans = [ReaderAnswerSpan, ...ReaderAnswerSpan[]];
+export type ReaderAnswerAnchor = { spans: ReaderAnswerSpans };
 
 /** Related paragraphs are valid only after this turn's corpus tool returned them. */
 export type ReaderAnswerCitation = {
@@ -56,17 +62,21 @@ export type ReaderAnswerUsage = {
 export type ReaderAnswerModelOptions = { modelId?: string };
 type ReaderAnswerCreateFields = ReaderAnswerModelOptions & {
   decisionId: SafeId<"caseLawDecision">;
-  anchor: ReaderAnswerAnchor;
-  locale: string;
+  /** Any spans; the API admits them only when they match the decision text. */
+  anchor: { spans: ReaderAnswerSpan[] };
+  /** Explicit answer language; omission keeps the document language. */
+  locale?: string;
 };
 export type CreateReaderAnswer = ReaderAnswerCreateFields &
   ({ kind: "ask"; question: string } | { kind: "explain"; question?: never });
 export type ReaderAnswerFollowUp = ReaderAnswerModelOptions & {
   question: string;
-  locale: string;
+  /** Explicit answer language; omission keeps the document language. */
+  locale?: string;
 };
 export type ReaderAnswerRegenerate = ReaderAnswerModelOptions & {
-  locale: string;
+  /** Explicit answer language; omission keeps the document language. */
+  locale?: string;
 };
 
 export type ReaderAnswerMessage = {

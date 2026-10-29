@@ -5,7 +5,6 @@ import {
   API_FILE_SECURITY_REJECTED_ERROR_CODE,
   API_VALIDATION_ERROR_CODE,
   API_VERSION_CONFLICT_ERROR_CODE,
-  AI_FAILURE_CODES,
   CLAUSE_DIRECTIVES_INVALID_CODE,
   CLAUSE_VERSION_LIMIT_ERROR_CODE,
   ENCRYPTED_CONTENT_ERROR_CODE,
@@ -14,7 +13,7 @@ import {
   parseApiErrorValue,
   parseApiValidationIssues,
 } from "@stll/api-contract";
-import type { AIFailureCode, ApiValidationIssue } from "@stll/api-contract";
+import type { ApiValidationIssue } from "@stll/api-contract";
 import {
   ACTION_ADMISSION_REFUSALS,
   isActionAdmissionCode,
@@ -25,16 +24,18 @@ import { providerDiagnosticSchema } from "@stll/api-contract/provider-setup";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import {
   PUBLIC_COUNTRY_UNAVAILABLE_CODE,
-  publicCountryUnavailableSchema,
   type PublicCountryUnavailable,
+  publicCountryUnavailableSchema,
   type PublicLawDomain,
 } from "@stll/api-contract/public-country-capability";
+import { GLOBAL_SEARCH_RANK_WORK_LIMIT_CODE } from "@stll/api-contract/search";
 import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
 import type { VerificationRunCapCode } from "@stll/api-contract/verification-run-caps";
 import { MATTER_CONTACT_CAPACITY_CODE } from "@stll/api-contract/workspace-contacts";
 
 import { getTranslator } from "@/i18n/translator";
 import type { TranslationKey } from "@/i18n/types";
+import { AI_FAILURE_ERROR_KEYS } from "@/lib/errors/ai-failure";
 import { API_ERROR_TAG } from "@/lib/errors/api-tag";
 import { ClientOperationError } from "@/lib/errors/client";
 import {
@@ -51,10 +52,23 @@ export class APIError extends TaggedError(API_ERROR_TAG)<{
   rawMessage?: string | undefined;
   details?: Record<string, unknown> | undefined;
   providerDiagnostic?: ProviderDiagnostic | undefined;
+  transportKind?: "network" | "timeout" | "aborted" | undefined;
+  cause?: unknown;
 }> {}
 
+export const isCancellation = (error: unknown): boolean =>
+  (APIError.is(error) && error.transportKind === "aborted") ||
+  (typeof DOMException !== "undefined" &&
+    error instanceof DOMException &&
+    error.name === "AbortError");
+
 const MAX_API_RETRY_COUNT = 3;
+const CLIENT_ERROR_STATUS = 400;
 const TOO_MANY_REQUESTS_STATUS = 429;
+const SERVER_ERROR_STATUS = 500;
+
+const isClientErrorStatus = (status: number): boolean =>
+  status >= CLIENT_ERROR_STATUS && status < SERVER_ERROR_STATUS;
 
 export const shouldRetryAPIRequest = (
   failureCount: number,
@@ -67,6 +81,11 @@ export const shouldRetryAPIRequest = (
     return (
       failureCount < MAX_API_RETRY_COUNT &&
       ACTION_ADMISSION_REFUSALS[error.code].retryable
+    );
+  }
+  if (APIError.is(error) && error.transportKind !== undefined) {
+    return (
+      failureCount < MAX_API_RETRY_COUNT && error.transportKind !== "aborted"
     );
   }
   // Any other typed error is a deliberate outcome (a disabled surface, a
@@ -85,28 +104,54 @@ export const shouldRetryAPIRequest = (
 export type ToAPIErrorProps = {
   status: number;
   value: unknown;
+  kind?: "network" | "timeout" | "aborted" | undefined;
+  cause?: unknown;
 };
 
-export type EdenResponse<T> =
-  | { data: T; error: null }
-  | { data: null; error: { status: number; value: unknown } };
+export type ApiResponse<T> =
+  { data: T; error: null } | { data: null; error: ToAPIErrorProps };
 
 /**
- * Unwraps an Eden treaty response: throws a localized {@link APIError} when the
+ * Unwraps an API client response: throws a localized {@link APIError} when the
  * response carries an error, otherwise returns `response.data`.
  *
  * `T` is inferred from the response's success branch, so nullable payloads (e.g.
  * public-law endpoints whose `data` is `X | null`) keep their nullability at the
  * call site. Do not pass an explicit type argument; let inference flow.
  */
-export function unwrapEden<T>(response: EdenResponse<T>): T {
+export function unwrapApiResponse<T>(response: ApiResponse<T>): T {
   if (response.error) {
     throw toAPIError(response.error);
   }
   return response.data;
 }
 
-export const toAPIError = ({ status, value }: ToAPIErrorProps) => {
+export const toAPIError = (error: ToAPIErrorProps): APIError => {
+  if (error.kind !== undefined) {
+    const t = getTranslator();
+    let message: string;
+    switch (error.kind) {
+      case "network":
+        message = t("common.networkError");
+        break;
+      case "timeout":
+        message = t("transportErrors.timeout");
+        break;
+      case "aborted":
+        message = "Request aborted";
+        break;
+      default:
+        error.kind satisfies never;
+        panic("Unknown API transport kind", error.kind);
+    }
+    return new APIError({
+      status: error.status,
+      transportKind: error.kind,
+      cause: error.cause,
+      message,
+    });
+  }
+  const { status, value } = error;
   const normalized = normalizeApiError({
     status,
     value: parseApiErrorValue(value),
@@ -183,31 +228,8 @@ const VERIFICATION_RUN_CAP_ERROR_KEYS = {
     "errors.apiCodes.verificationDailyLimitReached",
 } as const satisfies Record<VerificationRunCapCode, TranslationKey>;
 
-const AI_FAILURE_ERROR_KEYS = {
-  [AI_FAILURE_CODES.quota_exhausted]: "chat.sendErrorQuotaExhausted",
-  [AI_FAILURE_CODES.provider_billing]: "chat.sendErrorProviderBilling",
-  [AI_FAILURE_CODES.provider_credentials_rejected]:
-    "chat.sendErrorProviderCredentialsRejected",
-  [AI_FAILURE_CODES.model_unavailable]: "chat.sendErrorModelUnavailable",
-  [AI_FAILURE_CODES.provider_unavailable]: "chat.sendErrorProviderUnavailable",
-  [AI_FAILURE_CODES.provider_stream_incomplete]:
-    "chat.sendErrorStreamIncomplete",
-  [AI_FAILURE_CODES.output_incomplete]: "chat.sendErrorStreamIncomplete",
-  [AI_FAILURE_CODES.output_moderated]: "errors.apiCodes.aiOutputModerated",
-  [AI_FAILURE_CODES.output_invalid]: "errors.apiCodes.aiOutputInvalid",
-  [AI_FAILURE_CODES.deadline_exceeded]: "chat.sendErrorTimedOut",
-  [AI_FAILURE_CODES.loop_detected]: "chat.sendErrorLoopDetected",
-  [AI_FAILURE_CODES.empty_completion]: "chat.sendErrorEmptyCompletion",
-  [AI_FAILURE_CODES.unknown]: "errors.apiCodes.aiUnknown",
-  [AI_FAILURE_CODES.role_not_configured]: "capabilityActions.aiMissing",
-  [AI_FAILURE_CODES.own_key_required]: "capabilityActions.aiMissing",
-  [AI_FAILURE_CODES.provider_task_unsupported]:
-    "errors.apiCodes.aiProviderTaskUnsupported",
-  [AI_FAILURE_CODES.managed_provider_unavailable]:
-    "capabilityActions.aiMissing",
-} as const satisfies Record<AIFailureCode, TranslationKey>;
-
 const CODE_ERROR_KEYS = {
+  [GLOBAL_SEARCH_RANK_WORK_LIMIT_CODE]: "caseLaw.pagination.refineForMore",
   ...AI_FAILURE_ERROR_KEYS,
   ...VERIFICATION_RUN_CAP_ERROR_KEYS,
   [FILE_PROPERTY_TYPE_IMMUTABLE_CODE]:
@@ -306,7 +328,11 @@ export const apiFieldIssueMessage = (
   error: unknown,
   field: string,
 ): string | undefined => {
-  if (!APIError.is(error) || error.code !== API_VALIDATION_ERROR_CODE) {
+  if (
+    !APIError.is(error) ||
+    error.code !== API_VALIDATION_ERROR_CODE ||
+    !isClientErrorStatus(error.status)
+  ) {
     return undefined;
   }
   const issue = parseApiValidationIssues(error.details).find(
@@ -364,14 +390,20 @@ const localizeAPIError = ({ code, details, status }: LocalizeAPIErrorInput) => {
   if (isActionAdmissionCode(code)) {
     return translateError(ACTION_ADMISSION_ERROR_KEYS[code]);
   }
+  // Only a rejected request (4xx) is a validation answer. An outage that
+  // carries the code must keep the unavailable/retry message.
   const issue =
-    code === API_VALIDATION_ERROR_CODE
+    code === API_VALIDATION_ERROR_CODE && isClientErrorStatus(status)
       ? parseApiValidationIssues(details).at(0)
       : undefined;
   if (issue !== undefined) {
     return validationIssueMessage(issue);
   }
-  if (code && isKnownErrorCode(code)) {
+  if (
+    code &&
+    isKnownErrorCode(code) &&
+    !(code === API_VALIDATION_ERROR_CODE && !isClientErrorStatus(status))
+  ) {
     return translateError(CODE_ERROR_KEYS[code]);
   }
   if (

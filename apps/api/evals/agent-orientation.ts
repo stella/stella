@@ -240,7 +240,7 @@ const CLI_INSTRUCTION =
   "do this, do not invent one: reply with one short sentence explaining " +
   "why, and no code block.";
 
-const MCP_SYSTEM_PROMPT = getMcpInstructions("default");
+const MCP_SYSTEM_PROMPT = await getMcpInstructions("default");
 
 // --- arg checking -----------------------------------------------------------
 
@@ -395,8 +395,7 @@ type McpTaskSpec = {
    * model is asked to read.
    */
   preflight?:
-    | { type: "capability-described" }
-    | { type: "compat-search-returned" };
+    { type: "capability-described" } | { type: "compat-search-returned" };
   /**
    * The tool names this task exposes, for a task about a client that carries
    * fewer tools than the surface has. Absent exposes the whole default
@@ -2645,6 +2644,7 @@ const resolveModels = async (
     modelIds.map(async (id) => ({
       id,
       model: await resolveTanStackTextModel({
+        userId: null,
         modelId: id,
         orgAIConfig: null,
         dataClass: "customer",

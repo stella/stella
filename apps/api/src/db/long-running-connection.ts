@@ -1,23 +1,30 @@
-import { panic } from "better-result";
-import { SQL } from "bun";
-import type { ReservedSQL } from "bun";
-import { drizzle } from "drizzle-orm/bun-sql";
+import { panic, Result } from "better-result";
+import type { ReservedSQL, SQL } from "bun";
+import { AsyncLocalStorage } from "node:async_hooks";
 
-import { databaseRelations } from "@/api/db/database-relations";
+import type { databaseRelations } from "@/api/db/database-relations";
 import {
   createDedicatedConnectionOwner,
   DEDICATED_CONNECTIONS_PER_PROCESS,
 } from "@/api/db/dedicated-connection-slots";
+import {
+  positiveDedicatedTimeoutMilliseconds,
+  setDedicatedStatementTimeout,
+} from "@/api/db/dedicated-connection-timeouts";
+import { createDatabase, createSqlClient } from "@/api/db/sql-client";
 import { terminateReserved } from "@/api/db/sql-close";
-import { assertDatabaseLoginPosture } from "@/api/lib/db/assert-database-login-posture";
+import { instrumentDedicatedSqlCounts } from "@/api/lib/db-query-counter";
 import { failureSink } from "@/api/lib/observability/failure";
-import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { isRecord } from "@/api/lib/type-guards";
 
 // The existing transport owner opens every dedicated session, including cancellation.
 const dedicatedConnectionOwner = createDedicatedConnectionOwner({
   capacity: DEDICATED_CONNECTIONS_PER_PROCESS,
-  openClient: (options) => new SQL({ ...options, max: 1 }),
+  openClient: (options, purpose) =>
+    instrumentDedicatedSqlCounts(
+      createSqlClient({ ...options, max: 1 }),
+      purpose === "cancellation" ? "cleanup" : "work",
+    ),
 });
 const { openLongRunningSql } = dedicatedConnectionOwner;
 export const { openMaintenanceSql } = dedicatedConnectionOwner;
@@ -37,17 +44,119 @@ type LongRunningConnectionOptions = {
   signal: AbortSignal;
 };
 
-const positiveMilliseconds = (value: number, name: string): number => {
-  if (!Number.isSafeInteger(value) || value <= 0) {
-    return panic(`${name} must be a finite positive millisecond budget`);
-  }
-  return value;
-};
-
 type ReservableSession = {
   unsafe: (query: string, params?: unknown[]) => PromiseLike<unknown>;
-  release: () => void;
+  release: () => Promise<void>;
   close: () => Promise<void>;
+};
+
+type CancellableReservedSessionOptions<TSession extends ReservableSession> = {
+  reserve: () => Promise<TSession>;
+  cancelBackend: (pid: number) => Promise<unknown>;
+  signal: AbortSignal;
+};
+
+type CancellableReservedSession<TSession extends ReservableSession> = {
+  session: TSession;
+  close: () => Promise<void>;
+};
+
+/** Reserves a backend until cancellation settles, then closes it if aborted. */
+export const openCancellableReservedSession = async <
+  TSession extends ReservableSession,
+>({
+  reserve,
+  cancelBackend,
+  signal,
+}: CancellableReservedSessionOptions<TSession>): Promise<
+  CancellableReservedSession<TSession>
+> => {
+  const runInCaller = AsyncLocalStorage.snapshot();
+  const reserved = await reserve();
+  let cancelling: Promise<unknown> | undefined;
+  let onAbort: (() => void) | undefined;
+  let state: "open" | "closing" | "closed" = "open";
+
+  const close = async () => {
+    if (state !== "open") {
+      panic("Cancellable reserved session already closing");
+    }
+    state = "closing";
+    if (onAbort !== undefined) {
+      signal.removeEventListener("abort", onAbort);
+    }
+    if (cancelling === undefined) {
+      await reserved.release();
+    } else {
+      await cancelling;
+      await terminateReserved(reserved);
+    }
+    state = "closed";
+  };
+
+  try {
+    const rows = await reserved.unsafe("SELECT pg_backend_pid() AS pid");
+    if (!Array.isArray(rows)) {
+      panic("Expected an array from the dedicated PostgreSQL session");
+    }
+    const pid = rows.find(isRecord)?.["pid"];
+    if (typeof pid !== "number") {
+      panic("Expected the dedicated PostgreSQL backend pid");
+    }
+    onAbort = () =>
+      runInCaller(() => {
+        if (cancelling !== undefined) {
+          return;
+        }
+        cancelling = Promise.allSettled([
+          (async () => {
+            await cancelBackend(pid);
+          })(),
+        ]).then(async ([result]) => {
+          if (result.status === "rejected") {
+            const { observeFailure } =
+              await import("@/api/lib/observability/observe-failure");
+            observeFailure(result.reason, {
+              sink: CANCEL_FAILED_SINK,
+              ctx: { step: "cancel_backend" },
+            });
+          }
+          return undefined;
+        });
+      });
+    signal.addEventListener("abort", onAbort, { once: true });
+    if (signal.aborted) {
+      onAbort();
+      signal.throwIfAborted();
+    }
+
+    const session = new Proxy(reserved, {
+      apply(target, _thisArg, args) {
+        signal.throwIfAborted();
+        if (typeof target !== "function") {
+          return panic("Expected a callable dedicated PostgreSQL session");
+        }
+        const result: unknown = Reflect.apply(target, target, args);
+        return result;
+      },
+      get(target, property) {
+        if (property === "unsafe") {
+          return (...args: Parameters<TSession["unsafe"]>) => {
+            signal.throwIfAborted();
+            return Reflect.apply(target.unsafe, target, args);
+          };
+        }
+        const value: unknown = Reflect.get(target, property, target);
+        const bound: unknown =
+          typeof value === "function" ? value.bind(target) : value;
+        return bound;
+      },
+    });
+    return { session, close };
+  } catch (error) {
+    await close();
+    throw error;
+  }
 };
 
 type TransactionBudget = Pick<
@@ -77,90 +186,34 @@ export const withDedicatedReservedSession = async <
   signal,
   work,
 }: ReservedWorkOptions<T, TSession>): Promise<T> => {
-  const reserved = await reserve();
-  const guarded = new Proxy(reserved, {
-    apply(target, _thisArg, args) {
-      signal.throwIfAborted();
-      if (typeof target !== "function") {
-        return panic("Expected a callable dedicated PostgreSQL session");
-      }
-      const result: unknown = Reflect.apply(target, target, args);
-      return result;
-    },
-    get(target, property) {
-      if (property === "unsafe") {
-        return (...args: Parameters<TSession["unsafe"]>) => {
-          signal.throwIfAborted();
-          return Reflect.apply(target.unsafe, target, args);
-        };
-      }
-      const value: unknown = Reflect.get(target, property, target);
-      const bound: unknown =
-        typeof value === "function" ? value.bind(target) : value;
-      return bound;
-    },
+  const { session, close } = await openCancellableReservedSession({
+    reserve,
+    cancelBackend,
+    signal,
   });
-  let cancelling: Promise<unknown> | undefined;
-  let onAbort: (() => void) | undefined;
-  const body = (async () => {
-    const rows = await reserved.unsafe("SELECT pg_backend_pid() AS pid");
-    if (!Array.isArray(rows)) {
-      return panic("Expected an array from the dedicated PostgreSQL session");
-    }
-    const pid = rows.find(isRecord)?.["pid"];
-    if (typeof pid !== "number") {
-      return panic("Expected the dedicated PostgreSQL backend pid");
-    }
-    onAbort = () => {
-      if (cancelling !== undefined) {
-        return;
-      }
-      cancelling = Promise.allSettled([
-        (async () => {
-          await cancelBackend(pid);
-        })(),
-      ]).then(([result]) => {
-        if (result.status === "rejected") {
-          observeFailure(result.reason, {
-            sink: CANCEL_FAILED_SINK,
-            ctx: { step: "cancel_backend" },
-          });
-        }
-        return undefined;
-      });
-    };
-    signal.addEventListener("abort", onAbort, { once: true });
-    if (signal.aborted) {
-      onAbort();
-      signal.throwIfAborted();
-    }
-    return await work(guarded, async ({ statementTimeout, lockTimeout }) => {
-      const statementBudget = positiveMilliseconds(
+  const body = (async () =>
+    work(session, async ({ statementTimeout, lockTimeout }) => {
+      const statementBudget = positiveDedicatedTimeoutMilliseconds(
         statementTimeout,
         "statementTimeout",
       );
-      const lockBudget = positiveMilliseconds(lockTimeout, "lockTimeout");
-      await guarded.unsafe(`SET LOCAL lock_timeout = '${lockBudget}ms'`);
-      await guarded.unsafe(
-        `SET LOCAL statement_timeout = '${statementBudget}ms'`,
+      const lockBudget = positiveDedicatedTimeoutMilliseconds(
+        lockTimeout,
+        "lockTimeout",
       );
-    });
-  })();
+      await session.unsafe(`SET LOCAL lock_timeout = '${lockBudget}ms'`);
+      await setDedicatedStatementTimeout(
+        async (statement) => await session.unsafe(statement),
+        statementBudget,
+      );
+    }))();
   await Promise.allSettled([body]);
-  if (onAbort !== undefined) {
-    signal.removeEventListener("abort", onAbort);
-  }
-  if (cancelling === undefined) {
-    reserved.release();
-  } else {
-    await cancelling;
-    await terminateReserved(reserved);
-  }
+  await close();
   return await body;
 };
 
-const databaseFor = (client: SQL) =>
-  drizzle({ client, relations: databaseRelations });
+const databaseFor = (client: SQL, relations: typeof databaseRelations) =>
+  createDatabase({ client, relations });
 
 type LongRunningHandle = {
   /** Drizzle is bound to the reserved session, not an application pool. */
@@ -180,13 +233,21 @@ export const withLongRunningConnection = async <T>(
   { statementTimeout, lockTimeout, signal }: LongRunningConnectionOptions,
   work: (handle: LongRunningHandle) => Promise<T>,
 ): Promise<T> => {
-  const statementBudget = positiveMilliseconds(
+  const statementBudget = positiveDedicatedTimeoutMilliseconds(
     statementTimeout,
     "statementTimeout",
   );
-  const lockBudget = positiveMilliseconds(lockTimeout, "lockTimeout");
+  const lockBudget = positiveDedicatedTimeoutMilliseconds(
+    lockTimeout,
+    "lockTimeout",
+  );
   signal.throwIfAborted();
-  const { envBase } = await import("@/api/env-base");
+  const [{ envBase }, { databaseRelations }, { assertDatabaseLoginPosture }] =
+    await Promise.all([
+      import("@/api/env-base"),
+      import("@/api/db/database-relations"),
+      import("@/api/lib/db/assert-database-login-posture"),
+    ]);
   const dedicated = await openLongRunningSql({
     url: envBase.DATABASE_URL,
     connectionTimeout: CONNECTION_TIMEOUT_SECONDS,
@@ -201,7 +262,7 @@ export const withLongRunningConnection = async <T>(
       cancelBackend: dedicated.cancelBackend,
       signal,
       work: async (reserved, setTransactionBudget) => {
-        const db = databaseFor(reserved);
+        const db = databaseFor(reserved, databaseRelations);
         await assertDatabaseLoginPosture(db);
         const workResult = await work({
           db,
@@ -210,11 +271,11 @@ export const withLongRunningConnection = async <T>(
             statementTimeout: requestedStatementTimeout,
             lockTimeout: requestedLockTimeout,
           }) => {
-            const requestedStatement = positiveMilliseconds(
+            const requestedStatement = positiveDedicatedTimeoutMilliseconds(
               requestedStatementTimeout,
               "statementTimeout",
             );
-            const requestedLock = positiveMilliseconds(
+            const requestedLock = positiveDedicatedTimeoutMilliseconds(
               requestedLockTimeout,
               "lockTimeout",
             );
@@ -233,4 +294,54 @@ export const withLongRunningConnection = async <T>(
   } finally {
     await dedicated.end();
   }
+};
+
+type DedicatedStatementTimeoutOptions<T> = {
+  query: (
+    statement: string,
+    parameters?: readonly (string | number | null)[],
+  ) => Promise<readonly unknown[]>;
+  statementTimeoutMs: number;
+  work: () => Promise<T>;
+};
+
+/** Temporarily budgets an already reserved maintenance session and restores its exact setting. */
+export const withDedicatedStatementTimeout = async <T>({
+  query,
+  statementTimeoutMs,
+  work,
+}: DedicatedStatementTimeoutOptions<T>): Promise<T> => {
+  const budget = positiveDedicatedTimeoutMilliseconds(
+    statementTimeoutMs,
+    "statementTimeoutMs",
+  );
+  const previous = (
+    await query("SELECT current_setting('statement_timeout') AS timeout")
+  ).find(isRecord)?.["timeout"];
+  if (typeof previous !== "string") {
+    return panic(
+      "Dedicated PostgreSQL session did not return statement_timeout",
+    );
+  }
+  await query("SELECT set_config('statement_timeout', $1, false)", [
+    `${budget}ms`,
+  ]);
+  const outcome = await Result.tryPromise({
+    try: work,
+    catch: (cause) => cause,
+  });
+  const restoration = await Result.tryPromise({
+    try: async () =>
+      await query("SELECT set_config('statement_timeout', $1, false)", [
+        previous,
+      ]),
+    catch: (cause) => cause,
+  });
+  if (outcome.isErr()) {
+    throw outcome.error;
+  }
+  if (restoration.isErr()) {
+    throw restoration.error;
+  }
+  return outcome.value;
 };

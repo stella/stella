@@ -10,6 +10,7 @@ import { stella, stellaIngestion } from "@/api/db/rls";
 import {
   aiMemories,
   anonymizationBlacklistEntries,
+  bilingualTranslationRuns,
   billingCodes,
   caseLawDecisions,
   caseLawMatterLinks,
@@ -24,7 +25,6 @@ import {
   contacts,
   documentCounters,
   documentReferenceCounters,
-  bilingualTranslationRuns,
   docxSuggestions,
   entities,
   entityVersionAiSummaries,
@@ -62,12 +62,14 @@ import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-messag
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeIdType } from "@/api/lib/branded-types";
 import type { ClauseBody } from "@/api/lib/clauses/types";
+import { encryptContent } from "@/api/lib/content-encryption";
+import { createUserFileKey } from "@/api/lib/file-key";
 import { cents } from "@/api/lib/money";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
-import { testFileKey } from "@/api/tests/helpers/file-key";
 import type {
   TestDatabase,
   TestDatabaseTransaction,
@@ -184,6 +186,7 @@ export const createTestIds = () => ({
   // boundary alone, independent of matter access.
   aiMemoryFirmA: id<"aiMemory">(),
   aiMemoryFirmB: id<"aiMemory">(),
+  aiMemoryDeleteB: id<"aiMemory">(),
   // Additional properties for dependencies
   propertyA1dep: id<"property">(),
   propertyB1dep: id<"property">(),
@@ -322,6 +325,12 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       createdAt: new Date(),
     },
   ]);
+  for (const organizationId of [ids.orgA, ids.orgB]) {
+    await recordNewOrganizationAccessState(db, {
+      organizationId,
+      now: new Date(),
+    });
+  }
 
   await db.insert(member).values([
     {
@@ -698,7 +707,7 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       organizationId: ids.orgA,
       name: "Tmpl A",
       fileName: "a.docx",
-      s3Key: "test/a.docx",
+      s3Key: `${ids.orgA}/test/a.docx`,
       sizeBytes: 1024,
       createdBy: ids.userA1,
     },
@@ -707,7 +716,7 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       organizationId: ids.orgB,
       name: "Tmpl B",
       fileName: "b.docx",
-      s3Key: "test/b.docx",
+      s3Key: `${ids.orgB}/test/b.docx`,
       sizeBytes: 1024,
       createdBy: ids.userB1,
     },
@@ -1161,28 +1170,44 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       ...userFileFixture,
       id: ids.userFileGlobalA1,
       userId: ids.userA1,
-      s3Key: testFileKey(`user-files/${ids.userFileGlobalA1}`),
+      s3Key: createUserFileKey({
+        fileId: ids.userFileGlobalA1,
+        mimeType: userFileFixture.mimeType,
+        organizationId: ids.orgA,
+      }),
       threadId: ids.chatThreadGlobalA1,
     },
     {
       ...userFileFixture,
       id: ids.userFileWorkspaceA1,
       userId: ids.userA1,
-      s3Key: testFileKey(`user-files/${ids.userFileWorkspaceA1}`),
+      s3Key: createUserFileKey({
+        fileId: ids.userFileWorkspaceA1,
+        mimeType: userFileFixture.mimeType,
+        organizationId: ids.orgA,
+      }),
       threadId: ids.chatThreadWorkspaceA1,
     },
     {
       ...userFileFixture,
       id: ids.userFileGlobalB1UserA1,
       userId: ids.userA1,
-      s3Key: testFileKey(`user-files/${ids.userFileGlobalB1UserA1}`),
+      s3Key: createUserFileKey({
+        fileId: ids.userFileGlobalB1UserA1,
+        mimeType: userFileFixture.mimeType,
+        organizationId: ids.orgB,
+      }),
       threadId: ids.chatThreadGlobalB1UserA1,
     },
     {
       ...userFileFixture,
       id: ids.userFileWorkspaceB1UserA1,
       userId: ids.userA1,
-      s3Key: testFileKey(`user-files/${ids.userFileWorkspaceB1UserA1}`),
+      s3Key: createUserFileKey({
+        fileId: ids.userFileWorkspaceB1UserA1,
+        mimeType: userFileFixture.mimeType,
+        organizationId: ids.orgB,
+      }),
       threadId: ids.chatThreadWorkspaceB1UserA1,
       thumbnailFileId: Bun.randomUUIDv7(),
     },
@@ -1211,6 +1236,18 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       kind: "preference" as const,
       content: "Firm B cites Bluebook",
       dedupKey: hashSha256Hex(ids.aiMemoryFirmB),
+      source: "user" as const,
+      status: "active" as const,
+      createdBy: ids.userB1,
+    },
+    {
+      id: ids.aiMemoryDeleteB,
+      organizationId: ids.orgB,
+      scope: "user" as const,
+      userId: ids.userB1,
+      kind: "preference" as const,
+      content: "Firm B cites Bluebook",
+      dedupKey: hashSha256Hex(ids.aiMemoryDeleteB),
       source: "user" as const,
       status: "active" as const,
       createdBy: ids.userB1,
@@ -1330,6 +1367,8 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
   // but a wrong-width IV would be a fixture the production reader could never
   // have written. `sourceSha256Hex` satisfies the 64-hex-character CHECK and
   // matches the digest already seeded on the corresponding file field.
+  const encryptedA = await encryptContent(ids.orgA, "extracted text a1");
+  const encryptedB = await encryptContent(ids.orgB, "extracted text b1");
   await db.insert(extractedContent).values([
     {
       entityId: ids.entityA1,
@@ -1339,8 +1378,8 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       sourceFieldId: ids.fileFieldA1,
       sourceFileId: ids.fileObjectA1,
       sourceSha256Hex: "a".repeat(64),
-      ciphertext: Buffer.from("extracted text a1"),
-      iv: Buffer.alloc(12, 0xa1),
+      ciphertext: encryptedA.ciphertext,
+      iv: encryptedA.iv,
       charCount: 17,
       language: "en",
     },
@@ -1352,8 +1391,8 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       sourceFieldId: ids.fileFieldB1,
       sourceFileId: ids.fileObjectB1,
       sourceSha256Hex: "b".repeat(64),
-      ciphertext: Buffer.from("extracted text b1"),
-      iv: Buffer.alloc(12, 0xb1),
+      ciphertext: encryptedB.ciphertext,
+      iv: encryptedB.iv,
       charCount: 17,
       language: "en",
     },
@@ -1459,7 +1498,7 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       organizationId: ids.orgA,
       templateId: ids.templateA,
       version: 1,
-      s3Key: "test/a-v1.docx",
+      s3Key: `${ids.orgA}/test/a-v1.docx`,
       createdBy: ids.userA1,
     },
     {
@@ -1467,7 +1506,7 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       organizationId: ids.orgB,
       templateId: ids.templateB,
       version: 1,
-      s3Key: "test/b-v1.docx",
+      s3Key: `${ids.orgB}/test/b-v1.docx`,
       createdBy: ids.userB1,
     },
   ]);

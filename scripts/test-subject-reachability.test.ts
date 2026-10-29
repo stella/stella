@@ -8,13 +8,14 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import ts from "typescript";
+import { API } from "tsrs/unstable/async";
 
 import {
-  REACHABILITY_CATEGORIES,
   analyzeTestSubjectReachability,
   checkReachabilityBaselineMembership,
+  REACHABILITY_CATEGORIES,
   type ReachabilityCategory,
+  type ReachabilityFinding,
 } from "./test-subject-reachability";
 
 const TEST_FILE = "apps/example/src/widget.test.tsx";
@@ -51,66 +52,70 @@ const git = (root: string, ...args: string[]) => {
 };
 
 describe("test subject reachability", () => {
-  test("the compiler source index and independent sibling parses give identical findings", () => {
+  test("the compiler source index and independent sibling parses give identical findings", async () => {
     const input = fixture("");
     const sibling = path.join(input.root, "apps/example/src/widget.ts");
-    const independentSibling = (filename: string) =>
-      ts.createSourceFile(
-        filename,
-        readFileSync(filename, "utf-8"),
-        ts.ScriptTarget.Latest,
-        true,
-        filename.endsWith("x") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-      );
-    const sources = [
-      "import { reduceWidgetState } from './widget'; test('state', () => reduceWidgetState());",
-      "import { createHandler } from './widget.js'; const reduceWidgetState = () => 'stand-in'; test('state', () => createHandler());",
-      "const reduceWidgetState = () => 'stand-in'; test('state', () => reduceWidgetState());",
-    ];
-    for (const source of sources) {
-      writeFileSync(path.join(input.root, TEST_FILE), source);
+    const compiler = new API({ cwd: input.root });
+    try {
+      const independentSibling = async (filename: string) =>
+        (
+          await compiler.createSourceFile(
+            filename,
+            readFileSync(filename, "utf-8"),
+          )
+        ).sourceFile;
+      const sources = [
+        "import { reduceWidgetState } from './widget'; test('state', () => reduceWidgetState());",
+        "import { createHandler } from './widget.js'; const reduceWidgetState = () => 'stand-in'; test('state', () => createHandler());",
+        "const reduceWidgetState = () => 'stand-in'; test('state', () => reduceWidgetState());",
+      ];
+      for (const source of sources) {
+        writeFileSync(path.join(input.root, TEST_FILE), source);
+        const options = { repoRoot: input.root, files: input.files };
+        const indexed = await analyzeTestSubjectReachability(options);
+        expect(indexed).toEqual(
+          await analyzeTestSubjectReachability({
+            ...options,
+            siblingSource: independentSibling,
+          }),
+        );
+        if (source.includes("stand-in")) {
+          expect(indexed).toContainEqual({
+            file: TEST_FILE,
+            kind: "local-export-collision",
+            name: "reduceWidgetState",
+          });
+        } else {
+          expect(indexed).toEqual([]);
+        }
+      }
+      // An edited export must invalidate the next scan even when the test text is identical.
+      writeFileSync(sibling, "export const replacement = () => 'real';");
       const options = { repoRoot: input.root, files: input.files };
-      const indexed = analyzeTestSubjectReachability(options);
-      expect(indexed).toEqual(
-        analyzeTestSubjectReachability({
+      const findings = await analyzeTestSubjectReachability(options);
+      expect(findings).toEqual(
+        await analyzeTestSubjectReachability({
           ...options,
           siblingSource: independentSibling,
         }),
       );
-      if (source.includes("stand-in")) {
-        expect(indexed).toContainEqual({
-          file: TEST_FILE,
-          kind: "local-export-collision",
-          name: "reduceWidgetState",
-        });
-      } else {
-        expect(indexed).toEqual([]);
-      }
+      expect(
+        findings.some(({ kind }) => kind === "local-export-collision"),
+      ).toBe(false);
+      expect(
+        findings.some(({ kind }) => kind === "no-classified-reachability"),
+      ).toBe(true);
+    } finally {
+      await compiler.close();
     }
-    // An edited export must invalidate the next scan even when the test text is identical.
-    writeFileSync(sibling, "export const replacement = () => 'real';");
-    const options = { repoRoot: input.root, files: input.files };
-    const findings = analyzeTestSubjectReachability(options);
-    expect(findings).toEqual(
-      analyzeTestSubjectReachability({
-        ...options,
-        siblingSource: independentSibling,
-      }),
-    );
-    expect(findings.some(({ kind }) => kind === "local-export-collision")).toBe(
-      false,
-    );
-    expect(
-      findings.some(({ kind }) => kind === "no-classified-reachability"),
-    ).toBe(true);
   });
 
-  test("reports a stand-in state machine and component", () => {
+  test("reports a stand-in state machine and component", async () => {
     const input = fixture(
       "const reduceWidgetState = () => 'stand-in';\nconst WidgetPanel = () => null;\ntest('state', () => reduceWidgetState());\n",
     );
     expect(
-      analyzeTestSubjectReachability({
+      await analyzeTestSubjectReachability({
         repoRoot: input.root,
         files: input.files,
       }),
@@ -133,12 +138,62 @@ describe("test subject reachability", () => {
     ]);
   });
 
-  test("follows an alias wrapper to the real subject", () => {
+  test("a test that drives a patched dependency reaches the committed patch", async () => {
+    const drives =
+      "import { PostMessageTransport } from '@vendor/client';\ntest('limits', () => new PostMessageTransport());\n";
+    const unclassified: ReachabilityFinding[] = [
+      {
+        file: TEST_FILE,
+        kind: "no-classified-reachability",
+        attempted: REACHABILITY_CATEGORIES,
+      },
+    ];
+    const analyze = async (source: string, patchedDependencies?: object) => {
+      const input = fixture(source);
+      if (patchedDependencies) {
+        writeFileSync(
+          path.join(input.root, "package.json"),
+          JSON.stringify({ patchedDependencies }),
+        );
+      }
+      return await analyzeTestSubjectReachability({
+        repoRoot: input.root,
+        files: input.files,
+      });
+    };
+    const patched = {
+      "@vendor/client@7.1.1": "patches/@vendor%2Fclient@7.1.1.patch",
+    };
+
+    expect(await analyze(drives, patched)).toEqual([]);
+    const drivesDynamically =
+      "const { PostMessageTransport } = await import('@vendor/client');\ntest('limits', () => new PostMessageTransport());\n";
+    expect(await analyze(drivesDynamically, patched)).toEqual([]);
+    expect(await analyze(drivesDynamically)).toEqual(unclassified);
+    expect(
+      await analyze(
+        drives.replace("@vendor/client", "@vendor/client/transport"),
+        patched,
+      ),
+    ).toEqual([]);
+    expect(await analyze(drives)).toEqual(unclassified);
+    expect(
+      await analyze(drives, { "@vendor/other@1.0.0": "patches/other.patch" }),
+    ).toEqual(unclassified);
+    expect(
+      await analyze(
+        "import { PostMessageTransport } from '@vendor/client';\ntest('limits', () => expect(true).toBe(true));\n",
+        patched,
+      ),
+    ).toEqual(unclassified);
+  });
+
+  test("follows an alias wrapper to the real subject", async () => {
     const input = fixture(
       "import { reduceWidgetState as realReducer } from './widget';\nconst reduce = () => realReducer();\ntest('state', reduce);\n",
     );
     expect(
-      analyzeTestSubjectReachability({
+      await analyzeTestSubjectReachability({
         repoRoot: input.root,
         files: input.files,
       }),
@@ -149,7 +204,7 @@ describe("test subject reachability", () => {
       "import { reduceWidgetState as realReducer } from './widget';\nconst reduce = () => 'stand-in';\ntest('state', reduce);\n",
     );
     expect(
-      analyzeTestSubjectReachability({
+      await analyzeTestSubjectReachability({
         repoRoot: input.root,
         files: input.files,
       }),
@@ -162,43 +217,43 @@ describe("test subject reachability", () => {
     ]);
   });
 
-  test("resolves a NodeNext .js import to its TypeScript source", () => {
+  test("resolves a NodeNext .js import to its TypeScript source", async () => {
     const input = fixture(
       "import { reduceWidgetState } from './widget.js';\ntest('state', () => expect(reduceWidgetState()).toBe('real'));\n",
     );
     expect(
-      analyzeTestSubjectReachability({
+      await analyzeTestSubjectReachability({
         repoRoot: input.root,
         files: input.files,
       }),
     ).toEqual([]);
   });
 
-  test("follows a module-scope result initializer to the real subject", () => {
+  test("follows a module-scope result initializer to the real subject", async () => {
     const input = fixture(
       "import { reduceWidgetState } from './widget';\nconst actual = reduceWidgetState();\ntest('state', () => expect(actual).toBe('real'));\n",
     );
     expect(
-      analyzeTestSubjectReachability({
+      await analyzeTestSubjectReachability({
         repoRoot: input.root,
         files: input.files,
       }),
     ).toEqual([]);
   });
 
-  test("follows a module-scope factory initializer to the real subject", () => {
+  test("follows a module-scope factory initializer to the real subject", async () => {
     const input = fixture(
       "import { createHandler } from './widget';\nconst handler = createHandler();\ntest('state', () => expect(handler()).toBe('real'));\n",
     );
     expect(
-      analyzeTestSubjectReachability({
+      await analyzeTestSubjectReachability({
         repoRoot: input.root,
         files: input.files,
       }),
     ).toEqual([]);
   });
 
-  test("classifies a directly tested support factory as the real subject", () => {
+  test("classifies a directly tested support factory as the real subject", async () => {
     const { root } = fixture("");
     const helperFile = "apps/example/src/tests/helpers/test-mutants.ts";
     const testFile = "apps/example/src/tests/helpers/test-mutants.test.ts";
@@ -212,7 +267,10 @@ describe("test subject reachability", () => {
       "import { createTestMutantDirectory } from './test-mutants';\ntest('directory', () => expect(createTestMutantDirectory('mutant-')).toBe('mutant-'));\n",
     );
     expect(
-      analyzeTestSubjectReachability({ repoRoot: root, files: [testFile] }),
+      await analyzeTestSubjectReachability({
+        repoRoot: root,
+        files: [testFile],
+      }),
     ).toEqual([]);
 
     writeFileSync(
@@ -220,7 +278,10 @@ describe("test subject reachability", () => {
       "import { createTestMutantDirectory } from './test-mutants';\nconst unused = () => createTestMutantDirectory('mutant-');\ntest('directory', () => expect('stand-in').toBe('stand-in'));\n",
     );
     expect(
-      analyzeTestSubjectReachability({ repoRoot: root, files: [testFile] }),
+      await analyzeTestSubjectReachability({
+        repoRoot: root,
+        files: [testFile],
+      }),
     ).toEqual([
       {
         file: testFile,
@@ -230,12 +291,12 @@ describe("test subject reachability", () => {
     ]);
   });
 
-  test("does not count an imported subject hidden in an uncalled wrapper", () => {
+  test("does not count an imported subject hidden in an uncalled wrapper", async () => {
     const input = fixture(
       "import { reduceWidgetState as realReducer } from './widget';\nconst unused = () => realReducer();\nconst reduceWidgetState = () => 'stand-in';\ntest('state', () => reduceWidgetState());\n",
     );
     expect(
-      analyzeTestSubjectReachability({
+      await analyzeTestSubjectReachability({
         repoRoot: input.root,
         files: input.files,
       }),
@@ -253,12 +314,12 @@ describe("test subject reachability", () => {
     ]);
   });
 
-  test("does not count a type-only reference to an imported subject", () => {
+  test("does not count a type-only reference to an imported subject", async () => {
     const input = fixture(
       "import { reduceWidgetState } from './widget';\ntype Subject = typeof reduceWidgetState;\nconst standIn: Subject = () => 'stand-in';\ntest('state', () => standIn());\n",
     );
     expect(
-      analyzeTestSubjectReachability({
+      await analyzeTestSubjectReachability({
         repoRoot: input.root,
         files: input.files,
       }),
@@ -271,12 +332,12 @@ describe("test subject reachability", () => {
     ]);
   });
 
-  test("does not count a shadowed local binding as the imported subject", () => {
+  test("does not count a shadowed local binding as the imported subject", async () => {
     const input = fixture(
       "import { reduceWidgetState } from './widget';\ntest('state', () => { const reduceWidgetState = () => 'stand-in'; return reduceWidgetState(); });\n",
     );
     expect(
-      analyzeTestSubjectReachability({
+      await analyzeTestSubjectReachability({
         repoRoot: input.root,
         files: input.files,
       }),
@@ -289,36 +350,36 @@ describe("test subject reachability", () => {
     ]);
   });
 
-  test("classifies a spawned source entry", () => {
+  test("classifies a spawned source entry", async () => {
     const input = fixture(
       "test('cli', () => Bun.spawn(['bun', 'apps/example/src/widget.ts']));\n",
     );
     expect(
-      analyzeTestSubjectReachability({
+      await analyzeTestSubjectReachability({
         repoRoot: input.root,
         files: input.files,
       }),
     ).toEqual([]);
   });
 
-  test("classifies a bundled source entry", () => {
+  test("classifies a bundled source entry", async () => {
     const input = fixture(
       "test('bundle', () => Bun.build({ entrypoints: ['apps/example/src/widget.ts'] }));\n",
     );
     expect(
-      analyzeTestSubjectReachability({
+      await analyzeTestSubjectReachability({
         repoRoot: input.root,
         files: input.files,
       }),
     ).toEqual([]);
   });
 
-  test("classifies raw SQL against a migrated test database", () => {
+  test("classifies raw SQL against a migrated test database", async () => {
     const input = fixture(
       "test('gate', async () => { const client = await createTestPglite(); await client.query('SELECT 1'); });\n",
     );
     expect(
-      analyzeTestSubjectReachability({
+      await analyzeTestSubjectReachability({
         repoRoot: input.root,
         files: input.files,
       }),
@@ -353,10 +414,10 @@ describe("test subject reachability", () => {
   ] as const;
 
   for (const { title, source, attempted } of UNREACHED_HELPER_CASES) {
-    test(`does not count ${title}`, () => {
+    test(`does not count ${title}`, async () => {
       const input = fixture(source);
       expect(
-        analyzeTestSubjectReachability({
+        await analyzeTestSubjectReachability({
           repoRoot: input.root,
           files: input.files,
         }),
@@ -395,10 +456,10 @@ describe("test subject reachability", () => {
   ] as const;
 
   for (const { title, source } of REACHED_HELPER_CASES) {
-    test(`counts ${title}`, () => {
+    test(`counts ${title}`, async () => {
       const input = fixture(source);
       expect(
-        analyzeTestSubjectReachability({
+        await analyzeTestSubjectReachability({
           repoRoot: input.root,
           files: input.files,
         }),
@@ -444,7 +505,7 @@ describe("test subject reachability", () => {
 
   test.each(SOURCE_INDEX_CASES)(
     "classifies a shared source index read through a $label",
-    ({ specifier, manifest, reached }) => {
+    async ({ specifier, manifest, reached }) => {
       const input = fixture(
         `import { sourceFileIndex } from '${specifier}';\ntest('inventory', () => sourceFileIndex().includes('widget.ts'));\n`,
       );
@@ -461,7 +522,7 @@ describe("test subject reachability", () => {
       );
 
       expect(
-        analyzeTestSubjectReachability({
+        await analyzeTestSubjectReachability({
           repoRoot: input.root,
           files: input.files,
         }),
@@ -479,55 +540,67 @@ describe("test subject reachability", () => {
     },
   );
 
-  test("follows a subject passed through a registered test harness", () => {
+  test("follows a subject passed through a registered test harness", async () => {
     const input = fixture(
       "import { reduceWidgetState } from './widget';\nconst registerCases = (options: { run: () => string }) => test('case', options.run);\nregisterCases({ run: () => reduceWidgetState() });\n",
     );
     expect(
-      analyzeTestSubjectReachability({
+      await analyzeTestSubjectReachability({
         repoRoot: input.root,
         files: input.files,
       }),
     ).toEqual([]);
   });
 
-  test("follows a dynamically imported component through a UI harness", () => {
+  test("follows a subject passed through an awaited registered test harness", async () => {
+    const input = fixture(
+      "import { reduceWidgetState } from './widget';\nconst registerCases = async (options: { run: () => string }) => { await Promise.resolve(); test('case', options.run); };\nawait registerCases({ run: () => reduceWidgetState() });\n",
+    );
+    expect(
+      await analyzeTestSubjectReachability({
+        repoRoot: input.root,
+        files: input.files,
+      }),
+    ).toEqual([]);
+  });
+
+  test("follows a dynamically imported component through a UI harness", async () => {
     const input = fixture(
       "const { WidgetPanel } = await import('./widget');\nconst mount = () => WidgetPanel();\ntest('ui', mount);\n",
     );
     expect(
-      analyzeTestSubjectReachability({
+      await analyzeTestSubjectReachability({
         repoRoot: input.root,
         files: input.files,
       }),
     ).toEqual([]);
   });
 
-  test("follows a module-scope destructured owner factory", () => {
+  test("follows a module-scope destructured owner factory", async () => {
     const input = fixture(
       "import { createHandler } from './widget';\nconst { call } = { call: createHandler() };\ntest('owner', () => call());\n",
     );
     expect(
-      analyzeTestSubjectReachability({
+      await analyzeTestSubjectReachability({
         repoRoot: input.root,
         files: input.files,
       }),
     ).toEqual([]);
   });
 
-  test("accepts dependency injection and a model beside the real component", () => {
+  test("accepts dependency injection and a model beside the real component", async () => {
     const input = fixture(
       "import { WidgetPanel, reduceWidgetState } from './widget';\nconst model = () => 'oracle';\nconst makeHarness = (subject: typeof reduceWidgetState) => subject();\ntest('ui', () => { WidgetPanel(); return makeHarness(reduceWidgetState) === model(); });\n",
     );
     expect(
-      analyzeTestSubjectReachability({
+      await analyzeTestSubjectReachability({
         repoRoot: input.root,
         files: input.files,
       }),
     ).toEqual([]);
   });
 
-  test("does not treat a fixture builder name as a subject stand-in", () => {
+  test("does not treat a fixture builder name as a subject stand-in", async () => {
     const input = fixture(
       "import { reduceWidgetState } from './widget';\nconst widgetFixture = () => ({ state: 'ready' });\ntest('fixture', () => reduceWidgetState(widgetFixture()));\n",
     );
@@ -536,14 +609,14 @@ describe("test subject reachability", () => {
       "export const widgetFixture = () => ({ state: 'production' });\nexport const reduceWidgetState = (value: unknown) => value;\n",
     );
     expect(
-      analyzeTestSubjectReachability({
+      await analyzeTestSubjectReachability({
         repoRoot: input.root,
         files: input.files,
       }),
     ).toEqual([]);
   });
 
-  test("rejects an exception added to the head baseline", () => {
+  test("rejects an exception added to the head baseline", async () => {
     const root = mkdtempSync(path.join(tmpdir(), "subject-reachability-git-"));
     roots.push(root);
     mkdirSync(path.join(root, "scripts"), { recursive: true });

@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import type { SQL } from "drizzle-orm";
 import { sql } from "drizzle-orm";
-import { PgDialect, getTableConfig } from "drizzle-orm/pg-core";
+import { getTableConfig, PgDialect } from "drizzle-orm/pg-core";
 import { readFileSync } from "node:fs";
 import nodePath from "node:path";
 

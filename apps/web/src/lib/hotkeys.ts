@@ -1,5 +1,5 @@
 import { detectPlatform, formatForDisplay } from "@tanstack/react-hotkeys";
-import type { IndividualKey, Hotkey } from "@tanstack/react-hotkeys";
+import type { HotkeyChord, IndividualKey } from "@tanstack/react-hotkeys";
 
 import type { TranslationKey } from "@/i18n/types";
 
@@ -11,16 +11,18 @@ export const HOTKEYS = {
   NEW_MATTER: "Mod+Shift+E",
   LOG_TIME: "Mod+Alt+T",
   SELECT_ALL: "Mod+A",
+  UNDO: "Mod+Z",
+  REDO: "Mod+Shift+Z",
   FIND: "Mod+F",
   ACCEPT_SUGGESTION: "Alt+Enter",
   REJECT_SUGGESTION: "Alt+Shift+Enter",
   NEXT_SUGGESTION: "Alt+ArrowDown",
   PREVIOUS_SUGGESTION: "Alt+ArrowUp",
-} as const satisfies Record<string, Hotkey>;
+} as const satisfies Record<string, HotkeyChord>;
 
 /**
  * The cheatsheet dialog opens on `?`. `Shift+/` is intentionally NOT a
- * TanStack `Hotkey` (that type excludes `Shift+<punctuation>` because the
+ * TanStack `HotkeyChord` (that type excludes `Shift+<punctuation>` because the
  * physical key that yields `?` is keyboard-layout dependent). We match the
  * produced character via `KeyboardEvent.key` instead, which is layout-correct.
  */
@@ -34,12 +36,12 @@ export const SHORTCUT_CONTEXTS = ["global", "workspace", "pdf"] as const;
 export type ShortcutContext = (typeof SHORTCUT_CONTEXTS)[number];
 
 /**
- * How a shortcut is bound. `hotkey` maps to a @tanstack `Hotkey` (bound with
+ * How a shortcut is bound. `hotkey` maps to a @tanstack `HotkeyChord` (bound with
  * `useHotkey`, displayed with `formatForDisplay`); `char` is a bare produced
  * character (layout-correct, matched via `KeyboardEvent.key`).
  */
 export type ShortcutBinding =
-  | { readonly type: "hotkey"; readonly hotkey: Hotkey }
+  | { readonly type: "hotkey"; readonly hotkey: HotkeyChord }
   | { readonly type: "char"; readonly char: string };
 
 /**
@@ -71,6 +73,8 @@ export type ShortcutLabelKey = Extract<
   | "chat.newChat"
   | "common.selectAll"
   | "docxReview.reject"
+  | "legalReader.annotations.history.redoShortcut"
+  | "legalReader.annotations.history.undoShortcut"
 >;
 
 type ShortcutDescriptorShape = {
@@ -78,6 +82,7 @@ type ShortcutDescriptorShape = {
   readonly binding: ShortcutBinding;
   readonly labelKey: ShortcutLabelKey;
   readonly contexts: readonly ShortcutContext[];
+  readonly capability?: "timeBilling";
 };
 
 type ShortcutGroupShape = {
@@ -131,6 +136,7 @@ export const SHORTCUT_GROUPS = [
         binding: { type: "hotkey", hotkey: HOTKEYS.LOG_TIME },
         labelKey: "common.logTime",
         contexts: ["global"],
+        capability: "timeBilling",
       },
       {
         id: "newChat",
@@ -149,6 +155,20 @@ export const SHORTCUT_GROUPS = [
         binding: { type: "hotkey", hotkey: HOTKEYS.FIND },
         labelKey: "common.find",
         contexts: ["workspace"],
+      },
+      // Undo is the same chord on every page that can show a reader (case
+      // law, statutes, the inspector), so no other shortcut may take it.
+      {
+        id: "undoReaderAnnotation",
+        binding: { type: "hotkey", hotkey: HOTKEYS.UNDO },
+        labelKey: "legalReader.annotations.history.undoShortcut",
+        contexts: ["global"],
+      },
+      {
+        id: "redoReaderAnnotation",
+        binding: { type: "hotkey", hotkey: HOTKEYS.REDO },
+        labelKey: "legalReader.annotations.history.redoShortcut",
+        contexts: ["global"],
       },
     ],
   },
@@ -207,6 +227,21 @@ export type ShortcutGroup = {
   readonly shortcuts: readonly ShortcutDescriptor[];
 };
 
+export type ShortcutCapabilities = { readonly timeBilling: boolean };
+
+/** The same capability projection is consumed by help, palettes, and binders. */
+export const availableShortcutGroups = (
+  groups: readonly ShortcutGroup[],
+  capabilities: ShortcutCapabilities,
+): ShortcutGroup[] =>
+  groups.map((group) => ({
+    ...group,
+    shortcuts: group.shortcuts.filter(
+      (shortcut) =>
+        shortcut.capability === undefined || capabilities[shortcut.capability],
+    ),
+  }));
+
 export type HotkeyPlatform = ReturnType<typeof detectPlatform>;
 
 export const SSR_HOTKEY_PLATFORM: HotkeyPlatform = "linux";
@@ -225,7 +260,7 @@ export const resolveHydrationSafeHotkeyPlatform = (
   state.status === "mounted" ? state.detected : SSR_HOTKEY_PLATFORM;
 
 export const formatHotkeyForPlatform = (
-  hotkey: Hotkey,
+  hotkey: HotkeyChord,
   platform: HotkeyPlatform,
 ): string => formatForDisplay(hotkey, { platform });
 

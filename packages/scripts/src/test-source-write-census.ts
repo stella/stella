@@ -1,10 +1,11 @@
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
 
 import { repoRelativePath } from "@stll/portable-path";
 
+import type { IdentifierNode as Identifier } from "./syntax-estree-names";
+import { type Node, parseSource, walk } from "./syntax-tree";
 import { sourceWriteExceptionIssues } from "./test-source-write-exceptions";
 
 const repositoryRoot = path.resolve(import.meta.dir, "../../..");
@@ -28,25 +29,248 @@ export const writers = new Map([
   ["symlink", [1]],
 ]);
 
-type ResolvePathCallOptions = {
-  name: string | undefined;
-  values: (string | undefined)[];
-  packageRoot: string;
+const createAnalysis = (file: string, source: string) => {
+  const tree = parseSource(file, source);
+  const parents = new Map<Node, Node>();
+  walk(tree.program, (node, ancestors) => {
+    const parent = ancestors.at(-1);
+    if (parent) {
+      parents.set(node, parent);
+    }
+  });
+  const bindings = new Map<Node, Map<string, Node>>();
+  const aliases = new Map<string, string>();
+  walk(tree.program, (node, ancestors) => {
+    if (node.type === "ImportSpecifier") {
+      aliases.set(
+        node.local.name,
+        node.imported.type === "Identifier"
+          ? node.imported.name
+          : node.imported.value,
+      );
+    }
+    if (
+      node.type === "Property" &&
+      !node.shorthand &&
+      !node.computed &&
+      ancestors.at(-1)?.type === "ObjectPattern" &&
+      node.key.type === "Identifier"
+    ) {
+      const owner = ancestors.findLast(
+        (ancestor) =>
+          ![
+            "ObjectPattern",
+            "ArrayPattern",
+            "Property",
+            "AssignmentPattern",
+            "RestElement",
+          ].includes(ancestor.type),
+      );
+      const binding =
+        node.value.type === "AssignmentPattern" ? node.value.left : node.value;
+      if (
+        owner?.type !== "AssignmentExpression" &&
+        binding.type === "Identifier"
+      ) {
+        aliases.set(binding.name, node.key.name);
+      }
+    }
+    if (
+      node.type === "VariableDeclarator" &&
+      node.id.type === "Identifier" &&
+      node.init !== null
+    ) {
+      const scope = scopeOf({ node, parents, program: tree.program });
+      let entries = bindings.get(scope);
+      if (!entries) {
+        entries = new Map();
+        bindings.set(scope, entries);
+      }
+      entries.set(node.id.name, node.init);
+    }
+  });
+  return { tree, parents, bindings, aliases };
 };
 
-const resolvePathCall = ({
-  name,
-  values,
+type ScopeOfOptions = { node: Node; parents: Map<Node, Node>; program: Node };
+type Analysis = ReturnType<typeof createAnalysis>;
+
+const scopeOf = ({ node, parents, program }: ScopeOfOptions) => {
+  let scope = parents.get(node);
+  while (scope && scope.type !== "BlockStatement" && scope.type !== "Program") {
+    scope = parents.get(scope);
+  }
+  return scope ?? program;
+};
+
+type BindingForOptions = {
+  node: Identifier;
+  parents: Map<Node, Node>;
+  bindings: Map<Node, Map<string, Node>>;
+};
+const bindingFor = ({ node, parents, bindings }: BindingForOptions) => {
+  let scope = parents.get(node);
+  while (scope) {
+    const initializer = bindings.get(scope)?.get(node.name);
+    if (initializer !== undefined) {
+      return initializer;
+    }
+    if (scope.type === "Program") {
+      return undefined;
+    }
+    scope = parents.get(scope);
+  }
+  return undefined;
+};
+
+type CallNameOptions = {
+  expression: Node;
+  analysis: Analysis;
+  seen?: Set<Node>;
+};
+const memberPropertyName = (expression: Node) => {
+  if (expression.type !== "MemberExpression") {
+    return undefined;
+  }
+  if (expression.computed) {
+    if (
+      expression.property.type === "Literal" &&
+      typeof expression.property.value === "string"
+    ) {
+      return expression.property.value;
+    }
+    return undefined;
+  }
+  if (expression.property.type === "Identifier") {
+    return expression.property.name;
+  }
+  return undefined;
+};
+
+const callName = ({
+  expression,
+  analysis,
+  seen = new Set<Node>(),
+}: CallNameOptions): string | undefined => {
+  if (seen.has(expression)) {
+    return undefined;
+  }
+  if (expression.type === "ChainExpression") {
+    return callName({
+      expression: expression.expression,
+      analysis,
+      seen: new Set(seen).add(expression),
+    });
+  }
+  if (expression.type === "Identifier") {
+    const initializer = bindingFor({
+      node: expression,
+      parents: analysis.parents,
+      bindings: analysis.bindings,
+    });
+    if (initializer !== undefined) {
+      return callName({
+        expression: initializer,
+        analysis,
+        seen: new Set(seen).add(expression),
+      });
+    }
+    return expression.name === "write" && !analysis.aliases.has(expression.name)
+      ? undefined
+      : (analysis.aliases.get(expression.name) ?? expression.name);
+  }
+  if (expression.type === "MemberExpression") {
+    const property = memberPropertyName(expression);
+    if (property === undefined) {
+      return undefined;
+    }
+    if (
+      property === "write" &&
+      callName({
+        expression: expression.object,
+        analysis,
+        seen: new Set(seen).add(expression),
+      }) !== "Bun"
+    ) {
+      return undefined;
+    }
+    return property;
+  }
+  return undefined;
+};
+
+type EvaluatePathOptions = {
+  node: Node;
+  analysis: Analysis;
+  absoluteFile: string;
+  packageRoot: string;
+  seen?: Set<Node>;
+};
+
+const evaluateUrlPath = ({
+  node,
+  analysis,
+  absoluteFile,
   packageRoot,
-}: ResolvePathCallOptions) => {
+  seen,
+}: EvaluatePathOptions) => {
+  if (node.type !== "NewExpression") {
+    return undefined;
+  }
+  const relative = node.arguments.at(0);
+  const base = node.arguments.at(1);
+  const relativeValue =
+    relative === undefined
+      ? undefined
+      : evaluatePath({
+          node: relative,
+          analysis,
+          absoluteFile,
+          packageRoot,
+          seen,
+        });
+  const baseValue =
+    base === undefined
+      ? undefined
+      : evaluatePath({
+          node: base,
+          analysis,
+          absoluteFile,
+          packageRoot,
+          seen,
+        });
+  if (relativeValue !== undefined && baseValue?.startsWith("file://")) {
+    return path.resolve(path.dirname(baseValue.slice(7)), relativeValue);
+  }
+  return undefined;
+};
+
+const evaluateCallPath = ({
+  node,
+  analysis,
+  absoluteFile,
+  packageRoot,
+  seen,
+}: EvaluatePathOptions) => {
+  if (node.type !== "CallExpression") {
+    return undefined;
+  }
+  const name = callName({ expression: node.callee, analysis });
+  if (name === "tmpdir") {
+    return "/__outside_repository_tmp__";
+  }
+  const values = node.arguments.map((argument) =>
+    evaluatePath({ node: argument, analysis, absoluteFile, packageRoot, seen }),
+  );
   if (name === "join" || name === "resolve") {
     if (values.every((value) => value === undefined)) {
       return undefined;
     }
     const segments = values.map((value) => value ?? "__dynamic__");
-    return name === "join"
-      ? path.join(...segments)
-      : path.resolve(packageRoot, ...segments);
+    if (name === "join") {
+      return path.join(...segments);
+    }
+    return path.resolve(packageRoot, ...segments);
   }
   const first = values.at(0);
   if (first === undefined) {
@@ -64,102 +288,132 @@ const resolvePathCall = ({
   return undefined;
 };
 
-type SourcePathEvaluatorOptions = {
-  absoluteFile: string;
-  packageRoot: string;
-  bindingFor: (node: ts.Identifier) => ts.Expression | undefined;
-  callName: (node: ts.Expression) => string | undefined;
-};
-
-const createSourcePathEvaluator = ({
+const evaluatePath = ({
+  node,
+  analysis,
   absoluteFile,
   packageRoot,
-  bindingFor,
-  callName,
-}: SourcePathEvaluatorOptions) => {
-  const evaluatePath = (
-    node: ts.Expression,
-    seen = new Set<ts.Node>(),
-  ): string | undefined => {
-    if (seen.has(node)) {
-      return undefined;
+  seen = new Set<Node>(),
+}: EvaluatePathOptions): string | undefined => {
+  if (seen.has(node)) {
+    return undefined;
+  }
+  const nextSeen = new Set(seen).add(node);
+  if (node.type === "Literal" && typeof node.value === "string") {
+    return node.value;
+  }
+  if (node.type === "Identifier") {
+    if (node.name === "__dirname") {
+      return path.dirname(absoluteFile);
     }
-    const nextSeen = new Set(seen).add(node);
-    if (ts.isStringLiteralLike(node)) {
-      return node.text;
+    const initializer = bindingFor({
+      node,
+      parents: analysis.parents,
+      bindings: analysis.bindings,
+    });
+    return initializer === undefined
+      ? undefined
+      : evaluatePath({
+          node: initializer,
+          analysis,
+          absoluteFile,
+          packageRoot,
+          seen: nextSeen,
+        });
+  }
+  if (
+    node.type === "MemberExpression" &&
+    !node.computed &&
+    node.property.type === "Identifier" &&
+    node.object.type === "MetaProperty"
+  ) {
+    if (node.property.name === "dir" || node.property.name === "dirname") {
+      return path.dirname(absoluteFile);
     }
-    if (ts.isIdentifier(node)) {
-      if (node.text === "__dirname") {
-        return path.dirname(absoluteFile);
-      }
-      const initializer = bindingFor(node);
-      return initializer === undefined
-        ? undefined
-        : evaluatePath(initializer, nextSeen);
+    if (node.property.name === "url") {
+      return `file://${absoluteFile}`;
     }
-    if (
-      ts.isPropertyAccessExpression(node) &&
-      ts.isMetaProperty(node.expression)
-    ) {
-      if (node.name.text === "dir" || node.name.text === "dirname") {
-        return path.dirname(absoluteFile);
-      }
-      if (node.name.text === "url") {
-        return `file://${absoluteFile}`;
-      }
-    }
-    if (
-      ts.isParenthesizedExpression(node) ||
-      ts.isAwaitExpression(node) ||
-      ts.isAsExpression(node) ||
-      ts.isNonNullExpression(node)
-    ) {
-      return evaluatePath(node.expression, nextSeen);
-    }
-    if (ts.isTemplateExpression(node)) {
-      let value = node.head.text;
-      for (const span of node.templateSpans) {
-        value += `${evaluatePath(span.expression, nextSeen) ?? "__dynamic__"}${span.literal.text}`;
-      }
-      return value;
-    }
-    if (
-      ts.isBinaryExpression(node) &&
-      node.operatorToken.kind === ts.SyntaxKind.PlusToken
-    ) {
-      const left = evaluatePath(node.left, nextSeen);
-      const right = evaluatePath(node.right, nextSeen);
-      return left === undefined && right === undefined
-        ? undefined
-        : `${left ?? "__dynamic__"}${right ?? "__dynamic__"}`;
-    }
-    if (ts.isNewExpression(node) && callName(node.expression) === "URL") {
-      return evaluateUrl(node, nextSeen);
-    }
-    if (!ts.isCallExpression(node)) {
-      return undefined;
-    }
-    const name = callName(node.expression);
-    if (name === "tmpdir") {
-      return "/__outside_repository_tmp__";
-    }
-    const values = node.arguments.map((argument) =>
-      evaluatePath(argument, nextSeen),
-    );
-    return resolvePathCall({ name, values, packageRoot });
-  };
-  const evaluateUrl = (node: ts.NewExpression, seen: Set<ts.Node>) => {
-    const relative = node.arguments?.at(0);
-    const base = node.arguments?.at(1);
-    const relativeValue =
-      relative === undefined ? undefined : evaluatePath(relative, seen);
-    const baseValue = base === undefined ? undefined : evaluatePath(base, seen);
-    if (relativeValue !== undefined && baseValue?.startsWith("file://")) {
-      return path.resolve(path.dirname(baseValue.slice(7)), relativeValue);
+  }
+  if (node.type === "ChainExpression") {
+    return evaluatePath({
+      node: node.expression,
+      analysis,
+      absoluteFile,
+      packageRoot,
+      seen: nextSeen,
+    });
+  }
+  if (
+    node.type === "ParenthesizedExpression" ||
+    node.type === "TSAsExpression" ||
+    node.type === "TSNonNullExpression"
+  ) {
+    return evaluatePath({
+      node: node.expression,
+      analysis,
+      absoluteFile,
+      packageRoot,
+      seen: nextSeen,
+    });
+  }
+  if (node.type === "AwaitExpression") {
+    return evaluatePath({
+      node: node.argument,
+      analysis,
+      absoluteFile,
+      packageRoot,
+      seen: nextSeen,
+    });
+  }
+  if (node.type === "TemplateLiteral") {
+    return node.quasis
+      .map((quasi, index) => {
+        const text = quasi.value.cooked ?? quasi.value.raw;
+        const expression = node.expressions.at(index);
+        return expression
+          ? `${text}${evaluatePath({ node: expression, analysis, absoluteFile, packageRoot, seen: nextSeen }) ?? "__dynamic__"}`
+          : text;
+      })
+      .join("");
+  }
+  if (node.type === "BinaryExpression" && node.operator === "+") {
+    const left = evaluatePath({
+      node: node.left,
+      analysis,
+      absoluteFile,
+      packageRoot,
+      seen: nextSeen,
+    });
+    const right = evaluatePath({
+      node: node.right,
+      analysis,
+      absoluteFile,
+      packageRoot,
+      seen: nextSeen,
+    });
+    return left === undefined && right === undefined
+      ? undefined
+      : `${left ?? "__dynamic__"}${right ?? "__dynamic__"}`;
+  }
+  if (node.type === "NewExpression") {
+    if (callName({ expression: node.callee, analysis }) === "URL") {
+      return evaluateUrlPath({
+        node,
+        analysis,
+        absoluteFile,
+        packageRoot,
+        seen: nextSeen,
+      });
     }
     return undefined;
-  };
-  return evaluatePath;
+  }
+  return evaluateCallPath({
+    node,
+    analysis,
+    absoluteFile,
+    packageRoot,
+    seen: nextSeen,
+  });
 };
 
 export const inspectSourceWrites = (source: string, file: string) => {
@@ -174,161 +428,77 @@ export const inspectSourceWrites = (source: string, file: string) => {
     repositoryRoot,
     file.split("/").slice(0, 2).join("/"),
   );
-  const tree = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
-  const bindings = new Map<ts.Node, Map<string, ts.Expression>>();
-  const aliases = new Map<string, string>();
-  const scopeOf = (node: ts.Node): ts.Node => {
-    let scope = node.parent;
-    while (!ts.isBlock(scope) && !ts.isSourceFile(scope)) {
-      scope = scope.parent;
-    }
-    return scope;
-  };
-  const collect = (node: ts.Node) => {
-    if (ts.isImportSpecifier(node)) {
-      aliases.set(node.name.text, (node.propertyName ?? node.name).text);
-    }
+  const analysis = createAnalysis(file, source);
+  walk(analysis.tree.program, (node) => {
     if (
-      ts.isBindingElement(node) &&
-      ts.isIdentifier(node.name) &&
-      node.propertyName !== undefined &&
-      ts.isIdentifier(node.propertyName)
+      node.type === "AssignmentExpression" &&
+      node.operator === "=" &&
+      node.left.type === "Identifier"
     ) {
-      aliases.set(node.name.text, node.propertyName.text);
-    }
-    if (
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      node.initializer !== undefined
-    ) {
-      const scope = scopeOf(node);
-      let entries = bindings.get(scope);
-      if (entries === undefined) {
-        entries = new Map();
-        bindings.set(scope, entries);
-      }
-      entries.set(node.name.text, node.initializer);
-    }
-    ts.forEachChild(node, collect);
-  };
-  collect(tree);
-  const bindingFor = (node: ts.Identifier) => {
-    let scope = node.parent;
-    while (true) {
-      const initializer = bindings.get(scope)?.get(node.text);
-      if (initializer !== undefined) {
-        return initializer;
-      }
-      if (ts.isSourceFile(scope)) {
-        return undefined;
-      }
-      scope = scope.parent;
-    }
-  };
-  const callName = (
-    expression: ts.Expression,
-    seen = new Set<ts.Node>(),
-  ): string | undefined => {
-    if (seen.has(expression)) {
-      return undefined;
-    }
-    if (ts.isIdentifier(expression)) {
-      const initializer = bindingFor(expression);
-      if (initializer !== undefined) {
-        return callName(initializer, new Set(seen).add(expression));
-      }
-      return expression.text === "write" && !aliases.has(expression.text)
-        ? undefined
-        : (aliases.get(expression.text) ?? expression.text);
-    }
-    if (ts.isPropertyAccessExpression(expression)) {
-      if (
-        expression.name.text === "write" &&
-        callName(expression.expression, new Set(seen).add(expression)) !== "Bun"
-      ) {
-        return undefined;
-      }
-      return expression.name.text;
-    }
-    if (
-      ts.isElementAccessExpression(expression) &&
-      ts.isStringLiteral(expression.argumentExpression)
-    ) {
-      if (
-        expression.argumentExpression.text === "write" &&
-        callName(expression.expression, new Set(seen).add(expression)) !== "Bun"
-      ) {
-        return undefined;
-      }
-      return expression.argumentExpression.text;
-    }
-    return undefined;
-  };
-  const evaluatePath = createSourcePathEvaluator({
-    absoluteFile,
-    packageRoot,
-    bindingFor,
-    callName,
-  });
-  const visit = (node: ts.Node) => {
-    if (
-      ts.isBinaryExpression(node) &&
-      node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
-      ts.isIdentifier(node.left)
-    ) {
-      let scope = node.parent;
+      let scope = analysis.parents.get(node);
       while (
-        !ts.isSourceFile(scope) &&
-        !bindings.get(scope)?.has(node.left.text)
+        scope &&
+        scope.type !== "Program" &&
+        !analysis.bindings.get(scope)?.has(node.left.name)
       ) {
-        scope = scope.parent;
+        scope = analysis.parents.get(scope);
       }
-      const targetScope = bindings.get(scope)?.has(node.left.text)
-        ? scope
-        : scopeOf(node);
-      let entries = bindings.get(targetScope);
-      if (entries === undefined) {
+      const targetScope =
+        scope && analysis.bindings.get(scope)?.has(node.left.name)
+          ? scope
+          : scopeOf({
+              node,
+              parents: analysis.parents,
+              program: analysis.tree.program,
+            });
+      let entries = analysis.bindings.get(targetScope);
+      if (!entries) {
         entries = new Map();
-        bindings.set(targetScope, entries);
+        analysis.bindings.set(targetScope, entries);
       }
-      entries.set(node.left.text, node.right);
+      entries.set(node.left.name, node.right);
     }
-    const writer = ts.isCallExpression(node)
-      ? callName(node.expression)
-      : undefined;
+    const writer =
+      node.type === "CallExpression"
+        ? callName({ expression: node.callee, analysis })
+        : undefined;
     const argumentIndexes =
       writer === undefined ? undefined : writers.get(writer);
     if (
-      ts.isCallExpression(node) &&
-      writer !== undefined &&
-      argumentIndexes !== undefined
+      node.type !== "CallExpression" ||
+      writer === undefined ||
+      argumentIndexes === undefined
     ) {
-      for (const argumentIndex of argumentIndexes) {
-        const destination = node.arguments.at(argumentIndex);
-        const value =
-          destination === undefined ? undefined : evaluatePath(destination);
-        if (value !== undefined) {
-          const base = /^(?:apps|packages)\//u.test(value)
-            ? repositoryRoot
-            : packageRoot;
-          const relative = repoRelativePath(
-            repositoryRoot,
-            path.resolve(base, value),
-          );
-          if (/^(?:apps|packages)\/[^/]+\/src(?:\/|$)/u.test(relative)) {
-            const { line } = tree.getLineAndCharacterOfPosition(
-              node.getStart(tree),
-            );
-            violations.push(
-              `${file}:${line + 1}: ${writer} writes into src (${relative})`,
-            );
-          }
-        }
+      return;
+    }
+    for (const argumentIndex of argumentIndexes) {
+      const destination = node.arguments.at(argumentIndex);
+      const value =
+        destination === undefined
+          ? undefined
+          : evaluatePath({
+              node: destination,
+              analysis,
+              absoluteFile,
+              packageRoot,
+            });
+      if (value === undefined) {
+        continue;
+      }
+      const base = /^(?:apps|packages)\//u.test(value)
+        ? repositoryRoot
+        : packageRoot;
+      const relative = repoRelativePath(
+        repositoryRoot,
+        path.resolve(base, value),
+      );
+      if (/^(?:apps|packages)\/[^/]+\/src(?:\/|$)/u.test(relative)) {
+        violations.push(
+          `${file}:${analysis.tree.locate(node.start).line}: ${writer} writes into src (${relative})`,
+        );
       }
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(tree);
+  });
   return violations;
 };
 
@@ -343,17 +513,11 @@ export const filesToInspect = (root: string) =>
       /\/(?:tests|__tests__|test-helpers|test-fixtures)\//u.test(file),
   );
 
-type RunSourceWriteCensusOptions = {
-  budgetMs: number;
-  entrypoint?: string;
-};
-
+type RunSourceWriteCensusOptions = { budgetMs: number; entrypoint?: string };
 export const runSourceWriteCensus = ({
   budgetMs,
   entrypoint = import.meta.path,
 }: RunSourceWriteCensusOptions) => {
-  // A child owns synchronous parsing and Git: its deadline cannot interrupt
-  // the parent assertion or masquerade as a ledger failure.
   const child = spawnSync(process.execPath, ["--no-env-file", entrypoint], {
     cwd: repositoryRoot,
     encoding: "utf-8",
@@ -367,12 +531,9 @@ export const runSourceWriteCensus = ({
     return [`Source-write census exceeded budget ${budgetMs / 1000}s`];
   }
   if (child.status !== 0) {
-    const detail =
-      child.error?.message ||
-      child.stderr ||
-      child.stdout ||
-      `exit ${child.status ?? "none"}, signal ${child.signal ?? "none"}`;
-    return [`Source-write census failed: ${detail}`];
+    return [
+      `Source-write census failed: ${child.error?.message || child.stderr || child.stdout || `exit ${child.status ?? "none"}, signal ${child.signal ?? "none"}`}`,
+    ];
   }
   return [];
 };

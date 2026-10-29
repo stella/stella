@@ -3,13 +3,15 @@ import { describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 
+import { waitForExternalState } from "@stll/property-testing/external-state";
+
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
   auditLogs,
+  featureEnrolments,
   rateTables,
   workspaceMembers,
   workspaces,
-  featureEnrolments,
 } from "@/api/db/schema";
 import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
 import {
@@ -24,8 +26,8 @@ import {
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
 import {
-  NO_DB,
   createTestHandlerContext,
+  NO_DB,
 } from "@/api/tests/helpers/handler-context";
 
 import createRateTable from "./create";
@@ -38,18 +40,18 @@ const observeBlocking = async (
   tx: Pick<PgAsyncDatabase<PgQueryResultHKT>, "select">,
   pid: number,
 ) => {
-  for (let attempt = 0; attempt < 200; attempt += 1) {
-    const rows = await tx
-      .select({
-        blocked: sql<boolean>`pg_backend_pid() = ANY(pg_blocking_pids(${pid}))`,
-      })
-      .from(sql`(SELECT 1) AS lock_observation`);
-    if (rows.at(0)?.blocked) {
-      return;
-    }
-    await Bun.sleep(10);
-  }
-  panic("Concurrent rate default mutation did not reach the workspace lock");
+  await waitForExternalState({
+    description:
+      "the concurrent rate default mutation waits on the workspace lock",
+    read: async () =>
+      (
+        await tx
+          .select({
+            blocked: sql<boolean>`pg_backend_pid() = ANY(pg_blocking_pids(${pid}))`,
+          })
+          .from(sql`(SELECT 1) AS lock_observation`)
+      ).at(0)?.blocked === true,
+  });
 };
 
 if (!databaseUrl || !runPostgres) {

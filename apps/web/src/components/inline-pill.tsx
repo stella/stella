@@ -7,6 +7,10 @@ import type {
 
 import { cn } from "@stll/ui/utils";
 
+import {
+  CHIP_HEIGHT_CLASS,
+  CHIP_TOUCH_TARGET_CLASS,
+} from "@/components/chip-scale";
 import Tooltip from "@/components/tooltip";
 
 /**
@@ -43,9 +47,9 @@ type InlinePillProps = {
   leadingIcon?: ReactNode;
   tooltip?: ReactNode;
   /**
-   * Clamp the pill to ~14rem and ellipsis the label inside. The
-   * mention chips set this; anonymized values do not (their text
-   * is the actual prose word being annotated).
+   * Clamp the pill to 14rem or its line, whichever is narrower, and
+   * ellipsis the label inside. The mention chips set this; anonymized
+   * values do not (their text is the actual prose word being annotated).
    */
   truncate?: boolean;
   onActivate?: MouseEventHandler<HTMLElement> | undefined;
@@ -58,7 +62,7 @@ type InlinePillProps = {
   ariaLabel?: string;
   className?: string;
   children: ReactNode;
-} & Pick<HTMLAttributes<HTMLElement>, "style"> &
+} & Pick<HTMLAttributes<HTMLElement>, "style" | "title"> &
   Record<`data-${string}`, string | undefined>;
 
 const TONE_BASE: Record<InlinePillTone, string> = {
@@ -79,13 +83,14 @@ const TONE_FOCUS_RING: Record<InlinePillTone, string> = {
   success: "focus-visible:ring-success/50",
 };
 
+// A chip takes its height from the chip scale it shares with every
+// attachment chip; an inherit pill follows the line it sits in.
 const SIZE: Record<InlinePillSize, string> = {
-  chip: "text-xs font-medium",
-  inherit: "font-[inherit] text-[inherit] leading-[inherit]",
+  chip: cn("text-xs font-medium", CHIP_HEIGHT_CLASS, CHIP_TOUCH_TARGET_CLASS),
+  inherit: "font-[inherit] text-[inherit] leading-[inherit] py-0.5",
 };
 
-const BASE =
-  "inline-flex items-center gap-0.5 align-middle rounded px-1 py-0.5";
+const BASE = "inline-flex items-center gap-0.5 align-middle rounded px-1";
 
 const INTERACTIVE_RESET =
   "appearance-none border-0 bg-clip-padding cursor-pointer focus-visible:outline-none focus-visible:ring-2";
@@ -101,9 +106,11 @@ export const InlinePill = ({
   className,
   children,
   style,
+  title,
   ...dataAttrs
 }: InlinePillProps): ReactElement => {
   const clickable = onActivate !== undefined;
+  const chipKind = size === "chip" ? "reference" : undefined;
   // A tooltip-bearing pill must be keyboard-focusable so screen-
   // reader users (and tab users) can pop the placeholder content,
   // even when the pill itself doesn't trigger an action. Base UI's
@@ -128,7 +135,10 @@ export const InlinePill = ({
     BASE,
     TONE_BASE[tone],
     SIZE[size],
-    truncate && "max-w-56",
+    // The line bound keeps a long label inside a narrow composer or bubble;
+    // the 1ch it leaves free holds the space and caret after the chip, which
+    // would otherwise wrap onto a line of their own.
+    truncate && "max-w-[min(14rem,calc(100%-1ch))]",
     renderAsButton &&
       cn(INTERACTIVE_RESET, TONE_INTERACTIVE[tone], TONE_FOCUS_RING[tone]),
     // Annotation-only pills (no click handler) signal "this is
@@ -145,8 +155,10 @@ export const InlinePill = ({
     <button
       aria-label={ariaLabel}
       className={sharedClass}
+      data-chip-kind={chipKind}
       onClick={onActivate}
       style={style}
+      title={title}
       type="button"
       {...dataAttrs}
     >
@@ -156,8 +168,10 @@ export const InlinePill = ({
     <span
       aria-label={ariaLabel}
       className={sharedClass}
+      data-chip-kind={chipKind}
       role="group"
       style={style}
+      title={title}
       {...dataAttrs}
     >
       {body}

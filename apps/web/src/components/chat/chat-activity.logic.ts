@@ -5,11 +5,7 @@ import type {
 } from "@/components/chat/chat-ui-tools";
 
 export type ChatToolActivityCategory =
-  | "artifact"
-  | "computation"
-  | "mutation"
-  | "research"
-  | "user-input";
+  "artifact" | "computation" | "mutation" | "research" | "user-input";
 
 const BUILT_IN_CHAT_TOOL_ACTIVITY_CATEGORIES = {
   show_visual: "artifact",
@@ -22,6 +18,7 @@ const BUILT_IN_CHAT_TOOL_ACTIVITY_CATEGORIES = {
   boe_search_legislation: "research",
   borme_get_summary: "research",
   business_registry_lookup: "research",
+  connect_connector: "user-input",
   counterparty_check: "research",
   request_secret: "user-input",
   review_folder_consistency: "research",
@@ -45,6 +42,7 @@ const BUILT_IN_CHAT_TOOL_ACTIVITY_CATEGORIES = {
   get_document_outline: "research",
   infosoud_lookup_case: "research",
   link_matter_contact: "mutation",
+  list_connectable_connectors: "research",
   list_stories: "research",
   list_templates: "research",
   "load-skill": "research",
