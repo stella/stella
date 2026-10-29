@@ -470,7 +470,7 @@ test.each(["record-failure", "report-failure", "completed"] as const)(
       },
       report: scenario === "report-failure" ? failEvidence : () => undefined,
       sampleStore: async () => ({ signature: "unchanged", newest: 0 }),
-      inspectProcess: () => {
+      inspectProcess: async () => {
         inspectionStarted.resolve(undefined);
         return inspected.promise;
       },
