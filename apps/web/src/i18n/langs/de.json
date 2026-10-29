@@ -914,6 +914,7 @@
     "aiMissing": "KI ist nicht eingerichtet.",
     "availabilityUnknown": "Die Verfügbarkeit konnte nicht bestätigt werden.",
     "deeplMissing": "DeepL ist nicht eingerichtet.",
+    "deeplPdfRequired": "Für die Übersetzung von PDF-Dateien ist DeepL erforderlich.",
     "desktopUnavailable": "stella desktop verbinden oder aktualisieren.",
     "featureUnavailable": "Diese Funktion ist nicht verfügbar.",
     "ocrUnavailable": "OCR ist nicht verfügbar.",
@@ -2476,6 +2477,8 @@
       "aresNotFound": "Für diese IČO wurde kein Unternehmen gefunden.",
       "aresTitle": "Tschechisches Register (ARES)",
       "contactName": "Kontaktname",
+      "displayNameOrganizationHint": "Optionale Überschreibung; andernfalls aus dem Organisationsnamen erstellt.",
+      "displayNamePersonHint": "Optionale Überschreibung; andernfalls aus Vor- und Nachname erstellt.",
       "icoPlaceholder": "IČO",
       "invalidIco": "Geben Sie eine 8-stellige IČO ein."
     },

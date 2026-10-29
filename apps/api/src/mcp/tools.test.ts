@@ -2361,6 +2361,28 @@ describe("OpenAI-compatible MCP tools", () => {
         });
       });
 
+      test.each([
+        {
+          date: { birth_date: "2099-01-01" },
+          message: "The birth date must be from 1900 through today",
+        },
+        {
+          date: { date_of_birth: { precision: "year", year: 2099 } },
+          message: "Expected a valid birth date from 1900 through today",
+        },
+      ])("rejects a future birth date in either input form", async (input) => {
+        const result = await callSanctions(
+          async () => panic("The lists must not be screened"),
+          {
+            type: "person",
+            first_name: "Ivan",
+            last_name: "Sidorov",
+            ...input.date,
+          },
+        );
+        expectValidationMessage(result, input.message);
+      });
+
       test("asks for one birth date when the two given disagree", async () => {
         const result = await callSanctions(
           async () => panic("The lists must not be screened"),
@@ -10585,7 +10607,12 @@ describe("OpenAI-compatible MCP tools", () => {
 
     expect(validationEnvelope(result)).toMatchObject({
       code: "validation_error",
-      issues: [{ path: "dateOfBirth", message: "Invalid date of birth" }],
+      issues: [
+        {
+          path: "dateOfBirth",
+          message: "Expected a valid birth date from 1900 through today",
+        },
+      ],
     });
   });
 

@@ -914,6 +914,7 @@
     "aiMissing": "Tehisintellekt pole seadistatud.",
     "availabilityUnknown": "Saadavust ei õnnestunud kinnitada.",
     "deeplMissing": "DeepL pole seadistatud.",
+    "deeplPdfRequired": "PDF-failide tõlkimiseks on vaja DeepL-i.",
     "desktopUnavailable": "Ühendage või uuendage stella desktopi.",
     "featureUnavailable": "See funktsioon pole saadaval.",
     "ocrUnavailable": "OCR pole saadaval.",
@@ -2476,6 +2477,8 @@
       "aresNotFound": "Selle IČO järgi ettevõtet ei leitud.",
       "aresTitle": "Tšehhi register (ARES)",
       "contactName": "Kontakti nimi",
+      "displayNameOrganizationHint": "Valikuline asendus; muul juhul luuakse organisatsiooni nimest.",
+      "displayNamePersonHint": "Valikuline asendus; muul juhul luuakse ees- ja perekonnanimest.",
       "icoPlaceholder": "IČO",
       "invalidIco": "Sisesta 8-kohaline IČO."
     },
