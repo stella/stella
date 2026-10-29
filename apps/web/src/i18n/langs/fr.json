@@ -747,6 +747,7 @@
           "active": "Lien actif",
           "expired": "Lien expiré",
           "failed": "Non remise",
+          "pending": "Envoi en cours",
           "revoked": "Lien révoqué"
         },
         "loadFailed": "L'historique des envois n'a pas pu être chargé.",

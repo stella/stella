@@ -747,6 +747,7 @@
           "active": "Nuoroda aktyvi",
           "expired": "Nuorodos galiojimas baigėsi",
           "failed": "Nepristatyta",
+          "pending": "Siunčiama",
           "revoked": "Nuoroda atšaukta"
         },
         "loadFailed": "Siuntimo istorijos įkelti nepavyko.",

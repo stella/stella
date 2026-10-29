@@ -747,6 +747,7 @@
           "active": "Link aktywny",
           "expired": "Link wygasł",
           "failed": "Nie doręczono",
+          "pending": "Wysyłanie",
           "revoked": "Link unieważniony"
         },
         "loadFailed": "Nie udało się wczytać historii wysyłek.",

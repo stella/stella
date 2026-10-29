@@ -15,7 +15,7 @@ CREATE TABLE "invoice_sends" (
 	"language" text NOT NULL,
 	"reply_to" varchar(320) NOT NULL,
 	"token_hash" varchar(64) NOT NULL,
-	"expires_at" timestamptz NOT NULL,
+	"expires_at" timestamptz DEFAULT now() + interval '60 days' NOT NULL,
 	"delivery_status" text DEFAULT 'pending' NOT NULL,
 	"revoked_at" timestamptz,
 	"revoked_by_user_id" text,
@@ -284,6 +284,9 @@ BEGIN
       OR OLD.organization_id IS DISTINCT FROM NEW.organization_id
       OR OLD.expires_at IS DISTINCT FROM NEW.expires_at THEN
       RAISE EXCEPTION 'Invoice send identity and expiry are immutable' USING ERRCODE = '42501';
+    END IF;
+    IF OLD.delivery_status <> 'pending' AND OLD.failed_recipients IS DISTINCT FROM NEW.failed_recipients THEN
+      RAISE EXCEPTION 'Invoice send failure recipients are immutable after completion' USING ERRCODE = '42501';
     END IF;
     IF OLD.delivery_status IS DISTINCT FROM NEW.delivery_status
       AND NOT (OLD.delivery_status = 'pending' AND NEW.delivery_status IN ('delivered', 'partial', 'failed')) THEN

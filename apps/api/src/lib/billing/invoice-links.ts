@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto";
 import * as v from "valibot";
 
 import { sha256Hex } from "@stll/sha256/bun";
-import { DAY_IN_MS, Temporal } from "@stll/time";
+import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
 import { env } from "@/api/env";
@@ -28,9 +28,6 @@ import {
  * page sees it; the page posts it to the API in a request body.
  */
 
-/** How long a link stays valid after the email leaves. */
-const INVOICE_LINK_TTL_DAYS = 60;
-
 /** Sends one invoice may take in a rolling day. */
 export const INVOICE_SENDS_PER_INVOICE_PER_DAY = 5;
 /** Sends one organization may make in a rolling day. */
@@ -51,9 +48,6 @@ export const isInvoiceLinkTokenShape = (value: string): boolean =>
 /** The page a recipient opens; the token rides in the fragment. */
 export const invoiceLinkUrl = (token: string): string =>
   `${env.FRONTEND_URL}/invoice-link#${token}`;
-
-export const invoiceLinkExpiresAt = (from: Date): Date =>
-  new Date(from.getTime() + INVOICE_LINK_TTL_DAYS * DAY_IN_MS);
 
 /** What a live link proves: the send, its tenant and the invoice's matters. */
 export type InvoiceLinkScope = {

@@ -42,6 +42,7 @@ import {
   fields,
   invoiceLines,
   invoices,
+  invoiceSends,
   organizationSettings,
   pdfSigningSessions,
   timeEntries,
@@ -2851,6 +2852,35 @@ export const lockInvoiceInStatus = async (
     return undefined;
   }
   return invoice;
+};
+
+type LockInvoiceSendDeliveryOptions = {
+  invoiceId: SafeId<"invoice">;
+  organizationId: SafeId<"organization">;
+  sendId: SafeId<"invoiceSend">;
+};
+
+/** Lock the child only after its invoice and complete matter set are held. */
+export const lockInvoiceSendDelivery = async (
+  tx: Transaction,
+  { invoiceId, organizationId, sendId }: LockInvoiceSendDeliveryOptions,
+) => {
+  const rows = await tx
+    .select({
+      deliveryStatus: invoiceSends.deliveryStatus,
+      revokedAt: invoiceSends.revokedAt,
+    })
+    .from(invoiceSends)
+    .where(
+      and(
+        eq(invoiceSends.id, sendId),
+        eq(invoiceSends.invoiceId, invoiceId),
+        eq(invoiceSends.organizationId, organizationId),
+      ),
+    )
+    .limit(1)
+    .for("update");
+  return rows.at(0);
 };
 
 /** Caller holds the timer-owner and complete matter advisory set. */

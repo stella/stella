@@ -51,7 +51,10 @@ import { invoiceLinksRoute } from "@/api/handlers/invoice-links/routes";
 import { createViewInvoiceLink } from "@/api/handlers/invoice-links/view";
 import readInvoiceById from "@/api/handlers/invoices/get";
 import type { InvoiceLinkMessage } from "@/api/handlers/invoices/sends/create";
-import { createSendInvoice } from "@/api/handlers/invoices/sends/create";
+import {
+  createSendInvoice,
+  prepareInvoiceSend,
+} from "@/api/handlers/invoices/sends/create";
 import listInvoiceSends from "@/api/handlers/invoices/sends/list";
 import revokeInvoiceSend from "@/api/handlers/invoices/sends/revoke";
 import transitionInvoice from "@/api/handlers/invoices/transition";
@@ -1080,6 +1083,209 @@ describe("sending an invoice by link", () => {
     },
   );
 
+  test.each([-7, 7])(
+    "preparation derives expiry from the database clock despite a %s-day application clock skew",
+    async (skewDays) => {
+      const invoiceId = await seedInvoice({ status: INVOICE_STATUS.FINALIZED });
+      const prepared = await tokenDb().scoped({
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+        workspaceIds: [ids.wsA1],
+      })(async (tx) => {
+        const result = await prepareInvoiceSend(tx, {
+          invoiceId,
+          workspaceId: ids.wsA1,
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+          recipients: ["clock-skew@example.test"],
+          message: null,
+          tokenHash: hashInvoiceLinkToken(createInvoiceLinkToken()),
+          now: new Date(Date.now() + skewDays * 86_400_000),
+          recordAuditEvent: invoiceTransitionRecorder(),
+        });
+        if (result.isErr()) {
+          return panic("Valid preparation must survive application clock skew");
+        }
+        const [clock] = await tx
+          .select({
+            expectedExpiry: sql`now() + interval '60 days'`.mapWith(
+              invoiceSends.expiresAt,
+            ),
+            storedExpiry: invoiceSends.expiresAt,
+          })
+          .from(invoiceSends)
+          .where(eq(invoiceSends.id, result.value.sendId))
+          .limit(1);
+        if (clock === undefined) {
+          return panic("Prepared invoice send must persist its expiry");
+        }
+        return { returnedExpiry: result.value.expiresAt, ...clock };
+      });
+      expect(prepared.returnedExpiry).toEqual(prepared.expectedExpiry);
+      expect(prepared.storedExpiry).toEqual(prepared.expectedExpiry);
+    },
+  );
+
+  test("an in-flight send is pending until delivery activates its link", async () => {
+    const invoiceId = await seedInvoice({ status: INVOICE_STATUS.FINALIZED });
+    const entered = Promise.withResolvers<InvoiceLinkMessage>();
+    const release = Promise.withResolvers<undefined>();
+    const blocked = createSendInvoice({
+      isDeliveryConfigured: () => true,
+      admitEmail: async () =>
+        Result.ok({
+          release: async () => {},
+          commit: async () => {},
+        }),
+      deliver: async (message) => {
+        entered.resolve(message);
+        await release.promise;
+      },
+    });
+    const sending = blocked.handler(
+      asTestRaw<Parameters<typeof blocked.handler>[0]>(
+        memberContext({
+          tenant: "A",
+          invoiceId,
+          route: "/v1/invoices/:workspaceId/:invoiceId/sends",
+          body: { recipients: ["pending-projection@example.test"] },
+        }),
+      ),
+    );
+    const message = await entered.promise;
+    const token = message.link.split("#").at(1);
+    if (token === undefined) {
+      release.resolve(undefined);
+      await sending;
+      return panic("The blocked transport must carry an invoice token");
+    }
+    try {
+      const listed = await listSendHistory(invoiceId);
+      expect(listed.items).toMatchObject([
+        { deliveryStatus: "pending", linkStatus: "pending" },
+      ]);
+      expect((await post(server, "view", { token })).status).toBe(404);
+    } finally {
+      release.resolve(undefined);
+      await sending;
+    }
+    expect(await sending).toMatchObject({ deliveryStatus: "delivered" });
+    expect((await listSendHistory(invoiceId)).items).toMatchObject([
+      { deliveryStatus: "delivered", linkStatus: "active" },
+    ]);
+    expect((await post(server, "view", { token })).status).toBe(200);
+  });
+
+  test("a pending send cannot advance a revised and re-finalized invoice or reactivate its withdrawn link", async () => {
+    const invoiceId = await seedInvoice({ status: INVOICE_STATUS.FINALIZED });
+    const auditEvents: AuditEvent[] = [];
+    const transported: InvoiceLinkMessage[] = [];
+    const withdrawalStamps: Date[] = [];
+    const racing = createSendInvoice({
+      isDeliveryConfigured: () => true,
+      admitEmail: async () =>
+        Result.ok({
+          release: async () => {},
+          commit: async () => {},
+        }),
+      deliver: async (message) => {
+        transported.push(message);
+        expect(
+          await transitionLinkedInvoice(invoiceId, {
+            action: "revert_to_draft",
+            auditEvents,
+          }),
+        ).toEqual({ id: invoiceId });
+        const original = (await sendRows(invoiceId)).at(0);
+        if (original?.revokedAt === undefined || original.revokedAt === null) {
+          return panic("Reverting must withdraw the in-flight invoice link");
+        }
+        withdrawalStamps.push(original.revokedAt);
+        expect(
+          await updateInvoice.handler(
+            asTestRaw<Parameters<typeof updateInvoice.handler>[0]>(
+              memberContext({
+                tenant: "A",
+                invoiceId,
+                route: "/v1/invoices/:workspaceId/:invoiceId",
+                body: {
+                  reference: "REVISED-DURING-SEND",
+                  notes: "Revised document",
+                },
+              }),
+            ),
+          ),
+        ).toEqual({ id: invoiceId });
+        expect(
+          await transitionLinkedInvoice(invoiceId, {
+            action: "finalize",
+            auditEvents,
+          }),
+        ).toEqual({ id: invoiceId });
+      },
+    });
+    const result = await racing.handler(
+      asTestRaw<Parameters<typeof racing.handler>[0]>(
+        memberContext({
+          tenant: "A",
+          invoiceId,
+          route: "/v1/invoices/:workspaceId/:invoiceId/sends",
+          body: { recipients: ["revised-during-send@example.test"] },
+          auditEvents,
+        }),
+      ),
+    );
+    expect(result).toMatchObject({
+      code: 409,
+      response: { code: "invoice_link_withdrawn" },
+    });
+    expect(transported).toHaveLength(1);
+    const token = transported.at(0)?.link.split("#").at(1);
+    if (token === undefined) {
+      return panic(
+        "The successful transport must have carried the original token",
+      );
+    }
+    const original = (await sendRows(invoiceId)).at(0);
+    expect(original).toMatchObject({
+      deliveryStatus: "failed",
+      revokedByUserId: ids.userA1,
+      revokedAt: withdrawalStamps.at(0),
+      failedRecipients: [],
+    });
+    const invoice = await testDb.query.invoices.findFirst({
+      where: { id: { eq: invoiceId } },
+      columns: { status: true, sentAt: true, reference: true },
+    });
+    expect(invoice).toEqual({
+      status: INVOICE_STATUS.FINALIZED,
+      sentAt: null,
+      reference: "REVISED-DURING-SEND",
+    });
+    expect(
+      auditEvents.filter((event) => event.changes?.["action"]?.new === "send"),
+    ).toEqual([]);
+    expect((await post(server, "view", { token })).status).toBe(404);
+    for (const file of ["pdf", "e_invoice"]) {
+      expect((await post(server, "download", { token, file })).status).toBe(
+        404,
+      );
+    }
+    expect(
+      await send(invoiceId, ["revised-new-link@example.test"]),
+    ).toMatchObject({
+      deliveryStatus: "delivered",
+    });
+    expect(
+      (
+        await post(server, "view", {
+          token: tokenSentTo("revised-new-link@example.test"),
+        })
+      ).status,
+    ).toBe(200);
+    expect((await post(server, "view", { token })).status).toBe(404);
+  });
+
   test.each([
     ["void", INVOICE_STATUS.VOID, "delivered"],
     ["revert_to_draft", INVOICE_STATUS.DRAFT, "delivered"],
@@ -1137,14 +1343,13 @@ describe("sending an invoice by link", () => {
           "Expected one transport attempt before checking its outcome",
         );
       }
+      expect(result).toMatchObject({
+        code: 409,
+        response: { code: "invoice_link_withdrawn" },
+      });
       if (outcome === "delivered") {
-        expect(result).toMatchObject({
-          deliveryStatus: outcome,
-          invoiceStatus: status,
-        });
         expect(delivered).toContainEqual(transportedMessage);
       } else {
-        expect(result).toMatchObject({ code: 502 });
         expect(delivered).not.toContainEqual(transportedMessage);
       }
       expect(transported).toHaveLength(1);
@@ -1153,7 +1358,7 @@ describe("sending an invoice by link", () => {
       const rows = await sendRows(invoiceId);
       expect(rows).toHaveLength(1);
       const row = rows.at(0);
-      expect(row?.deliveryStatus).toBe(outcome);
+      expect(row?.deliveryStatus).toBe("failed");
       expect(row?.failedRecipients).toEqual(
         outcome === "failed" ? [recipient] : [],
       );
@@ -1174,7 +1379,7 @@ describe("sending an invoice by link", () => {
         ),
       ).toMatchObject([
         {
-          changes: { emailDelivery: { old: "pending", new: outcome } },
+          changes: { emailDelivery: { old: "pending", new: "failed" } },
           metadata: { invoiceSendId: row?.id },
         },
       ]);

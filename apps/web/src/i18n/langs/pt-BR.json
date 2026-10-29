@@ -747,6 +747,7 @@
           "active": "Link ativo",
           "expired": "Link expirado",
           "failed": "Não entregue",
+          "pending": "Enviando",
           "revoked": "Link revogado"
         },
         "loadFailed": "Não foi possível carregar o histórico de envios.",

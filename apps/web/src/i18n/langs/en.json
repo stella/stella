@@ -747,6 +747,7 @@
           "active": "Link active",
           "expired": "Link expired",
           "failed": "Not delivered",
+          "pending": "Sending",
           "revoked": "Link revoked"
         },
         "loadFailed": "The sending history could not be loaded.",

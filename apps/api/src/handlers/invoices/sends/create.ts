@@ -27,7 +27,6 @@ import {
   hashInvoiceLinkToken,
   INVOICE_SENDS_PER_INVOICE_PER_DAY,
   INVOICE_SENDS_PER_ORGANIZATION_PER_DAY,
-  invoiceLinkExpiresAt,
   invoiceLinkUrl,
 } from "@/api/lib/billing/invoice-links";
 import {
@@ -36,6 +35,7 @@ import {
 } from "@/api/lib/billing/invoice-payments";
 import { createInvoiceFormatters } from "@/api/lib/billing/invoice-pdf/render-helpers";
 import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
+import { INVOICE_SEND_COMPLETION } from "@/api/lib/billing/invoice-send-completion";
 import { completeInvoiceSendDelivery } from "@/api/lib/billing/invoice-send-delivery";
 import type { InvoiceSendDeliveryOutcome } from "@/api/lib/billing/invoice-send-delivery";
 import { revokeLiveInvoiceSends } from "@/api/lib/billing/invoice-send-revocation";
@@ -44,6 +44,7 @@ import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import {
   lockInvoiceInStatus,
+  lockInvoiceSendDelivery,
   withAggregateLock,
 } from "@/api/lib/db/aggregate-lock";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
@@ -304,20 +305,25 @@ export const prepareInvoiceSend = async (
     return Result.err(validated.error);
   }
   const { invoice: locked, firmName, replyTo } = validated.value;
-  const expiresAt = invoiceLinkExpiresAt(options.now);
   const sendId = createSafeId<"invoiceSend">();
-  await tx.insert(invoiceSends).values({
-    id: sendId,
-    organizationId: options.organizationId,
-    invoiceId: options.invoiceId,
-    sentByUserId: options.userId,
-    recipients: options.recipients,
-    message: options.message,
-    language: locked.language,
-    replyTo,
-    tokenHash: options.tokenHash,
-    expiresAt,
-  });
+  const [inserted] = await tx
+    .insert(invoiceSends)
+    .values({
+      id: sendId,
+      organizationId: options.organizationId,
+      invoiceId: options.invoiceId,
+      sentByUserId: options.userId,
+      recipients: options.recipients,
+      message: options.message,
+      language: locked.language,
+      replyTo,
+      tokenHash: options.tokenHash,
+    })
+    .returning({ expiresAt: invoiceSends.expiresAt });
+  if (inserted === undefined) {
+    return panic("Invoice send insertion returned no expiry");
+  }
+  const { expiresAt } = inserted;
   await options.recordAuditEvent(tx, {
     action: AUDIT_ACTION.UPDATE,
     resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
@@ -427,14 +433,19 @@ type RecordDeliveryOptions = {
   recordAuditEvent: AuditRecorder;
 };
 
-/**
- * Stores how the emails left. A send that reached nobody revokes its link;
- * one that reached anyone moves a finalized invoice to sent.
- */
+type RecordedDelivery =
+  | { type: "withdrawn"; status: InvoiceStatus }
+  | {
+      type: "completed";
+      status: InvoiceStatus;
+      deliveryStatus: InvoiceSendDeliveryOutcome;
+    };
+
+/** Complete under both locks; invoice reissue cannot restore a send's authority. */
 const recordDelivery = async (
   tx: Transaction,
   options: RecordDeliveryOptions,
-): Promise<Result<{ status: InvoiceStatus }, HandlerError>> => {
+): Promise<Result<RecordedDelivery, HandlerError>> => {
   const current = await lockInvoiceInStatus(tx, {
     invoiceId: options.invoiceId,
     workspaceId: options.workspaceId,
@@ -449,26 +460,25 @@ const recordDelivery = async (
       }),
     );
   }
-  // Completion observes the status only after acquiring the invoice owner’s
-  // locks. A different send may already have performed the single send transition.
-  const sent =
-    current.status === INVOICE_STATUS.FINALIZED &&
-    options.deliveryStatus !== "failed"
-      ? await sendFinalizedInvoice(tx, {
-          actorUserId: options.actorUserId,
-          invoiceId: options.invoiceId,
-          now: options.now,
-          organizationId: options.organizationId,
-          recordAuditEvent: options.recordAuditEvent,
-          workspaceId: options.workspaceId,
-        })
-      : null;
-  if (sent?.isErr() === true) {
-    return Result.err(sent.error);
+  const send = await lockInvoiceSendDelivery(tx, {
+    invoiceId: current.id,
+    organizationId: options.organizationId,
+    sendId: options.prepared.sendId,
+  });
+  if (send === undefined) {
+    return Result.err(
+      new HandlerError({
+        status: 409,
+        message: "The invoice link disappeared before delivery completed",
+      }),
+    );
   }
-  switch (current.status) {
-    case INVOICE_STATUS.DRAFT:
-    case INVOICE_STATUS.VOID:
+  const decision =
+    INVOICE_SEND_COMPLETION[current.status][
+      send.revokedAt === null ? "live" : "revoked"
+    ][send.deliveryStatus][options.deliveryStatus];
+  switch (decision.type) {
+    case "withdraw": {
       await revokeLiveInvoiceSends(tx, {
         organizationId: options.organizationId,
         invoiceId: options.invoiceId,
@@ -477,19 +487,75 @@ const recordDelivery = async (
         recordAuditEvent: options.recordAuditEvent,
         target: { type: "send", sendId: options.prepared.sendId },
       });
+      switch (decision.previousDelivery) {
+        case "pending": {
+          const completed = await completeInvoiceSendDelivery(tx, {
+            sendId: options.prepared.sendId,
+            invoiceId: options.invoiceId,
+            deliveryStatus: "failed",
+            failedRecipients: options.failed,
+            now: options.now,
+            recordAuditEvent: options.recordAuditEvent,
+          });
+          if (completed.isErr()) {
+            return Result.err(completed.error);
+          }
+          break;
+        }
+        case "terminal":
+          break;
+        default:
+          decision satisfies never;
+          return panic("Unhandled withdrawn invoice send state");
+      }
+      await options.recordAuditEvent(tx, {
+        action: AUDIT_ACTION.UPDATE,
+        resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
+        resourceId: options.invoiceId,
+        metadata: {
+          invoiceSendId: options.prepared.sendId,
+          linkDeliveryStatus: "withdrawn",
+          transportDeliveryStatus: options.deliveryStatus,
+        },
+      });
+      // This outcome must commit before the handler reports that the link is unusable.
+      return Result.ok({ type: "withdrawn", status: current.status });
+    }
+    case "stale":
+      return Result.err(
+        new HandlerError({
+          status: 409,
+          message: "The invoice email delivery state changed before completion",
+        }),
+      );
+    case "advance": {
+      const sent = await sendFinalizedInvoice(tx, {
+        actorUserId: options.actorUserId,
+        invoiceId: options.invoiceId,
+        now: options.now,
+        organizationId: options.organizationId,
+        recordAuditEvent: options.recordAuditEvent,
+        workspaceId: options.workspaceId,
+      });
+      if (sent.isErr()) {
+        return Result.err(sent.error);
+      }
       break;
-    case INVOICE_STATUS.FINALIZED:
-    case INVOICE_STATUS.SENT:
-    case INVOICE_STATUS.PAID:
+    }
+    case "complete":
+      break;
+    case "fail":
       break;
     default:
-      current.status satisfies never;
-      return panic("Unhandled invoice status during email completion");
+      decision satisfies never;
+      return panic("Unhandled invoice send completion decision");
   }
+  const deliveryStatus =
+    decision.type === "fail" ? "failed" : decision.deliveryStatus;
   const completed = await completeInvoiceSendDelivery(tx, {
     sendId: options.prepared.sendId,
     invoiceId: options.invoiceId,
-    deliveryStatus: options.deliveryStatus,
+    deliveryStatus,
     failedRecipients: options.failed,
     now: options.now,
     recordAuditEvent: options.recordAuditEvent,
@@ -497,15 +563,16 @@ const recordDelivery = async (
   if (completed.isErr()) {
     return Result.err(completed.error);
   }
-  // Sending may settle the invoice; report the status stored by the owner.
   const [after] = await tx
     .select({ status: invoices.status })
     .from(invoices)
     .where(eq(invoices.id, options.invoiceId));
   return Result.ok({
+    type: "completed",
     status:
       after?.status ??
       panic("A locked invoice disappeared during email completion"),
+    deliveryStatus,
   });
 };
 
@@ -640,7 +707,24 @@ export const createSendInvoice = ({
               }),
           ),
         );
-        if (deliveryStatus === "failed") {
+        switch (recorded.type) {
+          case "withdrawn":
+            return Result.err(
+              new HandlerError({
+                status: 409,
+                code: "invoice_link_withdrawn",
+                message:
+                  "The invoice link was withdrawn before delivery completed and cannot be used.",
+                hint: "Reload the invoice and send a new link.",
+              }),
+            );
+          case "completed":
+            break;
+          default:
+            recorded satisfies never;
+            return panic("Unhandled recorded invoice delivery");
+        }
+        if (recorded.deliveryStatus === "failed") {
           return Result.err(
             classifyFailure(
               new HandlerError({
@@ -656,7 +740,7 @@ export const createSendInvoice = ({
         }
         return Result.ok({
           id: prepared.sendId,
-          deliveryStatus,
+          deliveryStatus: recorded.deliveryStatus,
           failedRecipients: failed,
           replyTo: prepared.replyTo,
           expiresAt: prepared.expiresAt.toISOString(),

@@ -747,6 +747,7 @@
           "active": "Link on aktiivne",
           "expired": "Link on aegunud",
           "failed": "Toimetamata",
+          "pending": "Saatmine",
           "revoked": "Link on tühistatud"
         },
         "loadFailed": "Saatmise ajalugu ei õnnestunud laadida.",

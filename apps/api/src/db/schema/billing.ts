@@ -1356,7 +1356,9 @@ export const invoiceSends = p.pgTable(
     language: p.text({ enum: INVOICE_LANGUAGES }).notNull(),
     replyTo: p.varchar("reply_to", { length: 320 }).notNull(),
     tokenHash: p.varchar("token_hash", { length: 64 }).notNull(),
-    expiresAt: timestamptz("expires_at").notNull(),
+    expiresAt: timestamptz("expires_at")
+      .notNull()
+      .default(sql`now() + interval '60 days'`),
     deliveryStatus: p
       .text("delivery_status", { enum: INVOICE_SEND_DELIVERY_STATUSES })
       .notNull()

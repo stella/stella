@@ -61,6 +61,7 @@ type LinkStatus = InvoiceSend["linkStatus"];
 const LINK_STATUS_STYLES = {
   active: "bg-[var(--option-emerald-bg)] text-[var(--option-emerald-fg)]",
   expired: "bg-muted text-muted-foreground",
+  pending: "bg-muted text-muted-foreground",
   revoked: "bg-muted text-muted-foreground",
   failed: "bg-[var(--option-red-bg)] text-[var(--option-red-fg)]",
 } as const satisfies Record<LinkStatus, string>;

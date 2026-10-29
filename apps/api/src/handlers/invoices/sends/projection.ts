@@ -1,4 +1,4 @@
-import type { invoiceSends } from "@/api/db/schema";
+import type { InvoiceSendDeliveryStatus, invoiceSends } from "@/api/db/schema";
 import type {
   UnbackedProjectionKeys,
   UnprojectedColumns,
@@ -19,22 +19,38 @@ type InvoiceSendRow = Pick<
   | "createdAt"
 >;
 
-/**
- * Whether the link a send carried still opens: `active`, or why not. A send
- * whose emails all failed never had a working link.
- */
-const invoiceSendLinkStatus = (row: InvoiceSendRow, now: Date) => {
-  if (row.deliveryStatus === "failed") {
-    return "failed" as const;
-  }
-  if (row.revokedAt !== null) {
-    return "revoked" as const;
-  }
-  if (row.expiresAt <= now) {
-    return "expired" as const;
-  }
-  return "active" as const;
-};
+type InvoiceSendLinkStatus =
+  "pending" | "active" | "failed" | "revoked" | "expired";
+type LinkRevocation = "unrevoked" | "revoked";
+type LinkExpiry = "unexpired" | "expired";
+
+const INVOICE_SEND_LINK_STATUS = {
+  pending: {
+    unrevoked: { unexpired: "pending", expired: "expired" },
+    revoked: { unexpired: "revoked", expired: "revoked" },
+  },
+  delivered: {
+    unrevoked: { unexpired: "active", expired: "expired" },
+    revoked: { unexpired: "revoked", expired: "revoked" },
+  },
+  partial: {
+    unrevoked: { unexpired: "active", expired: "expired" },
+    revoked: { unexpired: "revoked", expired: "revoked" },
+  },
+  failed: {
+    unrevoked: { unexpired: "failed", expired: "failed" },
+    revoked: { unexpired: "failed", expired: "failed" },
+  },
+} as const satisfies Record<
+  InvoiceSendDeliveryStatus,
+  Record<LinkRevocation, Record<LinkExpiry, InvoiceSendLinkStatus>>
+>;
+
+/** Failed transport, withdrawal and expiry all prevent a pending link becoming active. */
+const invoiceSendLinkStatus = (row: InvoiceSendRow, now: Date) =>
+  INVOICE_SEND_LINK_STATUS[row.deliveryStatus][
+    row.revokedAt === null ? "unrevoked" : "revoked"
+  ][row.expiresAt <= now ? "expired" : "unexpired"];
 
 /** One send as the firm sees it in the invoice's delivery history. */
 export const projectInvoiceSend = (

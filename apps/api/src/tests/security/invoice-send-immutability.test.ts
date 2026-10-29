@@ -44,6 +44,7 @@ afterAll(async () => {
 
 const seedSend = async (
   deliveryStatus: InvoiceSendDeliveryStatus = "delivered",
+  recipients = ["client@example.test"],
 ) => {
   const { testDb, ids } = fixture;
   const invoiceId = createSafeId<"invoice">();
@@ -74,7 +75,7 @@ const seedSend = async (
     organizationId: ids.orgA,
     invoiceId,
     sentByUserId: ids.userA1,
-    recipients: ["client@example.test"],
+    recipients,
     language: "en",
     replyTo: "billing@example.test",
     tokenHash,
@@ -289,6 +290,68 @@ describe("invoice send mutation authority", () => {
           .from(invoiceSends)
           .where(eq(invoiceSends.id, sendId)),
       ).toEqual([{ deliveryStatus: terminal }]);
+    },
+  );
+
+  test.each(
+    (["delivered", "partial", "failed"] as const).flatMap((terminal) =>
+      (["application", "owner"] as const).map((actor) => ({ terminal, actor })),
+    ),
+  )(
+    "$actor can complete pending failure details as $terminal but cannot rewrite terminal failure details",
+    async ({ terminal, actor }) => {
+      const { testDb } = fixture;
+      const recipients = ["accepted@example.test", "refused@example.test"];
+      const { sendId, safeDb } = await seedSend("pending", recipients);
+      type DeliveryPatch = Pick<
+        typeof invoiceSends.$inferInsert,
+        "deliveryStatus" | "failedRecipients"
+      >;
+      const write = async (patch: DeliveryPatch) =>
+        actor === "application"
+          ? await safeDb(async (tx) => {
+              await tx
+                .update(invoiceSends)
+                .set(patch)
+                .where(eq(invoiceSends.id, sendId));
+            })
+          : await Result.tryPromise(async () => {
+              await testDb
+                .update(invoiceSends)
+                .set(patch)
+                .where(eq(invoiceSends.id, sendId));
+            });
+      // The completion changes both fields from their prior pending values.
+      (await write({ failedRecipients: ["accepted@example.test"] })).unwrap();
+      const failedRecipients = {
+        delivered: [],
+        partial: ["refused@example.test"],
+        failed: recipients,
+      }[terminal];
+      (await write({ deliveryStatus: terminal, failedRecipients })).unwrap();
+      const changedRecipients =
+        failedRecipients.length === 0 ? ["refused@example.test"] : [];
+      for (const patch of [
+        { failedRecipients: changedRecipients },
+        { deliveryStatus: terminal, failedRecipients: changedRecipients },
+      ]) {
+        const refused = await write(patch);
+        expect(refused.isErr()).toBe(true);
+        if (refused.isErr()) {
+          expect(getPgErrorCode(refused.error)).toBe("42501");
+        }
+      }
+      // An unchanged completion stays idempotent rather than freezing all writes.
+      (await write({ deliveryStatus: terminal, failedRecipients })).unwrap();
+      expect(
+        await testDb
+          .select({
+            deliveryStatus: invoiceSends.deliveryStatus,
+            failedRecipients: invoiceSends.failedRecipients,
+          })
+          .from(invoiceSends)
+          .where(eq(invoiceSends.id, sendId)),
+      ).toEqual([{ deliveryStatus: terminal, failedRecipients }]);
     },
   );
 

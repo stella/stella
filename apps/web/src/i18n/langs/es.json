@@ -747,6 +747,7 @@
           "active": "Enlace activo",
           "expired": "Enlace caducado",
           "failed": "No entregada",
+          "pending": "Enviando",
           "revoked": "Enlace revocado"
         },
         "loadFailed": "No se pudo cargar el historial de envíos.",
