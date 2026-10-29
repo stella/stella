@@ -403,7 +403,7 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 60 * 1000 },
     task: REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK,
-    reads: "unmeasured",
+    reads: { budget: "scheduled.caseLaw.refreshSitemapShards" },
   },
   {
     // Hourly: nothing alarms on these gauges at a finer resolution, and a

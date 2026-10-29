@@ -8,6 +8,7 @@ import type {
 } from "@/api/lib/db/read-budgets";
 import type { LegislationReadTransaction } from "@/api/lib/legislation-public-read-db";
 import { REPORT_CASE_LAW_FRESHNESS_TASK } from "@/api/lib/scheduler/tasks/case-law-freshness-report";
+import { REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK } from "@/api/lib/scheduler/tasks/case-law-sitemap-shard-refresh";
 import { SWEEP_REQUEST_RECEIPTS_TASK } from "@/api/lib/scheduler/tasks/request-receipt-retention";
 import { buildDocumentSearchQueries } from "@/api/lib/search/pg-fts-search-query";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
@@ -18,6 +19,7 @@ import {
   CASE_LAW_SCENARIOS,
   LEGISLATION_CANDIDATE_COUNT,
   LEGISLATION_GENERATION,
+  seedSitemapReadBudget,
 } from "./corpus-seed";
 import { QUERY_PERF_OWNER_DEADLINES } from "./owner-deadlines";
 import type { RequestReceiptScenario } from "./request-receipt-seed";
@@ -72,6 +74,7 @@ export type ScheduledJobScenario =
   { type: "case-law"; served: ServedCaseLaw } | RequestReceiptScenario;
 
 type ScheduledJobMeasurement = {
+  prepare?: typeof seedSitemapReadBudget;
   task: string;
   scenarios: readonly {
     size: ScheduledJobScenario;
@@ -90,6 +93,13 @@ type ScheduledJobMeasurement = {
 export const SCHEDULED_JOB_MEASUREMENTS: Readonly<
   Record<string, ScheduledJobMeasurement>
 > = {
+  "caseLaw.refreshSitemapShards.hourly": {
+    task: REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK,
+    prepare: seedSitemapReadBudget,
+    scenarios: [
+      { size: { type: "case-law", served: CASE_LAW_SCENARIOS.quiet.size } },
+    ],
+  },
   "requests.sweepReceipts.hourly": {
     task: SWEEP_REQUEST_RECEIPTS_TASK,
     scenarios: (["expired", "quiet", "mixed"] as const).map((cohort) => ({
@@ -150,6 +160,7 @@ export const scheduledJobMeasurementViolations = (
 
 /** Which profile measures each budget; every budget has exactly one. */
 export const READ_BUDGET_PROFILES = {
+  "scheduled.caseLaw.refreshSitemapShards": "corpus",
   "scheduled.caseLaw.reportFreshness": "corpus",
   "scheduled.requests.sweepReceipts": "corpus",
   "statement.caseLaw.coverageSources": "coverage",

@@ -291,7 +291,7 @@ const RateTablesView = ({
                 </span>
               </button>
 
-              <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+              <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 pointer-coarse:opacity-100">
                 {!table.isDefault && (
                   <Button
                     className="size-7"
@@ -637,7 +637,7 @@ const RateEntriesView = ({
 
               <Button
                 aria-label={t("common.delete")}
-                className="size-7 opacity-0 transition-opacity group-hover:opacity-100"
+                className="size-7 opacity-0 transition-opacity group-hover:opacity-100 pointer-coarse:opacity-100"
                 onClick={() => handleDelete(entry.id)}
                 size="icon"
                 variant="destructive-ghost"

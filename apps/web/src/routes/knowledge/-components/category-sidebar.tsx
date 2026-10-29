@@ -574,7 +574,7 @@ const CategoryRow = ({
             <DropdownMenuTrigger
               render={
                 <Button
-                  className="invisible shrink-0 group-hover:visible"
+                  className="invisible shrink-0 group-hover:visible pointer-coarse:visible"
                   size="icon-xs"
                   variant="ghost"
                 />

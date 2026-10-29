@@ -297,42 +297,65 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
           } else {
             await seedRequestReceiptScenario(db, scenario);
           }
-          const generation = describeScheduledScenario(scenario);
-          const run = await measureScheduledJobRun({
-            database: db,
-            openClient,
-            jobId,
-            task,
-          });
-          if (scenario.type === "request-receipts") {
-            const retained = await db.$count(schema.requestIdempotencyReceipts);
-            if (retained !== scenario.rows) {
-              panic("Scheduled measurement consumed its receipt fixture", {
-                retained,
-                expected: scenario.rows,
-              });
-            }
-            const deleted = run.statements.some(({ statement }) =>
-              /^delete\s/iu.test(statement),
-            );
-            if (deleted !== (scenario.cohort !== "quiet")) {
-              panic(
-                "Receipt task did not exercise the expected retention path",
-                scenario,
+          const measurement =
+            SCHEDULED_JOB_MEASUREMENTS[jobId] ??
+            panic(`No measurement for ${jobId}`);
+          const release =
+            scenario.type === "case-law"
+              ? await measurement.prepare?.({
+                  database: db,
+                  served: scenario.served,
+                  openClient,
+                })
+              : undefined;
+          try {
+            const generation = describeScheduledScenario(scenario);
+            const run = await measureScheduledJobRun({
+              database: db,
+              jobId,
+              task,
+            });
+            if (scenario.type === "request-receipts") {
+              const retained = await db.$count(
+                schema.requestIdempotencyReceipts,
               );
+              if (
+                scenario.cohort === "quiet"
+                  ? retained !== scenario.rows
+                  : retained >= scenario.rows
+              ) {
+                panic(
+                  "Scheduled measurement did not apply its receipt retention scenario",
+                  {
+                    retained,
+                    expected: scenario.rows,
+                  },
+                );
+              }
+              const deleted = run.statements.some(({ statement }) =>
+                /^delete\s/iu.test(statement),
+              );
+              if (deleted !== (scenario.cohort !== "quiet")) {
+                panic(
+                  "Receipt task did not exercise the expected retention path",
+                  scenario,
+                );
+              }
             }
+            log({
+              event: "read_budget_job_run",
+              jobId,
+              generation,
+              ...run.metrics,
+              statements: run.statements,
+            });
+            for (const violation of run.planViolations) {
+              note(violation.message);
+            }
+            return run.metrics;
+          } finally {
+            await release?.();
           }
-          log({
-            event: "read_budget_job_run",
-            jobId,
-            generation,
-            ...run.metrics,
-            statements: run.statements,
-          });
-          for (const violation of run.planViolations) {
-            note(violation.message);
-          }
-          return run.metrics;
         };
         // Every job that declares a budget, judged against the budget its own
         // registration names; the census makes each one have a measurement.

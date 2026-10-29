@@ -7,7 +7,6 @@ import {
 import { getTranslator } from "@/i18n/translator";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { invoicesKeys } from "@/lib/workspaces/queries/invoices";
 import { myTimeEntriesKeys } from "@/lib/workspaces/queries/my-time-entries";
@@ -15,8 +14,14 @@ import { timeApprovalsKeys } from "@/lib/workspaces/queries/time-approvals";
 import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
 import {
   approveTimeEntries,
+  batchDeleteTimeEntries,
+  batchUpdateTimeEntries,
+  createTimeEntry,
+  decideTimeSuggestion,
+  deleteTimeEntry,
   returnTimeEntries,
-  sendTimeEntryMutation,
+  splitTimeEntry,
+  updateTimeEntry,
 } from "@/lib/workspaces/time-entries-api";
 
 // A review decision changes the matters' time and what they can invoice, and
@@ -119,22 +124,15 @@ type CreateTimeEntryVars = {
 export const useCreateTimeEntry = () => {
   const analytics = useAnalytics();
 
-  return useIdempotentMutation({
-    mutationFn: async (
-      { workspaceId, workItemId, ...body }: CreateTimeEntryVars,
-      request,
-    ) => {
-      await sendTimeEntryMutation({
-        headers: request.headers,
-        workspaceId,
-        mutation: {
-          type: "create",
-          body: {
-            queryKey: timeEntriesKeys.all(workspaceId),
-            ...body,
-            ...(workItemId && { workItemId }),
-          },
-        },
+  return useMutation({
+    mutationFn: async ({
+      workspaceId,
+      workItemId,
+      ...body
+    }: CreateTimeEntryVars) => {
+      await createTimeEntry(workspaceId, {
+        ...body,
+        ...(workItemId && { workItemId }),
       });
     },
     onError: (error) => {
@@ -172,18 +170,11 @@ export const useUpdateTimeEntry = () => {
   return useMutation({
     mutationFn: async ({ workspaceId, ...body }: UpdateTimeEntryVars) => {
       const { id, workItemId, moveTo, ...restBody } = body;
-      await sendTimeEntryMutation({
-        workspaceId,
-        mutation: {
-          type: "update",
-          body: {
-            queryKey: timeEntriesKeys.all(workspaceId),
-            ...restBody,
-            id,
-            ...(workItemId !== undefined && { workItemId }),
-            ...(moveTo !== undefined && { moveToWorkspaceId: moveTo }),
-          },
-        },
+      await updateTimeEntry(workspaceId, {
+        ...restBody,
+        id,
+        ...(workItemId !== undefined && { workItemId }),
+        ...(moveTo !== undefined && { moveToWorkspaceId: moveTo }),
       });
     },
     onError: (error) => {
@@ -218,19 +209,9 @@ export const useDecideTimeSuggestion = () => {
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
 
-  return useIdempotentMutation({
-    mutationFn: async (
-      { workspaceId, ...body }: DecideTimeSuggestionVars,
-      request,
-    ) => {
-      await sendTimeEntryMutation({
-        headers: request.headers,
-        workspaceId,
-        mutation: {
-          type: "suggestion_decision",
-          body: { queryKey: timeEntriesKeys.all(workspaceId), ...body },
-        },
-      });
+  return useMutation({
+    mutationFn: async ({ workspaceId, ...body }: DecideTimeSuggestionVars) => {
+      await decideTimeSuggestion(workspaceId, body);
     },
     onSuccess: async (_result, { workspaceId }) => {
       // Accept creates an entry and both decisions retire a suggestion, so the
@@ -262,13 +243,7 @@ export const useDeleteTimeEntry = () => {
 
   return useMutation({
     mutationFn: async ({ workspaceId, id }: DeleteTimeEntryVars) => {
-      await sendTimeEntryMutation({
-        workspaceId,
-        mutation: {
-          type: "delete",
-          body: { queryKey: timeEntriesKeys.all(workspaceId), id },
-        },
-      });
+      await deleteTimeEntry(workspaceId, id);
     },
     onError: (error) => {
       analytics.captureError(error, {
@@ -291,16 +266,7 @@ export const useBatchUpdateTimeEntries = () => {
 
   return useMutation({
     mutationFn: async ({ workspaceId, ...body }: BatchUpdateVars) => {
-      await sendTimeEntryMutation({
-        workspaceId,
-        mutation: {
-          type: "batch_update",
-          body: {
-            queryKey: timeEntriesKeys.all(workspaceId),
-            ...body,
-          },
-        },
-      });
+      await batchUpdateTimeEntries(workspaceId, body);
     },
     onError: (error) => {
       analytics.captureError(error, {
@@ -325,13 +291,7 @@ export const useBatchDeleteTimeEntries = () => {
 
   return useMutation({
     mutationFn: async ({ workspaceId, ids }: BatchDeleteVars) => {
-      await sendTimeEntryMutation({
-        workspaceId,
-        mutation: {
-          type: "batch_delete",
-          body: { queryKey: timeEntriesKeys.all(workspaceId), ids },
-        },
-      });
+      await batchDeleteTimeEntries(workspaceId, ids);
     },
     onError: (error) => {
       analytics.captureError(error, {
@@ -355,18 +315,9 @@ type SplitTimeEntryVars = {
 export const useSplitTimeEntry = () => {
   const analytics = useAnalytics();
 
-  return useIdempotentMutation({
+  return useMutation({
     mutationFn: async ({ workspaceId, ...body }: SplitTimeEntryVars) => {
-      await sendTimeEntryMutation({
-        workspaceId,
-        mutation: {
-          type: "split",
-          body: {
-            queryKey: timeEntriesKeys.all(workspaceId),
-            ...body,
-          },
-        },
-      });
+      await splitTimeEntry(workspaceId, body);
     },
     onError: (error) => {
       analytics.captureError(error, {
