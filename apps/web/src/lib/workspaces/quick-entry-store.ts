@@ -2,7 +2,7 @@ import type { RefObject } from "react";
 
 import { create } from "zustand";
 
-import { captureDialogReturnFocus } from "@/lib/dialog-return-focus";
+import { captureDialogReturnFocus } from "@/lib/workspaces/dialog-return-focus";
 
 type QuickEntryScope = { userId: string; organizationId: string };
 type QuickEntryState = {

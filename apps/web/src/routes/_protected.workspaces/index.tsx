@@ -40,10 +40,10 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { useFormattingLocale } from "@/i18n/formatting-context";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
-import { captureDialogReturnFocus } from "@/lib/dialog-return-focus";
 import { pageTitle } from "@/lib/page-title";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
+import { captureDialogReturnFocus } from "@/lib/workspaces/dialog-return-focus";
 import {
   workspacesKeys,
   workspacesRouteOptions,

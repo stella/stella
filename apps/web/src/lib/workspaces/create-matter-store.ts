@@ -4,7 +4,7 @@ import { create } from "zustand";
 
 import type { ContactType } from "@stll/api-contract";
 
-import { captureDialogReturnFocus } from "@/lib/dialog-return-focus";
+import { captureDialogReturnFocus } from "@/lib/workspaces/dialog-return-focus";
 
 export type MatterDraftClient = {
   id: string;
@@ -52,7 +52,7 @@ export const useCreateMatterStore = create<CreateMatterState>()((set) => ({
     set(({ dialog }) =>
       dialog.status === "closing" ? { dialog: { status: "closed" } } : {},
     ),
-  openDialog: ({ client, onCreated, opener } = {}) =>
+  openDialog: ({ client, onCreated, opener }: OpenCreateMatterOptions = {}) =>
     set({
       returnFocus: captureDialogReturnFocus(opener),
       dialog: {
