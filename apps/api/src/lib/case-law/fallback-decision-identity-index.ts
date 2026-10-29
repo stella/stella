@@ -44,6 +44,15 @@ export const FALLBACK_DECISION_INDEXES = [
     name: "case_law_decisions_source_fallback_publication_idx",
     tableName: "case_law_decisions",
   },
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "case_law_decisions_source_docket_cohort_idx" ON public."case_law_decisions" USING btree ("source_id", "language", "case_number")',
+    definitionBody:
+      "ON public.case_law_decisions USING btree (source_id, language, case_number)",
+    isUnique: false,
+    name: "case_law_decisions_source_docket_cohort_idx",
+    tableName: "case_law_decisions",
+  },
 ] as const satisfies readonly (RequiredMigrationIndex & {
   createSql: string;
 })[];
@@ -51,6 +60,8 @@ export const FALLBACK_DECISION_INDEXES = [
 type FallbackDecisionIndexColumns = {
   sourceId: AnyPgColumn;
   sourceDocumentId: AnyPgColumn;
+  language: AnyPgColumn;
+  caseNumber: AnyPgColumn;
   fallbackIdentityKey: AnyPgColumn;
   fallbackCohortKey: AnyPgColumn;
   fallbackContentHash: AnyPgColumn;
@@ -61,6 +72,11 @@ type FallbackDecisionIndexColumns = {
 export const fallbackDecisionIdentityIndexes = (
   columns: FallbackDecisionIndexColumns,
 ) => [
+  index("case_law_decisions_source_docket_cohort_idx").on(
+    columns.sourceId,
+    columns.language,
+    columns.caseNumber,
+  ),
   uniqueIndex(FALLBACK_DECISION_IDENTITY_INDEX)
     .on(columns.sourceId, columns.fallbackIdentityKey)
     .where(

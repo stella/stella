@@ -28,6 +28,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { canonicalDecisionIdSql } from "@/api/lib/case-law/decision-alias";
 import { resolveDecisionCourtId } from "@/api/lib/case-law/decision-court-identity";
 import {
+  decisionContentEvidenceCompatible,
   decisionPublicationCompatible,
   decisionStorageEnrichmentMatch,
   decisionStorageIdentity,
@@ -481,17 +482,49 @@ export const findFallbackDecisionTx = async (
   tx: Transaction,
   { sourceId, storageIdentity }: FindFallbackDecisionOptions,
 ) => {
-  const exact =
-    storageIdentity.type === "strong"
-      ? await findStrongFallbackDecisionTx(tx, { sourceId, storageIdentity })
-      : await tx.query.caseLawDecisions.findFirst({
-          where: {
-            sourceId: { eq: sourceId },
-            ...decisionStorageIdentityMatch(storageIdentity),
-          },
-          columns: IDENTITY_COLUMNS,
-          extras: IDENTITY_EXTRAS,
-        });
+  let exact: IdentityRow | undefined;
+  switch (storageIdentity.type) {
+    case "strong":
+      exact = await findStrongFallbackDecisionTx(tx, {
+        sourceId,
+        storageIdentity,
+      });
+      break;
+    case "content": {
+      const rows = await tx.query.caseLawDecisions.findMany({
+        where: {
+          sourceId: { eq: sourceId },
+          ...decisionStorageIdentityMatch(storageIdentity),
+        },
+        columns: IDENTITY_COLUMNS,
+        extras: IDENTITY_EXTRAS,
+        limit: MAX_LEGACY_DOCKET_CANDIDATES + 1,
+      });
+      const compatible = rows.filter((row) =>
+        decisionContentEvidenceCompatible(storageIdentity, row),
+      );
+      exact =
+        rows.length <= MAX_LEGACY_DOCKET_CANDIDATES && compatible.length === 1
+          ? compatible.at(0)
+          : undefined;
+      break;
+    }
+    case "document":
+      exact = await tx.query.caseLawDecisions.findFirst({
+        where: {
+          sourceId: { eq: sourceId },
+          ...decisionStorageIdentityMatch(storageIdentity),
+        },
+        columns: IDENTITY_COLUMNS,
+        extras: IDENTITY_EXTRAS,
+      });
+      break;
+    case "unkeyable":
+      return panic("An unkeyable fallback cannot select a decision");
+    default:
+      storageIdentity satisfies never;
+      return panic("Unhandled exact fallback identity");
+  }
   if (exact !== undefined) {
     return exact;
   }
@@ -504,6 +537,8 @@ export const findFallbackDecisionTx = async (
     columns: {
       id: true,
       decisionDate: true,
+      ecli: true,
+      sheetNumber: true,
       decisionType: true,
       sourceUrl: true,
       documentUrl: true,

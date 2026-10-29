@@ -14,6 +14,7 @@ import {
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
+import { readSourceContract } from "@/api/handlers/case-law/ingestion/pipeline/source-contract";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
   absentDecisionTextFields,
@@ -23,6 +24,7 @@ import { corpusContentHash } from "@/api/lib/legal-search/corpus-content-hash";
 import { caseLawCanonicalPayload } from "@/api/lib/legal-search/decision-payload";
 import { EMPTY_AST } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import { isRecord } from "@/api/lib/type-guards";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -36,7 +38,7 @@ const corpus = {
   },
 } satisfies CaseLawCorpusDependencies;
 
-test("weak publication enrichment preserves its row and distinguishes full cohort siblings", async () => {
+test("expansion enrichment preserves its row before post-contract sibling storage", async () => {
   const client = await createTestPglite();
   const db = drizzle({
     client,
@@ -98,6 +100,14 @@ test("weak publication enrichment preserves its row and distinguishes full cohor
     expect(before).toHaveLength(1);
     const original =
       before.at(0) ?? panic("Metadata observation must be stored");
+    await ingest(
+      plainTextIngestionResult({
+        ...publication(""),
+        rawHash: "listing-enriched",
+        metadata: { publicationLabel: "first", newListingField: "retained" },
+      }),
+    );
+    expect((await stored()).map(({ id }) => id)).toEqual([original.id]);
     await ingest(
       publication("Prvé uznesenie.", "https://example.org/publication/first"),
     );
@@ -419,3 +429,303 @@ test("legacy ECLI spelling changes adopt the original no-ID row", async () => {
     await client.close();
   }
 });
+
+test("a pre-expansion textless publication receives its document on the original UUID", async () => {
+  const client = await createTestPglite();
+  const db = drizzle({
+    client,
+    relations: { ...relations, ...authRelationsPart },
+  });
+  const scopedDb: ScopedDb = async (callback) =>
+    await db.transaction(async (tx) => await callback(asTestRaw(tx)));
+  const sourceId = createSafeId<"caseLawSource">();
+  const id = createSafeId<"caseLawDecision">();
+  const fields = {
+    caseNumber: "0Pu/1/2025",
+    court: "Mestský súd Košice",
+    country: "SVK",
+    language: "sk",
+    decisionDate: "2025-04-18",
+    decisionType: "uznesenie",
+  };
+  try {
+    await db.insert(caseLawSources).values({
+      id: sourceId,
+      adapterKey: `legacy-textless-${sourceId}`,
+      name: "Legacy textless fixture",
+    });
+    await db.insert(caseLawDecisions).values({
+      ...fields,
+      id,
+      sourceId,
+      sourceHash: "legacy",
+      sourceHashVersion: 0,
+      metadata: { publicationLabel: "same" },
+    });
+    const before = (
+      await db
+        .select({
+          publication: caseLawDecisions.fallbackPublicationHash,
+          identity: caseLawDecisions.fallbackIdentityKey,
+          cohort: caseLawDecisions.fallbackCohortKey,
+          hash: caseLawDecisions.fallbackContentHash,
+        })
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, id))
+    ).at(0);
+    expect(before).toEqual({
+      publication: null,
+      identity: null,
+      cohort: null,
+      hash: null,
+    });
+    const outcome = await processDecision({
+      sourceId,
+      scopedDb,
+      corpus,
+      observationOrder: 1n,
+      observedAt: new Date("2026-10-29T08:00:00Z"),
+      input: plainTextIngestionResult({
+        ...fields,
+        fulltext: "Published full ruling.",
+        rawHash: "full-detail",
+        metadata: { publicationLabel: "same", newDetail: "stated" },
+        documentAst: EMPTY_AST,
+        textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+      }),
+    });
+    expect(outcome.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
+    expect(
+      await db
+        .select({ id: caseLawDecisions.id, text: caseLawDecisions.fulltext })
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.sourceId, sourceId)),
+    ).toEqual([{ id, text: "Published full ruling." }]);
+  } finally {
+    await client.close();
+  }
+});
+
+test("post-contract overlapping full observations cannot overwrite one textless publication", async () => {
+  const client = await createTestPglite();
+  const db = drizzle({
+    client,
+    relations: { ...relations, ...authRelationsPart },
+  });
+  const scopedDb: ScopedDb = async (callback) =>
+    await db.transaction(async (tx) => await callback(asTestRaw(tx)));
+  const sourceId = createSafeId<"caseLawSource">();
+  const id = createSafeId<"caseLawDecision">();
+  const fields = {
+    caseNumber: "0Pu/1/2025",
+    court: "Mestský súd Košice",
+    country: "SVK",
+    language: "sk",
+    decisionDate: "2025-04-18",
+    decisionType: "uznesenie",
+  };
+  try {
+    await db.insert(caseLawSources).values({
+      id: sourceId,
+      adapterKey: `overlap-${sourceId}`,
+      name: "Overlapping enrichment fixture",
+    });
+    await db.insert(caseLawDecisions).values({
+      ...fields,
+      id,
+      sourceId,
+      sourceHash: "legacy",
+      sourceHashVersion: 0,
+      metadata: {},
+    });
+    // This fixture models the separate contract release, where different full siblings can coexist.
+    await db.execute(
+      sql`DROP INDEX case_law_decisions_source_case_lang_null_idx`,
+    );
+    const contract = await readSourceContract(sourceId, scopedDb);
+    const bothResolved = Promise.withResolvers();
+    const matchedIds: string[] = [];
+    const ingest = async (text: string, observationOrder: bigint) => {
+      let phase: "identity" | "after-identity" = "identity";
+      const actorDb: ScopedDb = async (callback) => {
+        const value = await db.transaction(
+          async (tx) => await callback(asTestRaw(tx)),
+        );
+        if (phase === "identity") {
+          phase = "after-identity";
+          const matched = isRecord(value) ? value["existing"] : undefined;
+          if (!isRecord(matched) || matched["id"] !== id) {
+            return panic(
+              "Both observations must resolve the same textless row before writing",
+            );
+          }
+          matchedIds.push(id);
+          if (matchedIds.length === 2) {
+            bothResolved.resolve(undefined);
+          }
+          await bothResolved.promise;
+        }
+        return value;
+      };
+      return await processDecision(
+        {
+          sourceId,
+          scopedDb: actorDb,
+          corpus,
+          observationOrder,
+          observedAt: new Date("2026-10-29T08:00:00Z"),
+          input: plainTextIngestionResult({
+            ...fields,
+            fulltext: text,
+            rawHash: text,
+            metadata: {},
+            documentAst: EMPTY_AST,
+            textFields: absentDecisionTextFields(
+              TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+            ),
+          }),
+        },
+        async () => contract,
+      );
+    };
+    const outcomes = await Promise.all([
+      ingest("First full ruling.", 1n),
+      ingest("Second full ruling.", 2n),
+    ]);
+    expect(matchedIds).toEqual([id, id]);
+    expect(outcomes.map(({ status }) => status)).toEqual([
+      PROCESS_DECISION_STATUS.COMPLETE,
+      PROCESS_DECISION_STATUS.COMPLETE,
+    ]);
+    const rows = await db
+      .select({ id: caseLawDecisions.id, text: caseLawDecisions.fulltext })
+      .from(caseLawDecisions)
+      .where(eq(caseLawDecisions.sourceId, sourceId));
+    expect(rows).toHaveLength(2);
+    expect(new Set(rows.map(({ text }) => text))).toEqual(
+      new Set(["First full ruling.", "Second full ruling."]),
+    );
+    expect(rows.some((row) => row.id === id)).toBe(true);
+  } finally {
+    await client.close();
+  }
+});
+
+test.each(["ecli", "sheet-number"] as const)(
+  "unknown-court %s evidence separates sibling enrichment",
+  async (evidence) => {
+    const client = await createTestPglite();
+    const db = drizzle({
+      client,
+      relations: { ...relations, ...authRelationsPart },
+    });
+    const scopedDb: ScopedDb = async (callback) =>
+      await db.transaction(async (tx) => await callback(asTestRaw(tx)));
+    const sourceId = createSafeId<"caseLawSource">();
+    const observation = (member: string, text: string) =>
+      plainTextIngestionResult({
+        caseNumber: "104 C 16/2024",
+        court: "",
+        country: "CZE",
+        language: "cs",
+        ecli:
+          evidence === "ecli"
+            ? `ECLI:CZ:OSCR:2025:104.C.16.2024.${member}`
+            : undefined,
+        sheetNumber: evidence === "sheet-number" ? member : undefined,
+        fulltext: text,
+        rawHash: `${member}:${text}`,
+        metadata: {},
+        documentAst: EMPTY_AST,
+        textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+      });
+    let order = 0n;
+    const ingest = async (member: string, text: string) => {
+      const outcome = await processDecision({
+        sourceId,
+        scopedDb,
+        corpus,
+        observationOrder: ++order,
+        observedAt: new Date("2026-10-29T08:00:00Z"),
+        input: observation(member, text),
+      });
+      expect(outcome.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
+    };
+    try {
+      await db.insert(caseLawSources).values({
+        id: sourceId,
+        adapterKey: `unknown-evidence-${sourceId}`,
+        name: "Unknown evidence fixture",
+      });
+      await db.execute(
+        sql`DROP INDEX case_law_decisions_source_case_lang_null_idx`,
+      );
+      await ingest("1", "");
+      const original =
+        (
+          await db
+            .select({ id: caseLawDecisions.id })
+            .from(caseLawDecisions)
+            .where(eq(caseLawDecisions.sourceId, sourceId))
+        ).at(0) ?? panic("Textless member must be stored");
+      await ingest("2", "Second member document.");
+      expect(
+        await db
+          .select({ text: caseLawDecisions.fulltext })
+          .from(caseLawDecisions)
+          .where(eq(caseLawDecisions.id, original.id)),
+      ).toEqual([{ text: null }]);
+      await ingest("1", "First member document.");
+      expect(
+        await db
+          .select({ id: caseLawDecisions.id })
+          .from(caseLawDecisions)
+          .where(eq(caseLawDecisions.sourceId, sourceId)),
+      ).toHaveLength(2);
+      expect(
+        await db
+          .select({ text: caseLawDecisions.fulltext })
+          .from(caseLawDecisions)
+          .where(eq(caseLawDecisions.id, original.id)),
+      ).toEqual([{ text: "First member document." }]);
+      // Equal text cannot replace contradictory evidence, including a pre-expansion full row.
+      await db
+        .update(caseLawDecisions)
+        .set({
+          fallbackIdentityKey: null,
+          fallbackCohortKey: null,
+          fallbackContentHash: null,
+          fallbackPublicationHash: null,
+          contentHash: corpusContentHash(
+            caseLawCanonicalPayload(observation("1", "First member document.")),
+          ),
+        })
+        .where(eq(caseLawDecisions.id, original.id));
+      await ingest("3", "First member document.");
+      await ingest("4", "First member document.");
+      expect(
+        await db
+          .select({ id: caseLawDecisions.id })
+          .from(caseLawDecisions)
+          .where(eq(caseLawDecisions.sourceId, sourceId)),
+      ).toHaveLength(4);
+      expect(
+        await db
+          .select({
+            ecli: caseLawDecisions.ecli,
+            sheet: caseLawDecisions.sheetNumber,
+          })
+          .from(caseLawDecisions)
+          .where(eq(caseLawDecisions.id, original.id)),
+      ).toEqual([
+        {
+          ecli:
+            evidence === "ecli" ? "ECLI:CZ:OSCR:2025:104.C.16.2024.1" : null,
+          sheet: evidence === "sheet-number" ? "1" : null,
+        },
+      ]);
+    } finally {
+      await client.close();
+    }
+  },
+);

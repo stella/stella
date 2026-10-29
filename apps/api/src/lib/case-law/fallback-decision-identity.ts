@@ -18,6 +18,10 @@ import {
   rowHoldsDocumentFor,
 } from "@/api/lib/case-law/stored-payload";
 import { corpusContentHash } from "@/api/lib/legal-search/corpus-content-hash";
+import {
+  decisionIdentifiersFromPersistedMetadata,
+  storeDecisionIdentifiersInMetadata,
+} from "@/api/lib/legal-search/decision-identifier-metadata";
 import { caseLawCanonicalPayload } from "@/api/lib/legal-search/decision-payload";
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { PARTIAL_OBSERVATION_KEY } from "@/api/lib/legal-search/partial-observation-sql";
@@ -261,6 +265,8 @@ export const parseFallbackDecisionIdentityKey = (
 
 type PublicationFieldsInput = {
   decisionDate?: string | null | undefined;
+  ecli?: string | null | undefined;
+  sheetNumber?: string | null | undefined;
   decisionType?: string | null | undefined;
   judges?: readonly unknown[] | null | undefined;
   sourceUrl?: string | null | undefined;
@@ -278,18 +284,37 @@ const OBSERVATION_METADATA_KEYS = new Set([
   "detailUnavailable",
 ]);
 
-const publicationFields = (result: PublicationFieldsInput) => ({
-  decisionDate: result.decisionDate,
-  decisionType: result.decisionType,
-  judges: result.judges,
-  sourceUrl: result.sourceUrl,
-  documentUrl: result.documentUrl,
-  metadata: Object.fromEntries(
-    Object.entries(
-      splitStoredDecisionTextMetadata(result.metadata ?? {}).metadata,
-    ).filter(([key]) => !OBSERVATION_METADATA_KEYS.has(key)),
-  ),
+const publicationEvidence = (result: PublicationFieldsInput) => ({
+  ecli: fallbackEcliComparisonKey(result.ecli ?? "") || undefined,
+  sheetNumber: result.sheetNumber,
 });
+
+const publicationFields = (result: PublicationFieldsInput) => {
+  const metadata = splitStoredDecisionTextMetadata(
+    result.metadata ?? {},
+  ).metadata;
+  const identifiers = decisionIdentifiersFromPersistedMetadata(metadata);
+  return {
+    decisionDate: result.decisionDate,
+    decisionType: result.decisionType,
+    evidence: publicationEvidence(result),
+    judges: result.judges,
+    sourceUrl: result.sourceUrl,
+    documentUrl: result.documentUrl,
+    identifiers: identifiers?.map((identifier) => ({
+      type: identifier.type,
+      value:
+        identifier.type === DECISION_IDENTIFIER_TYPES.ECLI
+          ? normalizeStructuredDecisionIdentifier(identifier)
+          : identifier.value,
+    })),
+    metadata: Object.fromEntries(
+      Object.entries(
+        storeDecisionIdentifiersInMetadata(metadata, undefined),
+      ).filter(([key]) => !OBSERVATION_METADATA_KEYS.has(key)),
+    ),
+  };
+};
 
 /** Absence is not evidence; every value stated by both observations must agree.
  * Collections may gain members on enrichment, but disjoint stated collections conflict.
@@ -343,6 +368,18 @@ export const decisionPublicationCompatible = (
       stored.hasStoredDocument
         ? "contained"
         : "shared",
+  });
+
+/** Equal document text does not override contradictory publication evidence. */
+export const decisionContentEvidenceCompatible = (
+  storage: DecisionStorageIdentity,
+  stored: PublicationFieldsInput,
+) =>
+  (storage.type === "content" || storage.type === "strong") &&
+  sharedPublicationFieldsAgree({
+    left: storage.publicationFields.evidence,
+    right: publicationEvidence(stored),
+    mode: "shared",
   });
 
 const scopedPublicationHash = (
@@ -444,7 +481,12 @@ export const decisionStorageIdentity = (
             ),
           ),
         )
-      : scopedPublicationHash(identity, publishedContentHash);
+      : scopedPublicationHash(
+          identity,
+          sha256Hex(
+            JSON.stringify([publicationEvidence(result), publishedContentHash]),
+          ),
+        );
   return {
     type: "content",
     identity,
@@ -536,6 +578,9 @@ export const decisionStorageIdentityMatch = (
         ? [
             {
               ...legacyScope,
+              ...(identity.court.type === "unknown-court"
+                ? {}
+                : { ecli: ABSENT_FIELD, sheetNumber: ABSENT_FIELD }),
               contentHash: storage.publishedContentHash,
             },
           ]
@@ -553,9 +598,23 @@ export const decisionStorageEnrichmentMatch = (
   if (storage.type !== "content" && storage.type !== "strong") {
     return null;
   }
+  const legacy = {
+    fallbackPublicationHash: ABSENT_FIELD,
+    fallbackIdentityKey: ABSENT_FIELD,
+    fallbackCohortKey: ABSENT_FIELD,
+    language: storage.identity.language,
+    caseNumber: storage.identity.caseNumber,
+    ...fallbackDecisionCourtMatch(storage.identity),
+    // A legacy known-court ECLI/sheet already names a strong publication.
+    ...(storage.identity.court.type === "unknown-court"
+      ? {}
+      : { ecli: ABSENT_FIELD, sheetNumber: ABSENT_FIELD }),
+    RAW: (table: Parameters<typeof rowHoldsDocumentFor>[0]) =>
+      not(rowHoldsDocumentFor(table)),
+  };
   const scope = {
     sourceDocumentId: ABSENT_FIELD,
-    fallbackPublicationHash: storage.publicationHash,
+    OR: [{ fallbackPublicationHash: storage.publicationHash }, legacy],
   };
   if (storage.type === "strong" || storage.documentState === "document") {
     return {
@@ -567,7 +626,14 @@ export const decisionStorageEnrichmentMatch = (
   }
   return {
     ...scope,
-    OR: [{ fallbackIdentityKey: ABSENT_FIELD }, { RAW: rowHoldsDocumentFor }],
+    AND: [
+      {
+        OR: [
+          { fallbackIdentityKey: ABSENT_FIELD },
+          { RAW: rowHoldsDocumentFor },
+        ],
+      },
+    ],
   };
 };
 
