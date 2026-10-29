@@ -3,9 +3,10 @@ import type { ConfigContext, ExpoConfig } from "expo/config";
 import {
   IOSConfig,
   withDangerousMod,
+  withPodfile,
   withXcodeProject,
 } from "expo/config-plugins";
-import type { ConfigPlugin } from "expo/config-plugins";
+import type { ConfigPlugin, ExportedConfig } from "expo/config-plugins";
 import { cpSync, existsSync, rmSync } from "node:fs";
 import path from "node:path";
 
@@ -137,6 +138,32 @@ const withBarGlyphs: ConfigPlugin = (config) =>
       return mod;
     },
   ]);
+
+/** CocoaPods owns the widget bundle phase; keep its entry point in the app. */
+export const WIDGETS_BUNDLE_HOOK = `
+post_integrate do |installer|
+  phases = installer.pods_project.targets.flat_map(&:shell_script_build_phases).select do |phase|
+    phase.name == '[CP-User] Build ExpoWidgets Bundle'
+  end
+  raise 'ExpoWidgets bundle phase missing' if phases.empty?
+  phases.each do |phase|
+    phase.shell_script = 'bash "$PODS_ROOT/../../scripts/xcode-widget-bundle.sh"'
+  end
+  installer.pods_project.save
+end
+`;
+
+export const configureWidgetsPodfile: Parameters<typeof withPodfile>[1] = (
+  mod,
+) => {
+  if (!mod.modResults.contents.includes(WIDGETS_BUNDLE_HOOK)) {
+    mod.modResults.contents += WIDGETS_BUNDLE_HOOK;
+  }
+  return mod;
+};
+
+const withWidgetsBundle: ConfigPlugin = (config) =>
+  withPodfile(config, configureWidgetsPodfile);
 
 /** stella's API, whose update route relays the signed updates every build runs. */
 const UPDATES_ORIGIN = "https://api.stll.app";
@@ -318,7 +345,7 @@ export const appConfigFor = ({
   ...inputs
 }: Omit<AppConfigInputs, "liveActivities" | "pushNotifications"> & {
   signing?: ReleaseSigning | undefined;
-}): ExpoConfig => {
+}): ExportedConfig => {
   // The widgets profile comes with the profiles regenerated for the App
   // Group and push capabilities, so it stands for both.
   const storeCapabilities =
@@ -330,7 +357,9 @@ export const appConfigFor = ({
       pushNotifications: storeCapabilities,
     }),
   );
-  return signing === undefined ? config : withReleaseSigning(config, signing);
+  // The native module is autolinked even when the extension is omitted.
+  const bundled = withWidgetsBundle(config);
+  return signing === undefined ? bundled : withReleaseSigning(bundled, signing);
 };
 
 /** `APP_VARIANT`: `development` (default), `preview` or `production`. */
