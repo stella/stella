@@ -55,10 +55,6 @@
       "types": "./src/czech-document-roles.ts",
       "import": "./src/czech-document-roles.ts"
     },
-    "./dash-subheadings": {
-      "types": "./src/dash-subheadings.ts",
-      "import": "./src/dash-subheadings.ts"
-    },
     "./decision-caption": {
       "types": "./src/decision-caption.ts",
       "import": "./src/decision-caption.ts"
@@ -74,6 +70,10 @@
     "./document-ast": {
       "types": "./src/document-ast.ts",
       "import": "./src/document-ast.ts"
+    },
+    "./heading-designator-levels": {
+      "types": "./src/heading-designator-levels.ts",
+      "import": "./src/heading-designator-levels.ts"
     },
     "./document-kind": {
       "types": "./src/document-kind.ts",

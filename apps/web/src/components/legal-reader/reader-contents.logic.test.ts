@@ -2,8 +2,8 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { withDashSubheadingLevels } from "@stll/legal-ast/dash-subheadings";
 import type { Block, HeadingLevel } from "@stll/legal-ast/document-ast";
+import { withDesignatorHeadingLevels } from "@stll/legal-ast/heading-designator-levels";
 import { comparableHeadingTitle } from "@stll/legal-ast/source-contents";
 import { assertProperty } from "@stll/property-testing";
 
@@ -402,7 +402,7 @@ describe("reader contents", () => {
   // The shape the published corpus holds for a Court of Justice appeal: the
   // same dash-led pair under every ground, stored at the ground's own level.
   const appeal = () =>
-    withDashSubheadingLevels(
+    withDesignatorHeadingLevels(
       documentBlocks([
         { type: "heading", level: 2, title: "The appeal" },
         { type: "heading", level: 3, title: "Substance" },
