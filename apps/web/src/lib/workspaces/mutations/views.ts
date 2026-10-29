@@ -2,10 +2,12 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import type { ConvertibleViewLayoutType } from "@stll/api-contract";
 
+import { getTranslator } from "@/i18n/translator";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { readQueryResult } from "@/lib/errors/query-result";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { toSafeId } from "@/lib/safe-id";
 import type { ViewLayout, ViewTemplateProperty } from "@/lib/types";
@@ -56,7 +58,11 @@ export const useCreateView = (workspaceId: string) => {
       ]);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useCreateView:failure",
+        scope: { type: "handler", handlerId: "useCreateView:failure" },
+      });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -123,7 +129,11 @@ export const useUpdateView = (workspaceId: string) => {
       if (context?.previousViews) {
         queryClient.setQueryData(localizedKey, context.previousViews);
       }
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useUpdateView:failure",
+        scope: { type: "handler", handlerId: "useUpdateView:failure" },
+      });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
     onSettled: async () => {
       await queryClient.invalidateQueries({
@@ -167,7 +177,11 @@ export const useConvertView = (workspaceId: string) => {
       });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useConvertView:failure",
+        scope: { type: "handler", handlerId: "useConvertView:failure" },
+      });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -197,7 +211,11 @@ export const useReorderViews = (workspaceId: string) => {
       readQueryResult(await cache.apply(viewIds)),
     onError: (error, _variables, context) => {
       cache.restore(context);
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useReorderViews:failure",
+        scope: { type: "handler", handlerId: "useReorderViews:failure" },
+      });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
     onSettled: cache.settle,
   });
@@ -230,7 +248,11 @@ export const useDeleteView = (workspaceId: string) => {
       await invalidateViewDerivedQueries({ queryClient, workspaceId });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useDeleteView:failure",
+        scope: { type: "handler", handlerId: "useDeleteView:failure" },
+      });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };

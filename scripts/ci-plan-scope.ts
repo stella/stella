@@ -124,7 +124,13 @@ const failClosedServiceSuites = (
     widenScope(
       `service suite detector failed (${String(error)}); running every service suite`,
     );
-    return { postgres: true, corpus: true, valkey: true, collab: true };
+    return {
+      postgres: true,
+      corpus: true,
+      valkey: true,
+      collab: true,
+      devSeed: true,
+    };
   }
 };
 
@@ -182,12 +188,17 @@ export const MODEL_CATALOG_DRIFT_INPUTS = [
   "packages/ai-catalog/src/capabilities.gen.ts",
   "packages/ai-catalog/src/document-input-overrides.ts",
   "packages/ai-catalog/src/index.ts",
+  "packages/ai-catalog/src/model-defaults-ledger.ts",
   "packages/ai-catalog/src/model-rate-policy.ts",
   "packages/ai-catalog/src/model-rate.ts",
   "packages/ai-catalog/src/model-rates.gen.ts",
+  "packages/ai-catalog/src/reasoning-capabilities.ts",
+  "packages/fetch/src/connection-failure.ts",
+  "packages/fetch/src/index.ts",
   "packages/scripts/src/model-catalog-capabilities-gen.ts",
   "packages/scripts/src/model-catalog-capabilities.ts",
   "packages/scripts/src/model-catalog-rates-gen.ts",
+  "packages/scripts/src/model-catalog-snapshot.ts",
 ] as const;
 
 export const ROUTE_TREE_INPUTS = [
@@ -240,6 +251,7 @@ export const DESKTOP_WINDOWS_DRY_RUN_INPUTS = [
   "scripts/release-channel.sh",
   "scripts/rename-desktop-artifacts.sh",
   "scripts/check-api-deployment.ts",
+  "scripts/check-release-publication-source.sh",
   "scripts/gh-retry.sh",
   "scripts/retry.sh",
   "scripts/build-desktop-dmg.sh",
@@ -350,6 +362,7 @@ const wideScope = (input: ChangedFileScopeInput): Record<string, string> => {
     api_image_platforms: BOTH_PLATFORMS,
     api_image_smoke_required: TRUE,
     postgres_suites_required: TRUE,
+    dev_seed_required: TRUE,
     corpus_suites_required: TRUE,
     valkey_suites_required: TRUE,
     collaboration_suite_required: TRUE,
@@ -439,6 +452,7 @@ const deriveScopeFacts = (
         api_image_platforms: "[]",
         api_image_smoke_required: FALSE,
         postgres_suites_required: api,
+        dev_seed_required: api,
         corpus_suites_required: api,
         valkey_suites_required: api,
         collaboration_suite_required: FALSE,
@@ -632,10 +646,21 @@ const deriveNormalScopeFacts = (
     "scripts/retry.sh",
   ]);
   const legal = legalAtlasImageSelected(files);
-  const postgres = full ? packageChecks : services.postgres;
-  const corpus = full ? packageChecks : services.corpus;
-  const valkey = full ? packageChecks : services.valkey;
-  const collaboration = full ? collab : services.collab;
+  const {
+    postgres,
+    devSeed,
+    corpus,
+    valkey,
+    collab: collaboration,
+  } = full
+    ? {
+        postgres: packageChecks,
+        devSeed: packageChecks,
+        corpus: packageChecks,
+        valkey: packageChecks,
+        collab,
+      }
+    : services;
   const servicePr =
     services.postgres || services.corpus || services.valkey || services.collab;
   const fixTest =
@@ -673,6 +698,7 @@ const deriveNormalScopeFacts = (
     sandbox,
     legal,
     postgres,
+    devSeed,
     corpus,
     valkey,
     collaboration,
@@ -692,6 +718,7 @@ export const OUTPUT_ORDER = [
   "api_image_platforms",
   "api_image_smoke_required",
   "postgres_suites_required",
+  "dev_seed_required",
   "corpus_suites_required",
   "valkey_suites_required",
   "collaboration_suite_required",
@@ -807,6 +834,8 @@ export const OUTPUT_RULES = {
     scopeRule(facts, "postgres_suites_required", ({ postgres }) =>
       bool(postgres),
     ),
+  dev_seed_required: (facts) =>
+    scopeRule(facts, "dev_seed_required", ({ devSeed }) => bool(devSeed)),
   corpus_suites_required: (facts) =>
     scopeRule(facts, "corpus_suites_required", ({ corpus }) => bool(corpus)),
   valkey_suites_required: (facts) =>
@@ -875,7 +904,7 @@ export const OUTPUT_RULES = {
     scopeRule(facts, "dependency_changes_required", ({ p }) =>
       bool(
         p([
-          "scripts/dependency-audit.ts",
+          "scripts/dependency-audit*",
           "scripts/check-trusted-dependencies.ts",
           "scripts/retry.sh",
           "bun.lock",
@@ -982,6 +1011,11 @@ export const OUTPUT_RULES = {
             "patches/*",
             "scripts/check-published-exports.ts",
             "scripts/prepare-publish.ts",
+            "scripts/publish-declarations.ts",
+            "scripts/pack-reproducibly.sh",
+            "scripts/check-publish-reproducibility.sh",
+            "scripts/publish-packages.ts",
+            "scripts/generate-npm-release-jobs.ts",
             "scripts/publish-manifest.ts",
             "scripts/published-export-guards.ts",
             "bun.lock",
@@ -1214,6 +1248,10 @@ if (import.meta.main) {
     versionChangedInHead,
   });
   const output = `${scopeOutputLines(scope).join("\n")}\n`;
+  writeFileSync(
+    path.join(runnerTemp, "changed-scope.json"),
+    `${JSON.stringify(scope)}\n`,
+  );
   if (Bun.env["GITHUB_OUTPUT"]) {
     await Bun.write(Bun.file(Bun.env["GITHUB_OUTPUT"]), output);
   } else {

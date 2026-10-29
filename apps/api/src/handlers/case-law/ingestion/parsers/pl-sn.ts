@@ -22,10 +22,17 @@ import { PDF } from "@libpdf/core";
 import { panic } from "better-result";
 
 // parser-output-unchanged: imports the document AST from its package owner
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { collapseSpacedLetters } from "@stll/text-normalize";
 
 import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
+import {
+  INDENT_THRESHOLD_PT,
+  opensBlockParagraph,
+  POINT_MARKERS,
+  type PointMarkers,
+} from "@/api/handlers/case-law/ingestion/parsers/pl-printed-lines";
 import {
   buildBoldRanges,
   normalizeSpanText,
@@ -76,15 +83,6 @@ const SOFT_HYPHEN_END = /\p{L}-$/u;
  * ("Administracyjnego-" + "Ośrodka").
  */
 const RESUMES_A_BROKEN_WORD = /^\p{Ll}/u;
-
-/**
- * How far past the body margin a first line has to sit to read as an indent.
- *
- * The observed step is a full tab (72pt body, 108pt indent). Half of that is
- * comfortably above the sub-point jitter the extractor reports for lines that
- * begin at the same margin, and comfortably below a real indent.
- */
-const INDENT_THRESHOLD_PT = 18;
 
 const HTML_ESCAPES: Readonly<Record<string, string>> = {
   "&": "&amp;",
@@ -206,7 +204,9 @@ export type ExtractPlSnLinesOptions = {
    *   line indented again, so measured against the body margin every line
    *   of it reads as a first line. A line continues the one above it when
    *   that line ran out of room for this line's first word and this line
-   *   sits no deeper than it.
+   *   sits no deeper than it;
+   * - a word space the text layer marks only by a gap between two glyphs,
+   *   with no space glyph, is read as a space.
    */
   readonly supremeCourt?: { readonly docket: string } | undefined;
 };
@@ -346,6 +346,17 @@ const runOfMark = (mark: LineMark, bold: boolean): PlSnRun => {
  * Collapsing letter spacing removes only whitespace, so the count of printed
  * characters still finds the place.
  */
+/** Non-space code points in `text`, the unit `withMarks` counts in. */
+const printedCodePointsIn = (text: string): number => {
+  let count = 0;
+  for (const character of text) {
+    if (!/\s/u.test(character)) {
+      count += 1;
+    }
+  }
+  return count;
+};
+
 const withMarks = (
   runs: readonly PlSnRun[],
   marks: readonly LineMark[],
@@ -440,133 +451,11 @@ const rightEdgeOf = (lines: readonly ExtractedLine[]): number | undefined => {
   return edge;
 };
 
-/** A list point's own number or bullet: `2.`, `IV.`, `a)`, `–`. */
-const LIST_MARKER = /^(?:(?:\d{1,3}|[IVXLC]{1,6}|\p{Ll})[.)]|[-–•])\s/u;
-
-/** A point numbered in a way no wrapped sentence starts: `2.`, `2)`, `a)`. */
-const NUMBERED_POINT = /^(?:\d{1,3}[.)]|\p{Ll}\))\s/u;
-
-/** A line ending on a unit a number follows: `art.`, `ust.`, `pkt`, `§`, `nr`. */
-const TAKES_A_NUMBER =
-  /(?:(?:^|\s)(?:art|ust|pkt|lit|poz|nr|zd|par|rozdz|tom|str|s|k)\.?|§)$/iu;
-
-/** How a publisher marks the points and paragraphs a line can open. */
-type PointMarkers = {
-  /** A list point's own number or bullet. */
-  readonly list: RegExp;
-  /** A number no wrapped sentence starts with. */
-  readonly numbered: RegExp;
-  /**
-   * The number a publisher hangs out left of each paragraph: it opens one
-   * where the line below starts further right. A sentence can wrap onto the
-   * same characters (`w pkt 3 podpkt.` / `(1) i (2) pisma`), set flush with
-   * the lines around it, so the characters alone are not a point.
-   */
-  readonly paragraphNumber?: RegExp | undefined;
-};
-
-const POINT_MARKERS: PointMarkers = {
-  list: LIST_MARKER,
-  numbered: NUMBERED_POINT,
-};
-
 /** The number an authority sets before each paragraph: `(12)`, `[12]`. */
 const PARAGRAPH_NUMBER = /^(?:\(\d{1,3}\)|\[\d{1,3}\])\s/u;
-
 const NUMBERED_PARAGRAPH_MARKERS: PointMarkers = {
-  list: LIST_MARKER,
-  numbered: NUMBERED_POINT,
+  ...POINT_MARKERS,
   paragraphNumber: PARAGRAPH_NUMBER,
-};
-
-/** A line ending a sentence or a list point, closing quotes included. */
-const ENDS_SENTENCE = /[.;:!?…]["”')\]]*$/u;
-/** A capital, or an opening bracket or quote: also how a clerk's mark (`[SOP]`) starts. */
-const STARTS_SENTENCE = /^[\p{Lu}[(„"]/u;
-
-/**
- * Whether the line above ended only because `line`'s first word no longer
- * fit on it. A line that stopped short of that ended its paragraph.
- *
- * A short first word fits almost any gap, so a line that ended a sentence
- * before a capital or a list point is taken as the paragraph's end: two
- * paragraphs merged would hide the structure, where a missed continuation
- * only leaves the line break the reading had before.
- */
-const ranOutOfRoom = (
-  previous: ExtractedLine,
-  line: ExtractedLine,
-  rightEdge: number,
-  markers: PointMarkers,
-): boolean => {
-  const opening = line.text.trimStart();
-  if (
-    previous.right === undefined ||
-    line.right === undefined ||
-    (ENDS_SENTENCE.test(previous.text.trimEnd()) &&
-      (STARTS_SENTENCE.test(opening) || markers.list.test(opening)))
-  ) {
-    return false;
-  }
-  const firstWord = opening.split(/\s/u, 1).at(0) ?? "";
-  const characterWidth = (line.right - line.x) / Math.max(1, line.text.length);
-  return rightEdge - previous.right < (firstWord.length + 1) * characterWidth;
-};
-
-/**
- * Whether `line` opens a paragraph, where the indent alone misreads blocks
- * and lists.
- *
- * An indented line carries on the full line above it when it sits no
- * deeper than that line, or when that line is a list point's first line
- * set with a hanging indent. A short line above ended its paragraph, which
- * is what keeps two one-line points of an operative part apart. A list
- * point opens a paragraph wherever it starts, though nothing indents it.
- */
-const opensBlockParagraph = (
-  {
-    previous,
-    line,
-    next,
-  }: {
-    readonly previous: ExtractedLine | undefined;
-    readonly line: ExtractedLine;
-    /** The line below on the same page, where there is one. */
-    readonly next: ExtractedLine | undefined;
-  },
-  indented: boolean,
-  {
-    rightEdge,
-    markers,
-  }: { readonly rightEdge: number; readonly markers: PointMarkers },
-): boolean => {
-  if (previous === undefined || previous.text.length === 0) {
-    return indented;
-  }
-  // A numbered point opens its own paragraph however full the line above
-  // ran, unless that line ended on a word the number belongs to (`art.`).
-  // Dashes, initials (`C. B.`) and abbreviations (`w. z`) wrap inside
-  // sentences, so only the full-line test reads those.
-  if (
-    (markers.numbered.test(line.text.trimStart()) &&
-      !TAKES_A_NUMBER.test(previous.text.trimEnd())) ||
-    (markers.paragraphNumber?.test(line.text.trimStart()) === true &&
-      next !== undefined &&
-      next.text.length > 0 &&
-      next.x - line.x >= INDENT_THRESHOLD_PT)
-  ) {
-    return true;
-  }
-  const full = ranOutOfRoom(previous, line, rightEdge, markers);
-  if (!indented) {
-    return !full && markers.list.test(line.text.trimStart());
-  }
-  return !(
-    full &&
-    (line.x - previous.x < INDENT_THRESHOLD_PT ||
-      markers.list.test(previous.text.trimStart()) ||
-      markers.paragraphNumber?.test(previous.text.trimStart()) === true)
-  );
 };
 
 /** Read one page's lines, keeping blanks and the indent decision. */
@@ -607,18 +496,14 @@ const readPage = (
         blocks === undefined
           ? indented
           : spacedApart ||
-            opensBlockParagraph(
-              {
-                previous: index === 0 ? blocks.carried : above,
-                line,
-                next: lines[index + 1],
-              },
+            opensBlockParagraph({
+              previous: index === 0 ? blocks.carried : above,
+              line,
+              next: lines[index + 1],
               indented,
-              {
-                rightEdge: blocks.rightEdge,
-                markers: blocks.markers ?? POINT_MARKERS,
-              },
-            ),
+              rightEdge: blocks.rightEdge,
+              markers: blocks.markers ?? POINT_MARKERS,
+            }),
     };
   });
 };
@@ -784,7 +669,10 @@ const readPagesWithFootnotes = (
           currentNote !== undefined &&
           (original.bbox.y < height * FOOTNOTE_ZONE_RATIO ||
             (beforeBody && !/^\d/u.test(text.trim()))) &&
-          !/^\d+(?:\s+\d+)*$/u.test(text.trim()))
+          !text
+            .trim()
+            .split(/\s+/u)
+            .every((token) => /^\d+$/u.test(token)))
       ) {
         const label = text.trim();
         if (labels.has(label)) {
@@ -990,6 +878,226 @@ const extractedLineOf = (
   ...(marks === undefined || marks.length === 0 ? {} : { marks }),
 });
 
+type PdfTextChar = PdfTextLine["spans"][number]["chars"][number];
+
+/**
+ * How wide a gap between two glyphs has to be, as a share of the font's own
+ * space, to read as a word space the text layer printed no glyph for.
+ *
+ * Some of this court's PDFs place a word space by position alone, with no
+ * space glyph, and the extractor inserts one only past a fixed 0.3 em, wider
+ * than the 0.278 em space of the Arial the court sets in. Measured on those
+ * PDFs, the letters of one word sit at most 0.05 em apart and such a space
+ * leaves 0.16 em or more; two fifths of the space (0.11 em) falls between.
+ */
+const POSITIONED_SPACE_RATIO = 0.4;
+
+/**
+ * A word space's width, in ems, for a document that prints no space glyph to
+ * measure: the narrow end of common text faces (Times 0.25 em, Arial
+ * 0.278 em).
+ */
+const TYPOGRAPHIC_SPACE_EM = 0.25;
+
+const SPACE_GLYPH = " ";
+
+/** The most common value, or `undefined` for none. */
+const modeOf = (values: readonly number[]): number | undefined => {
+  const counts = new Map<number, number>();
+  for (const value of values) {
+    counts.set(value, (counts.get(value) ?? 0) + 1);
+  }
+  let mode: number | undefined;
+  let best = 0;
+  for (const [value, count] of counts) {
+    if (count > best) {
+      mode = value;
+      best = count;
+    }
+  }
+  return mode;
+};
+
+/**
+ * A space's width per font, in ems, and the width for a font that prints no
+ * space.
+ */
+type SpaceWidths = {
+  readonly byFont: ReadonlyMap<string, number>;
+  readonly fallback: number;
+};
+
+/**
+ * Whether the glyph was read off the content stream. The extractor numbers
+ * each glyph it reads in stream order and places a space it inserts itself
+ * half a step after the glyph before it, so only a printed glyph carries a
+ * whole number.
+ */
+const isPrinted = ({ sequenceIndex }: PdfTextChar): boolean =>
+  sequenceIndex !== undefined && Number.isInteger(sequenceIndex);
+
+/**
+ * Each font's space width, read off the space glyphs the document prints:
+ * the most common width per font, and across the document for a font that
+ * prints none. A space the extractor inserted is left out, since it spans
+ * whatever gap it filled rather than a space's width. A document that prints
+ * no space at all is measured against a typographic word space.
+ */
+const spaceWidthsOf = (lines: readonly PdfTextLine[]): SpaceWidths => {
+  const widths = new Map<string, number[]>();
+  for (const { spans } of lines) {
+    for (const { chars } of spans) {
+      for (const char of chars) {
+        const { bbox, fontName, fontSize } = char;
+        if (char.char !== SPACE_GLYPH || !isPrinted(char) || fontSize <= 0) {
+          continue;
+        }
+        const em = Math.round((bbox.width / fontSize) * 1000) / 1000;
+        const ems = widths.get(fontName);
+        if (ems === undefined) {
+          widths.set(fontName, [em]);
+        } else {
+          ems.push(em);
+        }
+      }
+    }
+  }
+  const fallback = modeOf([...widths.values()].flat()) ?? TYPOGRAPHIC_SPACE_EM;
+  const byFont = new Map<string, number>();
+  for (const [fontName, ems] of widths) {
+    byFont.set(fontName, modeOf(ems) ?? fallback);
+  }
+  return { byFont, fallback };
+};
+
+const gapBetween = (left: PdfTextChar, right: PdfTextChar): number =>
+  right.bbox.x - (left.bbox.x + left.bbox.width);
+
+const printsInk = ({ char }: PdfTextChar): boolean => char.trim().length > 0;
+
+/**
+ * The letter spacing after each glyph of a line, in points.
+ *
+ * It is read per run: the glyphs of one span (one font and size) between two
+ * spaces, which share whatever character spacing they were set with. A run
+ * is letter-spaced by the narrowest gap between its glyphs: about zero
+ * inside a word, and the tracking of a letter-spaced token (`2-9` set with
+ * character spacing), where every glyph stands the same gap from the next.
+ * That takes two gaps at least, so a run of two glyphs, whose one gap may be
+ * a word space, reads as not letter-spaced. A gap to a glyph of another run
+ * says nothing about either run's spacing.
+ */
+const letterSpacingOf = (line: PdfTextLine): number[] => {
+  const spacing: number[] = [];
+  for (const { chars } of line.spans) {
+    let start = spacing.length;
+    let gaps: number[] = [];
+    let last: PdfTextChar | undefined;
+    const close = () => {
+      const tracking = gaps.length >= 2 ? Math.max(0, Math.min(...gaps)) : 0;
+      spacing.fill(tracking, start);
+      gaps = [];
+      last = undefined;
+    };
+    for (const char of chars) {
+      if (!printsInk(char)) {
+        close();
+        spacing.push(0);
+        start = spacing.length;
+        continue;
+      }
+      if (last !== undefined) {
+        gaps.push(gapBetween(last, char));
+      }
+      last = char;
+      spacing.push(0);
+    }
+    close();
+  }
+  return spacing;
+};
+
+/**
+ * The line with a space set wherever two glyphs stand a word space apart and
+ * the text layer printed none between them.
+ *
+ * A gap is measured past the letter spacing of the glyph before it (see
+ * `letterSpacingOf`), so a letter-spaced token is never split letter by
+ * letter, and is a word space past two fifths of that font's space. The
+ * space joins the span of the glyph before it, as the extractor's own
+ * inserted spaces do.
+ */
+const withPositionedSpaces = (
+  line: PdfTextLine,
+  spaceWidths: SpaceWidths,
+): PdfTextLine => {
+  const chars = line.spans.flatMap((span) => span.chars);
+  const letterSpacing = letterSpacingOf(line);
+  const spaceAfter = (index: number): PdfTextChar | undefined => {
+    const previous = chars[index];
+    const next = chars[index + 1];
+    if (
+      previous === undefined ||
+      next === undefined ||
+      !printsInk(previous) ||
+      !printsInk(next)
+    ) {
+      return undefined;
+    }
+    const tracking =
+      letterSpacing[index] ??
+      panic(`No letter spacing was read for glyph ${index} of its line`);
+    const gap = gapBetween(previous, next);
+    const space =
+      spaceWidths.byFont.get(previous.fontName) ?? spaceWidths.fallback;
+    const fontSize = (previous.fontSize + next.fontSize) / 2;
+    if (gap - tracking <= space * fontSize * POSITIONED_SPACE_RATIO) {
+      return undefined;
+    }
+    return {
+      char: SPACE_GLYPH,
+      bbox: {
+        x: previous.bbox.x + previous.bbox.width,
+        y: previous.bbox.y,
+        width: gap,
+        height: previous.bbox.height,
+      },
+      fontSize,
+      fontName: previous.fontName,
+      baseline: (previous.baseline + next.baseline) / 2,
+    };
+  };
+
+  let inserted = false;
+  let index = 0;
+  const spans = line.spans.map((span) => ({ ...span }));
+  for (const [spanIndex, span] of spans.entries()) {
+    const out: PdfTextChar[] = [];
+    for (const char of span.chars) {
+      const space = spaceAfter(index - 1);
+      if (space !== undefined) {
+        inserted = true;
+        // At a span boundary the space ends the span before, so a bold
+        // range never starts with it.
+        const before = out.length === 0 ? spans[spanIndex - 1] : undefined;
+        if (before === undefined) {
+          out.push(space);
+        } else {
+          before.chars.push(space);
+          before.text += SPACE_GLYPH;
+        }
+      }
+      out.push(char);
+      index += 1;
+    }
+    span.chars = out;
+    span.text = out.map(({ char: glyph }) => glyph).join("");
+  }
+  return inserted
+    ? { ...line, spans, text: spans.map(({ text }) => text).join("") }
+    : line;
+};
+
 /** The printed (non-whitespace) characters of a line, in order. */
 const printedCharactersOf = (line: PdfTextLine) =>
   line.spans
@@ -1086,11 +1194,15 @@ const liftSuperscripts = (
     const raisedEnough = raise >= bodySize * SUPERSCRIPT_RAISE_RATIO;
     return groups.map((group): LineMark => {
       const x = group.at(0)?.bbox.x ?? 0;
-      const after = printed.filter(
+      const preceding = printed.filter(
         ({ bbox }) => bbox.x + bbox.width / 2 < x,
-      ).length;
+      );
+      const after = preceding.reduce(
+        (count, { char }) => count + printedCodePointsIn(char),
+        0,
+      );
       const text = group.map(({ char }) => char).join("");
-      const previous = printed.at(after - 1);
+      const previous = preceding.at(-1);
       const gap =
         previous === undefined || after === 0
           ? Number.POSITIVE_INFINITY
@@ -1208,7 +1320,7 @@ const withoutInlineMarks = (
     } else {
       kept.push(span);
       text += span.text;
-      printed += span.text.replace(/\s/gu, "").length;
+      printed += printedCodePointsIn(span.text);
     }
     cursor = at + span.text.length;
   }
@@ -1236,7 +1348,12 @@ export const extractPlSnLines = async (
     );
   }
 
-  const pages = textPages.map(({ height, lines }, pageIndex) => {
+  const spaceWidths = spaceWidthsOf(textPages.flatMap(({ lines }) => lines));
+  const spacedPages = textPages.map(({ height, lines }) => ({
+    height,
+    lines: lines.map((line) => withPositionedSpaces(line, spaceWidths)),
+  }));
+  const pages = spacedPages.map(({ height, lines }, pageIndex) => {
     const first = lines.findIndex(({ text }) => text.trim().length > 0);
     const header = lines[first];
     // A header is the page's first line, printed in its top margin: the same
@@ -1252,7 +1369,7 @@ export const extractPlSnLines = async (
       ? lines.toSpliced(first, 1)
       : lines;
   });
-  return readSetPages(textPages, pages, paragraphStart, SUPREME_COURT_READING)
+  return readSetPages(spacedPages, pages, paragraphStart, SUPREME_COURT_READING)
     .body;
 };
 
@@ -1390,9 +1507,12 @@ const withoutRepeatedFurniture = (
     for (const line of lines) {
       if (letterheadCandidate(line, height)) {
         const key = keyOf(line);
-        const places = placed.get(key) ?? [];
-        places.push({ page, y: line.bbox.y });
-        placed.set(key, places);
+        const places = placed.get(key);
+        if (places === undefined) {
+          placed.set(key, [{ page, y: line.bbox.y }]);
+        } else {
+          places.push({ page, y: line.bbox.y });
+        }
       }
     }
   }
@@ -1402,7 +1522,10 @@ const withoutRepeatedFurniture = (
   );
   const repeatedAt = (key: string, at: number): boolean =>
     new Set(
-      (placed.get(key) ?? [])
+      (
+        placed.get(key) ??
+        panic("A candidate footer must have recorded positions")
+      )
         .filter(({ y }) => Math.abs(y - at) <= SAME_PLACE_PT)
         .map(({ page }) => page),
     ).size >= repeatedOn;
@@ -1438,9 +1561,9 @@ const withoutRepeatedFurniture = (
   // Each page's own number as printed, with how far it sits from the
   // nearest other line, before deciding how far is far enough.
   const numbers = pages.map(({ height, width }, page) => {
-    const printedLines = (keptPages[page] ?? []).filter(
-      (line) => printedCharactersOf(line).length > 0,
-    );
+    const printedLines = (
+      keptPages.at(page) ?? panic("Every page must have retained lines")
+    ).filter((line) => printedCharactersOf(line).length > 0);
     const byHeight = printedLines.toSorted(
       (left, right) => left.bbox.y - right.bbox.y,
     );
@@ -1493,7 +1616,7 @@ const withoutRepeatedFurniture = (
     );
   return keptPages.map((lines, page) => {
     const pageNumbers = new Set(
-      (clear[page] ?? [])
+      (clear.at(page) ?? panic("Every page must have classified lines"))
         .filter(
           ({ gap, line }) =>
             gap >= linePitch || numberedAtSamePlace(page, line),
@@ -1585,26 +1708,31 @@ const EXPONENT_UNIT = /(?:^|[^\p{L}])(?:mm|cm|dm|m|km|ha)$/u;
 const noteReferencesOf = (
   line: ExtractedLine,
 ): { text: string; plain: boolean }[] =>
-  (line.marks ?? []).flatMap(({ after, text, type }) => {
-    if (type !== "superscript") {
-      return [];
-    }
-    let printed = 0;
-    let end = 0;
-    while (end < line.text.length && printed < after) {
-      if (/\S/u.test(line.text.charAt(end))) {
-        printed += 1;
-      }
-      end += 1;
-    }
-    const before = line.text.slice(0, end);
-    return [
-      {
-        text,
-        plain: !/\d$/u.test(before) && !EXPONENT_UNIT.test(before),
-      },
-    ];
-  });
+  line.marks === undefined
+    ? []
+    : line.marks.flatMap(({ after, text, type }) => {
+        if (type !== "superscript") {
+          return [];
+        }
+        let printed = 0;
+        let end = 0;
+        for (const character of line.text) {
+          if (printed >= after) {
+            break;
+          }
+          if (/\S/u.test(character)) {
+            printed += 1;
+          }
+          end += character.length;
+        }
+        const before = line.text.slice(0, end);
+        return [
+          {
+            text,
+            plain: !/\d$/u.test(before) && !EXPONENT_UNIT.test(before),
+          },
+        ];
+      });
 
 /**
  * A page's footnotes, read off the foot of its text: from the first line
@@ -1651,7 +1779,10 @@ const pageNotesOf = (
     if (opening === undefined) {
       return undefined;
     }
-    const label = Number(opening.label);
+    const label = parseIntegerToken(opening.label, {
+      sign: "unsigned",
+      max: 999,
+    }).unwrap();
     const referred = references.filter(({ text }) => text === opening.label);
     if (label <= last || referred.length === 0) {
       return undefined;
@@ -1689,7 +1820,10 @@ const pageNotesOf = (
   for (const line of lines.slice(first)) {
     const opening = referencedOpening(line);
     if (opening !== undefined) {
-      last = Number(opening.label);
+      last = parseIntegerToken(opening.label, {
+        sign: "unsigned",
+        max: 999,
+      }).unwrap();
       openedOnPage = true;
       notes.push({ ...opening, lines: [] });
     } else if (line.text.length > 0) {
@@ -1757,7 +1891,10 @@ const readSetPages = (
       for (const note of page.notes) {
         // Note numbers only rise, so each names one note.
         read = {
-          label: Number(note.label),
+          label: parseIntegerToken(note.label, {
+            sign: "unsigned",
+            max: 999,
+          }).unwrap(),
           labelSize: note.labelSize ?? read.labelSize,
         };
         const footnote = {

@@ -6,6 +6,8 @@ import { CHAT_PROMPT_IMPROVEMENT_STRATEGIES } from "@stll/api-contract/chat";
 
 import { buildPromptImprovementModelInput } from "@/api/handlers/chat/improve-prompt-instructions";
 import { resolveCaching } from "@/api/lib/ai-config";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
@@ -40,6 +42,7 @@ const IMPROVE_PROMPT_MAX_OUTPUT_TOKENS = 4096;
 const improvePrompt = createSafeRootHandler(
   config,
   async function* ({
+    orgAIConfigStatus,
     actionSignal,
     body,
     orgAIConfig,
@@ -51,6 +54,10 @@ const improvePrompt = createSafeRootHandler(
     session,
     user,
   }) {
+    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+      return Result.err(storedAIConfigUnreadableError());
+    }
+
     if (body.sendMode === CHAT_SEND_MODE.anonymized) {
       return Result.err(
         new HandlerError({
@@ -135,7 +142,11 @@ const improvePrompt = createSafeRootHandler(
     )).trim();
     if (improvedPrompt.length === 0) {
       return Result.err(
-        new HandlerError({ status: 502, message: "Empty improved prompt" }),
+        new HandlerError({
+          status: 502,
+          code: "internal_error",
+          message: "Empty improved prompt",
+        }),
       );
     }
 

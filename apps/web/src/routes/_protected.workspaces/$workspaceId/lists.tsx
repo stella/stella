@@ -8,7 +8,7 @@ import {
 } from "@tanstack/react-query";
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { Result } from "better-result";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
 import { AUDIT_CHANGES_STATUS } from "@stll/api-contract/audit-log";
@@ -44,6 +44,7 @@ import {
   LIST_ITEM_TYPES,
 } from "@/components/workspaces/tasks/task-detail-constants";
 import type { ListItemType } from "@/components/workspaces/tasks/task-detail-constants";
+import { useFormatter } from "@/i18n/formatting-context";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -55,9 +56,9 @@ import {
   useCallerFeatureEnabled,
 } from "@/lib/organization/feature-access/access";
 import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
+import { queryView } from "@/lib/query-view.logic";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView } from "@/lib/use-query-view";
 import {
   legalListActivityOptions,
   legalListCandidatesOptions,
@@ -154,7 +155,13 @@ function LegalListsPage() {
     });
     setCreatingList(false);
     if (result.isErr()) {
-      getAnalytics().captureError(result.error);
+      getAnalytics().captureError(result.error, {
+        fingerprintKey: "LegalListsPage.createList:failure",
+        scope: {
+          type: "handler",
+          handlerId: "LegalListsPage.createList:failure",
+        },
+      });
       notifyUserError(result.error, t("errors.actionFailed"));
       return;
     }
@@ -247,7 +254,7 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
   const formatter = useFormatter();
   const queryClient = useQueryClient();
   const list = useQuery(legalListOptions(workspaceId, listId));
-  const listView = useQueryView(list);
+  const listView = queryView(list);
   const listData = listView.type === "items" ? listView.items : undefined;
   const items = useInfiniteQuery(
     legalListItemsOptions({
@@ -256,16 +263,16 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
       viewer: { userId: user.id, organizationId: user.activeOrganizationId },
     }),
   );
-  const itemsView = useQueryView(items);
+  const itemsView = queryView(items);
   const itemsData = itemsView.type === "items" ? itemsView.items : undefined;
   const properties = useQuery(propertiesOptions(workspaceId));
-  const propertiesView = useQueryView(properties, { isEmpty: () => false });
+  const propertiesView = queryView(properties, { isEmpty: () => false });
   const propertiesData =
     propertiesView.type === "items" ? propertiesView.items : undefined;
   const generations = useQuery(
     legalListGenerationsOptions(workspaceId, listId),
   );
-  const generationsView = useQueryView(generations);
+  const generationsView = queryView(generations);
   const generationsData =
     generationsView.type === "items" ? generationsView.items : undefined;
   const reviewRun = generationsData?.items.find(
@@ -274,7 +281,7 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
   const candidates = useQuery(
     legalListCandidatesOptions(workspaceId, listId, reviewRun?.id ?? ""),
   );
-  const candidatesView = useQueryView(candidates);
+  const candidatesView = queryView(candidates);
   const candidatesData =
     candidatesView.type === "items" ? candidatesView.items : undefined;
   const [name, setName] = useState("");
@@ -311,7 +318,13 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
     });
     setCreating(false);
     if (result.isErr()) {
-      getAnalytics().captureError(result.error);
+      getAnalytics().captureError(result.error, {
+        fingerprintKey: "LegalListDetail.createItem:failure",
+        scope: {
+          type: "handler",
+          handlerId: "LegalListDetail.createItem:failure",
+        },
+      });
       notifyUserError(result.error, t("errors.actionFailed"));
       return;
     }
@@ -412,7 +425,13 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
     });
     setDecidingCandidateId(null);
     if (result.isErr()) {
-      getAnalytics().captureError(result.error);
+      getAnalytics().captureError(result.error, {
+        fingerprintKey: "LegalListDetail.decideCandidate:failure",
+        scope: {
+          type: "handler",
+          handlerId: "LegalListDetail.decideCandidate:failure",
+        },
+      });
       notifyUserError(result.error, t("errors.actionFailed"));
       return;
     }
@@ -873,7 +892,7 @@ const ItemSourcesPanel = ({
       viewer: { userId: user.id, organizationId: user.activeOrganizationId },
     }),
   );
-  const activityView = useQueryView(activity);
+  const activityView = queryView(activity);
   const activityData =
     activityView.type === "items" ? activityView.items : undefined;
 

@@ -12,7 +12,9 @@ import {
 } from "@/api/db/schema";
 import { resolveCaching } from "@/api/lib/ai-config";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
@@ -27,6 +29,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 import {
@@ -201,6 +204,10 @@ const organizeSuggestionsHandler = async function* ({
   body,
   userId,
 }: OrganizeSuggestionsHandlerProps) {
+  if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+    return Result.err(storedAIConfigUnreadableError());
+  }
+
   yield* requireTanStackAIAvailableForTask({
     dataClass: "customer",
     configStatus: orgAIConfigStatus,
@@ -229,24 +236,22 @@ const organizeSuggestionsHandler = async function* ({
     (context) => context.summary === null,
   );
   if (missingContexts.length > 0) {
-    const summariesResult = await generateMissingSummaries({
-      contexts: missingContexts,
-      organizationId,
-      admission,
-      workspaceId,
-      orgAIConfig,
-      managedAIResidency,
-      promptCachingEnabled,
-      safeDb,
-      userId,
-    });
-
-    if (Result.isError(summariesResult)) {
-      return Result.err(summariesResult.error);
-    }
+    const summaries = yield* Result.await(
+      generateMissingSummaries({
+        contexts: missingContexts,
+        organizationId,
+        admission,
+        workspaceId,
+        orgAIConfig,
+        managedAIResidency,
+        promptCachingEnabled,
+        safeDb,
+        userId,
+      }),
+    );
 
     const generatedByEntityId = new Map(
-      summariesResult.value.map((summary) => [summary.entityId, summary]),
+      summaries.map((summary) => [summary.entityId, summary]),
     );
 
     for (const context of missingContexts) {
@@ -255,6 +260,7 @@ const organizeSuggestionsHandler = async function* ({
         return Result.err(
           new HandlerError({
             status: 502,
+            code: "internal_error",
             message: "Failed to generate document summaries",
           }),
         );
@@ -347,11 +353,17 @@ const organizeSuggestionsHandler = async function* ({
 
   if (Result.isError(result)) {
     aiAnalytics.captureError(result.error);
-    captureError(result.error, {
-      feature: "entities.placements.suggest",
-      workspaceId,
-      organizationId,
-    });
+    captureError(
+      result.error,
+      handlerErrorContext(
+        "placements.organizeSuggestionsHandler.result_error",
+        {
+          feature: "entities.placements.suggest",
+          workspaceId,
+          organizationId,
+        },
+      ),
+    );
     return Result.err(
       aiHandlerError(result.error, {
         status: 502,
@@ -390,6 +402,7 @@ const organizeSuggestionsHandler = async function* ({
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "Failed to generate organization suggestions",
         }),
       );
@@ -816,11 +829,14 @@ const generateMissingSummaries = async ({
 
   if (Result.isError(result)) {
     aiAnalytics.captureError(result.error);
-    captureError(result.error, {
-      feature: "entities.version-summary",
-      workspaceId,
-      organizationId,
-    });
+    captureError(
+      result.error,
+      handlerErrorContext("placements.generateMissingSummaries.result_error", {
+        feature: "entities.version-summary",
+        workspaceId,
+        organizationId,
+      }),
+    );
     return Result.err(
       aiHandlerError(result.error, {
         status: 502,
@@ -841,6 +857,7 @@ const generateMissingSummaries = async ({
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "Failed to generate document summaries",
         }),
       );
@@ -1134,6 +1151,10 @@ const organizeSuggestions = createSafeHandler(
     body,
     user,
   }) {
+    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+      return Result.err(storedAIConfigUnreadableError());
+    }
+
     return yield* organizeSuggestionsHandler({
       admission: configuredModelAdmission({ modelAdmission }),
       safeDb,

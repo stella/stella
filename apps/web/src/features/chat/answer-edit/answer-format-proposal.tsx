@@ -13,7 +13,8 @@ import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 import type { AnswerEditProposal } from "./answer-edit-api";
 import { AnswerEditNotice, AnswerEditPanel } from "./answer-edit-panel";
@@ -41,7 +42,13 @@ export const AnswerFormatProposal = ({
           catch: (error) => error,
         });
         if (Result.isError(refreshed)) {
-          getAnalytics().captureError(refreshed.error);
+          getAnalytics().captureError(refreshed.error, {
+            fingerprintKey: "AnswerFormatProposal.refresh:failure",
+            scope: {
+              type: "handler",
+              handlerId: "AnswerFormatProposal.refresh:failure",
+            },
+          });
           setRefreshError(true);
           return;
         }
@@ -112,8 +119,8 @@ export const AnswerFormatProposal = ({
     enabled: result.status === "proposal",
     retry: false,
   });
-  const view = useQueryView(query);
-  useQueryViewError(view);
+  const view = queryView(query);
+  useQueryViewError(view, "AnswerFormatProposal:snapshot");
   if (refreshError) {
     return (
       <div

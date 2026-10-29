@@ -182,18 +182,21 @@ describe.each(MCP_MODES.map((mode) => ({ mode })))(
       expect(offendersIn(mode, texts)).toEqual([]);
     });
 
-    test("in the connect-time instructions, gate open or closed", () => {
+    test("in the connect-time instructions, gate open or closed", async () => {
       const texts = [{ where: "max", text: MCP_INSTRUCTIONS[mode] }];
       for (const gate of [true, false]) {
         env.FEATURE_PUBLIC_LAW = gate;
-        texts.push({ where: `gate=${gate}`, text: getMcpInstructions(mode) });
+        texts.push({
+          where: `gate=${gate}`,
+          text: await getMcpInstructions(mode),
+        });
       }
       expect(offendersIn(mode, texts)).toEqual([]);
     });
 
     test("in every reference resource it serves", async () => {
       const texts: { where: string; text: string }[] = [];
-      for (const resource of listMcpResources(mode)) {
+      for (const resource of await listMcpResources(mode)) {
         texts.push({
           where: resource.uri,
           text: resource.description ?? "",
@@ -208,8 +211,10 @@ describe.each(MCP_MODES.map((mode) => ({ mode })))(
       expect(offendersIn(mode, texts)).toEqual([]);
     });
 
-    test("and points only at reference resources it serves", () => {
-      const served = new Set(listMcpResources(mode).map(({ uri }) => uri));
+    test("and points only at reference resources it serves", async () => {
+      const served = new Set(
+        (await listMcpResources(mode)).map(({ uri }) => uri),
+      );
       const texts = [
         MCP_INSTRUCTIONS[mode],
         ...toMcpTools(listStaticMcpToolDefinitions(mode), { mode }).flatMap(

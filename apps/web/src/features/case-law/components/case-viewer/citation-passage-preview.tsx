@@ -2,13 +2,15 @@ import { useQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { visibleDecisionBlocks } from "@stll/decision-reader/decision-text.logic";
 import type { CitationAnchorSource } from "@stll/decision-reader/reader-types";
+import { visibleDecisionBlocks } from "@stll/legal-ast/case-law-reader";
 import { findCitationPassage } from "@stll/legal-ast/citation-passage";
 import type { CitationPassageMatch } from "@stll/legal-ast/citation-passage";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { BidiText } from "@stll/ui/bidi-text";
+import { LEGAL_TEXT_CLASS_NAME } from "@stll/ui/prose";
 import { Skeleton } from "@stll/ui/skeleton";
+import { cn } from "@stll/ui/utils";
 
 import { decisionOptions } from "@/features/case-law/queries/decisions";
 
@@ -116,7 +118,10 @@ export const CitationPassageQuote = ({
 
       return (
         <blockquote
-          className="text-foreground-strong-muted border-border/60 m-0 border-s-2 ps-2 text-xs leading-snug"
+          className={cn(
+            LEGAL_TEXT_CLASS_NAME,
+            "text-foreground-strong-muted border-border/60 m-0 border-s-2 ps-2 text-xs leading-snug",
+          )}
           style={{ fontFamily: "var(--reader-body-font)" }}
         >
           <BidiText as="span">

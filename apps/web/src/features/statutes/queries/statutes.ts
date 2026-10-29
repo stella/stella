@@ -15,7 +15,11 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { nullableStringCursorSeed } from "@/lib/infinite-query";
-import { isPublicLawMiss, unwrapPublicLawResponse } from "@/lib/public-law-api";
+import {
+  isPublicLawMiss,
+  PUBLIC_LAW_READ_TIMEOUT_MS,
+  unwrapPublicLawResponse,
+} from "@/lib/public-law-api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -55,7 +59,7 @@ export type StatuteSlugKey = {
   slug: string;
 };
 
-const statuteKeys = {
+export const statuteKeys = {
   all: ["statutes"],
   list: (key: StatuteListKey) => [
     ...statuteKeys.all,
@@ -123,7 +127,12 @@ const readStatutesPage = async ({
       ...(filters.validity !== undefined && { validity: filters.validity }),
       ...(filters.year !== undefined && { year: Number(filters.year) }),
     },
-    fetch: { signal },
+    fetch: {
+      signal: AbortSignal.any([
+        signal,
+        AbortSignal.timeout(PUBLIC_LAW_READ_TIMEOUT_MS),
+      ]),
+    },
   });
 
   const data = unwrapPublicLawResponse(response, "listPublicStatutes");
@@ -179,7 +188,12 @@ const readStatuteSearchPage = async ({
       limit: PUBLIC_STATUTE_SEARCH_PAGE_SIZE,
       ...(cursor === null ? {} : { cursor }),
     },
-    fetch: { signal },
+    fetch: {
+      signal: AbortSignal.any([
+        signal,
+        AbortSignal.timeout(PUBLIC_LAW_READ_TIMEOUT_MS),
+      ]),
+    },
   });
   return unwrapPublicLawResponse(response, "searchPublicStatutes");
 };
@@ -395,6 +409,13 @@ const readStatuteVersionsFrom = async ({
         action: "statutes.versions-walk",
         message: "Statute version walk stopped at the page cap",
       }),
+      {
+        fingerprintKey: "readStatuteVersionsFrom:ClientOperationError",
+        scope: {
+          type: "handler",
+          handlerId: "readStatuteVersionsFrom:ClientOperationError",
+        },
+      },
     );
 
     return collected;

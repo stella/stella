@@ -53,12 +53,16 @@ import {
 import {
   getOauthHashFragment,
   getOauthRedirectUrl,
+  getSignedOauthQuery,
   getSignedOauthQueryFromHash,
+  hasOauthPrompt,
   hasSignedOauthQuery,
 } from "@/lib/oauth-provider";
 import { organizationListOptions } from "@/lib/organization/queries";
 import { createSlug, getOrganizationSchema } from "@/lib/organization/utils";
+import { queryView } from "@/lib/query-view.logic";
 import {
+  destinationNavigation,
   isAcceptInvitationRedirect,
   normalizeRedirectTo,
   onboardingNavigation,
@@ -68,7 +72,6 @@ import {
   schemaFormOptions,
   toFormErrors,
 } from "@/lib/schema";
-import { useQueryView } from "@/lib/use-query-view";
 import { routeSearchSchema } from "@/route-search-params";
 
 const searchSchema = routeSearchSchema({
@@ -118,7 +121,7 @@ export const Route = createFileRoute("/auth/organization")({
       (context.session.activeOrganizationId ||
         isAcceptInvitationRedirect(search.redirectTo ?? "/"))
     ) {
-      throw redirect({ to: search.redirectTo ?? "/", replace: true });
+      throw redirect(destinationNavigation(search.redirectTo ?? "/"));
     }
 
     return { isOauthPostLoginFromSearch, userId: context.session.userId };
@@ -168,9 +171,7 @@ const OrganizationSkeleton = () => (
 
 const OrganizationFlow = ({ hydrated }: { hydrated: boolean }) => {
   const userId = Route.useRouteContext({ select: (ctx) => ctx.userId });
-  const organizationView = useQueryView(
-    useQuery(organizationListOptions(userId)),
-  );
+  const organizationView = queryView(useQuery(organizationListOptions(userId)));
   const redirectTo = Route.useSearch({ select: (search) => search.redirectTo });
   const isOauthPostLoginFromSearch = Route.useRouteContext({
     select: (context) => context.isOauthPostLoginFromSearch,
@@ -178,6 +179,17 @@ const OrganizationFlow = ({ hydrated }: { hydrated: boolean }) => {
   const isOauthPostLogin =
     isOauthPostLoginFromSearch ||
     (hydrated && getSignedOauthQueryFromHash(window.location.hash) !== null);
+  // A client asking for account selection gets this step even for a single
+  // membership, so the account can still be switched before consent.
+  const isAccountSelection =
+    hydrated &&
+    hasOauthPrompt(
+      getSignedOauthQuery({
+        hash: window.location.hash,
+        searchStr: window.location.search,
+      }),
+      "select_account",
+    );
 
   if (hydrated && organizationView.type === "empty" && !isOauthPostLogin) {
     return <Navigate {...onboardingNavigation(redirectTo)} />;
@@ -205,6 +217,7 @@ const OrganizationFlow = ({ hydrated }: { hydrated: boolean }) => {
       <QueryViewFeedback view={organizationView} />
       {organizationView.type === "items" ? (
         <OrganizationList
+          isAccountSelection={isAccountSelection}
           isOauthPostLogin={isOauthPostLogin}
           organizations={organizationView.items}
         />
@@ -252,6 +265,7 @@ const SignedInAccount = ({ disabled }: { disabled: boolean }) => {
 };
 
 type OrganizationListProps = {
+  isAccountSelection: boolean;
   isOauthPostLogin: boolean;
   organizations: { id: string; name: string; slug: string }[];
 };
@@ -275,7 +289,7 @@ const completeOrganizationFlow = async ({
   await refreshAuthQueries(queryClient);
 
   if (!isOauthPostLogin) {
-    await navigate({ to: redirectTo, replace: true });
+    await navigate(destinationNavigation(redirectTo));
     return;
   }
 
@@ -296,6 +310,7 @@ const completeOrganizationFlow = async ({
 };
 
 const OrganizationList = ({
+  isAccountSelection,
   isOauthPostLogin,
   organizations,
 }: OrganizationListProps) => {
@@ -325,12 +340,17 @@ const OrganizationList = ({
       });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "OrganizationList:failure",
+        scope: { type: "handler", handlerId: "OrganizationList:failure" },
+      });
     },
   });
 
-  // Auto-select when there's only one organization
-  const singleOrg = organizations.length === 1 ? organizations[0] : null;
+  // Auto-select when there is only one organization, unless the client asked
+  // for account selection.
+  const singleOrg =
+    organizations.length === 1 && !isAccountSelection ? organizations[0] : null;
   const autoSelected = useRef(false);
   useExternalSyncEffect(() => {
     if (singleOrg && !autoSelected.current && !isSelectPending) {
@@ -408,7 +428,13 @@ const CreateOrganizationForm = ({
           });
 
         if (slugCheckError) {
-          analytics.captureError(toAuthClientError(slugCheckError));
+          analytics.captureError(toAuthClientError(slugCheckError), {
+            fingerprintKey: "CreateOrganizationForm.onSubmit:failure",
+            scope: {
+              type: "handler",
+              handlerId: "CreateOrganizationForm.onSubmit:failure",
+            },
+          });
           notifyAuthClientError(slugCheckError, t("errors.actionFailed"));
           return;
         }
@@ -427,7 +453,13 @@ const CreateOrganizationForm = ({
           });
 
         if (createError) {
-          analytics.captureError(toAuthClientError(createError));
+          analytics.captureError(toAuthClientError(createError), {
+            fingerprintKey: "CreateOrganizationForm.onSubmit:failure-2",
+            scope: {
+              type: "handler",
+              handlerId: "CreateOrganizationForm.onSubmit:failure-2",
+            },
+          });
           notifyAuthClientError(createError, t("errors.actionFailed"));
           return;
         }
@@ -438,7 +470,13 @@ const CreateOrganizationForm = ({
           });
 
         if (setActiveError) {
-          analytics.captureError(toAuthClientError(setActiveError));
+          analytics.captureError(toAuthClientError(setActiveError), {
+            fingerprintKey: "CreateOrganizationForm.onSubmit:failure-3",
+            scope: {
+              type: "handler",
+              handlerId: "CreateOrganizationForm.onSubmit:failure-3",
+            },
+          });
           notifyAuthClientError(setActiveError, t("errors.actionFailed"));
           return;
         }
@@ -452,7 +490,13 @@ const CreateOrganizationForm = ({
             status: "created",
           });
         } catch (error) {
-          analytics.captureError(error);
+          analytics.captureError(error, {
+            fingerprintKey: "CreateOrganizationForm.onSubmit:failure-4",
+            scope: {
+              type: "handler",
+              handlerId: "CreateOrganizationForm.onSubmit:failure-4",
+            },
+          });
           notifyUserError(error, t("errors.actionFailed"));
         }
       },

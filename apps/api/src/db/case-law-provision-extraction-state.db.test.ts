@@ -561,6 +561,24 @@ describe("enqueue trigger", () => {
     expect((await readState(id))?.dueAt).not.toBeNull();
   });
 
+  test("redaction retires fresh work even while its scope remains active", async () => {
+    const id = await insertDecision();
+    expect(await readState(id)).toMatchObject({
+      lane: "fresh",
+      enqueueReason: "input",
+    });
+    await db.execute(
+      sql`UPDATE case_law_decisions SET redacted_at = now(), content_hash = NULL WHERE id = ${id}`,
+    );
+    expect(await readState(id)).toMatchObject({
+      lane: "repair",
+      enqueueReason: "scope_retired",
+      workStatus: "eligible",
+      digestIsCurrent: true,
+    });
+    expect((await readState(id))?.dueAt).not.toBeNull();
+  });
+
   test("records an unseen key as a retired scope and enqueues nothing", async () => {
     const id = await insertDecision({ country: "POL", language: "pl" });
     expect(await readState(id)).toBeNull();
@@ -807,6 +825,33 @@ describe("ensure_case_law_provision_extraction_state", () => {
     expect(await readState(outOfScope)).toBeNull();
     expect(await ensure([inScope, outOfScope], "seed")).toBe(0);
   });
+
+  test.each(["seed", "reconcile", "activate", "retire"] as const)(
+    "%s keeps redacted work in retirement and never creates fresh work",
+    async (action) => {
+      const id = await insertDecision();
+      await db.execute(
+        sql`UPDATE case_law_decisions SET redacted_at = now(), content_hash = NULL WHERE id = ${id}`,
+      );
+      await db.execute(
+        sql`UPDATE case_law_provision_extractions SET lane = 'fresh', enqueue_reason = 'input', due_at = now() WHERE decision_id = ${id}`,
+      );
+      expect(await ensure([id], action)).toBe(1);
+      expect(await readState(id)).toMatchObject({
+        lane: "repair",
+        enqueueReason: "scope_retired",
+        digestIsCurrent: true,
+      });
+      expect(await ensure([id], action)).toBe(0);
+      const withoutState = await insertDecision({
+        redactedAt: "2026-01-01T00:00:00Z",
+        contentHash: null,
+      });
+      expect(await readState(withoutState)).toBeNull();
+      expect(await ensure([withoutState], action)).toBe(0);
+      expect(await readState(withoutState)).toBeNull();
+    },
+  );
 
   test("reconciles only a missing or outdated digest", async () => {
     const current = await insertDecision();

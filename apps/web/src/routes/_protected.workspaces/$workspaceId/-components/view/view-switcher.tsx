@@ -63,8 +63,8 @@ import type { ViewLayout, ViewLayoutType } from "@/lib/api-contract";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/access";
 import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
+import { queryView } from "@/lib/query-view.logic";
 import type { WorkspaceView } from "@/lib/types";
-import { useQueryView } from "@/lib/use-query-view";
 import { createUuid } from "@/lib/uuid";
 import {
   useConvertView,
@@ -176,7 +176,7 @@ export const ViewSwitcher = ({
   const direction = useI18nStore((state) => getLangDir(state.lang));
   const avtEnabled = useCallerFeatureEnabled(CALLER_FEATURE.verification);
   const allViewsQuery = useQuery(viewsOptions(workspaceId));
-  const allViewsView = useQueryView(allViewsQuery);
+  const allViewsView = queryView(allViewsQuery);
   const allViews = allViewsView.type === "items" ? allViewsView.items : [];
   const views = switcherViews(allViews, avtEnabled);
   const createView = useCreateView(workspaceId);

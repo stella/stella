@@ -5,6 +5,23 @@ configuration feature gates on every boot. Operator control uses only
 `paused_by`, `paused_since`, `paused_until`, and `pause_reason`, which survive that refresh.
 New jobs are enabled by default unless their configuration gate disables them.
 
+## Stopping a runaway job
+
+Run the guarded operator command from `apps/api`. Start without `--apply` to
+review the current row and resulting deadline, then repeat the same command
+with `--apply` using an authorized operator database connection:
+
+```sh
+bun run scheduler:job-pause -- pause --job documentProcessing.dispatchOcr.configuredInterval --for 24h --reason "Runaway queue growth" --actor operator-id
+bun run scheduler:job-pause -- pause --job documentProcessing.dispatchOcr.configuredInterval --for 24h --reason "Runaway queue growth" --actor operator-id --apply
+bun run scheduler:job-pause -- status --job documentProcessing.dispatchOcr.configuredInterval
+bun run scheduler:job-pause -- resume --job documentProcessing.dispatchOcr.configuredInterval --reason "Queue is stable" --actor operator-id --apply
+```
+
+The pause auto-resumes at its deadline. The hourly audit flags an active pause
+older than 24 hours. If the script is unavailable, use the SQL below as the
+fallback.
+
 A job can run when `enabled` is true and `paused_until` is either `NULL` or in
 the past. `NULL` means unpaused. A pause may be at most 72 hours from the time
 it is written. An elapsed pause resumes automatically. The runner clears expired
@@ -43,9 +60,13 @@ emits JSON `scheduler.job.paused` and `scheduler.job.resumed` events when
 `paused_until` changes, including the job, attribution, reason, and previous
 deadline. Updating a future pause emits a pause event; setting a past deadline
 or clearing an expired deadline emits a resume event. Repeating the same
-deadline produces no duplicate transition event. A runner that encounters an
-active pause during execution emits `scheduler.job.paused_job_ran` at error
-level and prevents execution.
+deadline produces no duplicate transition event. A runner that meets an active
+pause before a leased run starts, or at a heartbeat while it runs, skips or
+stops the run and emits `scheduler.job.pause_honored` at info level with its
+`phase` (`before_start` or `while_running`): the pause worked, so it is
+operator-owned state, not an error. Only a run that completes after its pause
+committed emits `scheduler.job.paused_job_ran` at error level, because that
+work ran under the pause.
 
 The hourly pause audit emits `scheduler.job.pause_overdue` at error level for
 each active pause that began more than 24 hours ago, including active legacy

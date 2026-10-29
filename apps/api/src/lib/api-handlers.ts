@@ -11,7 +11,7 @@ import type { PermissionInput } from "@stll/permissions";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { UsageActionType, UsageServiceTier } from "@/api/db/schema";
 import { env } from "@/api/env";
-import type { CachePolicy } from "@/api/http/cache";
+import type { RouteCachePolicy } from "@/api/http/cache";
 import type { ResponseSet } from "@/api/http/context";
 import { decodeRequestInput } from "@/api/http/input";
 import type { QueryRecord } from "@/api/http/input";
@@ -81,6 +81,7 @@ import {
   publicReadTimeoutError,
   runPublicReadRequest,
 } from "@/api/lib/legal-search/public-read-timeout";
+import { withExceptionScope } from "@/api/lib/observability/exception-scope";
 import {
   causeChainAttributes,
   failureSink,
@@ -94,9 +95,13 @@ import {
   SHADOW_SINKS,
   shadowFields,
 } from "@/api/lib/observability/failure-shadow";
+import { observeLimiterAdmissionFailure } from "@/api/lib/observability/limiter-admission-failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
-import { getRequestContext } from "@/api/lib/observability/request-context";
+import {
+  getRequestContext,
+  recordRequestExceptionScope,
+} from "@/api/lib/observability/request-context";
 import {
   hasMemberPermission,
   readAuthorizedMemberRole,
@@ -137,8 +142,8 @@ import { decideChatUsageLane } from "@/api/lib/usage/lane-routing";
 import type { UsageLaneDecision } from "@/api/lib/usage/lane-routing";
 import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 import { assertUsageAvailable } from "@/api/lib/usage/usage-ledger";
-import { recordWriteContract } from "@/api/lib/write-contract";
-import type { WriteContract } from "@/api/lib/write-contract";
+import { recordWriteContract } from "@/api/lib/write-contract/write-contract";
+import type { WriteContract } from "@/api/lib/write-contract/write-contract";
 // Type-only: keep endpoint metadata independent of the expensive MCP schema graph.
 import type { McpToolName } from "@/api/mcp/static-tool-names";
 import type { McpReadClass } from "@/api/mcp/tool-types";
@@ -907,10 +912,25 @@ function toSafeStatusResponse(
   return status(statusCode, body);
 }
 
-type SafeHandlerLogContext = {
+export type SafeHandlerLogContext = {
   request: Request;
   route: string;
   set?: ResponseSet;
+};
+
+const withSafeHandlerExceptionScope = <TResult>(
+  ctx: SafeHandlerLogContext,
+  operation: () => TResult,
+): TResult => {
+  const scope = ctx.route.startsWith("mcp:invoke_capability/")
+    ? ({ type: "handler", handlerId: ctx.route } as const)
+    : ({
+        type: "request",
+        method: ctx.request.method,
+        routeTemplate: ctx.route,
+      } as const);
+  recordRequestExceptionScope(ctx.request, scope);
+  return withExceptionScope(scope, operation);
 };
 
 type ErrorStatusBuilder<TErrorStatus> = (
@@ -1502,141 +1522,142 @@ const createSafeScopedHandler = <
   recordSafeHandler({
     config,
     access,
-    handler: async (requestCtx): Promise<SafeHandlerResult<TResult>> => {
-      const memberRole = readAuthorizedMemberRole(requestCtx);
-      if (!memberRole) {
-        return toSafeStatusResponse(403, {
-          code: API_ERROR_CODE.forbidden,
-          message: "Forbidden",
-        });
-      }
-      const configurationAdmission = checkHandlerConfigurationAdmission({
-        principal: { memberRole, readEmail: () => requestCtx.user.email },
-        config,
-        checkAccountOperation,
-      });
-      if (configurationAdmission === "permission_required") {
-        return toSafeStatusResponse(403, {
-          code: API_ERROR_CODE.forbidden,
-          message: "Forbidden",
-        });
-      }
-      if (configurationAdmission === "account_restricted") {
-        return toSafeStatusResponse(403, {
-          code: "account_access_unavailable",
-          message: "This operation is unavailable for this account.",
-        });
-      }
-      const featureAccess = await admitHandlerFeatureAccess({
-        ctx: requestCtx,
-        config,
-      });
-      if ("answer" in featureAccess) {
-        return featureAccess.answer;
-      }
-      const { ctx } = featureAccess;
-
-      const visible = await Result.tryPromise(
-        async () =>
-          await resourcesAreVisible({
-            inputs: [
-              { schema: config.body, value: ctx.body },
-              { schema: config.params, value: ctx.params },
-              { schema: config.query, value: ctx.query },
-            ],
-            scopedDb: async (read) => {
-              const result = await ctx.safeDb(read);
-              if (result.isErr()) {
-                throw result.error;
-              }
-              return result.value;
-            },
-          }),
-      );
-      if (visible.isErr()) {
-        return await runSafeHandler({
-          ctx,
-          contentDelivery: config.contentDelivery,
-          async *handler() {
-            return yield* Result.await(
-              Promise.resolve(Result.err(visible.error)),
-            );
-          },
-        });
-      }
-      if (!visible.value) {
-        return toSafeStatusResponse(404, { message: "Not found" });
-      }
-
-      let usageLane = ctx.usageLane;
-      const authorization = await authorizeOperation({
-        kind: HANDLER_USAGE_ALLOWED,
-        input: { ctx, config, handler, admit },
-        check: async ({
-          ctx: checkedContext,
-          config: checkedConfig,
-        }): Promise<Result<void, HandlerError>> => {
-          const configStatusError = checkedConfig.requiresUsage
-            ? orgAIConfigStatusError(checkedContext.orgAIConfigStatus)
-            : null;
-          if (configStatusError) {
-            return Result.err(configStatusError);
-          }
-          if (checkedConfig.requiresUsage && env.USAGE_ENFORCEMENT_ENABLED) {
-            const meteringContext = resolveMeteringContext({
-              metering: checkedConfig.requiresUsage,
-              organizationId: checkedContext.session.activeOrganizationId,
-              orgAIConfig: checkedContext.orgAIConfig,
-              workspaceId: hasWorkspaceId(checkedContext)
-                ? checkedContext.workspaceId
-                : null,
-              userId: checkedContext.user.id,
-            });
-            const preflight = await runUsagePreflight({
-              ctx: checkedContext,
-              meteringContext,
-            });
-            if (Result.isError(preflight)) {
-              return Result.err(preflight.error);
-            }
-            usageLane = preflight.value;
-          }
-          return Result.ok(undefined);
-        },
-      });
-      if (Result.isError(authorization)) {
-        return toSafeStatusResponse(
-          authorization.error.status,
-          safeErrorBody(authorization.error),
-        );
-      }
-      const result = await authorization.value.execute(
-        async (operation) =>
-          // Response state belongs to the request; handler data belongs to this execution.
-          await runCheckedScopedHandler(operation, usageLane, ctx.set),
-      );
-      // The transaction has settled; realtime delivery cannot change its result.
-      if (
-        config.realtime !== undefined &&
-        config.realtime.scope !== "none" &&
-        isSuccessfulHandlerResult(result)
-      ) {
-        const announcement = Result.try(() =>
-          announce({
-            realtime: config.realtime,
-            result,
-            organizationId: ctx.session.activeOrganizationId,
-            workspaceId: hasWorkspaceId(ctx) ? ctx.workspaceId : undefined,
-          }),
-        );
-        if (Result.isError(announcement)) {
-          observeFailure(announcement.error, {
-            sink: REALTIME_ANNOUNCEMENT_FAILURE,
+    handler: async (requestCtx): Promise<SafeHandlerResult<TResult>> =>
+      await withSafeHandlerExceptionScope(requestCtx, async () => {
+        const memberRole = readAuthorizedMemberRole(requestCtx);
+        if (!memberRole) {
+          return toSafeStatusResponse(403, {
+            code: API_ERROR_CODE.forbidden,
+            message: "Forbidden",
           });
         }
-      }
-      return result;
-    },
+        const configurationAdmission = checkHandlerConfigurationAdmission({
+          principal: { memberRole, readEmail: () => requestCtx.user.email },
+          config,
+          checkAccountOperation,
+        });
+        if (configurationAdmission === "permission_required") {
+          return toSafeStatusResponse(403, {
+            code: API_ERROR_CODE.forbidden,
+            message: "Forbidden",
+          });
+        }
+        if (configurationAdmission === "account_restricted") {
+          return toSafeStatusResponse(403, {
+            code: "account_access_unavailable",
+            message: "This operation is unavailable for this account.",
+          });
+        }
+        const featureAccess = await admitHandlerFeatureAccess({
+          ctx: requestCtx,
+          config,
+        });
+        if ("answer" in featureAccess) {
+          return featureAccess.answer;
+        }
+        const { ctx } = featureAccess;
+
+        const visible = await Result.tryPromise(
+          async () =>
+            await resourcesAreVisible({
+              inputs: [
+                { schema: config.body, value: ctx.body },
+                { schema: config.params, value: ctx.params },
+                { schema: config.query, value: ctx.query },
+              ],
+              scopedDb: async (read) => {
+                const result = await ctx.safeDb(read);
+                if (result.isErr()) {
+                  throw result.error;
+                }
+                return result.value;
+              },
+            }),
+        );
+        if (visible.isErr()) {
+          return await runSafeHandler({
+            ctx,
+            contentDelivery: config.contentDelivery,
+            async *handler() {
+              return yield* Result.await(
+                Promise.resolve(Result.err(visible.error)),
+              );
+            },
+          });
+        }
+        if (!visible.value) {
+          return toSafeStatusResponse(404, { message: "Not found" });
+        }
+
+        let usageLane = ctx.usageLane;
+        const authorization = await authorizeOperation({
+          kind: HANDLER_USAGE_ALLOWED,
+          input: { ctx, config, handler, admit },
+          check: async ({
+            ctx: checkedContext,
+            config: checkedConfig,
+          }): Promise<Result<void, HandlerError>> => {
+            const configStatusError = checkedConfig.requiresUsage
+              ? orgAIConfigStatusError(checkedContext.orgAIConfigStatus)
+              : null;
+            if (configStatusError) {
+              return Result.err(configStatusError);
+            }
+            if (checkedConfig.requiresUsage && env.USAGE_ENFORCEMENT_ENABLED) {
+              const meteringContext = resolveMeteringContext({
+                metering: checkedConfig.requiresUsage,
+                organizationId: checkedContext.session.activeOrganizationId,
+                orgAIConfig: checkedContext.orgAIConfig,
+                workspaceId: hasWorkspaceId(checkedContext)
+                  ? checkedContext.workspaceId
+                  : null,
+                userId: checkedContext.user.id,
+              });
+              const preflight = await runUsagePreflight({
+                ctx: checkedContext,
+                meteringContext,
+              });
+              if (Result.isError(preflight)) {
+                return Result.err(preflight.error);
+              }
+              usageLane = preflight.value;
+            }
+            return Result.ok(undefined);
+          },
+        });
+        if (Result.isError(authorization)) {
+          return toSafeStatusResponse(
+            authorization.error.status,
+            safeErrorBody(authorization.error),
+          );
+        }
+        const result = await authorization.value.execute(
+          async (operation) =>
+            // Response state belongs to the request; handler data belongs to this execution.
+            await runCheckedScopedHandler(operation, usageLane, ctx.set),
+        );
+        // The transaction has settled; realtime delivery cannot change its result.
+        if (
+          config.realtime !== undefined &&
+          config.realtime.scope !== "none" &&
+          isSuccessfulHandlerResult(result)
+        ) {
+          const announcement = Result.try(() =>
+            announce({
+              realtime: config.realtime,
+              result,
+              organizationId: ctx.session.activeOrganizationId,
+              workspaceId: hasWorkspaceId(ctx) ? ctx.workspaceId : undefined,
+            }),
+          );
+          if (Result.isError(announcement)) {
+            observeFailure(announcement.error, {
+              sink: REALTIME_ANNOUNCEMENT_FAILURE,
+            });
+          }
+        }
+        return result;
+      }),
   });
 
 type ResolvedMeteringContext = {
@@ -2020,11 +2041,15 @@ const createSafeDirectHandler = <
     config,
     access: "token",
     handler: async (ctx: TContext): Promise<SafeHandlerResult<TResult>> =>
-      await runSafeHandler({
+      await withSafeHandlerExceptionScope(
         ctx,
-        handler,
-        contentDelivery: config.contentDelivery,
-      }),
+        async () =>
+          await runSafeHandler({
+            ctx,
+            handler,
+            contentDelivery: config.contentDelivery,
+          }),
+      ),
   });
 
 const safeErrorBody = (error: HandlerError): SafeErrorBody => ({
@@ -2120,25 +2145,26 @@ export const createSafeSessionHandler = <
     access: "session",
     handler: async (
       ctx: SessionHandlerContext<TConfig>,
-    ): Promise<SafeHandlerResult<TResult>> => {
-      if (requiresAccountCheck(config.accountAccess)) {
-        const accountAccess = checkAccountOperation(
-          ctx.user.email,
-          config.accountAccess,
-        );
-        if (Result.isError(accountAccess)) {
-          return toSafeStatusResponse(403, {
-            code: "account_access_unavailable",
-            message: "This operation is unavailable for this account.",
-          });
+    ): Promise<SafeHandlerResult<TResult>> =>
+      await withSafeHandlerExceptionScope(ctx, async () => {
+        if (requiresAccountCheck(config.accountAccess)) {
+          const accountAccess = checkAccountOperation(
+            ctx.user.email,
+            config.accountAccess,
+          );
+          if (Result.isError(accountAccess)) {
+            return toSafeStatusResponse(403, {
+              code: "account_access_unavailable",
+              message: "This operation is unavailable for this account.",
+            });
+          }
         }
-      }
-      return await runSafeHandler({
-        ctx,
-        handler,
-        contentDelivery: config.contentDelivery,
-      });
-    },
+        return await runSafeHandler({
+          ctx,
+          handler,
+          contentDelivery: config.contentDelivery,
+        });
+      }),
   });
   return {
     ...core,
@@ -2250,7 +2276,7 @@ export type PublicHandlerConfig = InputSchema &
   ContentDeliveryDisposition &
   CapabilityAccess &
   SandboxAccountAccess & {
-    cache: CachePolicy;
+    cache: RouteCachePolicy;
     /** `own`: the route answers CORS itself (an any-origin discovery document). */
     cors?: "own";
     mcp: McpExposure;
@@ -2266,7 +2292,7 @@ export type PublicHandlerContext<
  * a raw function passed to `.get()` reads the same at the call site.
  */
 type PublicHandlerRegistration = {
-  cache: CachePolicy;
+  cache: RouteCachePolicy;
   readTimeout: "route-class" | "none";
 };
 
@@ -2318,14 +2344,15 @@ export const createSafePublicHandler = <
     access: "public",
     cache: config.cache,
     ...(config.cors === undefined ? {} : { cors: config.cors }),
-    handler: async (ctx: PublicHandlerContext<TConfig>) => {
-      const response = await runSafeHandler({
-        ctx,
-        handler,
-        contentDelivery: config.contentDelivery,
-      });
-      return response;
-    },
+    handler: async (ctx: PublicHandlerContext<TConfig>) =>
+      await withSafeHandlerExceptionScope(ctx, async () => {
+        const response = await runSafeHandler({
+          ctx,
+          handler,
+          contentDelivery: config.contentDelivery,
+        });
+        return response;
+      }),
   });
   safePublicHandlers.set(definition.handler, {
     cache: config.cache,
@@ -2416,33 +2443,34 @@ export const createSafeUncheckedBoundedPublicHandler = <
     access: "public",
     cache: config.cache,
     ...(config.cors === undefined ? {} : { cors: config.cors }),
-    handler: async (ctx: PublicHandlerContext<TConfig>) => {
-      const result = await runPublicReadRequest(
-        ctx,
-        async () =>
-          await runSafeHandlerWith({
-            ctx,
-            handler,
-            contentDelivery: config.contentDelivery,
-            toErrorStatus: toBoundedPublicErrorStatus,
-          }),
-      );
-      const response =
-        // Projection is idempotent, so factory-built statuses pass through it
-        // unchanged; handler-returned statuses are bounded the same way.
-        result instanceof HttpStatusResponse && result.code >= 400
-          ? toSafePublicStatusResponse(
-              result.code,
-              typeof result.response === "string"
-                ? truncateTextBytes(
-                    result.response,
-                    PUBLIC_ERROR_TEXT_BYTES.statusText,
-                  )
-                : projectPublicErrorBody(result.response),
-            )
-          : result;
-      return response;
-    },
+    handler: async (ctx: PublicHandlerContext<TConfig>) =>
+      await withSafeHandlerExceptionScope(ctx, async () => {
+        const result = await runPublicReadRequest(
+          ctx,
+          async () =>
+            await runSafeHandlerWith({
+              ctx,
+              handler,
+              contentDelivery: config.contentDelivery,
+              toErrorStatus: toBoundedPublicErrorStatus,
+            }),
+        );
+        const response =
+          // Projection is idempotent, so factory-built statuses pass through it
+          // unchanged; handler-returned statuses are bounded the same way.
+          result instanceof HttpStatusResponse && result.code >= 400
+            ? toSafePublicStatusResponse(
+                result.code,
+                typeof result.response === "string"
+                  ? truncateTextBytes(
+                      result.response,
+                      PUBLIC_ERROR_TEXT_BYTES.statusText,
+                    )
+                  : projectPublicErrorBody(result.response),
+              )
+            : result;
+        return response;
+      }),
   });
   safePublicHandlers.set(definition.handler, {
     cache: config.cache,
@@ -2518,6 +2546,12 @@ const logAndCaptureSafeError = ({
   statusCode,
   telemetry,
 }: LogAndCaptureSafeErrorProps) => {
+  if (
+    resolveHandlerError(error)?.code === ACTION_ADMISSION_CODES.storeUnavailable
+  ) {
+    observeLimiterAdmissionFailure(error, "admission");
+    return;
+  }
   const reqCtx = getRequestContext();
   const evidence = readEvidence(error);
   const severity =
@@ -2552,7 +2586,7 @@ const logAndCaptureSafeError = ({
 
   // Every answered failure is un-diagnosable without this: the message and
   // stack are redacted from every sink, leaving only `error.type`. The
-  // fingerprint (class, stable code, top `file:line:col` frames) is non-PII
+  // diagnostic identity (class, stable code and source positions) is non-PII
   // and uses keys that survive the logger's redaction, so a failure always
   // carries a code location. A 4xx needs it at least as much as a panic —
   // `error.type` reads `HandlerError` at every one of the dozens of sites
@@ -2600,6 +2634,12 @@ const logAndCaptureSafeError = ({
   // already carries the rejecting frame.
   if (telemetry === "capture") {
     captureObservedError(error, {
+      // HTTP routes are declared templates; MCP routes carry capability IDs.
+      // Neither contains resolved request values.
+      fingerprintKey: "api.safeHandlerFailure",
+      scope: route.startsWith("mcp:invoke_capability/")
+        ? { type: "handler", handlerId: route }
+        : { type: "request", method: request.method, routeTemplate: route },
       request,
       context: {
         method: request.method,

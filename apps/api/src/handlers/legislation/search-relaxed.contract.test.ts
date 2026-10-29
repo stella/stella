@@ -765,7 +765,7 @@ describe.skipIf(!runEngineTests)(
         "malformed-cursor",
         encodeCursor(
           0.5,
-          `0:none:relevance:p${Buffer.from('{"type":"strict').toString("base64url")}:${String(code.id)}`,
+          `0:none:relevance:p${Buffer.from('{"type":"strict').toBase64({ alphabet: "base64url", omitPadding: true })}:${String(code.id)}`,
         ),
         encodeCorpusSearchCursor({
           ...cursor,

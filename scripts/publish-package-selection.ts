@@ -1,5 +1,8 @@
-import { panic } from "better-result";
+import { fail as panic } from "node:assert";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 
+import { readNpmReleaseGraph } from "./generate-npm-release-jobs";
 import { ALL_PACKAGE_ORDER, LIBRARY_PACKAGE_ORDER } from "./publish-packages";
 
 type PublishEvent = "push" | "workflow_run" | "workflow_dispatch";
@@ -8,6 +11,7 @@ type PublishPackageSelectionOptions = {
   eventName: PublishEvent;
   manualPackage: string;
   changedPaths: readonly string[];
+  readManifest?: (directory: string) => string;
 };
 
 const isKnownPackage = (
@@ -15,10 +19,49 @@ const isKnownPackage = (
 ): packageName is (typeof ALL_PACKAGE_ORDER)[number] =>
   ALL_PACKAGE_ORDER.some((knownPackage) => knownPackage === packageName);
 
+type ExpandPublishPackagesOptions = {
+  selected: readonly string[];
+  graph: ReturnType<typeof readNpmReleaseGraph>;
+};
+
+export const expandPublishPackages = ({
+  selected,
+  graph,
+}: ExpandPublishPackagesOptions): readonly string[] => {
+  const packages = new Map(graph.map((pkg) => [pkg.directory, pkg]));
+  const visited = new Set<string>();
+  const ordered: string[] = [];
+  const visit = (directory: string) => {
+    if (visited.has(directory)) {
+      return;
+    }
+    const pkg = packages.get(directory);
+    if (pkg === undefined) {
+      panic(`Unknown package '${directory}'.`);
+    }
+    visited.add(directory);
+    for (const dependency of pkg.dependencies) {
+      visit(dependency);
+    }
+    ordered.push(directory);
+  };
+  for (const directory of selected) {
+    visit(directory);
+  }
+  return ordered;
+};
+
+const readSourceManifest = (directory: string) =>
+  readFileSync(
+    path.join(process.cwd(), "packages", directory, "package.json"),
+    "utf-8",
+  );
+
 export const selectPublishPackages = ({
   eventName,
   manualPackage,
   changedPaths,
+  readManifest = readSourceManifest,
 }: PublishPackageSelectionOptions): readonly string[] => {
   if (eventName === "workflow_run") {
     return ["cli"];
@@ -33,7 +76,10 @@ export const selectPublishPackages = ({
       panic(`Unknown package '${manualPackage}'.`);
     }
 
-    return [manualPackage];
+    return expandPublishPackages({
+      selected: [manualPackage],
+      graph: readNpmReleaseGraph({ roots: [manualPackage], readManifest }),
+    });
   }
 
   const changed = new Set(changedPaths);
@@ -89,6 +135,23 @@ if (import.meta.main) {
     panic(`Unsupported event '${eventName ?? ""}'.`);
   }
 
+  if (eventName === "workflow_dispatch" && manualPackage !== "all") {
+    const sourceRoot = Bun.argv.at(4) ?? process.cwd();
+    for (const packageName of selectPublishPackages({
+      eventName,
+      manualPackage,
+      changedPaths: [],
+      readManifest: (directory) =>
+        readFileSync(
+          path.join(sourceRoot, "packages", directory, "package.json"),
+          "utf-8",
+        ),
+    })) {
+      console.log(packageName);
+    }
+    process.exit(0);
+  }
+
   const changedPaths = Bun.spawnSync(
     [...changedPathsCommand(process.env["PUSH_BEFORE"])],
     { stdout: "pipe", stderr: "pipe" },
@@ -100,7 +163,7 @@ if (import.meta.main) {
   const paths = new TextDecoder()
     .decode(changedPaths.stdout)
     .split("\n")
-    .filter((path) => path.length > 0);
+    .filter((changedPath) => changedPath.length > 0);
   for (const packageName of selectPublishPackages({
     eventName,
     manualPackage,

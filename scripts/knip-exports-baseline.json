@@ -1,6 +1,6 @@
 {
   "apps/api": {
-    "count": 125,
+    "count": 123,
     "files": {
       "apps/api/scripts/lib/capability-catalog.ts": 7,
       "apps/api/src/handlers/case-law/citation-kind.ts": 1,
@@ -18,7 +18,7 @@
       "apps/api/src/lib/ai-config.ts": 6,
       "apps/api/src/lib/ai-provider-probe.ts": 2,
       "apps/api/src/lib/auth/feature-access/view-eligibility.ts": 1,
-      "apps/api/src/lib/buffer-intent-reconciliation.ts": 6,
+      "apps/api/src/lib/buffer-intent-reconciliation.ts": 5,
       "apps/api/src/lib/chat/thread-compaction.ts": 1,
       "apps/api/src/lib/document-processing-ocr-result.ts": 1,
       "apps/api/src/lib/document-review/review-extract.ts": 2,
@@ -53,7 +53,7 @@
       "apps/api/src/mcp/context.ts": 1,
       "apps/api/src/mcp/file-comparison-picker-tool.ts": 1,
       "apps/api/src/mcp/matter-tools.ts": 1,
-      "apps/api/src/mcp/tool-types.ts": 8,
+      "apps/api/src/mcp/tool-types.ts": 7,
       "apps/api/src/mcp/upload-purpose-gate.ts": 1,
       "apps/api/src/tests/helpers/provider-wire-contract.ts": 3,
       "apps/api/src/tests/pglite-test-db.ts": 1
@@ -66,7 +66,7 @@
     }
   },
   "apps/web": {
-    "count": 18,
+    "count": 17,
     "files": {
       "apps/web/src/components/ai-config-role-models.logic.ts": 3,
       "apps/web/src/components/ai-suggestions/review-position-header.tsx": 1,
@@ -79,8 +79,7 @@
       "apps/web/src/lib/workspaces/format-duration.ts": 1,
       "apps/web/src/lib/workspaces/mutations/time-entries.ts": 3,
       "apps/web/src/lib/workspaces/queries/billing-codes.ts": 1,
-      "apps/web/src/lib/workspaces/queries/rates.ts": 1,
-      "apps/web/src/lib/workspaces/queries/time-entries.ts": 1
+      "apps/web/src/lib/workspaces/queries/rates.ts": 1
     }
   },
   "packages/business-registries": {

@@ -36,6 +36,7 @@ import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import {
+  firstNotificationsPageRefresh,
   notificationsOptions,
   refetchFirstNotificationsPage,
 } from "@/lib/notification-queries";
@@ -81,17 +82,23 @@ export const NotificationBell = () => {
     // The user channel carries a single event kind today; this bind makes a
     // second kind a compile error here instead of a silently ignored event.
     eventType satisfies typeof REALTIME_EVENT_TYPE.NEW_NOTIFICATION;
-    detached(
-      refetchFirstNotificationsPage({ organizationId, queryClient, userId }),
-      "notification-bell.refetch-first-page",
-    );
+    return [
+      firstNotificationsPageRefresh({
+        organizationId,
+        queryClient,
+        userId,
+      }),
+    ];
   });
 
   useExternalSyncEffect(() => {
     if (listError === null) {
       return;
     }
-    analytics.captureError(listError);
+    analytics.captureError(listError, {
+      fingerprintKey: "NotificationBell:listError",
+      scope: { type: "handler", handlerId: "NotificationBell:listError" },
+    });
     notifyUserError(listError, t("common.unexpectedError"));
   }, [analytics, listError, t]);
 

@@ -16,8 +16,9 @@ import {
 } from "@/components/viewer/viewer-recovery.logic";
 import type { ViewerErrorRecovery } from "@/components/viewer/viewer-recovery.logic";
 import { getAnalytics } from "@/lib/analytics/provider";
+import { detached } from "@/lib/detached";
 import { ClientTelemetryError } from "@/lib/errors/telemetry";
-import { reloadForStaleDeployment } from "@/lib/preload-error-recovery";
+import { recoverFromStaleDeploymentLoad } from "@/lib/preload-error-recovery";
 
 /**
  * Every surface that renders a file. Telemetry is keyed by it, so a viewer
@@ -131,6 +132,30 @@ class ViewerErrorBoundary extends Component<
     this.state = { type: "rendering", attempt: 0, generation: 0 };
   }
 
+  private readonly recoverChunkLoad = async (
+    error: Error,
+    generation: number,
+  ): Promise<void> => {
+    const classification = await recoverFromStaleDeploymentLoad(error);
+    if (classification === null) {
+      this.fail({ error, failure: "exhausted" });
+      return;
+    }
+    switch (classification.type) {
+      case "build-skew":
+        this.setState({ type: "reloading", generation });
+        return;
+      case "not-skew":
+        this.fail({ error, failure: "exhausted" });
+        return;
+      default:
+        classification satisfies never;
+        return panic(
+          `Unhandled failed chunk classification: ${String(classification)}`,
+        );
+    }
+  };
+
   // React merges this into the current state, so the attempt and generation
   // of the render that threw carry over into the caught state.
   static getDerivedStateFromError(error: Error): Partial<ViewerBoundaryState> {
@@ -146,11 +171,10 @@ class ViewerErrorBoundary extends Component<
     this.report({ error, recovery, attempt: state.attempt });
     switch (recovery.type) {
       case "reload-app": {
-        if (reloadForStaleDeployment()) {
-          this.setState({ type: "reloading", generation: state.generation });
-          return;
-        }
-        this.fail({ error, failure: "exhausted" });
+        detached(
+          this.recoverChunkLoad(error, state.generation),
+          "viewer-error.recover-chunk-load",
+        );
         return;
       }
       case "final": {
@@ -202,6 +226,13 @@ class ViewerErrorBoundary extends Component<
         message: `[${area}] ${recovery.type} after attempt ${String(attempt)}: ${error.message}`,
         cause: error,
       }),
+      {
+        fingerprintKey: `RecoverableViewerBoundary:${this.props.surface}.${recovery.type}`,
+        scope: {
+          type: "handler",
+          handlerId: `RecoverableViewerBoundary:${this.props.surface}.${recovery.type}`,
+        },
+      },
     );
   }
 

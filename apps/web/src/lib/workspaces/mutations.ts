@@ -6,6 +6,7 @@ import {
 import { useRouter } from "@tanstack/react-router";
 import { panic } from "better-result";
 
+import { getTranslator } from "@/i18n/translator";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
@@ -14,6 +15,7 @@ import {
   toAPIError,
   unwrapApiResponse,
 } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 import { createUuid } from "@/lib/uuid";
 import { workspacesKeys } from "@/lib/workspaces/queries";
@@ -63,7 +65,11 @@ export const useCreateWorkspace = () => {
       });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useCreateWorkspace:failure",
+        scope: { type: "handler", handlerId: "useCreateWorkspace:failure" },
+      });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -175,7 +181,11 @@ export const useUpdateWorkspace = () => {
       }
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useUpdateWorkspace:failure",
+        scope: { type: "handler", handlerId: "useUpdateWorkspace:failure" },
+      });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -204,7 +214,11 @@ export const useUnarchiveWorkspace = () => {
       });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useUnarchiveWorkspace:failure",
+        scope: { type: "handler", handlerId: "useUnarchiveWorkspace:failure" },
+      });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -231,7 +245,11 @@ export const useDeleteWorkspace = () => {
       useTableStore.getState().dropMatter(workspaceId);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useDeleteWorkspace:failure",
+        scope: { type: "handler", handlerId: "useDeleteWorkspace:failure" },
+      });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -265,7 +283,11 @@ export const useDuplicateWorkspace = () => {
       );
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useDuplicateWorkspace:failure",
+        scope: { type: "handler", handlerId: "useDuplicateWorkspace:failure" },
+      });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };

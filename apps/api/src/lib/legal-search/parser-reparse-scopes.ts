@@ -109,98 +109,99 @@ export const storedFeaturesForParserReparseScope = <
 
 export const PARSER_VERSION_SCOPES = {
   [ADAPTER_KEYS.CZ_REGIONAL]: {
-    version: 14,
+    version: 15,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "running headers, soft hyphens, misplaced opening quotes, title lines and paragraph numbers are recomputed from the stored decision, and none of them has feature storage of its own",
     },
   },
   [ADAPTER_KEYS.CZ_NS]: {
-    version: 19,
+    version: 20,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "running headers, page numbers, soft hyphens, captions and paragraph numbers are recomputed from the stored print page, and none of them has feature storage of its own",
     },
   },
   [ADAPTER_KEYS.CZ_NSS]: {
-    version: 21,
+    version: 23,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Rebuild decision text, structure and paragraph identities from archived pages or registry originals; read current scalar metadata separately from related-record evidence and retain conflicting scalar values. Discovering an uncaptured original requires a normal re-crawl.",
     },
   },
   [ADAPTER_KEYS.CZ_US]: {
-    version: 27,
+    version: 31,
     scope: {
       type: "all",
       reason:
-        "the bench read from the opening sentence is part of the judges every re-parse replaces, which have no feature storage of their own",
+        "the record card's affected constitutional and other provisions are read one listed act per value, so the stored provision lists are recomputed from the stored card; paragraph text, ruling roles, separate-opinion headings, letter-spaced words and paragraph numbers are recomputed from the stored page, and none of them has feature storage of its own",
     },
   },
   [ADAPTER_KEYS.SK_COURTS]: {
-    version: 18,
+    version: 20,
     scope: {
       type: "all",
       reason:
-        "Re-read PDFs: the PDF reader now resolves legacy Adobe glyph names (zdot), which changes letters it left unread.",
+        "paragraph text and block boundaries are recomputed from the stored PDF (a line the layout wrapped inside a sentence no longer opens a numbered point or a signature), a decision title set over several lines is one heading, and repeated section headings get unique anchors; paragraphs have no feature storage of their own; re-read legacy Adobe glyph names from stored PDFs",
     },
   },
   [ADAPTER_KEYS.SK_US]: {
-    version: 12,
+    version: 16,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "paragraph text, paragraph numbers and anonymization markers are recomputed from stored markup before whitespace trimming, including unpainted non-breaking-space redaction runs; letter-spaced words and section markers include uneven chunks witnessed by intact words in the decision; none has feature storage of its own",
     },
   },
   [ADAPTER_KEYS.PL_COURTS]: {
-    version: 14,
+    version: 16,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Re-read SAOS judgments in the courts' own markup: line wraps, list markers, framed tables, soft hyphens and article superscripts change paragraph text and inlines; thesis placeholders become absent summaries.",
     },
   },
   [ADAPTER_KEYS.PL_SN]: {
+    version: 10,
+    scope: {
+      type: "all",
+      reason:
+        "Re-read Supreme Court PDFs: positioned spaces, block spacing, hanging lists, inline indices, footnotes and legacy glyph names change text and inlines.",
+    },
+  },
+  [ADAPTER_KEYS.PL_KIO]: {
+    version: 10,
+    scope: {
+      type: "all",
+      reason:
+        "Re-read procurement rulings with printed paragraph structure, joined page continuations, preserved superscripts and publisher-only markup budgets.",
+    },
+  },
+  [ADAPTER_KEYS.PL_TK]: {
     version: 9,
     scope: {
       type: "all",
       reason:
-        "Re-read Supreme Court PDFs: running headers, indented blocks, hanging lists, superscripts and legacy Adobe glyph names (zdot) change paragraph text and inlines.",
-    },
-  },
-  [ADAPTER_KEYS.PL_KIO]: {
-    version: 8,
-    scope: {
-      type: "all",
-      reason:
-        "Re-evaluate stored KIO documents with bounded HTML parsing and typed resource dispositions.",
-    },
-  },
-  [ADAPTER_KEYS.PL_TK]: {
-    version: 8,
-    scope: {
-      type: "all",
-      reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Re-read Tribunal exports with collapsed whitespace, attached superscripts, linked footnotes and named dissent authors.",
     },
   },
   [ADAPTER_KEYS.PL_NSA]: {
-    version: 8,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.PL_NCOURT]: {
-    version: 13,
+    version: 9,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Rejoin sentences split across paragraphs, drop page numbers after the closing rule and join marked superscript article numbers.",
+    },
+  },
+  [ADAPTER_KEYS.PL_NCOURT]: {
+    version: 15,
+    scope: {
+      type: "all",
+      reason:
+        "Re-read portal judgments in the courts' own markup: line wraps, list markers, framed tables, soft hyphens and article superscripts change paragraph text and inlines; thesis placeholders become absent headnotes.",
     },
   },
   [ADAPTER_KEYS.AT_COURTS]: {
@@ -289,19 +290,27 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.EU_ECJ]: {
-    version: 16,
+    version: 17,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "paragraph numbers, headings, roles and page anchors of the oldest layout, the operative-part heading, the case number and the court all change together in the document AST and the row, which have no feature storage of their own",
+    },
+  },
+  [ADAPTER_KEYS.UK_FCL]: {
+    version: 3,
+    scope: {
+      type: "all",
+      reason:
+        "Read the stated judgment type and ECLI availability from the stored XML envelope.",
     },
   },
   [ADAPTER_KEYS.HU_BHGY]: {
-    version: 20,
+    version: 21,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "move range markers between blocks are skipped as positions, so paragraph text and footnotes in the document AST are recomputed, and neither has feature storage of its own",
     },
   },
   [ADAPTER_KEYS.PL_KIS]: {
@@ -309,11 +318,11 @@ export const PARSER_VERSION_SCOPES = {
     scope: {
       type: "all",
       reason:
-        "Re-read PDFs: the PDF reader now resolves legacy Adobe glyph names (zdot), which changes letters it left unread.",
+        "Revalidate document AST identities across the complete parser output.",
     },
   },
   [ADAPTER_KEYS.PL_UODO]: {
-    version: 13,
+    version: 14,
     scope: {
       type: "all",
       reason:
@@ -325,15 +334,15 @@ export const PARSER_VERSION_SCOPES = {
     scope: {
       type: "all",
       reason:
-        "Re-read UOKiK PDFs: page furniture, footnotes, superscripts, paragraph breaks and glyph names change text and blocks.",
+        "Revalidate document AST identities across the complete parser output.; re-read legacy Adobe glyph names from stored PDFs and preserve the office's page layout and footnotes",
     },
   },
   [ADAPTER_KEYS.CZ_UOHS]: {
-    version: 4,
+    version: 5,
     scope: {
       type: "all",
       reason:
-        "Re-read PDFs: the PDF reader now resolves legacy Adobe glyph names (zdot), which changes letters it left unread.",
+        "paragraph numbers are recomputed from the stored document and have no feature storage of their own; re-read legacy Adobe glyph names from stored PDFs",
     },
   },
 } as const satisfies ParserVersionScopes<

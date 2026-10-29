@@ -1,9 +1,11 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
+import { getTranslator } from "@/i18n/translator";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 import { workspacesKeys } from "@/lib/workspaces/queries";
 import { workspaceMembersKeys } from "@/lib/workspaces/queries/workspace-members";
@@ -38,7 +40,11 @@ export const useAddWorkspaceMember = () => {
       );
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useAddWorkspaceMember:failure",
+        scope: { type: "handler", handlerId: "useAddWorkspaceMember:failure" },
+      });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };

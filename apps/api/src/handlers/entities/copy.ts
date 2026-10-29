@@ -25,7 +25,7 @@ import {
   validateMoveSourceReadLimits,
 } from "@/api/handlers/entities/copy-utils";
 import { entityRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, createErrorCapture } from "@/api/lib/analytics/capture";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -47,6 +47,7 @@ import {
 } from "@/api/lib/files/field-file-refs";
 import { deleteS3Objects } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { DOCUMENT_TYPE_CLASSIFIER_ROLE } from "@/api/lib/properties/create-schema";
 import { broadcastWorkspaceResourceSetUpdated } from "@/api/lib/resource-realtime";
 import { syncWorkspaceSearchActivity } from "@/api/lib/search/index-global";
@@ -325,11 +326,17 @@ const cleanupMovedSourceFiles = async ({
   );
 
   if (Result.isError(unreferencedSourceFileRefsResult)) {
-    captureError(unreferencedSourceFileRefsResult.error, {
-      operation: "move-cleanup",
-      sourceWorkspaceId,
-      sourceEntityId,
-    });
+    captureError(
+      unreferencedSourceFileRefsResult.error,
+      handlerErrorContext(
+        "entities.cleanupMovedSourceFiles.unreferencedSourceFileRefsResult_error",
+        {
+          operation: "move-cleanup",
+          sourceWorkspaceId,
+          sourceEntityId,
+        },
+      ),
+    );
     return;
   }
 
@@ -340,11 +347,17 @@ const cleanupMovedSourceFiles = async ({
   });
 
   if (Result.isError(deleteResult)) {
-    captureError(deleteResult.error, {
-      operation: "move-cleanup",
-      sourceWorkspaceId,
-      sourceEntityId,
-    });
+    captureError(
+      deleteResult.error,
+      handlerErrorContext(
+        "entities.cleanupMovedSourceFiles.deleteResult_error",
+        {
+          operation: "move-cleanup",
+          sourceWorkspaceId,
+          sourceEntityId,
+        },
+      ),
+    );
   }
 };
 
@@ -533,11 +546,17 @@ const copyToWorkspaceHandler = async function* ({
   });
   if (Result.isError(fileMappings)) {
     await rollbackS3Copies(copiedS3Keys);
-    captureError(fileMappings.error, {
-      sourceWorkspaceId,
-      targetWorkspaceId,
-      sourceEntityId,
-    });
+    captureError(
+      fileMappings.error,
+      handlerErrorContext(
+        "entities.copyToWorkspaceHandler.fileMappings_error",
+        {
+          sourceWorkspaceId,
+          targetWorkspaceId,
+          sourceEntityId,
+        },
+      ),
+    );
     return Result.err(
       new HandlerError({ status: 500, message: "Failed to copy files" }),
     );
@@ -641,13 +660,19 @@ const copyToWorkspaceHandler = async function* ({
         SEARCH_INDEX_OWNER.durableExtraction
       ],
     ])
-    .catch(captureError);
+    .catch(createErrorCapture(handlerErrorContext("entityCopy.flushSearch")));
 
   // Acceleration only: each run already committed with its copied source.
   handoffCommittedDocumentProcessingRuns({
     enqueue: dependencies.enqueueDocumentProcessingRun,
     runIds: txResult.nativeExtractionRunIds,
-  }).catch(captureError);
+  }).catch(
+    createErrorCapture(
+      handlerErrorContext(
+        "copyToWorkspaceHandler.handoffCommittedDocumentProcessingRuns",
+      ),
+    ),
+  );
 
   // Enqueue PDF derivative generation for copied file fields
   for (const fileField of txResult.fileFields) {
@@ -661,7 +686,11 @@ const copyToWorkspaceHandler = async function* ({
         userId,
         workspaceId: targetWorkspaceId,
       })
-      .catch(captureError);
+      .catch(
+        createErrorCapture(
+          handlerErrorContext("entityCopy.enqueuePdfDerivative"),
+        ),
+      );
     dependencies
       .enqueueImageThumbnailOrMarkFailed({
         entityId: fileField.entityId,
@@ -672,20 +701,26 @@ const copyToWorkspaceHandler = async function* ({
         userId,
         workspaceId: targetWorkspaceId,
       })
-      .catch(captureError);
+      .catch(
+        createErrorCapture(handlerErrorContext("entityCopy.enqueueThumbnail")),
+      );
   }
 
   // Sync search indexes
   dependencies
     .syncWorkspaceSearchActivity(targetWorkspaceId)
-    .catch(captureError);
+    .catch(
+      createErrorCapture(handlerErrorContext("entityCopy.syncTargetSearch")),
+    );
   if (deleteSource) {
     dependencies
       .syncWorkspaceSearchActivity(sourceWorkspaceId)
-      .catch(captureError);
+      .catch(
+        createErrorCapture(handlerErrorContext("entityCopy.syncSourceSearch")),
+      );
   }
 
-  // The source workspace event is emitted by the route macro. This explicit
+  // The source workspace event comes from the `realtime` config. This explicit
   // event reaches clients connected to the distinct target workspace.
   broadcastWorkspaceResourceSetUpdated(targetWorkspaceId, RESOURCE_TYPE.ENTITY);
 

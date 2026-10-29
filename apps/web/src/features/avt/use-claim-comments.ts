@@ -1,5 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 
+import { readerPdfPageAnchorId } from "@stll/api-contract/legal-reader-annotations";
+
 import type {
   AnnotationVisibility,
   UpdateAnnotationInput,
@@ -12,8 +14,9 @@ import { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { unwrapApiResponse } from "@/lib/errors/api";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 type ClaimCommentsScope = {
   claim: Pick<VerificationClaim, "anchor" | "id" | "text">;
@@ -40,7 +43,7 @@ export type ClaimComments = {
 const claimAnchorId = (anchor: VerificationClaim["anchor"]): string =>
   anchor.type === "docx-block"
     ? anchor.blockId
-    : `page-${String(anchor.pageNumber)}`;
+    : readerPdfPageAnchorId(anchor.pageNumber);
 
 /**
  * The comments on one verification claim, with the reader's ways to change
@@ -65,8 +68,8 @@ export const useClaimComments = ({
     workspaceId,
   });
   const queryKey = options.queryKey;
-  const view = useQueryView(useQuery({ ...options, enabled: user !== null }));
-  useQueryViewError(view);
+  const view = queryView(useQuery({ ...options, enabled: user !== null }));
+  useQueryViewError(view, "useClaimComments:query");
   const comments = view.type === "items" ? view.items : [];
   const commentRoutes = () =>
     api.lists({ workspaceId: toSafeId<"workspace">(workspaceId) })[
@@ -76,6 +79,7 @@ export const useClaimComments = ({
     commentRoutes()({ annotationId: toSafeId<"legalReaderAnnotation">(id) });
 
   const { create, remove, update } = useOptimisticAnnotationMutations({
+    handlerId: "claim-comments",
     create: async ({
       body,
       visibility,

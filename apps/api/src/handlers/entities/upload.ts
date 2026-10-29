@@ -77,6 +77,7 @@ import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
 import { createFileKey } from "@/api/lib/files/utils";
 import { maybeStartUploadTriggeredFlows } from "@/api/lib/flows/maybe-start-upload-triggered-flows";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
@@ -309,11 +310,14 @@ const cleanupUploadedS3Keys = async ({
     }),
   );
   if (Result.isError(cleanup)) {
-    captureError(cleanup.error, {
-      operation: "upload-s3-cleanup",
-      fileId,
-      workspaceId,
-    });
+    captureError(
+      cleanup.error,
+      handlerErrorContext("entities.cleanupUploadedS3Keys.cleanup_error", {
+        operation: "upload-s3-cleanup",
+        fileId,
+        workspaceId,
+      }),
+    );
   }
   return Result.isOk(cleanup);
 };
@@ -871,7 +875,10 @@ export const uploadEntityHandler = async function* ({
 
   const encryption = uploadFileEncryption(
     await detectFileEncryption({ mimeType: file.type, scanned }),
-    { mimeType: file.type, sizeBytes: String(fileBuffer.byteLength) },
+    handlerErrorContext("entityUpload.detectEncryption", {
+      mimeType: file.type,
+      sizeBytes: String(fileBuffer.byteLength),
+    }),
   );
   if (encryption === null) {
     return Result.err(
@@ -1233,7 +1240,13 @@ export const uploadEntityHandler = async function* ({
     const fileName = writeResult.resolvedName;
 
     await processEntity(entityId).catch((error: unknown) =>
-      captureError(error, { entityId, mimeType: file.type }),
+      captureError(
+        error,
+        handlerErrorContext("entityUpload.processExtraction", {
+          entityId,
+          mimeType: file.type,
+        }),
+      ),
     );
 
     if (uploadTriggeredFlowPolicy(origin) === "start") {
@@ -1243,7 +1256,13 @@ export const uploadEntityHandler = async function* ({
         organizationId,
         fileName: fileName.value,
       }).catch((error: unknown) => {
-        captureError(error, { entityId, workspaceId });
+        captureError(
+          error,
+          handlerErrorContext("entityUpload.startFlows", {
+            entityId,
+            workspaceId,
+          }),
+        );
       });
     }
 
@@ -1256,11 +1275,14 @@ export const uploadEntityHandler = async function* ({
       userId,
       workspaceId,
     }).catch((error: unknown) => {
-      captureError(error, {
-        entityId,
-        fieldId,
-        mimeType: file.type,
-      });
+      captureError(
+        error,
+        handlerErrorContext("entityUpload.enqueuePdfDerivative", {
+          entityId,
+          fieldId,
+          mimeType: file.type,
+        }),
+      );
     });
 
     enqueueImageThumbnailOrMarkFailed({
@@ -1272,11 +1294,14 @@ export const uploadEntityHandler = async function* ({
       userId,
       workspaceId,
     }).catch((error: unknown) => {
-      captureError(error, {
-        entityId,
-        fieldId,
-        mimeType: file.type,
-      });
+      captureError(
+        error,
+        handlerErrorContext("entityUpload.enqueueThumbnail", {
+          entityId,
+          fieldId,
+          mimeType: file.type,
+        }),
+      );
     });
 
     return Result.ok({

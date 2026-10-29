@@ -414,7 +414,6 @@ export const ExistingFileOrganizerDialog = ({
     const toastId = stellaToast.add({
       type: "loading",
       title: t("workspaces.importOrganizer.applying"),
-      timeout: 0,
     });
 
     const run = async () => {
@@ -513,15 +512,19 @@ export const ExistingFileOrganizerDialog = ({
         stellaToast.update(toastId, {
           type: "success",
           title: t("workspaces.importOrganizer.organized"),
-          timeout: undefined,
         });
         return;
       })
       .catch((error: unknown) => {
-        analytics.captureError(error);
+        analytics.captureError(error, {
+          fingerprintKey: "ExistingFileOrganizerDialog.handleApply:failure",
+          scope: {
+            type: "handler",
+            handlerId: "ExistingFileOrganizerDialog.handleApply:failure",
+          },
+        });
         notifyUserError(error, t("workspaces.importOrganizer.failed"), {
           toastId,
-          timeout: undefined,
         });
       });
   };
@@ -618,7 +621,14 @@ export const ExistingFileOrganizerDialog = ({
       ) {
         return;
       }
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey:
+          "ExistingFileOrganizerDialog.requestAiSuggestions:failure",
+        scope: {
+          type: "handler",
+          handlerId: "ExistingFileOrganizerDialog.requestAiSuggestions:failure",
+        },
+      });
       setSuggestionStatus("failed");
     }
   };

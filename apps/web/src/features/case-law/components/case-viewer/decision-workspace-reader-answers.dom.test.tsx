@@ -9,6 +9,7 @@ import {
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
+import { DOCUMENT_OCR_AVAILABILITY } from "@stll/api-contract/document-ocr-availability";
 import type {
   ReaderAnswer,
   ReaderAnswerStreamEvent,
@@ -237,10 +238,14 @@ const answer = {
   kind: "explain",
   visibility: "private",
   anchor: {
-    paragraphId: "p-2",
-    quote: passage,
-    startOffset: 0,
-    endOffset: passage.length,
+    spans: [
+      {
+        paragraphId: "p-2",
+        quote: passage,
+        startOffset: 0,
+        endOffset: passage.length,
+      },
+    ],
   },
   messages: [
     {
@@ -392,7 +397,7 @@ const renderWorkspace = async (
                 role: "member",
                 ai: true,
                 deepl: false,
-                ocr: false,
+                ocr: DOCUMENT_OCR_AVAILABILITY.unconfigured,
                 desktop: "none",
                 settings: undefined,
               })}

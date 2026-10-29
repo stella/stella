@@ -1,11 +1,37 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
+import * as v from "valibot";
 
+import { decisionDateRange } from "@/features/case-law/case-law-index-search.logic";
+import { toSafeId } from "@/lib/safe-id";
 import { LAW_CRUMB_TRAIL_PRODUCERS } from "@/routes/law/-law-crumb-trail";
 import {
   decisionLawCrumbTrailOf,
   statuteLawCrumbTrailOf,
 } from "@/routes/law/-law-crumb-trail.logic";
+import { searchSchema } from "@/routes/law/cases/-case-law-search-schema";
+
+const decisionId = (id: string) => toSafeId<"caseLawDecision">(id);
+const caseFileDocument = (id: string, languageGroupKey: string | null) => ({
+  id: decisionId(id),
+  caseNumber: "SYN 1/2026",
+  country: "CZE",
+  court: "Synthetic court",
+  decisionDate: "2026-01-29",
+  decisionType: "rozsudek",
+  ecli: null,
+  language: "cs",
+  languageAlternates: [],
+  languageGroupKey,
+  slug: id,
+});
+const EMPTY_CASE_FILE = { items: [], nextCursor: null, limit: 50 };
+// The identity every fixture's open decision shares.
+const OPEN_DECISION = {
+  caseFile: EMPTY_CASE_FILE,
+  id: decisionId("open"),
+  languageGroupKey: null,
+};
 
 describe("statute breadcrumb identity and destinations", () => {
   test("separates a Czech citation from its short title and retains the full title", () => {
@@ -32,9 +58,12 @@ describe("statute breadcrumb identity and destinations", () => {
       shortTitle: "občanský zákoník",
       fullTitle: statute.title,
       yearLink: {
-        to: "/law/$country/statutes",
-        params: { country: "cze" },
-        search: { year: 2012 },
+        year: 2012,
+        link: {
+          to: "/law/$country/statutes",
+          params: { country: "cze" },
+          search: { year: 2012 },
+        },
       },
     });
   });
@@ -84,11 +113,14 @@ describe("statute breadcrumb identity and destinations", () => {
         identity: { kind: "statute", number, year },
         citation: `${number}/${year} ${gazette}`,
         shortTitle: statute.title,
-        fullTitle: statute.title,
+        fullTitle: `${number}/${year} ${gazette} ${statute.title}`,
         yearLink: {
-          to: "/law/$country/statutes",
-          params: { country: "svk" },
-          search: { year: Number(year) },
+          year: Number(year),
+          link: {
+            to: "/law/$country/statutes",
+            params: { country: "svk" },
+            search: { year: Number(year) },
+          },
         },
       });
     },
@@ -125,6 +157,7 @@ describe("statute breadcrumb identity and destinations", () => {
 describe("decision breadcrumb identity and destinations", () => {
   test("retains the court, case number and legal area and scopes the year to the court", () => {
     const decision = {
+      ...OPEN_DECISION,
       court: "Nejvyšší soud",
       courtAbbreviation: "NS",
       courtTier: "supreme",
@@ -142,16 +175,43 @@ describe("decision breadcrumb identity and destinations", () => {
         link: { to: "/law/cases", search: { court: decision.court } },
       },
       yearLink: {
-        to: "/law/cases",
-        search: { court: decision.court, year: 2024 },
+        year: 2024,
+        link: {
+          to: "/law/cases",
+          search: {
+            court: decision.court,
+            from: "2024-01-01",
+            to: "2024-12-31",
+          },
+        },
       },
       caseNumber: decision.caseNumber,
+      caseFile: null,
       legalArea: "Občanské právo",
+    });
+  });
+
+  test("links the year to a search the results page reads as that whole year", () => {
+    const trail = decisionLawCrumbTrailOf({
+      ...OPEN_DECISION,
+      court: "Ústavní soud",
+      courtAbbreviation: "ÚS",
+      caseNumber: "III.ÚS 290/26",
+      decisionDate: "2026-03-02",
+      metadata: {},
+    });
+    const search = v.parse(searchSchema, trail.yearLink?.link.search);
+
+    expect(search).toMatchObject({ court: "Ústavní soud" });
+    expect(decisionDateRange(search)).toEqual({
+      from: "2026-01-01",
+      to: "2026-12-31",
     });
   });
 
   test("keeps the court destination when the date, abbreviation, tier and legal area are absent", () => {
     const decision = {
+      ...OPEN_DECISION,
       court: "Synthetic court",
       courtAbbreviation: null,
       caseNumber: "SYN 1/2026",
@@ -169,7 +229,38 @@ describe("decision breadcrumb identity and destinations", () => {
       },
       yearLink: null,
       caseNumber: decision.caseNumber,
+      caseFile: null,
       legalArea: null,
+    });
+  });
+
+  test("offers the case file only when it holds a document besides the open one", () => {
+    const decision = {
+      ...OPEN_DECISION,
+      court: "Synthetic court",
+      courtAbbreviation: null,
+      caseNumber: "SYN 1/2026",
+      decisionDate: null,
+      metadata: {},
+    } satisfies Parameters<typeof decisionLawCrumbTrailOf>[0];
+    const open = caseFileDocument("open", null);
+    const appeal = caseFileDocument("appeal", null);
+
+    expect(
+      decisionLawCrumbTrailOf({
+        ...decision,
+        caseFile: { ...EMPTY_CASE_FILE, items: [open] },
+      }).caseFile,
+    ).toBeNull();
+    expect(
+      decisionLawCrumbTrailOf({
+        ...decision,
+        caseFile: { ...EMPTY_CASE_FILE, items: [open, appeal] },
+      }).caseFile,
+    ).toEqual({
+      ...EMPTY_CASE_FILE,
+      items: [open, appeal],
+      current: { id: OPEN_DECISION.id, languageGroupKey: null },
     });
   });
 
@@ -181,6 +272,7 @@ describe("decision breadcrumb identity and destinations", () => {
     { legalArea: null },
   ])("omits a legal area that is not text: %j", ({ legalArea }) => {
     const decision = {
+      ...OPEN_DECISION,
       court: "Synthetic court",
       courtAbbreviation: null,
       caseNumber: "SYN 1/2026",

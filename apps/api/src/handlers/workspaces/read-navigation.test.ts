@@ -1,5 +1,6 @@
 import { describe, expect, mock, test } from "bun:test";
 
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   createFeatureAccessSnapshot,
@@ -127,7 +128,7 @@ const createContext = ({
       orgAIConfig: null,
       query,
       request: new Request("https://example.test/v1/workspaces/navigation"),
-      route: "/v1/workspaces/navigation",
+      route: "/v1/workspaces/navigation" satisfies ApiRoutePath,
       safeDb,
       scopedDb,
       session: {

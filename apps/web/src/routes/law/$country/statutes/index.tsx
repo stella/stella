@@ -17,6 +17,7 @@ import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
 import { LEGISLATION_LIST_VALIDITIES } from "@stll/api-contract/legislation-status";
+import { statuteDisplayLabel } from "@stll/api-contract/statute-display-label";
 import type { StatuteQueryIntent } from "@stll/api-contract/statute-query-intent";
 import {
   createStatuteIndexPath,
@@ -49,8 +50,8 @@ import {
 } from "@/components/public-law-table/public-law-results-toolbar";
 import type { PublicLawFilterChip } from "@/components/public-law-table/public-law-results-toolbar";
 import { usePublicLawPageArrival } from "@/components/public-law-table/use-public-law-page-arrival";
-import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { TableFindBar } from "@/components/workspaces/table/table-find-bar";
+import { StatuteDisplayLabel } from "@/features/statutes/components/statute-display-label";
 import { StatuteFilterPopover } from "@/features/statutes/components/statute-filter-popover";
 import { StatuteSearch } from "@/features/statutes/components/statute-search";
 import { StatuteSearchResults } from "@/features/statutes/components/statute-search-results";
@@ -67,7 +68,7 @@ import {
 } from "@/features/statutes/queries/statutes";
 import type { StatuteListItem } from "@/features/statutes/queries/statutes";
 import { STATUTE_VALIDITY_LABEL_KEYS } from "@/features/statutes/statute-columns.logic";
-import { STATUTE_FILTER_KEYS } from "@/features/statutes/statute-filters.logic";
+import { activeStatuteFilterCount } from "@/features/statutes/statute-filters.logic";
 import type { StatuteFilterKey } from "@/features/statutes/statute-filters.logic";
 import {
   changeStatutesIndexQuery,
@@ -94,14 +95,21 @@ import {
   createPublicLawCanonicalUrl,
   createPublicLawHead,
 } from "@/lib/public-law-seo";
+import { queryView } from "@/lib/query-view.logic";
 import { ensureRouteInfiniteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import { isPublicStatuteCountry } from "@/lib/statutes/statute-route";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
+import {
+  PublicLawQueryFeedback,
+  PublicLawResultsBoundary,
+} from "@/routes/law/-components/public-law-list-failure";
 import {
   createStatuteListFilters,
   loadPublicStatutesIndex,
 } from "@/routes/law/-statutes-index.logic";
+
+import { PublicStatutesIndexError } from "./-statutes-index-error";
 
 /** Stable empties, so an unchanged page does not hand the table new arrays. */
 const EMPTY_STATUTES: readonly StatuteListItem[] = [];
@@ -138,9 +146,6 @@ const withFilter = (
       return panic(`Unhandled statute filter: ${String(key)}`);
   }
 };
-
-const activeStatuteFilterCount = (search: StatutesIndexSearch): number =>
-  STATUTE_FILTER_KEYS.filter((key) => search[key] !== undefined).length;
 
 const createStatutesIndexPath = (
   country: string,
@@ -218,7 +223,7 @@ export const Route = createFileRoute("/law/$country/statutes/")({
         kind: "statutes",
         items: loaderData
           ? loaderData.statutes.map((statute) => ({
-              name: statute.title,
+              name: statuteDisplayLabel(statute).text,
               url: createPublicLawCanonicalUrl(
                 createStatutePath(
                   createStatuteRouteParams({
@@ -239,6 +244,7 @@ export const Route = createFileRoute("/law/$country/statutes/")({
       type: "website",
     });
   },
+  errorComponent: PublicStatutesIndexError,
   // One page, two states, as the case-law results: only a cold arrival
   // renders the pending one, and what waits there is the grid alone.
   component: () => <PublicStatutesIndex routeState="loaded" />,
@@ -309,13 +315,13 @@ function PublicStatuteFullText({ query }: { query: string }) {
   );
   const { fetchNextPage, hasNextPage, isFetchingNextPage, isPending } =
     dataQuery;
-  const dataView = useQueryView(dataQuery, {
+  const dataView = queryView(dataQuery, {
     isEmpty: (data) => data.pages.every((page) => page.items.length === 0),
   });
   const data = dataView.type === "items" ? dataView.items : undefined;
   const facetsQuery = useQuery(statuteFacetsOptions(country.toUpperCase()));
-  const facetsView = useQueryView(facetsQuery);
-  useQueryViewError(facetsView);
+  const facetsView = queryView(facetsQuery);
+  useQueryViewError(facetsView, "PublicStatuteFullText:query");
   const facets = facetsView.type === "items" ? facetsView.items : undefined;
   const selectType = (documentType: string | undefined) => {
     const pending = writeQuery.isPending() ? input.trim() : query;
@@ -336,7 +342,7 @@ function PublicStatuteFullText({ query }: { query: string }) {
   return (
     <main className="flex min-h-0 flex-1 flex-col gap-4 p-4">
       {hydrated && dataView.type !== "pending" && (
-        <QueryViewFeedback view={dataView} />
+        <PublicLawQueryFeedback view={dataView} />
       )}
       <h1 className="sr-only">{t("statutes.title")}</h1>
       <StatuteSearch
@@ -378,38 +384,43 @@ function PublicStatuteFullText({ query }: { query: string }) {
       />
       <ScrollArea className="min-h-0 flex-1">
         {dataView.type !== "error" && (
-          <StatuteSearchResults
-            hits={hits}
-            isLoading={isPending}
-            isFetchingNextPage={isFetchingNextPage}
-            hasNextPage={hasNextPage}
-            onLoadMore={() =>
-              detached(fetchNextPage(), "statutes.full-text-next-page")
-            }
-            titleLink={(hit) => {
-              const params = createStatuteRouteParams({
-                country: hit.country,
-                documentId: hit.documentId,
-                eli: hit.eli,
-                slug: hit.slug,
-                version: null,
-              });
-              return (
-                <Link
-                  to="/law/$country/statutes/$slug"
-                  params={{ country: params.country, slug: params.slug }}
-                  search={{ q: query }}
-                  onClick={openStatute.onLinkClick({
-                    ...hit,
-                    id: toSafeId<"legislationDocument">(hit.documentId),
-                    versionValidFrom: null,
-                  })}
-                >
-                  {hit.title}
-                </Link>
-              );
-            }}
-          />
+          <PublicLawResultsBoundary
+            searchKey={`${country}:${query}`}
+            resetOn={data}
+          >
+            <StatuteSearchResults
+              hits={hits}
+              isLoading={isPending}
+              isFetchingNextPage={isFetchingNextPage}
+              hasNextPage={hasNextPage}
+              onLoadMore={() =>
+                detached(fetchNextPage(), "statutes.full-text-next-page")
+              }
+              titleLink={(hit) => {
+                const params = createStatuteRouteParams({
+                  country: hit.country,
+                  documentId: hit.documentId,
+                  eli: hit.eli,
+                  slug: hit.slug,
+                  version: null,
+                });
+                return (
+                  <Link
+                    to="/law/$country/statutes/$slug"
+                    params={{ country: params.country, slug: params.slug }}
+                    search={{ q: query }}
+                    onClick={openStatute.onLinkClick({
+                      ...hit,
+                      id: toSafeId<"legislationDocument">(hit.documentId),
+                      versionValidFrom: null,
+                    })}
+                  >
+                    <StatuteDisplayLabel statute={hit} />
+                  </Link>
+                );
+              }}
+            />
+          </PublicLawResultsBoundary>
         )}
       </ScrollArea>
     </main>
@@ -535,7 +546,7 @@ function PublicStatuteList({
     search.q ?? "",
     dataQuery.data !== undefined && !isPlaceholderData,
   );
-  const dataView = useQueryView(dataQuery, {
+  const dataView = queryView(dataQuery, {
     isEmpty: (data) => data.pages.every((page) => page.items.length === 0),
   });
   const data = dataView.type === "items" ? dataView.items : undefined;
@@ -543,8 +554,8 @@ function PublicStatuteList({
     ...statuteFacetsOptions(country.toUpperCase()),
     placeholderData: keepPreviousData,
   });
-  const facetsView = useQueryView(facetsQuery);
-  useQueryViewError(facetsView);
+  const facetsView = queryView(facetsQuery);
+  useQueryViewError(facetsView, "PublicStatuteList:query");
   const facets = facetsView.type === "items" ? facetsView.items : undefined;
   const rows = publicLawRowsPhase({ isLoading, isPlaceholderData, routeState });
 
@@ -558,6 +569,7 @@ function PublicStatuteList({
     data?.pages.at(pager.currentPage - 1)?.items ?? EMPTY_STATUTES;
   // A page the reader steps to brings them to its first row once it is drawn.
   const requestPage = usePublicLawPageArrival({
+    focusOnArrival: "first-result",
     regionRef: paneRef,
     shownPage: rows === "rows" ? pager.currentPage : null,
   });
@@ -687,7 +699,9 @@ function PublicStatuteList({
   // overflows here and the table owns the only scroll.
   return (
     <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
-      {dataView.type !== "pending" && <QueryViewFeedback view={dataView} />}
+      {dataView.type !== "pending" && (
+        <PublicLawQueryFeedback view={dataView} />
+      )}
       {/*
         The breadcrumb already names the screen, so the heading is for the
         document outline and for a screen reader, not for the eye.
@@ -742,21 +756,26 @@ function PublicStatuteList({
         />
 
         {dataView.type !== "error" && (
-          <StatuteTable
-            emptyState={
-              <p className="text-muted-foreground p-4 text-sm">
-                {t("statutes.emptyState")}
-              </p>
-            }
-            expectedRowCount={pageSize}
-            findHighlight={find.highlight}
-            firstRowNumber={(pager.currentPage - 1) * pageSize + 1}
-            isLoading={rows === "skeleton"}
-            isRefreshing={rows === "stale"}
-            layout={layout}
-            onLayoutChange={setLayout}
-            statutes={find.rows}
-          />
+          <PublicLawResultsBoundary
+            resetOn={data}
+            searchKey={`${country}:${search.q ?? ""}:${search.type ?? ""}:${search.validity ?? ""}:${search.year ?? ""}`}
+          >
+            <StatuteTable
+              emptyState={
+                <p className="text-muted-foreground p-4 text-sm">
+                  {t("statutes.emptyState")}
+                </p>
+              }
+              expectedRowCount={pageSize}
+              findHighlight={find.highlight}
+              firstRowNumber={(pager.currentPage - 1) * pageSize + 1}
+              isLoading={rows === "skeleton"}
+              isRefreshing={rows === "stale"}
+              layout={layout}
+              onLayoutChange={setLayout}
+              statutes={find.rows}
+            />
+          </PublicLawResultsBoundary>
         )}
         <PublicLawPager
           navigation={{

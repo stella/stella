@@ -62,7 +62,7 @@ export type ParsePlUokikDocumentOutput = {
  * A blank line between two files ends the last paragraph of the first, so
  * no paragraph spans them; a note keeps its own number in every file.
  */
-export const plUokikDocumentContent = async (
+const plUokikDocumentContent = async (
   pdfs: readonly Uint8Array[],
 ): Promise<PlPdfSeparatedContent> => {
   const body: PlSnLine[] = [];

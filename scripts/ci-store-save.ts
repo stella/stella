@@ -209,7 +209,10 @@ const saveStore = async ({ key, store }: SaveStoreOptions) => {
     }
   }, 1000);
   try {
-    if (spawnSync("zstd", ["--version"], { stdio: "ignore" }).status !== 0) {
+    if (
+      spawnSync("zstd", ["--version"], { maxBuffer: 2 ** 30, stdio: "ignore" })
+        .status !== 0
+    ) {
       throw new StoreSaveError("zstd unavailable; refusing a gzip cache save");
     }
     directory = mkdtempSync(path.join(tmpdir(), "stella-store-save-"));

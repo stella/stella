@@ -12,7 +12,13 @@
 
 import { Result } from "better-result";
 
-import { type FailureGrade, sanitizeQueryErrorText } from "@stll/errors";
+import {
+  type ExceptionScope,
+  type FailureGrade,
+  type HandlerExceptionScope,
+  type RequestExceptionScope,
+  sanitizeQueryErrorText,
+} from "@stll/errors";
 
 import { captureObservedError } from "@/api/lib/analytics/capture";
 import type {
@@ -62,6 +68,7 @@ export const FAILURE_CONTEXT_KEYS = [
   "modelId",
   "operation",
   "organizationId",
+  "parameterStoreReason",
   "phase",
   "queue",
   "requestId",
@@ -138,9 +145,14 @@ const resolvePolicy = (
 type ObserveFailureOptions = {
   readonly sink: FailureSink;
   readonly ctx?: FailureContext | undefined;
-  readonly request?: Request | undefined;
   readonly escalation?: "sustained" | undefined;
-};
+} & (
+  | {
+      readonly request: Request;
+      readonly scope: RequestExceptionScope | HandlerExceptionScope;
+    }
+  | { readonly request?: undefined; readonly scope?: ExceptionScope }
+);
 
 const requestFields = (request: Request | undefined): LoggerAttributes => {
   const requestId =
@@ -148,14 +160,24 @@ const requestFields = (request: Request | undefined): LoggerAttributes => {
   return requestId === undefined ? {} : { "request.id": requestId };
 };
 
-const observe = (
-  error: unknown,
-  { sink, ctx, request, escalation }: ObserveFailureOptions,
-): void => {
+const observedStoreRequests = new WeakSet<object>();
+
+const observe = (error: unknown, options: ObserveFailureOptions): void => {
+  const { sink, ctx, request, escalation } = options;
   const evidence = readEvidence(error);
   const grading: FailureGrading = gradeFailure(evidence, sink, {
     requestAborted: request?.signal.aborted,
   });
+  const requestContext = getRequestContext();
+  if (
+    grading.reason === "limiter_store_unavailable" &&
+    requestContext !== undefined
+  ) {
+    if (observedStoreRequests.has(requestContext)) {
+      return;
+    }
+    observedStoreRequests.add(requestContext);
+  }
   const policy = resolvePolicy(sink, grading.grade, escalation);
   const context = acceptFailureContext(ctx);
   const attributes: LoggerAttributes = {
@@ -169,7 +191,7 @@ const observe = (
       : {}),
   };
 
-  if (request !== undefined) {
+  if (request !== undefined || grading.reason === "limiter_store_unavailable") {
     recordRequestFailure({
       grade: grading.grade,
       reason: grading.reason,
@@ -194,11 +216,20 @@ const observe = (
     logger.warn(sink.event, attributes);
   }
   if (policy.capture) {
-    captureObservedError(error, {
+    const capture = {
+      scope: { type: "handler", handlerId: sink.event },
+      fingerprintKey: `observe.${sink.event}`,
       context: context.accepted,
-      request,
       observation: grading,
-    });
+    } as const;
+    const captureOptions =
+      options.request !== undefined
+        ? { ...capture, request: options.request, scope: options.scope }
+        : {
+            ...capture,
+            scope: options.scope ?? capture.scope,
+          };
+    captureObservedError(error, captureOptions);
   }
 };
 
