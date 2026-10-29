@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import type { Page } from "@playwright/test";
 
 import { DEFAULT_CLIPBOARD_GROUP_COLOR } from "../../src/clipboard/clipboard-style";
 import { isClipboardEditorContext } from "../../src/clipboard/clipboard-types";
@@ -21,23 +22,37 @@ const EDITOR_CONTEXT = {
   sourceAppVisual: null,
 } satisfies ClipboardEditorContext;
 
+const openEditor = async (page: Page) => {
+  expect(isClipboardEditorContext(EDITOR_CONTEXT)).toBe(true);
+  await installTauriIpc(page, {
+    windowLabel: "clipboard-editor",
+    unhandled: "resolveUndefined",
+    arg: { editorContext: EDITOR_CONTEXT },
+    handlers: ({ editorContext }) => ({
+      clipboard_get_editor_context: () => structuredClone(editorContext),
+      get_desktop_language: () => "en",
+      registry_get_state: () => ({ status: "disconnected" }),
+    }),
+  });
+  await page.goto("/");
+};
+
+test("an opened clip takes typing in its text without a click", async ({
+  page,
+}) => {
+  await openEditor(page);
+  const text = page.getByRole("textbox", { name: "Clip text" });
+  await expect(text).toBeFocused();
+  await page.keyboard.type("Draft: ");
+  await expect(text).toHaveText("Draft: Quarterly memo body");
+});
+
 for (const colorScheme of ["light", "dark"] as const) {
   test(`the clip name field shows its caret and focus state (${colorScheme})`, async ({
     page,
   }) => {
-    expect(isClipboardEditorContext(EDITOR_CONTEXT)).toBe(true);
     await page.emulateMedia({ colorScheme });
-    await installTauriIpc(page, {
-      windowLabel: "clipboard-editor",
-      unhandled: "resolveUndefined",
-      arg: { editorContext: EDITOR_CONTEXT },
-      handlers: ({ editorContext }) => ({
-        clipboard_get_editor_context: () => structuredClone(editorContext),
-        get_desktop_language: () => "en",
-        registry_get_state: () => ({ status: "disconnected" }),
-      }),
-    });
-    await page.goto("/");
+    await openEditor(page);
 
     const name = page.locator("[data-clipboard-editor-name]");
     await expect(name).toHaveValue("Quarterly memo");
