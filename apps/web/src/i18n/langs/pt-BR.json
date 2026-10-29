@@ -5129,6 +5129,16 @@
       "preferredNamePlaceholder": "Seu nome",
       "profileDescription": "Gerencie suas preferências pessoais",
       "sendOtpCode": "Enviar código de verificação",
+      "signInMethods": {
+        "confirmDescription": "Digite um novo código enviado para seu e-mail para desconectar este método de login.",
+        "confirmTitle": "Desconectar {provider}?",
+        "description": "Conecte contas que usam o mesmo endereço de e-mail verificado.",
+        "emailCode": "Código por e-mail",
+        "emailCodeDescription": "Você sempre pode entrar com um código enviado para seu e-mail.",
+        "lastMethod": "Conecte outra conta antes de desconectar esta.",
+        "title": "Métodos de login",
+        "unavailable": "O envio de e-mails precisa estar configurado para desconectar métodos de login."
+      },
       "timezone": "Fuso horário",
       "timezoneDescription": "Usado para carimbos de data/hora em notificações e e-mails",
       "timezoneSaved": "Fuso horário atualizado",

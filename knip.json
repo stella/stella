@@ -160,6 +160,9 @@
     "packages/mojibake": {
       "entry": ["src/**/*.test.ts", "scripts/*.ts"]
     },
+    "packages/parameter-store": {
+      "entry": ["src/read-parameter.ts", "src/**/*.test.ts"]
+    },
     "packages/portable-path": {
       "entry": ["src/**/*.test.ts"]
     },

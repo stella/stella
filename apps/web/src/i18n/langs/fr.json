@@ -5129,6 +5129,16 @@
       "preferredNamePlaceholder": "Votre nom",
       "profileDescription": "Gérez vos préférences personnelles",
       "sendOtpCode": "Envoyer le code de vérification",
+      "signInMethods": {
+        "confirmDescription": "Saisissez un nouveau code envoyé à votre adresse e-mail pour dissocier cette méthode de connexion.",
+        "confirmTitle": "Dissocier {provider} ?",
+        "description": "Associez les comptes qui utilisent la même adresse e-mail vérifiée.",
+        "emailCode": "Code par e-mail",
+        "emailCodeDescription": "Vous pouvez toujours vous connecter avec un code envoyé à votre adresse e-mail.",
+        "lastMethod": "Associez un autre compte avant de dissocier celui-ci.",
+        "title": "Méthodes de connexion",
+        "unavailable": "L’envoi d’e-mails doit être configuré pour dissocier des méthodes de connexion."
+      },
       "timezone": "Fuseau horaire",
       "timezoneDescription": "Utilisé pour les horodatages dans les notifications et les e-mails",
       "timezoneSaved": "Fuseau horaire mis à jour",
