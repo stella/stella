@@ -1,6 +1,7 @@
 import { PGlite } from "@electric-sql/pglite";
 import { expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
+import { getViewConfig } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { publishedCaseLawDecisions } from "@/api/db/schema";
@@ -17,10 +18,23 @@ test("stored decision versions retain microseconds across payload reads and same
   const client = await PGlite.create();
   const db = drizzle({ client });
   try {
-    await db.execute(sql`CREATE TABLE case_law_published_decisions (
-      id uuid PRIMARY KEY, updated_at timestamptz NOT NULL,
-      content_hash text, ast_s3_key text, fulltext text
-    )`);
+    const columns = [
+      publishedCaseLawDecisions.id,
+      publishedCaseLawDecisions.updatedAt,
+      publishedCaseLawDecisions.contentHash,
+      publishedCaseLawDecisions.astS3Key,
+      publishedCaseLawDecisions.fulltext,
+    ];
+    const definition = sql.join(
+      columns.map(
+        (column) =>
+          sql`${sql.identifier(column.name)} ${sql.raw(column.getSQLType())}`,
+      ),
+      sql`, `,
+    );
+    await db.execute(
+      sql`CREATE TABLE ${sql.identifier(getViewConfig(publishedCaseLawDecisions).name)} (${definition})`,
+    );
     const id = createSafeId<"caseLawDecision">();
     await db.execute(sql`INSERT INTO case_law_published_decisions
       (id, updated_at, fulltext) VALUES
