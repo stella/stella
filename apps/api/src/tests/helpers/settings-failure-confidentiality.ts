@@ -16,6 +16,7 @@ type SettingsFailureOutputs = {
   analyticsEvents: readonly ServerAnalyticsCaptureParams[];
   captureEntries: readonly unknown[];
   developmentEntries: readonly unknown[];
+  developmentLogInputs?: readonly unknown[];
   groupIdentifies: readonly OrganizationGroupIdentifyParams[];
   logRecords: readonly LogRecord[];
   returned: unknown;
@@ -104,9 +105,29 @@ const errorPayload = (error: Error): Record<string, unknown> =>
       .map((key) => [key, Reflect.get(error, key)]),
   );
 
-const REPOSITORY_SOURCE = /(?:^|\/)(?:apps|packages)\/[A-Za-z0-9_./-]+\.ts$/u;
-const REPOSITORY_FRAME =
-  /(?:^|\/)(?:apps|packages)\/[A-Za-z0-9_./-]+\.ts:\d+(?::\d+)?/u;
+const REPOSITORY_PATH = "(?:apps|packages)/[A-Za-z0-9_./-]+\\.ts";
+const REPOSITORY_ROOT = import.meta.dir.replace(
+  /apps\/api\/src\/tests\/helpers$/u,
+  "",
+);
+const escapeRegExp = (value: string): string =>
+  value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+const REPOSITORY_SOURCE = new RegExp(
+  `^${escapeRegExp(REPOSITORY_ROOT)}${REPOSITORY_PATH}$`,
+  "u",
+);
+const REPOSITORY_FRAME = new RegExp(
+  `^(?:${escapeRegExp(REPOSITORY_ROOT)})?${REPOSITORY_PATH}:\\d+:\\d+$`,
+  "u",
+);
+const STACK_FUNCTION = "(?:async )?(?:[A-Za-z_$][A-Za-z0-9_$.<>]*|<anonymous>)";
+const BETTER_RESULT_SOURCE = new URL(import.meta.resolve("better-result"))
+  .pathname;
+const STACK_LOCATION = `(?:${REPOSITORY_SOURCE.source.slice(1, -1)}|${escapeRegExp(BETTER_RESULT_SOURCE)}):\\d+:\\d+`;
+const STACK_FRAME = new RegExp(
+  `^ {4}at ${STACK_FUNCTION} (?:\\(${STACK_LOCATION}\\)|${STACK_LOCATION})$`,
+  "u",
+);
 
 const reflectedValue = (object: object, key: PropertyKey): unknown =>
   Reflect.get(object, key);
@@ -116,8 +137,17 @@ const assertSourceLocations = (error: Error): void => {
   const stack = reflectedValue(error, "stack");
   expect(sourceURL).toBeString();
   expect(sourceURL).toMatch(REPOSITORY_SOURCE);
-  expect(stack).toBeString();
-  expect(stack).toMatch(REPOSITORY_FRAME);
+  if (typeof stack !== "string") {
+    panic("Expected an error stack");
+  }
+  const lines = stack.split("\n");
+  const tag = reflectedValue(error, "_tag");
+  const stackName = typeof tag === "string" ? tag : error.name;
+  expect(lines.at(0)).toBe(`${stackName}: ${error.message}`);
+  expect(lines.length).toBeGreaterThan(1);
+  for (const frame of lines.slice(1)) {
+    expect(frame === "    at unknown" || STACK_FRAME.test(frame)).toBe(true);
+  }
   for (const key of ["line", "column", "originalLine", "originalColumn"]) {
     const value = reflectedValue(error, key);
     expect(
@@ -128,9 +158,11 @@ const assertSourceLocations = (error: Error): void => {
 };
 
 const normalizeFrame = (value: unknown): unknown => {
-  expect(value).toBeString();
+  if (typeof value !== "string") {
+    panic("Expected a source frame");
+  }
   expect(value).toMatch(REPOSITORY_FRAME);
-  return "[repository-frame]";
+  return value.replace(/:\d+:\d+$/u, ":[line]:[column]");
 };
 
 const ownRecord = (value: unknown): Record<string, unknown> => {
@@ -151,9 +183,22 @@ const normalizedDevProjection = (error: Error): unknown => {
   const projection = serializeDevError(error);
   expect(projection).toBeObject();
   const record = ownRecord(projection);
-  normalizeFrame(record["stack"]);
   expect(record["sourceURL"]).toMatch(REPOSITORY_SOURCE);
-  return { ...record, sourceURL: "[repository-source]", stack: "[stack]" };
+  const stackValue = record["stack"];
+  if (typeof stackValue !== "string") {
+    panic("Expected a serialized error stack");
+  }
+  const stack = stackValue.split("\n");
+  for (const frame of stack.slice(1)) {
+    expect(frame === "    at unknown" || STACK_FRAME.test(frame)).toBe(true);
+  }
+  return {
+    ...record,
+    stack: [
+      stack.at(0),
+      stack.at(1)?.replace(/:\d+:\d+(\)?)$/u, ":[line]:[column]$1"),
+    ].join("\n"),
+  };
 };
 
 const assertReturnedAllowlist = (returned: unknown): void => {
@@ -246,6 +291,23 @@ const assertReturnedAllowlist = (returned: unknown): void => {
   );
 };
 
+/** Assert a classified decryption failure before a reader replaces it. */
+export const assertClassifiedSettingsFailure = (
+  error: unknown,
+  reason: OrgAIConfigReadFailure,
+): void => {
+  if (!(error instanceof Error)) {
+    panic("Expected a classified settings Error");
+  }
+  assertSourceLocations(error);
+  expect(errorPayload(error)).toStrictEqual({
+    _tag: "OrgAIConfigReadError",
+    message: "Decrypted organization AI configuration is unreadable",
+    name: "OrgAIConfigReadError",
+    reason,
+  });
+};
+
 /** Assert the complete observable output of one unreadable-settings path. */
 export const assertSettingsFailureConfidential = ({
   reason,
@@ -302,13 +364,14 @@ export const assertSettingsFailureConfidential = ({
         "error.status_code": 503,
         "error.class": "HandlerError",
         "error.code": "ai_config_stored_unreadable",
-        "error.frame": "[repository-frame]",
+        "error.frame": `${REPOSITORY_ROOT}apps/api/src/lib/ai-config-response.ts:[line]:[column]`,
         "failure.grade": "defect",
         "failure.reason": "tagged_failure",
         "failure.shadow": "true",
       },
     });
     expect(outputs.developmentEntries).toHaveLength(1);
+    expect(outputs.developmentLogInputs).toHaveLength(1);
     const event = outputs.analyticsEvents.at(0);
     expect(outputs.analyticsEvents).toHaveLength(1);
     if (event?.event !== "$exception") {
@@ -334,7 +397,7 @@ export const assertSettingsFailureConfidential = ({
         $exception_list: [
           { ...exceptionEntry, value: "[classified-exception]" },
         ],
-        "error.frame": "[repository-frame]",
+        "error.frame": "apps/api/src/lib/ai-config-response.ts:[line]:[column]",
       },
     };
     expect(normalizedEvent).toEqual({
@@ -356,7 +419,7 @@ export const assertSettingsFailureConfidential = ({
         $exception_type: "HandlerError",
         "error.class": "HandlerError",
         "error.code": "ai_config_stored_unreadable",
-        "error.frame": "[repository-frame]",
+        "error.frame": "apps/api/src/lib/ai-config-response.ts:[line]:[column]",
         "failure.grade": "defect",
         "failure.reason": "tagged_failure",
         "failure.shadow": "true",
@@ -420,6 +483,17 @@ export const assertSettingsFailureConfidential = ({
     expect(normalizedDevProjection(developmentError)).toStrictEqual(
       normalizedDevProjection(canonicalDevelopmentError),
     );
+    const devLogCall = arrayValue(outputs.developmentLogInputs?.at(0));
+    expect(devLogCall).toHaveLength(2);
+    const devLogError = devLogCall.at(0);
+    if (!(devLogError instanceof Error)) {
+      panic("Expected logServerDevError to receive an Error");
+    }
+    assertSourceLocations(devLogError);
+    expect(errorPayload(devLogError)).toStrictEqual(
+      errorPayload(canonicalDevelopmentError),
+    );
+    expect(devLogCall.at(1)).toEqual(properties);
   }
   if (isDirectFailure) {
     expect(outputs.captureEntries).toEqual([]);

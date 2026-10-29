@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 import { beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
+import { parseSync } from "oxc-parser";
 
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
@@ -17,13 +18,17 @@ import {
   decryptOrgAIConfigRow,
   resolvePromptCachingPreference,
 } from "@/api/lib/ai-config-loader-core";
+import * as aiConfigLoaderCore from "@/api/lib/ai-config-loader-core";
 import * as captureModule from "@/api/lib/analytics/capture";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   installRecordingAnalytics,
   installRecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
-import { assertSettingsFailureConfidential } from "@/api/tests/helpers/settings-failure-confidentiality";
+import {
+  assertClassifiedSettingsFailure,
+  assertSettingsFailureConfidential,
+} from "@/api/tests/helpers/settings-failure-confidentiality";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 beforeEach(() => {
@@ -120,6 +125,20 @@ describe("loadOrgAIConfig", () => {
         envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY =
           reason === "missing-key" ? undefined : key;
         for (const [name, load] of Object.entries(loaders)) {
+          const classified: unknown[] = [];
+          const decryptRow = aiConfigLoaderCore.decryptOrgAIConfigRow;
+          const decrypt = spyOn(
+            aiConfigLoaderCore,
+            "decryptOrgAIConfigRow",
+          ).mockImplementation(
+            async (...args: Parameters<typeof decryptRow>) => {
+              const result = await decryptRow(...args);
+              if (result.status === "corrupt") {
+                classified.push(result.error);
+              }
+              return result;
+            },
+          );
           const analytics = installRecordingAnalytics();
           const logs = installRecordingLogger();
           const capture = spyOn(captureModule, "captureObservedError");
@@ -152,7 +171,10 @@ describe("loadOrgAIConfig", () => {
                 returned,
               },
             });
+            expect(classified).toHaveLength(1);
+            assertClassifiedSettingsFailure(classified.at(0), reason);
           } finally {
+            decrypt.mockRestore();
             devErrors.mockRestore();
             capture.mockRestore();
             logs.restore();
@@ -295,15 +317,62 @@ describe("loadOrgAIConfig", () => {
       if (file.endsWith(".test.ts") || file.includes("/tests/")) {
         continue;
       }
-      const source = await Bun.file(file).text();
-      const callsCryptoBoundary =
-        file !== "src/lib/ai-config-crypto.ts" &&
-        /\bdecryptAIConfig\s*\(/u.test(source);
-      const callsRowBoundary =
-        file !== "src/lib/ai-config-loader-core.ts" &&
-        /\bdecryptOrgAIConfigRow\s*\(/u.test(source);
-      if (callsCryptoBoundary || callsRowBoundary) {
-        boundaryCallers.push(file);
+      const program = parseSync(file, await Bun.file(file).text()).program;
+      const boundaryBindings = new Set<string>();
+      for (const statement of program.body) {
+        if (statement.type !== "ImportDeclaration") {
+          continue;
+        }
+        for (const specifier of statement.specifiers) {
+          let importedName: string | undefined;
+          if (specifier.type === "ImportSpecifier") {
+            importedName =
+              specifier.imported.type === "Identifier"
+                ? specifier.imported.name
+                : specifier.imported.value;
+          }
+          if (
+            specifier.type === "ImportSpecifier" &&
+            (importedName === "decryptAIConfig" ||
+              importedName === "decryptOrgAIConfigRow")
+          ) {
+            boundaryBindings.add(specifier.local.name);
+          }
+        }
+      }
+      const visit = (node: unknown): void => {
+        if (typeof node !== "object" || node === null) {
+          return;
+        }
+        if (
+          "type" in node &&
+          node.type === "CallExpression" &&
+          "callee" in node &&
+          typeof node.callee === "object" &&
+          node.callee !== null &&
+          "type" in node.callee &&
+          node.callee.type === "Identifier" &&
+          "name" in node.callee &&
+          typeof node.callee.name === "string" &&
+          boundaryBindings.has(node.callee.name)
+        ) {
+          boundaryCallers.push(file);
+        }
+        for (const value of Object.values(node)) {
+          if (Array.isArray(value)) {
+            for (const child of value) {
+              visit(child);
+            }
+          } else {
+            visit(value);
+          }
+        }
+      };
+      visit(program);
+      if (new Set(boundaryCallers).size !== boundaryCallers.length) {
+        throw new Error(
+          "Each settings reader must have one exercised decryption boundary",
+        );
       }
     }
     expect(boundaryCallers.toSorted()).toEqual([
