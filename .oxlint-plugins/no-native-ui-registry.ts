@@ -448,6 +448,7 @@ export const NO_NATIVE_UI_REACT_NATIVE = {
     "the web's navigation chrome; the app navigates with the platform's tab bar",
   ),
   avatar: webOnly("the app shows no user avatars yet"),
+  badge: webOnly("a web status pill; the app shows no badges yet"),
   "bidi-text": webOnly(
     "React Native lays out bidirectional text through the platform; there is no <bdi> to wrap",
   ),
@@ -608,6 +609,9 @@ export const NO_NATIVE_UI_REACT_NATIVE = {
   ),
   tooltip: webOnly(
     "a phone has no hover; a control's name is its accessibility label",
+  ),
+  "truncated-text": webOnly(
+    "reveals the full text in a hover tooltip; a phone has no hover and caps lines with Text's numberOfLines",
   ),
   "view-toolbar": webOnly(
     "the web's view filter row; the app filters from the header",
