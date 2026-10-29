@@ -1,7 +1,9 @@
 import { panic } from "better-result";
-import type { ExpoConfig } from "expo/config";
+import type { ConfigContext, ExpoConfig } from "expo/config";
 import { IOSConfig, withXcodeProject } from "expo/config-plugins";
 import type { ConfigPlugin } from "expo/config-plugins";
+import { existsSync } from "node:fs";
+import path from "node:path";
 
 // Evaluated by Node through Expo's config loader, which cannot follow a
 // workspace package's extensionless TypeScript imports; so this file imports
@@ -78,18 +80,53 @@ const withReleaseSigning: ConfigPlugin<ReleaseSigning> = (
     return mod;
   });
 
+/** stella's API, whose update route relays the signed updates every build runs. */
+const UPDATES_ORIGIN = "https://api.stll.app";
+
+/**
+ * The certificate every update must be signed against. Public; its private
+ * key exists only in the publish workflow's secrets. Without it a build
+ * ships with updates off rather than accepting unsigned ones.
+ */
+export const UPDATE_SIGNING_CERTIFICATE = "./certs/mobile-update-signing.pem";
+
+const updatesFor = (
+  variant: Variant,
+  signingCertificatePresent: boolean,
+): NonNullable<ExpoConfig["updates"]> =>
+  variant === "development" || !signingCertificatePresent
+    ? { enabled: false }
+    : {
+        enabled: true,
+        url: `${UPDATES_ORIGIN}/v1/mobile/updates/${variant}`,
+        checkAutomatically: "ON_LOAD",
+        // Launch on the bundle at hand; a downloaded update runs next launch.
+        fallbackToCacheTimeout: 0,
+        codeSigningCertificate: UPDATE_SIGNING_CERTIFICATE,
+        codeSigningMetadata: { keyid: "main", alg: "rsa-v1_5-sha256" },
+      };
+
+type AppConfigInputs = {
+  buildNumber: number;
+  /** The native fingerprint (`scripts/fingerprint.ts`); updates target it. */
+  runtimeVersion: string;
+  signingCertificatePresent: boolean;
+  variant: Variant;
+};
+
 const appConfigBase = ({
   buildNumber,
+  runtimeVersion,
+  signingCertificatePresent,
   variant,
-}: {
-  buildNumber: number;
-  variant: Variant;
-}): ExpoConfig => ({
+}: AppConfigInputs): ExpoConfig => ({
   name: VARIANT_CONFIG[variant].name,
   slug: "stella",
   version: APP_VERSION,
   orientation: "default",
   scheme: VARIANT_CONFIG[variant].scheme,
+  // The web's favicon edge to edge (`scripts/generate-mobile-app-icon.ts`).
+  icon: "./assets/icon.png",
   userInterfaceStyle: "automatic",
   ios: {
     bundleIdentifier: VARIANT_CONFIG[variant].identifier,
@@ -98,6 +135,12 @@ const appConfigBase = ({
     // The app's only cryptography is HTTPS and the platform keychain, which
     // are exempt; declaring it spares every TestFlight upload the question.
     config: { usesNonExemptEncryption: false },
+    infoPlist: {
+      // The document camera (modules/document-scanner) scans paper into a
+      // matter's documents.
+      NSCameraUsageDescription:
+        "stella scans paper documents with the camera to add them to a matter.",
+    },
   },
   android: {
     package: VARIANT_CONFIG[variant].identifier,
@@ -108,9 +151,24 @@ const appConfigBase = ({
     bundler: "metro",
     output: "static",
   },
-  // No update channel exists yet; every build runs the bundle it shipped.
-  updates: { enabled: false },
-  plugins: ["expo-router"],
+  runtimeVersion,
+  updates: updatesFor(variant, signingCertificatePresent),
+  plugins: [
+    "expo-router",
+    // DM Sans, the web's typeface, embedded in the build.
+    [
+      "expo-font",
+      {
+        fonts: [
+          "@expo-google-fonts/dm-sans/300Light/DMSans_300Light.ttf",
+          "@expo-google-fonts/dm-sans/400Regular/DMSans_400Regular.ttf",
+          "@expo-google-fonts/dm-sans/500Medium/DMSans_500Medium.ttf",
+          "@expo-google-fonts/dm-sans/600SemiBold/DMSans_600SemiBold.ttf",
+          "@expo-google-fonts/dm-sans/700Bold/DMSans_700Bold.ttf",
+        ],
+      },
+    ],
+  ],
   experiments: {
     typedRoutes: true,
     reactCompiler: true,
@@ -119,15 +177,12 @@ const appConfigBase = ({
 });
 
 export const appConfigFor = ({
-  buildNumber,
   signing,
-  variant,
-}: {
-  buildNumber: number;
+  ...inputs
+}: AppConfigInputs & {
   signing?: ReleaseSigning | undefined;
-  variant: Variant;
 }): ExpoConfig => {
-  const config = appConfigBase({ buildNumber, variant });
+  const config = appConfigBase(inputs);
   return signing === undefined ? config : withReleaseSigning(config, signing);
 };
 
@@ -138,7 +193,7 @@ const readVariant = (value: string | undefined): Variant =>
     : (VARIANTS.find((variant) => variant === value) ??
       panic(`APP_VARIANT must be one of ${VARIANTS.join(", ")}`));
 
-/** `MOBILE_BUILD_NUMBER`: the store build number; the release workflow passes its run number. */
+/** `MOBILE_BUILD_NUMBER`: the store build number; the release workflow passes its run number plus 100. */
 const readBuildNumber = (value: string | undefined): number => {
   if (value === undefined) {
     return 1;
@@ -168,12 +223,18 @@ const readEnv = (name: string): string | undefined => {
   return typeof value === "string" ? value : undefined;
 };
 
-const appConfig = (): ExpoConfig =>
+const appConfig = ({ projectRoot }: ConfigContext): ExpoConfig =>
   appConfigFor({
     buildNumber: readBuildNumber(readEnv("MOBILE_BUILD_NUMBER")),
+    // The release workflows stamp the fingerprint. A build made without one
+    // names no published runtime, so no update ever reaches it.
+    runtimeVersion: readEnv("MOBILE_RUNTIME_VERSION") ?? "unpublished",
     signing: readSigning(
       readEnv("APPLE_TEAM_ID"),
       readEnv("MOBILE_PROFILE_UUID"),
+    ),
+    signingCertificatePresent: existsSync(
+      path.join(projectRoot, UPDATE_SIGNING_CERTIFICATE),
     ),
     variant: readVariant(readEnv("APP_VARIANT")),
   });

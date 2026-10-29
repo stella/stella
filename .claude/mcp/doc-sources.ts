@@ -146,12 +146,15 @@ export const DOC_SOURCES = {
   },
   Expo: {
     dependencies: [
+      "@expo-google-fonts/dm-sans",
       "@expo/fingerprint",
+      "@expo/vector-icons",
       "expo",
       "expo-constants",
       "expo-crypto",
       "expo-dev-client",
       "expo-doctor",
+      "expo-font",
       "expo-linking",
       "expo-router",
       "expo-secure-store",
@@ -161,6 +164,7 @@ export const DOC_SOURCES = {
       "expo-web-browser",
       "react-native-safe-area-context",
       "react-native-screens",
+      "react-native-svg",
     ],
     url: "https://docs.expo.dev/llms.txt",
   },
@@ -182,6 +186,7 @@ export const DOC_SOURCES = {
       "@aws-sdk/client-cloudwatch",
       "@aws-sdk/client-lambda",
       "@aws-sdk/client-s3",
+      "@aws-sdk/client-ssm",
       "@aws-sdk/client-sesv2",
       "@aws-sdk/client-sqs",
       "@aws-sdk/client-sts",
@@ -209,7 +214,7 @@ export const DOC_SOURCES = {
     url: "https://turborepo.dev/llms.txt",
   },
   PostHog: {
-    dependencies: ["posthog-js", "posthog-node"],
+    dependencies: ["posthog-js"],
     url: "https://posthog.com/llms.txt",
   },
   Zustand: {
@@ -255,7 +260,7 @@ export const DOC_SOURCES = {
     url: "https://fontsource.org/llms.txt",
   },
   Lucide: {
-    dependencies: ["lucide-react"],
+    dependencies: ["lucide-react", "lucide-react-native", "lucide-static"],
     url: "https://lucide.dev/llms.txt",
   },
   Tsdown: {
@@ -274,15 +279,6 @@ export const DOC_SOURCES = {
     dependencies: ["oxlint-tailwindcss"],
     url: "https://oxlint-tailwindcss.pages.dev/llms.txt",
   },
-  OpenTelemetry: {
-    dependencies: [
-      "@opentelemetry/api-logs",
-      "@opentelemetry/exporter-logs-otlp-http",
-      "@opentelemetry/resources",
-      "@opentelemetry/sdk-logs",
-    ],
-    url: "https://opentelemetry.io/llms.txt",
-  },
   GeminiAPI: {
     dependencies: ["@google/genai"],
     url: "https://ai.google.dev/gemini-api/docs/llms.txt",
@@ -294,6 +290,14 @@ export const DOC_SOURCES = {
   Lefthook: {
     dependencies: ["lefthook"],
     url: "https://lefthook.dev/llms.txt",
+  },
+  AgentDevice: {
+    dependencies: ["agent-device"],
+    url: "https://agent-device.dev/llms.txt",
+  },
+  Uniwind: {
+    dependencies: ["uniwind"],
+    url: "https://docs.uniwind.dev/llms.txt",
   },
 } as const satisfies Record<string, DocSource>;
 
@@ -609,6 +613,13 @@ const PROBED_WITHOUT_LLMS_TXT = [
     "scslre",
     ["https://raw.githubusercontent.com/RunDevelopment/scslre/HEAD/llms.txt"],
   ],
+  [
+    "sharp",
+    [
+      "https://sharp.pixelplumbing.com/llms.txt",
+      "https://raw.githubusercontent.com/lovell/sharp/HEAD/llms.txt",
+    ],
+  ],
   ["sherif", ["https://raw.githubusercontent.com/QuiiBz/sherif/HEAD/llms.txt"]],
   [
     "slimdom",
@@ -914,14 +925,6 @@ export const DOC_SOURCE_EXCLUSIONS = PROBED_WITHOUT_LLMS_TXT.map(
     dependency: "ajv-formats",
     explanation:
       "https://ajv.js.org/llms.txt returns no llms.txt. The Ajv project publishes no llms.txt. Use the format list in the README at https://github.com/ajv-validator/ajv-formats directly.",
-    expiresAt: "2026-11-25T00:00:00.000Z",
-    reason: "no-llms-txt",
-  },
-  {
-    checkedAt: "2026-10-26T00:00:00.000Z",
-    dependency: "fast-xml-parser",
-    explanation:
-      "The project publishes no llms.txt (https://naturalintelligence.github.io/fast-xml-parser/llms.txt returns 404). Use the docs at https://github.com/NaturalIntelligence/fast-xml-parser/tree/master/docs and the typed API in its package (src/fxp.d.ts) directly.",
     expiresAt: "2026-11-25T00:00:00.000Z",
     reason: "no-llms-txt",
   },

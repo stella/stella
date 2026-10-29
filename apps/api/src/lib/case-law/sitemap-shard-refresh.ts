@@ -25,6 +25,7 @@ import {
   decisionMonthSqlFor,
   decisionYearSqlFor,
   SITEMAP_ALL_BUCKET,
+  sitemapDocumentRepresentativeFor,
 } from "@/api/lib/case-law/sitemap-shard-sql";
 import {
   lockCaseLawRemovalSnapshots,
@@ -160,6 +161,8 @@ const afterCursorSql = (
  * the publication gate is its partial predicate, so the page is an index-only
  * range read that stops at the limit. A page with no rows ends the phase; a
  * page whose rows are all withheld still returns its cursor, with no counts.
+ * The bounded page then probes document identities to count only their one
+ * global language representative; the cursor still advances over every row.
  * Exported for the plan test, which holds it to that index.
  */
 export const sitemapRefreshPageSql = ({
@@ -218,8 +221,10 @@ export const sitemapRefreshPageSql = ({
       count(*)::int AS total,
       (extract(epoch FROM max(page.updated_at)) * 1000)::float8 AS last_modified_ms
     FROM page
+    INNER JOIN ${caseLawDecisions} ON ${caseLawDecisions.id} = page.id
     INNER JOIN ${caseLawSources} ON ${caseLawSources.id} = page.source_id
     WHERE ${redistributableCaseLawSource}
+      AND ${sitemapDocumentRepresentativeFor(caseLawDecisions)}
     GROUP BY page.year, page.month, page.bucket
   ) AS counts ON true
 `;
