@@ -20,17 +20,12 @@ import {
   parseReasonedLedger,
   runLedgerMembershipGuard,
 } from "../../../../../scripts/ledger-membership.ts";
-import pendingLedger from "./read-budgets-pending.json";
 import unmeasuredLedger from "./read-budgets-unmeasured.json";
 
 const repoRoot = path.resolve(import.meta.dir, "../../../../..");
 const LEDGER = "apps/api/src/lib/db/read-budgets-unmeasured.json";
-const PENDING_LEDGER = "apps/api/src/lib/db/read-budgets-pending.json";
 const unmeasured = new Set(
   parseReasonedLedger(JSON.stringify(unmeasuredLedger), LEDGER),
-);
-const pending = new Set(
-  parseReasonedLedger(JSON.stringify(pendingLedger), "read-budgets-pending"),
 );
 
 type IsAssignable<T, U> = [T] extends [U] ? true : false;
@@ -51,15 +46,6 @@ describe("read budget declarations", () => {
     const governed = new Set<string>(Object.values(SCHEDULER_BACKFILL_IDS));
     const violations = DECLARED_SCHEDULER_JOBS.flatMap((job) => {
       const listed = unmeasured.has(`job:${job.id}`);
-      const pendingBudget = pending.has(`job:${job.id}`);
-      if (job.reads === "pending") {
-        return pendingBudget
-          ? []
-          : [`${job.id}: pending reads need a pending-ledger entry`];
-      }
-      if (pendingBudget) {
-        return [`${job.id}: has a read budget, so remove its pending entry`];
-      }
       if (job.reads === "unmeasured") {
         return listed
           ? []
@@ -138,9 +124,7 @@ describe("read budget declarations", () => {
         DECLARED_SCHEDULER_JOBS.find((job) => job.id === id)?.reads,
         id,
       ).toSatisfy(
-        (reads) =>
-          reads === "pending" ||
-          (typeof reads === "object" && "governance" in reads),
+        (reads) => typeof reads === "object" && "governance" in reads,
       );
     }
   });
@@ -175,20 +159,6 @@ describe("read budget declarations", () => {
         parseLedger: parseReasonedLedger,
         label: "read-budgets-unmeasured",
         remediation: "declare a read budget and measure it instead",
-        args: ["--base", ledgerMergeBase({ repoRoot, baseRef: "origin/main" })],
-      }),
-    ).toBe(0);
-  });
-
-  test("the pending ledger contains only the inherited coverage job and only shrinks", () => {
-    expect([...pending]).toEqual([`job:${SCHEDULER_BACKFILL_IDS.coverage}`]);
-    expect(
-      runLedgerMembershipGuard({
-        ledgerRel: PENDING_LEDGER,
-        repoRoot,
-        parseLedger: parseReasonedLedger,
-        label: "read-budgets-pending",
-        remediation: "declare and measure a read budget instead",
         args: ["--base", ledgerMergeBase({ repoRoot, baseRef: "origin/main" })],
       }),
     ).toBe(0);

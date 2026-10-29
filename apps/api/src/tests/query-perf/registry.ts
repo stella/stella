@@ -8,6 +8,7 @@ import type {
 } from "@/api/lib/db/read-budgets";
 import type { LegislationReadTransaction } from "@/api/lib/legislation-public-read-db";
 import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
+import { REFRESH_CASE_LAW_COVERAGE_TASK } from "@/api/lib/scheduler/tasks/case-law-coverage-refresh";
 import { REPORT_CASE_LAW_FRESHNESS_TASK } from "@/api/lib/scheduler/tasks/case-law-freshness-report";
 import { BACKFILL_CASE_LAW_PROVISION_STATE_TASK } from "@/api/lib/scheduler/tasks/case-law-provision-state-backfill";
 import { BACKFILL_LEGISLATION_EXPRESSION_IDS_TASK } from "@/api/lib/scheduler/tasks/legislation-expression-id-backfill";
@@ -78,6 +79,10 @@ type ScheduledJobMeasurement = {
 export const SCHEDULED_JOB_MEASUREMENTS: Readonly<
   Record<string, ScheduledJobMeasurement>
 > = {
+  [SCHEDULER_BACKFILL_IDS.coverage]: {
+    task: REFRESH_CASE_LAW_COVERAGE_TASK,
+    scenarios: [CASE_LAW_SCENARIOS.quiet],
+  },
   [SCHEDULER_BACKFILL_IDS.provisionState]: {
     task: BACKFILL_CASE_LAW_PROVISION_STATE_TASK,
     scenarios: [CASE_LAW_SCENARIOS.quiet],
@@ -98,7 +103,6 @@ type DeclaredJobReads = {
   task: string;
   reads:
     | { budget: ScheduledJobReadBudgetId; governance?: "load-governed" }
-    | "pending"
     | "unmeasured";
 };
 
@@ -137,6 +141,7 @@ export const scheduledJobMeasurementViolations = (
 
 /** Which profile measures each budget; every budget has exactly one. */
 export const READ_BUDGET_PROFILES = {
+  "scheduled.caseLaw.refreshCoverage": "corpus",
   "scheduled.caseLaw.backfillProvisionState": "corpus",
   "scheduled.caseLaw.reportFreshness": "corpus",
   "scheduled.legislation.backfillExpressionIds": "corpus",

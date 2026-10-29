@@ -1,6 +1,0 @@
-[
-  {
-    "id": "job:caseLaw.refreshCoverage.fiveMinute",
-    "reason": "The governed coverage refresh receives its measured read budget with its dedicated query-perf fixture."
-  }
-]

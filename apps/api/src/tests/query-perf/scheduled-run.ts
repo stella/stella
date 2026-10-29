@@ -45,6 +45,7 @@ const TRANSACTION_KEYWORDS: ReadonlySet<string> = new Set([
   "alter",
   "begin",
   "commit",
+  "lock",
   "rollback",
   "savepoint",
 ]);
@@ -145,11 +146,13 @@ export const measureScheduledJobRun = async ({
           }),
         ).get(job.task) ??
         panic(`No registered task ${job.task} for ${jobId}`));
+  const runId = Bun.randomUUIDv7();
   const outcome = await task(
     asTestRaw<SchedulerTaskContext>({
       db,
       job: { id: job.id, task: job.task },
       payload: null,
+      runId,
       signal: new AbortController().signal,
       scheduleContinuation: noopTask,
       logger: {
@@ -163,6 +166,9 @@ export const measureScheduledJobRun = async ({
   if (outcome !== undefined && !Result.isOk(outcome)) {
     return panic(`${jobId} failed on the fixture: ${outcome.error.message}`);
   }
+  await database.execute(
+    sql`DELETE FROM system_audit_runs WHERE subject = ${runId}`,
+  );
   const reads = captured.filter(({ text }) => {
     const keyword = leadingKeyword(text);
     if (SESSION_KEYWORDS.has(keyword)) {

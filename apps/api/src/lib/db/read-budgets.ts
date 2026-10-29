@@ -31,6 +31,12 @@ type ReadBudget = {
 };
 
 export const READ_BUDGETS = {
+  "scheduled.caseLaw.refreshCoverage": {
+    surface: "scheduled-job",
+    pages: 150,
+    reason:
+      "A governed coverage refresh reads the source policy, computes the bounded coverage snapshot, and writes its summary and audit record. The production-shape corpus fixture measures 89 pages; 150 pages leaves more than 50% headroom for production-height indexes.",
+  },
   "scheduled.caseLaw.backfillProvisionState": {
     surface: "scheduled-job",
     pages: 13_200,
@@ -95,8 +101,6 @@ export const UNGOVERNED_SCHEDULED_JOB_PAGE_CEILING = 20_000;
  *   at most the budget, and the same pages at twice the corpus size.
  * - `{ budget, governance: "load-governed" }`: every batch runs under the
  *   shared load governor and the whole run also stays within its budget.
- * - `"pending"`: the one pre-budget governed job in the shrink-only pending
- *   ledger. New jobs cannot use this state.
  * - `"unmeasured"`: a job registered before read budgets, listed with its
  *   reason in `read-budgets-unmeasured.json`; that ledger only shrinks.
  */
@@ -105,7 +109,6 @@ export type ScheduledJobReads =
       budget: ScheduledJobReadBudgetId;
       governance?: "load-governed";
     }
-  | "pending"
   | "unmeasured";
 
 /** The budgets each MCP tool's hot statements are measured against. */
