@@ -173,13 +173,10 @@ export const ChatPastedTextNode = (props: NodeViewProps) => {
               </Button>
             </div>
             {/* The box is drawn here and the control is `unstyled`: raw
-                pasted text reads in small monospace (the control supplies
-                the inset), and the textarea sizes to its content, so this
-                bounded box keeps a long paste scrolling inside the popover
-                instead of growing it. Textarea's own frame has no height
-                bound for its inner element and no way to drop the resize
-                handle. */}
-            <div className="bg-muted/40 focus-within:ring-ring text-2xs max-h-60 min-h-32 overflow-y-auto rounded-md border font-mono whitespace-pre-wrap focus-within:ring-2 [&_textarea]:resize-none">
+                pasted text reads in small monospace. A fixed-height field
+                scrolls a long paste inside itself, with no resize grip, so
+                the popover keeps its size. */}
+            <div className="bg-muted/40 focus-within:ring-ring text-2xs rounded-md border font-mono whitespace-pre-wrap focus-within:ring-2">
               <Textarea
                 aria-label={t("common.edit")}
                 dir={contentDir(draftText)}
@@ -187,6 +184,8 @@ export const ChatPastedTextNode = (props: NodeViewProps) => {
                 onChange={(event) => {
                   setDraftText(event.target.value);
                 }}
+                fieldSizing="fixed"
+                rows={8}
                 spellCheck={false}
                 unstyled
                 value={draftText}

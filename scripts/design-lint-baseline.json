@@ -257,7 +257,6 @@
     "apps/web/src/components/bilingual-review-rows.tsx": 1,
     "apps/web/src/components/bilingual-run-panel.tsx": 1,
     "apps/web/src/components/chat-editor-provider.tsx": 1,
-    "apps/web/src/components/chat-pasted-text-node.tsx": 1,
     "apps/web/src/components/chat/chat-draft-attachment-chips.tsx": 1,
     "apps/web/src/components/chat/create-document-draft-inspector-editor.tsx": 1,
     "apps/web/src/components/chat/needs-matter-card.tsx": 1,

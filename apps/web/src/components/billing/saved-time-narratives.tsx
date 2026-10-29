@@ -248,6 +248,7 @@ export const SavedTimeNarratives = ({
             <DialogTitle>{t("billing.savedNarratives.save")}</DialogTitle>
           </DialogHeader>
           <Form
+            density="compact"
             dirty={name !== null && name !== ""}
             onDiscard={() => {
               setName(null);
@@ -260,9 +261,9 @@ export const SavedTimeNarratives = ({
               }
             }}
           >
-            {/* The form's own row gap stands in for the bottom inset the
-                field used to carry, so the footer keeps its distance. */}
-            <div className="px-6 pb-2">
+            {/* The compact form's row gap and this inset together keep the
+                footer at its old distance from the field. */}
+            <div className="px-6 pb-4">
               <Label className="sr-only" htmlFor="saved-narrative-name">
                 {t("common.name")}
               </Label>
