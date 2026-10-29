@@ -377,7 +377,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "openWorldHint": "Read case-law coverage is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Report case-law availability by jurisdiction/source: decision years, sync, pending text, courts and reconciled yearly knownGaps. publisherCensus gives unknown/none-recorded/known, publisher/stored/text counts, years and worst slices. Slice counts can overlap; unmeasured cannot prove completeness. Check before declaring data missing. Unadmitted countries return unavailable with a reason.",
+    "description": "Check held case-law years, sync, pending text, courts and reconciled knownGaps before claiming missing data. publisherCensus: unknown/none-recorded/known; publisher/stored/text counts (slice memberships may overlap). Unmeasured cannot prove completeness. Unadmitted countries return unavailable.",
     "annotations": {
       "title": "Read case-law coverage",
       "destructiveHint": false,
@@ -7033,7 +7033,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "openWorldHint": "Read case-law coverage is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Report case-law availability by jurisdiction/source: decision years, sync, pending text, courts and reconciled yearly knownGaps. publisherCensus gives unknown/none-recorded/known, publisher/stored/text counts, years and worst slices. Slice counts can overlap; unmeasured cannot prove completeness. Check before declaring data missing. Unadmitted countries return unavailable with a reason.",
+    "description": "Check held case-law years, sync, pending text, courts and reconciled knownGaps before claiming missing data. publisherCensus: unknown/none-recorded/known; publisher/stored/text counts (slice memberships may overlap). Unmeasured cannot prove completeness. Unadmitted countries return unavailable.",
     "annotations": {
       "title": "Read case-law coverage",
       "destructiveHint": false,
@@ -14465,7 +14465,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "openWorldHint": "Read case-law coverage is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Report case-law availability by jurisdiction/source: decision years, sync, pending text, courts and reconciled yearly knownGaps. publisherCensus gives unknown/none-recorded/known, publisher/stored/text counts, years and worst slices. Slice counts can overlap; unmeasured cannot prove completeness. Check before declaring data missing. Unadmitted countries return unavailable with a reason.",
+    "description": "Check held case-law years, sync, pending text, courts and reconciled knownGaps before claiming missing data. publisherCensus: unknown/none-recorded/known; publisher/stored/text counts (slice memberships may overlap). Unmeasured cannot prove completeness. Unadmitted countries return unavailable.",
     "annotations": {
       "title": "Read case-law coverage",
       "destructiveHint": false,
@@ -16503,7 +16503,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
       "openWorldHint": "Read case-law coverage is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Report case-law availability by jurisdiction/source: decision years, sync, pending text, courts and reconciled yearly knownGaps. publisherCensus gives unknown/none-recorded/known, publisher/stored/text counts, years and worst slices. Slice counts can overlap; unmeasured cannot prove completeness. Check before declaring data missing. Unadmitted countries return unavailable with a reason.",
+    "description": "Check held case-law years, sync, pending text, courts and reconciled knownGaps before claiming missing data. publisherCensus: unknown/none-recorded/known; publisher/stored/text counts (slice memberships may overlap). Unmeasured cannot prove completeness. Unadmitted countries return unavailable.",
     "annotations": {
       "title": "Read case-law coverage",
       "destructiveHint": false,

@@ -1158,7 +1158,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "Report case-law availability by jurisdiction/source: decision years, sync, pending text, courts and reconciled yearly knownGaps. publisherCensus gives unknown/none-recorded/known, publisher/stored/text counts, years and worst slices. Slice counts can overlap; unmeasured cannot prove completeness. Check before declaring data missing. Unadmitted countries return unavailable with a reason.",
+      "Check held case-law years, sync, pending text, courts and reconciled knownGaps before claiming missing data. publisherCensus: unknown/none-recorded/known; publisher/stored/text counts (slice memberships may overlap). Unmeasured cannot prove completeness. Unadmitted countries return unavailable.",
     inputSchema: caseLawCoverageArgsSchema,
     inputNormalization: {
       country: countryNormalization({
