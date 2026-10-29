@@ -32,12 +32,14 @@ import {
 } from "@/api/db/scoped";
 import { loadLinkedInvoiceData } from "@/api/handlers/invoice-links/document";
 import { createDownloadInvoiceLinkFile } from "@/api/handlers/invoice-links/download";
+import { parseInvoiceLinkInvoiceRow } from "@/api/handlers/invoice-links/function-rows";
 import { invoiceLinksRoute } from "@/api/handlers/invoice-links/routes";
 import { createViewInvoiceLink } from "@/api/handlers/invoice-links/view";
 import {
   loadInvoiceExport,
   toExportRecords,
 } from "@/api/handlers/invoices/export-records";
+import { INVOICE_DOCUMENT_PROJECTION } from "@/api/handlers/invoices/invoice-detail";
 import type { InvoiceLinkMessage } from "@/api/handlers/invoices/sends/create";
 import { createSendInvoice } from "@/api/handlers/invoices/sends/create";
 import listInvoiceSends from "@/api/handlers/invoices/sends/list";
@@ -360,7 +362,7 @@ const send = async (
         route: "/v1/invoices/:workspaceId/:invoiceId/sends",
         body: { recipients, message: "For October." },
         auditEvents,
-        senderId,
+        ...(senderId === undefined ? {} : { senderId }),
       }),
     ),
   );
@@ -485,12 +487,11 @@ const readPublicAndAuthenticatedPaidDates = async (
     return panic("Expected a linked invoice for settlement parity");
   }
   const publicRecords = toExportRecords(linked.exportData, [invoiceId]);
-  const authenticated = await createScopedDb(
-    testDb,
-    [workspaceId],
+  const authenticated = await database.scoped({
     organizationId,
     userId,
-  )((tx) =>
+    workspaceIds: [workspaceId],
+  })((tx) =>
     loadInvoiceExport(tx, {
       organizationId,
       workspaceId,
@@ -1043,12 +1044,14 @@ describe("opening an invoice link", () => {
     const projected = await tokenDb().tenantless(
       async (tx) =>
         await tx
-          .select({ id: invoices.id })
+          .select(INVOICE_DOCUMENT_PROJECTION)
           .from(
             sql`public.invoice_link_invoice(${sha256Hex(own.token)}) AS invoices`,
           ),
     );
-    expect(projected).toEqual([{ id: own.invoiceId }]);
+    expect(
+      projected.map(parseInvoiceLinkInvoiceRow).map(({ id }) => id),
+    ).toEqual([own.invoiceId]);
     expect(JSON.stringify(otherView)).toContain(numberOf(other));
     expect(JSON.stringify(otherView)).not.toContain("Example Law Office");
 
