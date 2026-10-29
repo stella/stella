@@ -485,6 +485,7 @@ describe("Slovak courthouse workplace dockets", () => {
             jurisdiction: "SVK",
             formatted: docket,
             canonical: docket.toLowerCase(),
+            filingYear: { type: "known", year },
           });
           expect(spaced).toEqual(parsed);
           expect(parsed?.canonical).not.toBe(
@@ -496,14 +497,19 @@ describe("Slovak courthouse workplace dockets", () => {
     );
   });
 
-  test.each(["B1-7C/221/1991", "B4-14Cb/13/2021", "K2-17P/72/2022"])(
+  test.each([
+    ["B1-7C/221/1991", 1991],
+    ["B4-14Cb/13/2021", 2021],
+    ["K2-17P/72/2022", 2022],
+  ] as const)(
     "a publisher workplace prefix remains part of %s",
-    (docket) => {
+    (docket, year) => {
       const parsed = DECISION_DOCKET_GRAMMARS.SVK.parse(docket);
       expect(parsed).toEqual({
         jurisdiction: "SVK",
         formatted: docket,
         canonical: docket.toLowerCase(),
+        filingYear: { type: "known", year },
       });
       expect(storedDecisionDocketOf(docket, "SVK")).toEqual({
         type: "canonical",
