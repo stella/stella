@@ -160,10 +160,10 @@
     {
       "name": "list_audit_log",
       "nameChars": 14,
-      "descriptionChars": 389,
+      "descriptionChars": 492,
       "inputSchemaChars": 1256,
-      "totalChars": 1659,
-      "estimatedTokens": 658
+      "totalChars": 1762,
+      "estimatedTokens": 692
     },
     {
       "name": "list_capabilities",
@@ -623,7 +623,7 @@
     }
   ],
   "totals": {
-    "characters": 127453,
-    "estimatedTokens": 50526
+    "characters": 127556,
+    "estimatedTokens": 50560
   }
 }
