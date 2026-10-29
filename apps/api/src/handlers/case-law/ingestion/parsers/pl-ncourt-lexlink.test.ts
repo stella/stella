@@ -146,6 +146,18 @@ const KNOWN: [string, string, LexLinkVerdict["type"]][] = [
   ["§ 2 pkt 3", "art. 98 § 2", "rejected"],
   ["§ 2 pkt 3 rozporządzenia Ministra Sprawiedliwości", "", "rejected"],
   ["art. 3 dyrektywy 2000/31/WE", "art. 3", "rejected"],
+  // Letter subdivisions are letters, listed with the same joiners as numbers.
+  [
+    "art. 6 ust. 1 lit. a k.p.c.",
+    "art. 6;art. 6 ust. 1;art. 6 ust. 1 lit. a",
+    "provision",
+  ],
+  [
+    "art. 6 ust. 1 lit. a i b k.p.c.",
+    "art. 6;art. 6 ust. 1;art. 6 ust. 1 lit. a;art. 6 ust. 1 lit. b",
+    "provision",
+  ],
+  ["art. 6 ust. 1 lit. a k.p.c.", "art. 6;art. 6 ust. 1 lit. b", "act"],
 ];
 
 test.each(KNOWN)("judges %p against %p as %p", (anchor, articles, type) => {

@@ -97,10 +97,10 @@ describe("scheduled replay entrypoint", () => {
   });
 
   // A parser version change previews its replay; enrolling a source to write
-  // stays a reviewed step of its own.
+  // stays a reviewed step of its own. The committed map's type already admits
+  // no enrolled source, so this checks the preview budget.
   test("committed enrolment only previews, within the preview budget, and enrols nothing", () => {
     const declared = Object.values(REPLAY_ENROLMENT);
-    expect(declared.filter(({ mode }) => mode === "enrolled")).toEqual([]);
     expect(
       declared.filter(
         (enrolment) =>

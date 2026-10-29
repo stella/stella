@@ -53,12 +53,24 @@ const PROVISION_KINDS = new Map([
 const LEVELS = ["art", "par", "ust", "pkt", "lit"];
 
 const NUMBER_SOURCE = String.raw`\d+[a-z]?(?:\(\d+\))?`;
+/** A letter subdivision (`lit. a`, `lit. b)`); letters, never numbers. */
+const LETTER_SOURCE = String.raw`[a-z]\)?(?!\p{L})`;
 const LIST_JOINER_SOURCE = String.raw`\s*(?:,|-|–|\bi\b|\boraz\b|\bdo\b)\s*`;
 const TOKEN_PATTERN = new RegExp(
-  String.raw`(?<!\p{L})(art|§|ust|pkt|lit)\.?\s*(${NUMBER_SOURCE}(?:${LIST_JOINER_SOURCE}${NUMBER_SOURCE})*)`,
+  String.raw`(?<!\p{L})(?:(art|§|ust|pkt)\.?\s*(${NUMBER_SOURCE}(?:${LIST_JOINER_SOURCE}${NUMBER_SOURCE})*)|(lit)\.?\s*(${LETTER_SOURCE}(?:${LIST_JOINER_SOURCE}${LETTER_SOURCE})*))`,
   "giu",
 );
 const NUMBER_PATTERN = new RegExp(NUMBER_SOURCE, "gu");
+const LIST_JOINER_PATTERN = new RegExp(LIST_JOINER_SOURCE, "u");
+
+/** The values one provision word lists: numbers, or a letter list split on its joiners. */
+const valuesOf = (kind: string, listed: string): string[] =>
+  kind === "lit"
+    ? listed
+        .split(LIST_JOINER_PATTERN)
+        .map((value) => value.replace(")", "").trim())
+        .filter((value) => value.length > 0)
+    : [...listed.matchAll(NUMBER_PATTERN)].map(([number]) => number);
 
 /** Names a regulation, directive, convention or treaty in any case. */
 const FOREIGN_ACT_PATTERN =
@@ -87,7 +99,13 @@ const chainsOf = (text: string): ProvisionChains => {
   let path: string[] = [];
   const remainder = normalised(text).replaceAll(
     TOKEN_PATTERN,
-    (match, word: string, numbers: string) => {
+    (match: string, ...captures: unknown[]) => {
+      // Either the numbered alternative or the lettered one matched.
+      const [numberWord, numbers, letterWord, letters] = captures.map(
+        (capture) => (typeof capture === "string" ? capture : undefined),
+      );
+      const word = numberWord ?? letterWord ?? "";
+      const listed = numbers ?? letters ?? "";
       const kind = PROVISION_KINDS.get(word);
       const level = kind === undefined ? -1 : LEVELS.indexOf(kind);
       if (kind === undefined || level < 0) {
@@ -97,7 +115,7 @@ const chainsOf = (text: string): ProvisionChains => {
         (step) => LEVELS.indexOf(step.slice(0, step.indexOf(":"))) < level,
       );
       let last = outer;
-      for (const [number] of numbers.matchAll(NUMBER_PATTERN)) {
+      for (const number of valuesOf(kind, listed)) {
         last = [...outer, `${kind}:${number}`];
         leaves.push(last.join("/"));
         for (let end = 1; end <= last.length; end += 1) {
