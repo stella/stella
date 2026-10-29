@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 /**
  * A reported total for a source whose publisher states none, summed from the
  * publisher's own listing.
@@ -34,8 +35,6 @@
  * take back out) and continues from there; the earlier slices are not listed
  * again.
  */
-
-import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
@@ -58,6 +57,7 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import { ADAPTER_TIMEOUT } from "@/api/lib/legal-search/ingestion-constants";
 import type { SourceAdapter } from "@/api/lib/legal-search/ingestion-types";
+import { storeListingObservations } from "@/api/lib/legal-search/listing-observation-store";
 import { isRecord } from "@/api/lib/type-guards";
 
 /** The key under the source's `config` that holds the census checkpoint. */
@@ -425,12 +425,16 @@ const recordSlice = async ({
 };
 
 type CountSliceOptions = {
+  scopedDb: ScopedDb;
+  sourceId: SafeId<"caseLawSource">;
   adapter: ListingCensusAdapter;
   slice: string;
   sleep: (ms: number) => Promise<void>;
 };
 
 const countSlice = async ({
+  scopedDb,
+  sourceId,
   adapter,
   slice: target,
   sleep,
@@ -460,14 +464,20 @@ const countSlice = async ({
   // What the publisher lists, the records no row can hold included: the
   // census is the source's own count, and those records are exactly the gap
   // between it and what is stored.
-  return listing
-    .andThen((listed) => listed)
-    .map(
-      (listed) =>
-        listed.keyed.size +
-        listed.observations.size +
-        unstoredRecordCount(listed),
-    );
+  const counted = listing.andThen((listed) => listed);
+  if (Result.isError(counted)) {
+    return counted;
+  }
+  await storeListingObservations(scopedDb, {
+    sourceId,
+    adapterKey: adapter.key,
+    observations: [...counted.value.observations.values()],
+  });
+  return Result.ok(
+    counted.value.keyed.size +
+      counted.value.observations.size +
+      unstoredRecordCount(counted.value),
+  );
 };
 
 /** The checkpoint a call starts counting from, and the value it replaces. */
@@ -572,7 +582,13 @@ export const runListingCensus = async (
       await sleep(adapter.minRequestIntervalMs);
     }
     const target = checkpoint.nextSlice;
-    const counted = await countSlice({ adapter, slice: target, sleep });
+    const counted = await countSlice({
+      adapter,
+      slice: target,
+      sleep,
+      scopedDb,
+      sourceId: plan.sourceId,
+    });
     if (Result.isError(counted)) {
       return counted;
     }

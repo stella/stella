@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
@@ -11,6 +12,8 @@ import {
   caseLawSources,
   relations,
 } from "@/api/db/schema";
+import { skUsAdapter } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
+import { runListingCensus } from "@/api/handlers/case-law/ingestion/listing-census";
 import { createSafeId } from "@/api/lib/branded-types";
 import { storeListingObservations } from "@/api/lib/legal-search/listing-observation-store";
 import {
@@ -100,4 +103,47 @@ test("source evidence is durable, immutable on replay, and never creates a canon
       .where(eq(caseLawDecisions.sourceId, first))
       .limit(1),
   ).toEqual([]);
+  const reconciliation = skUsAdapter.reconciliation;
+  if (reconciliation === undefined) {
+    return panic("SK-US supports listing reconciliation");
+  }
+  const censusObservation = quarantinedListingObservation({
+    source: "sk-us",
+    payload: { retainedBy: "listing census" },
+    reason: LISTING_OBSERVATION_REASON.NO_USABLE_ID,
+  });
+  const date = new Date("2026-01-01T00:00:00.000Z");
+  const census = await runListingCensus({
+    scopedDb,
+    adapter: {
+      ...skUsAdapter,
+      reconciliation: {
+        ...reconciliation,
+        firstSlice: "2026-01",
+        listSlicePage: async () => ({
+          items: [],
+          observations: [censusObservation],
+          totalPages: 1,
+        }),
+      },
+    },
+    from: date,
+    to: date,
+    now: date,
+    maxSlices: 1,
+    sleep: async () => undefined,
+  });
+  expect(census.unwrap("The census completes its configured range").type).toBe(
+    "completed",
+  );
+  const evidence = await db
+    .select()
+    .from(caseLawListingObservations)
+    .where(eq(caseLawListingObservations.sourceId, first))
+    .limit(10);
+  expect(
+    evidence.map(({ payload: storedPayload }) => storedPayload),
+  ).toContainEqual({
+    listing: censusObservation.payload,
+  });
 });
