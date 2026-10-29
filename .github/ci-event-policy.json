@@ -27,6 +27,7 @@
     "release.yml/promote-staging": "main",
     "release.yml/release-health-gate": "main",
     "release.yml/dispatch-release-health": "main",
+    "release-rehearsal.yml/rehearse": "main",
     "release.yml/publish-chrome-extension": "main",
     "release-health.yml/window": "main",
     "auth-md-spec-check.yml/auth-md-spec-check": "main",
@@ -275,6 +276,10 @@
     "dependency-audit.yml": {
       "role": "analysis",
       "cancelInProgress": false
+    },
+    "release-rehearsal.yml": {
+      "role": "analysis",
+      "cancelInProgress": true
     }
   },
   "periodicJobs": ["ci.yml/release-typecheck"]
