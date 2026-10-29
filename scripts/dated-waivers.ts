@@ -344,7 +344,8 @@ export const waiverWarnings = (
 // elapsed flaky-test quarantine is enforced on main by the scheduled
 // flaky-test-quarantine workflow, which fails naming its owner: neither is a defect
 // of whichever change is under review, so pull requests and merge groups only
-// annotate them. Every other elapsed waiver, including a dated test quarantine
+// annotate them. Dependency acceptance dates warn unless their source changes.
+// Every other elapsed waiver, including a dated test quarantine
 // that still skips its test, keeps failing the gate.
 export const EXPIRY_AT_CHANGE_GATE = {
   "no-llms-txt": "fail",
@@ -381,7 +382,8 @@ export const expiredWaiverAnnotations = (
  * `changedFiles`: an expiry fails it only when the change touches the file that
  * declares the waiver (adding, renewing or editing it, or the waived code a
  * test quarantine sits on). Time alone never fails an unrelated change; the
- * scheduled run on the default branch checks every waiver and alerts owners.
+ * scheduled run checks other waivers; dependency acceptance dates remain warnings
+ * until a change touches the acceptance file.
  */
 export const expiredWaiverFailures = (
   entries: readonly DatedWaiver[],
@@ -393,7 +395,9 @@ export const expiredWaiverFailures = (
       (entry) =>
         EXPIRY_AT_CHANGE_GATE[entry.kind] === "fail" &&
         isExpired(entry, now) &&
-        (changedFiles === undefined || changedFiles.has(entry.source)),
+        (entry.kind === "dependency-audit"
+          ? changedFiles?.has(entry.source) === true
+          : changedFiles === undefined || changedFiles.has(entry.source)),
     )
     .map(
       (entry) =>
@@ -416,8 +420,9 @@ export const dueWaiverWarnings = (
       (entry) =>
         !isExpired(entry, now) ||
         (EXPIRY_AT_CHANGE_GATE[entry.kind] === "fail" &&
-          changedFiles !== undefined &&
-          !changedFiles.has(entry.source)),
+          (entry.kind === "dependency-audit"
+            ? changedFiles?.has(entry.source) !== true
+            : changedFiles !== undefined && !changedFiles.has(entry.source))),
     ),
     now,
   );

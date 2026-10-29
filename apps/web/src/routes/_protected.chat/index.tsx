@@ -123,10 +123,12 @@ import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import type { WorkspaceMemberPreview } from "@/lib/workspaces/queries/workspace-member-previews";
 import { workspaceMemberPreviewsOptions } from "@/lib/workspaces/queries/workspace-member-previews";
+import { routePresentation } from "@/routes/-route-presentation";
 import { ChatFileStack } from "@/routes/_protected.chat/-components/chat-file-stack";
 import { ChatHistoryLink } from "@/routes/_protected.chat/-components/chat-history-link";
 
 export const Route = createFileRoute("/_protected/chat/")({
+  staticData: { presentation: routePresentation({ type: "inherit" }) },
   loader: ({ context }) => {
     const activeOrganizationId = context.user.activeOrganizationId;
     const onPrefetchError = (error: unknown) => {
@@ -215,7 +217,7 @@ const MatterColleagues = ({
 function ChatIndex() {
   const t = useTranslations();
   const { focusThread } = useChatEditorManager();
-  const { ensureAIAvailable } = useAIKeyGate();
+  const { availability, ensureAIAvailable } = useAIKeyGate();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const userContext = useChatUserContext();
@@ -637,6 +639,7 @@ function ChatIndex() {
               workspaceId={draftThreadId}
             />
             <ChatInputSurface
+              sendDisabled={availability !== "available"}
               anonymized={anonymized}
               autoFocus
               context={{ activeOrganizationId, threadRef }}

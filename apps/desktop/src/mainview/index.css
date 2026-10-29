@@ -11,11 +11,18 @@
 /* The folio editor chrome uses Tailwind utilities but ships no utility CSS of
  * its own, and node_modules is outside Tailwind's default source detection. */
 @source "../../../../node_modules/@stll/folio-react/dist/**/*.js";
-/* Clipboard is a sibling of the Vite root, so its utilities need an explicit
- * source. Without this, uncommon sizing and glass classes are omitted. */
-@source "../clipboard/**/*.{ts,tsx}";
-@source "../registry/**/*.{ts,tsx}";
-@source "../activity/**/*.{ts,tsx}";
+/* The Vite root is this folder, but every window's views live in its sibling
+ * folders, so the whole app source is scanned as one. A per-folder list
+ * leaves out each new folder's classes until someone adds it. */
+@source "../**/*.{ts,tsx}";
+
+/* The design system sizes its controls for touch below `sm` and for a mouse
+ * from `sm` up. Desktop windows are narrower than `sm` yet always driven by a
+ * pointer, so `sm` starts at zero here; a layout that should follow the
+ * window's width uses an explicit `min-[…]:` width instead. */
+@theme {
+  --breakpoint-sm: 0rem;
+}
 
 html,
 body,

@@ -87,6 +87,10 @@
       "types": "./src/fixtures/cz-262-2006-section-51.ts",
       "import": "./src/fixtures/cz-262-2006-section-51.ts"
     },
+    "./fixtures/sk-300-2005-section-128": {
+      "types": "./src/fixtures/sk-300-2005-section-128.ts",
+      "import": "./src/fixtures/sk-300-2005-section-128.ts"
+    },
     "./court-paragraph-number": {
       "types": "./src/court-paragraph-number.ts",
       "import": "./src/court-paragraph-number.ts"
@@ -130,6 +134,10 @@
     "./slovak-document-roles": {
       "types": "./src/slovak-document-roles.ts",
       "import": "./src/slovak-document-roles.ts"
+    },
+    "./spot-place": {
+      "types": "./src/spot-place.ts",
+      "import": "./src/spot-place.ts"
     },
     "./statute-ast": {
       "types": "./src/statute-ast.ts",

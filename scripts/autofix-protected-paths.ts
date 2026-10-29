@@ -1,6 +1,7 @@
 import { BASELINE_PATHS } from "./baseline-paths";
 
 // Decision records are never autofix outputs, including when the PR changed them.
+// The exact changeset README is generated documentation, not a release entry.
 export const AUTOFIX_PROTECTED_PATHS = [
   ...Object.values(BASELINE_PATHS),
   "scripts/ratchet-baseline.json",
@@ -34,6 +35,7 @@ export const AUTOFIX_PROTECTED_PATHS = [
 ] as const;
 
 export const isAutofixProtectedPath = (file: string) =>
+  file !== ".changeset/README.md" &&
   AUTOFIX_PROTECTED_PATHS.some((pattern) => new Bun.Glob(pattern).match(file));
 
 if (import.meta.main) {

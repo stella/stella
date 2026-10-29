@@ -1,7 +1,9 @@
 import { panic } from "better-result";
-import type { ExpoConfig } from "expo/config";
+import type { ConfigContext, ExpoConfig } from "expo/config";
 import { IOSConfig, withXcodeProject } from "expo/config-plugins";
 import type { ConfigPlugin } from "expo/config-plugins";
+import { existsSync } from "node:fs";
+import path from "node:path";
 
 // Evaluated by Node through Expo's config loader, which cannot follow a
 // workspace package's extensionless TypeScript imports; so this file imports
@@ -9,6 +11,9 @@ import type { ConfigPlugin } from "expo/config-plugins";
 // `@stll/api-contract/mobile-client`.
 
 const VARIANTS = ["development", "preview", "production"] as const;
+
+/** The store version; `scripts/fingerprint.ts` hashes its release line. */
+export const APP_VERSION = "0.1.0";
 
 type Variant = (typeof VARIANTS)[number];
 
@@ -75,16 +80,49 @@ const withReleaseSigning: ConfigPlugin<ReleaseSigning> = (
     return mod;
   });
 
+/** stella's API, whose update route relays the signed updates every build runs. */
+const UPDATES_ORIGIN = "https://api.stll.app";
+
+/**
+ * The certificate every update must be signed against. Public; its private
+ * key exists only in the publish workflow's secrets. Without it a build
+ * ships with updates off rather than accepting unsigned ones.
+ */
+export const UPDATE_SIGNING_CERTIFICATE = "./certs/mobile-update-signing.pem";
+
+const updatesFor = (
+  variant: Variant,
+  signingCertificatePresent: boolean,
+): NonNullable<ExpoConfig["updates"]> =>
+  variant === "development" || !signingCertificatePresent
+    ? { enabled: false }
+    : {
+        enabled: true,
+        url: `${UPDATES_ORIGIN}/v1/mobile/updates/${variant}`,
+        checkAutomatically: "ON_LOAD",
+        // Launch on the bundle at hand; a downloaded update runs next launch.
+        fallbackToCacheTimeout: 0,
+        codeSigningCertificate: UPDATE_SIGNING_CERTIFICATE,
+        codeSigningMetadata: { keyid: "main", alg: "rsa-v1_5-sha256" },
+      };
+
+type AppConfigInputs = {
+  buildNumber: number;
+  /** The native fingerprint (`scripts/fingerprint.ts`); updates target it. */
+  runtimeVersion: string;
+  signingCertificatePresent: boolean;
+  variant: Variant;
+};
+
 const appConfigBase = ({
   buildNumber,
+  runtimeVersion,
+  signingCertificatePresent,
   variant,
-}: {
-  buildNumber: number;
-  variant: Variant;
-}): ExpoConfig => ({
+}: AppConfigInputs): ExpoConfig => ({
   name: VARIANT_CONFIG[variant].name,
   slug: "stella",
-  version: "0.1.0",
+  version: APP_VERSION,
   orientation: "default",
   scheme: VARIANT_CONFIG[variant].scheme,
   userInterfaceStyle: "automatic",
@@ -105,8 +143,8 @@ const appConfigBase = ({
     bundler: "metro",
     output: "static",
   },
-  // No update channel exists yet; every build runs the bundle it shipped.
-  updates: { enabled: false },
+  runtimeVersion,
+  updates: updatesFor(variant, signingCertificatePresent),
   plugins: ["expo-router"],
   experiments: {
     typedRoutes: true,
@@ -116,15 +154,12 @@ const appConfigBase = ({
 });
 
 export const appConfigFor = ({
-  buildNumber,
   signing,
-  variant,
-}: {
-  buildNumber: number;
+  ...inputs
+}: AppConfigInputs & {
   signing?: ReleaseSigning | undefined;
-  variant: Variant;
 }): ExpoConfig => {
-  const config = appConfigBase({ buildNumber, variant });
+  const config = appConfigBase(inputs);
   return signing === undefined ? config : withReleaseSigning(config, signing);
 };
 
@@ -165,12 +200,18 @@ const readEnv = (name: string): string | undefined => {
   return typeof value === "string" ? value : undefined;
 };
 
-const appConfig = (): ExpoConfig =>
+const appConfig = ({ projectRoot }: ConfigContext): ExpoConfig =>
   appConfigFor({
     buildNumber: readBuildNumber(readEnv("MOBILE_BUILD_NUMBER")),
+    // The release workflows stamp the fingerprint. A build made without one
+    // names no published runtime, so no update ever reaches it.
+    runtimeVersion: readEnv("MOBILE_RUNTIME_VERSION") ?? "unpublished",
     signing: readSigning(
       readEnv("APPLE_TEAM_ID"),
       readEnv("MOBILE_PROFILE_UUID"),
+    ),
+    signingCertificatePresent: existsSync(
+      path.join(projectRoot, UPDATE_SIGNING_CERTIFICATE),
     ),
     variant: readVariant(readEnv("APP_VARIANT")),
   });

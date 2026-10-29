@@ -575,6 +575,25 @@ describe("dispatch follows each resolve run to its publish", () => {
 describe("resolve", () => {
   const job = workflows.resolve.jobs["resolve"];
 
+  test("merged lockfiles refresh without lifecycle scripts before frozen install", () => {
+    const steps = job?.steps ?? [];
+    const refresh = steps.findIndex(
+      (step) => step.name === "Re-resolve merged lockfile with frozen pins",
+    );
+    const install = steps.findIndex(
+      (step) => step.name === "Install dependencies",
+    );
+    expect(refresh).toBeGreaterThan(-1);
+    expect(refresh).toBeLessThan(install);
+    expect(steps.at(refresh)?.["timeout-minutes"]).toBe(5);
+    expect(steps.at(refresh)?.run).toContain("refresh-lock --repo .");
+    expect(steps.at(install)?.run).toContain("bun ci --ignore-scripts");
+    const regenerate = steps.find(
+      (step) => step.name === "Regenerate conflicted outputs",
+    );
+    expect(regenerate?.run).toContain('if [[ -n "$GENERATOR_IDS" ]]');
+  });
+
   test("never runs in a default-branch context and saves no cache", () => {
     // Branch code runs here. On a branch ref its caches and artifacts are
     // branch-scoped, so main, release and deploy runs never restore them.

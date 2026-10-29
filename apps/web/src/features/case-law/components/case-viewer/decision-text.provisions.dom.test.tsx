@@ -8,6 +8,7 @@ import {
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
+import { statuteDisplayLabel } from "@stll/api-contract/statute-display-label";
 import { sleep } from "@stll/concurrency/sleep";
 import type { DecisionProvisionAnchor } from "@stll/decision-reader/reader-types";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
@@ -173,7 +174,7 @@ const provisionAnchor = ({
     spanStart: start,
     target: {
       document: {
-        country: "cz",
+        country: "CZE",
         eli: "/eli/cz/sb/2026/1",
         id: documentId,
         slug: "test-act",
@@ -185,7 +186,12 @@ const provisionAnchor = ({
         eli: "/eli/cz/sb/2026/1",
         jurisdiction: "CZE",
         provisionLabel: citation,
-        statuteTitle: "Test Act",
+        // The anchors hook hands the card the act's display label.
+        statuteTitle: statuteDisplayLabel({
+          country: "CZE",
+          eli: "/eli/cz/sb/2026/1",
+          title: "Test Act",
+        }).text,
         versionCount: 1,
         versionValidFrom: "2026-01-01",
       },
@@ -574,7 +580,7 @@ const citationAnchor = ({
     spanStart: start,
     target: {
       document: {
-        country: "cz",
+        country: "CZE",
         eli: "/eli/cz/sb/2026/1",
         id,
         slug: "test-act",

@@ -1,3 +1,4 @@
+import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -185,6 +186,44 @@ describe("post-release regression check", () => {
     expect(summary).not.toContain("10");
   });
 
+  test("the generated environment predicate excludes staging RC traffic", () => {
+    const { query } = buildQuery({
+      release: RELEASE,
+      previous: PREVIOUS_RELEASE,
+      until: CHECKED_AT,
+    });
+    const predicate = query.query
+      .split("\n")
+      .find((line) => line.includes("properties.deploy_environment"));
+    expect(predicate).toBe("AND properties.deploy_environment = {environment}");
+    if (predicate === undefined) {
+      throw new TypeError(
+        "Release health query has no deployment environment predicate",
+      );
+    }
+    const environment = query.values["environment"];
+    if (environment === undefined) {
+      throw new TypeError("Release health query has no environment binding");
+    }
+    const database = new Database(":memory:");
+    try {
+      database.run(
+        "CREATE TABLE properties (deploy_environment TEXT, occurrences INTEGER)",
+      );
+      database.run(
+        "INSERT INTO properties VALUES ('staging', 999), ('production', 7), (NULL, 500)",
+      );
+      const rows = database
+        .query(
+          `SELECT SUM(occurrences) AS occurrences FROM properties WHERE ${predicate.replace(/^AND /u, "").replace("{environment}", "$environment")}`,
+        )
+        .all({ $environment: environment });
+      expect(rows).toEqual([{ occurrences: 7 }]);
+    } finally {
+      database.close();
+    }
+  });
+
   test("versions travel as placeholders, without the tag prefix", () => {
     const { query } = buildQuery({
       release: RELEASE,
@@ -194,11 +233,15 @@ describe("post-release regression check", () => {
 
     expect(query.values).toEqual({
       event: "release_failure_window",
+      environment: "production",
       until: CHECKED_AT,
       version_0: "1.4.1",
       version_1: "1.4.0",
     });
     expect(query.query).not.toContain("1.4");
+    expect(query.query).toContain(
+      "AND properties.deploy_environment = {environment}",
+    );
     expect(() =>
       buildQuery({ release: "v1.4.1'", previous: null, until: CHECKED_AT }),
     ).toThrow("is not a stable release ref");
