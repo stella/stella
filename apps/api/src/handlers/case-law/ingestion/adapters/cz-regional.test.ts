@@ -800,7 +800,7 @@ describe("the crawl keeps a refused row as its listing", () => {
             ? {
                 censusCourtEvidence: {
                   type: "known",
-                  court: raw["soud"],
+                  court: raw["soud"] ?? panic("Fixture court missing"),
                   courtId: null,
                 },
               }
