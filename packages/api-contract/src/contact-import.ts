@@ -66,6 +66,7 @@ export const CONTACT_IMPORT_ISSUE_CODE = {
   INVALID_DATE_OF_BIRTH: "invalid_date_of_birth",
   INVALID_NATIONALITY_CODES: "invalid_nationality_codes",
   INVALID_TYPE: "invalid_type",
+  IN_FILE_DUPLICATE: "in_file_duplicate",
   ROW_LENGTH_MISMATCH: "row_length_mismatch",
   TAX_ID_REQUIRED: "tax_id_required",
   TOO_LONG: "too_long",
@@ -75,6 +76,14 @@ export const CONTACT_IMPORT_ISSUE_CODE = {
 
 export type ContactImportIssueCode =
   (typeof CONTACT_IMPORT_ISSUE_CODE)[keyof typeof CONTACT_IMPORT_ISSUE_CODE];
+
+export const CONTACT_IMPORT_WARNING_CODE = {
+  IGNORED_POPULATED_COLUMN: "ignored_populated_column",
+  POSSIBLE_IN_FILE_DUPLICATE: "possible_in_file_duplicate",
+} as const;
+
+export type ContactImportWarningCode =
+  (typeof CONTACT_IMPORT_WARNING_CODE)[keyof typeof CONTACT_IMPORT_WARNING_CODE];
 
 export const CONTACT_IMPORT_TARGET_FIELDS = [
   ...CONTACT_IMPORT_FIELDS,

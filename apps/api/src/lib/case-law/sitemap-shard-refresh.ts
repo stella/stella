@@ -10,6 +10,8 @@ import type { rootDb } from "@/api/db/root";
 import {
   caseLawDecisions,
   caseLawSitemapChanges,
+  caseLawSitemapCountryGenerations,
+  caseLawSitemapShardCounts,
   caseLawSitemapShards,
   caseLawSources,
 } from "@/api/db/schema";
@@ -25,8 +27,10 @@ import {
   SITEMAP_ALL_BUCKET,
   SITEMAP_UNDATED_MONTH,
   SITEMAP_UNDATED_YEAR,
+  sitemapDocumentRepresentativeFor,
 } from "@/api/lib/case-law/sitemap-shard-sql";
 import {
+  lockCaseLawRemovalSnapshots,
   tryLockCaseLawSitemapMonth,
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
@@ -178,6 +182,7 @@ export const sitemapMonthCountSql = (target: SitemapMonth): SQL => sql`
       AND ${caseLawDecisions.country} = ${target.country}
       AND ${monthRangeSql(target)}
       AND ${redistributableCaseLawSource}
+      AND ${sitemapDocumentRepresentativeFor(caseLawDecisions)}
     GROUP BY 1
   )
   SELECT logged.consumed, counts.bucket, counts.total, counts.last_modified_ms
@@ -359,6 +364,9 @@ const recountMonth = async (
     if (!(await tryLockCaseLawSitemapMonth({ tx, month: target }))) {
       return false;
     }
+    // Skip an already held month before waiting on the shared removal fence.
+    // Hold that fence from the count's snapshot through publication.
+    await lockCaseLawRemovalSnapshots(tx);
     const counted = executedRows(
       await tx.execute(sitemapMonthCountSql(target)),
     ).map((row) => v.parse(monthCountRowSchema, row));
@@ -671,4 +679,31 @@ export const refreshCaseLawSitemapShards = async (
     logger.error("case_law.sitemap.shard_refresh_over_capacity", extent);
   }
   return { type: "refreshed", months: progress.months, ...extent };
+};
+
+/** Retire both staged counts and published shards for the changed country. */
+export const invalidateCaseLawSitemapShardsTx = async (
+  tx: RefreshTransaction,
+  country: string,
+): Promise<void> => {
+  await tx
+    .insert(caseLawSitemapCountryGenerations)
+    .values({ country, generation: 1n })
+    .onConflictDoUpdate({
+      target: caseLawSitemapCountryGenerations.country,
+      set: {
+        generation: sql`${caseLawSitemapCountryGenerations.generation} + 1`,
+      },
+    });
+  // audit: skip — sitemap invalidation belongs to the canonical removal audit.
+  await tx
+    .delete(caseLawSitemapShardCounts)
+    .where(eq(caseLawSitemapShardCounts.country, country));
+  await tx
+    .delete(caseLawSitemapShards)
+    .where(eq(caseLawSitemapShards.country, country));
+  await tx
+    .insert(caseLawSitemapChanges)
+    .values(wholeCountryRow(country))
+    .onConflictDoNothing();
 };

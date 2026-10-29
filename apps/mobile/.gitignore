@@ -13,3 +13,8 @@ expo-env.d.ts
 # needs a capability that cannot be expressed through config plugins.
 /android/
 /ios/
+
+# The over-the-air update signing certificate is public by design: every
+# build pins it. Its private key lives only in the MOBILE_UPDATE_SIGNING_KEY
+# secret. No other .pem belongs here.
+!/certs/mobile-update-signing.pem

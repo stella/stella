@@ -73,7 +73,7 @@ const dependencies = (acquire: 0 | 1 = 1) => {
     send: async (_command: string, args: string[]) => {
       if (args.at(0)?.includes("ZREMRANGEBYSCORE")) {
         acquisitions += 1;
-        return acquire;
+        return acquire === 0 ? [0, 1000] : acquire;
       }
       if (args.at(0)?.includes("ZREM")) {
         releases += 1;
@@ -113,7 +113,7 @@ describe("finite HTTP action admission", () => {
         "busy",
         "period_exhausted",
         "not_enabled",
-        "unavailable",
+        "store_unavailable",
       ] as const;
       try {
         for (const reason of reasons) {
@@ -500,6 +500,7 @@ describe("finite HTTP action admission", () => {
             send: async () => {
               throw new HandlerError({
                 status: 503,
+                code: "internal_error",
                 message: "Coordination offline",
               });
             },
@@ -515,7 +516,7 @@ describe("finite HTTP action admission", () => {
       );
       expect(await endpoint.handler(asTestRaw(context()))).toMatchObject({
         code: 503,
-        response: { code: "action_admission_unavailable" },
+        response: { code: "limiter_store_unavailable" },
       });
       expect(calls).toBe(0);
     });

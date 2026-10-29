@@ -99,7 +99,10 @@ export const ConsentDecisionBar = ({
   const t = useTranslations("consent");
   const tCommon = useTranslations("common");
   return (
-    <div className="border-border/64 bg-background flex shrink-0 flex-col gap-2 border-t px-6 py-4">
+    <div
+      className="border-border/64 bg-background flex shrink-0 flex-col gap-2 border-t px-6 py-4"
+      data-slot="consent-decision-bar"
+    >
       {hasError ? (
         <p className="text-destructive text-sm">{t("error")}</p>
       ) : null}

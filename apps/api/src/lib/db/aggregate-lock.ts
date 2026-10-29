@@ -17,6 +17,7 @@ import {
 } from "drizzle-orm";
 import type { Subquery } from "drizzle-orm";
 import { getTableConfig, PgColumn, PgTable } from "drizzle-orm/pg-core";
+import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import type {
   LockConfig,
   LockStrength,
@@ -32,19 +33,28 @@ import type {
   OnlineMigrationParam,
 } from "@/api/db/online-migration-connection";
 import type { Transaction } from "@/api/db/root";
+import type { InvoiceStatus, SearchProjectionKind } from "@/api/db/schema";
 import {
+  billingArrangements,
   caseLawReplayBatches,
   entities,
   entityVersions,
   fields,
+  invoiceLines,
+  invoices,
+  organizationSettings,
   pdfSigningSessions,
+  timeEntries,
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
 import { withSharedTransactionTimeoutRestoration } from "@/api/db/shared-pool-timeouts";
+import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
+import { LIMITS } from "@/api/lib/limits";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import {
   brandPersistedOrganizationId,
@@ -56,6 +66,8 @@ import { isRecord } from "@/api/lib/type-guards";
 export const AGGREGATE_LOCKS = {
   account: { rank: -20, kind: "row" },
   accountExport: { rank: -10, kind: "row" },
+  accountDeletionRequest: { rank: -10, kind: "row" },
+  organizationObjectIntent: { rank: -1, kind: "advisory" },
   organization: { rank: 0, kind: "row" },
   professionalUseAcceptance: { rank: 5, kind: "advisory" },
   orgFeatureAdmission: { rank: 10, kind: "advisory" },
@@ -75,8 +87,10 @@ export const AGGREGATE_LOCKS = {
   desktopMembership: { rank: 70, kind: "row" },
   desktopCredential: { rank: 80, kind: "row" },
   desktopBatch: { rank: 90, kind: "advisory" },
+  chatOwnerStoredContentEgress: { rank: 95, kind: "advisory" },
   workspace: { rank: 100, kind: "row" },
   memberCleanup: { rank: 110, kind: "row" },
+  chatStoredContentEgress: { rank: 115, kind: "advisory" },
   // A chat interaction's fences: the thread, then the turn awaiting input,
   // then the receipt it produced.
   chatThread: { rank: 120, kind: "row" },
@@ -93,10 +107,17 @@ export const AGGREGATE_LOCKS = {
   entity: { rank: 500, kind: "row" },
   entityVersion: { rank: 510, kind: "row" },
   field: { rank: 520, kind: "row" },
+  memory: { rank: 530, kind: "row" },
+  searchProjectionRepair: { rank: 540, kind: "row" },
   signal: { rank: 600, kind: "row" },
   automatedFlowRunCap: { rank: 700, kind: "advisory" },
   processingClaim: { rank: 600, kind: "row" },
   contactCapacity: { rank: 700, kind: "advisory" },
+  fileComparisonCapacity: { rank: 700, kind: "advisory" },
+  billingCodeCapacity: { rank: 700, kind: "advisory" },
+  expenseCapacity: { rank: 700, kind: "advisory" },
+  rateTableWorkspace: { rank: 700, kind: "advisory" },
+  mcpOAuthState: { rank: 700, kind: "advisory" },
   personalCatalog: { rank: 700, kind: "advisory" },
   sampleCase: { rank: 700, kind: "advisory" },
   searchHistory: { rank: 710, kind: "row" },
@@ -123,6 +144,23 @@ export const queryOrganizationFencedRepairBatch = async ({
   params,
 }: OrganizationFencedRepairBatchOptions) =>
   await connection.query(`${query} FOR KEY SHARE OF tenant`, params);
+
+type InvoiceRepairBatchOptions = {
+  connection: Pick<OnlineMigrationConnection, "query">;
+  predicate: string;
+  limit: number;
+};
+
+/** Online invoice repairs hold their candidates through the batch transaction. */
+export const lockInvoiceRepairBatch = async ({
+  connection,
+  predicate,
+  limit,
+}: InvoiceRepairBatchOptions) =>
+  await connection.query(
+    `SELECT i.id FROM public.invoices i WHERE ${predicate} ORDER BY i.id LIMIT $1 FOR UPDATE OF i`,
+    [limit],
+  );
 
 /** Derive rank proofs from the same registry used for acquisitions. */
 export const AGGREGATE_CHAINS = {
@@ -162,6 +200,12 @@ export const AGGREGATE_CHAINS = {
   caseLawSitemapMonth: ["caseLawSitemapMonth"],
   chatSecret: ["chatThread", "chatTurn", "chatSecret"],
   chatToolGrants: ["chatThread", "chatToolGrants"],
+  chatStoredContent: [
+    "chatOwnerStoredContentEgress",
+    "chatStoredContentEgress",
+    "chatThread",
+    "chatTurn",
+  ],
   memberPrefix: [
     "workspace",
     "memberCleanup",
@@ -171,6 +215,12 @@ export const AGGREGATE_CHAINS = {
     "entity",
   ],
   accountExport: ["account", "accountExport"],
+  accountDeletionRequest: ["account", "accountDeletionRequest"],
+  organizationObjectIntentLifecycle: [
+    "organizationObjectIntent",
+    "organization",
+  ],
+  organizationObjectIntentWriter: ["organizationObjectIntent", "workspace"],
   professionalUseAcceptance: ["professionalUseAcceptance"],
   desktopRenewal: ["desktopMembership", "desktopCredential"],
   desktopBatch: ["desktopBatch", "workspace"],
@@ -192,9 +242,16 @@ export const AGGREGATE_CHAINS = {
   signal: ["signal"],
   automatedFlowRunCap: ["automatedFlowRunCap"],
   contactCapacity: ["contactCapacity"],
+  fileComparisonCapacity: ["fileComparisonCapacity"],
+  billingCodeCapacity: ["billingCodeCapacity"],
+  expenseCapacity: ["expenseCapacity"],
+  rateTableWorkspace: ["rateTableWorkspace"],
+  mcpOAuthState: ["mcpOAuthState"],
   personalCatalog: ["personalCatalog"],
   sampleCase: ["workspace", "sampleCase"],
   searchHistory: ["desktopMembership", "searchHistory"],
+  memory: ["memory"],
+  searchProjectionRepair: ["searchProjectionRepair"],
   chatRevision: ["chatThread", "chatMessage"],
   readerAnswer: ["readerAnswer", "readerAnswerMessage"],
   readerAnnotation: ["readerAnnotation"],
@@ -243,7 +300,9 @@ type AggregateIdentities = {
   };
   account: SafeId<"user">;
   accountExport: { id: string; userId: SafeId<"user"> };
+  accountDeletionRequest: SafeId<"accountDeletionRequest">;
   sampleCase: { workspaceId: SafeId<"workspace"> };
+  organizationObjectIntent: SafeId<"organization">;
   organization: SafeId<"organization">;
   professionalUseAcceptance: { userId: SafeId<"user"> };
   desktopMembership: {
@@ -288,6 +347,11 @@ type AggregateIdentities = {
         id: string;
         workspaceId: SafeId<"workspace">;
       };
+  chatOwnerStoredContentEgress: {
+    organizationId: SafeId<"organization">;
+    userId: SafeId<"user">;
+  };
+  chatStoredContentEgress: SafeId<"chatThread">;
   chatThread: {
     id: SafeId<"chatThread">;
     organizationId: SafeId<"organization">;
@@ -332,6 +396,15 @@ type AggregateIdentities = {
     workspaceId: SafeId<"workspace">;
   };
   field: { id: SafeId<"field">; workspaceId: SafeId<"workspace"> };
+  memory: {
+    id: SafeId<"aiMemory">;
+    organizationId: SafeId<"organization">;
+  };
+  searchProjectionRepair: {
+    kind: SearchProjectionKind;
+    revision: string;
+    sourceId: string;
+  };
   signal: { id: SafeId<"signal">; organizationId: SafeId<"organization"> };
   automatedFlowRunCap: SafeId<"flowDefinition">;
   processingClaim: {
@@ -340,6 +413,15 @@ type AggregateIdentities = {
   };
   contactCapacity: { organizationId: SafeId<"organization"> };
   chatToolGrants: {
+    organizationId: SafeId<"organization">;
+    userId: SafeId<"user">;
+  };
+  fileComparisonCapacity: { organizationId: SafeId<"organization"> };
+  billingCodeCapacity: { workspaceId: SafeId<"workspace"> };
+  expenseCapacity: { workspaceId: SafeId<"workspace"> };
+  rateTableWorkspace: { workspaceId: SafeId<"workspace"> };
+  mcpOAuthState: {
+    connectorId: SafeId<"mcpConnector">;
     organizationId: SafeId<"organization">;
     userId: SafeId<"user">;
   };
@@ -358,6 +440,23 @@ type AggregateIdentities = {
     organizationId: SafeId<"organization">;
   };
 };
+
+// Advisory first-key namespaces are a deployed contract: old and new workers
+// must take the same lock for the same work during a rolling deployment.
+// aggregate-lock-namespaces.json beside this file records each one, and
+// scripts/check-aggregate-locks.ts holds it to the base revision.
+const CHAT_STORED_CONTENT_EGRESS_LOCK_NAMESPACE = 0x0f_10_cc_b3;
+const CHAT_OWNER_STORED_CONTENT_EGRESS_LOCK_NAMESPACE = 0x0f_10_cc_b4;
+const ORGANIZATION_OBJECT_INTENT_LOCK_NAMESPACE = 0x0f_10_cc_b0;
+const READER_ANNOTATION_LOCK_NAMESPACE = 0x0f_10_cc_af;
+
+const chatOwnerStoredContentEgressKey = ({
+  organizationId,
+  userId,
+}: {
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+}) => `${organizationId}\u001f${userId}`;
 
 type ExecuteTransaction = { execute: (statement: SQL) => PromiseLike<unknown> };
 type SavepointTransaction = Pick<Transaction, "execute" | "transaction">;
@@ -732,11 +831,20 @@ export const withExecutorSavepoint = async <T>(
   }
 };
 
-/** Track the public savepoint callback without inspecting driver internals. */
-export const withAggregateSavepoint = async <T>(
-  tx: Pick<Transaction, "execute" | "transaction">,
-  run: (savepoint: Transaction) => Promise<T>,
+/** Own a fresh database transaction or track a native nested savepoint. */
+export const withAggregateSavepoint = async <Tx extends object, T>(
+  tx: {
+    transaction: <Value>(
+      run: (savepoint: Tx) => Promise<Value>,
+    ) => Promise<Value>;
+  },
+  run: (savepoint: Tx) => Promise<T>,
 ): Promise<T> => {
+  // Only native transaction handles expose rollback. A reusable database
+  // must never enter the per-transaction history registry.
+  if (!("rollback" in tx)) {
+    return await withAggregateTransaction(tx, run);
+  }
   const parent = lockHistory(tx);
   // Non-locking callers retain the driver's existing savepoint behavior.
   if (transactionHasAggregateLocks(parent)) {
@@ -823,6 +931,58 @@ const memberCleanupRowResource = (
       return panic("Unknown member cleanup resource");
   }
 };
+type AuxiliaryRowIdentityOptions = Extract<
+  RowIdentityOptions,
+  {
+    aggregate:
+      | "accountDeletionRequest"
+      | "desktopMembership"
+      | "memory"
+      | "searchProjectionRepair";
+  }
+>;
+
+const auxiliaryRowResource = (
+  options: AuxiliaryRowIdentityOptions,
+): RowResource => {
+  switch (options.aggregate) {
+    case "accountDeletionRequest":
+      return {
+        table: "account_deletion_requests",
+        columns: ["id"],
+        values: [options.id],
+        scopeColumns: [],
+        scopeValues: [],
+      };
+    case "desktopMembership":
+      return {
+        table: "member",
+        columns: ["user_id", "organization_id"],
+        values: [options.id.userId, options.id.organizationId],
+        scopeColumns: [],
+        scopeValues: [],
+      };
+    case "memory":
+      return byIdWithin(
+        "ai_memories",
+        options.id.id,
+        "organization_id",
+        options.id.organizationId,
+      );
+    case "searchProjectionRepair":
+      return {
+        table: "search_projection_repair_queue",
+        columns: ["kind", "source_id", "revision"],
+        values: [options.id.kind, options.id.sourceId, options.id.revision],
+        scopeColumns: [],
+        scopeValues: [],
+      };
+    default:
+      options satisfies never;
+      return panic("Unknown auxiliary row aggregate");
+  }
+};
+
 const rowResource = (options: RowIdentityOptions): RowResource => {
   switch (options.aggregate) {
     case "account":
@@ -841,14 +1001,11 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
         "user_id",
         options.id.userId,
       );
+    case "accountDeletionRequest":
     case "desktopMembership":
-      return {
-        table: "member",
-        columns: ["user_id", "organization_id"],
-        values: [options.id.userId, options.id.organizationId],
-        scopeColumns: [],
-        scopeValues: [],
-      };
+    case "memory":
+    case "searchProjectionRepair":
+      return auxiliaryRowResource(options);
     case "searchHistory":
       return {
         table: "search_history_owners",
@@ -1254,6 +1411,12 @@ const rowStatement = (
 };
 const advisoryResource = (options: AdvisoryIdentityOptions) => {
   switch (options.aggregate) {
+    case "organizationObjectIntent":
+      return {
+        first: sql`${ORGANIZATION_OBJECT_INTENT_LOCK_NAMESPACE}::integer`,
+        second: sql`hashtext(${options.id})`,
+        order: [options.aggregate, options.id],
+      };
     case "legislationAmendmentWork":
       return {
         first: sql`${0x0f_10_cc_ad}::integer`,
@@ -1264,6 +1427,20 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
           options.id.eli,
           options.id.language,
         ],
+      };
+    case "chatOwnerStoredContentEgress": {
+      const key = chatOwnerStoredContentEgressKey(options.id);
+      return {
+        first: sql`${CHAT_OWNER_STORED_CONTENT_EGRESS_LOCK_NAMESPACE}::integer`,
+        second: sql`hashtext(${key})`,
+        order: [options.aggregate, key],
+      };
+    }
+    case "chatStoredContentEgress":
+      return {
+        first: sql`${CHAT_STORED_CONTENT_EGRESS_LOCK_NAMESPACE}::integer`,
+        second: sql`hashtext(${options.id})`,
+        order: [options.aggregate, options.id],
       };
     case "desktopBatch":
       return {
@@ -1310,6 +1487,47 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
           options.id.userId,
         ],
       };
+    case "fileComparisonCapacity":
+      return {
+        first: sql`${0x0f_10_cc_b2}::integer`,
+        second: sql`hashtext(${options.id.organizationId})`,
+        order: [options.aggregate, options.id.organizationId],
+      };
+    case "billingCodeCapacity":
+      return {
+        first: sql`hashtext('billing-code-capacity')`,
+        second: sql`hashtext(${options.id.workspaceId})`,
+        order: [options.aggregate, options.id.workspaceId],
+      };
+    case "expenseCapacity":
+      return {
+        first: sql`hashtext('expense-capacity')`,
+        second: sql`hashtext(${options.id.workspaceId})`,
+        order: [options.aggregate, options.id.workspaceId],
+      };
+    case "rateTableWorkspace":
+      return {
+        first: sql`hashtext('rate-table-workspace')`,
+        second: sql`hashtext(${options.id.workspaceId})`,
+        order: [options.aggregate, options.id.workspaceId],
+      };
+    case "mcpOAuthState":
+      return {
+        first: sql`${0x4d_43_50_4f}::integer`,
+        // A JSON array keeps the three ids apart without a separator they
+        // could contain; PostgreSQL text parameters cannot carry NUL.
+        second: sql`hashtext(${JSON.stringify([
+          options.id.organizationId,
+          options.id.connectorId,
+          options.id.userId,
+        ])})`,
+        order: [
+          options.aggregate,
+          options.id.organizationId,
+          options.id.connectorId,
+          options.id.userId,
+        ],
+      };
     case "personalCatalog":
       return {
         first: sql`hashtext(${options.id.organizationId})`,
@@ -1322,7 +1540,7 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
       };
     case "readerAnnotation":
       return {
-        first: sql`${0x0f_10_cc_af}::integer`,
+        first: sql`${READER_ANNOTATION_LOCK_NAMESPACE}::integer`,
         second: sql`hashtext(${JSON.stringify([options.id.userId, options.id.id])})`,
         order: [
           options.aggregate,
@@ -1367,6 +1585,76 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
     default:
       options satisfies never;
       return panic("Unknown advisory aggregate");
+  }
+};
+
+type AggregateSessionConnection = {
+  unsafe: (query: string, params?: unknown[]) => PromiseLike<unknown>;
+};
+
+/**
+ * Hold the thread's stored-content egress fence on one physical session.
+ * Transaction writers use the same key through `withAggregateLock`; holding
+ * this session lock across provider I/O linearizes raw egress with a thread's
+ * irreversible switch to anonymized mode without keeping a transaction open.
+ */
+export const withChatStoredContentEgressSessionLock = async <T>({
+  connection,
+  organizationId,
+  threadId,
+  userId,
+  work,
+}: {
+  connection: AggregateSessionConnection;
+  organizationId: SafeId<"organization">;
+  threadId: SafeId<"chatThread">;
+  userId: SafeId<"user">;
+  work: () => Promise<T>;
+}): Promise<T> => {
+  const ownerKey = chatOwnerStoredContentEgressKey({ organizationId, userId });
+  let ownerAcquired = false;
+  let threadAcquired = false;
+  try {
+    await connection.unsafe(
+      "SELECT pg_advisory_lock($1::integer, hashtext($2::text))",
+      [CHAT_OWNER_STORED_CONTENT_EGRESS_LOCK_NAMESPACE, ownerKey],
+    );
+    ownerAcquired = true;
+    await connection.unsafe(
+      "SELECT pg_advisory_lock($1::integer, hashtext($2::text))",
+      [CHAT_STORED_CONTENT_EGRESS_LOCK_NAMESPACE, threadId],
+    );
+    threadAcquired = true;
+    return await work();
+  } finally {
+    if (threadAcquired) {
+      const rows = await connection.unsafe(
+        "SELECT pg_advisory_unlock($1::integer, hashtext($2::text)) AS released",
+        [CHAT_STORED_CONTENT_EGRESS_LOCK_NAMESPACE, threadId],
+      );
+      let released: unknown;
+      if (Array.isArray(rows)) {
+        const values: unknown[] = rows;
+        released = values.at(0);
+      }
+      if (!isRecord(released) || released["released"] !== true) {
+        panic("Chat stored-content egress lock was not held at release");
+      }
+    }
+    if (ownerAcquired) {
+      const rows = await connection.unsafe(
+        "SELECT pg_advisory_unlock($1::integer, hashtext($2::text)) AS released",
+        [CHAT_OWNER_STORED_CONTENT_EGRESS_LOCK_NAMESPACE, ownerKey],
+      );
+      let released: unknown;
+      if (Array.isArray(rows)) {
+        const values: unknown[] = rows;
+        released = values.at(0);
+      }
+      if (!isRecord(released) || released["released"] !== true) {
+        panic("Chat owner stored-content egress lock was not held at release");
+      }
+    }
   }
 };
 const busy = (aggregate: AggregateName): AggregateLockResult => ({
@@ -1541,6 +1829,9 @@ export const withAggregateLock = async (
   completeAcquisition(history);
   return rows.length > 0 ? { status: "locked" } : { status: "missing" };
 };
+
+/** The queue claim owns this nonblocking row-lock clause. */
+export const chatCompactionQueueClaimLock = () => sql`FOR UPDATE SKIP LOCKED`;
 
 type OpenSigningPageOptions = {
   tx: Transaction;
@@ -2417,6 +2708,229 @@ export const withDecisionCitationStatsLocks = async ({
   `);
 };
 
+export const lockBillingArrangement = async (
+  tx: Transaction,
+  workspaceId: SafeId<"workspace">,
+) => {
+  // Same matter lock as timer/invoice guards; it also serializes first-row creation.
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`);
+  const rows = await tx
+    .select()
+    .from(billingArrangements)
+    .where(eq(billingArrangements.workspaceId, workspaceId))
+    .limit(1)
+    .for("update");
+  return rows.at(0);
+};
+
+/** Timer guards use the same advisory key order before any matter row lock. */
+export const withInvoiceMatterLocks = async (
+  tx: Transaction,
+  workspaceIds: readonly SafeId<"workspace">[],
+) => {
+  const ids = [...new Set(workspaceIds)].toSorted();
+  if (ids.length === 0) {
+    panic("Invoice matter locks require at least one matter");
+  }
+  await tx.execute(
+    sql`SELECT pg_advisory_xact_lock(keys.key) FROM (SELECT DISTINCT hashtext(matter_id::text) AS key FROM unnest(ARRAY[${sql.join(
+      ids.map((id) => sql`${id}::uuid`),
+      sql`, `,
+    )}]) AS matter_id ORDER BY key) keys ORDER BY keys.key`,
+  );
+  await withAggregateParentBatch({
+    tx,
+    organizationIds: [],
+    workspaceIds: ids,
+    mode: "no key update",
+  });
+  for (const id of ids) {
+    // db-await-in-loop: bounded invoice matter set, advisory locks already acquired together
+    await lockBillingArrangement(tx, id);
+  }
+};
+
+export type AcquiredInvoiceMatterLocks = {
+  type: "acquired";
+  invoiceId: SafeId<"invoice">;
+  workspaceIds: ReadonlySet<SafeId<"workspace">>;
+};
+export type InvoiceMatterLocks =
+  { type: "acquire" } | AcquiredInvoiceMatterLocks;
+
+type LockInvoiceOptions = {
+  invoiceId: SafeId<"invoice">;
+  workspaceId: SafeId<"workspace">;
+  status: InvoiceStatus | readonly InvoiceStatus[];
+  matterLocks: InvoiceMatterLocks;
+};
+
+/**
+ * Locks the invoice row with `SELECT ... FOR UPDATE` and returns the columns
+ * every mutation handler (update, transition, delete, add-entries,
+ * remove-entries) needs to make its status-conditional decision. Callers
+ * must re-check `status` (or the relevant precondition) inside the same
+ * transaction before mutating, and repeat the identical status filter on the
+ * mutating statement itself: the lock alone does not stop a concurrent
+ * transaction from having already committed a status change before this one
+ * started.
+ *
+ * Call this BEFORE any child-row writes (`time_entries`, `expenses`) inside
+ * the transaction, never after. Every invoice mutation handler in this
+ * module locks the invoice row first and mutates children second; a handler
+ * that mutates children first and only touches the invoice row later (e.g.
+ * via an `UPDATE invoices ...` at the end of the transaction) acquires its
+ * locks in the opposite order and can deadlock against a concurrent
+ * transaction that follows the invoice-first order.
+ */
+export const lockInvoiceInStatus = async (
+  tx: Transaction,
+  { invoiceId, workspaceId, status, matterLocks }: LockInvoiceOptions,
+) => {
+  const lineMattersRead = await readBounded(
+    tx
+      .selectDistinct({ workspaceId: invoiceLines.workspaceId })
+      .from(invoiceLines)
+      .where(eq(invoiceLines.invoiceId, invoiceId)),
+    LIMITS.invoiceLinesPerInvoice,
+  );
+  if (lineMattersRead.type === "overflow") {
+    return undefined;
+  }
+  const lineMatters = lineMattersRead.rows;
+  const matterIds = [
+    ...new Set([workspaceId, ...lineMatters.map((line) => line.workspaceId)]),
+  ].toSorted();
+  switch (matterLocks.type) {
+    case "acquire":
+      break;
+    case "acquired":
+      if (matterLocks.invoiceId !== invoiceId) {
+        return panic("Invoice matter locks belong to another invoice");
+      }
+      if (matterIds.some((id) => !matterLocks.workspaceIds.has(id))) {
+        return undefined;
+      }
+      break;
+    default:
+      matterLocks satisfies never;
+      return panic("Unknown invoice matter lock scope");
+  }
+  await withInvoiceMatterLocks(tx, matterIds);
+  const statusFilter =
+    typeof status === "string"
+      ? eq(invoices.status, status)
+      : inArray(invoices.status, [...status]);
+
+  const rows = await tx
+    .select({
+      id: invoices.id,
+      status: invoices.status,
+      documentType: invoices.documentType,
+      billingMode: invoices.billingMode,
+      flatFeeAmount: invoices.flatFeeAmount,
+      originalInvoiceId: invoices.originalInvoiceId,
+      finalizedAt: invoices.finalizedAt,
+      currency: invoices.currency,
+      language: invoices.language,
+      vatAmount: invoices.vatAmount,
+      dueDate: invoices.dueDate,
+      invoiceDate: invoices.invoiceDate,
+      invoiceNumber: invoices.invoiceNumber,
+      notes: invoices.notes,
+      reference: invoices.reference,
+      sentAt: invoices.sentAt,
+      sellerProfileId: invoices.sellerProfileId,
+      taxableSupplyDate: invoices.taxableSupplyDate,
+      totalAmount: invoices.totalAmount,
+      vatExchangeRate: invoices.vatExchangeRate,
+    })
+    .from(invoices)
+    .where(
+      and(
+        eq(invoices.id, invoiceId),
+        invoiceInMatter(invoices, workspaceId),
+        statusFilter,
+      ),
+    )
+    .limit(1)
+    .for("update");
+
+  const invoice = rows.at(0);
+  if (invoice === undefined) {
+    return undefined;
+  }
+  // A concurrent writer can add a participating matter while this acquisition
+  // waits. The invoice row now fences new participation; refuse a stale
+  // lock set before callers mutate or acquire missing matter locks out of order.
+  const currentMattersRead = await readBounded(
+    tx
+      .selectDistinct({ workspaceId: invoiceLines.workspaceId })
+      .from(invoiceLines)
+      .where(eq(invoiceLines.invoiceId, invoiceId)),
+    LIMITS.invoiceLinesPerInvoice,
+  );
+  if (currentMattersRead.type === "overflow") {
+    return undefined;
+  }
+  const currentMatters = currentMattersRead.rows;
+  const lockedMatterIds = new Set(matterIds);
+  if (currentMatters.some((line) => !lockedMatterIds.has(line.workspaceId))) {
+    return undefined;
+  }
+  return invoice;
+};
+
+/** Caller holds the timer-owner and complete matter advisory set. */
+export const lockBillingTimeEntrySources = async (
+  tx: Pick<PgAsyncDatabase<PgQueryResultHKT>, "select">,
+  condition: SQL | undefined,
+) =>
+  await readBounded(
+    {
+      limit: (cap) =>
+        tx
+          .select({ id: timeEntries.id })
+          .from(timeEntries)
+          .where(condition)
+          .orderBy(asc(timeEntries.id))
+          .limit(cap)
+          .for("update"),
+    },
+    LIMITS.timeEntriesPerWorkspace,
+  );
+
+/** Caller holds timer-owner locks; all selected matter advisory keys are acquired together. */
+export const withBillingMatterAdvisoryLocks = async (
+  tx: ExecuteTransaction,
+  keys: SQL,
+) => {
+  await tx.execute(
+    sql`SELECT pg_advisory_xact_lock(matter_locks.lock_key) FROM (${keys} ORDER BY lock_key) matter_locks ORDER BY matter_locks.lock_key`,
+  );
+};
+
+type LockOriginalInvoiceOptions = {
+  invoiceId: SafeId<"invoice">;
+  workspaceId: SafeId<"workspace">;
+};
+export const lockOriginalInvoice = async (
+  tx: Transaction,
+  { invoiceId, workspaceId }: LockOriginalInvoiceOptions,
+) =>
+  await tx
+    .select({
+      status: invoices.status,
+      documentType: invoices.documentType,
+      currency: invoices.currency,
+      totalAmount: invoices.totalAmount,
+    })
+    .from(invoices)
+    .where(
+      and(eq(invoices.id, invoiceId), invoiceInMatter(invoices, workspaceId)),
+    )
+    .limit(1)
+    .for("update");
 type MemberAccessRowLockOptions = {
   tx: Transaction;
   organizationId: SafeId<"organization">;
@@ -2444,6 +2958,30 @@ export const lockMemberAccessRow = async ({
       .limit(1)
       .for(mode)
   ).at(0);
+
+/**
+ * Holds off organization settings writes until the transaction ends: a first
+ * settings row's foreign key needs a key-share lock on the organization row,
+ * and a later write updates the settings row itself. A read after this lock
+ * is the state every such write serializes with.
+ */
+export const lockOrganizationSettingsWrites = async ({
+  tx,
+  organizationIds,
+}: {
+  tx: Transaction;
+  organizationIds: readonly SafeId<"organization">[];
+}): Promise<void> => {
+  if (organizationIds.length === 0) {
+    return;
+  }
+  await withAggregateParentBatch({ tx, organizationIds, mode: "update" });
+  await tx
+    .select({ organizationId: organizationSettings.organizationId })
+    .from(organizationSettings)
+    .where(inArray(organizationSettings.organizationId, [...organizationIds]))
+    .for("share");
+};
 
 type MatterAccessRowsLockOptions = MemberAccessRowLockOptions & {
   workspaceIds: readonly SafeId<"workspace">[];
@@ -2577,4 +3115,35 @@ export const lockTimerMatterAccessRows = async ({
     default:
       return panic("Invalid timer matter lock scope");
   }
+};
+
+/** Fence snapshot writers before removal discards their inputs. */
+export const lockCaseLawRemovalSnapshots = async (
+  tx: ExecuteTransaction,
+): Promise<void> => {
+  await tx.execute(sql`LOCK TABLE case_law_browse_facet_counts, case_law_coverage_summaries,
+    case_law_sitemap_shard_counts, case_law_sitemap_shards, case_law_source_arrivals
+    IN SHARE ROW EXCLUSIVE MODE`);
+};
+
+/** A coverage answer holds its snapshot fence before reading its inputs. */
+export const lockCaseLawCoverageSnapshot = async (
+  tx: ExecuteTransaction,
+): Promise<void> => {
+  await tx.execute(
+    sql`LOCK TABLE case_law_coverage_summaries IN SHARE ROW EXCLUSIVE MODE`,
+  );
+};
+
+/** Removal discovery and completion serialize their ledger and checkpoint on one source. */
+export const lockCaseLawRemovalSource = async ({
+  tx,
+  sourceId,
+}: {
+  tx: ExecuteTransaction;
+  sourceId: SafeId<"caseLawSource">;
+}): Promise<void> => {
+  await tx.execute(
+    sql`SELECT id FROM case_law_sources WHERE id = ${sourceId} FOR UPDATE`,
+  );
 };

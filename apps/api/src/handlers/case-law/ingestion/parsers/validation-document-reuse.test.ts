@@ -1,5 +1,5 @@
 import { Glob } from "bun";
-import { describe, expect, spyOn, test } from "bun:test";
+import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 import * as cheerio from "cheerio";
 import * as v from "valibot";
 
@@ -15,6 +15,11 @@ import {
   readPlTkRuling,
 } from "./pl-tk";
 import { parseSkUsDocumentXhtml } from "./sk-us";
+
+// Spies created in a test stay attached if it fails before restoring them.
+afterEach(() => {
+  mock.restore();
+});
 
 const FIXTURES = new URL("__fixtures__/", import.meta.url);
 const ADAPTER_FIXTURES = new URL("../adapters/__fixtures__/", import.meta.url);

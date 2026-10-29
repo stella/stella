@@ -102,6 +102,12 @@ const BENIGN: readonly RegExp[] = [
   // led by a chamber number or written "Spr."): the agenda of the court's
   // president, not a decision docket the corpus can hold.
   /^sp\.\s{0,3}zn\.\s{0,3}(?:\d{1,3}\s{0,2})?Spr\.?\s{1,3}\d{1,6}\/\d{2,4}(?![\p{L}\d/-])/u,
+  // Slovak prosecutor-office file ("sp. zn. VI/2 Pz 123/07", "sp. zn. XV/2
+  // Gn 45/09"): a Roman division and numeric department joined by a slash
+  // lead the reference, where every court docket opens with a plain chamber
+  // number; the prosecution service's files are not decisions the corpus
+  // can hold.
+  /^sp\.\s{0,3}zn\.\s{0,3}[IVX]{1,5}\/\d{1,2}\s{1,3}\p{Lu}\p{Ll}{1,3}\s{1,3}\d{1,6}\/\d{2,4}(?![\p{L}\d/-])/u,
 ];
 
 export const isBenign = (candidate: string): boolean =>

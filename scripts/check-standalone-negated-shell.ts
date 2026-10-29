@@ -1,4 +1,8 @@
-/** Reject shell negation statements whose status `set -e` silently ignores. */
+/**
+ * Reject shell statements whose exit status misleads under `set -eo pipefail`:
+ * negations that `set -e` silently ignores, and pipelines whose reader can
+ * exit before its writer finishes.
+ */
 
 import { execFileSync } from "node:child_process";
 import {
@@ -17,7 +21,7 @@ const WORKFLOW_FILE =
   /^\.github\/(?:workflows\/[^/]+\.ya?ml|actions\/.+\/action\.ya?ml)$/u;
 const BASH_SHEBANG = /^#![^\n]*\b(?:\/|\s)bash(?:\s|$)/u;
 
-export type StandaloneNegationFinding = {
+export type ShellStatusFinding = {
   readonly file: string;
   readonly line: number;
   readonly source: string;
@@ -67,10 +71,14 @@ const COMMAND_SEPARATORS = new Set([
 
 type Heredoc = { readonly delimiter: string; readonly stripTabs: boolean };
 
+// The text inside `$(...)` or backticks, which runs as its own script.
+type CommandSubstitution = { readonly source: string; readonly line: number };
+
 type LexState = {
   readonly source: string;
   readonly tokens: Token[];
   readonly heredocs: Heredoc[];
+  readonly substitutions: CommandSubstitution[];
   index: number;
   line: number;
   heredocOperator: "<<" | "<<-" | undefined;
@@ -108,10 +116,13 @@ const SUBSTITUTION_OPENERS = {
 const skipSubstitution = (state: LexState, closing: SubstitutionClose) => {
   const { source } = state;
   const opener = SUBSTITUTION_OPENERS[closing];
+  const start = state.index;
+  const startLine = state.line;
   let depth = 1;
   while (state.index < source.length && depth > 0) {
     const char = source[state.index];
     if (char === "\\") {
+      state.line += source[state.index + 1] === "\n" ? 1 : 0;
       state.index += Math.min(2, source.length - state.index);
       continue;
     }
@@ -129,6 +140,13 @@ const skipSubstitution = (state: LexState, closing: SubstitutionClose) => {
       depth -= 1;
     }
     state.index += 1;
+  }
+  // `${...}` is a parameter expansion, not a command.
+  if (closing !== "}") {
+    state.substitutions.push({
+      source: source.slice(start, Math.max(start, state.index - 1)),
+      line: startLine,
+    });
   }
 };
 
@@ -178,6 +196,7 @@ const readQuoted = (state: LexState, kind: QuoteKind) => {
   let value = "";
   while (state.index < source.length && source[state.index] !== quote) {
     if (kind !== "'" && source[state.index] === "\\") {
+      state.line += source[state.index + 1] === "\n" ? 1 : 0;
       value += source[state.index + 1] ?? "";
       state.index += 2;
       continue;
@@ -294,6 +313,7 @@ const readConditionalExpression = (state: LexState) => {
       continue;
     }
     if (char === "\\") {
+      state.line += source[state.index + 1] === "\n" ? 1 : 0;
       state.index += 2;
       continue;
     }
@@ -325,11 +345,17 @@ const readNewline = (state: LexState) => {
   }
 };
 
-const shellTokens = (source: string): Token[] => {
+type LexResult = {
+  readonly tokens: Token[];
+  readonly substitutions: CommandSubstitution[];
+};
+
+const lexShell = (source: string): LexResult => {
   const state: LexState = {
     source,
     tokens: [],
     heredocs: [],
+    substitutions: [],
     index: 0,
     line: 1,
     heredocOperator: undefined,
@@ -383,7 +409,7 @@ const shellTokens = (source: string): Token[] => {
     state.heredocOperator =
       operator === "<<" || operator === "<<-" ? operator : undefined;
   }
-  return state.tokens;
+  return { tokens: state.tokens, substitutions: state.substitutions };
 };
 
 // Quoted words never act as operators, even when their text matches one.
@@ -656,9 +682,9 @@ const startsTimedPipeline = (
   reserved && (token.value === "time" || (timePrefix && token.value === "-p"));
 
 const shellFindings = ({ file, lineOffset, source }: ShellSource) => {
-  const findings: StandaloneNegationFinding[] = [];
+  const findings: ShellStatusFinding[] = [];
   const lines = source.split("\n");
-  const tokens = shellTokens(source);
+  const { tokens } = lexShell(source);
   const conditions: ConditionState[] = [];
   const groups: GroupFrame[] = [];
   // One frame per open `case`: its word, then patterns, then an arm body.
@@ -799,10 +825,134 @@ const hasBashShebang = (file: string): boolean => {
   return BASH_SHEBANG.test(buffer.toString("utf-8", 0, bytesRead));
 };
 
-export const findStandaloneNegatedShellStatements = (
+// Readers that can stop before end of input: `head`, and searches that stop
+// at a first match or a match limit.
+const SEARCH_COMMANDS = new Set(["grep", "egrep", "fgrep", "rg"]);
+const EARLY_EXIT_SHORT_OPTIONS = new Set(["q", "m", "l"]);
+// Short options whose value is the rest of the cluster or the next word.
+const VALUE_SHORT_OPTIONS = new Set(["e", "f", "A", "B", "C", "d", "D"]);
+const EARLY_EXIT_LONG_OPTION =
+  /^--(?:quiet|silent|max-count|files-with-matches)(?:=|$)/u;
+const ASSIGNMENT_WORD = /^[A-Za-z_][A-Za-z0-9_]*=/u;
+
+// Whether a search's option clusters ask it to stop early. The value of
+// `-e`, `-A` and the like is skipped, so `-e -q` searches for "-q".
+const searchExitsEarly = (options: readonly Token[]): boolean => {
+  let valueNext = false;
+  for (const { value, quoted } of options) {
+    if (valueNext || quoted) {
+      valueNext = false;
+      continue;
+    }
+    if (value === "--") {
+      return false;
+    }
+    if (EARLY_EXIT_LONG_OPTION.test(value)) {
+      return true;
+    }
+    if (!/^-[A-Za-z0-9]/u.test(value)) {
+      continue;
+    }
+    // Short options are ASCII letters, one code unit each.
+    for (let index = 1; index < value.length; index += 1) {
+      const letter = value.charAt(index);
+      if (EARLY_EXIT_SHORT_OPTIONS.has(letter)) {
+        return true;
+      }
+      if (VALUE_SHORT_OPTIONS.has(letter)) {
+        valueNext = index === value.length - 1;
+        break;
+      }
+    }
+  }
+  return false;
+};
+
+const exitsEarly = (words: readonly Token[]): boolean => {
+  const commandIndex = words.findIndex(
+    (word) => !ASSIGNMENT_WORD.test(word.value),
+  );
+  const command = words[commandIndex];
+  if (command === undefined || command.quoted) {
+    return false;
+  }
+  if (command.value === "head") {
+    return true;
+  }
+  return (
+    SEARCH_COMMANDS.has(command.value) &&
+    searchExitsEarly(words.slice(commandIndex + 1))
+  );
+};
+
+type EarlyExitSource = ShellSource & {
+  // Reports the original line, so substitutions show their whole statement.
+  readonly display: (line: number) => string;
+};
+
+// Under pipefail a reader that exits before end of input kills its writer
+// with SIGPIPE, so a pipeline that found its match can still fail.
+const earlyExitPipeFindings = ({
+  file,
+  lineOffset,
+  source,
+  display,
+}: EarlyExitSource): ShellStatusFinding[] => {
+  const { tokens, substitutions } = lexShell(source);
+  const findings: ShellStatusFinding[] = [];
+  for (const [index, token] of tokens.entries()) {
+    if (!isOperator(token, PIPES)) {
+      continue;
+    }
+    // A pipe may end a line; its reader starts after newlines and comments.
+    let start = index + 1;
+    while (isOperator(tokens[start], LINE_BREAKS)) {
+      start += 1;
+    }
+    const end = tokens.findIndex(
+      (candidate, position) =>
+        position >= start && candidate.type === "operator",
+    );
+    const words = tokens.slice(start, end === -1 ? tokens.length : end);
+    const reader = words.at(0);
+    if (reader === undefined || !exitsEarly(words)) {
+      continue;
+    }
+    const line = lineOffset + reader.line;
+    findings.push({ file, line, source: display(line).trim() });
+  }
+  for (const substitution of substitutions) {
+    findings.push(
+      ...earlyExitPipeFindings({
+        file,
+        lineOffset: lineOffset + substitution.line - 1,
+        source: substitution.source,
+        display,
+      }),
+    );
+  }
+  return findings;
+};
+
+const earlyExitPipeBlockFindings = (block: ShellSource) => {
+  const lines = block.source.split("\n");
+  const findings = earlyExitPipeFindings({
+    ...block,
+    display: (line) => lines[line - block.lineOffset - 1] ?? "",
+  });
+  // A substitution nested in a quoted substitution is lexed at both levels.
+  return [
+    ...new Map(findings.map((finding) => [finding.line, finding])).values(),
+  ];
+};
+
+type ShellRule = (block: ShellSource) => ShellStatusFinding[];
+
+const findShellRuleViolations = (
   sources: ReadonlyMap<string, string>,
-): StandaloneNegationFinding[] => {
-  const findings: StandaloneNegationFinding[] = [];
+  rule: ShellRule,
+): ShellStatusFinding[] => {
+  const findings: ShellStatusFinding[] = [];
   for (const [file, source] of sources) {
     if (WORKFLOW_FILE.test(file)) {
       const blocks = workflowShellSources(file, source);
@@ -816,15 +966,44 @@ export const findStandaloneNegatedShellStatements = (
         continue;
       }
       for (const block of blocks) {
-        findings.push(...shellFindings(block));
+        findings.push(...rule(block));
       }
       continue;
     }
     if (SHELL_FILE.test(file) || BASH_SHEBANG.test(source)) {
-      findings.push(...shellFindings({ file, lineOffset: 0, source }));
+      findings.push(...rule({ file, lineOffset: 0, source }));
     }
   }
   return findings;
+};
+
+export const findStandaloneNegatedShellStatements = (
+  sources: ReadonlyMap<string, string>,
+) => findShellRuleViolations(sources, shellFindings);
+
+// `stll-cloud-setup` (from @stll/oxlint-config) renders this file and the
+// generated-file check rejects hand edits, so its fix lands in that renderer.
+// An entry is reported once its file no longer needs it.
+const EARLY_EXIT_PIPE_EXEMPTIONS = new Set([".agents/cloud-setup.sh"]);
+
+export type EarlyExitPipeReport = {
+  readonly violations: readonly ShellStatusFinding[];
+  readonly staleExemptions: readonly string[];
+};
+
+export const findEarlyExitPipelines = (
+  sources: ReadonlyMap<string, string>,
+): EarlyExitPipeReport => {
+  const findings = findShellRuleViolations(sources, earlyExitPipeBlockFindings);
+  const flagged = new Set(findings.map(({ file }) => file));
+  return {
+    violations: findings.filter(
+      ({ file }) => !EARLY_EXIT_PIPE_EXEMPTIONS.has(file),
+    ),
+    staleExemptions: [...EARLY_EXIT_PIPE_EXEMPTIONS].filter(
+      (file) => sources.has(file) && !flagged.has(file),
+    ),
+  };
 };
 
 const trackedSources = (): Map<string, string> => {
@@ -853,19 +1032,40 @@ const trackedSources = (): Map<string, string> => {
   return sources;
 };
 
-export const checkStandaloneNegatedShellStatements = () =>
-  findStandaloneNegatedShellStatements(trackedSources());
+const RULE_MESSAGES = {
+  negation: "standalone negation cannot enforce failure under set -e",
+  earlyExitPipe:
+    "reader can exit before its writer, so pipefail can fail a matching pipeline; read a here-string or file instead",
+  staleExemption: "exempt from the early-exit pipe rule without needing it",
+} as const;
 
 if (import.meta.main) {
-  const findings = checkStandaloneNegatedShellStatements();
+  const sources = trackedSources();
+  const earlyExitPipes = findEarlyExitPipelines(sources);
+  const findings = [
+    ...findStandaloneNegatedShellStatements(sources).map((finding) => ({
+      finding,
+      message: RULE_MESSAGES.negation,
+    })),
+    ...earlyExitPipes.violations.map((finding) => ({
+      finding,
+      message: RULE_MESSAGES.earlyExitPipe,
+    })),
+    ...earlyExitPipes.staleExemptions.map((file) => ({
+      finding: {
+        file,
+        line: 1,
+        source: "remove its EARLY_EXIT_PIPE_EXEMPTIONS entry",
+      },
+      message: RULE_MESSAGES.staleExemption,
+    })),
+  ];
   if (findings.length === 0) {
-    process.stdout.write(
-      "Standalone negated shell statement guard passed: 0 violations.\n",
-    );
+    process.stdout.write("Shell exit-status guard passed: 0 violations.\n");
   } else {
-    for (const finding of findings) {
+    for (const { finding, message } of findings) {
       process.stderr.write(
-        `${finding.file}:${finding.line}: standalone negation cannot enforce failure under set -e: ${finding.source}\n`,
+        `${finding.file}:${finding.line}: ${message}: ${finding.source}\n`,
       );
     }
     process.exitCode = 1;

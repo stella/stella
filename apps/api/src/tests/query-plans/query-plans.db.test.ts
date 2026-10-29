@@ -435,13 +435,15 @@ test(
     const decisions = scans.filter(
       ({ relation }) => relation === "case_law_decisions",
     );
-    expect(decisions).toHaveLength(1);
+    expect(decisions).toHaveLength(2);
+    expect(decisions[1]?.index).toBe("case_law_decisions_lang_group_idx");
+    expect(decisions[1]?.indexCond).toMatch(/language_group_key/u);
     expect(decisions[0]?.nodeType).not.toBe("Seq Scan");
     expect(decisions[0]?.index).toBe(
       "case_law_decisions_sitemap_shard_published_idx",
     );
     // The country and both ends of the month bound the range the scan reads.
-    expect(decisions[0]?.indexCond).toMatch(/\bcountry = /u);
+    expect(decisions[0]?.indexCond).toMatch(/\bcountry(?:\)::text)? = /u);
     expect(decisions[0]?.indexCond).toMatch(/\bdecision_date >= /u);
     expect(decisions[0]?.indexCond).toMatch(/\bdecision_date < /u);
     expect(

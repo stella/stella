@@ -864,8 +864,8 @@ for (const target of [
       const scan = plan.slice(plan.indexOf("case_law_decisions_sitemap_shard"));
       expect(scan).toMatch(
         target.year === "undated"
-          ? /Index Cond: \(\(country = .*\) AND \(decision_date IS NULL\)\)/u
-          : /Index Cond: \(\(country = .*\) AND \(decision_date >= .*\) AND \(decision_date < .*\)\)/u,
+          ? /Index Cond: \(\((?:country|\(country\)::text) = .*\) AND \(decision_date IS NULL\)(?: AND \(source_id = case_law_sources.id\))?\)/u
+          : /Index Cond: \(\((?:country|\(country\)::text) = .*\) AND \(decision_date >= .*\) AND \(decision_date < .*\)\)/u,
       );
     },
     propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres runs each statement and the schema push in WASM

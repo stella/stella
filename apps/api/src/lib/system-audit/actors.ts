@@ -38,6 +38,7 @@ export const SYSTEM_RUN_ACTOR_COUNTS = {
   ],
   "system:case-law-sitemap-refresh": ["months", "shards"],
   "system:statute-sitemap-refresh": ["shards"],
+  "system:case-law-coverage-refresh": ["summaries", "countries"],
   "system:case-law-browse-facet-refresh": ["buckets"],
   "system:legislation-facet-refresh": ["buckets"],
   "system:case-law-source-arrivals-refresh": ["sources"],
