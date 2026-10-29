@@ -9,6 +9,7 @@ import {
   type MessageFormatElement,
   parse,
   type PluralElement,
+  type SelectElement,
   TYPE,
 } from "@formatjs/icu-messageformat-parser";
 import { expect, test } from "bun:test";
@@ -79,6 +80,7 @@ type Analysis = {
   numericArguments: Set<string>;
   dateArguments: Set<string>;
   plurals: PluralElement[];
+  ast: MessageFormatElement[];
   tags: Set<string>;
 };
 
@@ -101,6 +103,7 @@ const analyzeMessage = (message: string): Analysis => {
     numericArguments: new Set(),
     dateArguments: new Set(),
     plurals: [],
+    ast: parse(message, { captureLocation: true }),
     tags: new Set(),
   };
   const plainArguments = new Set<string>();
@@ -154,11 +157,9 @@ const analyzeMessage = (message: string): Analysis => {
     }
   };
 
-  visit(parse(message, { captureLocation: true }), []);
-  if (analysis.numericArguments.size > 0) {
-    for (const argument of plainArguments) {
-      analysis.numericArguments.add(argument);
-    }
+  visit(analysis.ast, []);
+  for (const argument of plainArguments) {
+    analysis.numericArguments.add(argument);
   }
   return analysis;
 };
@@ -216,32 +217,107 @@ const censusErrors = (
   return errors;
 };
 
-const PLURAL_CANDIDATES = [
-  0, 1, 2, 3, 4, 5, 6, 11, 12, 21, 22, 101, 1_000_000, 1_000_001, 1.5,
-] as const;
+type BranchValue = number | string;
+type BranchScenario = { label: string; values: Map<string, BranchValue> };
 
-type PluralRepresentatives = {
-  missing: Intl.LDMLPluralRule[];
-  values: Map<Intl.LDMLPluralRule, number>;
+const pluralCandidates = function* () {
+  for (let value = 0; value <= 2000; value += 1) {
+    yield value;
+  }
+  for (let value = 0; value <= 200; value += 1) {
+    yield value + 0.1;
+    yield value + 0.01;
+  }
+  yield 1_000_000;
+  yield 1_000_001;
 };
 
-const pluralRepresentatives = (
+const selectedPluralOption = (
+  plural: PluralElement,
+  rules: Intl.PluralRules,
+  value: number,
+) => {
+  const explicit = `=${value}`;
+  if (explicit in plural.options) {
+    return explicit;
+  }
+  const category = rules.select(value - plural.offset);
+  return category in plural.options ? category : "other";
+};
+
+const valueForPluralOption = (
+  plural: PluralElement,
+  option: string,
   locale: string,
-  type: Intl.PluralRuleType,
-): PluralRepresentatives => {
-  const rules = new Intl.PluralRules(locale, { type });
-  const categories = rules.resolvedOptions().pluralCategories;
-  const representatives = new Map<Intl.LDMLPluralRule, number>();
-  for (const value of PLURAL_CANDIDATES) {
-    const category = rules.select(value);
-    if (!representatives.has(category)) {
-      representatives.set(category, value);
+) => {
+  if (option.startsWith("=")) {
+    return Number(option.slice(1));
+  }
+  const rules = new Intl.PluralRules(locale, { type: plural.pluralType });
+  for (const value of pluralCandidates()) {
+    if (selectedPluralOption(plural, rules, value) === option) {
+      return value;
     }
   }
-  return {
-    missing: categories.filter((category) => !representatives.has(category)),
-    values: representatives,
+  return undefined;
+};
+
+const selectedSelectOption = (select: SelectElement, value: string) =>
+  value in select.options ? value : "other";
+
+const branchScenarios = (analysis: Analysis, locale: string) => {
+  const scenarios: BranchScenario[] = [];
+  const visit = (
+    elements: MessageFormatElement[],
+    inherited: Map<string, BranchValue>,
+  ) => {
+    for (const element of elements) {
+      if (isTagElement(element)) {
+        visit(element.children, inherited);
+        continue;
+      }
+      if (!isPluralElement(element) && !isSelectElement(element)) {
+        continue;
+      }
+
+      for (const [option, { value: children }] of Object.entries(
+        element.options,
+      )) {
+        let branchValue: BranchValue | undefined;
+        if (isPluralElement(element)) {
+          branchValue = valueForPluralOption(element, option, locale);
+        } else {
+          branchValue =
+            option === "other" ? `__census_other_${element.value}__` : option;
+        }
+        if (branchValue === undefined) {
+          continue;
+        }
+        const existing = inherited.get(element.value);
+        if (
+          existing !== undefined &&
+          (isPluralElement(element)
+            ? selectedPluralOption(
+                element,
+                new Intl.PluralRules(locale, { type: element.pluralType }),
+                Number(existing),
+              ) !== option
+            : selectedSelectOption(element, String(existing)) !== option)
+        ) {
+          continue;
+        }
+        const values = new Map(inherited);
+        values.set(element.value, existing ?? branchValue);
+        scenarios.push({
+          label: `${element.value}=${String(values.get(element.value))} (${option})`,
+          values,
+        });
+        visit(children, values);
+      }
+    }
   };
+  visit(analysis.ast, new Map());
+  return scenarios;
 };
 
 const render = (
@@ -249,19 +325,20 @@ const render = (
   locale: string,
   analysis: Analysis,
   numericArguments: string[],
-  controllingArgument: string,
-  controllingValue: number,
+  branchValues: Map<string, BranchValue>,
 ) => {
   const arguments_: NonNullable<
     Parameters<ReturnType<typeof createTranslator>["rich"]>[1]
   > = Object.fromEntries(
     sorted(analysis.arguments).map((argument) => [argument, "value"]),
   );
-  const usedValues = new Set([controllingValue]);
+  const usedValues = new Set(branchValues.values());
+  for (const [argument, value] of branchValues) {
+    arguments_[argument] = value;
+  }
   let candidate = 5;
   for (const argument of numericArguments) {
-    if (argument === controllingArgument) {
-      arguments_[argument] = controllingValue;
+    if (branchValues.has(argument)) {
       continue;
     }
     while (usedValues.has(candidate)) {
@@ -304,60 +381,49 @@ const renderingErrors = (
       !sourceAnalysis.dateArguments.has(argument) &&
       !translationAnalysis.dateArguments.has(argument),
   );
-  const controllingArguments = new Set([
-    ...sourceAnalysis.plurals.map(({ value }) => value),
-    ...translationAnalysis.plurals.map(({ value }) => value),
-  ]);
   const errors: string[] = [];
-  for (const controllingArgument of controllingArguments) {
-    const pluralTypes = new Set(
-      [...sourceAnalysis.plurals, ...translationAnalysis.plurals]
-        .filter(({ value }) => value === controllingArgument)
-        .map(({ pluralType }) => pluralType ?? "cardinal"),
+  const scenarios = [
+    ...branchScenarios(sourceAnalysis, locale),
+    ...branchScenarios(translationAnalysis, locale),
+  ].filter(
+    (scenario, index, all) =>
+      all.findIndex(
+        ({ values }) =>
+          JSON.stringify([...values.entries()]) ===
+          JSON.stringify([...scenario.values.entries()]),
+      ) === index,
+  );
+  for (const scenario of scenarios) {
+    const sourceResult = render(
+      source,
+      locale,
+      sourceAnalysis,
+      numericArguments,
+      scenario.values,
     );
-    for (const pluralType of pluralTypes) {
-      const representatives = pluralRepresentatives(locale, pluralType);
-      if (representatives.missing.length > 0) {
-        const ruleType = pluralType === "ordinal" ? "ordinal" : "cardinal";
-        errors.push(
-          `${ruleType} plural representatives are missing ${representatives.missing.join(", ")}`,
-        );
+    const translationResult = render(
+      translation,
+      locale,
+      translationAnalysis,
+      numericArguments,
+      scenario.values,
+    );
+    for (const argument of numericArguments) {
+      if (scenario.values.has(argument)) {
+        continue;
       }
-      for (const [category, value] of representatives.values) {
-        const sourceResult = render(
-          source,
-          locale,
-          sourceAnalysis,
-          numericArguments,
-          controllingArgument,
-          value,
+      const argumentValue = sourceResult.arguments_[argument];
+      if (typeof argumentValue !== "number") {
+        continue;
+      }
+      const formatted = new Intl.NumberFormat(locale).format(argumentValue);
+      if (
+        sourceResult.rendered.includes(formatted) &&
+        !translationResult.rendered.includes(formatted)
+      ) {
+        errors.push(
+          `${scenario.label} renders ${JSON.stringify(translationResult.rendered)} without ${argument}=${formatted}`,
         );
-        const translationResult = render(
-          translation,
-          locale,
-          translationAnalysis,
-          numericArguments,
-          controllingArgument,
-          value,
-        );
-        for (const argument of numericArguments) {
-          if (argument === controllingArgument) {
-            continue;
-          }
-          const argumentValue = sourceResult.arguments_[argument];
-          if (typeof argumentValue !== "number") {
-            continue;
-          }
-          const formatted = new Intl.NumberFormat(locale).format(argumentValue);
-          if (
-            sourceResult.rendered.includes(formatted) &&
-            !translationResult.rendered.includes(formatted)
-          ) {
-            errors.push(
-              `${controllingArgument}=${value} (${category}) renders ${JSON.stringify(translationResult.rendered)} without ${argument}=${formatted}`,
-            );
-          }
-        }
       }
     }
   }
@@ -473,4 +539,25 @@ test("census rejects argument and plural regressions", () => {
   ).toEqual([
     'count=1000000 (many) renders "1\u202f000\u202f000 sur 1\u202f000\u202f000" without total=5',
   ]);
+  expect(
+    renderingErrors(
+      "{count, plural, offset:1 =42 {# of {total}} other {# of {total}}}",
+      "{count, plural, offset:1 =42 {# of #} other {# of {total}}}",
+      "en",
+    ),
+  ).toContain('count=42 (=42) renders "41 of 41" without total=5');
+  expect(
+    renderingErrors(
+      "{kind, select, exact {{count} of {total}} other {{count} of {total}}}",
+      "{kind, select, exact {{count} total} other {{count} of {total}}}",
+      "en",
+    ),
+  ).toContain('kind=exact (exact) renders "5 total" without total=6');
+  expect(
+    renderingErrors(
+      "{place, selectordinal, one {#st of {total}} two {#nd of {total}} few {#rd of {total}} other {#th of {total}}}",
+      "{place, selectordinal, one {#st of {total}} two {#nd of #} few {#rd of {total}} other {#th of {total}}}",
+      "en",
+    ),
+  ).toContain('place=2 (two) renders "2nd of 2" without total=5');
 });
