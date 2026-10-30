@@ -306,3 +306,18 @@ test("reports screen bound from Testing Library by import or dynamic import", as
     ),
   ).toEqual([1, 2]);
 });
+
+test("accepts queries through the render result and a screen bound elsewhere", async () => {
+  expect(
+    await lintSingleRule(
+      "no-global-testing-library-screen",
+      [
+        'import { render, within } from "@testing-library/react";',
+        'import { screen } from "./local-screen";',
+        "const view = render(null);",
+        "void [view.getByRole, within(view.container), screen];",
+      ].join("\n"),
+      { plugin },
+    ),
+  ).toEqual([]);
+});

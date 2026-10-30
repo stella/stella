@@ -1319,8 +1319,6 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
-        const report = (node: AstNode) =>
-          context.report({ node, messageId: "globalScreen" });
         return {
           before() {
             return context.sourceCode.text.includes(TESTING_LIBRARY_SCOPE);
@@ -1339,7 +1337,7 @@ export default eslintCompatPlugin({
               isAstNode(node.imported) &&
               getPropertyName(node.imported) === SCREEN_EXPORT
             ) {
-              report(node);
+              context.report({ node, messageId: "globalScreen" });
             }
           },
           Property(node) {
@@ -1371,7 +1369,7 @@ export default eslintCompatPlugin({
               isStringLiteral(loaded.source) &&
               loaded.source.value.startsWith(TESTING_LIBRARY_SCOPE)
             ) {
-              report(node);
+              context.report({ node, messageId: "globalScreen" });
             }
           },
         };
