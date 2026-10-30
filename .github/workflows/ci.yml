@@ -1668,17 +1668,11 @@ jobs:
       # Parser versions must advance whenever an adapter's parser inputs
       # change. The guard needs no dependency installation.
       - name: Configure flaky-test quarantine
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         uses: ./.github/actions/flaky-test-quarantine
 
       - name: "parser-version-guard: Check parser version guard"
-        if: >-
-          !cancelled()
-          && inputs.pr_depth_only != true
-          && needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1'
-          && needs.ci-plan.outputs.run_required != 'false'
-          && (needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
-          && needs.ci-plan.outputs.package_checks_required == 'true'
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (inputs.pr_depth_only != true && needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1' && needs.ci-plan.outputs.run_required != 'false' && (needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch') && needs.ci-plan.outputs.package_checks_required == 'true') }}
         continue-on-error: false
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -1871,11 +1865,11 @@ jobs:
           NPM_TOKEN: ""
 
       - name: Configure flaky-test quarantine
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         uses: ./.github/actions/flaky-test-quarantine
 
       - name: Run protocol and malformed-stream tests
-        if: needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.agent_sandbox_docker_required == 'true') }}
         id: protocol
         run: bun --filter @stll/agent-engine test
 
@@ -1962,7 +1956,7 @@ jobs:
           exit 1
 
       - name: Exercise Docker provider isolation and cleanup
-        if: needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.agent_sandbox_docker_required == 'true') }}
         id: isolation
         env:
           AGENT_ENGINE_DOCKER_TEST: "1"
@@ -2353,12 +2347,12 @@ jobs:
           retention-days: 14
 
       - name: Configure flaky-test quarantine
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         uses: ./.github/actions/flaky-test-quarantine
 
       - name: Typecheck-cost baseline guard
         continue-on-error: ${{ github.event_name == 'merge_group' }}
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         env:
           STELLA_VERIFY: check
         # The --self-test run first proves the parser and comparison logic,
@@ -2715,7 +2709,7 @@ jobs:
         run: bun .ai/shared/scripts/validate-skills.ts .agents/skills
 
       - name: Configure flaky-test quarantine
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         env:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
@@ -2838,7 +2832,7 @@ jobs:
         env:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Prepares and validates baseline using target revision and external recording context."
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && steps.network_manifest_prepare.outcome == 'success') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Route network manifest coverage')) }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && steps.network_manifest_prepare.outcome == 'success') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Route network manifest coverage')) }}
         timeout-minutes: 1
         run: |
           timeout 30s bash -c '
@@ -2945,6 +2939,7 @@ jobs:
 
     steps:
       - name: Checkout
+        id: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
@@ -3030,16 +3025,13 @@ jobs:
           fi
 
       - name: Configure flaky-test quarantine
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         uses: ./.github/actions/flaky-test-quarantine
 
       - name: Test .claude/mcp
         # Outside the workspace, so no shard filter selects it: one shard owns
         # it outright.
-        if: >-
-          !cancelled()
-          && needs.ci-plan.outputs.package_checks_required == 'true'
-          && matrix.shard == 'rest-web'
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && matrix.shard == 'rest-web') }}
         run: bun --cwd .claude/mcp test
 
       # The API test runner sizes its parallel lanes from the runner's cores
@@ -3050,9 +3042,7 @@ jobs:
 
       - name: Test API or rest
         id: test-api-or-rest
-        if: >-
-          !cancelled()
-          && needs.ci-plan.outputs.package_checks_required == 'true'
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         env:
           AFFECTED_FLAG: ${{ steps.affected.outputs.flag }}
           TEST_SCOPE: ${{ needs.ci-plan.outputs.test_scope }}
@@ -3117,10 +3107,7 @@ jobs:
 
       - name: Test web
         id: test-web
-        if: >-
-          !cancelled()
-          && needs.ci-plan.outputs.package_checks_required == 'true'
-          && matrix.shard == 'rest-web'
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && matrix.shard == 'rest-web') }}
         env:
           AFFECTED_FLAG: ${{ steps.affected.outputs.flag }}
           TEST_SCOPE: ${{ needs.ci-plan.outputs.test_scope }}
@@ -3335,6 +3322,7 @@ jobs:
       actions: write
     steps:
       - &full_checkout_input_sha
+        id: checkout
         name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -3494,17 +3482,18 @@ jobs:
           dependency-mode: preinstalled
 
       - name: Configure flaky-test quarantine
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         uses: ./.github/actions/flaky-test-quarantine
 
       - name: Test UI browser interactions
         # On a pull request the UI leg runs only the selected playground specs.
-        if: matrix.suite == 'ui' && github.event_name != 'pull_request' && steps.ui-browser-tests.outputs.required == 'true'
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (matrix.suite == 'ui' && github.event_name != 'pull_request' && steps.ui-browser-tests.outputs.required == 'true') }}
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/test-ui-browser-interactions.json
         run: bun --filter @stll/ui test:browser
 
       - name: Test desktop browser interactions
-        if: matrix.suite == 'desktop' && steps.desktop-browser-tests.outputs.required == 'true'
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (matrix.suite == 'desktop' && steps.desktop-browser-tests.outputs.required == 'true') }}
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/test-desktop-browser-interactions.json
         run: |
@@ -3521,7 +3510,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Test UI playground visuals
-        if: (matrix.suite == 'playground' || matrix.suite == 'playground-1' || matrix.suite == 'playground-2' || matrix.suite == 'playground-3' || matrix.suite == 'playground-4' || matrix.suite == 'playground-5' || matrix.suite == 'playground-6') && steps.ui-browser-tests.outputs.required == 'true'
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && ((matrix.suite == 'playground' || matrix.suite == 'playground-1' || matrix.suite == 'playground-2' || matrix.suite == 'playground-3' || matrix.suite == 'playground-4' || matrix.suite == 'playground-5' || matrix.suite == 'playground-6') && steps.ui-browser-tests.outputs.required == 'true') }}
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/test-ui-playground-visuals.json
           SUITE: ${{ matrix.suite }}
@@ -3538,7 +3527,7 @@ jobs:
           bun run test:e2e:ui-playground --shard="${SUITE#playground-}/6"
 
       - name: Test extension browser boundary
-        if: matrix.suite == 'ui' && steps.extension-browser-tests.outputs.required == 'true'
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (matrix.suite == 'ui' && steps.extension-browser-tests.outputs.required == 'true') }}
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/test-extension-browser-boundary.json
         run: bun --filter @stll/extension test:e2e
@@ -4032,11 +4021,12 @@ jobs:
         run: bun scripts/postgres-test-maintenance.ts
 
       - name: Configure flaky-test quarantine
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         uses: ./.github/actions/flaky-test-quarantine
 
       - name: Run Postgres-gated API suites
         id: postgres-tests
-        if: needs.ci-plan.outputs.postgres_suites_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true'))
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.postgres_suites_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true'))) }}
         working-directory: apps/api
         env:
           CI_POSTGRES_TEST_SHARD: ${{ matrix.shard }}
@@ -4222,18 +4212,18 @@ jobs:
       # Independent of the Postgres verdict: a failure there should not hide
       # this runner's result.
       - name: Configure flaky-test quarantine
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         uses: ./.github/actions/flaky-test-quarantine
 
       - name: Run Valkey-gated API suites
-        if: ${{ !cancelled() && needs.ci-plan.outputs.valkey_suites_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true')) }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.valkey_suites_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true'))) }}
         working-directory: apps/api
         env:
           REDIS_URL: redis://127.0.0.1:6379
         run: bun run test:valkey
 
       - name: Run cross-replica collaboration suite
-        if: ${{ !cancelled() && needs.ci-plan.outputs.collaboration_suite_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true')) }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.collaboration_suite_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true'))) }}
         env:
           STELLA_COLLAB_TEST_REDIS_CONTAINER_ID: ${{ job.services.redis.id }}
           STELLA_COLLAB_TEST_REDIS_URL: redis://127.0.0.1:6380
@@ -4263,6 +4253,7 @@ jobs:
 
     steps:
       - name: Checkout
+        id: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
@@ -4282,9 +4273,11 @@ jobs:
           NPM_TOKEN: ""
 
       - name: Configure flaky-test quarantine
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         uses: ./.github/actions/flaky-test-quarantine
 
       - name: Test migration safety rules and historical findings
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         run: bun test scripts/check-migration-safety.test.ts scripts/check-migration-index-builds.test.ts apps/api/scripts/migration-roles.test.ts
 
       - name: Check migration coverage
@@ -5160,6 +5153,7 @@ jobs:
       CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
     steps:
       - name: Checkout
+        id: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -5207,9 +5201,11 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Configure flaky-test quarantine
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         uses: ./.github/actions/flaky-test-quarantine
 
       - name: Check route network baseline
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         continue-on-error: ${{ github.event_name == 'merge_group' }}
         timeout-minutes: 6
         id: network-baseline
@@ -5293,6 +5289,7 @@ jobs:
       CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
     steps:
       - name: Checkout
+        id: checkout
         timeout-minutes: 7
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -5358,16 +5355,14 @@ jobs:
       # Route count times per-route render time on a loaded runner: the slowest
       # passing runs take about 3 minutes and a slow runner about 4.5.
       - name: Configure flaky-test quarantine
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         timeout-minutes: 1
         uses: ./.github/actions/flaky-test-quarantine
 
       - name: Check route network baseline
         continue-on-error: ${{ github.event_name == 'merge_group' }}
         timeout-minutes: 8
-        if: >-
-          steps.e2e-stack.outcome == 'success'
-          && matrix.shard == 'network-baseline'
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (steps.e2e-stack.outcome == 'success' && matrix.shard == 'network-baseline') }}
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/check-route-network-baseline.json
           E2E_EXECUTION_PROFILE: network-baseline
@@ -5390,9 +5385,7 @@ jobs:
 
       - name: Run Playwright shard
         timeout-minutes: ${{ fromJSON(steps.e2e-budget.outputs.minutes) }}
-        if: >-
-          steps.e2e-stack.outcome == 'success'
-          && matrix.shard != 'network-baseline'
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (steps.e2e-stack.outcome == 'success' && matrix.shard != 'network-baseline') }}
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/run-playwright-shard.json
           E2E_EXECUTION_PROFILE: ci-production-parallel
@@ -5444,21 +5437,14 @@ jobs:
       # but no web app; one shard runs them.
       - name: Run API browser checks
         timeout-minutes: 3
-        if: >-
-          !cancelled()
-          && steps.e2e-stack.outcome == 'success'
-          && matrix.shard == 1
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (steps.e2e-stack.outcome == 'success' && matrix.shard == 1) }}
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/run-api-browser-checks.json
         run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/api test:e2e:browser
 
       - name: Run route-smoke Playwright shard
         timeout-minutes: 3
-        if: >-
-          always()
-          && !cancelled()
-          && steps.e2e-stack.outcome == 'success'
-          && matrix.shard != 'network-baseline'
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (always() && !cancelled() && steps.e2e-stack.outcome == 'success' && matrix.shard != 'network-baseline') }}
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/run-route-smoke-playwright-shard.json
           E2E_EXECUTION_PROFILE: standard
@@ -5562,9 +5548,11 @@ jobs:
           browsers: firefox webkit
 
       - name: Configure flaky-test quarantine
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         uses: ./.github/actions/flaky-test-quarantine
 
       - name: Test browser stack redaction
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         timeout-minutes: 2
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/test-browser-stack-redaction.json
@@ -5697,11 +5685,12 @@ jobs:
         uses: ./.github/actions/setup-playwright
 
       - name: Configure flaky-test quarantine
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         uses: ./.github/actions/flaky-test-quarantine
 
       - name: Run Vite dependency canary
         timeout-minutes: 3
-        if: steps.e2e-stack.outcome == 'success'
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (steps.e2e-stack.outcome == 'success') }}
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/run-vite-dependency-canary.json
           E2E_EXPECT_DEV_ROUTES: "true"
@@ -5713,7 +5702,7 @@ jobs:
 
       - name: Test anonymized PDF export
         timeout-minutes: 2
-        if: steps.e2e-stack.outcome == 'success'
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (steps.e2e-stack.outcome == 'success') }}
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/test-anonymized-pdf-export.json
         run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:anonymized-export
@@ -5724,7 +5713,7 @@ jobs:
       # are uploaded separately with their traces and videos.
       - name: Run lockless collaboration browser suite
         timeout-minutes: 3
-        if: steps.e2e-stack.outcome == 'success'
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (steps.e2e-stack.outcome == 'success') }}
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/run-lockless-collaboration-browser-suite.json
           E2E_EXPECT_DEV_ROUTES: "true"
@@ -5872,9 +5861,11 @@ jobs:
           package-directory: apps/landing
 
       - name: Configure flaky-test quarantine
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         uses: ./.github/actions/flaky-test-quarantine
 
       - name: Check landing islands
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         timeout-minutes: 2
         env:
           PLAYWRIGHT_PACKAGE_DIR: apps/landing
@@ -6483,9 +6474,11 @@ jobs:
           if-no-files-found: ignore
 
       - name: Configure flaky-test quarantine
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         uses: ./.github/actions/flaky-test-quarantine
 
       - name: Test dev runner and process tree cleanup
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         shell: pwsh
         run: bun test packages/scripts/src/dev-runner.test.ts packages/scripts/src/process-shutdown.test.ts packages/scripts/src/process-memory.test.ts packages/scripts/src/windows-process-ownership.test.ts packages/scripts/src/process-spawn.test.ts scripts/ci-install.test.ts
 

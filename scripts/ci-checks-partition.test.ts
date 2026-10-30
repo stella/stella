@@ -30,6 +30,7 @@ import {
   DELEGATED_CHECKS_ENV,
   UNCHANGED_CHECKS_ENV,
 } from "./generated-files-guard";
+import { stepConditionCovers } from "./github-expression";
 import { customLintTestCommand } from "./run-custom-lint-tests";
 import { jobCachePolicy } from "./workflow-cache-policy.ts";
 import { flattenWorkflowSteps, isWorkflowBarrier } from "./workflow-steps";
@@ -501,6 +502,7 @@ const CONTINUATION_PREFIXES = {
   checkout: `\${{ !cancelled() && steps.checkout.outcome == 'success'`,
   install: `\${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure'`,
   installPackages: `\${{ !cancelled() && steps.install.outcome == 'success'`,
+  checkoutInstallPackages: `\${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome == 'success'`,
 } as const;
 const outcomeDependencies: Record<string, string> = {
   "Changeset present for published package changes": "policy",
@@ -2377,7 +2379,20 @@ const expectContinuation = (steps: readonly Step[], leg: string) => {
           ? CONTINUATION_PREFIXES.installPackages
           : CONTINUATION_PREFIXES.install;
     }
-    expect(condition.startsWith(prefix), step.name).toBe(true);
+    const stableStepIds = new Set(
+      steps.slice(0, index).flatMap((earlier) => {
+        const id = earlier["id"];
+        return typeof id === "string" ? [id.toLowerCase()] : [];
+      }),
+    );
+    expect(
+      stepConditionCovers({
+        earlier: `${prefix} }}`,
+        later: condition,
+        stableStepIds,
+      }),
+      step.name,
+    ).toBe(true);
     expect(withoutContinuation(step), step.name).not.toEqual(step);
     if (step.name === "Install dependencies") {
       const safety = leg === "ci-checks-rest" ? SAFETY_SUFFIX : "";

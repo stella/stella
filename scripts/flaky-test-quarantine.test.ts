@@ -216,6 +216,11 @@ describe("workflow quarantine ownership", () => {
     ["always()", "!cancelled()", true],
     ["!cancelled()", undefined, true],
     [undefined, undefined, true],
+    [
+      "!cancelled() && steps.checkout.outcome == 'success'",
+      "!cancelled() && steps.checkout.outcome == 'success'",
+      true,
+    ],
     ["contains('failure()', 'failure')", "!cancelled()", false],
     ["!cancelled() && inputs.enabled", "!cancelled()", false],
   ])(
@@ -225,7 +230,7 @@ describe("workflow quarantine ownership", () => {
         jobs: {
           check: {
             steps: [
-              { run: "exit 1" },
+              { id: "checkout", run: "exit 1" },
               { uses: QUARANTINE_ACTION, if: setup },
               { run: "bun test", if: consumer },
             ],
@@ -308,21 +313,34 @@ test("independent suites retain quarantine setup after an earlier step fails", (
   if (setup === undefined || suite === undefined) {
     throw new TypeError("Suite and preceding quarantine setup are required");
   }
-  const context = {
-    values: {
-      "needs.ci-plan.outputs.valkey_suites_required": "true",
-      "github.event_name": "workflow_dispatch",
-      "needs.ci-plan.outputs.suite_depth": "full",
-    },
-    status: { always: true, success: false, failure: true, cancelled: false },
-  };
-  expect(evaluate(String(suite["if"]), context)).toBe(true);
-  expect(
-    evaluate(
-      typeof setup["if"] === "string" ? setup["if"] : "success()",
-      context,
-    ),
-  ).toBe(true);
+  for (const checkout of ["success", "failure", "skipped"]) {
+    for (const failure of [false, true]) {
+      for (const cancelled of [false, true]) {
+        const context = {
+          values: {
+            "steps.checkout.outcome": checkout,
+            "needs.ci-plan.outputs.valkey_suites_required": "true",
+            "github.event_name": "workflow_dispatch",
+            "needs.ci-plan.outputs.suite_depth": "full",
+          },
+          status: {
+            always: true,
+            success: !failure && !cancelled,
+            failure,
+            cancelled,
+          },
+        };
+        const runnable = checkout === "success" && !cancelled;
+        expect(evaluate(String(suite["if"]), context)).toBe(runnable);
+        expect(
+          evaluate(
+            typeof setup["if"] === "string" ? setup["if"] : "success()",
+            context,
+          ),
+        ).toBe(runnable);
+      }
+    }
+  }
 });
 
 test("quoted replay instructions do not run test commands", () => {
