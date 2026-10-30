@@ -1244,12 +1244,10 @@ describe("the reasons' stored payload", () => {
     const aliasReasons = await decisionBy(fixture.sourceId, "339003");
     const canonicalRuling = await decisionBy(fixture.sourceId, "339002");
     const aliasRuling = await decisionBy(fixture.sourceId, "339004");
-    await db
-      .insert(caseLawDecisionAliases)
-      .values({
-        retiredDecisionId: aliasReasons.id,
-        canonicalDecisionId: canonicalReasons.id,
-      });
+    await db.insert(caseLawDecisionAliases).values({
+      retiredDecisionId: aliasReasons.id,
+      canonicalDecisionId: canonicalReasons.id,
+    });
     const result = await redactCaseLawDecisionWithSupplementHolders({
       decisionId: canonicalReasons.id,
       scopedDb,
