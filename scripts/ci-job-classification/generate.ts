@@ -337,6 +337,97 @@ const reachableDocuments = ({
   }
   return documents;
 };
+
+type DerivedPrivilegeOptions = DocumentDigestOptions & {
+  decisions: v.InferOutput<typeof DECISIONS>;
+};
+const derivePrivileges = ({
+  nodes,
+  parsedDocuments,
+  decisions,
+}: DerivedPrivilegeOptions) => {
+  const jobPrivileges = new Map<string, boolean>();
+  const inheritedGrants = new Map<string, Map<string, unknown>>();
+  for (const node of nodes.values()) {
+    if (node.type !== "metadata") {
+      continue;
+    }
+    const parsed = parsedDocuments.get(node.id);
+    if (!parsed) {
+      throw new AdmissionError({ message: "parsed metadata missing" });
+    }
+    for (const [jobId, job] of Object.entries(parsed.jobs)) {
+      const key = `${node.repository}:${node.path}/${jobId}`;
+      const targets = Object.keys(job.dependencies).flatMap((reference) => {
+        const target = node.edges[reference];
+        return target ? [target] : [];
+      });
+      jobPrivileges.set(
+        key,
+        isPrivilegedJobClosure({
+          kind: decisions[key]?.kind,
+          privileged: job.privileged,
+          shape: job.shape,
+          reachableDocuments: reachableDocuments({
+            initialTargets: targets,
+            nodes,
+            parsedDocuments,
+          }),
+        }),
+      );
+    }
+  }
+
+  let privilegeChanged = true;
+  while (privilegeChanged) {
+    privilegeChanged = false;
+    for (const node of nodes.values()) {
+      if (node.type !== "metadata") {
+        continue;
+      }
+      const parsed = parsedDocuments.get(node.id);
+      if (!parsed) {
+        throw new AdmissionError({ message: "parsed metadata missing" });
+      }
+      for (const [jobId, caller] of Object.entries(parsed.jobs)) {
+        const callerKey = `${node.repository}:${node.path}/${jobId}`;
+        if (!jobPrivileges.get(callerKey)) {
+          continue;
+        }
+        for (const [reference, kind] of Object.entries(caller.dependencies)) {
+          if (kind !== "reusable-workflow") {
+            continue;
+          }
+          const target = node.edges[reference];
+          const callee = target ? parsedDocuments.get(target) : undefined;
+          const calleeNode = target ? nodes.get(target) : undefined;
+          if (!callee || !calleeNode || calleeNode.type !== "metadata") {
+            continue;
+          }
+          const grant =
+            caller.shape.job["permissions"] ??
+            caller.shape.job["workflow-permissions"] ??
+            "read";
+          for (const [calleeJobId, calleeJob] of Object.entries(callee.jobs)) {
+            if ("permissions" in calleeJob.shape.job) {
+              continue;
+            }
+            const calleeKey = `${calleeNode.repository}:${calleeNode.path}/${calleeJobId}`;
+            const grants = inheritedGrants.get(calleeKey) ?? new Map();
+            grants.set(callerKey, grant);
+            inheritedGrants.set(calleeKey, grants);
+            if (!jobPrivileges.get(calleeKey)) {
+              jobPrivileges.set(calleeKey, true);
+              privilegeChanged = true;
+            }
+          }
+        }
+      }
+    }
+  }
+  return { jobPrivileges, inheritedGrants };
+};
+
 const reviewJobs = ({
   nodes,
   parsedDocuments,
@@ -351,6 +442,13 @@ const reviewJobs = ({
   const privilegedJobs: string[] = [];
   const observedJobs = new Set<string>();
   const derivedJobs = new Map<string, DerivedJob>();
+
+  const { jobPrivileges, inheritedGrants } = derivePrivileges({
+    nodes,
+    parsedDocuments,
+    decisions,
+  });
+
   for (const node of nodes.values()) {
     if (node.type !== "metadata") {
       continue;
@@ -387,13 +485,21 @@ const reviewJobs = ({
         nodes,
         parsedDocuments,
       });
-      const privileged = isPrivilegedJobClosure({
-        kind: decision?.kind,
-        privileged: job.privileged,
-        shape: job.shape,
-        reachableDocuments: reachable,
-      });
-      const surfaceDigest = privileged ? job.privilegedDigest : job.digest;
+      const privileged = jobPrivileges.get(key) ?? false;
+      const grants = inheritedGrants.get(key);
+      const privilegedSurfaceDigest = grants?.size
+        ? sha256(
+            JSON.stringify({
+              digest: job.privilegedDigest,
+              inheritedPermissions: Object.fromEntries(
+                [...grants.entries()].toSorted(([left], [right]) =>
+                  compareCodeUnit(left, right),
+                ),
+              ),
+            }),
+          )
+        : job.privilegedDigest;
+      const surfaceDigest = privileged ? privilegedSurfaceDigest : job.digest;
       const digest = Object.keys(dependencyDigests).length
         ? sha256(
             JSON.stringify({

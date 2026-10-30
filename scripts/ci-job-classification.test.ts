@@ -148,3 +148,96 @@ test("a privileged callee change keeps its own approval digest", () => {
   expect(digest(after, CALLEE)).not.toBe(digest(before, CALLEE));
   expect(after.get(CALLEE)?.privileged).toBe(true);
 });
+
+test("a callee inherits a privileged caller grant", () => {
+  const before = jobsFor({
+    ".github/workflows/caller.yml": `on: push
+permissions: {actions: write}
+jobs:
+  call:
+    uses: ./.github/workflows/shared.yml
+`,
+    ".github/workflows/shared.yml": `on: workflow_call
+permissions: {}
+jobs:
+  check:
+    permissions: {}
+    runs-on: ubuntu-latest
+    steps: []
+`,
+  });
+  const after = jobsFor({
+    ".github/workflows/caller.yml": `on: push
+permissions: {actions: write}
+jobs:
+  call:
+    uses: ./.github/workflows/shared.yml
+`,
+    ".github/workflows/shared.yml": `on: workflow_call
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo \${{ github.token }}
+`,
+  });
+
+  expect(before.get(CALLEE)?.privileged).toBe(false);
+  expect(after.get(CALLEE)?.privileged).toBe(true);
+  expect(digest(after, CALLEE)).not.toBe(digest(before, CALLEE));
+});
+
+test("a uses change in an inherited-privileged callee changes its digest", () => {
+  const privilegedWorkflow = (action: string) => ({
+    ".github/workflows/caller.yml": `on: push
+permissions: {actions: write}
+jobs: {call: {uses: ./.github/workflows/shared.yml}}
+`,
+    ".github/workflows/shared.yml": `on: workflow_call
+jobs: {check: {steps: [{uses: ${action}}]}}
+`,
+  });
+  const before = jobsFor(
+    privilegedWorkflow("acme/check@0000000000000000000000000000000000000000"),
+  );
+  const after = jobsFor(
+    privilegedWorkflow("acme/check@1111111111111111111111111111111111111111"),
+  );
+
+  expect(after.get(CALLEE)?.privileged).toBe(true);
+  expect(digest(after, CALLEE)).not.toBe(digest(before, CALLEE));
+});
+
+test("a callee reached only by read-only callers stays non-privileged", () => {
+  const jobs = jobsFor({
+    ".github/workflows/caller.yml": `on: push
+permissions: {contents: read}
+jobs: {call: {uses: ./.github/workflows/shared.yml}}
+`,
+    ".github/workflows/shared.yml": `on: workflow_call
+jobs: {check: {steps: [{run: 'echo \${{ github.token }}'}]}}
+`,
+  });
+
+  expect(jobs.get(CALLEE)?.privileged).toBe(false);
+});
+
+test("changing workflow permissions changes a caller call-surface digest", () => {
+  const documents = workflow(BASE_CALL, "run: echo unchanged");
+  const before = jobsFor({
+    ...documents,
+    ".github/workflows/caller.yml": `on: push
+permissions: {contents: read}
+jobs: {call: {uses: ./.github/workflows/shared.yml}}
+`,
+  });
+  const after = jobsFor({
+    ...documents,
+    ".github/workflows/caller.yml": `on: push
+permissions: {actions: read}
+jobs: {call: {uses: ./.github/workflows/shared.yml}}
+`,
+  });
+
+  expect(digest(after, CALLER)).not.toBe(digest(before, CALLER));
+});

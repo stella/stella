@@ -418,12 +418,15 @@ const REUSABLE_WORKFLOW_CALL_KEYS = [
   "strategy",
 ] as const;
 
-const reusableWorkflowCallSurface = (job: JsonRecord) =>
-  Object.fromEntries(
-    REUSABLE_WORKFLOW_CALL_KEYS.flatMap((key) =>
+const reusableWorkflowCallSurface = (job: JsonRecord, workflow: JsonRecord) =>
+  Object.fromEntries([
+    ...REUSABLE_WORKFLOW_CALL_KEYS.flatMap((key) =>
       key in job ? [[key, job[key]]] : [],
     ),
-  );
+    ...("permissions" in workflow
+      ? [["workflow-permissions", workflow["permissions"]]]
+      : []),
+  ]);
 
 const stepShapes = (value: unknown): JsonRecord[] => {
   if (!Array.isArray(value)) {
@@ -603,7 +606,7 @@ const parse = (text: string): ParsedDocument => {
       const isPrivileged = jobIsPrivileged(job, data);
       const callSurface =
         typeof job["uses"] === "string"
-          ? reusableWorkflowCallSurface(job)
+          ? reusableWorkflowCallSurface(job, data)
           : undefined;
       const workflowSurface =
         isPrivileged && "on" in data ? { on: data["on"] } : {};
