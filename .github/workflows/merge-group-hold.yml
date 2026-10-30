@@ -11,11 +11,15 @@ permissions:
   contents: read
   pull-requests: read
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   merge-group-hold:
     name: merge-group-hold
     if: github.event_name != 'pull_request_target'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - name: Check out trusted base scripts
@@ -43,7 +47,7 @@ jobs:
   dequeue-held-pull-request:
     name: dequeue-held-pull-request
     if: github.event_name == 'pull_request_target'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: read

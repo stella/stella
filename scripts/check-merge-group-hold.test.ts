@@ -28,7 +28,7 @@ const groupFixture = (numbers: number[]) => {
     group: {
       base_sha: base,
       head_sha: parent,
-      head_ref: `refs/heads/gh-readonly-queue/main/pr-${numbers.at(-1)}-${base}`,
+      head_ref: `refs/heads/gh-readonly-queue/main/pr-${String(numbers.at(-1))}-${base}`,
     },
     added: { total_commits: commits.length, commits },
   };
@@ -80,7 +80,7 @@ test("a held member refuses the group at every position", () => {
 
 test("a group without held members passes after reading every member live", () => {
   const run = fixture([17, 18, 19]);
-  expect(run.run()).toBeUndefined();
+  run.run();
   expect(run.calls.filter((call) => call.includes("/pulls/"))).toHaveLength(3);
 });
 
@@ -92,7 +92,7 @@ test("a label added after enqueue refuses the group", () => {
 
 test("pull request checks pass without API calls", () => {
   const run = fixture([17], [17]);
-  expect(run.run("pull_request")).toBeUndefined();
+  run.run("pull_request");
   expect(run.calls).toEqual([]);
 });
 
@@ -212,11 +212,11 @@ test("applying hold after successful group verification dequeues the held pull r
   const group = fixture([17, 18, 19]);
   const labels = labelFixtures([]);
   group.labels.set(17, labels);
-  expect(group.run()).toBeUndefined();
+  group.run();
   labels.push({ name: HOLD_LABEL });
   const target = dequeueFixture();
   target.pull.labels = labels;
-  expect(target.run()).toBeUndefined();
+  target.run();
   expect(target.reads).toEqual(["repos/stella/stella/pulls/17"]);
   expect(target.calls).toHaveLength(2);
   expect(target.calls.at(0)?.query).toContain("mergeQueueEntry");
@@ -231,7 +231,7 @@ test("a held pull request outside the queue needs no dequeue mutation", () => {
   target.responses.query = {
     data: { node: { id: target.pull.node_id, mergeQueueEntry: null } },
   };
-  expect(target.run()).toBeUndefined();
+  target.run();
   expect(target.calls).toHaveLength(1);
   expect(target.calls.at(0)?.query).toMatch(/^query/u);
 });
@@ -239,7 +239,7 @@ test("a held pull request outside the queue needs no dequeue mutation", () => {
 test("reopening a queued held pull request dequeues it using live labels", () => {
   const target = dequeueFixture();
   target.event.action = "reopened";
-  expect(target.run()).toBeUndefined();
+  target.run();
   expect(target.calls.at(1)?.query).toContain("dequeuePullRequest");
   expect(target.reads).toEqual(["repos/stella/stella/pulls/17"]);
 });
@@ -247,7 +247,7 @@ test("reopening a queued held pull request dequeues it using live labels", () =>
 test("an unrelated applied label makes no API calls", () => {
   const target = dequeueFixture();
   target.event.label.name = "documentation";
-  expect(target.run()).toBeUndefined();
+  target.run();
   expect(target.reads).toEqual([]);
   expect(target.calls).toEqual([]);
 });
@@ -255,7 +255,7 @@ test("an unrelated applied label makes no API calls", () => {
 test("a hold removed before the label handler reads live state needs no mutation", () => {
   const target = dequeueFixture();
   target.pull.labels = [];
-  expect(target.run()).toBeUndefined();
+  target.run();
   expect(target.reads).toEqual(["repos/stella/stella/pulls/17"]);
   expect(target.calls).toEqual([]);
 });
@@ -303,6 +303,7 @@ test("malformed and GraphQL error dequeue results fail closed", () => {
 test("the contributor-signature parser is generated from the shared owner", () => {
   execFileSync("node", ["scripts/sync-merge-group-parser.mjs", "--check"], {
     cwd: new URL("..", import.meta.url),
+    maxBuffer: 1024 * 1024,
   });
 });
 

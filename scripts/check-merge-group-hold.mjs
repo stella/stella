@@ -224,6 +224,7 @@ if (
       JSON.parse(
         execFileSync("bash", ["scripts/gh-retry.sh", "api", ...args], {
           encoding: "utf8",
+          maxBuffer: 16 * 1024 * 1024,
           stdio: ["ignore", "pipe", "pipe"],
         }),
       );
