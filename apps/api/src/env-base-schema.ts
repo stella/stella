@@ -21,10 +21,8 @@ import * as v from "valibot";
 import { redisSettingsSchema } from "@stll/redis-config";
 import { RUNTIME_MODE, type RuntimeMode } from "@stll/runtime-mode";
 
-import {
-  DATABASE_COMPONENT_KEYS,
-  hasSecureDatabaseTransport,
-} from "@/api/db-url";
+import { DATABASE_COMPONENT_KEYS } from "@/api/db-components";
+import { hasSecureDatabaseTransport } from "@/api/db-url";
 import {
   MIGRATE_ONLINE_WORK_MODE,
   MIGRATE_ONLINE_WORK_MODES,

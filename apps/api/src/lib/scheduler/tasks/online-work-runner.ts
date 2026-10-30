@@ -1,8 +1,9 @@
 import { panic, Result } from "better-result";
-import { inArray, sql } from "drizzle-orm";
+import { eq, gte, sql } from "drizzle-orm";
 
 import { openMaintenanceSql } from "@/api/db/long-running-connection";
 import { type ONLINE_WORK_STATES, onlineWorkState } from "@/api/db/schema";
+import { withSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
 import { envBase } from "@/api/env-base";
 import { envDbLoadGate } from "@/api/env-db-load-gate";
 import { detached } from "@/api/lib/analytics/capture";
@@ -44,6 +45,7 @@ import {
 } from "../../../db/online-work-lifecycle";
 
 export const ONLINE_WORK_RUNNER_TASK = "onlineWork.runPending" as const;
+export const ONLINE_WORK_STATE_STATEMENT_TIMEOUT_MS = 5000;
 const MAX_ERROR_LENGTH = 2000;
 
 type OnlineWorkRunnerOutcome =
@@ -307,17 +309,45 @@ export const createDrizzleOnlineWorkStateStore = (
     | SafeId<"systemScriptRun"> = createSafeId<"systemScriptRun">(),
 ): OnlineWorkStateStore => ({
   readStates: async () => {
-    const snapshot = await readBounded(
-      db
-        .select({
-          name: onlineWorkState.name,
-          state: onlineWorkState.state,
-          attempts: onlineWorkState.attempts,
-          finishedAt: onlineWorkState.finishedAt,
-        })
-        .from(onlineWorkState)
-        .where(inArray(onlineWorkState.name, ONLINE_WORK_NAMES)),
-      ONLINE_WORK_NAMES.length,
+    const snapshot = await withAggregateTransaction(
+      db,
+      async (tx) =>
+        await withSharedStatementTimeout(
+          tx,
+          ONLINE_WORK_STATE_STATEMENT_TIMEOUT_MS,
+          async () => {
+            // One primary-key probe per registry name, independent of retired rows.
+            // Read the ordered lower bound, then retain only an exact match;
+            // this preserves the primary-key seek even for a small state table.
+            const state = tx
+              .select({
+                name: onlineWorkState.name,
+                state: onlineWorkState.state,
+                attempts: onlineWorkState.attempts,
+                finishedAt: onlineWorkState.finishedAt,
+              })
+              .from(onlineWorkState)
+              .where(gte(onlineWorkState.name, sql<string>`registered.name`))
+              .orderBy(onlineWorkState.name)
+              .limit(1)
+              .as("registered_state");
+            return await readBounded(
+              tx
+                .select({
+                  name: state.name,
+                  state: state.state,
+                  attempts: state.attempts,
+                  finishedAt: state.finishedAt,
+                })
+                .from(
+                  sql`unnest(string_to_array(${ONLINE_WORK_NAMES.join(",")}, ',')) AS registered(name)`,
+                )
+                .innerJoinLateral(state, sql`true`)
+                .where(eq(state.name, sql<string>`registered.name`)),
+              ONLINE_WORK_NAMES.length,
+            );
+          },
+        ),
     );
     switch (snapshot.type) {
       case "complete":

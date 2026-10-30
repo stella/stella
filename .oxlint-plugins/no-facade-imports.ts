@@ -32,6 +32,7 @@ const ALLOWED_LEAF_IMPORTS = new Set([
   "@/api/db/long-running-connection",
   "@/api/db/migrate-online-work-mode",
   "@/api/db/online-migration-connection",
+  "@/api/db/online-unique-indexes",
   "@/api/db/rls",
   "@/api/db/root",
   "@/api/db/registration-budget-schema",

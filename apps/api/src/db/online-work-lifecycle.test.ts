@@ -2,7 +2,7 @@ import { expect, expectTypeOf, test } from "bun:test";
 
 import {
   ONLINE_INDEX_REPLACEMENTS,
-  type OnlineWorkName,
+  ONLINE_WORK_NAMES,
 } from "./online-migrations";
 import {
   FINALIZED,
@@ -27,7 +27,9 @@ type TestFinalizedWorkName = {
 }[keyof typeof TEST_LIFECYCLE];
 
 type Admits<Name, Admitted> = [Name] extends [Admitted] ? true : false;
-type IsTotal<Map> = [Map] extends [Record<OnlineWorkName, OnlineWorkLifecycle>]
+type IsTotal<Map> = [Map] extends [
+  Record<keyof typeof ONLINE_WORK_LIFECYCLE, OnlineWorkLifecycle>,
+]
   ? true
   : false;
 
@@ -44,6 +46,9 @@ test("a finalized handle admits finalized work only", () => {
 });
 
 test("every registered work name needs a lifecycle entry", () => {
+  expect([...new Set(ONLINE_WORK_NAMES)].toSorted()).toEqual(
+    Object.keys(ONLINE_WORK_LIFECYCLE).toSorted(),
+  );
   const partial = {
     apikey_personal_owner_keyset_idx:
       ONLINE_WORK_LIFECYCLE.apikey_personal_owner_keyset_idx,

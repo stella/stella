@@ -113,6 +113,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "case-law-raw-storage.ts",
     "Public legal corpus storage reconciliation.",
   ),
+  "caseLaw.reconcileDecisionIdentifiers": platform(
+    "case-law-decision-identifier-reconciliation.ts",
+    "Public legal corpus identifier reconciliation.",
+  ),
   "caseLaw.reconcileRawSweeps": platform(
     "case-law-raw-storage.ts",
     "Public legal corpus storage reconciliation.",
@@ -266,6 +270,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
   "reportExports.reconcileQueued": platform(
     "report-export-reconcile.ts",
     "Recovers stuck exports and hands queued ones back to their queue, whose worker resolves the requester's run actor.",
+  ),
+  "requests.sweepReceipts": platform(
+    "request-receipt-retention.ts",
+    "Retention sweep of expired technical request receipts under each receipt's organization and user scope.",
   ),
   "sanctions.backfillMonitoring": platform(
     "sanctions-monitoring-backfill.ts",

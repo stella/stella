@@ -116,6 +116,7 @@ const untilEmpty = async (
 };
 
 export const INVOICE_SENT_AT_BACKFILL = {
+  introducedBy: "20261029000100_invoice_payments",
   name: "invoice-sent-at",
   ...pending(UNMARKED_SENT_INVOICES, "Sent invoices lack their sent marker"),
   repair: async (connection) =>
@@ -212,6 +213,7 @@ const legacyPaymentBatch = async (
 };
 
 export const INVOICE_LEGACY_PAYMENT_BACKFILL = {
+  introducedBy: "20261029000100_invoice_payments",
   name: "invoice-legacy-payments",
   ...pending(
     UNSETTLED_PAID_INVOICES,

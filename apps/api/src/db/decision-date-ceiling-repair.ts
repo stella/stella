@@ -42,9 +42,9 @@ import { validateOnlineConstraints } from "./online-ddl";
 import type { OnlineConstraintValidation, OnlineTableGate } from "./online-ddl";
 import { onlineMigrationParams } from "./online-migration-connection";
 import type {
+  MigrationOwnedOnlineRepair,
   OnlineMigrationConnection,
   OnlineMigrationOutcome,
-  OnlineRepair,
 } from "./online-migration-connection";
 
 const REPAIR_NAME = "decision-date-ceiling";
@@ -185,31 +185,31 @@ type RepairRuntimeOptions = {
 
 export const createDecisionDateCeilingRepair = (
   options: RepairRuntimeOptions = {},
-) =>
-  ({
-    name: REPAIR_NAME,
-    readCompletion: async (connection) =>
-      await readConstraintCompletion({
-        connection,
-        constraintName: CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT,
-        repairName: REPAIR_NAME,
-        backfillName: REPAIR_NAME,
-        tableName: TABLE_NAME,
-      }),
-    repair: async (connection, tables) => {
-      // Empty fresh databases have no heavy data work and no metric source yet.
-      if (
-        (await connection.query(`SELECT 1 FROM public."${TABLE_NAME}" LIMIT 1`))
-          .length === 0
-      ) {
-        return await validateConstraint(connection, tables);
-      }
-      const pass = await repairUntilEmpty(connection, options);
-      if (pass.isErr()) {
-        throw pass.error;
-      }
+): MigrationOwnedOnlineRepair & { readonly name: typeof REPAIR_NAME } => ({
+  introducedBy: "20260902100000_case_law_decision_date_ceiling",
+  name: REPAIR_NAME,
+  readCompletion: async (connection) =>
+    await readConstraintCompletion({
+      connection,
+      constraintName: CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT,
+      repairName: REPAIR_NAME,
+      backfillName: REPAIR_NAME,
+      tableName: TABLE_NAME,
+    }),
+  repair: async (connection, tables) => {
+    // Empty fresh databases have no heavy data work and no metric source yet.
+    if (
+      (await connection.query(`SELECT 1 FROM public."${TABLE_NAME}" LIMIT 1`))
+        .length === 0
+    ) {
       return await validateConstraint(connection, tables);
-    },
-  }) as const satisfies OnlineRepair;
+    }
+    const pass = await repairUntilEmpty(connection, options);
+    if (pass.isErr()) {
+      throw pass.error;
+    }
+    return await validateConstraint(connection, tables);
+  },
+});
 
 export const DECISION_DATE_CEILING_REPAIR = createDecisionDateCeilingRepair();

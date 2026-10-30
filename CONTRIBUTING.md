@@ -100,6 +100,11 @@ to explore the codebase.
 
 ## Development Workflow
 
+Every new guard or lint ships with an autofix or codemod registered in the PR
+Autofix job, or enforces only lines changed against the merge base for its first
+week. Register the dated scope in `scripts/guard-rollout-policy.ts` so the existing
+dated-waiver inventory and healing checks enforce its seven-day deadline.
+
 1. Create a branch from `main` for your changes.
 2. Make your changes, following the conventions below.
 3. Run checks before pushing:

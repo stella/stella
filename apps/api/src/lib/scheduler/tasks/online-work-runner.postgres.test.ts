@@ -1,11 +1,16 @@
 import { panic, Result } from "better-result";
 import type { ReservedSQL } from "bun";
 import { describe, expect, test } from "bun:test";
+import { inArray, like, or, sql } from "drizzle-orm";
 
 import { defaultConfig } from "@stll/db-load-gate/health";
 
+import { onlineWorkState } from "@/api/db/schema";
+import { escapeLike } from "@/api/lib/escape-like";
 import type { SchedulerDb } from "@/api/lib/scheduler/types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { analyzePlan } from "@/api/tests/query-perf/plan-analyzer";
+import { measureJobStatements } from "@/api/tests/query-perf/statement-measurement";
 
 import { declaresOnlineBuild } from "../../../db/online-ddl";
 import type { OnlineIndexGateOptions } from "../../../db/online-index-gate";
@@ -22,6 +27,7 @@ import { allFinalizedOnlineWork } from "../../../tests/helpers/online-work-lifec
 import {
   createDrizzleOnlineWorkStateStore,
   createOnlineWorkRunner,
+  ONLINE_WORK_STATE_STATEMENT_TIMEOUT_MS,
 } from "./online-work-runner";
 
 /**
@@ -85,6 +91,87 @@ const healthyGate = (): OnlineIndexGateOptions => ({
 });
 
 describe.skipIf(!enabled)("online work runner on Postgres", () => {
+  test("state snapshots retain bounded key probes as retired state grows", async () => {
+    if (databaseUrl === undefined) {
+      panic("DATABASE_URL is required");
+    }
+    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      const main = openClient();
+      const prefix = `snapshot-retired-${Bun.randomUUIDv7()}-`;
+      const inserted = await main.db
+        .insert(onlineWorkState)
+        .values(
+          ONLINE_WORK_NAMES.map((name) => ({
+            name,
+            state: "finalized" as const,
+          })),
+        )
+        .onConflictDoNothing()
+        .returning({ name: onlineWorkState.name });
+      try {
+        const pages: number[] = [];
+        for (const retired of [0, 200, 2000]) {
+          // db-await-in-loop: three fixed cardinalities verify the same registry snapshot.
+          await main.db.execute(sql`INSERT INTO online_work_state (name, state)
+            SELECT ${prefix} || row, 'finalized' FROM generate_series(1, ${retired}) AS row
+            ON CONFLICT (name) DO NOTHING`);
+          // db-await-in-loop: refresh planner statistics for each fixed cardinality.
+          await main.db.execute(sql`ANALYZE online_work_state`);
+          // db-await-in-loop: each cardinality measures the actual state-store query.
+          const measured = await measureJobStatements({
+            database: main.db,
+            run: async (db) =>
+              await createDrizzleOnlineWorkStateStore(
+                asTestRaw<SchedulerDb>(db),
+              ).readStates(),
+          });
+          expect(measured.value.map(({ name }) => name).toSorted()).toEqual(
+            [...new Set(ONLINE_WORK_NAMES)].toSorted(),
+          );
+          const snapshot = measured.statements.find(({ query }) =>
+            query.text.includes("registered_state"),
+          );
+          if (!snapshot) {
+            panic("Expected a measured state snapshot");
+          }
+          expect(
+            analyzePlan({
+              document: snapshot.plan,
+              owner: "onlineWork.runPending",
+              ownerDeadlineMs: ONLINE_WORK_STATE_STATEMENT_TIMEOUT_MS,
+              profileId: "corpus",
+              statement: snapshot.query.text,
+            }),
+          ).toEqual([]);
+          expect(
+            measured.executed.some(
+              ({ text, params }) =>
+                text.includes("set_config('statement_timeout'") &&
+                params.includes(`${ONLINE_WORK_STATE_STATEMENT_TIMEOUT_MS}ms`),
+            ),
+          ).toBe(true);
+          pages.push(
+            Number(snapshot.plan.Plan["Shared Hit Blocks"] ?? 0) +
+              Number(snapshot.plan.Plan["Shared Read Blocks"] ?? 0),
+          );
+        }
+        expect(Math.max(...pages)).toBeLessThanOrEqual(
+          4 * ONLINE_WORK_NAMES.length + 8,
+        );
+      } finally {
+        await main.db.delete(onlineWorkState).where(
+          or(
+            inArray(
+              onlineWorkState.name,
+              inserted.map(({ name }) => name),
+            ),
+            like(onlineWorkState.name, `${escapeLike(prefix)}%`),
+          ),
+        );
+      }
+    });
+  });
+
   test("builds a missing pending index after rollout and records it finalized", async () => {
     if (databaseUrl === undefined) {
       panic("DATABASE_URL is required");

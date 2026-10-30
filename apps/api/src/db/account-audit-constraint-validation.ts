@@ -6,14 +6,17 @@ import type { OnlineRepair } from "./online-migration-connection";
 export const ACCOUNT_AUDIT_CONSTRAINT = {
   tableName: "account_audit_logs",
   constraintName: "account_audit_logs_event_type_check",
-} as const satisfies OnlineConstraintValidation;
+  introducedBy: "20261029094225_sign_in_method_audit_event",
+} as const satisfies OnlineConstraintValidation & { introducedBy: string };
 
 export const ACCOUNT_AUDIT_CONSTRAINT_VALIDATION = {
   name: ACCOUNT_AUDIT_CONSTRAINT.constraintName,
+  introducedBy: ACCOUNT_AUDIT_CONSTRAINT.introducedBy,
   readCompletion: async (connection) =>
     await readConstraintCompletion({
       connection,
-      ...ACCOUNT_AUDIT_CONSTRAINT,
+      tableName: ACCOUNT_AUDIT_CONSTRAINT.tableName,
+      constraintName: ACCOUNT_AUDIT_CONSTRAINT.constraintName,
       repairName: ACCOUNT_AUDIT_CONSTRAINT.constraintName,
     }),
   repair: async (connection, tables) =>

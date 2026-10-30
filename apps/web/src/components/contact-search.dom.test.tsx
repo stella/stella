@@ -82,7 +82,8 @@ globalThis.fetch = Object.assign(
 );
 
 const testing = await import("@testing-library/react");
-const query = await import("@tanstack/react-query");
+const { QueryClient, QueryClientProvider } =
+  await import("@tanstack/react-query");
 const router = await import("@tanstack/react-router");
 const { IntlProvider } = await import("use-intl");
 const { default: messages } = await import("@/i18n/langs/en.json");
@@ -106,7 +107,7 @@ const { contactsKeys } = await import("@/lib/contacts/queries");
 const { contactPickerKeys } =
   await import("@/components/contact-picker-queries");
 const ORGANIZATION = "contact-search-org";
-const clients: InstanceType<typeof query.QueryClient>[] = [];
+const clients: InstanceType<typeof QueryClient>[] = [];
 const user = {
   activeOrganizationId: ORGANIZATION,
   id: "reader",
@@ -147,7 +148,7 @@ const mount = async (
   picker: MountTarget = false,
   locale: "en" | "ar" = "en",
 ) => {
-  const client = new query.QueryClient({
+  const client = new QueryClient({
     defaultOptions: {
       queries: { retry: 1, retryDelay: 0, staleTime: Infinity },
     },
@@ -190,7 +191,7 @@ const mount = async (
         },
       }}
     >
-      <query.QueryClientProvider client={client}>
+      <QueryClientProvider client={client}>
         <IntlProvider
           locale={locale}
           messages={catalog}
@@ -202,7 +203,7 @@ const mount = async (
             </AuthenticatedUserProvider>
           </FormattingProvider>
         </IntlProvider>
-      </query.QueryClientProvider>
+      </QueryClientProvider>
     </AnalyticsContext>,
   );
   return client;
@@ -356,7 +357,10 @@ test("picker pending read hides creation and only successful absence is empty", 
     jest.advanceTimersByTime(201);
   });
   await testing.act(async () => {
-    restoreRealTimers();
+    // Keep the deliberately pending read pending: draining the fake clock also
+    // fires the API fetcher's total request deadline. One second covers the
+    // component library's short cleanup timers without reaching that deadline.
+    restoreRealTimers({ advanceMs: 1000 });
   });
   await testing.waitFor(() =>
     expect(reads.some((url) => url.searchParams.get("q") === "Eva")).toBe(true),

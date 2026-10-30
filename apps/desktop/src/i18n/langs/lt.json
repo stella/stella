@@ -368,7 +368,8 @@
     "welcomeShortcutDescription": "Paspauskite {shortcut}, kad peržiūrėtumėte istoriją ir pasirinktumėte iškarpą.",
     "welcomeShortcutTitle": "Atidarykite bet kur.",
     "welcomeStart": "Pradėti kopijuoti",
-    "welcomeTitle": "Susipažinkite su iškarpine"
+    "welcomeTitle": "Susipažinkite su iškarpine",
+    "registryIdentifierSearchHint": "Įveskite {identifiers}."
   },
   "activity": {
     "title": "Veikla",

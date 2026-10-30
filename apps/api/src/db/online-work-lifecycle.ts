@@ -14,6 +14,12 @@ export const FINALIZED = {
 // One `name: PENDING` or `name: FINALIZED` line per entry: that check reads
 // this file's history line by line.
 export const ONLINE_WORK_LIFECYCLE = {
+  chat_run_log_entries_message_snapshot_idx: PENDING,
+  chat_run_log_entries_text_start_idx: PENDING,
+  chat_run_log_entries_text_open_idx: PENDING,
+  chat_run_log_entries_text_boundary_id_idx: PENDING,
+  "chat-run-text-boundaries": PENDING,
+  case_law_identifier_retry_shape: PENDING,
   legal_reader_annotations_matter_document_idx: PENDING,
   legal_reader_annotations_matter_document_shape: PENDING,
   case_law_decisions_country_court_date_published_idx: PENDING,

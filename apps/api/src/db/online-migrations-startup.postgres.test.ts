@@ -2,13 +2,13 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { withGatedTestClients } from "../tests/gated-test-database";
-import { assertOnlineMigrationsApplied } from "./online-migrations";
+import { reportOnlineMigrations } from "./online-migrations";
 
 /**
  * The online lock's holder (a migrate run or the post-deploy runner) builds
  * pending work for longer than the database's statement timeout. Startup
- * validation of finalized work on another session must complete while that
- * lock is held, and hand its pooled session back with the timeout it had.
+ * validation on another session must return migrator_active while that lock
+ * is held, and hand its pooled session back with the timeout it had.
  */
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -19,7 +19,7 @@ const ONLINE_LOCK_KEY = "hashtext('stella-online-migrations')";
 const RETURN_WITHIN_MS = 2000;
 
 describe.skipIf(!enabled)("startup validation during a migrate run", () => {
-  test("validates while another session holds the online lock", async () => {
+  test("returns migrator_active while another session holds the online lock", async () => {
     if (databaseUrl === undefined) {
       panic("DATABASE_URL is required");
     }
@@ -31,7 +31,7 @@ describe.skipIf(!enabled)("startup validation during a migrate run", () => {
         // A session's own timeout, which RESET would replace with the default.
         await booting.unsafe("SET statement_timeout = '42s'");
         const started = performance.now();
-        await assertOnlineMigrationsApplied({
+        const outcome = await reportOnlineMigrations({
           reserve: async () => ({
             execute: async (query, params = []) => {
               await booting.unsafe(query, [...params]);
@@ -41,6 +41,7 @@ describe.skipIf(!enabled)("startup validation during a migrate run", () => {
             release: () => undefined,
           }),
         });
+        expect(outcome).toEqual({ type: "migrator_active" });
         expect(performance.now() - started).toBeLessThan(RETURN_WITHIN_MS);
         expect(await booting.unsafe("SHOW statement_timeout")).toEqual([
           { statement_timeout: "42s" },

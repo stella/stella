@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { onlineWorkState } from "@/api/db/schema";
 import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -582,11 +583,14 @@ describe("online work runner", () => {
 test("isolated online work tasks retain their own database across ticks", async () => {
   const fixture = () => {
     let reads = 0;
-    const context = asTestRaw<SchedulerTaskContext>({
-      dueAt: DueSlot.of({ nextRunAt: START }),
-      db: {
-        select: () => ({
-          from: () => ({
+    const transaction = {
+      execute: async () => [{ statement_timeout: "0" }],
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            orderBy: () => ({ limit: () => ({ as: () => onlineWorkState }) }),
+          }),
+          innerJoinLateral: () => ({
             where: () => ({
               limit: async () => {
                 reads += 1;
@@ -600,6 +604,14 @@ test("isolated online work tasks retain their own database across ticks", async 
             }),
           }),
         }),
+      }),
+    };
+    const context = asTestRaw<SchedulerTaskContext>({
+      dueAt: DueSlot.of({ nextRunAt: START }),
+      db: {
+        transaction: async (
+          run: (tx: typeof transaction) => Promise<unknown>,
+        ) => await run({ ...transaction }),
       },
     });
     return { context, reads: () => reads };

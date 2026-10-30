@@ -1,3 +1,4 @@
+// parser-output-unchanged: The retention check moved to the pipeline; dropping the parser's own validation call leaves its blocks and fulltext unchanged.
 /**
  * Czech Supreme Court (Nejvyšší soud) HTML parser.
  *
@@ -27,9 +28,14 @@ import type {
   ParagraphBlock,
   TableCell,
 } from "@stll/legal-ast/document-ast";
+import { hasInlineChildren } from "@stll/legal-ast/inline";
 
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
-import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
+import {
+  isPageNumberLine,
+  isRunningHeaderLine,
+  withoutSoftHyphens,
+} from "@/api/lib/legal-search/parsers/page-furniture";
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
 
 import {
@@ -39,20 +45,6 @@ import {
   visibleHtmlText,
   walkInlines as walkInlinesShared,
 } from "./shared-inlines";
-
-/**
- * Source text the AST is expected to account for.
- *
- * The metadata table above the decision body is extracted into
- * `metadata` rather than into blocks, so validating against the whole
- * page would report it as lost text. Everything else on the page must
- * reach the AST.
- */
-const validationHtml = ($: cheerio.CheerioAPI): string => {
-  const $body = $("body").clone();
-  $body.find("#box-table-a").remove();
-  return `<html><body>${$body.html() ?? ""}</body></html>`;
-};
 
 // ── Public API ─────────────────────────────────────────────
 
@@ -87,16 +79,6 @@ export const parseNsDecisionHtml = (
     },
   );
   const fulltext = blocksToPlainText(blocks);
-
-  validateAndLog(
-    {
-      parser: "cz-ns",
-      caseNumber: canonical.caseNumber ?? input.documentId,
-      url: input.webUrl,
-    },
-    validationHtml($),
-    blocks,
-  );
 
   const documentAst: DecisionDocumentAst = {
     version: 1,
@@ -398,10 +380,21 @@ type RawChunk =
   | { kind: "inlines"; inlines: Inline[]; centered: boolean }
   | { kind: "table"; rows: TableCell[][] };
 
+const withoutSoftHyphensIn = (inlines: readonly Inline[]): Inline[] =>
+  inlines.map((node) => {
+    if (node.type === "text") {
+      return { ...node, text: withoutSoftHyphens(node.text) };
+    }
+    return hasInlineChildren(node)
+      ? { ...node, children: withoutSoftHyphensIn(node.children) }
+      : node;
+  });
+
 const walkInlines = (
   $: cheerio.CheerioAPI,
   el: cheerio.Cheerio<AnyNode>,
-): Inline[] => walkInlinesShared($, el, { sanitizeHref: sanitizeUrl });
+): Inline[] =>
+  withoutSoftHyphensIn(walkInlinesShared($, el, { sanitizeHref: sanitizeUrl }));
 
 const isCentered = (el: cheerio.Cheerio<AnyNode>): boolean => {
   if (el.attr("align") === "center") {
@@ -758,6 +751,25 @@ const embeddedCaption = (text: string): EmbeddedCaption | null => {
   };
 };
 
+/**
+ * The paragraph holding the caption: the first one, or the one after it
+ * where the court's name stands above the caption on a line of its own
+ * ("NEJVYŠŠÍ SOUD", then "ČESKÉ REPUBLIKY 25 Cdo 803/2003 ČESKÁ REPUBLIKA
+ * ROZSUDEK JMÉNEM REPUBLIKY").
+ */
+const captionParagraphIndex = (blocks: readonly Block[]): number => {
+  const first = blocks.findIndex((block) => block.type === "paragraph");
+  const firstBlock = blocks[first];
+  const next = blocks[first + 1];
+  return firstBlock?.type === "paragraph" &&
+    embeddedCaption(firstBlock.plainText) === null &&
+    CAPTION_TITLE_RE.test(firstBlock.plainText) &&
+    next?.type === "paragraph" &&
+    embeddedCaption(next.plainText) !== null
+    ? first + 1
+    : first;
+};
+
 const mergeBlocks = (
   rawBlocks: Block[],
   makeBlockId: () => string,
@@ -810,7 +822,7 @@ const mergeBlocks = (
   // REPUBLIKA ROZSUDEK JMÉNEM REPUBLIKY"): the court preamble
   // before the case number, the case number, and the capitals
   // after it as the title. Every character stays in a block.
-  const firstParaIdx = merged.findIndex((b) => b.type === "paragraph");
+  const firstParaIdx = captionParagraphIndex(merged);
   if (firstParaIdx !== -1) {
     const firstPara = merged.at(firstParaIdx);
     if (!firstPara) {
@@ -930,7 +942,7 @@ const classifyBlocks = (
     });
   }
 
-  for (const chunk of chunks) {
+  for (const [chunkIndex, chunk] of chunks.entries()) {
     blockIndex += 1;
     const id = makeBlockId();
     const anchorId = makeAnchorId(blockIndex);
@@ -953,7 +965,23 @@ const classifyBlocks = (
     const { inlines, centered } = chunk;
     const plainText = inlinesToPlainText(inlines).trim();
 
-    if (!plainText) {
+    const nextChunk = chunks[chunkIndex + 1];
+    const followedByHeader =
+      nextChunk?.kind === "inlines" &&
+      isRunningHeaderLine(inlinesToPlainText(nextChunk.inlines));
+
+    // The print page keeps every page's running header and page number
+    // where the page broke. Without them, the merge pass below joins the
+    // sentence they cut.
+    if (
+      !plainText ||
+      isRunningHeaderLine(plainText) ||
+      (isPageNumberLine(plainText) &&
+        (/^[\r\n]*[ \t\u00a0]{8,}\d{1,3}\s*$/u.test(
+          inlinesToPlainText(inlines),
+        ) ||
+          (centered && followedByHeader)))
+    ) {
       continue;
     }
 

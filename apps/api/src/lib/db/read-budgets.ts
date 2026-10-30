@@ -30,6 +30,10 @@ type ReadBudget = {
    * stay above the budget, so the entry is removed as soon as it passes.
    */
   overBudget?: { reason: string };
+  /** Per-statement database deadline for a scheduled job. */
+  statementDeadlineMs?: number;
+  /** Wall-clock work budget; the job stops at its next durable boundary. */
+  runBudgetMs?: number;
 };
 
 export const READ_BUDGETS = {
@@ -38,6 +42,18 @@ export const READ_BUDGETS = {
     pages: 2 * (4 * ONLINE_WORK_NAMES.length + 8),
     reason:
       "At most two registry-filtered state snapshots per tick: three primary-key index pages plus one heap page per registered unit, and eight catalog pages per snapshot for the table-owner policy. The registry is in memory and the advisory lock reads no relation pages. Build catalog probes run in the detached unit under the online-work database pressure governor, outside the scheduler tick.",
+  },
+  "statement.caseLaw.globalSearchHits": {
+    surface: "statement",
+    pages: 6000,
+    reason:
+      "Fixed 200 full-text matches: up to 12 pages each for eligibility and ranking, then 11 returned rows at up to 256 pages each for decision/search-document/identifier lookups and wide TOAST-backed section bodies, with 784 pages for the full-text probe and index depth. Body reads must depend on the returned page, not all matches.",
+  },
+  "scheduled.requests.sweepReceipts": {
+    surface: "scheduled-job",
+    pages: 20_000,
+    reason:
+      "Four rounds each discover at most 128 completed and 128 pending receipts, then lock and delete at most 128 scoped rows: 2,048 row visits. Nine index/heap pages per visit leave 1,568 pages for tenant-scope reads and fixed probes under the 20,000-page ungoverned ceiling. State-leading ordered expiry probes keep this independent of total receipt cardinality; PostgreSQL measures quiet, expired and mixed cohorts at both sizes.",
   },
   "statement.caseLaw.coverageSources": {
     surface: "statement",
@@ -50,6 +66,14 @@ export const READ_BUDGETS = {
     pages: 12_500,
     reason:
       "One walk of the serving generation's queue index, capped at CASE_LAW_FRESHNESS_SCAN_CAP + 1 entries with at most one heap page each (about 10,200 pages when every entry sits on its own heap page), plus the source ages, the serving generation and three single-row queue probes. The run reads the same pages whatever the generation's size.",
+  },
+  "scheduled.caseLaw.refreshSitemapShards": {
+    surface: "scheduled-job",
+    pages: 18_000,
+    statementDeadlineMs: 30_000,
+    runBudgetMs: 15 * 60 * 1000,
+    reason:
+      "One 500-row change-log window, one indexed country-month decision range, and the replacement shard rows per step. A run stops between months after fifteen minutes, leaving the scheduler ceiling room for its current month, and every statement has a thirty-second database deadline.",
   },
   "statement.legislation.candidateRows": {
     surface: "statement",

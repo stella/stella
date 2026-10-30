@@ -27,6 +27,7 @@
     "release.yml/promote-staging": "main",
     "release.yml/release-health-gate": "main",
     "release.yml/dispatch-release-health": "main",
+    "release.yml/publish-chrome-extension": "main",
     "release-health.yml/window": "main",
     "auth-md-spec-check.yml/auth-md-spec-check": "main",
     "marketing-screenshots-update.yml/update": "main",

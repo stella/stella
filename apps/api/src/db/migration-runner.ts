@@ -50,8 +50,8 @@ import type {
 } from "./online-migration-connection";
 import {
   ALL_WORK_SCOPE,
-  assertOnlineMigrationsApplied,
   FINALIZED_SCOPE,
+  reportOnlineMigrations,
   runOnlineMigrations,
 } from "./online-migrations";
 import { APPLICATION_RLS_ROLE_NAME } from "./role-names";
@@ -683,13 +683,15 @@ const migratorOnlineConnection = (
   release: (): void => undefined,
 });
 
+const ONLINE_LOCK_RETRY_MS = 1000;
+
 type OnlinePhaseOptions = {
   mode: MigrateOnlineWorkMode;
   pool: Parameters<typeof runOnlineMigrations>[0];
   /** How a building mode walks; its scope comes from the mode. */
   build: Omit<Parameters<typeof runOnlineMigrations>[1], "scope">;
   runOnline: typeof runOnlineMigrations;
-  validateOnline: typeof assertOnlineMigrationsApplied;
+  validateOnline: typeof reportOnlineMigrations;
 };
 
 /** The online phase of one mode: build its scope, or only verify. */
@@ -704,9 +706,22 @@ const runOnlinePhase = async ({
     case MIGRATE_ONLINE_WORK_MODE.BUILD_FINALIZED:
     case MIGRATE_ONLINE_WORK_MODE.BUILD_ALL:
       return await runOnline(pool, { ...build, scope: BUILD_SCOPE[mode] });
-    case MIGRATE_ONLINE_WORK_MODE.VERIFY_FINALIZED:
-      await validateOnline(pool);
-      return { type: "complete" };
+    case MIGRATE_ONLINE_WORK_MODE.VERIFY_FINALIZED: {
+      const outcome = await validateOnline(pool);
+      switch (outcome.type) {
+        case "validated":
+          return { type: "complete" };
+        case "migrator_active":
+          return {
+            type: "deferred",
+            step: "online-migrations-lock",
+            retryAfterMs: ONLINE_LOCK_RETRY_MS,
+          };
+        default:
+          outcome satisfies never;
+          return panic("Unknown online validation outcome");
+      }
+    }
     default:
       mode satisfies never;
       return panic("Unknown migrate online-work mode");
@@ -725,7 +740,7 @@ type RunMigrationsOptions = {
   migrationsSchema?: string;
   migrationsTable?: string;
   runOnline?: typeof runOnlineMigrations;
-  validateOnline?: typeof assertOnlineMigrationsApplied;
+  validateOnline?: typeof reportOnlineMigrations;
   onlineIndexHold?: OnlineIndexHoldRef;
   /** Test seam: lock retry configuration and runtime. */
   lockWaitRetry?: LockWaitRetry;
@@ -782,7 +797,7 @@ export const runMigrations = async ({
   migrationsSchema = "drizzle",
   migrationsTable = "__drizzle_migrations",
   runOnline = runOnlineMigrations,
-  validateOnline = assertOnlineMigrationsApplied,
+  validateOnline = reportOnlineMigrations,
   onlineIndexHold = createOnlineIndexHold(),
   lockWaitRetry = DEFAULT_LOCK_WAIT_RETRY,
   timing = DEFAULT_MIGRATION_TIMING,

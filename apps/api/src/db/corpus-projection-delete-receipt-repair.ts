@@ -35,9 +35,9 @@ import { readConstraintCompletion } from "./online-constraint-completion";
 import { validateOnlineConstraints } from "./online-ddl";
 import type { OnlineConstraintValidation, OnlineTableGate } from "./online-ddl";
 import type {
+  MigrationOwnedOnlineRepair,
   OnlineMigrationConnection,
   OnlineMigrationOutcome,
-  OnlineRepair,
 } from "./online-migration-connection";
 
 const REPAIR_NAME = "corpus-projection-delete-receipt";
@@ -174,32 +174,32 @@ type RepairRuntimeOptions = {
 
 export const createCorpusProjectionDeleteReceiptRepair = (
   options: RepairRuntimeOptions = {},
-) =>
-  ({
-    name: REPAIR_NAME,
-    readCompletion: async (connection) =>
-      await readConstraintCompletion({
-        connection,
-        constraintName: CONSTRAINT_NAME,
-        repairName: REPAIR_NAME,
-        backfillName: REPAIR_NAME,
-        tableName: TABLE_NAME,
-      }),
-    repair: async (connection, tables) => {
-      // Empty fresh databases have no heavy data work and no metric source yet.
-      if (
-        (await connection.query(`SELECT 1 FROM public."${TABLE_NAME}" LIMIT 1`))
-          .length === 0
-      ) {
-        return await validateConstraint(connection, tables);
-      }
-      const pass = await repairFrom(connection, options);
-      if (pass.isErr()) {
-        throw pass.error;
-      }
+): MigrationOwnedOnlineRepair & { readonly name: typeof REPAIR_NAME } => ({
+  introducedBy: "20260908140000_corpus_projection_delete_task_instant",
+  name: REPAIR_NAME,
+  readCompletion: async (connection) =>
+    await readConstraintCompletion({
+      connection,
+      constraintName: CONSTRAINT_NAME,
+      repairName: REPAIR_NAME,
+      backfillName: REPAIR_NAME,
+      tableName: TABLE_NAME,
+    }),
+  repair: async (connection, tables) => {
+    // Empty fresh databases have no heavy data work and no metric source yet.
+    if (
+      (await connection.query(`SELECT 1 FROM public."${TABLE_NAME}" LIMIT 1`))
+        .length === 0
+    ) {
       return await validateConstraint(connection, tables);
-    },
-  }) as const satisfies OnlineRepair;
+    }
+    const pass = await repairFrom(connection, options);
+    if (pass.isErr()) {
+      throw pass.error;
+    }
+    return await validateConstraint(connection, tables);
+  },
+});
 
 export const CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR =
   createCorpusProjectionDeleteReceiptRepair();
