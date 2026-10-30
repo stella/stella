@@ -1,45 +1,81 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
+import type { Ranged } from "@oxlint/plugins";
 
-import { getPropertyName, isFileIn, isIdentifier } from "./utils.ts";
+import { guardEnforcesLine } from "../scripts/guard-rollouts.ts";
+import {
+  filenameForContext,
+  isFileIn,
+  isIdentifier,
+  resolveImportedExpressionForEnforcement,
+} from "./utils.ts";
 
 const OWNER =
   "apps/api/src/lib/legal-search/case-law-source-ingestion-lease.ts";
 
-export default eslintCompatPlugin({
-  meta: { name: "no-bare-case-law-source-ingestion-lease" },
-  rules: {
-    "no-bare-case-law-source-ingestion-lease": {
-      meta: {
-        type: "problem",
-        messages: {
-          bareAcquisition:
-            "Run source work through withCaseLawSourceIngestionLease; only the lease owner may acquire directly.",
+const ACQUIRE = "acquireCaseLawSourceIngestionLease";
+
+export const createCaseLawSourceIngestionLeasePlugin = (
+  enforcesLine = guardEnforcesLine,
+) =>
+  eslintCompatPlugin({
+    meta: { name: "no-bare-case-law-source-ingestion-lease" },
+    rules: {
+      "no-bare-case-law-source-ingestion-lease": {
+        meta: {
+          type: "problem",
+          messages: {
+            bareAcquisition:
+              "Run source work through withCaseLawSourceIngestionLease; only the lease owner may acquire directly.",
+          },
+          schema: [],
         },
-        schema: [],
-      },
-      createOnce(context) {
-        return {
-          before() {
-            return !isFileIn(context, [OWNER]);
-          },
-          CallExpression(node) {
-            const memberName =
-              node.callee.type === "MemberExpression"
-                ? getPropertyName(node.callee.property)
-                : null;
-            if (
-              (isIdentifier(node.callee) &&
-                node.callee.name === "acquireCaseLawSourceIngestionLease") ||
-              memberName === "acquireCaseLawSourceIngestionLease"
-            ) {
-              context.report({
-                node: node.callee,
-                messageId: "bareAcquisition",
-              });
+        createOnce(context) {
+          const enforces = (node: Ranged) => {
+            const start = context.sourceCode.getLocFromIndex(
+              node.range[0],
+            ).line;
+            const end = context.sourceCode.getLocFromIndex(
+              node.range[1] - 1,
+            ).line;
+            for (let line = start; line <= end; line++) {
+              if (
+                enforcesLine({
+                  guard: "no-bare-case-law-source-ingestion-lease",
+                  file: filenameForContext(context),
+                  line,
+                })
+              ) {
+                return true;
+              }
             }
-          },
-        };
+            return false;
+          };
+
+          return {
+            before() {
+              return !isFileIn(context, [OWNER]);
+            },
+            CallExpression(node) {
+              const imported = resolveImportedExpressionForEnforcement(
+                context,
+                node.callee,
+              );
+              const isDirectGlobal =
+                isIdentifier(node.callee) && node.callee.name === ACQUIRE;
+              if (
+                enforces(node) &&
+                (isDirectGlobal || imported?.imported === ACQUIRE)
+              ) {
+                context.report({
+                  node: node.callee,
+                  messageId: "bareAcquisition",
+                });
+              }
+            },
+          };
+        },
       },
     },
-  },
-});
+  });
+
+export default createCaseLawSourceIngestionLeasePlugin();
