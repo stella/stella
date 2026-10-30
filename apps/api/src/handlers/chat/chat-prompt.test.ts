@@ -1,13 +1,15 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
   BROWSER_CONTROL_PROTOCOL_VERSION,
+  BROWSER_EXTENSION_STATUS,
   CHAT_DECISION_HREF_TEMPLATE,
   CHAT_DECISION_PASSAGE_HREF_PREFIX,
   CHAT_USER_HREF_TEMPLATE,
   toChatDecisionPassageHref,
 } from "@stll/api-contract";
+import type { BrowserExtensionStatus } from "@stll/api-contract";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 import { sha256Hex as legacyHex } from "@stll/sha256/node";
@@ -20,7 +22,10 @@ import type {
 import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
 import { selectStatuteProvisions } from "@/api/handlers/chat/active-statute-selection.logic";
 import { createChatAttachmentPart } from "@/api/handlers/chat/chat-message-parts";
-import { UNBOUND } from "@/api/lib/agent-skills/binding";
+import {
+  NO_SKILL_BINDING_SCOPE,
+  UNBOUND,
+} from "@/api/lib/agent-skills/binding";
 import { ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS } from "@/api/lib/agent-skills/skills";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type {
@@ -43,6 +48,7 @@ import {
   buildActiveStatutePrompt,
   buildActiveTemplatePrompt,
   buildChatPromptCacheKey,
+  buildChatSystemPromptParts,
   buildContextMatterScopeSection,
   buildCorpusOnlyCaseLawSection,
   buildGlobalPrompt,
@@ -86,36 +92,126 @@ const SKILL_METADATA = [
   },
 ] as const;
 
-test("checking browser state asks the user to resend once discovery completes", () => {
+const ONLY_ON_A_WEBSITE_REQUEST =
+  "Only if the user asks you to open, read or operate a website, tell them, in their language, ";
+const OTHERWISE_NO_EXTENSION_MENTION =
+  "otherwise do not mention the browser extension.";
+
+test("checking browser state asks for a resend only on a website request", () => {
   expect(
     browserExtensionPromptLine({
       protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
       status: "checking",
     }),
-  ).toContain("send the message again in a moment");
+  ).toContain(
+    `${ONLY_ON_A_WEBSITE_REQUEST}to send the message again in a moment;`,
+  );
 });
 
 test.each([
   BROWSER_CONTROL_PROTOCOL_VERSION - 1,
   BROWSER_CONTROL_PROTOCOL_VERSION + 1,
 ])(
-  "protocol version %s asks the user to reload the stella tab",
+  "protocol version %s offers a stella tab reload only on a website request",
   (protocolVersion) => {
-    expect(
-      browserExtensionPromptLine({ protocolVersion, status: "connected" }),
-    ).toBe(
-      "BROWSER: Tell the user, in their language, to reload this stella tab to use the browser extension. Do not claim you have no way to use a browser.",
+    const line = browserExtensionPromptLine({
+      protocolVersion,
+      status: "connected",
+    });
+    expect(line).toContain(
+      `${ONLY_ON_A_WEBSITE_REQUEST}to reload this stella tab to use the browser extension;`,
     );
+    expect(line).toContain(OTHERWISE_NO_EXTENSION_MENTION);
   },
 );
 
-test("not-paired browser state tells the model how the user connects", () => {
+test("not-paired browser state names the connect step only on a website request", () => {
   expect(
     browserExtensionPromptLine({
       protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
       status: "not-paired",
     }),
-  ).toContain("on this stella tab and connect the tab");
+  ).toContain(
+    `${ONLY_ON_A_WEBSITE_REQUEST}to click the stella extension icon in the browser toolbar on this stella tab and connect the tab;`,
+  );
+});
+
+describe("browser extension line in the chat prompt", () => {
+  const promptFor = async (status: BrowserExtensionStatus) =>
+    (
+      await buildChatSystemPromptParts({
+        activeDecision: undefined,
+        activeExternal: undefined,
+        activeFile: undefined,
+        activeSkillContext: null,
+        activeStatute: undefined,
+        browserExtension: {
+          protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+          status,
+        },
+        contextMatterIds: [],
+        hasReachableMatter: false,
+        offeredToolNamesForSkills: () => new Set(),
+        practiceJurisdictions: [],
+        refRegistry: createChatRefRegistry(),
+        safeDb: asTestRaw<SafeDb>(async () => Result.ok([])),
+        // An ordinary legal question: nothing in the turn asks for a website.
+        messages: [
+          {
+            id: toSafeId<"chatMessage">("00000000-0000-4000-8000-000000000b01"),
+            role: "user",
+          },
+        ],
+        requestedSkillNames: new Set(),
+        skillBindingScope: NO_SKILL_BINDING_SCOPE,
+        threadId: toSafeId<"chatThread">(
+          "00000000-0000-4000-8000-000000000b02",
+        ),
+        toolAvailability: {
+          docxEditMode: null,
+          templateAuthoring: false,
+          webResearch: false,
+          folioAgentDocTools: false,
+          subagents: false,
+        },
+        userContext: undefined,
+        workspaceId: null,
+      })
+    ).unwrap();
+
+  test("an ordinary request without the extension gets the conditional line, not an install instruction", async () => {
+    const prompt = await promptFor(BROWSER_EXTENSION_STATUS.notInstalled);
+    const line = browserExtensionPromptLine({
+      protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+      status: BROWSER_EXTENSION_STATUS.notInstalled,
+    });
+
+    expect(prompt.fullPrompt).toContain(line);
+    expect(prompt.fullPrompt).toContain(
+      `${ONLY_ON_A_WEBSITE_REQUEST}to install the stella browser extension for Chrome`,
+    );
+    expect(prompt.fullPrompt).toContain(OTHERWISE_NO_EXTENSION_MENTION);
+    expect(prompt.fullPrompt).not.toMatch(/tell the user[^.]*\binstall\b/iu);
+    expect(prompt.fullPrompt).not.toMatch(/BROWSER: Tell\b/u);
+  });
+
+  test.each(
+    Object.values(BROWSER_EXTENSION_STATUS).filter(
+      (status) => status !== BROWSER_EXTENSION_STATUS.connected,
+    ),
+  )(
+    "%s reaches the prompt only behind the website-request condition",
+    async (status) => {
+      const prompt = await promptFor(status);
+      const browserLines = prompt.fullPrompt
+        .split("\n")
+        .filter((promptLine) => promptLine.includes("BROWSER:"));
+
+      expect(browserLines).toHaveLength(1);
+      expect(browserLines[0]).toContain(ONLY_ON_A_WEBSITE_REQUEST);
+      expect(browserLines[0]).toContain(OTHERWISE_NO_EXTENSION_MENTION);
+    },
+  );
 });
 
 describe("reader marks in the prompt", () => {
