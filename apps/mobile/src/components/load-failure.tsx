@@ -34,11 +34,15 @@ const loadFailure = (error: ApiError): LoadFailure => {
     return { kind: "session" };
   }
   if (error._tag === "TokenError") {
-    // The token endpoint answered with an OAuth error: the grant is gone.
-    // Without one, it never answered.
-    return error.oauthError === undefined
-      ? { kind: "offline" }
-      : { kind: "session" };
+    // A refusal that ends the grant arrives as SignedOutError; any other,
+    // such as temporarily_unavailable, may pass on a retry. Without a
+    // status, the token endpoint never answered.
+    if (error.status === undefined) {
+      return { kind: "offline" };
+    }
+    return error.status >= 500
+      ? { kind: "server", status: error.status }
+      : { kind: "refused", status: error.status, detail: undefined };
   }
   if (needsConsent(error)) {
     return { kind: "consent" };

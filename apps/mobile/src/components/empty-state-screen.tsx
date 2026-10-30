@@ -49,12 +49,12 @@ export const screenStyles = StyleSheet.create({
 });
 
 /**
- * A list's scrolling while it has no rows. Its card, stretched to the
- * screen, plus the translucent bar's inset overflowed the screen, so an empty
- * list scrolled; held to its own height, it neither scrolls nor bounces.
+ * A list's content while it has no rows. Its card, stretched to the screen,
+ * plus the translucent bar's inset overflowed the screen, so an empty list
+ * scrolled; held to its own height, it does not. It still bounces, as the
+ * pull that refreshes it needs.
  */
 export const emptyListProps = (empty: boolean) => ({
-  alwaysBounceVertical: !empty,
   contentContainerStyle: empty
     ? [screenStyles.content, screenStyles.unstretched]
     : screenStyles.content,
