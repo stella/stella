@@ -47,6 +47,8 @@ type PublicLawRowsPhaseInput = {
   isLoading: boolean;
   /** Whether the rows on screen were kept from the previous search. */
   isPlaceholderData: boolean;
+  /** How many rows the held page carries; read only while it is held. */
+  keptRowCount: number;
 };
 
 /**
@@ -54,17 +56,25 @@ type PublicLawRowsPhaseInput = {
  * that decides what they show. A pending render and a first fetch are the same
  * thing to the reader — the page is drawn and the grid is empty — and rows are
  * only called stale when there are rows to keep.
+ *
+ * A kept page with no rows keeps nothing: drawn as stale it would be the
+ * previous search's "no results" standing over the search still in flight,
+ * an answer the new search never gave. Only a settled page may say it is
+ * empty, so a held empty page waits in skeleton like a first fetch.
  */
 export const publicLawRowsPhase = ({
   isLoading,
   isPlaceholderData,
+  keptRowCount,
   routeState,
 }: PublicLawRowsPhaseInput): PublicLawRowsPhase => {
   if (routeState === "pending" || isLoading) {
     return "skeleton";
   }
-
-  return isPlaceholderData ? "stale" : "rows";
+  if (!isPlaceholderData) {
+    return "rows";
+  }
+  return keptRowCount > 0 ? "stale" : "skeleton";
 };
 
 /**
