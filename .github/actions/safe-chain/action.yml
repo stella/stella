@@ -42,8 +42,9 @@ runs:
   using: composite
   steps:
     - name: Restore Safe Chain binary
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      uses: ./.github/actions/ci-cache
       with:
+        operation: restore
         path: ~/.safe-chain/bin
         key: safe-chain-${{ inputs.version }}-${{ inputs.sha256 }}-${{ runner.os }}-${{ runner.arch }}
 
@@ -57,6 +58,13 @@ runs:
       # In container jobs `github.action_path` is the host path; the env var is
       # the path as the step sees it.
       run: bash "$GITHUB_ACTION_PATH/install.sh"
+
+    - name: Save Safe Chain binary
+      uses: ./.github/actions/ci-cache
+      with:
+        operation: save
+        path: ~/.safe-chain/bin
+        key: safe-chain-${{ inputs.version }}-${{ inputs.sha256 }}-${{ runner.os }}-${{ runner.arch }}
 
     - name: Verify shims are active
       shell: bash

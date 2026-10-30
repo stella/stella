@@ -13,8 +13,9 @@ runs:
   using: composite
   steps:
     - name: Restore OSV-Scanner binary
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      uses: ./.github/actions/ci-cache
       with:
+        operation: restore
         path: ~/.osv-scanner/bin
         key: osv-scanner-${{ inputs.version }}-${{ inputs.sha256 }}-${{ runner.os }}-${{ runner.arch }}
     - name: Install OSV-Scanner
@@ -25,3 +26,9 @@ runs:
         OSV_SCANNER_PRIMARY_RELEASE_URL: https://github.com/google/osv-scanner/releases/download/v${{ inputs.version }}
         OSV_SCANNER_MIRROR_RELEASE_URL: https://github.com/stella/.github/releases/download/mirror-osv-scanner-v${{ inputs.version }}
       run: bash "$GITHUB_ACTION_PATH/install.sh"
+    - name: Save OSV-Scanner binary
+      uses: ./.github/actions/ci-cache
+      with:
+        operation: save
+        path: ~/.osv-scanner/bin
+        key: osv-scanner-${{ inputs.version }}-${{ inputs.sha256 }}-${{ runner.os }}-${{ runner.arch }}

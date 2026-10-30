@@ -1,0 +1,35 @@
+name: Non-fatal CI cache transport
+description: Treat cache service failures as restore misses or skipped saves.
+inputs:
+  operation:
+    description: Cache operation (restore or save).
+    required: true
+  path:
+    description: Paths to restore or save.
+    required: true
+  key:
+    description: Cache key.
+    required: true
+  restore-keys:
+    description: Ordered restore key prefixes.
+    required: false
+    default: ""
+outputs:
+  cache-hit:
+    description: Whether the exact key was restored.
+    value: ${{ steps.cache.outputs.cache-hit }}
+  cache-matched-key:
+    description: Key matched by the restore.
+    value: ${{ steps.cache.outputs.cache-matched-key }}
+runs:
+  using: composite
+  steps:
+    - name: Run supervised cache operation
+      id: cache
+      shell: bash
+      env:
+        INPUT_OPERATION: ${{ inputs.operation }}
+        INPUT_PATH: ${{ inputs.path }}
+        INPUT_KEY: ${{ inputs.key }}
+        INPUT_RESTORE-KEYS: ${{ inputs.restore-keys }}
+      run: bun scripts/ci-cache.ts

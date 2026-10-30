@@ -1208,8 +1208,9 @@ jobs:
       - name: Restore API test durations
         id: api-test-duration-cache
         if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: ./.github/actions/ci-cache
         with:
+          operation: restore
           path: ${{ runner.temp }}/api-test-durations.json
           key: api-test-durations-${{ github.run_id }}
           restore-keys: api-test-durations-
@@ -1244,8 +1245,9 @@ jobs:
       - name: Restore Postgres test durations
         id: postgres-test-duration-cache
         if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: ./.github/actions/ci-cache
         with:
+          operation: restore
           path: ${{ runner.temp }}/postgres-test-durations.json
           key: postgres-test-durations-${{ github.run_id }}
           restore-keys: postgres-test-durations-
@@ -1569,8 +1571,9 @@ jobs:
 
       - name: Restore generated sources
         id: cache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: ./.github/actions/ci-cache
         with:
+          operation: restore
           path: ${{ runner.temp }}/generated-sources
           key: ${{ steps.identity.outputs.key }}
 
@@ -1622,8 +1625,9 @@ jobs:
       - name: Save generated sources
         if: steps.cache.outputs.cache-hit != 'true'
         continue-on-error: true
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: ./.github/actions/ci-cache
         with:
+          operation: save
           path: ${{ runner.temp }}/generated-sources
           key: ${{ steps.identity.outputs.key }}
       - name: Upload generated sources
@@ -3257,8 +3261,9 @@ jobs:
           --path "$RUNNER_TEMP/api-test-timings"
 
       - name: Restore previous API test durations
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: ./.github/actions/ci-cache
         with:
+          operation: restore
           path: ${{ runner.temp }}/api-test-durations.json
           key: api-test-durations-${{ github.run_id }}
           restore-keys: api-test-durations-
@@ -3271,8 +3276,9 @@ jobs:
           bun apps/api/scripts/refresh-test-durations.ts --write "$RUNNER_TEMP/api-test-durations.json" --base "$([[ -f "$RUNNER_TEMP/api-test-durations.json" ]] && echo "$RUNNER_TEMP/api-test-durations.json" || echo missing)" "$RUNNER_TEMP/api-test-timings"
 
       - name: Save API test durations
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: ./.github/actions/ci-cache
         with:
+          operation: save
           path: ${{ runner.temp }}/api-test-durations.json
           key: api-test-durations-${{ github.run_id }}
 
@@ -3288,8 +3294,9 @@ jobs:
 
       - name: Restore previous Postgres test durations
         if: needs.postgres-service-suites.result == 'success'
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: ./.github/actions/ci-cache
         with:
+          operation: restore
           path: ${{ runner.temp }}/postgres-test-durations.json
           key: postgres-test-durations-${{ github.run_id }}
           restore-keys: postgres-test-durations-
@@ -3302,8 +3309,9 @@ jobs:
 
       - name: Save Postgres test durations
         if: needs.postgres-service-suites.result == 'success'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: ./.github/actions/ci-cache
         with:
+          operation: save
           path: ${{ runner.temp }}/postgres-test-durations.json
           key: postgres-test-durations-${{ github.run_id }}
 
@@ -6520,8 +6528,9 @@ jobs:
           targets: wasm32-unknown-unknown
 
       - name: Restore Rust build cache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: ./.github/actions/ci-cache
         with:
+          operation: restore
           path: |
             ~/.cargo/registry
             ~/.cargo/bin/wasm-bindgen
@@ -6561,8 +6570,9 @@ jobs:
 
       - name: Save Rust build cache
         if: success()
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: ./.github/actions/ci-cache
         with:
+          operation: save
           path: |
             ~/.cargo/registry
             ~/.cargo/bin/wasm-bindgen

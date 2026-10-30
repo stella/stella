@@ -90,8 +90,9 @@ runs:
     - name: Restore exact or newest compatible complete install store
       id: cache
       if: steps.compression.outcome == 'success'
-      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      uses: ./.github/actions/ci-cache
       with:
+        operation: restore
         path: ${{ steps.identity.outputs.store }}
         key: ${{ steps.identity.outputs.key }}
         restore-keys: ${{ steps.identity.outputs.restore-prefix }}

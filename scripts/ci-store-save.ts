@@ -152,8 +152,8 @@ export const runCacheSave = async ({
           return;
         }
         stalled = true;
-        warning(
-          `No archive or upload progress for ${stallMs}ms; stopping cache save.`,
+        console.log(
+          `::warning title=cache-save-skipped::kind=infra class=cache-save outcome=skipped reason=stalled idle_ms=${stallMs}`,
         );
         killTree(child);
       } catch (error) {

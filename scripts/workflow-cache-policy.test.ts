@@ -4,7 +4,6 @@ import { fileURLToPath } from "node:url";
 import { API } from "tsrs/unstable/async";
 import * as v from "valibot";
 
-import { CACHE_SAVE_REVISION } from "./ci-store-save";
 import { storeSaverCensus } from "./ci-store-save-policy";
 import { mainHeavyJobs } from "./main-heavy-plan";
 import {
@@ -472,8 +471,9 @@ test("scoped store saves are non-fatal post hooks, and containers cannot restore
     (step) => step["id"] === "compression",
   );
   const restore = action.runs.steps.find((step) => step["id"] === "cache");
-  expect(restore?.["uses"]).toBe(
-    `actions/cache/restore@${CACHE_SAVE_REVISION}`,
+  expect(restore?.["uses"]).toBe("./.github/actions/ci-cache");
+  expect(restore?.["with"]).toEqual(
+    expect.objectContaining({ operation: "restore" }),
   );
   expect(compression?.["run"]).toContain(
     "apt-get install -y --no-install-recommends zstd",
