@@ -10,6 +10,8 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 
+import { compareCodeUnit } from "@stll/collation";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawDecisions,
@@ -132,13 +134,13 @@ const idFor = (label: string): SafeId<"caseLawDecision"> => {
 
 const ours = (ids: readonly SafeId<"caseLawDecision">[]) => {
   const seededIds = new Set(seeded.values());
-  return ids.filter((id) => seededIds.has(id)).toSorted();
+  return ids.filter((id) => seededIds.has(id)).toSorted(compareCodeUnit);
 };
 
 const qualifying = () =>
   SEEDS.filter(({ qualifies }) => qualifies)
     .map(({ label }) => idFor(label))
-    .toSorted();
+    .toSorted(compareCodeUnit);
 
 const scanAll = async () =>
   await scanEmptiedDocuments({
@@ -311,7 +313,7 @@ test("an applied run requeues each qualifying decision into the walk once", asyn
     })
     .from(caseLawIndexJobs)
     .where(inArray(caseLawIndexJobs.decisionId, requeued));
-  expect(audit.map(({ id }) => id).toSorted()).toEqual(requeued);
+  expect(audit.map(({ id }) => id).toSorted(compareCodeUnit)).toEqual(requeued);
   expect(audit.every(({ operation }) => operation === "withdraw")).toBe(true);
 
   const stored = await testDb
