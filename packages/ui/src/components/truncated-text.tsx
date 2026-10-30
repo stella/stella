@@ -26,6 +26,7 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "./tooltip";
 const TruncatedText = ({
   children,
   className,
+  hint = true,
   lines = 1,
   render,
   side = "top",
@@ -77,6 +78,10 @@ const TruncatedText = ({
     render,
   });
 
+  if (!hint) {
+    return text;
+  }
+
   // The trigger merges its handlers into the text element, chaining any
   // handler the caller passed, and keeps the element's ref.
   return (
@@ -115,9 +120,16 @@ const TruncatedText = ({
 type TruncatedTextSurface = "tooltip" | "popover";
 
 /** How many lines the text may take before it is cut. */
-type TruncatedTextLines = 1 | 2 | 3;
+type TruncatedTextLines = 1 | 2 | 3 | 4 | 5 | 6 | 8;
 
 type TruncatedTextProps = useRender.ComponentProps<"span"> & {
+  /**
+   * Whether cut text shows its whole self on hover, focus or tap. Pass false
+   * only where something around the text already shows it (a tooltip on the
+   * row, a title the text sits in); the text stays inside its container
+   * either way.
+   */
+  hint?: boolean;
   lines?: TruncatedTextLines;
   side?: React.ComponentProps<typeof TooltipPopup>["side"];
   /**
@@ -156,6 +168,10 @@ const TRUNCATED_TEXT_LINES_CLASS = {
   1: "block min-w-0 max-w-full truncate",
   2: "line-clamp-2 min-w-0 max-w-full wrap-anywhere",
   3: "line-clamp-3 min-w-0 max-w-full wrap-anywhere",
+  4: "line-clamp-4 min-w-0 max-w-full wrap-anywhere",
+  5: "line-clamp-5 min-w-0 max-w-full wrap-anywhere",
+  6: "line-clamp-6 min-w-0 max-w-full wrap-anywhere",
+  8: "line-clamp-8 min-w-0 max-w-full wrap-anywhere",
 } as const satisfies Record<TruncatedTextLines, string>;
 
 /** Whether the element's text is cut by its box, in either direction. */
