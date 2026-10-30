@@ -80,6 +80,7 @@ export const questionAiCellState = ({
   switch (answer.state) {
     case "pending":
       return { type: "running" };
+    case "withdrawn":
     case "answered":
     case "not_stated":
       return { type: "done" };

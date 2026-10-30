@@ -4,9 +4,10 @@ import { operators } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
+import { cents } from "@stll/money";
 
 import type { Transaction } from "@/api/db/root";
-import { invoices } from "@/api/db/schema";
+import { BILLING_STATUS, invoices } from "@/api/db/schema";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
@@ -18,6 +19,7 @@ import {
 } from "@/api/lib/safe-id-boundaries";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
+import { invoiceDetailRowFixture } from "@/api/tests/helpers/invoice-tool-fixtures";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
@@ -212,57 +214,38 @@ describe("follow-up (a): detail-mode workspace resolution from the fetched row",
               predicates.push(
                 dialect.sqlToQuery(predicate(invoices, operators)),
               );
-              return {
-                id: INV_UUID,
-                clientId: null,
-                workspaceId: WS_UUID,
+              return invoiceDetailRowFixture({
+                id: toSafeId<"invoice">(INV_UUID),
+                workspaceId: toSafeId<"workspace">(WS_UUID),
                 invoiceNumber: "INV-1",
-                documentType: "invoice",
-                originalInvoiceId: null,
                 reference: "REF-1",
-                status: "draft",
-                invoiceDate: "2026-01-01",
                 dueDate: "2026-02-01",
-                currency: "EUR",
-                totalAmount: 1000,
-                // Totals written before invoice lines: the read derives them.
-                netAmount: null,
-                vatAmount: null,
-                notes: null,
-                taxableSupplyDate: null,
-                sellerProfileId: null,
-                buyerName: null,
-                buyerRegistrationId: null,
-                buyerVatId: null,
-                buyerAddressLine1: null,
-                buyerAddressLine2: null,
-                buyerCity: null,
-                buyerPostalCode: null,
-                buyerCountry: null,
-                paidAt: null,
-                createdAt: new Date("2026-01-01T00:00:00.000Z"),
-                updatedAt: new Date("2026-01-01T00:00:00.000Z"),
-                lines: [],
+                totalAmount: cents(1000),
                 timeEntries: [
                   {
-                    id: TE_UUID,
-                    workspaceId: WS_UUID,
-                    workItemId: ENTITY_UUID,
-                    workItemReference: { type: "available", id: ENTITY_UUID },
+                    id: toSafeId<"timeEntry">(TE_UUID),
+                    workspaceId: toSafeId<"workspace">(WS_UUID),
+                    workItemId: toSafeId<"entity">(ENTITY_UUID),
+                    workItemReference: {
+                      type: "available",
+                      id: toSafeId<"entity">(ENTITY_UUID),
+                    },
                     dateWorked: "2026-01-01",
                     billedMinutes: 60,
-                    rateAtEntry: 100,
+                    rateAtEntry: cents(100),
                     currency: "EUR",
                     narrative: "work",
-                    narrativeLanguage: null,
                     invoiceNarrative: null,
                     noCharge: false,
-                    status: "invoiced",
-                    workItem: { id: ENTITY_UUID, name: "Deed" },
+                    status: BILLING_STATUS.BILLED,
+                    invoiceAttachment: "charged",
+                    workItem: {
+                      id: toSafeId<"entity">(ENTITY_UUID),
+                      name: "Deed",
+                    },
                   },
                 ],
-                expenses: [],
-              };
+              });
             },
           },
         },

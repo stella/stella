@@ -35,6 +35,10 @@ import messages from "@/i18n/langs/en.json";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { ChatThreadTestRouter } from "@/lib/chat-thread-test-router";
 import { APIError, toAPIError } from "@/lib/errors/api";
+import {
+  ACTION_ADMISSION_ERROR_KEYS,
+  translateError,
+} from "@/lib/errors/localization";
 import { ProviderDiagnosticError } from "@/lib/errors/provider-diagnostic";
 
 const previousApiUrl = process.env["VITE_API_URL"];
@@ -296,7 +300,9 @@ describe("chat thread messages", () => {
         />,
       );
       expect(html).toContain('role="status"');
-      expect(html).toContain(refusal.message);
+      expect(renderedText(html)).toContain(
+        translateError(ACTION_ADMISSION_ERROR_KEYS[code]),
+      );
       expect(html.includes(messages.common.tryAgain)).toBe(refusal.retryable);
       expect(html.includes('href="https://example.test/contact"')).toBe(
         refusal.status === 403,

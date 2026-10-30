@@ -299,7 +299,7 @@
     "moreOptions": "Más opciones",
     "moreItemActions": "Más acciones para el elemento {number}",
     "noResults": "No hay recortes coincidentes",
-    "noResultsDescription": "¿Quieres buscar «{query}» en los registros?",
+    "noResultsSearchRegistries": "Buscar «{query}» en los registros",
     "noGroup": "Sin grupo",
     "newGroupOption": "Grupo nuevo…",
     "copyItem": "Copiar elemento {number}",
@@ -368,7 +368,8 @@
     "welcomeShortcutDescription": "Pulsa {shortcut} para consultar el historial y elegir un recorte.",
     "welcomeShortcutTitle": "Ábrelo desde cualquier lugar.",
     "welcomeStart": "Empezar a copiar",
-    "welcomeTitle": "Conoce tu portapapeles"
+    "welcomeTitle": "Conoce tu portapapeles",
+    "registryIdentifierSearchHint": "Introduce {identifiers}."
   },
   "activity": {
     "title": "Actividad",

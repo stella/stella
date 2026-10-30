@@ -22,7 +22,7 @@
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/scripts"
   },
   "dependencies": {
-    "@formatjs/icu-messageformat-parser": "3.5.20",
+    "@formatjs/icu-messageformat-parser": "3.5.22",
     "@stll/ai-catalog": "workspace:*",
     "@stll/api-contract": "workspace:*",
     "@stll/fetch": "workspace:*",
