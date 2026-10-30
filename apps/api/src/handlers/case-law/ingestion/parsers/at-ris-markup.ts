@@ -17,6 +17,7 @@ import { type AnyNode, type Element, isTag, isText } from "domhandler";
 import type { DecisionTextFidelity } from "@stll/api-contract/case-law-text-field";
 import type { Inline } from "@stll/legal-ast/document-ast";
 import { hasInlineChildren } from "@stll/legal-ast/document-ast";
+import { flattenInlineText } from "@stll/legal-ast/inline";
 
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
 
@@ -278,21 +279,31 @@ const holdsBlock = (node: Element): boolean =>
       (isTag(child) && specOf(child.name) === undefined && holdsBlock(child)),
   );
 
+// Inline content outside any paragraph element is one paragraph until a
+// block element or a break ends it, so `vor <b>mitten</b> nach` stays one run.
 const readRisBlocks = (
   nodes: readonly AnyNode[],
   reader: Reader,
   items: RisItem[],
 ): void => {
+  let run: AnyNode[] = [];
+  const flushRun = (): void => {
+    if (run.length === 0) {
+      return;
+    }
+    pushBlock(items, {
+      type: "paragraph",
+      element: "text",
+      contentType: undefined,
+      layout: undefined,
+      inlines: readInlineNodes(run, reader),
+    });
+    run = [];
+  };
   for (const node of nodes) {
     if (!isTag(node)) {
       if (isText(node)) {
-        pushBlock(items, {
-          type: "paragraph",
-          element: "text",
-          contentType: undefined,
-          layout: undefined,
-          inlines: readInlineNodes([node], reader),
-        });
+        run.push(node);
       }
       continue;
     }
@@ -300,6 +311,7 @@ const readRisBlocks = (
     if (spec === undefined) {
       reader.unknown.add(node.name);
       if (holdsBlock(node)) {
+        flushRun();
         readRisBlocks(node.children, reader, items);
         continue;
       }
@@ -310,14 +322,17 @@ const readRisBlocks = (
         break;
       }
       case "container": {
+        flushRun();
         readRisBlocks(node.children, reader, items);
         break;
       }
       case "break": {
+        flushRun();
         items.push({ type: "break" });
         break;
       }
       case "heading": {
+        flushRun();
         pushBlock(items, {
           type: "heading",
           inlines: readInlineNodes(node.children, reader),
@@ -325,6 +340,7 @@ const readRisBlocks = (
         break;
       }
       case "paragraph": {
+        flushRun();
         const element = node.name;
         pushBlock(items, {
           type: "paragraph",
@@ -345,13 +361,7 @@ const readRisBlocks = (
       case "character":
       case "line-break":
       case undefined: {
-        pushBlock(items, {
-          type: "paragraph",
-          element: "text",
-          contentType: undefined,
-          layout: undefined,
-          inlines: readInlineNodes([node], reader),
-        });
+        run.push(node);
         break;
       }
       default: {
@@ -360,6 +370,7 @@ const readRisBlocks = (
       }
     }
   }
+  flushRun();
 };
 
 /** Read the children of a `nutzdaten` element as printed units. */
@@ -395,17 +406,8 @@ const sourceNonSpace = (node: AnyNode): string => {
   return printed;
 };
 
-const inlineNonSpace = (inlines: readonly Inline[]): string => {
-  let read = "";
-  for (const node of inlines) {
-    if (node.type === "text") {
-      read += nonSpaceChars(node.text);
-    } else if (hasInlineChildren(node)) {
-      read += inlineNonSpace(node.children);
-    }
-  }
-  return read;
-};
+const inlineNonSpace = (inlines: readonly Inline[]): string =>
+  nonSpaceChars(flattenInlineText(inlines, "rendered"));
 
 /** How many characters of `left` have no counterpart in `right`. */
 const surplusChars = (left: string, right: string): number => {
@@ -448,11 +450,16 @@ export const risTextFidelity = (
   return orderedFidelity(printed, read);
 };
 
-/** Where two character sequences first differ; the shorter length if one extends the other. */
+/**
+ * Where two character sequences first differ, in code points as the counts
+ * are; the shorter length if one extends the other.
+ */
 const firstDifference = (left: string, right: string): number => {
-  const length = Math.min(left.length, right.length);
+  const leftPoints = [...left];
+  const rightPoints = [...right];
+  const length = Math.min(leftPoints.length, rightPoints.length);
   for (let index = 0; index < length; index += 1) {
-    if (left[index] !== right[index]) {
+    if (leftPoints[index] !== rightPoints[index]) {
       return index;
     }
   }

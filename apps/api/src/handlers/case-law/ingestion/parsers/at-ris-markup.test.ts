@@ -294,6 +294,23 @@ describe("RIS text fidelity", () => {
     });
   });
 
+  test("the first difference is counted in code points, as the counts are", () => {
+    expect(compareTextFidelity("\u{1F600}A", "\u{1F600}B")).toMatchObject({
+      firstDifferenceAt: 1,
+    });
+  });
+
+  test("inline runs outside a paragraph stay one paragraph", () => {
+    const { items } = readRisContent(
+      contentOf(wrapped("vor <b>mitten</b> nach<abstand/>danach")),
+    );
+    expect(items.map((item) => item.type)).toEqual([
+      "paragraph",
+      "break",
+      "paragraph",
+    ]);
+  });
+
   test("text the reader cannot place is stored with a marker, not refused", () => {
     const parsed = parseXml(
       wrapped('<absatz ct="text">sichtbar</absatz><abstand>verloren</abstand>'),
