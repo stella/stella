@@ -274,24 +274,14 @@ pub fn run() {
       // Restore sessions and build the initial tray menu off the main thread.
       // Session restore reads the OS keychain, which can block on user
       // authorization; the event loop is not running yet, so blocking setup
-      // makes macOS report the app as not responding. The guard is acquired
-      // synchronously here so every other manager consumer (bridge, deep
-      // links, tray actions) queues behind the restore instead of racing it.
+      // makes macOS report the app as not responding. Read the account before
+      // locking the session manager, following account request lock order.
+      // set_account_owner serializes restoration with other manager consumers.
       {
         let manager = Arc::clone(&manager);
-        // A second-instance notification can race this lock on Windows and
-        // Linux, so fall back to awaiting instead of panicking.
-        let setup_guard = Arc::clone(&manager).try_lock_owned();
         let handle = handle.clone();
         tauri::async_runtime::spawn(async move {
-          let mut mgr = match setup_guard {
-            Ok(guard) => guard,
-            Err(_) => {
-              tracing::warn!("session manager contended during setup");
-              Arc::clone(&manager).lock_owned().await
-            }
-          };
-          mgr.set_app_handle(handle.clone());
+          manager.lock().await.set_app_handle(handle.clone());
           let account = handle.state::<account::AccountState>();
           let owner = match account::current(&account).await {
             Ok(account) => account.as_ref().map(document_sessions::AccountOwner::for_account),
@@ -300,7 +290,8 @@ pub fn run() {
               return;
             }
           };
-          if let Err(error) = mgr.initialize(owner).await {
+          let mut mgr = manager.lock().await;
+          if let Err(error) = mgr.set_account_owner(owner).await {
             tracing::warn!(error = %error, "document session restore remains pending");
             return;
           }

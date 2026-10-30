@@ -882,7 +882,9 @@ pub async fn link(
                   .as_ref()
                   .map(crate::document_sessions::AccountOwner::for_account),
               )
-              .await?
+              .await?;
+            crate::session_manager::SessionManager::attach_pending_listeners(sessions)
+              .await;
           }
           Err(lookup_error) => {
             tracing::warn!(error = %lookup_error, "document account lookup remains unavailable")
