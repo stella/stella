@@ -6524,6 +6524,14 @@
           "started": "Pradėjo dokumento peržiūrą:"
         },
         "empty": "Šioje byloje veiklos dar nėra.",
+        "fields": {
+          "dueDate": "terminas",
+          "parentFolder": "pirminis aplankas",
+          "priority": "prioritetas",
+          "property": "savybė",
+          "schedule": "tvarkaraštis",
+          "sortOrder": "eilės tvarka"
+        },
         "filterLabel": "Filtruoti veiklą",
         "filters": {
           "all": "Visa veikla",
@@ -6573,6 +6581,7 @@
           "translation": "vertimas"
         },
         "title": "Veikla",
+        "updatedFields": "Atnaujinta: {fields}",
         "views": {
           "list": "Sąrašo rodinys",
           "timeline": "Laiko juostos rodinys"

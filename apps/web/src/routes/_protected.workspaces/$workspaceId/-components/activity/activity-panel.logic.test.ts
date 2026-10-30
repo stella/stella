@@ -38,8 +38,8 @@ const LOCAL_MIDNIGHT = new Date(2026, 6, 31).getTime();
 type ItemOptions = {
   action?: MatterActivityItem["action"];
   activityAt?: string;
+  changedFields?: MatterActivityItem["changedFields"];
   performer?: MatterActivityItem["performer"];
-  renameOnly?: boolean;
   runId: string | null;
   target?: Partial<MatterActivityItem["target"]>;
 };
@@ -49,8 +49,8 @@ const item = (
   {
     action = "update",
     activityAt = "2026-07-30T12:00:00.000Z",
+    changedFields = [],
     performer = { name: "Review agent", type: "agent" },
-    renameOnly = false,
     runId,
     target,
   }: ItemOptions,
@@ -59,9 +59,9 @@ const item = (
   activityAt,
   approval: { status: "not_required", user: null },
   category: "documents",
+  changedFields,
   id: toSafeId<"auditLog">(id),
   performer,
-  renameOnly,
   runId,
   target: {
     color: null,
@@ -111,6 +111,76 @@ describe("activity provenance", () => {
 });
 
 describe("groupActivityItems", () => {
+  test("folds consecutive updates only for the same target and actor", () => {
+    const user = {
+      deletedAt: null,
+      id: "user-1",
+      image: null,
+      name: "Matter Administrator",
+      type: "user",
+    } satisfies MatterActivityItem["performer"];
+    const updates = [
+      item("4", {
+        activityAt: "2026-07-30T12:00:30.000Z",
+        changedFields: ["priority"],
+        performer: user,
+        runId: null,
+      }),
+      item("3", {
+        activityAt: "2026-07-30T12:00:20.000Z",
+        changedFields: ["status"],
+        performer: user,
+        runId: null,
+      }),
+      item("2", {
+        activityAt: "2026-07-30T12:00:10.000Z",
+        changedFields: ["dueDate"],
+        performer: user,
+        runId: null,
+      }),
+      item("1", {
+        activityAt: "2026-07-30T12:00:00.000Z",
+        changedFields: ["name", "status"],
+        performer: user,
+        runId: null,
+      }),
+    ];
+
+    const folded = groupActivityItems(updates);
+    expect(folded).toHaveLength(1);
+    expect(folded[0]?.items).toHaveLength(4);
+    expect(
+      new Set(folded[0]?.items.flatMap(({ changedFields }) => changedFields)),
+    ).toEqual(new Set(["name", "status", "dueDate", "priority"]));
+
+    const later = groupActivityItems([
+      ...updates,
+      item("5", {
+        activityAt: "2026-07-30T11:58:00.000Z",
+        changedFields: ["status"],
+        performer: user,
+        runId: null,
+      }),
+    ]);
+    expect(later).toHaveLength(2);
+
+    const otherUser = groupActivityItems([
+      item("4", {
+        activityAt: "2026-07-30T12:00:30.000Z",
+        changedFields: ["priority"],
+        performer: user,
+        runId: null,
+      }),
+      item("6", {
+        activityAt: "2026-07-30T12:00:25.000Z",
+        changedFields: ["status"],
+        performer: { ...user, id: "user-2" },
+        runId: null,
+      }),
+    ]);
+    expect(otherUser).toHaveLength(2);
+  });
+
   test("groups only consecutive events from the same AI run", () => {
     const groups = groupActivityItems([
       item("1", { runId: "run-a" }),
@@ -285,14 +355,14 @@ describe("groupActivityItems", () => {
       item("3", {
         activityAt: new Date(LOCAL_NOON + 8000).toISOString(),
         performer,
-        renameOnly: true,
+        changedFields: ["name"],
         runId: null,
         target: folder,
       }),
       item("2", {
         activityAt: new Date(LOCAL_NOON + 5000).toISOString(),
         performer,
-        renameOnly: true,
+        changedFields: ["name"],
         runId: null,
         target: folder,
       }),
@@ -323,7 +393,7 @@ describe("groupActivityItems", () => {
       item("2", {
         activityAt: new Date(LOCAL_NOON + 5000).toISOString(),
         performer,
-        renameOnly: false,
+        changedFields: ["parentFolder"],
         runId: null,
         target: folder,
       }),
@@ -352,7 +422,7 @@ describe("groupActivityItems", () => {
       item("2", {
         activityAt: new Date(LOCAL_NOON + 2000).toISOString(),
         performer,
-        renameOnly: true,
+        changedFields: ["name"],
         runId: null,
         target: { ...folder, id: "folder-2" },
       }),
@@ -370,7 +440,7 @@ describe("groupActivityItems", () => {
       item("2", {
         activityAt: new Date(LOCAL_NOON + 2000).toISOString(),
         performer: { ...performer, id: "user-2" },
-        renameOnly: true,
+        changedFields: ["name"],
         runId: null,
         target: folder,
       }),
@@ -398,7 +468,7 @@ describe("groupActivityItems", () => {
       item("2", {
         activityAt: new Date(LOCAL_NOON + 61_000).toISOString(),
         performer,
-        renameOnly: true,
+        changedFields: ["name"],
         runId: null,
         target: folder,
       }),

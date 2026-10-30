@@ -6524,6 +6524,14 @@
           "started": "Dokumentenprüfung gestartet für"
         },
         "empty": "Noch keine Aktivität in dieser Akte.",
+        "fields": {
+          "dueDate": "Fälligkeitsdatum",
+          "parentFolder": "übergeordneter Ordner",
+          "priority": "Priorität",
+          "property": "Eigenschaft",
+          "schedule": "Zeitplan",
+          "sortOrder": "Reihenfolge"
+        },
         "filterLabel": "Aktivität filtern",
         "filters": {
           "all": "Alle Aktivitäten",
@@ -6573,6 +6581,7 @@
           "translation": "Übersetzung"
         },
         "title": "Aktivität",
+        "updatedFields": "{fields} aktualisiert",
         "views": {
           "list": "Listenansicht",
           "timeline": "Zeitleistenansicht"

@@ -44,6 +44,21 @@ export const TARGET_LABEL_KEYS = {
   TranslationKey
 >;
 
+export const CHANGED_FIELD_LABEL_KEYS = {
+  dueDate: "workspaces.overview.activity.fields.dueDate",
+  name: "common.name",
+  parentFolder: "workspaces.overview.activity.fields.parentFolder",
+  priority: "workspaces.overview.activity.fields.priority",
+  property: "workspaces.overview.activity.fields.property",
+  schedule: "workspaces.overview.activity.fields.schedule",
+  sortOrder: "workspaces.overview.activity.fields.sortOrder",
+  status: "common.status",
+  type: "common.type",
+} as const satisfies Record<
+  MatterActivityItem["changedFields"][number],
+  TranslationKey
+>;
+
 const ACTIVITY_FOLD_WINDOW_MS = 60_000;
 
 /**
@@ -161,7 +176,7 @@ export type ActivityGroup =
     }
   | {
       id: string;
-      items: [MatterActivityItem];
+      items: [MatterActivityItem, ...MatterActivityItem[]];
       type: "single";
     };
 
@@ -209,7 +224,8 @@ const isFoldableFolderRename = (
 ) =>
   candidate?.type === "single" &&
   isUserFolderAction(candidate.items[0], "update") &&
-  candidate.items[0].renameOnly &&
+  candidate.items[0].changedFields.length === 1 &&
+  candidate.items[0].changedFields[0] === "name" &&
   candidate.items[0].target.id === createItem.target.id &&
   hasSamePerformer(candidate.items[0], createItem) &&
   isWithinActivityFoldWindow(candidate.items[0], createItem);
@@ -218,6 +234,22 @@ const hasSameActivityDay = (
   left: MatterActivityItem,
   right: MatterActivityItem,
 ) => activityDayKey(left.activityAt) === activityDayKey(right.activityAt);
+
+const foldsIntoUpdate = (
+  candidate: ActivityGroup | undefined,
+  item: MatterActivityItem,
+): candidate is Extract<ActivityGroup, { type: "single" }> =>
+  candidate?.type === "single" &&
+  candidate.items[0].runId === null &&
+  item.runId === null &&
+  candidate.items[0].action === "update" &&
+  item.action === "update" &&
+  candidate.items[0].target.id === item.target.id &&
+  hasSameActor(candidate.items[0], item) &&
+  isWithinActivityFoldWindow(
+    candidate.items.at(-1) ?? candidate.items[0],
+    item,
+  );
 
 /** One decision on one review's finding, whichever surface took it. */
 const isReviewDecision = (item: MatterActivityItem) =>
@@ -264,6 +296,10 @@ export const groupActivityItems = (
 
   for (const item of items) {
     const previous = groups.at(-1);
+    if (foldsIntoUpdate(previous, item)) {
+      previous.items.push(item);
+      continue;
+    }
     // Before the run grouping below: a decision taken through chat carries a
     // run id, and it still belongs to its review rather than to that run.
     if (isReviewDecision(item)) {

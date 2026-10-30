@@ -6524,6 +6524,14 @@
           "started": "Rozpoczął(-ęła) przegląd dokumentu"
         },
         "empty": "Brak aktywności w tej sprawie.",
+        "fields": {
+          "dueDate": "termin",
+          "parentFolder": "folder nadrzędny",
+          "priority": "priorytet",
+          "property": "właściwość",
+          "schedule": "harmonogram",
+          "sortOrder": "kolejność"
+        },
         "filterLabel": "Filtruj aktywność",
         "filters": {
           "all": "Cała aktywność",
@@ -6573,6 +6581,7 @@
           "translation": "tłumaczenie"
         },
         "title": "Aktywność",
+        "updatedFields": "Zaktualizowano: {fields}",
         "views": {
           "list": "Widok listy",
           "timeline": "Widok osi czasu"
