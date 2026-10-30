@@ -129,29 +129,72 @@ const linkChipMarkup = (href: string, label: string): string | null => {
 };
 
 /**
- * The chips of one edited message, each under a token no other chip of the
- * message spells: two references with the same label read `@Acme` and
- * `@Acme (2)`, so a token names one reference wherever the user moves it.
+ * The chips of one edited message. While the message is read, each chip
+ * stands in the text as a placeholder; once all of the message's text is
+ * known, every chip gets a token that neither another chip nor the text the
+ * user typed spells. `Ask @Acme about` plus a reference labelled Acme reads
+ * `Ask @Acme about @Acme (2)`: the literal `@Acme` stays text, and the token
+ * names the one reference wherever the user moves it.
  */
 type ChipCollector = {
-  readonly chips: UserMessageEditChip[];
-  /** Records a chip and returns the token the text spells it with. */
+  /** Records a chip and returns the placeholder that stands for it. */
   add: (label: string, html: string) => string;
+  /** The chips under their tokens, and `texts` with each placeholder replaced
+   *  by its chip's token. */
+  finish: (texts: readonly string[]) => {
+    chips: UserMessageEditChip[];
+    texts: string[];
+  };
 };
 
-const createChipCollector = (): ChipCollector => {
-  const chips: UserMessageEditChip[] = [];
-  const taken = new Set<string>();
+/** A private-use character none of `sources` contains, to mark placeholders. */
+const unusedMarker = (sources: readonly string[]): string => {
+  for (let codePoint = 0xe0_00; codePoint <= 0xf8_ff; codePoint += 1) {
+    const marker = String.fromCodePoint(codePoint);
+    if (sources.every((source) => !source.includes(marker))) {
+      return marker;
+    }
+  }
+  return panic("The message uses every private-use character");
+};
+
+const createChipCollector = (sources: readonly string[]): ChipCollector => {
+  const marker = unusedMarker(sources);
+  const placeholder = new RegExp(`${marker}(\\d+)${marker}`, "gu");
+  const pending: { html: string; label: string }[] = [];
   return {
-    chips,
     add: (label, html) => {
-      let token = `@${label}`;
-      for (let copy = 2; taken.has(token); copy += 1) {
-        token = `@${label} (${String(copy)})`;
-      }
-      taken.add(token);
-      chips.push({ html, token });
-      return token;
+      pending.push({ html, label });
+      return `${marker}${String(pending.length - 1)}${marker}`;
+    },
+    finish: (texts) => {
+      // Everything the user typed, each chip a break so no token is read
+      // across one.
+      const typed = texts
+        .map((text) => text.replaceAll(placeholder, "\n"))
+        .join("\n");
+      const taken = new Set<string>();
+      const chips = pending.map(({ html, label }) => {
+        let token = `@${label}`;
+        for (
+          let copy = 2;
+          taken.has(token) || typed.includes(token);
+          copy += 1
+        ) {
+          token = `@${label} (${String(copy)})`;
+        }
+        taken.add(token);
+        return { html, token };
+      });
+      return {
+        chips,
+        texts: texts.map((text) =>
+          text.replaceAll(
+            placeholder,
+            (_placeholder, index: string) => chips[Number(index)]?.token ?? "",
+          ),
+        ),
+      };
     },
   };
 };
@@ -322,9 +365,9 @@ const editableText = (content: string, chips: ChipCollector): string => {
 export const userMessageEditText = (
   content: string,
 ): { chips: UserMessageEditChip[]; text: string } => {
-  const chips = createChipCollector();
-  const text = editableText(content, chips);
-  return { chips: chips.chips, text };
+  const collector = createChipCollector([content]);
+  const { chips, texts } = collector.finish([editableText(content, collector)]);
+  return { chips, text: texts.join("") };
 };
 
 const isEditAttachmentPart = (
@@ -339,18 +382,22 @@ export const createUserMessageEditDraft = (
   message: Pick<PersistedChatMessage, "parts">,
   createId: () => string,
 ): UserMessageEditDraft => {
-  const texts: string[] = [];
-  // One collector for every text part, so no two chips share a token.
-  const chips = createChipCollector();
+  const textContents: string[] = [];
   const attachments: UserMessageEditAttachment[] = [];
   for (const part of message.parts) {
     if (isEditAttachmentPart(part)) {
       attachments.push({ id: createId(), part });
     } else if (part.type === "text") {
-      texts.push(editableText(part.content, chips));
+      textContents.push(part.content);
     }
   }
-  return { attachments, chips: chips.chips, text: texts.join("\n\n") };
+  // One collector for every text part, so no chip's token is spelled by
+  // another chip or by anything the user typed anywhere in the message.
+  const collector = createChipCollector(textContents);
+  const { chips, texts } = collector.finish(
+    textContents.map((content) => editableText(content, collector)),
+  );
+  return { attachments, chips, text: texts.join("\n\n") };
 };
 
 /** Typed text as composer markup: a blank line starts a paragraph, a line

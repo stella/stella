@@ -176,6 +176,64 @@ describe("the markup an edit sends", () => {
     ).toBe(`<p>${matterChip?.html ?? ""} beside ${entityChip?.html ?? ""}</p>`);
   });
 
+  describe("a literal @Acme typed before a reference labelled Acme", () => {
+    /** The stored message as the edit form opens it. */
+    const openStored = () => {
+      const editable = userMessageEditText(
+        `Ask @Acme about [Acme](${hrefOf({ category: "workspace", id: MATTER_ID })})`,
+      );
+      const [reference] = editable.chips;
+      return {
+        editable,
+        referenceHtml: reference?.html ?? expect.unreachable("A chip"),
+      };
+    };
+
+    test("reads with a token the typed text does not spell", () => {
+      const { editable, referenceHtml } = openStored();
+      expect(editable.text).toBe("Ask @Acme about @Acme (2)");
+      expect(editable.chips).toEqual([
+        { html: referenceHtml, token: "@Acme (2)" },
+      ]);
+    });
+
+    test("keeps the reference on its own occurrence when sent back", () => {
+      const { editable, referenceHtml } = openStored();
+      expect(
+        composeUserMessageEdit({ chips: editable.chips, text: editable.text }),
+      ).toEqual({
+        html: `<p>Ask @Acme about ${referenceHtml}</p>`,
+        removedChips: [],
+      });
+    });
+
+    test("deleting the reference's occurrence removes it and keeps the typed text", () => {
+      const { editable } = openStored();
+      expect(
+        composeUserMessageEdit({
+          chips: editable.chips,
+          text: "Ask @Acme about it",
+        }),
+      ).toEqual({
+        html: "<p>Ask @Acme about it</p>",
+        removedChips: editable.chips,
+      });
+    });
+
+    test("deleting the typed text keeps the reference", () => {
+      const { editable, referenceHtml } = openStored();
+      expect(
+        composeUserMessageEdit({
+          chips: editable.chips,
+          text: "Ask about @Acme (2)",
+        }),
+      ).toEqual({
+        html: `<p>Ask about ${referenceHtml}</p>`,
+        removedChips: [],
+      });
+    });
+  });
+
   test("a token typed again where no chip stood stays text", () => {
     expect(
       composeUserMessageEdit({ chips: [chipA], text: "@A\n\nthen @A" }).html,
