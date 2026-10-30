@@ -17,10 +17,7 @@ const databaseUrl = process.env["DATABASE_URL"];
 const HOT_MONTH_ROWS = 200_000;
 const CHANGE_ROW_BUDGET = 20;
 
-const discoveryScans = (
-  value: unknown,
-  limit: number | undefined = undefined,
-): number => {
+const discoveryScans = (value: unknown, limit?: number): number => {
   if (!isRecord(value)) {
     panic("Invalid discovery plan node");
   }
