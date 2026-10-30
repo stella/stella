@@ -14,6 +14,7 @@ import {
   CASE_LAW_IDENTIFIER_RETRY_CONSTRAINT_VALIDATION,
   CASE_LAW_IDENTIFIER_RETRY_CONSTRAINTS,
 } from "./case-law-identifier-retry-constraint-validation";
+import { CASE_LAW_SITEMAP_PACKING_ENROLLMENT } from "./case-law-sitemap-packing-enrollment";
 import { CORPUS_PROJECTION_CLEANUP_STALL_REPAIR } from "./corpus-projection-cleanup-stall-repair";
 import { CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR } from "./corpus-projection-delete-receipt-repair";
 import {
@@ -2396,6 +2397,9 @@ const createHarness = ({
             return [{ installed: false }];
           }
           if (query.includes("database_backfill_states")) {
+            if (params.at(0) === CASE_LAW_SITEMAP_PACKING_ENROLLMENT.name) {
+              return [{ last_country: "complete" }];
+            }
             return queryBackfillCheckpoint(query, params);
           }
           if (query.includes("transaction_isolation")) {
