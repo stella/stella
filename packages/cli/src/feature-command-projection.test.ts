@@ -5,6 +5,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { resolveEffectiveGrants } from "./auth/command-scopes.js";
 import { buildApp } from "./build-cli-tree.js";
 import {
   loadBakedCapabilityCatalog,
@@ -102,6 +103,7 @@ const invokeHelp = async (commandTree: RouteNode, argv: string[]) => {
       configDir: "",
       serverUrl: undefined,
       token: undefined,
+      effectiveGrants: resolveEffectiveGrants({}),
     }),
     process: {
       stdout: {
@@ -228,6 +230,7 @@ for (const featureAccess of [undefined, hidden]) {
           configDir: "",
           serverUrl: undefined,
           token: undefined,
+          effectiveGrants: resolveEffectiveGrants({}),
         }),
         process: { stdout: process.stdout, stderr: process.stderr },
       });

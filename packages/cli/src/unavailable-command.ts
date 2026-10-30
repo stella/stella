@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 
+import type { EffectiveGrants } from "./auth/command-scopes.js";
 import { scopePreflightFailure } from "./auth/command-scopes.js";
 import type { CallerFeatureAccess } from "./feature-command-projection.js";
 import { EXIT_CODES } from "./mcp-constants.js";
@@ -52,16 +53,13 @@ type ResolveCommandUnavailableCauseOptions = {
   argv: readonly string[];
   baked: RouteNode;
   current: RouteNode;
-  token?: string | undefined;
+  effectiveGrants: EffectiveGrants;
   featureAccess?: CallerFeatureAccess | undefined;
   serverUrl?: string | undefined;
   evidence?:
     | Pick<
         CurrentRegistry,
-        | "grantedScopes"
-        | "scopeOmittedTools"
-        | "featureOmittedTools"
-        | "featureOmittedCapabilities"
+        "featureOmittedTools" | "featureOmittedCapabilities"
       >
     | undefined;
 };
@@ -71,7 +69,7 @@ export const resolveCommandUnavailableCause = ({
   argv,
   baked,
   current,
-  token,
+  effectiveGrants,
   serverUrl,
   evidence,
   featureAccess,
@@ -114,7 +112,7 @@ export const resolveCommandUnavailableCause = ({
         return boundCommandUnavailableCause({
           known,
           current: visible,
-          token,
+          effectiveGrants,
           serverUrl,
           evidence,
           featureAccess,
@@ -130,7 +128,7 @@ export const resolveCommandUnavailableCause = ({
 
 type BoundCommandUnavailableCauseOptions = Pick<
   ResolveCommandUnavailableCauseOptions,
-  "token" | "serverUrl" | "evidence" | "featureAccess"
+  "effectiveGrants" | "serverUrl" | "evidence" | "featureAccess"
 > & {
   known: Exclude<RouteNode, { kind: "route" }>;
   current: RouteNode | undefined;
@@ -140,7 +138,7 @@ type BoundCommandUnavailableCauseOptions = Pick<
 const boundCommandUnavailableCause = ({
   known,
   current,
-  token,
+  effectiveGrants,
   serverUrl,
   evidence,
   featureAccess,
@@ -168,8 +166,7 @@ const boundCommandUnavailableCause = ({
   const scopeFailure = scopePreflightFailure({
     scope: known.spec.scope,
     additionalScopes: known.spec.additionalScopes,
-    token: token ?? "",
-    grantedScopes: evidence?.grantedScopes,
+    effectiveGrants,
     serverUrl,
   });
   if (scopeFailure !== undefined) {

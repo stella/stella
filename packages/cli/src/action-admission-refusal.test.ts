@@ -8,6 +8,7 @@ import {
   readCliActionAdmissionRefusal,
   readHttpActionAdmissionRefusal,
 } from "./action-admission-refusal.js";
+import { resolveEffectiveGrants } from "./auth/command-scopes.js";
 import { checkServerCompatibility } from "./compatibility.js";
 import type { Context } from "./context.js";
 import {
@@ -75,6 +76,7 @@ const render = async (
       configDir: "/tmp/stella-refusal",
       serverUrl: undefined,
       token: undefined,
+      effectiveGrants: resolveEffectiveGrants({}),
     },
     {
       stderr: (text) => {

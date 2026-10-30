@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
 
+import { resolveEffectiveGrants } from "./auth/command-scopes.js";
 import { loadBakedCapabilityCatalog } from "./capability-catalog-load.js";
 import { projectFeatureCommands } from "./feature-command-projection.js";
 import { buildCliRouteTree } from "./generate-capability-tree.js";
@@ -10,6 +11,8 @@ import {
   resolveCommandUnavailableCause,
 } from "./unavailable-command.js";
 import type { CommandUnavailableCause } from "./unavailable-command.js";
+
+const unknownGrants = resolveEffectiveGrants({});
 
 const featureEvidence = {
   featureOmittedTools: ["list_time_entries", "list_invoices", "resolve_rate"],
@@ -33,6 +36,7 @@ test("known omitted commands name organization availability and the owning featu
   const argv = ["capability", "lists", "verifications-get", "--help"];
   expect(
     resolveCommandUnavailableCause({
+      effectiveGrants: unknownGrants,
       argv,
       baked,
       current,
@@ -49,6 +53,7 @@ test("known omitted commands name organization availability and the owning featu
   ]) {
     expect(
       resolveCommandUnavailableCause({
+        effectiveGrants: unknownGrants,
         argv: [...serverArgs, ...argv],
         baked,
         current,
@@ -56,6 +61,7 @@ test("known omitted commands name organization availability and the owning featu
       }),
     ).toEqual(
       resolveCommandUnavailableCause({
+        effectiveGrants: unknownGrants,
         argv,
         baked,
         current,
@@ -64,10 +70,16 @@ test("known omitted commands name organization availability and the owning featu
     );
   }
   expect(
-    resolveCommandUnavailableCause({ argv, baked, current: baked }),
+    resolveCommandUnavailableCause({
+      effectiveGrants: unknownGrants,
+      argv,
+      baked,
+      current: baked,
+    }),
   ).toBeUndefined();
   expect(
     resolveCommandUnavailableCause({
+      effectiveGrants: unknownGrants,
       argv: ["capability", "lists", "verifications-gte"],
       baked,
       current,
@@ -75,6 +87,7 @@ test("known omitted commands name organization availability and the owning featu
   ).toBeUndefined();
   expect(
     resolveCommandUnavailableCause({
+      effectiveGrants: unknownGrants,
       argv: ["capability", "lists", "--help"],
       baked,
       current,
@@ -93,6 +106,7 @@ test("time, invoice, and rate omissions explain that the organization has not en
     ["rate", "resolve"],
   ]) {
     const message = resolveCommandUnavailableCause({
+      effectiveGrants: unknownGrants,
       argv,
       baked: generatedRouteMap,
       current,
@@ -114,6 +128,7 @@ test("unknown paths including inherited object names remain ordinary unknown com
   for (const name of ["constructor", "toString", "__proto__"]) {
     expect(
       resolveCommandUnavailableCause({
+        effectiveGrants: unknownGrants,
         argv: [name],
         baked: generatedRouteMap,
         current: generatedRouteMap,
@@ -121,6 +136,7 @@ test("unknown paths including inherited object names remain ordinary unknown com
     ).toBeUndefined();
     expect(
       resolveCommandUnavailableCause({
+        effectiveGrants: unknownGrants,
         argv: ["matter", name],
         baked: generatedRouteMap,
         current: generatedRouteMap,
@@ -176,15 +192,15 @@ test("opaque callers use server grants while missing evidence never implies a di
     argv: ["matter", "list"],
     baked: generatedRouteMap,
     current,
-    token: "opaque-token",
+    effectiveGrants: unknownGrants,
     serverUrl: "https://example.invalid",
   };
   const missing = resolveCommandUnavailableCause({
     ...options,
-    evidence: {
-      grantedScopes: ["openid", "stella:search"],
-      scopeOmittedTools: ["list_matters"],
-    },
+    effectiveGrants: resolveEffectiveGrants({
+      registry: { grantedScopes: ["openid", "stella:search"] },
+    }),
+    evidence: {},
   });
   expect(missing).toEqual({
     type: "missing-scope",
@@ -196,15 +212,20 @@ test("opaque callers use server grants while missing evidence never implies a di
   expect(
     resolveCommandUnavailableCause({
       ...options,
-      evidence: { grantedScopes: ["stella:read"] },
+      effectiveGrants: resolveEffectiveGrants({
+        registry: { grantedScopes: ["stella:read"] },
+      }),
+      evidence: {},
     }),
   ).toEqual({ type: "unknown-to-server", command: "matter list" });
   expect(
     resolveCommandUnavailableCause({
       ...options,
       argv: ["time-entry", "list"],
+      effectiveGrants: resolveEffectiveGrants({
+        registry: { grantedScopes: [] },
+      }),
       evidence: {
-        grantedScopes: [],
         featureOmittedTools: ["list_time_entries"],
       },
     }),
@@ -217,7 +238,10 @@ test("opaque callers use server grants while missing evidence never implies a di
     resolveCommandUnavailableCause({
       ...options,
       current: generatedRouteMap,
-      evidence: { grantedScopes: ["stella:search"] },
+      effectiveGrants: resolveEffectiveGrants({
+        registry: { grantedScopes: ["stella:search"] },
+      }),
+      evidence: {},
     })?.type,
   ).toBe("missing-scope");
 });
@@ -240,10 +264,16 @@ test("explicit caller enrolment denials distinguish disabled tools and capabilit
       argv,
       baked: generatedRouteMap,
       current,
-      evidence: { grantedScopes: ["stella:read"] },
+      effectiveGrants: resolveEffectiveGrants({
+        registry: { grantedScopes: ["stella:read"] },
+      }),
+      evidence: {},
     };
     expect(
-      resolveCommandUnavailableCause({ ...options, featureAccess }),
+      resolveCommandUnavailableCause({
+        ...options,
+        featureAccess,
+      }),
     ).toEqual({ type: "feature-disabled", command: argv.join(" "), feature });
     expect(
       resolveCommandUnavailableCause({

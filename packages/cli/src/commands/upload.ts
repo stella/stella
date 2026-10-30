@@ -199,9 +199,9 @@ export const uploadCommand: Command<Context> = buildCommand<
       flags.entityId === undefined
         ? ["matters_write", "documents_write"]
         : ["documents_write"];
-    const { token } = this;
     const missingScope = requiredScopes.find(
-      (scope) => !scopeGranted({ token, scope }),
+      (scope) =>
+        !scopeGranted({ effectiveGrants: this.effectiveGrants, scope }),
     );
     if (missingScope !== undefined) {
       writers.stderr(
@@ -213,7 +213,7 @@ export const uploadCommand: Command<Context> = buildCommand<
     if (
       flags.entityId === undefined &&
       flags.propertyId === undefined &&
-      !scopeGranted({ token: this.token, scope: "read" })
+      !scopeGranted({ effectiveGrants: this.effectiveGrants, scope: "read" })
     ) {
       writers.stderr(
         "Automatic file-property resolution needs scope stella:read; grant it or pass --property-id explicitly.\n",

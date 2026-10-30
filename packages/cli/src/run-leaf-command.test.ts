@@ -6,7 +6,11 @@ import path from "node:path";
 import { PassThrough } from "node:stream";
 
 import { respondToMcpLifecycle } from "../tests/mcp-test-lifecycle.js";
-import { scopeGranted, scopePreflightFailure } from "./auth/command-scopes.js";
+import {
+  resolveEffectiveGrants,
+  scopeGranted,
+  scopePreflightFailure,
+} from "./auth/command-scopes.js";
 import { CLI_IDENTITY_SCOPES } from "./auth/constants.js";
 import { parseScopesFlag } from "./auth/scopes.js";
 import type { Context } from "./context.js";
@@ -542,6 +546,7 @@ const makeTtyContext = ({
     configDir: "/tmp/stella-test",
     serverUrl,
     token: "header.payload.sig",
+    effectiveGrants: resolveEffectiveGrants({ token: "header.payload.sig" }),
   };
   return {
     context,
@@ -821,7 +826,11 @@ describe("--schema", () => {
       stdinData: "",
       isTTY: false,
     });
-    const signedOut: Context = { ...tty.context, token: undefined };
+    const signedOut: Context = {
+      ...tty.context,
+      token: undefined,
+      effectiveGrants: resolveEffectiveGrants({}),
+    };
     await runLeafCommand({
       context: signedOut,
       flags: { schema: true },
@@ -993,11 +1002,18 @@ describe("scopePreflightFailure: the hint must survive a re-parse", () => {
     ({ granted, required, admitted }) => {
       const result = scopePreflightFailure({
         scope: required,
-        token: tokenGranting(granted),
+        effectiveGrants: resolveEffectiveGrants({
+          token: tokenGranting(granted),
+        }),
       });
       expect(result === undefined).toBe(admitted);
       expect(
-        scopeGranted({ token: tokenGranting(granted), scope: required }),
+        scopeGranted({
+          effectiveGrants: resolveEffectiveGrants({
+            token: tokenGranting(granted),
+          }),
+          scope: required,
+        }),
       ).toBe(admitted);
       if (!admitted) {
         expect(result?.scope).toBe(`stella:${required}`);
@@ -1005,11 +1021,55 @@ describe("scopePreflightFailure: the hint must survive a re-parse", () => {
     },
   );
 
+  for (const admitted of [false, true]) {
+    test(`curated execution follows effective server grants when token claims ${admitted ? "deny" : "allow"}`, async () => {
+      const server = startConfirmGateServer();
+      const tty = makeTtyContext({
+        serverUrl: server.url,
+        stdinData: "",
+        isTTY: false,
+      });
+      const token = tokenGranting(
+        admitted ? "stella:read" : "stella:matters_write",
+      );
+      try {
+        await runLeafCommand({
+          context: {
+            ...tty.context,
+            token,
+            effectiveGrants: resolveEffectiveGrants({
+              token,
+              registry: {
+                grantedScopes: admitted
+                  ? ["stella:matters_write"]
+                  : ["stella:read"],
+              },
+            }),
+          },
+          flags: { input: '{"confirm":true}' },
+          spec: { ...specWith([]), scope: "matters_write" },
+        });
+        expect(server.calls).toHaveLength(admitted ? 1 : 0);
+        if (admitted) {
+          expect(tty.exitCode()).toBeUndefined();
+          expect(tty.stderrText()).toBe("");
+        } else {
+          expect(tty.exitCode()).toBe(EXIT_CODES.auth);
+          expect(tty.stderrText()).toContain("stella:matters_write");
+        }
+      } finally {
+        server.stop();
+      }
+    });
+  }
+
   test("current server grants override token claims and login retains the selected server", () => {
     const failure = scopePreflightFailure({
       scope: "billing_write",
-      token: tokenGranting("stella:billing_write"),
-      grantedScopes: ["openid", "stella:read"],
+      effectiveGrants: resolveEffectiveGrants({
+        token: tokenGranting("stella:billing_write"),
+        registry: { grantedScopes: ["openid", "stella:read"] },
+      }),
       serverUrl: "https://tenant.example",
     });
     expect(failure).toEqual({
@@ -1021,8 +1081,10 @@ describe("scopePreflightFailure: the hint must survive a re-parse", () => {
     expect(
       scopePreflightFailure({
         scope: "billing_write",
-        token: tokenGranting("stella:read"),
-        grantedScopes: ["stella:billing_write"],
+        effectiveGrants: resolveEffectiveGrants({
+          token: tokenGranting("stella:read"),
+          registry: { grantedScopes: ["stella:billing_write"] },
+        }),
       }),
     ).toBeUndefined();
     if (failure === undefined) {
@@ -1037,7 +1099,9 @@ describe("scopePreflightFailure: the hint must survive a re-parse", () => {
   test("login hints quote the selected server as one shell argument", () => {
     const failure = scopePreflightFailure({
       scope: "billing_write",
-      token: tokenGranting("stella:read"),
+      effectiveGrants: resolveEffectiveGrants({
+        token: tokenGranting("stella:read"),
+      }),
       serverUrl: "https://tenant.example/?q=a'b",
     });
     expect(failure?.loginCommand).toBe(
@@ -1053,9 +1117,11 @@ describe("scopePreflightFailure: the hint must survive a re-parse", () => {
     const failure = scopePreflightFailure({
       additionalScopes: ["templates"],
       scope: "documents_write",
-      token: tokenGranting(
-        "openid profile email offline_access stella:read stella:documents_write",
-      ),
+      effectiveGrants: resolveEffectiveGrants({
+        token: tokenGranting(
+          "openid profile email offline_access stella:read stella:documents_write",
+        ),
+      }),
     });
 
     expect(failure).toBeDefined();

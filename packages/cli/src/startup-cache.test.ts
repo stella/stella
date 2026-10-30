@@ -6,6 +6,7 @@ import * as v from "valibot";
 
 import { respondToMcpLifecycle } from "../tests/mcp-test-lifecycle.js";
 import { writeCredentialFile } from "./auth/credential-store.js";
+import { MCP_CAPABILITY_EXECUTORS } from "./generated/mcp-contract.js";
 import registry from "./generated/registry-snapshot.json";
 
 // timeout: two CLI subprocesses each have a bounded 10-second startup deadline.
@@ -318,3 +319,148 @@ test.each([
   },
   30_000,
 );
+
+// timeout: four CLI subprocesses each have a bounded ten-second startup deadline.
+test("server grants override JWT claims in native and advanced capability execution across cached invocations", async () => {
+  const directory = await mkdtemp(
+    path.join(os.tmpdir(), "stella-server-grants-"),
+  );
+  const configHome = path.join(directory, "config");
+  let registryRequests = 0;
+  const calls: { name: string; arguments: Record<string, unknown> }[] = [];
+  const server = Bun.serve({
+    port: 0,
+    fetch: async (request) => {
+      if (request.method !== "POST") {
+        return new Response(null, { status: 405 });
+      }
+      const body = v.parse(
+        v.object({
+          id: v.exactOptional(v.union([v.number(), v.string()])),
+          method: v.exactOptional(v.string()),
+          params: v.exactOptional(v.unknown()),
+        }),
+        await request.json(),
+      );
+      const lifecycle = respondToMcpLifecycle(body);
+      if (lifecycle !== null) {
+        return lifecycle;
+      }
+      if (body.method === "tools/list") {
+        registryRequests += 1;
+        return Response.json(
+          { jsonrpc: "2.0", id: body.id, result: { tools: registry } },
+          {
+            headers: {
+              "x-stella-scopes": "stella:read stella:admin_read",
+              "x-stella-api-contract-version": "3",
+            },
+          },
+        );
+      }
+      if (body.method === "tools/call" && body.params !== undefined) {
+        calls.push(
+          v.parse(
+            v.object({
+              name: v.string(),
+              arguments: v.record(v.string(), v.unknown()),
+            }),
+            body.params,
+          ),
+        );
+        return Response.json({
+          jsonrpc: "2.0",
+          id: body.id,
+          result: {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({ items: [], nextCursor: null }),
+              },
+            ],
+          },
+        });
+      }
+      return new Response(null, { status: 500 });
+    },
+  });
+  try {
+    const now = Date.now();
+    const payload = Buffer.from(
+      JSON.stringify({
+        sub: "synthetic-account",
+        org_id: "organization",
+        scope: "stella:search",
+        exp: Math.floor(now / 1000) + 3600,
+      }),
+    ).toString("base64url");
+    const token = `e30.${payload}.synthetic-signature`;
+    await writeCredentialFile(path.join(configHome, "stella"), {
+      version: 1,
+      defaultOrgByServer: { [server.url.origin]: "organization" },
+      credentials: [
+        {
+          serverUrl: server.url.origin,
+          orgId: "organization",
+          clientId: "client",
+          accessToken: token,
+          scope: "stella:search",
+          tokenType: "Bearer",
+          expiresAt: now + 3_600_000,
+          createdAt: now,
+          updatedAt: now,
+        },
+      ],
+    });
+    for (let invocation = 0; invocation < 2; invocation += 1) {
+      for (const argv of [
+        ["matter", "list"],
+        ["capability", "audit-logs", "list"],
+      ]) {
+        const child = Bun.spawn(
+          [
+            process.execPath,
+            new URL("cli.ts", import.meta.url).pathname,
+            ...argv,
+            "--json",
+          ],
+          {
+            env: {
+              ...process.env,
+              STELLA_API_KEY: "",
+              STELLA_SERVER_URL: server.url.origin,
+              XDG_CONFIG_HOME: configHome,
+              XDG_CACHE_HOME: path.join(directory, "cache"),
+            },
+            stdout: "pipe",
+            stderr: "pipe",
+            timeout: 10_000,
+          },
+        );
+        const [exitCode, stdout, stderr] = await Promise.all([
+          child.exited,
+          new Response(child.stdout).text(),
+          new Response(child.stderr).text(),
+        ]);
+        expect({ exitCode, stderr }).toEqual({ exitCode: 0, stderr: "" });
+        expect(JSON.parse(stdout)).toEqual({ items: [], nextCursor: null });
+      }
+    }
+    expect(calls).toEqual([
+      { name: "list_matters", arguments: {} },
+      {
+        name: MCP_CAPABILITY_EXECUTORS.read,
+        arguments: { capability: "audit-logs.list", input: {} },
+      },
+      { name: "list_matters", arguments: {} },
+      {
+        name: MCP_CAPABILITY_EXECUTORS.read,
+        arguments: { capability: "audit-logs.list", input: {} },
+      },
+    ]);
+    expect(registryRequests).toBe(1);
+  } finally {
+    server.stop(true);
+    await rm(directory, { recursive: true, force: true });
+  }
+}, 45_000);

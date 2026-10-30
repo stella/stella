@@ -117,11 +117,12 @@ export const runCapabilityCommand = async ({
   // validation for both JSON and flags. Keeping a snapshot validator here would
   // reject lenient spellings before the canonical reader sees them.
 
-  // Client-side scope precheck (spec S3): fail before any server call.
+  // Reuse discovery's grant snapshot; decoding the token here could contradict
+  // authenticated server evidence.
   const scopeFailure = scopePreflightFailure({
     additionalScopes: spec.additionalScopes,
     scope: spec.scope,
-    token,
+    effectiveGrants: context.effectiveGrants,
     serverUrl,
   });
   if (scopeFailure !== undefined) {

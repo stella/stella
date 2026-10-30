@@ -1,7 +1,38 @@
+import { panic } from "better-result";
+
 import { MCP_SCOPE_IMPLICATIONS } from "../generated/mcp-contract.js";
+import type { CurrentRegistry } from "../registry-refresh.js";
 import type { CommandUnavailableCause } from "../unavailable-command.js";
 import { decodeAccessTokenClaims } from "./jwt.js";
 import { RESOURCE_SCOPE_PREFIX } from "./scopes.js";
+
+/** One invocation's authoritative grants, shared by discovery and execution. */
+export type EffectiveGrants =
+  | { readonly type: "known"; readonly scopes: readonly string[] }
+  | { readonly type: "unknown" };
+
+type ResolveEffectiveGrantsOptions = {
+  token?: string | undefined;
+  registry?: Pick<CurrentRegistry, "grantedScopes"> | undefined;
+};
+
+export const resolveEffectiveGrants = ({
+  token,
+  registry,
+}: ResolveEffectiveGrantsOptions): EffectiveGrants => {
+  const serverGrantedScopes = registry?.grantedScopes;
+  if (serverGrantedScopes !== undefined) {
+    return { type: "known", scopes: serverGrantedScopes };
+  }
+  const scope =
+    token === undefined ? undefined : decodeAccessTokenClaims(token)?.scope;
+  return scope === undefined
+    ? { type: "unknown" }
+    : {
+        type: "known",
+        scopes: scope.split(/\s+/u).filter((grant) => grant.length > 0),
+      };
+};
 
 const shellArgument = (value: string): string =>
   /^[A-Za-z0-9_.,:/=-]+$/u.test(value)
@@ -9,36 +40,37 @@ const shellArgument = (value: string): string =>
     : `'${value.replaceAll("'", `'\\''`)}'`;
 
 export const scopeGranted = ({
-  token,
+  effectiveGrants,
   scope,
 }: {
-  token: string;
+  effectiveGrants: EffectiveGrants;
   scope: string;
-}): boolean => scopePreflightFailure({ token, scope }) === undefined;
+}): boolean => scopePreflightFailure({ effectiveGrants, scope }) === undefined;
 
 type ScopePreflightFailureArgs = {
   additionalScopes?: readonly string[] | undefined;
   scope?: string | undefined;
-  token: string;
-  grantedScopes?: readonly string[] | undefined;
+  effectiveGrants: EffectiveGrants;
   serverUrl?: string | undefined;
 };
 
 export const scopePreflightFailure = ({
   additionalScopes,
   scope,
-  token,
-  grantedScopes: serverGrantedScopes,
+  effectiveGrants,
   serverUrl,
 }: ScopePreflightFailureArgs):
   Extract<CommandUnavailableCause, { type: "missing-scope" }> | undefined => {
-  const claims = decodeAccessTokenClaims(token);
-  const grantedScopes =
-    serverGrantedScopes ??
-    claims?.scope?.split(/\s+/u).filter((grant) => grant.length > 0);
-  if (grantedScopes === undefined) {
-    return undefined;
+  switch (effectiveGrants.type) {
+    case "unknown":
+      return undefined;
+    case "known":
+      break;
+    default:
+      effectiveGrants satisfies never;
+      return panic("Unexpected effective grant state");
   }
+  const grantedScopes = effectiveGrants.scopes;
 
   const requiredScopes: string[] = [];
   if (scope !== undefined) {

@@ -14,6 +14,7 @@ import {
   actionAdmissionRefusalOutput,
   type CliActionAdmissionRefusal,
 } from "./action-admission-refusal.js";
+import { resolveEffectiveGrants } from "./auth/command-scopes.js";
 import { defaultConfigDir } from "./auth/config-dir.js";
 import { resolveAccessToken } from "./auth/resolve-access-token.js";
 import { resolveServerUrl } from "./auth/server-resolution.js";
@@ -226,11 +227,15 @@ const main = async (): Promise<void> => {
     ...(currentRegistry === undefined ? {} : { registry: currentRegistry }),
     ...(featureAccess === undefined ? {} : { featureAccess }),
   });
+  const effectiveGrants = resolveEffectiveGrants({
+    token,
+    registry: currentRegistry,
+  });
   const unavailable = resolveCommandUnavailableCause({
     argv,
     baked: generatedRouteMap,
     current: tree,
-    token,
+    effectiveGrants,
     serverUrl,
     evidence: currentRegistry,
     featureAccess,
@@ -261,7 +266,13 @@ const main = async (): Promise<void> => {
   }
 
   await run(buildApp(tree), argv, {
-    forCommand: () => ({ configDir, process, serverUrl, token }),
+    forCommand: () => ({
+      configDir,
+      process,
+      serverUrl,
+      token,
+      effectiveGrants,
+    }),
     process: stricliProcess,
   });
   // stricli reports its own parse failures (unknown command, bad flag) with
