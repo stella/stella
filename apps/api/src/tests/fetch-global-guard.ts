@@ -4,7 +4,8 @@ import { afterAll, beforeEach, onTestFinished } from "bun:test";
 const processFetch = globalThis.fetch;
 let testFile = "unknown API test file";
 
-const currentTestFile = () => Bun.argv.at(-1) ?? testFile;
+// Bun narrows argv for a test worker to the file currently being executed.
+const currentTestFile = () => Bun.argv[1] ?? testFile;
 
 beforeEach(() => {
   testFile = currentTestFile();

@@ -38,13 +38,24 @@ const fetchReplacement =
   "Object.assign(async () => new Response(), { preconnect: () => undefined })";
 
 test("reports the file that leaks a global fetch replacement", () => {
-  const fixture = runFixture(`
+  const fixture = runFixtures([
+    `
     import { test } from "bun:test";
+    // The worker can retain other command-line files after its active file.
+    Bun.argv.push("fetch-guard-fixture-1.test.ts");
     test("leaks fetch", () => { globalThis.fetch = ${fetchReplacement}; });
-  `);
+  `,
+    `
+    import { expect, test } from "bun:test";
+    test("keeps process fetch", () => expect(globalThis.fetch.name).toBe("fetch"));
+  `,
+  ]);
 
   expect(fixture.exitCode).not.toBe(0);
   expect(fixture.output).toContain("fetch-guard-fixture-0.test.ts");
+  expect(fixture.output).not.toMatch(
+    /globalThis\.fetch: .*fetch-guard-fixture-1\.test\.ts/u,
+  );
   expect(fixture.output).toContain("leaked a replacement globalThis.fetch");
 });
 
