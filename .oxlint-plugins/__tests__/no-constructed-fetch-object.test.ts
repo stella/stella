@@ -26,7 +26,7 @@ const severityFor = (file: string): unknown => {
   return severity;
 };
 
-test("rejects the rebuilt response that broke every request on the phone", async () => {
+test("rejects a response rebuilt around a fetch body stream", async () => {
   expect(
     await lint(
       [
