@@ -78,8 +78,9 @@ describe.serial(RULE_NAME, () => {
 
   test("leaves the component that implements truncation alone", async () => {
     const source = [
-      `const LINES = { 1: "block min-w-0 max-w-full truncate", 2: "line-clamp-2" };`,
-      "export { LINES };",
+      `const ONE_LINE = "block min-w-0 max-w-full truncate";`,
+      `const TWO_LINES = "line-clamp-2 min-w-0 max-w-full";`,
+      "export { ONE_LINE, TWO_LINES };",
       "",
     ].join("\n");
 
@@ -89,7 +90,7 @@ describe.serial(RULE_NAME, () => {
       }),
     ).toEqual([]);
     expect(await lint(source, { fileName: "truncated-label.tsx" })).toEqual([
-      1,
+      1, 2,
     ]);
   });
 });
