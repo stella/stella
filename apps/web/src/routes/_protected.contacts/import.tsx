@@ -65,7 +65,7 @@ import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { pageTitle } from "@/lib/page-title";
 import { routePresentation } from "@/routes/-route-presentation";
-import { BulkDeleteContacts } from "@/routes/_protected.contacts/-components/bulk-delete";
+import { ImportUndoContacts } from "@/routes/_protected.contacts/-components/bulk-delete";
 import { IMPORT_EDITABLE_FIELDS } from "@/routes/_protected.contacts/-import-candidate";
 import type { ImportEditableField } from "@/routes/_protected.contacts/-import-candidate";
 import {
@@ -740,7 +740,6 @@ const ReviewStep = ({
 }) => {
   const t = useTranslations();
   const { results } = review;
-  const [undoComplete, setUndoComplete] = useState(false);
 
   if (results) {
     return (
@@ -770,16 +769,12 @@ const ReviewStep = ({
           <Button onClick={onRestart} variant="outline">
             {t("contacts.importStudio.importAnother")}
           </Button>
-          {!undoComplete && (
-            <BulkDeleteContacts
-              contactIds={results.flatMap((result) =>
-                result.status === "created" ? [result.contactId] : [],
-              )}
-              labelKey="contacts.importStudio.undoImport"
-              onDeleted={() => setUndoComplete(true)}
-              organizationId={activeOrganizationId}
-            />
-          )}
+          <ImportUndoContacts
+            contactIds={results.flatMap((result) =>
+              result.status === "created" ? [result.contactId] : [],
+            )}
+            organizationId={activeOrganizationId}
+          />
         </div>
       </section>
     );

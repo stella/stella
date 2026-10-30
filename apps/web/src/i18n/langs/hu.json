@@ -2516,12 +2516,15 @@
       "value": "Mező értéke"
     },
     "datePrecision": "Dátum pontossága",
+    "deleteBlockedByMattersCount": "Ez a kapcsolat még ügyfélként szerepel ügyekben. A kapcsolat törlése előtt rendelje át vagy törölje ezeket az ügyeket.",
+    "deleteBlockedCount": "El nem távolított névjegyek: {count}",
     "deleteContact": "Kapcsolat törlése",
     "deleteContactBlockedByMatters": "Ez a kapcsolat még ügyfélként szerepel ügyekben. A kapcsolat törlése előtt rendelje át vagy törölje ezeket az ügyeket.",
     "deleteContactConfirmDescription": "Biztosan törölni szeretné ezt a kontaktot? Ez a művelet nem vonható vissza.",
-    "deleteSelected": "{count} névjegy törlése",
-    "deleteSelectedConfirm": "Véglegesen töröl {count} névjegyet? Ez a művelet nem vonható vissza.",
-    "deletedCount": "{count} névjegy törölve",
+    "deleteNotFoundCount": "Nem található névjegyek: {count}.",
+    "deleteSelected": "{count, plural, one {# névjegy törlése} other {# névjegy törlése}}",
+    "deleteSelectedConfirm": "Véglegesen töröl {count, plural, one {# névjegyet} other {# névjegyet}}? Ez a művelet nem vonható vissza.",
+    "deletedCount": "{count, plural, one {# névjegy törölve} other {# névjegy törölve}}",
     "editContact": "Kapcsolat szerkesztése",
     "emailTypes": {
       "other": "Egyéb",

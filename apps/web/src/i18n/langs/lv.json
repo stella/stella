@@ -2516,12 +2516,15 @@
       "value": "Lauka vērtība"
     },
     "datePrecision": "Datuma precizitāte",
+    "deleteBlockedByMattersCount": "Šī kontaktpersona joprojām ir norādīta kā klients lietās. Pirms kontaktpersonas dzēšanas pārpiešķiriet vai dzēsiet šīs lietas.",
+    "deleteBlockedCount": "Nenoņemtās kontaktpersonas: {count}",
     "deleteContact": "Dzēst kontaktpersonu",
     "deleteContactBlockedByMatters": "Šī kontaktpersona joprojām ir norādīta kā klients lietās. Pirms kontaktpersonas dzēšanas pārpiešķiriet vai dzēsiet šīs lietas.",
     "deleteContactConfirmDescription": "Vai tiešām vēlaties dzēst šo kontaktu? Šo darbību nevar atsaukt.",
-    "deleteSelected": "Dzēst {count} kontaktpersonas",
-    "deleteSelectedConfirm": "Neatgriezeniski dzēst {count} kontaktpersonas? Šo darbību nevar atsaukt.",
-    "deletedCount": "Izdzēstas {count} kontaktpersonas",
+    "deleteNotFoundCount": "Neatrastās kontaktpersonas: {count}.",
+    "deleteSelected": "Dzēst {count, plural, zero {# kontaktpersonu} one {# kontaktpersonu} other {# kontaktpersonas}}",
+    "deleteSelectedConfirm": "Neatgriezeniski dzēst {count, plural, zero {# kontaktpersonu} one {# kontaktpersonu} other {# kontaktpersonas}}? Šo darbību nevar atsaukt.",
+    "deletedCount": "Izdzēstas {count, plural, zero {# kontaktpersonas} one {# kontaktpersona} other {# kontaktpersonas}}",
     "editContact": "Rediģēt kontaktpersonu",
     "emailTypes": {
       "other": "Cits",

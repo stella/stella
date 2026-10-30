@@ -2516,12 +2516,15 @@
       "value": "Wartość pola"
     },
     "datePrecision": "Dokładność daty",
+    "deleteBlockedByMattersCount": "Ten kontakt nadal jest przypisany jako klient w sprawach. Przypisz te sprawy ponownie albo usuń je przed usunięciem kontaktu.",
+    "deleteBlockedCount": "Nieusunięte kontakty: {count}",
     "deleteContact": "Usuń kontakt",
     "deleteContactBlockedByMatters": "Ten kontakt nadal jest przypisany jako klient w sprawach. Przypisz te sprawy ponownie albo usuń je przed usunięciem kontaktu.",
     "deleteContactConfirmDescription": "Czy na pewno chcesz usunąć ten kontakt? Tej operacji nie można cofnąć.",
-    "deleteSelected": "Usuń {count, plural, one {# kontakt} few {# kontakty} other {# kontaktów}}",
-    "deleteSelectedConfirm": "Trwale usunąć {count, plural, one {ten kontakt} few {te # kontakty} other {tych # kontaktów}}? Tej operacji nie można cofnąć.",
-    "deletedCount": "Usunięto {count, plural, one {# kontakt} few {# kontakty} other {# kontaktów}}",
+    "deleteNotFoundCount": "Nieznalezione kontakty: {count}.",
+    "deleteSelected": "Usuń {count, plural, one {# kontakt} few {# kontakty} many {# kontaktów} other {# kontaktu}}",
+    "deleteSelectedConfirm": "Trwale usunąć {count, plural, one {ten kontakt} few {te # kontakty} many {tych # kontaktów} other {tego # kontaktu}}? Tej operacji nie można cofnąć.",
+    "deletedCount": "Usunięto {count, plural, one {# kontakt} few {# kontakty} many {# kontaktów} other {# kontaktu}}",
     "editContact": "Edytuj kontakt",
     "emailTypes": {
       "other": "Inny",

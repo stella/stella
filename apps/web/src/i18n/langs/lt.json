@@ -2516,12 +2516,15 @@
       "value": "Lauko reikšmė"
     },
     "datePrecision": "Datos tikslumas",
+    "deleteBlockedByMattersCount": "Šis kontaktas vis dar priskirtas kaip klientas bylose. Prieš ištrindami kontaktą, perskirkite arba ištrinkite tas bylas.",
+    "deleteBlockedCount": "Nepašalinti kontaktai: {count}",
     "deleteContact": "Ištrinti kontaktą",
     "deleteContactBlockedByMatters": "Šis kontaktas vis dar priskirtas kaip klientas bylose. Prieš ištrindami kontaktą, perskirkite arba ištrinkite tas bylas.",
     "deleteContactConfirmDescription": "Ar tikrai norite ištrinti šį kontaktą? Šio veiksmo negalima atšaukti.",
-    "deleteSelected": "Ištrinti {count} kontaktus",
-    "deleteSelectedConfirm": "Visam laikui ištrinti {count} kontaktus? Šio veiksmo anuliuoti negalima.",
-    "deletedCount": "Ištrinta kontaktų: {count}",
+    "deleteNotFoundCount": "Nerasti kontaktai: {count}.",
+    "deleteSelected": "Ištrinti {count, plural, one {# kontaktą} few {# kontaktus} many {# kontakto} other {# kontaktų}}",
+    "deleteSelectedConfirm": "Visam laikui ištrinti {count, plural, one {# kontaktą} few {# kontaktus} many {# kontakto} other {# kontaktų}}? Šio veiksmo anuliuoti negalima.",
+    "deletedCount": "Ištrinta {count, plural, one {# kontaktas} few {# kontaktai} many {# kontakto} other {# kontaktų}}",
     "editContact": "Redaguoti kontaktą",
     "emailTypes": {
       "other": "Kitas",

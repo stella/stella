@@ -2516,9 +2516,12 @@
       "value": "Hodnota poľa"
     },
     "datePrecision": "Presnosť dátumu",
+    "deleteBlockedByMattersCount": "Tento kontakt je stále priradený ako klient v spisoch. Pred odstránením kontaktu tieto spisy priraďte inému klientovi alebo ich odstráňte.",
+    "deleteBlockedCount": "Neodstránené kontakty: {count}",
     "deleteContact": "Vymazať kontakt",
     "deleteContactBlockedByMatters": "Tento kontakt je stále priradený ako klient v spisoch. Pred odstránením kontaktu tieto spisy priraďte inému klientovi alebo ich odstráňte.",
     "deleteContactConfirmDescription": "Naozaj chcete vymazať tento kontakt? Túto akciu nemožno vrátiť.",
+    "deleteNotFoundCount": "Nenájdené kontakty: {count}.",
     "deleteSelected": "Odstrániť {count, plural, one {# kontakt} few {# kontakty} other {# kontaktov}}",
     "deleteSelectedConfirm": "Natrvalo odstrániť {count, plural, one {tento kontakt} few {tieto # kontakty} other {týchto # kontaktov}}? Túto akciu nemožno vrátiť späť.",
     "deletedCount": "Odstránené: {count, plural, one {# kontakt} few {# kontakty} other {# kontaktov}}",

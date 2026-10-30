@@ -15,11 +15,19 @@ const deleteContacts = async (contactIds: readonly string[]) => {
     status: "deleted" as const,
   }));
 };
+const deleteContactsPartially = async (contactIds: readonly string[]) => {
+  receivedBatches.push([...contactIds]);
+  return [
+    { contactId: "contact-one", status: "deleted" as const },
+    { contactId: "contact-two", status: "blocked" as const },
+  ];
+};
 
 GlobalRegistrator.register({ url: "http://localhost:3000/contacts" });
 const { act, cleanup, fireEvent, render, screen } =
   await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
+const { ToastProvider } = await import("@stll/ui/toast");
 const { BulkDeleteContacts } = await import("./bulk-delete");
 
 afterEach(async () => {
@@ -62,6 +70,26 @@ function Fixture() {
   );
 }
 
+function PartialFixture() {
+  const [selected, setSelected] = useState(["contact-one", "contact-two"]);
+  return (
+    <>
+      <BulkDeleteContacts
+        contactIds={selected}
+        deleteContacts={deleteContactsPartially}
+        onDeleted={(deletedIds) =>
+          setSelected((currentIds) =>
+            currentIds.filter((contactId) => !deletedIds.includes(contactId)),
+          )
+        }
+        organizationId="organization-one"
+      />
+      <output>{selected.join(",")}</output>
+      <ToastProvider />
+    </>
+  );
+}
+
 test("selects three contacts and confirms one bulk request", async () => {
   const queryClient = new QueryClient();
   await act(async () => {
@@ -89,4 +117,28 @@ test("selects three contacts and confirms one bulk request", async () => {
   expect(receivedBatches).toEqual([
     ["contact-one", "contact-two", "contact-three"],
   ]);
+});
+
+test("reports blocked contacts and keeps them selected", async () => {
+  const queryClient = new QueryClient();
+  await act(async () => {
+    render(
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
+        <QueryClientProvider client={queryClient}>
+          <PartialFixture />
+        </QueryClientProvider>
+      </IntlProvider>,
+    );
+  });
+
+  await act(async () =>
+    fireEvent.click(screen.getByRole("button", { name: "Delete 2 contacts" })),
+  );
+  await act(async () =>
+    fireEvent.click(screen.getByRole("button", { name: "Delete" })),
+  );
+
+  expect(await screen.findByText("Contacts not removed: 1")).toBeTruthy();
+  expect(screen.getByText("contact-two")).toBeTruthy();
+  expect(screen.queryByText("Deleted 1 contact")).toBeNull();
 });

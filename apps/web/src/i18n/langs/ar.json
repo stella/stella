@@ -2516,12 +2516,15 @@
       "value": "قيمة الحقل"
     },
     "datePrecision": "دقة التاريخ",
+    "deleteBlockedByMattersCount": "ما زالت جهة الاتصال هذه مُكلَّفة كعميل في ملفات قانونية. أعد تكليف تلك الملفات أو احذفها قبل حذف جهة الاتصال.",
+    "deleteBlockedCount": "جهات الاتصال التي لم تُزل: {count}",
     "deleteContact": "حذف جهة الاتصال",
     "deleteContactBlockedByMatters": "ما زالت جهة الاتصال هذه مُكلَّفة كعميل في ملفات قانونية. أعد تكليف تلك الملفات أو احذفها قبل حذف جهة الاتصال.",
     "deleteContactConfirmDescription": "هل أنت متأكد من رغبتك في حذف جهة الاتصال هذه؟ لا يمكن التراجع عن هذا الإجراء.",
-    "deleteSelected": "حذف {count, plural, one {جهة اتصال واحدة} other {# جهات اتصال}}",
-    "deleteSelectedConfirm": "هل تريد حذف {count, plural, one {جهة الاتصال هذه} other {جهات الاتصال الـ # هذه}} نهائيًا؟ لا يمكن التراجع عن هذا الإجراء.",
-    "deletedCount": "تم حذف {count, plural, one {جهة اتصال واحدة} other {# جهات اتصال}}",
+    "deleteNotFoundCount": "جهات الاتصال التي تعذّر العثور عليها: {count}.",
+    "deleteSelected": "حذف {count, plural, zero {لا جهات اتصال} one {جهة اتصال واحدة} two {جهتي اتصال} few {# جهات اتصال} many {# جهة اتصال} other {# جهة اتصال}}",
+    "deleteSelectedConfirm": "هل تريد حذف {count, plural, zero {لا جهات اتصال} one {جهة الاتصال هذه} two {جهتي الاتصال هاتين} few {جهات الاتصال الـ # هذه} many {جهات الاتصال الـ # هذه} other {جهات الاتصال الـ # هذه}} نهائيًا؟ لا يمكن التراجع عن هذا الإجراء.",
+    "deletedCount": "تم حذف {count, plural, zero {لا جهات اتصال} one {جهة اتصال واحدة} two {جهتي اتصال} few {# جهات اتصال} many {# جهة اتصال} other {# جهة اتصال}}",
     "editContact": "تعديل جهة الاتصال",
     "emailTypes": {
       "other": "أخرى",

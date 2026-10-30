@@ -208,7 +208,11 @@ function ContactsPage() {
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
       <BulkDeleteContacts
         contactIds={selectedIds}
-        onDeleted={() => setSelectedIds([])}
+        onDeleted={(deletedIds) =>
+          setSelectedIds((currentIds) =>
+            currentIds.filter((contactId) => !deletedIds.includes(contactId)),
+          )
+        }
         organizationId={activeOrganizationId}
       />
       <ResponsiveActionToolbar>

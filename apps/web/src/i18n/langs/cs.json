@@ -2516,9 +2516,12 @@
       "value": "Hodnota pole"
     },
     "datePrecision": "Přesnost data",
+    "deleteBlockedByMattersCount": "Tento kontakt je stále přiřazen jako klient u spisů. Než kontakt smažete, přeřaďte nebo smažte tyto spisy.",
+    "deleteBlockedCount": "Neodebrané kontakty: {count}",
     "deleteContact": "Smazat kontakt",
     "deleteContactBlockedByMatters": "Tento kontakt je stále přiřazen jako klient u spisů. Než kontakt smažete, přeřaďte nebo smažte tyto spisy.",
     "deleteContactConfirmDescription": "Opravdu chcete smazat tento kontakt? Tuto akci nelze vrátit.",
+    "deleteNotFoundCount": "Nenalezené kontakty: {count}.",
     "deleteSelected": "Smazat {count, plural, one {# kontakt} few {# kontakty} other {# kontaktů}}",
     "deleteSelectedConfirm": "Trvale smazat {count, plural, one {tento kontakt} few {tyto # kontakty} other {těchto # kontaktů}}? Tuto akci nelze vrátit zpět.",
     "deletedCount": "Smazáno {count, plural, one {# kontakt} few {# kontakty} other {# kontaktů}}",

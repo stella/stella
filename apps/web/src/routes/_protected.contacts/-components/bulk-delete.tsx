@@ -27,6 +27,10 @@ type BulkDeleteOutcome = {
   status: "blocked" | "deleted" | "not_found";
 };
 
+type DeleteContacts = (
+  contactIds: readonly string[],
+) => Promise<readonly BulkDeleteOutcome[]>;
+
 const requestBulkDelete = async (
   contactIds: readonly string[],
 ): Promise<readonly BulkDeleteOutcome[]> => {
@@ -42,9 +46,7 @@ export function BulkDeleteContacts({
   labelKey = "contacts.deleteSelected",
 }: {
   contactIds: readonly string[];
-  deleteContacts?: (
-    contactIds: readonly string[],
-  ) => Promise<readonly BulkDeleteOutcome[]>;
+  deleteContacts?: DeleteContacts | undefined;
   organizationId: string;
   onDeleted: (deletedIds: readonly string[]) => void;
   labelKey?: "contacts.deleteSelected" | "contacts.importStudio.undoImport";
@@ -71,6 +73,31 @@ export function BulkDeleteContacts({
     setPending(false);
     setOpen(false);
     onDeleted(deletedIds);
+    const blockedCount = outcomes.filter(
+      ({ status }) => status === "blocked",
+    ).length;
+    const notFoundCount = outcomes.filter(
+      ({ status }) => status === "not_found",
+    ).length;
+    if (blockedCount > 0 || notFoundCount > 0) {
+      stellaToast.add({
+        description: [
+          blockedCount > 0 ? t("contacts.deleteBlockedByMattersCount") : null,
+          notFoundCount > 0
+            ? t("contacts.deleteNotFoundCount", {
+                count: String(notFoundCount),
+              })
+            : null,
+        ]
+          .filter((message) => message !== null)
+          .join(" "),
+        title: t("contacts.deleteBlockedCount", {
+          count: String(blockedCount + notFoundCount),
+        }),
+        type: "warning",
+      });
+      return;
+    }
     stellaToast.add({
       title: t("contacts.deletedCount", { count: deletedIds.length }),
       type: "success",
@@ -126,5 +153,31 @@ export function BulkDeleteContacts({
         </AlertDialogPopup>
       </AlertDialog>
     </>
+  );
+}
+
+export function ImportUndoContacts({
+  contactIds,
+  deleteContacts,
+  organizationId,
+}: {
+  contactIds: readonly string[];
+  deleteContacts?: DeleteContacts | undefined;
+  organizationId: string;
+}) {
+  const [remainingIds, setRemainingIds] = useState(contactIds);
+
+  return (
+    <BulkDeleteContacts
+      contactIds={remainingIds}
+      deleteContacts={deleteContacts}
+      labelKey="contacts.importStudio.undoImport"
+      onDeleted={(deletedIds) =>
+        setRemainingIds((currentIds) =>
+          currentIds.filter((contactId) => !deletedIds.includes(contactId)),
+        )
+      }
+      organizationId={organizationId}
+    />
   );
 }
