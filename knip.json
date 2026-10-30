@@ -205,6 +205,9 @@
     "packages/template-conditions": {
       "entry": ["src/**/*.test.ts"]
     },
+    "packages/test-state": {
+      "entry": ["src/**/*.test.ts"]
+    },
     "packages/transcript": {
       "entry": [
         "src/transcript.ts",

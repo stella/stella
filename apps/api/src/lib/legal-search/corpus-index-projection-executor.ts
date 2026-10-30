@@ -1,4 +1,4 @@
-import { type InferOk, panic, Result, UnhandledException } from "better-result";
+import { type InferOk, panic, Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 import { Buffer } from "node:buffer";
 
@@ -10,6 +10,10 @@ import type { Transaction } from "@/api/db/root";
 import { corpusIndexProjectionStates } from "@/api/db/schema";
 import { PayloadBudgetError } from "@/api/lib/compression";
 import { settleBoth } from "@/api/lib/corpus-index/core";
+import {
+  MAX_TRANSPORT_WRAPPER_DEPTH,
+  TRANSPORT_WRAPPERS,
+} from "@/api/lib/errors/handler-error-resolution";
 import type { StoredCorpusValidationError } from "@/api/lib/errors/tagged-errors";
 import { errorFingerprint } from "@/api/lib/errors/utils";
 import {
@@ -477,17 +481,30 @@ type PreparedProjectionFailure = {
 export const classifyCorpusProjectionPayloadReadFailure = (
   error: unknown,
 ): PreparedProjectionFailure => {
-  const cause = UnhandledException.is(error) ? error.cause : error;
-  return cause instanceof PayloadBudgetError ||
-    cause instanceof S3ObjectBudgetError
-    ? {
+  let cause = error;
+  for (let depth = 0; depth <= MAX_TRANSPORT_WRAPPER_DEPTH; depth++) {
+    const candidate = cause;
+    if (
+      candidate instanceof PayloadBudgetError ||
+      candidate instanceof S3ObjectBudgetError
+    ) {
+      return {
         kind: "revision_too_large",
         message: "projection payload exceeds the transfer or decode ceiling",
-      }
-    : {
-        kind: "payload_unavailable",
-        message: "projection payload read failed before append",
       };
+    }
+    if (
+      !(candidate instanceof Error) ||
+      !TRANSPORT_WRAPPERS.some((wrapper) => wrapper.is(candidate))
+    ) {
+      break;
+    }
+    cause = candidate.cause;
+  }
+  return {
+    kind: "payload_unavailable",
+    message: "projection payload read failed before append",
+  };
 };
 
 type PreparedProjectionRequest = {
