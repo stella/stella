@@ -64,6 +64,16 @@ import {
 } from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
 
+/** Scheduler claims and migration requests linearize before inspecting table leases. */
+export const TABLE_LEASE_QUEUE_LOCK_QUERY =
+  "SELECT pg_advisory_xact_lock(1937011281)";
+
+/** Serializes schema runners while they release the corpus lane to drain jobs. */
+export const MIGRATION_SCHEMA_RUN_LOCK_QUERY =
+  "SELECT pg_advisory_lock(hashtext('stella_migrate'), hashtext('schema_run'))";
+export const MIGRATION_SCHEMA_RUN_UNLOCK_QUERY =
+  "SELECT pg_advisory_unlock(hashtext('stella_migrate'), hashtext('schema_run'))";
+
 /** Registered blocking chains share one physical transaction order. */
 export const AGGREGATE_LOCKS = {
   requestReceipt: { rank: -10, kind: "row" },
@@ -747,6 +757,22 @@ export const withAggregateTransaction = async <Tx extends object, T>(
       history.status = "closed";
     }
   });
+};
+
+type SchedulerClaimCandidateQuery<Row> = {
+  toSQL: () => { sql: string };
+  for: (mode: RowLockMode, config: LockConfig) => PromiseLike<Row[]>;
+};
+
+/** The claim's bounded candidate query acquires its row without waiting behind another runner. */
+export const lockSchedulerClaimCandidate = async <Row>(
+  query: SchedulerClaimCandidateQuery<Row>,
+) => {
+  const target = aggregateSelectTarget(query.toSQL().sql);
+  if (target.joined || !target.filtered) {
+    panic("Scheduler claims require a filtered single-table query");
+  }
+  return await query.for("update", { skipLocked: true });
 };
 
 type SkipLockedBatchOptions<Tx extends object, Row, T> = {
