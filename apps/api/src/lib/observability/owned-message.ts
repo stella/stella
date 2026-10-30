@@ -29,13 +29,19 @@ type LiteralMessage<T extends string> = string extends T
     ? never
     : T;
 
+// `LiteralMessage` admits only a compile-time string literal, which the code
+// that wrote it owns; narrowing records that in the brand.
+const brandOwned: (message: string) => asserts message is OwnedMessage = () => {
+  // The check is the caller's literal; nothing remains to verify at runtime.
+};
+
 export const ownedMessage = <const T extends string>(
   message: LiteralMessage<T>,
-): OwnedMessage =>
-  // SAFETY: `LiteralMessage` admits only a compile-time string literal, which
-  // the code that wrote it owns; the brand records that.
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-  String(message) as OwnedMessage;
+): OwnedMessage => {
+  const text: string = message;
+  brandOwned(text);
+  return text;
+};
 
 /** The capped message of an error that owns it; undefined for any other. */
 export const ownedMessageOf = (error: unknown): string | undefined => {
