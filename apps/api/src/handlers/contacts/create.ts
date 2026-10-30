@@ -37,6 +37,7 @@ import {
   userIdSchema,
 } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { authorizeOrganizationReplay } from "@/api/lib/idempotency/organization-replay-authorization";
 import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
@@ -294,6 +295,7 @@ export const createContactHandler = async function* ({
 const createContact = createSafeRootHandler(
   {
     contract: "patch",
+    idempotency: { type: "replay" },
     description:
       "Create a contact in the organization address book. type (person or " +
       "organization) and displayName are supplied in the " +
@@ -316,6 +318,7 @@ const createContact = createSafeRootHandler(
       body,
     });
   },
+  { authorize: authorizeOrganizationReplay },
 );
 
 export default createContact;

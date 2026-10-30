@@ -108,8 +108,8 @@ export const useCreateContact = () => {
   const t = useTranslations();
 
   return useIdempotentMutation({
-    mutationFn: async (vars: CreateContactVars) => {
-      const response = await api.contacts.put(vars);
+    mutationFn: async (vars: CreateContactVars, request) => {
+      const response = await api.contacts.put(vars, request);
 
       return unwrapApiResponse(response);
     },
