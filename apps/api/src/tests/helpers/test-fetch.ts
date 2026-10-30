@@ -4,20 +4,29 @@ import { afterAll, afterEach, beforeAll, beforeEach } from "bun:test";
 // Captured by the preload before asynchronous test modules install request fakes.
 export const testFetch = globalThis.fetch;
 
+type FetchInterception = { wrapper: typeof fetch; delegate: typeof fetch };
+let interception: FetchInterception | undefined;
+
+// The accessor exposes the wrapper, while ownership belongs to its current delegate.
+const currentFetchReplacement = () =>
+  interception?.wrapper === globalThis.fetch
+    ? interception.delegate
+    : globalThis.fetch;
+
 /** A scoped replacement; restoring one owner must not conceal another owner's leak. */
 export const installTestFetch = (replacement: typeof fetch) => {
-  let previous = globalThis.fetch;
+  let previous = currentFetchReplacement();
   globalThis.fetch = replacement;
   return {
     install: () => {
-      if (globalThis.fetch === replacement) {
+      if (currentFetchReplacement() === replacement) {
         return;
       }
-      previous = globalThis.fetch;
+      previous = currentFetchReplacement();
       globalThis.fetch = replacement;
     },
     restore: () => {
-      if (globalThis.fetch === replacement) {
+      if (currentFetchReplacement() === replacement) {
         globalThis.fetch = previous;
       }
     },
@@ -132,22 +141,25 @@ export const withTestFetchInterceptor = async <T>(
 ): Promise<T> => {
   const descriptor = Object.getOwnPropertyDescriptor(globalThis, "fetch");
   const original = globalThis.fetch;
-  let delegate = original;
+  const previousInterception = interception;
   const wrapper = Object.assign(
     async (input: Parameters<typeof fetch>[0], init?: RequestInit) =>
-      await intercept(input, init, delegate),
+      await intercept(input, init, currentInterception.delegate),
     { preconnect: original.preconnect },
   );
+  const currentInterception = { wrapper, delegate: original };
+  interception = currentInterception;
   Object.defineProperty(globalThis, "fetch", {
     configurable: true,
     get: () => wrapper,
     set: (replacement: typeof fetch) => {
-      delegate = replacement;
+      currentInterception.delegate = replacement;
     },
   });
   try {
     return await operation();
   } finally {
+    interception = previousInterception;
     if (descriptor === undefined) {
       Reflect.deleteProperty(globalThis, "fetch");
     } else {

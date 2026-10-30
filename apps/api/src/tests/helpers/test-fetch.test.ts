@@ -132,26 +132,35 @@ test("fetch interception restores the property descriptor after success and reje
   const read = async () =>
     await (await fetch("https://example.invalid")).text();
 
-  const value = await withTestFetchInterceptor(intercept, async () => {
-    const wrapper = globalThis.fetch;
-    const firstOwner = installTestFetch(first);
-    try {
-      expect(globalThis.fetch).toBe(wrapper);
-      expect(await read()).toBe("intercepted first");
-      const secondOwner = installTestFetch(second);
-      try {
-        expect(globalThis.fetch).toBe(wrapper);
-        expect(await read()).toBe("intercepted second");
-      } finally {
-        secondOwner.restore();
-      }
-    } finally {
-      firstOwner.restore();
-    }
-    return "operation result";
-  });
+  const original = asFetchMock(async () => new Response("original"));
+  const value = await withTestFetch(
+    original,
+    async () =>
+      await withTestFetchInterceptor(intercept, async () => {
+        const wrapper = globalThis.fetch;
+        const firstOwner = installTestFetch(first);
+        try {
+          firstOwner.install();
+          expect(globalThis.fetch).toBe(wrapper);
+          expect(await read()).toBe("intercepted first");
+          const secondOwner = installTestFetch(second);
+          try {
+            firstOwner.restore();
+            expect(globalThis.fetch).toBe(wrapper);
+            expect(await read()).toBe("intercepted second");
+          } finally {
+            secondOwner.restore();
+          }
+          expect(await read()).toBe("intercepted first");
+        } finally {
+          firstOwner.restore();
+        }
+        expect(await read()).toBe("intercepted original");
+        return "operation result";
+      }),
+  );
   expect(value).toBe("operation result");
-  expect(seen).toEqual(["first", "second"]);
+  expect(seen).toEqual(["first", "second", "first", "original"]);
   expect(Object.getOwnPropertyDescriptor(globalThis, "fetch")).toEqual(
     descriptor,
   );
