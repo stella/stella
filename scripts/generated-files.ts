@@ -778,6 +778,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/chat/thread-name-kinds.ts",
     "apps/api/src/lib/chat/turn-status.ts",
     "apps/api/src/lib/conditions/contract.ts",
+    "apps/api/src/lib/db/column-storage.ts",
     "apps/api/src/lib/db/executed-rows.ts",
     "apps/api/src/lib/db/migration-alias-inventory.json",
     "apps/api/src/lib/db/migration-history.ts",
