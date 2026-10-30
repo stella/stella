@@ -188,9 +188,15 @@ export const fetchWithTimeout = async (
           return body;
         }
         const value: unknown = Reflect.get(target, property, target);
+        if (typeof value !== "function") {
+          return value;
+        }
         // A method reads the platform response's own state, so it runs on
         // it rather than on the proxy.
-        return typeof value === "function" ? value.bind(target) : value;
+        return (...args: unknown[]): unknown => {
+          const result: unknown = Reflect.apply(value, target, args);
+          return result;
+        };
       },
     });
   };
