@@ -1356,6 +1356,18 @@
     "aiPrompt": "Pole správy pre AI",
     "aiThread": "Konverzácia s AI",
     "analyzingSources": "Analyzujem zdroje",
+    "anonymizationPreview": {
+      "answer": "<person1>Zuzana Kováčová</person1> môže od <person2>Mareka Horvátha</person2> žiadať zaplatenie dlhu aj s úrokmi z omeškania.",
+      "off": "Anonymizovaný režim AI je vypnutý: AI dostane text tak, ako ste ho napísali, aj s osobnými údajmi.",
+      "on": "Anonymizovaný režim AI je zapnutý: osobné údaje sa pred odoslaním nahradia zástupnými hodnotami a v odpovedi sa zasa doplnia.",
+      "prompt": "Priprav odpoveď <person1>Zuzane Kováčovej</person1> (rod. č. <nationalId>856212/1234</nationalId>, <address>Hlavná 14, Košice</address>) vo veci dlhu <person2>Mareka Horvátha</person2>.",
+      "steps": {
+        "answered": "AI odpovie",
+        "restored": "Čítate",
+        "sent": "AI dostane",
+        "written": "Píšete"
+      }
+    },
     "anonymizedMode": "Anonymizovaný režim AI",
     "anonymizedModeDisabled": "Anonymizovaný režim AI je vypnutý",
     "anonymizedModeEnabled": "Anonymizovaný režim AI je zapnutý",

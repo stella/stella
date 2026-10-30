@@ -1356,6 +1356,18 @@
     "aiPrompt": "Champ de message IA",
     "aiThread": "Conversation IA",
     "analyzingSources": "Analyse des sources",
+    "anonymizationPreview": {
+      "answer": "<person1>Hélène Lefèvre</person1> peut réclamer à <person2>François Dubois</person2> le paiement de la dette, intérêts de retard compris.",
+      "off": "Le mode IA anonymisé est désactivé : l’IA reçoit votre texte tel que vous l’avez écrit, données personnelles comprises.",
+      "on": "Le mode IA anonymisé est activé : les données personnelles sont remplacées par des marqueurs avant l’envoi à l’IA, puis rétablies dans la réponse.",
+      "prompt": "Rédige une réponse à <person1>Hélène Lefèvre</person1> (NIR <nationalId>2 85 12 69 114 027 63</nationalId>, <address>14 rue des Lilas, Lyon</address>) au sujet de la dette de <person2>François Dubois</person2>.",
+      "steps": {
+        "answered": "L’IA répond",
+        "restored": "Vous lisez",
+        "sent": "L’IA reçoit",
+        "written": "Vous écrivez"
+      }
+    },
     "anonymizedMode": "Mode IA anonymisé",
     "anonymizedModeDisabled": "Le mode IA anonymisé est désactivé",
     "anonymizedModeEnabled": "Le mode IA anonymisé est activé",

@@ -1,5 +1,9 @@
 import { useTranslations } from "use-intl";
 
+import {
+  AnimatedPreview,
+  AnimatedPreviewMotion,
+} from "@stll/ui/animated-preview";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
   BookmarkIcon,
@@ -115,19 +119,31 @@ const KanbanPreview = ({ workspaceId }: { workspaceId: string }) => {
           status="in_progress"
         >
           <KanbanCard entity={KANBAN_STAYING_TASK} workspaceId={workspaceId} />
-          <div className="view-layout-preview-move relative">
-            <div className="view-layout-preview-fade-out">
-              <KanbanCard
-                entity={KANBAN_MOVING_IN_PROGRESS_TASK}
-                workspaceId={workspaceId}
+          <div className="view-layout-preview-kanban-carry">
+            <AnimatedPreviewMotion>
+              <AnimatedPreview
+                stages={[
+                  {
+                    id: "in-progress",
+                    content: (
+                      <KanbanCard
+                        entity={KANBAN_MOVING_IN_PROGRESS_TASK}
+                        workspaceId={workspaceId}
+                      />
+                    ),
+                  },
+                  {
+                    id: "done",
+                    content: (
+                      <KanbanCard
+                        entity={KANBAN_MOVING_DONE_TASK}
+                        workspaceId={workspaceId}
+                      />
+                    ),
+                  },
+                ]}
               />
-            </div>
-            <div className="view-layout-preview-fade-in absolute inset-0">
-              <KanbanCard
-                entity={KANBAN_MOVING_DONE_TASK}
-                workspaceId={workspaceId}
-              />
-            </div>
+            </AnimatedPreviewMotion>
           </div>
         </PreviewKanbanColumn>
         <PreviewKanbanColumn label={t(STATUS_LABEL_KEYS.done)} status="done" />

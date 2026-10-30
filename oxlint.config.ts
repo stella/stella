@@ -1096,9 +1096,7 @@ const customCssClassNames = [
   "stella-office-spreadsheet",
   "story-step",
   "story-step-visible",
-  "view-layout-preview-fade-in",
-  "view-layout-preview-fade-out",
-  "view-layout-preview-move",
+  "view-layout-preview-kanban-carry",
   "word",
 ] satisfies string[];
 
