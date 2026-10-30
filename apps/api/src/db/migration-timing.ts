@@ -35,6 +35,24 @@ export type MigrationTimingRecord =
       durationMs: number;
       retriesSpent: number;
       outcome: "complete" | "deferred" | "pending" | "failed";
+    }
+  | {
+      /** Scheduled jobs paused and waited on before the schema phase. */
+      event: "migrate.scheduler_drain";
+      outcome: "drained" | "timed_out";
+      pausedCount: number;
+      /** Jobs still leased when the drain ended. */
+      leasedCount: number;
+      drainWaitMs: number;
+    }
+  | {
+      /** Jobs resumed after the schema phase, whatever its outcome. */
+      event: "migrate.scheduler_resume";
+      outcome: "resumed" | "failed";
+      pausedCount: number;
+      resumedCount: number;
+      durationMs: number;
+      errorName?: string;
     };
 
 /** Distributes `Omit` over the union, so each record keeps its own shape. */

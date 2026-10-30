@@ -19,6 +19,7 @@ import {
   parseReasonedLedger,
   runLedgerMembershipGuard,
 } from "../../../../../scripts/ledger-membership.ts";
+import { DEFAULT_LOCK_RETRY_CONFIG } from "../../db/lock-retry-ladder";
 import unmeasuredLedger from "./read-budgets-unmeasured.json";
 
 const repoRoot = path.resolve(import.meta.dir, "../../../../..");
@@ -68,6 +69,30 @@ describe("read budget declarations", () => {
           ];
     });
     expect(violations).toEqual([]);
+  });
+
+  // A statement or transaction longer than the migration lock-wait ladder
+  // would hold a lock the schema phase cannot outwait.
+  test("every statement and transaction deadline is below the migration lock-wait ladder", () => {
+    const violations = Object.entries(READ_BUDGETS).flatMap(([id, budget]) => {
+      const deadlines: Record<string, number | undefined> = {
+        statementDeadlineMs: budget.statementDeadlineMs,
+        ...(budget.surface === "scheduled-job" && {
+          transactionDeadlineMs: budget.transactionDeadlineMs,
+        }),
+      };
+      return Object.entries(deadlines).flatMap(([name, ms]) =>
+        ms === undefined || ms < DEFAULT_LOCK_RETRY_CONFIG.budgetMs
+          ? []
+          : [`${id}.${name} (${String(ms)} ms) >= the ladder budget`],
+      );
+    });
+    expect(violations).toEqual([]);
+    for (const [id, budget] of Object.entries(READ_BUDGETS)) {
+      if (budget.surface === "scheduled-job") {
+        expect(budget.transactionDeadlineMs, id).toBeGreaterThan(0);
+      }
+    }
   });
 
   test("every budgeted job has a measurement of its own", () => {

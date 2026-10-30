@@ -34,6 +34,11 @@ import {
   runMigrations,
   runMigrationsUntilSettled,
 } from "./migration-runner";
+import {
+  DEFAULT_SCHEDULER_DRAIN_RUNTIME,
+  SchedulerDrainTimeoutError,
+} from "./migration-scheduler-drain";
+import type { SchedulerDrainRuntime } from "./migration-scheduler-drain";
 import type {
   MigrationTiming,
   MigrationTimingRecord,
@@ -292,6 +297,151 @@ const laneHolders = async (observer: SQL) => {
   );
   return row?.holders ?? Number.NaN;
 };
+
+const A_WITH_SCHEDULER = `${CREATE_PROBE};--> statement-breakpoint
+CREATE TABLE lock_probe (id integer);--> statement-breakpoint
+CREATE TABLE scheduler_jobs (
+  id text PRIMARY KEY,
+  paused_by text,
+  paused_until timestamptz,
+  pause_reason text,
+  locked_by text,
+  locked_until timestamptz,
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT scheduler_jobs_pause_attribution_check CHECK (
+    paused_until IS NULL OR (
+      paused_by IS NOT NULL AND length(btrim(paused_by)) > 0
+      AND pause_reason IS NOT NULL AND length(btrim(pause_reason)) >= 8
+    )
+  ),
+  CONSTRAINT scheduler_jobs_pause_audit_unpausable_check CHECK (
+    id <> 'scheduler.pauseAudit.hourly' OR paused_until IS NULL
+  )
+);--> statement-breakpoint
+INSERT INTO scheduler_jobs (id, paused_by, paused_until, pause_reason) VALUES
+  ('job.reader', NULL, NULL, NULL),
+  ('job.other', NULL, NULL, NULL),
+  ('job.expired', 'operator', now() - interval '1 hour', 'Elapsed maintenance'),
+  ('job.operator', 'operator', now() + interval '2 hours', 'Incident hold reason'),
+  ('scheduler.pauseAudit.hourly', NULL, NULL, NULL);`;
+const ALTER_AFTER_DRAIN = "ALTER TABLE lock_probe ADD COLUMN reissued boolean;";
+const FAILING_AFTER_ALTER = `${ALTER_AFTER_DRAIN}--> statement-breakpoint\nSELECT 1 / 0;`;
+const FAST_LOCK_WAIT_RETRY = {
+  lockTimeoutsMs: [10, 20, 30],
+  pauseBaseMs: 10,
+  pauseCapMs: 10,
+  random: () => 1,
+  budgetMs: MIGRATION_LOCK_WAIT_RETRY_BUDGET_MS,
+  now: () => performance.now(),
+  sleep: async () => {
+    await Promise.resolve();
+  },
+} as const;
+
+/** A drain whose clock moves only when it sleeps, so the deadline costs no time. */
+const virtualDrainRuntime = (
+  deadlineMs: number,
+  pollMs: number,
+): SchedulerDrainRuntime => {
+  let elapsedMs = 0;
+  return {
+    now: () => elapsedMs,
+    sleep: async (ms) => {
+      elapsedMs += ms;
+      await Promise.resolve();
+    },
+    deadlineMs,
+    pollMs,
+  };
+};
+
+const schedulerRows = async (observer: SQL) =>
+  await observer.unsafe<
+    {
+      id: string;
+      paused_by: string | null;
+      paused_until: Date | null;
+      pause_reason: string | null;
+      locked_by: string | null;
+      updated_at: Date;
+    }[]
+  >(
+    "SELECT id, paused_by, paused_until, pause_reason, locked_by, updated_at FROM scheduler_jobs ORDER BY id",
+  );
+
+const leaseJob = async (observer: SQL, id: string) => {
+  await observer.unsafe(
+    "UPDATE scheduler_jobs SET locked_by = 'previous-release-runner', locked_until = now() + interval '30 minutes' WHERE id = $1",
+    [id],
+  );
+};
+
+const releaseLease = async (observer: SQL, id: string) => {
+  await observer.unsafe(
+    "UPDATE scheduler_jobs SET locked_by = NULL, locked_until = NULL WHERE id = $1",
+    [id],
+  );
+};
+
+const waitForPauseBy = async (observer: SQL, id: string, pausedBy: string) => {
+  await waitForExternalState({
+    description: `${id} is paused by ${pausedBy}`,
+    read: async () => {
+      const [row] = await observer.unsafe<{ by: string | null }[]>(
+        "SELECT paused_by AS by FROM scheduler_jobs WHERE id = $1 AND paused_until > now()",
+        [id],
+      );
+      return row?.by === pausedBy;
+    },
+  });
+};
+
+type AttemptedRun = { error: unknown; timings: MigrationTimingRecord[] };
+
+const attemptRun = async ({
+  openClient,
+  scratchUrl,
+  folder,
+  schedulerDrain,
+}: {
+  openClient: () => SQL;
+  scratchUrl: string;
+  folder: string;
+  schedulerDrain: SchedulerDrainRuntime;
+}): Promise<AttemptedRun> => {
+  const connection = await openClient().reserve();
+  const timings: MigrationTimingRecord[] = [];
+  try {
+    const error = await rejectionOf(
+      async () =>
+        await runMigrations({
+          connection,
+          databaseUrl: scratchUrl,
+          ebs: DISABLED_EBS,
+          migrationsFolder: folder,
+          runOnline: async () => ONLINE_COMPLETE,
+          timing: {
+            clock: () => performance.now(),
+            emit: (record) => {
+              timings.push(record);
+            },
+          },
+          lockWaitRetry: FAST_LOCK_WAIT_RETRY,
+          schedulerDrain,
+        }),
+    );
+    return { error, timings };
+  } finally {
+    await connection.release();
+  }
+};
+
+const schedulerEvents = (timings: readonly MigrationTimingRecord[]) =>
+  timings.filter(
+    ({ event }) =>
+      event === "migrate.scheduler_drain" ||
+      event === "migrate.scheduler_resume",
+  );
 
 if (!runPostgresTests || databaseUrl === undefined) {
   describe.skip("migration runner PostgreSQL contract", () => {
@@ -1290,6 +1440,241 @@ if (!runPostgresTests || databaseUrl === undefined) {
           );
         },
       );
+    });
+
+    describe("scheduled jobs around the schema phase", () => {
+      // A is applied first; B is the pending set under test.
+      const withSchedulerBundle = async (
+        pendingSql: string,
+        work: (scratch: Scratch, folder: string) => Promise<void>,
+      ) => {
+        await withBundle(
+          [{ name: A, sql: A_WITH_SCHEDULER }],
+          async (firstFolder) => {
+            await withBundle(
+              [
+                { name: A, sql: A_WITH_SCHEDULER },
+                { name: B, sql: pendingSql },
+              ],
+              async (folder) => {
+                await withScratch(async (scratch) => {
+                  appliedResult(await scratch.run(firstFolder));
+                  await work(scratch, folder);
+                });
+              },
+            );
+          },
+        );
+      };
+
+      const rowOf = (
+        rows: Awaited<ReturnType<typeof schedulerRows>>,
+        id: string,
+      ) => rows.find((row) => row.id === id);
+
+      test("drains a leased reader that releases on the pause, applies the DDL, and resumes", async () => {
+        await withSchedulerBundle(
+          ALTER_AFTER_DRAIN,
+          async ({ observer, openClient, scratchUrl }, folder) => {
+            await leaseJob(observer, "job.reader");
+            const before = await schedulerRows(observer);
+            const holder = holdLockProbe(openClient());
+            await holder.held;
+            // The previous release's runner: at the pause it gives up its
+            // lock and its lease.
+            const runner = (async () => {
+              await waitForPauseBy(observer, "job.reader", "migrate");
+              await holder.release();
+              await releaseLease(observer, "job.reader");
+            })();
+            try {
+              const { error, timings } = await attemptRun({
+                openClient,
+                scratchUrl,
+                folder,
+                schedulerDrain: {
+                  ...DEFAULT_SCHEDULER_DRAIN_RUNTIME,
+                  pollMs: 10,
+                },
+              });
+              expect(error).toBeNull();
+              expect(schedulerEvents(timings)).toMatchObject([
+                {
+                  event: "migrate.scheduler_drain",
+                  outcome: "drained",
+                  pausedCount: 3,
+                  leasedCount: 0,
+                },
+                {
+                  event: "migrate.scheduler_resume",
+                  outcome: "resumed",
+                  pausedCount: 3,
+                  resumedCount: 3,
+                },
+              ]);
+            } finally {
+              await runner;
+              await holder.release();
+            }
+            expect(await lockProbeColumns(observer)).toEqual([
+              "id",
+              "reissued",
+            ]);
+            const after = await schedulerRows(observer);
+            for (const id of ["job.reader", "job.other", "job.expired"]) {
+              expect(rowOf(after, id)?.paused_until, id).toBeNull();
+            }
+            // The operator pause and the pause audit are never written.
+            for (const id of ["job.operator", "scheduler.pauseAudit.hourly"]) {
+              expect(rowOf(after, id), id).toEqual(rowOf(before, id));
+            }
+          },
+        );
+      });
+
+      test("a job that never releases fails the drain before any migration statement and resumes the jobs", async () => {
+        await withSchedulerBundle(
+          ALTER_AFTER_DRAIN,
+          async ({ observer, openClient, scratchUrl }, folder) => {
+            await leaseJob(observer, "job.reader");
+            const ledgerBefore = await ledgerRows(observer);
+            const before = await schedulerRows(observer);
+            const { error, timings } = await attemptRun({
+              openClient,
+              scratchUrl,
+              folder,
+              schedulerDrain: virtualDrainRuntime(5000, 1000),
+            });
+            expect(SchedulerDrainTimeoutError.is(error)).toBe(true);
+            expect(error).toMatchObject({
+              waitedMs: 5000,
+              leased: [
+                { id: "job.reader", lockedBy: "previous-release-runner" },
+              ],
+            });
+            expect(schedulerEvents(timings)).toMatchObject([
+              {
+                event: "migrate.scheduler_drain",
+                outcome: "timed_out",
+                pausedCount: 3,
+                leasedCount: 1,
+                drainWaitMs: 5000,
+              },
+              {
+                event: "migrate.scheduler_resume",
+                outcome: "resumed",
+                resumedCount: 3,
+              },
+            ]);
+            // Nothing ran: the ledger and the table are as they were.
+            expect([...(await ledgerRows(observer))]).toEqual([
+              ...ledgerBefore,
+            ]);
+            expect(await lockProbeColumns(observer)).toEqual(["id"]);
+            const after = await schedulerRows(observer);
+            expect(after.filter((row) => row.paused_by === "migrate")).toEqual(
+              [],
+            );
+            expect(rowOf(after, "job.operator")).toEqual(
+              rowOf(before, "job.operator"),
+            );
+            expect(rowOf(after, "job.reader")?.locked_by).toBe(
+              "previous-release-runner",
+            );
+          },
+        );
+      });
+
+      test("a migration that fails after the drain still resumes the jobs it paused", async () => {
+        await withSchedulerBundle(
+          FAILING_AFTER_ALTER,
+          async ({ observer, openClient, scratchUrl }, folder) => {
+            const { error, timings } = await attemptRun({
+              openClient,
+              scratchUrl,
+              folder,
+              schedulerDrain: virtualDrainRuntime(5000, 1000),
+            });
+            expect(SchedulerDrainTimeoutError.is(error)).toBe(false);
+            expect(error).toBeInstanceOf(Error);
+            expect(schedulerEvents(timings)).toMatchObject([
+              {
+                event: "migrate.scheduler_drain",
+                outcome: "drained",
+                pausedCount: 3,
+              },
+              {
+                event: "migrate.scheduler_resume",
+                outcome: "resumed",
+                resumedCount: 3,
+              },
+            ]);
+            const paused = (await schedulerRows(observer))
+              .filter(({ paused_until }) => paused_until !== null)
+              .map(({ id }) => id);
+            expect(paused).toEqual(["job.operator"]);
+          },
+        );
+      });
+
+      test("an operator pause made during the drain is not resumed", async () => {
+        await withSchedulerBundle(
+          ALTER_AFTER_DRAIN,
+          async ({ observer, openClient, scratchUrl }, folder) => {
+            await leaseJob(observer, "job.reader");
+            // The operator replaces the migrate pause, then the runner stops.
+            const operator = (async () => {
+              await waitForPauseBy(observer, "job.reader", "migrate");
+              await observer.unsafe(
+                "UPDATE scheduler_jobs SET paused_by = 'operator', pause_reason = 'Operator took over', paused_until = now() + interval '2 hours' WHERE id = 'job.reader'",
+              );
+              await releaseLease(observer, "job.reader");
+            })();
+            const { error } = await attemptRun({
+              openClient,
+              scratchUrl,
+              folder,
+              schedulerDrain: {
+                ...DEFAULT_SCHEDULER_DRAIN_RUNTIME,
+                pollMs: 10,
+              },
+            });
+            await operator;
+            expect(error).toBeNull();
+            const reader = rowOf(await schedulerRows(observer), "job.reader");
+            expect(reader).toMatchObject({
+              paused_by: "operator",
+              pause_reason: "Operator took over",
+            });
+            expect(reader?.paused_until).not.toBeNull();
+          },
+        );
+      });
+
+      test("no pending schema migration pauses nothing", async () => {
+        await withSchedulerBundle(
+          ALTER_AFTER_DRAIN,
+          async ({ observer, openClient, scratchUrl }, folder) => {
+            const settled = await attemptRun({
+              openClient,
+              scratchUrl,
+              folder,
+              schedulerDrain: virtualDrainRuntime(5000, 1000),
+            });
+            expect(settled.error).toBeNull();
+            const before = await schedulerRows(observer);
+            const rerun = await attemptRun({
+              openClient,
+              scratchUrl,
+              folder,
+              schedulerDrain: virtualDrainRuntime(5000, 1000),
+            });
+            expect(rerun.error).toBeNull();
+            expect(schedulerEvents(rerun.timings)).toEqual([]);
+            expect(await schedulerRows(observer)).toEqual(before);
+          },
+        );
+      });
     });
 
     test("new receipts equal the preflight prediction in file order", async () => {

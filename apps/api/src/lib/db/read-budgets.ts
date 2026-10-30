@@ -17,8 +17,7 @@
  * `read-budgets.test.ts`.
  */
 
-type ReadBudget = {
-  surface: "scheduled-job" | "statement";
+type ReadBudgetFields = {
   /** Shared buffers (hit plus read) per call or per run. */
   pages: number;
   reason: string;
@@ -34,10 +33,25 @@ type ReadBudget = {
   runBudgetMs?: number;
 };
 
+/**
+ * A scheduled job's transactions are bounded as well as its statements: a
+ * transaction of short statements still holds its locks and snapshot for its
+ * whole length, and a schema migration waits for it. Both deadlines stay
+ * below the migration lock-wait ladder (`read-budgets.test.ts`).
+ */
+type ReadBudget =
+  | (ReadBudgetFields & { surface: "statement" })
+  | (ReadBudgetFields & {
+      surface: "scheduled-job";
+      /** Enforced as `transaction_timeout` where the job opens its transactions. */
+      transactionDeadlineMs: number;
+    });
+
 export const READ_BUDGETS = {
   "scheduled.caseLaw.refreshCoverage": {
     surface: "scheduled-job",
     pages: 150,
+    transactionDeadlineMs: 60_000,
     reason:
       "A governed coverage refresh reads the source policy, computes the bounded coverage snapshot, and writes its summary and audit record. The production-shape corpus fixture measures 89 pages; 150 pages leaves more than 50% headroom for production-height indexes.",
     overBudget: {
@@ -54,6 +68,7 @@ export const READ_BUDGETS = {
   "scheduled.requests.sweepReceipts": {
     surface: "scheduled-job",
     pages: 20_000,
+    transactionDeadlineMs: 60_000,
     reason:
       "Four rounds each discover at most 128 completed and 128 pending receipts, then lock and delete at most 128 scoped rows: 2,048 row visits. Nine index/heap pages per visit leave 1,568 pages for tenant-scope reads and fixed probes under the 20,000-page ungoverned ceiling. State-leading ordered expiry probes keep this independent of total receipt cardinality; PostgreSQL measures quiet, expired and mixed cohorts at both sizes.",
   },
@@ -73,6 +88,7 @@ export const READ_BUDGETS = {
   "scheduled.caseLaw.reportFreshness": {
     surface: "scheduled-job",
     pages: 12_500,
+    transactionDeadlineMs: 60_000,
     reason:
       "One walk of the serving generation's queue index, capped at CASE_LAW_FRESHNESS_SCAN_CAP + 1 entries with at most one heap page each (about 10,200 pages when every entry sits on its own heap page), plus the source ages, the serving generation and three single-row queue probes. The run reads the same pages whatever the generation's size.",
   },
@@ -81,6 +97,7 @@ export const READ_BUDGETS = {
     pages: 18_000,
     statementDeadlineMs: 30_000,
     runBudgetMs: 15 * 60 * 1000,
+    transactionDeadlineMs: 90_000,
     reason:
       "One 500-row change-log window, one indexed country-month decision range, and the replacement shard rows per step. A run stops between months after fifteen minutes, leaving the scheduler ceiling room for its current month, and every statement has a thirty-second database deadline.",
   },

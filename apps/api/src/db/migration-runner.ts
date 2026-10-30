@@ -34,6 +34,11 @@ import {
 } from "./migration-lock-observation";
 import type { MigrationLockTelemetry } from "./migration-lock-observation";
 import { withMigrationLockTimeout } from "./migration-lock-timeout";
+import {
+  DEFAULT_SCHEDULER_DRAIN_RUNTIME,
+  withDrainedScheduler,
+} from "./migration-scheduler-drain";
+import type { SchedulerDrainRuntime } from "./migration-scheduler-drain";
 import { DEFAULT_MIGRATION_TIMING } from "./migration-timing";
 import type { MigrationTiming } from "./migration-timing";
 import { createOnlineIndexHold } from "./online-index-gate";
@@ -644,6 +649,26 @@ const emitFailedPhase = (
   }
 };
 
+/** Reports a stale bundle (a refusal panics) and closes the schema phase. */
+const settleStalePreflight = (
+  preflight: Exclude<StaleBundleDecision, { status: "ready" }>,
+  timing: MigrationTiming,
+  clock: MigrationPhaseClock,
+  durationMs: number,
+): void => {
+  reportStalePreflight(preflight);
+  clock.phase = "done";
+  timing.emit({
+    event: "migrate.phase_duration",
+    phase: "schema",
+    durationMs,
+    retriesSpent: clock.retriesSpent,
+    outcome: preflight.status,
+    laneWaitMs: clock.laneWaitMs,
+    appliedCount: 0,
+  });
+};
+
 type RunMigrationsOptions = {
   connection: ReservedSQL;
   /** The database `connection` belongs to; index builds observe it apart. */
@@ -661,6 +686,8 @@ type RunMigrationsOptions = {
   timing?: MigrationTiming;
   lockTelemetry?: MigrationLockTelemetry;
   reserveSchemaObserver?: () => Promise<OnlineMigrationConnection>;
+  /** Test seam: clock, sleep and bounds of the scheduled-job drain. */
+  schedulerDrain?: SchedulerDrainRuntime;
 };
 
 const migrationSessionCanUnlock = (
@@ -715,6 +742,7 @@ export const runMigrations = async ({
   lockTelemetry = createMigrationLockTelemetry(),
   reserveSchemaObserver = async () =>
     await openOnlineIndexObserver(databaseUrl),
+  schedulerDrain = DEFAULT_SCHEDULER_DRAIN_RUNTIME,
 }: RunMigrationsOptions) => {
   let laneHeld = false;
   const clock: MigrationPhaseClock = {
@@ -756,17 +784,7 @@ export const runMigrations = async ({
     );
 
     if (preflight.status !== "ready") {
-      reportStalePreflight(preflight);
-      clock.phase = "done";
-      timing.emit({
-        event: "migrate.phase_duration",
-        phase: "schema",
-        durationMs: elapsedMs(),
-        retriesSpent: clock.retriesSpent,
-        outcome: preflight.status,
-        laneWaitMs: clock.laneWaitMs,
-        appliedCount: 0,
-      });
+      settleStalePreflight(preflight, timing, clock, elapsedMs());
       return preflight;
     }
 
@@ -785,35 +803,44 @@ export const runMigrations = async ({
         FROM ${sql.identifier(migrationsSchema)}.${sql.identifier(migrationsTable)}
         ORDER BY id
       `);
-    await applySchemaMigrationsRetryingLockWaits({
-      connection,
-      connectionState: () => session.state,
-      apply: async (lockTimeoutMs) => {
-        await connection.unsafe(
-          `SET lock_timeout = '${String(lockTimeoutMs)}ms'`,
-        );
-        await observeSchema(
-          "schema.pending",
-          async () =>
-            await pgCoreMigrate(
-              migrations.map((migration) => ({
-                ...migration,
-                sql: migration.sql.map((statement) =>
-                  withMigrationLockTimeout(statement, lockTimeoutMs),
-                ),
-              })),
-              database,
-              { migrationsFolder, migrationsSchema, migrationsTable },
-            ),
-        );
-      },
-      classifyLedger: migrationLedgerClassifier({
-        preflightRows: preflight.rows,
-        predicted,
-        readLedger,
-      }),
-      retry: lockWaitRetry,
-    });
+    const applyPending = async () =>
+      await applySchemaMigrationsRetryingLockWaits({
+        connection,
+        connectionState: () => session.state,
+        apply: async (lockTimeoutMs) => {
+          await connection.unsafe(
+            `SET lock_timeout = '${String(lockTimeoutMs)}ms'`,
+          );
+          await observeSchema(
+            "schema.pending",
+            async () =>
+              await pgCoreMigrate(
+                migrations.map((migration) => ({
+                  ...migration,
+                  sql: migration.sql.map((statement) =>
+                    withMigrationLockTimeout(statement, lockTimeoutMs),
+                  ),
+                })),
+                database,
+                { migrationsFolder, migrationsSchema, migrationsTable },
+              ),
+          );
+        },
+        classifyLedger: migrationLedgerClassifier({
+          preflightRows: preflight.rows,
+          predicted,
+          readLedger,
+        }),
+        retry: lockWaitRetry,
+      });
+    if (predicted.length === 0) {
+      await applyPending();
+    } else {
+      await withDrainedScheduler(
+        { connection, timing, runtime: schedulerDrain },
+        applyPending,
+      );
+    }
     clock.retriesSpent = lockTelemetry.retriesSpent - schemaRetriesAtStart;
     await schemaObserver.release();
     schemaObserver = undefined;
