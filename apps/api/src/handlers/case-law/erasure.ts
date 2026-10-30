@@ -602,18 +602,6 @@ export const redactCaseLawDecision = async ({
       fenced satisfies never;
       return panic(`Unhandled fence: ${String(fenced)}`);
   }
-  if (prepareSupplementHolders !== undefined) {
-    const prepared = await prepareSupplementHolders({
-      [ACCEPTED_REDACTION]: true,
-      recovery: fenced.recovery,
-      decisionIds: fenced.decisions.map(({ decision }) => decision.id),
-      decisionId: fenced.claimDecisionId,
-      scopedDb,
-    });
-    if (prepared.isErr()) {
-      return prepared;
-    }
-  }
   const primary = fenced.decisions.find(
     ({ decision }) => decision.id === fenced.canonicalId,
   );
@@ -646,8 +634,51 @@ export const redactCaseLawDecision = async ({
     deleteCorpus,
     sweepRaw,
   });
-  return Result.ok(incompleteAlias ?? primaryOutcome);
+  if (prepareSupplementHolders !== undefined) {
+    const prepared = await prepareSupplementHolders({
+      [ACCEPTED_REDACTION]: true,
+      recovery: fenced.recovery,
+      decisionIds: fenced.decisions.map(({ decision }) => decision.id),
+      decisionId: fenced.claimDecisionId,
+      scopedDb,
+    });
+    if (prepared.isErr()) {
+      return prepared;
+    }
+  }
+  const completedAudits = [...aliasOutcomes, primaryOutcome].flatMap(
+    (outcome) => (outcome.type === "redacted" ? [outcome.audit] : []),
+  );
+  if (completedAudits.length > 0) {
+    await scopedDb((tx) =>
+      // audit: skip - the success record follows own cleanup and holder withdrawal.
+      tx.insert(caseLawIndexJobs).values(
+        completedAudits.map((audit) => ({
+          ...audit,
+          operation: "redact",
+          status: "succeeded",
+          contentHash: null,
+        })),
+      ),
+    );
+  }
+  const outcome = incompleteAlias ?? primaryOutcome;
+  return Result.ok(
+    outcome.type === "redacted"
+      ? {
+          type: outcome.type,
+          erasure: outcome.erasure,
+          legacyRaw: outcome.legacyRaw,
+        }
+      : outcome,
+  );
 };
+
+type FencedDecisionErasureOutcome =
+  | Extract<RedactCaseLawDecisionOutcome, { type: "corpus-objects-remain" }>
+  | (Extract<RedactCaseLawDecisionOutcome, { type: "redacted" }> & {
+      audit: { decisionId: SafeId<"caseLawDecision">; detail: string | null };
+    });
 
 type EraseFencedDecisionOptions = {
   fenced: FencedDecision;
@@ -661,9 +692,7 @@ const eraseFencedDecision = async ({
   scopedDb,
   deleteCorpus,
   sweepRaw,
-}: EraseFencedDecisionOptions): Promise<
-  Exclude<RedactCaseLawDecisionOutcome, { type: "not-found" | "superseded" }>
-> => {
+}: EraseFencedDecisionOptions): Promise<FencedDecisionErasureOutcome> => {
   const decisionId = decision.id;
 
   // 1. pg-fts projection.
@@ -858,19 +887,9 @@ const eraseFencedDecision = async ({
       .filter((part) => part !== null)
       .join("; ")
       .slice(0, 2048) || null;
-  await scopedDb((tx) =>
-    // audit: skip — this insert IS the append-only erasure audit row
-    tx.insert(caseLawIndexJobs).values({
-      decisionId,
-      operation: "redact",
-      status: "succeeded",
-      contentHash: null,
-      detail,
-    }),
-  );
-
   return {
     type: "redacted",
+    audit: { decisionId, detail },
     erasure: corpusErasure.type,
     legacyRaw: rawErasure.legacyRaw,
   };

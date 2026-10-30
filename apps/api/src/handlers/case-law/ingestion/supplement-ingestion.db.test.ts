@@ -24,6 +24,7 @@ import {
   caseLawDecisionSupplements,
   caseLawIndexJobs,
   caseLawRemovalReconciliationItems,
+  caseLawSearchDocuments,
   caseLawSources,
   relations,
 } from "@/api/db/schema";
@@ -1158,6 +1159,18 @@ describe("the reasons' stored payload", () => {
     await ingestSupplement(fixture, supplementOf(REASONS));
     await ingestDecision(fixture, decisionOf(RULING));
     const absorbed = await decisionBy(fixture.sourceId, "339001");
+    const corpusBucket = envBase.LEGAL_CORPUS_S3_BUCKET ?? envBase.S3_BUCKET;
+    const ownCorpusKey = `legal-corpus/erasure/${absorbed.id}.txt`;
+    const ownRawKey = `${rawDocumentPrefix({ family: RAW_SOURCE_FAMILY.CASE_LAW, sourceId: fixture.sourceId, documentId: absorbed.id })}payloads/retained`;
+    fake.put(corpusBucket, ownCorpusKey, REASONS_TEXT);
+    fake.put(envBase.S3_BUCKET, ownRawKey, REASONS_TEXT);
+    await db
+      .update(caseLawDecisions)
+      .set({ textS3Key: ownCorpusKey, sourceRawS3Key: ownRawKey })
+      .where(eq(caseLawDecisions.id, absorbed.id));
+    await db
+      .insert(caseLawSearchDocuments)
+      .values({ decisionId: absorbed.id, searchableText: REASONS_TEXT });
     let redactionStarted = false;
 
     const erased = await redactCaseLawDecisionWithSupplementHolders({
@@ -1179,6 +1192,14 @@ describe("the reasons' stored payload", () => {
       },
     });
 
+    expect(fake.objects.has(`${corpusBucket}/${ownCorpusKey}`)).toBe(false);
+    expect(fake.objects.has(`${envBase.S3_BUCKET}/${ownRawKey}`)).toBe(false);
+    expect(
+      await db.$count(
+        caseLawSearchDocuments,
+        eq(caseLawSearchDocuments.decisionId, absorbed.id),
+      ),
+    ).toBe(0);
     expect(Result.isError(erased)).toBe(true);
     expect(redactionStarted).toBe(true);
     expect(
