@@ -70,25 +70,28 @@ export async function* iterateBodyWithIdleDeadline(
         signal === undefined
           ? deadline.signal
           : AbortSignal.any([signal, deadline.signal]);
+      // The deadline covers the wait for the body only: it ends when the read
+      // settles, so a consumer holding a yielded chunk cannot time it out.
+      let next: Awaited<ReturnType<typeof reader.read>>;
       try {
-        const next = await raceAbort(reader.read(), combined);
-        if (next.done) {
-          return;
-        }
-        byteLength += next.value.byteLength;
-        if (maxBytes !== undefined && byteLength > maxBytes) {
-          const limitError = new BodyByteLimitError({
-            message: `Response body exceeds the ${maxBytes}-byte limit`,
-            limit: maxBytes,
-          });
-          exitReason = limitError;
-          await Promise.reject(limitError);
-        }
-        yield next.value;
+        next = await raceAbort(reader.read(), combined);
       } finally {
         exitReason ??= combined.reason;
         clearTimeout(timer);
       }
+      if (next.done) {
+        return;
+      }
+      byteLength += next.value.byteLength;
+      if (maxBytes !== undefined && byteLength > maxBytes) {
+        const limitError = new BodyByteLimitError({
+          message: `Response body exceeds the ${maxBytes}-byte limit`,
+          limit: maxBytes,
+        });
+        exitReason = limitError;
+        await Promise.reject(limitError);
+      }
+      yield next.value;
     }
   } finally {
     reader
