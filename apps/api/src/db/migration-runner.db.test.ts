@@ -672,9 +672,27 @@ if (!runPostgresTests || databaseUrl === undefined) {
             });
             expect(records).toEqual([
               {
+                event: "migrate.schema_step",
+                step: "preflight",
+                migrations: [],
+                durationMs: 10,
+                attempts: 1,
+                retriesSpent: 0,
+                outcome: "done",
+              },
+              {
+                event: "migrate.schema_step",
+                step: "apply",
+                migrations: [A],
+                durationMs: 10,
+                attempts: 1,
+                retriesSpent: 0,
+                outcome: "done",
+              },
+              {
                 event: "migrate.phase_duration",
                 phase: "schema",
-                durationMs: 20,
+                durationMs: 60,
                 retriesSpent: 0,
                 outcome: "applied",
                 laneWaitMs: 10,
@@ -706,9 +724,41 @@ if (!runPostgresTests || databaseUrl === undefined) {
                   }),
               ),
             ).toBe(failure);
-            expect(records).toMatchObject([
-              { phase: "schema", outcome: "applied", appliedCount: 0 },
-              { phase: "online", outcome: "failed" },
+            expect(records).toEqual([
+              {
+                event: "migrate.schema_step",
+                step: "preflight",
+                migrations: [],
+                durationMs: 10,
+                attempts: 1,
+                retriesSpent: 0,
+                outcome: "done",
+              },
+              {
+                event: "migrate.schema_step",
+                step: "apply",
+                migrations: [],
+                durationMs: 10,
+                attempts: 1,
+                retriesSpent: 0,
+                outcome: "done",
+              },
+              {
+                event: "migrate.phase_duration",
+                phase: "schema",
+                durationMs: 60,
+                retriesSpent: 0,
+                outcome: "applied",
+                laneWaitMs: 10,
+                appliedCount: 0,
+              },
+              {
+                event: "migrate.phase_duration",
+                phase: "online",
+                durationMs: 10,
+                retriesSpent: 0,
+                outcome: "failed",
+              },
             ]);
           } finally {
             await connection.release();
@@ -1028,23 +1078,34 @@ if (!runPostgresTests || databaseUrl === undefined) {
                         mismatchCount: 1,
                         mismatchedNames: [A],
                       });
-                      // The no-op event, then the schema phase's duration.
+                      // Preflight completes before the no-op decision and schema duration.
                       const phaseCalls = stdout.mock.calls.filter(
                         (call) =>
                           !String(call.at(0)).includes(
                             '"event":"migrate.lock_attempt"',
                           ),
                       );
-                      expect(phaseCalls).toHaveLength(2);
+                      expect(phaseCalls).toHaveLength(3);
                       expect(
-                        JSON.parse(String(phaseCalls.at(1)?.at(0))),
+                        JSON.parse(String(phaseCalls.at(0)?.at(0))),
+                      ).toEqual({
+                        event: "migrate.schema_step",
+                        step: "preflight",
+                        migrations: [],
+                        durationMs: expect.any(Number),
+                        attempts: 1,
+                        retriesSpent: 0,
+                        outcome: "done",
+                      });
+                      expect(
+                        JSON.parse(String(phaseCalls.at(2)?.at(0))),
                       ).toMatchObject({
                         event: "migrate.phase_duration",
                         phase: "schema",
                         outcome: "stale_bundle_noop",
                         appliedCount: 0,
                       });
-                      const noopLine = String(phaseCalls.at(0)?.at(0));
+                      const noopLine = String(phaseCalls.at(1)?.at(0));
                       expect(noopLine.endsWith("\n")).toBe(true);
                       expect(JSON.parse(noopLine)).toEqual({
                         event: "migrate.stale_bundle_noop",
@@ -1194,7 +1255,11 @@ if (!runPostgresTests || databaseUrl === undefined) {
               });
               expect(sleeps).toEqual([10]);
               expect(
-                timings.find(({ event }) => event === "migrate.schema_step"),
+                timings.find(
+                  (record) =>
+                    record.event === "migrate.schema_step" &&
+                    record.step === "apply",
+                ),
               ).toMatchObject({
                 step: "apply",
                 migrations: [A, B],
@@ -1295,8 +1360,16 @@ if (!runPostgresTests || databaseUrl === undefined) {
                   true,
                 );
                 expect(sleeps).toEqual([10]);
-                expect(timings).toHaveLength(2);
+                expect(timings).toHaveLength(3);
                 expect(timings.at(0)).toMatchObject({
+                  event: "migrate.schema_step",
+                  step: "preflight",
+                  migrations: [],
+                  outcome: "done",
+                  attempts: 1,
+                  retriesSpent: 0,
+                });
+                expect(timings.at(1)).toMatchObject({
                   event: "migrate.schema_step",
                   step: "apply",
                   migrations: [A, B],
@@ -1304,7 +1377,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
                   attempts: 2,
                   retriesSpent: 1,
                 });
-                expect(timings.at(1)).toMatchObject({
+                expect(timings.at(2)).toMatchObject({
                   event: "migrate.phase_duration",
                   phase: "schema",
                   outcome: "failed",
@@ -1379,6 +1452,13 @@ if (!runPostgresTests || databaseUrl === undefined) {
                   record.step === "preflight",
               ),
             ).toMatchObject({ outcome: "done", attempts: 2, retriesSpent: 1 });
+            expect(
+              timings.find(
+                (record) =>
+                  record.event === "migrate.schema_step" &&
+                  record.step === "apply",
+              ),
+            ).toMatchObject({ outcome: "done", attempts: 1, retriesSpent: 0 });
           } finally {
             stdout.mockRestore();
             await holder.release();

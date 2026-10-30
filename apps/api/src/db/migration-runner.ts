@@ -939,10 +939,11 @@ export const runMigrations = async ({
     });
     const readLedger = async () =>
       await readLedgerRows({ database, migrationsSchema, migrationsTable });
+    const applyRetriesAtStart = lockTelemetry.retriesSpent;
     await reportSchemaStep({
       step: "apply",
       timing,
-      retriesSpent: () => lockTelemetry.retriesSpent - schemaRetriesAtStart,
+      retriesSpent: () => lockTelemetry.retriesSpent - applyRetriesAtStart,
       migrations: predicted.map(({ name }) => name),
       work: async () =>
         await applySchemaMigrationsRetryingLockWaits({
