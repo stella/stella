@@ -1,0 +1,22 @@
+import type { GuardRollout } from "../guard-rollout-policy.ts";
+
+export default {
+  id: "no-fetch-response-body-replacement",
+  rules: [
+    "no-fetch-response-body-replacement/no-fetch-response-body-replacement",
+  ],
+  type: "changed-lines",
+  expiresAt: "2026-11-06T00:00:00.000Z",
+  check: [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "no-fetch-response-body-replacement/no-fetch-response-body-replacement",
+    ".",
+  ],
+} as const satisfies GuardRollout;

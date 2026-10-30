@@ -2,6 +2,7 @@
 import centralTestTimeout from "./guard-rollouts/central-test-timeout.ts";
 import noDirectDecisionIdentifierColumnWrite from "./guard-rollouts/no-direct-decision-identifier-column-write.ts";
 import noDynamicKeyInOperator from "./guard-rollouts/no-dynamic-key-in-operator.ts";
+import noFetchResponseBodyReplacement from "./guard-rollouts/no-fetch-response-body-replacement.ts";
 import noGlobalTestingLibraryScreen from "./guard-rollouts/no-global-testing-library-screen.ts";
 import noInertAutofocus from "./guard-rollouts/no-inert-autofocus.ts";
 import noParserInlineFlatten from "./guard-rollouts/no-parser-inline-flatten.ts";
@@ -14,6 +15,7 @@ export const GUARD_ROLLOUT_FILES = {
   "no-direct-decision-identifier-column-write":
     noDirectDecisionIdentifierColumnWrite,
   "no-dynamic-key-in-operator": noDynamicKeyInOperator,
+  "no-fetch-response-body-replacement": noFetchResponseBodyReplacement,
   "no-global-testing-library-screen": noGlobalTestingLibraryScreen,
   "no-inert-autofocus": noInertAutofocus,
   "no-parser-inline-flatten": noParserInlineFlatten,
