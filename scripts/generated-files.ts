@@ -260,6 +260,8 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/http/*",
     "apps/api/src/lib/*",
     "apps/api/src/lib/account-export/constants.ts",
+    "apps/api/src/lib/account-export/enqueue.ts",
+    "apps/api/src/lib/account-export/store.ts",
     "apps/api/src/lib/agent-skills/*",
     "apps/api/src/lib/analytics/*",
     "apps/api/src/lib/auth/*",
