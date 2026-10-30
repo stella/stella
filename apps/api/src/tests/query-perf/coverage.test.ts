@@ -68,6 +68,14 @@ describe.skipIf(!enabled)("coverage refresh read budget", () => {
         );
         const schemaName = `coverage_budget_${Bun.randomUUIDv7().replaceAll("-", "")}`;
         const schema = sql.identifier(schemaName);
+        const metadataSourceId = Bun.randomUUIDv7();
+        const [rootQueue] = await db.execute(sql`SELECT EXISTS (
+          SELECT 1 FROM public.case_law_population_deltas
+        ) AS pending`);
+        expect(rootQueue?.["pending"]).toBe(false);
+        await db.execute(
+          sql`VACUUM (ANALYZE) public.case_law_population_deltas`,
+        );
         await db.execute(sql`CREATE SCHEMA ${schema}`);
         try {
           for (const table of [
@@ -84,16 +92,16 @@ describe.skipIf(!enabled)("coverage refresh read budget", () => {
           }
           await db.execute(sql`SET search_path TO ${schema}, public`);
           const [guard] = await client`SELECT pg_get_functiondef(
-            'public.assert_case_law_population_backlog_bounded()'::regprocedure
+            'public.case_law_population_backlog_within_window()'::regprocedure
           ) AS definition`;
           if (!isRecord(guard) || typeof guard["definition"] !== "string") {
             panic("Coverage fixture requires the production backlog guard");
           }
           const guardDefinition = guard["definition"]
             .replace(
-              "FUNCTION public.assert_case_law_population_backlog_bounded",
+              "FUNCTION public.case_law_population_backlog_within_window",
               () =>
-                `FUNCTION ${schemaName}.assert_case_law_population_backlog_bounded`,
+                `FUNCTION ${schemaName}.case_law_population_backlog_within_window`,
             )
             .replaceAll(
               "public.case_law_population_deltas",
@@ -137,8 +145,8 @@ describe.skipIf(!enabled)("coverage refresh read budget", () => {
               () => `${schemaName}.case_law_population_deltas`,
             )
             .replaceAll(
-              "public.assert_case_law_population_backlog_bounded",
-              () => `${schemaName}.assert_case_law_population_backlog_bounded`,
+              "public.case_law_population_backlog_within_window",
+              () => `${schemaName}.case_law_population_backlog_within_window`,
             );
           await db.execute(sql`CREATE VIEW ${schema}.case_law_population_counts_live
             WITH (security_invoker = true) AS ${sql.raw(liveDefinition)}`);
@@ -178,6 +186,12 @@ describe.skipIf(!enabled)("coverage refresh read budget", () => {
           FROM generate_series(1, ${CASE_LAW_POPULATION_DELTA_BACKLOG_LIMIT}) n
           JOIN case_law_sources s ON s.adapter_key =
             'coverage-budget-' || ((((n - 1) / 2 / 30) % 3) + 1)`);
+          // The qualified production freshness function reads the real queue.
+          // Give it the same bounded backlog as the private population fixture.
+          await db.execute(sql`INSERT INTO public.case_law_population_deltas
+            (kind, country, source_id, value, delta)
+            SELECT 'court', 'CZE', ${metadataSourceId}::uuid, 'Court fixture', 1
+            FROM generate_series(1, ${CASE_LAW_POPULATION_DELTA_BACKLOG_LIMIT})`);
           await db.execute(sql`UPDATE case_law_population_counts counts
           SET total = counts.total - pending.total
           FROM (
@@ -188,7 +202,7 @@ describe.skipIf(!enabled)("coverage refresh read budget", () => {
           WHERE (counts.kind, counts.country, counts.source_id, counts.value) =
             (pending.kind, pending.country, pending.source_id, pending.value)`);
           await db.execute(
-            sql`SELECT ${schema}.assert_case_law_population_backlog_bounded()`,
+            sql`SELECT ${schema}.case_law_population_backlog_within_window()`,
           );
           for (const table of [
             "case_law_sources",
@@ -203,6 +217,7 @@ describe.skipIf(!enabled)("coverage refresh read budget", () => {
           captured.length = 0;
           const sources = await readCaseLawCoverageSourcesQuery(
             asTestRaw<CaseLawPublicReadTransaction>(db),
+            [],
           );
           const statements = captured.slice();
           expect(statements).toHaveLength(1);
@@ -324,6 +339,12 @@ describe.skipIf(!enabled)("coverage refresh read budget", () => {
           );
         } finally {
           await db.execute(sql`SET search_path TO public`);
+          await db.execute(
+            sql`DELETE FROM public.case_law_population_deltas WHERE source_id = ${metadataSourceId}::uuid`,
+          );
+          await db.execute(
+            sql`VACUUM (ANALYZE) public.case_law_population_deltas`,
+          );
           await db.execute(sql`DROP SCHEMA ${schema} CASCADE`);
         }
       });

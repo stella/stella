@@ -8,11 +8,7 @@ import {
   BackfillHeldError,
   createScriptBackfillRuntime,
 } from "@/api/db/backfill-runtime";
-import {
-  CASE_LAW_POPULATION_DELTA_BACKLOG_LIMIT,
-  CASE_LAW_POPULATION_FOLD_BATCH_LIMIT,
-} from "@/api/lib/case-law/population-count-limits";
-import { readCaseLawPopulationBucketCount } from "@/api/lib/case-law/population-counts";
+import { CASE_LAW_POPULATION_FOLD_BATCH_LIMIT } from "@/api/lib/case-law/population-count-limits";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   logSchedulerBackfillStatus,
@@ -29,20 +25,23 @@ export const FOLD_CASE_LAW_POPULATION_COUNTS_TASK =
   "caseLaw.foldPopulationCounts" as const;
 
 const RUN_BUDGET_MS = 45_000;
-const BATCHES_PER_RUN =
-  CASE_LAW_POPULATION_DELTA_BACKLOG_LIMIT /
-  CASE_LAW_POPULATION_FOLD_BATCH_LIMIT;
+// Leave room for a governed indicator read and one bounded write transaction.
+const BATCH_START_RESERVE_MS = 10_000;
+const MAX_BATCHES_PER_RUN = RUN_BUDGET_MS / defaultConfig.minSleepMs;
 
 type PopulationFoldOptions = {
   createRuntime?: typeof createScriptBackfillRuntime;
+  clock?: () => number;
 };
 
 /** Writers append deltas; this owner folds bounded batches in separate transactions. */
 export const createCaseLawPopulationFoldTask =
   ({
     createRuntime = createScriptBackfillRuntime,
+    clock = performance.now,
   }: PopulationFoldOptions = {}): SchedulerTask =>
-  async ({ db, logger, runId, signal }) => {
+  async ({ db, logger, runId, signal, scheduleContinuation, dueAt }) => {
+    const deadline = clock() + RUN_BUDGET_MS;
     signal.throwIfAborted();
     const boundedSignal = AbortSignal.any([
       signal,
@@ -67,7 +66,11 @@ export const createCaseLawPopulationFoldTask =
     const outcome = await Result.tryPromise({
       try: async () => {
         try {
-          for (let batch = 0; batch < BATCHES_PER_RUN; batch += 1) {
+          for (let batch = 0; batch < MAX_BATCHES_PER_RUN; batch += 1) {
+            if (clock() + BATCH_START_RESERVE_MS >= deadline) {
+              scheduleContinuation(dueAt.claimedAtDate());
+              return;
+            }
             boundedSignal.throwIfAborted();
             // db-await-in-loop: each bounded fold commits independently under fresh load admission.
             const result = await runtime.step(async ({ tx, size }) => {
@@ -98,24 +101,18 @@ export const createCaseLawPopulationFoldTask =
               "caseLawPopulation.deltas": result.value.folded,
             });
             if (result.value.done) {
-              boundedSignal.throwIfAborted();
-              const summary = await runtime.step(async ({ tx }) => {
-                const { buckets } = await readCaseLawPopulationBucketCount(
-                  tx,
-                  boundedSignal,
-                );
-                return { cursor: null, done: true, value: buckets };
-              });
-              logger.info("scheduler.case_law_population_current", {
-                "caseLawPopulation.buckets": summary.value,
-              });
               return;
             }
             if (result.value.folded === 0) {
               return;
             }
+            if (clock() + result.sleepMs + BATCH_START_RESERVE_MS >= deadline) {
+              scheduleContinuation(dueAt.claimedAtDate());
+              return;
+            }
             await sleep(result.sleepMs, undefined, { signal: boundedSignal });
           }
+          scheduleContinuation(dueAt.claimedAtDate());
         } finally {
           await runtime.close();
         }

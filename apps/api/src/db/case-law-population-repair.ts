@@ -3,19 +3,19 @@ import { panic } from "better-result";
 import { runBackfillPass } from "@stll/db-load-gate/backfill-pass";
 import { defaultConfig } from "@stll/db-load-gate/health";
 
+import { CASE_LAW_POPULATION_SEED_REPAIR_NAME } from "@/api/lib/case-law/population-count-limits";
 import { isRecord } from "@/api/lib/type-guards";
 
 import { createBackfillRuntime } from "./backfill-runtime";
 import type { OnlineRepair } from "./online-migration-connection";
 
-const REPAIR_NAME = "case-law-population-counts";
 const BATCH_SIZE = 128;
 const MAX_BATCH_SIZE = 256;
 
 /** A row projection is the data checkpoint; the cursor bounds seed discovery. */
 export const CASE_LAW_POPULATION_REPAIR = {
   introducedBy: "20261030222000_case_law_population_counts",
-  name: REPAIR_NAME,
+  name: CASE_LAW_POPULATION_SEED_REPAIR_NAME,
   readCompletion: async (connection) => {
     const row = (
       await connection.query(
@@ -35,7 +35,7 @@ export const CASE_LAW_POPULATION_REPAIR = {
     const checkpoint = (
       await connection.query(
         `SELECT cursor, batch FROM public.database_backfill_states WHERE name = $1`,
-        [REPAIR_NAME],
+        [CASE_LAW_POPULATION_SEED_REPAIR_NAME],
       )
     ).at(0);
     if (checkpoint === undefined) {
@@ -70,7 +70,7 @@ export const CASE_LAW_POPULATION_REPAIR = {
   },
   repair: async (connection) => {
     const runtime = createBackfillRuntime({
-      name: REPAIR_NAME,
+      name: CASE_LAW_POPULATION_SEED_REPAIR_NAME,
       tableName: "case_law_decisions",
       initialSize: BATCH_SIZE,
       config: {

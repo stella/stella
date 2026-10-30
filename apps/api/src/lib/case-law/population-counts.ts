@@ -1,23 +1,33 @@
-import { panic } from "better-result";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import type { rootDb } from "@/api/db/root";
-import { caseLawPopulationCountsLive } from "@/api/db/schema";
+import { caseLawPopulationCountsLive, caseLawSources } from "@/api/db/schema";
+import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
+import { typedPgArray } from "@/api/lib/search/sql";
 
 type PopulationReadDb = Pick<typeof rootDb, "select">;
 
-/** The live owner includes committed deltas that have not been folded yet. */
-export const readCaseLawPopulationBucketCount = async (
+/** Every caller supplies the source exclusions used for its population snapshot. */
+export const caseLawPopulationRows = (
   db: PopulationReadDb,
-  signal?: AbortSignal,
-) => {
-  const [summary] = await db
-    .select({ buckets: sql<number>`count(*)::integer` })
+  excludedSourceIds: readonly string[],
+) =>
+  db
+    .select({
+      kind: caseLawPopulationCountsLive.kind,
+      country: caseLawPopulationCountsLive.country,
+      sourceId: caseLawPopulationCountsLive.sourceId,
+      value: caseLawPopulationCountsLive.value,
+      total: caseLawPopulationCountsLive.total,
+    })
     .from(caseLawPopulationCountsLive)
-    .where(sql`public.assert_case_law_population_ready()`);
-  if (!summary) {
-    panic("Browse population aggregate returned no row.");
-  }
-  signal?.throwIfAborted();
-  return { buckets: summary.buckets };
-};
+    .innerJoin(
+      caseLawSources,
+      eq(caseLawSources.id, caseLawPopulationCountsLive.sourceId),
+    )
+    .where(
+      sql`(SELECT public.assert_case_law_population_ready())
+    AND ${redistributableCaseLawSource}
+    AND ${caseLawSources.id} <> ALL(${typedPgArray(excludedSourceIds, "uuid")})`,
+    )
+    .as("case_law_population_rows");

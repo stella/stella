@@ -108,6 +108,7 @@ const FACETS_DECISIONS_FILE =
   "apps/api/src/handlers/case-law/decisions/facets.ts";
 const PG_FTS_FACETS_FILE =
   "apps/api/src/lib/legal-search/pg-fts-browse-facets.ts";
+const POPULATION_COUNTS_FILE = "apps/api/src/lib/case-law/population-counts.ts";
 const CORPUS_INDEX_FACETS_FILE =
   "apps/api/src/lib/legal-search/corpus-index-facets.ts";
 const CORPUS_INDEX_PROJECTION_INPUT_FILE =
@@ -595,15 +596,21 @@ describe("public case-law route boundary", () => {
   });
 
   test("public facets payload is aggregate public data only", async () => {
-    // Facets are provider-dispatched, so the invariant has to hold on the
-    // handler and on both implementations behind it.
-    const [handlerSource, pgFtsSource, corpusIndexSource] = await Promise.all([
-      readFacetsSource(),
-      readPgFtsFacetsSource(),
-      readCorpusIndexFacetsSource(),
-    ]);
+    // Follow the public reader into its mandatory population scope owner.
+    const [handlerSource, pgFtsSource, corpusIndexSource, populationSource] =
+      await Promise.all([
+        readFacetsSource(),
+        readPgFtsFacetsSource(),
+        readCorpusIndexFacetsSource(),
+        readSource(POPULATION_COUNTS_FILE),
+      ]);
 
-    for (const source of [handlerSource, pgFtsSource, corpusIndexSource]) {
+    for (const source of [
+      handlerSource,
+      pgFtsSource,
+      corpusIndexSource,
+      populationSource,
+    ]) {
       expect(source).not.toContain("analysis");
       expect(source).not.toContain("workspace");
       expect(source).not.toContain("organization");
@@ -611,14 +618,17 @@ describe("public case-law route boundary", () => {
     }
 
     expect(handlerSource).toContain("LIMITS.caseLawFacetLimit");
-    expect(pgFtsSource).toContain("caseLawPopulationCountsLive.country");
     expect(pgFtsSource).toContain(
-      'eq(caseLawPopulationCountsLive.kind, "court")',
+      "caseLawPopulationRows(tx, query.excludedSourceIds)",
     );
-    expect(pgFtsSource).toContain(
-      'eq(caseLawPopulationCountsLive.kind, "year")',
+    expect(pgFtsSource).toContain("eq(population.country, query.jurisdiction)");
+    expect(pgFtsSource).toContain("IN ('country', 'court', 'year')");
+    expect(populationSource).toContain("excludedSourceIds: readonly string[]");
+    expect(populationSource).toContain("redistributableCaseLawSource");
+    expect(populationSource).toContain(
+      'typedPgArray(excludedSourceIds, "uuid")',
     );
-    expect(pgFtsSource).toContain("redistributableCaseLawSource");
+    expect(populationSource).toContain("caseLawSources.id} <> ALL(");
     expect(corpusIndexSource).toContain('field: "jurisdiction"');
     expect(corpusIndexSource).toContain('field: "court"');
     expect(corpusIndexSource).toContain(
@@ -1085,7 +1095,12 @@ describe("public case-law route boundary", () => {
     expect(await readPublicSubjectSource()).toContain(
       "!isRedistributable(row.descriptor)",
     );
-    expect(pgFtsFacetsSource).toContain("redistributableCaseLawSource");
+    expect(pgFtsFacetsSource).toContain(
+      "caseLawPopulationRows(tx, query.excludedSourceIds)",
+    );
+    expect(await readSource(POPULATION_COUNTS_FILE)).toContain(
+      "redistributableCaseLawSource",
+    );
     // The corpus-index facets aggregate the index rather than the table, so
     // the gate is two-sided. Projection reads eligibility off the source
     // descriptor and erases whatever is ineligible; because a revocation only

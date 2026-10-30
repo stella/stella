@@ -2911,6 +2911,8 @@ export const caseLawPopulationSeedState = p.pgTable(
     slot: p.integer().primaryKey(),
     cursor: safeUuid<"caseLawDecision">("cursor"),
     sourceId: safeUuid<"caseLawSource">("source_id"),
+    foldGeneration: p.integer("fold_generation").notNull().default(0),
+    foldedAt: timestamptz("folded_at"),
     phase: p
       .text({ enum: CASE_LAW_POPULATION_SEED_PHASES })
       .notNull()

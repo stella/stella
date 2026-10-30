@@ -1,12 +1,15 @@
 import { panic, Result, TaggedError } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
-import { createScriptBackfillRuntime } from "@/api/db/backfill-runtime";
+import {
+  BackfillHeldError,
+  createScriptBackfillRuntime,
+} from "@/api/db/backfill-runtime";
 import {
   caseLawPopulationCounts,
   caseLawPopulationCountsLive,
@@ -16,22 +19,29 @@ import {
   schedulerJobs,
   systemAuditRuns,
 } from "@/api/db/schema";
+import { publicCaseLawRoute } from "@/api/handlers/case-law/public-routes";
+import { createHttpApp } from "@/api/http/app";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
+import { readCaseLawPopulationFreshness } from "@/api/lib/case-law/population-count-freshness";
 import {
   CASE_LAW_POPULATION_DELTA_BACKLOG_LIMIT,
   CASE_LAW_POPULATION_FOLD_BATCH_LIMIT,
+  CASE_LAW_POPULATION_MAINTENANCE_HIGH_WATER,
 } from "@/api/lib/case-law/population-count-limits";
-import { readCaseLawPopulationBucketCount } from "@/api/lib/case-law/population-counts";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
+import type { LegalBrowseFacets } from "@/api/lib/legal-search/types";
 import { logger } from "@/api/lib/observability/logger";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { getPgErrorCode } from "@/api/lib/pg-error";
 import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
 import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import { DECLARED_SCHEDULER_JOBS } from "@/api/lib/scheduler/jobs";
 import type { SchedulerDb } from "@/api/lib/scheduler/types";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
-import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { serveForTest } from "@/api/tests/helpers/test-server";
+import { asTestRaw, readTestJson } from "@/api/tests/helpers/test-tool-set";
 
 import {
   createCaseLawPopulationFoldTask,
@@ -39,8 +49,7 @@ import {
 } from "./case-law-population-fold";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
-const PROPERTY_ID =
-  "population live backlog guard matches the configured limit";
+const PROPERTY_ID = "population live backlog window preserves exact snapshots";
 
 class PopulationFoldFixtureRollback extends TaggedError(
   "PopulationFoldFixtureRollback",
@@ -95,6 +104,19 @@ const withFoldFixture = async (work: (db: SchedulerDb) => Promise<void>) => {
   });
 };
 
+const readCaseLawPopulationBucketCount = async (
+  db: Pick<SchedulerDb, "select">,
+) => {
+  const [summary] = await db
+    .select({ buckets: sql<number>`count(*)::integer` })
+    .from(caseLawPopulationCountsLive)
+    .where(sql`public.assert_case_law_population_ready()`);
+  if (!summary) {
+    return panic("Population fixture aggregate returned no row");
+  }
+  return { buckets: summary.buckets };
+};
+
 const appendDeltas = async (
   db: SchedulerDb,
   sourceId: SafeId<"caseLawSource">,
@@ -104,11 +126,24 @@ const appendDeltas = async (
     SELECT 'court', 'CZE', ${sourceId}, 'Fold fixture court', 1 FROM generate_series(1, ${count})`);
 };
 
-const runFoldTask = async (db: SchedulerDb) => {
+type RunFoldTaskOptions = {
+  clock?: () => number;
+  runId?: SafeId<"schedulerJobRun">;
+  jobId?: string;
+};
+
+const runFoldTask = async (
+  db: SchedulerDb,
+  {
+    clock,
+    runId = createSafeId<"schedulerJobRun">(),
+    jobId = `population-fold-${runId}`,
+  }: RunFoldTaskOptions = {},
+) => {
   const [job] = await db
     .insert(schedulerJobs)
     .values({
-      id: `population-fold-${createSafeId<"schedulerJobRun">()}`,
+      id: jobId,
       description: "Population fold fixture",
       nextRunAt: new Date("2026-10-01T12:00:00Z"),
       schedule: { type: "interval", everyMs: 60_000 },
@@ -118,8 +153,9 @@ const runFoldTask = async (db: SchedulerDb) => {
   if (!job) {
     return panic("Population fold scheduler fixture was not inserted");
   }
-  const runId = createSafeId<"schedulerJobRun">();
+  const continuations: Date[] = [];
   const task = createCaseLawPopulationFoldTask({
+    ...(clock === undefined ? {} : { clock }),
     createRuntime: (options) =>
       createScriptBackfillRuntime({
         ...options,
@@ -134,12 +170,39 @@ const runFoldTask = async (db: SchedulerDb) => {
       dueAt: DueSlot.of(job),
       payload: null,
       runId,
-      scheduleContinuation: () => {},
+      scheduleContinuation: (nextRunAt) => {
+        continuations.push(nextRunAt);
+      },
       signal: new AbortController().signal,
       logger,
     }),
   ).toBeUndefined();
-  return runId;
+  return { runId, jobId: job.id, continuations };
+};
+
+const probeMaintenance = async (db: SchedulerDb, name: string) => {
+  let calls = 0;
+  const runtime = createScriptBackfillRuntime({
+    db,
+    name,
+    tableName: "case_law_decisions",
+    initialSize: 1,
+    readVerdict: async () => ({ kind: "normal", signals: [] }),
+    slot: { tryAcquire: async () => true, release: () => {} },
+  });
+  try {
+    const result = await Result.tryPromise({
+      try: async () =>
+        await runtime.step(async () => {
+          calls += 1;
+          return { cursor: null, done: true, value: "admitted" };
+        }),
+      catch: (cause: unknown) => cause,
+    });
+    return { result, calls };
+  } finally {
+    await runtime.close();
+  }
 };
 
 describe.skipIf(!enabled)("population fold scheduler owner (postgres)", () => {
@@ -169,7 +232,7 @@ describe.skipIf(!enabled)("population fold scheduler owner (postgres)", () => {
           .from(caseLawPopulationDeltas)
           .where(eq(caseLawPopulationDeltas.sourceId, sourceId)),
       ).toEqual([{ count }]);
-      const runId = await runFoldTask(db);
+      const { runId } = await runFoldTask(db);
       expect(
         await db
           .select()
@@ -344,7 +407,284 @@ describe.skipIf(!enabled)("population fold scheduler owner (postgres)", () => {
       }),
   );
 
-  // timeout: three backlog boundaries each exercise two real governed scheduler runs and their pacing.
+  test("a fold run preserves its deadline reserve and requests continuation without starting a batch", async () => {
+    await withFoldFixture(async (db) => {
+      const sourceId = createSafeId<"caseLawSource">();
+      await db.insert(caseLawSources).values({
+        id: sourceId,
+        adapterKey: `budget-${sourceId}`,
+        name: "Fold budget fixture",
+      });
+      await appendDeltas(db, sourceId, 1);
+      let clockReads = 0;
+      const { continuations, runId } = await runFoldTask(db, {
+        clock: () => {
+          clockReads += 1;
+          return clockReads === 1 ? 0 : 35_000;
+        },
+      });
+      expect(continuations).toHaveLength(1);
+      expect(
+        await db
+          .select({ count: sql<number>`count(*)::integer` })
+          .from(caseLawPopulationDeltas)
+          .where(eq(caseLawPopulationDeltas.sourceId, sourceId)),
+      ).toEqual([{ count: 1 }]);
+      expect(
+        await db
+          .select()
+          .from(systemAuditRuns)
+          .where(eq(systemAuditRuns.subject, runId)),
+      ).toEqual([]);
+    });
+  });
+
+  // timeout: one real 45-second governed run drains a three-window burst while public HTTP requests remain available.
+  test("a three-window burst stays readable while one adaptive run drains it", async () => {
+    const databaseUrl =
+      process.env["DATABASE_URL"] ??
+      panic("Population burst proof requires DATABASE_URL");
+    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      const { db } = openClient({ max: 1 });
+      const fixtureDb = asTestRaw<SchedulerDb>(db);
+      const sourceId = createSafeId<"caseLawSource">();
+      const runId = createSafeId<"schedulerJobRun">();
+      const jobId = `population-burst-${sourceId}`;
+      const heldName = `population-held-${sourceId}`;
+      const releasedName = `population-released-${sourceId}`;
+      const count = CASE_LAW_POPULATION_DELTA_BACKLOG_LIMIT * 3;
+      const baseline = 7;
+      expect(count).toBe(49_152);
+      expect(count).toBeGreaterThan(CASE_LAW_POPULATION_MAINTENANCE_HIGH_WATER);
+      await drainPopulationDeltas(fixtureDb);
+      await db.insert(caseLawSources).values({
+        id: sourceId,
+        adapterKey: `burst-${sourceId}`,
+        name: "Burst fixture",
+      });
+      try {
+        await db.insert(caseLawPopulationCounts).values([
+          {
+            kind: "country",
+            country: "CZE",
+            sourceId,
+            value: "CZE",
+            total: baseline,
+          },
+          {
+            kind: "court",
+            country: "CZE",
+            sourceId,
+            value: "Fold fixture court",
+            total: baseline,
+          },
+        ]);
+        const initial = await readCaseLawPopulationFreshness(
+          asTestRaw<CaseLawPublicReadTransaction>(db),
+        );
+        await using server = serveForTest(
+          createHttpApp({
+            routes: publicCaseLawRoute,
+            middleware: [errorBoundary],
+          }),
+        );
+        const warmFacetsResponse = await server.fetch(
+          new Request("http://localhost/case/decisions/facets?country=CZE", {
+            signal: AbortSignal.timeout(5000),
+          }),
+        );
+        expect(warmFacetsResponse.status).toBe(200);
+        expect(await warmFacetsResponse.json()).toMatchObject({
+          country: [{ value: "CZE", count: baseline }],
+          countsFreshness: initial,
+        });
+        const warmStatusResponse = await server.fetch(
+          new Request("http://localhost/case/decisions/status?country=CZE", {
+            signal: AbortSignal.timeout(5000),
+          }),
+        );
+        expect(warmStatusResponse.status).toBe(200);
+        expect(await warmStatusResponse.json()).toMatchObject({
+          decisions: baseline,
+          countsFreshness: initial,
+        });
+
+        await db.execute(sql`INSERT INTO public.case_law_population_deltas (kind, country, source_id, value, delta)
+          SELECT CASE WHEN n % 2 = 0 THEN 'country' ELSE 'court' END, 'CZE', ${sourceId},
+            CASE WHEN n % 2 = 0 THEN 'CZE' ELSE 'Fold fixture court' END, 1
+          FROM generate_series(1, ${count}) n`);
+        expect(
+          await db
+            .select({ count: sql<number>`count(*)::integer` })
+            .from(caseLawPopulationDeltas)
+            .where(eq(caseLawPopulationDeltas.sourceId, sourceId)),
+        ).toEqual([{ count }]);
+        expect(
+          await db
+            .select({
+              kind: caseLawPopulationCountsLive.kind,
+              total: caseLawPopulationCountsLive.total,
+            })
+            .from(caseLawPopulationCountsLive)
+            .where(eq(caseLawPopulationCountsLive.sourceId, sourceId))
+            .orderBy(caseLawPopulationCountsLive.kind),
+        ).toEqual([
+          { kind: "country", total: baseline },
+          { kind: "court", total: baseline },
+        ]);
+        const stale = await readCaseLawPopulationFreshness(
+          asTestRaw<CaseLawPublicReadTransaction>(db),
+        );
+        expect(stale).toEqual({
+          status: "stale",
+          fold: initial.fold,
+          foldedAt: initial.foldedAt,
+        });
+        const held = await probeMaintenance(fixtureDb, heldName);
+        expect(held.calls).toBe(0);
+        expect(held.result.isErr()).toBe(true);
+        if (held.result.isErr()) {
+          expect(held.result.error).toBeInstanceOf(BackfillHeldError);
+        }
+        const facetsResponse = await server.fetch(
+          new Request("http://localhost/case/decisions/facets?country=CZE", {
+            signal: AbortSignal.timeout(5000),
+          }),
+        );
+        expect(facetsResponse.status).toBe(200);
+        const facets = await readTestJson<LegalBrowseFacets>(facetsResponse);
+        expect(facets).toMatchObject({
+          country: [{ value: "CZE", count: baseline }],
+          court: [{ value: "Fold fixture court", count: baseline }],
+          countsFreshness: stale,
+        });
+        const statusResponse = await server.fetch(
+          new Request("http://localhost/case/decisions/status?country=CZE", {
+            signal: AbortSignal.timeout(5000),
+          }),
+        );
+        expect(statusResponse.status).toBe(200);
+        expect(await statusResponse.json()).toMatchObject({
+          decisions: baseline,
+          countsFreshness: stale,
+        });
+        const started = performance.now();
+        const { continuations } = await runFoldTask(fixtureDb, {
+          runId,
+          jobId,
+        });
+        const elapsedMs = performance.now() - started;
+        expect(elapsedMs).toBeLessThan(45_000);
+        expect(
+          await db
+            .select({ count: sql<number>`count(*)::integer` })
+            .from(caseLawPopulationDeltas)
+            .where(eq(caseLawPopulationDeltas.sourceId, sourceId)),
+        ).toEqual([{ count: 0 }]);
+        expect(continuations).toEqual([]);
+        const expected = baseline + count / 2;
+        expect(
+          await db
+            .select({
+              kind: caseLawPopulationCountsLive.kind,
+              total: caseLawPopulationCountsLive.total,
+            })
+            .from(caseLawPopulationCountsLive)
+            .where(eq(caseLawPopulationCountsLive.sourceId, sourceId))
+            .orderBy(caseLawPopulationCountsLive.kind),
+        ).toEqual([
+          { kind: "country", total: expected },
+          { kind: "court", total: expected },
+        ]);
+        const current = await readCaseLawPopulationFreshness(
+          asTestRaw<CaseLawPublicReadTransaction>(db),
+        );
+        expect(current.status).toBe("current");
+        expect(current.fold).toBeGreaterThan(stale.fold);
+        expect(current.foldedAt).not.toBeNull();
+        const admitted = await probeMaintenance(fixtureDb, releasedName);
+        expect(admitted.calls).toBe(1);
+        expect(admitted.result.isOk()).toBe(true);
+        const audits = await db
+          .select({ counts: systemAuditRuns.counts })
+          .from(systemAuditRuns)
+          .where(
+            and(
+              eq(systemAuditRuns.actor, "system:case-law-population-fold"),
+              eq(systemAuditRuns.subject, runId),
+            ),
+          );
+        expect(audits).toHaveLength(
+          count / CASE_LAW_POPULATION_FOLD_BATCH_LIMIT,
+        );
+        expect(
+          audits.every(
+            ({ counts }) =>
+              counts["deltas"] === CASE_LAW_POPULATION_FOLD_BATCH_LIMIT,
+          ),
+        ).toBe(true);
+        expect(
+          audits.reduce((sum, { counts }) => sum + Number(counts["deltas"]), 0),
+        ).toBe(count);
+        const currentFacetsResponse = await server.fetch(
+          new Request("http://localhost/case/decisions/facets?country=CZE", {
+            signal: AbortSignal.timeout(5000),
+          }),
+        );
+        expect(currentFacetsResponse.status).toBe(200);
+        expect(await currentFacetsResponse.json()).toMatchObject({
+          country: [{ value: "CZE", count: expected }],
+          court: [{ value: "Fold fixture court", count: expected }],
+          countsFreshness: current,
+        });
+        const currentStatusResponse = await server.fetch(
+          new Request("http://localhost/case/decisions/status?country=CZE", {
+            signal: AbortSignal.timeout(5000),
+          }),
+        );
+        expect(currentStatusResponse.status).toBe(200);
+        expect(await currentStatusResponse.json()).toMatchObject({
+          decisions: expected,
+          countsFreshness: current,
+        });
+        console.info(
+          JSON.stringify({
+            event: "population_burst_proof",
+            pendingBefore: count,
+            pendingAfter: 0,
+            elapsedMs,
+            auditBatches: audits.length,
+            auditDeltas: count,
+            stale,
+            current,
+          }),
+        );
+      } finally {
+        await db
+          .delete(caseLawPopulationDeltas)
+          .where(eq(caseLawPopulationDeltas.sourceId, sourceId));
+        await db
+          .delete(caseLawPopulationCounts)
+          .where(eq(caseLawPopulationCounts.sourceId, sourceId));
+        await db.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
+        await db
+          .delete(systemAuditRuns)
+          .where(eq(systemAuditRuns.subject, runId));
+        await db.delete(schedulerJobs).where(eq(schedulerJobs.id, jobId));
+        await db
+          .delete(databaseBackfillStates)
+          .where(
+            inArray(databaseBackfillStates.name, [
+              heldName,
+              releasedName,
+              SCHEDULER_BACKFILL_IDS.populationCounts,
+            ]),
+          );
+      }
+    });
+  }, 60_000);
+
+  // timeout: shuffled boundaries seed the full window and verify current and folded snapshots against real PostgreSQL.
   test(
     PROPERTY_ID,
     async () => {
@@ -358,6 +698,7 @@ describe.skipIf(!enabled)("population fold scheduler owner (postgres)", () => {
                 const rollback = new PopulationFoldFixtureRollback({
                   message: "Roll back backlog boundary case",
                 });
+                // db-await-in-loop: each boundary is an isolated real-Postgres savepoint over the same canonical owner.
                 expect(
                   await rejectionOf(
                     db.transaction(async (tx) => {
@@ -366,49 +707,36 @@ describe.skipIf(!enabled)("population fold scheduler owner (postgres)", () => {
                       await tx.insert(caseLawSources).values({
                         id: sourceId,
                         adapterKey: `cap-${sourceId}`,
-                        name: "Backlog cap fixture",
+                        name: "Backlog window fixture",
+                      });
+                      const total = 13;
+                      await tx.insert(caseLawPopulationCounts).values({
+                        kind: "court",
+                        country: "CZE",
+                        sourceId,
+                        value: "Fold fixture court",
+                        total,
                       });
                       const baseline =
                         await readCaseLawPopulationBucketCount(caseDb);
+                      const snapshot = await readCaseLawPopulationFreshness(
+                        asTestRaw<CaseLawPublicReadTransaction>(tx),
+                      );
                       const count =
                         CASE_LAW_POPULATION_DELTA_BACKLOG_LIMIT + offset;
                       await appendDeltas(caseDb, sourceId, count);
-                      const read = await Result.tryPromise({
-                        try: async () =>
-                          await tx.transaction(
-                            async (readTx) =>
-                              await readCaseLawPopulationBucketCount(
-                                asTestRaw<SchedulerDb>(readTx),
-                              ),
-                          ),
-                        catch: getPgErrorCode,
+                      expect(
+                        await readCaseLawPopulationBucketCount(caseDb),
+                      ).toEqual(baseline);
+                      expect(
+                        await readCaseLawPopulationFreshness(
+                          asTestRaw<CaseLawPublicReadTransaction>(tx),
+                        ),
+                      ).toEqual({
+                        status: offset > 0 ? "stale" : "current",
+                        fold: snapshot.fold,
+                        foldedAt: snapshot.foldedAt,
                       });
-                      if (offset > 0) {
-                        expect(read.isErr()).toBe(true);
-                        if (read.isErr()) {
-                          expect(read.error).toBe("55000");
-                        }
-                        await runFoldTask(caseDb);
-                        await runFoldTask(caseDb);
-                        expect(
-                          await readCaseLawPopulationBucketCount(caseDb),
-                        ).toEqual({ buckets: baseline.buckets + 1 });
-                        expect(
-                          await tx
-                            .select()
-                            .from(caseLawPopulationDeltas)
-                            .where(
-                              eq(caseLawPopulationDeltas.sourceId, sourceId),
-                            ),
-                        ).toEqual([]);
-                      } else {
-                        expect(read.isOk()).toBe(true);
-                        if (read.isOk()) {
-                          expect(read.value).toEqual({
-                            buckets: baseline.buckets + 1,
-                          });
-                        }
-                      }
                       expect(
                         await tx
                           .select({ total: caseLawPopulationCountsLive.total })
@@ -416,7 +744,7 @@ describe.skipIf(!enabled)("population fold scheduler owner (postgres)", () => {
                           .where(
                             eq(caseLawPopulationCountsLive.sourceId, sourceId),
                           ),
-                      ).toEqual([{ total: count }]);
+                      ).toEqual([{ total: total + (offset > 0 ? 0 : count) }]);
                       abortTransaction(rollback);
                     }),
                   ),
@@ -428,5 +756,5 @@ describe.skipIf(!enabled)("population fold scheduler owner (postgres)", () => {
       );
     },
     120_000,
-  ); // timeout: shuffled boundary cases seed the full bounded queue and exercise overflow recovery through the real scheduler.
+  );
 });

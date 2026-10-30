@@ -85,6 +85,7 @@ describe.skipIf(!enabled)("maintained coverage read plan (postgres)", () => {
           captured.length = 0;
           const rows = await readCaseLawCoverageSourcesQuery(
             asTestRaw<CaseLawPublicReadTransaction>(db),
+            [],
           );
           const statements = captured.slice();
           expect(statements.length).toBeGreaterThan(0);

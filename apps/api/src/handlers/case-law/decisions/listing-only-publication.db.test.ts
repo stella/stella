@@ -19,7 +19,6 @@ import type {
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
 import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
-import { readCaseLawPopulationBucketCount } from "@/api/lib/case-law/population-counts";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import {
   publishedCaseLawDecisionFor,
@@ -100,8 +99,6 @@ const shapeRows = markerShapes.map((shape) => ({
 
 let client: PGlite;
 let db: ReturnType<typeof drizzle>;
-type RefreshDb = Parameters<typeof readCaseLawPopulationBucketCount>[0];
-let refreshDb: RefreshDb;
 let caseLawDb: CaseLawPublicReadDb;
 
 type SeedOptions = {
@@ -138,9 +135,6 @@ const seedDecision = ({
 beforeAll(async () => {
   client = await createTestPglite();
   db = drizzle({ client });
-  // SAFETY: the refresh uses only the select and transaction operations the embedded database provides.
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- embedded database stands in for the root pool
-  refreshDb = db as unknown as RefreshDb;
   const readDb = async <T>(
     read: (tx: CaseLawPublicReadTransaction) => Promise<T>,
   ) =>
@@ -336,7 +330,6 @@ test(
     );
     expect(freshInstallFacets.court).toEqual([{ count: 2, value: COURT }]);
 
-    await readCaseLawPopulationBucketCount(refreshDb);
     const facets = await caseLawDb(
       async (tx) =>
         await readPgFtsBrowseFacets(tx, {
@@ -366,7 +359,12 @@ test(
           limit: 10,
         }),
     );
-    expect(revokedFacets).toEqual({ country: [], court: [], year: [] });
+    expect(revokedFacets).toMatchObject({
+      country: [],
+      court: [],
+      year: [],
+      countsFreshness: { status: "current" },
+    });
     const restrictedRows = await withPublicLawReaderRole(
       db,
       async (readerDb) =>
@@ -447,9 +445,10 @@ test(
     await db
       .delete(caseLawDecisions)
       .where(eq(caseLawDecisions.sourceId, sourceId));
-    expect(await readCaseLawPopulationBucketCount(refreshDb)).toEqual({
-      buckets: 0,
-    });
+    const [population] = await db
+      .select({ buckets: sql<number>`count(*)::integer` })
+      .from(caseLawPopulationCountsLive);
+    expect(population).toEqual({ buckets: 0 });
     const facets = await caseLawDb(
       async (tx) =>
         await readPgFtsBrowseFacets(tx, {
@@ -458,7 +457,12 @@ test(
           limit: 10,
         }),
     );
-    expect(facets).toEqual({ country: [], court: [], year: [] });
+    expect(facets).toMatchObject({
+      country: [],
+      court: [],
+      year: [],
+      countsFreshness: { status: "current" },
+    });
   },
   DB_TEST_TIMEOUT_MS,
 );

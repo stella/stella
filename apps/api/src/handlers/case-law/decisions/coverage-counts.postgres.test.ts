@@ -262,6 +262,7 @@ describe.skipIf(!enabled)("incremental coverage counts (postgres)", () => {
                   async (readTx) =>
                     await readCaseLawCoverageSourcesQuery(
                       asTestRaw<CaseLawPublicReadTransaction>(readTx),
+                      [],
                     ),
                 );
                 expect(rows.find(({ id }) => id === sourceId)).toMatchObject({

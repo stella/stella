@@ -19,7 +19,6 @@ import {
 } from "@/api/handlers/case-law/decisions/coverage";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
-import { readCaseLawPopulationBucketCount } from "@/api/lib/case-law/population-counts";
 import { resetPublicCaseLawConfigForTesting } from "@/api/lib/case-law/public-case-law-config";
 import { CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT } from "@/api/lib/decision-date-bounds-sql";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
@@ -322,7 +321,6 @@ describe.skipIf(!enabled)("coverage computation (postgres)", () => {
           });
           expect(computedCountry.decisionYearFrom).toBe(2024);
           expect(computedCountry.decisionYearTo).toBe(2026);
-          await readCaseLawPopulationBucketCount(tx);
           const snapshot = await computeCaseLawCoverageAnswer(
             async (read) => await read(tx),
             [],

@@ -8,11 +8,7 @@ import {
 } from "@stll/api-contract/case-law-jurisdictions";
 import { isPublicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 
-import {
-  caseLawPopulationCountsLive,
-  caseLawSources,
-  SOURCE_TOTAL_ORIGIN,
-} from "@/api/db/schema";
+import { caseLawSources, SOURCE_TOTAL_ORIGIN } from "@/api/db/schema";
 import type { SourceTotalOrigin } from "@/api/db/schema";
 import {
   type CaseLawSourceArrivals,
@@ -49,6 +45,12 @@ import {
   caseLawCoverageFreshness,
 } from "@/api/lib/case-law/coverage-freshness";
 import {
+  type PopulationCountsFreshness,
+  populationCountsFreshness,
+  readCaseLawPopulationFreshness,
+} from "@/api/lib/case-law/population-count-freshness";
+import { caseLawPopulationRows } from "@/api/lib/case-law/population-counts";
+import {
   readProvisionPendingCounts,
   unavailableProvisionPendingCounts,
 } from "@/api/lib/case-law/provision-pending";
@@ -74,6 +76,7 @@ import {
   PUBLIC_LAW_SHARED_QUERY,
 } from "@/api/lib/public-law-shared-query";
 import { projectResponseText } from "@/api/lib/search/project-response-text";
+import { typedPgArray } from "@/api/lib/search/sql";
 import { isRecord } from "@/api/lib/type-guards";
 
 /**
@@ -288,9 +291,12 @@ export const readCaseLawCoverageSourcesQuery = definePublicLawSharedQuery(
   PUBLIC_LAW_SHARED_QUERY.caseLawCoverageSources,
   async (
     tx: CaseLawPublicReadTransaction,
-  ): Promise<CaseLawCoverageSourceRow[]> => {
+    excludedSourceIds: readonly string[],
+  ) => {
+    const population = caseLawPopulationRows(tx, excludedSourceIds);
     const sources = await tx
       .select({
+        countsFreshness: populationCountsFreshness,
         id: caseLawSources.id,
         adapterKey: caseLawSources.adapterKey,
         enabled: caseLawSources.enabled,
@@ -304,9 +310,9 @@ export const readCaseLawCoverageSourcesQuery = definePublicLawSharedQuery(
           WITH population AS (
             SELECT court, decisions FROM jsonb_to_recordset(coalesce(
               jsonb_agg(jsonb_build_object(
-                'court', ${caseLawPopulationCountsLive.value},
-                'decisions', ${caseLawPopulationCountsLive.total}
-              )) FILTER (WHERE ${caseLawPopulationCountsLive.kind} = 'court'),
+                'court', ${population.value},
+                'decisions', ${population.total}
+              )) FILTER (WHERE ${population.kind} = 'court'),
               '[]'::jsonb
             )) AS counts(court text, decisions integer)
           ), normalized AS (
@@ -329,24 +335,19 @@ export const readCaseLawCoverageSourcesQuery = definePublicLawSharedQuery(
             ORDER BY decisions DESC, court ASC)
           FROM bounded
         ), '[]'::jsonb)`,
-        pendingTextCount: sql<number>`coalesce(sum(${caseLawPopulationCountsLive.total})
-          FILTER (WHERE ${caseLawPopulationCountsLive.kind} = 'pending-text'), 0)::integer`,
-        decisionYearFrom: sql<
-          number | null
-        >`min(${caseLawPopulationCountsLive.value}::integer)
-          FILTER (WHERE ${caseLawPopulationCountsLive.kind} = 'coverage-year')`,
-        decisionYearTo: sql<
-          number | null
-        >`max(${caseLawPopulationCountsLive.value}::integer)
-          FILTER (WHERE ${caseLawPopulationCountsLive.kind} = 'coverage-year')`,
+        pendingTextCount: sql<number>`coalesce(sum(${population.total})
+          FILTER (WHERE ${population.kind} = 'pending-text'), 0)::integer`,
+        decisionYearFrom: sql<number | null>`min(${population.value}::integer)
+          FILTER (WHERE ${population.kind} = 'coverage-year')`,
+        decisionYearTo: sql<number | null>`max(${population.value}::integer)
+          FILTER (WHERE ${population.kind} = 'coverage-year')`,
       })
       .from(caseLawSources)
-      .leftJoin(
-        caseLawPopulationCountsLive,
-        eq(caseLawPopulationCountsLive.sourceId, caseLawSources.id),
-      )
+      .leftJoin(population, eq(population.sourceId, caseLawSources.id))
       .where(
-        sql`${redistributableCaseLawSource} AND (SELECT public.assert_case_law_population_ready())`,
+        sql`${redistributableCaseLawSource}
+          AND ${caseLawSources.id} <> ALL(${typedPgArray(excludedSourceIds, "uuid")})
+          AND (SELECT public.assert_case_law_population_ready())`,
       )
       .groupBy(caseLawSources.id)
       .orderBy(caseLawSources.adapterKey)
@@ -703,6 +704,7 @@ export const loadCaseLawCoverage = async ({
 
 /** The answer the scheduler computes and stores. */
 type CaseLawCoverageSnapshot = CaseLawCoverage & {
+  countsFreshness?: PopulationCountsFreshness;
   provisionProcessing: Awaited<ReturnType<typeof readProvisionPendingCounts>>;
 };
 
@@ -789,7 +791,9 @@ export const readCaseLawCoverageHandler = async (
     freshness: caseLawCoverageFreshness({
       generatedAt,
       now,
-      policyCurrent: stored.policyCurrent,
+      policyCurrent:
+        stored.policyCurrent &&
+        stored.answer.countsFreshness?.status !== "stale",
     }),
   };
 };
@@ -861,6 +865,7 @@ export const computeCaseLawCoverageAnswer = async (
   // and `generatedAt` all describe the same moment, so a reader comparing a
   // source's last sync against the stated time is comparing like with like.
   const now = new Date();
+  let countsFreshness: PopulationCountsFreshness | undefined;
 
   const computation = await assembleCaseLawCoverageAnswer({
     readProvisionProcessing: async () =>
@@ -870,7 +875,20 @@ export const computeCaseLawCoverageAnswer = async (
     load: {
       excludedSourceIds,
       now,
-      readSources: async () => await caseLawDb(readCaseLawCoverageSourcesQuery),
+      readSources: async () =>
+        await caseLawDb(
+          async (tx) => {
+            const sources = await readCaseLawCoverageSourcesQuery(
+              tx,
+              excludedSourceIds,
+            );
+            countsFreshness =
+              sources.at(0)?.countsFreshness ??
+              (await readCaseLawPopulationFreshness(tx));
+            return sources;
+          },
+          { isolation: "repeatable-read" },
+        ),
       readYearCompleteness: async (sources) =>
         await caseLawDb(
           async (tx) => await readCaseLawCoverageYearsQuery(tx, sources),
@@ -898,15 +916,20 @@ export const computeCaseLawCoverageAnswer = async (
       },
       readFacets: async (country) =>
         await Result.tryPromise({
-          try: async () =>
-            await caseLawDb(
+          try: async () => {
+            const facets = await caseLawDb(
               async (tx) =>
                 await readPgFtsBrowseFacets(tx, {
                   jurisdiction: country,
                   excludedSourceIds,
                   limit: LIMITS.caseLawFacetLimit,
                 }),
-            ),
+            );
+            if (facets.countsFreshness?.status === "stale") {
+              countsFreshness = facets.countsFreshness;
+            }
+            return facets;
+          },
           catch: coverageError("reading maintained coverage facets failed"),
         }),
       readCourts: async ({ buckets, country, total }) => {
@@ -922,21 +945,21 @@ export const computeCaseLawCoverageAnswer = async (
               }),
           ),
           caseLawDb(async (tx) => {
+            const population = caseLawPopulationRows(tx, excludedSourceIds);
             const [row] = await tx
               .select({
-                courts: sql<number>`count(DISTINCT ${caseLawPopulationCountsLive.value})::integer`,
+                courts: sql<number>`count(DISTINCT ${population.value})::integer`,
+                countsFreshness: populationCountsFreshness,
               })
-              .from(caseLawPopulationCountsLive)
-              .innerJoin(
-                caseLawSources,
-                eq(caseLawSources.id, caseLawPopulationCountsLive.sourceId),
-              ).where(sql`${caseLawPopulationCountsLive.kind} = 'court'
-                AND ${caseLawPopulationCountsLive.country} = ${country}
-                AND ${redistributableCaseLawSource}`);
-            return (
-              row?.courts ??
-              panic("Coverage court count returned no aggregate row")
-            );
+              .from(population).where(sql`${population.kind} = 'court'
+                AND ${population.country} = ${country}`);
+            if (!row) {
+              return panic("Coverage court count returned no aggregate row");
+            }
+            if (row.countsFreshness.status === "stale") {
+              countsFreshness = row.countsFreshness;
+            }
+            return row.courts;
           }),
         ]);
         return caseLawCourtStatusRows({
@@ -954,7 +977,10 @@ export const computeCaseLawCoverageAnswer = async (
     return computation;
   }
   return {
-    answer: projectResponseText(computation.answer, coverageSnapshotSchema),
+    answer: projectResponseText(
+      { ...computation.answer, countsFreshness },
+      coverageSnapshotSchema,
+    ),
     complete: true,
   };
 };

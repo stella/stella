@@ -32,21 +32,18 @@ CREATE POLICY public_law_reader_access ON public.case_law_population_deltas FOR 
 GRANT SELECT (id, kind, country, source_id, value, delta) ON public.case_law_population_deltas TO stella_public_law_reader;--> statement-breakpoint
 
 -- The bound counts the global queue before any policy filtering. A stalled
--- fold refuses the read; it never turns a truncated queue into a false total.
+-- reader serves the folded snapshot; it never sums a truncated queue.
 -- stella-migration-safety: reviewed security-definer - read-only bounded backlog assertion with fixed search path; exposes no queue rows or operational checkpoint
-CREATE FUNCTION public.assert_case_law_population_backlog_bounded()
+CREATE FUNCTION public.case_law_population_backlog_within_window()
 RETURNS boolean LANGUAGE plpgsql STABLE SECURITY DEFINER
 SET search_path = pg_catalog, public, pg_temp
 AS $function$
 BEGIN
-  IF (SELECT count(*) FROM (SELECT id FROM public.case_law_population_deltas ORDER BY id LIMIT 16385) bounded) > 16384 THEN
-    RAISE EXCEPTION 'Case-law population delta backlog exceeds the read limit' USING ERRCODE = '55000';
-  END IF;
-  RETURN true;
+  RETURN (SELECT count(*) FROM (SELECT id FROM public.case_law_population_deltas ORDER BY id LIMIT 16385) bounded) <= 16384;
 END
 $function$;--> statement-breakpoint
-REVOKE ALL ON FUNCTION public.assert_case_law_population_backlog_bounded() FROM PUBLIC;--> statement-breakpoint
-GRANT EXECUTE ON FUNCTION public.assert_case_law_population_backlog_bounded() TO stella_public_law_reader;--> statement-breakpoint
+REVOKE ALL ON FUNCTION public.case_law_population_backlog_within_window() FROM PUBLIC;--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.case_law_population_backlog_within_window() TO stella_public_law_reader;--> statement-breakpoint
 
 CREATE VIEW public.case_law_population_counts_live WITH (security_invoker = true) AS
 WITH pending AS MATERIALIZED (
@@ -58,8 +55,8 @@ FROM (
   SELECT kind, country, source_id, value, total FROM public.case_law_population_counts
   UNION ALL
   SELECT kind, country, source_id, value, delta AS total FROM pending
+  WHERE (SELECT public.case_law_population_backlog_within_window())
 ) population
-WHERE (SELECT public.assert_case_law_population_backlog_bounded())
 GROUP BY kind, country, source_id, value
 HAVING sum(total) <> 0;--> statement-breakpoint
 GRANT SELECT (kind, country, source_id, value, total) ON public.case_law_population_counts_live TO stella_public_law_reader;--> statement-breakpoint
@@ -80,6 +77,8 @@ CREATE TABLE public.case_law_population_seed_state (
   cursor uuid,
   source_id uuid,
   phase text NOT NULL DEFAULT 'scan',
+  fold_generation integer NOT NULL DEFAULT 0,
+  folded_at timestamptz,
   CONSTRAINT case_law_population_seed_phase_valid CHECK (phase IN ('scan', 'fold', 'complete'))
 );--> statement-breakpoint
 INSERT INTO public.case_law_population_seed_state (slot) VALUES (0);--> statement-breakpoint
@@ -102,6 +101,19 @@ CREATE POLICY public_law_reader_access ON public.case_law_population_projections
   USING (publication = 'published' AND EXISTS (SELECT 1 FROM public.case_law_sources s WHERE s.id = source_id
     AND (s.descriptor IS NULL OR s.descriptor->>'allowsRedistribution' = 'true')));--> statement-breakpoint
 GRANT SELECT (source_id, country, court, created_at, updated_at, publication) ON public.case_law_population_projections TO stella_public_law_reader;--> statement-breakpoint
+
+-- stella-migration-safety: reviewed security-definer - bounded read-only freshness metadata; no queue rows or source data exposed
+CREATE FUNCTION public.read_case_law_population_freshness()
+RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = pg_catalog, public, pg_temp
+AS $function$
+  SELECT jsonb_build_object(
+    'status', CASE WHEN public.case_law_population_backlog_within_window() THEN 'current' ELSE 'stale' END,
+    'fold', fold_generation, 'foldedAt', folded_at)
+  FROM public.case_law_population_seed_state WHERE slot = 0
+$function$;--> statement-breakpoint
+REVOKE ALL ON FUNCTION public.read_case_law_population_freshness() FROM PUBLIC;--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.read_case_law_population_freshness() TO stella_public_law_reader;--> statement-breakpoint
 
 -- Publication is shared with the corpus views; coverage years also reject
 -- dates before a docket's filing year. The bounded date CHECK is already
@@ -259,6 +271,8 @@ BEGIN
       AND counts.source_id = totals.source_id AND counts.value = totals.value;
   END IF;
   DELETE FROM public.case_law_population_deltas WHERE id = ANY(selected_ids);
+  UPDATE public.case_law_population_seed_state
+  SET fold_generation = fold_generation + 1, folded_at = clock_timestamp() WHERE slot = 0;
   RETURN QUERY SELECT cardinality(selected_ids), NOT EXISTS (SELECT 1 FROM public.case_law_population_deltas);
 END
 $function$;--> statement-breakpoint
