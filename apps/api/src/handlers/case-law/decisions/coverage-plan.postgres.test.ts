@@ -271,6 +271,16 @@ describe.skipIf(!enabled)("published coverage bounds plan (postgres)", () => {
           "case_law_browse_facet_counts",
         ).filter(({ actualLoops }) => actualLoops !== 0);
         expect(facetProbes, planEvidence).toHaveLength(2);
+        // No other executed read of the facet table, of any kind: a bitmap
+        // path's index child names no relation, so both shapes count two.
+        expect(
+          planNodes(root).filter(
+            (node) =>
+              node["Relation Name"] === "case_law_browse_facet_counts" &&
+              node["Actual Loops"] !== 0,
+          ),
+          planEvidence,
+        ).toHaveLength(2);
         for (const probe of facetProbes) {
           expect(probe.indexNames, planEvidence).toContain(FACET_INDEX);
           expect(probe.indexConditions.join(" "), planEvidence).toContain(
