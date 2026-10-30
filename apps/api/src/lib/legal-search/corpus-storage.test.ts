@@ -17,6 +17,7 @@ import {
   CorpusMemberDigestMismatchError,
   CorpusMemberTombstonedError,
   CorpusPayloadUnavailableError,
+  StoredCorpusValidationError,
   TimeoutError,
 } from "@/api/lib/errors/tagged-errors";
 import {
@@ -302,12 +303,12 @@ describe("persisted corpus JSON validation", () => {
     ).toThrow('Invalid type: Expected number but received "0"');
     expect(() =>
       parsePersistedCorpusAst({ version: 1, blocks: [{ type: "paragraph" }] }),
-    ).toThrow("Invalid type: Expected (Object | unknown) but received Object");
+    ).toThrow(StoredCorpusValidationError);
     expect(() => parsePersistedCorpusAst([])).toThrow(
-      "Invalid type: Expected (Object | unknown) but received Array",
+      StoredCorpusValidationError,
     );
     expect(() => parsePersistedCorpusAst({ unexpected: true })).toThrow(
-      "Invalid type: Expected (Object | unknown) but received Object",
+      StoredCorpusValidationError,
     );
   });
 

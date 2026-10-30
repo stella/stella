@@ -68,6 +68,7 @@ type AnnotationToolbarProps = {
    * no notes margin, where the bar offers no comment at all rather than an
    * affordance that leads nowhere. */
   onCompose?: ((spans: SelectionAnchor[]) => void) | undefined;
+  explainLanguagePicker?: ReactNode;
   onExplain?: ((spans: SelectionAnchor[]) => void) | undefined;
   /** Why Explain cannot take these spans, or `undefined` when it can. */
   explainRefusal?:
@@ -125,6 +126,7 @@ export const AnnotationToolbar = ({
   onClearActive,
   onCompose,
   onExplain,
+  explainLanguagePicker,
   explainRefusal,
   onSelectedSpansChange,
   scrollContainerRef,
@@ -283,10 +285,22 @@ export const AnnotationToolbar = ({
           reportSelectedSpans(NO_SELECTED_SPANS);
           return;
         }
-        // A fresh selection must not inherit the previous one's open menu.
-        setCopyOpen(false);
         const range = selection.getRangeAt(0);
         const spans = selectionAnchorsFrom(selection, root);
+        // The bar acts on a passage of the document: words selected in the
+        // reader's own chrome (a notice, a note, a label) touch none of its
+        // anchored blocks, and quoting them with the document's citation
+        // would be wrong. A text with no anchored blocks at all keeps the bar.
+        if (
+          spans.length === 0 &&
+          root.querySelector("[data-anchor]") !== null
+        ) {
+          setSelected(null);
+          reportSelectedSpans(NO_SELECTED_SPANS);
+          return;
+        }
+        // A fresh selection must not inherit the previous one's open menu.
+        setCopyOpen(false);
         // Reported before the bar's geometry: words scrolled out of view are
         // still selected, though the bar has nowhere to float.
         reportSelectedSpans(spans);
@@ -679,6 +693,7 @@ export const AnnotationToolbar = ({
         {mode === "authenticated" && spans.length > 0 && (
           <SelectionAIActions
             explainRefusal={explainRefusal?.(spans)}
+            explainLanguagePicker={explainLanguagePicker}
             onAsk={() => {
               askAboutPassage(
                 spans.map(({ quote }) => quote).join(" "),
@@ -737,7 +752,9 @@ export const AnnotationToolbar = ({
       doc={doc}
       onAttach={attachBar}
     >
-      {content}
+      <div onMouseDown={(event) => event.preventDefault()} role="presentation">
+        {content}
+      </div>
     </SelectionToolbar>
   );
 };

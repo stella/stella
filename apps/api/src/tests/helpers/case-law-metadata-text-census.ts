@@ -41,6 +41,7 @@ const excluded = (reason: string): MetadataTextDisposition => ({
 });
 
 export const METADATA_TEXT_DISPOSITIONS = {
+  detailFieldEvidence: INSPECTED,
   identifiers: INSPECTED,
   xmlFields: INSPECTED,
   feedFields: INSPECTED,
@@ -288,7 +289,9 @@ export const METADATA_TEXT_DISPOSITIONS = {
   linkedRulings: INSPECTED,
   lodgedOn: INSPECTED,
   lowerCourtJudgments: INSPECTED,
+  rejectedLegalReferences: INSPECTED,
   manifestations: INSPECTED,
+  manifestationType: INSPECTED,
   manifestationUri: INSPECTED,
   meansOfAppeal: INSPECTED,
   mentionedStatutes: INSPECTED,
@@ -474,6 +477,7 @@ export const METADATA_TEXT_DISPOSITIONS = {
   volumeOfLawReports: INSPECTED,
   webTitle: INSPECTED,
   wordDocumentUrl: INSPECTED,
+  workExpressions: INSPECTED,
   yearOfLawReports: INSPECTED,
   zverejnenoNaWebu: INSPECTED,
 } as const satisfies Record<string, MetadataTextDisposition>;

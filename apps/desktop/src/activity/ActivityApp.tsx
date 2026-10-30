@@ -1180,7 +1180,6 @@ const ConfirmDialog = ({
 const REVIEW_PENDING = {
   editing: false,
   submitting: true,
-  discarding: true,
   retry: true,
   saved: false,
 } as const satisfies Record<ActivityReviewStatus, boolean>;
@@ -1286,8 +1285,7 @@ const ActivityApp = () => {
           args["recovery"] === "discardUnreadable")) ||
         (command === "activity_delete_other_account_history" &&
           args["recovery"] === "discardUnrecoverable")) &&
-      reviewStatusRef.current !== "submitting" &&
-      reviewStatusRef.current !== "discarding";
+      reviewStatusRef.current !== "submitting";
     const inactiveRecoveryPreflight =
       command === "activity_delete_other_account_history" &&
       args["recovery"] === "preserve" &&
@@ -1487,9 +1485,7 @@ const ActivityApp = () => {
         onReviewStatusChange={onReviewStatusChange}
         header={
           <DayHeader
-            navigationDisabled={
-              reviewStatus === "submitting" || reviewStatus === "discarding"
-            }
+            navigationDisabled={reviewStatus === "submitting"}
             onNavigate={(next) =>
               setDate(next === snapshot.today ? null : next)
             }
@@ -1525,8 +1521,7 @@ const ActivityApp = () => {
           deletionDisabled={deletionDisabled}
           recoveryEraseStatus={
             snapshot.deletionStatus === "unreadable" &&
-            reviewStatus !== "submitting" &&
-            reviewStatus !== "discarding"
+            reviewStatus !== "submitting"
               ? "available"
               : "blocked"
           }

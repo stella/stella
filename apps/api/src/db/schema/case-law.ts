@@ -10,6 +10,7 @@ import {
   CASE_LAW_RESEARCH_ANSWER_TYPES,
 } from "@stll/api-contract";
 import type { CaseLawResearchColumnTool } from "@stll/api-contract";
+import type { ExtractionWarnings } from "@stll/api-contract/case-law-extraction-warnings";
 import { DECISION_JUDGE_ROLES } from "@stll/api-contract/case-law-judges";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import {
@@ -126,6 +127,7 @@ import {
   tsvector,
   user,
   wsPolicies,
+  xid8,
 } from "./common";
 import type {
   CorpusSourceDescriptor,
@@ -657,6 +659,12 @@ export const caseLawDecisions = p.pgTable(
     }),
     decisionDate: p.date("decision_date"),
     decisionType: p.varchar("decision_type", { length: 128 }),
+    /** Extraction defects in the stored document, independent of parser and jurisdiction. */
+    extractionWarnings: p
+      .jsonb("extraction_warnings")
+      .$type<ExtractionWarnings>()
+      .notNull()
+      .default([]),
     fulltext: p.text(),
     /** Last reconciliation attempt to re-read a textless listing-only detail. */
     textlessDetailRecheckedAt: timestamptz("textless_detail_rechecked_at"),
@@ -1378,6 +1386,17 @@ export const caseLawDecisionIdentifierBackfills = p.pgTable(
       .notNull()
       .default(0),
     completedAt: timestamptz("completed_at"),
+    repairedCount: p.integer("repaired_count").notNull().default(0),
+    lastCompletedRepairedCount: p
+      .integer("last_completed_repaired_count")
+      .notNull()
+      .default(0),
+    lastCompletedAt: timestamptz("last_completed_at"),
+    verificationRetryCount: p
+      .integer("verification_retry_count")
+      .notNull()
+      .default(0),
+    verificationRetryAfter: timestamptz("verification_retry_after"),
     updatedAt: timestamptz("updated_at")
       .defaultNow()
       .notNull()
@@ -1396,6 +1415,10 @@ export const caseLawDecisionIdentifierBackfills = p.pgTable(
     p.check(
       "case_law_decision_identifier_backfills_counts_nonnegative",
       sql`${t.decisionsScanned} >= 0 AND ${t.citationsScanned} >= 0`,
+    ),
+    p.check(
+      "case_law_identifier_retry_shape",
+      sql`${t.verificationRetryCount} BETWEEN 0 AND 3 AND (${t.verificationRetryCount} = 3) = (${t.verificationRetryAfter} IS NOT NULL)`,
     ),
     p.check(
       "case_law_decision_identifier_backfills_terminal_shape",
@@ -2352,13 +2375,30 @@ export const caseLawProvisionCitations = p.pgTable(
     // One provision with every subdivision under it, for either work key.
     // The anchor compares byte-wise so a subtree is one contiguous range
     // (`provisionAnchorSubtreeSql`); under the database collation `par_510`
-    // sorts between `par_51` and `par_51-odst_1`.
+    // sorts between `par_51` and `par_51-odst_1`. The trailing date,
+    // decision and span make the range index-only for the cited-by page,
+    // which groups a subtree per decision, with the offset of its earliest
+    // mention, before it reads any decision.
     p
-      .index("case_law_provision_citations_work_subtree_idx")
-      .on(t.jurisdiction, t.workIdentifier, sql`${t.anchor} COLLATE "C"`),
+      .index("case_law_provision_citations_work_citing_idx")
+      .on(
+        t.jurisdiction,
+        t.workIdentifier,
+        sql`${t.anchor} COLLATE "C"`,
+        t.decisionDate,
+        t.decisionId,
+        t.spanStart,
+      ),
     p
-      .index("case_law_provision_citations_eli_subtree_idx")
-      .on(t.jurisdiction, t.workEli, sql`${t.anchor} COLLATE "C"`)
+      .index("case_law_provision_citations_eli_citing_idx")
+      .on(
+        t.jurisdiction,
+        t.workEli,
+        sql`${t.anchor} COLLATE "C"`,
+        t.decisionDate,
+        t.decisionId,
+        t.spanStart,
+      )
       .where(isNotNull(t.workEli)),
     p.check(
       "provision_citations_work_number_shape",
@@ -2664,6 +2704,43 @@ export const caseLawSitemapShards = p.pgTable(
 );
 
 /**
+ * The sitemap months a write touched, appended by triggers (migration
+ * `20261029140900_case_law_sitemap_changes`): the month a decision left and
+ * the month it entered. A month of `*` asks for a whole country, and a
+ * country of `*` for every country (a source's redistribution changed). The
+ * refresh recounts each logged month and deletes exactly the rows its count's
+ * own snapshot saw, so a row is consumed only by a count that includes its
+ * change. One row per month per transaction, so a bulk write logs each month
+ * once. A queue, not a watermark: ids order nothing.
+ */
+export const caseLawSitemapChanges = p.pgTable(
+  "case_law_sitemap_changes",
+  {
+    id: p
+      .bigint({ mode: "number" })
+      .primaryKey()
+      .generatedAlwaysAsIdentity({ name: "case_law_sitemap_changes_id_seq" }),
+    country: p.text().notNull(),
+    year: p.text().notNull(),
+    month: p.text().notNull(),
+    xact: xid8()
+      .notNull()
+      .default(sql`pg_current_xact_id()`),
+  },
+  (t) => [
+    p
+      .unique("case_law_sitemap_changes_month_xact_key")
+      .on(t.country, t.year, t.month, t.xact),
+    p.pgPolicy("case_law_sitemap_change_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`true`,
+      withCheck: sql`true`,
+    }),
+  ],
+);
+
+/**
  * One country's month counts, staged by the sitemap refresh until every
  * public country is counted and `case_law_sitemap_shards` is replaced whole.
  */
@@ -2721,6 +2798,10 @@ export const caseLawBrowseFacetCounts = p.pgTable(
       "case_law_browse_facet_counts_kind_valid",
       sql`${t.kind} IN (${sql.join(CASE_LAW_BROWSE_FACET_KIND_SQL_VALUES, sql`, `)})`,
     ),
+    // Trailing keys keep each source's court buckets available to index-only reads.
+    p
+      .index("case_law_browse_facet_counts_source_kind_idx")
+      .on(t.sourceId, t.kind, t.value, t.total),
     ...removalSnapshotPolicies(),
     p.pgPolicy("case_law_browse_facet_count_owner_access", {
       for: "all",

@@ -941,12 +941,16 @@
         "reasoning": "Uvažovanie"
       },
       "errors": {
+        "analysisDisabled": "Generovanie AI analýzy je na tomto serveri vypnuté. Prečítajte si text rozhodnutia alebo to skúste neskôr.",
         "answerIncomplete": "{source, select, organization {Kľúč vašej organizácie pre {provider} vrátil neúplnú odpoveď.} other {AI model vrátil neúplnú odpoveď.}}",
+        "decisionNotFound": "Rozhodnutie sa nenašlo. Otvorte ho znova z vyhľadávania.",
+        "documentUnparseable": "Text rozhodnutia nie je pripravený na analýzu. Prečítajte si pôvodný zdroj.",
+        "languageUnsupported": "AI analýza zatiaľ nepodporuje jazyk tohto rozhodnutia. Prečítajte si text rozhodnutia alebo pôvodný zdroj.",
         "providerRefused": "{source, select, organization {{provider} odmietol požiadavku s kľúčom vašej organizácie. Skontrolujte kľúč, jeho kvótu a fakturáciu v nastaveniach organizácie.} other {Poskytovateľ AI požiadavku odmietol.}}",
         "providerUnavailable": "{source, select, organization {{provider} je pre kľúč vašej organizácie momentálne nedostupný.} other {Poskytovateľ AI je momentálne nedostupný.}}",
         "retryAfter": "Znova to môžete skúsiť po {time}.",
-        "timedOut": "{source, select, organization {{provider} s kľúčom vašej organizácie neodpovedal včas.} other {AI model neodpovedal včas.}}",
-        "unavailable": "AI analýza nie je pre toto rozhodnutie k dispozícii."
+        "sourceRestricted": "Zdroj nepovoľuje AI analýzu. Prečítajte si text rozhodnutia alebo pôvodný zdroj.",
+        "timedOut": "{source, select, organization {{provider} s kľúčom vašej organizácie neodpovedal včas.} other {AI model neodpovedal včas.}}"
       },
       "generate": "Zostaviť právne vety pomocou AI",
       "invitation": "S bezplatným účtom vám AI k rozhodnutiu pripraví pracovné poznámky.",
@@ -1086,7 +1090,9 @@
     },
     "emptyState": "Žiadne rozhodnutia. Nakonfigurujte zdroj a spustite synchronizáciu na import judikatúry.",
     "filters": {
-      "remove": "Odstrániť filter {filter}"
+      "countryMismatch": "Filtre boli odstránené, pretože nepatria do krajiny {country}: {filters}.",
+      "remove": "Odstrániť filter {filter}",
+      "showInCountry": "Zobraziť {filter} pre krajinu {country}"
     },
     "languages": {
       "count": "{count, plural, one {# jazyk} few {# jazyky} other {# jazykov}}",
@@ -1151,7 +1157,7 @@
     "reader": {
       "documentUpdated": "Dokument bol aktualizovaný.",
       "expandProvisions": "Rozbaliť ustanovenia",
-      "headMatter": "Úvodná časť",
+      "headMatter": "Informácie o veci",
       "sourceAttribution": "Zdroj údajov je voľne dostupný na <link>{source}</link>."
     },
     "research": {
@@ -1283,7 +1289,8 @@
       "versionAtDecisionDateInferred": "Znenie k dátumu rozhodnutia (odvodené)",
       "versionBasisInferredCompact": "Dátum rozhodnutia · odvodené",
       "versionBasisInferredExplanation": "Znenie je odvodené z dátumu rozhodnutia. Rozhodnutie neuvádza, ktoré znenie sa použije."
-    }
+    },
+    "withdrawnByPublisher": "Stiahnuté vydavateľom"
   },
   "catalogue": {
     "addCustom": "Pridať vlastné",
@@ -1341,6 +1348,7 @@
       "toastTitle": "Plné zobrazenie zatiaľ nie je dostupné"
     },
     "activity": {
+      "newerVersion": "Tento obsah sa zobrazí v novšej verzii.",
       "review": "Informácie o revízii"
     },
     "aiPrompt": "Pole správy pre AI",
@@ -1580,6 +1588,12 @@
     "loadEarlierMessagesError": "Staršie správy sa nepodarilo načítať",
     "loadingEarlierMessages": "Načítavajú sa staršie správy…",
     "maxAttachmentsReached": "Maximálne {count} súborov na správu",
+    "mcpReconnect": {
+      "additional": "{count, plural, one {+# ďalšie} few {+# ďalšie} other {+# ďalších}}",
+      "dismiss": "Skryť upozornenie na pripojenie",
+      "stoppedWorking": "Vaše pripojenie k službe <name>{server}</name> prestalo fungovať.",
+      "waitingApproval": "Vaše pripojenie k službe <name>{server}</name> čaká na schválenie."
+    },
     "mention": {
       "category": {
         "entities": "V tomto spise",
@@ -2073,8 +2087,6 @@
     "clearFilters": "Vymazať filtre",
     "clearSearch": "Vymazať hľadanie",
     "close": "Zavrieť",
-    "closeAll": "Zavrieť všetko",
-    "closeOthers": "Zavrieť ostatné",
     "columns": "Stĺpce",
     "comfortable": "Pohodlné",
     "comingSoon": "Čoskoro",
@@ -2348,6 +2360,7 @@
     "unknownUser": "Neznámy používateľ",
     "unpin": "Odopnúť",
     "unsavedChanges": "Neuložené zmeny",
+    "unsavedChangesClose": "Neuložené zmeny. Ďalším zatvorením ich zahodíte",
     "unsavedChangesEscape": "Neuložené zmeny. Ďalším stlačením Esc ich zahodíte",
     "unsavedLeaveConfirm": "Máte neuložené zmeny. Odísť bez uloženia?",
     "unverified": "Neoverené",
@@ -2389,6 +2402,8 @@
     "returnToAgent": "Pokračujte návratom k svojmu agentovi.",
     "returnsLocally": "Na tomto počítači sa vrátite do aplikácie {clientName}",
     "returnsTo": "Vrátite sa do aplikácie {clientName}",
+    "scopeAccountExportRead": "Čítať exporty vašich osobných údajov",
+    "scopeAccountExportWrite": "Požiadať o exporty vašich osobných údajov",
     "scopeAdminRead": "Čítať protokol auditu vašej organizácie",
     "scopeAdminWrite": "Spravovať členov a nastavenia organizácie",
     "scopeBillingWrite": "Vytvoriť, upraviť a vymazať vaše časové záznamy",
@@ -2859,6 +2874,8 @@
       "forbidden": "Na túto akciu nemáte oprávnenie.",
       "hostedCheckoutOpen": "Pre túto organizáciu je už otvorená objednávka. Dokončite ju alebo začnite novú, keď vyprší.",
       "hostedSubscriptionLive": "Táto organizácia už má predplatné. Zmeňte ho v časti Spravovať hostované využitie.",
+      "idempotencyInProgress": "Táto požiadavka sa ešte spracúva. Chvíľu počkajte a skúste to znova.",
+      "idempotencyKeyReused": "Odosielané údaje sa od predchádzajúceho pokusu zmenili. Obnovte formulár a skúste to znova.",
       "internalServerError": "Niečo sa pokazilo. Skúste to prosím znova.",
       "legalSourceEntityLimitReached": "Tento spis dosiahol limit položiek, preto dokument nebolo možné vytvoriť.",
       "legalSourceFilePropertyMissing": "V tomto spise chýba vlastnosť súboru, preto dokument nebolo možné vytvoriť.",
@@ -3661,6 +3678,9 @@
       "unsupportedVisualContent": "Tento súbor obsahuje obrázky alebo vektorovú grafiku, pri ktorých nemožno overiť citlivý text. Export nie je k dispozícii.",
       "workspaceTermsHeading": "Výrazy pracovného priestoru ({count})"
     },
+    "closeAllTabs": "Zavrieť {count, plural, one {# kartu} few {všetky # karty} other {všetkých # kariet}}",
+    "closeOtherTabs": "Zavrieť {count, plural, one {# ďalšiu kartu} few {# ďalšie karty} other {# ďalších kariet}}",
+    "closeTab": "Zavrieť <bdi>{name}</bdi>",
     "conversionRefusal": {
       "legacyFormat": "Toto je starší súbor {format}. Ak ho chcete konvertovať, znova ho uložte ako {replacementExtension}.",
       "unsupportedEncoding": "Tento dokument používa nepodporované kódovanie {encoding}, preto ho nemožno konvertovať.",
@@ -4879,7 +4899,9 @@
     "viewOnGithub": "Zobraziť na GitHube"
   },
   "readerAnswers": {
+    "answerLanguage": "Jazyk odpovede",
     "budgetError": "Rozpočet na odpovede je vyčerpaný.",
+    "documentLanguage": "Jazyk dokumentu ({language})",
     "expand": "Rozbaliť odpoveď",
     "explain": "Vysvetliť",
     "followUp": "Položiť doplňujúcu otázku",
@@ -5033,6 +5055,8 @@
       "desktopCardConnectedTitle": "stella desktop je prepojený",
       "desktopCardMissingDetail": "Nainštalujte ho, alebo ho pripojte, ak už na tomto počítači nainštalovaný je.",
       "desktopCardMissingTitle": "stella desktop zatiaľ nie je prepojený",
+      "desktopCardOpeningDetail": "Prepájame tento počítač s účtom <bdi>{identity}</bdi> na {host}. Ak sa prehliadač opýta, povoľte otvorenie stella desktop.",
+      "desktopCardOpeningTitle": "Otvára sa stella desktop...",
       "desktopCardOutdatedDetail": "Verzia {version} je prepojená s účtom <bdi>{identity}</bdi>. Nainštalujte najnovšiu verziu, aby dokumenty a aktivita ďalej fungovali.",
       "desktopCardOutdatedTitle": "stella desktop potrebuje aktualizáciu",
       "desktopClipboardDescription": "Otvárajte, prehľadávajte, usporadúvajte a znova používajte text skopírovaný z ľubovoľnej aplikácie.",
@@ -5052,6 +5076,7 @@
       "desktopInstallOpenStep": "Raz otvorte stella desktop. Schránka sa zobrazí okamžite a zostane dostupná z panela ponúk systému macOS alebo z oblasti oznámení systému Windows.",
       "desktopInstallTitle": "Inštalácia a otvorenie",
       "desktopInstallWindowsStep": "Spustite inštalátor a postupujte podľa pokynov.",
+      "desktopOpenApp": "Otvoriť stella desktop",
       "desktopPrivacyDescription": "História schránky je šifrovaná a uložená v tomto zariadení.",
       "desktopPrivacyTitle": "Predvolene súkromné",
       "desktopSelfHostDescription": "Dôverujte tejto URL stella v podpísanej desktopovej aplikácii, aby sa dokumenty z tejto inštalácie mohli otvárať lokálne.",
@@ -5061,6 +5086,15 @@
       "displayNameSaved": "Zobrazované meno aktualizované",
       "enterOtp": "Overovací kód",
       "otpSentSuccess": "Overovací kód bol odoslaný na váš e-mail.",
+      "personalDataExportDescription": "Požiadajte o stiahnuteľnú kópiu osobných údajov vo svojom účte. Súbor bude dostupný jednu hodinu.",
+      "personalDataExportExpired": "Platnosť tohto exportu vypršala.",
+      "personalDataExportExpiresAt": "Dostupné do {expiresAt}.",
+      "personalDataExportFailed": "Export sa nepodarilo pripraviť.",
+      "personalDataExportReady": "Export je pripravený.",
+      "personalDataExportRequest": "Požiadať o export",
+      "personalDataExportRequestNew": "Požiadať o nový export",
+      "personalDataExportTitle": "Exportovať moje údaje",
+      "personalDataExportWorking": "Pripravuje sa export…",
       "preferredName": "Preferované meno",
       "preferredNameDescription": "Použité ako autor pre sledované zmeny a komentáre v DOCX.",
       "preferredNamePlaceholder": "Vaše meno",
@@ -5398,6 +5432,7 @@
     "showCitedPartOnly": "Zobraziť len citovanú časť",
     "showFullProvision": "Zobraziť celé ustanovenie",
     "showInText": "Zobraziť v texte",
+    "sortNeedsYear": "Na zoradenie podľa tohto stĺpca vyberte vo filtroch rok.",
     "statedWindow": "Dátumy uvedené vydavateľom: {range}",
     "status": {
       "current": "Účinné",
@@ -6495,6 +6530,14 @@
           "started": "Spustil(a) kontrolu dokumentu"
         },
         "empty": "V tomto spise zatiaľ nie je žiadna aktivita.",
+        "fields": {
+          "dueDate": "termín",
+          "parentFolder": "nadradený priečinok",
+          "priority": "priorita",
+          "property": "vlastnosť",
+          "schedule": "plán",
+          "sortOrder": "poradie"
+        },
         "filterLabel": "Filtrovať aktivitu",
         "filters": {
           "all": "Všetka aktivita",
@@ -6544,6 +6587,7 @@
           "translation": "preklad"
         },
         "title": "Aktivita",
+        "updatedFields": "Aktualizované: {fields}",
         "views": {
           "list": "Zoznam",
           "timeline": "Časová os"

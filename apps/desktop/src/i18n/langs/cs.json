@@ -1,11 +1,11 @@
 {
   "tray": {
     "activeEdits": "{count, plural, one {1 aktivní úprava} few {{count} aktivní úpravy} other {{count} aktivních úprav}}",
-    "clipboard": "Historie schránky",
     "activity": "Aktivita",
     "activityRecording": "Aktivita: Záznam · dnes {hours} h",
     "activityPaused": "Aktivita: Pozastaveno · dnes {hours} h",
     "activityOff": "Aktivita: Vypnuto",
+    "openActivity": "Otevřít aktivitu",
     "activityNow": "Nyní: {name}",
     "activityPause": "Pozastavit záznam",
     "activityResume": "Pokračovat v záznamu",
@@ -149,6 +149,7 @@
     "handoffUnavailable": "Dokument se nepodařilo otevřít. Začněte znovu ze Stelly.",
     "handoffRetry": "Zkusit znovu",
     "unsavedChangesEscape": "Neuložené změny. Dalším stisknutím Esc je zahodíte",
+    "unsavedChangesClose": "Neuložené změny. Dalším zavřením je zahodíte",
     "handoffConnectToSign": "Pro podepsání tohoto dokumentu připojte stella desktop",
     "handoffConnectToOpen": "Pro otevření tohoto dokumentu připojte stella desktop",
     "handoffConnectDetail": "Připojte svůj účet stella. Dokument se po připojení otevře automaticky.",
@@ -368,7 +369,8 @@
     "welcomeShortcutDescription": "Stisknutím {shortcut} procházejte historii a vyberte výstřižek.",
     "welcomeShortcutTitle": "Otevřete ji odkudkoli.",
     "welcomeStart": "Začít kopírovat",
-    "welcomeTitle": "Seznamte se se schránkou"
+    "welcomeTitle": "Seznamte se se schránkou",
+    "registryIdentifierSearchHint": "Zadejte {identifiers}."
   },
   "activity": {
     "title": "Aktivita",
@@ -482,9 +484,6 @@
     "unreadableEraseAction": "Smazat nečitelnou aktivitu",
     "unreadableEraseConfirmation": "Nečitelná uložená aktivita a údaje pro obnovení jejích čekajících konceptů budou smazány. Vytvořené koncepty již mohou existovat. Tuto akci nelze vrátit zpět.",
     "unreadableEraseNotice": "Některou uloženou aktivitu nelze přečíst. Nečitelnou uloženou aktivitu a údaje pro obnovení jejích konceptů můžete smazat.",
-    "discardPendingConfirmation": "Údaje pro obnovení čekajících konceptů budou z tohoto zařízení smazány. Vytvořené koncepty již mohou existovat. Tuto akci nelze vrátit zpět.",
-    "discardPendingRecovery": "Zahodit obnovení konceptů",
-    "batchUnavailable": "Vytváření konceptů nyní není dostupné.",
     "pendingActivityProtected": "Před smazáním aktivity dokončete čekající vytváření konceptů.",
     "draftMarkerFailed": "Koncepty byly vytvořeny, ale místní potvrzení se nepodařilo uložit. Zkuste potvrzení uložit znovu.",
     "narrativeEvidence": "Práce na: {evidence}",

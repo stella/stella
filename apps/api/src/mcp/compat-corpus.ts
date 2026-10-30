@@ -15,11 +15,11 @@ import {
   type SearchPaginationOutcome,
 } from "@stll/api-contract/search";
 import { mapWithConcurrency } from "@stll/concurrency";
-import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
 import { documentHydrationFor } from "@/api/handlers/case-law/decisions/get-deferred-document";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import { parseCachedDecisionAst } from "@/api/lib/case-law/decision-ast-normalization";
 import { loadPracticeJurisdictions } from "@/api/lib/db/practice-jurisdictions";
 import { isSearchIndexUnavailable } from "@/api/lib/legal-search/search-index-unavailable";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
@@ -644,7 +644,7 @@ export const readCompatDecision = async ({
     type: "read",
     text:
       toPlainCorpusText({
-        blocks: parseCaseLawDecisionAst(decision.documentAst)?.blocks ?? null,
+        blocks: parseCachedDecisionAst(decision.documentAst)?.blocks ?? null,
         fulltext: decision.fulltext,
       }) ?? "",
     title: caseLawDecisionHeading({

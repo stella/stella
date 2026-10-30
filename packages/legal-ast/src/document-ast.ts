@@ -1,3 +1,27 @@
+// parser-output-unchanged: [cz-uohs] the reader supplies fulltext and every block plainText directly; its stored footnote inlines and replay fixture fields are unchanged.
+// parser-output-unchanged: [at-courts] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-vfgh] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-vwgh] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-bvwg] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-lvwg] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-asylgh] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-ubas] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-uvs] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-verg] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-umse] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-bks] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [cz-ns] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [cz-nss] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [cz-us] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [cz-regional] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [sk-courts] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [sk-us] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-findok] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [hu-bhgy] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [uk-fcl] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [pl-kis] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [pl-uokik] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [us-courtlistener] registered replay fixture fields are unchanged by numeric index normalization.
 // parser-output-unchanged: Guidance metadata is a new union branch; decision metadata keeps its fields and no parser writes the optional type.
 import { panic } from "better-result";
 /**
@@ -24,6 +48,7 @@ import {
 } from "./document-kind.js";
 import type { DocumentIssuer, GuidanceKind } from "./document-kind.js";
 import {
+  flattenInlineText,
   inlineSchema,
   isKnownInlineType,
   persistedInlineArraySchema,
@@ -67,7 +92,11 @@ export type HeadingLevel = 1 | 2 | 3 | 4 | 5 | 6;
  * persisted reader. A role added here reaches all three; a role added
  * anywhere else is a type error.
  */
-export const HEADING_ROLES = ["decision-title", "section-heading"] as const;
+export const HEADING_ROLES = [
+  "decision-title",
+  "section-heading",
+  "publisher-heading",
+] as const;
 
 export type HeadingRole = (typeof HEADING_ROLES)[number];
 
@@ -105,6 +134,8 @@ export const PARAGRAPH_ROLES = [
    * finer roles below do not name. Not the court's own words —
    * readers may fold it away. */
   "apparatus",
+  /** Publisher annotations printed after the decision, never head matter. */
+  "publisher-note",
   /** The publisher's official summary of the decision, printed with it
    * but not part of it. */
   "syllabus",
@@ -129,24 +160,22 @@ export type ParagraphRole = (typeof PARAGRAPH_ROLES)[number];
  * The publisher-authored roles a reader may fold away: everything around
  * the decision that the court did not write.
  *
- * `panel` is not one of them. The bench is a fact about the decision that
- * a reader looks for, not apparatus wrapped around it.
+ * `panel` and `counsel` are not among them. Participants are facts about
+ * the decision, not publisher apparatus wrapped around it.
  */
 export const APPARATUS_ROLES = [
   "apparatus",
   "syllabus",
   "headnotes",
   "summary",
-  "counsel",
 ] as const satisfies readonly ParagraphRole[];
 
 export type ApparatusRole = (typeof APPARATUS_ROLES)[number];
 
 /**
  * The apparatus roles that carry the publisher's own summary of the decision:
- * the text a reader recognises the case by. `apparatus` and `counsel` are
- * apparatus too and summarise nothing — the first is unnamed publisher
- * matter, the second is who appeared.
+ * the text a reader recognises the case by. `apparatus` is unnamed publisher
+ * matter and summarises nothing.
  *
  * One list, because two surfaces resolve over it and must not drift: the API
  * reads a decision's headnote from these paragraphs before it reads any
@@ -407,25 +436,8 @@ export type DecisionDocumentAst = DocumentAst<DecisionMetadata>;
  * character for character. Nothing here may normalize, trim or collapse:
  * one character of drift moves every anchor after it.
  */
-export const plainTextOf = (inlines: readonly Inline[]): string => {
-  let out = "";
-  for (const node of inlines) {
-    if (node.type === "text") {
-      out += node.text;
-    } else if (node.type === "line-break") {
-      out += "\n";
-    } else if (node.type === "page-anchor") {
-      // Zero characters: a page break is typography, and it may fall
-      // mid-word — the word must stay whole on this axis.
-    } else {
-      // A citation's `cite` is zero characters here for the same reason:
-      // the printed reference is the children, `cite` is metadata beside
-      // them.
-      out += plainTextOf(node.children);
-    }
-  }
-  return out;
-};
+export const plainTextOf = (inlines: readonly Inline[]): string =>
+  flattenInlineText(inlines, "rendered");
 
 /**
  * Trailing spaces and tabs before a line break, which carry no meaning
@@ -437,7 +449,8 @@ const NO_BREAK_SPACE = /\u00a0/gu;
 
 /**
  * `inlines` reduced to the text that feeds search and AI reads: the raw
- * flattening with no-break spaces normalized, spaces before a line break
+ * projection with numeric superscript indices delimited, no-break spaces
+ * normalized, spaces before a line break
  * dropped, the ends trimmed, and letter-spaced runs collapsed so a
  * court's "R O Z S U D E K" is findable as "ROZSUDEK".
  *
@@ -451,7 +464,7 @@ const NO_BREAK_SPACE = /\u00a0/gu;
  */
 export const projectPlainText = (inlines: readonly Inline[]): string =>
   collapseSpacedLetters(
-    plainTextOf(inlines)
+    flattenInlineText(inlines)
       .replace(NO_BREAK_SPACE, " ")
       .replace(SPACE_BEFORE_NEWLINE, "\n")
       .trim(),
@@ -1021,6 +1034,90 @@ const hasUniqueBlockIdentities = (blocks: readonly Block[]): boolean => {
   return true;
 };
 
+/** Every paragraph role explicitly declares whether it starts the decision body. */
+const PARAGRAPH_STARTS_BODY = {
+  "case-number": false,
+  intro: false,
+  history: false,
+  argumentation: true,
+  holding: true,
+  dissent: true,
+  closing: true,
+  signature: true,
+  quote: true,
+  parties: false,
+  "front-matter": false,
+  apparatus: false,
+  "publisher-note": true,
+  syllabus: false,
+  headnotes: false,
+  summary: false,
+  counsel: false,
+  panel: false,
+  unknown: true,
+} as const satisfies Record<ParagraphRole, boolean>;
+
+const HEADING_STARTS_BODY = {
+  "decision-title": false,
+  "section-heading": true,
+  "publisher-heading": false,
+} as const satisfies Record<HeadingRole, boolean>;
+
+const TABLE_STARTS_BODY = {
+  "related-proceedings": false,
+  "metadata-table": false,
+} as const satisfies Record<TableRole, boolean>;
+
+/** Shared positional boundary for parsers and persisted-reader validation. */
+export const startsDecisionBody = (block: Block): boolean => {
+  if (footnoteOf(block) !== null) {
+    return false;
+  }
+  switch (block.type) {
+    case "paragraph":
+      return block.role === undefined || PARAGRAPH_STARTS_BODY[block.role];
+    case "heading":
+      return block.role === undefined || HEADING_STARTS_BODY[block.role];
+    case "table":
+      return block.role === undefined || TABLE_STARTS_BODY[block.role];
+    case "image":
+      return false;
+    default:
+      block satisfies never;
+      return panic(`Unhandled block type: ${String(block)}`);
+  }
+};
+
+/** The publisher blocks validated and folded as one head-matter region. */
+export const isHeadMatterBlock = (block: Block): boolean =>
+  (block.type === "paragraph" &&
+    block.note === undefined &&
+    isApparatusRole(block.role)) ||
+  (block.type === "heading" && block.role === "publisher-heading");
+
+/** Publisher head matter may precede, but never interrupt or follow, the body.
+ * Notes retain their own placement and are never a head-matter region. */
+export const headMatterPrecedesBody = (blocks: readonly Block[]): boolean => {
+  let bodyStarted = false;
+  for (const block of blocks) {
+    if (footnoteOf(block) !== null) {
+      continue;
+    }
+    if (bodyStarted && isHeadMatterBlock(block)) {
+      return false;
+    }
+    bodyStarted ||= startsDecisionBody(block);
+  }
+  return true;
+};
+
+const HEAD_MATTER_ORDER_MESSAGE = "Head matter must precede the decision body";
+
+const headMatterOrderCheck = v.check(
+  ({ blocks }: DocumentAst) => headMatterPrecedesBody(blocks),
+  HEAD_MATTER_ORDER_MESSAGE,
+);
+
 export const documentAstSchema: v.GenericSchema<DocumentAst> = v.pipe(
   v.object({
     version: v.literal(1),
@@ -1028,6 +1125,7 @@ export const documentAstSchema: v.GenericSchema<DocumentAst> = v.pipe(
     metadata: documentAstMetadataSchema,
     blocks: v.array(blockSchema),
   }),
+  headMatterOrderCheck,
   v.check(
     ({ blocks }) => footnoteGroupsShareLabels(blocks),
     "Adjacent footnote blocks sharing a noteId must repeat one label",
@@ -1085,6 +1183,7 @@ export const persistedDocumentAstSchema: v.GenericSchema<unknown, DocumentAst> =
         block === null ? [] : [fillBlockPlainText(block)],
       ),
     })),
+    headMatterOrderCheck,
     v.check(
       ({ blocks }) => hasUniqueBlockIdentities(blocks),
       "Block ids and anchorIds must be unique",
