@@ -12,13 +12,16 @@ import { AUTH_REJECTION_BODY } from "@/api/lib/auth";
 import { recordContentDeliveryReceipt } from "@/api/lib/files/content-delivery";
 import { logger } from "@/api/lib/observability/logger";
 import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
+import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 import { authenticateAccountExportRequest } from "@/api/mcp/auth";
 import { serveForTest } from "@/api/tests/helpers/test-server";
 
 const EXPORT_ID = "11111111-1111-4111-8111-111111111111";
 const OWNER_ID = "22222222-2222-4222-8222-222222222222";
 const OTHER_USER_ID = "33333333-3333-4333-8333-333333333333";
-const ORGANIZATION_ID = "44444444-4444-4444-8444-444444444444";
+const ORGANIZATION_ID = brandPersistedOrganizationId(
+  "44444444-4444-4444-8444-444444444444",
+);
 const MEMBER_ID = "55555555-5555-4555-8555-555555555555";
 const ARCHIVE = "account export archive";
 
