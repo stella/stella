@@ -29,6 +29,38 @@ test("the committed SQL function is derived from the registered filing-year rule
 });
 
 describe.skipIf(!enabled)("docket filing-year parity (postgres)", () => {
+  test("the latest migrated function retains Slovak workplace filing years", async () => {
+    const databaseUrl =
+      process.env["DATABASE_URL"] ??
+      panic("Filing-year parity requires DATABASE_URL");
+    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      const { db } = openClient({ max: 1 });
+      const rows = executedRows(
+        await db.execute(sql`
+          SELECT v.case_number,
+            public.decision_docket_filing_year(v.case_number, 'SVK') AS result
+          FROM (VALUES
+            (1, 'B4-7Co/91/2022'),
+            (2, 'C12-3C/42/2025'),
+            (3, 'B4-no docket')
+          ) AS v(position, case_number)
+          ORDER BY v.position
+        `),
+      );
+      expect(rows).toEqual([
+        {
+          case_number: "B4-7Co/91/2022",
+          result: { type: "known", year: 2022 },
+        },
+        {
+          case_number: "C12-3C/42/2025",
+          result: { type: "known", year: 2025 },
+        },
+        { case_number: "B4-no docket", result: { type: "unparseable" } },
+      ]);
+    });
+  });
+
   test("filing-year.replacement-preserves-unprefixed-dockets", async () => {
     const databaseUrl =
       process.env["DATABASE_URL"] ??
