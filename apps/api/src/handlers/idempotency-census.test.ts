@@ -79,6 +79,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "credential",
   },
+  "DELETE /v1/me/push-devices/:token": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "DELETE /v1/memories/:memoryId": {
     type: "non-replay",
     reason: "current-state",
@@ -993,6 +997,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "replay",
   },
   "PUT /v1/flows/:flowId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "PUT /v1/me/push-devices": {
     type: "non-replay",
     reason: "current-state",
   },
