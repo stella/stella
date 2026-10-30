@@ -491,7 +491,7 @@ const ownBoldness = (node: AnyNode | undefined): boolean | undefined =>
               value:
                 value === "bold" ||
                 value === "bolder" ||
-                Number(value) >= BOLD_WEIGHT,
+                parseDecimalToken(value).unwrapOr(0) >= BOLD_WEIGHT,
             }
           : undefined,
       )?.value
