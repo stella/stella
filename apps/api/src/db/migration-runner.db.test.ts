@@ -214,7 +214,7 @@ const AWAIT_SCHEMA_GATE = `SELECT pg_advisory_xact_lock(${String(SCHEMA_GATE_KEY
 const HOLD_SCHEMA_GATE = `SELECT pg_advisory_lock(${String(SCHEMA_GATE_KEY)})`;
 const RELEASE_SCHEMA_GATE = `SELECT pg_advisory_unlock_all()`;
 
-const backendPid = async (connection: SQL) => {
+const backendPid = async (connection: Pick<SQL, "unsafe">) => {
   const [row] = await connection.unsafe<{ pid: number }[]>(
     "SELECT pg_backend_pid() AS pid",
   );
@@ -244,19 +244,25 @@ const waitUntilBlocked = async (observer: SQL, pid: number) => {
   });
 };
 
+const LOCK_PROBE_HOLDER_APPLICATION = "lock-probe-holder";
+
 type LockProbeHolder = {
-  held: Promise<undefined>;
+  /** Resolves with the holding backend's pid once the lock is granted. */
+  held: Promise<number>;
   /** Ends the holding transaction; resolves once it has committed. */
   release: () => Promise<void>;
 };
 
 /** A second session holding a lock the ALTER in `ALTER_LOCK_PROBE` conflicts with. */
 const holdLockProbe = (client: SQL): LockProbeHolder => {
-  const held = Promise.withResolvers<undefined>();
+  const held = Promise.withResolvers<number>();
   const release = Promise.withResolvers<undefined>();
   const done = client.begin(async (tx) => {
+    await tx.unsafe(
+      `SET LOCAL application_name = '${LOCK_PROBE_HOLDER_APPLICATION}'`,
+    );
     await tx.unsafe("LOCK TABLE lock_probe IN ACCESS SHARE MODE");
-    held.resolve(undefined);
+    held.resolve(await backendPid(tx));
     await release.promise;
   });
   // A holder that fails before locking fails the test waiting on `held`;
@@ -1146,6 +1152,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
             const holder = holdLockProbe(openClient());
             const connection = await openClient().reserve();
             const sleeps: number[] = [];
+            const timings: MigrationTimingRecord[] = [];
             let onlineLockTimeout: unknown;
             const stdout = spyOn(process.stdout, "write").mockImplementation(
               () => true,
@@ -1157,6 +1164,12 @@ if (!runPostgresTests || databaseUrl === undefined) {
                 databaseUrl: scratchUrl,
                 ebs: DISABLED_EBS,
                 migrationsFolder: folder,
+                timing: {
+                  clock: () => performance.now(),
+                  emit: (record) => {
+                    timings.push(record);
+                  },
+                },
                 runOnline: async (pool) => {
                   const onlineConnection = await pool.reserve();
                   onlineLockTimeout = await onlineConnection.query(
@@ -1180,6 +1193,14 @@ if (!runPostgresTests || databaseUrl === undefined) {
                 },
               });
               expect(sleeps).toEqual([10]);
+              expect(
+                timings.find(({ event }) => event === "migrate.schema_apply"),
+              ).toMatchObject({
+                migrations: [A, B],
+                outcome: "applied",
+                attempts: 2,
+                retriesSpent: 1,
+              });
               expect(result).toMatchObject({
                 status: "applied",
                 predictedNames: [A, B],
@@ -1223,7 +1244,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
                 () => true,
               );
               try {
-                await holder.held;
+                const holderPid = await holder.held;
                 const rejection = await rejectionOf(
                   async () =>
                     await runMigrations({
@@ -1239,7 +1260,8 @@ if (!runPostgresTests || databaseUrl === undefined) {
                         },
                       },
                       lockWaitRetry: {
-                        lockTimeoutsMs: [10, 20, 30],
+                        // Waits long enough for the observer to sample the holder.
+                        lockTimeoutsMs: [250, 300],
                         pauseBaseMs: 10,
                         pauseCapMs: 10,
                         random: () => 1,
@@ -1255,19 +1277,36 @@ if (!runPostgresTests || databaseUrl === undefined) {
                 expect(MigrationLockWaitError.is(rejection)).toBe(true);
                 expect(rejection).toMatchObject({
                   reason: MIGRATION_LOCK_WAIT_FAILURE.exhausted,
-                  attempts: 3,
-                  lockTimeoutMs: 30,
+                  attempts: 2,
+                  lockTimeoutMs: 300,
+                  blockers: [
+                    expect.objectContaining({
+                      pid: holderPid,
+                      state: "idle in transaction",
+                      applicationName: LOCK_PROBE_HOLDER_APPLICATION,
+                    }),
+                  ],
+                });
+                expect(rejection).toMatchObject({
+                  message: expect.stringContaining(`pid ${String(holderPid)}`),
                 });
                 expect(isPgError(rejection, PG_ERROR.LOCK_NOT_AVAILABLE)).toBe(
                   true,
                 );
-                expect(sleeps).toEqual([10, 10]);
-                expect(timings).toHaveLength(1);
+                expect(sleeps).toEqual([10]);
+                expect(timings).toHaveLength(2);
                 expect(timings.at(0)).toMatchObject({
+                  event: "migrate.schema_apply",
+                  migrations: [A, B],
+                  outcome: "failed",
+                  attempts: 2,
+                  retriesSpent: 1,
+                });
+                expect(timings.at(1)).toMatchObject({
                   event: "migrate.phase_duration",
                   phase: "schema",
                   outcome: "failed",
-                  retriesSpent: 2,
+                  retriesSpent: 1,
                 });
                 expect([...(await ledgerRows(observer))]).toEqual([]);
 

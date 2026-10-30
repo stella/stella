@@ -99,6 +99,7 @@ test("a deferred online attempt and a failed schema attempt each emit one termin
         statement: "ALTER TABLE probe ADD COLUMN n integer",
         pid: 12,
         state: "idle in transaction",
+        applicationName: "citation-reader",
         xactAgeMs: 5000,
         waitEvent: "ClientRead",
         query: "UPDATE probe SET n = 42",
@@ -152,6 +153,7 @@ test("a deferred online attempt and a failed schema attempt each emit one termin
       {
         pid: 12,
         state: "idle in transaction",
+        applicationName: "citation-reader",
         xactAgeMs: 5000,
         waitEvent: "ClientRead",
         queryFingerprint: "update probe set n = ?",

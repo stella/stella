@@ -30,9 +30,14 @@ import {
 import type { LockRetryConfig, LockRetryRuntime } from "./lock-retry-ladder";
 import {
   createMigrationLockTelemetry,
+  describeMigrationBlockers,
+  migrationLockKey,
   observeMigrationLockAttempt,
 } from "./migration-lock-observation";
-import type { MigrationLockTelemetry } from "./migration-lock-observation";
+import type {
+  MigrationBlocker,
+  MigrationLockTelemetry,
+} from "./migration-lock-observation";
 import { withMigrationLockTimeout } from "./migration-lock-timeout";
 import { DEFAULT_MIGRATION_TIMING } from "./migration-timing";
 import type { MigrationTiming } from "./migration-timing";
@@ -327,6 +332,7 @@ export class MigrationLockWaitError extends TaggedError(
   reason: MigrationLockWaitFailure;
   attempts: number;
   lockTimeoutMs: number;
+  blockers: readonly MigrationBlocker[];
   cause: unknown;
 }> {
   static {
@@ -344,6 +350,8 @@ const DEFAULT_LOCK_WAIT_RETRY: LockWaitRetry = {
 type ApplyPendingOptions = {
   apply: (lockTimeoutMs: number) => Promise<void>;
   classifyLedger: () => Promise<MigrationLedgerProgress>;
+  /** Sessions seen blocking the failed attempts, named in the final error. */
+  blockers: () => readonly MigrationBlocker[];
   retry: LockWaitRetry;
 };
 
@@ -428,6 +436,7 @@ const migrationLedgerClassifier =
 export const applyPendingRetryingLockWaits = async ({
   apply,
   classifyLedger,
+  blockers,
   retry,
 }: ApplyPendingOptions): Promise<void> => {
   const outcome = await runLockRetryLadder({
@@ -440,10 +449,11 @@ export const applyPendingRetryingLockWaits = async ({
       const ledgerProgress = await classifyLedger();
       if (ledgerProgress.status === "foreign") {
         throw new MigrationLockWaitError({
-          message: `Migrations lost a lock wait after committing receipts on attempt ${String(attempts)}`,
+          message: `Migrations lost a lock wait after committing receipts on attempt ${String(attempts)}; blocked by ${describeMigrationBlockers(blockers())}`,
           reason: MIGRATION_LOCK_WAIT_FAILURE.ledgerMoved,
           attempts,
           lockTimeoutMs,
+          blockers: blockers(),
           cause,
         });
       }
@@ -464,10 +474,11 @@ export const applyPendingRetryingLockWaits = async ({
     return;
   }
   throw new MigrationLockWaitError({
-    message: `Migrations lost a lock wait after ${String(outcome.attempts)} attempts (${outcome.reason})`,
+    message: `Migrations lost a lock wait after ${String(outcome.attempts)} attempts (${outcome.reason}); blocked by ${describeMigrationBlockers(blockers())}`,
     reason: outcome.reason,
     attempts: outcome.attempts,
     lockTimeoutMs: outcome.lockTimeoutMs,
+    blockers: blockers(),
     cause: outcome.cause,
   });
 };
@@ -600,6 +611,82 @@ const reportStalePreflight = (
     );
   }
   process.stdout.write(`${JSON.stringify(event)}\n`);
+};
+
+const SCHEMA_PENDING_STEP = "schema.pending";
+
+const schemaPendingBlockers = (telemetry: MigrationLockTelemetry) =>
+  telemetry.lastBlockers.get(migrationLockKey("schema", SCHEMA_PENDING_STEP)) ??
+  [];
+
+type MigratePendingOptions = {
+  observeSchema: Awaited<ReturnType<typeof createSchemaObservation>>;
+  migrations: ReturnType<typeof readMigrationFiles>;
+  database: ReturnType<typeof createDatabase>;
+  lockTimeoutMs: number;
+  paths: {
+    migrationsFolder: string;
+    migrationsSchema: string;
+    migrationsTable: string;
+  };
+};
+
+/** Every attempt reruns the whole pending set from the start of its transaction. */
+const migratePending = async ({
+  observeSchema,
+  migrations,
+  database,
+  lockTimeoutMs,
+  paths,
+}: MigratePendingOptions) =>
+  await observeSchema(
+    SCHEMA_PENDING_STEP,
+    async () =>
+      await pgCoreMigrate(
+        migrations.map((migration) => ({
+          ...migration,
+          sql: migration.sql.map((statement) =>
+            withMigrationLockTimeout(statement, lockTimeoutMs),
+          ),
+        })),
+        database,
+        paths,
+      ),
+  );
+
+type ReportSchemaApplyOptions = {
+  timing: MigrationTiming;
+  retriesSpent: () => number;
+  migrations: readonly string[];
+  work: () => Promise<void>;
+};
+
+/** One record per apply of the pending set, success or failure. */
+const reportSchemaApply = async ({
+  timing,
+  retriesSpent: spent,
+  migrations,
+  work,
+}: ReportSchemaApplyOptions) => {
+  const startedAt = timing.clock();
+  const emit = (outcome: "applied" | "failed") => {
+    const retriesSpent = spent();
+    timing.emit({
+      event: "migrate.schema_apply",
+      migrations,
+      durationMs: Math.max(0, Math.round(timing.clock() - startedAt)),
+      attempts: retriesSpent + 1,
+      retriesSpent,
+      outcome,
+    });
+  };
+  try {
+    await work();
+  } catch (error: unknown) {
+    emit("failed");
+    throw error;
+  }
+  emit("applied");
 };
 
 type MigrationPhaseClock = {
@@ -785,34 +872,34 @@ export const runMigrations = async ({
         FROM ${sql.identifier(migrationsSchema)}.${sql.identifier(migrationsTable)}
         ORDER BY id
       `);
-    await applySchemaMigrationsRetryingLockWaits({
-      connection,
-      connectionState: () => session.state,
-      apply: async (lockTimeoutMs) => {
-        await connection.unsafe(
-          `SET lock_timeout = '${String(lockTimeoutMs)}ms'`,
-        );
-        await observeSchema(
-          "schema.pending",
-          async () =>
-            await pgCoreMigrate(
-              migrations.map((migration) => ({
-                ...migration,
-                sql: migration.sql.map((statement) =>
-                  withMigrationLockTimeout(statement, lockTimeoutMs),
-                ),
-              })),
+    await reportSchemaApply({
+      timing,
+      retriesSpent: () => lockTelemetry.retriesSpent - schemaRetriesAtStart,
+      migrations: predicted.map(({ name }) => name),
+      work: async () =>
+        await applySchemaMigrationsRetryingLockWaits({
+          connection,
+          connectionState: () => session.state,
+          apply: async (lockTimeoutMs) => {
+            await connection.unsafe(
+              `SET lock_timeout = '${String(lockTimeoutMs)}ms'`,
+            );
+            await migratePending({
+              observeSchema,
+              migrations,
               database,
-              { migrationsFolder, migrationsSchema, migrationsTable },
-            ),
-        );
-      },
-      classifyLedger: migrationLedgerClassifier({
-        preflightRows: preflight.rows,
-        predicted,
-        readLedger,
-      }),
-      retry: lockWaitRetry,
+              lockTimeoutMs,
+              paths: { migrationsFolder, migrationsSchema, migrationsTable },
+            });
+          },
+          classifyLedger: migrationLedgerClassifier({
+            preflightRows: preflight.rows,
+            predicted,
+            readLedger,
+          }),
+          blockers: () => schemaPendingBlockers(lockTelemetry),
+          retry: lockWaitRetry,
+        }),
     });
     clock.retriesSpent = lockTelemetry.retriesSpent - schemaRetriesAtStart;
     await schemaObserver.release();

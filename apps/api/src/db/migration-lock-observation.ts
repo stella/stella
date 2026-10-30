@@ -109,9 +109,10 @@ export const migrationQueryFingerprint = (query: string): string => {
     .slice(0, FINGERPRINT_LIMIT);
 };
 
-type MigrationBlocker = {
+export type MigrationBlocker = {
   pid: number;
   state: string | null;
+  applicationName: string | null;
   xactAgeMs: number | null;
   waitEvent: string | null;
   queryFingerprint: string;
@@ -142,12 +143,33 @@ export type MigrationLockEvent = {
 
 export type MigrationLockTelemetry = {
   attempts: Map<string, number>;
+  /** The most recent non-empty blocker sample per `migrationLockKey`. */
+  lastBlockers: Map<string, readonly MigrationBlocker[]>;
   retriesSpent: number;
   emit: (event: MigrationLockEvent) => void;
 };
 
+export const migrationLockKey = (
+  phase: MigrationLockEvent["phase"],
+  step: string,
+) => `${phase}:${step}`;
+
+/** Sessions by pid, state, application and transaction age; never query text. */
+export const describeMigrationBlockers = (
+  blockers: readonly MigrationBlocker[],
+): string =>
+  blockers.length === 0
+    ? "no blocking session was observed"
+    : blockers
+        .map(
+          ({ pid, state, applicationName, xactAgeMs }) =>
+            `pid ${String(pid)} (state ${state ?? "unknown"}, application ${JSON.stringify(applicationName ?? "")}, transaction age ${xactAgeMs === null ? "unknown" : `${String(Math.round(xactAgeMs))} ms`})`,
+        )
+        .join("; ");
+
 export const createMigrationLockTelemetry = (): MigrationLockTelemetry => ({
   attempts: new Map(),
+  lastBlockers: new Map(),
   retriesSpent: 0,
   emit: (event) => {
     process.stdout.write(`${JSON.stringify(event)}\n`);
@@ -166,7 +188,7 @@ const WAIT_SQL = `WITH waiting AS MATERIALIZED (
   WHERE EXISTS (SELECT 1 FROM waiting)
 )
 SELECT w.mode, w."tableName", w.statement,
-  b.pid, b.state,
+  b.pid, b.state, b.application_name AS "applicationName",
   (extract(epoch FROM (clock_timestamp() - b.xact_start)) * 1000)::double precision AS "xactAgeMs",
   b.wait_event AS "waitEvent", b.query
 FROM waiting w
@@ -204,7 +226,7 @@ export const observeMigrationLockAttempt = async <T>({
   cancelWork,
   additionalRetries,
 }: ObserveMigrationLockAttemptOptions<T>): Promise<T> => {
-  const key = `${phase}:${step}`;
+  const key = migrationLockKey(phase, step);
   const attempt = (telemetry.attempts.get(key) ?? 0) + 1;
   telemetry.attempts.set(key, attempt);
   if (attempt > 1) {
@@ -267,6 +289,7 @@ export const observeMigrationLockAttempt = async <T>({
           const blocker = {
             pid: row["pid"],
             state: nullableString(row["state"]),
+            applicationName: nullableString(row["applicationName"]),
             xactAgeMs:
               typeof row["xactAgeMs"] === "number" ? row["xactAgeMs"] : null,
             waitEvent: nullableString(row["waitEvent"]),
@@ -329,6 +352,9 @@ export const observeMigrationLockAttempt = async <T>({
     telemetry.attempts.delete(key);
   } else {
     telemetry.attempts.set(key, finalAttempt);
+  }
+  if (blockers.size > 0) {
+    telemetry.lastBlockers.set(key, [...blockers.values()]);
   }
   telemetry.emit({
     event: "migrate.lock_attempt",

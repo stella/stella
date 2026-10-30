@@ -22,6 +22,18 @@ export type MigrationTimingRecord =
       appliedCount: number | null;
     }
   | {
+      /**
+       * The pending set, which the migrator applies in one transaction, so the
+       * grain is the set: its migration names, apply time and attempts.
+       */
+      event: "migrate.schema_apply";
+      migrations: readonly string[];
+      durationMs: number;
+      attempts: number;
+      retriesSpent: number;
+      outcome: "applied" | "failed";
+    }
+  | {
       event: "migrate.phase_duration";
       phase: "online";
       durationMs: number;
