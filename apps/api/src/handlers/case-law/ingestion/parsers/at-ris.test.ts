@@ -142,3 +142,27 @@ it("keeps publisher summaries before the body and publisher notes after it", () 
   ]);
   expect(headMatterPrecedesBody(documentAst.blocks)).toBe(true);
 });
+
+it("a publisher heading looks past a break to the paragraph it titles", () => {
+  const xml = `<risdok><nutzdaten><abschnitt>
+    <ueberschrift>Leitsatz</ueberschrift><abstand/><absatz ct="leitsatz">Vor der Entscheidung</absatz>
+    <ueberschrift>Spruch</ueberschrift><absatz ct="spruch">Die Revision wird zurückgewiesen.</absatz>
+    </abschnitt></nutzdaten></risdok>`;
+  const { documentAst } = parseRisDecisionXml({
+    sourceDocumentId: "JJT_20260115_OGH0002_0010OB00001_26A0000_000",
+    caseNumber: "1 Ob 1/26a",
+    ecli: undefined,
+    court: "OGH",
+    decisionDate: "2026-01-15",
+    decisionType: "beschluss",
+    sourceUrl: undefined,
+    xml,
+  }).unwrap();
+  expect(documentAst.blocks.at(0)).toMatchObject({
+    type: "heading",
+    role: "publisher-heading",
+  });
+  expect(
+    documentAst.blocks.find((block) => block.type === "paragraph"),
+  ).toMatchObject({ role: "syllabus" });
+});

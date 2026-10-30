@@ -274,7 +274,10 @@ export const parseRisDecisionXml = (
         type: "heading",
         level: 1,
         role:
-          !bodyStarted && titlesHeadMatter(units.at(index + 1))
+          !bodyStarted &&
+          titlesHeadMatter(
+            units.slice(index + 1).find((unit) => unit.type !== "break"),
+          )
             ? "publisher-heading"
             : "section-heading",
         inlines,
