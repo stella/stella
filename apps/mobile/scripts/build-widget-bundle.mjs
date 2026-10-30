@@ -4,6 +4,8 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { childExitStatus } from "../../../packages/scripts/src/child-exit-status.ts";
+
 const require = createRequire(import.meta.url);
 const projectRoot = fileURLToPath(new URL("../", import.meta.url));
 const widgetsRoot = path.dirname(require.resolve("expo-widgets/package.json"));
@@ -36,10 +38,11 @@ const result = spawnSync(
         "widgets.metro.config.cjs",
       ),
     },
+    maxBuffer: 2 ** 30,
     stdio: "inherit",
   },
 );
 if (result.error) {
   throw result.error;
 }
-process.exit(result.status ?? 1);
+process.exit(childExitStatus(result));

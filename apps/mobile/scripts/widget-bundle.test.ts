@@ -47,7 +47,7 @@ test("the widget build uses an app-owned Metro config and retains runtime stubs"
     assert.deepEqual(requests, [{name: empty, platform: 'ios'}, {name: '@stll/locales', platform: 'ios'}]);
   `,
     ],
-    { cwd: APP_ROOT, encoding: "utf-8" },
+    { cwd: APP_ROOT, encoding: "utf-8", maxBuffer: 2 ** 30 },
   );
   expect(result.stderr).toBe("");
   expect(result.status).toBe(0);
@@ -101,7 +101,7 @@ test.each([0, 1, 2])(
     ${WIDGETS_BUNDLE_HOOK}
   `,
       ],
-      { encoding: "utf-8" },
+      { encoding: "utf-8", maxBuffer: 2 ** 30 },
     );
     if (count === 0) {
       expect(result.status).not.toBe(0);
