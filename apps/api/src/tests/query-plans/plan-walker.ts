@@ -273,6 +273,14 @@ const indexDetails = (node: PlanNode) => {
 };
 
 /** Decode Drizzle/PGlite's single JSON EXPLAIN row; malformed plans fail closed. */
+/**
+ * The text-plan header of a plain index scan in one direction. Ordered page
+ * walks need it: only an index scan returns rows in index order, so a bitmap
+ * path cannot stop after one page.
+ */
+export const orderedIndexScanHeader = (direction: "forward" | "backward") =>
+  direction === "forward" ? "Index Scan" : "Index Scan Backward";
+
 export const explainRoot = (explained: unknown): PlanNode => {
   const rows = isRecord(explained) ? explained["rows"] : explained;
   if (!isUnknownArray(rows) || rows.length !== 1) {
