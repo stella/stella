@@ -162,6 +162,8 @@
       "default": "./src/components/text.tsx"
     },
     "./toast": "./src/components/toast.tsx",
+    "./toggle": "./src/components/toggle.tsx",
+    "./toggle-group": "./src/components/toggle-group.tsx",
     "./tooltip": "./src/components/tooltip.tsx",
     "./truncated-text": "./src/components/truncated-text.tsx",
     "./typed-character": "./src/lib/typed-character.ts",
