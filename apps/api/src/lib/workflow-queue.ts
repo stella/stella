@@ -4,7 +4,7 @@ import type { Job } from "bullmq";
 import { sleep } from "bun";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 
-import { RESOURCE_TYPE } from "@stll/api-contract";
+import { type AiCellSettlement, RESOURCE_TYPE } from "@stll/api-contract";
 import { drainFanOut } from "@stll/concurrency";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { Temporal } from "@stll/time";
@@ -1228,6 +1228,11 @@ const markPendingPlannedFieldsErrored = async (
       .update(fields)
       .set({
         content: { type: "error", version: 1 },
+        aiSettlement: {
+          type: "failed",
+          runId: actor.runId,
+          settledAt: Temporal.Now.instant().toString(),
+        } satisfies AiCellSettlement,
         ownerRunId: null,
         ownerBatchId: null,
         deadlineAt: null,
@@ -1318,6 +1323,7 @@ type ProcessWorkflowEntityRunOptions = {
   data: EntityJobData;
   signal: AbortSignal;
   extractionRuns: ExtractionRunStore;
+  now?: () => string;
 };
 
 /**
@@ -1331,6 +1337,7 @@ export const processWorkflowEntityRun = async ({
   data,
   signal,
   extractionRuns,
+  now = () => Temporal.Now.instant().toString(),
 }: ProcessWorkflowEntityRunOptions) => {
   const {
     entityId,
@@ -1409,6 +1416,7 @@ export const processWorkflowEntityRun = async ({
           serviceTier,
           forcedPropertyIds,
           recoveryAttempt: normalizeRecoveryAttempt(recoveryAttempt),
+          now,
         }),
     });
     if (Result.isError(drained)) {
@@ -1441,6 +1449,7 @@ type ProcessOneBatchArgs = {
   serviceTier: AIRequestServiceTier;
   forcedPropertyIds: ReadonlySet<string>;
   recoveryAttempt: 0 | 1;
+  now: () => string;
 };
 
 type BatchPreviewPublisherArgs = {
@@ -1526,6 +1535,7 @@ const processOneBatch = async ({
   serviceTier,
   forcedPropertyIds,
   recoveryAttempt,
+  now,
 }: ProcessOneBatchArgs): Promise<void> => {
   const { workspaceId, organizationId, userId, runId: requestId } = actor;
   signal.throwIfAborted();
@@ -1662,6 +1672,7 @@ const processOneBatch = async ({
     const skippedPropertyIds: SafeId<"property">[] = [];
     const unsupportedPropertyIds: SafeId<"property">[] = [];
     const erroredProperties: BatchProperty[] = [];
+    const terminalSettlements = new Map<SafeId<"property">, AiCellSettlement>();
     const usageMetering = {
       actionType: "background" as const,
       organizationId,
@@ -1739,8 +1750,41 @@ const processOneBatch = async ({
         );
         for (const { id: propertyId } of aiModelProperties) {
           const outcome = batchResult.value.settlements.get(propertyId);
-          if (outcome === "notStated" || outcome === "refused") {
-            skippedPropertyIds.push(propertyId);
+          switch (outcome) {
+            case "answered":
+              terminalSettlements.set(propertyId, {
+                type: "value",
+                runId: requestId,
+                settledAt: now(),
+              });
+              break;
+            case "notStated":
+              terminalSettlements.set(propertyId, {
+                type: "notStated",
+                runId: requestId,
+                settledAt: now(),
+              });
+              skippedPropertyIds.push(propertyId);
+              break;
+            case "refused":
+              terminalSettlements.set(propertyId, {
+                type: "refused",
+                reason: "modelRefusal",
+                runId: requestId,
+                settledAt: now(),
+              });
+              skippedPropertyIds.push(propertyId);
+              break;
+            case "unsupported":
+              break;
+            case undefined:
+              if (skippedPropertyIds.includes(propertyId)) {
+                break;
+              }
+              return panic(`AI property ${propertyId} was not settled`);
+            default:
+              outcome satisfies never;
+              return panic(`Unhandled AI settlement: ${String(outcome)}`);
           }
         }
       }
@@ -1774,8 +1818,18 @@ const processOneBatch = async ({
         const settlement = verdictOutput.settlements.get(property.id);
         switch (settlement) {
           case "answered":
+            terminalSettlements.set(property.id, {
+              type: "value",
+              runId: requestId,
+              settledAt: now(),
+            });
             break;
           case "notStated":
+            terminalSettlements.set(property.id, {
+              type: "notStated",
+              runId: requestId,
+              settledAt: now(),
+            });
             skippedPropertyIds.push(property.id);
             break;
           case "failedTransient":
@@ -1937,6 +1991,7 @@ const processOneBatch = async ({
             propertyId,
             entityVersionId,
             content,
+            aiSettlement: terminalSettlements.get(propertyId),
           });
         }
       }
@@ -1948,6 +2003,18 @@ const processOneBatch = async ({
             propertyId,
             entityVersionId,
             content: { type: "unsupported" as const, version: 1 as const },
+          });
+        }
+      }
+      for (const [propertyId, aiSettlement] of terminalSettlements) {
+        if (ownedPropertyIds.has(propertyId) && aiSettlement.type !== "value") {
+          fieldValues.push({
+            id: createSafeId<"field">(),
+            workspaceId,
+            propertyId,
+            entityVersionId,
+            content: { type: "unsupported" as const, version: 1 as const },
+            aiSettlement,
           });
         }
       }
@@ -2368,6 +2435,14 @@ const setFieldsStatus = async ({
       ownerBatchId: owner?.batchId ?? null,
       deadlineAt: owner?.deadlineAt ?? null,
       attempt: owner?.attempt ?? null,
+      aiSettlement:
+        contentType === "error"
+          ? ({
+              type: "failed",
+              runId: ownerRunId,
+              settledAt: Temporal.Now.instant().toString(),
+            } satisfies AiCellSettlement)
+          : null,
     }));
 
     await tx.insert(fields).values(fieldValues);

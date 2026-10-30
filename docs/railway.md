@@ -12,6 +12,9 @@ Create these services in one Railway project:
 
 - `web`: builds from `apps/web/Dockerfile`, public HTTP domain.
 - `api`: builds from `apps/api/Dockerfile`, public HTTP domain.
+- `file-derivative-worker`: builds from `apps/api/Dockerfile`, no public domain.
+  Consumes the `file-derivatives` queue (PDF previews and thumbnails); the API
+  does not.
 - `Postgres`: builds from `docker/postgres/Dockerfile`, with a persistent volume
   mounted at `/var/lib/postgresql` and private networking.
 - `Redis`: Railway Redis or Valkey.
@@ -19,8 +22,9 @@ Create these services in one Railway project:
 - Storage bucket, for example `stella-files`.
 
 Point the `api` service config file at `railway/api.railway.json`. Point the
-`web` service config file at `railway/web.railway.json`, and `Postgres` at
-`railway/postgres.railway.json`. All three services use the
+`web` service config file at `railway/web.railway.json`,
+`file-derivative-worker` at `railway/file-derivative-worker.railway.json`, and
+`Postgres` at `railway/postgres.railway.json`. All four services use the
 repository root as Docker build context. Railway calls this
 [config as code](https://docs.railway.com/config-as-code); custom config files
 are selected in each service's settings.

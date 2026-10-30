@@ -718,7 +718,10 @@ describe("failure grading", () => {
       "busy",
       "period_exhausted",
       "not_enabled",
-      "unavailable",
+      "store_unavailable",
+      "configuration_incomplete",
+      "organization_state_unreadable",
+      "lease_lost",
     ] as const) {
       const refusal = new ActionAdmissionError({
         reason,

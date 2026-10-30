@@ -117,11 +117,11 @@ export const PUBLISHER_GATES = {
     intervalMs: POLITE_INTERVAL_MS,
     hosts: ["rozhodnuti.nsoud.cz"],
   },
-  /** vyhledavac.nssoud.cz. */
+  /** NSS search portal and the court's original-document registry. */
   "nssoud-cz": {
     publisher: "Nejvyšší správní soud",
     intervalMs: POLITE_INTERVAL_MS,
-    hosts: ["vyhledavac.nssoud.cz"],
+    hosts: ["vyhledavac.nssoud.cz", "www.nssoud.cz"],
   },
   /** rozhodnuti.justice.cz. */
   "justice-cz": {
@@ -195,6 +195,11 @@ export const PUBLISHER_GATES = {
     publisher: "Prezes UOKiK",
     intervalMs: 2000,
     hosts: ["decyzje.uokik.gov.pl"],
+  },
+  "fcl-uk": {
+    publisher: "Find Case Law",
+    intervalMs: 500,
+    hosts: ["caselaw.nationalarchives.gov.uk"],
   },
   /** eakta.birosag.hu. */
   "birosag-hu": {

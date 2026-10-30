@@ -94,8 +94,10 @@ export const CommandActionItem = ({
         >
           <Icon className="text-muted-foreground size-4 shrink-0" />
           <span className="min-w-0 flex-1 truncate">{action.title}</span>
+          {/* A shortcut hint means nothing without a keyboard, so a
+              touch-first device drops it. */}
           {action.hotkey && (
-            <kbd className="bg-muted text-muted-foreground text-3xs pointer-events-none inline-flex h-5 shrink-0 items-center gap-1 rounded border px-1.5 font-medium select-none">
+            <kbd className="bg-muted text-muted-foreground text-3xs pointer-events-none inline-flex h-5 shrink-0 items-center gap-1 rounded border px-1.5 font-medium select-none pointer-coarse:hidden">
               {formatHotkeyForPlatform(action.hotkey, hotkeyPlatform)}
             </kbd>
           )}

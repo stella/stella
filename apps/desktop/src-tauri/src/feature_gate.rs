@@ -11,16 +11,19 @@ use std::{collections::HashSet, num::NonZeroUsize, sync::RwLock};
 pub enum DesktopFeature {
   ActivityTimeline,
   TimeBilling,
+  LocalAgents,
 }
 
 impl DesktopFeature {
-  pub const ALL: &'static [Self] = &[Self::ActivityTimeline, Self::TimeBilling];
+  pub const ALL: &'static [Self] =
+    &[Self::ActivityTimeline, Self::TimeBilling, Self::LocalAgents];
 
   /// The identifier the feature-access contract uses.
   pub const fn id(self) -> &'static str {
     match self {
       Self::ActivityTimeline => "activity-timeline",
       Self::TimeBilling => "time-billing",
+      Self::LocalAgents => "local-agents",
     }
   }
 

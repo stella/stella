@@ -7,6 +7,7 @@ import createEntityLink from "@/api/handlers/tasks/entity-links/create";
 import deleteEntityLink from "@/api/handlers/tasks/entity-links/delete";
 import listEntityLinks from "@/api/handlers/tasks/entity-links/list";
 import readTaskById from "@/api/handlers/tasks/get";
+import listMyOpenTasks from "@/api/handlers/tasks/list";
 import updateTask from "@/api/handlers/tasks/update";
 import { routes } from "@/api/http/route";
 
@@ -21,4 +22,13 @@ export const tasksRoute = routes(
     "/:taskId/links": { GET: listEntityLinks },
   },
   { prefix: "/tasks/:workspaceId" },
+);
+
+// The caller's own open tasks across matters. A sibling of the matter routes
+// above, whose prefix needs a workspace id.
+export const myTasksRoute = routes(
+  {
+    "/": { GET: listMyOpenTasks },
+  },
+  { prefix: "/tasks" },
 );

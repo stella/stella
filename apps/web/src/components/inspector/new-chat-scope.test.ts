@@ -7,7 +7,6 @@ import { sourceFileIndex } from "@stll/scripts/src/source-file-index";
 import {
   type CallExpression,
   type Node,
-  type ParsedSource,
   parseSource,
   walk,
 } from "@stll/scripts/src/syntax-tree";
@@ -166,20 +165,24 @@ const calleeName = (call: CallExpression): string | undefined => {
   const callee = call.callee;
   if (
     callee.type === "MemberExpression" &&
-    !callee.computed &&
     callee.property.type === "Identifier"
   ) {
     return callee.property.name;
   }
-  return callee.type === "Identifier" ? callee.name : undefined;
+  if (callee.type === "Identifier") {
+    return callee.name;
+  }
+  return undefined;
 };
+
 type OpenChatCall = {
-  argument: Node;
+  /** Absent for a bare openChat(), which opens a global chat. */
+  argument: Node | undefined;
   file: string;
   line: number;
-  source: ParsedSource;
+  sourceText: string;
 };
-const EMPTY_ARGUMENT = parseSource("empty.ts", "({})").program;
+
 const openChatCalls = (): OpenChatCall[] =>
   sourceFileIndex(SOURCE_ROOT)
     .filter(
@@ -188,55 +191,62 @@ const openChatCalls = (): OpenChatCall[] =>
         sourceText.includes("openChat("),
     )
     .flatMap((entry) => {
-      const source = entry.sourceFile();
+      const source = parseSource(entry.filePath, entry.sourceText);
       const calls: OpenChatCall[] = [];
       walk(source.program, (node) => {
         if (node.type === "CallExpression" && calleeName(node) === "openChat") {
           // A bare openChat() opens a global chat wherever the user is, so
           // it has to be listed too: its argument is the empty object.
           calls.push({
-            argument: node.arguments.at(0) ?? EMPTY_ARGUMENT,
+            argument: node.arguments[0],
             file: entry.relativePath,
             line: source.locate(node.start).line,
-            source,
+            sourceText: source.sourceText,
           });
         }
       });
       return calls;
     });
-const callsBuilder = (node: Node): boolean => {
+
+const someNode = (
+  root: Node | undefined,
+  predicate: (node: Node) => boolean,
+): boolean => {
   let found = false;
-  walk(node, (child) => {
-    if (
-      child.type === "CallExpression" &&
-      child.callee.type === "Identifier" &&
-      ROUTE_SCOPE_BUILDERS.has(child.callee.name)
-    ) {
-      found = true;
-    }
-  });
+  if (root !== undefined) {
+    walk(root, (node) => {
+      if (found || predicate(node)) {
+        found = true;
+        return "skip-children";
+      }
+      return undefined;
+    });
+  }
   return found;
 };
+
+const callsBuilder = (root: Node | undefined): boolean =>
+  someNode(
+    root,
+    (node) =>
+      node.type === "CallExpression" &&
+      node.callee.type === "Identifier" &&
+      ROUTE_SCOPE_BUILDERS.has(node.callee.name),
+  );
+
 const MATTER_FIELDS = new Set(["contextMatterIds", "workspaceId"]);
-const readsTabMatter = (node: Node, source: ParsedSource): boolean => {
-  let found = false;
-  walk(node, (child) => {
-    if (
-      (child.type === "MemberExpression" &&
-        !child.computed &&
-        child.property.type === "Identifier" &&
-        MATTER_FIELDS.has(child.property.name) &&
-        /tab/iu.test(
-          source.sourceText.slice(child.object.start, child.object.end),
-        )) ||
-      (child.type === "Identifier" &&
-        /^tab(WorkspaceId|ContextMatterIds)$/u.test(child.name))
-    ) {
-      found = true;
-    }
-  });
-  return found;
-};
+const readsTabMatter = (root: Node | undefined, sourceText: string): boolean =>
+  someNode(
+    root,
+    (node) =>
+      (node.type === "MemberExpression" &&
+        node.property.type === "Identifier" &&
+        !node.computed &&
+        MATTER_FIELDS.has(node.property.name) &&
+        /tab/iu.test(sourceText.slice(node.object.start, node.object.end))) ||
+      (node.type === "Identifier" &&
+        /^tab(WorkspaceId|ContextMatterIds)$/u.test(node.name)),
+  );
 
 describe("openChat census", () => {
   const calls = openChatCalls();
@@ -248,7 +258,9 @@ describe("openChat census", () => {
   test("no caller copies an open tab's matter into openChat", () => {
     expect(
       calls
-        .filter(({ argument, source }) => readsTabMatter(argument, source))
+        .filter(({ argument, sourceText }) =>
+          readsTabMatter(argument, sourceText),
+        )
         .map(({ file, line }) => `${file}:${line}`),
     ).toEqual([]);
   });

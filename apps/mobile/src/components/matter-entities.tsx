@@ -8,12 +8,13 @@ import {
   RefreshControl,
   SectionList,
   StyleSheet,
-  Text,
   View,
 } from "react-native";
 import { useTranslations } from "use-intl";
 
-import { EmptyCard } from "@/components/empty-state-screen";
+import { Text } from "@stll/ui/text";
+
+import { EmptyCard, screenStyles } from "@/components/empty-state-screen";
 import { EntityRow } from "@/components/entity-row";
 import { epochMilliseconds } from "@/connection/clock";
 import type { AccessTokenSource } from "@/connection/session";
@@ -50,7 +51,7 @@ export const MatterEntities = ({
       cursor: previous.nextCursor,
     });
     if (Result.isError(result) && result.error._tag === "SignedOutError") {
-      end();
+      end(source);
     }
     return applyEntityPage(previous, result, epochMilliseconds());
   };
@@ -181,7 +182,7 @@ const LoadedEntities = ({
           />
         )
       }
-      ListFooterComponent={footer}
+      ListFooterComponent={footer ?? undefined}
       refreshControl={
         <RefreshControl
           onRefresh={onReload}
@@ -227,6 +228,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   content: {
+    ...screenStyles.readable,
     paddingBottom: 32,
     paddingHorizontal: 20,
   },

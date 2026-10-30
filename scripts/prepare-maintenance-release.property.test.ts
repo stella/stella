@@ -412,6 +412,22 @@ describe("pending changesets folded into the release", () => {
     }
   });
 
+  test("increments the supplied newest final version even when main VERSION differs", () => {
+    const root = mkdtempSync(nodePath.join(tmpdir(), "stella-release-"));
+    roots.push(root);
+    releaseFixture(root, "{}\n");
+    writeFileSync(nodePath.join(root, "VERSION"), "9.9.9\n");
+    const prepared = prepareMaintenanceReleaseFiles({
+      previousFinalVersion: "1.2.3",
+      previousRelease: PUBLISHED,
+      rootDir: root,
+    });
+    expect(prepared.version).toBe("1.2.4");
+    expect(readFileSync(nodePath.join(root, "VERSION"), "utf-8")).toBe(
+      "1.2.4\n",
+    );
+  });
+
   test("versions the pending packages and records them in the changelog", () => {
     const root = mkdtempSync(nodePath.join(tmpdir(), "stella-release-"));
     roots.push(root);
@@ -427,6 +443,10 @@ describe("pending changesets folded into the release", () => {
     expect(
       prepareMaintenanceReleaseFiles({
         previousRelease: PUBLISHED,
+        previousFinalVersion: readFileSync(
+          nodePath.join(root, "VERSION"),
+          "utf-8",
+        ).trim(),
         rootDir: root,
         versionPackages,
       }),
@@ -467,6 +487,10 @@ describe("pending changesets folded into the release", () => {
     expect(
       prepareMaintenanceReleaseFiles({
         previousRelease: PUBLISHED,
+        previousFinalVersion: readFileSync(
+          nodePath.join(root, "VERSION"),
+          "utf-8",
+        ).trim(),
         rootDir: root,
         versionPackages,
       }).changesets,
@@ -493,6 +517,10 @@ describe("pending changesets folded into the release", () => {
     expect(() =>
       prepareMaintenanceReleaseFiles({
         previousRelease: PUBLISHED,
+        previousFinalVersion: readFileSync(
+          nodePath.join(root, "VERSION"),
+          "utf-8",
+        ).trim(),
         rootDir: root,
         versionPackages,
         writeFile: (path, contents) => {
@@ -723,6 +751,10 @@ describe("maintenance release preparation", () => {
     expect(
       prepareMaintenanceReleaseFiles({
         previousRelease: PUBLISHED,
+        previousFinalVersion: readFileSync(
+          nodePath.join(root, "VERSION"),
+          "utf-8",
+        ).trim(),
         rootDir: root,
       }),
     ).toEqual({
@@ -780,6 +812,10 @@ describe("maintenance release preparation", () => {
     expect(
       prepareMaintenanceReleaseFiles({
         previousRelease: { kind: "unpromoted" },
+        previousFinalVersion: readFileSync(
+          nodePath.join(root, "VERSION"),
+          "utf-8",
+        ).trim(),
         rootDir: root,
       }),
     ).toMatchObject({ previousTag: "v1.2.3", version: "1.2.4" });
@@ -798,6 +834,10 @@ describe("maintenance release preparation", () => {
     expect(
       prepareMaintenanceReleaseFiles({
         previousRelease: { kind: "superseded" },
+        previousFinalVersion: readFileSync(
+          nodePath.join(root, "VERSION"),
+          "utf-8",
+        ).trim(),
         rootDir: root,
       }),
     ).toMatchObject({ previousTag: "v1.2.3", version: "1.2.4" });
@@ -814,6 +854,10 @@ describe("maintenance release preparation", () => {
 
     prepareMaintenanceReleaseFiles({
       previousRelease: PUBLISHED,
+      previousFinalVersion: readFileSync(
+        nodePath.join(root, "VERSION"),
+        "utf-8",
+      ).trim(),
       rootDir: root,
     });
     expect(readReleaseDates(root)).toEqual({ "v1.2.3": null });
@@ -905,6 +949,10 @@ describe("maintenance release preparation", () => {
     expect(() =>
       prepareMaintenanceReleaseFiles({
         previousRelease: PUBLISHED,
+        previousFinalVersion: readFileSync(
+          nodePath.join(root, "VERSION"),
+          "utf-8",
+        ).trim(),
         rootDir: root,
       }),
     ).toThrow("already exists");
@@ -934,6 +982,10 @@ describe("maintenance release preparation", () => {
     expect(() =>
       prepareMaintenanceReleaseFiles({
         previousRelease: PUBLISHED,
+        previousFinalVersion: readFileSync(
+          nodePath.join(root, "VERSION"),
+          "utf-8",
+        ).trim(),
         rootDir: root,
         writeFile: (path, contents) => {
           if (path === releaseDatesPath && !failed) {
@@ -976,6 +1028,10 @@ describe("maintenance release preparation", () => {
     try {
       prepareMaintenanceReleaseFiles({
         previousRelease: PUBLISHED,
+        previousFinalVersion: readFileSync(
+          nodePath.join(root, "VERSION"),
+          "utf-8",
+        ).trim(),
         rootDir: root,
         writeFile: (path, contents) => {
           if (path === releaseDatesPath) {
@@ -1001,6 +1057,10 @@ describe("maintenance release preparation", () => {
     expect(
       prepareMaintenanceReleaseFiles({
         previousRelease: PUBLISHED,
+        previousFinalVersion: readFileSync(
+          nodePath.join(root, "VERSION"),
+          "utf-8",
+        ).trim(),
         rootDir: root,
       }),
     ).toMatchObject({ version: "1.2.4" });
@@ -1138,6 +1198,10 @@ describe("a superseded version's notes folded into the release", () => {
     expect(
       prepareMaintenanceReleaseFiles({
         previousRelease: { kind: "superseded" },
+        previousFinalVersion: readFileSync(
+          nodePath.join(root, "VERSION"),
+          "utf-8",
+        ).trim(),
         rootDir: root,
       }),
     ).toEqual({
@@ -1163,6 +1227,10 @@ describe("a superseded version's notes folded into the release", () => {
 
     prepareMaintenanceReleaseFiles({
       previousRelease: { kind: "superseded" },
+      previousFinalVersion: readFileSync(
+        nodePath.join(root, "VERSION"),
+        "utf-8",
+      ).trim(),
       rootDir: root,
     });
     expect(changelogFiles(root)).toEqual(["v1.2.4.md"]);
@@ -1180,6 +1248,10 @@ describe("a superseded version's notes folded into the release", () => {
     expect(
       prepareMaintenanceReleaseFiles({
         previousRelease: PUBLISHED,
+        previousFinalVersion: readFileSync(
+          nodePath.join(root, "VERSION"),
+          "utf-8",
+        ).trim(),
         rootDir: root,
       }),
     ).toMatchObject({ foldedChangelogPath: null });
@@ -1197,6 +1269,10 @@ describe("a superseded version's notes folded into the release", () => {
     expect(() =>
       prepareMaintenanceReleaseFiles({
         previousRelease: { kind: "superseded" },
+        previousFinalVersion: readFileSync(
+          nodePath.join(root, "VERSION"),
+          "utf-8",
+        ).trim(),
         rootDir: root,
         writeFile: (path, contents) => {
           if (path === versionPath) {
@@ -1232,6 +1308,10 @@ describe("a superseded version's notes folded into the release", () => {
           for (const kind of outcomes) {
             prepareMaintenanceReleaseFiles({
               previousRelease: kind === "published" ? PUBLISHED : { kind },
+              previousFinalVersion: readFileSync(
+                nodePath.join(root, "VERSION"),
+                "utf-8",
+              ).trim(),
               rootDir: root,
             });
           }

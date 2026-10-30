@@ -37,6 +37,10 @@ const assertMcpGate = (workflow: string) => {
     workflow.slice(start, end),
     "MCP smoke requires the corpus preflight",
   ).toContain("steps.corpus-preflight.outcome == 'success'");
+  expect(
+    workflow.slice(start, end),
+    "MCP smoke requires staging readiness",
+  ).toContain("steps.proof-readiness.outputs.status == 'ready'");
 };
 
 type PreflightCase = {

@@ -62,8 +62,9 @@ import { api } from "@/lib/api";
 import { contactsKeys } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { pageTitle } from "@/lib/page-title";
+import { routePresentation } from "@/routes/-route-presentation";
 import { IMPORT_EDITABLE_FIELDS } from "@/routes/_protected.contacts/-import-candidate";
 import type { ImportEditableField } from "@/routes/_protected.contacts/-import-candidate";
 import {
@@ -75,6 +76,13 @@ import {
 import type { ImportReview } from "@/routes/_protected.contacts/-import-review";
 
 export const Route = createFileRoute("/_protected/contacts/import")({
+  staticData: {
+    presentation: routePresentation({
+      type: "label",
+      labelKey: "contacts.importStudio.title",
+      to: "/contacts/import",
+    }),
+  },
   head: () => ({
     meta: [{ title: pageTitle("contacts.importStudio.title") }],
   }),
@@ -210,7 +218,7 @@ function ContactImportStudio() {
 
   const inspectFile = async (file: File) => {
     if (!isSupportedFile(file)) {
-      notifyUserError(undefined, t("contacts.importStudio.fileInvalid"));
+      notifyUserProblem(t("contacts.importStudio.fileInvalid"));
       return;
     }
 
@@ -268,11 +276,14 @@ function ContactImportStudio() {
 
     review.seed({
       taxIdScheme: state.mapping.taxIdScheme,
-      rows: result.value.rows.map(({ contact, issues, rowNumber }) => ({
-        candidate: contact,
-        issues,
-        rowNumber,
-      })),
+      rows: result.value.rows.map(
+        ({ contact, issues, rowNumber, warnings }) => ({
+          candidate: contact,
+          issues,
+          rowNumber,
+          warnings,
+        }),
+      ),
     });
     setState({
       status: "review",
@@ -443,7 +454,7 @@ const UploadStep = ({
     onDrop: (files) => {
       const file = files.at(0);
       if (files.length !== 1 || !file) {
-        notifyUserError(undefined, t("contacts.importStudio.fileInvalid"));
+        notifyUserProblem(t("contacts.importStudio.fileInvalid"));
         return;
       }
       onFile(file);
@@ -770,13 +781,12 @@ const ReviewStep = ({
       </div>
       <ImportReviewSummary review={review} />
       <div className="space-y-3">
-        {review.rows.map((row, index) => (
+        {review.rows.map((row) => (
           <ImportCandidateCard
             fields={fields}
             key={row.id}
             onChange={(candidate) => review.updateRow(row.id, candidate)}
             onRemove={() => review.removeRow(row.id)}
-            ordinal={index + 1}
             row={row}
           />
         ))}

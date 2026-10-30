@@ -1,0 +1,5 @@
+{
+  "kind": "ordinary",
+  "qualifier": "Applies migrations to disposable databases and verifies schema, history and API startup; no publication or deployment.",
+  "reviewedDigest": "f6cf43f43c920c2477cc98a05698e6c4f2587c97d2e128cadbbd7bf848f79492"
+}

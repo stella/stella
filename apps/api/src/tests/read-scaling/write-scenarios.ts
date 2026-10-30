@@ -1,9 +1,10 @@
 import { panic, Result } from "better-result";
 import { eq } from "drizzle-orm";
 
-import { organization, user } from "@/api/db/auth-schema";
+import { member, organization, user } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
 import { vatRates } from "@/api/db/schema";
+import { markRlsDatabase } from "@/api/db/scoped";
 import applyVatRatePreset from "@/api/handlers/vat-rates/presets/create";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { HttpStatusResponse } from "@/api/http/status";
@@ -16,7 +17,11 @@ import {
 import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
-import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import {
+  mintAuthProviderId,
+  mintAuthProviderIdValue,
+} from "@/api/tests/helpers/auth-provider-id";
+import { createOrganizationScopedTestDb } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScalingTempTables } from "@/api/tests/read-scaling/entity-fixture";
 
@@ -71,6 +76,13 @@ const seedVatRateWriteScaling = async (db: GatedTestDb, size: number) => {
     name: "Write actor",
     email: `${userId}@example.test`,
   });
+  await db.insert(member).values({
+    id: mintAuthProviderIdValue(),
+    organizationId,
+    userId,
+    role: "owner",
+    createdAt: new Date(),
+  });
   await db.insert(vatRates).values(
     Array.from({ length: size }, (_, index) => ({
       organizationId,
@@ -86,6 +98,10 @@ const seedVatRateWriteScaling = async (db: GatedTestDb, size: number) => {
     organizationId,
     userId,
     safeDb,
+    scopedDb: createOrganizationScopedTestDb(markRlsDatabase(db), {
+      organizationId,
+      userId,
+    }),
     cleanup: async () => {
       await db
         .delete(vatRates)
@@ -104,7 +120,7 @@ export const writeScalingScenarios = [
     name: "VAT rate preset",
     definition: applyVatRatePreset,
     prepare: async (db: GatedTestDb) =>
-      await createScalingTempTables(db, [organization, user, vatRates]),
+      await createScalingTempTables(db, [vatRates]),
     seed: seedVatRateWriteScaling,
     measure: async (fixture: WriteFixture) =>
       await runWithMeasuredQueryCounter(async (counter) => {
@@ -119,6 +135,7 @@ export const writeScalingScenarios = [
               fixture.userId,
             ),
             safeDb: fixture.safeDb,
+            scopedDb: fixture.scopedDb,
             recordAuditEvent: noopAuditRecorder,
             request: new Request(
               "https://example.test/v1/vat-rates/apply-preset",

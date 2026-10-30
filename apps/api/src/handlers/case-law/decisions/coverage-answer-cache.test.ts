@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -32,6 +32,8 @@ const answeringReaders = (): Assembly => ({
         decisionYearFrom: 1993,
         decisionYearTo: 2026,
         pendingTextCount: 0,
+        courts: [],
+        publishedDecisions: 0,
       },
     ],
     readArrivals: async () => new Map(),
@@ -104,6 +106,45 @@ describe("coverage summary publication eligibility", () => {
     expect(computation.complete).toBe(true);
     expect("message" in computation.answer).toBe(false);
   });
+
+  for (const { storedTotal, storedTotalAsOf, storedDecisions } of [
+    { storedTotal: 0, storedTotalAsOf: null, storedDecisions: null },
+    {
+      storedTotal: 0,
+      storedTotalAsOf: new Date("2026-10-25T10:00:00.000Z"),
+      storedDecisions: 0,
+    },
+    {
+      storedTotal: 7,
+      storedTotalAsOf: new Date("2026-10-25T10:00:00.000Z"),
+      storedDecisions: 7,
+    },
+  ]) {
+    test(`stored count ${storedTotal} observed ${storedTotalAsOf?.toISOString() ?? "never"} is published as ${String(storedDecisions)}`, async () => {
+      const readers = answeringReaders();
+      const sources = await readers.load.readSources();
+      const computation = await assembleCaseLawCoverageAnswer({
+        ...readers,
+        load: {
+          ...readers.load,
+          readSources: async () =>
+            sources.map((source) => ({
+              ...source,
+              storedTotal,
+              storedTotalAsOf,
+            })),
+        },
+      });
+
+      expect(computation.complete).toBe(true);
+      if ("message" in computation.answer) {
+        panic("The source must produce a coverage answer");
+      }
+      expect(
+        computation.answer.countries.at(0)?.sources.at(0)?.storedDecisions,
+      ).toBe(storedDecisions);
+    });
+  }
 
   for (const part of PARTS) {
     test(`an answer without ${part} cannot replace the stored summary`, async () => {

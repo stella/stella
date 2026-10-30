@@ -16,6 +16,7 @@ const SESSION: StoredSession = {
   tokenEndpoint: "https://stella.example.com/api/auth/oauth2/token",
   resource: "https://stella.example.com/v1",
   refreshToken: "refresh-1",
+  userId: "user-1",
 };
 
 /** A token endpoint that rotates refresh tokens, counting what it is asked. */
@@ -117,6 +118,159 @@ describe("access tokens", () => {
 
     expect(await token(source)).toBe("SignedOutError");
     expect(memory.stored()).toBeUndefined();
+  });
+
+  test("a grant another run rotated first continues from the token it kept", async () => {
+    const successor = { ...SESSION, refreshToken: "refresh-2" };
+    const memory = memoryStore(successor);
+    const presented: string[] = [];
+    const source = createAccessTokenSource({
+      fetch: async (_input, init) => {
+        const body = new URLSearchParams(
+          typeof init?.body === "string" ? init.body : "",
+        );
+        const refreshToken = body.get("refresh_token") ?? "";
+        presented.push(refreshToken);
+        return refreshToken === "refresh-2"
+          ? Response.json({
+              access_token: "access-2",
+              expires_in: 900,
+              refresh_token: "refresh-3",
+              token_type: "Bearer",
+            })
+          : Response.json({ error: "invalid_grant" }, { status: 400 });
+      },
+      initialAccess: undefined,
+      now: () => 0,
+      session: SESSION,
+      store: memory.store,
+    });
+
+    expect(await token(source)).toBe("access-2");
+    expect(presented).toEqual(["refresh-1", "refresh-2"]);
+    expect(memory.stored()?.refreshToken).toBe("refresh-3");
+  });
+
+  test("a session kept for another server is neither adopted nor cleared", async () => {
+    // A server controls its own discovery document, so it can claim another
+    // server's issuer, client, endpoints and resource; only its URL differs.
+    const other: StoredSession = {
+      ...SESSION,
+      serverUrl: "https://other.example.com",
+      refreshToken: "other-refresh",
+    };
+    const memory = memoryStore(other);
+    const presented: string[] = [];
+    const source = createAccessTokenSource({
+      fetch: async (_input, init) => {
+        const body = new URLSearchParams(
+          typeof init?.body === "string" ? init.body : "",
+        );
+        presented.push(body.get("refresh_token") ?? "");
+        return Response.json({ error: "invalid_grant" }, { status: 400 });
+      },
+      initialAccess: undefined,
+      now: () => 0,
+      session: SESSION,
+      store: memory.store,
+    });
+
+    expect(await token(source)).toBe("SignedOutError");
+    expect(presented).toEqual(["refresh-1"]);
+    expect(memory.stored()).toEqual(other);
+  });
+
+  test("a session kept for another person on the same server is not adopted", async () => {
+    const other: StoredSession = {
+      ...SESSION,
+      userId: "user-2",
+      refreshToken: "other-refresh",
+    };
+    const memory = memoryStore(other);
+    const presented: string[] = [];
+    const source = createAccessTokenSource({
+      fetch: async (_input, init) => {
+        const body = new URLSearchParams(
+          typeof init?.body === "string" ? init.body : "",
+        );
+        presented.push(body.get("refresh_token") ?? "");
+        return Response.json({ error: "invalid_grant" }, { status: 400 });
+      },
+      initialAccess: undefined,
+      now: () => 0,
+      session: SESSION,
+      store: memory.store,
+    });
+
+    expect(await token(source)).toBe("SignedOutError");
+    expect(presented).toEqual(["refresh-1"]);
+    expect(memory.stored()).toEqual(other);
+  });
+
+  test("an adopted token refused after another run rotated again keeps the newer one", async () => {
+    // This source adopts refresh-2, which the server then refuses because a
+    // third run has since rotated it and kept refresh-3.
+    const memory = memoryStore({ ...SESSION, refreshToken: "refresh-2" });
+    const source = createAccessTokenSource({
+      fetch: async (_input, init) => {
+        const body = new URLSearchParams(
+          typeof init?.body === "string" ? init.body : "",
+        );
+        if (body.get("refresh_token") === "refresh-2") {
+          await memory.store.write({ ...SESSION, refreshToken: "refresh-3" });
+        }
+        return Response.json({ error: "invalid_grant" }, { status: 400 });
+      },
+      initialAccess: undefined,
+      now: () => 0,
+      session: SESSION,
+      store: memory.store,
+    });
+
+    expect(await token(source)).toBe("SignedOutError");
+    expect(memory.stored()?.refreshToken).toBe("refresh-3");
+  });
+
+  test("a keychain that cannot be read is not cleared", async () => {
+    let cleared = false;
+    const source = createAccessTokenSource({
+      fetch: async () =>
+        Response.json({ error: "invalid_grant" }, { status: 400 }),
+      initialAccess: undefined,
+      now: () => 0,
+      session: SESSION,
+      store: {
+        read: async () => {
+          throw new Error("The keychain is locked");
+        },
+        write: async () => undefined,
+        clear: async () => {
+          cleared = true;
+        },
+      },
+    });
+
+    expect(await token(source)).toBe("SignedOutError");
+    expect(cleared).toBe(false);
+  });
+
+  test("a keychain that cannot be cleared still signs the app out", async () => {
+    const source = createAccessTokenSource({
+      fetch: async () =>
+        Response.json({ error: "invalid_grant" }, { status: 400 }),
+      initialAccess: undefined,
+      now: () => 0,
+      session: SESSION,
+      store: {
+        read: async () => SESSION,
+        write: async () => undefined,
+        clear: async () => {
+          throw new Error("The keychain is locked");
+        },
+      },
+    });
+
+    expect(await token(source)).toBe("SignedOutError");
   });
 
   test("an unreachable server keeps the session for the next attempt", async () => {

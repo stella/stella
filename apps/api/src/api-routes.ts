@@ -65,6 +65,7 @@ import { mcpConnectorsRoute } from "@/api/handlers/mcp-connectors/routes";
 import { mcpRoute } from "@/api/handlers/mcp/routes";
 import { meRoute } from "@/api/handlers/me/routes";
 import { memoriesRoute } from "@/api/handlers/memories/routes";
+import { mobileUpdatesRoute } from "@/api/handlers/mobile-updates/routes";
 import { notificationsRoute } from "@/api/handlers/notifications/routes";
 import { numberSeriesRoute } from "@/api/handlers/number-series/routes";
 import { operatorRoute } from "@/api/handlers/operator/routes";
@@ -87,7 +88,7 @@ import { skillsRoute } from "@/api/handlers/skills/routes";
 import { smokeRoute } from "@/api/handlers/smoke/routes";
 import { styleSetsRoute } from "@/api/handlers/style-sets/routes";
 import { syntheticRoute } from "@/api/handlers/synthetic/routes";
-import { tasksRoute } from "@/api/handlers/tasks/routes";
+import { myTasksRoute, tasksRoute } from "@/api/handlers/tasks/routes";
 import { templatePacksRoute } from "@/api/handlers/template-packs/routes";
 import { templateRecipesRoute } from "@/api/handlers/template-recipes/routes";
 import {
@@ -252,6 +253,7 @@ export const apiRoutes = mount([
       legislationCorpusRoute,
       publicLegislationRoute,
       publicSanctionsRoute,
+      mobileUpdatesRoute,
       publicKnowledgeRoute,
       searchRoute,
       savedSearchesRoute,
@@ -270,6 +272,7 @@ export const apiRoutes = mount([
       entityViewsRoute,
       listsRoute,
       tasksRoute,
+      myTasksRoute,
       workObligationsRoute,
       myWorkRoute,
       accountExportsRoute,

@@ -423,10 +423,10 @@ describe("returning a submitted entry", () => {
       await returnEntry.handler(
         asTestRaw<ReturnCtx>({
           ...context(ids.userA2),
-          body: { id, comment: "Split the call from the drafting" },
+          body: { ids: [id], comment: "Split the call from the drafting" },
         }),
       ),
-    ).toEqual({ id, status: "draft" });
+    ).toEqual({ results: [{ id, status: "returned" }] });
     const mine = await listMyTimeEntries.handler(
       asTestRaw<MyListCtx>({
         ...context(ids.userA1),

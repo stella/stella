@@ -12,6 +12,8 @@ import { toSafeId } from "@/lib/safe-id";
 import type { MyTimeSuggestionRange as MySuggestionRange } from "@/lib/workspaces/queries/my-time-suggestions";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
+import { TIME_TRACKING_ENTRIES_SELECTOR } from "../../../e2e/marketing/capture-readiness";
+
 GlobalRegistrator.register({ url: "http://localhost:3000/time" });
 
 const { act, useState } = await import("react");
@@ -28,6 +30,9 @@ const { roleOptions } = await import("@/lib/auth-queries");
 const { timeEntriesKeys } =
   await import("@/lib/workspaces/queries/time-entries");
 const { invoicesKeys } = await import("@/lib/workspaces/queries/invoices");
+const { workspacesNavigationOptions } =
+  await import("@/lib/workspaces/queries");
+const { groupedChatThreadsOptions } = await import("@/features/chat/queries");
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
 const { weekOf } = await import("@/components/billing/work-week.logic");
@@ -468,6 +473,13 @@ describe("my week", () => {
     mount();
 
     expect(await screen.findByText("Review lease schedule")).toBeTruthy();
+    const capturedEntries = document.querySelectorAll(
+      TIME_TRACKING_ENTRIES_SELECTOR,
+    );
+    expect(capturedEntries).toHaveLength(1);
+    expect(capturedEntries.item(0).textContent).toContain(
+      "Review lease schedule",
+    );
     const nextMonday = Temporal.PlainDate.from(MONDAY)
       .add({ weeks: 1 })
       .toString();
@@ -485,6 +497,9 @@ describe("my week", () => {
       await screen.findByText(messages.timesheets.week.noActivity),
     ).toBeTruthy();
     expect(screen.queryByText("Review lease schedule") === null).toBe(true);
+    expect(
+      document.querySelectorAll(TIME_TRACKING_ENTRIES_SELECTOR),
+    ).toHaveLength(0);
     const ranges = calls
       .filter(({ method }) => method === "GET")
       .map(({ path, search }) => ({
@@ -597,6 +612,124 @@ describe("my week", () => {
       durationMinutes: 45,
       narrativeLanguage: "cs",
     });
+  });
+
+  test("a draft entry moves to another matter from its edit dialog", async () => {
+    const calls = serveWeek({ entries: [draftEntry()], suggestions: [] });
+    const client = mount();
+    // The matters the picker offers, as the sidebar already holds them.
+    client.setQueryData(
+      workspacesNavigationOptions({
+        organizationId: ORGANIZATION_ID,
+        userId: USER_ID,
+      }).queryKey,
+      {
+        workspaces: [LEASE_MATTER, SUPPLY_MATTER].map((matter) => ({
+          ...matter,
+          client: null,
+          clientId: null,
+          color: null,
+          defaultViewId: null,
+          lastActivityAt: new Date(`${MONDAY}T08:00:00.000Z`),
+          status: "active" as const,
+        })),
+        features: { timeBilling: true },
+      },
+    );
+    const history = groupedChatThreadsOptions({
+      activeOrganizationId: ORGANIZATION_ID,
+      userId: USER_ID,
+    });
+    client.setQueryData(history.queryKey, {
+      pageParams: [history.initialPageParam],
+      pages: [{ global: [], nextCursor: null, workspaces: [] }],
+    });
+    // Both matters' time and invoice data, opened earlier.
+    for (const matter of [LEASE_MATTER, SUPPLY_MATTER]) {
+      client.setQueryData(timeEntriesKeys.all(matter.id), { items: [] });
+      client.setQueryData(invoicesKeys.all(matter.id), { items: [] });
+    }
+
+    const edit = await screen.findByRole("button", {
+      name: `${messages.common.edit}: Review lease schedule`,
+    });
+    await act(async () => {
+      fireEvent.click(edit);
+    });
+    const dialog = await screen.findByRole("dialog");
+    const picker = within(dialog).getByLabelText(messages.common.matter);
+    if (!(picker instanceof HTMLInputElement)) {
+      throw new TypeError("Expected the matter picker input");
+    }
+    expect(picker.value).toBe(LEASE_MATTER.name);
+    expect(
+      within(dialog).queryByText(messages.billing.moveEntryHint),
+    ).toBeNull();
+    await act(async () => {
+      picker.focus();
+      fireEvent.keyDown(picker, { key: "ArrowDown" });
+    });
+    const supply = await screen.findByRole("option", {
+      name: SUPPLY_MATTER.name,
+    });
+    await act(async () => {
+      fireEvent.click(supply);
+    });
+    expect(
+      await within(dialog).findByText(messages.billing.moveEntryHint),
+    ).toBeTruthy();
+    await act(async () => {
+      fireEvent.click(
+        within(dialog).getByRole("button", { name: messages.common.save }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(calls.some(({ method }) => method === "PATCH")).toBe(true);
+    });
+    const patch = calls.find(({ method }) => method === "PATCH");
+    // Sent to the matter it is in, naming the one it moves to.
+    expect(patch?.path).toMatch(
+      new RegExp(`^/time-entries/${LEASE_MATTER.id}/?$`, "u"),
+    );
+    expect(patch?.body).toMatchObject({
+      id: toSafeId<"timeEntry">("entry-1"),
+      moveToWorkspaceId: SUPPLY_MATTER.id,
+    });
+    await waitFor(() => {
+      for (const matter of [LEASE_MATTER, SUPPLY_MATTER]) {
+        expect(
+          client.getQueryState(timeEntriesKeys.all(matter.id))?.isInvalidated,
+        ).toBe(true);
+        expect(
+          client.getQueryState(invoicesKeys.all(matter.id))?.isInvalidated,
+        ).toBe(true);
+      }
+    });
+  });
+
+  test("saving a draft in its own matter sends no move", async () => {
+    const calls = serveWeek({ entries: [draftEntry()], suggestions: [] });
+    mount();
+
+    const edit = await screen.findByRole("button", {
+      name: `${messages.common.edit}: Review lease schedule`,
+    });
+    await act(async () => {
+      fireEvent.click(edit);
+    });
+    const dialog = await screen.findByRole("dialog");
+    await act(async () => {
+      fireEvent.click(
+        within(dialog).getByRole("button", { name: messages.common.save }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(calls.some(({ method }) => method === "PATCH")).toBe(true);
+    });
+    const patch = calls.find(({ method }) => method === "PATCH");
+    expect(patch?.body).not.toHaveProperty("moveToWorkspaceId");
   });
 
   test.each([
