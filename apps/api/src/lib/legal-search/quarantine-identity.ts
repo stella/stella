@@ -232,7 +232,7 @@ const QUARANTINE_PREFIXES = [
  * reflow the same text across pages and exports, and a run of spaces carries
  * no meaning in a stable field.
  */
-const normalizeStableValue = (value: string): string =>
+export const normalizeStableValue = (value: string): string =>
   value.replace(/\s+/gu, " ").trim();
 
 /**

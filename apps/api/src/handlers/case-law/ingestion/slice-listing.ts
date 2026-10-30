@@ -12,13 +12,13 @@ import { abortableSleep } from "@/api/handlers/case-law/ingestion/abortable-slee
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import type {
   ListingIdentity,
-  ListingObservation,
   ReconciliationListingItem,
   SourceReconciliation,
 } from "@/api/lib/legal-search/ingestion-types";
 import { listingIdentityKey } from "@/api/lib/legal-search/ingestion-types";
 import {
   isQuarantineListingIdentity,
+  type ListingObservation,
   quarantineCollisionEvidence,
   quarantinePeerCollisions,
 } from "@/api/lib/legal-search/quarantine-identity";

@@ -1,5 +1,8 @@
 import { panic } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
+import fc from "fast-check";
+
+import { assertProperty } from "@stll/property-testing";
 
 import {
   decodeSourceRawEnvelope,
@@ -686,4 +689,66 @@ test("reconciliation retains every malformed listing value without canonical det
   } finally {
     globalThis.fetch = original;
   }
+});
+
+test("internal judge whitespace is normalized before quarantine bench ordering", () => {
+  const rawNames = ["Jan  Z", "Jan A"];
+  const normalizedNames = ["Jan Z", "Jan A"];
+  expect(rawNames.toSorted()).toEqual(["Jan  Z", "Jan A"]);
+  expect(normalizedNames.toSorted()).toEqual(["Jan A", "Jan Z"]);
+  const listing = {
+    id: null,
+    courtCases: [{ caseNumber: `II Co ${"1".repeat(300)}/15` }],
+  };
+  const raw = decisionFrom({
+    listingRow: { ...listing, judges: rawNames.map((name) => ({ name })) },
+    detail: null,
+  });
+  const normalized = decisionFrom({
+    listingRow: {
+      ...listing,
+      judges: normalizedNames.map((name) => ({ name })),
+    },
+    detail: null,
+  });
+  expect(normalized.sourceDocumentId).toBe(
+    "pl-courts-quarantine:2b466177ca910dbf1fcbaf4de795eee5146ca2fef45c5cb8ecfb32e8734b0f5d",
+  );
+  expect(raw.sourceDocumentId).toBe(normalized.sourceDocumentId);
+});
+
+test("pl-courts judge whitespace variants preserve quarantine identity", () => {
+  const whitespace = fc
+    .array(
+      fc.constantFrom(" ", "\t", "\r", "\n", "\u00a0", "\u2003", "\u202f"),
+      { minLength: 1, maxLength: 6 },
+    )
+    .map((parts) => parts.join(""));
+  const listing = {
+    id: null,
+    courtCases: [{ caseNumber: `II Co ${"1".repeat(300)}/15` }],
+  };
+  const normalized = decisionFrom({
+    listingRow: { ...listing, judges: [{ name: "Jan A" }, { name: "Jan Z" }] },
+    detail: null,
+  });
+  assertProperty(
+    "pl-courts judge whitespace variants preserve quarantine identity",
+    fc.property(
+      fc.record({
+        whitespaceA: whitespace,
+        whitespaceZ: whitespace,
+        order: fc.constantFrom("az", "za"),
+      }),
+      ({ whitespaceA, whitespaceZ, order }) => {
+        const a = { name: `${whitespaceA}Jan${whitespaceA}A${whitespaceA}` };
+        const z = { name: `${whitespaceZ}Jan${whitespaceZ}Z${whitespaceZ}` };
+        const decision = decisionFrom({
+          listingRow: { ...listing, judges: order === "az" ? [a, z] : [z, a] },
+          detail: null,
+        });
+        expect(decision.sourceDocumentId).toBe(normalized.sourceDocumentId);
+      },
+    ),
+  );
 });

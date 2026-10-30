@@ -100,6 +100,7 @@ import { opaqueMetadataValue } from "@/api/lib/legal-search/metadata-urls";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import {
   LISTING_OBSERVATION_REASON,
+  normalizeStableValue,
   QUARANTINE_NAMESPACE,
   quarantinedListingObservation,
   quarantineIdentity,
@@ -1346,7 +1347,7 @@ const plCourtsQuarantineId = (
   const bench = item.judges
     ?.flatMap((judge) => {
       const name = presentValue(judge.name);
-      return name === undefined ? [] : [name.trim()];
+      return name === undefined ? [] : [normalizeStableValue(name)];
     })
     .toSorted(compareCodeUnit);
   const divisionId = item.division?.id;
