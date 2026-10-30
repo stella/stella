@@ -235,18 +235,48 @@ test("a failed export to a reused prefix leaves the earlier export intact", asyn
 
 test("an export publishes its manifest only after the bounded snapshot commits", async () => {
   const { objects, storage } = memoryStorage();
+  const completedShards = new Set<string>();
+  const shardWrites: string[] = [];
   const state: { transaction: "running" | "committed" } = {
     transaction: "running",
   };
   const { manifestKey } = await exportCorpusSliceFromDatabase({
     database: snapshotDatabase(new Set([decisionId, laterId]), () => {
+      expect(shardWrites.length).toBeGreaterThan(0);
+      expect(completedShards.size).toBeGreaterThan(0);
+      expect([...objects.keys()].toSorted()).toEqual(
+        [...completedShards].toSorted(),
+      );
       state.transaction = "committed";
     }),
     storage: {
       ...storage,
       write: async (key, bytes, contentType) => {
-        expect(state.transaction).toBe("committed");
+        if (key.endsWith("/manifest.json")) {
+          expect(state.transaction).toBe("committed");
+          return await storage.write(key, bytes, contentType);
+        }
+        expect(key.endsWith(".ndjson")).toBe(true);
+        expect(state.transaction).toBe("running");
+        shardWrites.push(key);
         await storage.write(key, bytes, contentType);
+        completedShards.add(key);
+      },
+      openWriter: async (key, contentType) => {
+        expect(key.endsWith(".ndjson")).toBe(true);
+        const writer = await storage.openWriter(key, contentType);
+        return {
+          write: async (bytes) => {
+            expect(state.transaction).toBe("running");
+            shardWrites.push(key);
+            await writer.write(bytes);
+          },
+          close: async () => {
+            expect(state.transaction).toBe("running");
+            await writer.close();
+            completedShards.add(key);
+          },
+        };
       },
     },
     prefix: "committed",
