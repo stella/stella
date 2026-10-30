@@ -1259,7 +1259,6 @@
     "apps/web/src/components/docx/docx-browser-editor.tsx": 1,
     "apps/web/src/components/inline-pill.tsx": 2,
     "apps/web/src/components/inspector/document-ai-source-bar.tsx": 1,
-    "apps/web/src/components/suggested-actions.tsx": 1,
     "apps/web/src/components/templates/template-ai-conditions.tsx": 1,
     "apps/web/src/components/workspaces/table/table-find-bar.tsx": 1,
     "apps/web/src/features/avt/claim-detail-panel.tsx": 2,
