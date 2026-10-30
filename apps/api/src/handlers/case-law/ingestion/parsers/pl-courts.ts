@@ -1,3 +1,9 @@
+// parser-output-unchanged: [cz-nss] Printed-line joining changes only the common-court recital and EUREKA <br> runs; committed output of this source is unchanged (replay fingerprint identical).
+// parser-output-unchanged: [cz-uohs] Printed-line joining changes only the common-court recital and EUREKA <br> runs; committed output of this source is unchanged (replay fingerprint identical).
+// parser-output-unchanged: [pl-sn] Printed-line joining changes only the common-court recital and EUREKA <br> runs; committed output of this source is unchanged (replay fingerprint identical).
+// parser-output-unchanged: [pl-kio] Printed-line joining changes only the common-court recital and EUREKA <br> runs; committed output of this source is unchanged (replay fingerprint identical).
+// parser-output-unchanged: [pl-ncourt] Printed-line joining changes only the common-court recital and EUREKA <br> runs; committed output of this source is unchanged (replay fingerprint identical).
+// parser-output-unchanged: [pl-uokik] Printed-line joining changes only the common-court recital and EUREKA <br> runs; committed output of this source is unchanged (replay fingerprint identical).
 // parser-output-unchanged: Retention validation moved to the ingestion pipeline; the bounded plaintext load that enforces a source's DOM budget is kept on byte-identical markup, so blocks and rejections are unchanged.
 // parser-output-unchanged: Optional bounded loading is supplied only by KIO; accepted DOM traversal and legacy plaintext normalization are unchanged.
 // parser-output-unchanged: [pl-sn] PDF text becomes escaped paragraphs, so table-row changes are unreachable; exclusions and direct text reads are equivalent.
