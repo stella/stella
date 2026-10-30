@@ -1090,7 +1090,9 @@
     },
     "emptyState": "Otsuseid ei leitud. Seadistage allikas ja käivitage sünkroonimine kohtupraktika importimiseks.",
     "filters": {
-      "remove": "Eemalda filter {filter}"
+      "countryMismatch": "Eemaldati filtrid, mis ei kuulu valitud riigi ({country}) juurde: {filters}.",
+      "remove": "Eemalda filter {filter}",
+      "showInCountry": "Kuva {filter} riigis {country}"
     },
     "languages": {
       "count": "{count, plural, one {# keel} other {# keelt}}",
@@ -1346,6 +1348,7 @@
       "toastTitle": "Täisvaade ei ole veel saadaval"
     },
     "activity": {
+      "newerVersion": "Seda sisu kuvatakse uuemas versioonis.",
       "review": "Ülevaatuse värskendus"
     },
     "aiPrompt": "AI sõnumiväli",
@@ -5052,6 +5055,8 @@
       "desktopCardConnectedTitle": "stella desktop on seotud",
       "desktopCardMissingDetail": "Paigaldage see või ühendage, kui see on selles arvutis juba paigaldatud.",
       "desktopCardMissingTitle": "stella desktop pole veel ühendatud",
+      "desktopCardOpeningDetail": "Seome selle arvuti kontoga <bdi>{identity}</bdi> serveris {host}. Kui brauser küsib, lubage tal stella desktop avada.",
+      "desktopCardOpeningTitle": "stella desktop avaneb...",
       "desktopCardOutdatedDetail": "Versioon {version} on seotud kontoga <bdi>{identity}</bdi>. Paigaldage uusim versioon, et dokumendid ja tegevus töötaksid edasi.",
       "desktopCardOutdatedTitle": "stella desktop vajab uuendust",
       "desktopClipboardDescription": "Avage, otsige, korraldage ja kasutage uuesti mis tahes rakendusest kopeeritud teksti.",
@@ -5071,6 +5076,7 @@
       "desktopInstallOpenStep": "Avage stella desktop üks kord. Lõikelaud ilmub kohe ja jääb kättesaadavaks macOS-i menüüribalt või Windowsi süsteemisalvest.",
       "desktopInstallTitle": "Installimine ja avamine",
       "desktopInstallWindowsStep": "Käivitage installer ja järgige juhiseid.",
+      "desktopOpenApp": "Ava stella desktop",
       "desktopPrivacyDescription": "Lõikelaua ajalugu krüpteeritakse ja talletatakse selles seadmes.",
       "desktopPrivacyTitle": "Vaikimisi privaatne",
       "desktopSelfHostDescription": "Usaldage seda stella URL-i allkirjastatud töölauarakenduses, et selle paigalduse dokumendid avaneksid lokaalselt.",
@@ -5426,6 +5432,7 @@
     "showCitedPartOnly": "Näita ainult viidatud osa",
     "showFullProvision": "Näita kogu sätet",
     "showInText": "Näita tekstis",
+    "sortNeedsYear": "Selle veeru järgi sortimiseks valige filtrites aasta.",
     "statedWindow": "Väljaandja esitatud kuupäevad: {range}",
     "status": {
       "current": "Kehtiv",
@@ -6523,6 +6530,14 @@
           "started": "Alustas ülevaatust dokumendile"
         },
         "empty": "Selles toimikus pole veel tegevust.",
+        "fields": {
+          "dueDate": "tähtaeg",
+          "parentFolder": "ülemkaust",
+          "priority": "prioriteet",
+          "property": "omadus",
+          "schedule": "ajakava",
+          "sortOrder": "järjestus"
+        },
         "filterLabel": "Filtreeri tegevust",
         "filters": {
           "all": "Kogu tegevus",
@@ -6572,6 +6587,7 @@
           "translation": "tõlge"
         },
         "title": "Tegevus",
+        "updatedFields": "Uuendati: {fields}",
         "views": {
           "list": "Loendivaade",
           "timeline": "Ajajoone vaade"

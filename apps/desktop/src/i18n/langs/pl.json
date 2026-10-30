@@ -1,7 +1,6 @@
 {
   "tray": {
     "activeEdits": "{count, plural, one {1 aktywna edycja} few {{count} aktywne edycje} many {{count} aktywnych edycji} other {{count} aktywnych edycji}}",
-    "clipboard": "Historia schowka",
     "activity": "Aktywność",
     "activityRecording": "Aktywność: Rejestrowanie · dziś {hours} h",
     "activityPaused": "Aktywność: Wstrzymana · dziś {hours} h",
@@ -485,9 +484,6 @@
     "unreadableEraseAction": "Usuń nieczytelną aktywność",
     "unreadableEraseConfirmation": "Nieczytelna zapisana aktywność i dane odzyskiwania jej oczekujących wersji roboczych zostaną usunięte. Utworzone wersje robocze mogą już istnieć. Tej operacji nie można cofnąć.",
     "unreadableEraseNotice": "Nie można odczytać części zapisanej aktywności. Możesz usunąć nieczytelną zapisaną aktywność i dane odzyskiwania jej wersji roboczych.",
-    "discardPendingConfirmation": "Dane odzyskiwania oczekujących wersji roboczych zostaną usunięte z tego urządzenia. Utworzone wersje robocze mogą już istnieć. Tej operacji nie można cofnąć.",
-    "discardPendingRecovery": "Odrzuć odzyskiwanie wersji roboczych",
-    "batchUnavailable": "Tworzenie wersji roboczych jest obecnie niedostępne.",
     "pendingActivityProtected": "Dokończ oczekujące tworzenie wersji roboczych przed usunięciem aktywności.",
     "draftMarkerFailed": "Wersje robocze zostały utworzone, ale nie udało się zapisać lokalnego potwierdzenia. Spróbuj ponownie zapisać potwierdzenie.",
     "narrativeEvidence": "Praca nad: {evidence}",

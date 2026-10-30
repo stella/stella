@@ -1,7 +1,6 @@
 {
   "tray": {
     "activeEdits": "{count, plural, one {1 aktív szerkesztés} other {{count} aktív szerkesztés}}",
-    "clipboard": "Vágólap előzményei",
     "activity": "Tevékenység",
     "activityRecording": "Tevékenység: Rögzítés · ma {hours} ó",
     "activityPaused": "Tevékenység: Szünetel · ma {hours} ó",
@@ -485,9 +484,6 @@
     "unreadableEraseAction": "Olvashatatlan tevékenység törlése",
     "unreadableEraseConfirmation": "Az olvashatatlan mentett tevékenység és a hozzá tartozó függőben lévő piszkozatok helyreállítási adatai törlődnek. A létrehozott piszkozatok már létezhetnek. Ez a művelet nem vonható vissza.",
     "unreadableEraseNotice": "Egyes mentett tevékenységek nem olvashatók. Törölheti az olvashatatlan mentett tevékenységet és a hozzá tartozó piszkozat-helyreállítási adatokat.",
-    "discardPendingConfirmation": "A függőben lévő piszkozatok helyreállítási adatai törlődnek erről az eszközről. A létrehozott piszkozatok már létezhetnek. Ez a művelet nem vonható vissza.",
-    "discardPendingRecovery": "Piszkozat-helyreállítás elvetése",
-    "batchUnavailable": "A piszkozatok létrehozása jelenleg nem érhető el.",
     "pendingActivityProtected": "A tevékenység törlése előtt fejezze be a folyamatban lévő piszkozatkészítést.",
     "draftMarkerFailed": "A piszkozatok létrejöttek, de a helyi visszaigazolást nem sikerült menteni. Próbálja újra a visszaigazolás mentését.",
     "narrativeEvidence": "Munka: {evidence}",
