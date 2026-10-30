@@ -11,6 +11,8 @@ export const QUERY_PERF_TABLE_SIZES = {
   corpus_index_jurisdiction_serving: "small",
   corpus_index_projection_intents: "large",
   corpus_index_projection_states: "large",
+  // One checkpoint row per named backfill.
+  database_backfill_states: "small",
   entities: "large",
   entity_versions: "large",
   legislation_documents: "large",
