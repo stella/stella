@@ -51,12 +51,19 @@ const COMPLETION_ROWS = 100_000;
  * nothing. That is its worst case: the answer is known only once every row
  * has been ruled out. Its id sits outside the 00c2 range the coverage
  * scenario sources take by index, so their cleanup never walks these rows.
+ * The rows are listing-only, outside the published views: a published
+ * decision carries search documents, and these carry none, so published they
+ * would distort every per-country read of the views. The probe reads the
+ * decisions table itself.
  */
 const REPLAY_SOURCE_ID = toSafeId<"caseLawSource">(
   "01990000-00c4-7000-8000-000000000001",
 );
 const REPLAY_ROWS = 100_000;
 export const REPLAY_PARSER_VERSION = 3;
+const LISTING_ONLY_METADATA = JSON.stringify({
+  _stellaPartialObservation: { isListingOnly: true },
+});
 
 export type CaseLawScenarioGeneration =
   "case_law_v5" | "case_law_v6" | "case_law_v7" | "case_law_v8" | "case_law_v9";
@@ -480,13 +487,27 @@ export const seedCorpusReadBudgets = async (database: GatedTestDb) => {
       await tx.execute(sql`INSERT INTO case_law_decisions
         (id, source_id, case_number, country, court, language, parser_version,
           source_hash, source_hash_version, source_raw_s3_key,
-          parsed_source_hash, parsed_source_hash_version, parsed_source_raw_s3_key)
+          parsed_source_hash, parsed_source_hash_version, parsed_source_raw_s3_key,
+          metadata)
         SELECT md5(${REPLAY_SOURCE_ID}::text || '-' || n::text)::uuid,
           ${REPLAY_SOURCE_ID}, 'replay-' || n::text, 'POL', 'fixture', 'pl',
           ${REPLAY_PARSER_VERSION}, 'stored-' || n::text, 1, 'case-law/raw/replay-' || n::text,
-          'stored-' || n::text, 1, 'case-law/raw/replay-' || n::text
+          'stored-' || n::text, 1, 'case-law/raw/replay-' || n::text,
+          ${LISTING_ONLY_METADATA}::text::jsonb
         FROM generate_series(${chunk.first}, ${chunk.last}) AS n`);
     });
+  }
+  const [published] = v.parse(
+    v.tuple([v.object({ rows: v.number() })]),
+    executedRows(
+      await database.execute(sql`SELECT count(*)::integer AS rows
+        FROM case_law_published_decisions WHERE source_id = ${REPLAY_SOURCE_ID}`),
+    ),
+  );
+  if (published.rows !== 0) {
+    panic(
+      "The replay fixture's decisions must stay out of the published views",
+    );
   }
   await database.execute(sql`INSERT INTO eu_completion_receipts
     (id, source_id, decision_id, mode, parser_version, status, completion_source_hash, completed_at)
