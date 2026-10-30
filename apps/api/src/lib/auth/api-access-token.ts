@@ -92,7 +92,7 @@ export const API_OAUTH_ROUTES = {
   // Who works on a task: the people it can go to are the matter's members.
   "GET /v1/workspaces/:workspaceId/members": {
     scope: "stella:read",
-    handler: "apps/api/src/handlers/workspaces/members-list.ts",
+    handler: "apps/api/src/handlers/workspaces/members/list.ts",
   },
   "POST /v1/tasks/:workspaceId/assignees": {
     scope: "stella:matters_write",
