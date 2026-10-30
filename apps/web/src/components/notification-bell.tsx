@@ -27,6 +27,7 @@ import { Separator } from "@stll/ui/separator";
 import { cn } from "@stll/ui/utils";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { MatterRefLink } from "@/components/matter-ref-link";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -405,21 +406,22 @@ const NotificationLink = ({
           {children}
         </PopoverClose>
       );
-    // A task has no route of its own: it opens in the inspector, which sits
-    // over every page and links back to the task's matter, the same way the
-    // matter's activity and calendar open one.
+    // A task has no route of its own: the link opens its matter, and the task
+    // opens in the inspector over it, the way the matter's own agenda opens one.
     case NOTIFICATION_ENTITY_TYPE.TASK:
       return (
         <PopoverClose
           render={
-            <button
+            <MatterRefLink
               className={className}
               onClick={() => {
                 onRead();
                 openTask({ taskId: entityId, workspaceId });
               }}
-              type="button"
-            />
+              workspaceId={workspaceId}
+            >
+              {children}
+            </MatterRefLink>
           }
         >
           {children}
