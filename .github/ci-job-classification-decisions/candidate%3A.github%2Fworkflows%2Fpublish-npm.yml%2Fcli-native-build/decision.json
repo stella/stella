@@ -1,0 +1,4 @@
+{
+  "kind": "support",
+  "qualifier": "Builds and signs standalone binaries for a validated CLI release before release asset publication."
+}
