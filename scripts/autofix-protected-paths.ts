@@ -25,6 +25,7 @@ export const AUTOFIX_PROTECTED_PATHS = [
   "scripts/swallowed-item-error-ledger.json",
   "scripts/test-timing-ledger.json",
   "scripts/suppression-waivers.json",
+  "scripts/guard-rollout-policy.ts",
   "scripts/migration-baseline.txt",
   "packages/docx-utils/scripts/office-fixture-metadata-allowlist.json",
   "scripts/dead-columns.allowlist.json",
