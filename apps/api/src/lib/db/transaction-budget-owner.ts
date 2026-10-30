@@ -2,17 +2,23 @@ import { panic } from "better-result";
 import { type SQL, sql } from "drizzle-orm";
 import { AsyncLocalStorage } from "node:async_hooks";
 
-import type { AggregateTransactionBudget } from "./aggregate-transaction-budget.ts";
+import {
+  type AggregateTransactionBudget,
+  tighterTransactionBudget,
+} from "./aggregate-transaction-budget.ts";
 
-const pendingBudget = new AsyncLocalStorage<AggregateTransactionBudget>();
+const pendingBudget = new AsyncLocalStorage<{
+  budget: AggregateTransactionBudget;
+}>();
 const transactionBudgets = new WeakMap<object, AggregateTransactionBudget>();
 
 export const withTransactionBudgetContext = <T>(
   budget: AggregateTransactionBudget,
   run: () => T,
-): T => pendingBudget.run(budget, run);
+): T => pendingBudget.run({ budget }, run);
 
-export const getPendingTransactionBudget = () => pendingBudget.getStore();
+export const getPendingTransactionBudget = () =>
+  pendingBudget.getStore()?.budget;
 
 /** The pending policy belongs to transaction admission, not later transactions opened by its work. */
 export const withoutPendingTransactionBudget = <T>(run: () => T): T =>
@@ -33,6 +39,15 @@ export const initializeTransactionBudget = async (
     panic("Transaction budget is already initialized");
   }
   transactionBudgets.set(tx, budget);
+  // Admission may fail before the aggregate callback receives its transaction.
+  // Keep its error boundary aware of the physical policy already selected.
+  const admission = pendingBudget.getStore();
+  if (admission !== undefined) {
+    admission.budget = tighterTransactionBudget({
+      declared: admission.budget,
+      requested: budget,
+    });
+  }
   switch (budget.kind) {
     case "aggregate":
       await tx.execute(

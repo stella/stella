@@ -2,11 +2,20 @@ import { expect, test } from "bun:test";
 import { sql, type SQLWrapper } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
-import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
+import {
+  AGGREGATE_TRANSACTION_BUDGETS,
+  AggregateTransactionTimeoutError,
+} from "@/api/lib/db/aggregate-transaction-budget";
+import { PG_ERROR } from "@/api/lib/pg-error";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 
-import { getTransactionBudget } from "../lib/db/transaction-budget-owner";
+import {
+  getTransactionBudget,
+  withTransactionBudgetContext,
+} from "../lib/db/transaction-budget-owner";
 import {
   createMembershipSafeDb,
   createMembershipScopedDb,
@@ -15,6 +24,7 @@ import {
   createTenantlessDb,
   markRlsDatabase,
 } from "./scoped";
+import type { TransactionOf } from "./scoped";
 
 const fixture = () => {
   const statements: string[] = [];
@@ -128,6 +138,49 @@ test.each(["scoped", "tenantless"] as const)(
   },
 );
 
+test.each(["scoped", "tenantless"] as const)(
+  "%s scopes retain the tighter explicit or pending deadline",
+  async (scope) => {
+    for (const { declared, requested, expected } of [
+      {
+        declared: AGGREGATE_TRANSACTION_BUDGETS.scopedRequest,
+        requested:
+          AGGREGATE_TRANSACTION_BUDGETS.skipLockedBatchPendingMeasurement,
+        expected: AGGREGATE_TRANSACTION_BUDGETS.scopedRequest,
+      },
+      {
+        declared: AGGREGATE_TRANSACTION_BUDGETS.scopedWorkerPendingMeasurement,
+        requested: AGGREGATE_TRANSACTION_BUDGETS.deadlineProbe,
+        expected: AGGREGATE_TRANSACTION_BUDGETS.deadlineProbe,
+      },
+    ]) {
+      const { database, statements } = fixture();
+      const run =
+        scope === "scoped"
+          ? createScopedDb(database, {
+              budget: declared,
+              workspaceScope: [],
+              organizationId: mintAuthProviderId<"organization">(),
+              userId: null,
+            })
+          : createTenantlessDb(database, declared);
+      await withTransactionBudgetContext(
+        requested,
+        async () =>
+          await run(async (tx) => {
+            expect(getTransactionBudget(tx)).toBe(expected);
+            await tx.execute(sql`SELECT 1`);
+          }),
+      );
+      expect(
+        statements.filter((statement) =>
+          statement.includes("transaction_timeout"),
+        ),
+      ).toEqual([`SET LOCAL transaction_timeout = ${expected.milliseconds}`]);
+    }
+  },
+);
+
 test("a worker opens its own untimed transaction even when started inside request work", async () => {
   const request = fixture();
   const worker = fixture();
@@ -159,13 +212,115 @@ test("a worker opens its own untimed transaction even when started inside reques
   ).toEqual([]);
 });
 
+test("a scoped commit timeout identifies the physical request budget under an uncapped caller", async () => {
+  const { database, statements } = fixture();
+  const cause = { cause: { code: PG_ERROR.TRANSACTION_TIMEOUT } };
+  const rejectCommitDatabase = markRlsDatabase({
+    transaction: async <T>(
+      run: (tx: TransactionOf<typeof database>) => Promise<T>,
+    ): Promise<T> => {
+      await database.transaction(run);
+      return await Promise.reject(cause);
+    },
+  });
+  const budget = AGGREGATE_TRANSACTION_BUDGETS.scopedRequest;
+  const scoped = createScopedDb(rejectCommitDatabase, {
+    budget,
+    workspaceScope: [],
+    organizationId: mintAuthProviderId<"organization">(),
+    userId: null,
+  });
+  const failure = await rejectionOf(
+    withAggregateTransaction(
+      { transaction: scoped },
+      AGGREGATE_TRANSACTION_BUDGETS.skipLockedBatchPendingMeasurement,
+      async (tx) => {
+        expect(getTransactionBudget(tx)).toBe(budget);
+        await tx.execute(sql`SELECT 1`);
+      },
+    ),
+  );
+  expect(failure).toBeInstanceOf(AggregateTransactionTimeoutError);
+  if (!AggregateTransactionTimeoutError.is(failure)) {
+    return;
+  }
+  expect(failure.budget).toBe(budget);
+  expect(failure.cause).toBe(cause);
+  expect(failure.message).toContain(`${budget.milliseconds} ms`);
+  expect(
+    statements.filter((statement) => statement.includes("transaction_timeout")),
+  ).toEqual([`SET LOCAL transaction_timeout = ${budget.milliseconds}`]);
+});
+
+test("a tenant setup timeout identifies the request budget before the aggregate callback runs", async () => {
+  const budget = AGGREGATE_TRANSACTION_BUDGETS.scopedRequest;
+  const cause = { cause: { code: PG_ERROR.TRANSACTION_TIMEOUT } };
+  const statements: string[] = [];
+  const dialect = new PgDialect();
+  const tx = {
+    execute: async (statement: SQLWrapper | string) => {
+      const text =
+        typeof statement === "string"
+          ? statement
+          : dialect.sqlToQuery(statement.getSQL()).sql;
+      statements.push(text);
+      if (statements.length === 1) {
+        expect(text).toBe(
+          `SET LOCAL transaction_timeout = ${budget.milliseconds}`,
+        );
+        return [];
+      }
+      expect(text).toContain("set_config(");
+      return await Promise.reject(cause);
+    },
+  };
+  const database = markRlsDatabase({
+    transaction: async <T>(run: (transaction: typeof tx) => Promise<T>) =>
+      await run(tx),
+  });
+  const scoped = createScopedDb(database, {
+    budget,
+    workspaceScope: [],
+    organizationId: mintAuthProviderId<"organization">(),
+    userId: null,
+  });
+  let callbackRuns = 0;
+  const failure = await rejectionOf(
+    withAggregateTransaction(
+      { transaction: scoped },
+      AGGREGATE_TRANSACTION_BUDGETS.skipLockedBatchPendingMeasurement,
+      async () => {
+        callbackRuns += 1;
+      },
+    ),
+  );
+  expect(callbackRuns).toBe(0);
+  expect(failure).toBeInstanceOf(AggregateTransactionTimeoutError);
+  if (!AggregateTransactionTimeoutError.is(failure)) {
+    return;
+  }
+  expect(failure.budget).toBe(budget);
+  expect(failure.cause).toBe(cause);
+  expect(failure.message).toContain(`${budget.milliseconds} ms`);
+  expect(statements).toHaveLength(2);
+});
+
 test.each([
-  AGGREGATE_TRANSACTION_BUDGETS.requestPath,
-  AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch,
-  AGGREGATE_TRANSACTION_BUDGETS.skipLockedBatchPendingMeasurement,
+  {
+    budget: AGGREGATE_TRANSACTION_BUDGETS.deadlineProbe,
+    expected: AGGREGATE_TRANSACTION_BUDGETS.deadlineProbe,
+  },
+  {
+    budget: AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch,
+    expected: AGGREGATE_TRANSACTION_BUDGETS.scopedRequest,
+  },
+  {
+    budget: AGGREGATE_TRANSACTION_BUDGETS.skipLockedBatchPendingMeasurement,
+    expected: AGGREGATE_TRANSACTION_BUDGETS.scopedRequest,
+  },
 ])(
-  "a scoped aggregate keeps its caller's single deadline owner ($kind)",
-  async (budget) => {
+  "a scoped aggregate installs only the tighter declared or caller deadline ($budget.kind)",
+  async ({ budget, expected }) => {
     const { database, statements } = fixture();
     const scoped = createScopedDb(database, {
       budget: AGGREGATE_TRANSACTION_BUDGETS.scopedRequest,
@@ -176,22 +331,16 @@ test.each([
     await withAggregateTransaction(
       { transaction: scoped },
       budget,
-      async (tx) => await tx.execute(sql`SELECT 1`),
+      async (tx) => {
+        expect(getTransactionBudget(tx)).toBe(expected);
+        await tx.execute(sql`SELECT 1`);
+      },
     );
     const timeouts = statements.filter((statement) =>
       statement.includes("transaction_timeout"),
     );
-    switch (budget.kind) {
-      case "aggregate":
-        expect(timeouts).toEqual([
-          `SET LOCAL transaction_timeout = ${budget.milliseconds}`,
-        ]);
-        return;
-      case "uncapped-pending-measurement":
-        expect(timeouts).toEqual([]);
-        return;
-      default:
-        budget satisfies never;
-    }
+    expect(timeouts).toEqual([
+      `SET LOCAL transaction_timeout = ${expected.milliseconds}`,
+    ]);
   },
 );

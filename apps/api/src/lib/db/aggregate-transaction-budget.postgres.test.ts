@@ -44,7 +44,7 @@ if (!databaseUrl || !enabled) {
               },
             },
           });
-          const outerBudget = AGGREGATE_TRANSACTION_BUDGETS.requestPath;
+          const outerBudget = AGGREGATE_TRANSACTION_BUDGETS.deadlineProbe;
           const organizationId = mintAuthProviderId<"organization">();
           const userId = mintAuthProviderId<"user">();
           await withAggregateTransaction(db, outerBudget, async (parent) => {
@@ -98,7 +98,7 @@ if (!databaseUrl || !enabled) {
         const failure = await rejectionOf(
           withAggregateTransaction(
             openClient({ max: 1 }).db,
-            AGGREGATE_TRANSACTION_BUDGETS.requestPath,
+            AGGREGATE_TRANSACTION_BUDGETS.deadlineProbe,
             async (tx) => {
               await tx.execute(
                 drizzleSql`SET TRANSACTION ISOLATION LEVEL REPEATABLE READ`,
@@ -115,7 +115,9 @@ if (!databaseUrl || !enabled) {
         if (!(failure instanceof AggregateTransactionTimeoutError)) {
           throw failure;
         }
-        expect(failure.budget).toBe(AGGREGATE_TRANSACTION_BUDGETS.requestPath);
+        expect(failure.budget).toBe(
+          AGGREGATE_TRANSACTION_BUDGETS.deadlineProbe,
+        );
         expect(getPgErrorCode(failure.cause)).toBe("25P04");
       });
     }, 10_000);

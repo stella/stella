@@ -35,7 +35,7 @@ import type { MemberRole } from "@/api/lib/member-roles";
 import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
 
-const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.requestPath;
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.scopedRequest;
 
 const PROFESSIONAL_USE_AUDIT_FIELD = "professionalUseAcceptance";
 const OWNER_ROLE = "owner" satisfies MemberRole;

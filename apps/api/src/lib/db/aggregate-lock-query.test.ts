@@ -26,7 +26,7 @@ import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 
-const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.requestPath;
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.deadlineProbe;
 
 const db = await getTestDb();
 const organizationId = mintAuthProviderId<"organization">();

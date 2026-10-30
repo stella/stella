@@ -393,7 +393,7 @@ import {
 } from "@/api/mcp/constants";
 import { isLocalDevOpen, runtimeMode } from "@/api/runtime-mode";
 
-const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.requestPath;
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.scopedRequest;
 
 export { resolveWorkspaceMemberAccess, resolveWorkspaceMemberAuthority };
 

@@ -21,7 +21,7 @@ import {
   withAggregateTransaction,
 } from "./aggregate-lock";
 
-const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.requestPath;
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.deadlineProbe;
 
 describe("blocking aggregate order regressions", () => {
   test("chat revision locks scope the thread to its principal and the message to its thread", async () => {

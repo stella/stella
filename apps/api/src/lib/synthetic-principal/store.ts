@@ -36,7 +36,7 @@ import {
   SYNTHETIC_SESSION_PREFIX,
 } from "./constants";
 
-const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.requestPath;
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.scopedRequest;
 
 type MintSyntheticSessionOptions = {
   keyLabel: string;

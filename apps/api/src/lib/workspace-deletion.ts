@@ -31,7 +31,7 @@ import { hasCurrentMemberPermission } from "@/api/lib/permission-authorization";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { memberReachesMatterSql } from "@/api/lib/workspaces/authorized-workspace-ids";
 
-const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.requestPath;
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.scopedRequest;
 
 const WORKSPACE_DELETION_DEADLOCK_RETRIES = 2;
 

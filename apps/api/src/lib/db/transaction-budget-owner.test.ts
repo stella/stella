@@ -4,7 +4,10 @@ import { PgDialect } from "drizzle-orm/pg-core";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
-import { AGGREGATE_TRANSACTION_BUDGETS } from "./aggregate-transaction-budget.ts";
+import {
+  AGGREGATE_TRANSACTION_BUDGETS,
+  tighterTransactionBudget,
+} from "./aggregate-transaction-budget.ts";
 import {
   getPendingTransactionBudget,
   getTransactionBudget,
@@ -23,6 +26,52 @@ const createExecutor = () => {
   };
   return { tx, statements };
 };
+
+test("budget selection never weakens either boundary and preserves declared ownership on ties", () => {
+  const policies = Object.values(AGGREGATE_TRANSACTION_BUDGETS)
+    .filter((budget) => budget.kind !== "lease-coordinated")
+    .map((budget) => ({
+      budget,
+      deadline: budget.kind === "aggregate" ? budget.milliseconds : Infinity,
+    }));
+  for (const declared of policies) {
+    expect(
+      tighterTransactionBudget({
+        declared: declared.budget,
+        requested: undefined,
+      }),
+    ).toBe(declared.budget);
+    for (const requested of policies) {
+      const selected = tighterTransactionBudget({
+        declared: declared.budget,
+        requested: requested.budget,
+      });
+      const deadline =
+        selected.kind === "aggregate" ? selected.milliseconds : Infinity;
+      expect(
+        selected === declared.budget || selected === requested.budget,
+      ).toBe(true);
+      expect(deadline).toBeLessThanOrEqual(declared.deadline);
+      expect(deadline).toBeLessThanOrEqual(requested.deadline);
+      expect(deadline).toBe(Math.min(declared.deadline, requested.deadline));
+      if (declared.deadline === requested.deadline) {
+        expect(selected).toBe(declared.budget);
+      }
+      expect(
+        tighterTransactionBudget({
+          declared: selected,
+          requested: declared.budget,
+        }),
+      ).toBe(selected);
+      expect(
+        tighterTransactionBudget({
+          declared: selected,
+          requested: requested.budget,
+        }),
+      ).toBe(selected);
+    }
+  }
+});
 
 test.each(
   Object.values(AGGREGATE_TRANSACTION_BUDGETS).filter(
@@ -43,7 +92,7 @@ test.each(
       await rejectionOf(
         initializeTransactionBudget(
           parent.tx,
-          AGGREGATE_TRANSACTION_BUDGETS.requestPath,
+          AGGREGATE_TRANSACTION_BUDGETS.deadlineProbe,
         ),
       ),
     ).toMatchObject({ message: "Transaction budget is already initialized" });
@@ -87,7 +136,7 @@ test("racing initializers cannot issue a second deadline statement", async () =>
       return pending.promise;
     },
   };
-  const firstBudget = AGGREGATE_TRANSACTION_BUDGETS.requestPath;
+  const firstBudget = AGGREGATE_TRANSACTION_BUDGETS.deadlineProbe;
   const first = initializeTransactionBudget(tx, firstBudget);
   expect(getTransactionBudget(tx)).toBe(firstBudget);
   expect(
@@ -108,7 +157,7 @@ test("savepoints inherit the deadline without SQL and cannot reset or replace it
   const parent = createExecutor();
   const child = createExecutor();
   const grandchild = createExecutor();
-  const budget = AGGREGATE_TRANSACTION_BUDGETS.requestPath;
+  const budget = AGGREGATE_TRANSACTION_BUDGETS.deadlineProbe;
   await initializeTransactionBudget(parent.tx, budget);
   inheritTransactionBudget(parent.tx, child.tx);
   inheritTransactionBudget(child.tx, grandchild.tx);
@@ -138,7 +187,7 @@ test("savepoints inherit the deadline without SQL and cannot reset or replace it
 test("concurrent transaction contexts retain their own budgets and restore their callers", async () => {
   const ready = Promise.withResolvers<undefined>();
   const release = Promise.withResolvers<undefined>();
-  const firstBudget = AGGREGATE_TRANSACTION_BUDGETS.requestPath;
+  const firstBudget = AGGREGATE_TRANSACTION_BUDGETS.deadlineProbe;
   const secondBudget = AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch;
   const first = withTransactionBudgetContext(firstBudget, async () => {
     expect(getPendingTransactionBudget()).toBe(firstBudget);
@@ -175,7 +224,7 @@ test("concurrent transaction contexts retain their own budgets and restore their
 });
 
 test("initialization and context failures preserve their cause without permitting deadline retries", async () => {
-  const budget = AGGREGATE_TRANSACTION_BUDGETS.requestPath;
+  const budget = AGGREGATE_TRANSACTION_BUDGETS.deadlineProbe;
   const cause = { code: "08006" };
   let executions = 0;
   const tx = {

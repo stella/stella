@@ -28,7 +28,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isMemberRole } from "@/api/lib/member-roles";
 import { hasCurrentMemberPermission } from "@/api/lib/permission-authorization";
 
-const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.requestPath;
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.scopedRequest;
 
 type DesktopCredentialRequest = {
   body: {

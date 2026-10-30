@@ -7,12 +7,13 @@ import {
 
 /** Preserve Drizzle's rejection contract while identifying exhausted budgets. */
 export const withAggregateTransactionBoundary = async <T>(
-  budget: AggregateTransactionBudget,
+  getBudget: () => AggregateTransactionBudget,
   run: () => Promise<T>,
 ): Promise<T> => {
   try {
     return await run();
   } catch (error) {
+    const budget = getBudget();
     if (
       budget.kind !== "aggregate" ||
       getPgErrorCode(error) !== PG_ERROR.TRANSACTION_TIMEOUT

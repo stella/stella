@@ -24,7 +24,7 @@ import {
   withAggregateTransaction,
 } from "./aggregate-lock";
 
-const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.requestPath;
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.deadlineProbe;
 
 const recorder = () => {
   const statements: string[] = [];

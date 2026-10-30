@@ -18,7 +18,10 @@ test.each(
     const cause = { cause: { code: "25P04" } };
     expect(
       await rejectionOf(
-        withAggregateTransactionBoundary(budget, () => Promise.reject(cause)),
+        withAggregateTransactionBoundary(
+          () => budget,
+          () => Promise.reject(cause),
+        ),
       ),
     ).toBe(cause);
   },
@@ -33,7 +36,10 @@ test.each(
   async (budget) => {
     const cause = { cause: { code: "25P04" } };
     const failure = await rejectionOf(
-      withAggregateTransactionBoundary(budget, () => Promise.reject(cause)),
+      withAggregateTransactionBoundary(
+        () => budget,
+        () => Promise.reject(cause),
+      ),
     );
     expect(failure).toBeInstanceOf(AggregateTransactionTimeoutError);
     if (!AggregateTransactionTimeoutError.is(failure)) {
@@ -47,17 +53,21 @@ test.each(
 );
 
 test("transaction boundary preserves successful values and unrelated failures", async () => {
-  const budget = AGGREGATE_TRANSACTION_BUDGETS.requestPath;
+  const budget = AGGREGATE_TRANSACTION_BUDGETS.deadlineProbe;
   const value = { status: "committed" };
   expect(
-    await withAggregateTransactionBoundary(budget, () =>
-      Promise.resolve(value),
+    await withAggregateTransactionBoundary(
+      () => budget,
+      () => Promise.resolve(value),
     ),
   ).toBe(value);
   for (const cause of [{ code: "57014" }, { cause: { code: "40001" } }, null]) {
     expect(
       await rejectionOf(
-        withAggregateTransactionBoundary(budget, () => Promise.reject(cause)),
+        withAggregateTransactionBoundary(
+          () => budget,
+          () => Promise.reject(cause),
+        ),
       ),
     ).toBe(cause);
   }

@@ -22,7 +22,10 @@ import type { Transaction } from "@/api/db/root";
 import { workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateSavepoint } from "@/api/lib/db/aggregate-lock";
-import type { ScopedTransactionBudget } from "@/api/lib/db/aggregate-transaction-budget";
+import {
+  type ScopedTransactionBudget,
+  tighterTransactionBudget,
+} from "@/api/lib/db/aggregate-transaction-budget";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   getPendingTransactionBudget,
@@ -256,7 +259,10 @@ const initializeScopedBudget = async ({
     case "database":
       await initializeTransactionBudget(
         tx,
-        getPendingTransactionBudget() ?? budget,
+        tighterTransactionBudget({
+          declared: budget,
+          requested: getPendingTransactionBudget(),
+        }),
       );
       return;
     default:

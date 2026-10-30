@@ -51,7 +51,7 @@ import {
 } from "@/api/lib/usage/organization-access";
 import { readOrganizationAccessSnapshot } from "@/api/lib/usage/organization-access-snapshot";
 
-const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.requestPath;
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.scopedRequest;
 
 /**
  * Whether an organization without its own AI config may run on the instance

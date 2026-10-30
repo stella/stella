@@ -57,11 +57,13 @@ import { withAggregateTransactionBoundary } from "@/api/lib/db/aggregate-transac
 import {
   AGGREGATE_TRANSACTION_BUDGETS,
   type AggregateTransactionBudget,
+  tighterTransactionBudget,
 } from "@/api/lib/db/aggregate-transaction-budget";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import {
+  getPendingTransactionBudget,
   getTransactionBudget,
   inheritTransactionBudget,
   initializeTransactionBudget,
@@ -754,11 +756,16 @@ export const withAggregateTransaction = async <Tx extends object, T>(
   if (histories.has(database) || "rollback" in database) {
     panic("Use the aggregate savepoint owner for nested transactions");
   }
+  let effectiveBudget = budget;
   return await withTransactionBudgetContext(
     budget,
     async () =>
       await withAggregateTransactionBoundary(
-        budget,
+        () =>
+          tighterTransactionBudget({
+            declared: effectiveBudget,
+            requested: getPendingTransactionBudget(),
+          }),
         async () =>
           await database.transaction(async (tx) => {
             if (!isSqlExecutor(tx)) {
@@ -767,10 +774,15 @@ export const withAggregateTransaction = async <Tx extends object, T>(
             const initialized = getTransactionBudget(tx);
             if (initialized === undefined) {
               await initializeTransactionBudget(tx, budget);
-            } else if (initialized !== budget) {
-              panic(
-                "Physical transaction already has a different budget owner",
-              );
+            } else if (
+              tighterTransactionBudget({
+                declared: initialized,
+                requested: budget,
+              }) !== initialized
+            ) {
+              panic("Physical transaction already has a looser budget owner");
+            } else {
+              effectiveBudget = initialized;
             }
             const history = lockHistory(tx);
             assertAggregateLevelAvailable(history);
@@ -2663,7 +2675,7 @@ export const withAutomatedFlowRunCapLock = async <T>(
 ): Promise<T> =>
   await withAggregateTransaction(
     database,
-    AGGREGATE_TRANSACTION_BUDGETS.requestPath,
+    AGGREGATE_TRANSACTION_BUDGETS.scopedRequest,
     async (tx) => {
       await withAggregateLock({
         aggregate: "automatedFlowRunCap",

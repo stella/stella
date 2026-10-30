@@ -18,6 +18,8 @@ The permanent `raw-transaction-deadlines` rollout records the canonical check; i
 
 At this checkpoint, scoped/public request transactions use 30,000 ms and the largest ordinary transaction budget is 119,000 ms, strictly below the 120,000 ms migration ladder. The registry is authoritative. Lease-coordinated scheduler owners and background helpers awaiting measured runtimes remain explicitly classified; a shorter deadline is not inferred from a request caller.
 
+Request transaction families share the 30,000 ms `scopedRequest` policy, matching the established public-read statement deadline. The HTTP transport idle timeout is not an absolute handler deadline. No measured runtime envelope supports a separate five-second total transaction limit; tighter request deadlines require production-shape transaction measurements in a follow-up.
+
 1. Migrate request transaction families first, using the authorized request budget and retaining tenant-local role and identity setup.
 2. Migrate worker and scheduler families using their recorded batch cardinalities and measured transaction durations; do not inherit an interactive budget for background work.
 3. Migrate maintenance and native-driver adapters last. Corpus scheduler owners retain their explicit lease-coordinated classification and census; long work needs its registered drain contract or independently committed checkpoints.

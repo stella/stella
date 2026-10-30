@@ -16,7 +16,7 @@ import {
 import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
-const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.requestPath;
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.scopedRequest;
 
 const MAX_PRUNE_ROWS = 100;
 type ProofStoreDb = Pick<typeof rootDb, "transaction">;

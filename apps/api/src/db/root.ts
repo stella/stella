@@ -48,7 +48,7 @@ import type {
 import type { createSyntheticSessionStore } from "@/api/lib/synthetic-principal/store";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
-const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.requestPath;
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.scopedRequest;
 
 // Per-request query counter feeds the `x-db-queries` response header for the
 // N+1 e2e guard. Local/CI only: deployed environments pass no logger at all,

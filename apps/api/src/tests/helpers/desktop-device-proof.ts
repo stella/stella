@@ -110,7 +110,7 @@ export const claimFixtureDeviceProof = async ({
           const query = new PgDialect().sqlToQuery(statement);
           if (
             query.sql !==
-            `SET LOCAL transaction_timeout = ${AGGREGATE_TRANSACTION_BUDGETS.requestPath.milliseconds}`
+            `SET LOCAL transaction_timeout = ${AGGREGATE_TRANSACTION_BUDGETS.scopedRequest.milliseconds}`
           ) {
             panic("Unexpected SQL in desktop proof persistence fixture");
           }

@@ -68,7 +68,7 @@ import type { SchedulerDb } from "@/api/lib/scheduler/types";
 import { executeAuthorizedWorkspaceDeletion } from "@/api/lib/workspace-deletion";
 import type { WorkspaceDeletionDependencies } from "@/api/lib/workspace-deletion";
 
-const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.requestPath;
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.scopedRequest;
 
 export const REVIEW_RESET_REFUSAL = {
   unconfigured: "unconfigured",

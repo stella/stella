@@ -20,7 +20,7 @@ import {
 import { createEffectLease } from "@/api/lib/effect-lease";
 import type { EffectLease } from "@/api/lib/effect-lease";
 
-const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.requestPath;
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.scopedRequest;
 
 export const ACCOUNT_DELETION_EFFECT_KIND = "account-deletion-s3" as const;
 const ACCOUNT_DELETION_EFFECT_LEASE_MS = 15 * 60_000;

@@ -43,7 +43,7 @@ describe.skipIf(!enabled)("sitemap session lock (postgres)", () => {
           expect(
             await withAggregateTransaction(
               observer,
-              AGGREGATE_TRANSACTION_BUDGETS.requestPath,
+              AGGREGATE_TRANSACTION_BUDGETS.deadlineProbe,
               async (tx) => await tryLockCaseLawSitemapMonth({ tx, month }),
             ),
           ).toBe(false);
@@ -55,7 +55,7 @@ describe.skipIf(!enabled)("sitemap session lock (postgres)", () => {
         expect(
           await withAggregateTransaction(
             observer,
-            AGGREGATE_TRANSACTION_BUDGETS.requestPath,
+            AGGREGATE_TRANSACTION_BUDGETS.deadlineProbe,
             async (tx) => await tryLockCaseLawSitemapMonth({ tx, month }),
           ),
         ).toBe(true);

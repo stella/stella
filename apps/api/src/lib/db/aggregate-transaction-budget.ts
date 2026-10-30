@@ -1,4 +1,4 @@
-import { TaggedError } from "better-result";
+import { panic, TaggedError } from "better-result";
 
 import { HTTP_REQUEST_DATABASE_BUDGET_MS } from "../../http/timeout-policy.ts";
 import { READ_BUDGETS } from "./read-budgets.ts";
@@ -28,10 +28,11 @@ type TransactionBudget =
 
 /** Ordinary transactions end before online DDL's ladder; long scheduler jobs retain their existing policy until lease cutover. */
 export const AGGREGATE_TRANSACTION_BUDGETS = {
-  requestPath: {
+  deadlineProbe: {
     kind: "aggregate",
     milliseconds: 5000,
-    reason: "interactive request-path work",
+    reason:
+      "short deadline-owner regression probe; production requests use scopedRequest",
   },
   scopedRequest: {
     kind: "aggregate",
@@ -183,6 +184,35 @@ export type AggregateTransactionBudget = Extract<
   (typeof AGGREGATE_TRANSACTION_BUDGETS)[keyof typeof AGGREGATE_TRANSACTION_BUDGETS],
   { kind: "aggregate" | "uncapped-pending-measurement" }
 >;
+
+type TighterTransactionBudgetOptions = {
+  declared: AggregateTransactionBudget;
+  requested: AggregateTransactionBudget | undefined;
+};
+
+/** Explicit and ambient policies compose monotonically; ties preserve the declared owner. */
+export const tighterTransactionBudget = ({
+  declared,
+  requested,
+}: TighterTransactionBudgetOptions): AggregateTransactionBudget => {
+  if (requested === undefined) {
+    return declared;
+  }
+  switch (declared.kind) {
+    case "uncapped-pending-measurement":
+      return requested.kind === "aggregate" ? requested : declared;
+    case "aggregate":
+      return requested.kind === "uncapped-pending-measurement" ||
+        declared.milliseconds <= requested.milliseconds
+        ? declared
+        : requested;
+    default:
+      return panic(
+        "Unknown declared transaction budget",
+        declared satisfies never,
+      );
+  }
+};
 
 export class AggregateTransactionTimeoutError extends TaggedError(
   "AggregateTransactionTimeoutError",

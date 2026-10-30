@@ -40,7 +40,7 @@ import {
   brandPersistedUserId,
 } from "@/api/lib/safe-id-boundaries";
 
-const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.requestPath;
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.scopedRequest;
 
 const HANDOFF_SESSION_LABEL_CAP = 100;
 export class WebHandoffOperationError extends TaggedError(

@@ -83,7 +83,7 @@ import type { TestIds } from "@/api/tests/security/rls-helpers";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
-const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.requestPath;
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.deadlineProbe;
 
 // timeout: Boot the shared PGlite engine and complete schema before assertions.
 setDefaultTimeout(120_000);

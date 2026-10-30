@@ -17,7 +17,7 @@ import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
-const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.requestPath;
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.scopedRequest;
 
 const unlinkBody = v.object({
   accountId: v.pipe(

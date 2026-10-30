@@ -31,7 +31,7 @@ import {
 import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { runtimeMode } from "@/api/runtime-mode";
 
-const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.requestPath;
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.scopedRequest;
 
 const SMOKE_PRINCIPAL = {
   default: "default",
