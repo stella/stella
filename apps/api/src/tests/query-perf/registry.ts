@@ -107,7 +107,12 @@ export const SCHEDULED_JOB_MEASUREMENTS: Readonly<
     task: REFRESH_CASE_LAW_COVERAGE_TASK,
     prepare: isolateCoverageRefreshMeasurement,
     executed: coverageRefreshWroteSummary,
-    scenarios: [CASE_LAW_SCENARIOS.quiet],
+    scenarios: [
+      {
+        size: { type: "case-law", served: CASE_LAW_SCENARIOS.quiet.size },
+        double: { type: "case-law", served: CASE_LAW_SCENARIOS.quiet.double },
+      },
+    ],
   },
   "caseLaw.refreshSitemapShards.hourly": {
     task: REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK,

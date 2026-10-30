@@ -231,7 +231,7 @@ test("coverage refresh is governed as a shared reader at default floors, held at
   const compute = async () => {
     computations += 1;
     return await Promise.resolve({
-      answer: CASE_LAW_COVERAGE_FIXTURE,
+      answer: CASE_LAW_COVERAGE_SNAPSHOT_FIXTURE,
       complete: true,
     });
   };
