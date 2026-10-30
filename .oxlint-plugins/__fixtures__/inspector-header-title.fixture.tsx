@@ -3,9 +3,10 @@
 
 declare const title: string;
 
-// oxlint-disable-next-line inspector-header-title/inspector-header-title -- fixture: raw panel header titles must be rejected
+// Raw panel header titles must be rejected.
 export const _rawPanelHeader = (
   <header>
+    {/* oxlint-disable-next-line inspector-header-title/inspector-header-title */}
     <h2>{title}</h2>
   </header>
 );
