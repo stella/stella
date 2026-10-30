@@ -29,6 +29,8 @@ type ProofFixture = {
       conclusion: string | null;
       steps?: readonly { name: string; conclusion: string | null }[];
     }[];
+    /** The heavy run's current attempt; defaults to 1. */
+    runAttempt?: number;
     /** The jobs API's total_count; defaults to the number of jobs. */
     total?: number;
     /** The ci-required-summary record; no artifact when undefined. */
@@ -112,6 +114,7 @@ export const finalize = (fixture: ProofFixture = {}) => {
           head_branch: "main",
           event: "workflow_dispatch",
           display_title: `${title}${fixture.runSha ?? sha}`,
+          run_attempt: fixture.heavyRun?.runAttempt ?? 1,
           status: "completed",
           conclusion:
             title.startsWith("Main heavy") && fixture.heavyRun

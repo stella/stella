@@ -30,6 +30,8 @@ status_run_matches() {
   run_id="${url#"$runs_prefix"}"
   [[ "$run_id" =~ ^[1-9][0-9]*$ ]] || return 1
   run=$(bash "$gh_retry_script" api "repos/$repo/actions/runs/$run_id") || return 1
+  # The attempt the run is at now, for callers that bind evidence to it.
+  matched_run_attempt=$(jq -er '.run_attempt | select(type == "number" and . >= 1 and . == floor)' <<< "$run") || return 1
   jq -e --arg repo "$repo" --arg sha "$commit" --arg url "$url" --arg workflow "$workflow" --arg title "$title" --arg conclusion "$conclusion" --argjson id "$run_id" '
     .id == $id and .html_url == $url and .repository.full_name == $repo and
     .path == $workflow and .head_branch == "main" and
@@ -68,7 +70,7 @@ heavy_failed_only_in_advisory_jobs() {
   # and the unmet checks it published beside it; an absent one is null.
   record=$(download_ci_record "$run_id" ci-required-summary)
   violations=$(download_ci_record "$run_id" ci-required-violations)
-  verdict=$(jq -nc --argjson jobs "$jobs" --argjson total "$total" --argjson record "$record" --argjson violations "$violations" --argjson run_id "$run_id" --arg head "$commit" -f "$heavy_verdict_filter") || return 1
+  verdict=$(jq -nc --argjson jobs "$jobs" --argjson total "$total" --argjson record "$record" --argjson violations "$violations" --argjson run_id "$run_id" --argjson run_attempt "$matched_run_attempt" --arg head "$commit" -f "$heavy_verdict_filter") || return 1
   jq -e '.advisoryOnly' <<< "$verdict" >/dev/null || {
     echo "main/heavy failing jobs: $(jq -r '.blocking | join(", ")' <<< "$verdict")" >&2
     return 1

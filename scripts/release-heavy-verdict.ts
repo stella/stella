@@ -35,6 +35,8 @@ export type HeavyVerdictInput = {
   /** The run's `ci-required-violations` record; null when unreadable. */
   violations: unknown;
   runId: number;
+  /** The workflow run's current attempt; every input must come from it. */
+  runAttempt: number;
   head: string;
 };
 
@@ -44,6 +46,7 @@ export const heavyVerdict = ({
   record,
   violations,
   runId,
+  runAttempt,
   head,
 }: HeavyVerdictInput): HeavyVerdict => {
   const result = Bun.spawnSync(
@@ -65,6 +68,9 @@ export const heavyVerdict = ({
       "--argjson",
       "run_id",
       String(runId),
+      "--argjson",
+      "run_attempt",
+      String(runAttempt),
       "--arg",
       "head",
       head,

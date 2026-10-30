@@ -3,7 +3,9 @@
 #   jq -n --argjson jobs <latest-attempt jobs, with steps> --argjson total <API total_count> \
 #         --argjson record <ci-required-summary record or null> \
 #         --argjson violations <ci-required-violations record or null> \
-#         --argjson run_id <n> --arg head <sha> -f this
+#         --argjson run_id <n> --argjson run_attempt <the run's current attempt> --arg head <sha> -f this
+# Every input must come from that one attempt: a re-run of ci-result can fail
+# before it replaces the artifacts, and the previous attempt's still match.
 # by check-release-main-health.sh and, through release-heavy-verdict.ts, by
 # prepare-maintenance-release.ts.
 #
@@ -53,11 +55,11 @@ def record_blocking:
     | (if (.required | type) == "array" then .required else [] end) as $required
     | [
         (if .version != 1 then "required-jobs record has an unknown version" else empty end),
-        (if .run_id != $run_id or .head_sha != $head then "required-jobs record belongs to another run or commit" else empty end),
+        (if .run_id != $run_id or .head_sha != $head or .run_attempt != $run_attempt then "required-jobs record belongs to another run, attempt or commit" else empty end),
         (if .basis != "evaluated" or .verdict != "failure" or .depth != "heavy" then "required-jobs record is not an evaluated heavy failure" else empty end),
         (if ($required | length) == 0 then "required-jobs record lists no required job" else empty end),
         (if ($violations | type) != "object" then "required-violations record unreadable"
-          elif $violations.run_id != $run_id or $violations.head_sha != $head or $violations.run_attempt != .run_attempt then "required-violations record belongs to another run, attempt or commit"
+          elif $violations.run_id != $run_id or $violations.head_sha != $head or $violations.run_attempt != $run_attempt then "required-violations record belongs to another run, attempt or commit"
           elif $violations.evaluated != true then "required-violations record did not evaluate the unmet checks"
           elif ($violations.violations // advisory_violation) != advisory_violation then "unmet checks: \($violations.violations)"
           else empty end),
@@ -79,6 +81,7 @@ def job_verdict:
       blocking: (
         $blocking
         + (if ($total | type) == "number" and ($jobs | length) == $total then [] else ["job list incomplete: read \($jobs | length) of \($total)"] end)
+        + (if ($entries | all(.run_attempt == $run_attempt)) then [] else ["job list is not from run attempt \($run_attempt)"] end)
         + record_blocking
       )
     };

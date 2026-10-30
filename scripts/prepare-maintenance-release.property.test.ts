@@ -1377,6 +1377,7 @@ const job = (
 ) => ({
   conclusion,
   name,
+  run_attempt: 1,
   status,
 });
 
@@ -1523,6 +1524,7 @@ describe("release cut readiness", () => {
     head_branch: "main",
     event: "push",
     display_title: `Main heavy suites ${CUT_SHA}`,
+    run_attempt: 1,
     head_sha: CUT_SHA,
     status: "completed",
     conclusion: "failure",
@@ -1660,6 +1662,53 @@ describe("release cut readiness", () => {
       );
     },
   );
+
+  test("refuses artifacts of attempt 1 when the run is at attempt 2", async () => {
+    const message = await cutRefusal(
+      heavyFailure([marketingJob(), ...rollups], {
+        run: heavyRun({ run_attempt: 2 }),
+      }),
+      heavyRecord(),
+      heavyViolations(),
+    );
+    expect(message).toContain("main/heavy: failure");
+  });
+
+  test("cuts when the jobs and both artifacts are from the run's attempt", async () => {
+    const attempt2 = [marketingJob(), ...rollups].map((entry) => ({
+      ...entry,
+      run_attempt: 2,
+    }));
+    const written: string[] = [];
+    await assertReleaseCutReady(
+      CUT_SHA,
+      false,
+      {
+        json: fakeGitHub(
+          heavyFailure(attempt2, { run: heavyRun({ run_attempt: 2 }) }),
+        ),
+        record: fakeRecord(
+          heavyRecord({ run_attempt: 2 }),
+          heavyViolations({ run_attempt: 2 }),
+        ),
+      },
+      (text) => {
+        written.push(text);
+      },
+    );
+    expect(written.join("")).toContain("green on");
+  });
+
+  test("refuses a job list from an earlier attempt than the run's", async () => {
+    const message = await cutRefusal(
+      heavyFailure([marketingJob(), ...rollups], {
+        run: heavyRun({ run_attempt: 2 }),
+      }),
+      heavyRecord({ run_attempt: 2 }),
+      heavyViolations({ run_attempt: 2 }),
+    );
+    expect(message).toContain("main/heavy: failure");
+  });
 
   test("refuses a job count different from total_count", async () => {
     const message = await cutRefusal(

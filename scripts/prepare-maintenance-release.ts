@@ -1127,27 +1127,32 @@ const readRequiredRecord: RequiredRecordReader = async (runId, artifact) => {
 /**
  * Mirrors the shell gate's provenance check on a failed main/heavy run: the
  * linked run is this repository's main-heavy.yml on main for the cut commit,
- * and it completed with conclusion failure. Unreadable or mismatched is false.
+ * and it completed with conclusion failure. Returns the run's current
+ * attempt; unreadable or mismatched is null.
  */
 const failedHeavyRunMatches = async (
   runUrl: string | null,
   sha: string,
   readJson: GitHubJsonReader,
-): Promise<boolean> => {
+): Promise<number | null> => {
   const runId = runIdFromUrl(runUrl);
   if (runId === null) {
-    return false;
+    return null;
   }
   const runResult = await Result.tryPromise(async () =>
     readJson(`/actions/runs/${runId}`),
   );
   if (Result.isError(runResult) || !isRecord(runResult.value)) {
-    return false;
+    return null;
   }
   const linked = runResult.value;
   const repository = linked["repository"];
   const event = linked["event"];
-  return (
+  const attempt = linked["run_attempt"];
+  const matches =
+    typeof attempt === "number" &&
+    Number.isInteger(attempt) &&
+    attempt > 0 &&
     String(linked["id"]) === runId &&
     linked["html_url"] === runUrl &&
     isRecord(repository) &&
@@ -1159,8 +1164,8 @@ const failedHeavyRunMatches = async (
     linked["display_title"] === `Main heavy suites ${sha}` &&
     (event === "workflow_dispatch" || linked["head_sha"] === sha) &&
     linked["status"] === "completed" &&
-    linked["conclusion"] === "failure"
-  );
+    linked["conclusion"] === "failure";
+  return matches ? attempt : null;
 };
 
 type GateFromStatusOptions = {
@@ -1210,9 +1215,12 @@ const gateFromStatus = async ({
     spec.context === "main/heavy" &&
     login === TRUSTED_STATUS_CREATOR &&
     status["state"] === "failure" &&
-    read.kind === "jobs" &&
-    (await failedHeavyRunMatches(runUrl, sha, readJson))
+    read.kind === "jobs"
   ) {
+    const runAttempt = await failedHeavyRunMatches(runUrl, sha, readJson);
+    if (runAttempt === null) {
+      return { ...gate, failingJobs: failingJobNames(read) };
+    }
     const runId = String(runIdFromUrl(runUrl));
     const recordResult = await Result.tryPromise(async () =>
       readRecord(runId, "ci-required-summary"),
@@ -1226,6 +1234,7 @@ const gateFromStatus = async ({
       record: Result.isOk(recordResult) ? recordResult.value : null,
       violations: Result.isOk(violationsResult) ? violationsResult.value : null,
       runId: Number(runId),
+      runAttempt,
       head: sha,
     });
     if (verdict.advisoryOnly) {

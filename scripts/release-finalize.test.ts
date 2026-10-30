@@ -78,6 +78,7 @@ const heavyJob = (
   steps?: readonly HeavyStep[],
 ) => ({
   name,
+  run_attempt: 1,
   status: conclusion === null ? "in_progress" : "completed",
   conclusion,
   ...(steps === undefined ? {} : { steps }),
@@ -145,6 +146,40 @@ const failedHeavy = ({
       ...(violations === null ? {} : { violations }),
     },
   });
+
+test("artifacts of attempt 1 with the run at attempt 2 refuse", () => {
+  const proof = finalize({
+    states: { "main/heavy": "failure" },
+    heavyRun: {
+      conclusion: "failure",
+      jobs: [marketingJob(), ...ROLLUP_JOBS],
+      runAttempt: 2,
+      record: requiredRecord(),
+      violations: requiredViolations(),
+    },
+  });
+  expect(proof.result.exitCode).not.toBe(0);
+  expect(proof.result.stderr.toString()).toContain("attempt");
+  expect(proof.finalSha).toBeNull();
+});
+
+test("jobs and artifacts from the run's attempt finalize", () => {
+  const proof = finalize({
+    states: { "main/heavy": "failure" },
+    heavyRun: {
+      conclusion: "failure",
+      jobs: [marketingJob(), ...ROLLUP_JOBS].map((entry) => ({
+        ...entry,
+        run_attempt: 2,
+      })),
+      runAttempt: 2,
+      record: requiredRecord({ run_attempt: 2 }),
+      violations: requiredViolations({ run_attempt: 2 }),
+    },
+  });
+  expect(proof.result.exitCode, proof.result.stderr.toString()).toBe(0);
+  expect(proof.finalSha).toBe(proof.sha);
+});
 
 test("a heavy run that failed only in the screenshot comparison finalizes with a warning", () => {
   const proof = failedHeavy({

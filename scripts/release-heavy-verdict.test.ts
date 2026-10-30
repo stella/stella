@@ -38,6 +38,7 @@ const callerOf = (workflow: ReturnType<typeof readWorkflow>, uses: string) =>
 
 const HEAD = "d".repeat(40);
 const RUN_ID = 7;
+const RUN_ATTEMPT = 1;
 const MARKETING = "suites / marketing-screenshots / check";
 const CAPTURE_STEP = "Capture marketing screenshots";
 const MARKER_STEP = "Screenshot comparison failed";
@@ -60,6 +61,7 @@ const job = (
   steps?: readonly unknown[],
 ) => ({
   name,
+  run_attempt: RUN_ATTEMPT,
   status: conclusion === null ? "in_progress" : "completed",
   conclusion,
   ...(steps === undefined ? {} : { steps }),
@@ -110,6 +112,7 @@ const verdictOf = (overrides: Partial<HeavyVerdictInput> = {}) => {
     record: record(),
     violations: violationsRecord(),
     runId: RUN_ID,
+    runAttempt: RUN_ATTEMPT,
     head: HEAD,
     ...overrides,
   });
@@ -323,6 +326,41 @@ test.each([
   const verdict = verdictOf(overrides);
   expect(verdict.advisoryOnly).toBe(false);
   expect(verdict.blocking.join("\n")).toContain(reason);
+});
+
+// A re-run of ci-result can fail before it replaces the artifacts, so the
+// previous attempt's matching records must not excuse the new attempt.
+const atAttempt = (attempt: number) => ({
+  jobs: [job("suites / ci-tests", "success"), marketingJob(), ...ROLLUPS].map(
+    (entry) => ({ ...entry, run_attempt: attempt }),
+  ),
+  record: record({ run_attempt: attempt }),
+  violations: violationsRecord({ run_attempt: attempt }),
+  runAttempt: attempt,
+});
+
+test("everything from the run's current attempt is advisory", () => {
+  expect(verdictOf(atAttempt(2)).advisoryOnly).toBe(true);
+});
+
+test.each([
+  [
+    "both artifacts",
+    {
+      ...atAttempt(2),
+      ...{ record: record(), violations: violationsRecord() },
+    },
+  ],
+  ["the summary", { ...atAttempt(2), record: record() }],
+  [
+    "the violations artifact",
+    { ...atAttempt(2), violations: violationsRecord() },
+  ],
+  ["the job list", { ...atAttempt(2), jobs: atAttempt(1).jobs }],
+])("%s from an earlier attempt is not advisory-only", (_label, overrides) => {
+  const verdict = verdictOf(overrides);
+  expect(verdict.advisoryOnly).toBe(false);
+  expect(verdict.blocking.join("\n")).toMatch(/attempt/u);
 });
 
 test.each([
