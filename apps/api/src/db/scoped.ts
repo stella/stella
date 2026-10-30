@@ -21,7 +21,12 @@ import type { Transaction } from "@/api/db/root";
 import { workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateSavepoint } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { executedRows } from "@/api/lib/db/executed-rows";
+import {
+  getPendingTransactionBudget,
+  initializeTransactionBudget,
+} from "@/api/lib/db/transaction-budget-owner";
 import {
   DatabaseError,
   DatabaseRlsError,
@@ -239,6 +244,11 @@ const runScopedTransaction = async <
   featureAccessSnapshot,
 }: RunScopedTransactionOptions<TTransaction, T>): Promise<T> =>
   await database.transaction(async (tx: TTransaction) => {
+    await initializeTransactionBudget(
+      tx,
+      getPendingTransactionBudget() ??
+        AGGREGATE_TRANSACTION_BUDGETS.scopedRequest,
+    );
     if (
       featureAccessSnapshot !== undefined &&
       (featureAccessSnapshot.organizationId !== organizationId ||
@@ -294,6 +304,11 @@ export const createTenantlessDb =
   ) =>
   async <T>(fn: (tx: TTransaction) => Promise<T>): Promise<T> =>
     await database.transaction(async (tx: TTransaction) => {
+      await initializeTransactionBudget(
+        tx,
+        getPendingTransactionBudget() ??
+          AGGREGATE_TRANSACTION_BUDGETS.scopedRequest,
+      );
       await tx.execute(
         sql`SELECT set_config('role', '${sql.raw(stella.name)}', true)`,
       );

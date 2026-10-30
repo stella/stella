@@ -42,7 +42,9 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { Temporal } from "@stll/time";
 
 import { runUnderCorpusSchemaLane } from "@/api/db/corpus-schema-lane";
+import { stellaIngestion } from "@/api/db/rls";
 import type { rootDb as rootDatabase, Transaction } from "@/api/db/root";
+import { withAggregateSavepoint } from "@/api/lib/db/aggregate-lock";
 
 /**
  * The lane's advisory-lock key, as the `(int, int)` form of
@@ -164,16 +166,36 @@ export const caseLawRootHandleUnderCorpusSchemaLane = (
   };
 };
 
-const loadWriteHandles = async (): Promise<CaseLawWriteHandles> => {
+const loadScriptHandles = async (
+  mode: "write" | "read-only",
+): Promise<CaseLawScriptHandles> => {
   const { rlsDb, rootDb } = await import("@/api/db/root");
   const { assertDatabaseLoginPosture } =
     await import("@/api/lib/db/assert-database-login-posture");
   await assertDatabaseLoginPosture(rootDb);
-  const { createIngestionDb } = await import("@/api/db/scoped");
-  return {
-    rootDb: caseLawRootHandleUnderCorpusSchemaLane(rootDb),
-    ingestionDb: createIngestionDb(rlsDb),
-  };
+  switch (mode) {
+    case "write": {
+      const { createIngestionDb } = await import("@/api/db/scoped");
+      return {
+        rootDb: caseLawRootHandleUnderCorpusSchemaLane(rootDb),
+        ingestionDb: createIngestionDb(rlsDb),
+      };
+    }
+    case "read-only":
+      return {
+        rootDb,
+        ingestionDb: async (fn) =>
+          await withAggregateSavepoint(rlsDb, async (tx) => {
+            await tx.execute(
+              sql`SET LOCAL ROLE ${sql.identifier(stellaIngestion.name)}`,
+            );
+            return await fn(tx);
+          }),
+      };
+    default:
+      mode satisfies never;
+      return panic("Unknown case-law script mode");
+  }
 };
 
 /**
@@ -405,7 +427,7 @@ export async function enterCaseLawMaintenanceLane<T>(
   }
   return await createMaintenanceLaneSession({
     hold: holdCaseLawMaintenanceLane,
-    loadHandles: loadWriteHandles,
+    loadHandles: async () => await loadScriptHandles("write"),
   });
 }
 
@@ -453,4 +475,4 @@ export const readOnlyHandles = ({
 export const openCaseLawReadOnlySession = async ({
   handles,
 }: ReadOnlySessionOptions = {}): Promise<CaseLawScriptHandles> =>
-  readOnlyHandles(handles ?? (await loadWriteHandles()));
+  readOnlyHandles(handles ?? (await loadScriptHandles("read-only")));

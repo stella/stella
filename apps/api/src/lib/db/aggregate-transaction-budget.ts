@@ -1,37 +1,49 @@
 import { TaggedError } from "better-result";
 
-import type { DEFAULT_LOCK_RETRY_CONFIG } from "../../db/lock-retry-ladder";
-import { READ_BUDGETS } from "./read-budgets";
+import { HTTP_REQUEST_DATABASE_BUDGET_MS } from "../../http/timeout-policy.ts";
+import { READ_BUDGETS } from "./read-budgets.ts";
 
 type TransactionBudget =
   | {
       kind: "aggregate";
-      milliseconds: 5000 | 30_000 | 90_000 | 120_000;
+      milliseconds: 5000 | 30_000 | 90_000 | 119_000;
       reason: string;
     }
   | {
-      kind: "statement-envelope";
-      milliseconds: number;
-      reason: string;
-    }
-  | {
-      kind: "dedicated-deadline";
+      kind: "lease-coordinated";
       owner: string;
-      statementDeadline:
-        | { kind: "fixed"; milliseconds: number }
-        | {
-            kind: "connection-policy";
-            environment: "DATABASE_STATEMENT_TIMEOUT_MS";
-          };
+      envelopeMs: number;
+      tables: readonly string[];
+      transactionEntries: number;
+      statementDeadline: { kind: "fixed"; milliseconds: number };
+      reason: string;
+    }
+  | {
+      kind: "uncapped-pending-measurement";
+      owner: string;
+      entryPoint: string;
+      callers: readonly string[];
       reason: string;
     };
 
-/** Default aggregate budgets respect the DDL ceiling; longer envelopes require an explicit derivation. */
+/** Ordinary transactions end before online DDL's ladder; long scheduler jobs retain their existing policy until lease cutover. */
 export const AGGREGATE_TRANSACTION_BUDGETS = {
   requestPath: {
     kind: "aggregate",
     milliseconds: 5000,
     reason: "interactive request-path work",
+  },
+  scopedRequest: {
+    kind: "aggregate",
+    milliseconds: HTTP_REQUEST_DATABASE_BUDGET_MS,
+    reason:
+      "scoped requests share the existing 30-second public-read budget within the 75-second HTTP transport window",
+  },
+  publicReadRequest: {
+    kind: "aggregate",
+    milliseconds: HTTP_REQUEST_DATABASE_BUDGET_MS,
+    reason:
+      "anonymous reads share their existing 30-second statement deadline and remain inside the HTTP transport window",
   },
   backgroundBatch: {
     kind: "aggregate",
@@ -45,56 +57,121 @@ export const AGGREGATE_TRANSACTION_BUDGETS = {
   },
   corpusRepair: {
     kind: "aggregate",
-    milliseconds: 120_000,
-    reason: "2,000-row JSONB repair with a 100-second statement deadline",
-  },
-  sitemapRefresh: {
-    kind: "statement-envelope",
-    milliseconds:
-      13 *
-      READ_BUDGETS["scheduled.caseLaw.refreshSitemapShards"]
-        .statementDeadlineMs,
-    reason: `sitemap: four publication + two retirement + six settings/fence/read statements + budget setup; thirteen ${READ_BUDGETS["scheduled.caseLaw.refreshSitemapShards"].statementDeadlineMs}ms deadlines; lock waits retain the refresh lock timeout`,
+    milliseconds: 119_000,
+    reason:
+      "2,000-row JSONB repair with a 100-second statement deadline; below the migration ladder",
   },
   migrationCeiling: {
     kind: "aggregate",
-    milliseconds: 120_000,
-    reason: "online-DDL lock retry ceiling",
-  },
-  legislationFacetRefresh: {
-    kind: "dedicated-deadline",
-    owner: "apps/api/src/lib/legal-search/legislation-facet-refresh.ts",
-    statementDeadline: { kind: "fixed", milliseconds: 300_000 },
-    reason:
-      "atomic whole-corpus facet snapshot; five statements, no input row cap",
-  },
-  sourceArrivalsRefresh: {
-    kind: "dedicated-deadline",
-    owner: "apps/api/src/lib/case-law/source-arrivals-refresh.ts",
-    statementDeadline: { kind: "fixed", milliseconds: 120_000 },
-    reason:
-      "atomic whole-corpus arrival snapshot; three statements, no input row cap",
+    milliseconds: 119_000,
+    reason: "strictly below the 120-second online-DDL lock retry ladder",
   },
   corpusSliceExport: {
-    kind: "dedicated-deadline",
-    owner: "apps/api/src/lib/case-law/corpus-slice-transfer-execution.ts",
+    kind: "aggregate",
+    milliseconds: 119_000,
+    reason:
+      "read-only repeatable corpus snapshot; total cap below the migration ladder, publish manifest only after commit",
+  },
+  sitemapRefresh: {
+    kind: "lease-coordinated",
+    owner: "apps/api/src/lib/case-law/sitemap-shard-refresh.ts",
+    transactionEntries: 3,
+    envelopeMs:
+      13 *
+      READ_BUDGETS["scheduled.caseLaw.refreshSitemapShards"]
+        .statementDeadlineMs,
+    tables: [
+      "case_law_decisions",
+      "case_law_published_decisions",
+      "case_law_sources",
+      "case_law_sitemap_changes",
+      "case_law_sitemap_country_generations",
+      "case_law_sitemap_drain_progress",
+      "case_law_sitemap_refresh_cursor",
+      "case_law_sitemap_shard_counts",
+      "case_law_sitemap_shards",
+      "case_law_browse_facet_counts",
+      "case_law_coverage_summaries",
+      "case_law_source_arrivals",
+      "system_audit_runs",
+    ],
     statementDeadline: {
-      kind: "connection-policy",
-      environment: "DATABASE_STATEMENT_TIMEOUT_MS",
+      kind: "fixed",
+      milliseconds:
+        READ_BUDGETS["scheduled.caseLaw.refreshSitemapShards"]
+          .statementDeadlineMs,
     },
     reason:
-      "one read-only repeatable snapshot across all export pages and storage writes; no total duration cap",
+      "four publication + two retirement + six setup/fence/read statements + budget setup; legacy connection policy until scheduler table-lease cutover",
   },
-} as const satisfies Record<string, TransactionBudget> & {
-  migrationCeiling: {
-    milliseconds: typeof DEFAULT_LOCK_RETRY_CONFIG.budgetMs;
-    reason: string;
-  };
-};
+  legislationFacetRefresh: {
+    kind: "lease-coordinated",
+    owner: "apps/api/src/lib/legal-search/legislation-facet-refresh.ts",
+    transactionEntries: 1,
+    envelopeMs: 5 * 300_000,
+    tables: [
+      "legislation_documents",
+      "legislation_facet_counts",
+      "legislation_facet_refreshes",
+      "system_audit_runs",
+    ],
+    statementDeadline: { kind: "fixed", milliseconds: 300_000 },
+    reason:
+      "atomic whole-corpus facet snapshot; five statements, no input row cap; legacy connection policy until scheduler table-lease cutover",
+  },
+  sourceArrivalsRefresh: {
+    kind: "lease-coordinated",
+    owner: "apps/api/src/lib/case-law/source-arrivals-refresh.ts",
+    transactionEntries: 1,
+    envelopeMs: 3 * 120_000,
+    tables: [
+      "case_law_decisions",
+      "case_law_published_decisions",
+      "case_law_sources",
+      "case_law_source_arrivals",
+      "system_audit_runs",
+    ],
+    statementDeadline: { kind: "fixed", milliseconds: 120_000 },
+    reason:
+      "atomic whole-corpus arrivals snapshot; three statements, no input row cap; legacy connection policy until scheduler table-lease cutover",
+  },
+  skipLockedBatchPendingMeasurement: {
+    kind: "uncapped-pending-measurement",
+    owner: "apps/api/src/lib/db/aggregate-lock.ts",
+    entryPoint: "withSkipLockedBatch",
+    callers: [
+      "apps/api/src/lib/idempotency/request-receipts.ts",
+      "apps/api/src/lib/business-registries/desktop/proof-store.ts",
+    ],
+    reason:
+      "retain existing background batch behavior until measured production runtimes justify a deadline",
+  },
+  rootSavepointPendingMeasurement: {
+    kind: "uncapped-pending-measurement",
+    owner: "apps/api/src/lib/db/aggregate-lock.ts",
+    entryPoint: "withAggregateSavepoint",
+    callers: [
+      "apps/api/src/db/scoped.ts",
+      "apps/api/src/db/safe-db.ts",
+      "apps/api/src/handlers/skills/resources/delete.ts",
+      "apps/api/src/handlers/skills/resources/upload.ts",
+      "apps/api/src/handlers/skills/resources/create.ts",
+      "apps/api/src/handlers/skills/resources/rename.ts",
+      "apps/api/src/lib/skills/install.ts",
+      "apps/api/src/lib/ai-config-loader.ts",
+      "apps/api/src/lib/db/aggregate-lock.ts",
+      "apps/api/src/lib/agent-skills/skill-tools.ts",
+      "apps/api/src/lib/idempotency/request-receipts.ts",
+      "apps/api/src/lib/case-law/maintenance-lane.ts",
+    ],
+    reason:
+      "root fallback retains existing behavior until measured runtimes justify a deadline; savepoints inherit their parent's deadline",
+  },
+} as const satisfies Record<string, TransactionBudget>;
 
 export type AggregateTransactionBudget = Extract<
   (typeof AGGREGATE_TRANSACTION_BUDGETS)[keyof typeof AGGREGATE_TRANSACTION_BUDGETS],
-  { kind: "aggregate" | "statement-envelope" }
+  { kind: "aggregate" | "uncapped-pending-measurement" }
 >;
 
 export class AggregateTransactionTimeoutError extends TaggedError(
@@ -102,6 +179,6 @@ export class AggregateTransactionTimeoutError extends TaggedError(
 )<{
   message: string;
   cause: unknown;
-  budget: AggregateTransactionBudget;
+  budget: Extract<AggregateTransactionBudget, { kind: "aggregate" }>;
   reason: string;
 }> {}

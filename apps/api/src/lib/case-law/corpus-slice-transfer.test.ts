@@ -1,4 +1,6 @@
 import { expect, test } from "bun:test";
+import { isSQLWrapper } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
@@ -12,6 +14,10 @@ import {
   exportCorpusSliceFromDatabase,
 } from "@/api/lib/case-law/corpus-slice-transfer-execution";
 import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
+import {
+  AGGREGATE_TRANSACTION_BUDGETS,
+  AggregateTransactionTimeoutError,
+} from "@/api/lib/db/aggregate-transaction-budget";
 import { parseExportCorpusSliceArguments } from "@/api/scripts/export-corpus-slice-plan";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -48,7 +54,10 @@ const memoryStorage = () => {
  * A database double whose reads see `committedIds` live, as READ COMMITTED
  * would, until the transaction issues the snapshot isolation statement.
  */
-const snapshotDatabase = (committedIds: Set<string>) => {
+const snapshotDatabase = (
+  committedIds: Set<string>,
+  commit = () => undefined,
+) => {
   const decisionRows = [decisionId, laterId].map((id) => ({
     id,
     source_id: sourceId,
@@ -65,9 +74,15 @@ const snapshotDatabase = (committedIds: Set<string>) => {
       let snapshot: ReadonlySet<string> | null = null;
       const visible = () => snapshot ?? committedIds;
       let decisionPage = 0;
-      return await work(
+      const result = await work(
         asTestRaw({
           execute: async (query: unknown) => {
+            if (isSQLWrapper(query)) {
+              expect(new PgDialect().sqlToQuery(query.getSQL()).sql).toBe(
+                `SET LOCAL transaction_timeout = ${AGGREGATE_TRANSACTION_BUDGETS.corpusSliceExport.milliseconds}`,
+              );
+              return [];
+            }
             if (typeof query !== "string") {
               throw new TypeError(
                 "export issued a statement the double cannot read",
@@ -109,6 +124,8 @@ const snapshotDatabase = (committedIds: Set<string>) => {
           },
         }),
       );
+      commit();
+      return result;
     },
   });
 };
@@ -214,4 +231,49 @@ test("a failed export to a reused prefix leaves the earlier export intact", asyn
   expect(
     [...objects.keys()].filter((key) => key.endsWith("/manifest.json")),
   ).toEqual([first.manifestKey]);
+});
+
+test("an export publishes its manifest only after the bounded snapshot commits", async () => {
+  const { objects, storage } = memoryStorage();
+  const state: { transaction: "running" | "committed" } = {
+    transaction: "running",
+  };
+  const { manifestKey } = await exportCorpusSliceFromDatabase({
+    database: snapshotDatabase(new Set([decisionId, laterId]), () => {
+      state.transaction = "committed";
+    }),
+    storage: {
+      ...storage,
+      write: async (key, bytes, contentType) => {
+        expect(state.transaction).toBe("committed");
+        await storage.write(key, bytes, contentType);
+      },
+    },
+    prefix: "committed",
+    asOf,
+    batchSize: 1,
+  });
+  expect(objects.has(manifestKey)).toBe(true);
+});
+
+test("a transaction timeout at commit leaves the export generation unpublished", async () => {
+  const { objects, storage } = memoryStorage();
+  const failure = await rejectionOf(
+    exportCorpusSliceFromDatabase({
+      database: snapshotDatabase(new Set([decisionId, laterId]), () => {
+        throw Object.assign(new TypeError("snapshot transaction timed out"), {
+          code: "25P04",
+        });
+      }),
+      storage,
+      prefix: "timed-out",
+      asOf,
+      batchSize: 1,
+    }),
+  );
+  expect(failure).toBeInstanceOf(AggregateTransactionTimeoutError);
+  expect(objects.size).toBe(5);
+  expect([...objects.keys()].every((key) => key.endsWith(".ndjson"))).toBe(
+    true,
+  );
 });

@@ -10,6 +10,7 @@ import portablePath from "./guard-rollouts/portable-path.ts";
 import semanticControls from "./guard-rollouts/semantic-controls.ts";
 import testBaseRevision from "./guard-rollouts/test-base-revision.ts";
 import trackedSymlinks from "./guard-rollouts/tracked-symlinks.ts";
+import transactionTimeoutOwner from "./guard-rollouts/transaction-timeout-owner.ts";
 import workerDatabaseLoginPosture from "./guard-rollouts/worker-database-login-posture.ts";
 
 export const GUARD_ROLLOUT_FILES = {
@@ -25,5 +26,6 @@ export const GUARD_ROLLOUT_FILES = {
   "semantic-controls": semanticControls,
   "test-base-revision": testBaseRevision,
   "tracked-symlinks": trackedSymlinks,
+  "transaction-timeout-owner": transactionTimeoutOwner,
   "worker-database-login-posture": workerDatabaseLoginPosture,
 };

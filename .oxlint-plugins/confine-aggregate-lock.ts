@@ -4,7 +4,7 @@ import baseline from "../scripts/aggregate-lock-baseline.json" with { type: "jso
 import {
   aggregateLockBaseline,
   aggregateLockBaselineProblems,
-  aggregateLockSites,
+  aggregateLockSitesForEnforcement,
   aggregateLockSourceIncluded,
 } from "./aggregate-lock-sites.ts";
 import { repoRelativeFilename } from "./utils.ts";
@@ -33,7 +33,10 @@ export default eslintCompatPlugin({
             if (!aggregateLockSourceIncluded(file)) {
               return;
             }
-            const sites = aggregateLockSites(file, context.sourceCode.text);
+            const sites = aggregateLockSitesForEnforcement({
+              file,
+              source: context.sourceCode.text,
+            });
             const actual = aggregateLockBaseline(sites);
             for (const problem of aggregateLockBaselineProblems({
               actual,

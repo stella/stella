@@ -35,8 +35,11 @@ import type {
   SchedulerTaskRegistry,
 } from "@/api/lib/scheduler/types";
 
-const DEFAULT_POLL_INTERVAL_MS = 60_000;
-const DEFAULT_LEASE_MS = 30 * 60_000;
+import {
+  DEFAULT_LEASE_MS,
+  DEFAULT_POLL_INTERVAL_MS,
+  defaultHeartbeatIntervalMs,
+} from "./lease-timing";
 // A sweep runs every job that is due, once; this caps only the extra runs of
 // jobs that asked for an immediate continuation within the same sweep. Nine
 // keeps a single continuing job at the ten runs per sweep it always had, so
@@ -408,9 +411,6 @@ const dueJobPredicate = (runnableTasks: string[], eligibilityTime: SQL) =>
 
 const leaseExpiry = (leaseMs: number) =>
   sql`now() + ${leaseMs}::integer * interval '1 millisecond'`;
-
-const defaultHeartbeatIntervalMs = (leaseMs: number): number =>
-  Math.max(DEFAULT_POLL_INTERVAL_MS, Math.floor(leaseMs / 3));
 
 type LeaseHeartbeat = {
   stop: () => void;

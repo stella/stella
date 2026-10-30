@@ -36,10 +36,10 @@ import { serveForTest } from "@/api/tests/helpers/test-server";
  * row: member role and AI settings (2), then the AI gate confirms the caller
  * is still a member (1). The handler reads the caller's skills, then the chat
  * tool inputs a built-in skill's required tools are decided over: tool
- * overrides, matters, web-search keys and registry credentials, each in its
- * own scoped transaction (5 x 2).
+ * overrides, matters, web-search keys and registry credentials. Each of those
+ * five scoped transactions issues its deadline, role setup and read (5 x 3).
  */
-const WITH_SESSION_SNAPSHOT = 13;
+const WITH_SESSION_SNAPSHOT = 18;
 /**
  * Without the snapshot cookie auth checks the live session row and reads its
  * user (2). The first such call also records the session's activity; later

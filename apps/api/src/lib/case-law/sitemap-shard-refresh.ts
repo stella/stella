@@ -35,17 +35,13 @@ import {
   lockCaseLawRemovalSnapshots,
   lockCaseLawSitemapRefreshCursor,
   tryLockCaseLawSitemapMonth,
-  withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
-import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { READ_BUDGETS } from "@/api/lib/db/read-budgets";
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transitionScopedBatch } from "@/api/lib/db/transitions";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
-
-const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.sitemapRefresh;
 
 /**
  * A month is split into buckets once it holds more than this many decisions.
@@ -490,7 +486,7 @@ const readPendingMonth = async (
   { db, budget }: RunContext,
   cursorMode: "advance" | "observe",
 ): Promise<PendingMonth> =>
-  await withAggregateTransaction(db, BUDGET, async (tx) => {
+  await db.transaction(async (tx) => {
     await setTransactionBudget(tx, budget);
     await tx
       .insert(caseLawSitemapRefreshCursor)
@@ -573,7 +569,7 @@ const drainMonth = async (
   target: SitemapMonth,
   rows: number,
 ): Promise<DrainMonthResult> =>
-  await withAggregateTransaction(db, BUDGET, async (tx) => {
+  await db.transaction(async (tx) => {
     await setTransactionBudget(tx, budget);
     if (!(await tryLockCaseLawSitemapMonth({ tx, month: target }))) {
       return { status: "held" };
@@ -724,7 +720,7 @@ const readPublicShardExtent = async (
   db: RefreshDb,
   budget: SitemapRefreshBudget,
 ): Promise<{ largestShard: number; shards: number }> =>
-  await withAggregateTransaction(db, BUDGET, async (tx) => {
+  await db.transaction(async (tx) => {
     await tx.execute(sql`SET TRANSACTION READ ONLY`);
     await setTransactionBudget(tx, budget);
     const [extent] = await tx

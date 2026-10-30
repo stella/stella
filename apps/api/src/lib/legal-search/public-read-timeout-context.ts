@@ -18,7 +18,7 @@ import type {
   PublicReadTransport,
 } from "./public-read-transports";
 
-const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh;
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.publicReadRequest;
 
 type PublicReadWork = {
   pending: Set<Promise<void>>;

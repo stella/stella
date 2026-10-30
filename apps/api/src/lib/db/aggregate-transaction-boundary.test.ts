@@ -10,7 +10,23 @@ import {
 
 test.each(
   Object.values(AGGREGATE_TRANSACTION_BUDGETS).filter(
-    (budget) => budget.kind !== "dedicated-deadline",
+    (budget) => budget.kind === "uncapped-pending-measurement",
+  ),
+)(
+  "an uncapped owner preserves database timeout errors ($entryPoint)",
+  async (budget) => {
+    const cause = { cause: { code: "25P04" } };
+    expect(
+      await rejectionOf(
+        withAggregateTransactionBoundary(budget, () => Promise.reject(cause)),
+      ),
+    ).toBe(cause);
+  },
+);
+
+test.each(
+  Object.values(AGGREGATE_TRANSACTION_BUDGETS).filter(
+    (budget) => budget.kind === "aggregate",
   ),
 )(
   "transaction rejection names the exhausted budget ($reason)",

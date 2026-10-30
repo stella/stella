@@ -1,4 +1,5 @@
 import { PUBLIC_READ_STATEMENT_TIMEOUT_MS } from "@/api/db/shared-pool-timeouts";
+import { AggregateTransactionTimeoutError } from "@/api/lib/db/aggregate-transaction-budget";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { PublicLawStatementError } from "@/api/lib/legal-search/public-law-statement-error";
 import {
@@ -43,13 +44,18 @@ export const publicReadTimeoutError = (error: unknown) => {
     return null;
   }
   const { nodes } = readEvidence(error);
-  const statementIndex = nodes.findIndex((node) =>
-    node.prototypes.includes(PublicLawStatementError.prototype),
+  const statementIndex = nodes.findIndex(
+    (node) =>
+      node.prototypes.includes(PublicLawStatementError.prototype) ||
+      node.prototypes.includes(AggregateTransactionTimeoutError.prototype),
   );
+  const sqlState = nodes
+    .slice(statementIndex)
+    .find((node) => node.sqlState !== undefined)?.sqlState;
   if (
     statementIndex === -1 ||
-    nodes.slice(statementIndex).find((node) => node.sqlState !== undefined)
-      ?.sqlState !== PG_ERROR.QUERY_CANCELED
+    (sqlState !== PG_ERROR.QUERY_CANCELED &&
+      sqlState !== PG_ERROR.TRANSACTION_TIMEOUT)
   ) {
     return null;
   }

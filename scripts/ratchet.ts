@@ -36,6 +36,10 @@ import ts from "typescript6";
 
 import { compareCodeUnit } from "@stll/collation";
 
+import {
+  aggregateLockSites,
+  aggregateLockSourceIncluded,
+} from "../.oxlint-plugins/aggregate-lock-sites.ts";
 import { GRADED_HANDLER_CODE_REASON } from "../apps/api/src/lib/errors/graded-handler-codes";
 import { MCP_WRITE_ONLY_RESOURCE_SCOPES } from "../packages/api-contract/src/mcp";
 import { treeBaseRevision } from "../packages/scripts/src/tree-base-revision";
@@ -3097,6 +3101,22 @@ const countUnsignalledSkipMetric: FileCounter = (content, { file }) =>
   countUnsignalledSkips(content, { file });
 
 export const RATCHET_METRICS: readonly RatchetMetric[] = [
+  {
+    scope: "file",
+    id: "raw-api-transaction-boundaries",
+    description:
+      "Unowned API transaction/begin boundaries; migrate callers to the typed budget owner and delete their exact-site baseline entries",
+    include: ["apps/api/**/*.{ts,tsx,js,jsx,mjs,cjs,mts,cts}"],
+    exclude: (file) => !aggregateLockSourceIncluded(file),
+    perFile: true,
+    growth: "shrink-only",
+    count: (content, { file }) =>
+      aggregateLockSites(file, content).filter(
+        ({ primitive }) =>
+          primitive === "transaction-boundary" ||
+          primitive === "native-transaction-boundary",
+      ).length,
+  },
   {
     scope: "file",
     id: "unsignalled-skip",

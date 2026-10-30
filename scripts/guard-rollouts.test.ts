@@ -136,6 +136,25 @@ test("first-week path enforcement ignores legacy lines and expires into full sco
   ).toBe(true);
 });
 
+test("transaction timeout ownership scopes only its first week", () => {
+  const file = "apps/api/src/lib/legacy.ts";
+  const options = {
+    guard: "transaction-timeout-owner",
+    file,
+    changedLines: new Map([[file, new Set([4])]]),
+  };
+  const now = new Date("2026-10-30T20:29:13.000Z");
+  expect(guardEnforcesLine({ ...options, line: 3, now })).toBe(false);
+  expect(guardEnforcesLine({ ...options, line: 4, now })).toBe(true);
+  expect(
+    guardEnforcesLine({
+      ...options,
+      line: 3,
+      now: new Date("2026-11-06T20:29:13.000Z"),
+    }),
+  ).toBe(true);
+});
+
 const fullRollout = (id: string): GuardRollout => ({
   id,
   type: "full",

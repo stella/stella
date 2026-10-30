@@ -329,7 +329,7 @@ runtime validation, or integration tests.
 - [`require-function-replacer`](./require-function-replacer.ts) (`require-function-replacer`): requires function-valued state updates to use an explicit replacer wrapper so they are not invoked as updater callbacks.
 - [`suppression-hygiene`](./suppression-hygiene.ts) (`require-description`, `no-foreign-directive`, `canonical-rule-id`): requires explained suppressions, autofixes rule IDs to their configured spelling, and rejects directives for another lint engine.
 
-- [`confine-aggregate-lock`](./confine-aggregate-lock.ts) (`confine-aggregate-lock`): confines raw aggregate acquisitions and API transaction/savepoint boundaries to the owner and migrations, with an enumerated shrinking legacy baseline.
+- [`confine-aggregate-lock`](./confine-aggregate-lock.ts) (`confine-aggregate-lock`): confines raw aggregate acquisitions and API transaction/begin/savepoint boundaries to their owners and migrations; transaction timeouts have one set point, and legacy boundaries have an exact-site inventory and a per-file shrinking ratchet.
 
 ## Native and shared rules
 

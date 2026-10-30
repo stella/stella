@@ -1,4 +1,4 @@
-import { getPgErrorCode } from "@/api/lib/pg-error";
+import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 
 import {
   type AggregateTransactionBudget,
@@ -13,7 +13,10 @@ export const withAggregateTransactionBoundary = async <T>(
   try {
     return await run();
   } catch (error) {
-    if (getPgErrorCode(error) !== "25P04") {
+    if (
+      budget.kind !== "aggregate" ||
+      getPgErrorCode(error) !== PG_ERROR.TRANSACTION_TIMEOUT
+    ) {
       throw error;
     }
     throw new AggregateTransactionTimeoutError({

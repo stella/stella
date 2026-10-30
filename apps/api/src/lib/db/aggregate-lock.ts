@@ -61,6 +61,12 @@ import {
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
+import {
+  getTransactionBudget,
+  inheritTransactionBudget,
+  initializeTransactionBudget,
+  withTransactionBudgetContext,
+} from "@/api/lib/db/transaction-budget-owner";
 import { LIMITS } from "@/api/lib/limits";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import {
@@ -747,27 +753,35 @@ export const withAggregateTransaction = async <Tx extends object, T>(
   if (histories.has(database) || "rollback" in database) {
     panic("Use the aggregate savepoint owner for nested transactions");
   }
-  return await withAggregateTransactionBoundary(
+  return await withTransactionBudgetContext(
     budget,
     async () =>
-      await database.transaction(async (tx) => {
-        if (!isSqlExecutor(tx)) {
-          return panic("Aggregate transactions require an SQL executor");
-        }
-        // SET preserves the caller's ability to choose its snapshot isolation.
-        await tx.execute(
-          sql.raw(`SET LOCAL transaction_timeout = ${budget.milliseconds}`),
-        );
-        const history = lockHistory(tx);
-        assertAggregateLevelAvailable(history);
-        try {
-          const value = await run(tx);
-          assertAggregateLevelAvailable(history);
-          return value;
-        } finally {
-          history.status = "closed";
-        }
-      }),
+      await withAggregateTransactionBoundary(
+        budget,
+        async () =>
+          await database.transaction(async (tx) => {
+            if (!isSqlExecutor(tx)) {
+              return panic("Aggregate transactions require an SQL executor");
+            }
+            const initialized = getTransactionBudget(tx);
+            if (initialized === undefined) {
+              await initializeTransactionBudget(tx, budget);
+            } else if (initialized !== budget) {
+              panic(
+                "Physical transaction already has a different budget owner",
+              );
+            }
+            const history = lockHistory(tx);
+            assertAggregateLevelAvailable(history);
+            try {
+              const value = await run(tx);
+              assertAggregateLevelAvailable(history);
+              return value;
+            } finally {
+              history.status = "closed";
+            }
+          }),
+      ),
   );
 };
 
@@ -799,7 +813,7 @@ export const withSkipLockedBatch = async <Tx extends object, Row, T>({
   }
   return await withAggregateTransaction(
     database,
-    AGGREGATE_TRANSACTION_BUDGETS.requestPath,
+    AGGREGATE_TRANSACTION_BUDGETS.skipLockedBatchPendingMeasurement,
     async (tx) => {
       const history = lockHistory(tx);
       await prepare?.(tx);
@@ -912,7 +926,7 @@ export const withAggregateSavepoint = async <Tx extends object, T>(
   if (!("rollback" in tx)) {
     return await withAggregateTransaction(
       tx,
-      AGGREGATE_TRANSACTION_BUDGETS.requestPath,
+      AGGREGATE_TRANSACTION_BUDGETS.rootSavepointPendingMeasurement,
       run,
     );
   }
@@ -932,6 +946,7 @@ export const withAggregateSavepoint = async <Tx extends object, T>(
   parent.children.add(history);
   try {
     const committed = await tx.transaction(async (savepoint) => {
+      inheritTransactionBudget(tx, savepoint);
       histories.set(savepoint, history);
       try {
         const value = await run(savepoint);

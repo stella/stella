@@ -6,16 +6,18 @@ import {
   walk,
 } from "../packages/scripts/src/syntax-tree.ts";
 import { sha256Hex } from "../packages/sha256/src/node.ts";
+import { guardEnforcesLine } from "../scripts/guard-rollouts.ts";
 
 export const AGGREGATE_LOCK_OWNER = "apps/api/src/lib/db/aggregate-lock.ts";
-// These non-locking transactions are counted by the budget owner's census;
+export const TRANSACTION_BUDGET_OWNER =
+  "apps/api/src/lib/db/transaction-budget-owner.ts";
+// These scheduled transactions are counted by the budget owner's lease census;
 // their SQL lock primitives remain subject to this shrinking inventory.
-const dedicatedDeadlineOwners = Object.values(AGGREGATE_TRANSACTION_BUDGETS)
-  .filter((budget) => budget.kind === "dedicated-deadline")
+const leaseCoordinatedOwners = Object.values(AGGREGATE_TRANSACTION_BUDGETS)
+  .filter((budget) => budget.kind === "lease-coordinated")
   .map((budget) => budget.owner);
 export const aggregateLockSourceIncluded = (file: string) =>
   /\.(?:[cm]?ts|tsx|[cm]?js|jsx|sql)$/u.test(file) &&
-  file !== AGGREGATE_LOCK_OWNER &&
   !file.startsWith("apps/api/drizzle/") &&
   !/\.(?:test|fixture)\.|\/(?:__tests__|__fixtures__|fixtures|tests)\//u.test(
     file,
@@ -38,17 +40,19 @@ const maskSqlLiteralsAndComments = (text: string) =>
   text.replace(
     /--[^\n]*|\/\*[\s\S]*?\*\/|'(?:(?:'')|[^'])*'|"(?:(?:"")|[^"])*"/gu,
     (part) =>
-      /^"pg_(?:try_)?advisory_(?:xact_)?(?:lock|unlock)(?:_shared|_all)?"$/iu.test(
+      /^"(?:pg_(?:try_)?advisory_(?:xact_)?(?:lock|unlock)(?:_shared|_all)?|set_config|transaction_timeout)"$/iu.test(
         part,
       )
         ? part.replaceAll('"', " ")
-        : part.replace(/[^\n]/gu, " "),
+        : /^'transaction_timeout'$/iu.test(part)
+          ? part
+          : part.replace(/[^\n]/gu, " "),
   );
 const sqlLocks = (text: string, context: "sql" | "unknown" = "unknown") => {
   const masked = maskSqlLiteralsAndComments(text);
   const matches = [
     ...masked.matchAll(
-      /\bpg_(?:try_)?advisory_(?:xact_)?(?:lock|unlock)(?:_shared|_all)?\s*\(|\bLOCK\s+TABLE\b|\bFOR\s+(?:NO\s+KEY\s+UPDATE|KEY\s+SHARE|UPDATE|SHARE)\b|\bROLLBACK\s+TO(?:\s+SAVEPOINT)?\b|\bRELEASE(?:\s+SAVEPOINT)?\b|\bSAVEPOINT\b/giu,
+      /\bpg_(?:try_)?advisory_(?:xact_)?(?:lock|unlock)(?:_shared|_all)?\s*\(|\bLOCK\s+TABLE\b|\bFOR\s+(?:NO\s+KEY\s+UPDATE|KEY\s+SHARE|UPDATE|SHARE)\b|\bROLLBACK\s+TO(?:\s+SAVEPOINT)?\b|\bRELEASE(?:\s+SAVEPOINT)?\b|\bSAVEPOINT\b|\bSET\s+(?:(?:LOCAL|SESSION)\s+)?transaction_timeout\s*(?:=|TO\b)|\bset_config\s*\(\s*(?:E)?'transaction_timeout'\s*,/giu,
     ),
   ];
   return matches.filter((match) => {
@@ -177,13 +181,24 @@ export const aggregateLockSites = (
   source: string,
 ): AggregateLockSite[] => {
   const sites: AggregateLockSite[] = [];
-  const add = ({ primitive, text, offset }: AddAggregateLockSiteOptions) =>
+  const add = ({ primitive, text, offset }: AddAggregateLockSiteOptions) => {
+    const timeoutSetting = /\btransaction_timeout\b/iu.test(primitive);
+    if (timeoutSetting && file === TRANSACTION_BUDGET_OWNER) {
+      return;
+    }
+    if (!timeoutSetting && file === AGGREGATE_LOCK_OWNER) {
+      return;
+    }
+    const governedPrimitive = timeoutSetting
+      ? "transaction-timeout-setting"
+      : primitive;
     sites.push({
       file,
-      primitive,
-      fingerprint: fingerprint(primitive, text),
+      primitive: governedPrimitive,
+      fingerprint: fingerprint(governedPrimitive, text),
       line: source.slice(0, offset).split("\n").length,
     });
+  };
   if (file.endsWith(".sql")) {
     for (const match of sqlLocks(source, "sql")) {
       const start = source.lastIndexOf(";", match.index) + 1;
@@ -242,12 +257,15 @@ export const aggregateLockSites = (
         });
       }
       if (
-        method === "transaction" &&
+        (method === "transaction" || method === "begin") &&
         file.startsWith("apps/api/") &&
-        !dedicatedDeadlineOwners.some((owner) => owner === file)
+        !leaseCoordinatedOwners.some((owner) => owner === file)
       ) {
         add({
-          primitive: "transaction-boundary",
+          primitive:
+            method === "begin"
+              ? "native-transaction-boundary"
+              : "transaction-boundary",
           text: textOf(node),
           offset: node.start,
         });
@@ -300,6 +318,29 @@ export const aggregateLockSites = (
   });
   return sites;
 };
+
+type AggregateLockEnforcementOptions = {
+  file: string;
+  source: string;
+  enforcesLine?: typeof guardEnforcesLine;
+};
+
+/** The timer rollout must not narrow existing lock or transaction confinement. */
+export const aggregateLockSitesForEnforcement = ({
+  file,
+  source,
+  enforcesLine = guardEnforcesLine,
+}: AggregateLockEnforcementOptions) =>
+  aggregateLockSites(file, source).filter(
+    (site) =>
+      site.primitive !== "transaction-timeout-setting" ||
+      enforcesLine({
+        guard: "transaction-timeout-owner",
+        file,
+        line: site.line,
+      }),
+  );
+
 export const aggregateLockBaseline = (
   sites: readonly AggregateLockSite[],
 ): AggregateLockBaselineRow[] => {
@@ -312,7 +353,8 @@ export const aggregateLockBaseline = (
       continue;
     }
     const reason =
-      site.primitive === "transaction-boundary"
+      site.primitive === "transaction-boundary" ||
+      site.primitive === "native-transaction-boundary"
         ? "Existing transaction runner or savepoint; migrate nested boundaries through the aggregate owner."
         : /^(?:savepoint|release|rollback)\b/iu.test(site.primitive)
           ? "Existing SQL savepoint coordination; migrate through the aggregate owner to retain parent lock history."
@@ -382,6 +424,12 @@ export const aggregateLockBaselineProblems = ({
     }
   }
   for (const [key, row] of observed) {
+    if (row.reason.startsWith("transaction-timeout-setting in ")) {
+      problems.push(
+        `Transaction timeout belongs only to ${TRANSACTION_BUDGET_OWNER}: ${key}`,
+      );
+      continue;
+    }
     if (accepted.get(key)?.count !== row.count) {
       problems.push(`Unowned aggregate lock: ${key}`);
     }

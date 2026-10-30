@@ -3,9 +3,9 @@ import {
   type AggregateTransactionBudget,
 } from "./aggregate-transaction-budget";
 
+// @ts-expect-error Aggregate transactions may not outwait online DDL.
 export const overMigrationLockBudget: AggregateTransactionBudget = {
   kind: "aggregate",
-  // @ts-expect-error Aggregate transactions may not outwait online DDL.
   milliseconds: 120_001,
   reason: "online-DDL lock retry ceiling",
 };
