@@ -13,7 +13,10 @@ import {
 import { readCaseLawCoverageSourcesQuery } from "@/api/handlers/case-law/decisions/coverage";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
-import { CASE_LAW_COVERAGE_FILING_DATE_INDEX } from "@/api/lib/case-law/coverage-index";
+import {
+  CASE_LAW_COVERAGE_FILING_DATE_INDEX,
+  CASE_LAW_COVERAGE_INDEXES,
+} from "@/api/lib/case-law/coverage-index";
 import { refreshPgFtsBrowseFacets } from "@/api/lib/legal-search/pg-fts-browse-facet-refresh";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
@@ -22,6 +25,8 @@ import { explainRoot } from "@/api/tests/query-plans/plan-walker";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const COVERAGE_INDEX = CASE_LAW_COVERAGE_FILING_DATE_INDEX.name;
+const FACET_INDEX = "case_law_browse_facet_counts_source_kind_idx";
+const FACET_YEARS = 130;
 const SOURCES = 3;
 const SOURCE_DATE_SPAN = 5000;
 
@@ -107,6 +112,19 @@ describe.skipIf(!enabled)("published coverage bounds plan (postgres)", () => {
               ),
           ),
         );
+        const facetIndex =
+          CASE_LAW_COVERAGE_INDEXES.find(({ name }) => name === FACET_INDEX) ??
+          panic("The coverage facet index is not registered");
+        await db.execute(
+          sql.raw(
+            facetIndex.createSql
+              .replace("CREATE INDEX CONCURRENTLY", "CREATE INDEX")
+              .replace(
+                'public."case_law_browse_facet_counts"',
+                () => `"${schemaName}"."case_law_browse_facet_counts"`,
+              ),
+          ),
+        );
         const installed =
           await db.execute(sql`SELECT pg_get_indexdef(indexrelid) AS definition
           FROM pg_index JOIN pg_class ON pg_class.oid = indexrelid
@@ -159,7 +177,7 @@ describe.skipIf(!enabled)("published coverage bounds plan (postgres)", () => {
           (kind, country, source_id, value, total)
           SELECT 'year', 'CZE', sources.id, 'unused/' || n, 1
           FROM case_law_sources sources
-          CROSS JOIN generate_series(1, ${decisionsPerSource}) n`);
+          CROSS JOIN generate_series(1, ${FACET_YEARS}) n`);
         await db.execute(sql`VACUUM (ANALYZE) case_law_browse_facet_counts`);
         captured.length = 0;
         const rows = await readCaseLawCoverageSourcesQuery(
@@ -192,6 +210,7 @@ describe.skipIf(!enabled)("published coverage bounds plan (postgres)", () => {
           expect(["Index Scan", "Index Only Scan"], planEvidence).toContain(
             String(probe["Node Type"]),
           );
+          expect(probe["Index Name"], planEvidence).toBe(FACET_INDEX);
           expect(probe["Index Cond"], planEvidence).toContain("source_id");
           expect(probe["Index Cond"], planEvidence).toContain("court");
           expect(probe["Actual Rows"], planEvidence).toBe(1);

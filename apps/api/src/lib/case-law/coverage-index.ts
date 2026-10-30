@@ -34,6 +34,20 @@ const CASE_LAW_COVERAGE_COURT_INDEX = {
   introducedBy: OnlineStepIntroduction;
 };
 
+const CASE_LAW_COVERAGE_FACET_SOURCE_KIND_INDEX = {
+  createSql:
+    'CREATE INDEX CONCURRENTLY "case_law_browse_facet_counts_source_kind_idx" ON public."case_law_browse_facet_counts" USING btree ("source_id", "kind") INCLUDE ("value", "total")',
+  definitionBody:
+    "ON public.case_law_browse_facet_counts USING btree (source_id, kind) INCLUDE (value, total)",
+  introducedBy: { type: "code", owner: "src/lib/case-law/coverage-index.ts" },
+  isUnique: false,
+  name: "case_law_browse_facet_counts_source_kind_idx",
+  tableName: "case_law_browse_facet_counts",
+} as const satisfies RequiredMigrationIndex & {
+  createSql: string;
+  introducedBy: OnlineStepIntroduction;
+};
+
 const FILING_DATE_PREDICATE_SQL = new PgDialect().sqlToQuery(
   decisionDateNotBeforeFilingYearSql({
     date: sql.identifier("decision_date"),
@@ -65,4 +79,5 @@ export const CASE_LAW_COVERAGE_INDEXES = [
   CASE_LAW_COVERAGE_INDEX,
   CASE_LAW_COVERAGE_FILING_DATE_INDEX,
   CASE_LAW_COVERAGE_COURT_INDEX,
+  CASE_LAW_COVERAGE_FACET_SOURCE_KIND_INDEX,
 ] as const;

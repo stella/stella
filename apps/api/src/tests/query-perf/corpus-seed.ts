@@ -651,7 +651,7 @@ const seedCoverageDecisions = async ({
     SCENARIO_GENERATIONS.find(({ generation }) => generation === serving) ??
     panic(`Unknown coverage scenario ${serving}`);
   for (const build of coverageIndexBuildSql("public")) {
-    // db-await-in-loop: three fixed index builds, one statement each.
+    // db-await-in-loop: four fixed index builds, one statement each.
     await database.execute(sql.raw(build));
   }
   const sources = sql.join(
