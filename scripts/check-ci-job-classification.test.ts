@@ -694,6 +694,27 @@ test("two changes to one permission-kind job need a composed-digest approval", (
   expect(result.stderr).toContain("expected");
 });
 
+test("a merge group refuses a writer approved under an ordinary kind", () => {
+  const baseWorkflow =
+    "jobs: {check: {permissions: {contents: write}, steps: [{run: echo one}]}}";
+  const groupWorkflow = baseWorkflow.replace("echo one", "echo two");
+  // The decision and its exact-digest approval agree on ordinary, so only the
+  // writer rule can refuse the group.
+  const decisions = reviewed(baseWorkflow, "check");
+  const { root, commitAll } = repository(
+    { workflow: baseWorkflow, decisions },
+    { workflow: baseWorkflow, decisions },
+  );
+  const base = revision(root);
+  approveGroupJob(root, groupWorkflow, "ordinary");
+  writeFileSync(path.join(root, ".github/workflows/ci.yml"), groupWorkflow);
+  commitAll("group tree");
+
+  const result = mergeGroupRun(root, base, revision(root));
+  expect(result.exitCode).toBe(1);
+  expect(result.stderr).toContain("must be classified priority");
+});
+
 test("a job removed by a merge group needs no approval", () => {
   const baseWorkflow =
     "jobs: {check: {steps: [{run: echo check}]}, keep: {steps: [{run: echo keep}]}}";

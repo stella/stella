@@ -262,13 +262,8 @@ const misclassifiedWriters = (
 export const checkJobClassification = (root: string, base?: string) =>
   Result.try({
     try: () => {
-      const mergeGroup = mergeGroupBase();
-      if (mergeGroup) {
-        if (!base) {
-          throw new AdmissionError({ message: "Merge-group base is missing" });
-        }
-        return checkMergeGroupClassification(root, base);
-      }
+      // Pull requests and merge groups both refuse a writer approved under
+      // any kind but priority, before any approval is accepted.
       const headInputs = readClassificationInputs(root);
       const head = generateWithJobs(headInputs);
       const writers = misclassifiedWriters(head.jobs, headInputs.decisions);
@@ -276,6 +271,13 @@ export const checkJobClassification = (root: string, base?: string) =>
         throw new AdmissionError({
           message: `Jobs that write the repository (contents write permission, an app token requesting it, or the signed-commit action) publish and must be classified priority. Set kind "priority" and describe what they publish in:\n${writers.map(decisionPathForKey).join("\n")}`,
         });
+      }
+      const mergeGroup = mergeGroupBase();
+      if (mergeGroup) {
+        if (!base) {
+          throw new AdmissionError({ message: "Merge-group base is missing" });
+        }
+        return checkMergeGroupClassification(root, base);
       }
       const privilegedJobs = base
         ? (() => {
