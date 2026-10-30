@@ -208,13 +208,15 @@ const ingestDecision = async (
   { sourceId, nextObservationOrder }: Fixture,
   input: IngestionResult,
 ) => {
-  const outcome = await processDecision({
-    input,
-    sourceId,
-    scopedDb,
-    observedAt: new Date("2026-09-23T10:00:00.000Z"),
-    observationOrder: await nextObservationOrder(),
-  });
+  const outcome = (
+    await processDecision({
+      input,
+      sourceId,
+      scopedDb,
+      observedAt: new Date("2026-09-23T10:00:00.000Z"),
+      observationOrder: await nextObservationOrder(),
+    })
+  ).unwrap();
   expect(outcome.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
   return outcome;
 };
@@ -223,15 +225,17 @@ const ingestSupplement = async (
   { sourceId, nextObservationOrder }: Fixture,
   supplement: DecisionSupplement,
 ) =>
-  await processSupplement({
-    supplement,
-    sourceId,
-    scopedDb,
-    observedAt: new Date("2026-09-23T10:00:00.000Z"),
-    nextObservationOrder,
-    reparseStoredRaw,
-    readStoredRaw,
-  });
+  (
+    await processSupplement({
+      supplement,
+      sourceId,
+      scopedDb,
+      observedAt: new Date("2026-09-23T10:00:00.000Z"),
+      nextObservationOrder,
+      reparseStoredRaw,
+      readStoredRaw,
+    })
+  ).unwrap();
 
 const decisionRows = async (sourceId: SafeId<"caseLawSource">) =>
   await db
@@ -719,16 +723,18 @@ describe("the standalone row of reasons already stored", () => {
     const place = async (
       absorb?: Parameters<typeof processSupplement>[0]["absorb"],
     ) =>
-      await processSupplement({
-        supplement: supplementOf(REASONS),
-        sourceId: fixture.sourceId,
-        scopedDb,
-        observedAt: new Date("2026-09-23T10:00:00.000Z"),
-        nextObservationOrder: fixture.nextObservationOrder,
-        reparseStoredRaw,
-        readStoredRaw,
-        ...(absorb === undefined ? {} : { absorb }),
-      });
+      (
+        await processSupplement({
+          supplement: supplementOf(REASONS),
+          sourceId: fixture.sourceId,
+          scopedDb,
+          observedAt: new Date("2026-09-23T10:00:00.000Z"),
+          nextObservationOrder: fixture.nextObservationOrder,
+          reparseStoredRaw,
+          readStoredRaw,
+          ...(absorb === undefined ? {} : { absorb }),
+        })
+      ).unwrap();
 
     // A corpus object outlived its delete: the row keeps its document.
     const held = await place(
@@ -860,13 +866,15 @@ test("reasons parked while their ruling is being written are composed by that wr
     return await scopedDb(work);
   };
 
-  const outcome = await processDecision({
-    input: decisionOf(RULING),
-    sourceId: fixture.sourceId,
-    scopedDb: racingDb,
-    observedAt: new Date("2026-09-23T10:00:00.000Z"),
-    observationOrder: await fixture.nextObservationOrder(),
-  });
+  const outcome = (
+    await processDecision({
+      input: decisionOf(RULING),
+      sourceId: fixture.sourceId,
+      scopedDb: racingDb,
+      observedAt: new Date("2026-09-23T10:00:00.000Z"),
+      observationOrder: await fixture.nextObservationOrder(),
+    })
+  ).unwrap();
 
   expect(outcome.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
   const ruling = await decisionBy(fixture.sourceId, "339002");
@@ -1269,15 +1277,17 @@ test("a supplement and its standalone decision share one persisted source schema
   });
   const countedScopedDb: ScopedDb = async (callback) =>
     await countedDb.transaction(async (tx) => await callback(asTestRaw(tx)));
-  const placed = await processSupplement({
-    supplement: supplementOf(REASONS),
-    sourceId: fixture.sourceId,
-    scopedDb: countedScopedDb,
-    observedAt: new Date("2026-09-23T10:00:00.000Z"),
-    nextObservationOrder: fixture.nextObservationOrder,
-    reparseStoredRaw,
-    readStoredRaw,
-  });
+  const placed = (
+    await processSupplement({
+      supplement: supplementOf(REASONS),
+      sourceId: fixture.sourceId,
+      scopedDb: countedScopedDb,
+      observedAt: new Date("2026-09-23T10:00:00.000Z"),
+      nextObservationOrder: fixture.nextObservationOrder,
+      reparseStoredRaw,
+      readStoredRaw,
+    })
+  ).unwrap();
   expect(placed).toMatchObject({
     status: PROCESS_DECISION_STATUS.COMPLETE,
     disposition: { type: "standalone", reason: "no-judgment" },

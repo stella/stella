@@ -39,7 +39,7 @@ const createItem = (id: string): MatterActivityItem => ({
     name: "Jane Doe",
     type: "user",
   },
-  renameOnly: false,
+  changedFields: [],
   runId: null,
   target: {
     color: null,
