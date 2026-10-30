@@ -70,8 +70,6 @@ import {
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
   sourceTotalRead,
-  STORED_RAW_REPARSE_REJECTION,
-  STORED_RAW_REPLAY_STATUS,
   storedSourceSurface,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
@@ -1485,23 +1483,13 @@ const reparsePlKisStoredRaw = async (
   if (read.type === "rejected") {
     return read;
   }
-  const detail = readDetailPart(read.parts);
   const readObject = await readStoredDocumentObject(stored, PDF_OBJECT);
   if (Result.isError(readObject)) {
     return readObject;
   }
+  // A row with neither detail text nor a stored PDF replays from its listing
+  // and detail, as the ingestion builds it.
   const pdfBytes = readObject.value;
-  if (
-    pdfBytes === null &&
-    detailString(detail, "TRESC_INTERESARIUSZ") === undefined
-  ) {
-    return {
-      type: "rejected",
-      rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
-      status: STORED_RAW_REPLAY_STATUS.METADATA_ONLY,
-      detail: "the stored envelope has no document body",
-    };
-  }
   const built = await assemblePlKisDecision({
     row: read.listing,
     rawParts: read.parts,

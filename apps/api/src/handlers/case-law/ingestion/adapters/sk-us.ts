@@ -72,7 +72,6 @@ import {
   sourceTotalProbeFailed,
   sourceTotalRead,
   STORED_RAW_REPARSE_REJECTION,
-  STORED_RAW_REPLAY_STATUS,
   storedSourceSurface,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
@@ -2774,14 +2773,6 @@ const reparseStoredRaw = async (
     return readObject;
   }
   const pdfBytes = readObject.value;
-  if (pdfBytes === null) {
-    return {
-      type: "rejected",
-      rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
-      status: STORED_RAW_REPLAY_STATUS.METADATA_ONLY,
-      detail: "the stored row has no document-file object",
-    };
-  }
   const raw = new TextDecoder().decode(stored.raw);
   const parts = skUsStoredRawParts(raw, stored.contentType);
   const listingJson = parts?.["listing"];
@@ -2820,15 +2811,10 @@ const reparseStoredRaw = async (
     };
   }
 
+  // A row stored without its XHTML rendition or its document file replays
+  // from what was stored, the way the ingestion assembles a row whose
+  // document read is still pending.
   const documentXhtml = parts["document"];
-  if (documentXhtml === undefined) {
-    return {
-      type: "rejected",
-      rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
-      status: STORED_RAW_REPLAY_STATUS.METADATA_ONLY,
-      detail: "the stored row has no XHTML document for the document parser",
-    };
-  }
   const refusal: unknown = Result.try({
     try: (): unknown => JSON.parse(parts["refusal"] ?? "null"),
     catch: () => null,
@@ -2843,7 +2829,7 @@ const reparseStoredRaw = async (
       facetsJson: parts["facets"],
       collectionJson: parts["collection-listing"],
       courtFileJson: parts["file"],
-      pdfBytes,
+      pdfBytes: pdfBytes ?? undefined,
       withheld: isReadRefusal(refusal) ? refusal : undefined,
     },
   });

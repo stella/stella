@@ -901,7 +901,7 @@ export const STORED_RAW_REPLAY_STATUS = {
 } as const;
 
 /** Missing capture is incomplete metadata, never a parsed-document withdrawal. */
-export type StoredRawMetadataOnlyOutcome = {
+type StoredRawMetadataOnlyOutcome = {
   type: "rejected";
   rejection: typeof STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA;
   status: typeof STORED_RAW_REPLAY_STATUS.METADATA_ONLY;
@@ -1745,11 +1745,10 @@ export const defineSourceAdapter = <
     reparseStoredRaw:
       reparseStoredRaw === undefined
         ? undefined
-        : scoped(function (this: unknown, stored: StoredRawReparseInput) {
-            const value = reparseStoredRaw.call(this, stored);
-            return value instanceof Promise
-              ? value.then(readStoredRawReparseResult)
-              : readStoredRawReparseResult(value);
+        : scoped(async function (this: unknown, stored: StoredRawReparseInput) {
+            return readStoredRawReparseResult(
+              await reparseStoredRaw.call(this, stored),
+            );
           }),
     fetchPage: async (cursor, config, signal, onDocumentObservation) =>
       await observeDocumentStage({

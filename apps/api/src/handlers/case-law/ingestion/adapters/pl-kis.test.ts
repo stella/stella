@@ -8,7 +8,6 @@ import {
   decodeSourceRawEnvelope,
   encodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  STORED_RAW_REPARSE_REJECTION,
 } from "@/api/handlers/case-law/ingestion/adapter";
 /**
  * pl-kis against payloads eureka.mf.gov.pl served.
@@ -513,22 +512,22 @@ describe("every ingested category, as the service served it", () => {
       const replay = await reparse(input);
       expect(replay).toEqual({ type: "parsed", result: decision });
       expect(await reparse(input)).toEqual(replay);
+      // Without its PDF object the row replays from the stored listing and
+      // detail, as it did before document objects were captured.
       expect(
         await reparse({
           ...input,
           raw: new TextEncoder().encode(decision.sourceRaw),
         }),
       ).toMatchObject({
-        type: "rejected",
-        rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
-        status: "metadata-only",
+        type: "parsed",
+        result: { caseNumber: decision.caseNumber },
       });
       expect(
         await reparse({ ...input, readObject: async () => Result.ok(null) }),
       ).toMatchObject({
-        type: "rejected",
-        rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
-        status: "metadata-only",
+        type: "parsed",
+        result: { caseNumber: decision.caseNumber },
       });
     }
   });

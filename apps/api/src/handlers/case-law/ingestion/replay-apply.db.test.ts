@@ -42,6 +42,7 @@ import {
   encodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   STORED_RAW_REPARSE_REJECTION,
+  STORED_RAW_REPLAY_STATUS,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   IngestionResult,
@@ -57,7 +58,6 @@ import {
   assembleSkCourtsDecision,
   skCourtsAdapter,
 } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
-import { skUsAdapter } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
 import { caseLawCanonicalPayload } from "@/api/handlers/case-law/ingestion/pipeline/corpus-mirror";
 import {
   CASE_LAW_REPLAY_SCOPE,
@@ -574,6 +574,15 @@ const noDocumentAdapter = stubAdapter(() => ({
   detail: "no fulltext parsed from the stored payload",
 }));
 
+// What an adapter answers when the envelope names a document object that
+// object storage does not hold.
+const metadataOnlyAdapter = stubAdapter(() => ({
+  type: "rejected",
+  rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
+  status: STORED_RAW_REPLAY_STATUS.METADATA_ONLY,
+  detail: "the stored record has no document object for document",
+}));
+
 const STORED_PAGE_TEXT = "Site navigation, contact options and a footer.";
 
 type WithdrawFixture = {
@@ -681,7 +690,7 @@ test("missing stored document capture keeps existing text even when rejected-doc
   }
   try {
     const run = await replayCaseLawSource({
-      adapter: skUsAdapter,
+      adapter: metadataOnlyAdapter,
       scopedDb,
       sourceId,
       scope: CASE_LAW_REPLAY_SCOPE.SOURCE,

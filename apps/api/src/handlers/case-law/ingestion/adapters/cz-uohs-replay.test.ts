@@ -91,7 +91,13 @@ describe("ÚOHS stored document replay", () => {
     const valid = czUohsSyntheticPdf();
     globalThis.fetch = asFetchMock(
       async (input: string | URL | Request) =>
-        new Response(String(input).endsWith("/first.pdf") ? invalid : valid),
+        new Response(
+          (input instanceof Request ? input.url : input.toString()).endsWith(
+            "/first.pdf",
+          )
+            ? invalid
+            : valid,
+        ),
     );
     const decision = await buildCzUohsDecision(record);
     expect(decision.documentUrl).toBe("https://uohs.gov.cz/second.pdf");
@@ -156,12 +162,11 @@ test("stored read failures retain their typed rejection across the adapter callb
   rejectPublisherReads();
   expect(
     await rejectionOf(
-      Promise.resolve().then(() =>
-        reparse({
+      (async () =>
+        await reparse({
           ...replayInput(decision),
           readObject: async () => Result.err(error),
-        }),
-      ),
+        }))(),
     ),
   ).toBe(error);
 });

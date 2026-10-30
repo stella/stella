@@ -46,7 +46,6 @@ import {
   listingIdentityKey,
   SOURCE_DOCUMENT_ID_MAX_LENGTH,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  STORED_RAW_REPARSE_REJECTION,
 } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
@@ -1777,11 +1776,11 @@ describe("sk-us crawl and reconciliation dispose of a missing document different
     ]);
   });
 
-  test("stored replay without the PDF object or XHTML is metadata-only without a publisher request", async () => {
+  test("stored replay without the PDF object or XHTML replays from the stored listing without a publisher request", async () => {
     mockFetch({ search: [] });
     const built = await buildSkUsDecision(CHAMBER_RESOLUTION);
     if (built.type !== "built") {
-      return panic("Expected complete ingestion fixture");
+      throw new Error(`expected a built decision, got ${built.type}`);
     }
     const input = storedReplayInput(built.decision);
     const parts =
@@ -1800,9 +1799,8 @@ describe("sk-us crawl and reconciliation dispose of a missing document different
     ]) {
       const outcome = await skUsAdapter.reparseStoredRaw?.({ ...input, raw });
       expect(outcome).toMatchObject({
-        type: "rejected",
-        rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
-        status: "metadata-only",
+        type: "parsed",
+        result: { caseNumber: built.decision.caseNumber },
       });
     }
     const missingBody = await skUsAdapter.reparseStoredRaw?.({
@@ -1810,9 +1808,11 @@ describe("sk-us crawl and reconciliation dispose of a missing document different
       readObject: async () => Result.ok(null),
     });
     expect(missingBody).toMatchObject({
-      type: "rejected",
-      rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
-      status: "metadata-only",
+      type: "parsed",
+      result: {
+        caseNumber: built.decision.caseNumber,
+        isListingOnly: true,
+      },
     });
   });
 
@@ -1820,7 +1820,7 @@ describe("sk-us crawl and reconciliation dispose of a missing document different
     mockFetch({ search: [] });
     const built = await buildSkUsDecision(CHAMBER_RESOLUTION);
     if (built.type !== "built") {
-      return panic("Expected complete ingestion fixture");
+      throw new Error(`expected a built decision, got ${built.type}`);
     }
     globalThis.fetch = asFetchMock(async () =>
       panic("Replay must not request the publisher"),

@@ -119,15 +119,14 @@ describe("SK courts stored document replay", () => {
     }
   });
 
-  test("a stored envelope without a document object is metadata-only", async () => {
+  test("a stored envelope without a document object replays from its stored listing", async () => {
     const decision = await skCourtsFixture().buildDecision();
     const raw = decision.sourceRaw ?? panic("Fixture envelope missing");
     rejectPublisherReads();
     const result = await replay(storedInput(decision, raw));
     expect(result).toMatchObject({
-      type: "rejected",
-      rejection: "incomplete-metadata",
-      status: "metadata-only",
+      type: "parsed",
+      result: { caseNumber: decision.caseNumber },
     });
     const legacy = encodeSourceRawEnvelope({
       legacy: JSON.stringify({
@@ -138,9 +137,8 @@ describe("SK courts stored document replay", () => {
       }),
     });
     expect(await replay(storedInput(decision, legacy))).toMatchObject({
-      type: "rejected",
-      rejection: "incomplete-metadata",
-      status: "metadata-only",
+      type: "parsed",
+      result: { caseNumber: decision.caseNumber },
     });
   });
 });

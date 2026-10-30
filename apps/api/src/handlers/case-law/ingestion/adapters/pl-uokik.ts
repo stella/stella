@@ -1869,6 +1869,26 @@ const metadataOnlyPlUokikReplay = (): StoredRawReparseOutcome => ({
   detail: "the stored row has no complete document object set",
 });
 
+const plUokikReplayOutcome = (
+  built: Awaited<ReturnType<typeof assemblePlUokikDecision>>,
+): StoredRawReparseOutcome => {
+  switch (built.type) {
+    case "built":
+    case "detail-unavailable":
+      return { type: "parsed", result: built.decision };
+    case "unkeyable":
+      return {
+        type: "rejected",
+        rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+        detail: "the stored row states no UNID and no column",
+      };
+    default: {
+      built satisfies never;
+      return panic(`Unhandled pl-uokik build result: ${JSON.stringify(built)}`);
+    }
+  }
+};
+
 /** Rebuild documents only from the envelope and the objects it names. */
 const reparsePlUokikStoredRaw = async (
   stored: StoredRawReparseInput,
@@ -1899,6 +1919,7 @@ const reparsePlUokikStoredRaw = async (
   const listed = fieldFiles(detail, PL_UOKIK_LABEL.DECISION_FILES);
   const row = normalizePlUokikRow(read.listing);
   const objects = decodeSourceRawEnvelopeObjects(raw);
+  const storedStatus = stored.metadata["detailStatus"];
 
   if (rulingName !== undefined) {
     const readObject = await readStoredDocumentObject(stored, RULING_OBJECT);
@@ -1961,8 +1982,16 @@ const reparsePlUokikStoredRaw = async (
     };
   }
 
+  // A decision stored without attachment objects replays from its listing
+  // and decision page, as it did before attachments were captured.
   if (objects[FILE_OBJECT] === undefined) {
-    return metadataOnlyPlUokikReplay();
+    return plUokikReplayOutcome(
+      await assemblePlUokikDecision({
+        entry: read.listing,
+        rawParts: read.parts,
+        ...(isDetailStatus(storedStatus) ? { detailStatus: storedStatus } : {}),
+      }),
+    );
   }
   const storedFiles = stored.metadata["decisionFiles"];
   if (!Array.isArray(storedFiles) || storedFiles.length !== listed.length) {
@@ -2009,28 +2038,14 @@ const reparsePlUokikStoredRaw = async (
     });
     objectIndex += 1;
   }
-  const storedStatus = stored.metadata["detailStatus"];
-  const built = await assemblePlUokikDecision({
-    entry: read.listing,
-    rawParts: read.parts,
-    files,
-    ...(isDetailStatus(storedStatus) ? { detailStatus: storedStatus } : {}),
-  });
-  switch (built.type) {
-    case "built":
-    case "detail-unavailable":
-      return { type: "parsed", result: built.decision };
-    case "unkeyable":
-      return {
-        type: "rejected",
-        rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
-        detail: "the stored row states no UNID and no column",
-      };
-    default: {
-      built satisfies never;
-      return panic(`Unhandled pl-uokik build result: ${JSON.stringify(built)}`);
-    }
-  }
+  return plUokikReplayOutcome(
+    await assemblePlUokikDecision({
+      entry: read.listing,
+      rawParts: read.parts,
+      files,
+      ...(isDetailStatus(storedStatus) ? { detailStatus: storedStatus } : {}),
+    }),
+  );
 };
 
 // ── Source-field inventory ───────────────────────────────

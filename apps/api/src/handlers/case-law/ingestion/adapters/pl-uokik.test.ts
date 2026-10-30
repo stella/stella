@@ -1471,20 +1471,21 @@ describe("replaying a stored envelope", () => {
     });
   });
 
-  test("a row without a document object yields a metadata-only replay outcome", async () => {
+  test("rebuilds the decision the crawl built from its row and page", async () => {
     const entry = entryOf(await capturedEntries(), FILELESS);
     const decision = decisionOf(await buildFrom(entry, await pageOf(FILELESS)));
     globalThis.fetch = asFetchMock(async () => panic("replay must not fetch"));
-    expect(
-      await plUokikAdapter.reparseStoredRaw?.(storedOf(decision)),
-    ).toMatchObject({
-      type: "rejected",
-      rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
-      status: "metadata-only",
-    });
+    const replayed = await plUokikAdapter.reparseStoredRaw?.(
+      storedOf(decision),
+    );
+    expect(replayed?.type).toBe("parsed");
+    if (replayed?.type === "parsed") {
+      expect(replayed.result.rawHash).toBe(decision.rawHash);
+      expect(replayed.result.metadata).toEqual(decision.metadata);
+    }
   });
 
-  test("a row stored without its page yields a metadata-only replay outcome", async () => {
+  test("keeps the reason a row was stored without its page", async () => {
     const entry = entryOf(await capturedEntries(), FILELESS);
     const decision = decisionOf(
       await assemblePlUokikDecision({
@@ -1494,13 +1495,14 @@ describe("replaying a stored envelope", () => {
       }),
     );
     globalThis.fetch = asFetchMock(async () => panic("replay must not fetch"));
+    const replayed = await plUokikAdapter.reparseStoredRaw?.(
+      storedOf(decision),
+    );
     expect(
-      await plUokikAdapter.reparseStoredRaw?.(storedOf(decision)),
-    ).toMatchObject({
-      type: "rejected",
-      rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
-      status: "metadata-only",
-    });
+      replayed?.type === "parsed" &&
+        replayed.result.metadata["detailStatus"] ===
+          PL_UOKIK_DETAIL_STATUS.GONE,
+    ).toBe(true);
   });
 });
 

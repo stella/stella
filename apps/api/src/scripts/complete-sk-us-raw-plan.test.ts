@@ -10,7 +10,6 @@ import {
   decodeSourceRawEnvelopeObjects,
   encodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  STORED_RAW_REPARSE_REJECTION,
   StoredRawReadError,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type { StoredRawReparseInput } from "@/api/handlers/case-law/ingestion/adapter";
@@ -155,7 +154,7 @@ test("listing fetching preserves stored replay results for complete and legacy f
     {
       raw: encoder.encode(listingJson),
       contentType: "application/json",
-      expectedType: "rejected",
+      expectedType: "parsed",
     },
     {
       raw: encoder.encode(
@@ -563,11 +562,7 @@ test("legacy binary bytes survive storage and the old raw object is never delete
       documentUrl: null,
       metadata: {},
     });
-    expect(replayed).toMatchObject({
-      type: "rejected",
-      rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
-      status: "metadata-only",
-    });
+    expect(replayed?.type).toBe("parsed");
     expect(
       [...fake.objects.entries()].find(([key]) => key.endsWith(oldKey))?.at(1),
     ).toEqual({ bytes: PDF, contentType: "application/pdf" });
