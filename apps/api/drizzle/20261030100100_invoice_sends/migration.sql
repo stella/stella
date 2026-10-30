@@ -80,7 +80,7 @@ RETURNS TABLE (send_id uuid, organization_id text, invoice_id uuid, workspace_id
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path = pg_catalog, public
+SET search_path = pg_catalog, public, pg_temp
 AS $$
   SELECT s.id, s.organization_id::text, s.invoice_id,
          ARRAY(
@@ -117,7 +117,7 @@ RETURNS integer
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path = pg_catalog, public
+SET search_path = pg_catalog, public, pg_temp
 AS $$
   SELECT count(*)::integer
     FROM public.invoice_sends s
@@ -132,7 +132,7 @@ GRANT EXECUTE ON FUNCTION "invoice_sends_organization_count"(timestamptz) TO ste
 CREATE FUNCTION "invoice_link_invoice"(p_token_hash text)
 RETURNS TABLE ("id" uuid, "organization_id" varchar(128), "workspace_id" uuid, "client_id" uuid, "seller_profile_id" uuid, "original_invoice_id" uuid, "status" text, "document_type" text, "invoice_number" varchar(64), "invoice_date" date, "due_date" date, "taxable_supply_date" date, "currency" varchar(3), "language" text, "reference" varchar(256), "notes" text, "vat_exchange_rate" numeric(24, 12), "vat_exchange_rate_source" varchar(8), "vat_exchange_rate_date" date, "vat_exchange_rate_reference" varchar(64), "vat_exchange_rate_tax_point" date, "buyer_name" varchar(512), "buyer_registration_id" varchar(64), "buyer_tax_id" varchar(64), "buyer_vat_id" varchar(64), "buyer_address_line_1" varchar(512), "buyer_address_line_2" varchar(512), "buyer_city" varchar(256), "buyer_postal_code" varchar(32), "buyer_country" varchar(128), "net_amount" bigint, "total_amount" bigint, "paid_at" timestamp with time zone)
 LANGUAGE sql STABLE SECURITY DEFINER
-SET search_path = pg_catalog, public
+SET search_path = pg_catalog, public, pg_temp
 AS $$ SELECT r."id", r."organization_id", r."workspace_id", r."client_id", r."seller_profile_id", r."original_invoice_id", r."status", r."document_type", r."invoice_number", r."invoice_date", r."due_date", r."taxable_supply_date", r."currency", r."language", r."reference", r."notes", r."vat_exchange_rate", r."vat_exchange_rate_source", r."vat_exchange_rate_date", r."vat_exchange_rate_reference", r."vat_exchange_rate_tax_point", r."buyer_name", r."buyer_registration_id", r."buyer_tax_id", r."buyer_vat_id", r."buyer_address_line_1", r."buyer_address_line_2", r."buyer_city", r."buyer_postal_code", r."buyer_country", r."net_amount", r."total_amount", r."paid_at" FROM public.invoices r JOIN public.invoice_link_scope(p_token_hash) s ON r.id = s.invoice_id AND r.organization_id = s.organization_id $$;
 --> statement-breakpoint
 REVOKE ALL ON FUNCTION "invoice_link_invoice"(text) FROM PUBLIC;
@@ -144,7 +144,7 @@ GRANT EXECUTE ON FUNCTION "invoice_link_invoice"(text) TO stella;
 CREATE FUNCTION "invoice_link_lines"(p_token_hash text)
 RETURNS TABLE ("id" uuid, "workspace_id" uuid, "billing_purpose" text, "position" integer, "description" text, "recorded_description" text, "recorded_quantity" numeric(18, 4), "recorded_unit" varchar(32), "recorded_unit_price" bigint, "recorded_net_amount" bigint, "quantity" numeric(18, 4), "unit" varchar(32), "unit_price" bigint, "vat_rate_bps" integer, "vat_treatment" text, "exemption_reason" text, "net_amount" bigint, "vat_amount" bigint, "gross_amount" bigint, "source" text, "time_entry_id" uuid, "expense_id" uuid, "released_at" timestamp with time zone)
 LANGUAGE sql STABLE SECURITY DEFINER
-SET search_path = pg_catalog, public
+SET search_path = pg_catalog, public, pg_temp
 AS $$ SELECT r."id", r."workspace_id", r."billing_purpose", r."position", r."description", r."recorded_description", r."recorded_quantity", r."recorded_unit", r."recorded_unit_price", r."recorded_net_amount", r."quantity", r."unit", r."unit_price", r."vat_rate_bps", r."vat_treatment", r."exemption_reason", r."net_amount", r."vat_amount", r."gross_amount", r."source", r."time_entry_id", r."expense_id", r."released_at" FROM public.invoice_lines r JOIN public.invoice_link_scope(p_token_hash) s ON r.invoice_id = s.invoice_id AND r.organization_id = s.organization_id $$;
 --> statement-breakpoint
 REVOKE ALL ON FUNCTION "invoice_link_lines"(text) FROM PUBLIC;
@@ -156,7 +156,7 @@ GRANT EXECUTE ON FUNCTION "invoice_link_lines"(text) TO stella;
 CREATE FUNCTION "invoice_link_time"(p_token_hash text)
 RETURNS TABLE ("id" uuid, "workspace_id" uuid, "date_worked" date, "billed_minutes" integer, "rate_at_entry" bigint, "document_description" text, "no_charge" boolean, "invoice_attachment" text)
 LANGUAGE sql STABLE SECURITY DEFINER
-SET search_path = pg_catalog, public
+SET search_path = pg_catalog, public, pg_temp
 AS $$ SELECT r."id", r."workspace_id", r."date_worked", r."billed_minutes", r."rate_at_entry",
   COALESCE(
     CASE WHEN btrim(r."invoice_narrative", U&'\0009\000A\000B\000C\000D\0020\00A0\1680\2000\2001\2002\2003\2004\2005\2006\2007\2008\2009\200A\2028\2029\202F\205F\3000\FEFF') <> '' THEN r."invoice_narrative" END,
@@ -173,7 +173,7 @@ GRANT EXECUTE ON FUNCTION "invoice_link_time"(text) TO stella;
 CREATE FUNCTION "invoice_link_expenses"(p_token_hash text)
 RETURNS TABLE ("id" uuid, "workspace_id" uuid, "date_incurred" date, "amount" bigint, "currency" varchar(3), "category" text, "description" text, "invoice_description" text, "billable" boolean, "markup" integer)
 LANGUAGE sql STABLE SECURITY DEFINER
-SET search_path = pg_catalog, public
+SET search_path = pg_catalog, public, pg_temp
 AS $$ SELECT r."id", r."workspace_id", r."date_incurred", r."amount", r."currency", r."category", r."description", r."invoice_description", r."billable", r."markup" FROM public.expenses r JOIN public.invoice_link_scope(p_token_hash) s ON r.invoice_id = s.invoice_id AND r.organization_id = s.organization_id $$;
 --> statement-breakpoint
 REVOKE ALL ON FUNCTION "invoice_link_expenses"(text) FROM PUBLIC;
@@ -185,7 +185,7 @@ GRANT EXECUTE ON FUNCTION "invoice_link_expenses"(text) TO stella;
 CREATE FUNCTION "invoice_link_seller"(p_token_hash text)
 RETURNS TABLE ("id" uuid, "legal_name" varchar(512), "registration_id" varchar(64), "tax_id" varchar(64), "vat_id" varchar(64), "register_entry" text, "bar_registration" text, "vat_payer" boolean, "address_line_1" varchar(512), "address_line_2" varchar(512), "city" varchar(256), "postal_code" varchar(32), "country" varchar(128), "iban" varchar(34), "bic" varchar(11), "account_number" varchar(64), "default_currency" varchar(3), "footer_notes" text)
 LANGUAGE sql STABLE SECURITY DEFINER
-SET search_path = pg_catalog, public
+SET search_path = pg_catalog, public, pg_temp
 AS $$ SELECT r."id", r."legal_name", r."registration_id", r."tax_id", r."vat_id", r."register_entry", r."bar_registration", r."vat_payer", r."address_line_1", r."address_line_2", r."city", r."postal_code", r."country", r."iban", r."bic", r."account_number", r."default_currency", r."footer_notes" FROM public.seller_profiles r JOIN public.invoices i ON r.id = i.seller_profile_id AND r.organization_id = i.organization_id JOIN public.invoice_link_scope(p_token_hash) s ON i.id = s.invoice_id AND i.organization_id = s.organization_id $$;
 --> statement-breakpoint
 REVOKE ALL ON FUNCTION "invoice_link_seller"(text) FROM PUBLIC;
@@ -197,7 +197,7 @@ GRANT EXECUTE ON FUNCTION "invoice_link_seller"(text) TO stella;
 CREATE FUNCTION "invoice_link_matters"(p_token_hash text)
 RETURNS TABLE ("id" uuid, "name" varchar(256), "reference" varchar(64), "color" varchar(32))
 LANGUAGE sql STABLE SECURITY DEFINER
-SET search_path = pg_catalog, public
+SET search_path = pg_catalog, public, pg_temp
 AS $$ SELECT r."id", r."name", r."reference", r."color" FROM public.workspaces r JOIN public.invoice_link_scope(p_token_hash) s ON r.id = ANY(s.workspace_ids) AND r.organization_id = s.organization_id $$;
 --> statement-breakpoint
 REVOKE ALL ON FUNCTION "invoice_link_matters"(text) FROM PUBLIC;
@@ -209,7 +209,7 @@ GRANT EXECUTE ON FUNCTION "invoice_link_matters"(text) TO stella;
 CREATE FUNCTION "invoice_link_original"(p_token_hash text)
 RETURNS TABLE ("id" uuid, "invoice_number" varchar(64), "invoice_date" date)
 LANGUAGE sql STABLE SECURITY DEFINER
-SET search_path = pg_catalog, public
+SET search_path = pg_catalog, public, pg_temp
 AS $$ SELECT r."id", r."invoice_number", r."invoice_date" FROM public.invoices r JOIN public.invoices i ON r.id = i.original_invoice_id AND r.organization_id = i.organization_id JOIN public.invoice_link_scope(p_token_hash) s ON i.id = s.invoice_id AND i.organization_id = s.organization_id $$;
 --> statement-breakpoint
 REVOKE ALL ON FUNCTION "invoice_link_original"(text) FROM PUBLIC;
@@ -220,7 +220,7 @@ GRANT EXECUTE ON FUNCTION "invoice_link_original"(text) TO stella;
 -- stella-migration-safety: reviewed security-definer - fixed search path and app-only execute; rechecks token, organization, revocation, expiry and invoice state while stamping access, returning whether delivery is permitted
 CREATE FUNCTION "invoice_link_mark_viewed"(p_token_hash text)
 RETURNS boolean LANGUAGE plpgsql VOLATILE SECURITY DEFINER
-SET search_path = pg_catalog, public
+SET search_path = pg_catalog, public, pg_temp
 AS $$
 DECLARE v_live boolean;
 BEGIN
@@ -255,7 +255,7 @@ WITH CHECK (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_
 CREATE FUNCTION "invoice_link_settlement"(p_token_hash text)
 RETURNS TABLE ("latest_paid_on" date, "paid_amount" bigint)
 LANGUAGE sql STABLE SECURITY DEFINER
-SET search_path = pg_catalog, public
+SET search_path = pg_catalog, public, pg_temp
 AS $$
   SELECT CASE WHEN i.status = 'paid' THEN max(p.paid_on) ELSE NULL END, COALESCE(sum(p.amount), 0)::bigint
     FROM public.invoice_link_scope(p_token_hash) s
@@ -275,7 +275,7 @@ GRANT EXECUTE ON FUNCTION "invoice_link_settlement"(text) TO stella;
 -- cannot be removed or moved by any writer, including the owner.
 CREATE FUNCTION "invoice_sends_guard_update"()
 RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER
-SET search_path = pg_catalog, public
+SET search_path = pg_catalog, public, pg_temp
 AS $$
 BEGIN
   IF TG_OP = 'UPDATE' THEN
