@@ -1,8 +1,8 @@
 import { panic } from "better-result";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
-import { corpusIndexGenerations } from "@/api/db/schema";
+import { caseLawSitemapChanges, corpusIndexGenerations } from "@/api/db/schema";
 import type { TransactionOf } from "@/api/db/scoped";
 import { type SafeId, toSafeId } from "@/api/lib/branded-types";
 import {
@@ -569,9 +569,12 @@ export const seedSitemapReadBudget = async ({
   await database.execute(sql`DELETE FROM case_law_sitemap_changes`);
   // Many committed changes of the same month exercise the bounded queue
   // discovery and retirement without adding dirty months.
-  await database.execute(sql`INSERT INTO case_law_sitemap_changes (country, year, month, xact)
-    SELECT 'XQT', '2024', '01', (1000000 + i)::text::xid8
-    FROM generate_series(1, 2000) i`);
+  for (let change = 0; change < 2000; change += 1) {
+    // db-await-in-loop: each change needs its own committed transaction id so
+    // it is visible below the measured run's snapshot xmin.
+    await database.execute(sql`INSERT INTO case_law_sitemap_changes (country, year, month)
+      VALUES ('XQT', '2024', '01')`);
+  }
   await database.execute(sql`INSERT INTO case_law_sitemap_changes (country, year, month, xact)
     SELECT 'XQN', '2024', '01', (2000000 + i)::text::xid8
     FROM generate_series(1, ${scenario.rows}) i`);
@@ -602,6 +605,13 @@ export const seedSitemapReadBudget = async ({
     await holding;
   };
 };
+
+/** Whether the sitemap measurement retired at least one visible fixture change. */
+export const sitemapRefreshRetiredChanges = async (database: GatedTestDb) =>
+  (await database.$count(
+    caseLawSitemapChanges,
+    eq(caseLawSitemapChanges.country, "XQT"),
+  )) < 2000;
 
 /**
  * The rows the coverage refresh writes: its summary, its backfill checkpoint
