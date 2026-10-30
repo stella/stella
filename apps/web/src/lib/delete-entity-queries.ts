@@ -16,7 +16,7 @@ type DeleteEntityQueriesOptions = {
 };
 
 /** Remove an entity's cache before refreshing the collections that named it. */
-export const deleteEntityQueries = async ({
+const deleteEntityQueries = async ({
   collectionQueryKeys,
   entityQueryKeys,
   queryClient,
