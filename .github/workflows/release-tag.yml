@@ -222,6 +222,9 @@ jobs:
   finalize:
     name: Finalize the proven release candidate
     needs: finalize-eligibility
+    outputs:
+      sha: ${{ needs.finalize-eligibility.outputs.sha }}
+      final_tag: ${{ steps.finalize.outputs.final_tag }}
     if: github.event_name == 'workflow_run' && needs.finalize-eligibility.outputs.sha != ''
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -248,6 +251,7 @@ jobs:
           permission-contents: write
 
       - name: Move the final tag to the proven RC commit
+        id: finalize
         timeout-minutes: 5
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
@@ -257,6 +261,50 @@ jobs:
           git config user.name "stella-release-deployer[bot]"
           git config user.email "stella-release-deployer[bot]@users.noreply.github.com"
           bash scripts/finalize-release.sh "$GITHUB_REPOSITORY" "$RELEASE_SHA"
+          final_tag="v$(git show "$RELEASE_SHA:VERSION" | tr -d '[:space:]')"
+          if final_sha=$(git rev-parse --verify "refs/tags/$final_tag^{commit}" 2>/dev/null) && [[ "$final_sha" == "$RELEASE_SHA" ]]; then
+            {
+              echo "final_tag=$final_tag"
+            } >> "$GITHUB_OUTPUT"
+          fi
+
+  land-release-pr:
+    name: Land the finalized release pull request
+    needs: finalize
+    if: github.event_name == 'workflow_run' && needs.finalize.outputs.final_tag != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Mint changelog App token
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ secrets.CHANGELOG_APP_ID }}
+          private-key: ${{ secrets.CHANGELOG_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Checkout trusted landing tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          token: ${{ steps.app-token.outputs.token }}
+          fetch-depth: 0
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/land-release-pr.sh
+            scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Arm the release pull request at its finalized head
+        timeout-minutes: 3
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          RELEASE_SHA: ${{ needs.finalize.outputs.sha }}
+        run: bash scripts/land-release-pr.sh "$GITHUB_REPOSITORY" "$RELEASE_SHA"
 
   # Marketing freshness is content debt, not a release defect: staleness
   # surfaces as a warning and never blocks the tag. The check loads installed

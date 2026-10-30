@@ -1,0 +1,5 @@
+{
+  "kind": "priority",
+  "qualifier": "Enables auto-merge for the release pull request at the finalized tag commit using a repository-scoped App token.",
+  "reviewedDigest": "c432e326902065a96d89da0daa76cb2310d62a8b2f7094299f55b4ff4135c1d7"
+}

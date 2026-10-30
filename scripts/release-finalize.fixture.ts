@@ -9,6 +9,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import * as v from "valibot";
 
 const execute = (cwd: string, command: string[], env = process.env) =>
   Bun.spawnSync(command, { cwd, env });
@@ -16,6 +17,33 @@ const git = (cwd: string, ...args: string[]) => {
   const result = execute(cwd, ["git", ...args]);
   expect(result.exitCode, result.stderr.toString()).toBe(0);
   return result.stdout.toString().trim();
+};
+
+const readFinalizationCommand = () => {
+  const workflow = v.parse(
+    v.looseObject({
+      jobs: v.looseObject({
+        finalize: v.looseObject({
+          steps: v.array(
+            v.looseObject({
+              id: v.optional(v.string()),
+              run: v.optional(v.string()),
+            }),
+          ),
+        }),
+      }),
+    }),
+    Bun.YAML.parse(
+      readFileSync(
+        new URL("../.github/workflows/release-tag.yml", import.meta.url),
+        "utf-8",
+      ),
+    ),
+  );
+  return v.parse(
+    v.string(),
+    workflow.jobs.finalize.steps.find(({ id }) => id === "finalize")?.run,
+  );
 };
 
 type ProofFixture = {
@@ -26,7 +54,26 @@ type ProofFixture = {
   finalTag?: "candidate" | "previous";
   rcPublication?: "draft" | "published";
   publicationFails?: boolean;
+  pull?:
+    | "matching"
+    | "none"
+    | "multiple"
+    | "mismatch"
+    | "merged"
+    | "armed"
+    | "queued"
+    | "fork"
+    | "fork-alongside"
+    | "closed";
+  mergeFails?: boolean;
 };
+const pullState = (pull: ProofFixture["pull"]) => {
+  if (pull === "merged") {
+    return "MERGED";
+  }
+  return pull === "closed" ? "CLOSED" : "OPEN";
+};
+
 export const finalize = (fixture: ProofFixture = {}) => {
   const root = mkdtempSync(path.join(tmpdir(), "release-finalize-"));
   try {
@@ -55,16 +102,35 @@ export const finalize = (fixture: ProofFixture = {}) => {
         fixture.finalTag === "candidate" ? sha : `${sha}^`,
       );
     }
-    for (const source of [
-      "finalize-release.sh",
-      "check-release-main-health.sh",
-      "check-release-open-incidents.sh",
-    ]) {
-      cpSync(new URL(source, import.meta.url), path.join(root, source));
-    }
+    cpSync(
+      new URL("land-release-pr.sh", import.meta.url),
+      path.join(root, "land-release-pr.sh"),
+    );
     writeFileSync(
       path.join(root, "verifier.sh"),
       "#!/usr/bin/env bash\nexit 0\n",
+    );
+    const pull = {
+      number: 123,
+      title: "chore: release v1.2.3",
+      state: pullState(fixture.pull),
+      headRefName: "release/v1.2.3",
+      headRefOid: fixture.pull === "mismatch" ? "f".repeat(40) : sha,
+      isCrossRepository: fixture.pull === "fork",
+      isInMergeQueue: fixture.pull === "queued",
+      autoMergeRequest:
+        fixture.pull === "armed" ? { enabledAt: "2026-01-01T00:00:00Z" } : null,
+    };
+    const pulls = fixture.pull === "none" ? [] : [pull];
+    if (fixture.pull === "multiple") {
+      pulls.push({ ...pull, number: 456 });
+    }
+    if (fixture.pull === "fork-alongside") {
+      pulls.unshift({ ...pull, number: 456, isCrossRepository: true });
+    }
+    writeFileSync(
+      path.join(root, "pulls.json"),
+      JSON.stringify({ nodes: pulls, pageInfo: { hasNextPage: false } }),
     );
     const contexts = [
       [
@@ -110,10 +176,14 @@ export const finalize = (fixture: ProofFixture = {}) => {
 set -euo pipefail
 case "$*" in
   # A draft release is visible only to a token with push access.
+  'api graphql '*|'pr '*) [[ "$GH_TOKEN" == fixture-landing-token ]] ;;
   'release '*) [[ "$GH_TOKEN" == fixture-token ]] ;;
   *) [[ "$GH_TOKEN" == fixture-read-token ]] ;;
 esac
 case "$*" in
+  'api graphql '*) cat "$TEST_ROOT/pulls.json" ;;
+  'pr merge '*)
+    ${fixture.mergeFails || fixture.pull === "queued" ? 'echo "merge failed" >&2; exit 1' : 'printf \'%s\\n\' "$*" >> "$TEST_ROOT/merges"'} ;;
   'release view '*) printf '%s\\n' '${fixture.rcPublication !== "published"}' ;;
   *statuses?*) cat "$TEST_ROOT/statuses.json" ;;
   *actions/runs/*) run="\u0024{!#}"; cat "$TEST_ROOT/run-\u0024{run##*/}.json" ;;
@@ -136,19 +206,46 @@ exec "${realGit}" "$@"
 `,
       { mode: 0o755 },
     );
+    mkdirSync(path.join(root, "scripts"));
+    // The workflow runs trusted tooling from scripts/.
+    for (const source of [
+      "finalize-release.sh",
+      "check-release-main-health.sh",
+      "check-release-open-incidents.sh",
+    ]) {
+      cpSync(
+        new URL(source, import.meta.url),
+        path.join(root, "scripts", source),
+      );
+    }
+    const outputFile = path.join(root, "step-output");
     const result = execute(
       root,
-      ["bash", "finalize-release.sh", "stella/stella", sha],
+      ["bash", "-euo", "pipefail", "-c", readFinalizationCommand()],
       {
         ...process.env,
         PATH: `${bin}:${process.env["PATH"] ?? "/usr/bin:/bin"}`,
         TEST_ROOT: root,
+        GITHUB_REPOSITORY: "stella/stella",
+        RELEASE_SHA: sha,
+        GITHUB_OUTPUT: outputFile,
         GH_TOKEN: "fixture-token",
         RELEASE_HEALTH_TOKEN: "fixture-read-token",
         GH_RETRY_SCRIPT: path.join(root, "gh.sh"),
         RELEASE_TREE_PROOF_VERIFIER: path.join(root, "verifier.sh"),
       },
     );
+    const stepOutput =
+      Bun.file(outputFile).size > 0 ? readFileSync(outputFile, "utf-8") : "";
+    const landing =
+      result.exitCode === 0 && stepOutput.startsWith("final_tag=")
+        ? execute(root, ["bash", "land-release-pr.sh", "stella/stella", sha], {
+            ...process.env,
+            GH_TOKEN: "fixture-landing-token",
+            TEST_ROOT: root,
+            GH_RETRY_SCRIPT: path.join(root, "gh.sh"),
+          })
+        : null;
     const finalTag = execute(root, [
       realGit,
       "rev-parse",
@@ -161,6 +258,9 @@ exec "${realGit}" "$@"
     };
     return {
       result,
+      stepOutput,
+      landing,
+      merges: readReceipt("merges"),
       sha,
       finalSha:
         finalTag.exitCode === 0 ? finalTag.stdout.toString().trim() : null,

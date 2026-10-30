@@ -644,7 +644,8 @@
       ".changeset/**",
       ".github/workflows/**",
       "scripts/**",
-      "@stll/sha256"
+      "@stll/sha256",
+      "apps/web/e2e/marketing/captures.ts"
     ],
     "Test CLI contract changeset guard": [".changeset/**", "scripts/**"],
     "Test package scaffolder": ["scripts/**"],

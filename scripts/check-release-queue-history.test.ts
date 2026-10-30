@@ -1135,6 +1135,8 @@ const VERSION_READERS: Record<string, string> = {
     "VERSION equals the release tag being published",
   ".github/workflows/release.yml":
     "VERSION equals the stable portion of the RC or final tag",
+  ".github/workflows/release-tag.yml":
+    "VERSION names the final tag of the exact finalized SHA; never the previous release",
   "scripts/check-cli-release-coupling.ts":
     "VERSION changed against the merge base; compared with npm, not with tags",
   "scripts/check-npm-publish-lag.ts":
@@ -1149,6 +1151,8 @@ const VERSION_READERS: Record<string, string> = {
   "scripts/ci-root-check-inputs.json": "changed-path scope",
   "scripts/finalize-release.sh":
     "VERSION names the final tag after exact-SHA RC proof; never the previous release",
+  "scripts/land-release-pr.sh":
+    "VERSION at the finalized SHA names the final tag and release branch to land",
   "scripts/prepare-maintenance-release.ts":
     "new version derives from the newest final tag; VERSION identifies untagged notes to fold",
   "scripts/verify-release-candidate-tree.mjs":

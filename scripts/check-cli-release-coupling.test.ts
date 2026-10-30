@@ -13,7 +13,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty, propertyConfig } from "@stll/property-testing";
 
 import {
   canonicalJson,
@@ -30,6 +30,13 @@ import {
   verdictFromClassification,
 } from "./check-cli-release-coupling";
 import { readCiCheckCommandText } from "./ci-check-pool-registry";
+import {
+  assertNoOpenReleasePullRequests,
+  MaintenanceReleaseError,
+} from "./prepare-maintenance-release";
+
+// Dynamic reads consume temporary Git fixtures, never repository Markdown.
+export const CI_MARKDOWN_READER_INPUTS = [] as const;
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const SCRIPT = "scripts/check-cli-release-coupling.ts";
@@ -797,16 +804,16 @@ test("a squash merge group fetches a PR head absent from the checkout", () => {
   }
 });
 
-test("merge groups fail closed for unrelated tags, malformed refs, and missing PR heads", () => {
-  for (const failure of [
-    "unrelated-tag",
-    "malformed-ref",
-    "trailing-newline",
-    "zero-pr",
-    "short-sha",
-    "missing-pr-head",
-    "lookup-failure",
-  ] as const) {
+for (const failure of [
+  "unrelated-tag",
+  "malformed-ref",
+  "trailing-newline",
+  "zero-pr",
+  "short-sha",
+  "missing-pr-head",
+  "lookup-failure",
+] as const) {
+  test(`merge groups fail closed for ${failure}`, () => {
     const { root, env, git } = mergeGroupFixture(
       failure === "unrelated-tag" ? "elsewhere" : "release",
     );
@@ -844,5 +851,73 @@ test("merge groups fail closed for unrelated tags, malformed refs, and missing P
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
+  });
+}
+
+test("finalized release PRs cannot deadlock the next cut with pending CLI changesets", () => {
+  const root = releasedTagFixture("release");
+  const git = (...args: string[]) => {
+    const result = spawnSync("git", args, {
+      cwd: root,
+      encoding: "utf-8",
+      maxBuffer: 32 * 1024 * 1024,
+    });
+    expect(result.status, result.stderr).toBe(0);
+    return result.stdout.trim();
+  };
+  try {
+    const headRefOid = git("rev-parse", "HEAD");
+    git("checkout", "fixture-main");
+    mkdirSync(path.join(root, ".changeset"), { recursive: true });
+    writeFileSync(
+      path.join(root, ".changeset/pending-cli.md"),
+      '---\n"@stll/cli": patch\n---\n\nCLI change after the release cut.\n',
+    );
+    git("add", ".changeset/pending-cli.md");
+    git("commit", "-m", "pending CLI change on main");
+    git("checkout", "-b", "release-merge");
+    git("merge", "--no-edit", headRefOid);
+    expect(
+      readFileSync(path.join(root, ".changeset/pending-cli.md"), "utf-8"),
+    ).toContain('"@stll/cli": patch');
+    mkdirSync(path.join(root, "packages/cli"), { recursive: true });
+    writeFileSync(
+      path.join(root, "packages/cli/package.json"),
+      '{"name":"@stll/cli","version":"0.10.1"}',
+    );
+    mkdirSync(path.join(root, "bin"));
+    writeFileSync(
+      path.join(root, "bin/npm"),
+      '#!/bin/sh\nprintf \'%s\\n\' \'{"dist-tags.latest":"0.10.1","versions":["0.10.1"]}\'\n',
+      { mode: 0o755 },
+    );
+    const env = {
+      PATH: `${path.join(root, "bin")}:${process.env["PATH"] ?? "/usr/bin:/bin"}`,
+    };
+    const check = runBase(root, env);
+    expect(check.exitCode, check.stderr.toString()).toBe(0);
+    expect(check.stdout.toString()).toContain("v0.9.48 is already tagged at");
+    git("branch", "-f", "fixture-main", "HEAD");
+    // The cut's verdict depends on the checkout, not on the listing, so one
+    // run covers every sample.
+    expect(runBase(root, env).exitCode).toBe(0);
+    assertProperty(
+      "finalized release PRs cannot deadlock the next cut with pending CLI changesets",
+      fc.property(fc.integer({ min: 1, max: 1_000_000 }), (number) => {
+        const open = [{ number, title: "chore: release v0.9.48", headRefOid }];
+        expect(() => assertNoOpenReleasePullRequests(open)).toThrow(
+          MaintenanceReleaseError,
+        );
+        expect(() => assertNoOpenReleasePullRequests(open)).toThrow(
+          `merge-bar ${number}`,
+        );
+
+        // The merged PR disappears from the open listing used by the cut.
+        assertNoOpenReleasePullRequests([]);
+      }),
+      { numRuns: 3 },
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 });
