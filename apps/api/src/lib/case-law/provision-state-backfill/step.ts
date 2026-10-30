@@ -87,7 +87,7 @@ export const inBackfillTransaction = async (
   if (session.runUnit !== undefined) {
     return await session.runUnit({ lockTimeout, statementTimeout }, work);
   }
-  await session.execute("BEGIN");
+  await session.execute("BEGIN ISOLATION LEVEL READ COMMITTED");
   const unit = await Result.tryPromise({
     try: async () => {
       await session.setTransactionBudget({

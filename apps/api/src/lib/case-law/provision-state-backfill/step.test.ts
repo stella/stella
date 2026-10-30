@@ -37,3 +37,29 @@ for (const statementTimeout of [60_000, 25 * 60_000]) {
     expect(budgets).toEqual([{ lockTimeout: 10_000, statementTimeout }]);
   });
 }
+
+test("session-owned units override the session isolation with read committed", async () => {
+  const statements: string[] = [];
+  const session: ProvisionBackfillSession = {
+    execute: async (statement) => {
+      statements.push(statement);
+    },
+    query: async () => [],
+    setTransactionBudget: async () => {},
+  };
+
+  const result = await inBackfillTransaction(
+    session,
+    { lockTimeout: 10_000, statementTimeout: 60_000 },
+    async () => {
+      await session.execute("UPDATE gated_row SET value = 1");
+    },
+  );
+
+  expect(result.isOk()).toBe(true);
+  expect(statements).toEqual([
+    "BEGIN ISOLATION LEVEL READ COMMITTED",
+    "UPDATE gated_row SET value = 1",
+    "COMMIT",
+  ]);
+});

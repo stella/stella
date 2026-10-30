@@ -872,7 +872,7 @@ export const createBackfillRuntime = (
   const runInTransaction: IngestionTransactionRunner<
     Pick<OnlineMigrationConnection, "execute" | "query">
   > = async (work) => {
-    await connection.execute("BEGIN");
+    await connection.execute("BEGIN ISOLATION LEVEL READ COMMITTED");
     const outcome = await Result.tryPromise({
       try: async () => {
         const result = await work(connection);
