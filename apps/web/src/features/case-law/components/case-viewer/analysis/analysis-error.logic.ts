@@ -43,7 +43,8 @@ export const ANALYSIS_UNAVAILABLE_MESSAGE = {
   decision_not_found: "caseLaw.analysis.errors.decisionNotFound",
   document_unparseable: "caseLaw.analysis.errors.documentUnparseable",
   language_unsupported: "caseLaw.analysis.errors.languageUnsupported",
-  analysis_unavailable: "caseLaw.analysis.errors.unavailable",
+  analysis_disabled: "caseLaw.analysis.errors.analysisDisabled",
+  source_restricted: "caseLaw.analysis.errors.sourceRestricted",
 } as const satisfies Record<CaseLawAnalysisUnavailableCode, TranslationKey>;
 
 /** What the reader is told about an analysis that is not there. */

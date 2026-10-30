@@ -67,7 +67,7 @@ const prepareBilingualTranslation = createSafeHandler(
     workspaceId,
   }) {
     if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
-      return Result.err(storedAIConfigUnreadableError(undefined));
+      return Result.err(storedAIConfigUnreadableError());
     }
 
     if (body.sourceLang.toLowerCase() === body.targetLang.toLowerCase()) {

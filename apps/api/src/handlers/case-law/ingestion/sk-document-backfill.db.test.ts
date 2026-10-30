@@ -39,10 +39,14 @@ import {
   recordDocumentFetchRequest,
   storeBackfilledDocument,
 } from "@/api/lib/legal-search/sk-document-backfill";
-import type { PendingDocument } from "@/api/lib/legal-search/sk-document-backfill";
+import type {
+  PendingDocument,
+  SkDocumentRetentionCheck,
+} from "@/api/lib/legal-search/sk-document-backfill";
 import { SkDocumentNonPdfError } from "@/api/lib/legal-search/sk-document-fetch-diagnostics";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 import { readOfResponse } from "@/api/tests/helpers/publisher-read";
+import { memorySkDocumentRawStorage } from "@/api/tests/helpers/sk-document-raw-storage";
 
 /**
  * Wide enough to hold the whole queue on the migrated-but-unseeded
@@ -829,8 +833,11 @@ if (!databaseUrl || !runPostgresTests) {
         answer: () => Promise<Response>,
       ) =>
         await fetchDecisionDocument({
+          rawStorage: memorySkDocumentRawStorage().storage,
           decisionId: id,
           fetchDocument: async () => readOfResponse(await answer()),
+          // These cases settle a failed download; nothing is stored to measure.
+          checkRetention: () => undefined,
           scopedDb,
           signal: new AbortController().signal,
         });
@@ -891,8 +898,13 @@ if (!databaseUrl || !runPostgresTests) {
           expect(buffered.documentUrl).not.toBe(currentUrl);
           expect(buffered.caseNumber).not.toBe(metadata.caseNumber);
           const urls: string[] = [];
+          const checked: Parameters<SkDocumentRetentionCheck>[0][] = [];
           const outcome = await fetchDecisionDocument({
+            rawStorage: memorySkDocumentRawStorage().storage,
             decisionId: buffered.id,
+            checkRetention: (input) => {
+              checked.push(input);
+            },
             fetchDocument: async (url) => {
               urls.push(url.href);
               return readOfResponse(
@@ -922,12 +934,26 @@ if (!databaseUrl || !runPostgresTests) {
           });
           const stored = await db.query.caseLawDecisions.findFirst({
             where: { id: { eq: id } },
-            columns: { fulltext: true, sourceHash: true },
+            columns: {
+              fulltext: true,
+              sourceHash: true,
+              sourceRawS3Key: true,
+              sourceRawContentType: true,
+            },
           });
           expect(stored).toEqual({
             fulltext: outcome.document.fulltext,
             sourceHash: "source-v2",
+            sourceRawS3Key: expect.any(String),
+            sourceRawContentType: "application/vnd.stella.case-law-raw+json",
           });
+          // The stored document is measured against the bytes it came from.
+          expect(checked).toHaveLength(1);
+          expect(checked[0]?.decision.caseNumber).toBe(metadata.caseNumber);
+          expect(checked[0]?.pdfBytes).toEqual(new Uint8Array(bytes));
+          expect(checked[0]?.blocks).toEqual(
+            outcome.document.documentAst.blocks,
+          );
         }
       });
 
@@ -951,10 +977,18 @@ if (!databaseUrl || !runPostgresTests) {
         expect(row?.documentFetchAttempts).toBe(MAX_DOCUMENT_FETCH_ATTEMPTS);
         // Still pending: a parser fix and a requeue can still read it.
         const [text] = await db
-          .select({ fulltext: caseLawDecisions.fulltext })
+          .select({
+            fulltext: caseLawDecisions.fulltext,
+            sourceRawS3Key: caseLawDecisions.sourceRawS3Key,
+            sourceRawContentType: caseLawDecisions.sourceRawContentType,
+          })
           .from(caseLawDecisions)
           .where(eq(caseLawDecisions.id, id));
         expect(text?.fulltext).toBeNull();
+        expect(text?.sourceRawS3Key).toEqual(expect.any(String));
+        expect(text?.sourceRawContentType).toBe(
+          "application/vnd.stella.case-law-raw+json",
+        );
       });
 
       /** A body one byte over the ceiling that starts with `head`. */

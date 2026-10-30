@@ -3,6 +3,7 @@ import { useTranslations } from "use-intl";
 
 import { CASE_LAW_ANALYSIS_LANGUAGES } from "@stll/api-contract";
 import { createCaseLawDecisionRouteParams } from "@stll/api-contract/case-law-decision-route";
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { Button } from "@stll/ui/button";
 import { SparklesIcon } from "@stll/ui/icons";
 
@@ -48,6 +49,43 @@ const useAnalysisErrorText = (message: AnalysisErrorMessage): string => {
 };
 
 /**
+ * The version of the decision an analysis can be made in, offered when the
+ * open version's language has none. Only this offer reads the reader's
+ * languages, so the notice for every other reason needs no reader settings.
+ */
+const AnalysisLanguageVersionLink = ({
+  languageVersions,
+}: {
+  languageVersions: readonly PublicDecisionLanguageAlternate[];
+}) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  const readingLanguages = useCaseLawReadingLanguages();
+  const analysableVersion = analysisLanguageVersion(
+    languageVersions,
+    readingLanguages,
+  );
+  if (analysableVersion === null) {
+    return null;
+  }
+  return decisionLinkElement({
+    children: t("caseLaw.analysis.errors.openLanguageVersion", {
+      language: languageLabel(format, analysableVersion.language),
+    }),
+    className: "text-foreground text-xs font-medium hover:underline",
+    params: createCaseLawDecisionRouteParams({
+      caseNumber: analysableVersion.caseNumber,
+      country: analysableVersion.country,
+      court: analysableVersion.court,
+      decisionId: analysableVersion.id,
+      language: analysableVersion.language,
+      languageAlternates: languageVersions,
+      slug: analysableVersion.slug,
+    }),
+  });
+};
+
+/**
  * Why the analysis column holds no analysis, and the way to ask again when
  * asking again can help. A failed run names whose key it used, so a reader
  * on their organization's own key knows where the fault sits; one whose
@@ -58,6 +96,7 @@ export const AnalysisErrorNotice = ({
   error,
   languageVersions = NO_LANGUAGE_VERSIONS,
   onRetry,
+  sourceUrl,
 }: {
   error: AnalysisError;
   /**
@@ -66,15 +105,12 @@ export const AnalysisErrorNotice = ({
    */
   languageVersions?: readonly PublicDecisionLanguageAlternate[] | undefined;
   onRetry: () => void;
+  sourceUrl?: string | null;
 }) => {
   const t = useTranslations();
   const format = useFormatter();
-  const readingLanguages = useCaseLawReadingLanguages();
   const text = useAnalysisErrorText(analysisErrorMessage(error));
-  const analysableVersion =
-    error.kind === "unavailable" && error.code === "language_unsupported"
-      ? analysisLanguageVersion(languageVersions, readingLanguages)
-      : null;
+  const sourceHref = sourceUrl ? sanitizeHref(sourceUrl) : undefined;
   const retryAt = analysisRetryAt(error);
   const retryTimePassed = useTimePassed(retryAt);
   return (
@@ -87,28 +123,31 @@ export const AnalysisErrorNotice = ({
       ) : (
         <p className="text-muted-foreground text-xs leading-snug">{text}</p>
       )}
-      {analysableVersion !== null &&
-        decisionLinkElement({
-          children: t("caseLaw.analysis.errors.openLanguageVersion", {
-            language: languageLabel(format, analysableVersion.language),
-          }),
-          className: "text-foreground text-xs font-medium hover:underline",
-          params: createCaseLawDecisionRouteParams({
-            caseNumber: analysableVersion.caseNumber,
-            country: analysableVersion.country,
-            court: analysableVersion.court,
-            decisionId: analysableVersion.id,
-            language: analysableVersion.language,
-            languageAlternates: languageVersions,
-            slug: analysableVersion.slug,
-          }),
-        })}
+      {error.kind === "unavailable" &&
+        error.code === "language_unsupported" && (
+          <AnalysisLanguageVersionLink languageVersions={languageVersions} />
+        )}
       {retryAt !== undefined && !retryTimePassed && (
         <p className="text-muted-foreground text-xs leading-snug">
           {t("caseLaw.analysis.errors.retryAfter", {
             time: format.dateTime(retryAt, MEDIUM_DATE_SHORT_TIME_FORMAT),
           })}
         </p>
+      )}
+      {error.kind === "unavailable" && sourceHref !== undefined && (
+        <Button
+          render={
+            <a
+              href={sanitizeHref(sourceHref)}
+              target="_blank"
+              rel="noopener noreferrer"
+            />
+          }
+          size="sm"
+          variant="muted"
+        >
+          {t("common.viewSource")}
+        </Button>
       )}
       {analysisRetryOf(error, retryTimePassed) !== "none" && (
         <Button onClick={onRetry} size="sm" variant="muted">

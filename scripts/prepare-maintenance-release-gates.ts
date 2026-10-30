@@ -47,6 +47,16 @@ export type CutGate = PreCutGate | PostCutGate;
 
 export const MAINTENANCE_CUT_GATES: readonly CutGate[] = [
   {
+    name: "deploy-env-contract",
+    source: "cut",
+    stage: "pre-cut",
+    check: {
+      kind: "command",
+      command: ["bun", "scripts/check-deploy-env-contract.ts"],
+    },
+    overriddenByAllowUnprovenMain: false,
+  },
+  {
     name: "main-health",
     source: "cut",
     stage: "pre-cut",
@@ -82,6 +92,16 @@ export const MAINTENANCE_CUT_GATES: readonly CutGate[] = [
     source: "release-tag",
     stage: "pre-cut",
     check: { kind: "npm-publish-lag" },
+    overriddenByAllowUnprovenMain: false,
+  },
+  {
+    name: "npm-publish-readiness",
+    source: "release-tag",
+    stage: "pre-cut",
+    check: {
+      kind: "command",
+      command: ["bun", "scripts/check-npm-publish-readiness.ts"],
+    },
     overriddenByAllowUnprovenMain: false,
   },
   {

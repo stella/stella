@@ -192,7 +192,7 @@ describe("background action admission", () => {
       if (Result.isError(nested)) {
         expect(nested.error).toBeInstanceOf(ActionAdmissionError);
         expect(nested.error).toMatchObject({
-          reason: reply === -1 ? "period_exhausted" : "unavailable",
+          reason: reply === -1 ? "period_exhausted" : "lease_lost",
         });
       }
       expect(executions).toBe(0);
@@ -267,7 +267,9 @@ describe("background action admission", () => {
 
     expect(Result.isError(result)).toBe(true);
     if (Result.isError(result)) {
-      expect(result.error).toMatchObject({ reason: "unavailable" });
+      expect(result.error).toMatchObject({
+        reason: "configuration_incomplete",
+      });
     }
     expect(ran).toBe(false);
   });

@@ -1,12 +1,14 @@
 {
   "tabs": {
     "chat": "Czat",
-    "tasks": "Zadania",
+    "close": "Zamknij",
+    "law": "Orzecznictwo",
     "matters": "Sprawy",
-    "settings": "Ustawienia"
+    "more": "Więcej",
+    "settings": "Ustawienia",
+    "tasks": "Zadania"
   },
   "chat": {
-    "description": "Miej bieżącą pracę pod ręką i kontynuuj na dowolnym urządzeniu.",
     "emptyTitle": "Brak rozmów",
     "emptyDescription": "Tutaj pojawią się nowe rozmowy i ostatnie wątki.",
     "noMatchesTitle": "Brak pasujących czatów",
@@ -35,19 +37,62 @@
     "answerWorking": "Pracuję…",
     "answerStopped": "Zatrzymano.",
     "answerNeedsInput": "Ta odpowiedź wymaga Twojej decyzji. Dokończ ją w stelli w przeglądarce.",
-    "answerFailed": "Nie udało się dokończyć odpowiedzi."
+    "answerFailed": "Nie udało się dokończyć odpowiedzi.",
+    "composerMenu": "Otwórz menu załączników i narzędzi",
+    "pickTitle": "Wybierz rozmowę",
+    "pickDescription": "Wybierz wątek z listy lub rozpocznij nowy przyciskiem +."
   },
   "tasks": {
-    "description": "Sprawdź, co wymaga uwagi, bez otwierania całego obszaru roboczego.",
     "emptyTitle": "Brak otwartych zadań",
-    "emptyDescription": "Tutaj pojawią się przypisane i nadchodzące zadania."
+    "emptyDescription": "Tutaj pojawią się otwarte zadania przypisane do Ciebie.",
+    "loadFailed": "Nie udało się wczytać Twoich zadań.",
+    "retry": "Spróbuj ponownie",
+    "newTask": "Nowe zadanie",
+    "add": "Dodaj",
+    "name": "Nazwa zadania",
+    "dueTitle": "Termin",
+    "matterTitle": "Sprawa",
+    "findMatter": "Znajdź sprawę",
+    "addFailed": "Nie udało się dodać zadania. Spróbuj ponownie.",
+    "mattersFailed": "Nie udało się wczytać Twoich spraw.",
+    "dueOn": "termin {day}",
+    "dueChoice": {
+      "none": "Bez terminu",
+      "today": "Dziś",
+      "tomorrow": "Jutro",
+      "nextWeek": "Za tydzień"
+    },
+    "due": {
+      "overdue": "Po terminie",
+      "today": "Dziś",
+      "tomorrow": "Jutro",
+      "week": "W tym tygodniu",
+      "later": "Później",
+      "none": "Bez terminu"
+    },
+    "markDone": "Oznacz jako wykonane",
+    "reopen": "Otwórz ponownie",
+    "statusFailed": "Nie udało się zmienić zadania. Spróbuj ponownie.",
+    "pickTitle": "Wybierz zadanie",
+    "pickDescription": "Wybierz zadanie z listy, aby zobaczyć je tutaj.",
+    "openMatter": "Otwórz sprawę"
   },
   "matters": {
-    "description": "Znajdź sprawę i szybko poznaj najważniejszy kontekst.",
     "emptyTitle": "Nie ma jeszcze spraw",
     "emptyDescription": "Tutaj pojawią się Twoje ostatnie sprawy.",
     "loadFailed": "Nie udało się wczytać Twoich spraw.",
-    "retry": "Spróbuj ponownie"
+    "retry": "Spróbuj ponownie",
+    "groupBy": "Grupuj według",
+    "noGrouping": "Nie grupuj",
+    "groupClient": "Klient",
+    "personal": "Osobista",
+    "newMatter": "Nowa sprawa",
+    "create": "Utwórz",
+    "name": "Nazwa sprawy",
+    "personalHint": "Powstanie jako sprawa osobista, widoczna tylko dla Ciebie. Klienta i członków dodasz w wersji webowej.",
+    "createFailed": "Nie udało się utworzyć sprawy. Spróbuj ponownie.",
+    "pickTitle": "Wybierz sprawę",
+    "pickDescription": "Wybierz sprawę z listy, aby zobaczyć jej dokumenty i zadania."
   },
   "matter": {
     "documents": "Dokumenty",
@@ -71,7 +116,10 @@
       "in_review": "Do przeglądu",
       "done": "Zakończone",
       "cancelled": "Anulowane"
-    }
+    },
+    "add": "Dodaj",
+    "scanDocument": "Zeskanuj dokument",
+    "newTask": "Nowe zadanie"
   },
   "entity": {
     "type": "Typ",
@@ -80,11 +128,18 @@
     "loadFailed": "Nie udało się wczytać tej pozycji."
   },
   "signIn": {
-    "title": "Zaloguj się do stella",
-    "description": "Wpisz adres swojego serwera stella. Logowanie potwierdzisz w przeglądarce.",
+    "beta": "Beta",
+    "headline": "Jasność w każdej sprawie.",
+    "subtitle": "Dokumenty, orzecznictwo i przegląd pod kontrolą. Z pomocą AI.",
+    "submit": "Zaloguj się",
+    "terms": "Kontynuując, akceptujesz nasze <terms>Warunki korzystania z usługi</terms>.",
+    "options": "Opcje logowania",
+    "serverTitle": "Serwer",
+    "serverDescription": "Aplikacja loguje się do stella. Podaj inny serwer tylko wtedy, gdy Twoja organizacja prowadzi własny.",
+    "useStella": "Użyj stella",
+    "done": "Gotowe",
     "serverLabel": "Adres serwera",
     "serverPlaceholder": "stella.example.com",
-    "submit": "Kontynuuj",
     "sessionEnded": "Twoja sesja wygasła. Zaloguj się ponownie.",
     "errors": {
       "address": "Wpisz adres https, na przykład stella.example.com.",
@@ -96,6 +151,83 @@
   "settings": {
     "accountTitle": "Konto",
     "server": "Serwer",
-    "signOut": "Wyloguj się"
+    "signOut": "Wyloguj się",
+    "deleteAccount": "Usuń konto",
+    "deleteAccountHint": "Otwiera Twoje konto w przeglądarce, gdzie możesz je usunąć wraz ze wszystkim, co do Ciebie należy."
+  },
+  "header": {
+    "search": "Szukaj"
+  },
+  "law": {
+    "title": "Orzecznictwo",
+    "newest": "Najnowsze orzeczenia",
+    "noResults": "Nic nie odpowiada słowom wymaganym przez to wyszukiwanie.",
+    "noResultsHint": "Spróbuj mniej lub innych słów: pojęć, których użyłoby orzeczenie, a nie zdania, w którym zadaje się pytanie.",
+    "unavailable": "Wyszukiwanie jest tymczasowo niedostępne",
+    "retry": "Spróbuj ponownie",
+    "headnote": "Teza",
+    "textUnavailable": "Do tego orzeczenia nie ma dostępnego tekstu",
+    "openSource": "Otwórz źródło oryginalne",
+    "loadFailed": "Nie udało się wczytać orzecznictwa.",
+    "share": "Udostępnij"
+  },
+  "more": {
+    "soon": "Wkrótce",
+    "timers": "Stopery",
+    "voiceInput": "Wprowadzanie głosowe"
+  },
+  "writes": {
+    "consentNeeded": "Aby wprowadzać zmiany z aplikacji, stella potrzebuje Twojej zgody. Zaloguj się ponownie, aby jej udzielić.",
+    "signInAgain": "Zaloguj się ponownie"
+  },
+  "timers": {
+    "title": "Liczniki czasu",
+    "start": "Uruchom",
+    "startTimer": "Uruchom licznik",
+    "newTimer": "Nowy licznik",
+    "description": "Nad czym pracujesz?",
+    "matterTitle": "Sprawa",
+    "noMatter": "Bez sprawy",
+    "noDescription": "Bez opisu",
+    "running": "Działa",
+    "paused": "Wstrzymany",
+    "pause": "Wstrzymaj",
+    "resume": "Wznów",
+    "save": "Zapisz",
+    "discard": "Odrzuć",
+    "emptyTitle": "Brak liczników",
+    "emptyDescription": "Uruchom licznik przyciskiem + i po zakończeniu zapisz go jako wpis czasu.",
+    "loadFailed": "Nie udało się wczytać Twoich liczników.",
+    "retry": "Spróbuj ponownie",
+    "unavailable": "Rejestrowanie czasu nie jest włączone w Twojej organizacji.",
+    "startFailed": "Nie udało się uruchomić licznika. Spróbuj ponownie.",
+    "changeFailed": "Nie udało się zmienić licznika. Spróbuj ponownie.",
+    "more": "{count, plural, one {i # inny stoper} few {i # inne stopery} other {i # innych stoperów}}"
+  },
+  "scan": {
+    "title": "Zeskanuj dokument",
+    "upload": "Prześlij",
+    "name": "Nazwa dokumentu",
+    "defaultName": "Skan {day}",
+    "pages": "{count, plural, one {# strona} few {# strony} many {# stron} other {# strony}}",
+    "matterTitle": "Sprawa",
+    "uploadFailed": "Nie udało się przesłać skanu. Spróbuj ponownie.",
+    "failedTitle": "Skanowanie nie powiodło się",
+    "failed": "Aparat nie zapisał skanu. Spróbuj ponownie."
+  },
+  "shortcuts": {
+    "search": "Szukaj",
+    "palette": "Paleta poleceń",
+    "next": "Następny wynik",
+    "previous": "Poprzedni wynik",
+    "toggleList": "Pokaż lub ukryj listę"
+  },
+  "palette": {
+    "placeholder": "Szukaj spraw i rozmów lub uruchom polecenie",
+    "noResults": "Nic nie pasuje do „{query}”"
+  },
+  "pane": {
+    "showList": "Pokaż listę",
+    "hideList": "Ukryj listę"
   }
 }

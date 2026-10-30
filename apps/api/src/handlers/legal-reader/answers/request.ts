@@ -18,7 +18,7 @@ type ReaderAnswerRequestOptions = Pick<
   "safeDb" | "recordAuditEvent"
 > & {
   session: { activeOrganizationId: SafeId<"organization"> };
-  user: { id: SafeId<"user"> };
+  user: { id: SafeId<"user">; readerAnswerLanguage?: string | null };
   scopedDb: ScopedDb;
   orgAIConfig: OrgAIConfig | null;
   orgAIConfigStatus: OrgAIConfigStatus;
@@ -28,18 +28,21 @@ type ReaderAnswerRequestOptions = Pick<
 };
 
 /** All generation routes share provider policy and the existing chat admission lane. */
-export const readerAnswerRequest = ({
-  session,
-  user,
-  safeDb,
-  recordAuditEvent,
-  scopedDb,
-  orgAIConfig,
-  orgAIConfigStatus,
-  managedAIResidency,
-  request,
-  usageLane,
-}: ReaderAnswerRequestOptions) => {
+export const readerAnswerRequest = (
+  {
+    session,
+    user,
+    safeDb,
+    recordAuditEvent,
+    scopedDb,
+    orgAIConfig,
+    orgAIConfigStatus,
+    managedAIResidency,
+    request,
+    usageLane,
+  }: ReaderAnswerRequestOptions,
+  streamAnswer = streamReaderAnswer,
+) => {
   const available = requireTanStackAIAvailableForTask({
     task: "chat",
     orgConfig: orgAIConfig,
@@ -50,7 +53,7 @@ export const readerAnswerRequest = ({
     return available;
   }
   if (managedAIResidency === null) {
-    return Result.err(storedAIConfigUnreadableError(undefined));
+    return Result.err(storedAIConfigUnreadableError());
   }
   const scope = {
     organizationId: session.activeOrganizationId,
@@ -61,9 +64,16 @@ export const readerAnswerRequest = ({
   return Result.ok({
     scope,
     stream: (prepared: PreparedReaderAnswer) =>
-      streamReaderAnswer({
+      streamAnswer({
         ...scope,
-        prepared,
+        prepared: {
+          ...prepared,
+          locale:
+            prepared.locale ??
+            (user.readerAnswerLanguage === "document"
+              ? undefined
+              : (user.readerAnswerLanguage ?? undefined)),
+        },
         orgAIConfig,
         managedAIResidency,
         requestSignal: request.signal,

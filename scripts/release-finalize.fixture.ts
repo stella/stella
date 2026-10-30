@@ -109,7 +109,8 @@ export const finalize = (fixture: ProofFixture = {}) => {
       `#!/usr/bin/env bash
 set -euo pipefail
 case "$*" in
-  'release edit '*) [[ "$GH_TOKEN" == fixture-token ]] ;;
+  # A draft release is visible only to a token with push access.
+  'release '*) [[ "$GH_TOKEN" == fixture-token ]] ;;
   *) [[ "$GH_TOKEN" == fixture-read-token ]] ;;
 esac
 case "$*" in
