@@ -99,9 +99,7 @@ const useTimeEntryRate = ({
         rateRefusal.date === date &&
         rateRefusal.activityCode === (activityCode ?? null) &&
         rateRefusal.dataUpdatedAt >= rateQuery.dataUpdatedAt));
-  const rateReady =
-    !billable ||
-    (rateQuery.isSuccess && !rateQuery.isRefetchError && !missingRate);
+  const rateReady = !billable || (rateQuery.isSuccess && !missingRate);
 
   const recordRefusal = () =>
     setRateRefusal({

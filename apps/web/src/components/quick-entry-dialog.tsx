@@ -2,7 +2,7 @@ import { Suspense, useId, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import {
@@ -131,6 +131,10 @@ const QuickEntryDialog = () => {
         setMatterBaseline(matter);
         setStep({ type: "expense", matter, date: values.dateWorked });
         return undefined;
+      default: {
+        action satisfies never;
+        return panic(`Unhandled save action: ${String(action)}`);
+      }
     }
   };
 
