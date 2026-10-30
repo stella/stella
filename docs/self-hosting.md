@@ -60,9 +60,10 @@ Organization invitation grants use the same parameter as `activity-timeline`:
 ```
 
 Invoice links require this organization grant and `FEATURE_INVOICE_LINKS=true`.
-`FEATURE_TIME_BILLING` must also be enabled, and authenticated link operations
-require the caller's time-billing enrolment. Member grants do not enable invoice
-links. Removing the organization grant prevents delivery and makes existing links
+`FEATURE_TIME_BILLING` must also be enabled, and sending requires the caller's time-billing enrolment.
+History and revocation require normal invoice access and time-billing availability,
+without an invoice-links grant or personal enrolment. Member grants for invoice-links
+are rejected as invalid configuration. Removing the organization grant prevents delivery and makes existing links
 unavailable without deleting data. Public recipients need no account. Grant
 changes take effect when the configured parameter refresh is applied.
 

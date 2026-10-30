@@ -30,6 +30,8 @@ type DeclarationOptions = {
   registry: FeatureRegistry;
   endpoints: readonly { file: string; config: Record<string, unknown> }[];
   sources: ReadonlyMap<string, string>;
+  /** Derived from the reviewed invoice management route group. */
+  invoiceManagementFiles?: ReadonlySet<string>;
 };
 export type FeatureAccessDeclarationViolation = {
   file: string;
@@ -888,6 +890,7 @@ type EndpointOptions = {
   graph: DeclarationSourceGraph;
   dispatchModules: ReturnType<typeof validateOwnership>["dispatchModules"];
   modules: ModuleFacts;
+  invoiceManagementFiles: ReadonlySet<string>;
 };
 const inspectEndpoint = ({
   endpoint,
@@ -895,6 +898,7 @@ const inspectEndpoint = ({
   graph,
   dispatchModules,
   modules,
+  invoiceManagementFiles,
 }: EndpointOptions) => {
   const file = endpoint.file.split("#").at(0) ?? endpoint.file;
   const declaration = parseDeclaration(endpoint.config, file, registry);
@@ -903,7 +907,14 @@ const inspectEndpoint = ({
     return violations;
   }
   const required = new Map<string, Set<Requirement>>();
-  const add = (id: string, type: Requirement) => {
+  const add = (
+    id: string,
+    type: Requirement,
+    management = invoiceManagementFiles.has(endpoint.file),
+  ) => {
+    if (management && (id === "time-billing" || id === "invoice-links")) {
+      return;
+    }
     const types = required.get(id) ?? new Set<Requirement>();
     types.add(type);
     required.set(id, types);
@@ -919,11 +930,13 @@ const inspectEndpoint = ({
   }
   const visited = new Set<string>();
   const walked = new Set<string>();
-  const walk = (module: string) => {
-    if (walked.has(module)) {
+  const walk = (module: string, throughManagement = false) => {
+    const management = throughManagement || invoiceManagementFiles.has(module);
+    const walkKey = `${module}:${management ? "management" : "ordinary"}`;
+    if (walked.has(walkKey)) {
       return;
     }
-    walked.add(module);
+    walked.add(walkKey);
     visited.add(module);
     // Descriptor registries do not invoke their handlers. Dispatch owners
     // admit the selected descriptor before invocation, not the whole caller.
@@ -937,7 +950,7 @@ const inspectEndpoint = ({
     }
     const boundary = modules.boundary(module);
     for (const [id, type] of boundary) {
-      add(id, type);
+      add(id, type, management);
     }
     if (boundary.size !== 0) {
       return;
@@ -947,10 +960,10 @@ const inspectEndpoint = ({
       violations.push({ file, message });
     }
     for (const target of dependencies.targets) {
-      walk(target);
+      walk(target, management);
     }
     for (const [id, type] of modules.uses(module, ast)) {
-      add(id, type);
+      add(id, type, management);
     }
   };
   walk(file);
@@ -1095,6 +1108,7 @@ export const validateFeatureAccessDeclarations = ({
   registry,
   endpoints,
   sources,
+  invoiceManagementFiles = new Set<string>(),
 }: DeclarationOptions): FeatureAccessDeclarationViolation[] => {
   const dispatch = dispatchEntryEndpoints(sources);
   const graph = new DeclarationSourceGraph(dispatch.sources, registry);
@@ -1150,6 +1164,7 @@ export const validateFeatureAccessDeclarations = ({
         graph,
         dispatchModules: ownership.dispatchModules,
         modules,
+        invoiceManagementFiles,
       }),
     );
   }

@@ -55,11 +55,10 @@ const gatedInvoicesRoute = routes(
   },
 );
 
-/** Link operations require the invitation decision, including its billing prerequisite. */
+/** Sending requires the organization invitation and caller enrolment. */
 export const invoiceSendsRoute = routes(
   {
-    "/:invoiceId/sends": { GET: listInvoiceSends, POST: sendInvoice },
-    "/:invoiceId/sends/:sendId/revoke": { POST: revokeInvoiceSend },
+    "/:invoiceId/sends": { POST: sendInvoice },
   },
   {
     prefix: "/invoices/:workspaceId",
@@ -67,4 +66,20 @@ export const invoiceSendsRoute = routes(
   },
 );
 
-export const invoicesRoute = mount([gatedInvoicesRoute, invoiceSendsRoute]);
+/** Existing authority remains manageable without an invitation or personal enrolment. */
+export const invoiceSendManagementRoute = routes(
+  {
+    "/:invoiceId/sends": { GET: listInvoiceSends },
+    "/:invoiceId/sends/:sendId/revoke": { POST: revokeInvoiceSend },
+  },
+  {
+    prefix: "/invoices/:workspaceId",
+    middleware: [deploymentFeatureGate("FEATURE_TIME_BILLING")],
+  },
+);
+
+export const invoicesRoute = mount([
+  gatedInvoicesRoute,
+  invoiceSendsRoute,
+  invoiceSendManagementRoute,
+]);

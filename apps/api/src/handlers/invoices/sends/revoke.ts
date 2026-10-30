@@ -13,7 +13,6 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
   contract: "patch",
-  featureAccess: { featureId: "invoice-links", type: "required" },
   description:
     "Revoke the link an invoice email carried, so it no longer opens the invoice. Revoking twice keeps the first revocation; send the invoice again for a new link.",
   permissions: { invoice: ["update"] },

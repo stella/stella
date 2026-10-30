@@ -209,3 +209,37 @@ test("invoice organization grants are registered while unknown ids retain count-
     unknownGrantCount: 1,
   });
 });
+
+test("organization-scoped features reject member grants without exposing their identities", () => {
+  const organizationFeatures = Object.entries(FEATURE_REGISTRY).filter(
+    ([, definition]) =>
+      "grantScope" in definition && definition.grantScope === "organization",
+  );
+  expect(organizationFeatures.length).toBeGreaterThan(0);
+  for (const [featureId] of organizationFeatures) {
+    const memberGrant = {
+      type: "member",
+      organizationId: "org-sensitive",
+      email: "sensitive@example.test",
+    };
+    for (const grants of [
+      [memberGrant],
+      [{ type: "organization", organizationId: "org-a" }, memberGrant],
+    ]) {
+      const result = v.safeParse(
+        createFeatureAccessGrantsEnvSchema(FEATURE_REGISTRY),
+        JSON.stringify({ [featureId]: grants }),
+      );
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(JSON.stringify(result.issues)).not.toContain(
+          memberGrant.organizationId,
+        );
+        expect(JSON.stringify(result.issues)).not.toContain(memberGrant.email);
+        expect(result.issues.at(0)?.message).toBe(
+          "API_FEATURE_ACCESS_GRANTS contains a grant scope unsupported by its feature",
+        );
+      }
+    }
+  }
+});

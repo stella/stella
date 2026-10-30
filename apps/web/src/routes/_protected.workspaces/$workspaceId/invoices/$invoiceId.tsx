@@ -755,14 +755,14 @@ function InvoiceLinkControls({
   const invoiceLinksEnabled = useCallerFeatureEnabled(
     CALLER_FEATURE.invoiceLinks,
   );
-  if (!invoiceLinksEnabled || !canUpdateInvoice) {
+  if (!canUpdateInvoice) {
     return null;
   }
   return (
     <>
       {invoiceStatus !== "draft" && (
         <InvoiceSendsSection
-          canSend={invoiceStatus !== "void"}
+          canSend={invoiceLinksEnabled && invoiceStatus !== "void"}
           invoiceId={invoiceId}
           onSendAgain={(recipients) =>
             setSendDialog({ type: "open", recipients })
@@ -777,10 +777,12 @@ function InvoiceLinkControls({
             setSendDialog({ type: "closed" });
           }
         }}
-        open={sendDialog.type === "open"}
+        open={invoiceLinksEnabled && sendDialog.type === "open"}
       >
         <DialogPopup className="max-w-md">
-          {sendDialog.type === "open" && invoiceNumber !== null ? (
+          {invoiceLinksEnabled &&
+          sendDialog.type === "open" &&
+          invoiceNumber !== null ? (
             <SendInvoiceForm
               invoiceId={invoiceId}
               invoiceNumber={invoiceNumber}

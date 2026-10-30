@@ -96,6 +96,7 @@ import {
   resolveAccess,
   resolveHandlerKind,
   resolveScope,
+  reviewedInvoiceManagementEndpoints,
   scanBinarySchemaFields,
   scanContextFidelity,
   scanFileResponseReturns,
@@ -1082,6 +1083,7 @@ const validateGeneratedFeatureDeclarations = ({
   endpoints,
   sources: sourceModules,
   dispatchRecords,
+  invoiceManagementFiles,
 }: GeneratedFeatureDeclarationOptions): void => {
   const sources = new Map(sourceModules);
   for (const file of sources.keys()) {
@@ -1097,6 +1099,7 @@ const validateGeneratedFeatureDeclarations = ({
     registry,
     endpoints,
     sources,
+    invoiceManagementFiles,
   });
 };
 
@@ -1104,6 +1107,17 @@ const buildCatalog = async (): Promise<BuildResult> => {
   const { endpoints, files, importErrors } = await discoverSafeHandlers();
   const errors: string[] = [];
   const featureSources = await readFeatureDeclarationSources();
+  const { invoiceSendManagementRoute } =
+    await import("../src/handlers/invoices/routes");
+  const { classifyRouteGate: classifyManagementGate } =
+    await import("../src/lib/route-gates");
+  const invoiceManagementFiles = new Set(
+    reviewedInvoiceManagementEndpoints({
+      routes: invoiceSendManagementRoute,
+      endpoints,
+      classify: classifyManagementGate,
+    }).map(({ file }) => file),
+  );
 
   for (const { id, message } of importErrors) {
     errors.push(`import failed: ${id}: ${message}`);
@@ -1568,6 +1582,7 @@ const buildCatalog = async (): Promise<BuildResult> => {
     endpoints,
     sources: featureSources,
     dispatchRecords,
+    invoiceManagementFiles,
   });
 
   // Class guards over the built entries (context-fidelity, file-response,

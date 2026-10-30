@@ -62,6 +62,54 @@ const conditional = {
   },
 };
 
+test("reviewed management exempts billing and invoice invitations only on that dependency path", () => {
+  const management = "apps/api/src/routes/feature/management.ts";
+  const ordinary = "apps/api/src/routes/ordinary.ts";
+  const sources = new Map([
+    ...baseSources,
+    [
+      management,
+      'import { run } from "../../feature/core"; export const manage = () => run();',
+    ],
+    [
+      ordinary,
+      'import { manage } from "./feature/management"; import { run } from "../feature/core"; export const runBoth = () => [manage(), run()];',
+    ],
+  ]);
+  const invoiceManagementFiles = new Set([management]);
+  const endpoints = [
+    { file: management, config: {} },
+    { file: ordinary, config: {} },
+  ];
+  const violations = validateFeatureAccessDeclarations({
+    registry: {
+      "time-billing": registry.fixture,
+      "invoice-links": registry.fixture,
+    },
+    endpoints,
+    sources,
+    invoiceManagementFiles,
+  });
+  expect(violations.filter(({ file }) => file === management)).toEqual([]);
+  for (const featureId of ["time-billing", "invoice-links"]) {
+    expect(violations).toContainEqual({
+      file: ordinary,
+      message: `source ownership requires featureAccess ${featureId}`,
+    });
+  }
+  expect(
+    validateFeatureAccessDeclarations({
+      registry: { fixture: registry.fixture },
+      endpoints: [{ file: management, config: {} }],
+      sources,
+      invoiceManagementFiles,
+    }),
+  ).toContainEqual({
+    file: management,
+    message: "source ownership requires featureAccess fixture",
+  });
+});
+
 describe("feature source declarations", () => {
   test("the canonical database factory registers schemas without consuming their feature data", () => {
     const owner = [
@@ -572,8 +620,18 @@ export const ${name} = { run: { featureId: "fixture", ${target} } };`;
             },
           ],
           sources,
-        }),
+        }).filter((violation) => violation.file === file),
       ).toEqual([]);
+      if (action !== "create") {
+        expect(
+          validateFeatureAccessDeclarations({
+            registry: FEATURE_REGISTRY,
+            endpoints: [{ file, config: {} }],
+            sources,
+            invoiceManagementFiles: new Set([file]),
+          }).filter((violation) => violation.file === file),
+        ).toEqual([]);
+      }
     }
     const featureFile = "apps/api/src/handlers/lists/verifications/create.ts";
     for (const ordinary of ordinaryHandlers) {

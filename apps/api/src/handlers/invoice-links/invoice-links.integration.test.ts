@@ -844,13 +844,9 @@ describe("sending an invoice by link", () => {
           }),
         ),
       );
-      expect(listed).toMatchObject(
-        enabled
-          ? {
-              items: [expect.objectContaining({ deliveryStatus: "delivered" })],
-            }
-          : { code: 404 },
-      );
+      expect(listed).toMatchObject({
+        items: [expect.objectContaining({ deliveryStatus: "delivered" })],
+      });
       for (const [path, extra] of [
         ["view", {}],
         ["download", { file: "pdf" }],
@@ -885,10 +881,12 @@ describe("sending an invoice by link", () => {
       const row =
         (await sendRows(existing.invoiceId)).at(0) ??
         panic("Expected existing send");
-      expect(await revoke(existing.invoiceId, row.id)).toMatchObject(
-        enabled ? { id: row.id } : { code: 404 },
+      expect(await revoke(existing.invoiceId, row.id)).toHaveProperty(
+        "revokedAt",
       );
-      expect(await sendRows(existing.invoiceId)).toHaveLength(1);
+      const persisted = await sendRows(existing.invoiceId);
+      expect(persisted).toHaveLength(1);
+      expect(persisted.at(0)?.revokedAt).toBeInstanceOf(Date);
     },
   );
 
@@ -923,7 +921,44 @@ describe("sending an invoice by link", () => {
     expect(await invoiceStatus(invoiceId)).toBe(INVOICE_STATUS.FINALIZED);
   });
 
-  test("disabling invoice links refuses authenticated history and revocation", async () => {
+  test("revoking while the organization grant is removed stays revoked when the grant returns", async () => {
+    const invoiceId = await seedInvoice({ status: INVOICE_STATUS.FINALIZED });
+    const sent = await send(invoiceId, ["withdrawn-grant@example.test"]);
+    if (!("id" in sent)) {
+      return panic("Expected an invoice link before grant removal");
+    }
+    const token = tokenSentTo("withdrawn-grant@example.test");
+    expect((await post(server, "view", { token })).status).toBe(200);
+    const grants = env.API_FEATURE_ACCESS_GRANTS;
+    testState.setConfig("API_FEATURE_ACCESS_GRANTS", {});
+    expect((await listSendHistory(invoiceId)).items).toMatchObject([
+      { id: sent.id, linkStatus: "active" },
+    ]);
+    expect(await revoke(invoiceId, sent.id)).toMatchObject({ id: sent.id });
+    expect((await sendRows(invoiceId)).at(0)?.revokedAt).toBeInstanceOf(Date);
+    testState.setConfig("API_FEATURE_ACCESS_GRANTS", grants);
+    for (const [path, extra] of [
+      ["view", {}],
+      ["download", { file: "pdf" }],
+    ] as const) {
+      const revoked = await post(server, path, { token, ...extra });
+      const unknown = await post(server, path, {
+        token: createInvoiceLinkToken(),
+        ...extra,
+      });
+      expect(revoked.status).toBe(404);
+      expect(revoked.status).toBe(unknown.status);
+      expect(await revoked.json()).toEqual(await unknown.json());
+      expect(revoked.headers.get("cache-control")).toBe(
+        unknown.headers.get("cache-control"),
+      );
+      expect(revoked.headers.get("referrer-policy")).toBe(
+        unknown.headers.get("referrer-policy"),
+      );
+    }
+  });
+
+  test("disabling invoice links preserves authenticated history and revocation", async () => {
     const invoiceId = await seedInvoice({ status: INVOICE_STATUS.FINALIZED });
     const sent = await send(invoiceId, ["disabled-cleanup@example.test"]);
     if (!("id" in sent) || typeof sent.id !== "string") {
@@ -940,12 +975,12 @@ describe("sending an invoice by link", () => {
           }),
         ),
       ),
-    ).toMatchObject({ code: 404 });
-    expect(await revoke(invoiceId, sent.id)).toMatchObject({ code: 404 });
-    expect((await sendRows(invoiceId)).at(0)?.revokedAt).toBeNull();
+    ).toMatchObject({ items: [{ id: sent.id }] });
+    expect(await revoke(invoiceId, sent.id)).toMatchObject({ id: sent.id });
+    expect((await sendRows(invoiceId)).at(0)?.revokedAt).toBeInstanceOf(Date);
   });
 
-  test("unenrolling refuses authenticated link operations while recipient authority remains", async () => {
+  test("unenrolling preserves invoice link management while refusing new sends", async () => {
     const invoiceId = await seedInvoice({ status: INVOICE_STATUS.FINALIZED });
     const firstSend = await send(invoiceId, [
       "cleanup-after-unenrolment@example.test",
@@ -978,14 +1013,16 @@ describe("sending an invoice by link", () => {
           }),
         ),
       );
-      expect(listed).toMatchObject({ code: 404 });
+      expect(listed).toMatchObject({ items: [{ id: sendId }] });
       expect(await revoke(existing.invoiceId, sendId)).toMatchObject({
-        code: 404,
+        id: sendId,
       });
-      expect((await sendRows(existing.invoiceId)).at(0)?.revokedAt).toBeNull();
+      expect(
+        (await sendRows(existing.invoiceId)).at(0)?.revokedAt,
+      ).toBeInstanceOf(Date);
       expect(
         (await post(server, "view", { token: existing.token })).status,
-      ).toBe(200);
+      ).toBe(404);
       expect(
         await send(pending, ["still-disabled@example.test"]),
       ).toMatchObject({ code: 404 });
@@ -1931,7 +1968,7 @@ describe("sending an invoice by link", () => {
     expect(collectedIds.at(-1)).toBe(expected.at(-1)?.id);
   });
 
-  test("an unverified member cannot manage links while organization recipient authority remains", async () => {
+  test("an unverified member can list and revoke invoice links but cannot send", async () => {
     const invoiceId = await seedInvoice({ status: INVOICE_STATUS.FINALIZED });
     const sent = await send(invoiceId, ["unverified-reader@example.test"]);
     if (!("id" in sent)) {
@@ -1952,9 +1989,9 @@ describe("sending an invoice by link", () => {
           }),
         ),
       );
-      expect(listed).toMatchObject({ code: 404 });
-      expect(await revoke(invoiceId, sent.id)).toMatchObject({ code: 404 });
-      expect((await post(server, "view", { token })).status).toBe(200);
+      expect(listed).toMatchObject({ items: [{ id: sent.id }], replyTo: null });
+      expect(await revoke(invoiceId, sent.id)).toMatchObject({ id: sent.id });
+      expect((await post(server, "view", { token })).status).toBe(404);
       const transportedBefore = delivered.length;
       expect(
         await send(invoiceId, ["unverified-refused@example.test"]),

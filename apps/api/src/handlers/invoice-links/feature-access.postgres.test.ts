@@ -133,7 +133,7 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
                 }),
               );
               const enabled = deployed && granted;
-              expect("items" in listed).toBe(enabled);
+              expect("items" in listed).toBe(true);
               const opened = await open(token);
               expect(opened.isOk()).toBe(enabled);
               if (opened.isErr()) {
@@ -175,22 +175,6 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
                   }),
                 );
                 expect(refused).toMatchObject({ code: 404 });
-                expect(
-                  await revokeInvoiceSend.handler(
-                    createTestHandlerContext<
-                      Parameters<typeof revokeInvoiceSend.handler>[0]
-                    >({
-                      ...context(a),
-                      params: {
-                        workspaceId: a.context.workspaceId,
-                        invoiceId: a.invoiceId,
-                        sendId,
-                      },
-                      scopedDb: NO_DB,
-                      audit: a.context.audit,
-                    }),
-                  ),
-                ).toMatchObject({ code: 404 });
               }
             }
           }
@@ -222,6 +206,74 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
           );
           expect(stopped).toMatchObject({ code: 502 });
           expect(deliveries).toBe(0);
+          const unenrolledContext = {
+            ...a.context,
+            featureAccessSnapshot: buildFeatureAccessSnapshot({
+              organizationId: orgA,
+              userId: a.context.user.id,
+              identity: { email: a.context.user.email, emailVerified: true },
+              enrolments: [],
+            }),
+          };
+          const history = await listInvoiceSends.handler(
+            createTestHandlerContext<
+              Parameters<typeof listInvoiceSends.handler>[0]
+            >({
+              ...unenrolledContext,
+              params: {
+                workspaceId: a.context.workspaceId,
+                invoiceId: a.invoiceId,
+              },
+              query: {},
+              scopedDb: NO_DB,
+              audit: a.context.audit,
+            }),
+          );
+          expect("items" in history).toBe(true);
+          const revoked = await revokeInvoiceSend.handler(
+            createTestHandlerContext<
+              Parameters<typeof revokeInvoiceSend.handler>[0]
+            >({
+              ...unenrolledContext,
+              params: {
+                workspaceId: a.context.workspaceId,
+                invoiceId: a.invoiceId,
+                sendId,
+              },
+              scopedDb: NO_DB,
+              audit: a.context.audit,
+            }),
+          );
+          expect(revoked).toMatchObject({ id: sendId });
+          state.setConfig("API_FEATURE_ACCESS_GRANTS", {
+            "invoice-links": [{ type: "organization", organizationId: orgA }],
+          });
+          const restored = await open(token);
+          const unknown = await open(createInvoiceLinkToken());
+          expect(restored.isErr()).toBe(true);
+          expect(unknown.isErr()).toBe(true);
+          if (restored.isErr() && unknown.isErr()) {
+            expect(restored.error).toMatchObject({
+              status: unknown.error.status,
+              code: unknown.error.code,
+              message: unknown.error.message,
+            });
+          }
+          const foreign = await revokeInvoiceSend.handler(
+            createTestHandlerContext<
+              Parameters<typeof revokeInvoiceSend.handler>[0]
+            >({
+              ...b.context,
+              params: {
+                workspaceId: b.context.workspaceId,
+                invoiceId: a.invoiceId,
+                sendId,
+              },
+              scopedDb: NO_DB,
+              audit: b.context.audit,
+            }),
+          );
+          expect(foreign).toMatchObject({ code: 404 });
           // A grant for another tenant never validates an already sent token.
           state.setConfig("API_FEATURE_ACCESS_GRANTS", {
             "invoice-links": [{ type: "organization", organizationId: orgB }],

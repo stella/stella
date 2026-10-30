@@ -444,43 +444,43 @@ const InvoiceSendRow = ({
           </p>
         ) : null}
       </div>
-      {canSend ? (
-        <div className="flex shrink-0 items-center gap-2">
-          {send.linkStatus === "active" ? (
-            <AlertDialog>
-              <AlertDialogTrigger
-                nativeButton
-                render={
-                  <Button loading={revoke.isPending} size="sm" variant="ghost">
-                    {t("revoke")}
-                  </Button>
-                }
-              />
-              <AlertDialogPopup>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>{t("revokeTitle")}</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    {t("revokeConfirm")}
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogClose render={<Button variant="ghost" />}>
-                    {rootT("common.cancel")}
-                  </AlertDialogClose>
-                  <AlertDialogClose
-                    render={
-                      <Button
-                        onClick={() => revoke.mutate()}
-                        variant="destructive"
-                      />
-                    }
-                  >
-                    {t("revoke")}
-                  </AlertDialogClose>
-                </AlertDialogFooter>
-              </AlertDialogPopup>
-            </AlertDialog>
-          ) : null}
+      <div className="flex shrink-0 items-center gap-2">
+        {send.linkStatus === "active" ? (
+          <AlertDialog>
+            <AlertDialogTrigger
+              nativeButton
+              render={
+                <Button loading={revoke.isPending} size="sm" variant="ghost">
+                  {t("revoke")}
+                </Button>
+              }
+            />
+            <AlertDialogPopup>
+              <AlertDialogHeader>
+                <AlertDialogTitle>{t("revokeTitle")}</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {t("revokeConfirm")}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogClose render={<Button variant="ghost" />}>
+                  {rootT("common.cancel")}
+                </AlertDialogClose>
+                <AlertDialogClose
+                  render={
+                    <Button
+                      onClick={() => revoke.mutate()}
+                      variant="destructive"
+                    />
+                  }
+                >
+                  {t("revoke")}
+                </AlertDialogClose>
+              </AlertDialogFooter>
+            </AlertDialogPopup>
+          </AlertDialog>
+        ) : null}
+        {canSend ? (
           <Button
             onClick={() => onSendAgain(send.recipients)}
             size="sm"
@@ -489,8 +489,8 @@ const InvoiceSendRow = ({
             <SendIcon className="size-3.5" />
             {t("sendAgain")}
           </Button>
-        </div>
-      ) : null}
+        ) : null}
+      </div>
     </li>
   );
 };
