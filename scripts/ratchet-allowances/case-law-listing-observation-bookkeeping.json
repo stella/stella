@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 1,
+  "reason": "public-corpus listing-observation ledger and held-recheck claims are ingestion bookkeeping, not user actions; provenance is the immutable ledger"
+}

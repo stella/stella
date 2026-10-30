@@ -1922,7 +1922,7 @@ const reparsePlUokikStoredRaw = async (
     part: RAW_PART.LISTING,
     identityOf: (listing) => {
       const identity = plUokikListingIdentity(normalizePlUokikRow(listing));
-      if (identity === null || identity.type !== "document") {
+      if (identity === undefined || identity.type !== "document") {
         return undefined;
       }
       return rulingName === undefined

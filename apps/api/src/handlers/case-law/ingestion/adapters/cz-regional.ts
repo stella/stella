@@ -1,4 +1,3 @@
-// parser-output-unchanged: [cz-regional] rows earlier parsers stored keep their identity, fields and raw; they gain only sourceDocumentIdRepairAliases, which adopt nothing on replay because the source held no quarantine rows.
 // parser-output-unchanged: cursor counters are validated before fetching; decision parsing is unchanged.
 // parser-output-unchanged: array partitions and retry arithmetic use shared owners with identical boundaries and delays; parsed content is unchanged.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.

@@ -77,11 +77,6 @@ import {
 import { readStoredRawReparseResult } from "@/api/lib/legal-search/stored-raw-reparse-boundary";
 import { isRecord } from "@/api/lib/type-guards";
 
-export type {
-  ListingObservation,
-  ListingObservationIdentity,
-} from "@/api/lib/legal-search/quarantine-identity";
-
 export { EMPTY_AST };
 export type { EmptyAst };
 

@@ -1044,7 +1044,7 @@ describe("walking a month", () => {
     );
     expect(recovered.sourceDocumentIdRepairAliases).toHaveLength(1);
     expect(recovered.sourceDocumentIdRepairAliases?.map(String)).toEqual([
-      quarantined?.sourceDocumentId,
+      String(quarantined?.sourceDocumentId),
     ]);
   });
 

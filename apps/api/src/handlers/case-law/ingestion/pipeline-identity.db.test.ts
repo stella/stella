@@ -1227,10 +1227,10 @@ if (!databaseUrl || !runPostgresTests) {
           .where(
             and(
               eq(caseLawDecisions.sourceId, sourceId),
-              inArray(caseLawDecisions.sourceDocumentId, [
-                first.sourceDocumentId,
-                "nalus-record:7402",
-              ]),
+              inArray(
+                caseLawDecisions.sourceDocumentId,
+                [first.sourceDocumentId, "nalus-record:7402"].map(String),
+              ),
             ),
           )
           .limit(3);

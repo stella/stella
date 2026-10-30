@@ -1,4 +1,3 @@
-// parser-output-unchanged: [cz-us] reproduces the adapter's former quarantine digest byte for byte.
 /**
  * The identity of a listed record that states no usable publisher id.
  *
@@ -36,11 +35,7 @@ import {
 } from "@/api/lib/legal-search/quarantine-prefixes";
 import { fingerprintReconciliationPayload } from "@/api/lib/legal-search/reconciliation-payload";
 
-export {
-  LISTING_OBSERVATION_REASON,
-  LISTING_OBSERVATION_REASONS,
-} from "@/api/lib/legal-search/listing-observation-reasons";
-export type { ListingObservationReason } from "@/api/lib/legal-search/listing-observation-reasons";
+export { LISTING_OBSERVATION_REASON } from "@/api/lib/legal-search/listing-observation-reasons";
 
 /**
  * Quarantine namespaces, one per adapter that builds the identity. The
@@ -464,7 +459,7 @@ const listingObservationIdentitySchema = v.pipe(
   v.brand("ListingObservationIdentity"),
 );
 
-export type ListingObservationIdentity = v.InferOutput<
+type ListingObservationIdentity = v.InferOutput<
   typeof listingObservationIdentitySchema
 >;
 

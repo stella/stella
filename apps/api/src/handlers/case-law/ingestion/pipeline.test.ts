@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { SQL } from "bun";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 

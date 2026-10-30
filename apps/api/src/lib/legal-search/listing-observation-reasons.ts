@@ -1,4 +1,3 @@
-// parser-output-unchanged: observation reasons move unchanged into a schema-safe owner.
 export const LISTING_OBSERVATION_REASONS = [
   "no-usable-id",
   "unserved-listing-record",

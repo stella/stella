@@ -1,4 +1,3 @@
-// parser-output-unchanged: [eu-ecj] keyed rows gain only a repair alias; legacy null-id rows replay under the same identity.
 // parser-output-unchanged: the stripped-text fallback triggers on the same verdict; the adapter now logs which decision fell back.
 // parser-output-unchanged: adds stable capture ownership to existing failure reports; manifestation and decision parsing are unchanged.
 // parser-output-unchanged: [eu-ecj] Retry documentation changes only; decision parsing is unchanged.

@@ -1,4 +1,3 @@
-// parser-output-unchanged: [cz-nss] rows a previous version stored only gain sourceDocumentIdRepairAliases; id-less, reference-less and placeholder rows are records the previous parser dropped.
 // parser-output-unchanged: Bounded crawl retries and cursor encoding change fetch control without changing parsed decision output.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.

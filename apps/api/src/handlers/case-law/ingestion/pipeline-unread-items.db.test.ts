@@ -465,7 +465,9 @@ test("a quarantined record followed by its keyed peer survives as two database r
     .from(caseLawDecisions)
     .where(eq(caseLawDecisions.sourceId, sourceId));
   expect(rows.map((row) => row.sourceDocumentId).toSorted()).toEqual(
-    [quarantine.sourceDocumentId, keyed.sourceDocumentId].toSorted(),
+    [quarantine.sourceDocumentId, keyed.sourceDocumentId]
+      .map(String)
+      .toSorted(),
   );
   expect(new Set(rows.map((row) => row.id)).size).toBe(2);
   expect(rows.map((row) => row.caseNumber).toSorted()).toEqual(

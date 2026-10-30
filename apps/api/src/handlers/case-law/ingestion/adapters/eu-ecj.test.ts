@@ -1006,7 +1006,13 @@ const ECLI = "ECLI:EU:C:2024:49";
 describe("ecjVariantIdentity", () => {
   test("keys a variant on its CELEX and the stored language tag", () => {
     expect(
-      ecjVariantIdentity({ celex: "62021CJ0128", ecli: ECLI, language: "EN" }),
+      throughLedgerJson(
+        ecjVariantIdentity({
+          celex: "62021CJ0128",
+          ecli: ECLI,
+          language: "EN",
+        }),
+      ),
     ).toMatchObject({ type: "keyed", sourceDocumentId: "62021CJ0128:en" });
     expect(
       ecjVariantIdentity({ celex: "62023TJ0201", ecli: ECLI, language: "MT" }),
@@ -1090,7 +1096,13 @@ describe("ecjVariantIdentity", () => {
       language: "EN",
     });
     expect(
-      ecjVariantIdentity({ celex: "62021CJ0128", ecli: ECLI, language: "EN" }),
+      throughLedgerJson(
+        ecjVariantIdentity({
+          celex: "62021CJ0128",
+          ecli: ECLI,
+          language: "EN",
+        }),
+      ),
     ).toEqual({
       type: "keyed",
       sourceDocumentId: "62021CJ0128:en",

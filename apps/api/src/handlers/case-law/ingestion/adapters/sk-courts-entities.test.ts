@@ -167,7 +167,7 @@ describe("Slovak court display text decodes publisher entities to stable text", 
     },
   );
 
-  test("a rejected docket without a publisher id is not a lookup for an unstored raw docket", () => {
+  test("a rejected docket without a publisher id is not a lookup for an unstored raw docket", async () => {
     const parts = fixture();
     const item = {
       ...parts.item,
@@ -208,14 +208,17 @@ describe("Slovak court display text decodes publisher entities to stable text", 
       documentUrl: null,
       metadata: {},
     };
-    expect(replay(input)).toMatchObject({
+    expect(await replay(input)).toMatchObject({
       type: "parsed",
       result: { sourceDocumentId: decision.sourceDocumentId },
     });
     // A row an earlier version stored under its own fallback key keeps that
     // key: replay never moves a stored row's identity.
     expect(
-      replay({ ...input, sourceDocumentId: "plaintext-quarantine:earlier" }),
+      await replay({
+        ...input,
+        sourceDocumentId: "plaintext-quarantine:earlier",
+      }),
     ).toMatchObject({ type: "rejected", rejection: "identity-mismatch" });
   });
 
@@ -269,13 +272,13 @@ describe("Slovak court display text decodes publisher entities to stable text", 
       ]);
     });
 
-    test("replay rebuilds a row stored under the earlier id under the new one", () => {
+    test("replay rebuilds a row stored under the earlier id under the new one", async () => {
       const earlier = earlierRow();
       const replay =
         skCourtsAdapter.reparseStoredRaw ??
         panic("adapter has no replay reader");
 
-      const outcome = replay({
+      const outcome = await replay({
         raw: new TextEncoder().encode(
           earlier.sourceRaw ?? panic("the earlier row stores no raw"),
         ),

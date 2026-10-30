@@ -593,7 +593,7 @@ const claimTextlessHeldRechecks = async ({
   const before = textlessHeldRecheckCutoff(now, recheck);
   const claimed = await scopedDb(
     async (tx) =>
-      // audit: skip - durable per-row scheduler backoff bookkeeping
+      // audit: skip — public-corpus held-recheck claims, not user actions; provenance remains in the immutable listing ledger and ingestion run records
       await tx
         .update(caseLawDecisions)
         .set({
