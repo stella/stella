@@ -5,6 +5,10 @@ import { defaultConfig, initialBatchState } from "@stll/db-load-gate/health";
 
 import { lockBackfillCheckpoint } from "@/api/lib/db/aggregate-lock";
 
+import {
+  setDedicatedLockTimeout,
+  setDedicatedStatementTimeout,
+} from "./dedicated-connection-timeouts";
 import type {
   MigrationOwnedOnlineRepair,
   OnlineMigrationConnection,
@@ -67,8 +71,8 @@ const enrollBatch = async (
   await connection.execute("BEGIN");
   // This raw-connection boundary owns rollback, including a cancelled statement.
   try {
-    await connection.execute("SET LOCAL lock_timeout = '1s'");
-    await connection.execute("SET LOCAL statement_timeout = '30s'");
+    await setDedicatedLockTimeout(connection.execute, 1000);
+    await setDedicatedStatementTimeout(connection.execute, 30_000);
     await connection.execute(
       `
       INSERT INTO public.database_backfill_states (name, cursor, batch)
@@ -123,7 +127,6 @@ export const CASE_LAW_SITEMAP_PACKING_ENROLLMENT = {
   readCompletion,
   repair: async (connection) => {
     for (;;) {
-      // db-await-in-loop: each short transaction advances a durable country keyset of at most 100 entries.
       if ((await enrollBatch(connection)) === "complete") {
         return { type: "complete" };
       }

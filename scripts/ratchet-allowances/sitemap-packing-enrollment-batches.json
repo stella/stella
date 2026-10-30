@@ -1,6 +1,0 @@
-{
-  "metric": "no-db-await-in-loop-suppressions",
-  "file": "apps/api/src/db/case-law-sitemap-packing-enrollment.ts",
-  "delta": 1,
-  "reason": "The one-time online repair advances a durable country keyset in short transactions of at most 100 snapshot countries. Each batch atomically enqueues broad invalidations and commits its checkpoint; the next batch depends on that committed cursor. This is sequential batch progress, not per-row database I/O."
-}
