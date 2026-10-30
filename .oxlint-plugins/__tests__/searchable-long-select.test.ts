@@ -201,3 +201,28 @@ const select = <Select>{mostZones().map((zone) => <SelectItem value={zone}>{zone
     ),
   ).toEqual([4]);
 });
+
+test("ignores a named JSON import beside a short Select", async () => {
+  expect(
+    await lintSingleRule(
+      "searchable-long-select",
+      `${IMPORTS}
+import { choices } from "./package.json";
+const select = <Select>{["a", "b"].map((value) => <SelectItem value={value}>{choices}</SelectItem>)}</Select>;`,
+      { sourcePath: "source.tsx" },
+    ),
+  ).toEqual([]);
+});
+
+test("does not treat a long list read in a condition as the returned list", async () => {
+  expect(
+    await lintSingleRule(
+      "searchable-long-select",
+      `${IMPORTS}
+import { COMMON_TIMEZONES as zones } from "@/lib/timezones";
+const shortOptions = () => (zones.length ? ["a"] : ["b"]);
+const select = <Select>{shortOptions().map((value) => <SelectItem value={value}>{value}</SelectItem>)}</Select>;`,
+      { sourcePath: "source.tsx" },
+    ),
+  ).toEqual([]);
+});

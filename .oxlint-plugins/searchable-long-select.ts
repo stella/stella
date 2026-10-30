@@ -24,6 +24,22 @@ import type { AstNode } from "./utils.ts";
 const SELECT_MODULE = "@stll/ui/select";
 const SELECT_THRESHOLD = 30;
 const SOURCE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mts", ".cts"];
+const ASSET_EXTENSIONS = new Set([
+  ".json",
+  ".css",
+  ".scss",
+  ".svg",
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".webp",
+  ".gif",
+  ".md",
+  ".txt",
+  ".html",
+  ".woff",
+  ".woff2",
+]);
 
 const syntaxPropertyName = (value: unknown): string | null => {
   if (isIdentifier(value)) {
@@ -146,6 +162,13 @@ const importedModulePath = (
   const hasSourceExtension = SOURCE_EXTENSIONS.some((extension) =>
     base.endsWith(extension),
   );
+  // An imported asset (JSON, styles, images) is not a list source module.
+  if (
+    !hasSourceExtension &&
+    (ASSET_EXTENSIONS.has(path.extname(base)) || existsSync(base))
+  ) {
+    return null;
+  }
   const candidates = !hasSourceExtension
     ? [
         ...SOURCE_EXTENSIONS.map((extension) => `${base}${extension}`),
@@ -316,9 +339,39 @@ const returnedExpressionReferencesLongList = (
     const variable = resolveVariable(context, node);
     return variable !== null && variables.has(variable);
   }
-  return children(node).some((child) =>
-    returnedExpressionReferencesLongList(child, context, variables),
-  );
+  // Follow only positions whose value can become the returned list; a long
+  // list read in a condition or for its length does not make the result long.
+  const follow = (child: unknown) =>
+    returnedExpressionReferencesLongList(child, context, variables);
+  switch (node.type) {
+    case "ConditionalExpression":
+      return follow(node["consequent"]) || follow(node["alternate"]);
+    case "LogicalExpression":
+      return follow(node["left"]) || follow(node["right"]);
+    case "ParenthesizedExpression":
+    case "TSAsExpression":
+    case "TSSatisfiesExpression":
+    case "TSNonNullExpression":
+      return follow(node["expression"]);
+    case "CallExpression":
+      return (
+        isAstNode(node.callee) &&
+        node.callee.type === "MemberExpression" &&
+        follow(node.callee.object)
+      );
+    case "ArrayExpression":
+      return (
+        Array.isArray(node["elements"]) &&
+        node["elements"].some(
+          (element: unknown) =>
+            isAstNode(element) &&
+            element.type === "SpreadElement" &&
+            follow(element["argument"]),
+        )
+      );
+    default:
+      return false;
+  }
 };
 
 const helperReturnsLongList = (
