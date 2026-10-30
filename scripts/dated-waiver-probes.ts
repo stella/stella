@@ -35,6 +35,7 @@ import { parseLedger } from "./suppression-waivers";
 export type RemovalChange = { source: string; before: string; after: string };
 
 export const AUTOMATIC_REMOVAL_ALLOWED = {
+  "guard-rollout": true,
   "no-llms-txt": true,
   "release-age-exclusion": true,
   "release-age-exception": true,
@@ -346,6 +347,71 @@ const leadingComments = (ast: ParsedSource, node: Node) =>
       ),
   );
 
+const removeGuardRollout = (source: string, entry: DatedWaiver): string => {
+  const ast = parseOwner(source, entry.source);
+  const matches: ObjectExpression[] = [];
+  walk(ast.program, (node) => {
+    if (
+      node.type === "ObjectExpression" &&
+      node.properties.some(
+        (property) =>
+          property.type === "Property" &&
+          !property.method &&
+          !property.shorthand &&
+          source.slice(property.key.start, property.key.end) === "id" &&
+          property.value.type === "Literal" &&
+          property.value.value === entry.id,
+      )
+    ) {
+      matches.push(node);
+    }
+  });
+  const target = matches.at(0);
+  if (matches.length !== 1 || !target) {
+    panic(`Guard rollout anchor is not unique: ${entry.id}`);
+  }
+  const scope = target.properties.find(
+    (property) =>
+      property.type === "Property" &&
+      !property.method &&
+      !property.shorthand &&
+      source.slice(property.key.start, property.key.end) === "type",
+  );
+  const expiry = target.properties.find(
+    (property) =>
+      property.type === "Property" &&
+      !property.method &&
+      !property.shorthand &&
+      source.slice(property.key.start, property.key.end) === "expiresAt",
+  );
+  if (
+    scope?.type !== "Property" ||
+    scope.method ||
+    scope.shorthand ||
+    scope.value.type !== "Literal" ||
+    scope.value.value !== "changed-lines" ||
+    expiry?.type !== "Property" ||
+    expiry.method ||
+    expiry.shorthand ||
+    expiry.value.type !== "Literal" ||
+    expiry.value.value !== entry.expiresAt
+  ) {
+    panic(`Guard rollout scope or expiry changed: ${entry.id}`);
+  }
+  // Apply rightmost edits first so each offset still refers to the owner AST.
+  let updated = source;
+  for (const node of [scope.value, expiry].toSorted(
+    (a, b) => b.start - a.start,
+  )) {
+    updated =
+      node === expiry
+        ? removeNode(updated, ast, node)
+        : `${updated.slice(0, node.start)}"full"${updated.slice(node.end)}`;
+  }
+  parseOwner(updated, entry.source);
+  return updated;
+};
+
 export const removeWaiver = (
   entry: DatedWaiver,
   read: (file: string) => string,
@@ -356,6 +422,9 @@ export const removeWaiver = (
   const before = read(entry.source);
   let after: string;
   switch (entry.kind) {
+    case "guard-rollout":
+      after = removeGuardRollout(before, entry);
+      break;
     case "no-llms-txt":
       after = removeDocumentation(before, entry);
       break;
@@ -619,6 +688,7 @@ const receiptSelector = (
         panic(`Invalid flaky-test quarantine id: ${entry.id}`);
       return (name) => name === expected;
     }
+    case "guard-rollout":
     case "no-llms-txt":
     case "release-age-exclusion":
     case "release-age-exception":
