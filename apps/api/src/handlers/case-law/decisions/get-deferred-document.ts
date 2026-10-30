@@ -41,6 +41,7 @@ import {
   absentTextField,
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
+import type { TextAbsenceReason } from "@/api/lib/case-law/decision-text";
 import type {
   DecisionSubjectLocator,
   RedistributableDecisionSubject,
@@ -209,6 +210,188 @@ const hydrate = async ({
   };
 };
 
+const DECISION_READ_FIELD_KIND = {
+  METADATA: "metadata",
+  TEXT: "text",
+  STATE: "state",
+} as const;
+
+type DecisionReadFieldKind =
+  (typeof DECISION_READ_FIELD_KIND)[keyof typeof DECISION_READ_FIELD_KIND];
+
+/**
+ * Every field of a public decision read, classified for the response that
+ * withholds text after a failed completion. Metadata is copied, text is
+ * replaced by its absence, and state is recomputed. A field added to the read
+ * does not compile until it is classified here.
+ */
+const DECISION_READ_FIELD_KINDS = {
+  id: DECISION_READ_FIELD_KIND.METADATA,
+  resolution: DECISION_READ_FIELD_KIND.METADATA,
+  caseNumber: DECISION_READ_FIELD_KIND.METADATA,
+  caseNumberType: DECISION_READ_FIELD_KIND.METADATA,
+  slug: DECISION_READ_FIELD_KIND.METADATA,
+  ecli: DECISION_READ_FIELD_KIND.METADATA,
+  identifiers: DECISION_READ_FIELD_KIND.METADATA,
+  court: DECISION_READ_FIELD_KIND.METADATA,
+  courtId: DECISION_READ_FIELD_KIND.METADATA,
+  courtAbbreviation: DECISION_READ_FIELD_KIND.METADATA,
+  courtTier: DECISION_READ_FIELD_KIND.METADATA,
+  country: DECISION_READ_FIELD_KIND.METADATA,
+  language: DECISION_READ_FIELD_KIND.METADATA,
+  languageGroupKey: DECISION_READ_FIELD_KIND.METADATA,
+  decisionDate: DECISION_READ_FIELD_KIND.METADATA,
+  decisionType: DECISION_READ_FIELD_KIND.METADATA,
+  citationCount: DECISION_READ_FIELD_KIND.METADATA,
+  sourceUrl: DECISION_READ_FIELD_KIND.METADATA,
+  sourceAttributionUrl: DECISION_READ_FIELD_KIND.METADATA,
+  documentUrl: DECISION_READ_FIELD_KIND.METADATA,
+  sourceLanguages: DECISION_READ_FIELD_KIND.METADATA,
+  createdAt: DECISION_READ_FIELD_KIND.METADATA,
+  updatedAt: DECISION_READ_FIELD_KIND.METADATA,
+  judges: DECISION_READ_FIELD_KIND.METADATA,
+  languageAlternates: DECISION_READ_FIELD_KIND.METADATA,
+  caseFile: DECISION_READ_FIELD_KIND.METADATA,
+  documentAst: DECISION_READ_FIELD_KIND.TEXT,
+  projectionDigest: DECISION_READ_FIELD_KIND.TEXT,
+  documentAstSource: DECISION_READ_FIELD_KIND.TEXT,
+  sections: DECISION_READ_FIELD_KIND.TEXT,
+  fulltext: DECISION_READ_FIELD_KIND.TEXT,
+  metadata: DECISION_READ_FIELD_KIND.TEXT,
+  headnote: DECISION_READ_FIELD_KIND.TEXT,
+  textFields: DECISION_READ_FIELD_KIND.TEXT,
+  extractionWarnings: DECISION_READ_FIELD_KIND.TEXT,
+  citationsFrom: DECISION_READ_FIELD_KIND.TEXT,
+  citationsTo: DECISION_READ_FIELD_KIND.TEXT,
+  citationsNextCursor: DECISION_READ_FIELD_KIND.TEXT,
+  textIncompleteReason: DECISION_READ_FIELD_KIND.STATE,
+  textWithheldReason: DECISION_READ_FIELD_KIND.STATE,
+  documentPending: DECISION_READ_FIELD_KIND.STATE,
+  documentReadFailed: DECISION_READ_FIELD_KIND.STATE,
+  documentUnavailable: DECISION_READ_FIELD_KIND.STATE,
+  hasDocument: DECISION_READ_FIELD_KIND.STATE,
+  source: DECISION_READ_FIELD_KIND.STATE,
+} as const satisfies Record<keyof ReadableDecision, DecisionReadFieldKind>;
+
+type DecisionReadFieldsOf<Kind extends DecisionReadFieldKind> = {
+  [
+    Field in keyof typeof DECISION_READ_FIELD_KINDS
+  ]: (typeof DECISION_READ_FIELD_KINDS)[Field] extends Kind ? Field : never;
+}[keyof typeof DECISION_READ_FIELD_KINDS];
+
+type DecisionReadPart<Kind extends DecisionReadFieldKind> = Pick<
+  ReadableDecision,
+  DecisionReadFieldsOf<Kind>
+>;
+
+const decisionReadMetadata = (
+  read: ReadableDecision,
+): DecisionReadPart<"metadata"> => ({
+  id: read.id,
+  resolution: read.resolution,
+  caseNumber: read.caseNumber,
+  caseNumberType: read.caseNumberType,
+  slug: read.slug,
+  ecli: read.ecli,
+  identifiers: read.identifiers,
+  court: read.court,
+  courtId: read.courtId,
+  courtAbbreviation: read.courtAbbreviation,
+  courtTier: read.courtTier,
+  country: read.country,
+  language: read.language,
+  languageGroupKey: read.languageGroupKey,
+  decisionDate: read.decisionDate,
+  decisionType: read.decisionType,
+  citationCount: read.citationCount,
+  sourceUrl: read.sourceUrl,
+  sourceAttributionUrl: read.sourceAttributionUrl,
+  documentUrl: read.documentUrl,
+  sourceLanguages: read.sourceLanguages,
+  createdAt: read.createdAt,
+  updatedAt: read.updatedAt,
+  judges: read.judges,
+  languageAlternates: read.languageAlternates,
+  caseFile: read.caseFile,
+});
+
+/** Every text field as its absence; nothing here is read from a decision. */
+const withheldDecisionText = (reason: TextAbsenceReason) =>
+  ({
+    documentAst: null,
+    projectionDigest: null,
+    documentAstSource: null,
+    sections: null,
+    fulltext: null,
+    metadata: {},
+    headnote: absentTextField(reason),
+    textFields: absentDecisionTextFields(reason),
+    extractionWarnings: [],
+    citationsFrom: [],
+    citationsTo: [],
+    citationsNextCursor: null,
+  }) satisfies DecisionReadPart<"text">;
+
+type WithheldDecisionCompletion = Exclude<
+  ReturnType<typeof checkDecisionTextCompletion>,
+  { type: "eligible" }
+>;
+
+const withheldTextAbsenceReason = (
+  completion: WithheldDecisionCompletion,
+): TextAbsenceReason => {
+  switch (completion.type) {
+    case "withheld":
+      return TEXT_ABSENCE_REASON.REDISTRIBUTION_WITHHELD;
+    case "incomplete":
+      return completion.reason === "text_changed"
+        ? TEXT_ABSENCE_REASON.TEXT_CHANGED
+        : TEXT_ABSENCE_REASON.MISSING_TEXT;
+    default:
+      completion satisfies never;
+      return panic("Unhandled withheld decision completion");
+  }
+};
+
+type WithheldDecisionReadOptions = {
+  read: ReadableDecision;
+  completion: WithheldDecisionCompletion;
+  allowsDerivedAi: boolean;
+};
+
+/**
+ * The response for a decision whose text may no longer travel. Built from
+ * the classified parts rather than the prepared read, so a text field the
+ * read gains cannot reach this response unclassified.
+ */
+const withheldDecisionRead = ({
+  read,
+  completion,
+  allowsDerivedAi,
+}: WithheldDecisionReadOptions): ReadableDecision => {
+  const { textIncompleteReason, textWithheldReason } =
+    decisionTextCompletionReasons(completion);
+  const state: DecisionReadPart<"state"> = {
+    textIncompleteReason,
+    textWithheldReason,
+    documentPending: false,
+    documentReadFailed: false,
+    documentUnavailable: true,
+    hasDocument: false,
+    source: {
+      id: read.source.id,
+      name: read.source.name,
+      adapterKey: read.source.adapterKey,
+      allowsDerivedAi,
+    },
+  };
+  return {
+    ...decisionReadMetadata(read),
+    ...withheldDecisionText(withheldTextAbsenceReason(completion)),
+    ...state,
+  };
+};
+
 /**
  * The read's second phase fetches a transient document outside the gated
  * transaction. The ingestion queue owns persistent documents independently.
@@ -303,35 +486,13 @@ export const hydrateDeferredDocument = async ({
   if (completion.type === "eligible") {
     return hydrated;
   }
-  const absenceReason =
-    completion.type === "withheld"
-      ? TEXT_ABSENCE_REASON.REDISTRIBUTION_WITHHELD
-      : TEXT_ABSENCE_REASON[
-          completion.reason === "text_changed" ? "TEXT_CHANGED" : "MISSING_TEXT"
-        ];
-  return {
-    ...prepared.read,
-    ...decisionTextCompletionReasons(completion),
-    documentAst: null,
-    projectionDigest: null,
-    documentAstSource: null,
-    fulltext: null,
-    sections: null,
-    metadata: {},
-    headnote: absentTextField(absenceReason),
-    textFields: absentDecisionTextFields(absenceReason),
-    citationsFrom: [],
-    citationsTo: [],
-    source: {
-      ...prepared.read.source,
-      allowsDerivedAi:
-        currentSnapshot?.textWithheldReason === null &&
-        currentSnapshot.textIncompleteReason === null,
-    },
-    documentPending: false,
-    documentUnavailable: true,
-    hasDocument: false,
-  };
+  return withheldDecisionRead({
+    read: prepared.read,
+    completion,
+    allowsDerivedAi:
+      currentSnapshot?.textWithheldReason === null &&
+      currentSnapshot.textIncompleteReason === null,
+  });
 };
 
 export type ReadGatedDecisionOptions = {

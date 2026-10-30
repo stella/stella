@@ -1,8 +1,9 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { DECISION_TEXT_WITHHELD_REASON } from "@stll/api-contract/case-law-text-field";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { databaseRelations } from "@/api/db/database-relations";
@@ -37,6 +38,42 @@ const INITIAL_DESCRIPTOR = {
   allowsRedistribution: true,
   attribution: null,
   license: "permitted-redistribution",
+} as const;
+
+const STORED_ANALYSIS_TEXT = "Stored analysis of the decision.";
+const REVISED_CONTENT_HASH = "f".repeat(64);
+
+const WITHHELD_EXPECTATIONS = {
+  "publication changed": {
+    absenceReason: TEXT_ABSENCE_REASON.MISSING_TEXT,
+    textIncompleteReason: "missing_text",
+    textWithheldReason: null,
+    allowsDerivedAi: false,
+  },
+  "country changed": {
+    absenceReason: TEXT_ABSENCE_REASON.MISSING_TEXT,
+    textIncompleteReason: "missing_text",
+    textWithheldReason: null,
+    allowsDerivedAi: false,
+  },
+  "permission withdrawn": {
+    absenceReason: TEXT_ABSENCE_REASON.REDISTRIBUTION_WITHHELD,
+    textIncompleteReason: null,
+    textWithheldReason: DECISION_TEXT_WITHHELD_REASON.SOURCE_LICENCE,
+    allowsDerivedAi: false,
+  },
+  "revision changed": {
+    absenceReason: TEXT_ABSENCE_REASON.TEXT_CHANGED,
+    textIncompleteReason: "text_changed",
+    textWithheldReason: null,
+    allowsDerivedAi: true,
+  },
+  "completion read failed": {
+    absenceReason: TEXT_ABSENCE_REASON.MISSING_TEXT,
+    textIncompleteReason: "gate_failed",
+    textWithheldReason: null,
+    allowsDerivedAi: false,
+  },
 } as const;
 
 const TEST_SURFACE = {
@@ -86,6 +123,8 @@ const checkDeferredRead = async (
     | "unchanged"
     | "publication changed"
     | "country changed"
+    | "permission withdrawn"
+    | "revision changed"
     | "completion read failed",
 ) => {
   const client = await createTestPglite();
@@ -128,6 +167,9 @@ const checkDeferredRead = async (
       documentAst: null,
       fulltext: null,
       contentHash: null,
+      extractionWarnings: [{ rule: "html-tag", count: 1, firstOffsets: [0] }],
+      // Stored text outside the read's own fields: no response may carry it.
+      analysis: sql`${JSON.stringify({ summary: STORED_ANALYSIS_TEXT })}::text::jsonb`,
     });
     await db.insert(caseLawDecisions).values({
       id: citedDecisionId,
@@ -180,6 +222,20 @@ const checkDeferredRead = async (
             })
             .where(eq(caseLawDecisions.id, decisionId));
         }
+        if (change === "permission withdrawn") {
+          await db
+            .update(caseLawSources)
+            .set({
+              descriptor: { ...INITIAL_DESCRIPTOR, allowsDerivedAi: false },
+            })
+            .where(eq(caseLawSources.id, sourceId));
+        }
+        if (change === "revision changed") {
+          await db
+            .update(caseLawDecisions)
+            .set({ contentHash: REVISED_CONTENT_HASH })
+            .where(eq(caseLawDecisions.id, decisionId));
+        }
         if (change === "country changed") {
           await db
             .update(caseLawDecisions)
@@ -213,14 +269,30 @@ const checkDeferredRead = async (
         source: { allowsDerivedAi: true },
       });
     } else {
-      const absenceReason = TEXT_ABSENCE_REASON.MISSING_TEXT;
+      const expected = WITHHELD_EXPECTATIONS[change];
+      const absenceReason = expected.absenceReason;
       expect(decisionDocumentState(hydrated, false)).toBe("unavailable");
+      expect(Object.keys(hydrated).toSorted()).toEqual(
+        Object.keys(prepared.read).toSorted(),
+      );
+      const serialized = JSON.stringify(hydrated);
+      for (const text of [
+        STORED_ANALYSIS_TEXT,
+        storedMetadata.abstract,
+        storedMetadata.headnote,
+        ...initialSections.map((section) => section.text),
+        "Transient fetched decision text.",
+        "deferred-document-cited",
+      ]) {
+        expect(serialized).not.toContain(text);
+      }
       expect(hydrated).toMatchObject({
         id: decisionId,
         caseNumber: "deferred-document",
-        textIncompleteReason:
-          change === "completion read failed" ? "gate_failed" : "missing_text",
-        textWithheldReason: null,
+        textIncompleteReason: expected.textIncompleteReason,
+        textWithheldReason: expected.textWithheldReason,
+        extractionWarnings: [],
+        citationsNextCursor: null,
         documentAst: null,
         projectionDigest: null,
         documentAstSource: null,
@@ -252,9 +324,10 @@ const checkDeferredRead = async (
         citationsFrom: [],
         citationsTo: [],
         documentPending: false,
+        documentReadFailed: false,
         documentUnavailable: true,
         hasDocument: false,
-        source: { allowsDerivedAi: false },
+        source: { allowsDerivedAi: expected.allowsDerivedAi },
       });
     }
 
@@ -267,7 +340,10 @@ const checkDeferredRead = async (
       .from(caseLawDecisions)
       .where(eq(caseLawDecisions.id, decisionId));
     expect(stored?.documentAst).toBeNull();
-    expect(stored?.contentHash).toBeNull();
+    // Only the test's own revision change writes; the read never does.
+    expect(stored?.contentHash).toBe(
+      change === "revision changed" ? REVISED_CONTENT_HASH : null,
+    );
     expect(stored?.sections).toEqual(initialSections);
   } finally {
     await client.close();
@@ -284,6 +360,14 @@ test("a deferred document is withheld when publication changes during hydration"
 
 test("a deferred document is withheld when its country leaves the admitted surface during hydration", async () => {
   await checkDeferredRead("country changed");
+});
+
+test("a deferred document is withheld when its source withdraws text permission during hydration", async () => {
+  await checkDeferredRead("permission withdrawn");
+});
+
+test("a deferred document is withheld when its text revision changes during hydration", async () => {
+  await checkDeferredRead("revision changed");
 });
 
 test("a completion read failure returns decision metadata with gate_failed", async () => {
