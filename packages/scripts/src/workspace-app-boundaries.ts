@@ -2,11 +2,11 @@ import { panic } from "better-result";
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript6";
+import { API } from "tsrs/unstable/async";
 
 import { repoRelativePath } from "@stll/portable-path";
 
-import { withoutTsgoOnlyOptionDiagnostics } from "./tsgo-compiler-options";
+import { type Node, parseSource, walk } from "./syntax-tree";
 
 const APP_BOUNDARY_LEDGER_PATH = "scripts/app-boundary-exceptions.json";
 const DEPENDENCY_FIELDS = [
@@ -112,7 +112,12 @@ const listRepositoryFiles = (rootDir: string): string[] | null => {
         "apps",
         "packages",
       ],
-      { cwd: rootDir, encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"] },
+      {
+        maxBuffer: 2 ** 30,
+        cwd: rootDir,
+        encoding: "utf-8",
+        stdio: ["ignore", "pipe", "ignore"],
+      },
     );
     return output
       .split("\n")
@@ -240,29 +245,18 @@ const UNREADABLE_CONFIG_FILE_DIAGNOSTIC_CODE = 5083;
 const GENERATED_API_TYPECHECK_CONFIG =
   /\/apps\/api\/\.cache\/typecheck-declarations\/(?:roots|src|tests)\.json'/u;
 
-const readTsconfig = (
+const readTsconfig = async (
   tsconfigPath: string,
-): { aliases: PathAlias[]; diagnostics: string[]; includes: string[] } => {
-  const unrecoverableDiagnostics: ts.Diagnostic[] = [];
-  const parsed = ts.getParsedCommandLineOfConfigFile(
-    tsconfigPath,
-    {},
-    {
-      ...ts.sys,
-      onUnRecoverableConfigFileDiagnostic: (diagnostic) => {
-        unrecoverableDiagnostics.push(diagnostic);
-      },
-    },
-  );
-  const diagnostics = withoutTsgoOnlyOptionDiagnostics([
-    ...unrecoverableDiagnostics,
-    ...(parsed?.errors ?? []),
-  ])
+  api: API,
+): Promise<{
+  aliases: PathAlias[];
+  diagnostics: string[];
+  includes: string[];
+}> => {
+  const parsed = await api.parseConfigFile(tsconfigPath);
+  const diagnostics = parsed.errors
     .filter(({ code }) => code !== NO_TYPESCRIPT_INPUTS_DIAGNOSTIC_CODE)
-    .map((diagnostic) => ({
-      code: diagnostic.code,
-      message: ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"),
-    }))
+    .map(({ code, text }) => ({ code, message: text }))
     // Generated API typecheck configs carry only file lists, never path
     // aliases, and do not exist before generation (the install postinstall
     // runs this check first). The API typecheck validator owns their presence.
@@ -275,7 +269,7 @@ const readTsconfig = (
     )
     .map(({ message }) => message)
     .filter((message, index, messages) => messages.indexOf(message) === index);
-  if (parsed === undefined || diagnostics.length > 0) {
+  if (diagnostics.length > 0) {
     return {
       aliases: [],
       diagnostics:
@@ -314,122 +308,383 @@ const readTsconfig = (
 const edgeKey = (edge: AppBoundaryEdge) =>
   `${edge.kind}\u0000${edge.source}\u0000${edge.specifier}\u0000${edge.target}`;
 
-const collectAppBoundaryResult = (rootDir: string): AppBoundaryCollection => {
-  const workspaces = readWorkspaces(rootDir);
-  const apps = workspaces.filter(({ directory }) =>
-    directory.startsWith("apps/"),
-  );
-  const repositoryFiles = listRepositoryFiles(rootDir);
-  const edges: AppBoundaryEdge[] = [];
-  const issues: AppBoundaryIssue[] = [];
+type TagAttribute = {
+  /** Lowercased attribute name; empty for an Astro `{...spread}`. */
+  readonly name: string;
+  /** Literal value, or null for a bare attribute or an Astro expression. */
+  readonly value: string | null;
+  readonly expression: boolean;
+};
 
-  for (const workspace of workspaces) {
-    const workspaceFiles =
-      repositoryFiles?.filter((filePath) =>
-        filePath.startsWith(`${workspace.path}${path.sep}`),
-      ) ?? findFiles(workspace.path);
-    for (const dependencyName of readDependencyNames(
-      readJson(path.join(workspace.path, "package.json")),
-    )) {
-      const target = appForPackageSpecifier(dependencyName, apps);
-      if (target !== null && target.directory !== workspace.directory) {
-        edges.push({
-          kind: "manifest-dependency",
-          source: `${workspace.directory}/package.json`,
-          specifier: dependencyName,
-          target: target.directory,
-        });
-      }
-    }
+type OpeningTag = {
+  readonly attributes: readonly TagAttribute[];
+  /** Offset just past the tag's `>`. */
+  readonly end: number;
+  readonly selfClosing: boolean;
+};
 
-    const aliases: PathAlias[] = [];
-    for (const tsconfigPath of workspaceFiles.filter(
-      (filePath) =>
-        path.basename(filePath).startsWith("tsconfig") &&
-        filePath.endsWith(".json"),
-    )) {
-      const config = readTsconfig(tsconfigPath);
-      const source = repoRelativePath(rootDir, tsconfigPath);
-      for (const diagnostic of config.diagnostics) {
-        issues.push({
-          message: `invalid TypeScript configuration: ${diagnostic}`,
-          path: source,
-        });
-      }
-      aliases.push(...config.aliases);
+const isSpace = (character: string | undefined) =>
+  character !== undefined && /\s/u.test(character);
 
-      for (const { pattern, targets } of config.aliases) {
-        for (const targetPath of targets) {
-          const target = appForPath(targetPath.replaceAll("*", ""), apps);
-          if (target === null || target.directory === workspace.directory) {
-            continue;
-          }
-          edges.push({
-            kind: "tsconfig-path",
-            source,
-            specifier: `${pattern} -> ${repoRelativePath(path.dirname(tsconfigPath), targetPath)}`,
-            target: target.directory,
-          });
+/** Offset just past the `}` closing the Astro expression opened at `start`. */
+const expressionEnd = (text: string, start: number): number | null => {
+  let depth = 0;
+  for (let index = start; index < text.length; index += 1) {
+    const character = text[index];
+    if (character === '"' || character === "'" || character === "`") {
+      for (index += 1; index < text.length; index += 1) {
+        if (text[index] === "\\") {
+          index += 1;
+        } else if (text[index] === character) {
+          break;
         }
       }
-
-      for (const include of config.includes) {
-        const target = appForPath(
-          path.resolve(path.dirname(tsconfigPath), include.replaceAll("*", "")),
-          apps,
-        );
-        if (target !== null && target.directory !== workspace.directory) {
-          edges.push({
-            kind: "tsconfig-include",
-            source,
-            specifier: include,
-            target: target.directory,
-          });
-        }
-      }
-    }
-
-    for (const sourcePath of workspaceFiles.filter((filePath) =>
-      SOURCE_FILE_EXTENSIONS.has(path.extname(filePath)),
-    )) {
-      const source = repoRelativePath(rootDir, sourcePath);
-      const importedFiles = ts.preProcessFile(
-        readFileSync(sourcePath, "utf-8"),
-        true,
-        true,
-      ).importedFiles;
-      for (const { fileName: specifier } of importedFiles) {
-        const target =
-          appForPackageSpecifier(specifier, apps) ??
-          (specifier.startsWith(".")
-            ? appForPath(
-                path.resolve(path.dirname(sourcePath), specifier),
-                apps,
-              )
-            : null) ??
-          appForAlias(specifier, aliases, apps);
-        if (target !== null && target.directory !== workspace.directory) {
-          edges.push({
-            kind: "source-import",
-            source,
-            specifier,
-            target: target.directory,
-          });
-        }
+    } else if (character === "{") {
+      depth += 1;
+    } else if (character === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        return index + 1;
       }
     }
   }
-
-  return {
-    edges: [
-      ...new Map(edges.map((edge) => [edgeKey(edge), edge])).values(),
-    ].toSorted((a, b) => edgeKey(a).localeCompare(edgeKey(b))),
-    issues,
-  };
+  return null;
 };
 
-export const collectAppBoundaryEdges = (rootDir: string): AppBoundaryEdge[] =>
-  collectAppBoundaryResult(rootDir).edges;
+/**
+ * Reads the attributes of an opening tag from `start`, just after its name.
+ * Quoted values and Astro `{…}` expressions are read whole, so a `>` or an
+ * attribute-like text inside a value neither ends the tag nor names an
+ * attribute.
+ */
+const readOpeningTag = (text: string, start: number): OpeningTag | null => {
+  const attributes: TagAttribute[] = [];
+  let index = start;
+  while (index < text.length) {
+    while (isSpace(text[index])) {
+      index += 1;
+    }
+    if (text[index] === ">") {
+      return { attributes, end: index + 1, selfClosing: false };
+    }
+    if (text.startsWith("/>", index)) {
+      return { attributes, end: index + 2, selfClosing: true };
+    }
+    if (text[index] === "{") {
+      const end = expressionEnd(text, index);
+      if (end === null) {
+        return null;
+      }
+      attributes.push({ expression: true, name: "", value: null });
+      index = end;
+      continue;
+    }
+    let nameEnd = index;
+    while (nameEnd < text.length && !/[\s"'<>/=]/u.test(text[nameEnd] ?? "")) {
+      nameEnd += 1;
+    }
+    if (nameEnd === index) {
+      // A stray `/`, quote or `=` carries no attribute.
+      index += 1;
+      continue;
+    }
+    const name = text.slice(index, nameEnd).toLowerCase();
+    index = nameEnd;
+    while (isSpace(text[index])) {
+      index += 1;
+    }
+    if (text[index] !== "=") {
+      attributes.push({ expression: false, name, value: null });
+      continue;
+    }
+    index += 1;
+    while (isSpace(text[index])) {
+      index += 1;
+    }
+    const quote = text[index];
+    if (quote === '"' || quote === "'" || quote === "`") {
+      const close = text.indexOf(quote, index + 1);
+      if (close === -1) {
+        return null;
+      }
+      attributes.push({
+        expression: false,
+        name,
+        value: text.slice(index + 1, close),
+      });
+      index = close + 1;
+    } else if (quote === "{") {
+      const end = expressionEnd(text, index);
+      if (end === null) {
+        return null;
+      }
+      attributes.push({ expression: true, name, value: null });
+      index = end;
+    } else {
+      let valueEnd = index;
+      while (valueEnd < text.length && !/[\s>]/u.test(text[valueEnd] ?? "")) {
+        valueEnd += 1;
+      }
+      attributes.push({
+        expression: false,
+        name,
+        value: text.slice(index, valueEnd),
+      });
+      index = valueEnd;
+    }
+  }
+  return null;
+};
+
+// The HTML JavaScript MIME type essences, `module`, an empty type and the
+// TypeScript types Astro compiles.
+const CODE_SCRIPT_TYPE =
+  /^(?:|module|(?:text|application)\/(?:x-)?(?:java|ecma|type)script|text\/javascript1\.[0-5]|text\/(?:jscript|livescript))$/u;
+
+/**
+ * A script without a `type` attribute, or with a module or JavaScript type,
+ * runs as code; any other literal type (JSON, JSON-LD, import maps,
+ * templates) is data and is not parsed. A type computed by an expression
+ * cannot be read statically, so that script is parsed as code.
+ */
+const isCodeScript = (attributes: readonly TagAttribute[]): boolean => {
+  const type = attributes.find(({ name }) => name === "type");
+  if (type === undefined || type.expression || type.value === null) {
+    return true;
+  }
+  const essence = type.value.split(";").at(0)?.trim().toLowerCase() ?? "";
+  return CODE_SCRIPT_TYPE.test(essence);
+};
+
+/**
+ * The frontmatter and every code script body of an Astro component. Script
+ * tags are read from the template after the frontmatter only.
+ */
+const astroSourceTexts = (sourcePath: string, text: string): string[] => {
+  const frontmatter = /^﻿?---\r?\n([\s\S]*?)\r?\n---/u.exec(text);
+  const sourceTexts = [frontmatter?.at(1) ?? ""];
+  const scriptOpen = /<script(?=[\s/>])/giu;
+  scriptOpen.lastIndex = frontmatter === null ? 0 : frontmatter[0].length;
+  for (
+    let open = scriptOpen.exec(text);
+    open !== null;
+    open = scriptOpen.exec(text)
+  ) {
+    const tag = readOpeningTag(text, scriptOpen.lastIndex);
+    if (tag === null) {
+      panic(
+        `${sourcePath}: the <script> tag at offset ${open.index} never closes; fix the markup before rerunning`,
+      );
+    }
+    let bodyEnd = tag.end;
+    if (!tag.selfClosing) {
+      const scriptClose = /<\/script\s*>/giu;
+      scriptClose.lastIndex = tag.end;
+      const close = scriptClose.exec(text);
+      if (close === null) {
+        panic(
+          `${sourcePath}: the <script> element at offset ${open.index} has no </script>; fix the markup before rerunning`,
+        );
+      }
+      bodyEnd = close.index;
+      scriptOpen.lastIndex = scriptClose.lastIndex;
+    } else {
+      scriptOpen.lastIndex = tag.end;
+    }
+    if (isCodeScript(tag.attributes)) {
+      sourceTexts.push(text.slice(tag.end, bodyEnd));
+    }
+  }
+  return sourceTexts;
+};
+
+// A dynamic import or require of a string or a template without
+// substitutions names a static specifier.
+const staticSpecifier = (argument: Node | undefined): string | null => {
+  if (argument?.type === "Literal" && typeof argument.value === "string") {
+    return argument.value;
+  }
+  if (
+    argument?.type === "TemplateLiteral" &&
+    argument.expressions.length === 0
+  ) {
+    return argument.quasis.at(0)?.value.cooked ?? null;
+  }
+  return null;
+};
+
+const sourceImportSpecifiers = (sourcePath: string, text: string): string[] => {
+  const sourceTexts = sourcePath.endsWith(".astro")
+    ? astroSourceTexts(sourcePath, text)
+    : [text];
+  const importedFiles: string[] = [];
+  for (const sourceText of sourceTexts) {
+    const parsed = parseSource(
+      sourcePath.endsWith(".astro") ? `${sourcePath}.ts` : sourcePath,
+      sourceText,
+    );
+    importedFiles.push(
+      ...parsed.module.staticImports.map(
+        ({ moduleRequest }) => moduleRequest.value,
+      ),
+    );
+    for (const exported of parsed.module.staticExports) {
+      for (const { moduleRequest } of exported.entries) {
+        if (moduleRequest) {
+          importedFiles.push(moduleRequest.value);
+        }
+      }
+    }
+    walk(parsed.program, (node) => {
+      let specifier: string | null = null;
+      if (node.type === "ImportExpression") {
+        specifier = staticSpecifier(node.source);
+      } else if (
+        node.type === "CallExpression" &&
+        node.callee.type === "Identifier" &&
+        node.callee.name === "require"
+      ) {
+        specifier = staticSpecifier(node.arguments.at(0));
+      }
+      if (specifier !== null) {
+        importedFiles.push(specifier);
+      }
+      if (
+        node.type === "TSImportEqualsDeclaration" &&
+        node.moduleReference.type === "TSExternalModuleReference"
+      ) {
+        importedFiles.push(node.moduleReference.expression.value);
+      }
+    });
+  }
+  return importedFiles;
+};
+
+const collectAppBoundaryResult = async (
+  rootDir: string,
+): Promise<AppBoundaryCollection> => {
+  const api = new API({ cwd: rootDir });
+  try {
+    const workspaces = readWorkspaces(rootDir);
+    const apps = workspaces.filter(({ directory }) =>
+      directory.startsWith("apps/"),
+    );
+    const repositoryFiles = listRepositoryFiles(rootDir);
+    const edges: AppBoundaryEdge[] = [];
+    const issues: AppBoundaryIssue[] = [];
+
+    for (const workspace of workspaces) {
+      const workspaceFiles =
+        repositoryFiles?.filter((filePath) =>
+          filePath.startsWith(`${workspace.path}${path.sep}`),
+        ) ?? findFiles(workspace.path);
+      for (const dependencyName of readDependencyNames(
+        readJson(path.join(workspace.path, "package.json")),
+      )) {
+        const target = appForPackageSpecifier(dependencyName, apps);
+        if (target !== null && target.directory !== workspace.directory) {
+          edges.push({
+            kind: "manifest-dependency",
+            source: `${workspace.directory}/package.json`,
+            specifier: dependencyName,
+            target: target.directory,
+          });
+        }
+      }
+
+      const aliases: PathAlias[] = [];
+      for (const tsconfigPath of workspaceFiles.filter(
+        (filePath) =>
+          path.basename(filePath).startsWith("tsconfig") &&
+          filePath.endsWith(".json"),
+      )) {
+        const config = await readTsconfig(tsconfigPath, api);
+        const source = repoRelativePath(rootDir, tsconfigPath);
+        for (const diagnostic of config.diagnostics) {
+          issues.push({
+            message: `invalid TypeScript configuration: ${diagnostic}`,
+            path: source,
+          });
+        }
+        aliases.push(...config.aliases);
+
+        for (const { pattern, targets } of config.aliases) {
+          for (const targetPath of targets) {
+            const target = appForPath(targetPath.replaceAll("*", ""), apps);
+            if (target === null || target.directory === workspace.directory) {
+              continue;
+            }
+            edges.push({
+              kind: "tsconfig-path",
+              source,
+              specifier: `${pattern} -> ${repoRelativePath(path.dirname(tsconfigPath), targetPath)}`,
+              target: target.directory,
+            });
+          }
+        }
+
+        for (const include of config.includes) {
+          const target = appForPath(
+            path.resolve(
+              path.dirname(tsconfigPath),
+              include.replaceAll("*", ""),
+            ),
+            apps,
+          );
+          if (target !== null && target.directory !== workspace.directory) {
+            edges.push({
+              kind: "tsconfig-include",
+              source,
+              specifier: include,
+              target: target.directory,
+            });
+          }
+        }
+      }
+
+      for (const sourcePath of workspaceFiles.filter((filePath) =>
+        SOURCE_FILE_EXTENSIONS.has(path.extname(filePath)),
+      )) {
+        const source = repoRelativePath(rootDir, sourcePath);
+        const text = readFileSync(sourcePath, "utf-8");
+        const importedFiles = sourceImportSpecifiers(sourcePath, text);
+        for (const specifier of importedFiles) {
+          const target =
+            appForPackageSpecifier(specifier, apps) ??
+            (specifier.startsWith(".")
+              ? appForPath(
+                  path.resolve(path.dirname(sourcePath), specifier),
+                  apps,
+                )
+              : null) ??
+            appForAlias(specifier, aliases, apps);
+          if (target !== null && target.directory !== workspace.directory) {
+            edges.push({
+              kind: "source-import",
+              source,
+              specifier,
+              target: target.directory,
+            });
+          }
+        }
+      }
+    }
+
+    return {
+      edges: [
+        ...new Map(edges.map((edge) => [edgeKey(edge), edge])).values(),
+      ].toSorted((a, b) => edgeKey(a).localeCompare(edgeKey(b))),
+      issues,
+    };
+  } finally {
+    await api.close();
+  }
+};
+
+export const collectAppBoundaryEdges = async (
+  rootDir: string,
+): Promise<AppBoundaryEdge[]> =>
+  (await collectAppBoundaryResult(rootDir)).edges;
 
 const parseEdgeKind = (value: unknown): AppBoundaryEdgeKind | null => {
   switch (value) {
@@ -551,6 +806,7 @@ export type AppBoundaryOptions = {
 
 const runGit: GitRunner = (rootDir, arguments_) => {
   const result = spawnSync("git", arguments_, {
+    maxBuffer: 2 ** 30,
     cwd: rootDir,
     encoding: "utf-8",
     // Untranslated diagnostics, so a failure can be told apart by its stderr.
@@ -708,12 +964,12 @@ const violationMessage = (edge: AppBoundaryEdge): string => {
  * boundary. The playground/web locale exception disappears when locale assets
  * have a shared package or generated owner.
  */
-export const validateWorkspaceAppBoundaries = (
+export const validateWorkspaceAppBoundaries = async (
   rootDir: string,
   options: AppBoundaryOptions = {},
-): AppBoundaryIssue[] => {
+): Promise<AppBoundaryIssue[]> => {
   const { edges: observed, issues: collectionIssues } =
-    collectAppBoundaryResult(rootDir);
+    await collectAppBoundaryResult(rootDir);
   const { exceptions, issues: exceptionIssues } = readExceptions(rootDir);
   const baseline = readBaselineExceptions(rootDir, options);
   const issues = [

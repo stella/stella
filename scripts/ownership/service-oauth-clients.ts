@@ -35,6 +35,10 @@ export default {
         reason: "Exercises native OAuth lifecycle and durable audit records.",
       },
       {
+        path: "apps/api/src/lib/auth/partner-client.db.test.ts",
+        reason: "Proves service lifecycle operations refuse a partner client.",
+      },
+      {
         path: "apps/api/src/handlers/legal-resolve/service-routes.test.ts",
         reason:
           "Binds response audit fixtures to the owner operation contract.",

@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
 import { Input } from "@stll/ui/input";
@@ -11,6 +11,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
+
+import { useFormatter } from "@/i18n/formatting-context";
 
 type MonthLockPickerProps = {
   id: string;

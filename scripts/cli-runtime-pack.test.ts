@@ -496,6 +496,21 @@ describe("generated imports", () => {
       generators: [derived, committed],
     });
 
+  test.each([
+    "import(`./generated/missing`);",
+    "require(`./generated/missing`);",
+    'require("./generated/missing", 2);',
+    'type Missing = import("./generated/missing");',
+  ])("generated imports retain module references in %s", (source) => {
+    expect(scan({ source })).toEqual([
+      {
+        importer,
+        specifier: "./generated/missing",
+        missing: "packages/probe/src/generated/missing.ts",
+      },
+    ]);
+  });
+
   test("a tracked generated module is buildable", () => {
     expect(
       scan({

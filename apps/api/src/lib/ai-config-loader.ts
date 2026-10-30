@@ -4,13 +4,19 @@
  * Every loader reads through the handle its caller passes: a request's scoped
  * transaction (the `organization_settings` policy admits the caller's own
  * organization), a worker's database, or the authentication boundary's
- * connection before any request scope exists. The lookup is a single indexed
- * select on organization_id, so a request can fold it into a transaction it
- * already holds, and the BYOK key material is decrypted in process.
+ * connection before any request scope exists. Settings use an indexed select
+ * on organization_id; the authorization step separately proves current
+ * membership (and any applicable seat assignment) before a caller receives
+ * decrypted BYOK material.
  */
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { eq, sql } from "drizzle-orm";
+
+import {
+  AI_PROVIDER_CONFIGURATION,
+  resolveAIProviderSettings,
+} from "@stll/api-contract/organization-ai-availability";
 
 import type { Transaction } from "@/api/db/root";
 import { organizationSettings } from "@/api/db/schema";
@@ -18,7 +24,6 @@ import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { decryptAIConfig } from "@/api/lib/ai-config-crypto";
 import {
   decryptOrgAIConfigRow,
-  decryptOrgAIConfigRowOrThrow,
   ORG_AI_CONFIG_STATUS,
   resolvePromptCachingPreference,
 } from "@/api/lib/ai-config-loader-core";
@@ -26,11 +31,15 @@ import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import {
   memberAssignmentRequiredError,
   ownAIKeyRequiredError,
+  storedAIConfigUnreadableError,
 } from "@/api/lib/ai-config-response";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DEFAULT_MANAGED_AI_RESIDENCY } from "@/api/lib/chat/ai-data-policy";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
+import { withAggregateSavepoint } from "@/api/lib/db/aggregate-lock";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   authorizeOperation,
   snapshotOperationInput,
@@ -39,8 +48,18 @@ import type { CheckedOperationContext } from "@/api/lib/proofs/checked-transacti
 import { memberMayUseAI } from "@/api/lib/usage/member-capacity";
 import { mayUseInstanceModels } from "@/api/lib/usage/organization-access-state";
 
-/** The one capability the loaders need: a single `organization_settings` select. */
+const AI_SETTINGS_READ_FAILURE = failureSink({
+  event: "ai.settings_read.failed",
+  expected: [],
+});
+
+/** The one capability needed to query organization settings. */
 export type OrgSettingsReader = Pick<Transaction, "select">;
+
+/** Runtime settings reads isolate SQL failures from the caller's transaction. */
+type RecoverableOrgSettingsReader = OrgSettingsReader & {
+  transaction: <T>(run: (tx: OrgSettingsReader) => Promise<T>) => Promise<T>;
+};
 
 /**
  * Whose AI work the config is loaded for: the organization, and the member
@@ -51,7 +70,7 @@ export type OrgAIConfigReader = {
   userId: SafeId<"user">;
 };
 
-const selectAISettingsRow = async (
+const queryAISettingsRow = async (
   db: OrgSettingsReader,
   organizationId: SafeId<"organization">,
 ) =>
@@ -68,6 +87,66 @@ const selectAISettingsRow = async (
     .where(eq(organizationSettings.organizationId, organizationId))
     .limit(1)
     .then((rows) => rows.at(0));
+
+const selectAISettingsRow = async (
+  db: RecoverableOrgSettingsReader,
+  organizationId: SafeId<"organization">,
+) => {
+  // PostgreSQL aborts the current transaction on a failed statement. Catch
+  // outside the nested transaction so its rollback restores the caller first.
+  const result = await Result.tryPromise(async () =>
+    withAggregateSavepoint(
+      db,
+      async (tx) => await queryAISettingsRow(tx, organizationId),
+    ),
+  );
+  if (Result.isOk(result)) {
+    return { type: "ready", row: result.value } as const;
+  }
+  observeFailure(result.error, {
+    sink: AI_SETTINGS_READ_FAILURE,
+    ctx: { organizationId },
+  });
+  return { type: "unavailable" } as const;
+};
+
+type ReadProviderConfigOptions = {
+  organizationId: SafeId<"organization">;
+  settings: Extract<
+    Awaited<ReturnType<typeof selectAISettingsRow>>,
+    { type: "ready" }
+  >;
+};
+
+const readProviderConfig = async ({
+  organizationId,
+  settings,
+}: ReadProviderConfigOptions) => {
+  const decrypted = await decryptOrgAIConfigRow({
+    decrypt: decryptAIConfig,
+    organizationId,
+    row: settings.row,
+  });
+  const resolution = resolveAIProviderSettings({
+    orgConfigured: decrypted.status === "ok" && decrypted.config !== null,
+    providerConfiguration: AI_PROVIDER_CONFIGURATION.allowed,
+    readStatus: decrypted.status === "ok" ? "ready" : "unavailable",
+  });
+  switch (resolution.type) {
+    case "unavailable":
+      return Result.err(storedAIConfigUnreadableError());
+    case "orgSettings":
+    case "defaultProvider":
+      // A configured or absent provider requires a successful decryption read.
+      if (decrypted.status === "corrupt") {
+        return Result.err(storedAIConfigUnreadableError());
+      }
+      return Result.ok(decrypted.config);
+    default:
+      resolution satisfies never;
+      return panic("Unhandled AI provider settings resolution");
+  }
+};
 
 /**
  * Refuses a member the organization does not admit to AI work, whichever key
@@ -145,33 +224,25 @@ const readAIConfiguration = async <Settings>({
 };
 
 /**
- * For callers that are about to use the config for an AI call. Throws a
- * typed `ConfigurationError` on a corrupt stored row (see
- * `decryptOrgAIConfigRowOrThrow`) rather than silently falling back to no
- * config, which could mis-route or mis-bill. An org barred from the instance
- * provider without a config of its own is an error result.
+ * For callers that are about to use the config for an AI call. Uses the
+ * instance-provider fallback only for confirmed absent provider settings.
+ * Failed reads or decryption refuse AI work rather than changing processors.
  */
 export const loadOrgAIConfig = async (
-  db: OrgSettingsReader,
+  db: RecoverableOrgSettingsReader,
   reader: OrgAIConfigReader,
-): Promise<Result<OrgAIConfig | null, HandlerError<403>>> => {
+): Promise<Result<OrgAIConfig | null, HandlerError<403 | 503>>> => {
   const checkedReader = snapshotOperationInput(reader);
   const { organizationId } = checkedReader;
-  const rows = await db
-    .select({
-      aiConfigEncrypted: sql<
-        string | null
-      >`${organizationSettings.aiConfigEncrypted}::text`,
-      aiConfigIv: sql<string | null>`${organizationSettings.aiConfigIv}::text`,
-    })
-    .from(organizationSettings)
-    .where(eq(organizationSettings.organizationId, organizationId))
-    .limit(1);
-  const orgAIConfig = await decryptOrgAIConfigRowOrThrow({
-    decrypt: decryptAIConfig,
-    organizationId,
-    row: rows.at(0),
-  });
+  const settings = await selectAISettingsRow(db, organizationId);
+  if (settings.type === "unavailable") {
+    return Result.err(storedAIConfigUnreadableError());
+  }
+  const configResult = await readProviderConfig({ organizationId, settings });
+  if (Result.isError(configResult)) {
+    return Result.err(configResult.error);
+  }
+  const orgAIConfig = configResult.value;
   return await readAIConfiguration({
     db,
     reader: checkedReader,
@@ -200,22 +271,25 @@ export type OrgAISettings = {
 
 /**
  * {@link loadOrgAIConfig} plus the organization's prompt-caching preference in
- * one select, for AI call sites that need both. Keeps the strict corruption
- * semantics of {@link loadOrgAIConfig}: a stored row that does not decrypt
- * throws instead of degrading to platform defaults.
+ * one select. An absent row uses platform defaults; a failed read refuses AI
+ * work because neither privacy preference is known.
  */
 export const loadOrgAISettings = async (
-  db: OrgSettingsReader,
+  db: RecoverableOrgSettingsReader,
   reader: OrgAIConfigReader,
-): Promise<Result<OrgAISettings, HandlerError<403>>> => {
+): Promise<Result<OrgAISettings, HandlerError<403 | 503>>> => {
   const checkedReader = snapshotOperationInput(reader);
   const { organizationId } = checkedReader;
-  const row = await selectAISettingsRow(db, organizationId);
-  const orgAIConfig = await decryptOrgAIConfigRowOrThrow({
-    decrypt: decryptAIConfig,
-    organizationId,
-    row,
-  });
+  const settings = await selectAISettingsRow(db, organizationId);
+  if (settings.type === "unavailable") {
+    return Result.err(storedAIConfigUnreadableError());
+  }
+  const { row } = settings;
+  const configResult = await readProviderConfig({ organizationId, settings });
+  if (Result.isError(configResult)) {
+    return Result.err(configResult.error);
+  }
+  const orgAIConfig = configResult.value;
   return await readAIConfiguration({
     db,
     reader: checkedReader,
@@ -229,53 +303,55 @@ export const loadOrgAISettings = async (
   });
 };
 
-export type OrgSettingsForAuth = {
-  orgAIConfig: OrgAIConfig | null;
-  orgAIConfigStatus: OrgAIConfigStatus;
-  promptCachingEnabled: boolean;
-  managedAIResidency: ManagedAIResidency;
-};
+export type OrgSettingsForAuth =
+  | {
+      orgAIConfig: OrgAIConfig | null;
+      orgAIConfigStatus: Exclude<OrgAIConfigStatus, "unreadable">;
+      promptCachingEnabled: boolean;
+      managedAIResidency: ManagedAIResidency;
+    }
+  | {
+      orgAIConfig: null;
+      orgAIConfigStatus: "unreadable";
+      promptCachingEnabled: null;
+      managedAIResidency: null;
+    };
 
 /**
  * The AI config and prompt-caching preference for callers (the validateAuth
  * resolve, the MCP capability context) that need both on every request, in a
  * single `organization_settings` select.
  *
- * Deliberately degrades a corrupt stored config to `orgAIConfig: null`
- * instead of throwing: this backs the shared per-request auth resolve, so a
- * single undecryptable row (key rotation, cross-env restore) must not fail
- * every request for the org. The decrypt failure is still captured (see
- * `decryptOrgAIConfigRow`) and reported as `orgAIConfigStatus:
- * "unreadable"`, which AI-invoking call sites must fail closed on rather
- * than reading the null as "this org has no config of its own". An org
- * whose access state bars the instance provider reports `own_key_required`,
- * and a member it does not admit to AI work `member_assignment_required`, the
- * same way, so non-AI requests keep working.
+ * Failed reads retain an unavailable outcome without inventing privacy
+ * preferences. Non-AI operations can continue; AI admission rejects that state.
  */
 export const loadOrgSettingsForAuth = async (
-  db: OrgSettingsReader,
+  db: RecoverableOrgSettingsReader,
   { organizationId, userId }: OrgAIConfigReader,
 ): Promise<OrgSettingsForAuth> => {
-  const row = await selectAISettingsRow(db, organizationId);
-
-  const decryptResult = await decryptOrgAIConfigRow({
-    decrypt: decryptAIConfig,
-    organizationId,
-    row,
-  });
-  const promptCachingEnabled = resolvePromptCachingPreference(row);
-  const managedAIResidency =
-    row?.managedAIResidency ?? DEFAULT_MANAGED_AI_RESIDENCY;
-  if (decryptResult.status === "corrupt") {
+  const settings = await selectAISettingsRow(db, organizationId);
+  if (settings.type === "unavailable") {
     return {
       orgAIConfig: null,
       orgAIConfigStatus: ORG_AI_CONFIG_STATUS.unreadable,
-      promptCachingEnabled,
-      managedAIResidency,
+      promptCachingEnabled: null,
+      managedAIResidency: null,
     };
   }
-
-  const orgAIConfig = decryptResult.config;
+  const { row } = settings;
+  const configResult = await readProviderConfig({ organizationId, settings });
+  if (Result.isError(configResult)) {
+    return {
+      orgAIConfig: null,
+      orgAIConfigStatus: ORG_AI_CONFIG_STATUS.unreadable,
+      promptCachingEnabled: null,
+      managedAIResidency: null,
+    };
+  }
+  const orgAIConfig = configResult.value;
+  const promptCachingEnabled = resolvePromptCachingPreference(row);
+  const managedAIResidency =
+    row?.managedAIResidency ?? DEFAULT_MANAGED_AI_RESIDENCY;
   if (!(await memberMayUseAI(db, organizationId, userId))) {
     return {
       orgAIConfig,

@@ -1,6 +1,14 @@
 import { QueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
-import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
 import { Temporal } from "@stll/time";
 import { stellaToast } from "@stll/ui/toast";
@@ -36,6 +44,11 @@ import {
 } from "@/lib/account/user-scoped-storage";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
+
+// Spies created in a test stay attached if it fails before restoring them.
+afterEach(() => {
+  mock.restore();
+});
 
 const localArea = () =>
   browserStorage("local") ?? panic("Test requires local browser storage");
@@ -693,6 +706,38 @@ describe("replaceFileFieldId", () => {
       .getState()
       .tabs.find((item) => item.id === "field-pdf");
     expect(tab).toMatchObject({ facet: "preview", type: "pdf" });
+  });
+
+  test("reopening an open file applies a requested facet and keeps the reader's otherwise", () => {
+    const contract = {
+      id: "field-contract",
+      entityId: "entity-1",
+      label: "Contract",
+      fileName: "contract.pdf",
+      mimeType: "application/pdf",
+      pdfFileId: null,
+      propertyId: "property-1",
+      workspaceId: "workspace-1",
+    };
+    const contractTab = () =>
+      useInspectorTabsStore
+        .getState()
+        .tabs.find((item) => item.id === contract.id);
+    useInspectorTabsStore.getState().openFile(contract);
+    useInspectorTabsStore.getState().setFileFacet(contract.id, "metadata");
+
+    useInspectorTabsStore
+      .getState()
+      .openFile({ ...contract, facet: "versions" });
+    expect(contractTab()).toMatchObject({ facet: "versions", type: "pdf" });
+
+    useInspectorTabsStore.getState().openFile(contract);
+    expect(contractTab()).toMatchObject({ facet: "versions", type: "pdf" });
+
+    useInspectorTabsStore
+      .getState()
+      .openFileForEntity({ ...contract, facet: "preview" });
+    expect(contractTab()).toMatchObject({ facet: "preview", type: "pdf" });
   });
 
   test("openFileForEntity drops a stale tab whose id collides with the new field", () => {

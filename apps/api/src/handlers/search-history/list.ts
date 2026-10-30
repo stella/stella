@@ -20,6 +20,7 @@ import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limit
 import { brandPersistedSearchHistoryEntryId } from "@/api/lib/safe-id-boundaries";
 
 import {
+  searchHistoryCountrySchema,
   searchHistoryKindSchema,
   toSearchHistoryEntryResponse,
 } from "./entries";
@@ -27,7 +28,7 @@ import {
 const config = {
   contract: "patch",
   description:
-    "List your own search history in the active organization, most recently used first: law searches you ran and the decisions and statutes you opened. Each entry is private to you; nobody else in the organization can read it. Pass `kind` to list one kind, and `cursor` from `nextCursor` for older entries. Delete an entry with `search-history.delete`, or all of it with `search-history.clear`; pass the returned `scope.organizationId` as `expectedOrganizationId` and `scope.userId` as `expectedUserId` on either mutation.",
+    "List your own search history in the active organization, most recently used first: law searches you ran and the decisions and statutes you opened. Each entry is private to you; nobody else in the organization can read it. Pass `kind` to list one kind, `country` to list one jurisdiction's entries, and `cursor` from `nextCursor` for older entries. Delete an entry with `search-history.delete`, or all of it with `search-history.clear`; pass the returned `scope.organizationId` as `expectedOrganizationId` and `scope.userId` as `expectedUserId` on either mutation.",
   permissions: { searchHistory: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
@@ -39,6 +40,7 @@ const config = {
   },
   query: v.object({
     kind: v.optional(searchHistoryKindSchema),
+    country: v.optional(searchHistoryCountrySchema),
     cursor: v.optional(paginationCursorSchema()),
     limit: v.optional(
       v.pipe(
@@ -63,6 +65,7 @@ const UNSELECTED_HISTORY_COLUMNS = [
   "organizationId",
   "userId",
   "lookupKey",
+  "countryUsedAt",
 ] as const satisfies readonly (keyof typeof searchHistoryEntries.$inferSelect)[];
 
 const searchHistoryCursor = createTimestampIdCursorCodec({
@@ -83,6 +86,9 @@ const listSearchHistory = createSafeRootHandler(
     ];
     if (query.kind !== undefined) {
       conditions.push(eq(searchHistoryEntries.kind, query.kind));
+    }
+    if (query.country !== undefined) {
+      conditions.push(eq(searchHistoryEntries.country, query.country));
     }
     if (query.cursor !== undefined) {
       const cursor = searchHistoryCursor.decode(query.cursor);
@@ -111,6 +117,7 @@ const listSearchHistory = createSafeRootHandler(
           .select({
             id: searchHistoryEntries.id,
             kind: searchHistoryEntries.kind,
+            country: searchHistoryEntries.country,
             courtId: searchHistoryEntries.courtId,
             ciphertext: searchHistoryEntries.ciphertext,
             iv: searchHistoryEntries.iv,

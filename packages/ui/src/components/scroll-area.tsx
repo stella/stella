@@ -47,16 +47,19 @@ const ScrollArea = ({
   viewportRef?: Ref<HTMLDivElement>;
 }) => (
   <ScrollAreaPrimitive.Root
-    className={cn("size-full min-h-0", className)}
+    className={cn("flex size-full min-h-0 flex-col", className)}
     {...props}
   >
-    {/* A root bounded only by max-height has no definite height for the
-        viewport's h-full to resolve against, so the viewport inherits the cap
-        and scrolls instead of growing past it. */}
+    {/* The viewport is sized by flex, not by a percentage height. A root
+        bounded only by a max-height (its own, or that of a flex column it
+        flexes in) has no definite height for a percentage to resolve
+        against, so an `h-full` viewport grows with its content past the root
+        and paints over whatever follows it. As a flex item the viewport takes
+        the root's used height, whatever bounds it, and scrolls. */}
     <ScrollAreaPrimitive.Viewport
       ref={viewportRef}
       className={cn(
-        "focus-visible:ring-ring focus-visible:ring-offset-background h-full max-h-[inherit] overscroll-contain rounded-[inherit] outline-none focus-visible:ring-2 focus-visible:ring-offset-1 data-has-overflow-x:overscroll-x-contain",
+        "focus-visible:ring-ring focus-visible:ring-offset-background min-h-0 flex-1 overscroll-contain rounded-[inherit] outline-none focus-visible:ring-2 focus-visible:ring-offset-1 data-has-overflow-x:overscroll-x-contain",
         scrollFade &&
           "mask-t-from-[calc(100%-min(var(--fade-size),var(--scroll-area-overflow-y-start)))] mask-r-from-[calc(100%-min(var(--fade-size),var(--scroll-area-overflow-x-end)))] mask-b-from-[calc(100%-min(var(--fade-size),var(--scroll-area-overflow-y-end)))] mask-l-from-[calc(100%-min(var(--fade-size),var(--scroll-area-overflow-x-start)))] [--fade-size:1.5rem]",
         scrollbarGutter &&

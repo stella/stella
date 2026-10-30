@@ -46,6 +46,7 @@ export const noopAnalytics: Analytics = {
   captureLongAnimationFrame: noop,
   captureGuideStepSkipped: noop,
   captureProvisionPlacementGaps: noop,
+  captureCaseLawAnalysisTiming: noop,
   captureInspectorRestoreRecovered: noop,
   captureFollowupShown: noop,
   captureFollowupSelected: noop,

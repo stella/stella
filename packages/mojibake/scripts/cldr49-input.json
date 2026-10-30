@@ -1,0 +1,26 @@
+{
+  "version": "49.0.0",
+  "sourceCommit": "96e54b273d2da4ec6fbad350ba19ff23fa24a588",
+  "sources": {
+    "source": {
+      "url": "https://codeload.github.com/unicode-org/cldr/zip/96e54b273d2da4ec6fbad350ba19ff23fa24a588",
+      "sha256": "b40d8a6dc156a1538cf217184d399756f70727cea02ca9a9a99761df353c9156"
+    },
+    "converter": {
+      "url": "https://github.com/unicode-org/cldr/releases/download/release-49/cldr-tools-49.jar",
+      "sha256": "d692552085a59f86153cf1ac4113ba7c0a09db4f9526e8ff89485e8611470abd"
+    },
+    "npm": {
+      "url": "https://registry.npmjs.org/cldr-misc-full/-/cldr-misc-full-49.0.0.tgz",
+      "sha256": "d0129e972402b1d6b32ab44c82c5a058c3f721bf61bf07b2b652c9444eba8821"
+    }
+  },
+  "converterOptions": {
+    "resolved": true,
+    "draftstatus": "contributed",
+    "coverage": "optional",
+    "packages": true,
+    "type": "main",
+    "section": "characters"
+  }
+}

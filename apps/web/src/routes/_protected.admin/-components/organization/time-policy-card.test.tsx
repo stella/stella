@@ -7,6 +7,7 @@ import { IntlProvider } from "use-intl";
 
 import { parseTimeZoneId } from "@stll/time";
 
+import { FormattingProvider } from "@/i18n/formatting-context";
 import ar from "@/i18n/langs/ar.json";
 import en from "@/i18n/langs/en.json";
 import { AuthenticatedUserProvider } from "@/lib/authenticated-user-context";
@@ -55,9 +56,11 @@ const renderPolicy = async ({ role, locale }: RenderPolicyOptions) => {
   return renderToStaticMarkup(
     <QueryClientProvider client={queryClient}>
       <IntlProvider locale={locale} messages={catalogs[locale]} timeZone="UTC">
-        <AuthenticatedUserProvider user={USER}>
-          <TimePolicyForm settings={SETTINGS} canEdit={canEdit} />
-        </AuthenticatedUserProvider>
+        <FormattingProvider locale={locale} timeZone="UTC">
+          <AuthenticatedUserProvider user={USER}>
+            <TimePolicyForm settings={SETTINGS} canEdit={canEdit} />
+          </AuthenticatedUserProvider>
+        </FormattingProvider>
       </IntlProvider>
     </QueryClientProvider>,
   );

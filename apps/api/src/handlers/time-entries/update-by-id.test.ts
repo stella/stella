@@ -3,6 +3,7 @@ import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import { BILLING_STATUS } from "@/api/db/schema";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -35,7 +36,7 @@ const createContext = ({
   withTimeBillingEnrolment(
     asTestRaw<UpdateTimeEntryCtx>({
       request: new Request("https://api.example.test/handler"),
-      route: "/v1/workspaces/:workspaceId/time-entries/:timeEntryId",
+      route: "/v1/time-entries/:workspaceId" satisfies ApiRoutePath,
       body,
       safeDb,
       scopedDb,

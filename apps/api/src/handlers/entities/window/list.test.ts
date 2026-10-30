@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { encodeEntitiesWindowCursor } from "@/api/lib/entities/window-cursor";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -86,7 +87,7 @@ const createContext = ({
     body,
     safeDb,
     request: new Request("https://example.test/v1/entities/query-window"),
-    route: "/v1/entities/:workspaceId/query-window",
+    route: "/v1/entities/:workspaceId/query-window" satisfies ApiRoutePath,
   });
 
 const createSafeDb = (): Parameters<

@@ -1,0 +1,6 @@
+{
+  "metric": "implicit-root-connection-shapes",
+  "file": "apps/api/src/lib/auth/access-reset-revocation.ts",
+  "delta": 1,
+  "reason": "A confirmed email-code access reset ends the account's durable credentials inside the authentication hook, before any session or organization scope exists. The module takes no handle from callers and exports none."
+}

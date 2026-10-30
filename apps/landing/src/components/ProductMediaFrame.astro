@@ -208,8 +208,12 @@ const storyThumbnail = media.type === "story" ? productStoryThumbnails[media.sce
     (media.type === "live-anonymize" || media.type === "live-editor") &&
       thumbnail && (
         <ThemeImage
-          lightSrc={`/media/products/${media.type === "live-editor" ? "editor" : "anonymization"}.png`}
-          darkSrc={`/media/products/${media.type === "live-editor" ? "editor" : "anonymization"}-dark.png`}
+          lightSrc={media.type === "live-editor"
+            ? "/media/products/editor.png"
+            : "/media/products/anonymization.png"}
+          darkSrc={media.type === "live-editor"
+            ? "/media/products/editor-dark.png"
+            : "/media/products/anonymization-dark.png"}
           alt={media.alt}
           class="h-full w-full rounded-lg border object-cover"
           style="border-color: color-mix(in srgb, var(--border) 70%, transparent); box-shadow: 0 18px 42px -30px rgba(0, 0, 0, 0.5); object-position: 0% 0%"

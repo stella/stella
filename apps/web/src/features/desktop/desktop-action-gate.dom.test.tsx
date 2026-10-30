@@ -36,8 +36,9 @@ const { cleanup, fireEvent, render, screen, waitFor } =
 const { QueryClient, QueryClientProvider, focusManager } =
   await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
-const { DesktopRequiredDialog, useDesktopActionGate } =
+const { DesktopRequiredDialog, DesktopSetupMenuItem, useDesktopActionGate } =
   await import("@/features/desktop/desktop-action-gate");
+const { Menu, MenuPopup } = await import("@stll/ui/menu");
 const { desktopPresenceOptions } = await import("./desktop-presence");
 const { DesktopConnectionStatus } = await import("./desktop-connection-status");
 const { detectDesktopPlatform, MACOS_DMG_URL, WINDOWS_EXE_URL } =
@@ -286,9 +287,7 @@ describe("desktop action gate uses observed presence", () => {
       if (action !== "edit-file" && action !== "sign-pdf") {
         panic(`Unexpected test action: ${action}`);
       }
-      const started = Result.ok<{ readonly status: "started" }>({
-        status: "started",
-      });
+      const started = Result.ok({ status: "started" } as const);
       const connect = spyOn(
         desktopBridge,
         "linkDesktopAccount",
@@ -497,6 +496,87 @@ describe("desktop action gate uses observed presence", () => {
     expect(performed).toEqual(["open"]);
     expect(screen.queryByRole("dialog")).toBeNull();
   });
+});
+
+const SetupMenuHarness = ({ action }: { action: DesktopAction }) => {
+  const desktopGate = useDesktopActionGate(action);
+  return (
+    <>
+      <Menu open>
+        <MenuPopup>
+          <DesktopSetupMenuItem
+            onSetUp={desktopGate.setUp}
+            status={desktopGate.status}
+          />
+        </MenuPopup>
+      </Menu>
+      <DesktopRequiredDialog {...desktopGate.requiredDialog} />
+    </>
+  );
+};
+
+const mountSetupMenu = (presence: DesktopPresence) => {
+  const client = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false, retryOnMount: false, refetchOnMount: false },
+    },
+  });
+  clients.push(client);
+  client.setQueryData(
+    desktopPresenceOptions({
+      userId: user.id,
+      organizationId: user.activeOrganizationId,
+    }).queryKey,
+    presence,
+  );
+  render(
+    <QueryClientProvider client={client}>
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
+        <AuthenticatedUserProvider user={user}>
+          <SetupMenuHarness action="sign-pdf" />
+        </AuthenticatedUserProvider>
+      </IntlProvider>
+    </QueryClientProvider>,
+  );
+};
+
+describe("desktop status line in a menu", () => {
+  test("a current app shows no status line", () => {
+    mountSetupMenu(PRESENCE_FIXTURES.current);
+
+    expect(screen.queryByRole("menuitem")).toBeNull();
+  });
+
+  test("an unlinked app is connected from its status line", async () => {
+    const started = Result.ok({ status: "started" } as const);
+    const connect = spyOn(
+      desktopBridge,
+      "linkDesktopAccount",
+    ).mockResolvedValue(started);
+    mountSetupMenu(PRESENCE_FIXTURES.not_connected);
+
+    await act(async () => {
+      fireEvent.click(
+        await screen.findByRole("menuitem", { name: gate.connect }),
+      );
+    });
+    expect(connect).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  test.each([
+    { presence: PRESENCE_FIXTURES.none, label: gate.download },
+    { presence: PRESENCE_FIXTURES.outdated, label: gate.update },
+  ])(
+    "$presence.type opens the install or update dialog from its status line",
+    async ({ presence, label }) => {
+      mountSetupMenu(presence);
+
+      fireEvent.click(await screen.findByRole("menuitem", { name: label }));
+      expect(await screen.findByRole("dialog")).toBeDefined();
+      expect(screen.getByText(gate.signReason)).toBeDefined();
+    },
+  );
 });
 
 describe("desktop account update requirement", () => {

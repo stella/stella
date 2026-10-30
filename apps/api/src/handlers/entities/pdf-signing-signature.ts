@@ -57,7 +57,7 @@ const signaturePayloadSchema = v.object({
 
 const decodeBase64 = (value: string): Uint8Array | null => {
   const bytes = Buffer.from(value, "base64");
-  return bytes.length > 0 && bytes.toString("base64") === value
+  return bytes.length > 0 && bytes.toBase64() === value
     ? new Uint8Array(bytes)
     : null;
 };

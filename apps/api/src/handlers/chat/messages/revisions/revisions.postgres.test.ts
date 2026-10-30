@@ -49,6 +49,7 @@ import { estimateTextTokens } from "@/api/lib/chat/compaction-tokens";
 import { chatMessageCursorCodec } from "@/api/lib/chat/message-cursor";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { decodePaginationCursor } from "@/api/lib/pagination";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import {
@@ -100,6 +101,10 @@ const seedFixture = async (db: GatedTestDb) => {
     name: "Revision fixture",
     slug: organizationId,
     createdAt: new Date(),
+  });
+  await recordNewOrganizationAccessState(db, {
+    organizationId,
+    now: new Date(),
   });
   await db.insert(user).values({
     id: userId,
@@ -515,6 +520,10 @@ if (!databaseUrl || !runPostgres) {
             name: "Other author organization",
             slug: otherOrganizationId,
             createdAt: new Date(),
+          });
+          await recordNewOrganizationAccessState(db, {
+            organizationId: otherOrganizationId,
+            now: new Date(),
           });
           await db.insert(member).values({
             id: mintAuthProviderIdValue(),

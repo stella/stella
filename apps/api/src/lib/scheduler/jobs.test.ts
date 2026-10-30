@@ -68,7 +68,7 @@ describe("declared scheduler jobs", () => {
     });
   });
 
-  test("case-law freshness is reported every five minutes", () => {
+  test("case-law freshness is reported hourly", () => {
     expect(
       DECLARED_SCHEDULER_JOBS.find(
         ({ task }) => task === REPORT_CASE_LAW_FRESHNESS_TASK,
@@ -76,7 +76,7 @@ describe("declared scheduler jobs", () => {
     ).toMatchObject({
       id: "caseLaw.reportFreshness.fiveMinute",
       mode: "recurring",
-      schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
+      schedule: { type: "interval", everyMs: 60 * 60 * 1000 },
     });
   });
 

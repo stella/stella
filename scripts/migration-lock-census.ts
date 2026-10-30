@@ -697,357 +697,66 @@ export type MigrationLockAllowance = {
   reason: string;
 };
 // New writer-blocking work without an existing safety acknowledgement needs a
-// statement-form decision here (for example, an additive expand/contract step).
-export const MIGRATION_LOCK_ALLOWANCES: readonly MigrationLockAllowance[] = [
-  {
-    migration: "20261025130000_reader_answer_continuation_spans",
-    form: "add-column",
-    reason:
-      "The NOT NULL jsonb column uses a constant '[]'::jsonb default on PostgreSQL's fast-default catalog path without scanning or rewriting answer rows, under 1s lock_timeout and 5s statement_timeout.",
-  },
-  {
-    migration: "20261022120000_case_law_batch_slots",
-    form: "add-column",
-    reason:
-      "The three parsed-input fields and two captured raw-object keys are nullable and default-free catalog additions, without a corpus row scan or table rewrite; lock acquisition is bounded by 1s and the statement by 30s.",
-  },
-  {
-    migration: "20261022120000_case_law_batch_slots",
-    form: "add-constraint",
-    reason:
-      "The complete parsed-input CHECK is added NOT VALID without scanning existing corpus rows, under transaction-local 1s lock_timeout and 30s statement_timeout; the canonical online phase validates it after releasing the schema lock.",
-  },
-  {
-    migration: "20261022120000_case_law_batch_slots",
-    form: "create-trigger",
-    reason:
-      "Installing the row-level provenance invalidation trigger is a catalog-only change without a corpus scan, with acquisition bounded by transaction-local 1s lock_timeout and execution by 30s statement_timeout.",
-  },
-  {
-    migration: "20261016100500_agent_skill_binding",
-    form: "add-column",
-    reason:
-      "The two nullable, default-free UUID binding columns are catalog-only additions without a table rewrite; lock acquisition is bounded by 1s lock_timeout and each statement by 5s statement_timeout.",
-  },
-  {
-    migration: "20261016100500_agent_skill_binding",
-    form: "add-constraint",
-    reason:
-      "The single-binding CHECK is added NOT VALID, enforcing new writes without scanning existing rows; the gated online phase validates it after deploy, with this catalog addition bounded by 1s lock_timeout and 5s statement_timeout.",
-  },
-  {
-    migration: "20261016100500_agent_skill_binding",
-    form: "add-foreign-key",
-    reason:
-      "The two composite binding foreign keys retain organization identity and are added NOT VALID without scanning existing rows; validation runs through the online table gate, while pre-deploy lock acquisition is bounded by 1s and each catalog statement by 5s.",
-  },
-  {
-    migration: "20261016100500_agent_skill_binding",
-    form: "create-policy",
-    reason:
-      "The seven replacement policies retain organization and visibility checks, add binding reach, and allow a matter-bound skill's author to write it; each catalog-only replacement stays in the migration transaction under 1s lock_timeout and 5s statement_timeout.",
-  },
-  {
-    migration: "20261024193000_owner_erasure_paths",
-    form: "create-policy",
-    reason:
-      "The eighteen policies add only table-owner SELECT/DELETE access fenced to the reset organization; catalog-only policy creation performs no row scan, with transaction-local 1s lock_timeout and 5s statement_timeout.",
-  },
-  {
-    migration: "20261024190300_invoice_line_exemption_reason",
-    form: "add-column",
-    reason:
-      "The nullable, default-free exemption basis is a catalog-only addition to invoice lines without a table rewrite, under 5s lock_timeout and 30s statement_timeout.",
-  },
-  {
-    migration: "20261019010000_invoice_party_tax_vat_ids",
-    form: "add-column",
-    reason:
-      "The seller, contact and invoice party identifier columns are nullable and default-free, a catalog-only addition without a table rewrite, under 5s lock_timeout and 30s statement_timeout.",
-  },
-  {
-    migration: "20261019020000_invoice_language",
-    form: "add-column",
-    reason:
-      "The nullable language preferences are catalog-only; invoices.language takes a constant literal default on PostgreSQL's fast-default path without rewriting invoice rows; lock acquisition is bounded by 5s and the statement by 30s.",
-  },
-  {
-    migration: "20261019020000_invoice_language",
-    form: "add-constraint",
-    reason:
-      "The three language CHECKs are added NOT VALID without scanning existing rows, under 5s lock_timeout and 30s statement_timeout; they are validated in the online phase after the schema lock is released.",
-  },
-  {
-    migration: "20261024214500_invoice_vat_exchange_rate",
-    form: "add-column",
-    reason:
-      "The five VAT exchange-rate columns are nullable and default-free, a catalog-only addition without a table rewrite, under 1s lock_timeout and 5s statement_timeout.",
-  },
-  {
-    migration: "20261024190200_case_law_decision_date_floor_gbr",
-    form: "add-constraint",
-    reason:
-      "The widened decision-date CHECK is added NOT VALID without scanning corpus rows; metadata-only lock acquisition retries at 2s, 10s and 30s within a 10-minute statement budget, then validation runs in the online phase.",
-  },
-  {
-    migration: "20261020013635_case_law_source_hash_version",
-    form: "add-column",
-    reason:
-      "The non-volatile constant smallint default uses PostgreSQL's fast-default catalog path without rewriting decision rows; lock acquisition is bounded by 5s and the statement by 30s.",
-  },
-  {
-    migration: "20261024090100_reader_answer_feature_refusal",
-    form: "add-constraint",
-    reason:
-      "The widened diagnostic CHECK is added NOT VALID without scanning existing messages, under 1s lock_timeout and 5s statement_timeout; its later validation runs only after releasing the schema lock.",
-  },
-  {
-    migration: "20261020013635_case_law_source_hash_version",
-    form: "replace-view",
-    reason:
-      "The two decision views re-expand their existing SELECT * definitions to include source_hash_version while preserving the redaction and listing filters; replacement updates view metadata without scanning corpus rows, under 5s lock_timeout and 30s statement_timeout.",
-  },
-  {
-    migration: "20261023233000_oauth_client_metadata_validated_at",
-    form: "add-column",
-    reason:
-      "The nullable, default-free validation timestamp is a catalog-only addition without a table rewrite, under 1s lock_timeout and 5s statement_timeout.",
-  },
-  {
-    migration: "20261019091000_legislation_publisher_identity",
-    form: "add-column",
-    reason:
-      "Constant literal defaults use the PostgreSQL fast-default catalog path without rewriting either legislation table; lock acquisition is bounded by 1s and the statement by 10s.",
-  },
-  {
-    migration: "20261019091000_legislation_publisher_identity",
-    form: "create-trigger",
-    reason:
-      "The three identity and writer fences install trigger metadata without scanning existing rows, under the migration's 1s lock_timeout and 10s statement_timeout.",
-  },
-  {
-    migration: "20261019091000_legislation_publisher_identity",
-    form: "add-constraint",
-    reason:
-      "Identity, namespace, lifecycle and nonempty CHECK constraints are added NOT VALID under a 1s lock_timeout; validation runs separately under its weaker lock.",
-  },
-  {
-    migration: "20261019091000_legislation_publisher_identity",
-    form: "row-level-security",
-    reason:
-      "ENABLE and FORCE RLS affect only the identifier lookup table created by this migration; retries retain the 1s lock_timeout and 10s statement_timeout.",
-  },
-  {
-    migration: "20261019091000_legislation_publisher_identity",
-    form: "create-policy",
-    reason:
-      "Policies install the identifier lookup table's existing ingestion/public-reader role boundary without application-relation reads, with DDL lock acquisition bounded to 1s.",
-  },
-  {
-    migration: "20261019091000_legislation_publisher_identity",
-    form: "create-index",
-    reason:
-      "The ordinary index targets the lookup table initially created empty by this migration, not the populated legislation corpus; replay is bounded by 1s lock_timeout and 10s statement_timeout.",
-  },
-  {
-    migration: "20261019091000_legislation_publisher_identity",
-    form: "add-foreign-key",
-    reason:
-      "The identifier lookup foreign key is installed NOT VALID without an existing-row scan; locks on the lookup and legislation_sources are bounded by 1s lock_timeout.",
-  },
-  {
-    migration: "20261020143000_case_law_coverage_slice_public_reader",
-    form: "create-policy",
-    reason:
-      "The SELECT-only public-reader policy adds metadata with a constant predicate and no application-relation reads, under 1s lock_timeout and 5s statement_timeout.",
-  },
-  {
-    migration: "20261022120000_scheduler_pause_bound",
-    form: "create-index",
-    reason:
-      "The partial pause index covers one scheduler row per declared job or scheduled flow; lock acquisition is bounded to 1s and the entire index build to 5s.",
-  },
-  {
-    migration: "20261023100000_case_law_sitemap_shard_counts",
-    form: "row-level-security",
-    reason:
-      "ENABLE and FORCE RLS apply to the new empty sitemap count table before publication, under 1s lock_timeout and 5s statement_timeout.",
-  },
-  {
-    migration: "20261024090000_professional_use_acceptance_operator_source",
-    form: "add-constraint",
-    reason:
-      "The source CHECK is replaced transactionally and added NOT VALID, avoiding a scan under ACCESS EXCLUSIVE; 1s lock_timeout bounds acquisition and separate validation uses the weaker lock.",
-  },
-  {
-    migration: "20261022233000_mcp_web_handoff",
-    form: "create-table-references",
-    reason:
-      "Foreign keys are installed with a new empty table, so no existing rows are scanned; the 1s lock_timeout bounds referenced-table lock acquisition.",
-  },
-  {
-    migration: "20261022233000_mcp_web_handoff",
-    form: "row-level-security",
-    reason:
-      "ENABLE and FORCE RLS apply only to the new empty handoff table before it becomes visible to application traffic, under a 1s lock_timeout.",
-  },
-  {
-    migration: "20261022233000_mcp_web_handoff",
-    form: "create-policy",
-    reason:
-      "Both policies are installed on the new empty handoff table under a 1s lock_timeout; their expressions inspect table ownership or return false, without reading application relations.",
-  },
-  {
-    migration: "20261022233000_mcp_web_handoff",
-    form: "add-column",
-    reason:
-      "The two session columns are nullable and default-free catalog additions under a 1s lock_timeout, without a heap rewrite.",
-  },
-  {
-    migration: "20261022233000_mcp_web_handoff",
-    form: "add-foreign-key",
-    reason:
-      "The session foreign key is added NOT VALID, avoiding an existing-row scan while the 1s lock_timeout bounds locks on session and oauth_consent.",
-  },
-  {
-    migration: "20261015060000_folio_collab_saved_snapshot_cut",
-    form: "add-column",
-    reason:
-      "Nullable, default-free columns are a catalog-only change under a 1s lock_timeout.",
-  },
-  {
-    migration: "20261015060000_folio_collab_saved_snapshot_cut",
-    form: "add-constraint",
-    reason:
-      "CHECK constraints are added NOT VALID under a 1s lock_timeout; 20261015060010 validates them without ACCESS EXCLUSIVE.",
-  },
-  {
-    migration: "20261020090000_corpus_projection_desired_at",
-    form: "add-column",
-    reason:
-      "Nullable, default-free columns are a catalog-only change under a 1s lock_timeout.",
-  },
-  {
-    migration: "20261020090000_corpus_projection_desired_at",
-    form: "alter-column",
-    reason:
-      "SET DEFAULT changes only the catalog default for future rows (no rewrite or scan) under a 1s lock_timeout.",
-  },
-  {
-    migration: "20261022120000_professional_use_acceptance_source",
-    form: "add-column",
-    reason:
-      "Merged history adds a constant-default column as a catalog-only change under a 1s lock_timeout.",
-  },
-  {
-    migration: "20261022120000_professional_use_acceptance_source",
-    form: "add-constraint",
-    reason:
-      "Merged history adds the CHECK constraint NOT VALID under a 1s lock_timeout, then validates it separately.",
-  },
-  {
-    migration: "20261020000100_stored_keys_organization_scope",
-    form: "add-constraint",
-    reason:
-      "CHECK constraints are added NOT VALID, avoiding a table scan while the 5s lock_timeout bounds lock acquisition.",
-  },
-  {
-    migration: "20261020000100_stored_keys_organization_scope",
-    form: "create-trigger",
-    reason:
-      "Creating the trigger is a metadata-only change with lock acquisition bounded by the 5s lock_timeout.",
-  },
-  {
-    migration: "20261020120000_field_cell_ownership",
-    form: "add-column",
-    reason:
-      "Nullable, default-free columns are catalog-only changes under a 1s lock_timeout.",
-  },
-  {
-    migration: "20261020120000_republished_ruling_identity_raw",
-    form: "add-column",
-    reason:
-      "Nullable, default-free columns are catalog-only changes under a 5s lock_timeout.",
-  },
-  {
-    migration: "20261020140000_republished_alias_moved_identities",
-    form: "create-table-references",
-    reason:
-      "The foreign key is created with its new empty table, avoiding an existing-row scan under the 1s lock_timeout.",
-  },
-  {
-    migration: "20261020140000_republished_alias_moved_identities",
-    form: "row-level-security",
-    reason:
-      "Row-level security is enabled on the new empty table before it is available to concurrent application traffic.",
-  },
-  {
-    migration: "20261020140000_republished_alias_moved_identities",
-    form: "create-policy",
-    reason:
-      "The policy is created on the new empty table before it is available to concurrent application traffic.",
-  },
-  {
-    migration: "20261022120000_scheduler_pause_bound",
-    form: "add-column",
-    reason:
-      "The nullable, default-free column is a catalog-only change under a 1s lock_timeout.",
-  },
-  {
-    migration: "20261022120000_scheduler_pause_bound",
-    form: "add-constraint",
-    reason:
-      "CHECK constraints are added NOT VALID, avoiding a table scan while the 1s lock_timeout bounds lock acquisition.",
-  },
-  {
-    migration: "20261022120000_scheduler_pause_bound",
-    form: "create-trigger",
-    reason:
-      "Creating the trigger is a metadata-only change with lock acquisition bounded by the 1s lock_timeout.",
-  },
-  {
-    migration: "20261021080000_reader_annotation_verification_claims",
-    form: "add-column",
-    reason:
-      "The three claim columns are nullable and default-free, a catalog-only addition to reader notes without a rewrite, under 1s lock_timeout and 5s statement_timeout.",
-  },
-  {
-    migration: "20261021080000_reader_annotation_verification_claims",
-    form: "add-constraint",
-    reason:
-      "The widened target-type and claim-shape CHECKs are added NOT VALID without scanning existing notes, under 1s lock_timeout and 5s statement_timeout; the online phase validates them after the schema lock is released.",
-  },
-  {
-    migration: "20261021080000_reader_annotation_verification_claims",
-    form: "add-foreign-key",
-    reason:
-      "The matter key is added NOT VALID, so existing notes (all with a null matter) are not scanned, under 1s lock_timeout and 5s statement_timeout; the online phase validates it.",
-  },
-  {
-    migration: "20261021080000_reader_annotation_verification_claims",
-    form: "create-policy",
-    reason:
-      "Replacing the reader-note policies installs catalog metadata without reading rows, with DDL lock acquisition bounded by 1s and the statement by 5s.",
-  },
-  {
-    migration: "20261021080000_reader_annotation_verification_claims",
-    form: "row-level-security",
-    reason:
-      "FORCE ROW LEVEL SECURITY on reader notes changes only catalog flags; the owner paths it affects get their own policies in the same migration, under 1s lock_timeout and 5s statement_timeout.",
-  },
-  {
-    migration: "20261021080000_reader_annotation_verification_claims",
-    form: "create-trigger",
-    reason:
-      "The statement-level claim cleanup trigger installs metadata on the claims table without scanning rows, under 1s lock_timeout and 5s statement_timeout.",
-  },
-  {
-    migration: "20261022130000_account_export_annotation_authorship",
-    form: "create-policy",
-    reason:
-      "The account export owner policy adds catalog metadata to reader notes without reading rows, with DDL lock acquisition bounded by 1s and the statement by 5s.",
-  },
-];
+// statement-form decision (for example, an additive expand/contract step). Each
+// migration keeps its decisions in its own file, so concurrent migrations never
+// edit a shared list: scripts/migration-lock-allowances/<migration>.json maps
+// each DDL form to the reason it is safe.
+export const MIGRATION_LOCK_ALLOWANCES_PATH =
+  "scripts/migration-lock-allowances";
+const MIGRATION_FOLDER_NAME = /^\d{14}_[a-z0-9_]+$/u;
+const MINIMUM_ALLOWANCE_REASON_LENGTH = 12;
+
+export const migrationLockAllowancePath = (migration: string) =>
+  `${MIGRATION_LOCK_ALLOWANCES_PATH}/${migration}.json`;
+
+export const parseMigrationLockAllowances = (
+  file: string,
+  content: unknown,
+): { allowances: MigrationLockAllowance[]; errors: string[] } => {
+  const migration =
+    file
+      .split("/")
+      .at(-1)
+      ?.replace(/\.json$/u, "") ?? "";
+  if (!file.endsWith(".json") || !MIGRATION_FOLDER_NAME.test(migration)) {
+    return {
+      allowances: [],
+      errors: [
+        `${file}: name the file after its migration folder, <YYYYMMDDHHMMSS>_<name>.json`,
+      ],
+    };
+  }
+  if (
+    typeof content !== "object" ||
+    content === null ||
+    Array.isArray(content) ||
+    Object.keys(content).length === 0
+  ) {
+    return {
+      allowances: [],
+      errors: [
+        `${file}: expected a non-empty object mapping each DDL form to its reason`,
+      ],
+    };
+  }
+  const allowances: MigrationLockAllowance[] = [];
+  const errors: string[] = [];
+  for (const [form, reason] of Object.entries(content)) {
+    if (!isDdlForm(form)) {
+      errors.push(`${file}: ${form} is not a census DDL form`);
+    } else if (
+      typeof reason !== "string" ||
+      reason.trim().length < MINIMUM_ALLOWANCE_REASON_LENGTH
+    ) {
+      errors.push(
+        `${file}: ${form} needs a reason of at least ${String(MINIMUM_ALLOWANCE_REASON_LENGTH)} characters`,
+      );
+    } else {
+      allowances.push({ migration, form, reason });
+    }
+  }
+  return { allowances, errors };
+};
 export type LockBaselineEntry = {
   migration: string;
   form: DdlForm;
@@ -1089,7 +798,8 @@ type CheckMigrationLocksOptions = {
 export const checkMigrationLocks = ({
   sources,
   baseline,
-  allowances = MIGRATION_LOCK_ALLOWANCES,
+  // No allowances is the strict default: every new strong lock is reported.
+  allowances = [],
 }: CheckMigrationLocksOptions) => {
   const errors: string[] = [];
   const counts = new Map<LockMode, number>();
@@ -1131,13 +841,13 @@ export const checkMigrationLocks = ({
           (entry) =>
             entry.migration === migration &&
             entry.form === form &&
-            entry.reason.trim().length >= 12,
+            entry.reason.trim().length >= MINIMUM_ALLOWANCE_REASON_LENGTH,
         )
       ) {
         continue;
       }
       errors.push(
-        `${file}:${line}: ${lockMode} ${form} needs a reviewed safety acknowledgement or typed lock allowance with a reason; add { migration, form, reason } to MIGRATION_LOCK_ALLOWANCES in scripts/migration-lock-census.ts`,
+        `${file}:${line}: ${lockMode} ${form} needs a reviewed safety acknowledgement or typed lock allowance with a reason; add "${form}": "<reason>" to ${migrationLockAllowancePath(migration)}`,
       );
     }
   }

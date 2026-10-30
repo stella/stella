@@ -712,6 +712,13 @@ const recoverRefusedFolioSnapshot = async ({
             folioCollabRooms.yjsSnapshotRevision,
             snapshotPointer.yjsSnapshotRevision,
           ),
+          sql`EXISTS (
+            SELECT 1
+            FROM ${workspaces}
+            WHERE ${workspaces.id} = ${value.workspaceId}
+              AND ${workspaces.organizationId} = ${value.organizationId}
+              AND ${workspaces.status} = 'active'
+          )`,
         ) ?? panic("Snapshot recovery requires a room predicate"),
       options: {
         from: ["empty", "claimed", "seeded"],
@@ -848,6 +855,14 @@ export const loadFolioCollabSnapshot = async (
         })
         .from(folioCollabRooms)
         .innerJoin(
+          workspaces,
+          and(
+            eq(workspaces.id, folioCollabRooms.workspaceId),
+            eq(workspaces.organizationId, value.organizationId),
+            eq(workspaces.status, "active"),
+          ),
+        )
+        .innerJoin(
           entityVersions,
           and(
             eq(entityVersions.id, folioCollabRooms.baseVersionId),
@@ -950,9 +965,7 @@ export const loadFolioCollabSnapshot = async (
           snapshot: {
             generation: room.generation,
             loadOutcome: loaded.outcome,
-            snapshotBase64: Buffer.from(loaded.snapshotBytes).toString(
-              "base64",
-            ),
+            snapshotBase64: Buffer.from(loaded.snapshotBytes).toBase64(),
             snapshotRevision: room.yjsSnapshotRevision,
           },
           rawSnapshotSha256Hex: hashSha256Hex(snapshotBytes),

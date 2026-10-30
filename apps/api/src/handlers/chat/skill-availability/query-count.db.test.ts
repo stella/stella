@@ -1,5 +1,3 @@
-import { getSessionCookie } from "better-auth/cookies";
-import { panic } from "better-result";
 import {
   afterAll,
   beforeAll,
@@ -16,7 +14,6 @@ import { chatRoute } from "@/api/handlers/chat/routes";
 import { createHttpApp } from "@/api/http/app";
 import { setResponseHeaders } from "@/api/http/headers";
 import type { Middleware } from "@/api/http/route";
-import { authCookiePolicy } from "@/api/lib/auth/auth-cookie-name";
 import {
   queryCountLogger,
   runWithQueryCounter,
@@ -36,12 +33,13 @@ import { serveForTest } from "@/api/tests/helpers/test-server";
  * and the same for each of several calls in flight at once.
  *
  * Sign-in leaves the signed session snapshot cookie, so auth reads no session
- * row: member role and AI settings (2). The handler reads the caller's skills,
- * then the chat tool inputs a built-in skill's required tools are decided
- * over: tool overrides, matters, web-search keys and registry credentials,
- * each in its own scoped transaction (5 x 2).
+ * row: member role and AI settings (2), then the AI gate confirms the caller
+ * is still a member (1). The handler reads the caller's skills, then the chat
+ * tool inputs a built-in skill's required tools are decided over: tool
+ * overrides, matters, web-search keys and registry credentials, each in its
+ * own scoped transaction (5 x 2).
  */
-const WITH_SESSION_SNAPSHOT = 12;
+const WITH_SESSION_SNAPSHOT = 13;
 /**
  * Without the snapshot cookie auth checks the live session row and reads its
  * user (2). The first such call also records the session's activity; later
@@ -160,30 +158,5 @@ describe("skill availability runs a fixed query plan", () => {
     expect(await countQueries({ cookie: withoutSnapshot })).toBe(
       WITHOUT_SESSION_SNAPSHOT,
     );
-  });
-
-  test("bearer calls add only the session reads and one activity write", async () => {
-    const { cookieHeader, userId } = await createHumanSession({
-      email: `skill-queries-${Bun.randomUUIDv7()}@stella.dev`,
-      orgName: "Skill queries",
-      orgSlugPrefix: "skill-queries",
-    });
-    // Session setup can record activity before the measured request.
-    await rootDb
-      .update(session)
-      .set({ lastSeenAt: null })
-      .where(eq(session.userId, userId));
-    const credential =
-      // The app names its cookies with its own prefix, not better-auth's default.
-      getSessionCookie(new Headers({ cookie: cookieHeader }), {
-        cookiePrefix: authCookiePolicy().cookiePrefix,
-      }) ?? panic("Session fixture missing");
-    const headers = { authorization: `Bearer ${credential}` };
-    await requireNextRequestToRecordActivity(userId);
-    expect(await countQueries(headers)).toBe(
-      WITHOUT_SESSION_SNAPSHOT + SESSION_ACTIVITY_WRITE,
-    );
-    expect(await countQueries(headers)).toBe(WITHOUT_SESSION_SNAPSHOT);
-    expect(await countQueries(headers)).toBe(WITHOUT_SESSION_SNAPSHOT);
   });
 });

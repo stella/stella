@@ -25,7 +25,7 @@ import { rehypeScopeAnswerIds } from "@/components/chat/rehype-scope-answer-ids"
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import {
-  useLocale as useFormattingLocale,
+  useFormattingLocale,
   useStepsMarkerStyle,
 } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";

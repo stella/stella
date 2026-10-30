@@ -5,6 +5,7 @@ import mcpOAuthCallback, {
   buildCallbackRedirectUrl,
   createMcpOAuthCallbackHandler,
 } from "@/api/handlers/mcp-connectors/oauth-callback";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -100,7 +101,7 @@ const callbackContext = (
 ): CallbackCtx =>
   asTestRaw<CallbackCtx>({
     request: new Request("https://api.example.com/v1/mcp/oauth/callback"),
-    route: "/v1/mcp/oauth/callback",
+    route: "/v1/mcp/oauth/callback" satisfies ApiRoutePath,
     query: { code: "auth-code", state: "state-token" },
     safeDb: asTestRaw<CallbackCtx["safeDb"]>(
       async (operation: (tx: unknown) => unknown) => {
@@ -361,7 +362,7 @@ const failingLookupContext = (
   request: Request = new Request("https://api.test/mcp/oauth/callback"),
 ): CallbackCtx =>
   asTestRaw<CallbackCtx>({
-    route: "/v1/mcp/oauth/callback",
+    route: "/v1/mcp/oauth/callback" satisfies ApiRoutePath,
     query: { code: "auth-code", state: "state-token" },
     request,
     safeDb: asTestRaw<CallbackCtx["safeDb"]>(async () => Result.err(error)),

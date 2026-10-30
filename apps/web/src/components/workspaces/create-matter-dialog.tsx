@@ -26,7 +26,10 @@ import { Input } from "@stll/ui/input";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
-import { ContactPicker } from "@/components/contact-picker";
+import {
+  CONTACT_PICKER_SUGGESTIONS,
+  ContactPicker,
+} from "@/components/contact-picker";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { getPossibleDuplicateMatters } from "@/components/workspaces/create-matter-dialog.logic";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
@@ -36,9 +39,8 @@ import { contactsKeys } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { toSafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
-import { createUuid } from "@/lib/uuid";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import type { MatterDraftClient } from "@/lib/workspaces/create-matter-store";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { useCreateWorkspace } from "@/lib/workspaces/mutations";
@@ -139,7 +141,7 @@ const CreateMatterDialogBody = ({
   const workspacesDataQuery = useChromeQuery({
     ...workspacesOptions(currentUser.activeOrganizationId),
   });
-  const workspacesDataView = useQueryView(workspacesDataQuery);
+  const workspacesDataView = queryView(workspacesDataQuery);
   useQueryViewError(workspacesDataView, "CreateMatterDialogBody:query");
   const workspacesData =
     workspacesDataView.type === "items" ? workspacesDataView.items : undefined;
@@ -149,12 +151,9 @@ const CreateMatterDialogBody = ({
   };
 
   const handleCreateClient = async (displayName: string, type: ContactType) => {
-    const id = toSafeId<"contact">(createUuid());
-
     const result = await Result.tryPromise(
       async () =>
         await createContact.mutateAsync({
-          id,
           type,
           displayName,
         }),
@@ -176,7 +175,7 @@ const CreateMatterDialogBody = ({
     });
 
     setSelectedClient({
-      id,
+      id: result.value.id,
       displayName,
       type,
     });
@@ -325,6 +324,7 @@ const CreateMatterDialogBody = ({
                 ? t("workspaces.parties.changeClient")
                 : t("workspaces.parties.noClientOptional")
             }
+            suggestions={CONTACT_PICKER_SUGGESTIONS.recentClients}
           />
           {selectedClient === null ? (
             <p className="text-muted-foreground text-xs">

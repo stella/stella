@@ -73,7 +73,7 @@
     ]
   },
   "apps/web/src/components/inspector/inspector-panel.tsx::InspectorPanel": {
-    "memos": 8,
+    "memos": 7,
     "reasons": [
       "Cannot access refs during render",
       "Existing memoization could not be preserved"

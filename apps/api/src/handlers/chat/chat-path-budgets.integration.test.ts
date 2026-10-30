@@ -14,6 +14,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 
 import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
 import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
+import { waitForExternalState } from "@stll/property-testing/external-state";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
@@ -29,6 +30,7 @@ import getMessages from "@/api/handlers/chat/messages/list";
 import getOlderMessages from "@/api/handlers/chat/older-messages/list";
 import { joinChatTurn, probeChatTurn } from "@/api/handlers/chat/turns/resume";
 import type { ChatPart } from "@/api/handlers/chat/types";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -297,15 +299,6 @@ const recorded = async <T>(operation: () => Promise<T>) => {
   return { log, value };
 };
 
-/** Resolves once `log` has stopped growing. */
-const quiescent = async (log: StatementLog) => {
-  let seen = -1;
-  while (seen !== log.statements.length) {
-    seen = log.statements.length;
-    await Bun.sleep(50);
-  }
-};
-
 const isScopeStart = (statement: string) =>
   /^\s*select\s+set_config\('role'/iu.test(statement);
 const isRunLogAppend = (statement: string) =>
@@ -389,7 +382,7 @@ const measureSend = async ({
   }
   const body = await value.text();
   expect(await harness.awaitSettledTurns(threadId)).toEqual([]);
-  await quiescent(log);
+  await harness.awaitRunsSettled(threadId);
   return { bytes: byteLength(body), ...sendPhasesOf(log.statements) };
 };
 
@@ -414,7 +407,7 @@ const loadThreadPage = async (threadId: SafeId<"chatThread">) => {
       await getMessages.handler(
         asTestRaw<Parameters<typeof getMessages.handler>[0]>({
           ...readerContext(threadId),
-          route: "/v1/chat/threads/:threadId/messages",
+          route: "/v1/chat/threads/:threadId/messages" satisfies ApiRoutePath,
           params: { threadId },
           query: {},
         }),
@@ -440,7 +433,8 @@ const loadOlderPage = async (
       await getOlderMessages.handler(
         asTestRaw<Parameters<typeof getOlderMessages.handler>[0]>({
           ...readerContext(threadId),
-          route: "/v1/chat/threads/:threadId/messages/older",
+          route:
+            "/v1/chat/threads/:threadId/messages/older" satisfies ApiRoutePath,
           params: { threadId },
           query: { before },
         }),
@@ -536,22 +530,24 @@ const startPausedTurn = async ({
   const drained = response.text();
   // The tool call's arguments are the last thing the run stores before it
   // pauses.
-  for (;;) {
-    const [stored] = await testDb
-      .select({ seq: chatRunLogEntries.seq })
-      .from(chatRunLogEntries)
-      .where(
-        and(
-          eq(chatRunLogEntries.runId, runId),
-          sql`${chatRunLogEntries.chunk}->>'type' = ${EventType.TOOL_CALL_ARGS}`,
-        ),
-      )
-      .limit(1);
-    if (stored !== undefined) {
-      break;
-    }
-    await Bun.sleep(20);
-  }
+  await waitForExternalState({
+    description: "the run stores the tool call's arguments",
+    intervalMs: 20,
+    timeoutMs: 10_000,
+    read: async () =>
+      (
+        await testDb
+          .select({ seq: chatRunLogEntries.seq })
+          .from(chatRunLogEntries)
+          .where(
+            and(
+              eq(chatRunLogEntries.runId, runId),
+              sql`${chatRunLogEntries.chunk}->>'type' = ${EventType.TOOL_CALL_ARGS}`,
+            ),
+          )
+          .limit(1)
+      ).at(0),
+  });
   const [log] = await testDb
     .select({ nextSeq: chatRunLogs.nextSeq })
     .from(chatRunLogs)
@@ -578,7 +574,8 @@ const turnContext = (
     ...readerContext(threadId),
     params: { threadId, turnId },
     query,
-    route: "/v1/chat/threads/:threadId/turns/:turnId/join",
+    route:
+      "/v1/chat/threads/:threadId/turns/:turnId/join" satisfies ApiRoutePath,
   });
 
 const measureRejoin = async ({

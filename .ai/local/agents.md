@@ -25,6 +25,11 @@ rules.
 
 ## Implementation Quality
 
+Every new guard or lint ships with an autofix or codemod registered in the PR
+Autofix job, or enforces only lines changed against the merge base for its first
+week. Register the dated scope in `scripts/guard-rollout-policy.ts` so the existing
+dated-waiver inventory and healing checks enforce its seven-day deadline.
+
 - Comments explain a non-obvious invariant, trade-off, safety constraint, or why
   the code exists. Do not narrate the next statement, add empty documentation
   blocks, or label closing braces.
@@ -75,12 +80,12 @@ rules.
 tasks. Direct project checks use
 `bun check --no-pretty --all --project=<tsconfig path>`; add `--build` for
 solution configs with project references. Manual checks dispatch offers
-`typecheck-parity` to compare TypeScript and Bun diagnostics on repository code
-and seeded cases, and `typecheck-probe` to verify seeded-error rejection.
-These optional proofs run only on explicit dispatch. Every PR retains Bun checks.
+`typecheck-probe` to verify seeded-error rejection; it runs only on explicit
+dispatch. Every PR retains Bun checks.
 Editors keep the TypeScript language service because Bun provides no LSP.
-Keep TypeScript and its compatibility alias for compiler-API tools and declaration
-generation.
+`typescript6` stays only for the compiler-API tools that still import it, and
+`apps/landing` keeps `typescript` because `astro check` needs it. Package
+declarations come from Oxc (`dts: { generator: "oxc" }`) or tsrs.
 
 To see a change working, `bun run agent:up` starts this checkout's own
 seeded, signed-in stack; `agent:cli` and `agent:drive` exercise it and
@@ -123,8 +128,7 @@ and on a declared input no test reads any more.
 
 Main has a merge queue: GitHub builds main plus the pull request, runs CI on that
 commit, and merges only if it passes. Add ready pull requests directly to the
-merge queue. `ci-result` remains the required aggregate check, and
-`STELLA_MERGE_HOLD` can hold non-release queue entries during a release.
+merge queue. `ci-result` remains the required aggregate check.
 
 ## Documentation Access
 

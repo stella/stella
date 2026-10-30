@@ -13,6 +13,7 @@ import type {
   ReaderAnswerSpan,
   ReaderAnswerSpans,
 } from "@stll/api-contract/reader-answers";
+import { readerSelectionMatches } from "@stll/legal-ast/case-law-reader";
 
 import type { Transaction } from "@/api/db/root";
 import { abortableTx, abortTransaction } from "@/api/db/safe-db";
@@ -22,6 +23,9 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { readReaderAnswerDecision } from "@/api/lib/case-law/reader-answer-corpus";
 import type { ReaderAnswerDecision } from "@/api/lib/case-law/reader-answer-corpus";
+import { decisionReferencesIn } from "@/api/lib/case-law/withdrawn-copy-projection";
+import type { WithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-projection";
+import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
@@ -126,39 +130,24 @@ true satisfies MissingAnchorColumn extends never ? true : never;
 true satisfies UnexpectedAnchorColumn extends never ? true : never;
 
 /**
- * The spans as a selection when each matches its paragraph's text and the
- * paragraphs follow the decision's reading order without repeats; otherwise
- * undefined. The decision's own text bounds the selection, so no length cap.
+ * The spans as a selection when the reader offers them; otherwise undefined.
+ * The reader runs the same check before sending, so both refuse alike.
  */
 const selectionIn = (
   paragraphs: ReaderAnswerDecision["paragraphs"],
   spans: readonly ReaderAnswerSpan[],
 ): ReaderAnswerSpans | undefined => {
   const [first, ...rest] = spans;
-  if (first === undefined) {
-    return undefined;
-  }
-  const indexById = new Map(
-    paragraphs.map(({ paragraphId }, index) => [paragraphId, index] as const),
-  );
-  let previous = -1;
-  for (const span of spans) {
-    const index = indexById.get(span.paragraphId);
-    const text = index === undefined ? undefined : paragraphs[index]?.text;
-    if (
-      index === undefined ||
-      text === undefined ||
-      index <= previous ||
-      span.startOffset < 0 ||
-      span.endOffset > text.length ||
-      span.endOffset <= span.startOffset ||
-      text.slice(span.startOffset, span.endOffset) !== span.quote
-    ) {
-      return undefined;
-    }
-    previous = index;
-  }
-  return [first, ...rest];
+  return first !== undefined &&
+    readerSelectionMatches(
+      paragraphs.map(({ paragraphId, text }) => ({
+        anchorId: paragraphId,
+        text,
+      })),
+      spans.map((span) => ({ ...span, anchorId: span.paragraphId })),
+    )
+    ? [first, ...rest]
+    : undefined;
 };
 
 type RegenerateLastReaderAnswerOptions = {
@@ -236,6 +225,7 @@ const regenerateLastReaderAnswer = async ({
 const readReaderAnswerContext = async ({
   command,
   readDecision = readReaderAnswerDecision,
+  readCopies = readWithdrawnCopyProjection,
   ...scope
 }: PrepareReaderAnswerOptions) =>
   await Result.gen(async function* () {
@@ -278,6 +268,7 @@ const readReaderAnswerContext = async ({
           (cause) =>
             new HandlerError({
               status: 503,
+              code: "internal_error",
               message: "Decision reader is unavailable",
               cause,
             }),
@@ -303,6 +294,7 @@ const readReaderAnswerContext = async ({
           status: 400,
           code: READER_ANSWER_ANCHOR_MISMATCH_CODE,
           message: "Selection does not match the decision paragraph",
+          hint: "Select the text again from the decision as it is shown now.",
         }),
       );
     }
@@ -310,7 +302,32 @@ const readReaderAnswerContext = async ({
       command.type === "create"
         ? createSafeId<"legalReaderAnswer">()
         : command.answerId;
-    return Result.ok({ decision, anchor, answerId });
+    const history =
+      command.type === "create"
+        ? []
+        : yield* Result.await(
+            abortableTx(
+              scope.safeDb,
+              async (tx) => await readReaderAnswerThread(tx, answerId),
+            ),
+          );
+    const projection = yield* Result.await(
+      Result.tryPromise(
+        async () =>
+          await readCopies({ values: history, decisionIds: [decisionId] }),
+      ),
+    );
+    const marker = projection.marker(null, decisionId);
+    if (marker !== null) {
+      return Result.err(new HandlerError({ status: 404, message: marker }));
+    }
+    return Result.ok({
+      decision,
+      anchor,
+      answerId,
+      projection,
+      references: decisionReferencesIn({ decisionId, history }),
+    });
   });
 
 /** A thread past the message cap is refused rather than read truncated. */
@@ -337,11 +354,39 @@ const readReaderAnswerThread = async (
   return thread.rows;
 };
 
+type ProjectCheckedReaderHistoryOptions = {
+  messages: (typeof legalReaderAnswerMessages.$inferSelect)[];
+  decisionId: SafeId<"caseLawDecision">;
+  projection: WithdrawnCopyProjection;
+  references: ReadonlySet<string>;
+};
+const projectCheckedReaderHistory = ({
+  messages,
+  decisionId,
+  projection,
+  references,
+}: ProjectCheckedReaderHistoryOptions) => {
+  if ([...decisionReferencesIn(messages)].some((id) => !references.has(id))) {
+    return abortTransaction(
+      new HandlerError({
+        status: 409,
+        message: "Reader answer changed; reload and try again",
+      }),
+    );
+  }
+  return messages.map((row) => projection.answerMessage(row, decisionId));
+};
+
 /** Validation and corpus I/O finish before the locked turn transaction. */
 export const prepareReaderAnswer = async (
   options: PrepareReaderAnswerOptions,
 ) => {
-  const { command, readDecision: _readDecision, ...scope } = options;
+  const {
+    command,
+    readDecision: _readDecision,
+    readCopies: _readCopies,
+    ...scope
+  } = options;
   const context = await readReaderAnswerContext(options);
   if (Result.isError(context)) {
     return Result.err(context.error);
@@ -392,7 +437,12 @@ export const prepareReaderAnswer = async (
         }),
       );
     }
-    const messages = await readReaderAnswerThread(tx, answerId);
+    const messages = projectCheckedReaderHistory({
+      messages: await readReaderAnswerThread(tx, answerId),
+      decisionId,
+      projection: context.value.projection,
+      references: context.value.references,
+    });
     const streaming = messages.find(({ status }) => status === "streaming");
     const now = new Date();
     if (

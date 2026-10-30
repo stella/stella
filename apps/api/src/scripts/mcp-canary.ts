@@ -1130,7 +1130,10 @@ export const runOAuthJourneys = async (
           }
           const url = new URL(authorizationEndpoint);
           const challenge = canaryPkceChallenge(
-            randomBytes(32).toString("base64url"),
+            randomBytes(32).toBase64({
+              alphabet: "base64url",
+              omitPadding: true,
+            }),
           );
           url.search = new URLSearchParams({
             client_id: clientId,
@@ -1320,7 +1323,7 @@ export const runDesktopProbe = async (
         };
         const redeemHandoff = async (key?: string) => {
           const correlationId = Bun.randomUUIDv7();
-          const verifier = randomBytes(32).toString("hex");
+          const verifier = randomBytes(32).toHex();
           const grant = await fetcher(
             new URL("/v1/desktop-registry/grant", baseUrl),
             {
@@ -1928,6 +1931,11 @@ const signInReviewAccount = async ({
       body: JSON.stringify({ email, password }),
     },
   );
+  // Reviewers have only the password: a second step (an emailed code, a
+  // verification or two-factor challenge) would strand them at sign-in.
+  if (v.is(v.object({ twoFactorRedirect: v.literal(true) }), signedIn)) {
+    reject("expected the password alone to sign in, without a second step");
+  }
   if (
     !v.is(
       v.object({ user: v.object({ email: v.literal(email) }) }),
@@ -2038,8 +2046,14 @@ const authorizeReviewOAuth = async (
     cliClientMetadataUrl(baseUrl) ??
     (await registerReviewClient(context, metadata));
   state.step = "authorize";
-  const verifier = randomBytes(32).toString("base64url");
-  const stateValue = randomBytes(32).toString("base64url");
+  const verifier = randomBytes(32).toBase64({
+    alphabet: "base64url",
+    omitPadding: true,
+  });
+  const stateValue = randomBytes(32).toBase64({
+    alphabet: "base64url",
+    omitPadding: true,
+  });
   state.callback = createReviewCallback(stateValue);
   const authorize = new URL(metadata.authorization_endpoint);
   authorize.search = new URLSearchParams({

@@ -91,6 +91,7 @@ test(
         await Bun.file(path.join(root, file)).text(),
       );
       const jobs = record(parsed) ? parsed["jobs"] : undefined;
+      const workflowEnv = record(parsed) ? parsed["env"] : undefined;
       expect(record(jobs), file).toBe(true);
       if (!record(jobs)) {
         continue;
@@ -162,6 +163,14 @@ test(
         expect(preserveIndex, label).toBeGreaterThan(checkoutIndex);
         for (const index of calls) {
           expect(preserveIndex, label).toBeLessThan(index);
+          // The tooling checkout keeps no credentials: gh reads GH_TOKEN only.
+          const scopes = [steps[index]?.["env"], env, workflowEnv];
+          expect(
+            scopes.some(
+              (scope) => record(scope) && typeof scope["GH_TOKEN"] === "string",
+            ),
+            `${label}: step ${index} has no GH_TOKEN`,
+          ).toBe(true);
         }
       }
     }

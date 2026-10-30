@@ -28,6 +28,7 @@ import updateLine from "@/api/handlers/invoices/lines/update";
 import listInvoices from "@/api/handlers/invoices/list";
 import transitionInvoice from "@/api/handlers/invoices/transition";
 import updateInvoice from "@/api/handlers/invoices/update";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { SafeHandlerLogContext } from "@/api/lib/api-handlers";
 import type { AuditEvent } from "@/api/lib/audit-log";
@@ -82,6 +83,37 @@ afterAll(async () => {
   await releaseRlsFixture();
 });
 
+const invoiceRouteForHandler = (handler: unknown): ApiRoutePath => {
+  if (handler === createInvoice.handler) {
+    return "/v1/invoices/:workspaceId";
+  }
+  if (handler === deleteInvoice.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId";
+  }
+  if (handler === addEntries.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId/entries";
+  }
+  if (handler === createLine.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId/lines";
+  }
+  if (handler === getInvoice.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId";
+  }
+  if (handler === listInvoices.handler) {
+    return "/v1/invoices/:workspaceId";
+  }
+  if (handler === transitionInvoice.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId/transition";
+  }
+  if (handler === updateInvoice.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId";
+  }
+  if (handler === updateLine.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId/lines/:lineId";
+  }
+  return panic("Invoice test context received an unregistered handler");
+};
+
 const contextFor = <TContext extends SafeHandlerLogContext>(
   _handler: (context: TContext) => unknown,
   options: {
@@ -112,7 +144,7 @@ const contextFor = <TContext extends SafeHandlerLogContext>(
     promptCachingEnabled: false,
     recordAuditEvent,
     request: new Request(`https://example.test/workspaces/${ids.wsA1}`),
-    route: "/test/invoice-types",
+    route: invoiceRouteForHandler(_handler),
     safeDb: createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
     scopedDb: createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
     session: { activeOrganizationId: ids.orgA },

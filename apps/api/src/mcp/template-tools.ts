@@ -21,6 +21,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { authorizeHandlerUsage } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
+import { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   CONFIGURE_TEMPLATE_FIELDS_PROJECTION,
@@ -68,7 +69,6 @@ import {
   brandPersistedEntityId,
   brandPersistedTemplateId,
 } from "@/api/lib/safe-id-boundaries";
-import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 import { DOCX_EXT_RE, sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
 import type { FieldConfigurationIssue } from "@/api/lib/templates/configure-field-input";
@@ -1576,7 +1576,7 @@ const handleFillTemplateTool: McpToolHandler<
           ? filled.text.slice(0, TEMPLATE_FILL_TEXT_MAX_CHARS)
           : filled.text,
         truncated,
-        docxBase64: Buffer.from(filled.file.bytes).toString("base64"),
+        docxBase64: Buffer.from(filled.file.bytes).toBase64(),
         unmatchedPlaceholders: filled.unmatchedPlaceholders,
         unusedValues: filled.unusedValues,
         clauseWarnings: filled.clauseWarnings,

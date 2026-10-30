@@ -16,6 +16,7 @@ import {
   timeTimers,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { HttpStatusResponse } from "@/api/http/status";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -100,7 +101,7 @@ const runBatch = async (
       request: new Request("https://example.test/time-entries/batch", {
         method: "PATCH",
       }),
-      route: "/time-entries/batch",
+      route: "/v1/time-entries/:workspaceId/batch" satisfies ApiRoutePath,
       body,
       memberRole: sessionMemberRole("owner"),
       session: { activeOrganizationId: ids.orgA },
@@ -160,6 +161,29 @@ test("approval records its actor and time, clears return provenance, and revert 
   expect(events.at(1)?.changes).toHaveProperty("status", {
     old: BILLING_STATUS.APPROVED,
     new: BILLING_STATUS.DRAFT,
+  });
+});
+
+test("approval audits each entry's own previous status: submitted, or the caller's draft", async () => {
+  const submittedId = await createEntry();
+  await db
+    .update(timeEntries)
+    .set({ status: BILLING_STATUS.SUBMITTED })
+    .where(eq(timeEntries.id, submittedId));
+  const draftId = await createEntry();
+  const events: AuditEvent[] = [];
+  expect(
+    await runBatch({ ids: [submittedId, draftId], action: "approve" }, events),
+  ).toEqual({ updated: 2 });
+  const statusChange = (id: string) =>
+    events.find((event) => event.resourceId === id)?.changes;
+  expect(statusChange(submittedId)).toHaveProperty("status", {
+    old: BILLING_STATUS.SUBMITTED,
+    new: BILLING_STATUS.APPROVED,
+  });
+  expect(statusChange(draftId)).toHaveProperty("status", {
+    old: BILLING_STATUS.DRAFT,
+    new: BILLING_STATUS.APPROVED,
   });
 });
 

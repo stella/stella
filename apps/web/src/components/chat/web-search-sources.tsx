@@ -1,5 +1,8 @@
+import { useState } from "react";
+
 import { useTranslations } from "use-intl";
 
+import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronRightIcon, GlobeIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
@@ -33,12 +36,17 @@ type WebSearchSourcesProps = {
  */
 export const WebSearchSources = ({ parts }: WebSearchSourcesProps) => {
   const t = useTranslations();
+  const [open, setOpen] = useState(false);
   const answers = collectAnswers(parts);
   if (answers.length === 0) {
     return null;
   }
   return (
-    <details className="bg-muted/30 group/web-summary mt-3 rounded-md border">
+    <details
+      className="bg-muted/30 group/web-summary mt-3 rounded-md border"
+      onToggle={(event) => setOpen(event.currentTarget.open)}
+      open={open}
+    >
       <summary
         className={cn(
           "flex cursor-pointer list-none items-center gap-1.5",
@@ -47,11 +55,13 @@ export const WebSearchSources = ({ parts }: WebSearchSourcesProps) => {
           "hover:bg-muted/40 rounded-md",
         )}
       >
-        <ChevronRightIcon
+        <DirectionalIcon
           className={cn(
             "text-muted-foreground size-3.5 shrink-0 transition-transform",
             "group-open/web-summary:rotate-90",
           )}
+          flip={!open}
+          icon={ChevronRightIcon}
         />
         <GlobeIcon className="text-muted-foreground size-3.5 shrink-0" />
         <span className="text-muted-foreground text-2xs font-medium tracking-wide uppercase">

@@ -20,9 +20,10 @@ describe("templates list cursor", () => {
   });
 
   test("rejects a decodable cursor that does not carry a uuid", () => {
-    const cursor = Buffer.from(JSON.stringify(["not-a-uuid"])).toString(
-      "base64url",
-    );
+    const cursor = Buffer.from(JSON.stringify(["not-a-uuid"])).toBase64({
+      alphabet: "base64url",
+      omitPadding: true,
+    });
 
     expect(decodeTemplateListCursor(cursor)).toBeNull();
   });

@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { apiPipeline } from "@/api/api-pipeline";
+import { env } from "@/api/env";
 import { createHttpApp } from "@/api/http/app";
 import type { HttpApp } from "@/api/http/app";
 import { cors } from "@/api/http/cors";
@@ -13,8 +15,10 @@ import type {
   RouteRequest,
 } from "@/api/http/route";
 import { resolveClientAddress } from "@/api/lib/client-ip";
+import { sendServedRequest } from "@/api/tests/helpers/served-request";
 import { serveForTest } from "@/api/tests/helpers/test-server";
 import type { TestServer } from "@/api/tests/helpers/test-server";
+import { createTestState } from "@/api/tests/helpers/test-state";
 
 import {
   ActionSizeError,
@@ -25,6 +29,8 @@ import {
   isTenantAction,
   tenantActionAdmission,
 } from "./tenant-action-boundary";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const limits = { requestBytes: 8, responseBytes: 512, pageSize: 3 };
 const bytes = new TextEncoder();
@@ -131,26 +137,26 @@ describe("tenant HTTP action boundary", () => {
           return { unchanged: "😀".repeat(200) };
         },
       );
-      const server = serve(
-        admissionApp(
-          { "/action": { POST: route } },
-          {
-            enabled: mode !== "disabled",
-            policy: () => {
-              policyReads += 1;
-              return Result.ok(limits);
-            },
+      const app = admissionApp(
+        { "/action": { POST: route } },
+        {
+          enabled: mode !== "disabled",
+          policy: () => {
+            policyReads += 1;
+            return Result.ok(limits);
           },
-        ),
+        },
       );
 
-      const response = await server.fetch("http://localhost/action", {
-        method: "POST",
+      const response = await sendServedRequest(app, {
+        path: "/action",
         body: "oversized payload",
       });
 
       expect(response.status).toBe(200);
-      expect(await response.json()).toEqual({ unchanged: "😀".repeat(200) });
+      expect(JSON.parse(response.body)).toEqual({
+        unchanged: "😀".repeat(200),
+      });
       expect(policyReads).toBe(0);
       expect(seen).toEqual([{ policy: undefined, body: "oversized payload" }]);
     }
@@ -241,25 +247,20 @@ describe("tenant HTTP action boundary", () => {
 
   test("preserves exact UTF-8 request bytes and the tenant policy through the route", async () => {
     const body = "😀😀";
-    const server = serve(
-      admissionApp({
-        "/action": {
-          POST: definition("member", async ({ ctx }) => ({
-            contentLength: ctx.request.headers.get("content-length"),
-            body: await ctx.request.text(),
-            policy: getTenantActionSizePolicy() === limits,
-          })),
-        },
-      }),
-    );
-
-    const response = await server.fetch("http://localhost/action", {
-      method: "POST",
-      body,
+    const app = admissionApp({
+      "/action": {
+        POST: definition("member", async ({ ctx }) => ({
+          contentLength: ctx.request.headers.get("content-length"),
+          body: await ctx.request.text(),
+          policy: getTenantActionSizePolicy() === limits,
+        })),
+      },
     });
 
+    const response = await sendServedRequest(app, { path: "/action", body });
+
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({
+    expect(JSON.parse(response.body)).toEqual({
       contentLength: "8",
       body,
       policy: true,
@@ -267,30 +268,30 @@ describe("tenant HTTP action boundary", () => {
     expect(getTenantActionSizePolicy()).toBeUndefined();
   });
 
-  test("retains the native peer address while metering accepted bodies", async () => {
-    const app = admissionApp({
-      "/": {
-        POST: definition("member", async ({ ctx }) => ({
-          address: resolveClientAddress(ctx.request, ctx.server)?.address,
-          body: await ctx.request.text(),
-        })),
-      },
+  test("resolves the sealed peer address behind the production pipeline after re-framing the body", async () => {
+    testState.setConfig("FEATURE_ACTION_ADMISSION", true);
+    testState.setConfig("ACTION_REQUEST_MAX_BYTES", limits.requestBytes);
+    testState.setConfig("ACTION_RESPONSE_MAX_BYTES", limits.responseBytes);
+    testState.setConfig("ACTION_PAGE_SIZE_MAX", limits.pageSize);
+    const app = createHttpApp({
+      middleware: apiPipeline,
+      routes: routes({
+        "/": {
+          POST: definition("member", async ({ ctx }) => ({
+            address: resolveClientAddress(ctx.request, ctx.server)?.address,
+            body: await ctx.request.text(),
+            contentLength: ctx.request.headers.get("content-length"),
+          })),
+        },
+      }),
     });
-    // Bound to IPv4 loopback, so the peer is not reported as a mapped address.
-    const server = Bun.serve({
-      hostname: "127.0.0.1",
-      port: 0,
-      ...app.serveOptions,
+    // Served on IPv4 loopback, so the peer is not reported as a mapped address.
+    const response = await sendServedRequest(app, { path: "/", body: "é" });
+    expect(JSON.parse(response.body)).toEqual({
+      address: "127.0.0.1",
+      body: "é",
+      contentLength: "2",
     });
-    try {
-      const response = await fetch(server.url, { method: "POST", body: "é" });
-      expect(await response.json()).toEqual({
-        address: "127.0.0.1",
-        body: "é",
-      });
-    } finally {
-      await server.stop(true);
-    }
   });
 
   test("retains successful mutation statuses, headers and whole bodies above the response ceiling", async () => {

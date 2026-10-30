@@ -36,6 +36,19 @@ describe("walkInlines", () => {
     ]);
   });
 
+  test("reads <sup> as a superscript only when the publisher opts in", () => {
+    const html = "art. 398<sup>9</sup> k.p.c.";
+
+    expect(walk(html, { superscripts: true })).toEqual([
+      { type: "text", text: "art. 398" },
+      { type: "superscript", children: [{ type: "text", text: "9" }] },
+      { type: "text", text: " k.p.c." },
+    ]);
+    const unwrapped = walk(html);
+    expect(unwrapped.every(({ type }) => type === "text")).toBe(true);
+    expect(inlinesToPlainText(unwrapped)).toBe("art. 3989 k.p.c.");
+  });
+
   test("merges adjacent text separated by a skipped/empty node", () => {
     expect(walk("a<span></span>b")).toEqual([{ type: "text", text: "ab" }]);
   });

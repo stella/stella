@@ -1,6 +1,9 @@
+import * as v from "valibot";
+
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+import { contactBirthDateSchema } from "@stll/api-contract/contact-date";
 import { ARABIC_DIGIT_FOLDS, normalizeUnicode } from "@stll/text-normalize";
-import { containsSearchMatchKey } from "@stll/text-normalize/search-match-key";
+import { filterBySearchQuery } from "@stll/text-normalize/search-query-matcher";
 
 import type { PersonDateOfBirth } from "@/lib/contacts/mutations";
 
@@ -42,7 +45,10 @@ export const parseBirthDateDraft = (
     return null;
   }
   if (value.precision === "year") {
-    return { precision: "year", year };
+    const candidate = { precision: "year" as const, year };
+    return v.safeParse(contactBirthDateSchema, candidate).success
+      ? candidate
+      : null;
   }
   if (!/^\d{1,2}$/u.test(value.month)) {
     return null;
@@ -54,7 +60,10 @@ export const parseBirthDateDraft = (
     return null;
   }
   if (value.precision === "month") {
-    return { precision: "month", year, month };
+    const candidate = { precision: "month" as const, year, month };
+    return v.safeParse(contactBirthDateSchema, candidate).success
+      ? candidate
+      : null;
   }
   if (!/^\d{1,2}$/u.test(value.day)) {
     return null;
@@ -65,38 +74,26 @@ export const parseBirthDateDraft = (
   if (day === null) {
     return null;
   }
-  const leapYear = year % 400 === 0 || (year % 4 === 0 && year % 100 !== 0);
-  let lastDay = 31;
-  if (month === 2) {
-    lastDay = leapYear ? 29 : 28;
-  } else if ([4, 6, 9, 11].includes(month)) {
-    lastDay = 30;
-  }
-  if (day < 1 || day > lastDay) {
-    return null;
-  }
-  return { precision: "day", year, month, day };
+  const candidate = { precision: "day" as const, year, month, day };
+  return v.safeParse(contactBirthDateSchema, candidate).success
+    ? candidate
+    : null;
 };
 
 type FilterNationalityOptionsArgs<T> = {
   countries: readonly T[];
   query: string;
-  locale: string;
 };
 
-/** Locale-aware nationality filtering; accents and field boundaries stay significant. */
+/** Nationalities whose localized name or code matches the query, in order. */
 export const filterNationalityOptions = <
   T extends { name: string; code: string },
 >({
   countries,
   query,
-  locale,
-}: FilterNationalityOptionsArgs<T>): T[] => {
-  const normalizedQuery = query.trim().toLocaleLowerCase(locale);
-  return countries.filter(
-    ({ name, code }) =>
-      !normalizedQuery ||
-      containsSearchMatchKey(name.toLocaleLowerCase(locale), normalizedQuery) ||
-      containsSearchMatchKey(code.toLocaleLowerCase(locale), normalizedQuery),
-  );
-};
+}: FilterNationalityOptionsArgs<T>): T[] =>
+  filterBySearchQuery({
+    items: countries,
+    query,
+    fields: ({ code, name }) => [name, code],
+  });

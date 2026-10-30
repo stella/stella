@@ -20,6 +20,18 @@ import { WEB_ANALYTICS_EVENTS } from "@/lib/analytics/types";
 import { APIError } from "@/lib/errors/api";
 import { ClientTelemetryError } from "@/lib/errors/telemetry";
 
+beforeEach(() => {
+  captureExceptionMock.mockReset();
+  captureMock.mockReset();
+  getDistinctIdMock.mockReset();
+  groupMock.mockReset();
+  identifyMock.mockReset();
+  initMock.mockReset();
+  isIdentifiedMock.mockReset();
+  registerMock.mockReset();
+  resetMock.mockReset();
+});
+
 type CapturedBrowserEvent = {
   event: string;
   properties?: Record<string, unknown>;
@@ -139,6 +151,33 @@ describe("PostHog browser analytics adapter", () => {
     registerMock.mockClear();
     resetMock.mockClear();
     groupMock.mockClear();
+    captureMock.mockImplementation(
+      (_event: string, _properties?: unknown) => undefined,
+    );
+    captureExceptionMock.mockImplementation(
+      (_error: unknown, _properties?: Record<string, unknown>) => undefined,
+    );
+    getDistinctIdMock.mockImplementation(() => distinctId);
+    isIdentifiedMock.mockImplementation(() => identified);
+    identifyMock.mockImplementation((id: string) => {
+      if (!identified && id !== distinctId) {
+        identifyEvents.push({ distinctId: id, anonymousId: distinctId });
+      }
+      distinctId = id;
+      identified = true;
+    });
+    initMock.mockImplementation((_key: string, options: PostHogInitOptions) => {
+      initOptions = options;
+      return posthogMock;
+    });
+    registerMock.mockImplementation(
+      (_properties: Record<string, unknown>) => undefined,
+    );
+    resetMock.mockImplementation((options?: ResetOptions) => {
+      distinctId = options?.bootstrap?.distinctID ?? "anonymous_after_reset";
+      identified = options?.bootstrap?.isIdentifiedID === true;
+    });
+    groupMock.mockImplementation((_type: string, _key: string) => undefined);
   });
 
   test("captures hang diagnostics without storage values or SDK page context", () => {
@@ -1045,6 +1084,58 @@ describe("PostHog browser analytics adapter", () => {
       fingerprintKey: "posthog:undefined",
       scope: { type: "handler", handlerId: "posthog:undefined" },
     });
+    expect(captureExceptionMock).not.toHaveBeenCalled();
+  });
+
+  const expectTransientSignal = (
+    transportKind: "network" | "timeout" | "aborted",
+  ) => {
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
+    analytics.captureError(
+      new APIError({
+        status: 0,
+        message: "Private browser transport detail",
+        transportKind,
+      }),
+      {
+        fingerprintKey: "desktop-presence:query",
+        scope: { type: "handler", handlerId: "desktop-presence" },
+      },
+    );
+
+    expect(captureExceptionMock).not.toHaveBeenCalled();
+    expect(captureMock).toHaveBeenCalledTimes(1);
+    expect(captureMock).toHaveBeenLastCalledWith("client_transient", {
+      query_owner: "desktop-presence:query",
+      transport_kind: transportKind,
+    });
+  };
+
+  test("captureError records a network API transport failure as one transient signal", () => {
+    expectTransientSignal("network");
+  });
+
+  test("captureError records a timeout API transport failure as one transient signal", () => {
+    expectTransientSignal("timeout");
+  });
+
+  test("captureError records an aborted API transport failure as one transient signal", () => {
+    expectTransientSignal("aborted");
+  });
+
+  test("captureError ignores a bare abort exception", () => {
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
+    analytics.captureError(new DOMException("Cancelled", "AbortError"), {
+      fingerprintKey: "posthog:abort-error",
+      scope: { type: "handler", handlerId: "posthog:abort-error" },
+    });
+
     expect(captureExceptionMock).not.toHaveBeenCalled();
   });
 

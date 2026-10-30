@@ -35,6 +35,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { consumeInBatches } from "@/api/lib/destructive-effect-chunks";
@@ -102,6 +103,7 @@ const FORKED_THREAD_COLUMNS = {
   dataWorkspaceIds: chatThreads.dataWorkspaceIds,
   title: chatThreads.title,
   titleSource: chatThreads.titleSource,
+  subjectDecisionId: chatThreads.subjectDecisionId,
   usedAnonymization: chatThreads.usedAnonymization,
   webSearchEnabled: chatThreads.webSearchEnabled,
   workspaceId: chatThreads.workspaceId,
@@ -632,6 +634,8 @@ export const createForkThread = ({
             id: chatThreads.id,
             parentThreadId: chatThreads.parentThreadId,
             title: chatThreads.title,
+            titleSource: chatThreads.titleSource,
+            subjectDecisionId: chatThreads.subjectDecisionId,
           })
           .from(chatThreads)
           .where(
@@ -792,13 +796,23 @@ export const createForkThread = ({
             }),
           );
         }
+        const projection = yield* Result.await(
+          Result.tryPromise(async () =>
+            readWithdrawnCopyProjection({ values: existingFork }),
+          ),
+        );
         return Result.ok({
           threadId: existingFork.id,
-          title: existingFork.title,
+          title: projection.thread(existingFork).title,
         });
       }
 
       const { prefix, source, sourceFiles, unresolvedFileIds } = reads;
+      const projection = yield* Result.await(
+        Result.tryPromise(async () =>
+          readWithdrawnCopyProjection({ values: source }),
+        ),
+      );
       if (unresolvedFileIds.length > 0) {
         captureError(
           new ChatForkAttachmentRowMissingError({
@@ -877,6 +891,7 @@ export const createForkThread = ({
           parentThreadId: params.threadId,
           title: source.title,
           titleSource: source.titleSource,
+          subjectDecisionId: source.subjectDecisionId,
           usedAnonymization: source.usedAnonymization,
           userId: user.id,
           webSearchEnabled: source.webSearchEnabled,
@@ -1001,7 +1016,7 @@ export const createForkThread = ({
           }
           return Result.ok({
             threadId: raced.existingFork.id,
-            title: raced.existingFork.title,
+            title: projection.thread(raced.existingFork).title,
           });
         }
         await rollbackCopiedS3Keys(copiedS3Keys, fileUsageDb);
@@ -1017,7 +1032,10 @@ export const createForkThread = ({
         ),
       );
 
-      return Result.ok({ threadId: newThreadId, title: source.title });
+      return Result.ok({
+        threadId: newThreadId,
+        title: projection.thread(source).title,
+      });
     },
   );
 

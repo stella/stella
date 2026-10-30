@@ -1,9 +1,13 @@
 import { Result } from "better-result";
 import {
   afterAll,
+  afterEach,
   beforeAll,
+  beforeEach,
   describe,
   expect,
+  type Mock,
+  mock,
   setDefaultTimeout,
   spyOn,
   test,
@@ -62,12 +66,13 @@ setDefaultTimeout(120_000);
 // The MCP verifier loads the signing keys over HTTP; serve that one address
 // from the real auth handler so the token path runs unchanged.
 const passThroughFetch = globalThis.fetch;
-const fetchSpy = spyOn(globalThis, "fetch");
+let fetchSpy: Mock<typeof globalThis.fetch>;
+let serveJwks: typeof fetch;
 
 beforeAll(async () => {
   await initAgentAuthTestDb();
   const jwksUrl = getAuthEndpointUrl("jwks");
-  const serveJwks: typeof fetch = Object.assign(
+  serveJwks = Object.assign(
     async (input: string | URL | Request, init?: RequestInit) => {
       const request =
         input instanceof Request
@@ -80,7 +85,6 @@ beforeAll(async () => {
     },
     { preconnect: passThroughFetch.preconnect },
   );
-  fetchSpy.mockImplementation(serveJwks);
 });
 
 afterAll(async () => {
@@ -119,7 +123,7 @@ const createDesktopCredential = async (
 ) => {
   const device = await createDesktopDeviceSigner();
   const correlationId = Bun.randomUUIDv7();
-  const verifier = randomBytes(32).toString("hex");
+  const verifier = randomBytes(32).toHex();
   const grant = await postJson("/desktop-registry/grant", browser, {
     correlationId,
     deviceJkt: device.deviceJkt,
@@ -246,7 +250,9 @@ const inviteIntoOrganization = async ({
 
 /** Whether an OAuth access token opens an MCP request context. */
 const opensMcpContext = async (accessToken: string): Promise<boolean> => {
-  const session = await authenticateMcpRequest(accessToken);
+  const session = await authenticateMcpRequest(accessToken, {
+    resolveApiKeySession: resolveMachineApiKeySession,
+  });
   if (session.isErr()) {
     return false;
   }
@@ -258,6 +264,14 @@ const opensMcpContext = async (accessToken: string): Promise<boolean> => {
   );
   return context.isOk();
 };
+
+beforeEach(() => {
+  fetchSpy = spyOn(globalThis, "fetch").mockImplementation(serveJwks);
+});
+
+afterEach(() => {
+  mock.restore();
+});
 
 describe("organization member credential lifecycle", () => {
   test("removing a member ends every credential they hold in that organization, and re-inviting them restores none", async () => {

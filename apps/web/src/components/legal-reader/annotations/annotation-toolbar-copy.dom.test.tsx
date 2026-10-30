@@ -1,11 +1,17 @@
 import { createRef } from "react";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
+import { Result } from "better-result";
+import { afterAll, afterEach, expect, mock, spyOn, test } from "bun:test";
 
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import { createWebTestEnvironment } from "../../../../tests/environment.test-fixtures";
+
+// Spies created in a test stay attached if it fails before restoring them.
+afterEach(() => {
+  mock.restore();
+});
 
 GlobalRegistrator.register({ url: "https://app.example.test/law" });
 const testEnvironment = createWebTestEnvironment({ file: import.meta.path });
@@ -86,11 +92,11 @@ const mountToolbar = async () => {
           activeAnnotation={null}
           activeSpans={[]}
           controller={{
-            create: async () => undefined,
+            create: async () => Result.ok(undefined),
             redo: async () => undefined,
-            remove: async () => undefined,
+            remove: async () => Result.ok(undefined),
             undo: async () => undefined,
-            update: async () => undefined,
+            update: async () => Result.ok(undefined),
           }}
           mode="guest"
           onActivateAnnotation={() => undefined}

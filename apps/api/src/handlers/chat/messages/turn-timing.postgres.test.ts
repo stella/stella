@@ -11,6 +11,7 @@ import {
 } from "@/api/db/schema";
 import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -223,7 +224,7 @@ const readResponse = async (fixture: Fixture, messages: Messages) =>
       orgAIConfig: null,
       memberRole: sessionMemberRole("member"),
       request: new Request("http://localhost/v1/chat/threads/messages"),
-      route: "/v1/chat/threads/:threadId/messages",
+      route: "/v1/chat/threads/:threadId/messages" satisfies ApiRoutePath,
       getWorkspaceAccess: async (id: SafeId<"workspace">) =>
         id === fixture.workspaceId ? { id, status: "active" } : null,
     }),

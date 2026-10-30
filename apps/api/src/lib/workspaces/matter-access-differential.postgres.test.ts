@@ -17,6 +17,7 @@ import { canWriteWorkspaceEntities } from "@/api/lib/entities/workspace-entity-w
 import { canUseFolioCollabWorkspace } from "@/api/lib/folio-collab-rooms";
 import { isMemberRole } from "@/api/lib/member-roles";
 import { hasCurrentTimerMatterAccess } from "@/api/lib/time-entry-timer-access";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import {
   memberReachesMatterSql,
   readAuthorizedWorkspaces,
@@ -88,6 +89,10 @@ const insertOrganization = async (
     name: "Matter access differential",
     slug: organizationId,
     createdAt: new Date(),
+  });
+  await recordNewOrganizationAccessState(tx, {
+    organizationId,
+    now: new Date(),
   });
   const clientId = createSafeId<"contact">();
   await tx.insert(contacts).values({

@@ -1,5 +1,6 @@
+import { panic } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import "@/api/tests/setup-env";
@@ -7,6 +8,7 @@ import type { Transaction } from "@/api/db/root";
 import {
   caseLawSources,
   corpusIndexGenerations,
+  corpusIndexJurisdictionServing,
   corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
@@ -19,20 +21,40 @@ import {
   ADAPTER_KEYS,
   IMPORT_SOURCE_KEYS,
 } from "@/api/lib/legal-search/ingestion-constants";
-import { readCaseLawFreshnessReportTx } from "@/api/lib/observability/case-law-freshness-metrics";
+import {
+  CASE_LAW_FRESHNESS_SCAN_CAP,
+  readCaseLawFreshnessReportTx,
+  readServedCaseLawBacklogTx,
+} from "@/api/lib/observability/case-law-freshness-metrics";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 const GENERATION = "case_law_v5";
+const OTHER_GENERATION = "case_law_v6";
+/** A partial generation: it holds Czech decisions only. */
+const PARTIAL_GENERATION = "case_law_v9";
+const THIRD_GENERATION = "case_law_v7";
+const FLIPPED_PENDING_ID = "0198e331-e578-7000-c000-000000000001";
+const DAY_MS = 24 * 60 * 60 * 1000;
+const OLDEST_PENDING_ID = "0198e331-e578-7000-b000-000000000001";
 const INDEX_ID = "case_law_v5_cs_sk";
 const NOW = new Date();
 const OLD = new Date(NOW.getTime() - 2 * 60 * 60 * 1000);
 const ONE_HOUR_OLD = new Date(NOW.getTime() - 60 * 60 * 1000);
+const MONTH_OLD = new Date(NOW.getTime() - 30 * 24 * 60 * 60 * 1000);
+const TWO_MONTHS_OLD = new Date(NOW.getTime() - 60 * 24 * 60 * 60 * 1000);
 const ids = Array.from(
   { length: 8 },
   (_, index) =>
     `0198e331-e578-7000-8000-${String(index + 401).padStart(12, "0")}`,
 );
+
+const measuredSeconds = (
+  report: Awaited<ReturnType<typeof readCaseLawFreshnessReportTx>>,
+): number =>
+  report.oldestUnpublishedAge.type === "measured"
+    ? report.oldestUnpublishedAge.seconds
+    : panic(`Expected a measured age, got ${report.oldestUnpublishedAge.type}`);
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;
@@ -40,15 +62,34 @@ let db: ReturnType<typeof drizzle>;
 beforeAll(async () => {
   client = await createTestPglite();
   db = drizzle({ client });
-  await db.insert(corpusIndexGenerations).values({
-    family: "case_law",
-    generation: GENERATION,
-    cluster: "q09",
-    manifestDigest: corpusIndexManifestDigest(
-      CORPUS_INDEX_MANIFESTS.case_law_v5,
-    ),
-    status: "building",
-  });
+  await db.insert(corpusIndexGenerations).values([
+    {
+      family: "case_law",
+      generation: GENERATION,
+      cluster: "q09",
+      manifestDigest: corpusIndexManifestDigest(
+        CORPUS_INDEX_MANIFESTS.case_law_v5,
+      ),
+      status: "serving",
+    },
+    {
+      family: "case_law",
+      generation: OTHER_GENERATION,
+      cluster: "q09",
+      manifestDigest: corpusIndexManifestDigest(
+        CORPUS_INDEX_MANIFESTS.case_law_v6,
+      ),
+      status: "building",
+    },
+  ]);
+  // A generation readers are not served: its queue is not their backlog.
+  await db.execute(sql`
+    INSERT INTO ${corpusIndexProjectionStates}
+      (family, generation, entity_id, desired_action, desired_epoch)
+    SELECT 'case_law', ${OTHER_GENERATION},
+      ('0198e331-e578-7000-9000-' || lpad(n::text, 12, '0'))::uuid, 'erase', 1
+    FROM generate_series(1, 5) AS generated(n)
+  `);
   await db.insert(corpusIndexProjectionStates).values([
     {
       family: "case_law",
@@ -107,6 +148,22 @@ beforeAll(async () => {
       status: "cancelled",
       cancelledAt: NOW,
     },
+    {
+      // Published: not backlog.
+      id: toSafeId<"corpusIndexProjectionIntent">(ids[7]!),
+      family: "case_law",
+      generation: GENERATION,
+      entityId: ids[1]!,
+      epoch: 1n,
+      fingerprint: "c".repeat(64),
+      indexId: INDEX_ID,
+      status: "applied",
+      expectedDocumentCount: 1,
+      appendStartedAt: OLD,
+      appendCommittedAt: OLD,
+      appliedAt: OLD,
+      createdAt: OLD,
+    },
   ]);
   await db.insert(caseLawSources).values([
     {
@@ -138,16 +195,24 @@ afterAll(async () => {
   await client.close();
 });
 
-test("counts pending projections and reports only enabled scheduled-source freshness", async () => {
+test("counts the serving generation's pending projections and reports only enabled scheduled-source freshness", async () => {
   const report = await db.transaction(
     async (tx) =>
       await readCaseLawFreshnessReportTx(asTestRaw<Transaction>(tx)),
   );
 
-  expect(report.backlogItems).toBe(3);
-  expect(report.oldestUnpublishedAgeSeconds).toBeGreaterThanOrEqual(3500);
-  expect(report.oldestUnpublishedAgeSeconds).toBeLessThan(7100);
-  expect(report.oldestUnpublishedAgeSource).toBe("desired_at");
+  // The serving generation's two pending states. The other generation's
+  // queue and the converged state are not backlog, and no revision is
+  // counted on its own: an in-flight one is counted through its state.
+  expect(report.backlogItems).toBe(2);
+  expect(report.backlogCapped).toBe(false);
+  expect(report.oldestUnpublishedAge).toEqual({
+    type: "measured",
+    seconds: expect.any(Number),
+    source: "desired_at",
+  });
+  expect(measuredSeconds(report)).toBeGreaterThanOrEqual(3500);
+  expect(measuredSeconds(report)).toBeLessThan(7100);
 
   await db
     .update(corpusIndexProjectionStates)
@@ -157,12 +222,10 @@ test("counts pending projections and reports only enabled scheduled-source fresh
     async (tx) =>
       await readCaseLawFreshnessReportTx(asTestRaw<Transaction>(tx)),
   );
-  expect(fallbackReport.oldestUnpublishedAgeSeconds).toBeGreaterThanOrEqual(
-    7100,
-  );
-  expect(fallbackReport.oldestUnpublishedAgeSource).toBe(
-    "state_created_at_fallback",
-  );
+  expect(measuredSeconds(fallbackReport)).toBeGreaterThanOrEqual(7100);
+  expect(fallbackReport.oldestUnpublishedAge).toMatchObject({
+    source: "state_created_at_fallback",
+  });
   expect(report.sourceAges.map(({ source }) => source).toSorted()).toEqual(
     [ADAPTER_KEYS.CZ_NS, ADAPTER_KEYS.CZ_NSS].toSorted(),
   );
@@ -174,4 +237,132 @@ test("counts pending projections and reports only enabled scheduled-source fresh
     report.sourceAges.find(({ source }) => source === ADAPTER_KEYS.CZ_NSS)
       ?.ageSeconds,
   ).toBeGreaterThan(1_000_000_000);
+});
+
+test("the oldest pending state counts wherever its retry puts it in the queue", async () => {
+  // Pending for a month, but retried later than every other state, so it is
+  // the last row in queue order.
+  await db.insert(corpusIndexProjectionStates).values({
+    family: "case_law",
+    generation: GENERATION,
+    entityId: OLDEST_PENDING_ID,
+    desiredAction: "erase",
+    desiredEpoch: 1n,
+    workStatus: "retry_scheduled",
+    failureAttempts: 1,
+    lastFailureKind: "append_transient",
+    lastFailureMessage: "engine unavailable",
+    retryNotBefore: new Date(NOW.getTime() + DAY_MS),
+    createdAt: MONTH_OLD,
+    desiredAt: MONTH_OLD,
+  });
+  const report = await db.transaction(
+    async (tx) =>
+      await readCaseLawFreshnessReportTx(asTestRaw<Transaction>(tx)),
+  );
+
+  expect(measuredSeconds(report)).toBeGreaterThanOrEqual((29 * DAY_MS) / 1000);
+});
+
+test("a jurisdiction flipped to a partial generation counts that generation's queue", async () => {
+  const before = await db.transaction(
+    async (tx) =>
+      await readCaseLawFreshnessReportTx(asTestRaw<Transaction>(tx)),
+  );
+  await db.insert(corpusIndexGenerations).values({
+    family: "case_law",
+    generation: PARTIAL_GENERATION,
+    cluster: "q09",
+    manifestDigest: corpusIndexManifestDigest(
+      CORPUS_INDEX_MANIFESTS.case_law_v9,
+    ),
+    status: "building",
+  });
+  // Pending in the partial generation before the flip: nobody reads it yet.
+  await db.insert(corpusIndexProjectionStates).values({
+    family: "case_law",
+    generation: PARTIAL_GENERATION,
+    entityId: FLIPPED_PENDING_ID,
+    desiredAction: "erase",
+    desiredEpoch: 1n,
+    createdAt: TWO_MONTHS_OLD,
+    desiredAt: TWO_MONTHS_OLD,
+  });
+  const unflipped = await db.transaction(
+    async (tx) =>
+      await readCaseLawFreshnessReportTx(asTestRaw<Transaction>(tx)),
+  );
+  expect(unflipped.backlogItems).toBe(before.backlogItems);
+
+  await db.insert(corpusIndexJurisdictionServing).values({
+    family: "case_law",
+    jurisdiction: "CZE",
+    generation: PARTIAL_GENERATION,
+    fromGeneration: GENERATION,
+  });
+  const flipped = await db.transaction(
+    async (tx) =>
+      await readCaseLawFreshnessReportTx(asTestRaw<Transaction>(tx)),
+  );
+
+  // Czech readers are served from the partial generation now, so its pending
+  // state is their backlog, and it is the oldest one.
+  expect(flipped.backlogItems).toBe(before.backlogItems + 1);
+  expect(measuredSeconds(flipped)).toBeGreaterThanOrEqual((59 * DAY_MS) / 1000);
+});
+
+test("a queue past the scan cap reports the cap and says so", async () => {
+  await db.execute(sql`
+    INSERT INTO ${corpusIndexProjectionStates}
+      (family, generation, entity_id, desired_action, desired_epoch)
+    SELECT 'case_law', ${GENERATION},
+      ('0198e331-e578-7000-a000-' || lpad(n::text, 12, '0'))::uuid, 'erase', 1
+    FROM generate_series(1, ${CASE_LAW_FRESHNESS_SCAN_CAP}) AS generated(n)
+  `);
+  const report = await db.transaction(
+    async (tx) =>
+      await readCaseLawFreshnessReportTx(asTestRaw<Transaction>(tx)),
+  );
+
+  expect(report.backlogItems).toBe(CASE_LAW_FRESHNESS_SCAN_CAP);
+  expect(report.backlogCapped).toBe(true);
+  // The month-old state is now beyond the window the report reads: the age
+  // is reported as unknown, never as the window's younger oldest.
+  expect(report.oldestUnpublishedAge).toEqual({ type: "incomplete" });
+});
+
+test("one cap covers every served generation", async () => {
+  // Three generations, each under the cap and over it together.
+  const perGeneration = 4000;
+  await db.insert(corpusIndexGenerations).values({
+    family: "case_law",
+    generation: THIRD_GENERATION,
+    cluster: "q09",
+    manifestDigest: corpusIndexManifestDigest(
+      CORPUS_INDEX_MANIFESTS.case_law_v7,
+    ),
+    status: "building",
+  });
+  await db.execute(sql`
+    INSERT INTO ${corpusIndexProjectionStates}
+      (family, generation, entity_id, desired_action, desired_epoch)
+    SELECT 'case_law', served.generation,
+      ('0198e331-e578-7000-d00' || served.ordinal || '-' || lpad(n::text, 12, '0'))::uuid,
+      'erase', 1
+    FROM unnest(ARRAY[${OTHER_GENERATION}, ${PARTIAL_GENERATION}, ${THIRD_GENERATION}]::text[])
+      WITH ORDINALITY AS served(generation, ordinal)
+    CROSS JOIN generate_series(1, ${perGeneration}) AS generated(n)
+  `);
+  const backlog = await db.transaction(
+    async (tx) =>
+      await readServedCaseLawBacklogTx(asTestRaw<Transaction>(tx), [
+        OTHER_GENERATION,
+        PARTIAL_GENERATION,
+        THIRD_GENERATION,
+      ]),
+  );
+
+  expect(backlog.capped).toBe(true);
+  // Every walk is limited by what the earlier ones left of the one cap.
+  expect(backlog.rowsRead).toBe(CASE_LAW_FRESHNESS_SCAN_CAP + 1);
 });

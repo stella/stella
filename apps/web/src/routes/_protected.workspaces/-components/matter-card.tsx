@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -18,16 +18,20 @@ import {
 import { cn } from "@stll/ui/utils";
 
 import { DocumentIcon } from "@/components/document-icon";
+import { withDragAnnouncementData } from "@/components/drag-and-drop-live-region.logic";
 import { InlineEdit } from "@/components/inline-edit";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import Tooltip from "@/components/tooltip";
 import { MatterContextMenu } from "@/components/workspaces/matter-context-menu";
 import { TeamAvatars } from "@/features/workspaces/team-avatars";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { draggable } from "@/lib/drag-and-drop/element-registration";
 import { useMatterNumberingEnabled } from "@/lib/organization/use-matter-numbering";
+import { queryView } from "@/lib/query-view.logic";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
-import { useQueryView } from "@/lib/use-query-view";
 import { overviewOptions } from "@/lib/workspaces/queries";
 import type { Workspace } from "@/lib/workspaces/types";
+import { toMatterCardDragData } from "@/routes/_protected.workspaces/-components/matter-client-drop.logic";
 
 type OverviewData = NonNullable<
   Awaited<
@@ -37,19 +41,26 @@ type OverviewData = NonNullable<
   >
 >;
 
+// `client-group` lets the card be dropped on another client's group.
+type MatterCardDrag = "none" | "client-group";
+
 type MatterCardProps = {
   workspace: Workspace;
   focused: boolean;
+  drag: MatterCardDrag;
   hideClientName?: boolean;
 };
 
 export const MatterCard = ({
   workspace,
   focused,
+  drag,
   hideClientName,
 }: MatterCardProps) => {
   const t = useTranslations();
   const showMatterNumber = useMatterNumberingEnabled();
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
   const lastActivityAt = formatRelativeTime(workspace.lastActivityAt);
   const [previewEnabled, setPreviewEnabled] = useState(false);
@@ -59,7 +70,7 @@ export const MatterCard = ({
     ...overviewOptions(workspace.id),
     enabled: previewEnabled,
   });
-  const previewView = useQueryView(previewQuery);
+  const previewView = queryView(previewQuery);
   const preview = previewView.type === "items" ? previewView.items : undefined;
 
   const hasPreviewContent =
@@ -74,6 +85,34 @@ export const MatterCard = ({
   const matterTintStyle: React.CSSProperties & { "--matter-tint": string } = {
     "--matter-tint": `color-mix(in srgb, ${getMatterColor(workspace.id)} 8%, transparent)`,
   };
+
+  const clientId = workspace.client?.id ?? null;
+  useExternalSyncEffect(() => {
+    const element = cardRef.current;
+    if (!element || drag === "none") {
+      return undefined;
+    }
+    return draggable({
+      element,
+      name: "matter-card",
+      // An open inline rename keeps text selection drags inside its input.
+      canDrag: () => element.querySelector("input") === null,
+      getInitialData: () =>
+        withDragAnnouncementData(
+          toMatterCardDragData({
+            id: workspace.id,
+            name: workspace.name,
+            client: clientId === null ? null : { id: clientId },
+          }),
+          workspace.name,
+        ),
+      onDragStart: () => {
+        setIsDragging(true);
+        setPreviewOpen(false);
+      },
+      onDrop: () => setIsDragging(false),
+    });
+  }, [clientId, drag, workspace.id, workspace.name]);
 
   return (
     <MatterContextMenu
@@ -108,7 +147,9 @@ export const MatterCard = ({
                   // menu is open so the relation is obvious.
                   !isOverdue && menuOpen && "bg-[var(--matter-tint)]",
                   focused && "ring-primary ring-2",
+                  isDragging && "opacity-50",
                 )}
+                ref={cardRef}
                 style={matterTintStyle}
               />
             }
@@ -130,6 +171,9 @@ export const MatterCard = ({
                 ) : (
                   <Link
                     className="after:absolute after:inset-0"
+                    // The link covers the card; a draggable link would start a
+                    // native link drag instead of the card drag.
+                    draggable={drag === "none" ? undefined : false}
                     onClick={() => setPreviewOpen(false)}
                     params={{ workspaceId: workspace.id }}
                     to="/workspaces/$workspaceId"

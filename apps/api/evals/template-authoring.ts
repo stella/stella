@@ -1454,7 +1454,7 @@ const createAuthoringTools = ({
     // taken as real base64, so a client that does hold the file still works.
     const writtenDocx = written.get(ref.trim());
     const outcome = await createTemplateInMemory(
-      writtenDocx?.toString("base64") ?? ref,
+      writtenDocx?.toBase64() ?? ref,
     );
     await recordAttempt({ outcome, overlay: [], step: "create" });
     if (outcome.status === "invalid-docx") {
