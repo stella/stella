@@ -40,9 +40,9 @@ const CASE_LAW_COVERAGE_COURT_INDEX = {
 
 const CASE_LAW_COVERAGE_FACET_SOURCE_KIND_INDEX = {
   createSql:
-    'CREATE INDEX CONCURRENTLY "case_law_browse_facet_counts_source_kind_idx" ON public."case_law_browse_facet_counts" USING btree ("source_id", "kind") INCLUDE ("value", "total")',
+    'CREATE INDEX CONCURRENTLY "case_law_browse_facet_counts_source_kind_idx" ON public."case_law_browse_facet_counts" USING btree ("source_id", "kind", "value", "total")',
   definitionBody:
-    "ON public.case_law_browse_facet_counts USING btree (source_id, kind) INCLUDE (value, total)",
+    "ON public.case_law_browse_facet_counts USING btree (source_id, kind, value, total)",
   introducedBy: { type: "code", owner: "src/lib/case-law/coverage-index.ts" },
   isUnique: false,
   name: "case_law_browse_facet_counts_source_kind_idx",
