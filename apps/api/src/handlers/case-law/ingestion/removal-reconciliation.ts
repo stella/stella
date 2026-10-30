@@ -957,14 +957,18 @@ export const reconcilePublisherRemovals = async ({
         } as const;
       }
       if (prepared.type !== "ready") {
+        const nextRetryAt = await nextRemovalRetryAt(scopedDb, sourceId, {
+          kinds: [REMOVAL_RETRY_KIND.ERASURE],
+          acceptedOnly: true,
+        });
         return {
           ...prepared,
           retried: first.retried,
           nextRetryAt:
-            (await nextRemovalRetryAt(scopedDb, sourceId, {
-              kinds: [REMOVAL_RETRY_KIND.ERASURE],
-              acceptedOnly: true,
-            })) ?? (prepared.type === "paused" ? prepared.resumeAt : null),
+            prepared.type === "paused" &&
+            (nextRetryAt === null || prepared.resumeAt < nextRetryAt)
+              ? prepared.resumeAt
+              : nextRetryAt,
         };
       }
       const discovered = await discoverPublisherRemovals(context);

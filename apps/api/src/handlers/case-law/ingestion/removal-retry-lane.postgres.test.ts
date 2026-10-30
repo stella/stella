@@ -2,6 +2,7 @@
  * Publisher removal retries have a dedicated durable lane. Run only
  * against the migrated Postgres test database; skipped elsewhere.
  */
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { and, eq, getTableName, isNull, sql } from "drizzle-orm";
 
@@ -397,6 +398,24 @@ if (!databaseUrl || !runPostgresTests) {
             },
           }),
       );
+      const pending = await reconcilePublisherRemovals({
+        scopedDb,
+        sourceId,
+        mode: "claimed-erasures",
+        now: () => FIXED_NOW,
+        signal: AbortSignal.timeout(10_000),
+        remove: async () => Result.ok({ type: "pending" }),
+      });
+      expect(pending.unwrap().retried).toBe(1);
+      expect(
+        (
+          await db
+            .select({ payload: caseLawRemovalReconciliationItems.payload })
+            .from(caseLawRemovalReconciliationItems)
+            .where(eq(caseLawRemovalReconciliationItems.decisionId, decisionId))
+        ).at(0)?.payload,
+      ).toMatchObject({ claim: "accepted" });
+      const retryNow = new Date(FIXED_NOW.getTime() + 60_000);
       await db
         .update(caseLawDecisions)
         .set({
@@ -409,7 +428,7 @@ if (!databaseUrl || !runPostgresTests) {
         await selectDueErasureSources({
           scopedDb,
           after: null,
-          now: FIXED_NOW,
+          now: retryNow,
           limit: 1,
         }),
       ).toEqual([{ id: sourceId }]);
@@ -418,7 +437,7 @@ if (!databaseUrl || !runPostgresTests) {
         scopedDb,
         sourceId,
         mode: "claimed-erasures",
-        now: () => FIXED_NOW,
+        now: () => retryNow,
         signal: AbortSignal.timeout(10_000),
         remove: makeRemove(async () => {
           erasures++;
@@ -447,7 +466,7 @@ if (!databaseUrl || !runPostgresTests) {
         await selectDueErasureSources({
           scopedDb,
           after: null,
-          now: FIXED_NOW,
+          now: retryNow,
           limit: 1,
         }),
       ).toEqual([]);
