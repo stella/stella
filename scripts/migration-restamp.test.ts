@@ -272,6 +272,31 @@ test("moves two migrations sharing a suffix when one targets the other's name", 
   }
 });
 
+test("rewrites a reference between two untracked migrations", () => {
+  const root = fixture();
+  try {
+    advanceBase(root);
+    migration(root, "20260101010000_first");
+    migration(root, "20260101010100_second");
+    writeFileSync(
+      path.join(root, "apps/api/drizzle/20260101010100_second/requires.txt"),
+      "requires: 20260101010000_first\n",
+    );
+    expect(restampMigrations({ baseRef: "base", cwd: root })).toEqual([
+      { oldName: "20260101010000_first", newName: "20260101020100_first" },
+      { oldName: "20260101010100_second", newName: "20260101020200_second" },
+    ]);
+    expect(
+      readFileSync(
+        path.join(root, "apps/api/drizzle/20260101020200_second/requires.txt"),
+        "utf-8",
+      ),
+    ).toBe("requires: 20260101020100_first\n");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("rewrites a reference inside a moved migration to another moved one", () => {
   const root = fixture();
   try {

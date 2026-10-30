@@ -64,11 +64,12 @@ const migrationNamePattern = (name: string) =>
   );
 
 const trackedReferenceFiles = (cwd: string, name: string) => {
-  const result = Bun.spawnSync(["git", "grep", "-l", "-z", "-F", "--", name], {
-    cwd,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
+  // Untracked migrations are part of the change set, so their files are
+  // searched too (still excluding ignored paths).
+  const result = Bun.spawnSync(
+    ["git", "grep", "--untracked", "-l", "-z", "-F", "--", name],
+    { cwd, stdout: "pipe", stderr: "pipe" },
+  );
   if (result.exitCode !== 0 && result.exitCode !== 1) {
     panic(`git grep failed (${result.exitCode}): ${result.stderr.toString()}`);
   }
