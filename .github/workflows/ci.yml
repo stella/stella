@@ -5882,11 +5882,9 @@ jobs:
           package-directory: apps/landing
 
       - name: Configure flaky-test quarantine
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         uses: ./.github/actions/flaky-test-quarantine
 
       - name: Check landing islands
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         timeout-minutes: 2
         env:
           PLAYWRIGHT_PACKAGE_DIR: apps/landing
