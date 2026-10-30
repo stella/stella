@@ -60,6 +60,7 @@ export const DecisionReader = ({
     <>
       <ShareButton url={`${webOrigin}${decision.webPath}`} />
       <FlatList
+        alwaysBounceVertical={false}
         contentContainerStyle={screenStyles.content}
         data={blocks}
         initialNumToRender={12}
