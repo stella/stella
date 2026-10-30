@@ -127,6 +127,22 @@
     "currentVersion": "Version actuelle",
     "loadFailed": "Cet élément n’a pas pu être chargé."
   },
+  "document": {
+    "title": "Document",
+    "failedTitle": "Ce document n’a pas pu être ouvert",
+    "failure": {
+      "offline": "Vous êtes hors ligne. Connectez-vous à Internet et réessayez.",
+      "noFile": "Ce document n’a pas encore de fichier.",
+      "failed": "Une erreur s’est produite à l’ouverture. Réessayez dans un instant.",
+      "unsupported": "Mettez à jour l’app pour ouvrir les documents.",
+      "android": "Les documents ne peuvent pas encore être ouverts dans l’app Android."
+    },
+    "retry": "Réessayer",
+    "preview": "Ouvrir l’aperçu",
+    "previewDescription": "Ce fichier s’ouvre dans l’aperçu du système.",
+    "unrendered": "Ce document ne peut pas être affiché ici, mais l’aperçu du système pourra peut-être l’ouvrir.",
+    "details": "Détails"
+  },
   "signIn": {
     "beta": "Bêta",
     "headline": "La clarté pour chaque affaire.",
@@ -163,7 +179,6 @@
     "newest": "Décisions les plus récentes",
     "noResults": "Aucun résultat ne correspond aux mots exigés par cette recherche.",
     "noResultsHint": "Essayez moins de mots ou d’autres mots : les termes qu’emploierait une décision, et non la phrase dans laquelle une question est posée.",
-    "unavailable": "La recherche est temporairement indisponible",
     "retry": "Réessayer",
     "headnote": "Sommaire",
     "textUnavailable": "Aucun texte n'est disponible pour cette décision",
@@ -179,6 +194,14 @@
   "writes": {
     "consentNeeded": "Pour modifier depuis l’app, stella a besoin de votre autorisation. Reconnectez-vous pour la donner.",
     "signInAgain": "Se reconnecter"
+  },
+  "loads": {
+    "offline": "stella n’a pas pu joindre votre serveur. Vérifiez votre connexion et réessayez.",
+    "outdated": "Votre serveur a répondu dans un format que cette version de l’app ne comprend pas. Mettez à jour l’app, ou le serveur si vous l’administrez.",
+    "consent": "Cette connexion ne permet pas à l’app de lire ce contenu. Reconnectez-vous pour lui en donner l’accès.",
+    "session": "Votre session a expiré. Reconnectez-vous.",
+    "server": "Votre serveur a rencontré un problème (erreur {status}). Réessayez dans un instant.",
+    "refused": "Votre serveur a refusé la requête (erreur {status})."
   },
   "timers": {
     "title": "Minuteurs",
@@ -213,7 +236,27 @@
     "matterTitle": "Dossier",
     "uploadFailed": "La numérisation n’a pas pu être envoyée. Réessayez.",
     "failedTitle": "Échec de la numérisation",
-    "failed": "L’appareil photo n’a pas pu enregistrer la numérisation. Réessayez."
+    "failed": "L’appareil photo n’a pas pu enregistrer la numérisation. Réessayez.",
+    "save": "Enregistrer",
+    "saveTitle": "Enregistrer dans un dossier",
+    "share": "Partager",
+    "addPages": "Ajouter des pages",
+    "page": "Page {number}",
+    "rotatePage": "Faire pivoter la page {number}",
+    "removePage": "Retirer la page {number}",
+    "deletePage": "Supprimer",
+    "movePage": "Déplacer la page {number}",
+    "moveUp": "Monter",
+    "moveDown": "Descendre",
+    "noPages": "Il ne reste aucune page. Numérisez-en d’autres avec « Ajouter des pages ».",
+    "kilobytes": "{size} Ko",
+    "megabytes": "{size} Mo",
+    "pdfFailed": "Le PDF n’a pas pu être créé. Réessayez.",
+    "shareFailed": "Le PDF n’a pas pu être partagé. Réessayez.",
+    "discardTitle": "Abandonner cette numérisation ?",
+    "discardMessage": "Ses pages ne sont enregistrées dans aucun dossier et seront supprimées de cet appareil.",
+    "discard": "Abandonner",
+    "keepEditing": "Continuer à modifier"
   },
   "shortcuts": {
     "search": "Rechercher",

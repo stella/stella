@@ -79,7 +79,7 @@ export type CitationPassage = {
 
 export type CitationWithPassage = Omit<
   DecisionCitationRow,
-  "citationText" | "evidenceQuote"
+  "citationText" | "evidenceQuote" | "printedBy"
 > & {
   citationText: string | null;
   extractionWarnings: ExtractionWarnings;
@@ -534,20 +534,15 @@ export const readGatedDecisionCitations = defineWindowedRead(
           }
           return panic(`Unexpected citation list status ${String(statusCode)}`);
         }
-        // Whose text holds the citing block: this decision for its own outgoing
-        // citations, the citing decision for every incoming one.
-        const citingIds =
-          direction === "cites"
-            ? [decisionId]
-            : [
-                ...new Map(
-                  page.items.flatMap((item) =>
-                    item.decision === null
-                      ? []
-                      : [[String(item.decision.id), item.decision.id] as const],
-                  ),
-                ).values(),
-              ];
+        // Whose text holds the citing block: the version of this decision that
+        // prints an outgoing citation, the citing decision for an incoming one.
+        const citingIds = [
+          ...new Map(
+            page.items.map(
+              (item) => [String(item.printedBy), item.printedBy] as const,
+            ),
+          ).values(),
+        ];
         return {
           page,
           sources: await readPassageSourcePointers(subject.tx, citingIds),
@@ -570,15 +565,12 @@ export const readGatedDecisionCitations = defineWindowedRead(
       pointers: gated.sources,
       citations: gated.page.items.map((citation) => ({
         citation,
-        citingId:
-          direction === "cites"
-            ? String(decisionId)
-            : String(citation.decision?.id),
+        citingId: String(citation.printedBy),
       })),
     });
     const items = resolved.map(
       ({ citation: item, disposition }): CitationWithPassage => {
-        const { evidenceQuote, ...citation } = item;
+        const { evidenceQuote, printedBy: _printedBy, ...citation } = item;
         switch (disposition.type) {
           case "unavailable":
             return {

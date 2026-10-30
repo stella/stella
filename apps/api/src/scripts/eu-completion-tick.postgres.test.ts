@@ -21,10 +21,6 @@ import {
 import { createIngestionDb, markRlsDatabase } from "@/api/db/scoped";
 import { envBase } from "@/api/env-base";
 import { envDbLoadGate } from "@/api/env-db-load-gate";
-import {
-  encodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import sparqlFixture from "@/api/handlers/case-law/ingestion/adapters/__fixtures__/eu-ecj-sparql.json";
 import { euEcjAdapter } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
 import {
@@ -50,6 +46,10 @@ import {
   ADAPTER_KEYS,
   PARSER_VERSIONS,
 } from "@/api/lib/legal-search/ingestion-constants";
+import {
+  encodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@/api/lib/legal-search/ingestion-types";
 import { isUsableStaticCredential } from "@/api/lib/s3/credentials";
 import { isRecord } from "@/api/lib/type-guards";
 import {
@@ -1606,16 +1606,18 @@ if (!databaseUrl || !enabled) {
                 },
               },
             });
-            await processDecision({
-              input: candidate,
-              sourceId,
-              scopedDb: writer,
-              signal,
-              s3Policy: { mode: "replay-strict", signal },
-              observedAt: new Date(),
-              observationOrder,
-              refresh: DECISION_REFRESH.ALWAYS,
-            });
+            (
+              await processDecision({
+                input: candidate,
+                sourceId,
+                scopedDb: writer,
+                signal,
+                s3Policy: { mode: "replay-strict", signal },
+                observedAt: new Date(),
+                observationOrder,
+                refresh: DECISION_REFRESH.ALWAYS,
+              })
+            ).unwrap();
           } finally {
             await lease.release();
           }

@@ -11,14 +11,6 @@ import { panic } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 
 import {
-  decodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  IngestionItem,
-  StoredRawReparseInput,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import {
   buildPlItem,
   normalizeSaosDumpItem,
   PL_COURTS_RULING_DECISION_TYPES,
@@ -27,6 +19,14 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
 import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
+import {
+  decodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  IngestionItem,
+  StoredRawReparseInput,
+} from "@/api/lib/legal-search/ingestion-types";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
 const FIXTURES = new URL("__fixtures__/", import.meta.url);

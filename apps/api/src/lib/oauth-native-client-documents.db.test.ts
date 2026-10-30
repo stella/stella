@@ -15,8 +15,7 @@ import path from "node:path";
 import * as v from "valibot";
 
 import { sha256Base64Url } from "@stll/sha256/bun";
-
-import { createTestState } from "@/api/tests/helpers/test-state";
+import { createTestState } from "@stll/test-state";
 
 import type { LoopbackCallback } from "../../../../packages/cli/src/auth/loopback-listener.ts";
 
@@ -413,7 +412,7 @@ describe("stella mobile client document", () => {
     );
     expect(await details.json()).toMatchObject({
       clientIdHost: "stella-api.example.com",
-      client: { type: "verified", brand: "stella" },
+      client: { type: "verified", brand: "stella_ios" },
     });
   });
 

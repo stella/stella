@@ -3,6 +3,8 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { createTestState } from "@stll/test-state";
+
 import { env } from "@/api/env";
 import {
   createManagedOpenRouterCredentialProvider,
@@ -15,7 +17,6 @@ import {
 } from "@/api/lib/observability/request-metrics";
 import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
-import { createTestState } from "@/api/tests/helpers/test-state";
 
 const testState = createTestState({ file: import.meta.path, config: env });
 
