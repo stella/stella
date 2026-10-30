@@ -75,6 +75,7 @@ jobs:
       - name: Apply database migrations
         run: bun --filter @stll/api db:migrate
         env:
+          MIGRATE_MANUAL_DRAIN_CONFIRMED: Isolated query performance database is migrated before scheduler workers start
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
 
       - name: Run query performance suite

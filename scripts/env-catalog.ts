@@ -146,6 +146,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "DATABASE_ROOT_POOL_MAX",
   "DB_LOAD_GATE_RDS_INSTANCE_IDENTIFIER",
   "DB_LOAD_GATE_EBS_SIGNAL",
+  "MIGRATE_MANUAL_DRAIN_CONFIRMED",
   ...Object.keys(envOnlineIndexServerSchema),
   "DB_HOST",
   "DB_NAME",
@@ -433,6 +434,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "RDS instance whose EBS balances gate heavy maintenance and online index builds. Region and credentials use the AWS SDK provider chain. A set identifier enables EBS reads and takes precedence over DB_LOAD_GATE_EBS_SIGNAL. Missing or failed metrics defer maintenance.",
   DB_LOAD_GATE_EBS_SIGNAL:
     "Non-RDS, self-hosted and local databases must set `DB_LOAD_GATE_EBS_SIGNAL=disabled` to explicitly disable the EBS signal. The logged not_configured signal allows other health gates to govern maintenance. If neither setting is supplied, migrate fails before connecting, and background maintenance holds with an error event naming the missing configuration.",
+  MIGRATE_MANUAL_DRAIN_CONFIRMED:
+    "Required non-empty operator reason confirming a completed manual scheduler drain. Only migrate consumes it, bypassing recent lease-aware scheduler claim admission; manifest validation, table leases, and lock timeouts remain enforced.",
   DB_LOAD_GATE_START_FLOOR:
     "EBS balance percentage required to start an online index build.",
   DB_LOAD_GATE_HARD_FLOOR:
@@ -841,6 +844,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   DB_HOST: ENV_CREDENTIAL_KIND.notCredential,
   DB_LOAD_GATE_BUSY_WINDOWS: ENV_CREDENTIAL_KIND.notCredential,
   DB_LOAD_GATE_EBS_SIGNAL: ENV_CREDENTIAL_KIND.notCredential,
+  MIGRATE_MANUAL_DRAIN_CONFIRMED: ENV_CREDENTIAL_KIND.notCredential,
   DB_LOAD_GATE_HARD_FLOOR: ENV_CREDENTIAL_KIND.notCredential,
   DB_LOAD_GATE_LONG_TX_MAX_AGE_MS: ENV_CREDENTIAL_KIND.notCredential,
   DB_LOAD_GATE_MAX_HELD_MS: ENV_CREDENTIAL_KIND.notCredential,

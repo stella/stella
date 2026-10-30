@@ -14,12 +14,14 @@ import path from "node:path";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import { readMigrationLockSources } from "../../../../scripts/check-migration-locks";
 import { generateMigrationLockManifest } from "../../../../scripts/generate-migration-lock-manifest";
 import { DEFAULT_LEASE_MS } from "../lib/scheduler/lease-timing";
 import {
   type GatedTestClientScope,
   withGatedTestClients,
 } from "../tests/gated-test-database";
+import { ISOLATED_MIGRATION_DRAIN } from "../tests/helpers/migration-drain-confirmation";
 import {
   MIGRATION_LOCK_MANIFEST_FILE,
   pendingMigrationLockTables,
@@ -76,12 +78,15 @@ const withBundle = async (
     );
     mkdirSync(path.join(folder, name));
     writeFileSync(path.join(folder, name, "migration.sql"), source);
-    const manifest = generateMigrationLockManifest([
-      {
-        file: `apps/api/drizzle/${name}/migration.sql`,
-        source,
-      },
-    ]);
+    const fullManifest = generateMigrationLockManifest(
+      readMigrationLockSources(),
+    );
+    const entry =
+      fullManifest.migrations[name] ?? panic(`Missing real migration ${name}`);
+    const manifest = {
+      version: fullManifest.version,
+      migrations: { [name]: entry },
+    };
     writeFileSync(
       path.join(folder, MIGRATION_LOCK_MANIFEST_FILE),
       JSON.stringify(manifest),
@@ -127,6 +132,7 @@ describe.skipIf(!enabled)("migration runner table lease admission", () => {
           expect(originalColumns.length).toBeGreaterThan(0);
           const error = await rejectionOf(
             runMigrations({
+              manualDrainConfirmation: ISOLATED_MIGRATION_DRAIN,
               connection,
               databaseUrl,
               migrationsFolder,
@@ -190,6 +196,7 @@ describe.skipIf(!enabled)("migration runner table lease admission", () => {
         try {
           const error = await rejectionOf(
             runMigrations({
+              manualDrainConfirmation: ISOLATED_MIGRATION_DRAIN,
               connection,
               databaseUrl,
               migrationsFolder,
@@ -239,6 +246,7 @@ describe.skipIf(!enabled)("migration runner table lease admission", () => {
             ),
           ).toBe(true);
           const result = await runMigrations({
+            manualDrainConfirmation: ISOLATED_MIGRATION_DRAIN,
             connection,
             databaseUrl,
             migrationsFolder,

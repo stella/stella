@@ -106,7 +106,12 @@ const runMigrateEntrypoint = async (environment: Record<string, string>) => {
     nodePath.join(directory, ".env.test"),
     "NODE_ENV=test\nDATABASE_URL=postgres://wrong-test-database.invalid/cloud_test\nREDIS_URL=redis://127.0.0.1:16379\nDB_LOAD_GATE_EBS_SIGNAL=disabled\n",
   );
-  for (const dependency of ["db-url.ts", "env-db-load-gate.ts", "lib"]) {
+  for (const dependency of [
+    "db-url.ts",
+    "env-db-load-gate.ts",
+    "env-migration.ts",
+    "lib",
+  ]) {
     await symlink(
       nodePath.join(API_ROOT, "src", dependency),
       nodePath.join(directory, "src", dependency),

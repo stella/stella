@@ -23,6 +23,7 @@ import migrationAliasInventory from "../lib/db/migration-alias-inventory.json";
 import { assertMigrationHistory } from "../lib/db/migration-history";
 import { isPgError, PG_ERROR } from "../lib/pg-error";
 import { withGatedTestClients } from "../tests/gated-test-database";
+import { ISOLATED_MIGRATION_DRAIN } from "../tests/helpers/migration-drain-confirmation";
 import {
   CORPUS_SCHEMA_LANE,
   CORPUS_SCHEMA_LANE_TRY_SHARED_XACT_SQL,
@@ -187,6 +188,7 @@ const withScratch = async <T>(
               const connection = await openScratchClient().sql.reserve();
               try {
                 return await runMigrations({
+                  manualDrainConfirmation: ISOLATED_MIGRATION_DRAIN,
                   connection,
                   migrationsFolder: folder,
                   ebs: DISABLED_EBS,
@@ -603,6 +605,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
             const secondPid = await backendPid(second);
             await gate.unsafe(HOLD_SCHEMA_GATE);
             const firstRun = runMigrations({
+              manualDrainConfirmation: ISOLATED_MIGRATION_DRAIN,
               connection: first,
               migrationsFolder: folder,
               ebs: DISABLED_EBS,
@@ -613,6 +616,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
               // The first run holds the lane while its schema SQL waits.
               await waitUntilBlocked(observer, firstPid);
               const secondRun = runMigrations({
+                manualDrainConfirmation: ISOLATED_MIGRATION_DRAIN,
                 connection: second,
                 migrationsFolder: folder,
                 ebs: DISABLED_EBS,
@@ -679,6 +683,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
           const connection = await openClient().reserve();
           try {
             await runMigrations({
+              manualDrainConfirmation: ISOLATED_MIGRATION_DRAIN,
               connection,
               migrationsFolder: folder,
               ebs: DISABLED_EBS,
@@ -711,6 +716,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
               await rejectionOf(
                 async () =>
                   await runMigrations({
+                    manualDrainConfirmation: ISOLATED_MIGRATION_DRAIN,
                     connection,
                     migrationsFolder: folder,
                     ebs: DISABLED_EBS,
@@ -755,6 +761,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
           const timings: MigrationTimingRecord[] = [];
           try {
             const single = await runMigrations({
+              manualDrainConfirmation: ISOLATED_MIGRATION_DRAIN,
               connection,
               migrationsFolder: folder,
               ebs: DISABLED_EBS,
@@ -795,6 +802,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
             const holds = new Set<unknown>();
             const sleeps: number[] = [];
             const settled = await runMigrationsUntilSettled({
+              manualDrainConfirmation: ISOLATED_MIGRATION_DRAIN,
               connection,
               migrationsFolder: folder,
               ebs: DISABLED_EBS,
@@ -847,6 +855,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
           const connection = await openClient().reserve();
           try {
             const run = runMigrations({
+              manualDrainConfirmation: ISOLATED_MIGRATION_DRAIN,
               connection,
               migrationsFolder: folder,
               ebs: DISABLED_EBS,
@@ -927,6 +936,8 @@ if (!runPostgresTests || databaseUrl === undefined) {
               nodePath.join(import.meta.dir, "migrate.ts"),
             ],
             env: {
+              MIGRATE_MANUAL_DRAIN_CONFIRMED:
+                "Isolated migration entrypoint fixture has no scheduler workers",
               DATABASE_URL: scratchUrl,
               DB_LOAD_GATE_EBS_SIGNAL: "disabled",
               DB_LOAD_GATE_BUSY_WINDOWS: "[]",
@@ -1175,6 +1186,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
             try {
               await holder.held;
               const result = await runMigrations({
+                manualDrainConfirmation: ISOLATED_MIGRATION_DRAIN,
                 connection,
                 databaseUrl: scratchUrl,
                 ebs: DISABLED_EBS,
@@ -1249,6 +1261,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
                 const rejection = await rejectionOf(
                   async () =>
                     await runMigrations({
+                      manualDrainConfirmation: ISOLATED_MIGRATION_DRAIN,
                       connection,
                       databaseUrl: scratchUrl,
                       ebs: DISABLED_EBS,
@@ -1364,6 +1377,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
           try {
             const initial = appliedResult(
               await runMigrations({
+                manualDrainConfirmation: ISOLATED_MIGRATION_DRAIN,
                 connection: initialConnection,
                 migrationsFolder: corpusFolder,
                 ebs: DISABLED_EBS,
@@ -1393,6 +1407,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
               try {
                 const result = appliedResult(
                   await runMigrations({
+                    manualDrainConfirmation: ISOLATED_MIGRATION_DRAIN,
                     connection,
                     migrationsFolder: corpusFolder,
                     ebs: DISABLED_EBS,

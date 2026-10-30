@@ -1,5 +1,13 @@
 import { sql } from "drizzle-orm";
-import { check, index, pgTable, primaryKey, text } from "drizzle-orm/pg-core";
+import {
+  check,
+  index,
+  integer,
+  pgPolicy,
+  pgTable,
+  primaryKey,
+  text,
+} from "drizzle-orm/pg-core";
 
 import { timestamptz } from "../columns";
 
@@ -22,6 +30,12 @@ export const schedulerTableLeases = pgTable.withRLS(
     expiresAt: timestamptz("expires_at").notNull(),
   },
   (table) => [
+    pgPolicy("scheduler_table_leases_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.scheduler_table_leases'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.scheduler_table_leases'::regclass)`,
+    }),
     primaryKey({
       columns: [table.tableName, table.holderKind, table.holderId],
     }),
@@ -50,5 +64,23 @@ export const schedulerTableLeases = pgTable.withRLS(
       "scheduler_table_lease_kind_mode",
       sql`(${table.holderKind} = 'job' AND ${table.mode} = 'shared' AND ${table.grantedAt} IS NOT NULL) OR (${table.holderKind} = 'migration' AND ${table.mode} = 'exclusive')`,
     ),
+  ],
+);
+
+/** Durable evidence of successful lease-aware scheduler admission. */
+export const schedulerTableLeaseActivity = pgTable.withRLS(
+  "scheduler_table_lease_activity",
+  {
+    slot: integer("slot").primaryKey().default(0),
+    lastClaimedAt: timestamptz("last_claimed_at").notNull(),
+  },
+  (table) => [
+    pgPolicy("scheduler_table_lease_activity_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.scheduler_table_lease_activity'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.scheduler_table_lease_activity'::regclass)`,
+    }),
+    check("scheduler_table_lease_activity_singleton", sql`${table.slot} = 0`),
   ],
 );

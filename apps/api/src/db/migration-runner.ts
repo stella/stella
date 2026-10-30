@@ -7,6 +7,7 @@ import { migrate as pgCoreMigrate } from "drizzle-orm/pg-core";
 
 import { declareFingerprintFields } from "@stll/errors";
 
+import type { MigrationDrainConfirmation } from "../env-migration";
 import {
   MIGRATION_SCHEMA_RUN_LOCK_QUERY,
   MIGRATION_SCHEMA_RUN_UNLOCK_QUERY,
@@ -36,6 +37,8 @@ import {
   runLockRetryLadder,
 } from "./lock-retry-ladder";
 import type { LockRetryConfig, LockRetryRuntime } from "./lock-retry-ladder";
+import { assertMigrationCutover } from "./migration-cutover";
+import type { MigrationCutoverEvent } from "./migration-cutover";
 import {
   pendingMigrationLockTables,
   readMigrationLockManifest,
@@ -66,6 +69,7 @@ import { terminateReserved } from "./sql-close";
 import {
   acquireMigrationTableLeases,
   ensureTableLeaseQueue,
+  TABLE_LEASE_MIGRATION,
 } from "./table-lease-queue";
 
 type LedgerRow = {
@@ -546,6 +550,22 @@ const prepareSchemaPhase = async ({
   };
 };
 
+type ReadMigrationLedgerOptions = {
+  database: Pick<ReturnType<typeof createDatabase>, "execute">;
+  migrationsSchema: string;
+  migrationsTable: string;
+};
+
+const readMigrationLedger = async ({
+  database,
+  migrationsSchema,
+  migrationsTable,
+}: ReadMigrationLedgerOptions) =>
+  await database.execute<LedgerRow>(sql`
+    SELECT id, hash, created_at, name
+    FROM ${sql.identifier(migrationsSchema)}.${sql.identifier(migrationsTable)} ORDER BY id
+  `);
+
 type VerifyMigrationReceiptsOptions = {
   database: ReturnType<typeof createDatabase>;
   readLedger: () => Promise<readonly LedgerRow[]>;
@@ -675,6 +695,8 @@ type RunMigrationsOptions = {
   timing?: MigrationTiming;
   lockTelemetry?: MigrationLockTelemetry;
   reserveSchemaObserver?: () => Promise<OnlineMigrationConnection>;
+  manualDrainConfirmation?: MigrationDrainConfirmation;
+  cutoverEmit?: (event: MigrationCutoverEvent) => void;
   /** Bounded table admission and event sink, injectable for database tests. */
   tableLeaseOptions?: Pick<
     Parameters<typeof acquireMigrationTableLeases>[0],
@@ -910,6 +932,103 @@ const releaseSchemaResources = async ({
   }
 };
 
+type PendingMigrationCutoverOptions = {
+  connection: ReservedSQL;
+  migrations: ReturnType<typeof readMigrationFiles>;
+  manifest: ReturnType<typeof readMigrationLockManifest>;
+  migrationsSchema: string;
+  migrationsTable: string;
+  confirmation: MigrationDrainConfirmation;
+  emit: RunMigrationsOptions["cutoverEmit"];
+};
+
+const assertPendingMigrationCutover = async ({
+  connection,
+  migrations,
+  manifest,
+  migrationsSchema,
+  migrationsTable,
+  confirmation,
+  emit,
+}: PendingMigrationCutoverOptions) => {
+  const database = createDatabase({ client: connection });
+  const [table] = await database.execute<{ exists: boolean }>(sql`
+    SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_class relation
+      JOIN pg_catalog.pg_namespace namespace ON namespace.oid = relation.relnamespace
+      WHERE namespace.nspname = ${migrationsSchema} AND relation.relname = ${migrationsTable}) AS exists
+  `);
+  const exists =
+    table?.exists ?? panic("Missing migration ledger presence result");
+  const rows = exists
+    ? await database.execute<LedgerRow>(sql`
+    SELECT id, hash, created_at, to_jsonb(ledger)->>'name' AS name
+    FROM ${sql.identifier(migrationsSchema)}.${sql.identifier(migrationsTable)} AS ledger ORDER BY id
+  `)
+    : [];
+  const decisions = planLedgerAdoption({
+    rows,
+    bundle: migrations,
+    inventory: migrationAliasInventory,
+  });
+  const appliedNames = new Set(
+    decisions.flatMap((decision) =>
+      decision.type === "mapped" ? [decision.name] : [],
+    ),
+  );
+  const pendingNames = migrations
+    .filter(({ name }) => !appliedNames.has(name))
+    .map(({ name }) => name);
+  await assertMigrationCutover({
+    connection: {
+      query: async (query, params = []) =>
+        await connection.unsafe(query, [...params]),
+    },
+    tables: pendingMigrationLockTables(manifest, pendingNames),
+    confirmation,
+    emit,
+  });
+};
+
+type MigrationRunResultOptions = {
+  online: Awaited<ReturnType<typeof runOnlineMigrations>>;
+  predicted: ReturnType<typeof getMigrationsToRun>;
+  inserted: readonly LedgerRow[];
+};
+
+const migrationRunResult = ({
+  online,
+  predicted,
+  inserted,
+}: MigrationRunResultOptions) => {
+  const predictedNames = predicted.map(({ name }) => name);
+  const insertedNames = inserted.map(({ name }) => name);
+  if (online.type === "deferred") {
+    return {
+      status: "online_deferred" as const,
+      step: online.step,
+      retryAfterMs: online.retryAfterMs,
+      predictedNames,
+      insertedNames,
+    };
+  }
+  return { status: "applied" as const, predictedNames, insertedNames };
+};
+
+const schemaMigrationStatements = (
+  migrations: ReturnType<typeof readMigrationFiles>,
+  lockTimeoutMs: number,
+) =>
+  migrations.map((migration) => ({
+    ...migration,
+    // The coordinator already applied this DDL atomically before table admission.
+    sql:
+      migration.name === TABLE_LEASE_MIGRATION
+        ? []
+        : migration.sql.map((statement) =>
+            withMigrationLockTimeout(statement, lockTimeoutMs),
+          ),
+  }));
+
 export const runMigrations = async ({
   connection,
   databaseUrl,
@@ -925,6 +1044,8 @@ export const runMigrations = async ({
   reserveSchemaObserver = async () =>
     await openOnlineIndexObserver(databaseUrl),
   tableLeaseOptions,
+  manualDrainConfirmation = { type: "automatic" },
+  cutoverEmit,
 }: RunMigrationsOptions) => {
   const bundle = readMigrationFiles({ migrationsFolder });
   const manifest = readMigrationLockManifest(migrationsFolder, bundle);
@@ -948,6 +1069,15 @@ export const runMigrations = async ({
     // draining its table leases may still need to enter that lane to finish.
     await connection.unsafe(MIGRATION_SCHEMA_RUN_LOCK_QUERY);
     schemaRunHeld = true;
+    await assertPendingMigrationCutover({
+      connection,
+      migrations: bundle,
+      manifest,
+      migrationsSchema,
+      migrationsTable,
+      confirmation: manualDrainConfirmation,
+      emit: cutoverEmit,
+    });
     schemaObserver = await reserveSchemaObserver();
     const observeSchema = await createSchemaObservation({
       observer: schemaObserver,
@@ -1000,11 +1130,11 @@ export const runMigrations = async ({
     });
     await tableLeases?.assertHeld();
     const readLedger = async () =>
-      await database.execute<LedgerRow>(sql`
-        SELECT id, hash, created_at, name
-        FROM ${sql.identifier(migrationsSchema)}.${sql.identifier(migrationsTable)}
-        ORDER BY id
-      `);
+      await readMigrationLedger({
+        database,
+        migrationsSchema,
+        migrationsTable,
+      });
     await applySchemaMigrationsRetryingLockWaits({
       connection,
       connectionState: () => session.state,
@@ -1017,12 +1147,7 @@ export const runMigrations = async ({
           "schema.pending",
           async () =>
             await pgCoreMigrate(
-              migrations.map((migration) => ({
-                ...migration,
-                sql: migration.sql.map((statement) =>
-                  withMigrationLockTimeout(statement, lockTimeoutMs),
-                ),
-              })),
+              schemaMigrationStatements(migrations, lockTimeoutMs),
               database,
               { migrationsFolder, migrationsSchema, migrationsTable },
             ),
@@ -1084,18 +1209,7 @@ export const runMigrations = async ({
       retriesSpent: clock.retriesSpent,
       outcome: online.type,
     });
-    const predictedNames = predicted.map(({ name }) => name);
-    const insertedNames = inserted.map(({ name }) => name);
-    if (online.type === "deferred") {
-      return {
-        status: "online_deferred" as const,
-        step: online.step,
-        retryAfterMs: online.retryAfterMs,
-        predictedNames,
-        insertedNames,
-      };
-    }
-    return { status: "applied" as const, predictedNames, insertedNames };
+    return migrationRunResult({ online, predicted, inserted });
   } catch (error: unknown) {
     clock.retriesSpent =
       lockTelemetry.retriesSpent -

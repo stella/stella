@@ -4,14 +4,23 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## scheduler_table_leases · `schedulerTableLeases` · table-leases.ts:9 · rls
+## scheduler_table_leases · `schedulerTableLeases` · table-leases.ts:17 · rls
 
 ```text
-scheduler_table_leases.table_name    text         not null          table-leases.ts:12
-scheduler_table_leases.holder_kind   text         not null          table-leases.ts:13
-scheduler_table_leases.holder_id     text         not null          table-leases.ts:16
-scheduler_table_leases.mode          text         not null          table-leases.ts:17
-scheduler_table_leases.requested_at  timestamptz  default,not null  table-leases.ts:18
-scheduler_table_leases.granted_at    timestamptz  null              table-leases.ts:21
-scheduler_table_leases.expires_at    timestamptz  not null          table-leases.ts:22
+scheduler_table_leases.table_name    text         not null          table-leases.ts:20
+scheduler_table_leases.holder_kind   text         not null          table-leases.ts:21
+scheduler_table_leases.holder_id     text         not null          table-leases.ts:24
+scheduler_table_leases.mode          text         not null          table-leases.ts:25
+scheduler_table_leases.requested_at  timestamptz  default,not null  table-leases.ts:26
+scheduler_table_leases.granted_at    timestamptz  null              table-leases.ts:29
+scheduler_table_leases.expires_at    timestamptz  not null          table-leases.ts:30
+```
+
+## scheduler_table_lease_activity · `schedulerTableLeaseActivity` · table-leases.ts:71 · rls
+
+Durable evidence of successful lease-aware scheduler admission.
+
+```text
+scheduler_table_lease_activity.slot             integer      pk,default,not null  table-leases.ts:74
+scheduler_table_lease_activity.last_claimed_at  timestamptz  not null             table-leases.ts:75
 ```

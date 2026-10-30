@@ -270,6 +270,7 @@ export const SCHEMA_TABLE_NAMES = [
   "saved_time_narratives",
   "scheduler_job_runs",
   "scheduler_jobs",
+  "scheduler_table_lease_activity",
   "scheduler_table_leases",
   "scout_runs",
   "search_document_preview_passages",

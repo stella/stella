@@ -854,10 +854,6 @@
       "hash": "5cd2b01d12fb1dcecbfe669f3d897e741e40eb9f4b9ba544d47f527e059e48f1",
       "locks": [
         {
-          "relation": "if",
-          "mode": "ACCESS EXCLUSIVE"
-        },
-        {
           "relation": "workspaces",
           "mode": "ACCESS EXCLUSIVE"
         },
@@ -879,19 +875,15 @@
           "mode": "ACCESS EXCLUSIVE"
         },
         {
-          "relation": "organization",
-          "mode": "SHARE ROW EXCLUSIVE"
-        },
-        {
-          "relation": "prompt_shortcuts",
-          "mode": "ACCESS EXCLUSIVE"
-        },
-        {
-          "relation": "prompt_shortcuts",
+          "relation": "*",
           "mode": "SHARE"
         },
         {
-          "relation": "prompt_shortcuts",
+          "relation": "*",
+          "mode": "SHARE ROW EXCLUSIVE"
+        },
+        {
+          "relation": "organization",
           "mode": "SHARE ROW EXCLUSIVE"
         },
         {
@@ -1102,6 +1094,10 @@
         },
         {
           "relation": "*",
+          "mode": "SHARE"
+        },
+        {
+          "relation": "*",
           "mode": "SHARE ROW EXCLUSIVE"
         },
         {
@@ -1110,30 +1106,6 @@
         },
         {
           "relation": "entity_versions",
-          "mode": "SHARE ROW EXCLUSIVE"
-        },
-        {
-          "relation": "folio_collab_session_tokens",
-          "mode": "ACCESS EXCLUSIVE"
-        },
-        {
-          "relation": "folio_collab_session_tokens",
-          "mode": "SHARE"
-        },
-        {
-          "relation": "folio_collab_session_tokens",
-          "mode": "SHARE ROW EXCLUSIVE"
-        },
-        {
-          "relation": "folio_collab_sessions",
-          "mode": "ACCESS EXCLUSIVE"
-        },
-        {
-          "relation": "folio_collab_sessions",
-          "mode": "SHARE"
-        },
-        {
-          "relation": "folio_collab_sessions",
           "mode": "SHARE ROW EXCLUSIVE"
         },
         {
@@ -1302,10 +1274,6 @@
         {
           "relation": "anonymization_blacklist_entries",
           "mode": "SHARE"
-        },
-        {
-          "relation": "if",
-          "mode": "ACCESS EXCLUSIVE"
         },
         {
           "relation": "workspaces",
@@ -2131,15 +2099,11 @@
           "mode": "ACCESS EXCLUSIVE"
         },
         {
-          "relation": "playbooks",
-          "mode": "ACCESS EXCLUSIVE"
-        },
-        {
-          "relation": "playbooks",
+          "relation": "*",
           "mode": "SHARE"
         },
         {
-          "relation": "playbooks",
+          "relation": "*",
           "mode": "SHARE ROW EXCLUSIVE"
         },
         {
@@ -2221,10 +2185,6 @@
         {
           "relation": "playbook_definitions",
           "mode": "SHARE ROW EXCLUSIVE"
-        },
-        {
-          "relation": "playbooks",
-          "mode": "ACCESS EXCLUSIVE"
         }
       ]
     },
@@ -2435,7 +2395,7 @@
       "hash": "25a24c362624ced98462e63d21026a875e783502e3379c3c4009c5fcfa638e4e",
       "locks": [
         {
-          "relation": "if",
+          "relation": "*",
           "mode": "ACCESS EXCLUSIVE"
         }
       ]
@@ -2486,7 +2446,7 @@
       "hash": "25a24c362624ced98462e63d21026a875e783502e3379c3c4009c5fcfa638e4e",
       "locks": [
         {
-          "relation": "if",
+          "relation": "*",
           "mode": "ACCESS EXCLUSIVE"
         }
       ]
@@ -2508,11 +2468,15 @@
           "mode": "ACCESS EXCLUSIVE"
         },
         {
-          "relation": "stella_authorized_workspaces",
+          "relation": "member",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
           "relation": "user",
+          "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "workspace_members",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
@@ -2892,10 +2856,6 @@
           "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
-          "relation": "if",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
           "relation": "legislation_documents",
           "mode": "SHARE UPDATE EXCLUSIVE"
         }
@@ -2944,10 +2904,6 @@
       "locks": [
         {
           "relation": "contact_search_documents",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "if",
           "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
@@ -3074,6 +3030,10 @@
       "locks": [
         {
           "relation": "*",
+          "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "*",
           "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
@@ -3081,160 +3041,320 @@
           "mode": "ACCESS EXCLUSIVE"
         },
         {
+          "relation": "account",
+          "mode": "SHARE UPDATE EXCLUSIVE"
+        },
+        {
           "relation": "account_deletion_requests",
           "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "account_deletion_requests",
+          "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
           "relation": "agent_assertion_replay",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
+          "relation": "agent_assertion_replay",
+          "mode": "SHARE UPDATE EXCLUSIVE"
+        },
+        {
           "relation": "agent_delegation",
           "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "agent_delegation",
+          "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
           "relation": "agent_registration",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
+          "relation": "agent_registration",
+          "mode": "SHARE UPDATE EXCLUSIVE"
+        },
+        {
           "relation": "agent_skill_resources",
           "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "agent_skill_resources",
+          "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
           "relation": "agent_skills",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
+          "relation": "agent_skills",
+          "mode": "SHARE UPDATE EXCLUSIVE"
+        },
+        {
           "relation": "agent_trusted_issuer",
           "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "agent_trusted_issuer",
+          "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
           "relation": "anonymization_allowlist_entries",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
+          "relation": "anonymization_allowlist_entries",
+          "mode": "SHARE UPDATE EXCLUSIVE"
+        },
+        {
           "relation": "anonymization_blacklist_entries",
           "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "anonymization_blacklist_entries",
+          "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
           "relation": "apikey",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
+          "relation": "apikey",
+          "mode": "SHARE UPDATE EXCLUSIVE"
+        },
+        {
           "relation": "audit_logs",
           "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "audit_logs",
+          "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
           "relation": "billing_codes",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
+          "relation": "billing_codes",
+          "mode": "SHARE UPDATE EXCLUSIVE"
+        },
+        {
           "relation": "case_law_citations",
           "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "case_law_citations",
+          "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
           "relation": "case_law_court_weights",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
+          "relation": "case_law_court_weights",
+          "mode": "SHARE UPDATE EXCLUSIVE"
+        },
+        {
           "relation": "case_law_decisions",
           "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "case_law_decisions",
+          "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
           "relation": "case_law_index_jobs",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
+          "relation": "case_law_index_jobs",
+          "mode": "SHARE UPDATE EXCLUSIVE"
+        },
+        {
           "relation": "case_law_ingestion_events",
           "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "case_law_ingestion_events",
+          "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
           "relation": "case_law_ingestion_failures",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
+          "relation": "case_law_ingestion_failures",
+          "mode": "SHARE UPDATE EXCLUSIVE"
+        },
+        {
           "relation": "case_law_matter_links",
           "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "case_law_matter_links",
+          "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
           "relation": "case_law_polarity_rules",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
+          "relation": "case_law_polarity_rules",
+          "mode": "SHARE UPDATE EXCLUSIVE"
+        },
+        {
           "relation": "case_law_search_documents",
           "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "case_law_search_documents",
+          "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
           "relation": "case_law_sources",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
+          "relation": "case_law_sources",
+          "mode": "SHARE UPDATE EXCLUSIVE"
+        },
+        {
           "relation": "cell_metadata",
           "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "cell_metadata",
+          "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
           "relation": "chat_message_search_documents",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
+          "relation": "chat_message_search_documents",
+          "mode": "SHARE UPDATE EXCLUSIVE"
+        },
+        {
           "relation": "chat_messages",
           "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "chat_messages",
+          "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
           "relation": "chat_thread_compactions",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
+          "relation": "chat_thread_compactions",
+          "mode": "SHARE UPDATE EXCLUSIVE"
+        },
+        {
           "relation": "chat_thread_search_documents",
           "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "chat_thread_search_documents",
+          "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
           "relation": "chat_threads",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
+          "relation": "chat_threads",
+          "mode": "SHARE UPDATE EXCLUSIVE"
+        },
+        {
           "relation": "clause_categories",
           "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "clause_categories",
+          "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
           "relation": "clause_variants",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
+          "relation": "clause_variants",
+          "mode": "SHARE UPDATE EXCLUSIVE"
+        },
+        {
           "relation": "clause_versions",
           "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "clause_versions",
+          "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
           "relation": "clauses",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
+          "relation": "clauses",
+          "mode": "SHARE UPDATE EXCLUSIVE"
+        },
+        {
           "relation": "contact_relationships",
           "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "contact_relationships",
+          "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
           "relation": "contact_search_documents",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
+          "relation": "contact_search_documents",
+          "mode": "SHARE UPDATE EXCLUSIVE"
+        },
+        {
           "relation": "contacts",
           "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "contacts",
+          "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
           "relation": "desktop_edit_handoffs",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
+          "relation": "desktop_edit_handoffs",
+          "mode": "SHARE UPDATE EXCLUSIVE"
+        },
+        {
           "relation": "desktop_edit_sessions",
           "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "desktop_edit_sessions",
+          "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
           "relation": "document_types",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
+          "relation": "document_types",
+          "mode": "SHARE UPDATE EXCLUSIVE"
+        },
+        {
           "relation": "docx_suggestions",
           "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "docx_suggestions",
+          "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
           "relation": "entities",
@@ -3245,276 +3365,528 @@
           "mode": "SHARE"
         },
         {
+          "relation": "entities",
+          "mode": "SHARE UPDATE EXCLUSIVE"
+        },
+        {
           "relation": "entity_links",
           "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "entity_links",
+          "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
           "relation": "entity_version_ai_summaries",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
+          "relation": "entity_version_ai_summaries",
+          "mode": "SHARE UPDATE EXCLUSIVE"
+        },
+        {
           "relation": "entity_versions",
           "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "entity_versions",
+          "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
           "relation": "expenses",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
+          "relation": "expenses",
+          "mode": "SHARE UPDATE EXCLUSIVE"
+        },
+        {
           "relation": "extracted_content",
           "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "extracted_content",
+          "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
           "relation": "extraction_runs",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
+          "relation": "extraction_runs",
+          "mode": "SHARE UPDATE EXCLUSIVE"
+        },
+        {
           "relation": "file_chat_threads",
           "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "file_chat_threads",
+          "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
           "relation": "flow_definitions",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
+          "relation": "flow_definitions",
+          "mode": "SHARE UPDATE EXCLUSIVE"
+        },
+        {
           "relation": "flow_runs",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
-          "relation": "folio_collab_session_tokens",
-          "mode": "ACCESS EXCLUSIVE"
-        },
-        {
-          "relation": "folio_collab_sessions",
-          "mode": "ACCESS EXCLUSIVE"
-        },
-        {
-          "relation": "if",
-          "mode": "ACCESS EXCLUSIVE"
+          "relation": "flow_runs",
+          "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
           "relation": "infosoud_tracked_cases",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
+          "relation": "infosoud_tracked_cases",
+          "mode": "SHARE UPDATE EXCLUSIVE"
+        },
+        {
           "relation": "invitation",
           "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "invitation",
+          "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
           "relation": "invoices",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
+          "relation": "invoices",
+          "mode": "SHARE UPDATE EXCLUSIVE"
+        },
+        {
           "relation": "jwks",
           "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "jwks",
+          "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
           "relation": "legislation_documents",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
+          "relation": "legislation_documents",
+          "mode": "SHARE UPDATE EXCLUSIVE"
+        },
+        {
           "relation": "legislation_index_jobs",
           "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "legislation_index_jobs",
+          "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
           "relation": "legislation_search_documents",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
+          "relation": "legislation_search_documents",
+          "mode": "SHARE UPDATE EXCLUSIVE"
+        },
+        {
           "relation": "legislation_sources",
           "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "legislation_sources",
+          "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
           "relation": "mcp_connectors",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
+          "relation": "mcp_connectors",
+          "mode": "SHARE UPDATE EXCLUSIVE"
+        },
+        {
           "relation": "mcp_oauth_clients",
           "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "mcp_oauth_clients",
+          "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
           "relation": "mcp_oauth_state",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
+          "relation": "mcp_oauth_state",
+          "mode": "SHARE UPDATE EXCLUSIVE"
+        },
+        {
           "relation": "mcp_user_connections",
           "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "mcp_user_connections",
+          "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
           "relation": "member",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
+          "relation": "member",
+          "mode": "SHARE UPDATE EXCLUSIVE"
+        },
+        {
           "relation": "oauth_access_token",
           "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "oauth_access_token",
+          "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
           "relation": "oauth_client",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
+          "relation": "oauth_client",
+          "mode": "SHARE UPDATE EXCLUSIVE"
+        },
+        {
           "relation": "oauth_consent",
           "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "oauth_consent",
+          "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
           "relation": "oauth_refresh_token",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
+          "relation": "oauth_refresh_token",
+          "mode": "SHARE UPDATE EXCLUSIVE"
+        },
+        {
           "relation": "organization",
           "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "organization",
+          "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
           "relation": "organization_settings",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
+          "relation": "organization_settings",
+          "mode": "SHARE UPDATE EXCLUSIVE"
+        },
+        {
           "relation": "pending_uploads",
           "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "pending_uploads",
+          "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
           "relation": "playbook_definition_versions",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
+          "relation": "playbook_definition_versions",
+          "mode": "SHARE UPDATE EXCLUSIVE"
+        },
+        {
           "relation": "playbook_definitions",
           "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "playbook_definitions",
+          "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
           "relation": "properties",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
+          "relation": "properties",
+          "mode": "SHARE UPDATE EXCLUSIVE"
+        },
+        {
           "relation": "rate_entries",
           "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "rate_entries",
+          "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
           "relation": "rate_tables",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
+          "relation": "rate_tables",
+          "mode": "SHARE UPDATE EXCLUSIVE"
+        },
+        {
           "relation": "report_exports",
           "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "report_exports",
+          "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
           "relation": "saved_searches",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
+          "relation": "saved_searches",
+          "mode": "SHARE UPDATE EXCLUSIVE"
+        },
+        {
           "relation": "scheduler_jobs",
           "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "scheduler_jobs",
+          "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
           "relation": "search_documents",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
+          "relation": "search_documents",
+          "mode": "SHARE UPDATE EXCLUSIVE"
+        },
+        {
           "relation": "session",
           "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "session",
+          "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
           "relation": "sharepoint_connections",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
+          "relation": "sharepoint_connections",
+          "mode": "SHARE UPDATE EXCLUSIVE"
+        },
+        {
           "relation": "sharepoint_oauth_state",
           "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "sharepoint_oauth_state",
+          "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
           "relation": "style_sets",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
+          "relation": "style_sets",
+          "mode": "SHARE UPDATE EXCLUSIVE"
+        },
+        {
           "relation": "task_assignees",
           "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "task_assignees",
+          "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
           "relation": "template_categories",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
+          "relation": "template_categories",
+          "mode": "SHARE UPDATE EXCLUSIVE"
+        },
+        {
           "relation": "template_chat_threads",
           "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "template_chat_threads",
+          "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
           "relation": "template_clauses",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
+          "relation": "template_clauses",
+          "mode": "SHARE UPDATE EXCLUSIVE"
+        },
+        {
           "relation": "template_fills",
           "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "template_fills",
+          "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
           "relation": "template_recipes",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
+          "relation": "template_recipes",
+          "mode": "SHARE UPDATE EXCLUSIVE"
+        },
+        {
           "relation": "template_versions",
           "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "template_versions",
+          "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
           "relation": "templates",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
+          "relation": "templates",
+          "mode": "SHARE UPDATE EXCLUSIVE"
+        },
+        {
           "relation": "time_entries",
           "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "time_entries",
+          "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
           "relation": "two_factor",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
+          "relation": "two_factor",
+          "mode": "SHARE UPDATE EXCLUSIVE"
+        },
+        {
           "relation": "usage_allocations",
           "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "usage_allocations",
+          "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
           "relation": "usage_entitlements",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
+          "relation": "usage_entitlements",
+          "mode": "SHARE UPDATE EXCLUSIVE"
+        },
+        {
           "relation": "usage_events",
           "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "usage_events",
+          "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
           "relation": "usage_policies",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
+          "relation": "usage_policies",
+          "mode": "SHARE UPDATE EXCLUSIVE"
+        },
+        {
           "relation": "user",
           "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "user",
+          "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
           "relation": "user_files",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
+          "relation": "user_files",
+          "mode": "SHARE UPDATE EXCLUSIVE"
+        },
+        {
           "relation": "verification",
           "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "verification",
+          "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
           "relation": "workspace_contacts",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
+          "relation": "workspace_contacts",
+          "mode": "SHARE UPDATE EXCLUSIVE"
+        },
+        {
           "relation": "workspace_members",
           "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "workspace_members",
+          "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
           "relation": "workspace_search_documents",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
+          "relation": "workspace_search_documents",
+          "mode": "SHARE UPDATE EXCLUSIVE"
+        },
+        {
           "relation": "workspace_view_templates",
           "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "workspace_view_templates",
+          "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
           "relation": "workspace_views",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
+          "relation": "workspace_views",
+          "mode": "SHARE UPDATE EXCLUSIVE"
+        },
+        {
           "relation": "workspaces",
           "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "workspaces",
+          "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
     },
@@ -3586,10 +3958,6 @@
         {
           "relation": "fields",
           "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "if",
-          "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
     },
@@ -3615,10 +3983,6 @@
         {
           "relation": "fields",
           "mode": "SHARE ROW EXCLUSIVE"
-        },
-        {
-          "relation": "if",
-          "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
     },
@@ -3627,10 +3991,6 @@
       "locks": [
         {
           "relation": "document_processing_runs",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "if",
           "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
@@ -3670,10 +4030,6 @@
         {
           "relation": "case_law_decisions",
           "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "if",
-          "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
     },
@@ -3702,10 +4058,6 @@
       "hash": "5acca12a86bb3ee3e6591a7c7f3e40ea21afc41f804769337b36d0b94217c66d",
       "locks": [
         {
-          "relation": "if",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
           "relation": "pending_uploads",
           "mode": "SHARE UPDATE EXCLUSIVE"
         }
@@ -3720,10 +4072,6 @@
         },
         {
           "relation": "case_law_citations",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "if",
           "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
@@ -3805,10 +4153,6 @@
         {
           "relation": "audit_logs",
           "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "if",
-          "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
     },
@@ -3825,36 +4169,16 @@
       "hash": "4e35ff3e0fce8117382eb87ff73df18751954da90014ca9a2619a4a544de89e8",
       "locks": [
         {
-          "relation": "case_law_corpus_index_backfills",
+          "relation": "*",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
-          "relation": "case_law_corpus_index_backfills",
+          "relation": "*",
           "mode": "SHARE"
         },
         {
-          "relation": "case_law_corpus_index_backfills",
+          "relation": "*",
           "mode": "SHARE ROW EXCLUSIVE"
-        },
-        {
-          "relation": "case_law_corpus_index_projections",
-          "mode": "ACCESS EXCLUSIVE"
-        },
-        {
-          "relation": "case_law_corpus_index_projections",
-          "mode": "SHARE"
-        },
-        {
-          "relation": "case_law_corpus_index_source_reconciliations",
-          "mode": "ACCESS EXCLUSIVE"
-        },
-        {
-          "relation": "case_law_corpus_index_source_reconciliations",
-          "mode": "SHARE"
-        },
-        {
-          "relation": "case_law_corpus_index_writer_leases",
-          "mode": "ACCESS EXCLUSIVE"
         },
         {
           "relation": "case_law_decisions",
@@ -3879,10 +4203,6 @@
         {
           "relation": "case_law_sources",
           "mode": "SHARE ROW EXCLUSIVE"
-        },
-        {
-          "relation": "if",
-          "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
           "relation": "legislation_documents",
@@ -3988,10 +4308,6 @@
         {
           "relation": "desktop_edit_sessions",
           "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "if",
-          "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
     },
@@ -4000,10 +4316,6 @@
       "locks": [
         {
           "relation": "case_law_index_jobs",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "if",
           "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
@@ -4042,10 +4354,6 @@
           "mode": "SHARE ROW EXCLUSIVE"
         },
         {
-          "relation": "if",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
           "relation": "report_exports",
           "mode": "ACCESS EXCLUSIVE"
         },
@@ -4064,10 +4372,6 @@
       "locks": [
         {
           "relation": "document_processing_runs",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "if",
           "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
@@ -4093,10 +4397,6 @@
         },
         {
           "relation": "chat_messages",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "chat_messages_id_thread_uidx",
           "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
@@ -4181,7 +4481,7 @@
       "hash": "655f3e0e360230cce2966681c3a685126b8cfb3edb730514ae49314d8f90a78e",
       "locks": [
         {
-          "relation": "case_law_corpus_index_projections",
+          "relation": "*",
           "mode": "ACCESS EXCLUSIVE"
         }
       ]
@@ -4199,10 +4499,6 @@
         },
         {
           "relation": "fields",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "if",
           "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
@@ -4335,11 +4631,11 @@
       "hash": "c019d5ba2372cd10bcae239c50a7ece292f39737e37ae382194d2c32d2d153c5",
       "locks": [
         {
-          "relation": "chat_thread_compactions",
+          "relation": "*",
           "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
-          "relation": "if",
+          "relation": "chat_thread_compactions",
           "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
@@ -4353,11 +4649,11 @@
       "locks": [
         {
           "relation": "workspaces",
-          "mode": "SHARE UPDATE EXCLUSIVE"
+          "mode": "ACCESS EXCLUSIVE"
         },
         {
-          "relation": "workspaces_id_org_unq",
-          "mode": "ACCESS EXCLUSIVE"
+          "relation": "workspaces",
+          "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
     },
@@ -4399,10 +4695,6 @@
     "20260808011000_workspace_navigation_pagination": {
       "hash": "19adfa1694b9b89aad063ee8820ea87253cfe112e573fecfd62fb5b946c3f3a5",
       "locks": [
-        {
-          "relation": "if",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
         {
           "relation": "workspaces",
           "mode": "SHARE UPDATE EXCLUSIVE"
@@ -4448,10 +4740,6 @@
         },
         {
           "relation": "entity_versions",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "entity_versions_id_entity_ws_uidx",
           "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
@@ -4631,7 +4919,7 @@
           "mode": "SHARE ROW EXCLUSIVE"
         },
         {
-          "relation": "time_entries_ws_matter_status_idx",
+          "relation": "time_entries",
           "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
@@ -4654,10 +4942,6 @@
       "locks": [
         {
           "relation": "time_entries",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "time_entries_one_active_timer_per_user_idx",
           "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
@@ -4817,10 +5101,6 @@
         },
         {
           "relation": "chat_threads",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "if",
           "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
@@ -5260,6 +5540,10 @@
       "hash": "ba327b5170ae0719f386bc44b788626d9c79cf78acc282015d2fa45927d96d06",
       "locks": [
         {
+          "relation": "*",
+          "mode": "ACCESS EXCLUSIVE"
+        },
+        {
           "relation": "anonymization_allowlist_entries",
           "mode": "ACCESS EXCLUSIVE"
         },
@@ -5281,10 +5565,6 @@
         },
         {
           "relation": "file_chat_threads",
-          "mode": "ACCESS EXCLUSIVE"
-        },
-        {
-          "relation": "folio_collab_sessions",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
@@ -5380,10 +5660,6 @@
         {
           "relation": "document_review_runs",
           "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "if",
-          "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
     },
@@ -5397,10 +5673,6 @@
         {
           "relation": "playbook_definitions",
           "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "playbook_definitions_org_starter_id_uidx",
-          "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
     },
@@ -5409,10 +5681,6 @@
       "locks": [
         {
           "relation": "audit_logs",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "if",
           "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
@@ -5457,10 +5725,6 @@
         {
           "relation": "case_law_decisions",
           "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "if",
-          "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
     },
@@ -5484,6 +5748,10 @@
           "mode": "SHARE"
         },
         {
+          "relation": "usage_lane_counters",
+          "mode": "SHARE ROW EXCLUSIVE"
+        },
+        {
           "relation": "usage_policies",
           "mode": "ACCESS EXCLUSIVE"
         },
@@ -5498,10 +5766,6 @@
       "locks": [
         {
           "relation": "case_law_decisions",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "if",
           "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
@@ -5530,6 +5794,10 @@
           "mode": "SHARE"
         },
         {
+          "relation": "usage_seat_assignments",
+          "mode": "SHARE ROW EXCLUSIVE"
+        },
+        {
           "relation": "user",
           "mode": "SHARE ROW EXCLUSIVE"
         }
@@ -5539,11 +5807,11 @@
       "hash": "83de39e35d41bd60b6a521e81a078ce2bb1520e063178ee2aeae878d47466fb1",
       "locks": [
         {
-          "relation": "case_law_corpus_index_backfills",
+          "relation": "*",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
-          "relation": "case_law_corpus_index_backfills",
+          "relation": "*",
           "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
@@ -5556,10 +5824,6 @@
         },
         {
           "relation": "case_law_decisions",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "if",
           "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
@@ -5603,10 +5867,6 @@
         },
         {
           "relation": "case_law_coverage_slices",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "if",
           "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
@@ -5700,10 +5960,6 @@
         {
           "relation": "case_law_polarity_rules",
           "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "if",
-          "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
     },
@@ -5732,10 +5988,6 @@
       "hash": "0369dc21ccd8d16f7cacb17bc14f7e4108434b047b802ba083c3aece977aac32",
       "locks": [
         {
-          "relation": "if",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
           "relation": "legislation_documents",
           "mode": "SHARE UPDATE EXCLUSIVE"
         }
@@ -5747,20 +5999,12 @@
         {
           "relation": "case_law_provision_citations",
           "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "if",
-          "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
     },
     "20260819140000_legislation_expression_by_eli_idx": {
       "hash": "82e10c352c7436292ca5929fb20218905e093b7e3aada6fc00cba0a65441eb71",
       "locks": [
-        {
-          "relation": "if",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
         {
           "relation": "legislation_documents",
           "mode": "SHARE UPDATE EXCLUSIVE"
@@ -5781,20 +6025,12 @@
         {
           "relation": "templates",
           "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "templates_org_pack_template_uidx",
-          "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
     },
     "20260820120000_legislation_updated_trail_index": {
       "hash": "a0a3b5d93dd3a7e2c9b4d5541ae8267ee30068030d1540249003d4be2548a127",
       "locks": [
-        {
-          "relation": "if",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
         {
           "relation": "legislation_documents",
           "mode": "SHARE UPDATE EXCLUSIVE"
@@ -5804,10 +6040,6 @@
     "20260820130000_legislation_search_retry": {
       "hash": "f9adaa9a79f8a47e391782a409ed0e24676a20e352d4585fd04f2f2cc45f8700",
       "locks": [
-        {
-          "relation": "if",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
         {
           "relation": "legislation_search_documents",
           "mode": "ACCESS EXCLUSIVE"
@@ -5823,10 +6055,6 @@
       "locks": [
         {
           "relation": "case_law_citations",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "if",
           "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
@@ -5869,11 +6097,11 @@
       "hash": "413bcd3075f511c8c8e55c24dbf04952bcf73b8065d5d60dbb869a4c600ebe5c",
       "locks": [
         {
-          "relation": "case_law_citations",
+          "relation": "*",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
-          "relation": "case_law_corpus_index_projections",
+          "relation": "case_law_citations",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
@@ -5943,10 +6171,6 @@
       "hash": "f73e2b175d894ccae404bd5e48e26cf973184f85f17b81f251316de9608aaba7",
       "locks": [
         {
-          "relation": "if",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
           "relation": "legislation_documents",
           "mode": "ACCESS EXCLUSIVE"
         },
@@ -5964,31 +6188,7 @@
           "mode": "ACCESS EXCLUSIVE"
         },
         {
-          "relation": "case_law_corpus_index_backfills",
-          "mode": "SHARE ROW EXCLUSIVE"
-        },
-        {
-          "relation": "case_law_corpus_index_count_backfills",
-          "mode": "ACCESS EXCLUSIVE"
-        },
-        {
-          "relation": "case_law_corpus_index_count_backfills",
-          "mode": "SHARE ROW EXCLUSIVE"
-        },
-        {
-          "relation": "case_law_corpus_index_counts",
-          "mode": "ACCESS EXCLUSIVE"
-        },
-        {
-          "relation": "case_law_corpus_index_counts",
-          "mode": "SHARE ROW EXCLUSIVE"
-        },
-        {
-          "relation": "case_law_corpus_index_projections",
-          "mode": "ACCESS EXCLUSIVE"
-        },
-        {
-          "relation": "case_law_corpus_index_projections",
+          "relation": "*",
           "mode": "SHARE ROW EXCLUSIVE"
         }
       ]
@@ -5997,11 +6197,11 @@
       "hash": "2e2aa91f9def98109a476236e2a9f9cc46f535e8307374c420eb8fca99833b7b",
       "locks": [
         {
-          "relation": "case_law_citations",
+          "relation": "*",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
-          "relation": "case_law_corpus_index_projections",
+          "relation": "case_law_citations",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
@@ -6105,10 +6305,6 @@
         {
           "relation": "case_law_decisions",
           "mode": "SHARE ROW EXCLUSIVE"
-        },
-        {
-          "relation": "if",
-          "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
     },
@@ -6138,31 +6334,7 @@
           "mode": "ACCESS EXCLUSIVE"
         },
         {
-          "relation": "case_law_corpus_index_delete_watermarks",
-          "mode": "ACCESS EXCLUSIVE"
-        },
-        {
-          "relation": "case_law_corpus_index_pending_deletes",
-          "mode": "ACCESS EXCLUSIVE"
-        },
-        {
-          "relation": "case_law_corpus_index_pending_deletes",
-          "mode": "SHARE"
-        },
-        {
-          "relation": "legislation_corpus_index_delete_watermarks",
-          "mode": "ACCESS EXCLUSIVE"
-        },
-        {
-          "relation": "legislation_corpus_index_delete_watermarks",
-          "mode": "SHARE"
-        },
-        {
-          "relation": "legislation_corpus_index_pending_deletes",
-          "mode": "ACCESS EXCLUSIVE"
-        },
-        {
-          "relation": "legislation_corpus_index_pending_deletes",
+          "relation": "*",
           "mode": "SHARE"
         }
       ]
@@ -6181,10 +6353,6 @@
         {
           "relation": "case_law_decision_identifier_backfills",
           "mode": "ACCESS EXCLUSIVE"
-        },
-        {
-          "relation": "if",
-          "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
     },
@@ -6222,15 +6390,11 @@
           "mode": "ACCESS EXCLUSIVE"
         },
         {
-          "relation": "case_law_decision_annotations",
-          "mode": "ACCESS EXCLUSIVE"
-        },
-        {
-          "relation": "case_law_decision_annotations",
+          "relation": "*",
           "mode": "SHARE"
         },
         {
-          "relation": "case_law_decision_annotations",
+          "relation": "*",
           "mode": "SHARE ROW EXCLUSIVE"
         },
         {
@@ -6393,10 +6557,6 @@
       "hash": "5a90a8e5401b4cc5250a26fbebcaa0bbe703dbaf6fcfd4925ebb71b8a40f21b0",
       "locks": [
         {
-          "relation": "if",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
           "relation": "oauth_access_token",
           "mode": "SHARE UPDATE EXCLUSIVE"
         },
@@ -6477,10 +6637,6 @@
         {
           "relation": "account",
           "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "account_issuer_account_id_uidx",
-          "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
     },
@@ -6490,10 +6646,6 @@
         {
           "relation": "corpus_index_projection_intents",
           "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "if",
-          "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
     },
@@ -6502,11 +6654,11 @@
       "locks": [
         {
           "relation": "corpus_index_projection_intents",
-          "mode": "SHARE"
+          "mode": "ACCESS EXCLUSIVE"
         },
         {
-          "relation": "corpus_index_projection_intents_live_epoch_uidx",
-          "mode": "ACCESS EXCLUSIVE"
+          "relation": "corpus_index_projection_intents",
+          "mode": "SHARE"
         }
       ]
     },
@@ -6540,10 +6692,6 @@
         {
           "relation": "corpus_index_projection_states",
           "mode": "SHARE ROW EXCLUSIVE"
-        },
-        {
-          "relation": "corpus_index_projection_states_pending_idx",
-          "mode": "ACCESS EXCLUSIVE"
         }
       ]
     },
@@ -6570,10 +6718,6 @@
         {
           "relation": "corpus_index_projection_states",
           "mode": "SHARE"
-        },
-        {
-          "relation": "corpus_index_projection_states_pending_idx",
-          "mode": "ACCESS EXCLUSIVE"
         }
       ]
     },
@@ -6710,10 +6854,6 @@
           "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
-          "relation": "entity_versions_entity_number_uidx",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
           "relation": "folio_collab_room_tokens",
           "mode": "ACCESS EXCLUSIVE"
         },
@@ -6736,14 +6876,6 @@
         {
           "relation": "folio_collab_rooms",
           "mode": "SHARE ROW EXCLUSIVE"
-        },
-        {
-          "relation": "folio_collab_session_tokens",
-          "mode": "ACCESS EXCLUSIVE"
-        },
-        {
-          "relation": "folio_collab_sessions",
-          "mode": "ACCESS EXCLUSIVE"
         },
         {
           "relation": "properties",
@@ -6974,10 +7106,6 @@
         {
           "relation": "docx_suggestions",
           "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "if",
-          "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
     },
@@ -7024,10 +7152,6 @@
       "locks": [
         {
           "relation": "corpus_index_projection_states",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "if",
           "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
@@ -7112,10 +7236,6 @@
         {
           "relation": "document_review_findings",
           "mode": "SHARE"
-        },
-        {
-          "relation": "if",
-          "mode": "ACCESS EXCLUSIVE"
         }
       ]
     },
@@ -7329,10 +7449,6 @@
       "hash": "086d24cb6a0b0216bbd6c28414cf86df29ab227f564f6239471cf79ed00f44ee",
       "locks": [
         {
-          "relation": "if",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
           "relation": "legislation_documents",
           "mode": "SHARE UPDATE EXCLUSIVE"
         }
@@ -7346,27 +7462,11 @@
           "mode": "ACCESS EXCLUSIVE"
         },
         {
-          "relation": "case_law_research_table_decisions",
-          "mode": "ACCESS EXCLUSIVE"
-        },
-        {
-          "relation": "case_law_research_table_decisions",
+          "relation": "*",
           "mode": "SHARE"
         },
         {
-          "relation": "case_law_research_table_decisions",
-          "mode": "SHARE ROW EXCLUSIVE"
-        },
-        {
-          "relation": "case_law_research_tables",
-          "mode": "ACCESS EXCLUSIVE"
-        },
-        {
-          "relation": "case_law_research_tables",
-          "mode": "SHARE"
-        },
-        {
-          "relation": "case_law_research_tables",
+          "relation": "*",
           "mode": "SHARE ROW EXCLUSIVE"
         },
         {
@@ -7389,10 +7489,6 @@
         {
           "relation": "case_law_decisions",
           "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "if",
-          "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
     },
@@ -7404,6 +7500,10 @@
           "mode": "ACCESS EXCLUSIVE"
         },
         {
+          "relation": "*",
+          "mode": "SHARE ROW EXCLUSIVE"
+        },
+        {
           "relation": "case_law_research_answers",
           "mode": "ACCESS EXCLUSIVE"
         },
@@ -7425,10 +7525,6 @@
         },
         {
           "relation": "case_law_research_columns",
-          "mode": "SHARE ROW EXCLUSIVE"
-        },
-        {
-          "relation": "case_law_research_tables",
           "mode": "SHARE ROW EXCLUSIVE"
         }
       ]
@@ -7478,10 +7574,6 @@
         {
           "relation": "chat_threads",
           "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "if",
-          "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
     },
@@ -7501,10 +7593,6 @@
           "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
-          "relation": "if",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
           "relation": "style_sets",
           "mode": "SHARE UPDATE EXCLUSIVE"
         }
@@ -7513,10 +7601,6 @@
     "20260903130000_report_export_request": {
       "hash": "f8b523805514b7537c9a1c0a0401465aec111f37e9282549bd77e739f3a139e8",
       "locks": [
-        {
-          "relation": "if",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
         {
           "relation": "report_exports",
           "mode": "ACCESS EXCLUSIVE"
@@ -7617,10 +7701,6 @@
         {
           "relation": "corpus_index_projection_intents",
           "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "if",
-          "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
     },
@@ -7638,10 +7718,6 @@
       "locks": [
         {
           "relation": "case_law_decisions",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "if",
           "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
@@ -7727,10 +7803,6 @@
         {
           "relation": "fields",
           "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "if",
-          "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
     },
@@ -7769,11 +7841,7 @@
       "hash": "6e4caeffc1a92cb4bc2ddf17d038afd596655fd0ec2516ab740c44b54eb73366",
       "locks": [
         {
-          "relation": "case_law_corpus_index_backfills",
-          "mode": "ACCESS EXCLUSIVE"
-        },
-        {
-          "relation": "case_law_corpus_index_projections",
+          "relation": "*",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
@@ -7794,11 +7862,11 @@
       "hash": "6e62aa2f5c8067b0874438986448bca3a6c778f08184bf5af809699bf71c5f35",
       "locks": [
         {
-          "relation": "corpus_index_generations",
+          "relation": "*",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
-          "relation": "if",
+          "relation": "corpus_index_generations",
           "mode": "ACCESS EXCLUSIVE"
         }
       ]
@@ -7817,10 +7885,6 @@
       "locks": [
         {
           "relation": "corpus_index_projection_states",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "if",
           "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
@@ -7914,10 +7978,6 @@
         {
           "relation": "case_law_decisions",
           "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "if",
-          "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
     },
@@ -7943,10 +8003,6 @@
       "locks": [
         {
           "relation": "folio_collab_rooms",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "folio_collab_rooms_workspace_source_version_idx",
           "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
@@ -8020,10 +8076,6 @@
         {
           "relation": "case_law_research_columns",
           "mode": "ACCESS EXCLUSIVE"
-        },
-        {
-          "relation": "if",
-          "mode": "ACCESS EXCLUSIVE"
         }
       ]
     },
@@ -8061,11 +8113,11 @@
       "hash": "5732fe3c81e924eb450f959a4dc65ee11d8ac8ff32276c625b8fc657ccfa24a8",
       "locks": [
         {
-          "relation": "case_law_research_columns",
+          "relation": "*",
           "mode": "ACCESS EXCLUSIVE"
         },
         {
-          "relation": "if",
+          "relation": "case_law_research_columns",
           "mode": "ACCESS EXCLUSIVE"
         }
       ]
@@ -8125,7 +8177,7 @@
       "hash": "fa9193313bbce0e82f98d962607cada89a0f27c1e5b2c38e0a05290bb6045069",
       "locks": [
         {
-          "relation": "if",
+          "relation": "*",
           "mode": "ACCESS EXCLUSIVE"
         }
       ]
@@ -8133,10 +8185,6 @@
     "20260914140000_legislation_sitemap_bucket_index": {
       "hash": "a3cf8eeb3f9ae69beb88f7f464d577ae570c53bf5110cba540a3ca914433934c",
       "locks": [
-        {
-          "relation": "if",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
         {
           "relation": "legislation_documents",
           "mode": "SHARE UPDATE EXCLUSIVE"
@@ -8181,10 +8229,6 @@
       "locks": [
         {
           "relation": "case_law_decisions",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "if",
           "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
@@ -8254,10 +8298,6 @@
         {
           "relation": "account",
           "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "account_provider_account_id_uidx",
-          "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
     },
@@ -8270,10 +8310,6 @@
         },
         {
           "relation": "case_law_decisions",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "if",
           "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
@@ -8435,10 +8471,6 @@
         {
           "relation": "case_law_corpus_upload_intents",
           "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "if",
-          "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
     },
@@ -8527,10 +8559,6 @@
         {
           "relation": "case_law_decisions",
           "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "if",
-          "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
     },
@@ -8575,10 +8603,6 @@
     "20260923130000_legislation_documents_country_type_valid_from_idx": {
       "hash": "694756d4747979aa7064f7871d174b8cb5f780b3141eb81f03118fe2b3522110",
       "locks": [
-        {
-          "relation": "if",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
         {
           "relation": "legislation_documents",
           "mode": "SHARE UPDATE EXCLUSIVE"
@@ -8625,10 +8649,6 @@
       "locks": [
         {
           "relation": "case_law_decisions",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "if",
           "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
@@ -8687,7 +8707,7 @@
       "hash": "84488387e087975e686b064446d7b767eaf6bcfb6f1eea3a91ed31874dcb531b",
       "locks": [
         {
-          "relation": "if",
+          "relation": "case_law_provision_citations",
           "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
@@ -8705,7 +8725,7 @@
       "hash": "fa55f54423ea09e5bcbb38cb8bf50e25cdfa57e1bc6113161c1dda39d4b4db6d",
       "locks": [
         {
-          "relation": "if",
+          "relation": "case_law_decisions",
           "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
@@ -9095,10 +9115,6 @@
         {
           "relation": "case_law_decisions",
           "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "if",
-          "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
     },
@@ -9309,10 +9325,6 @@
         {
           "relation": "ai_memories",
           "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "if",
-          "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
     },
@@ -9385,10 +9397,6 @@
       "hash": "b4056de80d1304f92ee29c22647c2cae51826918ef0e0c93924ea99221230b7e",
       "locks": [
         {
-          "relation": "if",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
           "relation": "legislation_documents",
           "mode": "SHARE UPDATE EXCLUSIVE"
         }
@@ -9400,10 +9408,6 @@
         {
           "relation": "case_law_decisions",
           "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "if",
-          "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
     },
@@ -9412,10 +9416,6 @@
       "locks": [
         {
           "relation": "case_law_decisions",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "if",
           "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
@@ -9615,10 +9615,6 @@
         {
           "relation": "case_law_ingestion_events",
           "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "if",
-          "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
     },
@@ -9641,6 +9637,10 @@
         {
           "relation": "corpus_index_group_enrollments",
           "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "corpus_index_group_enrollments",
+          "mode": "SHARE ROW EXCLUSIVE"
         }
       ]
     },
@@ -9730,6 +9730,10 @@
         {
           "relation": "legislation_work_names",
           "mode": "SHARE"
+        },
+        {
+          "relation": "legislation_work_names",
+          "mode": "SHARE ROW EXCLUSIVE"
         }
       ]
     },
@@ -9756,10 +9760,6 @@
         {
           "relation": "case_law_decisions",
           "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "if",
-          "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
     },
@@ -9775,10 +9775,6 @@
     "20261003121200_my_day_time_entries_index": {
       "hash": "fe6961468ee4d6f88d8545de1dcaf471d5c6380afe73480859be56786394c495",
       "locks": [
-        {
-          "relation": "if",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
         {
           "relation": "time_entries",
           "mode": "SHARE UPDATE EXCLUSIVE"
@@ -9897,10 +9893,6 @@
       "hash": "49cd1430d4fe4ae5a07be4929bda1c26ed685c6a804258153cf4e73d5e769a13",
       "locks": [
         {
-          "relation": "if",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
           "relation": "legislation_documents",
           "mode": "SHARE UPDATE EXCLUSIVE"
         }
@@ -10016,10 +10008,6 @@
       "hash": "749f84f1e98f6fdd64297e5edc48609d846c882e9e5566f2a780616f36c1cb6d",
       "locks": [
         {
-          "relation": "if",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
           "relation": "legislation_documents",
           "mode": "SHARE UPDATE EXCLUSIVE"
         }
@@ -10109,14 +10097,6 @@
         },
         {
           "relation": "invoices",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "invoices_id_workspace_unique",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "invoices_ws_original_idx",
           "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
@@ -10253,14 +10233,6 @@
           "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
-          "relation": "time_timers_legacy_entry_uidx",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "time_timers_running_org_id_idx",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
           "relation": "user",
           "mode": "SHARE ROW EXCLUSIVE"
         }
@@ -10280,10 +10252,6 @@
         {
           "relation": "case_law_ingestion_failures",
           "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "case_law_ingestion_failures_source_record_uidx",
-          "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
     },
@@ -10297,10 +10265,6 @@
         {
           "relation": "case_law_decisions",
           "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "if",
-          "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
     },
@@ -10313,10 +10277,6 @@
       "locks": [
         {
           "relation": "contacts",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "contacts_org_id_unique",
           "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
@@ -10355,10 +10315,6 @@
         },
         {
           "relation": "time_entries",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "time_entries_approval_queue_idx",
           "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
@@ -10455,10 +10411,6 @@
         {
           "relation": "time_entries",
           "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "time_entries_org_status_date_id_idx",
-          "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
     },
@@ -10467,10 +10419,6 @@
       "locks": [
         {
           "relation": "workspace_views",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "workspace_views_correspondence_uidx",
           "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
@@ -10628,10 +10576,6 @@
       "hash": "d06291957bd26ee81f2de3559a48a3d66704c5936223d858307a4749ffeaf484",
       "locks": [
         {
-          "relation": "if",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
           "relation": "usage_events",
           "mode": "SHARE UPDATE EXCLUSIVE"
         }
@@ -10642,10 +10586,6 @@
       "locks": [
         {
           "relation": "rate_entries",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "rate_entries_table_role_from_idx",
           "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
@@ -10728,15 +10668,7 @@
           "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
-          "relation": "sanctions_contact_matches_org_open_cursor_idx",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
           "relation": "sanctions_screening_events",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "sanctions_screening_events_org_cursor_idx",
           "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
@@ -10825,10 +10757,6 @@
         },
         {
           "relation": "session",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "session_priorTokenHash_idx",
           "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
@@ -10999,11 +10927,11 @@
       "locks": [
         {
           "relation": "number_series",
-          "mode": "SHARE"
+          "mode": "ACCESS EXCLUSIVE"
         },
         {
-          "relation": "number_series_org_type_default_uidx",
-          "mode": "ACCESS EXCLUSIVE"
+          "relation": "number_series",
+          "mode": "SHARE"
         }
       ]
     },
@@ -11196,10 +11124,6 @@
       "hash": "85b9e8b2834ae8a971ecad75a08c2cec645a72f8c07f10eea8fae18365965b1b",
       "locks": [
         {
-          "relation": "if",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
           "relation": "usage_provider_webhook_events",
           "mode": "SHARE UPDATE EXCLUSIVE"
         }
@@ -11243,10 +11167,6 @@
           "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
-          "relation": "if",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
           "relation": "oauth_client",
           "mode": "SHARE UPDATE EXCLUSIVE"
         },
@@ -11263,10 +11183,6 @@
     "20261003125000_provider_event_replay_audit": {
       "hash": "57440e14866c835536fb1e62cf16ab1bb102ef75dbb181b81c13a003785330cb",
       "locks": [
-        {
-          "relation": "if",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
         {
           "relation": "usage_provider_webhook_events",
           "mode": "ACCESS EXCLUSIVE"
@@ -11323,10 +11239,6 @@
     "20261003125300_validate_playbook_document_type_reference": {
       "hash": "d2a3433f2b00a3f9f411ecc9f7c628027756bafe911b9b4100ccfc9e27d5a6bb",
       "locks": [
-        {
-          "relation": "if",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
         {
           "relation": "playbook_definitions",
           "mode": "SHARE UPDATE EXCLUSIVE"
@@ -11492,14 +11404,6 @@
         },
         {
           "relation": "correspondence_attachments",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "correspondence_attachments_ws_entity_idx",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "correspondence_ws_source_entity_uidx",
           "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
@@ -12182,10 +12086,6 @@
         {
           "relation": "chat_messages",
           "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "if",
-          "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
     },
@@ -12595,10 +12495,6 @@
           "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
-          "relation": "if",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
           "relation": "justifications",
           "mode": "ACCESS EXCLUSIVE"
         },
@@ -12834,10 +12730,6 @@
       "locks": [
         {
           "relation": "entities",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "if",
           "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
@@ -13127,10 +13019,6 @@
         {
           "relation": "document_processing_runs",
           "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "if",
-          "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
     },
@@ -13189,6 +13077,10 @@
       "locks": [
         {
           "relation": "*",
+          "mode": "ACCESS SHARE"
+        },
+        {
+          "relation": "case_law_decisions",
           "mode": "ACCESS SHARE"
         }
       ]
@@ -13396,10 +13288,6 @@
         {
           "relation": "legal_lists",
           "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "legal_lists_sample_workspace_uidx",
-          "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
     },
@@ -13508,10 +13396,6 @@
       "locks": [
         {
           "relation": "chat_turns",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "if",
           "mode": "SHARE UPDATE EXCLUSIVE"
         }
       ]
@@ -13843,22 +13727,6 @@
           "mode": "SHARE UPDATE EXCLUSIVE"
         },
         {
-          "relation": "legislation_documents_legacy_current_lang_idx",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "legislation_documents_legacy_version_lang_idx",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "legislation_documents_publisher_identity_idx",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
-          "relation": "legislation_documents_work_version_lang_idx",
-          "mode": "SHARE UPDATE EXCLUSIVE"
-        },
-        {
           "relation": "legislation_sources",
           "mode": "ACCESS EXCLUSIVE"
         },
@@ -13939,15 +13807,11 @@
       "hash": "5a7c1dc74e3fb04fb1a2ed6bb9e7f72766d292f0797d383717a3e3495195cd35",
       "locks": [
         {
+          "relation": "*",
+          "mode": "ACCESS EXCLUSIVE"
+        },
+        {
           "relation": "case_law_decisions",
-          "mode": "ACCESS EXCLUSIVE"
-        },
-        {
-          "relation": "case_law_published_decisions",
-          "mode": "ACCESS EXCLUSIVE"
-        },
-        {
-          "relation": "case_law_unredacted_decisions",
           "mode": "ACCESS EXCLUSIVE"
         }
       ]
@@ -14733,6 +14597,10 @@
         {
           "relation": "*",
           "mode": "ACCESS SHARE"
+        },
+        {
+          "relation": "case_law_decisions",
+          "mode": "ACCESS SHARE"
         }
       ]
     },
@@ -14842,15 +14710,11 @@
       "hash": "431a9b80c6dcc43efb0ce8819951c67ecf6c87aa237607eac5e09695cbca9b38",
       "locks": [
         {
+          "relation": "*",
+          "mode": "ACCESS EXCLUSIVE"
+        },
+        {
           "relation": "case_law_decisions",
-          "mode": "ACCESS EXCLUSIVE"
-        },
-        {
-          "relation": "case_law_published_decisions",
-          "mode": "ACCESS EXCLUSIVE"
-        },
-        {
-          "relation": "case_law_unredacted_decisions",
           "mode": "ACCESS EXCLUSIVE"
         }
       ]
@@ -14926,9 +14790,17 @@
         }
       ]
     },
-    "20261030103100_scheduler_table_leases": {
-      "hash": "05ad407fa09667887390a176c1712a8bcf531e409a4ba7ec348d4ae91647c75c",
+    "20261030213017_scheduler_table_leases": {
+      "hash": "1292d7367d2f3d7e108be5d450312f38a44f32dc1239043ad6d72cad3a862bb4",
       "locks": [
+        {
+          "relation": "*",
+          "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "scheduler_table_lease_activity",
+          "mode": "ACCESS EXCLUSIVE"
+        },
         {
           "relation": "scheduler_table_leases",
           "mode": "ACCESS EXCLUSIVE"

@@ -10,6 +10,7 @@ import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { withIsolatedPostgresCluster } from "@/api/tests/isolated-postgres-cluster";
 
 import { runMigrations } from "../../db/migration-runner";
+import { ISOLATED_MIGRATION_DRAIN } from "../../tests/helpers/migration-drain-confirmation";
 
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const describePostgres = describe.skipIf(!runPostgresTests);
@@ -188,6 +189,7 @@ const withMigratedDatabase = async (
         const connection = await database.reserve();
         try {
           await runMigrations({
+            manualDrainConfirmation: ISOLATED_MIGRATION_DRAIN,
             connection,
             databaseUrl: scratchUrl,
             migrationsFolder,

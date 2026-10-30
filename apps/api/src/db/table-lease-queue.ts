@@ -14,7 +14,7 @@ import {
 } from "../lib/scheduler/lease-timing";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
 
-export const TABLE_LEASE_MIGRATION = "20261030103100_scheduler_table_leases";
+export const TABLE_LEASE_MIGRATION = "20261030213017_scheduler_table_leases";
 const HOLDER_REPORT_LIMIT = 100;
 export const MIGRATION_TABLE_LEASE_WAIT_MS =
   DEFAULT_LEASE_MS + defaultHeartbeatIntervalMs(DEFAULT_LEASE_MS);
@@ -80,6 +80,9 @@ export const acquireJobTableLeases = async ({
       [...new Set(tables)].toSorted().map((table) => sql`${table}`),
       sql`, `,
     )}]::text[]) AS table_name`);
+  await tx.execute(sql`INSERT INTO scheduler_table_lease_activity (slot, last_claimed_at)
+    VALUES (0, clock_timestamp())
+    ON CONFLICT (slot) DO UPDATE SET last_claimed_at = EXCLUDED.last_claimed_at`);
   return true;
 };
 
@@ -114,7 +117,7 @@ export const ensureTableLeaseQueue = async ({
   const [{ exists }] = v.parse(
     v.tuple([v.object({ exists: v.boolean() })]),
     await connection.query(
-      "SELECT to_regclass('public.scheduler_table_leases') IS NOT NULL AS exists",
+      "SELECT to_regclass('public.scheduler_table_leases') IS NOT NULL AND to_regclass('public.scheduler_table_lease_activity') IS NOT NULL AS exists",
     ),
   );
   if (exists) {

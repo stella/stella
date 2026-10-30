@@ -47,7 +47,9 @@ migrate_log="$work/migrate.log"
 if ! (
   cd apps/api
   NODE_ENV=development STELLA_LOCAL_DEV=1 DB_LOAD_GATE_EBS_SIGNAL=disabled \
-    DB_LOAD_GATE_BUSY_WINDOWS='[]' bun --no-env-file src/db/migrate.ts
+    DB_LOAD_GATE_BUSY_WINDOWS='[]' \
+    MIGRATE_MANUAL_DRAIN_CONFIRMED='Disposable MCP journey database is migrated before API and scheduler startup' \
+    bun --no-env-file src/db/migrate.ts
 ) > "$migrate_log" 2>&1; then
   tail -50 "$migrate_log" >&2
   echo "Migrations failed on the disposable database." >&2

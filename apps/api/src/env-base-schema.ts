@@ -1,3 +1,4 @@
+// parser-output-unchanged: Migration admission does not alter ingested data.
 // parser-output-unchanged: Deployment environment labels telemetry; no parser reads it.
 // parser-output-unchanged: kill-switch overrides are admission state read per request; no parser reads them.
 // parser-output-unchanged: Database login admission configuration does not change parsed ingestion records.
@@ -45,6 +46,8 @@ import {
   isRailwayPrivateHostname,
   isTlsOrLoopbackUrl,
 } from "@/api/lib/secure-service-url";
+
+import { envMigrationServerSchema } from "./env-migration";
 
 const positiveIntegerValueSchema = v.pipe(
   v.string(),
@@ -141,6 +144,7 @@ export const envBaseServerSchema = {
   // parser-output-unchanged: database load-gate settings; no parser reads them
   DB_LOAD_GATE_RDS_INSTANCE_IDENTIFIER: v.optional(v.string()),
   DB_LOAD_GATE_EBS_SIGNAL: v.optional(v.picklist(["disabled"])),
+  ...envMigrationServerSchema,
   DATABASE_ROOT_POOL_MAX: databasePoolMaxSchema(),
   DATABASE_RLS_POOL_MAX: databasePoolMaxSchema(),
   PUBLIC_LAW_DATABASE_URL: v.optional(postgresUrlSchema()),

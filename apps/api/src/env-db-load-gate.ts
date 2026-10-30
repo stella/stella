@@ -1,6 +1,7 @@
 import { createEnv } from "@t3-oss/env-core";
 
 import { envBaseServerSchema } from "./env-base-schema";
+import { parseMigrationDrainConfirmation } from "./env-migration";
 
 /** Database-only entrypoints do not require the API's object-storage settings. */
 export const envDbLoadGate = createEnv({
@@ -12,3 +13,9 @@ export const envDbLoadGate = createEnv({
   emptyStringAsUndefined: true,
   runtimeEnv: process.env,
 });
+
+/** Migration-only configuration shares the database entrypoint's environment boundary. */
+export const readMigrationDrainConfirmation = () =>
+  parseMigrationDrainConfirmation(
+    process.env["MIGRATE_MANUAL_DRAIN_CONFIRMED"],
+  );

@@ -433,6 +433,7 @@ jobs:
       - name: Apply migrations to service Postgres
         working-directory: apps/api
         env:
+          MIGRATE_MANUAL_DRAIN_CONFIRMED: Isolated nightly test database is migrated before scheduler workers start
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
         # Exercises the shipped migrate entrypoint (Bun SQL + drizzle migrator),
         # so the JSONB persistence suite runs against the real schema, including
@@ -609,6 +610,7 @@ jobs:
         timeout-minutes: 12
         id: rehearsal
         env:
+          MIGRATE_MANUAL_DRAIN_CONFIRMED: Isolated exact-base fixture databases have no scheduler processes
           BASE_SHA: ${{ steps.base.outputs.sha }}
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
           CLEAN_DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5433/stella

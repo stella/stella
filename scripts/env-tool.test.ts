@@ -1212,3 +1212,12 @@ describe("web container build arguments", () => {
     ).toThrow("no longer runs");
   });
 });
+test("manual scheduler drain confirmation is documented without a prefilled attestation", () => {
+  const example = renderApiEnvExample();
+  expect(example).toContain('# MIGRATE_MANUAL_DRAIN_CONFIRMED=""');
+  expect(
+    example
+      .split("\n")
+      .some((line) => line.startsWith("MIGRATE_MANUAL_DRAIN_CONFIRMED=")),
+  ).toBe(false);
+});
