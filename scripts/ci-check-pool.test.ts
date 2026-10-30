@@ -38,6 +38,7 @@ import {
   processTree,
   procStatRow,
   psSeconds,
+  readCheckLog,
   resolveEnv,
   runChecks,
   runnerWorkerStartedAt,
@@ -479,6 +480,34 @@ test("the pool bounds concurrency, reports in order and reports every failure", 
       },
     ),
   );
+});
+
+test("a selected check without a log reports typed no output", async () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "ci-check-pool-no-log-"));
+  const planned: PlannedCheck[] = [
+    {
+      check: check("fails before opening its log"),
+      status: "selected",
+      env: {},
+      continueOnError: false,
+    },
+  ];
+  let reportedLog: ReturnType<typeof readCheckLog> | undefined;
+  try {
+    await runChecks({
+      planned,
+      concurrency: 1,
+      launch: async () => {
+        throw new Error("launch failed");
+      },
+      report: (index) => {
+        reportedLog = readCheckLog(directory, index);
+      },
+    });
+    expect(reportedLog).toEqual({ type: "no-output", output: "" });
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 test("a launched check runs as a bash step with its env, output and timeout", async () => {
@@ -1184,6 +1213,87 @@ test("the pool stops before its job's timeout and names the check still running"
     rmSync(directory, { recursive: true, force: true });
   }
 }, 25_000);
+
+test("a check that fails before it writes a log reports its own error", async () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "ci-check-pool-unlogged-"));
+  const scripts = path.join(directory, "scripts");
+  mkdirSync(scripts);
+  mkdirSync(path.join(directory, ".github/ci-checks"), { recursive: true });
+  mkdirSync(path.join(directory, ".github/workflows"), { recursive: true });
+  for (const file of [
+    "ci-check-pool.ts",
+    "ci-check-pool-registry.ts",
+    "github-expression.ts",
+  ]) {
+    copyFileSync(path.join(root, "scripts", file), path.join(scripts, file));
+  }
+  writeFileSync(
+    path.join(directory, ".github/workflows/ci.yml"),
+    Bun.YAML.stringify({
+      jobs: { "ci-checks-rest": { "timeout-minutes": 60, steps: [] } },
+    }),
+  );
+  writeFileSync(
+    path.join(directory, ".github/ci-checks/ci-checks-rest.yml"),
+    Bun.YAML.stringify({
+      checks: [
+        { name: "Unbudgeted check", run: "echo unreachable" },
+        { name: "Quick check", run: "echo quick" },
+      ].map((entry) => ({ ...entry, if: "true" })),
+    }),
+  );
+  // The first check has no budget, so its launch throws before its log exists.
+  writeFileSync(
+    path.join(directory, ".github/ci-checks/budgets.json"),
+    JSON.stringify({
+      "ci-checks-policy": {},
+      "ci-checks-rest": { "Quick check": { minutes: 10, samples: 0 } },
+      "code-quality-web-rest": {},
+    }),
+  );
+  writeFileSync(path.join(directory, "needs.json"), "{}");
+  try {
+    const child = Bun.spawn(
+      [
+        process.execPath,
+        path.join(scripts, "ci-check-pool.ts"),
+        "run",
+        "ci-checks-rest",
+      ],
+      {
+        cwd: directory,
+        env: {
+          PATH: process.env["PATH"] ?? "",
+          RUNNER_TEMP: directory,
+          GITHUB_JOB: "ci-checks-rest",
+          CI_CHECK_POOL_JOB_STARTED_AT: String(Date.now()),
+          CI_CHECK_POOL_CONCURRENCY: "2",
+          CI_CHECK_POOL_NEEDS_FILE: path.join(directory, "needs.json"),
+          CI_CHECK_POOL_STEPS: "{}",
+          CI_CHECK_POOL_INPUTS: "{}",
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    const [output, stderr, exitCode] = await Promise.all([
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+      child.exited,
+    ]);
+    const cause =
+      "Unbudgeted check: no budget in .github/ci-checks/budgets.json; run bun scripts/ci-check-budgets.ts refresh";
+    expect(stderr).toBe("");
+    expect(exitCode).toBe(1);
+    expect(output).toContain(`FAILED check: Unbudgeted check -- ${cause}`);
+    expect(output).toMatch(/^::group::Unbudgeted check: FAILED in /mu);
+    expect(output).toContain(`\nerror: ${cause}\n::endgroup::`);
+    expect(output).toContain("Quick check: passed");
+    expect(output).toContain("quick");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
 
 test("flattening steps that already carry their pooled checks adds none", () => {
   for (const job of CHECK_POOL_JOBS) {
