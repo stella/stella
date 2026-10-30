@@ -37,6 +37,8 @@ import {
 } from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { READ_BUDGETS } from "@/api/lib/db/read-budgets";
+import { TRANSITIONS } from "@/api/lib/db/transition-specs";
+import { transitionScopedBatch } from "@/api/lib/db/transitions";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 
@@ -446,7 +448,9 @@ export const sitemapPendingMonthsSql = (): SQL => sql`
 `;
 
 type PendingMonth =
-  { status: "empty" | "waiting" } | { status: "ready"; target: SitemapMonth };
+  | { status: "empty" }
+  | { status: "waiting" }
+  | { status: "ready"; target: SitemapMonth };
 
 const readPendingMonth = async ({
   db,
@@ -535,17 +539,27 @@ const drainMonth = async (
         await recountMonth(tx, target);
         recounted = true;
       }
-      await tx
-        .insert(caseLawSitemapDrainProgress)
-        .values({ ...target, coveredBefore })
-        .onConflictDoUpdate({
-          target: [
-            caseLawSitemapDrainProgress.country,
-            caseLawSitemapDrainProgress.year,
-            caseLawSitemapDrainProgress.month,
-          ],
-          set: { coveredBefore, retiredThrough, phase: "draining" },
+      if (progress === undefined) {
+        await tx
+          .insert(caseLawSitemapDrainProgress)
+          .values({ ...target, coveredBefore });
+      } else {
+        const changed = await transitionScopedBatch({
+          tx,
+          spec: TRANSITIONS.caseLawSitemapDrainProgress,
+          identities: [target],
+          options: {
+            from: ["awaiting_visibility"],
+            to: "draining",
+            set: { coveredBefore, retiredThrough },
+          },
+          // audit: skip - derived sitemap checkpoints contain no user-authored state.
+          recordTransitionAuditEvent: () => undefined,
         });
+        if (changed.length !== 1) {
+          panic("Locked sitemap coverage must resume from its waiting phase");
+        }
+      }
     }
     const retirement = v.parse(
       v.object({
@@ -596,10 +610,21 @@ const drainMonth = async (
       retiredThrough = retirement.retired_through;
     }
     if (retirement.retired < candidatesRead) {
-      await tx
-        .update(caseLawSitemapDrainProgress)
-        .set({ retiredThrough, phase: "awaiting_visibility" })
-        .where(targetConditions(target));
+      const changed = await transitionScopedBatch({
+        tx,
+        spec: TRANSITIONS.caseLawSitemapDrainProgress,
+        identities: [target],
+        options: {
+          from: ["draining"],
+          to: "awaiting_visibility",
+          set: { retiredThrough },
+        },
+        // audit: skip - derived sitemap checkpoints contain no user-authored state.
+        recordTransitionAuditEvent: () => undefined,
+      });
+      if (changed.length !== 1) {
+        panic("Locked sitemap coverage must wait from its draining phase");
+      }
     } else if (complete) {
       await tx
         .delete(caseLawSitemapDrainProgress)
