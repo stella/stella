@@ -1527,6 +1527,11 @@
     "credentialSendTitle": "Ez az üzenet hitelesítő adatot tartalmazhat",
     "deleteThread": "Beszélgetés törlése",
     "diagramUnavailable": "Ezt a diagramot nem sikerült megjeleníteni. A forráskódja alább látható.",
+    "editMessage": "Üzenet szerkesztése",
+    "editMessageInput": "Szerkesztett üzenet",
+    "editMessageNotice": "A küldés lecseréli ezt az üzenetet és az utána következő összes választ.",
+    "editMessageRefused": "Az üzenetet nem sikerült szerkeszteni. A csevegés most a mentett állapotot mutatja; próbálja újra, amikor már nem fut válasz.",
+    "editMessageRemoveAttachment": "{name} eltávolítása ebből az üzenetből",
     "editMode": {
       "autoDirect": "Automatikus · átírás",
       "autoDirectDescription": "Az AI módosításai azonnal, a dokumentum közvetlen átírásával lépnek életbe (változáskövetés nélkül).",

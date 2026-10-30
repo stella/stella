@@ -181,6 +181,10 @@ const ChatThreadDomPage = ({
             showThinkingIndicator
             streamdownComponents={session.streamdownComponents}
             threadRef={threadRef}
+            userMessageEdit={{
+              onStart: session.startUserMessageEdit,
+              onSubmit: session.editUserMessage,
+            }}
           />
         </ChatEditorProvider>
       </ChatApprovalContext>

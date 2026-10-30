@@ -279,6 +279,8 @@ export const ChatThreadPage = ({
     secretAvailabilityKey,
     handleAskUserSubmit,
     handleAskUserEditAndRerun,
+    startUserMessageEdit,
+    editUserMessage,
     handleAlwaysAllow,
     handleCreateDocumentResolve,
     handleOpenCreateDocumentDraft,
@@ -726,6 +728,10 @@ export const ChatThreadPage = ({
                         stickyUserMessages
                         streamdownComponents={streamdownComponents}
                         threadRef={threadRef}
+                        userMessageEdit={{
+                          onStart: startUserMessageEdit,
+                          onSubmit: editUserMessage,
+                        }}
                         workspaceId={workspaceId}
                       />
                       <ChatThreadRecap

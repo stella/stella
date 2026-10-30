@@ -292,6 +292,8 @@ export const ChatTabPanel = ({
     secretAvailabilityKey,
     handleAskUserSubmit,
     handleAskUserEditAndRerun,
+    startUserMessageEdit,
+    editUserMessage,
     handleAlwaysAllow,
     handleCreateDocumentResolve,
     handleOpenCreateDocumentDraft,
@@ -720,6 +722,10 @@ export const ChatTabPanel = ({
                   queuedMessages={queuedMessages}
                   showThinkingIndicator
                   streamdownComponents={streamdownComponents}
+                  userMessageEdit={{
+                    onStart: startUserMessageEdit,
+                    onSubmit: editUserMessage,
+                  }}
                   workspaceId={tabWorkspaceId}
                 />
               )}

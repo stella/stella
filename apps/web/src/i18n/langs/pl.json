@@ -1527,6 +1527,11 @@
     "credentialSendTitle": "Ta wiadomość może zawierać dane dostępowe",
     "deleteThread": "Usuń rozmowę",
     "diagramUnavailable": "Nie udało się wyświetlić tego diagramu. Poniżej znajduje się jego kod źródłowy.",
+    "editMessage": "Edytuj wiadomość",
+    "editMessageInput": "Edytowana wiadomość",
+    "editMessageNotice": "Wysłanie zastąpi tę wiadomość i wszystkie późniejsze odpowiedzi.",
+    "editMessageRefused": "Nie udało się edytować wiadomości. Czat pokazuje teraz zapisany stan; spróbuj ponownie, gdy nie będzie trwała żadna odpowiedź.",
+    "editMessageRemoveAttachment": "Usuń {name} z tej wiadomości",
     "editMode": {
       "autoDirect": "Automatycznie · przepisz",
       "autoDirectDescription": "Zmiany AI są stosowane natychmiast przez bezpośrednie przepisanie dokumentu (bez śledzenia zmian).",

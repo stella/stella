@@ -1527,6 +1527,11 @@
     "credentialSendTitle": "Tato zpráva může obsahovat přístupový údaj",
     "deleteThread": "Smazat konverzaci",
     "diagramUnavailable": "Diagram se nepodařilo vykreslit. Níže je jeho zdrojový kód.",
+    "editMessage": "Upravit zprávu",
+    "editMessageInput": "Upravená zpráva",
+    "editMessageNotice": "Odesláním nahradíte tuto zprávu i všechny odpovědi po ní.",
+    "editMessageRefused": "Zprávu se nepodařilo upravit. Chat teď ukazuje uložený stav, zkuste to znovu, až žádná odpověď neběží.",
+    "editMessageRemoveAttachment": "Odebrat {name} z této zprávy",
     "editMode": {
       "autoDirect": "Automaticky · přepsat",
       "autoDirectDescription": "Úpravy od AI se použijí ihned přímým přepsáním dokumentu (bez sledování změn).",

@@ -108,6 +108,7 @@ import {
   canForkAssistantMessage,
   canRetryAssistantMessage,
   canRetryChatRequest,
+  isChatMessageEditRefusal,
 } from "@/components/chat/chat-user-actions";
 import { ConnectConnectorCard } from "@/components/chat/connect-connector-card";
 import { ContextNotice } from "@/components/chat/context-notice";
@@ -127,6 +128,11 @@ import { ToolCallCard } from "@/components/chat/tool-call-card";
 import { uiResourceRenderer } from "@/components/chat/ui-resource-renderer";
 import { useLiveElapsedMs } from "@/components/chat/use-live-elapsed";
 import { useSteadyValue } from "@/components/chat/use-steady-value";
+import {
+  EditableUserMessage,
+  useUserMessageEdit,
+} from "@/components/chat/user-message-edit";
+import type { UserMessageEditActions } from "@/components/chat/user-message-edit";
 import { WebSearchSources } from "@/components/chat/web-search-sources";
 import { CopyActionButton } from "@/components/copy-action-button";
 import { DocumentIcon } from "@/components/document-icon";
@@ -306,6 +312,7 @@ export const ChatThreadMessages = ({
   queuedMessageActions,
   streamdownComponents,
   threadRef,
+  userMessageEdit,
   workspaceId,
 }: ChatThreadMessagesProps) => {
   const { activeOrganizationId } = useChatApproval();
@@ -457,11 +464,17 @@ export const ChatThreadMessages = ({
                   );
                 case "text":
                   return (
-                    <TextMessageParts
+                    <EditableUserMessage
+                      actions={userMessageEdit}
+                      isGenerating={generationActive}
                       message={message}
-                      messages={messages}
-                      index={index}
-                    />
+                    >
+                      <TextMessageParts
+                        message={message}
+                        messages={messages}
+                        index={index}
+                      />
+                    </EditableUserMessage>
                   );
                 default:
                   policy satisfies never;
@@ -515,9 +528,11 @@ export const ChatThreadMessages = ({
                   approvalPendingMessageId={approvalPendingMessageId}
                   headerIndex={turn.index}
                   headerMessage={turn.header}
+                  isGenerating={generationActive}
                   key={turn.header.id}
                   messages={messages}
                   scrollRef={scrollRef}
+                  userMessageEdit={userMessageEdit}
                 >
                   {turn.body.map((item) =>
                     renderMessageNode(item.message, item.index),
@@ -556,8 +571,10 @@ type StickyUserTurnProps = {
   approvalPendingMessageId: string | null;
   headerIndex: number;
   headerMessage: PersistedChatMessage;
+  isGenerating: boolean;
   messages: readonly PersistedChatMessage[];
   scrollRef: RefObject<HTMLDivElement | null> | null;
+  userMessageEdit: UserMessageEditActions | undefined;
   children: ReactNode;
 };
 
@@ -574,11 +591,18 @@ const StickyUserTurn = ({
   approvalPendingMessageId,
   headerIndex,
   headerMessage,
+  isGenerating,
   messages,
   scrollRef,
+  userMessageEdit,
   children,
 }: StickyUserTurnProps) => {
   const t = useTranslations();
+  const messageEdit = useUserMessageEdit({
+    actions: userMessageEdit,
+    isGenerating,
+    message: headerMessage,
+  });
   const sentinelRef = useRef<HTMLDivElement>(null);
   const stickyHeaderRef = useRef<HTMLDivElement>(null);
   const [isStuck, setIsStuck] = useState(false);
@@ -741,7 +765,7 @@ const StickyUserTurn = ({
             from="user"
             data-chat-message-id={headerMessage.id}
           >
-            <MessageContent>
+            <MessageContent className={cn(messageEdit.editing && "hidden")}>
               <div className="group-data-[stuck=true]/sticky:hidden">
                 <UserAttachments parts={fileParts} />
               </div>
@@ -774,6 +798,7 @@ const StickyUserTurn = ({
                 )}
               </div>
             </MessageContent>
+            {messageEdit.editor}
           </Message>
         </div>
       </div>
@@ -1119,7 +1144,9 @@ export const ChatErrorMessage = ({
     (refusal.status === 400 || refusal.status === 422) &&
     !isDisplayableAPIError(refusal);
   let errorMessage = refusal?.message ?? t(chatErrorTranslationKey(error));
-  if (!canRetryChatRequest(error)) {
+  if (isChatMessageEditRefusal(error)) {
+    errorMessage = t("chat.editMessageRefused");
+  } else if (!canRetryChatRequest(error)) {
     errorMessage = t("chat.sendErrorContinuationRejected");
   } else if (rejectedInput) {
     errorMessage = t("errors.api.validation");
@@ -1441,6 +1468,8 @@ type ChatThreadMessagesProps = {
   /** The thread being rendered. Enables the per-message export action; omitted
    *  on embedded surfaces that don't offer export. */
   threadRef?: ChatThreadRef | undefined;
+  /** Editing the user's sent messages; omitted, no message offers it. */
+  userMessageEdit?: UserMessageEditActions | undefined;
   workspaceId?: string | undefined;
 };
 

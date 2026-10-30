@@ -19,7 +19,7 @@ import {
   CHAT_TURN_INTENT,
   CHAT_TURN_NOT_OWNED_ERROR_CODE,
 } from "@stll/api-contract";
-import type { ChatSendRequest } from "@stll/api-contract";
+import type { ChatSendRequest, ChatTurnIntent } from "@stll/api-contract";
 import { createChatTurnTimingObserver } from "@stll/api-contract/chat-turn-duration";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import {
@@ -109,7 +109,7 @@ export type ChatContinuationRequestBody = {
   sendMode?: ChatSendMode | undefined;
   toolScope?: ChatToolScope | undefined;
   truncateAfterMessageId?: SafeId<"chatMessage"> | undefined;
-  turnIntent?: (typeof CHAT_TURN_INTENT)["regenerate"] | undefined;
+  turnIntent?: ChatTurnIntent | undefined;
 };
 export type ChatSendMessageOptions = {
   body?: ChatContinuationRequestBody | undefined;
@@ -1887,7 +1887,10 @@ const normalizeChatContinuationRequestBody = (
       data["truncateAfterMessageId"],
     );
   }
-  if (data["turnIntent"] === CHAT_TURN_INTENT.regenerate) {
+  if (
+    data["turnIntent"] === CHAT_TURN_INTENT.regenerate ||
+    data["turnIntent"] === CHAT_TURN_INTENT.edit
+  ) {
     body.turnIntent = data["turnIntent"];
   }
 

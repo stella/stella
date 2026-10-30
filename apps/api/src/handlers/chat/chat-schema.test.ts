@@ -50,6 +50,7 @@ import {
   agUiSendMessageBodySchema,
   parseMessage,
   resolveBrowserClientCapability,
+  resolveEditedUserMessageId,
   sendMessageBodySchema,
   validateMessage as validateMessageWithPersistence,
   validateToolCallParts,
@@ -401,6 +402,92 @@ describe("chat turn intent", () => {
         turnIntent: "retry",
       }),
     ).toBe(false);
+  });
+
+  test("accepts every shared turn intent", () => {
+    for (const turnIntent of Object.values(CHAT_TURN_INTENT)) {
+      expect(
+        v.is(sendMessageBodySchema, {
+          ...request,
+          truncateAfterMessageId: request.message.id,
+          turnIntent,
+        }),
+      ).toBe(true);
+    }
+  });
+});
+
+describe("edited user message target", () => {
+  const messageId = toSafeId<"chatMessage">(
+    "019fc771-8b17-7000-b85e-559afc54cfe5",
+  );
+  const otherMessageId = toSafeId<"chatMessage">(
+    "019fc771-8b17-7001-b85e-559afc54cfe5",
+  );
+  const userMessage = {
+    id: messageId,
+    role: "user" as const,
+    parts: [{ type: "text", content: "Draft the NDA again" }],
+  };
+
+  test("names the incoming user message an edit replaces", () => {
+    const resolved = resolveEditedUserMessageId({
+      message: userMessage,
+      truncateAfterMessageId: messageId,
+      turnIntent: CHAT_TURN_INTENT.edit,
+    });
+    expect(Result.isOk(resolved) && resolved.value).toBe(messageId);
+  });
+
+  test.each([
+    {
+      case: "a different truncation target",
+      body: { message: userMessage, truncateAfterMessageId: otherMessageId },
+    },
+    {
+      case: "no truncation target",
+      body: { message: userMessage },
+    },
+    {
+      case: "an assistant message",
+      body: {
+        message: { ...userMessage, role: "assistant" as const },
+        truncateAfterMessageId: messageId,
+      },
+    },
+  ])("refuses an edit with $case", ({ body }) => {
+    const resolved = resolveEditedUserMessageId({
+      ...body,
+      turnIntent: CHAT_TURN_INTENT.edit,
+    });
+    expect(Result.isError(resolved) && resolved.error.status).toBe(400);
+  });
+
+  test("refuses a user message that cuts history without the edit intent", () => {
+    const resolved = resolveEditedUserMessageId({
+      message: userMessage,
+      truncateAfterMessageId: messageId,
+    });
+    expect(Result.isError(resolved) && resolved.error.message).toBe(
+      "Replacing a stored user message requires the edit intent",
+    );
+  });
+
+  test("leaves sends, regenerations and answer replays to their own checks", () => {
+    for (const body of [
+      { message: userMessage },
+      {
+        message: userMessage,
+        turnIntent: CHAT_TURN_INTENT.regenerate,
+      },
+      {
+        message: { ...userMessage, role: "assistant" as const },
+        truncateAfterMessageId: messageId,
+      },
+    ]) {
+      const resolved = resolveEditedUserMessageId(body);
+      expect(Result.isOk(resolved) && resolved.value).toBeNull();
+    }
   });
 });
 

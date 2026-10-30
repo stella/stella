@@ -38,7 +38,6 @@ import type { ChatTableChartProps } from "@/components/chat/chat-table-chart";
 import type {
   ApprovalToolName,
   AskUserOutput,
-  ChatPart,
   ChatUITools,
 } from "@/components/chat/chat-ui-tools";
 import {
@@ -83,6 +82,8 @@ import {
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import type { CreateDocumentDestination } from "@/components/chat/needs-matter-card";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
+import { buildEditedUserMessage } from "@/components/chat/user-message-edit.logic";
+import type { UserMessageEditDraft } from "@/components/chat/user-message-edit.logic";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { queryView } from "@/lib/query-view.logic";
 import "@/components/chat/create-document-draft-inspector";
@@ -103,6 +104,8 @@ import {
   storeChatToolGrant,
 } from "@/features/chat/chat-tool-grants";
 import { LazyChatTableChart } from "@/features/chat/components/lazy-chat-table-chart";
+import { planTruncatedReplay } from "@/features/chat/hooks/edit-user-message";
+import type { TruncatedReplayTarget } from "@/features/chat/hooks/edit-user-message";
 import {
   invalidateCreatedDocumentQueries,
   promoteCreateDocumentDraftInspectorTab,
@@ -314,18 +317,6 @@ const openCreatedDocumentInInspector = async (
 // reducer) lives in the sibling `.logic.ts` file. Re-exported here so
 // existing consumers keep importing it from this hook.
 export type { QueuedChatMessage } from "@/features/chat/hooks/use-chat-session-send-queue.logic";
-
-type AskUserToolCallPart = Extract<
-  ChatPart,
-  { name: "ask-user"; type: "tool-call" }
->;
-
-const resetAskUserToolCall = (
-  part: AskUserToolCallPart,
-): AskUserToolCallPart => {
-  const { output: _discardedOutput, ...partWithoutOutput } = part;
-  return { ...partWithoutOutput, state: "input-complete" };
-};
 
 const ignoreQueuedDispatchError = (_error: unknown): void => undefined;
 
@@ -1076,99 +1067,86 @@ export const useChatSession = ({
   );
 
   /**
-   * Edit an already-answered ask-user card and replay the model
-   * from that point. TanStack ChatClient does not expose a
-   * rewind-to-tool-call primitive, so this is a truncate-and-replay:
-   *
-   *   1. Find the assistant message that owns the ask-user part.
-   *   2. Drop every message after it locally; the backend receives
-   *      the same truncation target for persisted history.
-   *   3. Reset the ask-user `tool-call` to `input-complete` and
-   *      remove its paired `tool-result` so `addToolResult` writes
-   *      a fresh output and TanStack's continuation logic drives the
-   *      next turn.
-   *
-   * The replay request also carries `truncateAfterMessageId`, so the
-   * backend drops persisted downstream turns before preparing the next
-   * model context.
+   * The one truncate-and-replay path. TanStack ChatClient has no rewind
+   * primitive, so the page drops every message after the target
+   * (`planTruncatedReplay`) and the replay request names the same target
+   * (`truncateAfterMessageId`), so the server drops the same persisted turns
+   * before the model runs again.
+   */
+  const replayFromTruncation = useCallback(
+    async (
+      target: TruncatedReplayTarget,
+      replay: (options: ChatSendMessageOptions | undefined) => Promise<void>,
+    ) => {
+      const plan = planTruncatedReplay(messages, target);
+      if (plan === null) {
+        return;
+      }
+      setMessages(plan.messages);
+      await replay(
+        snapshotChatRequestOptions({
+          docxEditRepresentation: undefined,
+          editApplyMode: undefined,
+          options: { body: plan.body },
+          sendMode: getSendMode?.(),
+        }),
+      );
+    },
+    [getSendMode, messages, setMessages],
+  );
+
+  /**
+   * Answer an answered ask-user card again: its card goes back to awaiting
+   * the answer, and `addToolResult` writes the new one, which drives the
+   * next turn.
    */
   const handleAskUserEditAndRerun = useCallback(
     async (toolCallId: string, output: AskUserOutput) => {
-      let targetIndex = -1;
-      for (let i = 0; i < messages.length; i += 1) {
-        const candidate = messages[i];
-        if (!candidate || candidate.role !== "assistant") {
-          continue;
-        }
-        const hasPart = candidate.parts.some(
-          (part) =>
-            part.type === "tool-call" &&
-            part.name === "ask-user" &&
-            part.id === toolCallId,
-        );
-        if (hasPart) {
-          targetIndex = i;
-          break;
-        }
-      }
-      if (targetIndex === -1) {
-        return;
-      }
-      const targetMessage = messages[targetIndex];
-      if (!targetMessage || targetMessage.role !== "assistant") {
-        return;
-      }
-
-      // slice's elements are shared refs with the original `messages`
-      // array; mutating in place would corrupt the SDK's history, so the
-      // spread builds a new message object that owns the rewritten parts.
-      const truncated = messages.slice(0, targetIndex + 1).map((message) => {
-        if (message.role !== "assistant") {
-          return message;
-        }
-        // Reset the matching ask-user part so `addToolResult` can
-        // overwrite its output. Keeping `input` on the tool-call
-        // keeps the card body stable during the brief frame between
-        // truncation and the next tool-result write.
-        const nextParts: ChatPart[] = [];
-        for (const part of message.parts) {
-          if (part.type === "tool-result" && part.toolCallId === toolCallId) {
-            continue;
-          }
-          if (
-            part.type === "tool-call" &&
-            part.name === "ask-user" &&
-            part.id === toolCallId &&
-            part.state === "complete"
-          ) {
-            nextParts.push(resetAskUserToolCall(part));
-            continue;
-          }
-          nextParts.push(part);
-        }
-        return { ...message, parts: nextParts };
-      });
-      setMessages(truncated);
-      const replayOptions = snapshotChatRequestOptions({
-        docxEditRepresentation: undefined,
-        editApplyMode: undefined,
-        options: {
-          body: {
-            truncateAfterMessageId: toSafeId<"chatMessage">(targetMessage.id),
-          },
+      await replayFromTruncation(
+        { type: "ask-user-answer", toolCallId },
+        async (options) => {
+          await addToolResult(
+            {
+              tool: "ask-user",
+              toolCallId,
+              output,
+            },
+            options,
+          );
         },
-        sendMode: getSendMode?.(),
-      });
-      await addToolResult(
-        {
-          tool: "ask-user",
-          toolCallId,
-          output,
-        },
-        replayOptions,
       );
     },
-    [addToolResult, getSendMode, messages, setMessages],
+    [addToolResult, replayFromTruncation],
+  );
+
+  /**
+   * Opening the editor of a sent message while a turn runs stops that turn
+   * through the composer's Stop, so the edit can be sent once it settled.
+   */
+  const startUserMessageEdit = useCallback(() => {
+    if (sendQueueRef.current.isGenerating) {
+      stop();
+    }
+  }, [stop]);
+
+  /**
+   * Replace one of the user's own messages and run the assistant again from
+   * there: the message and every later turn leave the thread, and the edited
+   * message is sent under the same id.
+   */
+  const editUserMessage = useCallback(
+    async (messageId: string, draft: UserMessageEditDraft) => {
+      await replayFromTruncation(
+        { type: "user-message", messageId },
+        async (options) => {
+          await sendChatMessage(
+            buildEditedUserMessage({ draft, messageId }),
+            options,
+          );
+        },
+      );
+    },
+    [replayFromTruncation, sendChatMessage],
   );
 
   const createDocumentMattersView = queryView(
@@ -1800,6 +1778,8 @@ export const useChatSession = ({
     resolveSecretTarget,
     secretAvailabilityKey: conversationId,
     handleAskUserEditAndRerun,
+    startUserMessageEdit,
+    editUserMessage,
     handleAlwaysAllow,
     confirmStoredApprovalGrant,
     handleCreateDocumentResolve,

@@ -1527,6 +1527,11 @@
     "credentialSendTitle": "Ce message peut contenir un identifiant",
     "deleteThread": "Supprimer la conversation",
     "diagramUnavailable": "Impossible d’afficher ce diagramme. Son code source figure ci-dessous.",
+    "editMessage": "Modifier le message",
+    "editMessageInput": "Message modifié",
+    "editMessageNotice": "L’envoi remplace ce message et toutes les réponses qui le suivent.",
+    "editMessageRefused": "Impossible de modifier ce message. La conversation affiche maintenant ce qui est enregistré ; réessayez lorsqu’aucune réponse n’est en cours.",
+    "editMessageRemoveAttachment": "Retirer {name} de ce message",
     "editMode": {
       "autoDirect": "Automatique · réécrire",
       "autoDirectDescription": "Les modifications de l’IA sont appliquées immédiatement en réécrivant directement le document (sans suivi des modifications).",

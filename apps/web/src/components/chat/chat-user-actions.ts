@@ -1,4 +1,7 @@
-import { CHAT_CONTINUATION_REJECTED_ERROR_CODE } from "@stll/api-contract";
+import {
+  CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+  CHAT_MESSAGE_EDIT_ERROR_CODE,
+} from "@stll/api-contract";
 
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import { hasRunningToolCallInLatestAssistantMessage } from "@/components/chat/chat-ui-tools";
@@ -66,6 +69,8 @@ export const CHAT_USER_ACTIONS = {
   "delete-thread": { via: "request" },
   deny: { handler: "handleDeny", via: "session" },
   "edit-answer": { handler: "handleAskUserEditAndRerun", via: "session" },
+  /** Replaces one of the user's own messages and drops every later turn. */
+  "edit-message": { handler: "editUserMessage", via: "session" },
   export: { via: "page" },
   fork: { via: "request" },
   "improve-prompt": { via: "page" },
@@ -78,6 +83,8 @@ export const CHAT_USER_ACTIONS = {
     via: "session",
   },
   "open-draft": { handler: "handleOpenCreateDocumentDraft", via: "session" },
+  /** Opens a sent message's editor; a running turn is stopped first. */
+  "open-message-editor": { handler: "startUserMessageEdit", via: "session" },
   "open-playbook": { handler: "handleOpenPlaybook", via: "session" },
   /** Reloads the canonical answer after an accepted edit or revision conflict. */
   "refresh-edited-answer": { handler: "refreshAnswers", via: "session" },
@@ -162,9 +169,21 @@ const isLatestAssistantMessage = ({
   return latest?.role === "assistant" && latest.id === messageId;
 };
 
-/** Replaying a mismatched continuation cannot repair its server-owned state. */
+const CHAT_MESSAGE_EDIT_REFUSAL_CODES = new Set<string>(
+  Object.values(CHAT_MESSAGE_EDIT_ERROR_CODE),
+);
+
+/** The server refused to edit a message; the page reloads what it stores. */
+export const isChatMessageEditRefusal = (error: Error | undefined): boolean => {
+  const code = chatRefusal(error)?.code;
+  return code !== undefined && CHAT_MESSAGE_EDIT_REFUSAL_CODES.has(code);
+};
+
+/** Replaying a mismatched continuation cannot repair its server-owned state,
+ *  and replaying a refused edit would answer the history it left in place. */
 export const canRetryChatRequest = (error: Error | undefined): boolean =>
-  chatRefusal(error)?.code !== CHAT_CONTINUATION_REJECTED_ERROR_CODE;
+  chatRefusal(error)?.code !== CHAT_CONTINUATION_REJECTED_ERROR_CODE &&
+  !isChatMessageEditRefusal(error);
 
 /** Retry regenerates the latest answer, once no turn runs. */
 export const canRetryAssistantMessage = ({

@@ -1527,6 +1527,11 @@
     "credentialSendTitle": "Šiame pranešime gali būti prisijungimo duomenų",
     "deleteThread": "Ištrinti pokalbį",
     "diagramUnavailable": "Šios diagramos nepavyko atvaizduoti. Jos šaltinio kodas pateiktas žemiau.",
+    "editMessage": "Redaguoti žinutę",
+    "editMessageInput": "Redaguota žinutė",
+    "editMessageNotice": "Išsiuntus bus pakeista ši žinutė ir visi po jos gauti atsakymai.",
+    "editMessageRefused": "Žinutės redaguoti nepavyko. Pokalbyje dabar rodoma tai, kas išsaugota; bandykite dar kartą, kai nebebus rengiamas joks atsakymas.",
+    "editMessageRemoveAttachment": "Pašalinti {name} iš šios žinutės",
     "editMode": {
       "autoDirect": "Automatiškai · perrašyti",
       "autoDirectDescription": "DI pakeitimai pritaikomi iš karto tiesiogiai perrašant dokumentą (be pakeitimų sekimo).",

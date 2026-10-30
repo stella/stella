@@ -1527,6 +1527,11 @@
     "credentialSendTitle": "Este mensaje puede contener una credencial",
     "deleteThread": "Eliminar conversación",
     "diagramUnavailable": "No se ha podido mostrar este diagrama. Debajo aparece su código fuente.",
+    "editMessage": "Editar mensaje",
+    "editMessageInput": "Mensaje editado",
+    "editMessageNotice": "Al enviarlo, se reemplazan este mensaje y todas las respuestas posteriores.",
+    "editMessageRefused": "No se pudo editar el mensaje. El chat muestra ahora lo que está guardado; inténtelo de nuevo cuando no haya ninguna respuesta en curso.",
+    "editMessageRemoveAttachment": "Quitar {name} de este mensaje",
     "editMode": {
       "autoDirect": "Automático · reescribir",
       "autoDirectDescription": "Las ediciones de la IA se aplican de inmediato reescribiendo directamente el documento (sin control de cambios).",
