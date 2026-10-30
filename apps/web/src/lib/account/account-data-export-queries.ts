@@ -3,7 +3,7 @@ import { queryOptions } from "@tanstack/react-query";
 import { Temporal } from "@stll/time";
 
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 
 const ACCOUNT_DATA_EXPORT_POLL_INTERVAL_MS = 2000;
 const ACCOUNT_DATA_EXPORT_READY_REFRESH_MAX_INTERVAL_MS = 60_000;
@@ -16,7 +16,7 @@ export const accountDataExportLatestOptions = (userId: string) =>
   queryOptions({
     queryKey: accountDataExportKeys.latest(userId),
     queryFn: async ({ signal }) =>
-      unwrapEden(await api.me["data-exports"].get({ fetch: { signal } }))
+      unwrapApiResponse(await api.me["data-exports"].get({ fetch: { signal } }))
         .latest,
     refetchInterval: (query) => {
       const status = query.state.data;

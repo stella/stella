@@ -35,7 +35,7 @@ const resolveOAuthUser = async (
   return email === undefined ? null : { id: userId, email };
 };
 
-export const authenticateAccountExportDownload = async (
+const authenticateAccountExportDownload = async (
   ctx: Parameters<typeof authenticateSession>[0],
   access: Parameters<typeof authenticateSession>[1],
   {

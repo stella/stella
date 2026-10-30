@@ -51,6 +51,116 @@ const createSelectionFixture = () => {
   return { root, spec, write };
 };
 
+const createModuleReferenceFixture = () => {
+  const fixture = createSelectionFixture();
+  fixture.write(
+    "apps/web/src/routes/dev/-visual-metadata.ts",
+    `export const visualRegistry = {
+  fixture: {},
+  other: {},
+} as const;`,
+  );
+  fixture.write(
+    "apps/web/src/routes/dev/-visual-registry.tsx",
+    `const visualLoaders = {
+  fixture: {
+    loader: () => import("./fixture"),
+  },
+  other: {
+    loader: () => import("./other"),
+  },
+} as const;`,
+  );
+  fixture.write("apps/web/src/routes/dev/other.ts", "export {};\n");
+  fixture.write(
+    "apps/web/e2e/ui-playground/other.geometry.spec.ts",
+    'const url = "/dev?visual=other";\n',
+  );
+  return fixture;
+};
+
+test.each([
+  'new Worker(new URL("./workers/worker.ts", import.meta.url));',
+  'new URL("workers/worker.ts", import.meta.url);',
+  "new URL(`./workers/worker.ts`, import.meta.url);",
+  String.raw`new URL("./workers/wo\u0072ker.ts", import.meta.url);`,
+  'import.meta.glob("./workers/*.ts");',
+  'import.meta.glob(["./workers/*.ts", "!./workers/*.test.ts"]);',
+  'import.meta.glob("./workers/*.ts", { eager: true });',
+  'import.meta.glob("./*.ts", { base: "./workers" });',
+  ...["worker", "url", "raw"].flatMap((query) => [
+    `import worker from "./workers/worker.ts?${query}"; export { worker };`,
+    `import(\`./workers/worker.ts?${query}\`);`,
+  ]),
+])(
+  "literal module references select the owning geometry spec: %s",
+  (source) => {
+    const { root, write } = createModuleReferenceFixture();
+    try {
+      write("apps/web/src/routes/dev/fixture.ts", source);
+      write(
+        "apps/web/src/routes/dev/workers/worker.ts",
+        'export default "worker";',
+      );
+      expect(
+        selectGeometrySpecs(
+          ["apps/web/src/routes/dev/workers/worker.ts"],
+          root,
+        ),
+      ).toEqual(["apps/web/e2e/ui-playground/fixture.geometry.spec.ts"]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  },
+);
+
+test.each([
+  "new URL(workerPath, import.meta.url);",
+  `new URL(\`./workers/\${workerName}.ts\`, import.meta.url);`,
+  "import.meta.glob(workerPattern);",
+  'import.meta.glob("./workers/*.ts", options);',
+  "import.meta.resolve(workerPath);",
+  ...["worker", "url", "raw"].map(
+    (query) => `import(\`./workers/\${workerName}.ts?${query}\`);`,
+  ),
+])(
+  "computed module references leave the import closure incomplete: %s",
+  (source) => {
+    const { root, write } = createModuleReferenceFixture();
+    try {
+      write("apps/web/src/routes/dev/fixture.ts", source);
+      expect(selectGeometrySpecs(["apps/web/src/unrelated.ts"], root)).toEqual([
+        "apps/web/e2e/ui-playground/fixture.geometry.spec.ts",
+        "apps/web/e2e/ui-playground/other.geometry.spec.ts",
+      ]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  },
+);
+
+test("glob references include removed matches and preserve exclusions", () => {
+  const { root, write } = createModuleReferenceFixture();
+  try {
+    write(
+      "apps/web/src/routes/dev/fixture.ts",
+      'import.meta.glob(["./workers/*.ts", "!./workers/*.test.ts"]);',
+    );
+    write("apps/web/src/routes/dev/workers/kept.ts", "export {};\n");
+    expect(
+      selectGeometrySpecs(["apps/web/src/routes/dev/workers/removed.ts"], root),
+    ).toEqual(["apps/web/e2e/ui-playground/fixture.geometry.spec.ts"]);
+    expect(
+      selectGeometrySpecs(
+        ["apps/web/src/routes/dev/workers/ignored.test.ts"],
+        root,
+      ),
+    ).toEqual([]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("every geometry spec opens registered visuals with loader modules", () => {
   const inventory = readPlaygroundInventory(ROOT);
   expect(inventory.specs.length).toBeGreaterThan(0);

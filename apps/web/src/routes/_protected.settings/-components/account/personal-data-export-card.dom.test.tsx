@@ -16,6 +16,7 @@ const { act, cleanup, fireEvent, render, screen, waitFor } =
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
+const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
 const { PersonalDataExportCard } = await import("./personal-data-export-card");
@@ -123,7 +124,9 @@ const renderAccountCard = () => {
             wordEditShortcut: null,
           }}
         >
-          <PersonalDataExportCard />
+          <FormattingProvider locale="en" timeZone="UTC">
+            <PersonalDataExportCard />
+          </FormattingProvider>
         </AuthenticatedUserProvider>
       </IntlProvider>
     </QueryClientProvider>,

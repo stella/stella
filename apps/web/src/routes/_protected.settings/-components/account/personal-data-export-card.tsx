@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { Temporal } from "@stll/time";
@@ -16,6 +16,8 @@ import { DownloadIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
+import { RecoverableErrorStatus } from "@/components/recoverable-error-status";
+import { useFormatter } from "@/i18n/formatting-context";
 import { accountDataExportLatestOptions } from "@/lib/account/account-data-export-queries";
 import type { AccountDataExportStatus as AccountDataExportStatusData } from "@/lib/account/account-data-export-queries";
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -23,10 +25,11 @@ import { api } from "@/lib/api";
 import { apiUrl } from "@/lib/api-url";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { invokeCapability } from "@/lib/capabilities/capability-request";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { queryView } from "@/lib/query-view.logic";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 export const PersonalDataExportCard = () => {
   const t = useTranslations();
@@ -36,10 +39,10 @@ export const PersonalDataExportCard = () => {
   const { id: userId } = useAuthenticatedUser();
   const latestOptions = accountDataExportLatestOptions(userId);
   const latestQuery = useQuery(latestOptions);
-  const latestView = useQueryView(latestQuery, {
+  const latestView = queryView(latestQuery, {
     isEmpty: (data) => data === null,
   });
-  useQueryViewError(latestView);
+  useQueryViewError(latestView, "PersonalDataExportCard:latest");
 
   const requestExport = useMutation({
     onMutate: async () => {
@@ -47,14 +50,19 @@ export const PersonalDataExportCard = () => {
     },
     mutationFn: async () =>
       await invokeCapability("account-exports.create", async (request) =>
-        unwrapEden(await api.me["data-exports"].post(undefined, request)),
+        unwrapApiResponse(
+          await api.me["data-exports"].post(undefined, request),
+        ),
       ),
     onSuccess: async (status) => {
       queryClient.setQueryData(latestOptions.queryKey, status);
       await queryClient.invalidateQueries({ queryKey: latestOptions.queryKey });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "PersonalDataExportCard:request",
+        scope: { type: "handler", handlerId: "PersonalDataExportCard:request" },
+      });
       notifyUserError(error, t("errors.actionFailed"));
     },
   });
@@ -177,20 +185,22 @@ const PersonalDataExportStatus = ({
       );
     case "failed":
       return (
-        <div className="flex flex-col items-start gap-3">
-          <p role="alert" className="text-destructive text-sm">
-            {t("settings.account.personalDataExportFailed")}
-          </p>
-          <Button
-            disabled={requestPending}
-            loading={requestPending}
-            onClick={onRequest}
-            size="sm"
-            variant="outline"
-          >
-            {t("settings.account.personalDataExportRequestNew")}
-          </Button>
-        </div>
+        <RecoverableErrorStatus
+          className="flex flex-col items-start gap-3"
+          messageClassName="text-destructive text-sm"
+          message={t("settings.account.personalDataExportFailed")}
+          actions={
+            <Button
+              disabled={requestPending}
+              loading={requestPending}
+              onClick={onRequest}
+              size="sm"
+              variant="outline"
+            >
+              {t("settings.account.personalDataExportRequestNew")}
+            </Button>
+          }
+        />
       );
     case "expired":
       return (
