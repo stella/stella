@@ -32,6 +32,54 @@ describe("HTTP request deadline", () => {
     expect(jest.getTimerCount()).toBe(0);
   });
 
+  test("errors a stream read when the body stalls past the deadline", async () => {
+    jest.useFakeTimers();
+    // The fetch ignores its signal, so only the deadline can end the read.
+    const fetch = async (): Promise<Response> =>
+      new Response(new ReadableStream<Uint8Array>(), {
+        headers: { "content-type": "application/octet-stream" },
+      });
+
+    const response = await fetchWithTimeout(fetch, "https://example.com");
+    const stream = response.body;
+    if (stream === null) {
+      throw new Error("The response has a body");
+    }
+    const read = stream
+      .getReader()
+      .read()
+      .catch((error: unknown) => error);
+    await flush();
+    expect(jest.getTimerCount()).toBe(1);
+
+    jest.advanceTimersByTime(20_000);
+    await flush();
+
+    expect(await read).toMatchObject({ name: "AbortError" });
+    expect(jest.getTimerCount()).toBe(0);
+  });
+
+  test("holds a clone's body to the same deadline", async () => {
+    jest.useFakeTimers();
+    const fetch = async (): Promise<Response> =>
+      new Response(new ReadableStream<Uint8Array>(), {
+        headers: { "content-type": "application/json" },
+      });
+
+    const response = await fetchWithTimeout(fetch, "https://example.com");
+    const body = response
+      .clone()
+      .text()
+      .catch((error: unknown) => error);
+    await flush();
+
+    jest.advanceTimersByTime(20_000);
+    await flush();
+
+    expect(await body).toMatchObject({ name: "AbortError" });
+    expect(jest.getTimerCount()).toBe(0);
+  });
+
   test("returns a complete response without leaving a timer", async () => {
     jest.useFakeTimers();
     const fetch = async (): Promise<Response> =>

@@ -13,7 +13,8 @@ const REQUEST_TIMEOUT_MS = 20_000;
  *
  * The deadline covers the body as well as the headers: the abort reaches a
  * `fetch` that honours its signal mid-body, and a body read races the
- * deadline for one that does not. The response is the platform's own,
+ * deadline for one that does not, as does a read of `body` itself. The
+ * response is the platform's own,
  * behind a proxy, never rebuilt: on a phone the global `Response` is a
  * polyfill that cannot take a stream as its body and reads it as the text
  * "[object ReadableStream]".
@@ -63,28 +64,75 @@ export const fetchWithTimeout = async (
         { once: true },
       );
     });
+  const raced = async <T>(read: Promise<T>): Promise<T> =>
+    await Promise.race([read, deadline()]);
   const bounded = async <T>(read: Promise<T>): Promise<T> =>
-    await Promise.race([read, deadline()]).finally(clear);
-  // The ways the app reads a body, each held to the deadline.
-  const readers = {
-    arrayBuffer: async () => await bounded(response.arrayBuffer()),
-    blob: async () => await bounded(response.blob()),
-    json: async (): Promise<unknown> => await bounded(response.json()),
-    text: async () => await bounded(response.text()),
-  } satisfies Partial<Response>;
-  const isReader = (property: PropertyKey): property is keyof typeof readers =>
-    Object.hasOwn(readers, property);
-  return new Proxy(response, {
-    get(target, property) {
-      if (isReader(property)) {
-        return readers[property];
-      }
-      const value: unknown = Reflect.get(target, property, target);
-      // A method reads the platform response's own state, so it runs on it
-      // rather than on the proxy.
-      return typeof value === "function" ? value.bind(target) : value;
-    },
-  });
+    await raced(read).finally(clear);
+  // A caller that reads the stream itself gets one that errors at the
+  // deadline, made when it first asks, so a `json()` caller never builds it.
+  const boundStream = (source: ReadableStream<Uint8Array>) =>
+    new ReadableStream<Uint8Array>({
+      // The reader is taken for one read and released after it, so the
+      // source is never left locked between pulls.
+      async pull(stream) {
+        const reader = source.getReader();
+        try {
+          const next = await Result.tryPromise(
+            async () => await raced(reader.read()),
+          );
+          if (Result.isError(next)) {
+            clear();
+            stream.error(next.error.cause);
+            await reader.cancel(next.error.cause);
+            return;
+          }
+          if (next.value.done) {
+            clear();
+            stream.close();
+            return;
+          }
+          stream.enqueue(next.value.value);
+        } finally {
+          reader.releaseLock();
+        }
+      },
+      async cancel(reason: unknown) {
+        clear();
+        await source.cancel(reason);
+      },
+    });
+  // Every way to consume the body is held to the deadline, on the response
+  // and on each clone of it.
+  const bind = (platform: Response): Response => {
+    const readers = {
+      arrayBuffer: async () => await bounded(platform.arrayBuffer()),
+      blob: async () => await bounded(platform.blob()),
+      clone: () => bind(platform.clone()),
+      formData: async () => await bounded(platform.formData()),
+      json: async (): Promise<unknown> => await bounded(platform.json()),
+      text: async () => await bounded(platform.text()),
+    };
+    const isReader = (
+      property: PropertyKey,
+    ): property is keyof typeof readers => Object.hasOwn(readers, property);
+    let body: ReadableStream<Uint8Array> | null | undefined;
+    return new Proxy(platform, {
+      get(target, property) {
+        if (isReader(property)) {
+          return readers[property];
+        }
+        if (property === "body") {
+          body ??= target.body === null ? null : boundStream(target.body);
+          return body;
+        }
+        const value: unknown = Reflect.get(target, property, target);
+        // A method reads the platform response's own state, so it runs on
+        // it rather than on the proxy.
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+  };
+  return bind(response);
 };
 
 /**
