@@ -881,7 +881,7 @@
     "scripts/tanstack-drift.ts": 3
   },
   "no-native-ui/no-native-accordion": {
-    "apps/desktop/src/activity/ActivityApp.tsx": 4,
+    "apps/desktop/src/activity/ActivityApp.tsx": 2,
     "apps/web/src/components/chat/chat-thread-messages.tsx": 4,
     "apps/web/src/components/chat/tool-approval-card.tsx": 2,
     "apps/web/src/components/chat/tool-call-card.tsx": 2,
