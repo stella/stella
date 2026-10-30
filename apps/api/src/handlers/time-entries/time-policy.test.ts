@@ -92,8 +92,8 @@ describe("time entry policy at API write paths", () => {
       }),
     );
     for (const result of [create, edit]) {
-      expect(Result.isError(result)).toBe(true);
-      if (Result.isError(result)) {
+      expect(result.status).toBe("error");
+      if (result.status === "error") {
         expect(result.error).toMatchObject({
           status: 400,
           code: TIME_ENTRY_RATE_REQUIRED_CODE,
