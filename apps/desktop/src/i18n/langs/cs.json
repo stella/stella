@@ -1,7 +1,6 @@
 {
   "tray": {
     "activeEdits": "{count, plural, one {1 aktivní úprava} few {{count} aktivní úpravy} other {{count} aktivních úprav}}",
-    "clipboard": "Historie schránky",
     "activity": "Aktivita",
     "activityRecording": "Aktivita: Záznam · dnes {hours} h",
     "activityPaused": "Aktivita: Pozastaveno · dnes {hours} h",
@@ -485,9 +484,6 @@
     "unreadableEraseAction": "Smazat nečitelnou aktivitu",
     "unreadableEraseConfirmation": "Nečitelná uložená aktivita a údaje pro obnovení jejích čekajících konceptů budou smazány. Vytvořené koncepty již mohou existovat. Tuto akci nelze vrátit zpět.",
     "unreadableEraseNotice": "Některou uloženou aktivitu nelze přečíst. Nečitelnou uloženou aktivitu a údaje pro obnovení jejích konceptů můžete smazat.",
-    "discardPendingConfirmation": "Údaje pro obnovení čekajících konceptů budou z tohoto zařízení smazány. Vytvořené koncepty již mohou existovat. Tuto akci nelze vrátit zpět.",
-    "discardPendingRecovery": "Zahodit obnovení konceptů",
-    "batchUnavailable": "Vytváření konceptů nyní není dostupné.",
     "pendingActivityProtected": "Před smazáním aktivity dokončete čekající vytváření konceptů.",
     "draftMarkerFailed": "Koncepty byly vytvořeny, ale místní potvrzení se nepodařilo uložit. Zkuste potvrzení uložit znovu.",
     "narrativeEvidence": "Práce na: {evidence}",

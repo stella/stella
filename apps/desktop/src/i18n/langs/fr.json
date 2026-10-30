@@ -1,7 +1,6 @@
 {
   "tray": {
     "activeEdits": "{count, plural, one {{count} modification active} other {{count} modifications actives}}",
-    "clipboard": "Historique du presse-papiers",
     "activity": "Activité",
     "activityRecording": "Activité : Enregistrement · {hours} h aujourd’hui",
     "activityPaused": "Activité : En pause · {hours} h aujourd’hui",
@@ -485,9 +484,6 @@
     "unreadableEraseAction": "Effacer l'activité illisible",
     "unreadableEraseConfirmation": "Les activités enregistrées illisibles et les données de récupération de leurs brouillons en attente seront effacées. Des brouillons créés peuvent déjà exister. Cette action est irréversible.",
     "unreadableEraseNotice": "Certaines activités enregistrées ne peuvent pas être lues. Vous pouvez effacer les activités enregistrées illisibles et les données de récupération de leurs brouillons.",
-    "discardPendingConfirmation": "Les données de récupération des brouillons en attente seront supprimées de cet appareil. Des brouillons créés peuvent déjà exister. Cette action est irréversible.",
-    "discardPendingRecovery": "Abandonner la récupération des brouillons",
-    "batchUnavailable": "La création de brouillons est actuellement indisponible.",
     "pendingActivityProtected": "Terminez la création de brouillons en attente avant de supprimer une activité.",
     "draftMarkerFailed": "Les brouillons ont été créés, mais le reçu local n'a pas pu être enregistré. Réessayez pour enregistrer le reçu.",
     "narrativeEvidence": "Travail sur {evidence}",
