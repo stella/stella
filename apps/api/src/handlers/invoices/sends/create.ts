@@ -577,6 +577,7 @@ const recordDelivery = async (
   });
 };
 
+// Email leaves between committed database phases; DB-only replay cannot undo it.
 const config = {
   contract: "patch",
   description:

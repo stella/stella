@@ -394,6 +394,7 @@ const memberContext = ({
   extraParams = {},
   auditEvents = [],
   senderId,
+  idempotencyKey,
 }: {
   tenant: Tenant;
   invoiceId: SafeId<"invoice">;
@@ -402,6 +403,7 @@ const memberContext = ({
   extraParams?: Record<string, string>;
   auditEvents?: AuditEvent[];
   senderId?: SafeId<"user">;
+  idempotencyKey?: string;
 }) => {
   const { organizationId, workspaceId } = tenantOf(tenant);
   const userId = senderId ?? tenantOf(tenant).userId;
@@ -419,6 +421,7 @@ const memberContext = ({
     getWorkspaceAccess: async () => ({ id: workspaceId, status: "active" }),
     params: { workspaceId, invoiceId, ...extraParams },
     query: {},
+    set: { headers: {} },
     body,
     createAuditRecorder: () => recordAuditEvent,
     recordAuditEvent,
@@ -428,6 +431,10 @@ const memberContext = ({
     promptCachingEnabled: false,
     request: new Request("https://example.test/invoice/sends", {
       method: "POST",
+      headers:
+        idempotencyKey === undefined
+          ? {}
+          : { "Idempotency-Key": idempotencyKey },
     }),
     route,
     safeDb: createSafeDb(testDb, [workspaceId], organizationId, userId),
@@ -726,6 +733,50 @@ const DISABLED_INVOICE_LINK_CASES = [
 ].flatMap((mode) => [10, 100].map((lineCount) => ({ mode, lineCount })));
 
 describe("sending an invoice by link", () => {
+  test("keyed invoice email retries are refused before any delivery or send mutation", async () => {
+    const invoiceId = await seedInvoice({ status: INVOICE_STATUS.FINALIZED });
+    let deliveries = 0;
+    let reservations = 0;
+    const guarded = createSendInvoice({
+      isDeliveryConfigured: () => true,
+      deliver: async () => {
+        deliveries += 1;
+      },
+      admitEmail: async () => {
+        reservations += 1;
+        return Result.ok({ release: async () => {}, commit: async () => {} });
+      },
+    });
+    const invoke = async (idempotencyKey: string) =>
+      await guarded.handler(
+        asTestRaw<Parameters<typeof guarded.handler>[0]>(
+          memberContext({
+            tenant: "A",
+            invoiceId,
+            route: "/v1/invoices/:workspaceId/:invoiceId/sends",
+            body: { recipients: ["keyed-send@example.test"] },
+            idempotencyKey,
+          }),
+        ),
+      );
+    const first = await invoke("invoice-send-intent-a");
+    expect(first).toMatchObject({
+      code: 400,
+      response: {
+        message:
+          "This endpoint does not support Idempotency-Key. Omit the header and use its documented submission flow.",
+      },
+    });
+    expect(await invoke("invoice-send-intent-a")).toEqual(first);
+    expect(await invoke("invoice-send-intent-b")).toEqual(first);
+    expect({ deliveries, reservations }).toEqual({
+      deliveries: 0,
+      reservations: 0,
+    });
+    expect(await sendRows(invoiceId)).toEqual([]);
+    expect(await invoiceStatus(invoiceId)).toBe(INVOICE_STATUS.FINALIZED);
+  });
+
   test.each(DISABLED_INVOICE_LINK_CASES)(
     "a disabled deployment refuses sending before reservation, email or invoice changes in $mode mode with $lineCount invoice lines",
     async ({ mode, lineCount }) => {
