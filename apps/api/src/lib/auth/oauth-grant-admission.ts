@@ -1,6 +1,5 @@
-import { oauthProviderResourceClient } from "@better-auth/oauth-provider/resource-client";
 import { Result } from "better-result";
-import type { JWTPayload } from "jose";
+import type { JWTPayload, JWTVerifyOptions } from "jose";
 
 import { readOAuthGrantAdmission } from "@/api/db/root";
 import { OAUTH_GRANT_ID_CLAIM } from "@/api/lib/auth/oauth-grant-identity";
@@ -9,7 +8,6 @@ import {
   SERVICE_CLIENT_PRINCIPAL,
   SERVICE_CLIENT_PRINCIPAL_CLAIM,
 } from "@/api/lib/db/service-client-contract";
-import type { McpSession } from "@/api/mcp/auth";
 import {
   AGENT_RUN_TOKEN_PURPOSE,
   MCP_MEMBER_ID_CLAIM,
@@ -18,6 +16,7 @@ import {
   McpAuthenticationError,
   McpTokenVerificationError,
 } from "@/api/mcp/errors";
+import type { McpSession } from "@/api/mcp/session";
 
 const isStringArray = (value: unknown): value is string[] =>
   Array.isArray(value) &&
@@ -247,18 +246,6 @@ export const admitMcpSession = async (
   return admitted.value.map((value) => ({ ...session, credential: value }));
 };
 
-export type VerifyBearerToken = ReturnType<
-  ReturnType<typeof oauthProviderResourceClient<undefined>>["getActions"]
->["verifyBearerToken"];
-
-let verifyBearerToken: VerifyBearerToken | undefined;
-
-const getVerifyBearerToken = (): VerifyBearerToken => {
-  verifyBearerToken ??=
-    oauthProviderResourceClient().getActions().verifyBearerToken;
-  return verifyBearerToken;
-};
-
 const admittedServiceToken = Symbol("admittedServiceToken");
 type AdmittedServicePayload = JWTPayload & {
   readonly [admittedServiceToken]: true;
@@ -267,9 +254,18 @@ type VerifiedOAuthToken =
   | { type: "user"; payload: JWTPayload; session: AdmittedMcpSession }
   | { type: "service"; payload: AdmittedServicePayload };
 
+type OAuthVerificationOptions = {
+  jwksUrl: string;
+  verifyOptions: JWTVerifyOptions &
+    Required<Pick<JWTVerifyOptions, "audience" | "issuer">>;
+};
+
 type VerifyOAuthTokenOptions = {
-  verificationOptions: Parameters<VerifyBearerToken>[1];
-  verifyToken?: VerifyBearerToken | undefined;
+  verificationOptions: OAuthVerificationOptions;
+  verifyToken: (
+    token: string,
+    options: OAuthVerificationOptions,
+  ) => Promise<JWTPayload>;
   admissionOptions?: AdmitMcpSessionOptions | undefined;
 };
 
@@ -285,8 +281,7 @@ export const verifyOAuthToken = async (
   Result<VerifiedOAuthToken, McpAuthenticationError | McpTokenVerificationError>
 > => {
   const verified = await Result.tryPromise({
-    try: async () =>
-      await (verifyToken ?? getVerifyBearerToken())(token, verificationOptions),
+    try: async () => await verifyToken(token, verificationOptions),
     catch: classifyMcpTokenVerificationError,
   });
   if (verified.isErr()) {

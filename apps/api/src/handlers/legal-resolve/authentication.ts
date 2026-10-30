@@ -10,6 +10,7 @@ import { resolveMachineApiKeySession } from "@/api/mcp/api-key-auth";
 import {
   authenticateMcpRequest,
   classifyMcpTokenVerificationError,
+  getVerifyBearerToken,
   verifyMcpAccessToken,
 } from "@/api/mcp/auth";
 import type { McpAuthenticationFailure } from "@/api/mcp/auth";
@@ -40,7 +41,7 @@ export const authenticateLegalResolveToken = async (
   const verified = await verifyMcpAccessToken(bearerToken, {
     mode,
     admissionOptions,
-    ...(verifyToken === undefined ? {} : { verifyToken }),
+    verifyToken: verifyToken ?? getVerifyBearerToken(),
   });
   if (Result.isError(verified)) {
     return verified;

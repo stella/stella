@@ -205,14 +205,14 @@ const RESTRICTED_IMPORT_RULES = {
     {
       messageId: "requireOwner",
       message:
-        "OAuth access-token verification belongs to lib/auth/oauth-grant-admission.ts; use its admitted token result.",
+        "Raw OAuth resource verifiers belong to mcp/auth.ts; use verifyOAuthToken for admitted token results.",
       modules: ["@better-auth/oauth-provider/resource-client"],
       restriction: {
         type: "module",
         typeOnlyImports: TYPE_ONLY_IMPORTS.restricted,
         dynamicImports: DYNAMIC_IMPORTS.restricted,
       },
-      owners: ["apps/api/src/lib/auth/oauth-grant-admission.ts"],
+      owners: ["apps/api/src/mcp/auth.ts"],
     },
     {
       messageId: "requireJwtOwner",

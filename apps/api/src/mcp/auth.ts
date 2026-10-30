@@ -1,7 +1,7 @@
+import { oauthProviderResourceClient } from "@better-auth/oauth-provider/resource-client";
 import { Result } from "better-result";
 
 import { ACCOUNT_EXPORT_SCOPES } from "@stll/api-contract";
-import type { PermissionInput } from "@stll/permissions";
 
 import {
   getAuthEndpointUrl,
@@ -12,10 +12,7 @@ import {
   classifyMcpTokenVerificationError,
   verifyOAuthToken,
 } from "@/api/lib/auth/oauth-grant-admission";
-import type {
-  AdmittedMcpSession,
-  VerifyBearerToken,
-} from "@/api/lib/auth/oauth-grant-admission";
+import type { AdmittedMcpSession } from "@/api/lib/auth/oauth-grant-admission";
 import { getReviewAccountConfig } from "@/api/lib/auth/review-account";
 import { narrowReviewOrganizationScopes } from "@/api/lib/auth/review-account-policy";
 import type { ReviewAccountConfig } from "@/api/lib/auth/review-account-policy";
@@ -29,48 +26,24 @@ import {
   getMcpResourceScopes,
   MCP_MODES,
 } from "@/api/mcp/resource-policy-contract";
+import type { McpSession } from "@/api/mcp/session";
 
-export type McpSession = {
-  userId: string;
-  organizationId: string;
-  scopes: string[];
-  credential?:
-    | { type: "agent_run"; runId: string }
-    | {
-        type: "oauth_client";
-        clientId: string;
-        grantId?: string;
-        issuedAt: number;
-      }
-    /**
-     * `permissions` is the key's own permission set, already checked to be a
-     * subset of its owner's current role when the credential resolved. It rides
-     * on the credential because it is the credential's attenuation, and the
-     * authorization path ANDs it with the role
-     * (`mcp/effective-authority.ts`). A key with no usable set never resolves,
-     * so the field is required on this branch.
-     */
-    | {
-        type: "machine_api_key" | "personal_api_key";
-        id: string;
-        name: string;
-        permissions: PermissionInput;
-      }
-    | { type: "delegated_user" };
-  /** Optional server-issued attenuation; absent means the full live access set. */
-  workspaceIds?: string[];
-  /**
-   * The membership row an OAuth access token was issued under; the session
-   * opens only while that row is the user's current membership. Absent on
-   * credentials that carry no such claim.
-   */
-  memberId?: string;
-};
+export type { McpSession } from "@/api/mcp/session";
 
 /** Which kind of credential opened a session, for telemetry and reporting. */
 export type McpCredentialType = NonNullable<McpSession["credential"]>["type"];
 
-export type { VerifyBearerToken } from "@/api/lib/auth/oauth-grant-admission";
+export type VerifyBearerToken = ReturnType<
+  ReturnType<typeof oauthProviderResourceClient<undefined>>["getActions"]
+>["verifyBearerToken"];
+
+let verifyBearerToken: VerifyBearerToken | undefined;
+
+export const getVerifyBearerToken = (): VerifyBearerToken => {
+  verifyBearerToken ??=
+    oauthProviderResourceClient().getActions().verifyBearerToken;
+  return verifyBearerToken;
+};
 
 export const getMcpAccessTokenVerificationOptions = (
   mode: McpMode = "default",
@@ -115,7 +88,7 @@ export const verifyMcpAccessToken = async (
 ) =>
   await verifyOAuthToken(bearerToken, {
     verificationOptions: getMcpAccessTokenVerificationOptions(mode),
-    verifyToken,
+    verifyToken: verifyToken ?? getVerifyBearerToken(),
     admissionOptions,
   });
 
@@ -155,7 +128,7 @@ export const authenticateMcpRequest = async (
   }
   const verified = await verifyMcpAccessToken(bearerToken, {
     mode,
-    verifyToken,
+    verifyToken: verifyToken ?? getVerifyBearerToken(),
     admissionOptions,
   });
   if (verified.isErr()) {
@@ -202,7 +175,7 @@ export const authenticateAccountExportRequest = async (
       ...options,
       verifyOptions: { ...options.verifyOptions, audience: audiences },
     },
-    verifyToken,
+    verifyToken: verifyToken ?? getVerifyBearerToken(),
     admissionOptions,
   });
   if (authenticated.isErr()) {

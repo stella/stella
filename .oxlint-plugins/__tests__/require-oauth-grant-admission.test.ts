@@ -14,14 +14,23 @@ describe.serial(RULE, () => {
   ])("requires the admission owner: %s", async (source) => {
     expect(await lintSingleRule(RULE, source)).toEqual([1]);
   });
-  test("accepts verification within the admission owner", async () => {
+  test("accepts verifier acquisition within the MCP owner", async () => {
+    expect(
+      await lintSingleRule(
+        RULE,
+        'import { oauthProviderResourceClient } from "@better-auth/oauth-provider/resource-client";',
+        { sourcePath: "apps/api/src/mcp/auth.ts" },
+      ),
+    ).toEqual([]);
+  });
+  test("keeps raw verifier acquisition outside the admission owner", async () => {
     expect(
       await lintSingleRule(
         RULE,
         'import { oauthProviderResourceClient } from "@better-auth/oauth-provider/resource-client";',
         { sourcePath: "apps/api/src/lib/auth/oauth-grant-admission.ts" },
       ),
-    ).toEqual([]);
+    ).toEqual([1]);
   });
   test("preserves identity assertion verification at its existing owner", async () => {
     expect(

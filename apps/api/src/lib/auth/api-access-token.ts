@@ -13,8 +13,7 @@
  * MCP audience therefore never verifies here, and a token minted for the API
  * never verifies on MCP.
  *
- * This module imports no MCP or session code, since `lib/auth.ts` resolves it
- * and the MCP modules import `lib/auth.ts`.
+ * The lazy provider verifier is shared with the MCP resource boundary.
  */
 
 import { Result, TaggedError } from "better-result";
@@ -37,6 +36,7 @@ import {
   SERVICE_CLIENT_PRINCIPAL_CLAIM,
 } from "@/api/lib/db/service-client-contract";
 import { getApiOAuthResourceIdentifier } from "@/api/lib/oauth-resource-policy";
+import { getVerifyBearerToken } from "@/api/mcp/auth";
 import type { VerifyBearerToken } from "@/api/mcp/auth";
 import { McpAuthenticationError } from "@/api/mcp/errors";
 
@@ -319,7 +319,7 @@ export const authenticateApiAccessToken = async (
         issuer: getAuthIssuerUrl(),
       },
     },
-    verifyToken,
+    verifyToken: verifyToken ?? getVerifyBearerToken(),
     admissionOptions,
   });
   if (verified.isErr()) {
