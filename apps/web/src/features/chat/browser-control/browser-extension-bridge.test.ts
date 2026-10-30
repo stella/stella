@@ -211,7 +211,15 @@ describe("Chromium extension support", () => {
         userAgent:
           "Mozilla/5.0 (Linux; Android 14) Chrome/140.0.0.0 Mobile Safari/537.36",
       },
-      supported: true,
+      supported: false,
+    },
+    {
+      name: "mobile Chromium brands",
+      browser: {
+        userAgent: "reduced",
+        userAgentData: { brands: [{ brand: "Chromium" }], mobile: true },
+      },
+      supported: false,
     },
     {
       name: "unknown browser",

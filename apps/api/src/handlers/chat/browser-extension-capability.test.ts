@@ -7,6 +7,7 @@ import {
 
 import {
   BROWSER_EXTENSION_CAPABILITY,
+  BROWSER_EXTENSION_PROTOCOL_MISMATCH,
   browserExtensionPolicy,
 } from "./browser-extension-capability";
 
@@ -39,9 +40,28 @@ describe("browser extension capability policy", () => {
     expect(policy.toolOffered).toBe(false);
     expect(policy.promptLine).toContain(guidance);
   });
+  test.each([
+    BROWSER_CONTROL_PROTOCOL_VERSION - 1,
+    BROWSER_CONTROL_PROTOCOL_VERSION + 1,
+  ])(
+    "protocol version %s disables tools and asks for a reload",
+    (protocolVersion) => {
+      for (const status of Object.values(BROWSER_EXTENSION_STATUS)) {
+        const policy = browserExtensionPolicy({ protocolVersion, status });
+        expect(policy.toolOffered).toBe(false);
+        expect(policy.promptLine).toBe(
+          "BROWSER: Tell the user, in their language, to reload this stella tab to use the browser extension. Do not claim you have no way to use a browser.",
+        );
+      }
+    },
+  );
+
   test("has one explicit tool and prompt decision for every status", () => {
     expect(Object.keys(BROWSER_EXTENSION_CAPABILITY).toSorted()).toEqual(
-      Object.values(BROWSER_EXTENSION_STATUS).toSorted(),
+      [
+        ...Object.values(BROWSER_EXTENSION_STATUS),
+        BROWSER_EXTENSION_PROTOCOL_MISMATCH,
+      ].toSorted(),
     );
 
     for (const status of Object.values(BROWSER_EXTENSION_STATUS)) {

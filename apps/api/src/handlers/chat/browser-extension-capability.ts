@@ -1,4 +1,5 @@
 import {
+  BROWSER_CONTROL_PROTOCOL_VERSION,
   BROWSER_EXTENSION_STATUS,
   type BrowserExtensionCapability,
   type BrowserExtensionStatus,
@@ -9,7 +10,14 @@ type BrowserExtensionPolicy = {
   toolOffered: boolean;
 };
 
+export const BROWSER_EXTENSION_PROTOCOL_MISMATCH = "protocol-mismatch";
+
 export const BROWSER_EXTENSION_CAPABILITY = {
+  [BROWSER_EXTENSION_PROTOCOL_MISMATCH]: {
+    toolOffered: false,
+    promptLine:
+      "BROWSER: Tell the user, in their language, to reload this stella tab to use the browser extension. Do not claim you have no way to use a browser.",
+  },
   [BROWSER_EXTENSION_STATUS.checking]: {
     toolOffered: false,
     promptLine:
@@ -40,8 +48,16 @@ export const BROWSER_EXTENSION_CAPABILITY = {
     promptLine:
       "BROWSER: Tell the user, in their language, that browser control requires a browser that supports the stella Chrome extension. Do not claim you have no way to use a browser.",
   },
-} satisfies Record<BrowserExtensionStatus, BrowserExtensionPolicy>;
+} satisfies Record<
+  BrowserExtensionStatus | typeof BROWSER_EXTENSION_PROTOCOL_MISMATCH,
+  BrowserExtensionPolicy
+>;
 
 export const browserExtensionPolicy = (
   extension: BrowserExtensionCapability,
-): BrowserExtensionPolicy => BROWSER_EXTENSION_CAPABILITY[extension.status];
+): BrowserExtensionPolicy =>
+  BROWSER_EXTENSION_CAPABILITY[
+    extension.protocolVersion === BROWSER_CONTROL_PROTOCOL_VERSION
+      ? extension.status
+      : BROWSER_EXTENSION_PROTOCOL_MISMATCH
+  ];

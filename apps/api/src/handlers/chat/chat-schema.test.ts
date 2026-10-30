@@ -431,6 +431,21 @@ describe("browser client capability", () => {
     }
   });
 
+  test.each([
+    BROWSER_CONTROL_PROTOCOL_VERSION - 1,
+    BROWSER_CONTROL_PROTOCOL_VERSION + 1,
+  ])("accepts protocol version %s so chat can continue", (protocolVersion) => {
+    const parsed = v.parse(sendMessageBodySchema, {
+      ...request,
+      browserExtension: { protocolVersion, status: "connected" },
+    });
+    expect(parsed.browserExtension).toEqual({
+      protocolVersion,
+      status: "connected",
+    });
+    expect(parsed.runId).toBe(request.runId);
+  });
+
   test("rejects a malformed browser capability", () => {
     for (const protocolVersion of [0, 1.5, "3"]) {
       expect(

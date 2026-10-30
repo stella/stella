@@ -459,7 +459,7 @@ export type BrowserExtensionStatus =
 
 export type BrowserExtensionCapability = {
   [Status in BrowserExtensionStatus]: {
-    protocolVersion: typeof BROWSER_CONTROL_PROTOCOL_VERSION;
+    protocolVersion: number;
     status: Status;
   };
 }[BrowserExtensionStatus];
