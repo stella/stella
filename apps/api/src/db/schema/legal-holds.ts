@@ -54,5 +54,12 @@ export const legalHolds = p.pgTable(
       .on(table.organizationId, table.workspaceId, table.entityId)
       .where(sql`${table.releasedAt} IS NULL`),
     ...orgPolicies(),
+    p.pgPolicy("legal_holds_owner_access", {
+      as: "permissive",
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.legal_holds'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.legal_holds'::regclass)`,
+    }),
   ],
 );
