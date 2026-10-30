@@ -1,15 +1,23 @@
+import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { corpusIndexGenerations } from "@/api/db/schema";
 import type { TransactionOf } from "@/api/db/scoped";
 import { type SafeId, toSafeId } from "@/api/lib/branded-types";
+import {
+  tryLockCaseLawSitemapMonth,
+  withAggregateTransaction,
+} from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
-import type { GatedTestDb } from "@/api/tests/gated-test-database";
+import type {
+  GatedTestClientScope,
+  GatedTestDb,
+} from "@/api/tests/gated-test-database";
 
 /**
  * The corpus profile: public corpus tables seeded in the shape production
@@ -29,6 +37,10 @@ import type { GatedTestDb } from "@/api/tests/gated-test-database";
  *   table written over months.
  */
 const CORPUS_SCENARIO_ROWS = 60_000;
+const COMPLETION_SOURCE_ID = toSafeId<"caseLawSource">(
+  "01990000-00c2-7000-8000-000000000001",
+);
+const COMPLETION_ROWS = 100_000;
 
 export type CaseLawScenarioGeneration =
   "case_law_v5" | "case_law_v6" | "case_law_v7" | "case_law_v8" | "case_law_v9";
@@ -374,6 +386,24 @@ export const seedCorpusReadBudgets = async (database: GatedTestDb) => {
       });
     }
   }
+  await database.execute(sql`INSERT INTO case_law_sources (id, adapter_key, name, enabled)
+    VALUES (${COMPLETION_SOURCE_ID}, 'query-perf-completion', 'Completion query fixture', false)`);
+  for (const chunk of chunks(COMPLETION_ROWS)) {
+    await withoutTriggers(database, async (tx) => {
+      await tx.execute(sql`INSERT INTO case_law_decisions
+        (id, source_id, case_number, country, court, language, parser_version, source_hash)
+        SELECT md5(${COMPLETION_SOURCE_ID}::text || '-' || n::text)::uuid,
+          ${COMPLETION_SOURCE_ID}, 'completion-' || n::text, 'EUR', 'fixture', 'en', 2, 'finished'
+        FROM generate_series(${chunk.first}, ${chunk.last}) AS n`);
+    });
+  }
+  await database.execute(sql`INSERT INTO eu_completion_receipts
+    (id, source_id, decision_id, mode, parser_version, status, completion_source_hash, completed_at)
+    SELECT 'finished-' || id::text, source_id, id, 'dry-run', 2, 'dry-run', source_hash, now()
+    FROM case_law_decisions WHERE source_id = ${COMPLETION_SOURCE_ID}`);
+  await database.execute(sql`INSERT INTO case_law_index_jobs (id, decision_id, operation, status)
+    SELECT md5('withdrawal-' || id::text)::uuid, id, 'withdraw', 'succeeded'
+    FROM case_law_decisions WHERE source_id = ${COMPLETION_SOURCE_ID}`);
   await database.execute(sql`INSERT INTO legislation_sources (id, adapter_key, name)
     VALUES (${LEGISLATION_SOURCE_ID}, 'read-budget-fixture', 'Read budget fixture')`);
   for (const chunk of chunks(
@@ -391,6 +421,9 @@ export const seedCorpusReadBudgets = async (database: GatedTestDb) => {
     "corpus_index_projection_intents",
     "legislation_sources",
     "legislation_documents",
+    "case_law_decisions",
+    "eu_completion_receipts",
+    "case_law_index_jobs",
   ]) {
     // db-await-in-loop: one VACUUM per seeded table; VACUUM cannot share a statement.
     await database.execute(sql.raw(`VACUUM (ANALYZE) ${table}`));
@@ -405,9 +438,83 @@ export const seedCorpusReadBudgets = async (database: GatedTestDb) => {
       `01990000-00a2-7000-8000-${(work * LEGISLATION_VERSIONS_PER_WORK).toString(16).padStart(12, "0")}`,
     ),
   );
-  return { candidateIds };
+  return { candidateIds, completionSourceId: COMPLETION_SOURCE_ID };
 };
 
 export type CorpusReadBudgetSeed = Awaited<
   ReturnType<typeof seedCorpusReadBudgets>
 >;
+
+type SeedSitemapReadBudgetOptions = {
+  database: GatedTestDb;
+  served: ServedCaseLaw;
+  openClient: GatedTestClientScope["openClient"];
+};
+
+/** One available dirty month beside a growing backlog held by another run. */
+export const seedSitemapReadBudget = async ({
+  database,
+  served: { serving },
+  openClient,
+}: SeedSitemapReadBudgetOptions) => {
+  const scenario =
+    SCENARIO_GENERATIONS.find(({ generation }) => generation === serving) ??
+    panic(`Unknown sitemap scenario ${serving}`);
+  const sourceId = "01990000-00c0-7000-8000-000000000001";
+  await database.execute(sql`INSERT INTO case_law_sources (id, adapter_key, name, enabled)
+    VALUES (${sourceId}::uuid, 'query-perf-sitemap', 'Sitemap fixture', false)
+    ON CONFLICT (id) DO NOTHING`);
+  await database.execute(
+    sql`DELETE FROM case_law_decisions WHERE source_id = ${sourceId}::uuid`,
+  );
+  for (let first = 1; first <= scenario.rows; first += SEED_CHUNK_ROWS) {
+    const last = Math.min(first + SEED_CHUNK_ROWS - 1, scenario.rows);
+    // Synthetic seed rows form no case files.
+    await database.execute(sql`INSERT INTO case_law_decisions
+      (id, source_id, country, court, language, case_number, docket_family_key, decision_date)
+      SELECT ('01990000-00c1-7000-8000-' || lpad(to_hex(i), 12, '0'))::uuid,
+        ${sourceId}::uuid, CASE WHEN i = 1 THEN 'XQT' ELSE 'XQN' END,
+        'Fixture court', 'xx', i::text, NULL, DATE '2024-01-01'
+      FROM generate_series(${first}, ${last}) i`);
+  }
+  // Existing shards represent the unrelated, previously refreshed months.
+  await database.execute(sql`DELETE FROM case_law_sitemap_shards`);
+  await database.execute(sql`INSERT INTO case_law_sitemap_shards
+    (country, year, month, bucket, total, last_modified_at)
+    SELECT 'XQN', (1000 + i / 12)::text, lpad((1 + i % 12)::text, 2, '0'),
+      'all', 1, '2026-01-01'::timestamptz FROM generate_series(1, ${scenario.rows}) i`);
+  await database.execute(sql`DELETE FROM case_law_sitemap_changes`);
+  // Many committed changes of the same month exercise the bounded queue
+  // page and its full-month consumption without adding dirty months.
+  await database.execute(sql`INSERT INTO case_law_sitemap_changes (country, year, month, xact)
+    SELECT 'XQT', '2024', '01', (1000000 + i)::text::xid8
+    FROM generate_series(1, 2000) i`);
+  await database.execute(sql`INSERT INTO case_law_sitemap_changes (country, year, month, xact)
+    SELECT 'XQN', '2024', '01', (2000000 + i)::text::xid8
+    FROM generate_series(1, ${scenario.rows}) i`);
+  await database.execute(sql`VACUUM (ANALYZE) case_law_decisions`);
+  await database.execute(sql`VACUUM (ANALYZE) case_law_sitemap_shards`);
+  await database.execute(sql`VACUUM (ANALYZE) case_law_sitemap_changes`);
+  const acquired = Promise.withResolvers<undefined>();
+  const release = Promise.withResolvers<undefined>();
+  const holding = withAggregateTransaction(openClient().db, async (tx) => {
+    if (
+      !(await tryLockCaseLawSitemapMonth({
+        tx,
+        month: { country: "XQN", year: "2024", month: "01" },
+      }))
+    ) {
+      panic("Sitemap fixture backlog month is already held");
+    }
+    acquired.resolve(undefined);
+    await release.promise;
+  });
+  await Promise.race([
+    acquired.promise,
+    holding.then(() => panic("Sitemap fixture lock released before capture")),
+  ]);
+  return async () => {
+    release.resolve(undefined);
+    await holding;
+  };
+};

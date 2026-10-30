@@ -11,6 +11,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
+import { UI_LOCALES } from "@stll/locales";
 
 import { jsonb, timestamptz } from "@/api/db/columns";
 import {
@@ -35,6 +36,10 @@ export const user = pgTable(
     image: text("image"),
     timezoneId: text("timezone_id").default("UTC").notNull(),
     preferredName: text("preferred_name"),
+    // Null or document follows the document language; a UI locale overrides it.
+    readerAnswerLanguage: text("reader_answer_language", {
+      enum: ["document", ...UI_LOCALES],
+    }),
     wordEditShortcut: text("word_edit_shortcut"),
     // Per-user keyboard-shortcut rebindings, serialized as a JSON object of
     // `{ [shortcutId]: "Mod+K" }`. Null when the user has never rebound a
@@ -95,6 +100,7 @@ export const AUTH_USER_STELLA_SELECT_COLUMNS = {
   image: "image",
   timezoneId: "timezone_id",
   preferredName: "preferred_name",
+  readerAnswerLanguage: "reader_answer_language",
   wordEditShortcut: "word_edit_shortcut",
   userShortcuts: "user_shortcuts",
   guideProgress: "guide_progress",

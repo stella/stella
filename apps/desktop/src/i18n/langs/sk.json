@@ -6,6 +6,7 @@
     "activityRecording": "Aktivita: Záznam · dnes {hours} h",
     "activityPaused": "Aktivita: Pozastavené · dnes {hours} h",
     "activityOff": "Aktivita: Vypnuté",
+    "openActivity": "Otvoriť aktivitu",
     "activityNow": "Teraz: {name}",
     "activityPause": "Pozastaviť záznam",
     "activityResume": "Pokračovať v zázname",
@@ -149,6 +150,7 @@
     "handoffUnavailable": "Dokument sa nepodarilo otvoriť. Začnite znova zo Stelly.",
     "handoffRetry": "Skúsiť znova",
     "unsavedChangesEscape": "Neuložené zmeny. Ďalším stlačením Esc ich zahodíte",
+    "unsavedChangesClose": "Neuložené zmeny. Ďalším zatvorením ich zahodíte",
     "handoffConnectToSign": "Na podpísanie tohto dokumentu pripojte stella desktop",
     "handoffConnectToOpen": "Na otvorenie tohto dokumentu pripojte stella desktop",
     "handoffConnectDetail": "Pripojte svoj účet stella. Dokument sa po pripojení otvorí automaticky.",
@@ -299,7 +301,7 @@
     "moreOptions": "Ďalšie možnosti",
     "moreItemActions": "Ďalšie akcie pre položku {number}",
     "noResults": "Žiadne zodpovedajúce výstrižky",
-    "noResultsDescription": "Chcete namiesto toho vyhľadať „{query}“ v registroch?",
+    "noResultsSearchRegistries": "Hľadať „{query}“ v registroch",
     "noGroup": "Bez skupiny",
     "newGroupOption": "Nová skupina…",
     "copyItem": "Kopírovať položku {number}",
@@ -368,7 +370,8 @@
     "welcomeShortcutDescription": "Stlačením {shortcut} prechádzajte históriu a vyberte výstrižok.",
     "welcomeShortcutTitle": "Otvorte ju odkiaľkoľvek.",
     "welcomeStart": "Začať kopírovať",
-    "welcomeTitle": "Zoznámte sa so schránkou"
+    "welcomeTitle": "Zoznámte sa so schránkou",
+    "registryIdentifierSearchHint": "Zadajte {identifiers}."
   },
   "activity": {
     "title": "Aktivita",

@@ -11,6 +11,7 @@ import type { CentsAmount } from "@stll/money";
 import { BILLING_MATTER_READ_PERMISSION } from "@stll/permissions";
 import type { PermissionInput } from "@stll/permissions";
 
+import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { UsageActionType, UsageServiceTier } from "@/api/db/schema";
 import { env } from "@/api/env";
@@ -26,7 +27,7 @@ import type {
 } from "@/api/http/route";
 import { decodeRouteInput, routeContext } from "@/api/http/route-input";
 import type { RawParams, RouteContext } from "@/api/http/route-input";
-import { HttpStatusResponse, status } from "@/api/http/status";
+import { HttpStatusResponse, status, unwrapStatus } from "@/api/http/status";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import {
   memberAssignmentRequiredError,
@@ -81,6 +82,10 @@ import {
   runWithContentDeliveryScope,
 } from "@/api/lib/files/content-delivery";
 import type { ContentDelivery } from "@/api/lib/files/content-delivery";
+import {
+  fingerprintHttpRequest,
+  runWithRequestReceipt,
+} from "@/api/lib/idempotency/request-receipts";
 import {
   publicReadTimeoutError,
   runPublicReadRequest,
@@ -461,6 +466,8 @@ export type HandlerConfig = InputSchema &
     accountAccess: AccountAccess;
     /** Finite API-owned transport deadline for a generated capability command. */
     requestTimeoutMs?: number;
+    /** Scoped DB mutations only; external side effects require owner-specific receipt integration. */
+    idempotency?: { type: "replay" };
     requiresUsage?: UsageMeteringConfig;
     featureAccess?: FeatureAccessRequirement;
     /** Finite synchronous work; streaming and queued execution need their own lifetimes. */
@@ -583,6 +590,11 @@ export type SessionHandlerConfig = InputSchema &
   CapabilityTransportDisposition & {
     accountAccess: AccountAccess;
     mcp: McpExposure;
+    /**
+     * Session handlers run outside an organization scope, so they can only
+     * state that a successful call announces no resource sets.
+     */
+    realtime?: NoResourceSetUpdates;
   };
 
 type SessionHandlerContext<
@@ -1190,43 +1202,42 @@ type ContainsMoney<T, Depth extends readonly unknown[] = []> = unknown extends T
               }[keyof T]
             : false;
 
-type MoneyShapeMatches<
-  T,
-  Schema,
-  Depth extends readonly unknown[] = [],
-> = Depth["length"] extends 8
-  ? true
-  : true extends ContainsMoney<T>
-    ? Schema extends { readonly wrapped: infer Wrapped }
-      ? MoneyShapeMatches<T, Wrapped, Depth>
-      : NonNullable<T> extends CentsAmount | Money
-        ? Schema extends v.GenericSchema
-          ? NonNullable<v.InferOutput<Schema>> extends Money
-            ? true
-            : false
-          : false
-        : NonNullable<T> extends readonly (infer Item)[]
-          ? Schema extends { readonly item: infer ItemSchema }
-            ? MoneyShapeMatches<Item, ItemSchema, [...Depth, unknown]>
-            : false
-          : Schema extends { readonly entries: infer Entries }
-            ? false extends {
-                [K in keyof NonNullable<T>]: true extends ContainsMoney<
-                  NonNullable<T>[K]
-                >
-                  ? K extends keyof Entries
-                    ? MoneyShapeMatches<
-                        NonNullable<T>[K],
-                        Entries[K],
-                        [...Depth, unknown]
-                      >
-                    : false
-                  : true;
-              }[keyof NonNullable<T>]
-              ? false
-              : true
-            : false
-    : true;
+type MoneyShapeMatches<T, Schema, Depth extends readonly unknown[] = []> =
+  T extends HttpStatusResponse<infer _Code, infer Body>
+    ? MoneyShapeMatches<Body, Schema, Depth>
+    : Depth["length"] extends 8
+      ? true
+      : true extends ContainsMoney<T>
+        ? Schema extends { readonly wrapped: infer Wrapped }
+          ? MoneyShapeMatches<T, Wrapped, Depth>
+          : NonNullable<T> extends CentsAmount | Money
+            ? Schema extends v.GenericSchema
+              ? NonNullable<v.InferOutput<Schema>> extends Money
+                ? true
+                : false
+              : false
+            : NonNullable<T> extends readonly (infer Item)[]
+              ? Schema extends { readonly item: infer ItemSchema }
+                ? MoneyShapeMatches<Item, ItemSchema, [...Depth, unknown]>
+                : false
+              : Schema extends { readonly entries: infer Entries }
+                ? false extends {
+                    [K in keyof NonNullable<T>]: true extends ContainsMoney<
+                      NonNullable<T>[K]
+                    >
+                      ? K extends keyof Entries
+                        ? MoneyShapeMatches<
+                            NonNullable<T>[K],
+                            Entries[K],
+                            [...Depth, unknown]
+                          >
+                        : false
+                      : true;
+                  }[keyof NonNullable<T>]
+                  ? false
+                  : true
+                : false
+        : true;
 
 type MoneyResponseGuard<TConfig, TResult> =
   true extends ContainsMoney<TResult>
@@ -1237,11 +1248,24 @@ type MoneyResponseGuard<TConfig, TResult> =
       : { moneyResponseSchemaRequired: never }
     : unknown;
 
-type ConfiguredFiniteHandlerGuard<TConfig, TResult> = TConfig extends {
-  actionAdmission: { type: "handler"; actionKind: PeriodActionKind };
+type NonJsonReplayPayload<T> =
+  T extends HttpStatusResponse<infer _Code, infer Body>
+    ? NonJsonReplayPayload<Body>
+    : Extract<
+        T,
+        Response | ReadableStream | Blob | ArrayBuffer | ArrayBufferView
+      >;
+
+type ConfiguredFiniteHandlerGuard<TConfig, TResult> = (TConfig extends {
+  idempotency: { type: "replay" };
 }
-  ? NoInfer<FiniteHandlerGuard<TResult>>
-  : unknown;
+  ? NoInfer<[NonJsonReplayPayload<TResult>] extends [never] ? unknown : never>
+  : unknown) &
+  (TConfig extends {
+    actionAdmission: { type: "handler"; actionKind: PeriodActionKind };
+  }
+    ? NoInfer<FiniteHandlerGuard<TResult>>
+    : unknown);
 
 type FiniteActionContext = SafeHandlerLogContext & {
   user: { id: SafeId<"user"> };
@@ -1388,7 +1412,8 @@ export const admitFiniteAction = async function* <
   });
 };
 
-type HandlerAdmissionDependencies = {
+type HandlerAdmissionDependencies<TContext> = {
+  authorize?: (ctx: TContext) => Promise<Result<void, HandlerError>>;
   admit?: typeof withActionAdmission;
   checkAccountOperation?: typeof checkRestrictedAccountOperation;
   announce?: typeof announceResourceSetUpdates;
@@ -1410,6 +1435,7 @@ type ScopedOperationInput<
   config: TConfig;
   handler: SafeHandlerFn<TContext, TResult>;
   admit: typeof withActionAdmission;
+  authorize?: HandlerAdmissionDependencies<TContext>["authorize"];
 };
 
 export const runCheckedScopedHandler = async <
@@ -1430,29 +1456,118 @@ export const runCheckedScopedHandler = async <
   /** The live request's response state; the proof's copy by default. */
   responseSet: ResponseSet = scratch.ctx.set,
 ): Promise<SafeHandlerResult<TResult>> => {
-  const { ctx, config, handler, admit } = cloneOperationInput(
+  const { ctx, config, handler, admit, authorize } = cloneOperationInput(
     proof.input.value,
   );
   const admission = config.actionAdmission;
+  const run = async (handlerContext: TContext) =>
+    await runSafeHandler({
+      ctx: {
+        ...handlerContext,
+        // Response state belongs to the live request, outside the proof copy.
+        set: responseSet,
+        ...(usageLane === undefined ? {} : { usageLane }),
+      },
+      contentDelivery: config.contentDelivery,
+      handler:
+        admission === undefined
+          ? handler
+          : (context) =>
+              runAdmittedFiniteHandler({
+                ctx: context,
+                handler,
+                admit,
+                actionKind: admission.actionKind,
+              }),
+    });
+  const request = ctx.request;
+  const key = request.headers.get("Idempotency-Key");
+  if (key === null) {
+    if (authorize !== undefined) {
+      const authorization = await authorize(ctx);
+      if (authorization.isErr()) {
+        return toSafeStatusResponse(
+          authorization.error.status,
+          safeErrorBody(authorization.error),
+        );
+      }
+    }
+    return await run(ctx);
+  }
+  if (config.idempotency === undefined) {
+    return await runSafeHandler({
+      ctx: { ...ctx, set: responseSet },
+      contentDelivery: undefined,
+      async *handler() {
+        return yield* Result.await(
+          Promise.resolve(
+            Result.err(
+              new HandlerError({
+                status: 400,
+                message:
+                  "This endpoint does not support Idempotency-Key. Omit the header and use its documented submission flow.",
+              }),
+            ),
+          ),
+        );
+      },
+    });
+  }
   return await runSafeHandler({
-    ctx: {
-      ...ctx,
-      // Response state is mutable request output, never an authorization
-      // input: the handler writes to the live request's, not the proof copy's.
-      set: responseSet,
-      ...(usageLane === undefined ? {} : { usageLane }),
-    },
-    contentDelivery: config.contentDelivery,
-    handler:
-      admission === undefined
-        ? handler
-        : (context) =>
-            runAdmittedFiniteHandler({
-              ctx: context,
-              handler,
-              admit,
-              actionKind: admission.actionKind,
+    ctx: { ...ctx, set: responseSet },
+    contentDelivery: undefined,
+    async *handler() {
+      const result = yield* Result.await(
+        Result.tryPromise(
+          async () =>
+            await runWithRequestReceipt({
+              ...(authorize === undefined
+                ? {}
+                : { authorize: async () => await authorize(ctx) }),
+              checkResponse: (body) => {
+                const memberRole = readAuthorizedMemberRole(ctx);
+                if (
+                  memberRole === null ||
+                  (!hasMemberPermission(
+                    memberRole,
+                    BILLING_MATTER_READ_PERMISSION,
+                  ) &&
+                    hasVisibleMoney(config.moneyResponse, body))
+                ) {
+                  return Result.err(
+                    new HandlerError({
+                      status: 403,
+                      code: API_ERROR_CODE.forbidden,
+                      message: "Forbidden",
+                    }),
+                  );
+                }
+                return Result.ok(undefined);
+              },
+              scopedDb: ctx.scopedDb,
+              organizationId: ctx.session.activeOrganizationId,
+              userId: ctx.user.id,
+              key,
+              route: ctx.route,
+              fingerprint: await fingerprintHttpRequest({
+                method: request.method,
+                route: ctx.route,
+                body: ctx.body,
+                params: ctx.params,
+                query: ctx.query,
+              }),
+              run: async (scopedDb) =>
+                await run({
+                  ...ctx,
+                  scopedDb,
+                  safeDb: safeDbFromScoped(scopedDb),
+                }),
+              responseStatus: () => responseSet.status ?? 200,
             }),
+        ),
+      );
+      return result;
+    },
   });
 };
 
@@ -1592,10 +1707,11 @@ const createSafeScopedHandler = <
   config: TConfig,
   handler: SafeHandlerFn<TContext, TResult>,
   {
+    authorize,
     admit = withActionAdmission,
     checkAccountOperation = checkRestrictedAccountOperation,
     announce = announceResourceSetUpdates,
-  }: HandlerAdmissionDependencies = {},
+  }: HandlerAdmissionDependencies<TContext> = {},
 ): SafeHandlerCore<TConfig, TContext, TResult> =>
   recordSafeHandler({
     config,
@@ -1670,7 +1786,13 @@ const createSafeScopedHandler = <
         let usageLane = ctx.usageLane;
         const authorization = await authorizeOperation({
           kind: HANDLER_USAGE_ALLOWED,
-          input: { ctx, config, handler, admit },
+          input: {
+            ctx,
+            config,
+            handler,
+            admit,
+            ...(authorize === undefined ? {} : { authorize }),
+          },
           check: async ({
             ctx: checkedContext,
             config: checkedConfig,
@@ -1716,7 +1838,7 @@ const createSafeScopedHandler = <
         );
         if (
           !hasMemberPermission(memberRole, BILLING_MATTER_READ_PERMISSION) &&
-          hasVisibleMoney(config.moneyResponse, result)
+          hasVisibleMoney(config.moneyResponse, unwrapStatus(result).value)
         ) {
           return toSafeStatusResponse(403, {
             code: API_ERROR_CODE.forbidden,
@@ -2178,6 +2300,11 @@ type RootHandlerConfig = HandlerConfig & {
   realtime?: OrganizationResourceSetUpdates | NoResourceSetUpdates;
 };
 
+const rootReplayAuthorizations = new WeakSet<object>();
+
+export const hasRootReplayAuthorization = (definition: object) =>
+  rootReplayAuthorizations.has(definition);
+
 export const createSafeRootHandler = <
   TConfig extends RootHandlerConfig,
   TResult extends SafeHandlerPayload,
@@ -2186,10 +2313,30 @@ export const createSafeRootHandler = <
   handler: SafeHandlerFn<RootHandlerContext<TConfig>, TResult> &
     ConfiguredFiniteHandlerGuard<TConfig, TResult> &
     NoInfer<MoneyResponseGuard<TConfig, TResult>>,
-  dependencies?: HandlerAdmissionDependencies,
+  ...dependencies: "idempotency" extends keyof TConfig
+    ? [
+        dependencies: HandlerAdmissionDependencies<
+          RootHandlerContext<TConfig>
+        > & {
+          authorize: NonNullable<
+            HandlerAdmissionDependencies<
+              RootHandlerContext<TConfig>
+            >["authorize"]
+          >;
+        },
+      ]
+    : [dependencies?: HandlerAdmissionDependencies<RootHandlerContext<TConfig>>]
 ): SafeHandlerDefinition<TConfig, RootHandlerContext<TConfig>, TResult> => {
-  const core = createSafeScopedHandler("member", config, handler, dependencies);
-  return { ...core, run: memberRun(config, core.handler) };
+  const admission = dependencies.at(0);
+  if (config.idempotency !== undefined && admission?.authorize === undefined) {
+    panic("Replay-enabled root handlers require pre-replay authorization");
+  }
+  const core = createSafeScopedHandler("member", config, handler, admission);
+  const definition = { ...core, run: memberRun(config, core.handler) };
+  if (config.idempotency !== undefined && admission?.authorize !== undefined) {
+    rootReplayAuthorizations.add(definition);
+  }
+  return definition;
 };
 
 export const createSafeHandler = <
@@ -2200,7 +2347,7 @@ export const createSafeHandler = <
   handler: SafeHandlerFn<WorkspaceHandlerContext<TConfig>, TResult> &
     ConfiguredFiniteHandlerGuard<TConfig, TResult> &
     NoInfer<MoneyResponseGuard<TConfig, TResult>>,
-  dependencies?: HandlerAdmissionDependencies,
+  dependencies?: HandlerAdmissionDependencies<WorkspaceHandlerContext<TConfig>>,
 ): SafeHandlerDefinition<
   TConfig,
   WorkspaceHandlerContext<TConfig>,
@@ -2216,6 +2363,7 @@ export const createSafeHandler = <
 };
 
 type SessionHandlerDependencies = {
+  authenticate?: typeof authenticateSession;
   checkAccountOperation?: typeof checkRestrictedAccountOperation;
 };
 
@@ -2226,6 +2374,7 @@ export const createSafeSessionHandler = <
   config: TConfig,
   handler: SafeHandlerFn<SessionHandlerContext<TConfig>, TResult>,
   {
+    authenticate = authenticateSession,
     checkAccountOperation = checkRestrictedAccountOperation,
   }: SessionHandlerDependencies = {},
 ): SafeHandlerDefinition<TConfig, SessionHandlerContext<TConfig>, TResult> => {
@@ -2258,7 +2407,7 @@ export const createSafeSessionHandler = <
   return {
     ...core,
     run: async (request) => {
-      const account = await authenticateSession(request.ctx, config);
+      const account = await authenticate(request.ctx, config);
       if (!account.ok) {
         return account.answer;
       }

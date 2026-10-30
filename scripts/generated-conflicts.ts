@@ -31,6 +31,7 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -47,6 +48,7 @@ import {
   generatorsForFiles,
   matchesGeneratedGlob,
   orderGenerators,
+  runGenerators,
 } from "./generated-files";
 
 // Computed reads here are plans, manifests, git blobs copied into temporary
@@ -1309,6 +1311,7 @@ export type PushOptions = {
   api?: string;
   fetch?: Fetch;
   retryDelayMs?: number;
+  treeBatchSize?: number;
 };
 
 /**
@@ -1325,6 +1328,7 @@ export const push = async ({
   api = "https://api.github.com",
   fetch: send = fetch,
   retryDelayMs = 2000,
+  treeBatchSize = 100,
 }: PushOptions) => {
   const [owner, name] = repository.split("/");
   if (!owner || !name || !/^[A-Za-z0-9._/-]+$/u.test(branch)) {
@@ -1383,15 +1387,34 @@ export const push = async ({
       );
     }
   }
-  const createdTree = await call(
-    `/repos/${repository}/git/trees`,
-    JSON.parse(readFileSync(path.join(requests, "tree.json"), "utf-8")),
-    3,
+  // Large trees are built in batches, each on top of the previous one, so no
+  // single request carries the whole merge; the final tree is the same.
+  const treeRequest: unknown = JSON.parse(
+    readFileSync(path.join(requests, "tree.json"), "utf-8"),
   );
-  if (field(createdTree, "sha") !== tree) {
-    return fail(
-      `GitHub built tree ${String(field(createdTree, "sha"))}, not ${tree}`,
+  const treeEntries = field(treeRequest, "tree");
+  const batches =
+    Array.isArray(treeEntries) && treeEntries.length > treeBatchSize
+      ? Array.from(
+          { length: Math.ceil(treeEntries.length / treeBatchSize) },
+          (_, index) =>
+            treeEntries.slice(
+              index * treeBatchSize,
+              (index + 1) * treeBatchSize,
+            ),
+        )
+      : [treeEntries];
+  let builtTree = field(treeRequest, "base_tree");
+  for (const batch of batches) {
+    const createdTree = await call(
+      `/repos/${repository}/git/trees`,
+      { base_tree: builtTree, tree: batch },
+      3,
     );
+    builtTree = field(createdTree, "sha");
+  }
+  if (builtTree !== tree) {
+    return fail(`GitHub built tree ${String(builtTree)}, not ${tree}`);
   }
   const commit = await call(
     `/repos/${repository}/git/commits`,
@@ -1444,6 +1467,188 @@ export const push = async ({
   return commitSha;
 };
 
+type ResolveDerivedOptions = {
+  repo: string;
+  main: string;
+  generators?: readonly Generator[];
+};
+
+/** Local counterpart of the CI planner: leave a normal merge for signed commit hooks. */
+export const resolveDerived = ({
+  repo,
+  main,
+  generators = GENERATORS,
+}: ResolveDerivedOptions) => {
+  const run = (args: readonly string[], allowFailure = false) => {
+    const result = Bun.spawnSync(["git", "-C", repo, ...args], {
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    if (result.exitCode !== 0 && !allowFailure) {
+      fail(`git ${args.join(" ")} failed: ${result.stderr.toString().trim()}`);
+    }
+    return result;
+  };
+  const read = (args: readonly string[]) => run(args).stdout.toString().trim();
+  const root = read(["rev-parse", "--show-toplevel"]);
+  if (realpathSync(repo) !== realpathSync(root)) {
+    fail("Run resolve-derived from the repository root");
+  }
+  if (read(["status", "--porcelain=v1", "--untracked-files=all"]) !== "") {
+    fail("resolve-derived requires a clean index and work tree");
+  }
+  for (const state of [
+    "MERGE_HEAD",
+    "CHERRY_PICK_HEAD",
+    "rebase-merge",
+    "rebase-apply",
+  ]) {
+    if (
+      existsSync(
+        read(["rev-parse", "--path-format=absolute", "--git-path", state]),
+      )
+    ) {
+      fail(`Finish or abort the existing ${state} operation first`);
+    }
+  }
+  const head = read(["rev-parse", "--verify", "HEAD^{commit}"]);
+  const mainTip = read([
+    "rev-parse",
+    "--verify",
+    "--end-of-options",
+    `${main}^{commit}`,
+  ]);
+  const scratch = mkdtempSync(path.join(tmpdir(), "resolve-derived-"));
+  try {
+    // plan() neutralizes attributes. Use a disposable object store so it never
+    // rewrites the caller's Git configuration, including linked worktrees.
+    const bare = path.join(scratch, "objects.git");
+    run(["init", "--bare", "--quiet", "--template=", bare]);
+    writeFileSync(
+      path.join(bare, "objects", "info", "alternates"),
+      `${read(["rev-parse", "--path-format=absolute", "--git-path", "objects"])}\n`,
+    );
+    const planned = plan(bare, head, mainTip, generators);
+    if (!planned.eligible || planned.baseline === null) {
+      fail(
+        `Cannot resolve derived conflicts: ${planned.eligible ? "no baseline" : planned.reasons.join("; ")}`,
+      );
+    }
+    // Import the planned tree without updating branch refs or FETCH_HEAD.
+    run([
+      "fetch",
+      "--no-write-fetch-head",
+      "--no-tags",
+      bare,
+      planned.baseline,
+    ]);
+    const merge = run(["merge", "--no-commit", "--no-ff", mainTip], true);
+    const merging = run(["rev-parse", "--verify", "MERGE_HEAD"], true);
+    if (
+      merging.exitCode !== 0 ||
+      merging.stdout.toString().trim() !== mainTip
+    ) {
+      fail(`Could not start merge: ${merge.stderr.toString().trim()}`);
+    }
+    // The clean preflight permits replacing tracked files with the proven
+    // baseline; MERGE_HEAD and ORIG_HEAD remain for ordinary commit/abort.
+    run(["read-tree", "--reset", "-u", planned.baseline]);
+    const selected = orderGenerators(
+      generators.filter(({ id }) => planned.ids.includes(id)),
+    );
+    const ignoredBefore = new Set(
+      run([
+        "ls-files",
+        "--others",
+        "--ignored",
+        "--exclude-standard",
+        "-z",
+        "--",
+        ".",
+      ])
+        .stdout.toString()
+        .split("\0")
+        .filter(Boolean),
+    );
+    const failed = runGenerators(
+      selected,
+      (command) =>
+        Bun.spawnSync([...command], {
+          cwd: repo,
+          stdout: "inherit",
+          stderr: "inherit",
+          env: { ...process.env, STELLA_LOCAL_AUTOFIX: "true" },
+        }).exitCode,
+    );
+    // Stage even a failed generator's writes so ordinary merge --abort can
+    // restore tracked files rather than refusing unstaged output edits.
+    run(["add", "-A", "--", "."]);
+    if (failed !== null) {
+      fail(
+        `Generator ${failed.id} failed; merge remains pending for inspection or git merge --abort`,
+      );
+    }
+    const unexpectedIgnored = run([
+      "ls-files",
+      "--others",
+      "--ignored",
+      "--exclude-standard",
+      "-z",
+      "--",
+      ".",
+    ])
+      .stdout.toString()
+      .split("\0")
+      .filter(
+        (file) =>
+          file !== "" &&
+          !ignoredBefore.has(file) &&
+          !selected.some(({ outputs }) =>
+            outputs.some((output) => matchesGeneratedGlob(output, file)),
+          ),
+      );
+    if (unexpectedIgnored.length > 0) {
+      fail(
+        `Regeneration created ignored files outside the owning generators' outputs: ${unexpectedIgnored.join(", ")}; merge remains pending`,
+      );
+    }
+    const tree = read(["write-tree"]);
+    const changed = run([
+      "diff-tree",
+      "-r",
+      "--no-commit-id",
+      "--name-only",
+      "--no-renames",
+      "-z",
+      planned.baseline,
+      tree,
+    ])
+      .stdout.toString()
+      .split("\0")
+      .filter(Boolean);
+    const outside = changed.filter(
+      (file) =>
+        !isAllowedResolution(file, planned) ||
+        (file !== "bun.lock" && ownersOf(file, generators).length === 0) ||
+        planned.deletions.includes(file),
+    );
+    if (outside.length > 0) {
+      fail(
+        `Regeneration changed files outside the owning generators' outputs: ${outside.join(", ")}; merge remains pending`,
+      );
+    }
+    const frozen = path.join(scratch, "frozen.lock");
+    writeFileSync(
+      frozen,
+      git(bare, ["show", `${planned.baseline}:bun.lock`]).stdout,
+    );
+    assertFinalAutofixLockfile({ repo, frozen });
+    return planned;
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+};
+
 const option = (args: readonly string[], name: string) => {
   const index = args.indexOf(name);
   return index === -1 ? undefined : args[index + 1];
@@ -1455,6 +1660,18 @@ const required = (args: readonly string[], name: string) =>
 if (import.meta.main) {
   const [mode = "", ...args] = process.argv.slice(2);
   switch (mode) {
+    case "resolve-derived":
+      if (args.length !== 0 && (args.length !== 2 || args.at(0) !== "--main")) {
+        fail("Usage: bun run resolve-derived [--main <ref>]");
+      }
+      resolveDerived({
+        repo: process.cwd(),
+        main: option(args, "--main") ?? "origin/main",
+      });
+      console.log(
+        "Derived conflicts regenerated and staged. Review git diff --cached, then git commit -S (or git merge --abort).",
+      );
+      break;
     case "plan":
       console.log(
         JSON.stringify(
@@ -1504,7 +1721,7 @@ if (import.meta.main) {
     }
     default:
       console.error(
-        "Usage: bun scripts/generated-conflicts.ts plan|refresh-lock|assert-frozen-lock|collect|apply|push (see the header)",
+        "Usage: bun scripts/generated-conflicts.ts resolve-derived [--main <ref>] | plan|refresh-lock|assert-frozen-lock|collect|apply|push (see the header)",
       );
       process.exitCode = 1;
   }

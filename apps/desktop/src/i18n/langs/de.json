@@ -6,6 +6,7 @@
     "activityRecording": "Aktivität: Aufzeichnung · heute {hours} h",
     "activityPaused": "Aktivität: Pausiert · heute {hours} h",
     "activityOff": "Aktivität: Aus",
+    "openActivity": "Aktivität öffnen",
     "activityNow": "Jetzt: {name}",
     "activityPause": "Aufzeichnung pausieren",
     "activityResume": "Aufzeichnung fortsetzen",
@@ -149,6 +150,7 @@
     "handoffUnavailable": "Das Dokument konnte nicht geöffnet werden. Starten Sie erneut über Stella.",
     "handoffRetry": "Erneut versuchen",
     "unsavedChangesEscape": "Ungespeicherte Änderungen. Erneut Esc drücken, um sie zu verwerfen",
+    "unsavedChangesClose": "Ungespeicherte Änderungen. Erneut schließen, um sie zu verwerfen",
     "handoffConnectToSign": "Verbinden Sie stella desktop, um dieses Dokument zu signieren",
     "handoffConnectToOpen": "Verbinden Sie stella desktop, um dieses Dokument zu öffnen",
     "handoffConnectDetail": "Verbinden Sie Ihr stella-Konto. Das Dokument öffnet sich automatisch, sobald die Verbindung steht.",
@@ -299,7 +301,7 @@
     "moreOptions": "Weitere Optionen",
     "moreItemActions": "Weitere Aktionen für Element {number}",
     "noResults": "Keine passenden Inhalte",
-    "noResultsDescription": "Möchten Sie stattdessen in den Registern nach „{query}“ suchen?",
+    "noResultsSearchRegistries": "In Registern nach „{query}“ suchen",
     "noGroup": "Keine Gruppe",
     "newGroupOption": "Neue Gruppe…",
     "copyItem": "Eintrag {number} kopieren",
@@ -368,7 +370,8 @@
     "welcomeShortcutDescription": "Drücken Sie {shortcut}, um den Verlauf zu durchsuchen und einen Eintrag auszuwählen.",
     "welcomeShortcutTitle": "Überall öffnen.",
     "welcomeStart": "Mit dem Kopieren beginnen",
-    "welcomeTitle": "Ihre neue Zwischenablage"
+    "welcomeTitle": "Ihre neue Zwischenablage",
+    "registryIdentifierSearchHint": "Geben Sie {identifiers} ein."
   },
   "activity": {
     "title": "Aktivität",

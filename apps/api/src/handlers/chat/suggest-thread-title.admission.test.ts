@@ -88,6 +88,9 @@ const runDeniedTitle = async ({
       },
     },
     select: (fields: Record<string, unknown>) => {
+      if ("subjectDecisionId" in fields) {
+        return createSelectQueryMock([]);
+      }
       // The message window reads the thread's send mode after its messages.
       if ("usedAnonymization" in fields) {
         sendModeReads += 1;

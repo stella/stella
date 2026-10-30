@@ -1,0 +1,4 @@
+{
+  "kind": "priority",
+  "qualifier": "Publishes the draft GitHub release after production serves the release commit."
+}

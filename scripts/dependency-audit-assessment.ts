@@ -448,25 +448,43 @@ type InstallableVersionsOptions = {
   policy: ReleaseAgePolicy;
   now: Date;
 };
+export type InstallableRelease = {
+  version: string;
+  installableSince: string;
+};
+
+const installableSince = (
+  name: string,
+  published: string,
+  policy: ReleaseAgePolicy,
+): string =>
+  new Date(
+    Date.parse(published) +
+      (policy.excludes.has(name) ? 0 : policy.minimumReleaseAgeSeconds * 1000),
+  ).toISOString();
+
 // A patch still in quarantine is not yet a fix: Bun would refuse to install it.
-export const installableVersions = ({
+export const installableReleases = ({
   name,
   versions,
   publishedAt,
   policy,
   now,
-}: InstallableVersionsOptions): string[] =>
-  versions.filter((version) => {
-    if (policy.excludes.has(name)) {
-      return true;
-    }
+}: InstallableVersionsOptions): InstallableRelease[] =>
+  versions.flatMap((version) => {
     const published = publishedAt[version];
-    return (
-      typeof published === "string" &&
-      Date.parse(published) + policy.minimumReleaseAgeSeconds * 1000 <=
-        now.getTime()
-    );
+    if (typeof published !== "string") {
+      return [];
+    }
+    const since = installableSince(name, published, policy);
+    return Date.parse(since) <= now.getTime()
+      ? [{ version, installableSince: since }]
+      : [];
   });
+
+export const installableVersions = (
+  options: InstallableVersionsOptions,
+): string[] => installableReleases(options).map(({ version }) => version);
 
 // Use Bun's registry configuration, as audit does, with no manifest cache so
 // a newly published compatible patch changes the assessment immediately.
@@ -507,7 +525,16 @@ export const readInstallableVersions = async (
   name: string,
   policy: ReleaseAgePolicy,
   now: Date,
-): Promise<string[]> => {
+): Promise<string[]> =>
+  (await readInstallableReleases(name, policy, now)).map(
+    ({ version }) => version,
+  );
+
+export const readInstallableReleases = async (
+  name: string,
+  policy: ReleaseAgePolicy,
+  now: Date,
+): Promise<InstallableRelease[]> => {
   const [versions, publishedAt] = await Promise.all([
     readBunInfo(name, "versions"),
     readBunInfo(name, "time"),
@@ -523,5 +550,5 @@ export const readInstallableVersions = async (
       `Registry lookup for ${name} has no publish times`,
     );
   }
-  return installableVersions({ name, versions, publishedAt, policy, now });
+  return installableReleases({ name, versions, publishedAt, policy, now });
 };

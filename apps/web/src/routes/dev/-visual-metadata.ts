@@ -35,6 +35,7 @@ export const composerReferenceStates = Object.keys(composerReferenceVariants);
 
 // Browser tests share the fixture census without importing the app graph.
 export const visualRegistry = {
+  "mcp-reconnect": { label: "MCP reconnect notice", layout: "plain" },
   "task-metadata": { label: "Task metadata alignment", layout: "plain" },
   "column-composer": { label: "Column composer alignment", layout: "plain" },
   "handoff-confirmation": {
@@ -61,6 +62,10 @@ export const visualRegistry = {
     layout: "plain",
   },
   "chat-link-icons": { label: "Chat link icons", layout: "plain" },
+  "case-law-text-availability": {
+    label: "Case-law text availability",
+    layout: "plain",
+  },
   "hungarian-decision": { label: "Hungarian decision", layout: "plain" },
   "reader-answers": { label: "Reader anchored answers", layout: "plain" },
   "reader-selection": { label: "Reader selection toolbar", layout: "plain" },

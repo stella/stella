@@ -12,6 +12,7 @@ import {
   ledgerMergeBase,
   runLedgerMembershipGuard,
 } from "../../../../../scripts/ledger-membership.ts";
+import { accountExportDownloadScalingScenario } from "./account-exports";
 import apiLedger from "./api-scaling-ledger.json";
 import { claimCommentScalingScenarios } from "./claim-comments";
 import { clientInvoicePrefillScalingScenario } from "./client-invoice-prefill";
@@ -19,6 +20,7 @@ import { decisionSummaryScalingScenario } from "./decision-summary";
 import { documentAnnotationScalingScenarios } from "./document-annotations";
 import { invoicePaymentScalingScenarios } from "./invoice-payments";
 import { exactIconScalingScenario } from "./link-icons";
+import { matterVocabularyScalingScenario } from "./matter-vocabulary";
 import mcpLedger from "./mcp-scaling-ledger.json";
 import { mcpScalingScenarios } from "./mcp-scenarios";
 import { memberBillingScalingScenario } from "./member-billing-access";
@@ -42,11 +44,13 @@ import { writeScalingScenarios } from "./write-scenarios";
 
 const repoRoot = path.resolve(import.meta.dir, "../../../../..");
 const measuredApiScenarios = [
+  matterVocabularyScalingScenario,
   ...readScalingScenarios,
   ...writeScalingScenarios,
   memberBillingScalingScenario,
   exactIconScalingScenario,
   decisionSummaryScalingScenario,
+  accountExportDownloadScalingScenario,
   clientInvoicePrefillScalingScenario,
   ...claimCommentScalingScenarios,
   suggestionRangeScalingScenario,

@@ -13,6 +13,7 @@ import {
 
 import listExpenses from "@/api/handlers/expenses/list";
 import type { RouteEntry } from "@/api/http/route";
+import { status, unwrapStatus } from "@/api/http/status";
 import {
   ACCOUNT_ACCESS,
   createSafeRootHandler,
@@ -222,44 +223,48 @@ test("money visibility is an additional member grant and does not replace operat
   ).toBe(false);
 });
 
-test("the shared handler boundary refuses non-null Money for an ungranted reader", async () => {
-  const endpoint = createSafeRootHandler(
-    {
-      contract: "patch",
-      permissions: { workspace: ["read"] },
-      accountAccess: ACCOUNT_ACCESS.sandbox,
-      access: "read",
-      description: "Read a monetary test fixture.",
-      mcp: {
-        type: "capability",
-        reason: "billing_admin",
-        consumesServices: false,
-        readClass: "tenant",
+test.each(["plain", "status"] as const)(
+  "the shared handler boundary checks %s monetary responses",
+  async (shape) => {
+    const endpoint = createSafeRootHandler(
+      {
+        contract: "patch",
+        permissions: { workspace: ["read"] },
+        accountAccess: ACCOUNT_ACCESS.sandbox,
+        access: "read",
+        description: "Read a monetary test fixture.",
+        mcp: {
+          type: "capability",
+          reason: "billing_admin",
+          consumesServices: false,
+          readClass: "tenant",
+        },
+        moneyResponse: v.looseObject({ renamed: v.nullable(moneySchema) }),
       },
-      moneyResponse: v.looseObject({ renamed: v.nullable(moneySchema) }),
-    },
-    async function* () {
-      return Result.ok({ renamed: 123 });
-    },
-  );
-  const context = createTestHandlerContext({
-    audit: NO_AUDIT,
-    safeDb: NO_DB,
-    scopedDb: NO_DB,
-    memberRole: sessionMemberRole("member"),
-    body: {},
-    params: {},
-    query: {},
-  });
-  expect(await endpoint.handler(asTestRaw(context))).toMatchObject({
-    code: 403,
-  });
-  expect(
-    await endpoint.handler(
+      async function* () {
+        return Result.ok(
+          shape === "status" ? status(201, { renamed: 123 }) : { renamed: 123 },
+        );
+      },
+    );
+    const context = createTestHandlerContext({
+      audit: NO_AUDIT,
+      safeDb: NO_DB,
+      scopedDb: NO_DB,
+      memberRole: sessionMemberRole("member"),
+      body: {},
+      params: {},
+      query: {},
+    });
+    expect(await endpoint.handler(asTestRaw(context))).toMatchObject({
+      code: 403,
+    });
+    const allowed = await endpoint.handler(
       asTestRaw({ ...context, memberRole: sessionMemberRole("member", true) }),
-    ),
-  ).toEqual({ renamed: 123 });
-});
+    );
+    expect(unwrapStatus(allowed).value).toEqual({ renamed: 123 });
+  },
+);
 
 test("MCP and AI egress enforce Money schemas identically in normal and anonymized modes", async () => {
   const outputSchema = v.object({ renamed: v.nullable(moneySchema) });

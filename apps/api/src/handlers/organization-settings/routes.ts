@@ -35,7 +35,6 @@ import updateDeepLKey from "@/api/handlers/organization-settings/update-deepl-ke
 import updateWebSearchKey from "@/api/handlers/organization-settings/update-web-search-key";
 import { mount, routes } from "@/api/http/route";
 import { featureAccessGate } from "@/api/lib/auth/feature-access/route";
-import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 
 export const organizationSettingsRoute = mount(
   [
@@ -95,10 +94,7 @@ export const organizationSettingsRoute = mount(
         "/members/:memberId/billing-access": { PUT: updateMemberBillingAccess },
       },
       {
-        middleware: [
-          deploymentFeatureGate("FEATURE_TIME_BILLING"),
-          featureAccessGate("time-billing"),
-        ],
+        middleware: [featureAccessGate("time-billing")],
       },
     ),
   ],

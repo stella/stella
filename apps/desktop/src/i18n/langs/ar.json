@@ -6,6 +6,7 @@
     "activityRecording": "النشاط: جارٍ التسجيل · {hours} س اليوم",
     "activityPaused": "النشاط: متوقف مؤقتًا · {hours} س اليوم",
     "activityOff": "النشاط: متوقف",
+    "openActivity": "فتح النشاط",
     "activityNow": "الآن: {name}",
     "activityPause": "إيقاف التسجيل مؤقتًا",
     "activityResume": "استئناف التسجيل",
@@ -149,6 +150,7 @@
     "handoffUnavailable": "تعذّر فتح المستند. ابدأ من جديد من Stella.",
     "handoffRetry": "إعادة المحاولة",
     "unsavedChangesEscape": "تغييرات غير محفوظة. اضغط على Esc مرة أخرى لتجاهلها",
+    "unsavedChangesClose": "تغييرات غير محفوظة. أغلق مرة أخرى لتجاهلها",
     "handoffConnectToSign": "اربط stella desktop لتوقيع هذا المستند",
     "handoffConnectToOpen": "اربط stella desktop لفتح هذا المستند",
     "handoffConnectDetail": "اربط حسابك في stella. سيُفتح المستند تلقائيًا بعد الربط.",
@@ -299,7 +301,7 @@
     "moreOptions": "المزيد من الخيارات",
     "moreItemActions": "مزيد من الإجراءات للعنصر {number}",
     "noResults": "لا توجد مقتطفات مطابقة",
-    "noResultsDescription": "هل تريد البحث عن «{query}» في السجلات بدلاً من ذلك؟",
+    "noResultsSearchRegistries": "البحث عن «{query}» في السجلات",
     "noGroup": "بلا مجموعة",
     "newGroupOption": "مجموعة جديدة…",
     "copyItem": "نسخ العنصر {number}",
@@ -368,7 +370,8 @@
     "welcomeShortcutDescription": "اضغط {shortcut} لتصفح سجلك واختيار مقتطف.",
     "welcomeShortcutTitle": "افتحها من أي مكان.",
     "welcomeStart": "ابدأ النسخ",
-    "welcomeTitle": "تعرّف على حافظتك"
+    "welcomeTitle": "تعرّف على حافظتك",
+    "registryIdentifierSearchHint": "أدخل {identifiers}."
   },
   "activity": {
     "title": "النشاط",

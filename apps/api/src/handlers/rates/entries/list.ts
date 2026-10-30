@@ -6,7 +6,7 @@ import { numberFromString } from "@stll/api-contract/http-input";
 import { BILLING_MATTER_READ_PERMISSION } from "@stll/permissions";
 
 import { member, user } from "@/api/db/auth-schema";
-import { rateEntries } from "@/api/db/schema";
+import { billingCodes, rateEntries } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { rateEntryMoneyResponse } from "@/api/lib/billing/response-schemas";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -73,7 +73,7 @@ const readRateEntries = createSafeHandler(
       "List the rate lines of one rate table, earliest effective-from first, " +
       "with cursor pagination. Each line carries the hourly rate in minor " +
       "currency units, its effective dates, and its person or organization role selector " +
-      "(both null for the table fallback). A rate table that does not exist in " +
+      "and optional activityCodeId (all null for the table fallback). A rate table that does not exist in " +
       "this matter returns an empty page rather than an error.",
     permissions: BILLING_MATTER_READ_PERMISSION,
     accountAccess: ACCOUNT_ACCESS.sandbox,
@@ -143,12 +143,22 @@ const readRateEntries = createSafeHandler(
             id: rateEntries.id,
             userId: rateEntries.userId,
             role: rateEntries.role,
+            activityCodeId: rateEntries.activityCodeId,
+            activityCode: billingCodes.code,
+            activityLabel: billingCodes.label,
             hourlyRate: rateEntries.hourlyRate,
             effectiveFrom: rateEntries.effectiveFrom,
             effectiveTo: rateEntries.effectiveTo,
             createdAt: rateEntries.createdAt,
           })
           .from(rateEntries)
+          .leftJoin(
+            billingCodes,
+            and(
+              eq(billingCodes.id, rateEntries.activityCodeId),
+              eq(billingCodes.workspaceId, rateEntries.workspaceId),
+            ),
+          )
           .where(and(...conditions))
           .orderBy(asc(rateEntries.effectiveFrom), asc(rateEntries.id))
           .limit(limit + 1),
@@ -203,6 +213,9 @@ const readRateEntries = createSafeHandler(
         id: row.id,
         userId: row.userId,
         role: row.role,
+        activityCodeId: row.activityCodeId,
+        activityCode: row.activityCode,
+        activityLabel: row.activityLabel,
         hourlyRate: row.hourlyRate,
         effectiveFrom: row.effectiveFrom,
         effectiveTo: row.effectiveTo,

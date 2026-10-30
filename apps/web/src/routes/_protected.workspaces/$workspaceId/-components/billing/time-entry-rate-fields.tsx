@@ -1,7 +1,8 @@
 import { useTranslations } from "use-intl";
 
-import { CURRENCY_CODE_LENGTH } from "@stll/api-contract";
+import { CURRENCY_CODE_LENGTH } from "@stll/api-contract/currency-code";
 import { tryToMinorUnits } from "@stll/money";
+import { Button } from "@stll/ui/button";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
 
@@ -32,14 +33,10 @@ export const TimeEntryRateFields = ({
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between">
         <Label>{t("billing.rates.hourlyRate")}</Label>
-        {!override && rate > 0 && (
-          <button
-            className="text-muted-foreground text-xs underline"
-            onClick={onOverride}
-            type="button"
-          >
+        {!override && (
+          <Button size="xs" variant="link" onClick={onOverride} type="button">
             {t("billing.rates.override")}
-          </button>
+          </Button>
         )}
       </div>
       {override ? (
