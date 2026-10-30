@@ -2,6 +2,30 @@ import { panic } from "better-result";
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
+import { PublisherPageError } from "@/api/handlers/case-law/ingestion/adapters/publisher-page";
+import { PUBLISHER_BODY_MAX_BYTES } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
+import {
+  assembleSkCourtsDecision,
+  reparseSkCourtsStoredMetadata,
+  SK_COURTS_SOURCE_FIELD_PATHS,
+  skCourtsAdapter,
+} from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
+import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
+import {
+  planUnreadItems,
+  type UnavailableStreaks,
+} from "@/api/handlers/case-law/ingestion/pipeline/unread-items";
+import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
+import {
+  isReadRefusal,
+  isStoredReadAbsence,
+  isStoredReadUnavailable,
+  READ_OUTCOME_METADATA_KEY,
+  type StoredReadOutcome,
+  UNAVAILABLE_CYCLES_BEFORE_MARKING,
+} from "@/api/lib/errors/read-outcome";
+import { FetchBoundaryError } from "@/api/lib/errors/tagged-errors";
+import { readGzipJson } from "@/api/lib/gzip-json";
 /**
  * What this adapter does with the record its publisher serves.
  *
@@ -22,34 +46,9 @@ import {
   decodeSourceRawEnvelope,
   decodeSourceRawEnvelopeObjects,
   encodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type { StoredRawReparseOutcome } from "@/api/handlers/case-law/ingestion/adapter";
-import { PublisherPageError } from "@/api/handlers/case-law/ingestion/adapters/publisher-page";
-import { PUBLISHER_BODY_MAX_BYTES } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
-import {
-  assembleSkCourtsDecision,
-  SK_COURTS_SOURCE_FIELD_PATHS,
-  skCourtsAdapter,
-} from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
-import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
-import {
-  planUnreadItems,
-  type UnavailableStreaks,
-} from "@/api/handlers/case-law/ingestion/pipeline/unread-items";
-import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
-import {
-  isReadRefusal,
-  isStoredReadAbsence,
-  isStoredReadUnavailable,
-  READ_OUTCOME_METADATA_KEY,
-  type StoredReadOutcome,
-  UNAVAILABLE_CYCLES_BEFORE_MARKING,
-} from "@/api/lib/errors/read-outcome";
-import { FetchBoundaryError } from "@/api/lib/errors/tagged-errors";
-import { readGzipJson } from "@/api/lib/gzip-json";
-import {
   type IngestionResult,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  type StoredRawReparseOutcome,
   toPlainTextIngestionResult,
 } from "@/api/lib/legal-search/ingestion-types";
 import { rehydrateMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
@@ -440,7 +439,7 @@ const reparse = (
   stored: StoredDecision,
   caseNumber: string,
 ): StoredRawReparseOutcome => {
-  const outcome = skCourtsAdapter.reparseStoredRaw?.({
+  const outcome = reparseSkCourtsStoredMetadata({
     raw: new TextEncoder().encode(stored.sourceRaw),
     contentType: stored.sourceRawContentType,
     caseNumber,
@@ -454,12 +453,7 @@ const reparse = (
     documentUrl: null,
     metadata: {},
   });
-  if (outcome === undefined) {
-    return panic("sk-courts declares no reparseStoredRaw");
-  }
-  return outcome instanceof Promise
-    ? panic("sk-courts reparseStoredRaw must answer without I/O")
-    : outcome;
+  return outcome;
 };
 
 describe("a stored record reaches the targets the inventory declares", () => {

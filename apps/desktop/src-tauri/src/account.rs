@@ -1059,6 +1059,10 @@ struct BrowserConnection {
   api_base_url: String,
   web_origin: String,
   port_secret: String,
+  // The challenge the approval page received, kept so a signed status names
+  // the whole challenge and a page holding a different one cannot match it.
+  verifier_hash: String,
+  device_jkt: String,
   device_key: crate::device_proof::DeviceKey,
   expires_at: std::time::Instant,
   redemption: LinkRedemption,
@@ -1127,6 +1131,8 @@ fn new_browser_connection_with_key(
       api_base_url,
       web_origin,
       port_secret,
+      verifier_hash,
+      device_jkt,
       device_key,
       expires_at: std::time::Instant::now() + LINK_APPROVAL_TIMEOUT,
       redemption: LinkRedemption::Waiting { verifier },
@@ -1407,31 +1413,40 @@ pub struct SignedConnectionStatus {
   proof: String,
 }
 
+/// Signs `correlationId\nverifierHash\ndeviceJkt\nstatus\ntimestamp` with
+/// the port secret. The page may approve on its own only after a fresh
+/// `pending` status verifies against the challenge it holds, so the signature
+/// covers every challenge field a grant binds, not only the correlation.
+fn connection_status_proof(
+  connection: &BrowserConnection,
+  status: &str,
+  timestamp: &str,
+) -> String {
+  let key =
+    ring::hmac::Key::new(ring::hmac::HMAC_SHA256, connection.port_secret.as_bytes());
+  let message = format!(
+    "{}\n{}\n{}\n{status}\n{timestamp}",
+    connection.correlation_id, connection.verifier_hash, connection.device_jkt
+  );
+  hex::encode(ring::hmac::sign(&key, message.as_bytes()).as_ref())
+}
+
 pub async fn signed_browser_connection_status(
   state: &AccountState,
   correlation_id: &str,
 ) -> Result<SignedConnectionStatus, String> {
   let status = browser_connection_status(state, correlation_id).await;
   let now = std::time::Instant::now();
-  let key = BROWSER_CONNECTION
+  let timestamp = chrono::Utc::now().timestamp().to_string();
+  let proof = BROWSER_CONNECTION
     .lock()
     .map_err(with_cause_logged("Desktop connection is unavailable"))?
     .as_ref()
     .filter(|connection| {
       connection.correlation_id == correlation_id && now < connection.expires_at
     })
-    .map(|connection| {
-      ring::hmac::Key::new(ring::hmac::HMAC_SHA256, connection.port_secret.as_bytes())
-    })
+    .map(|connection| connection_status_proof(connection, status, &timestamp))
     .ok_or("Desktop connection is unavailable")?;
-  let timestamp = chrono::Utc::now().timestamp().to_string();
-  let proof = hex::encode(
-    ring::hmac::sign(
-      &key,
-      format!("{correlation_id}\n{status}\n{timestamp}").as_bytes(),
-    )
-    .as_ref(),
-  );
   Ok(SignedConnectionStatus {
     correlation_id: correlation_id.to_string(),
     status,
@@ -1444,6 +1459,8 @@ pub async fn signed_browser_connection_status(
 pub(crate) struct BridgeProofFixture {
   pub correlation_id: String,
   pub port_secret: String,
+  pub verifier_hash: String,
+  pub device_jkt: String,
   previous: Option<BrowserConnection>,
 }
 
@@ -1453,10 +1470,14 @@ pub(crate) fn bridge_proof_fixture() -> BridgeProofFixture {
     new_browser_connection("https://api.stll.app", "http://localhost:3000").unwrap();
   let correlation_id = connection.correlation_id.clone();
   let port_secret = connection.port_secret.clone();
+  let verifier_hash = connection.verifier_hash.clone();
+  let device_jkt = connection.device_jkt.clone();
   let previous = BROWSER_CONNECTION.lock().unwrap().replace(connection);
   BridgeProofFixture {
     correlation_id,
     port_secret,
+    verifier_hash,
+    device_jkt,
     previous,
   }
 }
@@ -1848,6 +1869,8 @@ mod tests {
       fields.get("deviceJkt"),
       Some(&connection.device_key.thumbprint().unwrap())
     );
+    assert_eq!(fields.get("verifierHash"), Some(&connection.verifier_hash));
+    assert_eq!(fields.get("deviceJkt"), Some(&connection.device_jkt));
     assert!(!url.contains(verifier.as_str()));
     assert_ne!(verifier.as_str(), connection.port_secret.as_str());
   }
@@ -1928,6 +1951,54 @@ mod tests {
     assert!(!valid_bridge_proof(
       &another, timestamp, &proof, "GET", path, now
     ));
+  }
+
+  #[test]
+  fn connection_status_proofs_bind_the_whole_challenge() {
+    let (connection, _) =
+      new_browser_connection("https://api.stll.app", "https://my.stll.app").unwrap();
+    let timestamp = "1790851200";
+    let key =
+      ring::hmac::Key::new(ring::hmac::HMAC_SHA256, connection.port_secret.as_bytes());
+    let proof = connection_status_proof(&connection, "pending", timestamp);
+    let signature = hex::decode(&proof).unwrap();
+    let message = |correlation: &str, hash: &str, jkt: &str, status: &str, at: &str| {
+      format!("{correlation}\n{hash}\n{jkt}\n{status}\n{at}")
+    };
+    let (id, hash, jkt) = (
+      connection.correlation_id.as_str(),
+      connection.verifier_hash.as_str(),
+      connection.device_jkt.as_str(),
+    );
+    assert!(
+      ring::hmac::verify(
+        &key,
+        message(id, hash, jkt, "pending", timestamp).as_bytes(),
+        &signature
+      )
+      .is_ok()
+    );
+    let other_hash = "0".repeat(64);
+    let other_jkt = "A".repeat(43);
+    let other_id = "11111111-1111-4111-8111-111111111111";
+    for changed in [
+      message(other_id, hash, jkt, "pending", timestamp),
+      message(id, &other_hash, jkt, "pending", timestamp),
+      message(id, hash, &other_jkt, "pending", timestamp),
+      message(id, hash, jkt, "connected", timestamp),
+      message(id, hash, jkt, "pending", "1790851201"),
+      // The format before the challenge was bound.
+      format!("{id}\npending\n{timestamp}"),
+    ] {
+      assert!(ring::hmac::verify(&key, changed.as_bytes(), &signature).is_err());
+    }
+    let (another, _) =
+      new_browser_connection("https://api.stll.app", "https://my.stll.app").unwrap();
+    assert_ne!(another.verifier_hash, connection.verifier_hash);
+    assert_ne!(
+      connection_status_proof(&another, "pending", timestamp),
+      proof
+    );
   }
 
   fn fixture(key: &str, expires_in: i64) -> LinkedAccount {

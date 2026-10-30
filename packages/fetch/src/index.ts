@@ -52,6 +52,23 @@ const executeFetchWithTimeout = async (
     );
   }
 
+  if (timeout === undefined || timeout.type === "total") {
+    // A total deadline covers the whole exchange through the transport's own
+    // signal, and the caller gets the transport's response unchanged: a body
+    // re-wrapped in a script stream is invisible to the browser's network
+    // inspection and costs a stream hop on every response.
+    return await activeFetcher(input, {
+      ...init,
+      signal: AbortSignal.any([
+        ...callerSignals,
+        AbortSignal.timeout(duration),
+      ]),
+      ...(timeout === undefined ? {} : { timeout }),
+      timeoutMs: duration,
+    });
+  }
+  const policy = timeout;
+
   const controller = new AbortController();
   const combined = AbortSignal.any([...callerSignals, controller.signal]);
   const expire = () =>
@@ -72,38 +89,18 @@ const executeFetchWithTimeout = async (
         await activeFetcher(input, {
           ...init,
           signal: combined,
-          ...(timeout === undefined ? {} : { timeout }),
+          timeout: policy,
           timeoutMs: duration,
         }),
     )
-    .catch((error: unknown) => {
-      clear();
-      throw error;
-    })
-    .finally(() => {
-      if (timeout !== undefined && timeout.type !== "total") {
-        clear();
-      }
-    });
-  if (controller.signal.aborted) {
+    .finally(clear);
+  if (combined.aborted) {
     // The abort reason is the failure. Cancelling only releases the body, and
     // a body the abort already errored rejects with that same stored reason.
     await Promise.allSettled([response.body?.cancel(combined.reason)]);
     throw combined.reason;
   }
-  if (combined.aborted) {
-    if (timeout === undefined || timeout.type === "total") {
-      // Total deadlines historically delegated this settlement race to the
-      // transport. Keep a response that wins a caller abort so resumable
-      // consumers can use work completed before they observe the signal.
-      clear();
-      return response;
-    }
-    await Promise.allSettled([response.body?.cancel(combined.reason)]);
-    throw combined.reason;
-  }
-  if (timeout?.type === "headers" || response.body === null) {
-    clear();
+  if (policy.type === "headers" || response.body === null) {
     return response;
   }
 
@@ -142,16 +139,10 @@ const executeFetchWithTimeout = async (
         await cancellation;
         return;
       }
-      if (timeout?.type === "idle") {
-        reset();
-      }
+      reset();
       await reader
         .read()
-        .finally(() => {
-          if (timeout?.type === "idle") {
-            clear();
-          }
-        })
+        .finally(clear)
         .then(
           ({ done, value }) => {
             if (stopped) {

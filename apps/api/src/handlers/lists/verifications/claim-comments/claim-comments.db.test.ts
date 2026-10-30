@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 
+import { createTestState } from "@stll/test-state";
+
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
   auditLogs,
@@ -32,7 +34,6 @@ import {
   createTestHandlerContext,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
-import { createTestState } from "@/api/tests/helpers/test-state";
 
 import createComment from "./create";
 import deleteComment from "./delete";

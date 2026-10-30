@@ -814,8 +814,10 @@
       "deleteRateTable": "Usuń tabelę stawek",
       "editRateTable": "Edytuj tabelę stawek",
       "effectiveFrom": "Obowiązuje od",
+      "effectiveRateRequired": "Nie ustawiono obowiązującej stawki dla tej sprawy, osoby i daty. Dodaj stawkę lub zapisz czas jako niepodlegający rozliczeniu.",
       "effectiveTo": "Obowiązuje do",
       "hourlyRate": "Stawka godzinowa",
+      "logNonBillable": "Zapisz jako niepodlegający rozliczeniu",
       "noRateEntries": "Brak wpisów stawek",
       "noRateFound": "Brak skonfigurowanej stawki",
       "noRateTables": "Brak tabel stawek",
@@ -1090,7 +1092,9 @@
     },
     "emptyState": "Brak orzeczeń. Skonfiguruj źródło i uruchom synchronizację, aby zaimportować orzecznictwo.",
     "filters": {
-      "remove": "Usuń filtr {filter}"
+      "countryMismatch": "Usunięto filtry, które nie dotyczą kraju {country}: {filters}.",
+      "remove": "Usuń filtr {filter}",
+      "showInCountry": "Pokaż {filter} dla kraju {country}"
     },
     "languages": {
       "count": "{count, plural, one {# język} few {# języki} many {# języków} other {# języka}}",
@@ -1346,6 +1350,7 @@
       "toastTitle": "Pełny widok niedostępny"
     },
     "activity": {
+      "newerVersion": "Ta treść jest wyświetlana w nowszej wersji.",
       "review": "Aktualizacja przeglądu"
     },
     "aiPrompt": "Pole wiadomości AI",
@@ -2357,6 +2362,7 @@
     "unknownUser": "Nieznany użytkownik",
     "unpin": "Odepnij",
     "unsavedChanges": "Niezapisane zmiany",
+    "unsavedChangesClose": "Niezapisane zmiany. Zamknij ponownie, aby je odrzucić",
     "unsavedChangesEscape": "Niezapisane zmiany. Naciśnij ponownie Esc, aby je odrzucić",
     "unsavedLeaveConfirm": "Masz niezapisane zmiany. Wyjść bez zapisywania?",
     "unverified": "Niezweryfikowane",
@@ -2398,6 +2404,8 @@
     "returnToAgent": "Wróć do swojego agenta, aby kontynuować.",
     "returnsLocally": "Wrócisz do {clientName} na tym komputerze",
     "returnsTo": "Wrócisz do {clientName}",
+    "scopeAccountExportRead": "Odczyt eksportów Twoich danych osobowych",
+    "scopeAccountExportWrite": "Zamawianie eksportów Twoich danych osobowych",
     "scopeAdminRead": "Odczyt dziennika audytu Twojej organizacji",
     "scopeAdminWrite": "Zarządzanie członkami i ustawieniami organizacji",
     "scopeBillingWrite": "Tworzenie, edytowanie i usuwanie Twoich wpisów czasu",
@@ -5049,6 +5057,8 @@
       "desktopCardConnectedTitle": "stella desktop jest powiązany",
       "desktopCardMissingDetail": "Zainstaluj go lub połącz, jeśli jest już zainstalowany na tym komputerze.",
       "desktopCardMissingTitle": "stella desktop nie jest jeszcze połączony",
+      "desktopCardOpeningDetail": "Łączenie tego komputera z <bdi>{identity}</bdi> na {host}. Jeśli przeglądarka zapyta, zezwól na otwarcie stella desktop.",
+      "desktopCardOpeningTitle": "Otwieranie stella desktop...",
       "desktopCardOutdatedDetail": "Wersja {version} jest połączona z <bdi>{identity}</bdi>. Zainstaluj najnowszą wersję, aby dokumenty i aktywność nadal działały.",
       "desktopCardOutdatedTitle": "stella desktop wymaga aktualizacji",
       "desktopClipboardDescription": "Otwieraj, przeszukuj, porządkuj i ponownie wykorzystuj tekst skopiowany z dowolnej aplikacji.",
@@ -5068,6 +5078,7 @@
       "desktopInstallOpenStep": "Otwórz stella desktop jeden raz. Schowek pojawi się od razu i pozostanie dostępny z paska menu macOS lub zasobnika systemowego Windows.",
       "desktopInstallTitle": "Instalacja i otwarcie",
       "desktopInstallWindowsStep": "Uruchom instalator i postępuj zgodnie z instrukcjami.",
+      "desktopOpenApp": "Otwórz stella desktop",
       "desktopPrivacyDescription": "Historia schowka jest szyfrowana i przechowywana na tym urządzeniu.",
       "desktopPrivacyTitle": "Domyślnie prywatne",
       "desktopSelfHostDescription": "Zaufaj temu URL stella w podpisanej aplikacji desktop, aby dokumenty z tej instalacji mogły otwierać się lokalnie.",
@@ -5077,6 +5088,15 @@
       "displayNameSaved": "Zaktualizowano nazwę wyświetlaną",
       "enterOtp": "Kod weryfikacyjny",
       "otpSentSuccess": "Kod weryfikacyjny został wysłany na Twój adres e-mail.",
+      "personalDataExportDescription": "Poproś o kopię danych osobowych z konta do pobrania. Plik będzie dostępny przez godzinę.",
+      "personalDataExportExpired": "Ten eksport wygasł.",
+      "personalDataExportExpiresAt": "Dostępny do {expiresAt}.",
+      "personalDataExportFailed": "Nie udało się przygotować eksportu.",
+      "personalDataExportReady": "Eksport jest gotowy.",
+      "personalDataExportRequest": "Poproś o eksport",
+      "personalDataExportRequestNew": "Poproś o nowy eksport",
+      "personalDataExportTitle": "Eksportuj moje dane",
+      "personalDataExportWorking": "Przygotowywanie eksportu…",
       "preferredName": "Preferowane imię",
       "preferredNameDescription": "Używane jako autor śledzonych zmian i komentarzy w plikach DOCX.",
       "preferredNamePlaceholder": "Twoje imię",
@@ -5410,6 +5430,7 @@
     "showCitedPartOnly": "Pokaż tylko cytowaną część",
     "showFullProvision": "Pokaż cały przepis",
     "showInText": "Pokaż w tekście",
+    "sortNeedsYear": "Aby sortować według tej kolumny, wybierz rok w filtrach.",
     "statedWindow": "Daty podane przez wydawcę: {range}",
     "status": {
       "current": "Obowiązujący",
@@ -6507,6 +6528,14 @@
           "started": "Rozpoczął(-ęła) przegląd dokumentu"
         },
         "empty": "Brak aktywności w tej sprawie.",
+        "fields": {
+          "dueDate": "termin",
+          "parentFolder": "folder nadrzędny",
+          "priority": "priorytet",
+          "property": "właściwość",
+          "schedule": "harmonogram",
+          "sortOrder": "kolejność"
+        },
         "filterLabel": "Filtruj aktywność",
         "filters": {
           "all": "Cała aktywność",
@@ -6556,6 +6585,7 @@
           "translation": "tłumaczenie"
         },
         "title": "Aktywność",
+        "updatedFields": "Zaktualizowano: {fields}",
         "views": {
           "list": "Widok listy",
           "timeline": "Widok osi czasu"
