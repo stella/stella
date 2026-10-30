@@ -64,9 +64,7 @@ export type ButtonTokenVariant = keyof typeof BUTTON_VARIANT_TOKENS;
  */
 export const BUTTON_PLAIN_VARIANT = "plain";
 
-export type ButtonVariant =
-  | ButtonTokenVariant
-  | typeof BUTTON_PLAIN_VARIANT;
+export type ButtonVariant = ButtonTokenVariant | typeof BUTTON_PLAIN_VARIANT;
 
 /** Every size a button comes in, on every platform. */
 export const BUTTON_SIZES = [
