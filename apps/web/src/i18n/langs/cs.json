@@ -1589,7 +1589,7 @@
     "loadingEarlierMessages": "Načítání starších zpráv…",
     "maxAttachmentsReached": "Maximálně {count} souborů na zprávu",
     "mcpReconnect": {
-      "additional": "{count, plural, one {+# další} few {+# další} other {+# dalších}}",
+      "additional": "{count, plural, one {+# další} few {+# další} many {+# další} other {+# dalších}}",
       "dismiss": "Skrýt upozornění na připojení",
       "stoppedWorking": "Vaše připojení ke službě <name>{server}</name> přestalo fungovat.",
       "waitingApproval": "Vaše připojení ke službě <name>{server}</name> čeká na schválení."
@@ -3678,8 +3678,8 @@
       "unsupportedVisualContent": "Tento soubor obsahuje obrázky nebo vektorovou grafiku, u kterých nelze ověřit citlivý text. Export není k dispozici.",
       "workspaceTermsHeading": "Slovníček pro anonymizaci ({count})"
     },
-    "closeAllTabs": "Zavřít {count, plural, one {# kartu} few {všechny # karty} other {všech # karet}}",
-    "closeOtherTabs": "Zavřít {count, plural, one {# další kartu} few {# další karty} other {# dalších karet}}",
+    "closeAllTabs": "Zavřít {count, plural, one {# kartu} few {všechny # karty} many {# karty} other {všech # karet}}",
+    "closeOtherTabs": "Zavřít {count, plural, one {# další kartu} few {# další karty} many {# další karty} other {# dalších karet}}",
     "closeTab": "Zavřít <bdi>{name}</bdi>",
     "conversionRefusal": {
       "legacyFormat": "Toto je starší soubor {format}. Chcete-li jej převést, uložte jej znovu jako {replacementExtension}.",

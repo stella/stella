@@ -3678,8 +3678,8 @@
       "unsupportedVisualContent": "Šiame faile yra vaizdų arba vektorinės grafikos, kurių neįmanoma patikrinti, ar juose nėra neskelbtino teksto. Eksportuoti negalima.",
       "workspaceTermsHeading": "Darbo srities terminai ({count})"
     },
-    "closeAllTabs": "Uždaryti {count, plural, one {# kortelę} few {visas # korteles} other {visas # kortelių}}",
-    "closeOtherTabs": "Uždaryti {count, plural, one {# kitą kortelę} few {# kitas korteles} other {# kitų kortelių}}",
+    "closeAllTabs": "Uždaryti {count, plural, one {# kortelę} few {visas # korteles} many {# kortelės} other {visas # kortelių}}",
+    "closeOtherTabs": "Uždaryti {count, plural, one {# kitą kortelę} few {# kitas korteles} many {# kitos kortelės} other {# kitų kortelių}}",
     "closeTab": "Uždaryti <bdi>{name}</bdi>",
     "conversionRefusal": {
       "legacyFormat": "Tai seno formato „{format}“ failas. Norėdami jį konvertuoti, iš naujo įrašykite kaip {replacementExtension}.",

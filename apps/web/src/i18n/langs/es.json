@@ -3678,8 +3678,8 @@
       "unsupportedVisualContent": "Este archivo contiene imágenes o gráficos vectoriales que no se pueden comprobar para detectar texto sensible. La exportación no está disponible.",
       "workspaceTermsHeading": "Términos del espacio de trabajo ({count})"
     },
-    "closeAllTabs": "Cerrar {count, plural, one {# pestaña} other {las # pestañas}}",
-    "closeOtherTabs": "Cerrar {count, plural, one {la otra pestaña} other {las otras # pestañas}}",
+    "closeAllTabs": "Cerrar {count, plural, one {# pestaña} many {las # pestañas} other {las # pestañas}}",
+    "closeOtherTabs": "Cerrar {count, plural, one {la otra pestaña} many {las otras # pestañas} other {las otras # pestañas}}",
     "closeTab": "Cerrar <bdi>{name}</bdi>",
     "conversionRefusal": {
       "legacyFormat": "Este es un archivo antiguo de {format}. Vuelve a guardarlo como {replacementExtension} para convertirlo.",

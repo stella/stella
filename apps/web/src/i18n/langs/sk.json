@@ -1589,7 +1589,7 @@
     "loadingEarlierMessages": "Načítavajú sa staršie správy…",
     "maxAttachmentsReached": "Maximálne {count} súborov na správu",
     "mcpReconnect": {
-      "additional": "{count, plural, one {+# ďalšie} few {+# ďalšie} other {+# ďalších}}",
+      "additional": "{count, plural, one {+# ďalšie} few {+# ďalšie} many {+# ďalšieho} other {+# ďalších}}",
       "dismiss": "Skryť upozornenie na pripojenie",
       "stoppedWorking": "Vaše pripojenie k službe <name>{server}</name> prestalo fungovať.",
       "waitingApproval": "Vaše pripojenie k službe <name>{server}</name> čaká na schválenie."
@@ -3678,8 +3678,8 @@
       "unsupportedVisualContent": "Tento súbor obsahuje obrázky alebo vektorovú grafiku, pri ktorých nemožno overiť citlivý text. Export nie je k dispozícii.",
       "workspaceTermsHeading": "Výrazy pracovného priestoru ({count})"
     },
-    "closeAllTabs": "Zavrieť {count, plural, one {# kartu} few {všetky # karty} other {všetkých # kariet}}",
-    "closeOtherTabs": "Zavrieť {count, plural, one {# ďalšiu kartu} few {# ďalšie karty} other {# ďalších kariet}}",
+    "closeAllTabs": "Zavrieť {count, plural, one {# kartu} few {všetky # karty} many {# karty} other {všetkých # kariet}}",
+    "closeOtherTabs": "Zavrieť {count, plural, one {# ďalšiu kartu} few {# ďalšie karty} many {# ďalšej karty} other {# ďalších kariet}}",
     "closeTab": "Zavrieť <bdi>{name}</bdi>",
     "conversionRefusal": {
       "legacyFormat": "Toto je starší súbor {format}. Ak ho chcete konvertovať, znova ho uložte ako {replacementExtension}.",
