@@ -103,7 +103,7 @@ const renderRow = async (searchQuery: string | undefined) => {
       <router.RouterProvider router={appRouter} />
     </QueryClientProvider>,
   );
-  return await waitFor(() => view.getByTestId("row").textContent ?? "");
+  return await waitFor(() => view.getByTestId("row").textContent);
 };
 
 const MATCHED_IN_BULGARIAN = createTranslator({ locale: "en", messages })(
