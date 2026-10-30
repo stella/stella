@@ -4,8 +4,8 @@ import path from "node:path";
 
 import { lintSingleRule } from "./lint-single-rule";
 
-const lint = (source: string) =>
-  lintSingleRule("no-live-test-base", source, {
+const lint = async (source: string) =>
+  await lintSingleRule("no-live-test-base", source, {
     sourcePath: "scripts/example.test.ts",
   });
 
