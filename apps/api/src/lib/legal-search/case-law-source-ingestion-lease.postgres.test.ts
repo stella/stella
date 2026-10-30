@@ -69,13 +69,16 @@ describe.skipIf(!enabled)("case-law source ingestion lease owner", () => {
       const failed = Result.err(new Error("expected failed result"));
       expect(await run(async () => failed)).toBe(failed);
 
-      expect(
-        await rejectionOf(
-          run(async () => {
-            throw new Error("expected work rejection");
-          }),
-        ),
-      ).toThrow("expected work rejection");
+      const rejection = await rejectionOf(
+        run(async () => {
+          throw new Error("expected work rejection");
+        }),
+      );
+      expect(rejection).toBeInstanceOf(Error);
+      if (!(rejection instanceof Error)) {
+        panic("Expected work rejection to be an Error");
+      }
+      expect(rejection.message).toBe("expected work rejection");
 
       let heldWorkRan = false;
       const held = await withCaseLawSourceIngestionLease(
