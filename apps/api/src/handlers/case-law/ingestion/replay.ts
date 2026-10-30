@@ -318,7 +318,7 @@ export const parsedReplayInputPredicate = (targetParserVersion: number) =>
 /**
  * The rows the background replay has not read at the current parser, as
  * disjoint arms. Each arm is an equality or range on a prefix of the
- * replay-pending index (source, parser version, parsed-input state), so the
+ * replay-pending index (source, parser version, parsed-input state, id), so the
  * lag probe reads each from the index alone, whatever the planner estimates.
  */
 export const BACKGROUND_REPLAY_ARMS = [
@@ -715,10 +715,14 @@ export const buildBackgroundReplayProbe = (
           backgroundReplayExclusions(selection, tx),
         ),
       )
+      // Ordered by every index column, so an arm whose equalities fix the
+      // first three still asks for the index's order: a sequential scan would
+      // have to sort what it reads, whatever the planner estimates it finds.
       .orderBy(
         asc(caseLawDecisions.sourceId),
         asc(caseLawDecisions.parserVersion),
         asc(caseLawDecisions.parsedInputState),
+        asc(caseLawDecisions.id),
       )
       .limit(1),
   );

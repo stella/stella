@@ -546,6 +546,7 @@ const parsedInputStateCheck = (t: { parsedInputState: SQLWrapper }) =>
     sql`${t.parsedInputState} IN (${sql.join(PARSED_INPUT_STATE_SQL_VALUES, sql`, `)})`,
   );
 type ReplayPendingIndexColumns = {
+  id: PgColumn;
   sourceId: PgColumn;
   parserVersion: PgColumn;
   parsedInputState: PgColumn;
@@ -557,7 +558,7 @@ type ReplayPendingIndexColumns = {
 const replayPendingIndex = (t: ReplayPendingIndexColumns) =>
   p
     .index("case_law_decisions_replay_pending_idx")
-    .on(t.sourceId, t.parserVersion, t.parsedInputState)
+    .on(t.sourceId, t.parserVersion, t.parsedInputState, t.id)
     .where(sql`${t.sourceRawS3Key} IS NOT NULL AND ${t.redactedAt} IS NULL`);
 const parsedInputStateTableItems = (
   t: ReplayPendingIndexColumns & { parsedInputState: SQLWrapper },

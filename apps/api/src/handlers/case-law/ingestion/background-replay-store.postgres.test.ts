@@ -3279,7 +3279,7 @@ if (!databaseUrl || !enabled) {
                 ).toEqual(
                   expect.arrayContaining([
                     expect.stringMatching(
-                      /^case_law_decisions_(replay_(sparse|walk)_idx|source_id_parser_version_parsed_input_st_idx)$/u,
+                      /^case_law_decisions_(replay_(sparse|walk)_idx|source_id_parser_version_parsed_\w*idx)$/u,
                     ),
                   ]),
                 );

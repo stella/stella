@@ -18,9 +18,9 @@ export const CASE_LAW_REPLAY_PENDING_INDEX = {
     owner: "src/db/case-law-parsed-input-state.ts",
   },
   createSql:
-    'CREATE INDEX CONCURRENTLY "case_law_decisions_replay_pending_idx" ON public."case_law_decisions" USING btree ("source_id", "parser_version", "parsed_input_state") WHERE "source_raw_s3_key" IS NOT NULL AND "redacted_at" IS NULL',
+    'CREATE INDEX CONCURRENTLY "case_law_decisions_replay_pending_idx" ON public."case_law_decisions" USING btree ("source_id", "parser_version", "parsed_input_state", "id") WHERE "source_raw_s3_key" IS NOT NULL AND "redacted_at" IS NULL',
   definitionBody:
-    "ON public.case_law_decisions USING btree (source_id, parser_version, parsed_input_state) WHERE ((source_raw_s3_key IS NOT NULL) AND (redacted_at IS NULL))",
+    "ON public.case_law_decisions USING btree (source_id, parser_version, parsed_input_state, id) WHERE ((source_raw_s3_key IS NOT NULL) AND (redacted_at IS NULL))",
   isUnique: false,
   name: "case_law_decisions_replay_pending_idx",
   tableName: "case_law_decisions",
