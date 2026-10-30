@@ -15,6 +15,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { errorTag } from "@/api/lib/errors/utils";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
+import { createRootOrganizationBackgroundDb } from "@/api/lib/root-scoped-db";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 import {
   reindexWorkspacesForContact,
@@ -79,7 +80,10 @@ type SearchProjectionRepairDatabase = SearchProjectionRepairDb &
 
 export type SearchProjectionRepairDeps = {
   db: SearchProjectionRepairDb;
-  repair: Record<SearchProjectionKind, (sourceId: string) => Promise<void>>;
+  repair: Record<
+    SearchProjectionKind,
+    (sourceId: string, organizationId: SafeId<"organization">) => Promise<void>
+  >;
 };
 
 export type SearchProjectionRepairOutcome = {
@@ -89,6 +93,7 @@ export type SearchProjectionRepairOutcome = {
 
 type ClaimedRepair = {
   kind: SearchProjectionKind;
+  organizationId: SafeId<"organization">;
   revision: string;
   sourceId: string;
 };
@@ -117,8 +122,11 @@ export const createSearchProjectionRepairDeps = (
 ): SearchProjectionRepairDeps => ({
   db: database,
   repair: {
-    contact: async (sourceId) =>
-      await repairContactProjection(sourceId, database),
+    contact: async (sourceId, organizationId: SafeId<"organization">) =>
+      await createRootOrganizationBackgroundDb(organizationId)(
+        async (scopedDatabase) =>
+          await repairContactProjection(sourceId, scopedDatabase),
+      ),
     entity: async (sourceId) =>
       await upsertSearchDocument(toSafeId<"entity">(sourceId), { database }),
     workspace: async (sourceId) =>
@@ -238,6 +246,7 @@ export const enqueueWorkspaceSearchRepairs = async (
 
 const claimedColumns = {
   kind: searchProjectionRepairQueue.kind,
+  organizationId: searchProjectionRepairQueue.organizationId,
   revision: searchProjectionRepairQueue.revision,
   sourceId: searchProjectionRepairQueue.sourceId,
 };
@@ -352,7 +361,8 @@ const repairClaim = async ({
   outcome: SearchProjectionRepairOutcome;
 }): Promise<void> => {
   const attempt = await Result.tryPromise({
-    try: async () => await deps.repair[claim.kind](claim.sourceId),
+    try: async () =>
+      await deps.repair[claim.kind](claim.sourceId, claim.organizationId),
     catch: (cause) =>
       cause instanceof Error ? cause : new UnhandledException({ cause }),
   });

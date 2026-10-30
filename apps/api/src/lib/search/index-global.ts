@@ -29,6 +29,7 @@ import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import { escapeLike } from "@/api/lib/escape-like";
 import { primaryReferenceTypeFromStored } from "@/api/lib/legal-search/decision-primary-reference";
 import { LIMITS } from "@/api/lib/limits";
+import { createRootOrganizationBackgroundDb } from "@/api/lib/root-scoped-db";
 import {
   brandPersistedCaseLawDecisionId,
   brandPersistedChatThreadId,
@@ -2182,7 +2183,10 @@ export const reindexWorkspacesForContact = async (
 export const rebuildSupplementalSearchIndex = async (
   organizationId: SafeId<"organization">,
 ): Promise<void> => {
-  await rebuildSupplementalSearchDocuments(organizationId, rootDb);
+  await createRootOrganizationBackgroundDb(organizationId)(
+    async (database) =>
+      await rebuildSupplementalSearchDocuments(organizationId, database),
+  );
 };
 
 type KeysetPage<Id extends string> = { last: Id | null; more: boolean };
