@@ -80,7 +80,9 @@ type WithoutMeasurements<T> = T extends unknown
   ? Omit<T, "durationMs" | "retriesSpent">
   : never;
 
-export type MigrationTimingFields = WithoutMeasurements<MigrationTimingRecord>;
+export type MigrationTimingFields = WithoutMeasurements<
+  Extract<MigrationTimingRecord, { durationMs: number; retriesSpent: number }>
+>;
 
 export type MigrationTiming = {
   clock: () => number;

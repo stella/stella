@@ -146,6 +146,6 @@ describe("timed", () => {
       describe: () => ({ ...step, outcome: "complete" }),
       failure: { ...step, outcome: "failed" },
     });
-    expect(records.at(0)?.durationMs).toBe(0);
+    expect(records.at(0)).toMatchObject({ durationMs: 0 });
   });
 });
