@@ -712,10 +712,10 @@ impl SessionManager {
   ) -> Result<(), String> {
     match self.store_access {
       SessionStoreAccess::Pending => {
-        if let Err(error) = self.initialize(owner).await {
-          if self.store_access != SessionStoreAccess::Unavailable {
-            return Err(error);
-          }
+        if let Err(error) = self.initialize(owner).await
+          && self.store_access != SessionStoreAccess::Unavailable
+        {
+          return Err(error);
         }
         return Ok(());
       }
