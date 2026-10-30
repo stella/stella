@@ -446,7 +446,7 @@
   },
   {
     "id": "no-real-time-wait::apps/collab/src/server.test.ts::<module>::Bun.sleep",
-    "count": 5,
+    "count": 4,
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
   {
