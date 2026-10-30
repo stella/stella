@@ -3,7 +3,8 @@ import type { GuardRollout } from "../guard-rollout-policy.ts";
 export default {
   id: "no-button-whitespace-normal",
   rules: ["no-button-whitespace-normal/no-button-whitespace-normal"],
-  type: "full",
+  type: "changed-lines",
+  expiresAt: "2026-11-06T00:00:00.000Z",
   check: [
     "bun",
     "--bun",
