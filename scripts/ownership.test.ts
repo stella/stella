@@ -909,7 +909,11 @@ test("generated artefact provenance counts every dynamic-import invocation", asy
     `import(${module}).then(({ collectTanStackTextRun: run }) => { run({}); run({}); });`,
   ]) {
     const scanned = inspectArtefactGenerators({ file, source });
-    expect(scanned).toMatchObject({ modelImport: true, legacyCalls: 2 });
+    expect(scanned).toMatchObject({
+      modelImport: true,
+      legacyCalls: 2,
+      escapes: [],
+    });
     expect(
       assessArtefactGenerator({ file, scanned, ledger: { [file]: 1 } }),
     ).toContain(
@@ -946,6 +950,7 @@ test("generated artefact provenance resolves model receivers through expression 
         expect(scanned, source).toMatchObject({
           modelImport: true,
           legacyCalls: 1,
+          escapes: [],
         });
         expect(
           assessArtefactGenerator({ file, scanned, ledger: {} }),
@@ -955,6 +960,112 @@ test("generated artefact provenance resolves model receivers through expression 
         );
       }
     }
+  }
+});
+
+test("generated artefact provenance counts assignment aliases against the transition allowance", async () => {
+  const { inspectArtefactGenerators, assessArtefactGenerator } =
+    await import("./generated-artefact-provenance");
+  const file = "apps/api/src/handlers/chat/generate-thread-title.ts";
+  const imported =
+    'import { collectTanStackTextRun as raw } from "@/api/lib/tanstack-ai-generate";';
+  for (const alias of [
+    "let run; run = raw; run({});",
+    "let run; let next; next = run; run = raw; next({});",
+    "let run; run = (raw); run({});",
+  ]) {
+    const source = `${imported} raw({}); ${alias}`;
+    const scanned = inspectArtefactGenerators({ file, source });
+    expect(scanned, source).toMatchObject({ legacyCalls: 2, escapes: [] });
+    expect(
+      assessArtefactGenerator({ file, scanned, ledger: { [file]: 1 } }),
+      source,
+    ).toEqual([
+      `${file}: raw generation count 2; migrate through generateArtefact and shrink the transition list`,
+    ]);
+  }
+});
+
+test("generated artefact provenance rejects operation references that escape the census", async () => {
+  const { inspectArtefactGenerators, assessArtefactGenerator } =
+    await import("./generated-artefact-provenance");
+  const file = "apps/api/src/handlers/chat/generate-thread-title.ts";
+  const imported =
+    'import { collectTanStackTextRun as raw } from "@/api/lib/tanstack-ai-generate";';
+  for (const use of [
+    "consume(raw);",
+    "const holder = { run: raw };",
+    "const holder = { raw };",
+    "function expose() { return raw; }",
+    "const holder = [raw];",
+    "const holder = { ...raw };",
+    "export { raw };",
+    "export default raw;",
+    "export const exposed = raw;",
+    "const expose = () => raw;",
+    "raw.bind(null);",
+    "raw.call(null, {});",
+    "holder.run = raw;",
+    'holder["run"] = raw;',
+    "let run; run = raw; consume(run);",
+    "const run = raw; const holder = { run };",
+  ]) {
+    const source = `${imported}\n${use}`;
+    const scanned = inspectArtefactGenerators({ file, source });
+    expect(
+      assessArtefactGenerator({ file, scanned, ledger: {} }),
+      source,
+    ).toContain(
+      `${file}:2: model operation reference escapes the provenance census`,
+    );
+  }
+});
+
+test("generated artefact provenance follows namespace assignment aliases and ignores type-only references", async () => {
+  const { inspectArtefactGenerators, assessArtefactGenerator } =
+    await import("./generated-artefact-provenance");
+  const file = "apps/api/src/handlers/chat/generate-thread-title.ts";
+  const module = '"@/api/lib/tanstack-ai-generate"';
+  for (const source of [
+    `let m; m = await import(${module}); m.collectTanStackTextRun({});`,
+    `let m; m = await import(${module}); const { collectTanStackTextRun: run } = m; run({});`,
+    `import * as m from ${module}; let copy; copy = m; copy.collectTanStackTextRun({});`,
+    `import { collectTanStackTextRun as raw } from ${module}; type Run = typeof raw; raw({});`,
+    `import * as m from ${module}; type Module = typeof m; m.collectTanStackTextRun({});`,
+  ]) {
+    const scanned = inspectArtefactGenerators({ file, source });
+    expect(scanned, source).toMatchObject({
+      modelImport: true,
+      legacyCalls: 1,
+      escapes: [],
+    });
+    expect(
+      assessArtefactGenerator({ file, scanned, ledger: { [file]: 1 } }),
+      source,
+    ).toEqual([]);
+  }
+});
+
+test("generated artefact provenance rejects module reexports and unresolved computed bindings", async () => {
+  const { inspectArtefactGenerators, assessArtefactGenerator } =
+    await import("./generated-artefact-provenance");
+  const file = "apps/api/src/handlers/chat/generate-thread-title.ts";
+  const module = '"@/api/lib/tanstack-ai-generate"';
+  for (const source of [
+    `export {};\nexport { collectTanStackTextRun } from ${module};`,
+    `export {};\nexport * from ${module};`,
+    `export {};\nconst { [key]: run } = await import(${module}); run({});`,
+  ]) {
+    expect(
+      assessArtefactGenerator({
+        file,
+        scanned: inspectArtefactGenerators({ file, source }),
+        ledger: {},
+      }),
+      source,
+    ).toContain(
+      `${file}:2: model operation reference escapes the provenance census`,
+    );
   }
 });
 
