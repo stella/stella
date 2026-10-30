@@ -4,6 +4,7 @@ import { eq, sql } from "drizzle-orm";
 import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 
 import type { OutboundActionPreview } from "@stll/api-contract/outbound-action";
+import { waitForExternalState } from "@stll/property-testing/external-state";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -19,8 +20,8 @@ import {
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
 import {
-  NO_DB,
   createTestHandlerContext,
+  NO_DB,
 } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -47,18 +48,17 @@ const observeBlocking = async (
   tx: Pick<PgAsyncDatabase<PgQueryResultHKT>, "select">,
   pid: number,
 ) => {
-  for (let attempt = 0; attempt < 200; attempt += 1) {
-    const rows = await tx
-      .select({
-        blocked: sql<boolean>`pg_backend_pid() = ANY(pg_blocking_pids(${pid}))`,
-      })
-      .from(sql`(SELECT 1) AS lock_observation`);
-    if (rows.at(0)?.blocked) {
-      return;
-    }
-    await Bun.sleep(10);
-  }
-  panic("The second confirm did not reach the claimed row");
+  await waitForExternalState({
+    description: "the second confirm waits on the claimed row",
+    read: async () =>
+      (
+        await tx
+          .select({
+            blocked: sql<boolean>`pg_backend_pid() = ANY(pg_blocking_pids(${pid}))`,
+          })
+          .from(sql`(SELECT 1) AS lock_observation`)
+      ).at(0)?.blocked === true,
+  });
 };
 
 if (!databaseUrl || !runPostgres) {
