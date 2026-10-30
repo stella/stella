@@ -16,6 +16,7 @@
 import { panic, Result } from "better-result";
 import { eq, inArray } from "drizzle-orm";
 
+import type { ExtractionWarnings } from "@stll/api-contract/case-law-extraction-warnings";
 import type { DecisionTextWithheldReason } from "@stll/api-contract/case-law-text-field";
 import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
@@ -81,6 +82,7 @@ export type CitationWithPassage = Omit<
   "citationText" | "evidenceQuote"
 > & {
   citationText: string | null;
+  extractionWarnings: ExtractionWarnings;
   textWithheldReason: DecisionTextWithheldReason | null;
   /**
    * The citing block, or null where there is none to give: the source bars
@@ -127,6 +129,7 @@ type PassageSourcePointer = {
   astS3Key: string | null;
   contentHash: string | null;
   versionTimestamp: string;
+  extractionWarnings: ExtractionWarnings;
   textWithheldReason: DecisionTextWithheldReason | null;
 };
 
@@ -139,6 +142,7 @@ const readPassageSourcePointers = async (
   }
   const rows = await tx
     .select({
+      extractionWarnings: publishedCaseLawDecisions.extractionWarnings,
       id: publishedCaseLawDecisions.id,
       astS3Key: publishedCaseLawDecisions.astS3Key,
       contentHash: publishedCaseLawDecisions.contentHash,
@@ -266,6 +270,7 @@ type DecisionTextRead =
   | typeof UNAVAILABLE_DECISION_TEXT
   | {
       type: "source";
+      extractionWarnings: ExtractionWarnings;
       textWithheldReason: DecisionTextWithheldReason | null;
       text: DecisionText | null;
     };
@@ -378,19 +383,29 @@ const readDecisionTextGroup = async ({
       }
       return read.value === null
         ? null
-        : { status: "found" as const, ...read.value };
+        : {
+            status: "found" as const,
+            ...read.value,
+            extractionWarnings: pointer.extractionWarnings,
+          };
     }),
   );
   const textByDecision = new Map<string, DecisionTextRead>(
-    pointers.map(({ id, textWithheldReason }) => [
+    pointers.map(({ id, textWithheldReason, extractionWarnings }) => [
       String(id),
-      { type: "source" as const, textWithheldReason, text: null },
+      {
+        type: "source" as const,
+        textWithheldReason,
+        extractionWarnings,
+        text: null,
+      },
     ]),
   );
   for (const entry of entries) {
     if (entry?.status === "found") {
       textByDecision.set(entry.id, {
         type: "source",
+        extractionWarnings: entry.extractionWarnings,
         textWithheldReason: null,
         text: entry.text,
       });
@@ -568,6 +583,7 @@ export const readGatedDecisionCitations = defineWindowedRead(
           case "unavailable":
             return {
               ...citation,
+              extractionWarnings: [],
               citationText: null,
               textWithheldReason: null,
               passage: null,
@@ -576,6 +592,7 @@ export const readGatedDecisionCitations = defineWindowedRead(
             const { text, textWithheldReason } = disposition;
             return {
               ...citation,
+              extractionWarnings: disposition.extractionWarnings,
               citationText:
                 textWithheldReason === null ? item.citationText : null,
               textWithheldReason,
