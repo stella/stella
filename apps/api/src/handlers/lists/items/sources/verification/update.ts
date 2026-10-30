@@ -4,6 +4,7 @@ import * as v from "valibot";
 
 import {
   LEGAL_LIST_SOURCE_VERIFICATION_STATUSES,
+  legalListItemSourceDecisions,
   legalListItemSources,
 } from "@/api/db/schema";
 import { legalListRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
@@ -14,6 +15,12 @@ import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { LIST_VERIFICATION_ITEM_OPERATION } from "@/api/lib/lists/item-operations";
+import { LIST_ITEM_SOURCE_REVIEW_DECISION } from "@/api/lib/lists/review-decision-maps";
+import {
+  previousSourceDecision,
+  sourceDecisionRows,
+  sourceHasDecisionHistory,
+} from "@/api/lib/lists/source-decision-history";
 import { includes } from "@/api/lib/type-guards";
 
 const bodySchema = v.object({
@@ -56,13 +63,17 @@ const verifyItemSource = createSafeHandler(
     }
     const result = yield* Result.await(
       safeDb(async (tx) => {
-        const updated = await tx
+        const now = new Date();
+        // The update holds the source's row lock to commit, so the decision
+        // history read and written below follows the order in which the
+        // source changed; `old` is the row as that lock found it.
+        const [previous] = await tx
           .update(legalListItemSources)
           .set({
             verificationStatus,
             verifiedBy: verificationStatus === "unverified" ? null : user.id,
-            verifiedAt: verificationStatus === "unverified" ? null : new Date(),
-            updatedAt: new Date(),
+            verifiedAt: verificationStatus === "unverified" ? null : now,
+            updatedAt: now,
           })
           .where(
             and(
@@ -72,10 +83,26 @@ const verifyItemSource = createSafeHandler(
               eq(legalListItemSources.itemEntityId, body.itemEntityId),
             ),
           )
-          .returning({ id: legalListItemSources.id });
-        if (!updated.at(0)) {
+          .returning(previousSourceDecision);
+        if (!previous) {
           return false;
         }
+        // Every set restamps who and when above, a restatement included, so
+        // every set also joins the history: its newest event and the row
+        // agree on who decided.
+        await tx
+          .insert(legalListItemSourceDecisions)
+          .values(
+            sourceDecisionRows({
+              workspaceId,
+              sourceId: body.id,
+              previous,
+              decision: LIST_ITEM_SOURCE_REVIEW_DECISION[verificationStatus],
+              actorId: user.id,
+              hasHistory: await sourceHasDecisionHistory(tx, body.id),
+            }),
+          )
+          .onConflictDoNothing({ target: legalListItemSourceDecisions.id });
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.UPDATE,
           resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_ITEM,

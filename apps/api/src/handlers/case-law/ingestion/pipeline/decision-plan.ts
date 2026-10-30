@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import type { InferOk } from "better-result";
 import { eq } from "drizzle-orm";
 
+import type { ExtractionWarnings } from "@stll/api-contract/case-law-extraction-warnings";
 import { readsUsReporterCitations } from "@stll/api-contract/us-reporter-citation";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
@@ -69,7 +70,10 @@ import {
 import { corpusTombstoneReaderForTx } from "@/api/lib/legal-search/corpus-tombstones";
 import { decisionLanguageGroupKey } from "@/api/lib/legal-search/decision-language-identity";
 import { parsePrimaryReferenceType } from "@/api/lib/legal-search/decision-primary-reference";
-import { markupResidueIn } from "@/api/lib/legal-search/parsers/markup-residue";
+import {
+  markupResidueIn,
+  markupResidueWarnings,
+} from "@/api/lib/legal-search/parsers/markup-residue";
 import {
   TEXT_ENCODING_INCOMPLETE,
   TEXT_MISDECODED,
@@ -83,8 +87,8 @@ import { logger } from "@/api/lib/observability/logger";
 import type { S3CredentialRefreshOptions } from "@/api/lib/s3/credential-guard";
 import { sortDeep } from "@/api/lib/sort-deep";
 
-type PendingMirrorPayload = Awaited<
-  ReturnType<typeof loadPendingMirrorPayload>
+type PendingMirrorPayload = InferOk<
+  Awaited<ReturnType<typeof loadPendingMirrorPayload>>
 >;
 
 const storedScopeRow = async (
@@ -191,7 +195,11 @@ const verifyStoredCitationScopes = async ({
 };
 
 type ReportStoredDocumentQualityOptions = {
-  result: IngestionResult;
+  result: Pick<
+    IngestionResult,
+    "caseNumber" | "language" | "sourceUrl" | "documentUrl"
+  >;
+  payload: Pick<CorpusWritePayload, "text" | "ast">;
   sourceId: SafeId<"caseLawSource">;
   preserveStoredDocument: boolean;
   pendingMirrorPayload: PendingMirrorPayload | null;
@@ -213,27 +221,32 @@ type ReportStoredDocumentQualityOptions = {
  */
 const reportStoredDocumentQuality = ({
   result,
+  payload: { text: fulltext, ast: documentAst },
   sourceId,
   preserveStoredDocument,
   pendingMirrorPayload,
-}: ReportStoredDocumentQualityOptions): void => {
-  const astBlocks = hasUsableAst(result.documentAst)
-    ? result.documentAst.blocks.length
-    : 0;
-  const signal =
-    preserveStoredDocument || pendingMirrorPayload !== null
-      ? undefined
-      : storedDecisionSignal({
-          hasFulltext: Boolean(result.fulltext),
-          astBlocks,
-        });
+}: ReportStoredDocumentQualityOptions): ExtractionWarnings | undefined => {
+  if (preserveStoredDocument || pendingMirrorPayload !== null) {
+    return undefined;
+  }
+  const warnings = markupResidueWarnings(fulltext ?? "");
+  const astBlocks = hasUsableAst(documentAst) ? documentAst.blocks.length : 0;
+  const signal = storedDecisionSignal({
+    hasFulltext: Boolean(fulltext),
+    astBlocks,
+  });
   if (signal) {
+    warnings.push({
+      rule: fulltext ? "ast-missing" : "document-empty",
+      count: 1,
+      firstOffsets: [],
+    });
     const subject = {
       sourceId,
       caseNumber: result.caseNumber,
       language: result.language,
       url: result.sourceUrl ?? result.documentUrl ?? "",
-      fulltextLength: result.fulltext?.length ?? 0,
+      fulltextLength: fulltext?.length ?? 0,
     };
     if (signal.level === "error") {
       logger.error(signal.event, subject);
@@ -248,12 +261,7 @@ const reportStoredDocumentQuality = ({
   // as the document. Skipped where a stored document is being preserved,
   // which stores no text of its own.
   const storedResidue =
-    preserveStoredDocument ||
-    pendingMirrorPayload !== null ||
-    astBlocks > 0 ||
-    !result.fulltext
-      ? undefined
-      : markupResidueIn(result.fulltext);
+    astBlocks > 0 || !fulltext ? undefined : markupResidueIn(fulltext);
   if (storedResidue) {
     logger.error(AST_MARKUP_RESIDUE, {
       sourceId,
@@ -269,16 +277,18 @@ const reportStoredDocumentQuality = ({
   // Text read through the wrong character set, by the adapter or upstream.
   // Checked on every stored text, parsed or not: the parser sees the text
   // after decoding and cannot tell either.
-  const encoding =
-    preserveStoredDocument || pendingMirrorPayload !== null || !result.fulltext
-      ? undefined
-      : textEncodingReport(result.fulltext, result.language);
+  const encoding = !fulltext
+    ? undefined
+    : textEncodingReport(fulltext, result.language);
   const subject = {
     sourceId,
     caseNumber: result.caseNumber,
     language: result.language,
     url: result.sourceUrl ?? result.documentUrl ?? "",
   };
+  if (encoding) {
+    warnings.push(...encoding.warnings);
+  }
   switch (encoding?.type) {
     case undefined:
       break;
@@ -292,6 +302,7 @@ const reportStoredDocumentQuality = ({
       encoding satisfies never;
       panic("Unhandled text encoding report");
   }
+  return warnings;
 };
 
 type ReportCitationRecallOptions = {
@@ -370,18 +381,18 @@ const planCorpusPayload = ({
   // Corpus objects and every publisher alias now share the UUID reserved by
   // identity resolution before any external write.
 
-  const corpusPayload: CorpusWritePayload =
+  const payload =
     pendingMirrorPayload === null
-      ? {
-          documentId: decisionId,
-          jurisdiction: result.country,
-          ...caseLawCanonicalPayload(result),
-        }
-      : {
-          documentId: decisionId,
-          jurisdiction: result.country,
-          ...pendingMirrorPayload,
-        };
+      ? caseLawCanonicalPayload(result)
+      : Result.ok(pendingMirrorPayload);
+  if (payload.isErr()) {
+    return payload;
+  }
+  const corpusPayload: CorpusWritePayload = {
+    documentId: decisionId,
+    jurisdiction: result.country,
+    ...payload.value,
+  };
   const mirrorCarriesDocument = payloadCarriesDocument(corpusPayload);
 
   // A payload with no document has nothing to put in the corpus: its
@@ -479,13 +490,13 @@ const planCorpusPayload = ({
     }
   })();
 
-  return {
+  return Result.ok({
     corpusPayload,
     corpusPlan,
     mirrorCarriesDocument,
     payloadColumns,
     storedPayloadUnchanged,
-  };
+  });
 };
 
 type PlanDecisionWriteOptions = {
@@ -500,6 +511,54 @@ type PlanDecisionWriteOptions = {
   corpus: CaseLawCorpusDependencies;
   incomingCarriesDocument: boolean;
   polarityRules: RuleCache | undefined;
+};
+
+const readPreservedPayload = async ({
+  existing,
+  incomingCarriesDocument,
+  scopedDb,
+}: Pick<
+  PlanDecisionWriteOptions,
+  "existing" | "incomingCarriesDocument" | "scopedDb"
+>) => {
+  const preserveStoredDocument =
+    existing !== undefined &&
+    !incomingCarriesDocument &&
+    (await hasStoredDocument(existing.id, scopedDb));
+  const pending =
+    existing?.corpusMirrorStatus === CASE_LAW_CORPUS_MIRROR_STATUS.PENDING &&
+    !incomingCarriesDocument
+      ? await loadPendingMirrorPayload(existing.id, scopedDb)
+      : Result.ok(null);
+  if (pending.isErr()) {
+    return pending;
+  }
+  const pendingMirrorPayload = pending.value;
+
+  return Result.ok({ preserveStoredDocument, pendingMirrorPayload });
+};
+
+/** Replace an untrusted scope envelope with the one attached to the final AST. */
+const preparedCitationMetadata = (
+  {
+    metadata,
+    citationScopes,
+  }: Pick<IngestionResult, "metadata" | "citationScopes">,
+  documentAst: IngestionResult["documentAst"],
+) => {
+  const {
+    [CITATION_SCOPE_METADATA_KEY]: _untrustedScope,
+    ...ordinaryMetadata
+  } = metadata;
+  return citationScopes && hasUsableAst(documentAst)
+    ? {
+        ...ordinaryMetadata,
+        [CITATION_SCOPE_METADATA_KEY]: citationScopeEnvelope(
+          documentAst,
+          citationScopes,
+        ),
+      }
+    : ordinaryMetadata;
 };
 
 /**
@@ -533,15 +592,15 @@ export const planDecisionWrite = async ({
   // carries may replace one: the metadata is updated and the payload,
   // its object-storage pointers and the citations drawn from it are left
   // as they are.
-  const preserveStoredDocument =
-    existing !== undefined &&
-    !incomingCarriesDocument &&
-    (await hasStoredDocument(existing.id, scopedDb));
-  const pendingMirrorPayload =
-    existing?.corpusMirrorStatus === CASE_LAW_CORPUS_MIRROR_STATUS.PENDING &&
-    !incomingCarriesDocument
-      ? await loadPendingMirrorPayload(existing.id, scopedDb)
-      : null;
+  const preserved = await readPreservedPayload({
+    existing,
+    incomingCarriesDocument,
+    scopedDb,
+  });
+  if (preserved.isErr()) {
+    return preserved;
+  }
+  const { preserveStoredDocument, pendingMirrorPayload } = preserved.value;
 
   const reusedCitationScopeEnvelope =
     !incomingCarriesDocument && existing?.metadata
@@ -584,20 +643,7 @@ export const planDecisionWrite = async ({
     return Result.err(extraction.error);
   }
   const finalAst = extraction.value.documentAst ?? result.documentAst;
-  const {
-    [CITATION_SCOPE_METADATA_KEY]: _untrustedScope,
-    ...ordinaryMetadata
-  } = result.metadata;
-  const preparedMetadata =
-    result.citationScopes && hasUsableAst(finalAst)
-      ? {
-          ...ordinaryMetadata,
-          [CITATION_SCOPE_METADATA_KEY]: citationScopeEnvelope(
-            finalAst,
-            result.citationScopes,
-          ),
-        }
-      : ordinaryMetadata;
+  const preparedMetadata = preparedCitationMetadata(result, finalAst);
   const plainMetadata = toPlainTextMetadataObject(
     preparedMetadata,
     metadataUrlSchema,
@@ -610,13 +656,6 @@ export const planDecisionWrite = async ({
     documentAst: finalAst,
     metadata: plainMetadata.value,
   };
-
-  reportStoredDocumentQuality({
-    result,
-    sourceId,
-    preserveStoredDocument,
-    pendingMirrorPayload,
-  });
 
   // The publisher's own statement of the case's procedural history, where
   // it supplies one; classification consults it before any heuristic.
@@ -671,17 +710,29 @@ export const planDecisionWrite = async ({
     );
   }
 
+  const payloadPlan = planCorpusPayload({
+    result: preparedResult,
+    existing,
+    decisionId,
+    corpus,
+    preserveStoredDocument,
+    pendingMirrorPayload,
+  });
+  if (payloadPlan.isErr()) {
+    return payloadPlan;
+  }
   const {
     corpusPayload,
     corpusPlan,
     mirrorCarriesDocument,
     payloadColumns,
     storedPayloadUnchanged,
-  } = planCorpusPayload({
+  } = payloadPlan.value;
+
+  const extractionWarnings = reportStoredDocumentQuality({
     result: preparedResult,
-    existing,
-    decisionId,
-    corpus,
+    payload: corpusPayload,
+    sourceId,
     preserveStoredDocument,
     pendingMirrorPayload,
   });
@@ -724,7 +775,10 @@ export const planDecisionWrite = async ({
     incomingCitationKey,
     languageGroupKey,
     mirrorCarriesDocument,
-    payloadColumns,
+    payloadColumns:
+      extractionWarnings === undefined
+        ? payloadColumns
+        : { ...payloadColumns, extractionWarnings },
     pendingMirrorPayload,
     storedPayloadUnchanged,
   });

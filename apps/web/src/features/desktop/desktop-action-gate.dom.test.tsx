@@ -602,6 +602,10 @@ describe("desktop account update requirement", () => {
       window.location.hash = `desktop-account?${challenge.toString()}`;
       const outcome = await desktopBridge.linkDesktopAccount({
         apiBaseUrl: "https://api.example.test",
+        approval: "explicit",
+        onDesktopOpening: () => {
+          panic("Legacy desktop must not open the app");
+        },
       });
       expect(outcome.isOk()).toBe(true);
       if (outcome.isErr()) {
