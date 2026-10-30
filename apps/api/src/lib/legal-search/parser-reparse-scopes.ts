@@ -301,11 +301,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.EU_ECJ]: {
-    version: 18,
+    version: 19,
     scope: {
       type: "all",
       reason:
-        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
+        "Revalidate publisher head-matter ordering across the complete document AST; retain listed language variants with unusable CELEX values under their captured ECLI-qualified quarantine identity. Reconciliation alone establishes repair candidates from complete listings; these values have no separate feature storage.",
     },
   },
   [ADAPTER_KEYS.UK_FCL]: {
