@@ -30,12 +30,11 @@ const renderUngatedInvoiceControls = () => {
     recipients: null,
     onClose: () => undefined,
   });
-  // @ts-expect-error Delivery controls require feature admission.
   createElement(InvoiceSendsSection, {
     workspaceId: "matter",
     invoiceId: "invoice",
-    canSend: true,
-    onSendAgain: () => undefined,
+    // @ts-expect-error Sending again requires the same owner admission.
+    sendControl: { type: "available", onSendAgain: () => undefined },
   });
 };
 expectTypeOf(renderUngatedInvoiceControls).toBeFunction();

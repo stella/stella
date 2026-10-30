@@ -19,7 +19,6 @@ import { isInvoiceLinkTokenShape } from "@/api/lib/billing/invoice-links";
 import type { InvoicePdfRenderer } from "@/api/lib/billing/invoice-pdf/document";
 import { renderInvoiceWithTypst } from "@/api/lib/billing/invoice-pdf/typst/render-typst";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
-import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { admitInvoiceLinkToken } from "@/api/lib/rate-limit/invoice-link-admission";
 import type { TokenScopedDatabase } from "@/api/lib/root-scoped-db";
@@ -51,16 +50,12 @@ const readFailed = (cause: unknown) =>
     "invoice_link_read_failed",
   );
 
-/** The link opens only while the deployment offers time billing. */
-const timeBillingDeployed = () =>
-  isDeploymentFeatureEnabled("FEATURE_TIME_BILLING");
-
 /** Streams one file of a linked invoice through the API after the link check. */
 export const createDownloadInvoiceLinkFile = ({
   db,
   renderInvoice = renderInvoiceWithTypst,
   buildEInvoice = buildLinkedEInvoice,
-  isAvailable = timeBillingDeployed,
+  isAvailable = () => true,
   admitToken,
 }: {
   db?: TokenScopedDatabase;

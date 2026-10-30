@@ -3,8 +3,9 @@
  * no session: the link's token in the request body is the credential, and
  * the per-address budget bounds how fast anyone can try one. There is no
  * member to enrol, so instead of the time-billing route gates each handler
- * admits the request only while the deployment offers the feature, and
- * answers a disabled deployment like a dead link.
+ * admits the token-derived organization only while the deployment offers the
+ * feature and the organization has its invitation grant. Refusals answer
+ * like a dead link.
  */
 import downloadInvoiceLinkFile from "@/api/handlers/invoice-links/download";
 import viewInvoiceLink from "@/api/handlers/invoice-links/view";

@@ -120,7 +120,6 @@ import {
 import { serveForTest } from "@/api/tests/helpers/test-server";
 import type { TestServer } from "@/api/tests/helpers/test-server";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { withTimeBillingEnrolment } from "@/api/tests/helpers/time-billing-enrolment";
 import {
   getRlsFixture,
   releaseRlsFixture,
@@ -239,6 +238,12 @@ testState.beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
   ids = fixture.ids;
+  testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
+    "invoice-links": [ids.orgA, ids.orgB].map((organizationId) => ({
+      type: "organization",
+      organizationId,
+    })),
+  });
   await testDb
     .update(authUser)
     .set({ emailVerified: true })
@@ -799,7 +804,6 @@ describe("sending an invoice by link", () => {
         const auditEvents: AuditEvent[] = [];
         let admissions = 0;
         let deliveries = 0;
-        let databaseCalls = 0;
         const gated = createSendInvoice({
           isDeliveryConfigured: () => true,
           admitEmail: async () => {
@@ -814,31 +818,19 @@ describe("sending an invoice by link", () => {
           },
         });
         testState.setConfig("FEATURE_INVOICE_LINKS", false);
-        const context = withTimeBillingEnrolment(
-          memberContext({
-            tenant: "A",
-            invoiceId,
-            route: "/v1/invoices/:workspaceId/:invoiceId/sends",
-            body: { recipients: ["disabled@example.test"] },
-            auditEvents,
-          }),
-        );
-        const refuseDatabase = async () => {
-          databaseCalls += 1;
-          return panic("A disabled invoice send reached the database");
-        };
+        const context = memberContext({
+          tenant: "A",
+          invoiceId,
+          route: "/v1/invoices/:workspaceId/:invoiceId/sends",
+          body: { recipients: ["disabled@example.test"] },
+          auditEvents,
+        });
         const result = await gated.handler(
-          asTestRaw<Parameters<typeof gated.handler>[0]>({
-            ...context,
-            safeDb: refuseDatabase,
-            scopedDb: refuseDatabase,
-          }),
+          asTestRaw<Parameters<typeof gated.handler>[0]>(context),
         );
         expect(result).toMatchObject({
-          code: 503,
-          response: { code: "feature_disabled" },
+          code: 404,
         });
-        expect(databaseCalls).toBe(0);
         expect(admissions).toBe(0);
         expect(deliveries).toBe(0);
         expect(auditEvents).toEqual([]);
@@ -855,6 +847,168 @@ describe("sending an invoice by link", () => {
     },
   );
 
+  test.each([
+    { deployed: false, granted: false },
+    { deployed: false, granted: true },
+    { deployed: true, granted: false },
+    { deployed: true, granted: true },
+  ])(
+    "organization invoice link admission covers every entry point: $deployed/$granted",
+    async ({ deployed, granted }) => {
+      const invoiceId = await seedInvoice({
+        status: INVOICE_STATUS.FINALIZED,
+      });
+      const recipient = `grant-matrix-${deployed}-${granted}@example.test`;
+      await send(invoiceId, [recipient]);
+      const existing = { invoiceId, token: tokenSentTo(recipient) };
+      const pending = await seedInvoice({ status: INVOICE_STATUS.FINALIZED });
+      const other = await seedInvoice({
+        status: INVOICE_STATUS.FINALIZED,
+        tenant: "B",
+      });
+      testState.setConfig("FEATURE_INVOICE_LINKS", deployed);
+      testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
+        "invoice-links": granted
+          ? [{ type: "organization", organizationId: ids.orgA }]
+          : [],
+      });
+      await using admissionServer = serveForTest(
+        createHttpApp({
+          routes: linkRoutes({ budget: async (_ctx, next) => await next() }),
+          middleware: [errorBoundary],
+        }),
+      );
+      const enabled = deployed && granted;
+      const sent = await send(pending, ["grant-send@example.test"]);
+      expect(sent).toMatchObject(
+        enabled ? { deliveryStatus: "delivered" } : { code: 404 },
+      );
+      expect(
+        await send(other, ["other-org@example.test"], { tenant: "B" }),
+      ).toMatchObject({ code: 404 });
+      const listed = await listInvoiceSends.handler(
+        asTestRaw<Parameters<typeof listInvoiceSends.handler>[0]>(
+          memberContext({
+            tenant: "A",
+            invoiceId: existing.invoiceId,
+            route: "/v1/invoices/:workspaceId/:invoiceId/sends",
+          }),
+        ),
+      );
+      expect(listed).toMatchObject({
+        items: [expect.objectContaining({ deliveryStatus: "delivered" })],
+      });
+      for (const [path, extra] of [
+        ["view", {}],
+        ["download", { file: "pdf" }],
+        ["download", { file: "e_invoice" }],
+      ] as const) {
+        const response = await post(admissionServer, path, {
+          token: existing.token,
+          ...extra,
+        });
+        if (
+          enabled &&
+          path === "download" &&
+          "file" in extra &&
+          extra.file === "e_invoice"
+        ) {
+          // This fixture has no supported e-invoice profile.
+          expect(response.status).not.toBe(404);
+        } else {
+          expect(response.status).toBe(enabled ? 200 : 404);
+        }
+        if (!enabled) {
+          const unknown = await post(admissionServer, path, {
+            token: createInvoiceLinkToken(),
+            ...extra,
+          });
+          expect(await response.json()).toEqual(await unknown.json());
+          expect(
+            [...response.headers].filter(([key]) => key !== "date"),
+          ).toEqual([...unknown.headers].filter(([key]) => key !== "date"));
+        }
+      }
+      const row =
+        (await sendRows(existing.invoiceId)).at(0) ??
+        panic("Expected existing send");
+      expect(await revoke(existing.invoiceId, row.id)).toHaveProperty(
+        "revokedAt",
+      );
+      const persisted = await sendRows(existing.invoiceId);
+      expect(persisted).toHaveLength(1);
+      expect(persisted.at(0)?.revokedAt).toBeInstanceOf(Date);
+    },
+  );
+
+  test("removing an organization grant after reservation prevents delivery and leaves history", async () => {
+    const invoiceId = await seedInvoice({ status: INVOICE_STATUS.FINALIZED });
+    let deliveries = 0;
+    const queued = createSendInvoice({
+      isDeliveryConfigured: () => true,
+      admitEmail: async () => {
+        testState.setConfig("API_FEATURE_ACCESS_GRANTS", {});
+        return Result.ok({ release: async () => {}, commit: async () => {} });
+      },
+      deliver: async () => {
+        deliveries += 1;
+      },
+    });
+    const result = await queued.handler(
+      asTestRaw<Parameters<typeof queued.handler>[0]>(
+        memberContext({
+          tenant: "A",
+          invoiceId,
+          route: "/v1/invoices/:workspaceId/:invoiceId/sends",
+          body: { recipients: ["removed@example.test"] },
+        }),
+      ),
+    );
+    expect(result).toMatchObject({ code: 502 });
+    expect(deliveries).toBe(0);
+    expect(await sendRows(invoiceId)).toMatchObject([
+      { deliveryStatus: "failed", revokedAt: expect.any(Date) },
+    ]);
+    expect(await invoiceStatus(invoiceId)).toBe(INVOICE_STATUS.FINALIZED);
+  });
+
+  test("revoking while the organization grant is removed stays revoked when the grant returns", async () => {
+    const invoiceId = await seedInvoice({ status: INVOICE_STATUS.FINALIZED });
+    const sent = await send(invoiceId, ["withdrawn-grant@example.test"]);
+    if (!("id" in sent)) {
+      return panic("Expected an invoice link before grant removal");
+    }
+    const token = tokenSentTo("withdrawn-grant@example.test");
+    expect((await post(server, "view", { token })).status).toBe(200);
+    const grants = env.API_FEATURE_ACCESS_GRANTS;
+    testState.setConfig("API_FEATURE_ACCESS_GRANTS", {});
+    expect((await listSendHistory(invoiceId)).items).toMatchObject([
+      { id: sent.id, linkStatus: "active" },
+    ]);
+    expect(await revoke(invoiceId, sent.id)).toMatchObject({ id: sent.id });
+    expect((await sendRows(invoiceId)).at(0)?.revokedAt).toBeInstanceOf(Date);
+    testState.setConfig("API_FEATURE_ACCESS_GRANTS", grants);
+    for (const [path, extra] of [
+      ["view", {}],
+      ["download", { file: "pdf" }],
+    ] as const) {
+      const revoked = await post(server, path, { token, ...extra });
+      const unknown = await post(server, path, {
+        token: createInvoiceLinkToken(),
+        ...extra,
+      });
+      expect(revoked.status).toBe(404);
+      expect(revoked.status).toBe(unknown.status);
+      expect(await revoked.json()).toEqual(await unknown.json());
+      expect(revoked.headers.get("cache-control")).toBe(
+        unknown.headers.get("cache-control"),
+      );
+      expect(revoked.headers.get("referrer-policy")).toBe(
+        unknown.headers.get("referrer-policy"),
+      );
+    }
+  });
+
   test("disabling invoice links preserves authenticated history and revocation", async () => {
     const invoiceId = await seedInvoice({ status: INVOICE_STATUS.FINALIZED });
     const sent = await send(invoiceId, ["disabled-cleanup@example.test"]);
@@ -862,14 +1016,22 @@ describe("sending an invoice by link", () => {
       panic("Expected a delivered invoice link before disabling it");
     }
     testState.setConfig("FEATURE_INVOICE_LINKS", false);
-    expect(await listSendHistory(invoiceId)).toMatchObject({
-      items: [{ id: sent.id }],
-    });
+    expect(
+      await listInvoiceSends.handler(
+        asTestRaw<Parameters<typeof listInvoiceSends.handler>[0]>(
+          memberContext({
+            tenant: "A",
+            invoiceId,
+            route: "/v1/invoices/:workspaceId/:invoiceId/sends",
+          }),
+        ),
+      ),
+    ).toMatchObject({ items: [{ id: sent.id }] });
     expect(await revoke(invoiceId, sent.id)).toMatchObject({ id: sent.id });
     expect((await sendRows(invoiceId)).at(0)?.revokedAt).toBeInstanceOf(Date);
   });
 
-  test("unenrolling keeps existing link history and revocation available while refusing new sends", async () => {
+  test("unenrolling preserves invoice link management while refusing new sends", async () => {
     const invoiceId = await seedInvoice({ status: INVOICE_STATUS.FINALIZED });
     const firstSend = await send(invoiceId, [
       "cleanup-after-unenrolment@example.test",
@@ -1857,7 +2019,7 @@ describe("sending an invoice by link", () => {
     expect(collectedIds.at(-1)).toBe(expected.at(-1)?.id);
   });
 
-  test("an unverified authorized member can list and revoke history but cannot send", async () => {
+  test("an unverified member can list and revoke invoice links but cannot send", async () => {
     const invoiceId = await seedInvoice({ status: INVOICE_STATUS.FINALIZED });
     const sent = await send(invoiceId, ["unverified-reader@example.test"]);
     if (!("id" in sent)) {
@@ -1869,11 +2031,16 @@ describe("sending an invoice by link", () => {
       .set({ emailVerified: false })
       .where(eq(authUser.id, ids.userA1));
     try {
-      const listed = await listSendHistory(invoiceId);
-      expect(listed.replyTo).toBeNull();
-      expect(listed.items).toMatchObject([
-        { id: sent.id, linkStatus: "active" },
-      ]);
+      const listed = await listInvoiceSends.handler(
+        asTestRaw<Parameters<typeof listInvoiceSends.handler>[0]>(
+          memberContext({
+            tenant: "A",
+            invoiceId,
+            route: "/v1/invoices/:workspaceId/:invoiceId/sends",
+          }),
+        ),
+      );
+      expect(listed).toMatchObject({ items: [{ id: sent.id }], replyTo: null });
       expect(await revoke(invoiceId, sent.id)).toMatchObject({ id: sent.id });
       expect((await post(server, "view", { token })).status).toBe(404);
       const transportedBefore = delivered.length;

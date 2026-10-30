@@ -119,6 +119,8 @@ afterAll(async () => {
 const mountInvoice = async (
   role: "external" | "member",
   deploymentEnabled = true,
+  grantEnabled = true,
+  existingSends: InvoiceSends["items"] = [],
 ) => {
   globalThis.fetch = Object.assign(
     async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -129,7 +131,7 @@ const mountInvoice = async (
         return role === "external"
           ? Response.json({ message: "Unavailable" }, { status: 403 })
           : Response.json({
-              items: [],
+              items: existingSends,
               nextCursor: null,
               limit: 50,
               defaultRecipients: [],
@@ -163,7 +165,9 @@ const mountInvoice = async (
         legalLists: false,
         invoiceLinks: deploymentEnabled,
       },
-      capabilities: { "invoice-links": { status: "enabled" } },
+      capabilities: {
+        "invoice-links": { status: grantEnabled ? "enabled" : "hidden" },
+      },
       documentProcessingMode: "off",
       matterNumberPattern: "{year}/{number}",
       matterNumberPadding: 3,
@@ -264,31 +268,61 @@ test("a member with invoice update permission loads send history", async () => {
 });
 
 for (const deploymentEnabled of [false, true]) {
-  test(`invoice email controls follow deployment availability ${deploymentEnabled}`, async () => {
-    const { client, view } = await mountInvoice("member", deploymentEnabled);
-    expect(await view.findByText(invoice.invoiceNumber)).toBeDefined();
-    const send = view.queryByRole("button", {
-      name: messages.billing.invoices.sendByEmail,
-    });
-    expect(send !== null).toBe(deploymentEnabled);
-    expect(
-      view.queryByText(messages.billing.invoices.sending.historyTitle) !== null,
-    ).toBe(deploymentEnabled);
-    if (send !== null) {
-      await act(async () => {
-        fireEvent.click(send);
-      });
-      expect(await view.findByRole("dialog")).toBeDefined();
-      expect(
-        await view.findByText(messages.billing.invoices.sending.recipients),
-      ).toBeDefined();
-    } else {
-      expect(view.queryByRole("dialog")).toBeNull();
-      expect(requests.some((pathname) => pathname.endsWith("/sends"))).toBe(
-        false,
+  for (const grantEnabled of [false, true]) {
+    test(`invoice email controls follow deployment availability ${deploymentEnabled}, grant ${grantEnabled}`, async () => {
+      const { client, view } = await mountInvoice(
+        "member",
+        deploymentEnabled,
+        grantEnabled,
+        [
+          {
+            id: toSafeId<"invoiceSend">("019a0000-0000-7000-8000-000000000004"),
+            recipients: ["billing@example.test"],
+            failedRecipients: [],
+            message: null,
+            replyTo: "member@example.test",
+            language: "en",
+            deliveryStatus: "delivered",
+            linkStatus: "active",
+            sentBy: null,
+            createdAt: "2026-10-30T10:00:00Z",
+            expiresAt: "2026-11-30T10:00:00Z",
+            revokedAt: null,
+            firstViewedAt: null,
+          },
+        ],
       );
-    }
-    view.unmount();
-    client.clear();
-  });
+      expect(await view.findByText(invoice.invoiceNumber)).toBeDefined();
+      const send = view.queryByRole("button", {
+        name: messages.billing.invoices.sendByEmail,
+      });
+      expect(send !== null).toBe(deploymentEnabled && grantEnabled);
+      expect(
+        await view.findByText(messages.billing.invoices.sending.historyTitle),
+      ).toBeDefined();
+      expect(
+        await view.findByRole("button", {
+          name: messages.billing.invoices.sending.revoke,
+        }),
+      ).toBeDefined();
+      expect(
+        view.queryByRole("button", {
+          name: messages.billing.invoices.sending.sendAgain,
+        }) !== null,
+      ).toBe(deploymentEnabled && grantEnabled);
+      if (send !== null) {
+        await act(async () => {
+          fireEvent.click(send);
+        });
+        expect(await view.findByRole("dialog")).toBeDefined();
+        expect(
+          await view.findByText(messages.billing.invoices.sending.recipients),
+        ).toBeDefined();
+      } else {
+        expect(view.queryByRole("dialog")).toBeNull();
+      }
+      view.unmount();
+      client.clear();
+    });
+  }
 }

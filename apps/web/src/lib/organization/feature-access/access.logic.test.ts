@@ -276,8 +276,36 @@ test("deployment refusal precedes declared invoice link admission", () => {
         deploymentFeatures: { legalLists: false, invoiceLinks: enabled },
       };
       expect(callerFeatureEnabled(state, CALLER_FEATURE.invoiceLinks)).toBe(
-        enabled,
+        enabled && declared,
       );
     }
   }
+});
+
+test("invoice send controls stay hidden unless settings declares an enabled invoice-links decision", () => {
+  const feature = CALLER_FEATURE.invoiceLinks;
+  expect(
+    callerFeatureEnabled(
+      {
+        ...availability({ "invoice-links": { status: "enabled" } }),
+        declaredFeatureIds: ["time-billing"],
+      },
+      feature,
+    ),
+  ).toBe(false);
+  expect(
+    callerFeatureEnabled(
+      availability({
+        "time-billing": { status: "enabled" },
+        "invoice-links": { status: "hidden" },
+      }),
+      feature,
+    ),
+  ).toBe(false);
+  expect(
+    callerFeatureEnabled(
+      availability({ "invoice-links": { status: "enabled" } }),
+      feature,
+    ),
+  ).toBe(true);
 });

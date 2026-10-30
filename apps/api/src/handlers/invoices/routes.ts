@@ -40,7 +40,6 @@ const gatedInvoicesRoute = routes(
       DELETE: deleteInvoiceLine,
     },
     "/:invoiceId/pdf": { POST: exportInvoicePdf },
-    "/:invoiceId/sends": { POST: sendInvoice },
     "/:invoiceId/payments": {
       GET: listInvoicePayments,
       POST: recordInvoicePayment,
@@ -56,16 +55,31 @@ const gatedInvoicesRoute = routes(
   },
 );
 
-/** Historical link authority remains manageable after billing access is removed. */
-export const invoiceSendCleanupRoute = routes(
+/** Sending requires the organization invitation and caller enrolment. */
+export const invoiceSendsRoute = routes(
+  {
+    "/:invoiceId/sends": { POST: sendInvoice },
+  },
+  {
+    prefix: "/invoices/:workspaceId",
+    middleware: [featureAccessGate("invoice-links")],
+  },
+);
+
+/** Existing authority remains manageable without an invitation or personal enrolment. */
+export const invoiceSendManagementRoute = routes(
   {
     "/:invoiceId/sends": { GET: listInvoiceSends },
     "/:invoiceId/sends/:sendId/revoke": { POST: revokeInvoiceSend },
   },
-  { prefix: "/invoices/:workspaceId" },
+  {
+    prefix: "/invoices/:workspaceId",
+    middleware: [deploymentFeatureGate("FEATURE_TIME_BILLING")],
+  },
 );
 
 export const invoicesRoute = mount([
   gatedInvoicesRoute,
-  invoiceSendCleanupRoute,
+  invoiceSendsRoute,
+  invoiceSendManagementRoute,
 ]);

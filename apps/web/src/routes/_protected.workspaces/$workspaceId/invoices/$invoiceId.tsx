@@ -46,7 +46,10 @@ import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { CallerFeatureGate } from "@/lib/organization/feature-access/access";
+import {
+  CallerFeatureGate,
+  useCallerFeatureAdmission,
+} from "@/lib/organization/feature-access/access";
 import type { FeatureAdmission } from "@/lib/organization/feature-access/access";
 import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
 import { ensureRouteQueryData } from "@/lib/react-query";
@@ -701,46 +704,15 @@ const InvoiceDetail = ({
         </>
       )}
 
-      <CallerFeatureGate feature={CALLER_FEATURE.invoiceLinks}>
-        {(admission) => (
-          <>
-            {canUpdateInvoice && invoiceStatus !== "draft" && (
-              <InvoiceSendsSection
-                admission={admission}
-                canSend={invoiceStatus !== "void"}
-                invoiceId={invoiceId}
-                onSendAgain={(recipients) =>
-                  setSendDialog({ type: "open", recipients })
-                }
-                workspaceId={workspaceId}
-              />
-            )}
-
-            <Dialog
-              onOpenChange={(open) => {
-                if (!open) {
-                  setSendDialog({ type: "closed" });
-                }
-              }}
-              open={sendDialog.type === "open"}
-            >
-              <DialogPopup className="max-w-md">
-                {sendDialog.type === "open" &&
-                invoice.invoiceNumber !== null ? (
-                  <SendInvoiceForm
-                    admission={admission}
-                    invoiceId={invoiceId}
-                    invoiceNumber={invoice.invoiceNumber}
-                    onClose={() => setSendDialog({ type: "closed" })}
-                    recipients={sendDialog.recipients}
-                    workspaceId={workspaceId}
-                  />
-                ) : null}
-              </DialogPopup>
-            </Dialog>
-          </>
-        )}
-      </CallerFeatureGate>
+      <InvoiceLinkControls
+        canUpdateInvoice={canUpdateInvoice}
+        invoiceId={invoiceId}
+        invoiceNumber={invoice.invoiceNumber}
+        invoiceStatus={invoiceStatus}
+        sendDialog={sendDialog}
+        setSendDialog={setSendDialog}
+        workspaceId={workspaceId}
+      />
 
       {/* Edit dialog */}
       <Dialog onOpenChange={setEditOpen} open={editOpen}>
@@ -764,6 +736,75 @@ const InvoiceDetail = ({
 
 type SendDialogState =
   { type: "closed" } | { type: "open"; recipients: readonly string[] | null };
+
+type InvoiceLinkControlsProps = {
+  canUpdateInvoice: boolean;
+  invoiceId: string;
+  invoiceNumber: string | null;
+  invoiceStatus: InvoiceStatus;
+  sendDialog: SendDialogState;
+  setSendDialog: (state: SendDialogState) => void;
+  workspaceId: string;
+};
+
+function InvoiceLinkControls({
+  canUpdateInvoice,
+  invoiceId,
+  invoiceNumber,
+  invoiceStatus,
+  sendDialog,
+  setSendDialog,
+  workspaceId,
+}: InvoiceLinkControlsProps) {
+  const admission = useCallerFeatureAdmission(CALLER_FEATURE.invoiceLinks);
+  if (!canUpdateInvoice) {
+    return null;
+  }
+  return (
+    <>
+      {invoiceStatus !== "draft" && (
+        <InvoiceSendsSection
+          sendControl={
+            admission !== undefined && invoiceStatus !== "void"
+              ? {
+                  type: "available",
+                  admission,
+                  onSendAgain: (recipients) =>
+                    setSendDialog({ type: "open", recipients }),
+                }
+              : { type: "hidden" }
+          }
+          invoiceId={invoiceId}
+          workspaceId={workspaceId}
+        />
+      )}
+
+      <Dialog
+        onOpenChange={(open) => {
+          if (!open) {
+            setSendDialog({ type: "closed" });
+          }
+        }}
+        open={admission !== undefined && sendDialog.type === "open"}
+      >
+        <DialogPopup className="max-w-md">
+          {admission !== undefined &&
+          sendDialog.type === "open" &&
+          invoiceNumber !== null ? (
+            <SendInvoiceForm
+              admission={admission}
+              invoiceId={invoiceId}
+              invoiceNumber={invoiceNumber}
+              onClose={() => setSendDialog({ type: "closed" })}
+              recipients={sendDialog.recipients}
+              workspaceId={workspaceId}
+            />
+          ) : null}
+        </DialogPopup>
+      </Dialog>
+    </>
+  );
+}
 
 const InfoCell = ({ label, value }: { label: string; value: string }) => (
   <div>

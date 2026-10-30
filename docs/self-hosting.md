@@ -53,6 +53,20 @@ Unknown feature IDs are dropped at startup and emit the count-only ERROR event
 `feature_access.unknown_grant`. Invalid JSON or malformed grant shapes remain
 fatal configuration errors.
 
+Organization invitation grants use the same parameter as `activity-timeline`:
+
+```json
+{ "invoice-links": [{ "type": "organization", "organizationId": "org-id" }] }
+```
+
+Invoice links require this organization grant and `FEATURE_INVOICE_LINKS=true`.
+`FEATURE_TIME_BILLING` must also be enabled, and sending requires the caller's time-billing enrolment.
+History and revocation require normal invoice access and time-billing availability,
+without an invoice-links grant or personal enrolment. Member grants for invoice-links
+are rejected as invalid configuration. Removing the organization grant prevents delivery and makes existing links
+unavailable without deleting data. Public recipients need no account. Grant
+changes take effect when the configured parameter refresh is applied.
+
 The optional layout preview for generated views is available only in stella's
 cloud; on a self-hosted instance the assistant is told the preview is
 unavailable and the view is still published.

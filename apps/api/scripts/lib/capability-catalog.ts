@@ -33,14 +33,14 @@ import type { RouteGate } from "../../src/lib/route-gates";
 import type { HandlerKind } from "../../src/lib/safe-handler-factories";
 import { isRecord } from "../../src/lib/type-guards";
 
-type ReviewedInvoiceCleanupOptions<TEndpoint> = {
+type ReviewedInvoiceManagementOptions<TEndpoint> = {
   routes: readonly RouteEntry[];
   endpoints: readonly TEndpoint[];
   classify: (middleware: Middleware) => RouteGate;
 };
 
-/** Join the reviewed cleanup group to discovery; endpoint filenames are never a second allowlist. */
-export const reviewedInvoiceCleanupEndpoints = <
+/** Join the reviewed management group to discovery; endpoint filenames are never a second allowlist. */
+export const reviewedInvoiceManagementEndpoints = <
   TEndpoint extends {
     file: string;
     definition: object;
@@ -50,7 +50,7 @@ export const reviewedInvoiceCleanupEndpoints = <
   routes,
   endpoints,
   classify,
-}: ReviewedInvoiceCleanupOptions<TEndpoint>): TEndpoint[] =>
+}: ReviewedInvoiceManagementOptions<TEndpoint>): TEndpoint[] =>
   routes.map(({ definition, middleware }) => {
     const permissions = definition.config["permissions"];
     if (
@@ -61,10 +61,26 @@ export const reviewedInvoiceCleanupEndpoints = <
       !Array.isArray(permissions["invoice"]) ||
       permissions["invoice"].length !== 1 ||
       permissions["invoice"].at(0) !== "update" ||
-      middleware.some((stage) => classify(stage).kind !== "budget")
+      !middleware.some((stage) => {
+        const gate = classify(stage);
+        return (
+          gate.kind === "deployment-feature" &&
+          gate.flag === "FEATURE_TIME_BILLING"
+        );
+      }) ||
+      middleware.some((stage) => {
+        const gate = classify(stage);
+        return (
+          gate.kind !== "budget" &&
+          !(
+            gate.kind === "deployment-feature" &&
+            gate.flag === "FEATURE_TIME_BILLING"
+          )
+        );
+      })
     ) {
       return panic(
-        "Invoice cleanup requires invoice:update and no feature gates",
+        "Invoice management requires invoice:update and only time-billing deployment availability",
       );
     }
     const matching = endpoints.filter(
@@ -77,7 +93,7 @@ export const reviewedInvoiceCleanupEndpoints = <
       endpoint.config !== definition.config
     ) {
       return panic(
-        "Every reviewed invoice cleanup route must identify exactly one discovered handler",
+        "Every reviewed invoice management route must identify exactly one discovered handler",
       );
     }
     return endpoint;

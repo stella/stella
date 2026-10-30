@@ -88,10 +88,18 @@ type CallerFeatureGateProps<Feature extends CallerFeature> = {
   children: (admission: FeatureAdmission<Feature["id"]>) => ReactNode;
 };
 
+/** Admission refreshes with the caller decision; controls must not retain it in state. */
+export const useCallerFeatureAdmission = <Feature extends CallerFeature>(
+  feature: Feature,
+): FeatureAdmission<Feature["id"]> | undefined => {
+  const enabled = useCallerFeatureEnabled(feature);
+  return enabled ? { [FEATURE_ADMISSION]: feature.id } : undefined;
+};
+
 export const CallerFeatureGate = <Feature extends CallerFeature>({
   feature,
   children,
 }: CallerFeatureGateProps<Feature>) => {
-  const enabled = useCallerFeatureEnabled(feature);
-  return enabled ? children({ [FEATURE_ADMISSION]: feature.id }) : null;
+  const admission = useCallerFeatureAdmission(feature);
+  return admission === undefined ? null : children(admission);
 };

@@ -33,7 +33,7 @@ import {
   createTestHandlerContext,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
-import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
+import { invoiceLinksSnapshot } from "@/api/tests/helpers/invoice-links-feature-access";
 
 const SENDS_PER_INVOICE = 3;
 // Exercise the real handler operation and SQL; only the email provider is replaced.
@@ -100,7 +100,7 @@ export const seedInvoiceSendScaling = async (db: GatedTestDb, size: number) => {
       totalAmount: cents(1000),
     })),
   );
-  const featureAccessSnapshot = enrolledTimeBillingSnapshot({
+  const featureAccessSnapshot = invoiceLinksSnapshot({
     organizationId,
     userId,
   });

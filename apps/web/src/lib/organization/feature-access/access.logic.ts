@@ -28,8 +28,6 @@ const admittedByServer = (
     return availability.capabilities[feature.id]?.status === "enabled";
   }
   switch (feature.undeclared.type) {
-    case "deployment":
-      return true;
     case "hidden":
       return false;
     // Delete this undeclared policy when the server declares legal-lists.

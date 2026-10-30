@@ -282,20 +282,25 @@ const SendInvoiceFields = ({
   );
 };
 
+// History and revocation remain available; only a new send needs admission.
+type InvoiceSendControl =
+  | { type: "hidden" }
+  | {
+      type: "available";
+      admission: FeatureAdmission<"invoice-links">;
+      onSendAgain: (recipients: readonly string[]) => void;
+    };
+
 type InvoiceSendsSectionProps = InvoiceRef & {
-  canSend: boolean;
-  onSendAgain: (recipients: readonly string[]) => void;
+  sendControl: InvoiceSendControl;
 };
 
 /** The invoice's delivery history: each send, its link, and its controls. */
 export const InvoiceSendsSection = ({
   workspaceId,
   invoiceId,
-  canSend,
-  onSendAgain,
-}: InvoiceSendsSectionProps & {
-  admission: FeatureAdmission<"invoice-links">;
-}) => {
+  sendControl,
+}: InvoiceSendsSectionProps) => {
   const t = useTranslations("billing.invoices.sending");
   const rootT = useTranslations();
   const userId = useAuthenticatedUser().id;
@@ -312,9 +317,8 @@ export const InvoiceSendsSection = ({
         <h3 className="text-sm font-medium">{t("historyTitle")}</h3>
       </div>
       <InvoiceSendsBody
-        canSend={canSend}
+        sendControl={sendControl}
         invoiceId={invoiceId}
-        onSendAgain={onSendAgain}
         view={view}
         workspaceId={workspaceId}
       />
@@ -378,8 +382,7 @@ const InvoiceSendRow = ({
   send,
   workspaceId,
   invoiceId,
-  canSend,
-  onSendAgain,
+  sendControl,
 }: InvoiceSendsSectionProps & { send: InvoiceSend }) => {
   const t = useTranslations("billing.invoices.sending");
   const rootT = useTranslations();
@@ -448,53 +451,53 @@ const InvoiceSendRow = ({
           </p>
         ) : null}
       </div>
-      {canSend ? (
-        <div className="flex shrink-0 items-center gap-2">
-          {send.linkStatus === "active" ? (
-            <AlertDialog>
-              <AlertDialogTrigger
-                nativeButton
-                render={
-                  <Button loading={revoke.isPending} size="sm" variant="ghost">
-                    {t("revoke")}
-                  </Button>
-                }
-              />
-              <AlertDialogPopup>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>{t("revokeTitle")}</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    {t("revokeConfirm")}
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogClose render={<Button variant="ghost" />}>
-                    {rootT("common.cancel")}
-                  </AlertDialogClose>
-                  <AlertDialogClose
-                    render={
-                      <Button
-                        onClick={() => revoke.mutate()}
-                        variant="destructive"
-                      />
-                    }
-                  >
-                    {t("revoke")}
-                  </AlertDialogClose>
-                </AlertDialogFooter>
-              </AlertDialogPopup>
-            </AlertDialog>
-          ) : null}
+      <div className="flex shrink-0 items-center gap-2">
+        {send.linkStatus === "active" ? (
+          <AlertDialog>
+            <AlertDialogTrigger
+              nativeButton
+              render={
+                <Button loading={revoke.isPending} size="sm" variant="ghost">
+                  {t("revoke")}
+                </Button>
+              }
+            />
+            <AlertDialogPopup>
+              <AlertDialogHeader>
+                <AlertDialogTitle>{t("revokeTitle")}</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {t("revokeConfirm")}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogClose render={<Button variant="ghost" />}>
+                  {rootT("common.cancel")}
+                </AlertDialogClose>
+                <AlertDialogClose
+                  render={
+                    <Button
+                      onClick={() => revoke.mutate()}
+                      variant="destructive"
+                    />
+                  }
+                >
+                  {t("revoke")}
+                </AlertDialogClose>
+              </AlertDialogFooter>
+            </AlertDialogPopup>
+          </AlertDialog>
+        ) : null}
+        {sendControl.type === "available" ? (
           <Button
-            onClick={() => onSendAgain(send.recipients)}
+            onClick={() => sendControl.onSendAgain(send.recipients)}
             size="sm"
             variant="outline"
           >
             <SendIcon className="size-3.5" />
             {t("sendAgain")}
           </Button>
-        </div>
-      ) : null}
+        ) : null}
+      </div>
     </li>
   );
 };

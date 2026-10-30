@@ -40,11 +40,12 @@ import {
   createTestHandlerContext,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
-import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
+import { invoiceLinksSnapshot } from "@/api/tests/helpers/invoice-links-feature-access";
 
 const testState = createTestState({ file: import.meta.path, config: env });
 testState.beforeAll(() => {
   testState.setConfig("FEATURE_INVOICE_LINKS", true);
+  testState.setConfig("FEATURE_TIME_BILLING", true);
 });
 
 const transportGate = () => ({
@@ -71,6 +72,9 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
           const { db } = openClient({ max: 1 });
           const blocker = openClient({ max: 1 }).db;
           const organizationId = mintAuthProviderId<"organization">();
+          testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
+            "invoice-links": [{ type: "organization", organizationId }],
+          });
           const userId = mintAuthProviderId<"user">();
           const workspaceId = createSafeId<"workspace">();
           const invoiceId = createSafeId<"invoice">();
@@ -96,7 +100,7 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
           const request = new Request("https://example.test/v1/invoices/send", {
             method: "POST",
           });
-          const featureAccessSnapshot = enrolledTimeBillingSnapshot({
+          const featureAccessSnapshot = invoiceLinksSnapshot({
             organizationId,
             userId,
           });

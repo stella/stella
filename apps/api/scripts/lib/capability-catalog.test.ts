@@ -32,7 +32,7 @@ import {
   resolveHandlerKind,
   resolveScope,
   returnsInlineFileResponse,
-  reviewedInvoiceCleanupEndpoints,
+  reviewedInvoiceManagementEndpoints,
   scanBinarySchemaFields,
   scanContextFidelity,
   scanFileResponseReturns,
@@ -43,114 +43,59 @@ import {
   writePrimitivesImportedBy,
 } from "./capability-catalog";
 
-const cleanupFixture = (config: Record<string, unknown> = {}) => {
-  const definition = {
-    config: { permissions: { invoice: ["update"] }, ...config },
-    access: "workspace",
-    run: async () => ({}),
-  } satisfies RouteDefinition;
-  const route = {
-    definition,
-    method: "GET",
-    path: "/invoices/:workspaceId/:invoiceId/sends",
-    middleware: [],
-  } as const satisfies RouteEntry;
-  const endpoint = {
-    file: "apps/api/src/handlers/invoices/sends/list.ts",
-    definition,
-    config: definition.config,
-  };
-  return { route, endpoint };
-};
-
-describe("reviewed invoice cleanup discovery", () => {
-  test("derives exactly the exported group's handlers by definition identity", () => {
-    const fixture = cleanupFixture();
-    const neighbor = cleanupFixture();
-    expect(
-      reviewedInvoiceCleanupEndpoints({
-        routes: [fixture.route],
-        endpoints: [
-          fixture.endpoint,
-          {
-            ...neighbor.endpoint,
-            file: "apps/api/src/handlers/invoices/sends/revoke.ts",
-          },
-        ],
-        classify: () => ({ kind: "other" }),
-      }).map(({ file }) => file),
-    ).toEqual(["apps/api/src/handlers/invoices/sends/list.ts"]);
-  });
-
-  test.each([
-    { permissions: { workspace: ["read"] } },
-    { permissions: { invoice: ["read"] } },
-    { permissions: { invoice: ["update", "delete"] } },
-    { permissions: { invoice: ["update"], workspace: ["read"] } },
-    { featureAccess: { featureId: "time-billing", type: "required" } },
-  ])("rejects a cleanup contract with %j", (config) => {
-    const fixture = cleanupFixture(config);
-    expect(() =>
-      reviewedInvoiceCleanupEndpoints({
-        routes: [fixture.route],
-        endpoints: [fixture.endpoint],
-        classify: () => ({ kind: "other" }),
-      }),
-    ).toThrow("Invoice cleanup requires invoice:update and no feature gates");
-  });
-
-  test("rejects a public cleanup definition", () => {
-    const fixture = cleanupFixture();
+describe("reviewed invoice management admission", () => {
+  test("normal invoice access needs billing availability and refuses caller-feature gates", () => {
+    const billing: Middleware = async (_context, inner) => await inner();
+    const invitation: Middleware = async (_context, inner) => await inner();
+    const classify = (stage: Middleware): RouteGate =>
+      stage === billing
+        ? { kind: "deployment-feature", flag: "FEATURE_TIME_BILLING" }
+        : { kind: "feature-access", featureId: "invoice-links" };
+    const config = { permissions: { invoice: ["update"] } };
     const definition = {
-      ...fixture.route.definition,
-      access: "public",
-    } as const;
-    expect(() =>
-      reviewedInvoiceCleanupEndpoints({
-        routes: [{ ...fixture.route, definition }],
-        endpoints: [{ ...fixture.endpoint, definition }],
-        classify: () => ({ kind: "other" }),
+      access: "workspace",
+      config,
+      run: async () => ({}),
+    } satisfies RouteDefinition;
+    const endpoint = {
+      file: "apps/api/src/handlers/invoices/sends/list.ts",
+      definition,
+      config,
+    };
+    const route = {
+      path: "/sends",
+      method: "GET",
+      definition,
+      middleware: [billing],
+    } satisfies RouteEntry;
+    expect(
+      reviewedInvoiceManagementEndpoints({
+        routes: [route],
+        endpoints: [endpoint],
+        classify,
       }),
-    ).toThrow("Invoice cleanup requires invoice:update and no feature gates");
-  });
-
-  test.each(["deployment-feature", "feature-access"] as const)(
-    "rejects a %s middleware gate",
-    (kind) => {
-      const fixture = cleanupFixture();
-      const gate = async () => new Response();
+    ).toEqual([endpoint]);
+    for (const middleware of [[], [billing, invitation], [invitation]]) {
       expect(() =>
-        reviewedInvoiceCleanupEndpoints({
-          routes: [{ ...fixture.route, middleware: [gate] }],
-          endpoints: [fixture.endpoint],
-          classify: () =>
-            kind === "deployment-feature"
-              ? { kind, flag: "FEATURE_TIME_BILLING" }
-              : { kind, featureId: "time-billing" },
-        }),
-      ).toThrow("Invoice cleanup requires invoice:update and no feature gates");
-    },
-  );
-
-  test.each(["missing", "ambiguous"] as const)(
-    "rejects %s discovery identities",
-    (kind) => {
-      const fixture = cleanupFixture();
-      const endpoints =
-        kind === "missing"
-          ? []
-          : [fixture.endpoint, { ...fixture.endpoint, file: "other.ts" }];
-      expect(() =>
-        reviewedInvoiceCleanupEndpoints({
-          routes: [fixture.route],
-          endpoints,
-          classify: () => ({ kind: "other" }),
+        reviewedInvoiceManagementEndpoints({
+          routes: [{ ...route, middleware }],
+          endpoints: [endpoint],
+          classify,
         }),
       ).toThrow(
-        "Every reviewed invoice cleanup route must identify exactly one discovered handler",
+        "Invoice management requires invoice:update and only time-billing deployment availability",
       );
-    },
-  );
+    }
+    expect(() =>
+      reviewedInvoiceManagementEndpoints({
+        routes: [route],
+        endpoints: [],
+        classify,
+      }),
+    ).toThrow(
+      "Every reviewed invoice management route must identify exactly one discovered handler",
+    );
+  });
 });
 
 describe("deriveCapabilityId", () => {
