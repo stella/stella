@@ -1,8 +1,4 @@
-// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
-// parser-output-unchanged: session-protocol rejection carries explicit failure metadata; accepted sessions and parsed records are unchanged.
-// parser-output-unchanged: shared warning projection changes error telemetry only; parsed decisions are unchanged.
-// parser-output-unchanged: [pl-tk] Case-page parsing is reused within each assembly; stored fields, HTML and AST output are unchanged.
-// parser-output-unchanged: [pl-tk] The bench builder is typed to printed names only; the judges it emits are unchanged.
+import { panic, Result } from "better-result";
 /**
  * Polish Constitutional Tribunal (Trybunał Konstytucyjny) adapter.
  *
@@ -44,11 +40,16 @@
  * are the keys a SAOS row and a row from this portal share when they describe
  * the same ruling, stored as `rulingKeys` on the rows of both.
  */
-import { panic, Result } from "better-result";
 import type * as cheerio from "cheerio/slim";
 import type { AnyNode } from "domhandler";
 
 import { isPolishConstitutionalDocket } from "@stll/api-contract/decision-docket-grammar";
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
+// parser-output-unchanged: imports ingestion bindings directly from their existing owner.
+// parser-output-unchanged: session-protocol rejection carries explicit failure metadata; accepted sessions and parsed records are unchanged.
+// parser-output-unchanged: shared warning projection changes error telemetry only; parsed decisions are unchanged.
+// parser-output-unchanged: [pl-tk] Case-page parsing is reused within each assembly; stored fields, HTML and AST output are unchanged.
+// parser-output-unchanged: [pl-tk] The bench builder is typed to printed names only; the judges it emits are unchanged.
 import { load } from "@stll/html";
 // parser-output-unchanged: error output projection only; parsed decision fields are unchanged.
 // parser-output-unchanged: imports the document AST from its package owner
@@ -61,34 +62,6 @@ import { readCappedBytes } from "@stll/skills/streaming";
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import { ADAPTER_KEYS, PARSER_VERSIONS } from "@/api/handlers/case-law/consts";
-import {
-  defineSourceAdapter,
-  EMPTY_AST,
-  encodeSourceRawEnvelope,
-  excludedSourceSurface,
-  isPersistableSourceDocumentId,
-  readStoredRawListing,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  sourceTotalRead,
-  STORED_RAW_REPARSE_REJECTION,
-  storedSourceSurface,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  EmptyAst,
-  IngestionResult,
-  ListingIdentity,
-  PrintedDecisionJudge,
-  ReconciliationBuildOutcome,
-  ReconciliationSlicePage,
-  ReconciliationSlicePageOptions,
-  SourceFieldDisposition,
-  SourceRawParts,
-  SourceSurfaceCensus,
-  SourceSurfaceDisposition,
-  StoredRawReparseInput,
-  StoredRawReparseOutcome,
-  SyncPage,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import {
   PL_TK_RULING_FAMILY,
@@ -129,6 +102,34 @@ import {
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import {
+  defineSourceAdapter,
+  EMPTY_AST,
+  encodeSourceRawEnvelope,
+  excludedSourceSurface,
+  isPersistableSourceDocumentId,
+  readStoredRawListing,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  sourceTotalRead,
+  STORED_RAW_REPARSE_REJECTION,
+  storedSourceSurface,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  EmptyAst,
+  IngestionResult,
+  ListingIdentity,
+  PrintedDecisionJudge,
+  ReconciliationBuildOutcome,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
+  SourceFieldDisposition,
+  SourceRawParts,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
+  StoredRawReparseInput,
+  StoredRawReparseOutcome,
+  SyncPage,
+} from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";

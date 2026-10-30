@@ -1,5 +1,6 @@
-// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
-// parser-output-unchanged: shared warning projection changes error telemetry only; parsed decisions are unchanged.
+import { panic, Result } from "better-result";
+
+import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
 /**
  * Polish competition and consumer protection authority (Prezes UOKiK) adapter.
  *
@@ -55,9 +56,9 @@
  * The shared fetch identifies itself as Stella's ingestion agent, and the
  * publisher gate spaces requests two seconds apart.
  */
-import { panic, Result } from "better-result";
-
-import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
+// parser-output-unchanged: imports ingestion bindings directly from their existing owner.
+// parser-output-unchanged: shared warning projection changes error telemetry only; parsed decisions are unchanged.
 import { load } from "@stll/html";
 import {
   DECISION_IDENTIFIER_TYPES,
@@ -77,39 +78,6 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
-import {
-  decodeSourceRawEnvelope,
-  decodeSourceRawEnvelopeObjects,
-  defineSourceAdapter,
-  EMPTY_AST,
-  encodeSourceRawEnvelope,
-  excludedSourceField,
-  excludedSourceSurface,
-  isPersistableSourceDocumentId,
-  readStoredRawListing,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  SOURCE_TOTAL_PROBE_FAILURE,
-  sourceTotalProbeFailed,
-  sourceTotalRead,
-  STORED_RAW_REPARSE_REJECTION,
-  storedSourceSurface,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  EmptyAst,
-  IngestionResult,
-  ListingIdentity,
-  ReconciliationBuildOutcome,
-  ReconciliationSlicePage,
-  ReconciliationSlicePageOptions,
-  SourceFieldDisposition,
-  SourceRawParts,
-  SourceSurfaceCensus,
-  SourceSurfaceDisposition,
-  SourceTotalCount,
-  StoredRawReparseInput,
-  StoredRawReparseOutcome,
-  SyncPage,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { plCommonCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-common-court-ruling-keys";
 import { plSupremeCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-sn-ruling-keys";
@@ -137,7 +105,43 @@ import {
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import {
+  decodeSourceRawEnvelope,
+  decodeSourceRawEnvelopeObjects,
+  defineSourceAdapter,
+  EMPTY_AST,
+  encodeSourceRawEnvelope,
+  excludedSourceField,
+  excludedSourceSurface,
+  isPersistableSourceDocumentId,
+  readStoredRawListing,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  SOURCE_TOTAL_PROBE_FAILURE,
+  sourceTotalProbeFailed,
+  sourceTotalRead,
+  STORED_RAW_REPARSE_REJECTION,
+  STORED_RAW_REPLAY_STATUS,
+  storedSourceSurface,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  EmptyAst,
+  IngestionResult,
+  ListingIdentity,
+  ReconciliationBuildOutcome,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
+  SourceFieldDisposition,
+  SourceRawParts,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
+  SourceTotalCount,
+  StoredRawReparseInput,
+  StoredRawReparseOutcome,
+  StoredRawReparseValue,
+  SyncPage,
+} from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import { readStoredDocumentObject } from "@/api/lib/legal-search/stored-document-replay";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { MetadataUrlDefect, toMetadataUrl } from "@/api/lib/sanitize-url";
@@ -1857,52 +1861,19 @@ const buildPlUokikDecision = async ({
   return Result.ok({ built, rulings, itemBuildFailures });
 };
 
-/**
- * Re-parse a stored envelope without contacting the register. A decision whose
- * document is a stored PDF is refused: a replay reads the envelope, and the
- * files are objects beside it.
- */
-const reparsePlUokikStoredRaw = async (
-  stored: StoredRawReparseInput,
-): Promise<StoredRawReparseOutcome> => {
-  const parts = decodeSourceRawEnvelope(new TextDecoder().decode(stored.raw));
-  if (parts?.[RULING_NAME_PART] !== undefined) {
-    return {
-      type: "rejected",
-      rejection: STORED_RAW_REPARSE_REJECTION.UNSUPPORTED_CONTENT,
-      detail:
-        "a court ruling is read from its stored PDF, which a replay does not read",
-    };
-  }
-  const read = readStoredRawListing({
-    stored,
-    part: RAW_PART.LISTING,
-    identityOf: (listing) => {
-      const identity = plUokikListingIdentity(normalizePlUokikRow(listing));
-      return identity.type === "document"
-        ? identity.sourceDocumentId
-        : undefined;
-    },
-  });
-  if (read.type === "rejected") {
-    return read;
-  }
-  const objects = decodeSourceRawEnvelopeObjects(
-    new TextDecoder().decode(stored.raw),
-  );
-  if (objects[FILE_OBJECT] !== undefined) {
-    return {
-      type: "rejected",
-      rejection: STORED_RAW_REPARSE_REJECTION.UNSUPPORTED_CONTENT,
-      detail: "the document is the stored PDF, which a replay does not read",
-    };
-  }
-  const storedStatus = stored.metadata["detailStatus"];
-  const built = await assemblePlUokikDecision({
-    entry: read.listing,
-    rawParts: read.parts,
-    ...(isDetailStatus(storedStatus) ? { detailStatus: storedStatus } : {}),
-  });
+const isFileStatus = (value: unknown): value is PlUokikFileStatus =>
+  Object.values(PL_UOKIK_FILE_STATUS).some((status) => status === value);
+
+const metadataOnlyPlUokikReplay = (): StoredRawReparseOutcome => ({
+  type: "rejected",
+  rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
+  status: STORED_RAW_REPLAY_STATUS.METADATA_ONLY,
+  detail: "the stored row has no complete document object set",
+});
+
+const plUokikReplayOutcome = (
+  built: Awaited<ReturnType<typeof assemblePlUokikDecision>>,
+): StoredRawReparseOutcome => {
   switch (built.type) {
     case "built":
     case "detail-unavailable":
@@ -1918,6 +1889,165 @@ const reparsePlUokikStoredRaw = async (
       return panic(`Unhandled pl-uokik build result: ${JSON.stringify(built)}`);
     }
   }
+};
+
+/** Rebuild documents only from the envelope and the objects it names. */
+const reparsePlUokikStoredRaw = async (
+  stored: StoredRawReparseInput,
+): Promise<StoredRawReparseValue> => {
+  const raw = new TextDecoder().decode(stored.raw);
+  const rulingName = decodeSourceRawEnvelope(raw)?.[RULING_NAME_PART];
+  const read = readStoredRawListing({
+    stored,
+    part: RAW_PART.LISTING,
+    identityOf: (listing) => {
+      const identity = plUokikListingIdentity(normalizePlUokikRow(listing));
+      if (identity.type !== "document") {
+        return undefined;
+      }
+      return rulingName === undefined
+        ? identity.sourceDocumentId
+        : plUokikRulingId(identity.sourceDocumentId, rulingName);
+    },
+  });
+  if (read.type === "rejected") {
+    return read;
+  }
+  const detailHtml = read.parts[RAW_PART.DETAIL];
+  const detail =
+    detailHtml === undefined
+      ? undefined
+      : (parsePlUokikDetail(detailHtml) ?? undefined);
+  const listed = fieldFiles(detail, PL_UOKIK_LABEL.DECISION_FILES);
+  const row = normalizePlUokikRow(read.listing);
+  const objects = decodeSourceRawEnvelopeObjects(raw);
+  const storedStatus = stored.metadata["detailStatus"];
+
+  if (rulingName !== undefined) {
+    const readObject = await readStoredDocumentObject(stored, RULING_OBJECT);
+    if (Result.isError(readObject)) {
+      return readObject;
+    }
+    const bytes = readObject.value;
+    if (bytes === null) {
+      return metadataOnlyPlUokikReplay();
+    }
+    const file = fieldFiles(detail, PL_UOKIK_LABEL.RULINGS).find(
+      ({ name }) => name === rulingName,
+    );
+    const ref = objects[RULING_OBJECT];
+    if (
+      file === undefined ||
+      detailHtml === undefined ||
+      row.unid === undefined ||
+      ref === undefined
+    ) {
+      return {
+        type: "rejected",
+        rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
+        detail: "the stored ruling is not named by its decision page",
+      };
+    }
+    const parent = await assemblePlUokikDecision({
+      entry: read.listing,
+      rawParts: plUokikRawPartsOf(read.listing, detailHtml),
+    });
+    if (parent.type === "unkeyable") {
+      return {
+        type: "rejected",
+        rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
+        detail: "the stored ruling page states no parent decision identity",
+      };
+    }
+    return {
+      type: "parsed",
+      result: await assemblePlUokikRuling({
+        entry: read.listing,
+        detailHtml,
+        unid: row.unid,
+        file,
+        fetched: {
+          name: file.name,
+          status:
+            ref.contentType === PDF_CONTENT_TYPE
+              ? PL_UOKIK_FILE_STATUS.READ
+              : PL_UOKIK_FILE_STATUS.IMAGE,
+          bytes,
+          contentType: ref.contentType,
+        },
+        decision: {
+          sourceDocumentId: row.unid,
+          caseNumber: parent.decision.caseNumber,
+          decisionDate: parent.decision.decisionDate,
+        },
+      }),
+    };
+  }
+
+  // A decision stored without attachment objects replays from its listing
+  // and decision page, as it did before attachments were captured.
+  if (objects[FILE_OBJECT] === undefined) {
+    return plUokikReplayOutcome(
+      await assemblePlUokikDecision({
+        entry: read.listing,
+        rawParts: read.parts,
+        ...(isDetailStatus(storedStatus) ? { detailStatus: storedStatus } : {}),
+      }),
+    );
+  }
+  const storedFiles = stored.metadata["decisionFiles"];
+  if (!Array.isArray(storedFiles) || storedFiles.length !== listed.length) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
+      detail: "the stored decision has no ordered attachment statuses",
+    };
+  }
+  const files: PlUokikFetchedFile[] = [];
+  let objectIndex = 0;
+  for (const [index, file] of listed.entries()) {
+    const metadata: unknown = storedFiles[index];
+    const status = isRecord(metadata) ? metadata["status"] : undefined;
+    if (!isFileStatus(status)) {
+      return {
+        type: "rejected",
+        rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
+        detail: "the stored decision attachment has no fetch status",
+      };
+    }
+    if (
+      status !== PL_UOKIK_FILE_STATUS.READ &&
+      status !== PL_UOKIK_FILE_STATUS.IMAGE
+    ) {
+      files.push({ name: file.name, status });
+      continue;
+    }
+    const part = plUokikFileObjectName(objectIndex);
+    const readObject = await readStoredDocumentObject(stored, part);
+    if (Result.isError(readObject)) {
+      return readObject;
+    }
+    const bytes = readObject.value;
+    const ref = objects[part];
+    if (bytes === null || ref === undefined) {
+      return metadataOnlyPlUokikReplay();
+    }
+    files.push({
+      name: file.name,
+      status,
+      bytes,
+      contentType: ref.contentType,
+    });
+    objectIndex += 1;
+  }
+  return plUokikReplayOutcome(
+    await assemblePlUokikDecision({
+      entry: read.listing,
+      rawParts: read.parts,
+      files,
+      ...(isDetailStatus(storedStatus) ? { detailStatus: storedStatus } : {}),
+    }),
+  );
 };
 
 // ── Source-field inventory ───────────────────────────────

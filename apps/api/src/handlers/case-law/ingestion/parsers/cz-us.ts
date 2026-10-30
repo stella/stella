@@ -1,4 +1,3 @@
-// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 import { panic } from "better-result";
 import type * as cheerio from "cheerio/slim";
 import type { AnyNode } from "domhandler";
@@ -8,6 +7,8 @@ import type {
   Paragraph as FolioParagraph,
   ParagraphContent as FolioParagraphContent,
 } from "@stll/docx-core/model";
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
+// parser-output-unchanged: The retention check moved to the pipeline; dropping the parser's own validation call leaves its blocks and fulltext unchanged.
 import { load } from "@stll/html";
 /**
  * Czech Constitutional Court (Ustavni soud) HTML parser.
@@ -98,7 +99,6 @@ import { collapseLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spa
 import { readRtfString } from "@/api/lib/legal-search/parsers/rtf-reader";
 import { runContentVisibleText } from "@/api/lib/legal-search/parsers/run-content-text";
 import { separateOpinionHeadingTail } from "@/api/lib/legal-search/parsers/separate-opinion-heading";
-import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
 import { RTF_SOURCE_OPTIONS } from "@/api/lib/legal-search/rtf-source-registry";
 import { segmentDecisionBlocks } from "@/api/lib/legal-search/segment-decision";
 
@@ -163,20 +163,6 @@ export const parseUsDecisionHtml = (
       plainText: hiddenMeta.decisionForm,
     });
   }
-
-  // Build validation HTML from extracted lines instead of
-  // passing the raw page HTML. The page HTML concatenates
-  // all text without whitespace between sections, creating
-  // phantom words like "tarifu.ii.skutkové" that aren't in
-  // the AST. Using per-line <p> tags preserves word boundaries.
-  const validationParagraphs = lines.map((line) =>
-    line.kind === "body" ? line.value.plainText : line.note.value.plainText,
-  );
-  validateAndLog(
-    { parser: "cz-us", caseNumber: input.caseNumber },
-    { type: "paragraphs", paragraphs: validationParagraphs },
-    blocks,
-  );
 
   const fulltext = blocks
     .flatMap((b) => (b.plainText ? [b.plainText] : []))

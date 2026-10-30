@@ -1,4 +1,5 @@
 // parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
+// parser-output-unchanged: The retention check moved to the pipeline; dropping the parser's own validation call leaves its blocks and fulltext unchanged.
 /**
  * Czech Supreme Court (Nejvyšší soud) HTML parser.
  *
@@ -37,7 +38,6 @@ import {
   isRunningHeaderLine,
   withoutSoftHyphens,
 } from "@/api/lib/legal-search/parsers/page-furniture";
-import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
 
 import {
@@ -47,20 +47,6 @@ import {
   visibleHtmlText,
   walkInlines as walkInlinesShared,
 } from "./shared-inlines";
-
-/**
- * Source text the AST is expected to account for.
- *
- * The metadata table above the decision body is extracted into
- * `metadata` rather than into blocks, so validating against the whole
- * page would report it as lost text. Everything else on the page must
- * reach the AST.
- */
-const validationHtml = ($: cheerio.CheerioAPI): string => {
-  const $body = $("body").clone();
-  $body.find("#box-table-a").remove();
-  return `<html><body>${$body.html() ?? ""}</body></html>`;
-};
 
 // ── Public API ─────────────────────────────────────────────
 
@@ -95,16 +81,6 @@ export const parseNsDecisionHtml = (
     },
   );
   const fulltext = blocksToPlainText(blocks);
-
-  validateAndLog(
-    {
-      parser: "cz-ns",
-      caseNumber: canonical.caseNumber ?? input.documentId,
-      url: input.webUrl,
-    },
-    validationHtml($),
-    blocks,
-  );
 
   const documentAst: DecisionDocumentAst = {
     version: 1,

@@ -122,7 +122,7 @@ const persistedOutput = (adapter: string, raw: RawIngestionResult) => {
       "A recorded fixture is a valid ingestion result",
     ),
     schema,
-  );
+  ).unwrap("A recorded fixture has readable document content");
   const sections =
     result.sections ??
     (result.fulltext ? segmentDecision(result.fulltext) : []);

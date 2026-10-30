@@ -1,4 +1,5 @@
 // parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
+// parser-output-unchanged: the lost-content verdict is the same validateAst result; only the logging moved to the pipeline.
 // parser-output-unchanged: Whole-document validation reuses the unmodified parsed source; bounded decision subtrees retain serialization and reparsing, so diagnostics and output are unchanged.
 /**
  * Court of Justice of the European Union (CJEU) XHTML parser.
@@ -63,7 +64,7 @@ import {
   stripInlineLinePrefix,
 } from "@stll/legal-ast/inline-line";
 
-import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
+import { validateAst } from "@/api/lib/legal-search/parsers/validate-ast";
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
 
 import {
@@ -110,9 +111,9 @@ export type ParseEcjDecisionOutput = {
    */
   boundary: EcjDocumentBoundary;
   /**
-   * Codes of the issues `validateAndLog` raised, empty on a clean
-   * parse. Returned rather than only logged so callers can assert on
-   * content retention without re-walking the source document.
+   * Codes of the issues `validateAst` found, empty on a clean parse. The
+   * adapter falls back to the stripped text on lost content, and tests
+   * assert on retention without re-walking the source document.
    */
   validationIssues: string[];
 };
@@ -126,13 +127,9 @@ export const parseEcjDecisionHtml = (
   const keywords = extractKeywords($document);
 
   const validationHtml = documentSource($, $document, input.html);
-  const validation = validateAndLog(
-    {
-      parser: "eu-ecj",
-      caseNumber: input.caseNumber,
-      language: input.language,
-      url: input.sourceUrl,
-    },
+  // Measured, not logged: the adapter uses the verdict to fall back to the
+  // stripped text, and the pipeline reports retention for what is stored.
+  const validation = validateAst(
     validationHtml,
     blocks,
     tagNameOf($document.get(0)) === "body" ? { document: $ } : undefined,
@@ -484,6 +481,8 @@ const classDepth = (
  */
 const ECJ_INLINE_OPTIONS = {
   sanitizeHref: sanitizeUrl,
+  superscripts: true,
+  superscriptClasses: ["super", `${CLASS_PREFIX}super`],
   emphasisClasses: {
     bold: [CLASS.bold, `${CLASS_PREFIX}${CLASS.bold}`],
     italic: [CLASS.italic, `${CLASS_PREFIX}${CLASS.italic}`],

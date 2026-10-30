@@ -11,6 +11,7 @@ import { Button } from "@stll/ui/button";
 import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import { ExternalLinkIcon, LandmarkIcon } from "@stll/ui/icons";
 import { Popover, PopoverPanel, PopoverTrigger } from "@stll/ui/popover";
+import { LEGAL_TEXT_CLASS_NAME } from "@stll/ui/prose";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
@@ -305,7 +306,10 @@ export const DecisionCitationChip = ({
         {passage !== undefined && (
           <ScrollArea axis="vertical" className="max-h-64">
             <div
-              className="text-sm wrap-anywhere whitespace-pre-wrap"
+              className={cn(
+                LEGAL_TEXT_CLASS_NAME,
+                "text-sm whitespace-pre-wrap",
+              )}
               dir="auto"
             >
               {passage}

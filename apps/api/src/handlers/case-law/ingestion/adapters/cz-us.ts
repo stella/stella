@@ -1,11 +1,12 @@
-// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
-// parser-output-unchanged: array partitions use the shared owner with identical items and boundaries; parsed content is unchanged.
-// parser-output-unchanged: Read scope passes through the gate; successful decision text and parsing are unchanged.
 import { panic, Result, TaggedError } from "better-result";
 import type * as cheerio from "cheerio/slim";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { classifyFailure } from "@stll/errors";
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
+// parser-output-unchanged: imports ingestion bindings directly from their existing owner.
+// parser-output-unchanged: array partitions use the shared owner with identical items and boundaries; parsed content is unchanged.
+// parser-output-unchanged: Read scope passes through the gate; successful decision text and parsing are unchanged.
 import { load } from "@stll/html";
 import { DECISION_IDENTIFIER_MAX_COUNT } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
@@ -20,36 +21,6 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
-import {
-  decodeSourceRawEnvelope,
-  defineSourceAdapter,
-  EMPTY_AST,
-  encodeSourceRawEnvelope,
-  excludedSourceField,
-  excludedSourceSurface,
-  isPersistableSourceDocumentId,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  SOURCE_TOTAL_PROBE_FAILURE,
-  sourceTotalProbeFailed,
-  sourceTotalRead,
-  STORED_RAW_REPARSE_REJECTION,
-  storedSourceSurface,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  EmptyAst,
-  IngestionResult,
-  ListingIdentity,
-  ReconciliationBuildOutcome,
-  ReconciliationSlicePage,
-  ReconciliationSlicePageOptions,
-  SourceFieldDisposition,
-  SourceRawParts,
-  SourceSurfaceCensus,
-  SourceSurfaceDisposition,
-  StoredRawReparseInput,
-  StoredRawReparseOutcome,
-  SyncPage,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import { czUsOpeningBench } from "@/api/handlers/case-law/ingestion/adapters/cz-us-bench";
 import {
   fetchNalus,
@@ -99,11 +70,39 @@ import {
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import {
+  decodeSourceRawEnvelope,
+  defineSourceAdapter,
+  EMPTY_AST,
+  encodeSourceRawEnvelope,
+  excludedSourceField,
+  excludedSourceSurface,
+  isPersistableSourceDocumentId,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  SOURCE_TOTAL_PROBE_FAILURE,
+  sourceTotalProbeFailed,
+  sourceTotalRead,
+  STORED_RAW_REPARSE_REJECTION,
+  storedSourceSurface,
+} from "@/api/lib/legal-search/ingestion-types";
 import type {
   CzechDeclinedDecisionJudge,
   DecisionJudgeInput,
+  EmptyAst,
+  IngestionResult,
+  ListingIdentity,
   PrintedDecisionJudge,
   RawIngestionResult,
+  ReconciliationBuildOutcome,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
+  SourceFieldDisposition,
+  SourceRawParts,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
+  StoredRawReparseInput,
+  StoredRawReparseOutcome,
+  SyncPage,
 } from "@/api/lib/legal-search/ingestion-types";
 import { reflowPrintedText } from "@/api/lib/legal-search/parsers/hard-wrapped-lines";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";

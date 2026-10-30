@@ -45,6 +45,7 @@ export {
 } from "@/api/lib/rate-limit/budget-config";
 
 const VERSIONS_PAGE_SIZE_DEFAULT = 50;
+const SITEMAP_PROTOCOL_URL_LIMIT = 50_000;
 
 export const LIMITS = {
   matterNumberPatternMinLength: 1,
@@ -434,6 +435,11 @@ export const LIMITS = {
   searchPreviewResponseCharacterLimit: 16_000,
   /** Messages surrounding the best match in a global-search chat preview. */
   searchChatPreviewMessageLimit: 6,
+  searchChatCandidateThreadsMax: 100,
+  searchChatCandidateBatchesMax: 16,
+  searchChatCandidateSourceMessagesMax: 500,
+  searchChatCandidateSourceBytesMax: 256 * 1024,
+  searchChatCandidateBytesMax: 8 * 1024 * 1024,
   savedSearchesPerUser: 100,
   savedSearchesPageSizeDefault: 50,
   savedSearchesPageSizeMax: 100,
@@ -532,6 +538,9 @@ export const LIMITS = {
    *  folio conversion of a single document. Mirrors `extractionTimeoutMs`'s
    *  budget for the same class of work (one document-sized file). */
   docxMarkdownConversionTimeoutMs: 30_000,
+  /** Bounded process-local Markdown and session-redacted window sources. */
+  mcpWindowTextCacheMaxBytes: 64 * 1024 * 1024,
+  mcpWindowAnonymizationCacheMaxBytes: 64 * 1024 * 1024,
   /** Wall-clock ceiling for writing one generated chat export to object storage. */
   chatExportObjectIoTimeoutMs: 30_000,
   clauseExportLimit: 500,
@@ -641,9 +650,11 @@ export const LIMITS = {
    *  malformed/over-merged group key cannot load an unbounded set. */
   caseLawLanguageAlternatesPerGroupMax: 30,
   /** Max URL entries in one sitemap file by protocol. */
-  caseLawSitemapUrlLimit: 50_000,
-  /** Conservative per-shard case-law sitemap cap; leaves room for hreflang alternates under the XML byte limit. */
-  caseLawSitemapShardUrlLimit: 5000,
+  caseLawSitemapUrlLimit: SITEMAP_PROTOCOL_URL_LIMIT,
+  /** URL ceiling; XML serialization separately enforces the byte ceiling. */
+  caseLawSitemapShardUrlLimit: SITEMAP_PROTOCOL_URL_LIMIT,
+  /** Hreflang groups reserve room for their language alternates. */
+  caseLawSitemapMultilingualShardUrlLimit: 5000,
   /** Max child sitemap entries in one sitemap index by protocol. */
   caseLawSitemapIndexEntryLimit: 50_000,
   caseLawSourceFacetCountCap: 1000,
@@ -736,6 +747,9 @@ export const LIMITS = {
    * rather than one request per item.
    */
   legislationProvisionReadConcurrency: 6,
+  /** Estimated heap retained for parsed decisions and compact section references. */
+  caseLawDecisionAstCacheMaxHeapBytes: 96 * 1024 * 1024,
+  caseLawDecisionSectionCacheMaxHeapBytes: 16 * 1024 * 1024,
   /**
    * Estimated heap the process keeps for parsed consolidation ASTs between
    * requests. A large code's consolidation parses to roughly 10 MiB, so this
@@ -1025,10 +1039,11 @@ export const getPublicCorpusLimits = (
         global: aggregateGlobal,
       },
       sitemap: {
-        address: addressBudget({
-          configuredMax: 10,
-          globalMax: sitemapGlobal.max,
-        }),
+        // Shared crawler origins keep an address quota independent of fleet capacity.
+        address: {
+          duration: 60_000,
+          max: Math.min(600, sitemapGlobal.max - 1),
+        },
         global: sitemapGlobal,
       },
       browse: { address: API_RATE_LIMITS.api },

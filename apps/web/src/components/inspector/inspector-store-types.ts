@@ -301,6 +301,12 @@ type InspectorAnonymizationState = {
 
 type CloseTabOptions = {
   suggestRevive?: boolean;
+  /**
+   * The tab's content moved to the main view. The pane is minimized with it:
+   * what would remain in front is not what the reader asked to look at, and
+   * the rail keeps every other tab one click away.
+   */
+  movedToMain?: boolean;
 };
 
 type FileFieldReplacement = {

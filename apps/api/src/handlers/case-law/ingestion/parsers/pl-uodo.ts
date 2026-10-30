@@ -1,4 +1,5 @@
 // parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
+// parser-output-unchanged: a failed validateAst verdict still fails the parse; only the logging moved to the pipeline.
 /**
  * Reader for the decision XML the data-protection authority's portal serves.
  *
@@ -34,7 +35,7 @@ import type {
 import { ParseXmlError } from "@/api/handlers/case-law/ingestion/parsers/parse-xml-error";
 import {
   buildValidationHtml,
-  validateAndLog,
+  validateAst,
 } from "@/api/lib/legal-search/parsers/validate-ast";
 
 import { appendTextInline, inlinesToPlainText } from "./shared-inlines";
@@ -614,13 +615,10 @@ export const parsePlUodoDecisionXml = (
     );
   }
 
-  const validation = validateAndLog(
-    {
-      parser: "pl-uodo",
-      caseNumber: input.caseNumber,
-      language: "pl",
-      url: input.sourceUrl,
-    },
+  // Measured, not logged: a failed verdict fails the parse, which the adapter
+  // reports as a document parse failure, and the pipeline reports retention
+  // for every document it stores.
+  const validation = validateAst(
     buildValidationHtml(sourceTextsOf($, root)),
     state.blocks,
   );
