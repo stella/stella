@@ -8,7 +8,7 @@
  * the walk hands out again, and a second run must find nothing left to do.
  */
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { eq, inArray, sql } from "drizzle-orm";
+import { asc, eq, inArray, sql } from "drizzle-orm";
 
 import { compareCodeUnit } from "@stll/collation";
 
@@ -312,8 +312,9 @@ test("an applied run requeues each qualifying decision into the walk once", asyn
       operation: caseLawIndexJobs.operation,
     })
     .from(caseLawIndexJobs)
-    .where(inArray(caseLawIndexJobs.decisionId, requeued));
-  expect(audit.map(({ id }) => id).toSorted(compareCodeUnit)).toEqual(requeued);
+    .where(inArray(caseLawIndexJobs.decisionId, requeued))
+    .orderBy(asc(caseLawIndexJobs.decisionId));
+  expect(audit.map(({ id }) => id)).toEqual(requeued);
   expect(audit.every(({ operation }) => operation === "withdraw")).toBe(true);
 
   const stored = await testDb
