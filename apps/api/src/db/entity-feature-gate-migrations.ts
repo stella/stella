@@ -510,8 +510,12 @@ const DO_BLOCK_PROTECTION_VERBS =
 const doBlockDigest = (sql: string): string =>
   sha256Hex(sql.replace(/\s+/gu, " ").trim());
 
+/** The gate check constraints the generator writes for a newly gated table. */
+export const isGeneratedGateCheckBlock = (sql: string): boolean =>
+  GATE_CHECK_BLOCK.test(clean(sql).trim());
+
 const isReviewedGateDoBlock = (sql: string) =>
-  GATE_CHECK_BLOCK.test(sql) ||
+  isGeneratedGateCheckBlock(sql) ||
   REVIEWED_DO_BLOCK_DIGESTS.has(doBlockDigest(sql));
 
 /** Inline the policy DDL the gate migration's finish routine runs when called. */
