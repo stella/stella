@@ -1090,7 +1090,9 @@
     },
     "emptyState": "Nem található határozat. Adjon meg egy forrást, és futtasson szinkronizálást az ítélkezési gyakorlat importálásához.",
     "filters": {
-      "remove": "A(z) {filter} szűrő eltávolítása"
+      "countryMismatch": "A következő szűrőket eltávolítottuk, mert nem ehhez az országhoz tartoznak ({country}): {filters}.",
+      "remove": "A(z) {filter} szűrő eltávolítása",
+      "showInCountry": "{filter} megjelenítése ebben az országban: {country}"
     },
     "languages": {
       "count": "{count, plural, one {# nyelv} other {# nyelv}}",
@@ -1346,6 +1348,7 @@
       "toastTitle": "A teljes nézet még nem érhető el"
     },
     "activity": {
+      "newerVersion": "Ez a tartalom egy újabb verzióban jelenik meg.",
       "review": "Frissítés az áttekintésről"
     },
     "aiPrompt": "AI-üzenetmező",
@@ -5052,6 +5055,8 @@
       "desktopCardConnectedTitle": "A stella desktop összekapcsolva",
       "desktopCardMissingDetail": "Telepítse, vagy kapcsolja össze, ha már telepítve van ezen a számítógépen.",
       "desktopCardMissingTitle": "A stella desktop még nincs összekapcsolva",
+      "desktopCardOpeningDetail": "Ez a számítógép összekapcsolódik ezzel: <bdi>{identity}</bdi> · {host}. Ha a böngésző rákérdez, engedélyezze a stella desktop megnyitását.",
+      "desktopCardOpeningTitle": "A stella desktop megnyílik...",
       "desktopCardOutdatedDetail": "A(z) {version} verzió össze van kapcsolva ezzel: <bdi>{identity}</bdi>. Telepítse a legújabb verziót, hogy a dokumentumok és a tevékenység tovább működjenek.",
       "desktopCardOutdatedTitle": "A stella desktop frissítésre szorul",
       "desktopClipboardDescription": "Nyissa meg, keresse, rendszerezze és használja újra a bármely alkalmazásból másolt szöveget.",
@@ -5071,6 +5076,7 @@
       "desktopInstallOpenStep": "Nyissa meg egyszer a stella desktop alkalmazást. A vágólap azonnal megjelenik, később pedig a macOS menüsorából vagy a Windows értesítési területéről érhető el.",
       "desktopInstallTitle": "Telepítés és megnyitás",
       "desktopInstallWindowsStep": "Indítsa el a telepítőt, és kövesse az utasításokat.",
+      "desktopOpenApp": "stella desktop megnyitása",
       "desktopPrivacyDescription": "A vágólapelőzmények titkosítva, ezen az eszközön tárolódnak.",
       "desktopPrivacyTitle": "Alapértelmezetten privát",
       "desktopSelfHostDescription": "Bízzon meg ebben a stella URL-ben az aláírt desktop appban, hogy a telepítés dokumentumai helyben nyílhassanak meg.",
@@ -5426,6 +5432,7 @@
     "showCitedPartOnly": "Csak az idézett rész megjelenítése",
     "showFullProvision": "A teljes rendelkezés megjelenítése",
     "showInText": "Megjelenítés a szövegben",
+    "sortNeedsYear": "Az oszlop szerinti rendezéshez válasszon évet a szűrőkben.",
     "statedWindow": "A kiadó által megadott dátumok: {range}",
     "status": {
       "current": "Hatályos",

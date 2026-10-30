@@ -259,17 +259,7 @@ export const DOC_SOURCES = {
     url: "https://fast-check.dev/llms.txt",
   },
   Fontsource: {
-    dependencies: [
-      "@fontsource-variable/source-serif-4",
-      "@fontsource/arimo",
-      "@fontsource/caladea",
-      "@fontsource/carlito",
-      "@fontsource/cousine",
-      "@fontsource/lato",
-      "@fontsource/noto-sans-arabic",
-      "@fontsource/source-sans-3",
-      "@fontsource/tinos",
-    ],
+    dependencies: ["@fontsource-variable/source-serif-4"],
     url: "https://fontsource.org/llms.txt",
   },
   Lucide: {
@@ -389,6 +379,13 @@ const PROBED_WITHOUT_LLMS_TXT = [
   [
     "@formatjs/icu-messageformat-parser",
     ["https://raw.githubusercontent.com/formatjs/formatjs/HEAD/llms.txt"],
+  ],
+  [
+    "@formatjs/intl-pluralrules",
+    [
+      "https://formatjs.github.io/llms.txt",
+      "https://raw.githubusercontent.com/formatjs/formatjs/HEAD/llms.txt",
+    ],
   ],
   [
     "@happy-dom/global-registrator",

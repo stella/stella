@@ -14,6 +14,7 @@ import {
 } from "@stll/ai-catalog";
 import { assertProperty } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import type { CachingDecision, OrgAIConfig } from "@/api/lib/ai-config";
@@ -77,7 +78,6 @@ import type {
   RecordingAnalytics,
   RecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const testState = createTestState({ file: import.meta.path, config: env });

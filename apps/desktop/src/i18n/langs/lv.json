@@ -1,7 +1,6 @@
 {
   "tray": {
     "activeEdits": "{count, plural, zero {{count} aktīvu labojumu} one {{count} aktīvs labojums} other {{count} aktīvi labojumi}}",
-    "clipboard": "Starpliktuves vēsture",
     "activity": "Darbība",
     "activityRecording": "Darbība: Ierakstīšana · šodien {hours} st.",
     "activityPaused": "Darbība: Apturēta · šodien {hours} st.",
@@ -485,9 +484,6 @@
     "unreadableEraseAction": "Dzēst nenolasāmo darbību",
     "unreadableEraseConfirmation": "Nenolasāmā saglabātā darbība un tās gaidošo melnrakstu atkopšanas dati tiks dzēsti. Izveidotie melnraksti jau var pastāvēt. Šo darbību nevar atsaukt.",
     "unreadableEraseNotice": "Daļu saglabātās darbības nevar nolasīt. Varat dzēst nenolasāmo saglabāto darbību un tās melnrakstu atkopšanas datus.",
-    "discardPendingConfirmation": "Gaidošo melnrakstu atkopšanas dati tiks dzēsti no šīs ierīces. Izveidotie melnraksti jau var pastāvēt. Šo darbību nevar atsaukt.",
-    "discardPendingRecovery": "Atmest melnrakstu atkopšanu",
-    "batchUnavailable": "Melnrakstu izveide pašlaik nav pieejama.",
     "pendingActivityProtected": "Pirms aktivitātes dzēšanas pabeidziet iesākto melnrakstu izveidi.",
     "draftMarkerFailed": "Melnraksti tika izveidoti, bet vietējo apstiprinājumu neizdevās saglabāt. Mēģiniet vēlreiz saglabāt apstiprinājumu.",
     "narrativeEvidence": "Darbs ar: {evidence}",

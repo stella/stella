@@ -1,7 +1,6 @@
 {
   "tray": {
     "activeEdits": "{count, plural, one {1 aktiivne muudatus} other {{count} aktiivset muudatust}}",
-    "clipboard": "Lõikelaua ajalugu",
     "activity": "Tegevus",
     "activityRecording": "Tegevus: Salvestamine · täna {hours} h",
     "activityPaused": "Tegevus: Peatatud · täna {hours} h",
@@ -485,9 +484,6 @@
     "unreadableEraseAction": "Kustuta loetamatu tegevus",
     "unreadableEraseConfirmation": "Loetamatu salvestatud tegevus ja selle pooleliolevate mustandite taastamisandmed kustutatakse. Loodud mustandid võivad juba olemas olla. Seda ei saa tagasi võtta.",
     "unreadableEraseNotice": "Mõnda salvestatud tegevust ei saa lugeda. Saate kustutada loetamatu salvestatud tegevuse ja selle mustandite taastamisandmed.",
-    "discardPendingConfirmation": "Pooleliolevate mustandite taastamisandmed kustutatakse sellest seadmest. Loodud mustandid võivad juba olemas olla. Seda ei saa tagasi võtta.",
-    "discardPendingRecovery": "Loobu mustandite taastamisest",
-    "batchUnavailable": "Mustandite loomine pole praegu saadaval.",
     "pendingActivityProtected": "Enne tegevuse kustutamist viige pooleliolev mustandite loomine lõpule.",
     "draftMarkerFailed": "Mustandid loodi, kuid kohalikku kinnitust ei saanud salvestada. Kinnituse salvestamiseks proovige uuesti.",
     "narrativeEvidence": "Töö: {evidence}",

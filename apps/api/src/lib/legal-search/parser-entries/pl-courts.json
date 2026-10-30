@@ -2,7 +2,7 @@
   "type": "parser",
   "name": "PL_COURTS",
   "key": "pl-courts",
-  "parserVersion": 19,
+  "parserVersion": 20,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",
