@@ -227,3 +227,17 @@ spyOn(console, "warn");
 // expect-clean: bun-test-hygiene/require-module-mock-reset
 test("restores its spy", () => { const info = spyOn(console, "info"); try { info.mockClear(); } finally { info.mockRestore(); } });
 void mock;
+
+// --- require-fetch-after-all ---
+
+describe("unrestored fetch fixture", () => {
+  // oxlint-disable-next-line bun-test-hygiene/require-fetch-after-all -- fixture exercises a leaking suite hook
+  bt.beforeAll(() => { globalThis.fetch = fetch; });
+});
+
+describe("restored fetch fixture", () => {
+  const originalFetch = globalThis.fetch;
+  // expect-clean: bun-test-hygiene/require-fetch-after-all
+  bt.beforeAll(() => { globalThis.fetch = fetch; });
+  bt.afterAll(() => { globalThis.fetch = originalFetch; });
+});
