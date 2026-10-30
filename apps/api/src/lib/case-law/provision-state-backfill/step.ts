@@ -5,6 +5,8 @@
 
 import { Result, TaggedError } from "better-result";
 
+import { assertReadCommittedUnit } from "@/api/lib/db/read-committed-unit";
+
 /**
  * A bound parameter. Scalars only: the scheduler binds through Bun SQL's
  * `unsafe`, which sends a JavaScript array as comma-joined text rather than a
@@ -90,6 +92,9 @@ export const inBackfillTransaction = async (
   await session.execute("BEGIN ISOLATION LEVEL READ COMMITTED");
   const unit = await Result.tryPromise({
     try: async () => {
+      await assertReadCommittedUnit(
+        async (statement) => await session.query(statement),
+      );
       await session.setTransactionBudget({
         lockTimeout,
         statementTimeout,

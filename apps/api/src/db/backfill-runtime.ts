@@ -37,6 +37,7 @@ import {
   resolveEbsConfiguration,
 } from "../lib/db/ebs-signal-reader";
 import { executedRows } from "../lib/db/executed-rows";
+import { assertReadCommittedUnit } from "../lib/db/read-committed-unit";
 import { isPgError, PG_ERROR } from "../lib/pg-error";
 import type { IngestionTransactionRunner } from "../lib/replay-safe-ingestion";
 import { isRecord } from "../lib/type-guards";
@@ -875,6 +876,9 @@ export const createBackfillRuntime = (
     await connection.execute("BEGIN ISOLATION LEVEL READ COMMITTED");
     const outcome = await Result.tryPromise({
       try: async () => {
+        await assertReadCommittedUnit(
+          async (statement) => await connection.query(statement),
+        );
         const result = await work(connection);
         await connection.execute("COMMIT");
         return result;

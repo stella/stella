@@ -44,7 +44,7 @@ test("session-owned units override the session isolation with read committed", a
     execute: async (statement) => {
       statements.push(statement);
     },
-    query: async () => [],
+    query: async () => [{ isolation: "read committed" }],
     setTransactionBudget: async () => {},
   };
 
@@ -61,5 +61,31 @@ test("session-owned units override the session isolation with read committed", a
     "BEGIN ISOLATION LEVEL READ COMMITTED",
     "UPDATE gated_row SET value = 1",
     "COMMIT",
+  ]);
+});
+
+test("a unit refuses to run when its BEGIN joined an open repeatable-read transaction", async () => {
+  const statements: string[] = [];
+  const session: ProvisionBackfillSession = {
+    execute: async (statement) => {
+      statements.push(statement);
+    },
+    // An open transaction ignores the unit's BEGIN and keeps its isolation.
+    query: async () => [{ isolation: "repeatable read" }],
+    setTransactionBudget: async () => {},
+  };
+
+  const result = await inBackfillTransaction(
+    session,
+    { lockTimeout: 10_000, statementTimeout: 60_000 },
+    async () => {
+      await session.execute("UPDATE gated_row SET value = 1");
+    },
+  );
+
+  expect(result.isErr()).toBe(true);
+  expect(statements).toEqual([
+    "BEGIN ISOLATION LEVEL READ COMMITTED",
+    "ROLLBACK",
   ]);
 });
