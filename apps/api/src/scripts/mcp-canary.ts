@@ -794,7 +794,7 @@ export const TOOL_CALL_PROBES = [
   {
     name: PROBE_NAMES.caseLawCoverage,
     toolName: "case_law_coverage",
-    arguments: { country: "CZ" },
+    arguments: {},
     answered: "case-law coverage returned content",
   },
 ] as const satisfies readonly ToolCallProbe[];
@@ -881,18 +881,19 @@ export const AUTHENTICATED_PROBES = [
   },
 ] as const satisfies readonly AuthenticatedProbe[];
 
-// Concurrent because both eras are stateless: neither the legacy initialize
-// nor the modern per-request envelope establishes state for another probe.
+// Credentialed probes share the caller's action admission capacity.
 export const runAuthenticatedProbes = async (
   target: CanaryTarget,
   fetcher: CanaryFetcher = deploymentFetcher,
-): Promise<ProbeResult[]> =>
-  await Promise.all(
-    AUTHENTICATED_PROBES.map(
-      async ({ name, run }) =>
-        await runNamedProbe(name, async () => await run(target, fetcher)),
-    ),
-  );
+): Promise<ProbeResult[]> => {
+  const results: ProbeResult[] = [];
+  for (const { name, run } of AUTHENTICATED_PROBES) {
+    results.push(
+      await runNamedProbe(name, async () => await run(target, fetcher)),
+    );
+  }
+  return results;
+};
 
 export const summarize = (results: readonly ProbeResult[]) => ({
   failed: results.filter(

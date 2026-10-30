@@ -2357,10 +2357,32 @@ describe("staging credential journeys", () => {
 
   test("runs MCP and desktop probes with short-lived credentials, then revokes the MCP key", async () => {
     const { requests, fetcher } = createStagingDeployment();
+    let activeRequests = 0;
+    let peakRequests = 0;
+    const serialFetcher: CanaryFetcher = async (input, init) => {
+      activeRequests += 1;
+      peakRequests = Math.max(peakRequests, activeRequests);
+      await Promise.resolve();
+      try {
+        return await fetcher(input, init);
+      } finally {
+        activeRequests -= 1;
+      }
+    };
     const results = await runStagingCredentialJourneys(
       { baseUrl: "https://api.example", smokeSecret: "smoke-secret" },
-      fetcher,
+      serialFetcher,
     );
+    expect(peakRequests).toBe(1);
+    const coverage = requests.find(({ body }) =>
+      body.includes('"name":"case_law_coverage"'),
+    );
+    expect(JSON.parse(coverage?.body ?? "{}")).toMatchObject({
+      params: { name: "case_law_coverage", arguments: {} },
+    });
+    expect(
+      Object.keys(JSON.parse(coverage?.body ?? "{}").params.arguments),
+    ).toEqual([]);
     expect(
       results
         .filter(
