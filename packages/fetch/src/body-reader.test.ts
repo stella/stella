@@ -87,6 +87,39 @@ describe("idle-bounded response body reads", () => {
     expect(jest.getTimerCount()).toBe(0);
   });
 
+  test("an abort between iterator reads wins over a buffered chunk", async () => {
+    let stream: ReadableStreamDefaultController<Uint8Array> | undefined;
+    let cancelledWith: unknown;
+    const controller = new AbortController();
+    const response = new Response(
+      new ReadableStream<Uint8Array>({
+        start(value) {
+          stream = value;
+        },
+        cancel(reason) {
+          cancelledWith = reason;
+        },
+      }),
+    );
+    const iterator = iterateBodyWithIdleDeadline(response, {
+      idleMs: 1000,
+      signal: controller.signal,
+    });
+    stream?.enqueue(Uint8Array.of(1));
+    stream?.enqueue(Uint8Array.of(2));
+
+    expect(await iterator.next()).toEqual({
+      done: false,
+      value: Uint8Array.of(1),
+    });
+    const reason = new DOMException("caller stopped", "AbortError");
+    controller.abort(reason);
+
+    expect(await iterator.next().catch((error: unknown) => error)).toBe(reason);
+    await flush();
+    expect(cancelledWith).toBe(reason);
+  });
+
   test("the abort race detaches its listener after completion", async () => {
     const controller = new AbortController();
     let listeners = 0;
