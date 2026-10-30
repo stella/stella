@@ -473,8 +473,8 @@ test("all waiver kinds retain their keys when unrelated lines shift their locato
     collectWaivers({
       read: (file) =>
         prefix +
-        (file === "scripts/guard-rollout-policy.ts"
-          ? 'const rollouts = [{id: "fixture-guard"}];'
+        (file === "scripts/guard-rollouts/fixture-guard.ts"
+          ? 'export default { id: "fixture-guard" };'
           : read(file)),
       docs: [doc],
       audit: [{ id: "GHSA-test", package: "pkg", expiresOn: "2026-10-03" }],
@@ -620,8 +620,8 @@ test("tracked-files input rejects absolute and parent paths", () => {
 test("changed-lines guard rollouts enter the dated inventory with a full-scope probe", () => {
   const entries = collectWaivers({
     read: (file) =>
-      file === "scripts/guard-rollout-policy.ts"
-        ? 'export const GUARD_ROLLOUTS = [{ id: "fixture-guard" }];'
+      file === "scripts/guard-rollouts/fixture-guard.ts"
+        ? 'export default { id: "fixture-guard" };'
         : read(file),
     docs: [],
     audit: [],
@@ -663,7 +663,7 @@ test("changed-lines guard rollouts enter the dated inventory with a full-scope p
   expect(
     expiredWaiverFailures(entries, new Date("2026-10-20T00:00:00.000Z")),
   ).toEqual([
-    "scripts/guard-rollout-policy.ts:1 dated waiver expired: fixture-guard",
+    "scripts/guard-rollouts/fixture-guard.ts:1 dated waiver expired: fixture-guard",
   ]);
 });
 

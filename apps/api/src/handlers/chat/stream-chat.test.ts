@@ -37,7 +37,10 @@ import {
   BROWSER_CONTROL_PROTOCOL_VERSION,
   type BrowserControlResult,
 } from "@stll/api-contract/browser-control";
-import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
+import {
+  CHAT_TOOL_EXECUTOR_METADATA_KEY,
+  UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE,
+} from "@stll/api-contract/chat";
 import {
   VISUAL_PREVIEW_TOOL_NAME,
   type VisualPreviewOutput,
@@ -129,6 +132,7 @@ import {
 } from "@/api/tests/helpers/chat-fixtures";
 import { diffLiveAgainstReload } from "@/api/tests/helpers/chat-live-reload-invariants";
 import { memberDocumentWriteAccess } from "@/api/tests/helpers/document-write-access";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { richChatParts } from "./__fixtures__/rich-chat-parts";
@@ -5916,6 +5920,60 @@ describe("chat stream refs", () => {
     expect(JSON.stringify(assistant)).toContain(resolved);
   });
 
+  test("the outgoing stream removes an unknown stored part's raw payload", async () => {
+    const messageId = createSafeId<"chatMessage">();
+    const marker = {
+      type: "activity" as const,
+      activityType: UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE,
+      content: { part: { type: "citation", secret: "future-private-value" } },
+    };
+    const sourceSnapshot = buildWireSnapshot([
+      { id: messageId, role: "assistant", parts: [] },
+    ]);
+    const chunks = await collectChunks(
+      transformClientVisibleStream({
+        source: streamChunks([sourceSnapshot]),
+        storedHistory: {
+          loadServed: async () =>
+            Result.ok(
+              new Map([
+                [
+                  messageId,
+                  {
+                    createdAt: "2026-01-01T00:00:00Z",
+                    edited: false,
+                    id: messageId,
+                    parts: [marker],
+                    revision: 0,
+                    role: "assistant" as const,
+                  },
+                ],
+              ]),
+            ),
+          rewrittenOnAcceptance: [],
+        },
+      }),
+    );
+    expect(JSON.stringify(chunks)).not.toContain("future-private-value");
+    const firstChunk = chunks.at(0);
+    expect(firstChunk?.type).toBe(EventType.MESSAGES_SNAPSHOT);
+    if (firstChunk?.type !== EventType.MESSAGES_SNAPSHOT) {
+      return;
+    }
+    expect(firstChunk.messages).toMatchObject([
+      {
+        id: messageId,
+        parts: [
+          {
+            type: "activity",
+            activityType: UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE,
+            content: {},
+          },
+        ],
+      },
+    ]);
+  });
+
   test("reports a failed served-history read as a terminal stream error", async () => {
     const chunks = await collectChunks(
       transformClientVisibleStream({
@@ -7380,4 +7438,52 @@ describe("decision passage court numbers", () => {
       `[as held](${passage(EARLIER_ID, "p-4")})`,
     );
   });
+});
+
+test("an event type outside the engine's types reaches the client between answer chunks", async () => {
+  const source = async function* (): AsyncIterable<StreamChunk> {
+    yield* [
+      asTestRaw<StreamChunk>({
+        type: EventType.RUN_STARTED,
+        runId: "run-1",
+        threadId: "thread-1",
+      }),
+      asTestRaw<StreamChunk>({
+        type: EventType.TEXT_MESSAGE_START,
+        messageId: "message-1",
+        role: "assistant",
+      }),
+      asTestRaw<StreamChunk>({
+        type: EventType.TEXT_MESSAGE_CONTENT,
+        messageId: "message-1",
+        delta: "The answer ",
+      }),
+      asTestRaw<StreamChunk>({ type: "FUTURE_EVENT" }),
+      asTestRaw<StreamChunk>({
+        type: EventType.TEXT_MESSAGE_CONTENT,
+        messageId: "message-1",
+        delta: "continues.",
+      }),
+      asTestRaw<StreamChunk>({
+        type: EventType.TEXT_MESSAGE_END,
+        messageId: "message-1",
+      }),
+      asTestRaw<StreamChunk>({
+        type: EventType.RUN_FINISHED,
+        runId: "run-1",
+        threadId: "thread-1",
+      }),
+    ];
+  };
+
+  const visible = await collectChunks(
+    transformClientVisibleStream({
+      source: source(),
+      storedHistory: NOTHING_REWRITTEN,
+    }),
+  );
+
+  expect(collectText(visible)).toBe("The answer continues.");
+  expect(visible.map(({ type }): string => type)).toContain("FUTURE_EVENT");
+  expect(visible.at(-1)?.type).toBe(EventType.RUN_FINISHED);
 });

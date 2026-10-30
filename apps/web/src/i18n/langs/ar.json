@@ -1090,7 +1090,9 @@
     },
     "emptyState": "لم يُعثر على أي قرارات. اضبط مصدرًا وشغّل مزامنة لاستيراد الاجتهاد القضائي.",
     "filters": {
-      "remove": "إزالة عامل التصفية {filter}"
+      "countryMismatch": "أُزيلت عوامل التصفية لأنها لا تخص البلد المحدد ({country}): {filters}.",
+      "remove": "إزالة عامل التصفية {filter}",
+      "showInCountry": "عرض {filter} في {country}"
     },
     "languages": {
       "count": "{count, plural, zero {لا توجد لغات} one {لغة واحدة} two {لغتان} few {# لغات} many {# لغة} other {# لغة}}",
@@ -1346,6 +1348,7 @@
       "toastTitle": "العرض الكامل غير متاح بعد"
     },
     "activity": {
+      "newerVersion": "يُعرض هذا المحتوى في إصدار أحدث.",
       "review": "تحديث المراجعة"
     },
     "aiPrompt": "أداة تحرير رسائل الذكاء الاصطناعي",
@@ -2357,6 +2360,7 @@
     "unknownUser": "مستخدم غير معروف",
     "unpin": "إلغاء التثبيت",
     "unsavedChanges": "تغييرات غير محفوظة",
+    "unsavedChangesClose": "تغييرات غير محفوظة. أغلق مرة أخرى لتجاهلها",
     "unsavedChangesEscape": "تغييرات غير محفوظة. اضغط على Esc مرة أخرى لتجاهلها",
     "unsavedLeaveConfirm": "لديك تغييرات غير محفوظة. هل تغادر دون حفظ؟",
     "unverified": "غير مُتحقَّق منه",
@@ -5425,6 +5429,7 @@
     "showCitedPartOnly": "عرض الجزء المستشهد به فقط",
     "showFullProvision": "عرض الحكم كاملًا",
     "showInText": "عرض في النص",
+    "sortNeedsYear": "اختر سنة في عوامل التصفية للفرز حسب هذا العمود.",
     "statedWindow": "التواريخ التي ذكرها الناشر: {range}",
     "status": {
       "current": "نافذ",
