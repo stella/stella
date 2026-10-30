@@ -30,7 +30,15 @@ const CONTENTS_MAX_LINES = 40;
  */
 const CONTENTS_LEADING_BLOCKS = 80;
 
-const TRAILING_TITLE_PUNCTUATION = /[\s.:;,–—-]+$/u;
+const TITLE_PUNCTUATION = /[\s.:;,–—-]/u;
+
+const trimTitlePunctuation = (title: string): string => {
+  let end = title.length;
+  while (end > 0 && TITLE_PUNCTUATION.test(title.charAt(end - 1))) {
+    end -= 1;
+  }
+  return title.slice(0, end);
+};
 
 /** The dash a publisher sets before a subordinate heading: `– Arguments`. */
 const LEADING_TITLE_DASH = /^[–—-]\s+/u;
@@ -42,12 +50,12 @@ const LEADING_TITLE_DASH = /^[–—-]\s+/u;
  * section and the document's heading name the same part.
  */
 export const comparableHeadingTitle = (title: string): string =>
-  normalizeUnicode(title, "NFKC")
-    .replaceAll(/\s+/gu, " ")
-    .trim()
-    .replace(LEADING_TITLE_DASH, "")
-    .replace(TRAILING_TITLE_PUNCTUATION, "")
-    .toLocaleLowerCase("und");
+  trimTitlePunctuation(
+    normalizeUnicode(title, "NFKC")
+      .replaceAll(/\s+/gu, " ")
+      .trim()
+      .replace(LEADING_TITLE_DASH, ""),
+  ).toLocaleLowerCase("und");
 
 /**
  * The titles a block lists when it can be part of a table of contents: each

@@ -222,6 +222,15 @@ describe("a contents list published as one block", () => {
 });
 
 describe("comparable heading titles", () => {
+  test("only a trailing punctuation run is removed", () => {
+    const punctuation = ".:;,–—-".repeat(2048);
+    expect(comparableHeadingTitle(`Findings${punctuation}`)).toBe("findings");
+    expect(comparableHeadingTitle(`${punctuation}Findings`)).toBe(
+      `${punctuation}findings`,
+    );
+    expect(comparableHeadingTitle(punctuation)).toBe("");
+  });
+
   test("a subheading's leading dash does not make it another title", () => {
     expect(comparableHeadingTitle("– Arguments of the parties")).toBe(
       comparableHeadingTitle("Arguments of the parties"),

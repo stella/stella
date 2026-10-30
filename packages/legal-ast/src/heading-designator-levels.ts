@@ -20,6 +20,8 @@
  * already nest is returned as it is.
  */
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+
 import type { Block, HeadingBlock, HeadingLevel } from "./document-ast.js";
 
 /** How a designator is set off: `1.`, `(1)` or `a)`, or a leading dash. */
@@ -123,7 +125,14 @@ const designatorOf = (
   }
   const { style, token } = delimited;
   if (/^\d{1,3}$/u.test(token)) {
-    return { kind: "arabic", style, token, ordinal: Number(token) };
+    return {
+      kind: "arabic",
+      style,
+      token,
+      ordinal: parseIntegerToken(token, { sign: "unsigned" }).unwrap(
+        "A numeric designator contains one to three decimal digits",
+      ),
+    };
   }
   const upper = /^[A-Z]+$/u.test(token);
   const lower = /^[a-z]+$/u.test(token);

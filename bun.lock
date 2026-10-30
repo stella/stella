@@ -1103,6 +1103,7 @@
       "name": "@stll/legal-ast",
       "version": "0.0.0",
       "dependencies": {
+        "@stll/agent-input": "workspace:*",
         "@stll/sha256": "workspace:*",
         "@stll/text-normalize": "workspace:*",
         "better-result": "catalog:",
