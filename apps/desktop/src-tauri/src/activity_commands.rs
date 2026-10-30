@@ -5,7 +5,7 @@
 //! `activity_get_day`.
 
 use chrono::Utc;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, State};
 
 use crate::{
   activity::{
@@ -37,7 +37,7 @@ fn update<E: From<String>>(
   manager.require_caller(caller).map_err(E::from)?;
   change(&mut manager)?;
   drop(manager);
-  let _ = app.emit(activity::CHANGED_EVENT, ());
+  activity::emit_changed(app);
   Ok(())
 }
 
@@ -207,7 +207,7 @@ pub fn activity_set_capture_details(
     caller.require_current(&app)?;
     activity_details::request_permission();
   }
-  let _ = app.emit(activity::CHANGED_EVENT, ());
+  activity::emit_changed(&app);
   Ok(())
 }
 
@@ -224,7 +224,7 @@ pub fn activity_set_detect_calls(
     manager.require_caller(&caller)?;
     manager.set_detect_calls(enabled, Utc::now())?;
   }
-  let _ = app.emit(activity::CHANGED_EVENT, ());
+  activity::emit_changed(&app);
   Ok(())
 }
 
