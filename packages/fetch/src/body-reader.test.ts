@@ -47,6 +47,30 @@ describe("idle-bounded response body reads", () => {
     expect(jest.getTimerCount()).toBe(0);
   });
 
+  test("a consumer pause past the idle window neither times out nor leaves a timer", async () => {
+    jest.useFakeTimers();
+    let cancelledWith: unknown = "not cancelled";
+    const response = new Response(
+      new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(Uint8Array.of(1));
+        },
+        cancel(reason) {
+          cancelledWith = reason;
+        },
+      }),
+    );
+    const iterator = iterateBodyWithIdleDeadline(response, { idleMs: 10 });
+    const first = await iterator.next();
+    expect(first.value).toEqual(Uint8Array.of(1));
+    expect(jest.getTimerCount()).toBe(0);
+    jest.advanceTimersByTime(50);
+    await iterator.return();
+    await flush();
+    expect(cancelledWith).toBeUndefined();
+    expect(jest.getTimerCount()).toBe(0);
+  });
+
   test("the iterator propagates abort identity and detaches its listener", async () => {
     jest.useFakeTimers();
     const controller = new AbortController();
