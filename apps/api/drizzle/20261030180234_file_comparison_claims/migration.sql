@@ -12,8 +12,8 @@ ALTER TABLE "file_comparison_uploads"
 -- re-adds the status check in the same transaction with one more allowed
 -- value, so no write escapes it; rollback re-adds the old list once no row is
 -- 'processing'.
-ALTER TABLE "file_comparison_uploads"
-  DROP CONSTRAINT "file_comparison_uploads_status_check";--> statement-breakpoint
+-- squawk-ignore ban-drop-constraint
+ALTER TABLE "file_comparison_uploads" DROP CONSTRAINT "file_comparison_uploads_status_check";--> statement-breakpoint
 
 -- New writes obey both checks at once; the online phase validates existing
 -- rows, which all satisfied the narrower status list and hold no claim.

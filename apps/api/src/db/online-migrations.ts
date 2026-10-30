@@ -972,10 +972,12 @@ export const ONLINE_INDEX_REPLACEMENTS: readonly OnlineIndexReplacement[] = [
   // The reconciliation sweep orders write rows by their scheduled retry, not
   // by their last write, and skips quarantined rows.
   {
+    introducedBy: "20261030180334_file_reservation_reconciliation_state",
     legacyName: "organization_file_objects_pending_reconcile_idx",
     replacementNames: ["organization_file_objects_active_reconcile_idx"],
   },
   {
+    introducedBy: "20261030180334_file_reservation_reconciliation_state",
     legacyName: "organization_file_objects_org_pending_reconcile_idx",
     replacementNames: ["organization_file_objects_org_active_reconcile_idx"],
   },

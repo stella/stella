@@ -16,6 +16,7 @@ import type { RlsDatabase } from "@/api/db/scoped";
 import { env } from "@/api/env";
 import { readFileContentEndpoint } from "@/api/handlers/files/read-content";
 import type { createReadFileContentEndpoint } from "@/api/handlers/files/read-content";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { HttpStatusResponse } from "@/api/http/status";
 import { createSafeId } from "@/api/lib/branded-types";
 import { runWithMeasuredQueryCounter } from "@/api/lib/db-query-counter";
@@ -190,6 +191,7 @@ export const fileContentScalingScenario = {
       return await runWithMeasuredQueryCounter(async (counter) => {
         const response = await endpoint.handler(
           asTestRaw<Parameters<typeof endpoint.handler>[0]>({
+            route: "/v1/file-content/:grant" satisfies ApiRoutePath,
             caller: checked.grant,
             params: { grant },
             request: new Request(
