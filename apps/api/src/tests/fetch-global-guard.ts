@@ -2,13 +2,11 @@ import { panic } from "better-result";
 import { afterAll, beforeEach, onTestFinished } from "bun:test";
 
 const processFetch = globalThis.fetch;
-let testFile = "unknown API test file";
-
-// Bun narrows argv for a test worker to the file currently being executed.
-const currentTestFile = () => Bun.argv[1] ?? testFile;
 
 beforeEach(() => {
-  testFile = currentTestFile();
+  // In a multi-file run `Bun.argv` keeps the command line; `Bun.main` is the
+  // file whose tests are running.
+  const testFile = Bun.main;
   const testFetch = globalThis.fetch;
   onTestFinished(() => {
     if (globalThis.fetch === testFetch) {
