@@ -309,7 +309,10 @@ export const restampMigrations = ({
     earliest = target + 60_000;
     return target === own ? [] : [{ directory, target: new Date(target) }];
   });
-  return moves.map(({ directory, target }) => {
+  // Stamps only move forward, and a target equal to a later migration's
+  // current name means that migration moves too; applying the plan from the
+  // last move vacates every destination (and rewrites its references) first.
+  const applied = moves.toReversed().map(({ directory, target }) => {
     const oldName = path.posix.basename(directory);
     const suffix = oldName.slice(15);
     const newName = `${dateToStamp(target)}_${suffix}`;
@@ -338,6 +341,7 @@ export const restampMigrations = ({
     }
     return { oldName, newName };
   });
+  return applied.toReversed();
 };
 
 export const checkMigrationStamps = ({

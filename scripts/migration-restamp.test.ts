@@ -162,6 +162,44 @@ test("moves a later valid migration rather than reordering the branch", () => {
   }
 });
 
+test("moves two migrations sharing a suffix when one targets the other's name", () => {
+  const root = fixture();
+  try {
+    migration(root, "20260101010000_feature", "select 10;\n");
+    migration(root, "20260101020100_feature", "select 11;\n");
+    commitFeature(root);
+    advanceBase(root);
+    const firstSql = hash(
+      path.join(root, "apps/api/drizzle/20260101010000_feature/migration.sql"),
+    );
+    const secondSql = hash(
+      path.join(root, "apps/api/drizzle/20260101020100_feature/migration.sql"),
+    );
+    expect(restampMigrations({ baseRef: "base", cwd: root })).toEqual([
+      { oldName: "20260101010000_feature", newName: "20260101020100_feature" },
+      { oldName: "20260101020100_feature", newName: "20260101020200_feature" },
+    ]);
+    expect(
+      hash(
+        path.join(
+          root,
+          "apps/api/drizzle/20260101020100_feature/migration.sql",
+        ),
+      ),
+    ).toBe(firstSql);
+    expect(
+      hash(
+        path.join(
+          root,
+          "apps/api/drizzle/20260101020200_feature/migration.sql",
+        ),
+      ),
+    ).toBe(secondSql);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("keeps an added migration that already follows the moved ones", () => {
   const root = fixture();
   try {
