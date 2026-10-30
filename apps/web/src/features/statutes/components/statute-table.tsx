@@ -163,8 +163,7 @@ const StatuteOrderDirectionsContext = createContext<SortDirectionOffers | null>(
   null,
 );
 
-export const StatuteOrderDirectionsScope =
-  StatuteOrderDirectionsContext.Provider;
+const StatuteOrderDirectionsScope = StatuteOrderDirectionsContext.Provider;
 
 const StatuteOrderedHeader = ({
   column,

@@ -1,7 +1,7 @@
 import type { PGlite } from "@electric-sql/pglite";
 import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { statuteEliParts } from "@stll/api-contract/statute-act-number";
@@ -143,10 +143,16 @@ beforeAll(async () => {
           ],
     ),
   );
-  await db.insert(caseLawStatuteCitationCountState).values({
-    key: STATUTE_CITATION_COUNT_STATE_KEY,
-    status: STATUTE_CITATION_COUNT_STATUS.READY,
-  });
+  // The migration seeds the one state row; the fixture's counts are complete.
+  await db
+    .update(caseLawStatuteCitationCountState)
+    .set({ status: STATUTE_CITATION_COUNT_STATUS.READY })
+    .where(
+      eq(
+        caseLawStatuteCitationCountState.key,
+        STATUTE_CITATION_COUNT_STATE_KEY,
+      ),
+    );
   await seedOtherYears(20, 1);
 
   legislationDb = async (read) =>

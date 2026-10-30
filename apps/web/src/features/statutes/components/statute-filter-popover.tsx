@@ -2,6 +2,7 @@ import { useId } from "react";
 
 import { useTranslations } from "use-intl";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { LAW_YEAR_BOUNDS } from "@stll/api-contract/law-year";
 import { LEGISLATION_LIST_VALIDITIES } from "@stll/api-contract/legislation-status";
 import { NumberInput } from "@stll/ui/number-input";
@@ -94,9 +95,10 @@ const YearSection = ({
         // A year set elsewhere (a chip removed, a link) replaces the field's
         // text rather than leaving an edit the URL no longer holds.
         key={selectedValue ?? ""}
-        defaultValue={
-          selectedValue === undefined ? undefined : Number(selectedValue)
-        }
+        // The search schema admits only a whole year here.
+        defaultValue={parseIntegerToken(selectedValue, {
+          sign: "unsigned",
+        }).unwrapOr(undefined)}
         format={YEAR_FORMAT}
         inputProps={{ "aria-labelledby": headingId }}
         locale={locale}
