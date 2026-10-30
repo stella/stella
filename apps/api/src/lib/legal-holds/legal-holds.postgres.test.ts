@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 import { LEGAL_HOLD_ACTIVE } from "@stll/api-contract/legal-holds";
 
@@ -45,6 +45,7 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
         const otherOrganizationId = mintAuthProviderId<"organization">();
         const userId = mintAuthProviderId<"user">();
         const workspaceId = createSafeId<"workspace">();
+        const folderId = createSafeId<"entity">();
         const entityId = createSafeId<"entity">();
         const contactId = createSafeId<"contact">();
         const cleanupId = createSafeId<"entityDeletionCleanupRequest">();
@@ -109,9 +110,20 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
             workspaceId,
             userId,
           });
-          await db
-            .insert(entities)
-            .values({ id: entityId, workspaceId, name: "Evidence" });
+          await db.insert(entities).values([
+            {
+              id: folderId,
+              workspaceId,
+              kind: "folder",
+              name: "Evidence folder",
+            },
+            {
+              id: entityId,
+              workspaceId,
+              parentId: folderId,
+              name: "Evidence",
+            },
+          ]);
           await db.insert(entityDeletionCleanupRequests).values({
             id: cleanupId,
             organizationId,
@@ -330,6 +342,35 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
           if (itemHold.isErr()) {
             throw new TypeError("Expected item hold");
           }
+          const folderDelete = await Result.gen(() =>
+            deleteEntitiesHandler({
+              safeDb,
+              organizationId,
+              workspaceId,
+              recordAuditEvent,
+              body: { entityIds: [folderId] },
+            }),
+          );
+          expect(folderDelete.isErr()).toBe(true);
+          if (folderDelete.isErr()) {
+            expect(resolveHandlerError(folderDelete.error)).toMatchObject({
+              status: 409,
+              code: LEGAL_HOLD_ACTIVE,
+              issues: [{ path: itemHold.value.id }],
+            });
+          }
+          expect(
+            await db
+              .select({ id: entities.id })
+              .from(entities)
+              .where(eq(entities.id, folderId)),
+          ).toHaveLength(1);
+          expect(
+            await db
+              .select({ id: entities.id })
+              .from(entities)
+              .where(eq(entities.id, entityId)),
+          ).toHaveLength(1);
           expect(
             (
               await scopedDb(
@@ -354,7 +395,7 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
               )
             ).isErr(),
           ).toBe(true);
-          await scopedDb(
+          const itemReleased = await scopedDb(
             async (tx) =>
               await releaseLegalHold({
                 tx,
@@ -366,6 +407,7 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
                 recordAuditEvent,
               }),
           );
+          expect(itemReleased.isOk()).toBe(true);
           const audit = await db
             .select({
               action: auditLogs.action,
@@ -390,6 +432,22 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
           expect(audit.at(1)?.changes).toMatchObject({
             releaseReason: { old: null, new: "Proceed with deletion" },
           });
+          const deletedFolder = await Result.gen(() =>
+            deleteEntitiesHandler({
+              safeDb,
+              organizationId,
+              workspaceId,
+              recordAuditEvent,
+              body: { entityIds: [folderId] },
+            }),
+          );
+          expect(deletedFolder.isOk()).toBe(true);
+          expect(
+            await db
+              .select({ id: entities.id })
+              .from(entities)
+              .where(inArray(entities.id, [folderId, entityId])),
+          ).toEqual([]);
           await scopedDb(
             async (tx) =>
               await completeWorkspaceDeletion({

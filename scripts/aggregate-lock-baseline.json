@@ -1074,30 +1074,6 @@
     "reason": "builder-for in apps/api/src/handlers/entities/copy-utils.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
-    "file": "apps/api/src/handlers/entities/delete.ts",
-    "fingerprint": "417504192e24109eab7c3ed529a2ccf11edb14f06da52ce9965b479f4e974cda",
-    "count": 1,
-    "reason": "pg_advisory_xact_lock( in apps/api/src/handlers/entities/delete.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/handlers/entities/delete.ts",
-    "fingerprint": "460a48355d616360021e4ce5644ee73026097fd9311d62a2847ee6e2ca223750",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/entities/delete.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/handlers/entities/delete.ts",
-    "fingerprint": "773f5255e8b0f9dc8120324f75eda2dc6fd8343afc463bd81d98ba34fbf2c77d",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/entities/delete.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/handlers/entities/delete.ts",
-    "fingerprint": "aca7a35d8d752b99bffcab52cccbeec3058c99abef18feb696fd86ec3e97ffe8",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/entities/delete.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
     "file": "apps/api/src/handlers/entities/finalize-desktop-edit-session.ts",
     "fingerprint": "5623b4405609ff545a6e4db1da0632494e44d77c4105b8f1ae36a87fdd66c802",
     "count": 1,
