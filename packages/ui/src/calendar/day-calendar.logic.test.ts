@@ -265,6 +265,16 @@ type Segment = DayCalendarRange & { id: string };
 
 // Activity arrives as consecutive segments: each starts where the previous
 // ended, or after a gap.
+// Ids come from a small pool that includes the shapes generated `mixed` ids
+// take (`mixed:<id>`, `mixed:<id>:2`), so they can collide with input ids.
+const segmentIdArbitrary = fc
+  .tuple(
+    fc.constantFrom("", "mixed:", "mixed:mixed:"),
+    fc.integer({ max: 6, min: 0 }),
+    fc.constantFrom("", ":2"),
+  )
+  .map(([prefix, index, suffix]) => `${prefix}s${String(index)}${suffix}`);
+
 const segmentsArbitrary = fc
   .array(
     fc.record({
@@ -273,16 +283,24 @@ const segmentsArbitrary = fc
     }),
     { maxLength: 40 },
   )
-  .map((steps) => {
+  .chain((steps) =>
+    fc
+      .uniqueArray(segmentIdArbitrary, {
+        maxLength: steps.length,
+        minLength: steps.length,
+      })
+      .map((ids) => ({ ids, steps })),
+  )
+  .map(({ ids, steps }) => {
     const segments: Segment[] = [];
     let cursor = 0;
     for (const [index, { durationMs, gapMs }] of steps.entries()) {
       const startMs = cursor + gapMs;
-      segments.push({
-        endMs: startMs + durationMs,
-        id: `segment-${String(index)}`,
-        startMs,
-      });
+      const id = ids.at(index);
+      if (id === undefined) {
+        throw new Error("One id per segment");
+      }
+      segments.push({ endMs: startMs + durationMs, id, startMs });
       cursor = startMs + durationMs;
     }
     return segments;
@@ -344,6 +362,44 @@ describe("day calendar segment merging", () => {
         },
       ),
     );
+  });
+
+  test("day calendar merged entries have unique ids", () => {
+    assertProperty(
+      "day calendar merged entries have unique ids",
+      fc.property(
+        segmentsArbitrary,
+        fc.integer({ max: 20 * 60_000, min: 1 }),
+        (segments, thresholdMs) => {
+          const entries = mergeShortSegments(segments, { thresholdMs }).map(
+            (entry) => (entry.type === "single" ? entry.segment : entry),
+          );
+
+          expect(new Set(entries.map(({ id }) => id)).size).toBe(
+            entries.length,
+          );
+          expect(layoutOverlaps(entries).size).toBe(entries.length);
+        },
+      ),
+    );
+  });
+
+  test("a mixed id steps past an input id it would collide with", () => {
+    const minute = 60_000;
+    const merged = mergeShortSegments(
+      [
+        { endMs: minute, id: "a", startMs: 0 },
+        { endMs: 2 * minute, id: "b", startMs: minute },
+        { endMs: 11 * minute, id: "mixed:a", startMs: 10 * minute },
+      ],
+      { thresholdMs: 5 * minute },
+    );
+
+    expect(
+      merged.map((entry) =>
+        entry.type === "single" ? entry.segment.id : entry.id,
+      ),
+    ).toEqual(["mixed:a:2", "mixed:a"]);
   });
 
   test("lists the sources of a run of rapid switching", () => {

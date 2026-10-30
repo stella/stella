@@ -288,7 +288,9 @@ export type MergedSegment<Segment extends DayCalendarRange & { id: string }> =
  * `thresholdMs` that touch or overlap form one `mixed` entry listing its
  * sources in time order; a lone short segment stays as it is. Every input
  * segment lands in exactly one output entry, and the time the output covers
- * equals the time the input covers.
+ * equals the time the input covers. Output ids are unique: a `mixed` id
+ * derives from its first source and takes a numeric suffix when an input or
+ * an earlier entry already uses it.
  */
 export const mergeShortSegments = <
   Segment extends DayCalendarRange & { id: string },
@@ -303,8 +305,19 @@ export const mergeShortSegments = <
       compareIds(left.id, right.id),
   );
   const merged: MergedSegment<Segment>[] = [];
+  const takenIds = new Set(segments.map(({ id }) => id));
   let run: Segment[] = [];
   let runEnd = Number.NEGATIVE_INFINITY;
+
+  const mixedId = (first: Segment) => {
+    const base = `mixed:${first.id}`;
+    let id = base;
+    for (let suffix = 2; takenIds.has(id); suffix += 1) {
+      id = `${base}:${String(suffix)}`;
+    }
+    takenIds.add(id);
+    return id;
+  };
 
   const flushRun = () => {
     const first = run.at(0);
@@ -314,7 +327,7 @@ export const mergeShortSegments = <
     if (first !== undefined && run.length > 1) {
       merged.push({
         endMs: runEnd,
-        id: `mixed:${first.id}`,
+        id: mixedId(first),
         sources: run,
         startMs: first.startMs,
         type: "mixed",
