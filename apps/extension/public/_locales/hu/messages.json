@@ -95,5 +95,11 @@
   },
   "checkingAccess": {
     "message": "Kapcsolat ellenőrzése…"
+  },
+  "statusConnectedElsewhere": {
+    "message": "Egy másik stella-lap van csatlakoztatva"
+  },
+  "connectTabInstead": {
+    "message": "Inkább ezt a stella-lapot csatlakoztasd"
   }
 }

@@ -95,5 +95,11 @@
   },
   "checkingAccess": {
     "message": "Comprobando la conexión…"
+  },
+  "statusConnectedElsewhere": {
+    "message": "Hay otra pestaña de stella conectada"
+  },
+  "connectTabInstead": {
+    "message": "Conectar esta pestaña de stella en su lugar"
   }
 }

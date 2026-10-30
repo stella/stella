@@ -95,5 +95,11 @@
   },
   "checkingAccess": {
     "message": "Kontrola pripojenia…"
+  },
+  "statusConnectedElsewhere": {
+    "message": "Je pripojená iná karta stelly"
+  },
+  "connectTabInstead": {
+    "message": "Pripojiť namiesto nej túto kartu stelly"
   }
 }

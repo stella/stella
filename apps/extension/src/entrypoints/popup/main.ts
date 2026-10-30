@@ -61,7 +61,9 @@ const readActiveTab = async (): Promise<chrome.tabs.Tab | null> =>
 const activeTabKind = (tab: chrome.tabs.Tab | null): PopupActiveTab => {
   const url = tab?.url ?? "";
   if (trustedStellaOriginFromUrl(url) !== null) {
-    return { kind: "stella" };
+    return tab?.id === undefined
+      ? { kind: "unsupported" }
+      : { kind: "stella", tabId: tab.id };
   }
   if (parseControllableUrl(url) !== null) {
     return { kind: "controllable" };
@@ -74,6 +76,7 @@ const statusSubstitutions = (view: PopupView): string[] | undefined => {
     case "connected":
     case "tab-handed-to-stella":
       return [view.state.origin];
+    case "connected-elsewhere":
     case "not-connected":
     case "open-stella-to-connect":
     case "website-access-needed":

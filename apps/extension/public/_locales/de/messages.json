@@ -95,5 +95,11 @@
   },
   "checkingAccess": {
     "message": "Verbindung wird geprüft…"
+  },
+  "statusConnectedElsewhere": {
+    "message": "Ein anderer stella-Tab ist verbunden"
+  },
+  "connectTabInstead": {
+    "message": "Stattdessen diesen stella-Tab verbinden"
   }
 }

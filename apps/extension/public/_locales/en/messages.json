@@ -95,5 +95,11 @@
   },
   "checkingAccess": {
     "message": "Checking connection…"
+  },
+  "statusConnectedElsewhere": {
+    "message": "Another stella tab is connected"
+  },
+  "connectTabInstead": {
+    "message": "Connect this stella tab instead"
   }
 }

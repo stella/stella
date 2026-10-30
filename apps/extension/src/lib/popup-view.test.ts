@@ -4,23 +4,28 @@ import { readdir } from "node:fs/promises";
 import {
   handedTabView,
   type PopupActiveTab,
+  type PopupController,
   type PopupMessageKey,
   popupView,
 } from "./popup-view";
 
 const activeTabs = [
-  { kind: "stella" },
+  { kind: "stella", tabId: 1 },
+  { kind: "stella", tabId: 2 },
   { kind: "controllable" },
   { kind: "unsupported" },
 ] as const satisfies readonly PopupActiveTab[];
-const controllers = [null, { origin: "https://app.stll.app" }] as const;
+const controllers = [
+  null,
+  { origin: "https://app.stll.app", tabId: 1 },
+] as const satisfies readonly (PopupController | null)[];
 const grants = [false, true] as const;
 
 describe("popupView", () => {
   for (const granted of grants) {
     for (const controller of controllers) {
       for (const activeTab of activeTabs) {
-        test(`${granted ? "granted" : "not granted"}, ${controller ? "controller" : "no controller"}, ${activeTab.kind}`, () => {
+        test(`${granted ? "granted" : "not granted"}, ${controller ? "controller" : "no controller"}, ${activeTab.kind}${activeTab.kind === "stella" ? ` tab ${activeTab.tabId}` : ""}`, () => {
           const view = popupView({ activeTab, controller, granted });
           if (!granted) {
             expect(view.state.type).toBe("website-access-needed");
@@ -48,6 +53,30 @@ describe("popupView", () => {
             ]);
             return;
           }
+          if (
+            activeTab.kind === "stella" &&
+            activeTab.tabId !== controller.tabId
+          ) {
+            expect(view).toEqual({
+              primary: { action: "connect", messageKey: "connectTabInstead" },
+              secondary: [
+                {
+                  action: "disconnect",
+                  descriptionMessageKey: "disconnectDescription",
+                  messageKey: "disconnectTab",
+                },
+                {
+                  action: "revoke",
+                  descriptionMessageKey: "revokeDescription",
+                  messageKey: "revokeAccess",
+                },
+              ],
+              state: { type: "connected-elsewhere" },
+              statusMessageKey: "statusConnectedElsewhere",
+            });
+            return;
+          }
+          expect(view.statusMessageKey).toBe("statusConnected");
           expect(view.state).toEqual({
             origin: "https://app.stll.app",
             type: "connected",

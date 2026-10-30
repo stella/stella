@@ -95,5 +95,11 @@
   },
   "checkingAccess": {
     "message": "Pārbauda savienojumu…"
+  },
+  "statusConnectedElsewhere": {
+    "message": "Ir savienota cita stella cilne"
+  },
+  "connectTabInstead": {
+    "message": "Tās vietā savienot šo stella cilni"
   }
 }

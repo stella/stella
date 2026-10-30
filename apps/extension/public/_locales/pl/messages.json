@@ -95,5 +95,11 @@
   },
   "checkingAccess": {
     "message": "Sprawdzanie połączenia…"
+  },
+  "statusConnectedElsewhere": {
+    "message": "Połączona jest inna karta stella"
+  },
+  "connectTabInstead": {
+    "message": "Połącz tę kartę stella zamiast tamtej"
   }
 }

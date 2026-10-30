@@ -95,5 +95,11 @@
   },
   "checkingAccess": {
     "message": "Tikrinamas ryšys…"
+  },
+  "statusConnectedElsewhere": {
+    "message": "Prijungtas kitas stella skirtukas"
+  },
+  "connectTabInstead": {
+    "message": "Vietoj jo prijungti šį stella skirtuką"
   }
 }

@@ -1,9 +1,12 @@
 import type enMessages from "../../public/_locales/en/messages.json";
+import type { BrowserController } from "./controller";
 
 export type PopupMessageKey = keyof typeof enMessages;
 export type PopupActiveTab =
-  { kind: "stella" } | { kind: "controllable" } | { kind: "unsupported" };
-export type PopupController = { origin: string };
+  | { kind: "stella"; tabId: number }
+  | { kind: "controllable" }
+  | { kind: "unsupported" };
+export type PopupController = Pick<BrowserController, "origin" | "tabId">;
 export type PopupAction = {
   action: "adopt" | "connect" | "grant" | "grant-and-connect";
   messageKey: PopupMessageKey;
@@ -15,6 +18,7 @@ export type PopupSecondaryAction = {
 };
 export type PopupState =
   | { type: "connected"; origin: string }
+  | { type: "connected-elsewhere" }
   | { type: "not-connected" }
   | { type: "website-access-needed" }
   | { type: "open-stella-to-connect" }
@@ -74,6 +78,14 @@ export const popupView = ({
       secondary: [REVOKE],
       state: { type: "open-stella-to-connect" },
       statusMessageKey: "statusOpenStella",
+    };
+  }
+  if (activeTab.kind === "stella" && activeTab.tabId !== controller.tabId) {
+    return {
+      primary: { action: "connect", messageKey: "connectTabInstead" },
+      secondary: [DISCONNECT, REVOKE],
+      state: { type: "connected-elsewhere" },
+      statusMessageKey: "statusConnectedElsewhere",
     };
   }
   return {

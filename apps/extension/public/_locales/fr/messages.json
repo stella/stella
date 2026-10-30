@@ -95,5 +95,11 @@
   },
   "checkingAccess": {
     "message": "Vérification de la connexion…"
+  },
+  "statusConnectedElsewhere": {
+    "message": "Un autre onglet stella est connecté"
+  },
+  "connectTabInstead": {
+    "message": "Connecter cet onglet stella à la place"
   }
 }

@@ -95,5 +95,11 @@
   },
   "checkingAccess": {
     "message": "جارٍ التحقق من الاتصال…"
+  },
+  "statusConnectedElsewhere": {
+    "message": "علامة تبويب أخرى في stella متصلة"
+  },
+  "connectTabInstead": {
+    "message": "الاتصال بعلامة تبويب stella هذه بدلاً منها"
   }
 }

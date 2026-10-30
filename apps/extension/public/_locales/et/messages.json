@@ -95,5 +95,11 @@
   },
   "checkingAccess": {
     "message": "Ühenduse kontrollimine…"
+  },
+  "statusConnectedElsewhere": {
+    "message": "Ühendatud on teine stella vahekaart"
+  },
+  "connectTabInstead": {
+    "message": "Ühenda selle asemel see stella vahekaart"
   }
 }
