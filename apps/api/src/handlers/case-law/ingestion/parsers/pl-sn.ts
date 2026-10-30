@@ -32,6 +32,7 @@ import { collapseSpacedLetters } from "@stll/text-normalize";
 
 import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 import {
+  continuesSentence,
   INDENT_THRESHOLD_PT,
   opensBlockParagraph,
   POINT_MARKERS,
@@ -533,7 +534,9 @@ const readPage = (
       indented:
         blocks === undefined
           ? indented
-          : spacedApart ||
+          : (spacedApart &&
+              above !== undefined &&
+              !continuesSentence(above, line, blocks.rightEdge)) ||
             opensBlockParagraph({
               previous: index === 0 ? blocks.carried : above,
               line,

@@ -705,3 +705,39 @@ test("a baseline reference at a wrapped line keeps its exact footnote target", (
     `<a href="#${encodeURIComponent(reference.noteId)}"><b><i> 1</i></b></a>`,
   );
 });
+
+test.each([24, 30, 42])(
+  "a sentence continuation across a %s point gap stays in its paragraph",
+  async (gap) => {
+    const pdf = PDF.create();
+    const page = pdf.addPage({ size: "letter" });
+    for (const index of [0, 1, 2, 3, 4]) {
+      page.drawText(
+        "Ten akapit ustala rozmiar pisma i standardowy rytm tekstu.",
+        {
+          x: 72,
+          y: 700 - index * 15,
+          size: 12,
+        },
+      );
+    }
+    const opening =
+      "Organ antymonopolowy na podstawie zebranego w sprawie dowodu";
+    page.drawText(opening, { x: 72, y: 600, size: 12 });
+    page.drawText("ustala stan sprawy.", { x: 72, y: 600 - gap, size: 12 });
+    page.drawText("Nowy akapit opisuje inny fakt.", {
+      x: 72,
+      y: 570 - gap,
+      size: 12,
+    });
+    page.drawText("1. Pierwszy punkt.", { x: 72, y: 540 - gap, size: 12 });
+    const content = await extractPlPdfLetterheadContent(
+      await pdf.save(),
+      PL_PDF_PARAGRAPH_START.INDENT,
+    );
+    const paragraphs = plainText(assemblePlSnParagraphs(content.body));
+    expect(paragraphs).toContain(`${opening} ustala stan sprawy.`);
+    expect(paragraphs).toContain("Nowy akapit opisuje inny fakt.");
+    expect(paragraphs).toContain("1. Pierwszy punkt.");
+  },
+);
