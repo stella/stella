@@ -26,6 +26,7 @@ GlobalRegistrator.register({ url: "http://localhost:3000/" });
 Object.assign(import.meta.env, {
   VITE_API_URL: "http://localhost:3001",
   VITE_BETA_FEATURES_ENABLED: "true",
+  VITE_PUBLIC_LAW_ENABLED: "true",
 });
 Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
   configurable: true,
@@ -201,7 +202,6 @@ const { ActionCapabilitiesProvider } =
   await import("@/lib/organization/feature-access/capability-actions");
 const { resolveActionCapabilities } =
   await import("@/lib/organization/feature-access/action-capabilities.logic");
-const { useDevStore } = await import("@/lib/dev-store");
 const { assignUserStorage } = await import("@/lib/account/user-scoped-storage");
 const { SearchDialog } = await import("./search-dialog");
 
@@ -227,7 +227,6 @@ afterEach(() => {
   searchResponseGate = null;
   citationHits = citationResponse.hits;
   assignUserStorage(undefined);
-  useDevStore.setState({ publicLawPreview: false });
 });
 afterAll(async () => {
   globalThis.fetch = originalFetch;
@@ -326,7 +325,6 @@ test("actions stay on the blank screen and never sit above results", async () =>
 });
 
 test("a resolved citation is the first keyboard result above matter hits", async () => {
-  useDevStore.setState({ publicLawPreview: true });
   const appRouter = await mount(async () => {
     const root = router.createRootRoute({ component: SearchDialogHarness });
     const decision = router.createRoute({
@@ -384,7 +382,6 @@ test("a resolved citation is the first keyboard result above matter hits", async
 });
 
 test("citation expansion can be collapsed and ordinary keywords keep their search behavior", async () => {
-  useDevStore.setState({ publicLawPreview: true });
   await mount();
   await typeQuery("22 As 40/2025 - 49", "22 As 40/2025");
   const caseLaw = testing.screen.getByRole("button", {
@@ -410,7 +407,6 @@ test("citation expansion can be collapsed and ordinary keywords keep their searc
 });
 
 test("a citation never displays stale loose keyword hits while its phrase search loads", async () => {
-  useDevStore.setState({ publicLawPreview: true });
   await mount();
   await typeQuery();
   const gate = Promise.withResolvers<undefined>();
@@ -441,7 +437,6 @@ test.each([
 ])(
   "citation %s uses a whole phrase for matters and the raw query for Case Law",
   async (citation) => {
-    useDevStore.setState({ publicLawPreview: true });
     await mount();
     await typeQuery(hit.title, citation);
     expect(searchRequestBodies).toContainEqual(
@@ -459,7 +454,6 @@ test.each([
 );
 
 test("Case law scope searches only case law and drops matter recents and actions", async () => {
-  useDevStore.setState({ publicLawPreview: true });
   await mount();
   await testing.act(async () => {
     testing.fireEvent.click(
@@ -550,7 +544,6 @@ test("a folder result reveals the folder in the tree on screen, not the first tr
 });
 
 test("a bare docket shows the sheet identifier of every matching decision", async () => {
-  useDevStore.setState({ publicLawPreview: true });
   const first = citationDecision;
   citationHits = [
     first,
@@ -583,9 +576,13 @@ test("highlighting a citation clears the selected supplemental case-law preview"
       identifiers: [{ type: "case-number", value: "22 As 40/2025 - 51" }],
     },
   ];
-  useDevStore.setState({ publicLawPreview: true });
   await mount();
   const input = await typeQuery(hit.title, "22 As 40/2025 - 49");
+  expect(
+    testing.screen
+      .getByRole("button", { name: messages.common.caseLaw })
+      .getAttribute("aria-expanded"),
+  ).toBe("true");
   const supplemental = await testing.screen.findByRole("button", {
     name: supplementalHit.title,
   });

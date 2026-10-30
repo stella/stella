@@ -10,6 +10,7 @@
  * `unanchored` rather than located by position.
  */
 
+import { panic } from "better-result";
 import { inArray } from "drizzle-orm";
 
 import { mapWithConcurrency } from "@stll/concurrency";
@@ -22,6 +23,7 @@ import { chunkDocument } from "@/api/lib/corpus-index/chunking";
 import { readCorpusTombstones } from "@/api/lib/legal-search/corpus-reads";
 import {
   readCorpusAst,
+  readCorpusForRecovery,
   readCorpusText,
 } from "@/api/lib/legal-search/corpus-storage";
 import { prefetchCorpusTombstones } from "@/api/lib/legal-search/corpus-tombstones";
@@ -123,11 +125,23 @@ const hydratingPayloadSource = async (
     ),
     read,
   );
+  const documentByAstKey = new Map(
+    pointers.flatMap(({ astS3Key, documentId }) =>
+      astS3Key === null ? [] : [[astS3Key, documentId] as const],
+    ),
+  );
   return {
     readText: async (storedKey) =>
       await readCorpusText(storedKey, { readTombstones }),
     readAst: async (storedKey) =>
-      await readCorpusAst(storedKey, { readTombstones }),
+      (
+        await readCorpusForRecovery({
+          documentId:
+            documentByAstKey.get(storedKey) ??
+            panic("Passage AST pointer has no document"),
+          read: async () => await readCorpusAst(storedKey, { readTombstones }),
+        })
+      ).unwrapOr(null),
   };
 };
 

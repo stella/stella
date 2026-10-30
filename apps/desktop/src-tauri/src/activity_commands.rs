@@ -86,9 +86,20 @@ pub fn activity_set_recording_status(
   if status == ActivityRecordingStatus::Off {
     return Err("activity recording can only be paused".to_string());
   }
+  let mut prompt = false;
   update(&app, &state, &caller, |manager| {
+    // Details are on by default, so the first start asks for the
+    // permission that records them.
+    prompt = manager.recording_status() == ActivityRecordingStatus::Off
+      && manager.capture_details();
     manager.set_recording_status(status, Utc::now())
-  })
+  })?;
+  // Recording has started either way; the prompt only follows a caller that
+  // is still current.
+  if prompt && caller.require_current(&app).is_ok() {
+    activity_details::request_permission();
+  }
+  Ok(())
 }
 
 #[tauri::command]
