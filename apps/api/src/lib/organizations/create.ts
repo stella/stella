@@ -1,5 +1,5 @@
 import { APIError } from "better-auth/api";
-import { panic, Result, UnhandledException } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import {
@@ -180,7 +180,13 @@ export const createOrganizationForAccount = async (
       }
       // An unknown failure may follow a committed better-auth write. Keep the
       // claim pending rather than risking a duplicate organization on retry.
-      return Result.err(new UnhandledException({ cause: created.error }));
+      return Result.err(
+        new HandlerError({
+          status: 500,
+          message: "Organization creation could not be completed.",
+          cause: created.error,
+        }),
+      );
     }
     const result = {
       organizationId: created.value.id,

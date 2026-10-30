@@ -1,5 +1,5 @@
 import { APIError } from "better-auth/api";
-import { panic, Result, UnhandledException } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
@@ -267,11 +267,15 @@ describe("organization creation provider refusals", () => {
       },
     );
     expect(result.isErr()).toBe(true);
-    if (result.isOk() || !(result.error instanceof UnhandledException)) {
+    if (result.isOk() || !HandlerError.is(result.error)) {
       return panic(
         "Unknown creation failures must preserve their original cause",
       );
     }
+    expect(result.error.status).toBe(500);
+    expect(result.error.message).toBe(
+      "Organization creation could not be completed.",
+    );
     expect(result.error.cause).toBe(error);
     expect(fixture.receipts.get(REQUEST_KEY)?.organizationId).toBeNull();
     expect(fixture.audits).toEqual([]);
