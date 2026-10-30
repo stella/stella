@@ -2,6 +2,7 @@ import {
   playbookEditorStates,
   visualRegistry,
 } from "../../src/routes/dev/-visual-metadata";
+import { findEscapedText } from "../helpers/escaped-text";
 import {
   expect,
   test,
@@ -27,6 +28,10 @@ for (const [name, { label }] of Object.entries(visualRegistry)) {
       section.locator(":scope > :not(header)").first(),
     ).toBeVisible();
     await waitForStableGeometry(page, section);
+    expect(
+      await findEscapedText(section),
+      `${name} must keep every text inside its box`,
+    ).toEqual([]);
     if (name === "mcp-reconnect") {
       // Require the real notice, including the approval-only connection,
       // rather than accepting an empty fixture wrapper.

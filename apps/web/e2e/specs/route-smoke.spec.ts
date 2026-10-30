@@ -26,6 +26,7 @@ import {
   registerDeferredE2eCleanup,
 } from "../helpers/deferred-cleanup";
 import { createUploadedDocumentRoute } from "../helpers/document";
+import { findEscapedText } from "../helpers/escaped-text";
 import {
   assertNetworkBaseline,
   assertNetworkBaselineCoverage,
@@ -194,6 +195,7 @@ const declareRouteSmokeGroup = ({
         id: contactId,
       });
       contactCleanupRegistered = true;
+      await createLongDatedTask(apiRequest, workspace.id);
       const documentRoute = await createUploadedDocumentRoute({
         fileName: "route-smoke.docx",
         request: apiRequest,
@@ -454,6 +456,19 @@ const createContact = async (request: APIRequestContext): Promise<string> => {
   return contactId;
 };
 
+// A dated task whose name is longer than any card or row that shows it, so
+// the walk sees every surface that names the next deadline with text it must
+// cut or wrap. It goes with the workspace's cleanup.
+const createLongDatedTask = async (
+  request: APIRequestContext,
+  workspaceId: string,
+): Promise<void> => {
+  await apiPut(request, `/tasks/${workspaceId}`, {
+    name: "Podať námietky v podateľni úradu a doručiť rovnopis kontrolovanému subjektu pred uplynutím zákonnej lehoty",
+    dueDate: "2030-01-15",
+  });
+};
+
 const smokeRoute = async ({
   browser,
   results,
@@ -535,6 +550,10 @@ const measureRouteTarget = async ({
     expect(
       await findChromeDividerProblems(page),
       `${route.template} must show exactly one divider under the app chrome`,
+    ).toEqual([]);
+    expect(
+      await findEscapedText(page),
+      `${route.template} must keep every text inside its box`,
     ).toEqual([]);
     browserErrors.assertEmpty(`unexpected browser errors on ${route.template}`);
     // Captured after the route shell and tracked API work are ready, so the
