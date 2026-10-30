@@ -497,6 +497,41 @@ test("partly numbered paragraphs recover labels between numbered neighbours", ()
   );
 });
 
+test("a different-style list continuation is not promoted across a court numbering gap", () => {
+  const first = {
+    ...printedParagraph(0, "1. "),
+    number: 1,
+  };
+  const second = printedParagraph(1, "2. ");
+  const third = {
+    ...printedParagraph(2, ""),
+    number: 3,
+  };
+
+  const result = extractCourtParagraphNumbers([first, second, third]);
+
+  expect(labelsOf(result.blocks)).toEqual([1, undefined, 3]);
+  expect(result.blocks[0]?.plainText).toBe("1. Soud uvážil věc.");
+  expect(result.blocks[1]?.plainText).toBe("2. Soud uvážil věc.");
+});
+
+test("a lone different-style marker is recovered across a court numbering gap", () => {
+  const first = {
+    ...printedParagraph(0, ""),
+    number: 1,
+  };
+  const second = printedParagraph(1, "2. ");
+  const third = {
+    ...printedParagraph(2, ""),
+    number: 3,
+  };
+
+  const result = extractCourtParagraphNumbers([first, second, third]);
+
+  expect(labelsOf(result.blocks)).toEqual([1, 2, 3]);
+  expect(result.blocks[1]?.plainText).toBe("Soud uvážil věc.");
+});
+
 test("a dissent beginning at 2 does not continue the majority's paragraph 10", () => {
   const majority = Array.from({ length: 10 }, (_, index) =>
     printedParagraph(index, `${String(index + 1)}. `),

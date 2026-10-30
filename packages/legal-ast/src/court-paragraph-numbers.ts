@@ -461,35 +461,36 @@ type BridgeScopeOptions = {
   readonly to: number;
 };
 
-/** Local proofs also apply when an upstream parser already supplied labels. */
-const bridgeScope = ({
+type MarkerOccurrence = {
+  readonly blockIndex: number;
+  readonly bodyIndex: number;
+  readonly raw: string;
+};
+
+type ObservedMarkers = Map<
+  CourtParagraphMarkerStyle,
+  Map<number, MarkerOccurrence[]>
+>;
+
+type ObserveMarkersOptions = Pick<BridgeScopeOptions, "blocks" | "body"> & {
+  readonly from: number;
+  readonly to: number;
+};
+
+const observeMarkers = ({
   blocks,
   body,
-  numbers,
-  evidence,
   from,
   to,
-}: BridgeScopeOptions): void => {
-  for (let bodyIndex = from + 1; bodyIndex + 1 < to; bodyIndex += 1) {
+}: ObserveMarkersOptions): ObservedMarkers => {
+  const observed: ObservedMarkers = new Map();
+  for (let bodyIndex = from; bodyIndex < to; bodyIndex += 1) {
     const blockIndex = body.paragraphs[bodyIndex];
-    const previousIndex = body.paragraphs[bodyIndex - 1];
-    const nextIndex = body.paragraphs[bodyIndex + 1];
+    const block = blockIndex === undefined ? undefined : blocks[blockIndex];
     if (
       blockIndex === undefined ||
-      previousIndex === undefined ||
-      nextIndex === undefined ||
-      numbers.has(blockIndex) ||
+      block?.type !== "paragraph" ||
       body.quotedStarts.has(bodyIndex)
-    ) {
-      continue;
-    }
-    const previous = numbers.get(previousIndex)?.candidate.number;
-    const next = numbers.get(nextIndex)?.candidate.number;
-    const block = blocks[blockIndex];
-    if (
-      previous === undefined ||
-      next !== previous + 2 ||
-      block?.type !== "paragraph"
     ) {
       continue;
     }
@@ -505,24 +506,99 @@ const bridgeScope = ({
             sign: "unsigned",
           }).unwrap("OCR court marker normalizes to bounded decimal digits")
         : markerNumber(markerStyle, text);
-      if (number !== previous + 1) {
+      if (number === null) {
         continue;
       }
-      numbers.set(blockIndex, {
+      const byNumber =
+        observed.get(markerStyle) ?? new Map<number, MarkerOccurrence[]>();
+      const occurrences = byNumber.get(number) ?? [];
+      occurrences.push({ blockIndex, bodyIndex, raw: raw ?? "" });
+      byNumber.set(number, occurrences);
+      observed.set(markerStyle, byNumber);
+    }
+  }
+  return observed;
+};
+
+/** Local proofs also apply when an upstream parser already supplied labels. */
+const bridgeScope = ({
+  blocks,
+  body,
+  numbers,
+  evidence,
+  from,
+  to,
+}: BridgeScopeOptions): void => {
+  let previousBodyIndex: number | undefined;
+  for (let bodyIndex = from; bodyIndex < to; bodyIndex += 1) {
+    const nextIndex = body.paragraphs[bodyIndex];
+    const nextAssignment =
+      nextIndex === undefined ? undefined : numbers.get(nextIndex);
+    if (nextAssignment === undefined) {
+      continue;
+    }
+    if (previousBodyIndex === undefined) {
+      previousBodyIndex = bodyIndex;
+      continue;
+    }
+    const previousIndex = body.paragraphs[previousBodyIndex];
+    const previousAssignment =
+      previousIndex === undefined ? undefined : numbers.get(previousIndex);
+    const expected = (previousAssignment?.candidate.number ?? 0) + 1;
+    if (nextAssignment.candidate.number !== expected + 1) {
+      previousBodyIndex = bodyIndex;
+      continue;
+    }
+
+    const observed = observeMarkers({
+      blocks,
+      body,
+      from: previousBodyIndex,
+      to: bodyIndex,
+    });
+    let bridge: NumberAssignment | undefined;
+    for (const markerStyle of COURT_PARAGRAPH_MARKER_STYLES) {
+      const byNumber = observed.get(markerStyle);
+      const candidates = byNumber?.get(expected) ?? [];
+      const candidate = candidates.at(0);
+      const hasSameStyleSequence =
+        markerStyle !== previousAssignment?.style &&
+        (byNumber?.has(expected - 1) === true ||
+          byNumber?.has(expected + 1) === true);
+      if (
+        candidates.length !== 1 ||
+        candidate === undefined ||
+        hasSameStyleSequence
+      ) {
+        continue;
+      }
+      if (bridge !== undefined) {
+        bridge = undefined;
+        break;
+      }
+      bridge = {
         style: markerStyle,
         candidate: {
-          blockIndex,
-          bodyIndex,
-          number,
-          source: recovered ? "ocr" : "printed",
-          marker: raw ?? "",
+          blockIndex: candidate.blockIndex,
+          bodyIndex: candidate.bodyIndex,
+          number: expected,
+          source: candidate.raw === "" ? "printed" : "ocr",
+          marker: candidate.raw,
         },
-      });
-      if (recovered) {
-        evidence.push({ type: "ocr", blockIndex, number, marker: raw });
-      }
-      break;
+      };
     }
+    if (bridge !== undefined) {
+      numbers.set(bridge.candidate.blockIndex, bridge);
+      if (bridge.candidate.source === "ocr") {
+        evidence.push({
+          type: "ocr",
+          blockIndex: bridge.candidate.blockIndex,
+          number: bridge.candidate.number,
+          marker: bridge.candidate.marker,
+        });
+      }
+    }
+    previousBodyIndex = bodyIndex;
   }
 };
 
