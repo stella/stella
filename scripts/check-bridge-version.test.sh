@@ -90,6 +90,24 @@ run_case() {
   unset dir
 }
 
+run_merge_group_case() {
+  local name="$1" expected="$2" base_sha="$3"
+  local out actual
+  out=$(GITHUB_EVENT_NAME=merge_group GITHUB_BASE_REF=pr-base BRIDGE_BASE_SHA="$base_sha" bash "$SCRIPT" 2>&1) && actual=0 || actual=$?
+  if [[ "$actual" == "$expected" ]]; then
+    PASS=$((PASS + 1))
+    printf '  ✓  %s\n' "$name"
+  else
+    FAIL=$((FAIL + 1))
+    FAIL_NAMES+=("$name")
+    printf '  ✗  %s (expected exit %s, got %s)\n' "$name" "$expected" "$actual"
+    printf '       %s\n' "${out//$'\n'/$'\n       '}"
+  fi
+  cd /
+  rm -rf "$dir"
+  unset dir
+}
+
 echo "Running check-bridge-version.sh tests..."
 
 # 1. No file changes at all → OK.
@@ -204,6 +222,44 @@ sed -i.bak 's|BRIDGE_VERSION: u32 = 1;|BRIDGE_VERSION: u32 = 2;\npub struct Extr
 rm -f apps/desktop/src-tauri/src/types.rs.bak
 git commit -aq -m "types.rs change + bump"
 run_case "types.rs change + bump → 0" 0
+
+# Merge groups must compare to their current base, not the pull request base.
+# Simulate another pull request having already claimed version 2 on main.
+setup_repo
+git branch pr-base main
+git checkout -q main
+bump_version
+git commit -aq -m "first bridge bump lands"
+merge_base=$(git rev-parse HEAD)
+git checkout -q feat
+echo "// competing endpoint" >> apps/desktop/src-tauri/src/bridge.rs
+bump_version
+git commit -aq -m "duplicate bridge bump"
+run_merge_group_case "merge-group bump equals group base → 1" 1 "$merge_base"
+
+setup_repo
+git branch pr-base main
+git checkout -q main
+bump_version
+git commit -aq -m "first bridge bump lands"
+merge_base=$(git rev-parse HEAD)
+git checkout -q feat
+echo "// later endpoint" >> apps/desktop/src-tauri/src/bridge.rs
+sed -i.bak 's/BRIDGE_VERSION: u32 = 1/BRIDGE_VERSION: u32 = 3/' apps/desktop/src-tauri/src/types.rs
+rm -f apps/desktop/src-tauri/src/types.rs.bak
+git commit -aq -m "higher bridge bump"
+run_merge_group_case "merge-group bump above group base → 0" 0 "$merge_base"
+
+setup_repo
+git branch pr-base main
+git checkout -q main
+bump_version
+git commit -aq -m "bridge bump lands"
+merge_base=$(git rev-parse HEAD)
+git checkout -q feat
+echo "// unrelated" >> apps/desktop/src/unrelated.ts
+git commit -aq -m "unrelated edit"
+run_merge_group_case "merge group without bridge change → 0" 0 "$merge_base"
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

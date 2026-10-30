@@ -68,6 +68,17 @@ describe("push-scoped autofix plan", () => {
     });
   });
 
+  test("a bridge surface change schedules its version fixer", () => {
+    const bridge = "apps/desktop/src-tauri/src/bridge.rs";
+    const plan = planAutofix({
+      pullRequestFiles: [bridge],
+      pushFiles: [bridge],
+    });
+
+    expect(plan.scoped).toEqual([bridge]);
+    expect(plan.needed).toBe(true);
+  });
+
   test("a push that changes nothing the pull request owns needs no job", () => {
     const plan = planAutofix({
       pullRequestFiles: [DOC],

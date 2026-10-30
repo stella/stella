@@ -17,14 +17,20 @@
 # silent breakage between desktop and web releases.
 set -euo pipefail
 
-base="${GITHUB_BASE_REF:-main}"
-
-# Use origin/<base> when running in CI, fall back to local <base>
-# for ad-hoc invocation.
-if git rev-parse --verify "origin/$base" >/dev/null 2>&1; then
-  base_ref="origin/$base"
+if [[ "${GITHUB_EVENT_NAME:-}" == "merge_group" ]]; then
+  base_ref="${BRIDGE_BASE_SHA:?BRIDGE_BASE_SHA must be github.event.merge_group.base_sha}"
+  if ! git cat-file -e "$base_ref^{commit}" 2>/dev/null; then
+    git fetch --no-tags origin "$base_ref"
+  fi
 else
-  base_ref="$base"
+  base="${GITHUB_BASE_REF:-main}"
+  # Use origin/<base> when running in CI, fall back to local <base>
+  # for ad-hoc invocation.
+  if git rev-parse --verify "origin/$base" >/dev/null 2>&1; then
+    base_ref="origin/$base"
+  else
+    base_ref="$base"
+  fi
 fi
 
 bridge_files=(

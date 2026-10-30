@@ -39,8 +39,17 @@ const PRUNE_SOURCE = /\.(?:[cm]?[jt]sx?|sql)$/u;
 // themselves passed to a fixer.
 const FIXABLE_SOURCE =
   /\.(?:[cm]?[jt]sx?|jsonc?|ya?ml|mdx?|html?|vue|svelte|astro|css|scss|less|graphql|gql)$/u;
+const BRIDGE_SURFACE = new Set<string>([
+  "apps/desktop/src-tauri/src/bridge.rs",
+  "apps/desktop/src-tauri/src/commands.rs",
+  "apps/desktop/src-tauri/src/types.rs",
+  "apps/desktop/src/shared/rpc.gen.ts",
+  "apps/desktop/src/shared/rpc.ts",
+  "packages/api-contract/src/desktop-edit-file-types.ts",
+]);
 
-export const isAutofixablePath = (file: string) => FIXABLE_SOURCE.test(file);
+export const isAutofixablePath = (file: string) =>
+  FIXABLE_SOURCE.test(file) || BRIDGE_SURFACE.has(file);
 const PRUNABLE_PATHS = new Set<string>(
   PRUNABLE_BASELINES.map(({ path }) => path),
 );
@@ -59,6 +68,7 @@ const FIXER_INPUTS = [
   "types/**",
   ".github/workflows/autofix.yml",
   "scripts/autofix-*.ts",
+  "scripts/fix-bridge-version.sh",
   "scripts/ci-generated-sources.ts",
   "scripts/typecheck-coverage.ts",
 ] as const;
