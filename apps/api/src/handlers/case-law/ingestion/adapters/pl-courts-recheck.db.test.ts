@@ -28,7 +28,6 @@ import {
   caseLawSources,
   relations,
 } from "@/api/db/schema";
-import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
 import type { SaosItem } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
 import { plCourtsAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
 import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
@@ -47,6 +46,7 @@ import {
 } from "@/api/lib/case-law/decision-text";
 import { addUtcDays, toUtcDateString } from "@/api/lib/dates";
 import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
+import { EMPTY_AST } from "@/api/lib/legal-search/ingestion-types";
 import type {
   SourceReconciliation,
   StoredRawResultReader,

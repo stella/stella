@@ -15,7 +15,6 @@ import {
   ADAPTER_TIMEOUT,
   MAX_SYNC_PAGES,
 } from "@/api/handlers/case-law/consts";
-import type { SyncPage } from "@/api/handlers/case-law/ingestion/adapter";
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import {
   applyDecisionBatch,
@@ -76,6 +75,7 @@ import type {
   CycleDeadline,
   StartCycleDeadlineOptions,
 } from "@/api/lib/legal-search/cycle-deadline";
+import type { SyncPage } from "@/api/lib/legal-search/ingestion-types";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { withExceptionScope } from "@/api/lib/observability/exception-scope";
 import { logger } from "@/api/lib/observability/logger";
