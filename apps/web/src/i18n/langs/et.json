@@ -1090,7 +1090,9 @@
     },
     "emptyState": "Otsuseid ei leitud. Seadistage allikas ja käivitage sünkroonimine kohtupraktika importimiseks.",
     "filters": {
-      "remove": "Eemalda filter {filter}"
+      "countryMismatch": "Eemaldati filtrid, mis ei kuulu valitud riigi ({country}) juurde: {filters}.",
+      "remove": "Eemalda filter {filter}",
+      "showInCountry": "Kuva {filter} riigis {country}"
     },
     "languages": {
       "count": "{count, plural, one {# keel} other {# keelt}}",
@@ -1346,6 +1348,7 @@
       "toastTitle": "Täisvaade ei ole veel saadaval"
     },
     "activity": {
+      "newerVersion": "Seda sisu kuvatakse uuemas versioonis.",
       "review": "Ülevaatuse värskendus"
     },
     "aiPrompt": "AI sõnumiväli",
@@ -5426,6 +5429,7 @@
     "showCitedPartOnly": "Näita ainult viidatud osa",
     "showFullProvision": "Näita kogu sätet",
     "showInText": "Näita tekstis",
+    "sortNeedsYear": "Selle veeru järgi sortimiseks valige filtrites aasta.",
     "statedWindow": "Väljaandja esitatud kuupäevad: {range}",
     "status": {
       "current": "Kehtiv",
