@@ -49,10 +49,11 @@ const COMPLETION_ROWS = 100_000;
  * A source the background replay has caught up with: every decision stored
  * with its raw input and parsed by the current parser, so the lag probe finds
  * nothing. That is its worst case: the answer is known only once every row
- * has been ruled out.
+ * has been ruled out. Its id sits outside the 00c2 range the coverage
+ * scenario sources take by index, so their cleanup never walks these rows.
  */
 const REPLAY_SOURCE_ID = toSafeId<"caseLawSource">(
-  "01990000-00c2-7000-8000-000000000002",
+  "01990000-00c4-7000-8000-000000000001",
 );
 const REPLAY_ROWS = 100_000;
 export const REPLAY_PARSER_VERSION = 3;
@@ -476,15 +477,21 @@ export const seedCorpusReadBudgets = async (database: GatedTestDb) => {
   for (const chunk of chunks(REPLAY_ROWS)) {
     // db-await-in-loop: bounded seed chunks keep each statement inside the fixture's statement timeout.
     await withoutTriggers(database, async (tx) => {
+      // Triggers are off, so the row stores the state its trigger would
+      // derive, through the same function.
       await tx.execute(sql`INSERT INTO case_law_decisions
         (id, source_id, case_number, country, court, language, parser_version,
           source_hash, source_hash_version, source_raw_s3_key,
-          parsed_source_hash, parsed_source_hash_version, parsed_source_raw_s3_key)
+          parsed_source_hash, parsed_source_hash_version, parsed_source_raw_s3_key,
+          parsed_input_state)
         SELECT md5(${REPLAY_SOURCE_ID}::text || '-' || n::text)::uuid,
           ${REPLAY_SOURCE_ID}, 'replay-' || n::text, 'POL', 'fixture', 'pl',
-          ${REPLAY_PARSER_VERSION}, 'stored-' || n::text, 1, 'case-law/raw/replay-' || n::text,
-          'stored-' || n::text, 1, 'case-law/raw/replay-' || n::text
-        FROM generate_series(${chunk.first}, ${chunk.last}) AS n`);
+          ${REPLAY_PARSER_VERSION}, input.hash, 1, input.raw_key,
+          input.hash, 1, input.raw_key,
+          case_law_parsed_input_state(input.hash, 1, input.raw_key, input.hash, 1, input.raw_key)
+        FROM generate_series(${chunk.first}, ${chunk.last}) AS n,
+          LATERAL (SELECT 'stored-' || n::text AS hash,
+            'case-law/raw/replay-' || n::text AS raw_key) AS input`);
     });
   }
   await database.execute(sql`INSERT INTO eu_completion_receipts

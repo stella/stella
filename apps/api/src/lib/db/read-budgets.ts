@@ -74,11 +74,7 @@ export const READ_BUDGETS = {
     surface: "statement",
     pages: 32,
     reason:
-      "One background replay lag probe against a 100,000-decision source the replay has caught up with, its worst case: index descents that find no row behind the current parser and none whose stored input is unparsed, a few pages each whatever the source's size.",
-    overBudget: {
-      reason:
-        "The probe walks the source's decisions by id and compares each row's parsed input hashes, so a caught-up source is read whole before the probe can answer.",
-    },
+      "One background replay lag probe against a 100,000-decision source the replay has caught up with, its worst case: descents of the replay-pending index that find no row behind the current parser and none whose stored input is unparsed. Measured at 12 pages caught up and 16 with 1% of the source behind; 32 pages leave room for a deeper production index without admitting a walk of the source.",
   },
   "scheduled.caseLaw.reportFreshness": {
     surface: "scheduled-job",
