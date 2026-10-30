@@ -34,8 +34,11 @@ test("an unresolved incident creates no final tag", () => {
   expect(proof.result.exitCode).not.toBe(0);
   expect(proof.finalSha).toBeNull();
 });
-test("a missing RC performs no writes", () => {
+test("a missing RC emits no final tag output and skips landing", () => {
   const proof = finalize({ noRc: true });
+  expect(proof.stepOutput).toBe("");
+  expect(proof.landing).toBeNull();
+  expect(proof.merges).toBe("");
   expect(proof.result.exitCode, proof.result.stderr.toString()).toBe(0);
   expect(proof.pushes).toBe("");
   expect(proof.publications).toBe("");
@@ -71,6 +74,7 @@ for (const finalTag of [undefined, "candidate"] as const) {
   test(`finalization arms exactly the matching release head (${finalTag ?? "fresh"})`, () => {
     const proof = finalize({ finalTag });
     expect(proof.landing?.exitCode, proof.landing?.stderr.toString()).toBe(0);
+    expect(proof.stepOutput).toBe("final_tag=v1.2.3\n");
     expect(proof.merges.trim()).toBe(
       `pr merge 123 --repo stella/stella --auto --match-head-commit ${proof.sha}`,
     );
@@ -96,7 +100,7 @@ for (const pull of [
   });
 }
 
-for (const pull of ["merged", "armed"] as const) {
+for (const pull of ["merged", "armed", "queued"] as const) {
   test(`a rerun after the release PR is ${pull} performs no merge`, () => {
     const proof = finalize({
       pull,
@@ -107,6 +111,11 @@ for (const pull of ["merged", "armed"] as const) {
     expect(proof.merges).toBe("");
     expect(proof.pushes).toBe("");
     expect(proof.publications).toBe("");
+    if (pull === "queued") {
+      expect(proof.landing?.stdout.toString()).toContain(
+        "::notice::Release PR #123",
+      );
+    }
   });
 }
 
@@ -131,6 +140,7 @@ test("release landing waits for finalization and uses trusted tooling with a sep
         }),
         "land-release-pr": v.looseObject({
           needs: v.string(),
+          if: v.string(),
           permissions: v.record(v.string(), v.unknown()),
           steps: v.array(step),
         }),
@@ -145,6 +155,10 @@ test("release landing waits for finalization and uses trusted tooling with a sep
   );
   const landing = workflow.jobs["land-release-pr"];
   expect(landing.needs).toBe("finalize");
+  expect(landing.if).toBe("needs.finalize.outputs.final_tag != ''");
+  expect(workflow.jobs.finalize.outputs["final_tag"]).toBe(
+    `\${{ steps.finalize.outputs.final_tag }}`,
+  );
   expect(landing.permissions).toEqual({});
   expect(workflow.jobs.finalize.outputs["sha"]).toBe(
     `\${{ needs.finalize-eligibility.outputs.sha }}`,

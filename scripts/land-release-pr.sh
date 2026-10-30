@@ -20,12 +20,23 @@ final="v$version"
 final_sha=$(git rev-parse --verify "refs/tags/$final^{commit}") || fail "Final tag $final is missing"
 [[ "$final_sha" == "$sha" ]] || fail "Final tag $final targets $final_sha, expected $sha"
 branch="release/$final"
-pulls=$(bash "$gh_retry_script" pr list --repo "$repo" --head "$branch" --base main \
-  --state all --limit 100 --json number,title,state,headRefName,headRefOid,isCrossRepository,autoMergeRequest)
+listing=$(bash "$gh_retry_script" api graphql \
+  -f owner="${repo%/*}" -f name="${repo#*/}" -f head="$branch" \
+  -f query='query($owner: String!, $name: String!, $head: String!) {
+    repository(owner: $owner, name: $name) {
+      pullRequests(first: 100, headRefName: $head, baseRefName: "main", states: [OPEN, MERGED, CLOSED]) {
+        nodes { number title state headRefName headRefOid isCrossRepository autoMergeRequest { enabledAt } isInMergeQueue }
+        pageInfo { hasNextPage }
+      }
+    }
+  }' --jq '.data.repository.pullRequests')
+jq -e '.pageInfo.hasNextPage == false' <<<"$listing" >/dev/null \
+  || fail "Incomplete PR listing for $branch: $listing"
+pulls=$(jq '.nodes' <<<"$listing")
 jq -e 'type == "array" and length < 100 and all(.[];
   (.number | type == "number") and (.title | type == "string") and
   (.headRefName | type == "string") and (.headRefOid | test("^[0-9a-f]{40}$")) and
-  (.isCrossRepository | type == "boolean") and
+  (.isCrossRepository | type == "boolean") and (.isInMergeQueue | type == "boolean") and
   (.state == "OPEN" or .state == "MERGED" or .state == "CLOSED"))' <<<"$pulls" >/dev/null \
   || fail "Incomplete or invalid PR listing for $branch: $pulls"
 found=$(jq -r 'map("#\(.number) \(.title) (\(.state), head \(.headRefOid))") | join("; ")' <<<"$pulls")
@@ -41,6 +52,10 @@ fi
 jq -e --arg sha "$sha" --arg branch "$branch" '.[0] | .headRefOid == $sha and .headRefName == $branch and (.isCrossRepository | not)' <<<"$open" >/dev/null \
   || fail "Release PR head mismatch for $branch; expected $sha; found: $found"
 number=$(jq -r '.[0].number' <<<"$open")
+if jq -e '.[0].isInMergeQueue' <<<"$open" >/dev/null; then
+  echo "::notice::Release PR #$number at $sha is already in the merge queue."
+  exit 0
+fi
 if jq -e '.[0].autoMergeRequest != null' <<<"$open" >/dev/null; then
   echo "Release PR #$number at $sha already has auto-merge enabled."
   exit 0

@@ -224,6 +224,7 @@ jobs:
     needs: finalize-eligibility
     outputs:
       sha: ${{ needs.finalize-eligibility.outputs.sha }}
+      final_tag: ${{ steps.finalize.outputs.final_tag }}
     if: github.event_name == 'workflow_run' && needs.finalize-eligibility.outputs.sha != ''
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -250,6 +251,7 @@ jobs:
           permission-contents: write
 
       - name: Move the final tag to the proven RC commit
+        id: finalize
         timeout-minutes: 5
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
@@ -259,10 +261,17 @@ jobs:
           git config user.name "stella-release-deployer[bot]"
           git config user.email "stella-release-deployer[bot]@users.noreply.github.com"
           bash scripts/finalize-release.sh "$GITHUB_REPOSITORY" "$RELEASE_SHA"
+          final_tag="v$(git show "$RELEASE_SHA:VERSION" | tr -d '[:space:]')"
+          if final_sha=$(git rev-parse --verify "refs/tags/$final_tag^{commit}" 2>/dev/null) && [[ "$final_sha" == "$RELEASE_SHA" ]]; then
+            {
+              echo "final_tag=$final_tag"
+            } >> "$GITHUB_OUTPUT"
+          fi
 
   land-release-pr:
     name: Land the finalized release pull request
     needs: finalize
+    if: needs.finalize.outputs.final_tag != ''
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions: {}
