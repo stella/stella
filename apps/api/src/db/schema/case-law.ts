@@ -2798,6 +2798,10 @@ export const caseLawBrowseFacetCounts = p.pgTable(
       "case_law_browse_facet_counts_kind_valid",
       sql`${t.kind} IN (${sql.join(CASE_LAW_BROWSE_FACET_KIND_SQL_VALUES, sql`, `)})`,
     ),
+    // Trailing keys keep each source's court buckets available to index-only reads.
+    p
+      .index("case_law_browse_facet_counts_source_kind_idx")
+      .on(t.sourceId, t.kind, t.value, t.total),
     ...removalSnapshotPolicies(),
     p.pgPolicy("case_law_browse_facet_count_owner_access", {
       for: "all",
