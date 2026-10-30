@@ -3,6 +3,7 @@ import type { ComponentProps } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
 import { afterAll, expect, test } from "bun:test";
+import * as v from "valibot";
 
 import { cents } from "@stll/money";
 
@@ -35,7 +36,15 @@ const invoice = {
     { label: "Amount due", value: "EUR 120.00" },
   ],
   payment: null,
-  files: { pdf: { fileName: "2026-18.pdf" }, eInvoice: null },
+  files: {
+    pdf: {
+      fileName: v.parse(
+        v.pipe(v.string(), v.brand("SanitizedFileName")),
+        "2026-18.pdf",
+      ),
+    },
+    eInvoice: null,
+  },
   expiresAt: "2026-11-01T00:00:00.000Z",
 } satisfies ComponentProps<typeof InvoiceSummary>["invoice"];
 
