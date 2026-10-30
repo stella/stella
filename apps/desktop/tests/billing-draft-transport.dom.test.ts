@@ -45,126 +45,155 @@ test("billing-draft.current-consent-gates-every-random-transport-action", async 
         fc.constantFrom(
           "grant",
           "withdraw",
-          "refresh-granted",
-          "unavailable",
+          "save",
+          "save-failed",
+          "respond",
+          "respond-newest",
+          "restart",
+          "refresh",
           "draft",
           "redraft",
           "steer",
           "refine",
-          "resolve",
         ),
-        { minLength: 1, maxLength: 60 },
+        { minLength: 1, maxLength: 80 },
       ),
       async (events) => {
-        const consent = new BillingDraftConsent();
-        let status: "unavailable" | "revoked" | "granted" = "unavailable";
-        let policy: "settings" | "withdrawn" = "settings";
-        let epoch = 0;
-        const invoked: ReturnType<typeof Promise.withResolvers<unknown>>[] = [];
-        const pending: {
-          promise: ReturnType<typeof consent.request>;
-          epoch: number;
-          deferred: ReturnType<typeof Promise.withResolvers<unknown>>;
+        localStorage.clear();
+        let consent = new BillingDraftConsent();
+        consent.configure("transport-model");
+        let server: "granted" | "revoked" = "revoked";
+        let revision = 0;
+        let owner = 0;
+        let intent: {
+          value: "granted" | "revoked";
+          generation: number;
+          revision: number;
+          owner: number;
+        } | null = null;
+        const responses: {
+          value: "granted" | "revoked";
+          generation: number;
+          owner: number;
+          accepted: boolean;
         }[] = [];
-        mockIPC(async (command) => {
-          if (command !== "billing_draft_create_confirmed") {
-            return panic("Unexpected transport command", command);
-          }
-          expect(status).toBe("granted");
+        let invokes = 0;
+        mockIPC((command) => {
+          expect(command).toBe("billing_draft_create_confirmed");
+          expect(server).toBe("granted");
           expect(consent.getSnapshot()).toBe("granted");
-          const deferred = Promise.withResolvers<unknown>();
-          invoked.push(deferred);
-          return await deferred.promise;
+          expect(
+            localStorage.getItem("billing-draft-withdrawal:transport-model"),
+          ).toBeNull();
+          invokes += 1;
+          return {};
         });
-        const changeStatus = (next: typeof status) => {
-          if (next !== status) {
-            epoch += 1;
-          }
-          return next;
-        };
-        const complete = async () => {
-          const call = pending.shift();
-          if (call === undefined) {
-            return;
-          }
-          call.deferred.resolve({ result: "permitted response" });
-          expect((await call.promise).type).toBe(
-            call.epoch === epoch ? "completed" : "discarded",
-          );
-        };
-        // Exercise every route after withdrawal and an in-flight withdrawal/re-grant in every sample.
         const sequence = [
           "grant",
-          "draft",
+          "save",
           "withdraw",
-          "steer",
-          "refine",
-          "redraft",
-          "refresh-granted",
+          "save-failed",
+          "restart",
           "draft",
-          "grant",
-          "resolve",
+          "save",
+          "respond-newest",
+          "respond",
           ...events,
         ] as const;
         for (const event of sequence) {
           switch (event) {
             case "grant":
-              policy = "settings";
-              status = changeStatus("granted");
-              consent.grant();
+            case "withdraw": {
+              const value = event === "grant" ? "granted" : "revoked";
+              intent = {
+                value,
+                generation: consent.begin(value),
+                revision,
+                owner,
+              };
               break;
-            case "withdraw":
-              policy = "withdrawn";
-              status = changeStatus("revoked");
-              consent.withdraw();
+            }
+            case "save-failed":
+              break; // A failed transport cannot confirm or clear local intent.
+            case "save": {
+              if (intent === null) {
+                break;
+              }
+              const accepted = intent.revision === revision;
+              if (accepted) {
+                server = intent.value;
+                revision += 1;
+              }
+              responses.push({ ...intent, accepted });
               break;
-            case "refresh-granted":
-              status = changeStatus(
-                policy === "withdrawn" ? "revoked" : "granted",
+            }
+            case "respond":
+            case "respond-newest": {
+              const response =
+                event === "respond" ? responses.shift() : responses.pop();
+              if (response?.accepted && response.owner === owner) {
+                consent.confirm(response.value, response.generation);
+              }
+              break;
+            }
+            case "restart": {
+              const withdrawal = localStorage.getItem(
+                "billing-draft-withdrawal:transport-model",
               );
-              consent.refresh("granted");
+              consent.invalidate();
+              consent = new BillingDraftConsent();
+              consent.configure("transport-model");
+              owner += 1;
+              intent = null;
+              if (withdrawal !== null) {
+                expect(consent.getSnapshot()).toBe("pending-withdrawal");
+                intent = {
+                  value: "revoked",
+                  generation: consent.begin("revoked"),
+                  revision,
+                  owner,
+                };
+              } else {
+                consent.refresh(server);
+              }
               break;
-            case "unavailable":
-              status = changeStatus("unavailable");
-              consent.refresh("unavailable");
+            }
+            case "refresh": {
+              consent.refresh(server);
+              if (intent !== null) {
+                intent.revision = revision;
+              }
               break;
-            case "resolve":
-              await complete();
-              break;
+            }
             case "draft":
             case "redraft":
             case "steer":
             case "refine": {
-              const count = invoked.length;
-              const promise = consent.request(
+              const count = invokes;
+              const status = consent.getSnapshot();
+              const result = await consent.request(
                 event === "steer" || event === "refine"
                   ? { ...request, steer: "Adjust" }
                   : request,
               );
-              await Promise.resolve();
-              if (status !== "granted") {
-                expect((await promise).type).toBe("blocked");
-                expect(invoked).toHaveLength(count);
-              } else {
-                expect(invoked).toHaveLength(count + 1);
-                pending.push({
-                  promise,
-                  epoch,
-                  deferred:
-                    invoked.at(-1) ?? panic("Missing permitted invocation"),
-                });
-              }
+              expect(result.type).toBe(
+                status === "granted" ? "completed" : "blocked",
+              );
+              expect(invokes).toBe(count + (status === "granted" ? 1 : 0));
               break;
             }
             default:
               event satisfies never;
           }
-          expect(consent.getSnapshot()).toBe(status);
-        }
-        while (pending.length > 0) {
-          await complete();
+          if (
+            localStorage.getItem("billing-draft-withdrawal:transport-model") !==
+            null
+          ) {
+            expect(consent.getSnapshot()).not.toBe("granted");
+          }
         }
         clearMocks();
+        localStorage.clear();
       },
     ),
   );

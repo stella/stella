@@ -147,11 +147,15 @@ test("billing draft responses emit finite direct JSON schemas for native respons
 
 test("billing drafting settings accept only personal consent and bounded preferences", () => {
   for (const patch of [
-    { consent: "granted" },
-    { consent: "revoked" },
-    { preference: "Use concise Czech narratives" },
-    { preference: null },
-    { consent: "granted", preference: "Client-friendly wording" },
+    { revision: null, consent: "granted" },
+    { revision: null, consent: "revoked" },
+    { revision: null, preference: "Use concise Czech narratives" },
+    { revision: null, preference: null },
+    {
+      revision: null,
+      consent: "granted",
+      preference: "Client-friendly wording",
+    },
   ] satisfies DesktopBillingDraftSettingsRequest[]) {
     expect(v.parse(desktopBillingDraftSettingsRequestSchema, patch)).toEqual(
       patch,
@@ -159,12 +163,15 @@ test("billing drafting settings accept only personal consent and bounded prefere
   }
   for (const patch of [
     {},
-    { consent: "pending" },
+    { revision: null, consent: "pending" },
     { organizationMode: "enabled" },
-    { consent: "granted", userId: "another-user" },
-    { preference: "" },
-    { preference: "x".repeat(DESKTOP_BILLING_DRAFT_LIMITS.steerLength + 1) },
-    { preference: "text\u0000text" },
+    { revision: null, consent: "granted", userId: "another-user" },
+    { revision: null, preference: "" },
+    {
+      revision: null,
+      preference: "x".repeat(DESKTOP_BILLING_DRAFT_LIMITS.steerLength + 1),
+    },
+    { revision: null, preference: "text\u0000text" },
   ]) {
     expect(
       v.safeParse(desktopBillingDraftSettingsRequestSchema, patch).success,
@@ -172,7 +179,13 @@ test("billing drafting settings accept only personal consent and bounded prefere
   }
   for (const organizationMode of ["enabled", "disabled"] as const) {
     for (const consent of ["granted", "revoked"] as const) {
-      const settings = { organizationMode, consent, preference: null };
+      const settings = {
+        scopeKey: "test",
+        revision: null,
+        organizationMode,
+        consent,
+        preference: null,
+      };
       expect(
         v.parse(desktopBillingDraftSettingsResponseSchema, settings),
       ).toEqual(settings);
@@ -580,8 +593,16 @@ test("desktop billing response boundaries validate through Standard Schema", asy
     {
       schema: desktopBillingDraftSettingsResponseSchema,
       valid: [
-        { organizationMode: "enabled", consent: "granted", preference: null },
         {
+          scopeKey: "test",
+          revision: null,
+          organizationMode: "enabled",
+          consent: "granted",
+          preference: null,
+        },
+        {
+          scopeKey: "test",
+          revision: null,
           organizationMode: "disabled",
           consent: "revoked",
           preference: "Concise",
@@ -589,8 +610,16 @@ test("desktop billing response boundaries validate through Standard Schema", asy
       ],
       invalid: [
         { consent: "granted", preference: null },
-        { organizationMode: "enabled", consent: "unknown", preference: null },
         {
+          scopeKey: "test",
+          revision: null,
+          organizationMode: "enabled",
+          consent: "unknown",
+          preference: null,
+        },
+        {
+          scopeKey: "test",
+          revision: null,
           organizationMode: "enabled",
           consent: "granted",
           preference: null,

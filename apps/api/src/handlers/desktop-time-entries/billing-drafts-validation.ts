@@ -28,6 +28,7 @@ class BillingDraftValidationError extends TaggedError(
 
 export type BillingDraftValidationContext = {
   entries: DesktopBillingDraftRequest["entries"];
+  moveTargetMatterIds: readonly string[];
   matters: readonly { matterId: string; ledesEnabled: boolean }[];
   earlierEntries: readonly {
     id: string;
@@ -56,6 +57,7 @@ type ValidateBillingDraftOperationsOptions = {
     string,
     BillingDraftValidationContext["matters"][number]
   >;
+  moveTargetMatterIds: readonly string[];
   consumed: Map<string, string>;
   operationOwners: ReadonlySet<string>;
   validClassification: (
@@ -70,6 +72,7 @@ const validateOperations = ({
   entries,
   matters,
   consumed,
+  moveTargetMatterIds,
   operationOwners,
   validClassification,
 }: ValidateBillingDraftOperationsOptions) => {
@@ -155,6 +158,7 @@ const validateOperations = ({
       }
       case "move":
         if (
+          !moveTargetMatterIds.includes(operation.targetMatterId) ||
           !matters.has(operation.targetMatterId) ||
           operation.targetMatterId === entry.matterId
         ) {
@@ -303,6 +307,7 @@ export const validateBillingDraftResult = (
       entries,
       matters,
       consumed,
+      moveTargetMatterIds: context.moveTargetMatterIds,
       operationOwners,
       validClassification,
     });

@@ -22,6 +22,7 @@ const fixture = () => {
       durationMinutes: 60,
       appNames: ["Editor"],
     })),
+    moveTargetMatterIds: ["matter", "candidate"],
     matters: [
       { matterId: "matter", ledesEnabled: false },
       { matterId: "candidate", ledesEnabled: true },
@@ -504,4 +505,23 @@ test("structural proposals stand alone regardless of scalar operation kind or or
       }
     }
   }
+});
+
+test("move targets must belong to the caller's recent matter allowlist even when selected context includes them", () => {
+  const { result, context } = fixture();
+  const draft = result.drafts.at(0) ?? panic("Missing draft fixture");
+  draft.operations = [
+    {
+      type: "move",
+      targetMatterId: "candidate",
+      targetMatterName: "Candidate",
+      durationMinutes: 15,
+      narrative: "Moved work",
+      classification: { type: "ledes", taskCode: "L100", activityCode: "A101" },
+      billable: true,
+    },
+  ];
+  expect(validateBillingDraftResult(result, context).isOk()).toBe(true);
+  context.moveTargetMatterIds = ["matter"];
+  expect(validateBillingDraftResult(result, context).isErr()).toBe(true);
 });

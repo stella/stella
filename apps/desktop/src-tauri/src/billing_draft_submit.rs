@@ -137,9 +137,16 @@ pub enum Consent {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-enum SettingsUpdate<'a> {
+enum SettingsChange<'a> {
   Consent(Consent),
   Preference(Option<&'a str>),
+}
+
+#[derive(Serialize)]
+struct SettingsUpdate<'a> {
+  revision: Option<&'a str>,
+  #[serde(flatten)]
+  change: SettingsChange<'a>,
 }
 
 fn client(timeout: Duration) -> Result<DesktopHttpClient, String> {
@@ -203,20 +210,36 @@ pub async fn settings(account: &AccountRequest) -> Result<serde_json::Value, Str
 pub async fn set_consent(
   account: &AccountRequest,
   consent: Consent,
+  revision: Option<&str>,
 ) -> Result<serde_json::Value, String> {
-  update_settings(account, &SettingsUpdate::Consent(consent)).await
+  update_settings(
+    account,
+    &SettingsUpdate {
+      revision,
+      change: SettingsChange::Consent(consent),
+    },
+  )
+  .await
 }
 
 pub async fn set_preference(
   account: &AccountRequest,
   preference: Option<&str>,
+  revision: Option<&str>,
 ) -> Result<serde_json::Value, String> {
   if preference
     .is_some_and(|text| text.is_empty() || text.chars().count() > MAX_STEER_CHARS)
   {
     return Err(FAILURE.to_string());
   }
-  update_settings(account, &SettingsUpdate::Preference(preference)).await
+  update_settings(
+    account,
+    &SettingsUpdate {
+      revision,
+      change: SettingsChange::Preference(preference),
+    },
+  )
+  .await
 }
 
 async fn update_settings(
@@ -410,16 +433,28 @@ mod tests {
   #[test]
   fn settings_updates_send_one_field() {
     assert_eq!(
-      serde_json::to_value(SettingsUpdate::Consent(Consent::Granted)).unwrap(),
-      serde_json::json!({ "consent": "granted" })
+      serde_json::to_value(SettingsUpdate {
+        revision: Some("revision"),
+        change: SettingsChange::Consent(Consent::Granted)
+      })
+      .unwrap(),
+      serde_json::json!({ "consent": "granted", "revision": "revision" })
     );
     assert_eq!(
-      serde_json::to_value(SettingsUpdate::Preference(None)).unwrap(),
-      serde_json::json!({ "preference": null })
+      serde_json::to_value(SettingsUpdate {
+        revision: None,
+        change: SettingsChange::Preference(None)
+      })
+      .unwrap(),
+      serde_json::json!({ "preference": null, "revision": null })
     );
     assert_eq!(
-      serde_json::to_value(SettingsUpdate::Preference(Some("Shorter"))).unwrap(),
-      serde_json::json!({ "preference": "Shorter" })
+      serde_json::to_value(SettingsUpdate {
+        revision: Some("revision"),
+        change: SettingsChange::Preference(Some("Shorter"))
+      })
+      .unwrap(),
+      serde_json::json!({ "preference": "Shorter", "revision": "revision" })
     );
   }
 }

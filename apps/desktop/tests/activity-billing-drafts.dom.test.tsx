@@ -119,6 +119,7 @@ const { BillingDraftConsent } =
 
 const billingDrafts = {
   consent: new BillingDraftConsent("granted"),
+  reload: () => undefined,
   settings: { type: "ready", consent: "granted", preference: null },
   setConsent: async () => await Promise.resolve(true),
   setPreference: async () => await Promise.resolve(true),
@@ -142,6 +143,8 @@ const installNativeBoundary = (matterCandidates = candidates) => {
       switch (command) {
         case "billing_draft_get_settings":
           return {
+            scopeKey: "activity-test",
+            revision: null,
             organizationMode: "enabled",
             consent: "granted",
             preference: null,
@@ -269,6 +272,7 @@ const startDrafting = async (
 afterEach(async () => {
   await act(async () => {
     cleanup();
+    localStorage.clear();
     await Promise.resolve();
   });
   clearMocks();
@@ -299,11 +303,12 @@ for (const dialog of ["closed", "open"] as const) {
         {
           settings: { type: "ready", consent: "revoked", preference: null },
           consent: permission,
+          reload: () => undefined,
           setConsent: async (value) => {
             savedConsent.push(value);
             const saved = await consent.promise;
             if (saved) {
-              permission.grant();
+              permission.confirm("granted", permission.begin("granted"));
             }
             return saved;
           },
@@ -1421,6 +1426,8 @@ const saveConsent = async (
   }
   await act(async () => {
     request.deferred.resolve({
+      scopeKey: "activity-test",
+      revision: null,
       organizationMode: "enabled",
       consent: request.value,
       preference: null,
@@ -1450,7 +1457,9 @@ for (const route of ["steer", "refine"] as const) {
     fireEvent.click(
       view.getByRole("button", { name: messages.activity.aiSettingsRevoke }),
     );
-    expect(boundary.consentSaves.at(0)?.value).toBe("revoked");
+    await waitFor(() =>
+      expect(boundary.consentSaves.at(0)?.value).toBe("revoked"),
+    );
     expect(view.queryByPlaceholderText(placeholder)).toBeNull();
     expect(
       view.getByRole("button", { name: messages.activity.aiRefine }),
@@ -1460,6 +1469,7 @@ for (const route of ["steer", "refine"] as const) {
       view.getByRole("button", { name: messages.activity.aiRefine }),
     );
     expect(boundary.draftRequests).toHaveLength(1);
+    await waitFor(() => expect(boundary.consentSaves).toHaveLength(1));
     await saveConsent(boundary.consentSaves.at(0));
     expect(boundary.draftRequests).toHaveLength(1);
     fireEvent.click(
@@ -1472,6 +1482,7 @@ for (const route of ["steer", "refine"] as const) {
       view.getByRole("button", { name: messages.activity.aiConsentAllow }),
     );
     expect(boundary.draftRequests).toHaveLength(1);
+    await waitFor(() => expect(boundary.consentSaves).toHaveLength(2));
     await saveConsent(boundary.consentSaves.at(1));
     await waitFor(() => expect(boundary.draftRequests).toHaveLength(2));
     await resolveDraft(
@@ -1491,6 +1502,7 @@ test("withdrawal discards an in-flight result even when permission is subsequent
   fireEvent.click(
     view.getByRole("button", { name: messages.activity.aiSettingsRevoke }),
   );
+  await waitFor(() => expect(boundary.consentSaves).toHaveLength(1));
   await saveConsent(boundary.consentSaves.at(0));
   expect(boundary.draftRequests).toHaveLength(1);
   fireEvent.click(
@@ -1499,6 +1511,7 @@ test("withdrawal discards an in-flight result even when permission is subsequent
   fireEvent.click(
     view.getByRole("button", { name: messages.activity.aiConsentAllow }),
   );
+  await waitFor(() => expect(boundary.consentSaves).toHaveLength(2));
   await saveConsent(boundary.consentSaves.at(1));
   await waitFor(() => expect(boundary.draftRequests).toHaveLength(2));
   await resolveDraft(stale, review([draft("entry_1", "Withdrawn result")]));

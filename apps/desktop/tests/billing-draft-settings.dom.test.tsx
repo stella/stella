@@ -37,6 +37,8 @@ const Settings = ({ enabled }: { enabled: boolean }) => {
 const takeRequest = () =>
   pending.shift() ?? panic("Expected a settings request");
 const settingsResponse = (preference: string | null) => ({
+  scopeKey: "settings-test",
+  revision: null,
   organizationMode: "enabled",
   consent: "granted",
   preference,
@@ -46,6 +48,7 @@ afterEach(() => {
   cleanup();
   clearMocks();
   pending.length = 0;
+  localStorage.clear();
 });
 afterAll(async () => {
   await GlobalRegistrator.unregister();
@@ -99,7 +102,7 @@ test("settings schema rejects invalid responses and keeps disabled organizations
   await act(async () =>
     invalid.resolve({ ...settingsResponse(null), consent: "unknown" }),
   );
-  expect(view.getByRole("status").textContent).toBe('{"type":"unavailable"}');
+  expect(view.getByRole("status").textContent).toBe('{"type":"failed"}');
   view.rerender(<Settings enabled={false} />);
   view.rerender(<Settings enabled />);
   const disabled = takeRequest();
@@ -182,7 +185,9 @@ test("withdrawal blocks transport immediately and a failed save or preference re
   fireEvent.click(view.getByRole("button", { name: "Withdraw" }));
   fireEvent.click(view.getByRole("button", { name: "Draft" }));
   expect(drafts).toBe(0);
-  expect(view.getByRole("status").textContent).toContain('"revoked"');
+  expect(view.getByRole("status").textContent).toContain(
+    '"pending-withdrawal"',
+  );
   await act(async () => {
     revoked.reject("consent save failed");
     await Promise.resolve();
@@ -193,11 +198,223 @@ test("withdrawal blocks transport immediately and a failed save or preference re
   });
   fireEvent.click(view.getByRole("button", { name: "Draft" }));
   expect(drafts).toBe(0);
-  expect(view.getByRole("status").textContent).toContain('"revoked"');
+  expect(view.getByRole("status").textContent).toContain(
+    '"pending-withdrawal"',
+  );
   fireEvent.click(view.getByRole("button", { name: "Grant" }));
   await waitFor(() =>
     expect(view.getByRole("status").textContent).toContain('"granted"'),
   );
   fireEvent.click(view.getByRole("button", { name: "Draft" }));
   expect(drafts).toBe(1);
+});
+
+test("a failed withdrawal survives restart, blocks startup drafting, and remains retryable in settings", async () => {
+  const { BillingDraftSettingsSection } =
+    await import("../src/activity/ActivityBillingDrafts");
+  const { DesktopIntlProvider, defaultMessages: messages } =
+    await import("../src/i18n");
+  let serverConsent = "granted";
+  let revision = "1";
+  let saves = 0;
+  let drafts = 0;
+  let failRead = false;
+  mockIPC((command, args) => {
+    const response = () => ({
+      scopeKey: "settings-test",
+      revision,
+      organizationMode: "enabled",
+      consent: serverConsent,
+      preference: null,
+    });
+    switch (command) {
+      case "billing_draft_get_settings":
+        if (failRead) {
+          failRead = false;
+          return Promise.reject(new Error("offline startup"));
+        }
+        return response();
+      case "billing_draft_set_consent":
+        saves += 1;
+        if (saves <= 2) {
+          return Promise.reject(new Error("offline"));
+        }
+        expect(args).toMatchObject({ consent: "revoked", revision });
+        serverConsent = "revoked";
+        revision = "2";
+        return response();
+      case "billing_draft_create_confirmed":
+        drafts += 1;
+        return {};
+      case "desktop_report_error":
+        return undefined;
+      default:
+        return panic("Unexpected restart command", command);
+    }
+  });
+  const request =
+    requestFixture.requests.at(0) ?? panic("Missing drafting fixture");
+  const Probe = () => {
+    const control = useBillingDraftSettings(true);
+    return (
+      <>
+        <BillingDraftSettingsSection control={control} />
+        <output>{control.consent.getSnapshot()}</output>
+        <button
+          type="button"
+          onClick={() => {
+            void control.consent.request(request);
+          }}
+        >
+          Draft
+        </button>
+      </>
+    );
+  };
+  const mount = () =>
+    render(
+      <DesktopIntlProvider language="en" messages={messages}>
+        <Probe />
+      </DesktopIntlProvider>,
+    );
+  const first = mount();
+  await waitFor(() =>
+    expect(first.getByRole("status").textContent).toBe("granted"),
+  );
+  fireEvent.click(
+    first.getByRole("button", { name: messages.activity.aiSettingsRevoke }),
+  );
+  await waitFor(() =>
+    expect(first.getByRole("alert").textContent).toBe(
+      messages.activity.aiSettingsFailed,
+    ),
+  );
+  expect(first.getByRole("status").textContent).toBe("pending-withdrawal");
+  expect(serverConsent).toBe("granted");
+  first.unmount();
+  failRead = true;
+  const restarted = mount();
+  fireEvent.click(restarted.getByRole("button", { name: "Draft" }));
+  await waitFor(() =>
+    expect(
+      restarted.getByRole("button", { name: messages.activity.retry }),
+    ).toBeTruthy(),
+  );
+  expect(drafts).toBe(0);
+  fireEvent.click(
+    restarted.getByRole("button", { name: messages.activity.retry }),
+  );
+  await waitFor(() => expect(saves).toBe(2));
+  expect(restarted.getByRole("status").textContent).toBe("pending-withdrawal");
+  fireEvent.click(restarted.getByRole("button", { name: "Draft" }));
+  expect(drafts).toBe(0);
+  fireEvent.click(
+    restarted.getByRole("button", { name: messages.activity.aiSettingsRevoke }),
+  );
+  await waitFor(() =>
+    expect(restarted.getByRole("status").textContent).toBe("revoked"),
+  );
+  expect(saves).toBe(3);
+  expect(serverConsent).toBe("revoked");
+  expect(
+    localStorage.getItem("billing-draft-withdrawal:settings-test"),
+  ).toBeNull();
+});
+
+test("a delayed grant acknowledgement cannot overtake a newer withdrawal and saves use fresh CAS tokens", async () => {
+  let serverConsent = "revoked";
+  let revision = "1";
+  let drafts = 0;
+  const saves: {
+    value: string;
+    deferred: ReturnType<typeof Promise.withResolvers<unknown>>;
+  }[] = [];
+  const response = () => ({
+    scopeKey: "settings-test",
+    revision,
+    organizationMode: "enabled",
+    consent: serverConsent,
+    preference: null,
+  });
+  mockIPC((command, args) => {
+    switch (command) {
+      case "billing_draft_get_settings":
+        return response();
+      case "billing_draft_set_consent": {
+        expect(args).toMatchObject({ revision });
+        const value = args && "consent" in args ? args["consent"] : undefined;
+        if (typeof value !== "string") {
+          return panic("Missing consent intent");
+        }
+        const deferred = Promise.withResolvers<unknown>();
+        saves.push({ value, deferred });
+        return deferred.promise;
+      }
+      case "billing_draft_create_confirmed":
+        drafts += 1;
+        return {};
+      case "desktop_report_error":
+        return undefined;
+      default:
+        return panic("Unexpected ordering command", command);
+    }
+  });
+  const request =
+    requestFixture.requests.at(0) ?? panic("Missing drafting fixture");
+  const Probe = () => {
+    const control = useBillingDraftSettings(true);
+    return (
+      <>
+        <output>{control.consent.getSnapshot()}</output>
+        <button
+          type="button"
+          onClick={() => {
+            void control.setConsent("granted");
+          }}
+        >
+          Grant
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            void control.setConsent("revoked");
+          }}
+        >
+          Withdraw
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            void control.consent.request(request);
+          }}
+        >
+          Draft
+        </button>
+      </>
+    );
+  };
+  const view = render(<Probe />);
+  await waitFor(() =>
+    expect(view.getByRole("status").textContent).toBe("revoked"),
+  );
+  fireEvent.click(view.getByRole("button", { name: "Grant" }));
+  await waitFor(() => expect(saves).toHaveLength(1));
+  fireEvent.click(view.getByRole("button", { name: "Withdraw" }));
+  expect(saves).toHaveLength(1);
+  await act(async () => {
+    serverConsent = "granted";
+    revision = "2";
+    saves.at(0)?.deferred.resolve(response());
+  });
+  await waitFor(() => expect(saves).toHaveLength(2));
+  expect(view.getByRole("status").textContent).toBe("pending-withdrawal");
+  fireEvent.click(view.getByRole("button", { name: "Draft" }));
+  expect(drafts).toBe(0);
+  expect(saves.map(({ value }) => value)).toEqual(["granted", "revoked"]);
+  await act(async () => {
+    serverConsent = "revoked";
+    revision = "3";
+    saves.at(1)?.deferred.resolve(response());
+  });
+  expect(view.getByRole("status").textContent).toBe("revoked");
 });

@@ -84,55 +84,42 @@ import type {
 type BillingDraftSettings =
   | { type: "loading" }
   | { type: "unavailable" }
-  | {
-      type: "ready";
-      consent: "granted" | "revoked";
-      preference: string | null;
-    };
+  | { type: "failed" }
+  | { type: "ready"; consent: DraftConsentStatus; preference: string | null };
 
 export type BillingDraftSettingsControl = {
   settings: BillingDraftSettings;
   consent: BillingDraftConsent;
+  reload: () => void;
   setConsent: (consent: "granted" | "revoked") => Promise<boolean>;
   setPreference: (preference: string | null) => Promise<boolean>;
 };
 
-const settingsFrom = async (
-  value: unknown,
-): Promise<BillingDraftSettings | null> => {
+const settingsFrom = async (value: unknown) => {
   const parsed =
     await desktopBillingDraftSettingsResponseSchema["~standard"].validate(
       value,
     );
-  if (parsed.issues !== undefined) {
-    return null;
-  }
-  if (parsed.value.organizationMode === "disabled") {
-    return { type: "unavailable" };
-  }
-  return {
-    type: "ready",
-    consent: parsed.value.consent,
-    preference: parsed.value.preference,
-  };
+  return parsed.issues === undefined ? parsed.value : null;
 };
 
-/**
- * The organization's AI drafting mode and the user's own consent and
- * preference. Drafting is offered only when both gates are open; a failed read
- * leaves it absent rather than guessing.
- */
+/** Consent saves are serialized and compare-and-set on the server; stale responses cannot grant. */
 export const useBillingDraftSettings = (
   enabled: boolean,
 ): BillingDraftSettingsControl => {
-  const [loaded, setSettings] = useState<BillingDraftSettings>({
-    type: "loading",
-  });
+  const [loaded, setSettings] = useState<
+    | { type: "loading" }
+    | { type: "unavailable" }
+    | { type: "failed" }
+    | { type: "ready"; preference: string | null }
+  >({ type: "loading" });
   const [consent] = useState(() => new BillingDraftConsent());
   const consentStatus = useSyncExternalStore(
     consent.subscribe,
     consent.getSnapshot,
   );
+  const queue = useRef(Promise.resolve(true));
+  const request = useRef(0);
   const settings = (() => {
     if (!enabled) {
       return { type: "unavailable" } as const;
@@ -142,124 +129,170 @@ export const useBillingDraftSettings = (
     }
     return {
       type: "ready",
-      consent: consentStatus === "granted" ? "granted" : "revoked",
+      consent: consentStatus,
       preference: loaded.preference,
     } as const;
   })();
   useLayoutEffect(() => {
     if (!enabled) {
-      consent.refresh("unavailable");
+      consent.invalidate();
     }
   }, [enabled, consent]);
-  const request = useRef(0);
-  useEffect(() => {
-    const current = ++request.current;
-    if (!enabled) {
-      return undefined;
-    }
-    invoke<unknown>("billing_draft_get_settings")
-      .then(async (value) => {
-        if (current !== request.current) {
-          return undefined;
-        }
-        const next = await settingsFrom(value);
-        if (current !== request.current) {
-          return undefined;
-        }
-        if (next === null) {
-          reportActivityError(
-            DESKTOP_TELEMETRY_OPERATIONS.activityRead,
-            DESKTOP_TELEMETRY_ERROR_CODES.invalidResponse,
-          );
-        }
-        consent.refresh(next?.type === "ready" ? next.consent : "unavailable");
-        setSettings(next ?? { type: "unavailable" });
-        return undefined;
-      })
-      .catch(() => {
-        if (current === request.current) {
-          reportActivityError(
-            DESKTOP_TELEMETRY_OPERATIONS.activityRead,
-            DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
-          );
-          consent.refresh("unavailable");
-          setSettings({ type: "unavailable" });
-        }
-      });
-    return () => {
-      request.current += 1;
-      consent.refresh("unavailable");
-    };
-  }, [enabled, consent]);
-  const update = useCallback(
-    async ({
-      command,
-      args,
-      intent,
-    }: {
-      command: string;
-      args: Record<string, unknown>;
-      intent: "grant" | "refresh";
-    }) => {
-      const current = ++request.current;
-      const response = await Result.tryPromise(
-        async () => await invoke<unknown>(command, args),
-      );
-      if (current !== request.current) {
-        return false;
-      }
-      if (Result.isError(response)) {
+
+  const setConsent = useCallback(
+    async (value: "granted" | "revoked") => {
+      const intent = Result.try(() => consent.begin(value));
+      if (intent.isErr()) {
         reportActivityError(
           DESKTOP_TELEMETRY_OPERATIONS.activityUpdate,
           DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
         );
         return false;
       }
-      const next = await settingsFrom(response.value);
-      if (current !== request.current) {
-        return false;
-      }
-      if (next === null) {
-        reportActivityError(
-          DESKTOP_TELEMETRY_OPERATIONS.activityUpdate,
-          DESKTOP_TELEMETRY_ERROR_CODES.invalidResponse,
-        );
-        return false;
-      }
-      if (
-        intent === "grant" &&
-        next.type === "ready" &&
-        next.consent === "granted"
-      ) {
-        consent.grant();
-      } else {
-        consent.refresh(next.type === "ready" ? next.consent : "unavailable");
-      }
-      setSettings(next);
-      return true;
+      const generation = intent.value;
+      const save = async () => {
+        const result = await Result.tryPromise(async () => {
+          // Refresh the CAS token even after a lost response. Pending intent still blocks all drafts.
+          const current = await settingsFrom(
+            await invoke<unknown>("billing_draft_get_settings"),
+          );
+          if (current === null || !consent.isCurrent(generation)) {
+            return false;
+          }
+          const next = await settingsFrom(
+            await invoke<unknown>("billing_draft_set_consent", {
+              consent: value,
+              revision: current.revision,
+            }),
+          );
+          if (
+            next === null ||
+            next.consent !== value ||
+            !consent.isCurrent(generation)
+          ) {
+            return false;
+          }
+          if (!consent.confirm(next.consent, generation)) {
+            return false;
+          }
+          if (next.organizationMode === "disabled") {
+            consent.refresh("unavailable");
+          }
+          setSettings({ type: "ready", preference: next.preference });
+          return true;
+        });
+        if (result.isErr() || !result.value) {
+          reportActivityError(
+            DESKTOP_TELEMETRY_OPERATIONS.activityUpdate,
+            DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+          );
+          return false;
+        }
+        return true;
+      };
+      const pending = queue.current.then(save);
+      queue.current = pending;
+      return await pending;
     },
     [consent],
   );
+
+  const reload = useCallback(() => {
+    const current = ++request.current;
+    consent.invalidate();
+    if (!enabled) {
+      return;
+    }
+    void Result.tryPromise(async () => {
+      const next = await settingsFrom(
+        await invoke<unknown>("billing_draft_get_settings"),
+      );
+      if (current !== request.current) {
+        return;
+      }
+      if (next === null) {
+        reportActivityError(
+          DESKTOP_TELEMETRY_OPERATIONS.activityRead,
+          DESKTOP_TELEMETRY_ERROR_CODES.invalidResponse,
+        );
+        consent.refresh("unavailable");
+        setSettings({ type: "failed" });
+        return;
+      }
+      consent.configure(next.scopeKey);
+      if (consent.getSnapshot() === "pending-withdrawal") {
+        setSettings({ type: "ready", preference: next.preference });
+        await setConsent("revoked");
+        return;
+      }
+      consent.refresh(
+        next.organizationMode === "enabled" ? next.consent : "unavailable",
+      );
+      setSettings(
+        next.organizationMode === "enabled"
+          ? { type: "ready", preference: next.preference }
+          : { type: "unavailable" },
+      );
+    }).then((result) => {
+      if (result.isErr() && current === request.current) {
+        reportActivityError(
+          DESKTOP_TELEMETRY_OPERATIONS.activityRead,
+          DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+        );
+        consent.refresh("unavailable");
+        setSettings({ type: "failed" });
+      }
+      return undefined;
+    });
+  }, [enabled, consent, setConsent]);
+  useEffect(() => {
+    reload();
+    return () => {
+      request.current += 1;
+      consent.invalidate();
+    };
+  }, [reload, consent]);
+
   return {
     settings,
     consent,
-    setConsent: async (value) => {
-      if (value === "revoked") {
-        consent.withdraw();
-      }
-      const saved = await update({
-        command: "billing_draft_set_consent",
-        args: { consent: value },
-        intent: value === "granted" ? "grant" : "refresh",
-      });
-      return saved && consent.getSnapshot() === value;
+    setConsent,
+    reload,
+    setPreference: async (preference) => {
+      const currentRequest = request.current;
+      const save = async () => {
+        const result = await Result.tryPromise(async () => {
+          const current = await settingsFrom(
+            await invoke<unknown>("billing_draft_get_settings"),
+          );
+          if (current === null) {
+            return false;
+          }
+          const next = await settingsFrom(
+            await invoke<unknown>("billing_draft_set_preference", {
+              preference,
+              revision: current.revision,
+            }),
+          );
+          if (next === null || currentRequest !== request.current) {
+            return false;
+          }
+          setSettings({ type: "ready", preference: next.preference });
+          return true;
+        });
+        if (result.isErr() || !result.value) {
+          reportActivityError(
+            DESKTOP_TELEMETRY_OPERATIONS.activityUpdate,
+            DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+          );
+          return false;
+        }
+        return true;
+      };
+      const pending = queue.current.then(save);
+      queue.current = pending;
+      return await pending;
     },
-    setPreference: async (preference) =>
-      await update({
-        command: "billing_draft_set_preference",
-        args: { preference },
-        intent: "refresh",
-      }),
   };
 };
 
@@ -1021,6 +1054,16 @@ export const BillingDraftSettingsSection = ({
   const t = useTranslations("activity");
   const [failed, setFailed] = useState(false);
   const { settings } = control;
+  if (settings.type === "failed") {
+    return (
+      <div>
+        <p role="alert">{t("aiSettingsFailed")}</p>
+        <Button size="sm" variant="outline" onClick={control.reload}>
+          {t("retry")}
+        </Button>
+      </div>
+    );
+  }
   if (settings.type !== "ready") {
     return null;
   }
@@ -1042,13 +1085,26 @@ export const BillingDraftSettingsSection = ({
               : t("aiSettingsRevoked")}
           </span>
         </span>
-        {settings.consent === "granted" ? (
+        {settings.consent === "granted" ||
+        settings.consent === "pending-withdrawal" ||
+        settings.consent === "pending-grant" ? (
           <Button
             size="sm"
             variant="outline"
-            onClick={() => run(async () => await control.setConsent("revoked"))}
+            onClick={() =>
+              run(
+                async () =>
+                  await control.setConsent(
+                    settings.consent === "pending-grant"
+                      ? "granted"
+                      : "revoked",
+                  ),
+              )
+            }
           >
-            {t("aiSettingsRevoke")}
+            {settings.consent === "pending-grant"
+              ? t("aiConsentAllow")
+              : t("aiSettingsRevoke")}
           </Button>
         ) : null}
       </div>

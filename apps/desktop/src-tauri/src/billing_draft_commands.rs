@@ -29,9 +29,11 @@ pub async fn billing_draft_set_consent(
   gates: State<'_, FeatureGates>,
   accounts: State<'_, AccountState>,
   consent: Consent,
+  revision: Option<String>,
 ) -> Result<serde_json::Value, String> {
   let account = linked_account(&caller, &gates, &accounts).await?;
-  let settings = billing_draft_submit::set_consent(&account, consent).await?;
+  let settings =
+    billing_draft_submit::set_consent(&account, consent, revision.as_deref()).await?;
   require_account(&caller, &gates, &account)?;
   drop(account);
   Ok(settings)
@@ -43,10 +45,15 @@ pub async fn billing_draft_set_preference(
   gates: State<'_, FeatureGates>,
   accounts: State<'_, AccountState>,
   preference: Option<String>,
+  revision: Option<String>,
 ) -> Result<serde_json::Value, String> {
   let account = linked_account(&caller, &gates, &accounts).await?;
-  let settings =
-    billing_draft_submit::set_preference(&account, preference.as_deref()).await?;
+  let settings = billing_draft_submit::set_preference(
+    &account,
+    preference.as_deref(),
+    revision.as_deref(),
+  )
+  .await?;
   require_account(&caller, &gates, &account)?;
   drop(account);
   Ok(settings)

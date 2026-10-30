@@ -260,8 +260,13 @@ export const desktopBillingDraftRequestSchema = v.pipe(
   ),
 );
 
+const billingDraftSettingsRevisionSchema = v.nullable(
+  v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
+);
+
 export const desktopBillingDraftSettingsRequestSchema = v.pipe(
   v.strictObject({
+    revision: billingDraftSettingsRevisionSchema,
     consent: v.optional(v.picklist(["granted", "revoked"])),
     preference: v.optional(v.nullable(steeringTextSchema)),
   }),
@@ -273,6 +278,8 @@ export const desktopBillingDraftSettingsRequestSchema = v.pipe(
 );
 
 export const desktopBillingDraftSettingsResponseSchema = v.strictObject({
+  scopeKey: v.pipe(v.string(), v.minLength(1), v.maxLength(1024)),
+  revision: billingDraftSettingsRevisionSchema,
   organizationMode: v.picklist(["enabled", "disabled"]),
   consent: v.picklist(["granted", "revoked"]),
   preference: v.nullable(
