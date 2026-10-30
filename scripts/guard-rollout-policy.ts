@@ -73,4 +73,24 @@ export const GUARD_ROLLOUTS: readonly GuardRollout[] = [
     type: "full",
     check: ["bun", "scripts/check-tracked-symlinks.ts"],
   },
+  {
+    id: "no-direct-decision-identifier-column-write",
+    rules: [
+      "no-direct-decision-identifier-column-write/no-direct-decision-identifier-column-write",
+    ],
+    type: "changed-lines",
+    expiresAt: "2026-11-05T00:00:00.000Z",
+    check: [
+      "bun",
+      "--bun",
+      "oxlint",
+      "-c",
+      "oxlint.config.ts",
+      "--allow",
+      "all",
+      "--deny",
+      "no-direct-decision-identifier-column-write/no-direct-decision-identifier-column-write",
+      ".",
+    ],
+  },
 ] as const;
