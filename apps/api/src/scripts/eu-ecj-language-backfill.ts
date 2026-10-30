@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, like } from "drizzle-orm";
 import { appendFile } from "node:fs/promises";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
@@ -40,6 +40,7 @@ import {
 } from "@/api/lib/case-law/maintenance-lane";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { errorTag } from "@/api/lib/errors/utils";
+import { escapeLike } from "@/api/lib/escape-like";
 import {
   acquireCaseLawSourceIngestionLease,
   type CaseLawSourceIngestionLease,
@@ -69,6 +70,12 @@ import { operatorFlags } from "@/api/scripts/operator-flags";
 
 /** The durable cursor's name in `database_backfill_states`. */
 const CHECKPOINT = "eu-ecj-language-versions";
+/**
+ * A variant found listed but not served is one row under this prefix, its
+ * cursor the month it was listed in, so a later run neither fetches it again
+ * nor lets it hold its month. `--restart` clears them with the cursor.
+ */
+const UNAVAILABLE_PREFIX = `${CHECKPOINT}:unavailable:`;
 const HELD_LOOKUP_CHUNK = 500;
 /** Whole-variant budget: one listing plus one variant's three responses. */
 const VARIANT_FETCH_TIMEOUT_MS = 2 * 60_000;
@@ -82,7 +89,8 @@ const USAGE = `Usage: bun run src/scripts/eu-ecj-refetch.ts --missing-languages 
   --max-months <n>           Months this run may finish (default 12).
   --max-ingests <n>          Variants this run may write (default 500).
   --requests-per-second <n>  Publisher requests per second (default 1, max 2).
-  --restart                  Clear the cursor first, re-surveying every month.
+  --restart                  Clear the cursor and the not-served variants first,
+                             re-surveying every month.
 
 A retryable failure stops the run with the cursor on the last finished month;
 run again with the same arguments to resume.`;
@@ -172,12 +180,62 @@ const checkpointStore = (rootDb: CaseLawRootHandle) => ({
         .returning({ name: databaseBackfillStates.name });
       return advanced.length === 1;
     }),
+  unavailableIdentities: async (
+    identities: readonly string[],
+  ): Promise<Set<string>> => {
+    const unavailable = new Set<string>();
+    for (const identityChunk of chunkItems(identities, HELD_LOOKUP_CHUNK)) {
+      const rows = await withAggregateTransaction(rootDb, async (tx) =>
+        tx
+          .select({ name: databaseBackfillStates.name })
+          .from(databaseBackfillStates)
+          .where(
+            inArray(
+              databaseBackfillStates.name,
+              identityChunk.map(
+                (identity) => `${UNAVAILABLE_PREFIX}${identity}`,
+              ),
+            ),
+          ),
+      );
+      for (const { name } of rows) {
+        unavailable.add(name.slice(UNAVAILABLE_PREFIX.length));
+      }
+    }
+    return unavailable;
+  },
+  recordUnavailable: async ({
+    month,
+    identity,
+  }: {
+    month: EcjBackfillMonth;
+    identity: string;
+  }): Promise<void> => {
+    await withAggregateTransaction(rootDb, async (tx) => {
+      await tx
+        .insert(databaseBackfillStates)
+        .values({
+          name: `${UNAVAILABLE_PREFIX}${identity}`,
+          cursor: month,
+          batch: initialBatchState(),
+        })
+        .onConflictDoNothing();
+    });
+  },
   restart: async (): Promise<void> => {
     await withAggregateTransaction(rootDb, async (tx) => {
       await tx
         .update(databaseBackfillStates)
         .set({ cursor: null, updatedAt: new Date() })
         .where(eq(databaseBackfillStates.name, CHECKPOINT));
+      await tx
+        .delete(databaseBackfillStates)
+        .where(
+          like(
+            databaseBackfillStates.name,
+            `${escapeLike(UNAVAILABLE_PREFIX)}%`,
+          ),
+        );
     });
   },
 });
@@ -341,6 +399,8 @@ const runBackfillSession = async ({
         identityOf: ({ celex, language }) =>
           ecjSourceDocumentId(celex, language.toLowerCase()),
         heldIdentities: heldIdentitiesIn(ingestionDb, sourceId),
+        unavailableIdentities: checkpoint.unavailableIdentities,
+        recordUnavailable: checkpoint.recordUnavailable,
         loadCursor: checkpoint.loadCursor,
         advanceCursor: checkpoint.advanceCursor,
         journal: journalTo(flags.resultsOut),

@@ -21,6 +21,7 @@ import {
  */
 const world = (listings: Record<EcjBackfillMonth, EcjCelexVariant[]>) => {
   const held = new Set<string>();
+  const unavailable = new Map<string, EcjBackfillMonth>();
   const state = { cursor: null as EcjBackfillMonth | null };
   const journal: EcjBackfillJournalEntry[] = [];
   const ingested: string[] = [];
@@ -35,6 +36,17 @@ const world = (listings: Record<EcjBackfillMonth, EcjCelexVariant[]>) => {
     identityOf,
     heldIdentities: async (identities: readonly string[]) =>
       new Set(identities.filter((identity) => held.has(identity))),
+    unavailableIdentities: async (identities: readonly string[]) =>
+      new Set(identities.filter((identity) => unavailable.has(identity))),
+    recordUnavailable: async ({
+      month,
+      identity,
+    }: {
+      month: EcjBackfillMonth;
+      identity: string;
+    }) => {
+      unavailable.set(identity, month);
+    },
     ingest: async (
       variant: EcjCelexVariant,
     ): Promise<EcjVariantIngestOutcome> => {
@@ -60,7 +72,7 @@ const world = (listings: Record<EcjBackfillMonth, EcjCelexVariant[]>) => {
       journal.push(entry);
     },
   } satisfies Partial<EcjLanguageBackfillOptions>;
-  return { held, state, journal, ingested, identityOf, seams };
+  return { held, unavailable, state, journal, ingested, identityOf, seams };
 };
 
 const variant = (celex: string, language: string): EcjCelexVariant => {
@@ -173,7 +185,7 @@ describe("filling in missing language versions", () => {
   });
 
   test("a variant listed but not served is terminal and journaled", async () => {
-    const { seams, state, journal } = world(LISTINGS);
+    const { seams, state, journal, identityOf } = world(LISTINGS);
     const report = await runEcjLanguageBackfill({
       ...seams,
       ...RUN,
@@ -189,11 +201,56 @@ describe("filling in missing language versions", () => {
     expect(journal.filter(({ outcome }) => outcome === "unavailable")).toEqual([
       {
         month: "2024-03",
+        identity: identityOf(variant("62024CJ0244", "DE")),
         celex: "62024CJ0244",
         language: "DE",
         outcome: "unavailable",
       },
     ]);
+  });
+
+  // A not-served variant listed first must not take every later run's whole
+  // ingest budget: it is recorded, counted as unavailable and never fetched
+  // again, so the month behind it finishes.
+  test("an unavailable first variant does not hold its month across runs", async () => {
+    const listings = {
+      "2024-02": [variant("62024CO0100", "EN"), variant("62024CO0100", "BG")],
+      "2024-01": [variant("62024CJ0001", "FR")],
+    };
+    const { seams, state, ingested, unavailable, identityOf } = world(listings);
+    const fetched: string[] = [];
+    const ingest = async (
+      target: EcjCelexVariant,
+    ): Promise<EcjVariantIngestOutcome> => {
+      fetched.push(`${target.celex}:${target.language}`);
+      return target.language === "EN"
+        ? { type: "unavailable" }
+        : await seams.ingest(target);
+    };
+    const reports = [];
+    for (let run = 0; run < 4 && state.cursor !== "2024-01"; run += 1) {
+      reports.push(
+        await runEcjLanguageBackfill({
+          ...seams,
+          ...RUN,
+          newest: "2024-02",
+          maxIngests: 1,
+          ingest,
+        }),
+      );
+    }
+
+    expect(state.cursor).toBe("2024-01");
+    expect(reports.length).toBeLessThanOrEqual(3);
+    expect(fetched.filter((key) => key === "62024CO0100:EN")).toHaveLength(1);
+    expect(ingested).toEqual([
+      identityOf(variant("62024CO0100", "BG")),
+      identityOf(variant("62024CJ0001", "FR")),
+    ]);
+    expect([...unavailable]).toEqual([
+      [identityOf(variant("62024CO0100", "EN")), "2024-02"],
+    ]);
+    expect(reports.at(1)?.knownUnavailable).toBe(1);
   });
 
   test("an exhausted ingest budget leaves the month for the next run", async () => {

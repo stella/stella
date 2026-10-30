@@ -18,7 +18,8 @@
  *   identity, so a replayed month re-lists, finds it held, and writes nothing;
  * - a retryable failure holds the cursor where it was, and the next run
  *   re-lists that month; a variant the publisher lists but does not serve is
- *   terminal and journaled rather than retried forever;
+ *   terminal: recorded durably, journaled and counted as unavailable by every
+ *   later run, never fetched again, so it cannot hold its month;
  * - the cursor advances by compare-and-set against the value the run loaded,
  *   so two overlapping runs cannot move it past work one of them skipped.
  *
@@ -70,6 +71,7 @@ export type EcjVariantIngestOutcome =
 
 export type EcjBackfillJournalEntry = {
   month: EcjBackfillMonth;
+  identity: string;
   celex: string;
   language: string;
   outcome: EcjVariantIngestOutcome["type"];
@@ -83,6 +85,15 @@ type EcjLanguageBackfillSeams = {
   identityOf: (variant: EcjCelexVariant) => string | undefined;
   /** Which of these identities a stored row already holds. */
   heldIdentities: (identities: readonly string[]) => Promise<Set<string>>;
+  /** Which of these identities an earlier run found listed but not served. */
+  unavailableIdentities: (
+    identities: readonly string[],
+  ) => Promise<Set<string>>;
+  /** Durably record a variant as listed but not served. */
+  recordUnavailable: (entry: {
+    month: EcjBackfillMonth;
+    identity: string;
+  }) => Promise<void>;
   /** Fetch and write one variant. */
   ingest: (variant: EcjCelexVariant) => Promise<EcjVariantIngestOutcome>;
   /** The last month finished, or null before the first. */
@@ -127,7 +138,10 @@ export type EcjLanguageBackfillReport = {
   listed: number;
   missing: number;
   written: number;
+  /** Found listed but not served by this run. */
   unavailable: number;
+  /** Listed, not held, and recorded as not served by an earlier run. */
+  knownUnavailable: number;
   retryable: number;
   /** The month a retryable failure held, when one did. */
   heldAt?: EcjBackfillMonth;
@@ -163,6 +177,7 @@ export const runEcjLanguageBackfill = async (
     missing: 0,
     written: 0,
     unavailable: 0,
+    knownUnavailable: 0,
     retryable: 0,
   };
   let month: EcjBackfillMonth =
@@ -191,11 +206,16 @@ export const runEcjLanguageBackfill = async (
     const held = await options.heldIdentities(
       keyed.map(({ identity }) => identity),
     );
-    const missing = keyed.filter(({ identity }) => !held.has(identity));
+    const unheld = keyed.filter(({ identity }) => !held.has(identity));
+    const unavailable = await options.unavailableIdentities(
+      unheld.map(({ identity }) => identity),
+    );
+    report.knownUnavailable += unavailable.size;
+    const missing = unheld.filter(({ identity }) => !unavailable.has(identity));
     report.missing += missing.length;
 
     if (apply) {
-      for (const { variant } of missing) {
+      for (const { variant, identity } of missing) {
         if (aborted()) {
           return { ...report, status: "aborted", cursor };
         }
@@ -207,8 +227,12 @@ export const runEcjLanguageBackfill = async (
         ingests += 1;
         // Paced: one publisher fetch and pipeline write per variant.
         const outcome = await options.ingest(variant);
+        if (outcome.type === "unavailable") {
+          await options.recordUnavailable({ month, identity });
+        }
         await options.journal({
           month,
+          identity,
           celex: variant.celex,
           language: variant.language,
           outcome: outcome.type,
