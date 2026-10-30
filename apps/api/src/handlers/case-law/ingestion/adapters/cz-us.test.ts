@@ -15,11 +15,6 @@ import {
 import { sha256Hex as hashContent } from "@stll/sha256/node";
 
 import {
-  decodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
-import {
   czUsAdapter,
   openNalusSession,
   parseNalusDetail,
@@ -38,6 +33,11 @@ import {
   READ_OUTCOME_METADATA_KEY,
 } from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import {
+  decodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@/api/lib/legal-search/ingestion-types";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import {
   faultedResponse,
   READ_FAULTS,

@@ -3,9 +3,10 @@ import { useFormatter, useTranslations } from "use-intl";
 
 import { TASK_STATUS } from "@stll/api-contract/entity-options";
 import type { TaskStatus } from "@stll/api-contract/entity-options";
+import { Text } from "@stll/ui/text";
 
 import { EntityKindIcon } from "@/components/entity-kind-icon";
-import { Text } from "@/components/ui/text";
+import { ChevronDownIcon, ChevronRightIcon } from "@/icons.gen";
 import { isKnownEntityKind } from "@/state/matter-entities";
 import type { MatterEntity } from "@/state/matter-entities";
 import { useUiColors } from "@/theme";
@@ -15,16 +16,24 @@ const TASK_STATUSES: ReadonlySet<string> = new Set(Object.values(TASK_STATUS));
 const isTaskStatus = (status: string): status is TaskStatus =>
   TASK_STATUSES.has(status);
 
+/** How far each folder level indents its contents. */
+const DEPTH_INDENT = 20;
+
 /**
  * One document, folder or task: its name, then its kind (or a task's
  * status) and the day it last changed. A date, not "2 days ago": Hermes,
- * the app's JavaScript engine, cannot format relative times.
+ * the app's JavaScript engine, cannot format relative times. A row inside
+ * folders is indented by its depth; a folder shows whether it is open.
  */
 export const EntityRow = ({
+  depth,
   entity,
+  folder,
   onPress,
 }: {
+  depth: number;
   entity: MatterEntity;
+  folder: { open: boolean } | null;
   onPress: () => void;
 }) => {
   const t = useTranslations("matter");
@@ -51,8 +60,12 @@ export const EntityRow = ({
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityState={
+        folder === null ? undefined : { expanded: folder.open }
+      }
       className="border-border active:bg-accent flex-row gap-3 border-b py-3"
       onPress={onPress}
+      style={{ paddingStart: depth * DEPTH_INDENT }}
     >
       <View className="pt-0.5">
         <EntityKindIcon color={ui.mutedForeground} kind={entity.kind} />
@@ -67,6 +80,15 @@ export const EntityRow = ({
           {details.join(" · ")}
         </Text>
       </View>
+      {folder === null ? null : (
+        <View className="self-center">
+          {folder.open ? (
+            <ChevronDownIcon color={ui.mutedForeground} size={16} />
+          ) : (
+            <ChevronRightIcon color={ui.mutedForeground} size={16} />
+          )}
+        </View>
+      )}
     </Pressable>
   );
 };

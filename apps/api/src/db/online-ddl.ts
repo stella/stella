@@ -39,6 +39,7 @@ import type {
   OnlineMigrationConnection,
   OnlineMigrationOutcome,
 } from "./online-migration-connection";
+import { INVOICE_TENANT_UNIQUE_INDEX } from "./online-unique-indexes";
 
 /** Module-private, so a statement is constructible and readable only here. */
 const LOCK_TAKING: unique symbol = Symbol("stella.lockTakingStatement");
@@ -187,16 +188,6 @@ export const renameIndex = ({
     lockQueue: "beside_writers",
   });
 };
-
-/** The original-invoice tenant reference uses this online-built covering key. */
-export const INVOICE_TENANT_UNIQUE_INDEX = {
-  createSql:
-    'CREATE UNIQUE INDEX CONCURRENTLY "invoices_id_org_unique" ON public."invoices" USING btree (id, organization_id)',
-  definitionBody: "ON public.invoices USING btree (id, organization_id)",
-  isUnique: true,
-  name: "invoices_id_org_unique",
-  tableName: "invoices",
-} as const satisfies OnlineIndexDeclaration;
 
 const INVOICE_TENANT_KEY_STATE_SQL = `
 WITH target AS (

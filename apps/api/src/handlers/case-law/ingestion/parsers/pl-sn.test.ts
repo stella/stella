@@ -283,7 +283,7 @@ describe("reading recorded Supreme Court PDFs", () => {
       fulltext.split("\n\n").filter((paragraph) => /^\d+$/u.test(paragraph)),
     ).toEqual([]);
     expect(fulltext).toContain(
-      "służy instytucja tzw. przedsądu, ustanowiona w art. 3989 k.p.c.",
+      "służy instytucja tzw. przedsądu, ustanowiona w art. 398^9 k.p.c.",
     );
   });
 
@@ -293,10 +293,14 @@ describe("reading recorded Supreme Court PDFs", () => {
       "V CSK 98/17",
     );
 
+    expect(paragraphs.join("\n\n")).toContain(
+      "obie podstawy przewidziane w art. 398^3 § 1 k.p.c.",
+    );
+
     expect(
       paragraphs.some((paragraph) =>
         paragraph.startsWith(
-          "Potrzeba dokonania wykładni przepisów prawnych, przewidziana w art. 3989 § 1 pkt 2 k.p.c.",
+          "Potrzeba dokonania wykładni przepisów prawnych, przewidziana w art. 398^9 § 1 pkt 2 k.p.c.",
         ),
       ),
     ).toBe(true);
@@ -523,4 +527,33 @@ describe("reading word spaces set by position alone", () => {
 
     expect(lines).toEqual(["foo bar baz"]);
   });
+});
+
+test("inline emphasis survives wrapped lines and nested superscripts in one paragraph", () => {
+  const paragraphs = assemblePlSnParagraphs([
+    { type: "text", indented: true, runs: [{ text: "The rule", bold: false }] },
+    {
+      type: "text",
+      indented: false,
+      runs: [{ text: "in dubio", bold: false, italic: true }],
+    },
+    {
+      type: "text",
+      indented: false,
+      runs: [{ text: "contra proferentem", bold: false, italic: true }],
+    },
+    {
+      type: "text",
+      indented: false,
+      runs: [
+        { text: "in article 109", bold: true, italic: true },
+        { text: "7", bold: true, italic: true, superscript: true },
+        { text: ".", bold: false },
+      ],
+    },
+  ]);
+  expect(paragraphs).toHaveLength(1);
+  expect(plSnParagraphsToHtml(paragraphs)).toBe(
+    "<p>The rule<i> in dubio contra proferentem</i><b><i> in article 109</i></b><b><i><sup>7</sup></i></b>.</p>",
+  );
 });

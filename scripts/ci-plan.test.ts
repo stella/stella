@@ -2476,7 +2476,7 @@ test("desktop Rust tests select classified merge-group changes at every queue de
           expect(selected).toEqual(lintPlatforms);
           expect(selected.at(0)).toEqual({
             os: "macos",
-            runner: "macos-14",
+            runner: "macos-15",
             target: "aarch64-apple-darwin",
           });
           expect(selected.at(1)).toEqual({
@@ -5076,6 +5076,27 @@ test("split service suites preserve their scopes and independent verdicts", () =
   }
 });
 
+test("the UI playground plan consumes the changed-files output and exposes its selection", () => {
+  const plan = v.parse(
+    v.object({ outputs: v.record(v.string(), v.string()) }),
+    ciJobs["ci-plan"],
+  );
+  expect(plan.outputs["ui_playground_specs"]).toBe(
+    ["$", "{{ steps.ui-playground-plan.outputs.specs || '[]' }}"].join(""),
+  );
+  expect(plan.outputs["ui_playground_matrix"]).toBe(
+    ["$", "{{ steps.ui-playground-plan.outputs.matrix || '[]' }}"].join(""),
+  );
+  const step = jobSteps(ciJobs["ci-plan"]).find(
+    ({ name }) => name === "Plan UI playground geometry specs",
+  );
+  expect(step?.env?.["UI_PLAYGROUND_CHANGED_PATHS"]).toBe(
+    ["$", "{{ runner.temp }}/api-test-changed-paths"].join(""),
+  );
+  expect(step?.run).toContain("bun scripts/ui-playground-selection.ts");
+  expect(step?.run).toContain("bun scripts/ui-playground-shards.ts");
+});
+
 test("Bun cache saves are main-only and trusted Turbo results remain readable", () => {
   const configured = v.parse(
     v.object({ env: v.record(v.string(), v.string()) }),
@@ -5241,7 +5262,7 @@ test("every browser suite runs on its required matrix legs, the playground on ev
     v.object({
       strategy: v.object({
         "fail-fast": v.literal(false),
-        matrix: v.object({ suite: v.string() }),
+        matrix: v.object({ include: v.string() }),
       }),
       steps: v.array(
         v.object({
@@ -5253,25 +5274,11 @@ test("every browser suite runs on its required matrix legs, the playground on ev
     }),
     ciJobs["ci-browser"],
   );
-  const matrixSuites = v.parse(
-    v.array(v.string()),
-    evaluate(browser.strategy.matrix.suite, {
-      values: { "github.event_name": "merge_group" },
-    }),
+  expect(browser.strategy.matrix.include).toBe(
+    ["$", "{{ fromJSON(needs.ci-plan.outputs.ui_playground_matrix) }}"].join(
+      "",
+    ),
   );
-  const playgroundLegs = matrixSuites.filter((leg) =>
-    leg.startsWith("playground-"),
-  );
-  expect(new Set(matrixSuites)).toEqual(
-    new Set(["desktop", "ui", ...playgroundLegs]),
-  );
-  expect(matrixSuites).toHaveLength(2 + playgroundLegs.length);
-  expect(playgroundLegs.length).toBeGreaterThan(1);
-  expect(
-    evaluate(browser.strategy.matrix.suite, {
-      values: { "github.event_name": "pull_request" },
-    }),
-  ).toEqual(["desktop"]);
   const suites = browser.steps.filter(
     ({ run }) => run?.includes("test:browser") || run?.includes("test:e2e"),
   );
@@ -5284,19 +5291,16 @@ test("every browser suite runs on its required matrix legs, the playground on ev
     ].toSorted(compareCodeUnit),
   );
   for (const suite of suites) {
-    const legs = matrixSuites.filter((leg) =>
-      suite.if?.includes(`matrix.suite == '${leg}'`),
-    );
-    // The playground suite is the only sharded one: it runs on every
-    // playground leg, each taking one Playwright shard of as many as there
-    // are legs, so a leg can neither be dropped nor duplicate another's tests.
     if (suite.name === "Test UI playground visuals") {
-      expect(legs, suite.name).toEqual(playgroundLegs);
-      expect(suite.run, suite.name).toContain(
-        `--shard="\${SUITE#playground-}/${String(playgroundLegs.length)}"`,
+      expect(suite.if, suite.name).toContain(
+        "startsWith(matrix.suite, 'playground-')",
       );
+      expect(suite.run, suite.name).toContain(
+        `bun run test:e2e:ui-playground "\${specs[@]}"`,
+      );
+      expect(suite.run, suite.name).not.toContain("--shard");
     } else {
-      expect(legs, suite.name).toHaveLength(1);
+      expect(suite.if, suite.name).toContain("matrix.suite ==");
     }
     expect(suite.if, suite.name).toContain("outputs.required == 'true'");
   }
@@ -5311,7 +5315,7 @@ test("every browser suite runs on its required matrix legs, the playground on ev
   }
 });
 
-test("route-relevant changes plan the required merge-group smoke", () => {
+test("route-relevant changes plan the required route smoke", () => {
   const scope = "route_smoke_required";
   const selectedBy = jobIf(ciJobs["route-smoke"]);
   expect(selectedBy).toContain(`needs.ci-plan.outputs.${scope} == 'true'`);
@@ -5326,6 +5330,8 @@ test("route-relevant changes plan the required merge-group smoke", () => {
     "apps/web/src/lib/react-query.ts",
     "apps/web/src/components/new-query-component.tsx",
     "apps/api/src/handlers/tasks/get.ts",
+    "packages/fetch/src/index.ts",
+    "packages/api-client/src/index.ts",
     "packages/ui/src/button.tsx",
     "apps/web/e2e/network-baseline.json",
     "scripts/network-baseline-scope.ts",
@@ -7509,6 +7515,7 @@ type BrowserPlanOptions = {
   queueDepth?: string;
   packageChecksRequired?: string;
   browserScopeRequired?: string;
+  uiPlaygroundSpecs?: string;
 };
 type HeavyGatePlanOptions = {
   event: Event;
@@ -7554,6 +7561,7 @@ const browserPlanOutput = ({
   queueDepth = "full",
   packageChecksRequired = "true",
   browserScopeRequired = "true",
+  uiPlaygroundSpecs = "[]",
 }: BrowserPlanOptions) => {
   const { outputs } = v.parse(
     v.object({ outputs: v.record(v.string(), v.string()) }),
@@ -7574,10 +7582,32 @@ const browserPlanOutput = ({
           packageChecksRequired,
         "steps.depth.outputs.suite_depth": depth,
         "steps.depth.outputs.queue_depth": queueDepth,
+        "steps.ui-playground-plan.outputs.specs": uiPlaygroundSpecs,
       },
     }),
   );
 };
+
+test("a PR that selects UI playground specs requires the browser job", () => {
+  // ci-result requires every job whose scope output is true, so a planned
+  // UI leg that is skipped or cancelled fails the run; an unplanned one does
+  // not make the job required.
+  const plan = (desktopRequired: "true" | "false", uiPlaygroundSpecs: string) =>
+    browserPlanOutput({
+      event: "pull_request",
+      depth: "fast",
+      desktopRequired,
+      uiPlaygroundSpecs,
+    });
+  expect(
+    plan(
+      "false",
+      '["apps/web/e2e/ui-playground/reader-selection.geometry.spec.ts"]',
+    ),
+  ).toBe("true");
+  expect(plan("false", "[]")).toBe("false");
+  expect(plan("true", "[]")).toBe("true");
+});
 
 test("Playwright image-only changes admit browser suites in merge groups", () => {
   for (const file of [

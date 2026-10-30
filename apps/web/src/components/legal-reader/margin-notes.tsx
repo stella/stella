@@ -965,7 +965,7 @@ const CommentNote = ({
             // reach their own comment's controls without a pointer.
             placement.type === "inline"
               ? "opacity-100"
-              : "opacity-0 group-hover/comment:opacity-100 focus-within:opacity-100",
+              : "opacity-0 group-hover/comment:opacity-100 focus-within:opacity-100 pointer-coarse:opacity-100",
           )}
         >
           <AnnotationVisibilityToggle
