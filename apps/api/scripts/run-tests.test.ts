@@ -71,7 +71,9 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
         });
         const ready = await descendant.stdout.getReader().read();
         const leafPid = new TextDecoder().decode(ready.value).trim();
-        await Bun.write(${JSON.stringify(marker)}, String(process.pid) + " " + String(descendant.pid) + " " + leafPid);
+        // Rename into place so the test never reads a created but empty marker.
+        await Bun.write(${JSON.stringify(`${marker}.tmp`)}, String(process.pid) + " " + String(descendant.pid) + " " + leafPid);
+        (await import("node:fs")).renameSync(${JSON.stringify(`${marker}.tmp`)}, ${JSON.stringify(marker)});
         setInterval(() => {}, 1000);
       `,
       );
