@@ -51,7 +51,6 @@ import {
   validDecisionDate,
   withAutoRewrite,
   withOriginalWords,
-  withPendingQuery,
   withQuery,
 } from "@/features/case-law/case-law-index-search.logic";
 import type {
@@ -134,6 +133,10 @@ import {
 } from "@/routes/law/-components/public-law-list-failure";
 
 import { caseLawResultsFeedback } from "./-case-law-filter-notice";
+import {
+  type CaseLawSearchChange,
+  nextCaseLawIndexSearch,
+} from "./-case-law-search-navigation.logic";
 import type { CaseLawIndexSearch } from "./-case-law-search-schema";
 import { Route } from "./index";
 
@@ -449,23 +452,18 @@ export function PublicCaseLawIndex({
   // to the new filters; cancelling it alone would strand the edit for good,
   // because `search.q` never changes and the field never resyncs. So the
   // pending text is folded in first and the caller's own change applied over
-  // it. Returns the navigation so each caller tags it with a literal label.
-  //
-  // Every such change also drops the page: page 3 of the old result set
-  // names nothing in the new one.
+  // it (`nextCaseLawIndexSearch`). Returns the navigation so each caller tags
+  // it with a literal label.
   const searchNavigation = async (
-    nextSearch: (previous: CaseLawIndexSearch) => CaseLawIndexSearch,
+    change: CaseLawSearchChange,
+    apply: (previous: CaseLawIndexSearch) => CaseLawIndexSearch,
   ) => {
-    const pending = writeQuery.isPending() ? queryInput : null;
+    const pendingQuery = writeQuery.isPending() ? queryInput : null;
     writeQuery.cancel();
     await navigate({
       replace: true,
       search: (previous) =>
-        nextSearch({
-          ...withPendingQuery(previous, pending),
-          page: undefined,
-          filterNotice: undefined,
-        }),
+        nextCaseLawIndexSearch({ previous, pendingQuery, change, apply }),
     });
   };
 
@@ -543,7 +541,7 @@ export function PublicCaseLawIndex({
 
   const setPageSize = (next: PublicLawPageSize) => {
     detachedUserAction(
-      searchNavigation((previous) => ({
+      searchNavigation("page-size", (previous) => ({
         ...previous,
         pageSize: publicLawPageSizeSearchValue(next),
       })),
@@ -559,7 +557,7 @@ export function PublicCaseLawIndex({
   // because the words it requires are a different result set.
   const searchEveryWord = () => {
     detachedUserAction(
-      searchNavigation((previous) => ({
+      searchNavigation("strict", (previous) => ({
         ...previous,
         strict: STRICT_SEARCH_VALUE,
       })),
@@ -572,7 +570,7 @@ export function PublicCaseLawIndex({
 
   const selectFacet = (key: CaseLawFilterKey, value: string | undefined) => {
     detached(
-      searchNavigation((previous) =>
+      searchNavigation("filter", (previous) =>
         value === undefined
           ? dropCaseLawFilters(previous, [key])
           : { ...previous, [key]: value },
@@ -585,7 +583,7 @@ export function PublicCaseLawIndex({
   // the moment they touch the range, so the two can never disagree.
   const setDateRange = (range: DecisionDateRange) => {
     detached(
-      searchNavigation((previous) => ({
+      searchNavigation("date-range", (previous) => ({
         ...dropCaseLawFilters(previous, ["from", "to", "year"]),
         from: validDecisionDate(range.from),
         to: validDecisionDate(range.to),
@@ -668,7 +666,7 @@ export function PublicCaseLawIndex({
     setQueryInput(refined);
     setRequestedQuery(refined);
     detached(
-      searchNavigation((previous) => withQuery(previous, refined)),
+      searchNavigation("refine", (previous) => withQuery(previous, refined)),
       "cases.refine-navigate",
     );
   };
@@ -703,7 +701,7 @@ export function PublicCaseLawIndex({
   const order = decisionOrder(intent, search.sort);
   const changeSort = (next: DecisionSort) => {
     detached(
-      searchNavigation((previous) => ({ ...previous, sort: next })),
+      searchNavigation("sort", (previous) => ({ ...previous, sort: next })),
       "cases.sort-navigate",
     );
   };
@@ -849,7 +847,7 @@ export function PublicCaseLawIndex({
               // Clear the filters, not the query the reader typed into the box:
               // the box is the search, and emptying it is its own gesture.
               detached(
-                searchNavigation((previous) =>
+                searchNavigation("clear-filters", (previous) =>
                   dropCaseLawFilters(previous, [
                     ...CASE_LAW_FILTER_KEYS,
                     "from",
@@ -930,7 +928,8 @@ type CaseLawRewriteFlowOptions = {
   rowsAnswerQuery: boolean;
   search: CaseLawIndexSearch;
   searchNavigation: (
-    nextSearch: (previous: CaseLawIndexSearch) => CaseLawIndexSearch,
+    change: CaseLawSearchChange,
+    apply: (previous: CaseLawIndexSearch) => CaseLawIndexSearch,
   ) => Promise<void>;
   searchRefinedQuery: (refined: string) => void;
   /** Put words in the box and make them the search the rows wait on. */
@@ -962,7 +961,7 @@ const useCaseLawRewriteFlow = ({
     onAutoRefined: (refined, original) => {
       setQuery(refined);
       detached(
-        searchNavigation((previous) =>
+        searchNavigation("auto-refine", (previous) =>
           withAutoRewrite(previous, refined, original),
         ),
         "cases.auto-refine-navigate",
@@ -978,7 +977,7 @@ const useCaseLawRewriteFlow = ({
     // A pending query write drops `rewrittenFrom`; restore the words this
     // click saw so the original search still wins.
     detached(
-      searchNavigation((previous) =>
+      searchNavigation("original-words", (previous) =>
         withOriginalWords({ ...previous, rewrittenFrom: original }),
       ),
       "cases.original-words-navigate",
