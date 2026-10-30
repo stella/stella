@@ -174,6 +174,20 @@ describe("Button focusRing", () => {
     expect(outside).toContain("focus-visible:ring-offset-1");
     expect(outside).not.toContain("focus-visible:ring-inset");
   });
+
+  test("a selected plain button is marked pressed and draws its ring", () => {
+    const markup = renderToStaticMarkup(
+      <Button selected variant="plain">
+        Thumb
+      </Button>,
+    );
+
+    expect(markup).toContain('data-pressed=""');
+    expect(classesOf(markup)).toContain("data-pressed:inset-ring-2");
+    expect(
+      renderToStaticMarkup(<Button variant="plain">Thumb</Button>),
+    ).not.toContain('data-pressed=""');
+  });
 });
 
 describe("Button consolidated additions", () => {

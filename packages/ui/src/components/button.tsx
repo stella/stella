@@ -163,10 +163,12 @@ const buttonVariants = cva(
  * start), so a card's children stack as they would in a `div`; `className`
  * places it (`w-full`, `block`). `shape` gives it the outline its focus ring
  * follows. Like a native button it does not dim when disabled: the content
- * says it is unavailable.
+ * says it is unavailable. Selected (`data-pressed`), it draws an inset ring
+ * in the primary colour, inside its outline so a clipping container keeps
+ * it, and apart from the focus ring, which still shows over it.
  */
 const BUTTON_PLAIN_CLASS =
-  "focus-visible:ring-ring focus-visible:ring-offset-background relative inline-block cursor-pointer text-start outline-none focus-visible:ring-2 focus-visible:ring-offset-1 disabled:cursor-default";
+  "focus-visible:ring-ring focus-visible:ring-offset-background data-pressed:inset-ring-primary relative inline-block cursor-pointer text-start outline-none focus-visible:ring-2 focus-visible:ring-offset-1 disabled:cursor-default data-pressed:inset-ring-2";
 
 /**
  * The outline a plain button's focus ring follows, matching its content:
