@@ -145,12 +145,12 @@ export const installContentSecurityPolicyCollector = async (page: Page) => {
     });
   return {
     assertClean: async () => {
-      await flushViolations();
       const html = await latestDocument;
       if (html === undefined) {
         throw new TypeError("No enforced document response was captured");
       }
       const scriptNonces = renderedInlineScriptNonces(html);
+      await flushViolations();
       assertContentSecurityPolicySnapshot({
         violations,
         policies,
