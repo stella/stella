@@ -373,6 +373,58 @@ export const ${name} = { run: { featureId: "fixture", ${target} } };`;
       check('import { type featureRows } from "@/api/db/schema";'),
     ).toEqual([]);
   });
+  test("required table symbols gate shared-schema consumers without gating sibling tables", () => {
+    const file = "apps/api/src/routes/ordinary.ts";
+    const schemaFile = "apps/api/src/db/schema/feature.ts";
+    const selectedRegistry = {
+      fixture: {
+        ...registry.fixture,
+        ownership: {
+          ...registry.fixture.ownership,
+          tableSchemaFiles: [],
+          tableSchemas: { [schemaFile]: ["featureRows"] },
+        },
+      },
+    } as const;
+    const sources = new Map([
+      ...baseSources,
+      [
+        schemaFile,
+        'export const featureRows = p.pgTable("fixture_rows", {}); export const siblingRows = p.pgTable("sibling_rows", {});',
+      ],
+    ]);
+    const validate = (source: string, config: Record<string, unknown> = {}) => {
+      sources.set(file, source);
+      return validateFeatureAccessDeclarations({
+        registry: selectedRegistry,
+        endpoints: [{ file, config }],
+        sources,
+      });
+    };
+    for (const specifier of ["../db/schema/feature", "../db/schema"]) {
+      expect(validate(`import { siblingRows } from "${specifier}";`)).toEqual(
+        [],
+      );
+      const read = `import { featureRows as rows } from "${specifier}";`;
+      expect(validate(read)).toHaveLength(1);
+      expect(validate(read, required)).toEqual([]);
+    }
+    for (const read of [
+      'import * as tables from "../db/schema/feature"; const rows = tables.featureRows;',
+      "const rows = sql`select * from fixture_rows`;",
+    ]) {
+      expect(validate(read)).toHaveLength(1);
+      expect(validate(read, required)).toEqual([]);
+    }
+    sources.set(
+      schemaFile,
+      'export const siblingRows = p.pgTable("sibling_rows", {});',
+    );
+    expect(validate("")).toContainEqual({
+      file: schemaFile,
+      message: "feature fixture owns a missing table symbol featureRows",
+    });
+  });
   test("helper imports and named reexports preserve table ownership", () => {
     const additional = [
       [

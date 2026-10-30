@@ -359,7 +359,9 @@ class DeclarationSourceGraph {
         }
         const selections = Object.values(this.registry).flatMap(
           ({ ownership }) => {
-            const symbols = ownership?.conditionalTableSchemas?.[file];
+            const symbols =
+              ownership?.tableSchemas?.[file] ??
+              ownership?.conditionalTableSchemas?.[file];
             return symbols === undefined ? [] : [symbols];
           },
         );
@@ -601,6 +603,27 @@ const isValidDispatchBoundary = (
     }
   }
 };
+const ownedTableSchemas = (
+  ownership: NonNullable<FeatureRegistry[string]["ownership"]>,
+) => [
+  ...ownership.tableSchemaFiles.map((file) => ({
+    file,
+    symbols: undefined,
+    requirement: "required" as const,
+  })),
+  ...Object.entries(ownership.tableSchemas ?? {}).map(([file, symbols]) => ({
+    file,
+    symbols,
+    requirement: "required" as const,
+  })),
+  ...Object.entries(ownership.conditionalTableSchemas ?? {}).map(
+    ([file, symbols]) => ({
+      file,
+      symbols,
+      requirement: "conditional" as const,
+    }),
+  ),
+];
 const validateOwnership = (
   registry: FeatureRegistry,
   graph: DeclarationSourceGraph,
@@ -623,8 +646,7 @@ const validateOwnership = (
       ownership === undefined ||
       [
         ...ownership.handlerDirectories,
-        ...ownership.tableSchemaFiles,
-        ...Object.keys(ownership.conditionalTableSchemas ?? {}),
+        ...ownedTableSchemas(ownership).map(({ file }) => file),
         ...ownership.coreModules,
         ...(ownership.conditionalModules ?? []),
       ].length === 0
@@ -647,9 +669,9 @@ const validateOwnership = (
         });
       }
     }
+    const tableSchemas = ownedTableSchemas(ownership);
     for (const file of [
-      ...ownership.tableSchemaFiles,
-      ...Object.keys(ownership.conditionalTableSchemas ?? {}),
+      ...tableSchemas.map(({ file: schemaFile }) => schemaFile),
       ...ownership.coreModules,
       ...(ownership.conditionalModules ?? []),
     ]) {
@@ -660,15 +682,15 @@ const validateOwnership = (
         });
       }
     }
-    for (const file of [
-      ...ownership.tableSchemaFiles,
-      ...Object.keys(ownership.conditionalTableSchemas ?? {}),
-    ]) {
+    for (const {
+      file,
+      symbols: selectedSymbols,
+      requirement,
+    } of tableSchemas) {
       const ast = graph.sourceFile(file);
       if (ast === undefined) {
         continue;
       }
-      const selectedSymbols = ownership.conditionalTableSchemas?.[file];
       const selectedAst =
         selectedSymbols === undefined
           ? ast
@@ -692,12 +714,7 @@ const validateOwnership = (
       }
       for (const name of exportedTableNames(selectedAst)) {
         const owners = tableOwners.get(name) ?? new Map<string, Requirement>();
-        owners.set(
-          featureId,
-          ownership.conditionalTableSchemas?.[file] !== undefined
-            ? "conditional"
-            : "required",
-        );
+        owners.set(featureId, requirement);
         tableOwners.set(name, owners);
       }
     }
@@ -785,7 +802,8 @@ const moduleRequirements = (registry: FeatureRegistry, module: string) => {
         module.startsWith(`${directory.replace(/\/$/u, "")}/`),
       ) ||
       ownership?.coreModules.includes(module) ||
-      ownership?.tableSchemaFiles.includes(module)
+      ownership?.tableSchemaFiles.includes(module) ||
+      ownership?.tableSchemas?.[module] !== undefined
     ) {
       required.set(id, "required");
     }

@@ -18,6 +18,7 @@ type FeatureDefinition = {
   ownership?: {
     handlerDirectories: readonly string[];
     tableSchemaFiles: readonly string[];
+    tableSchemas?: Readonly<Record<string, readonly string[]>>;
     conditionalTableSchemas?: Readonly<Record<string, readonly string[]>>;
     coreModules: readonly string[];
     conditionalModules?: readonly string[];
@@ -133,7 +134,10 @@ export const FEATURE_REGISTRY = defineFeatureRegistry({
     prerequisites: ["time-billing"],
     ownership: {
       handlerDirectories: ["apps/api/src/handlers/invoices/sends"],
-      tableSchemaFiles: ["apps/api/src/db/schema/invoice-sends.ts"],
+      tableSchemaFiles: [],
+      tableSchemas: {
+        "apps/api/src/db/schema/billing.ts": ["invoiceSends"],
+      },
       coreModules: [
         "apps/api/src/lib/billing/invoice-links.ts",
         "apps/api/src/lib/billing/invoice-send-delivery.ts",

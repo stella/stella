@@ -12,7 +12,6 @@ export * from "./schema/properties";
 export * from "./schema/entities";
 export * from "./schema/templates";
 export * from "./schema/billing";
-export * from "./schema/invoice-sends";
 export * from "./schema/billing-arrangements";
 export * from "./schema/workspace-admin";
 export * from "./schema/clauses";
