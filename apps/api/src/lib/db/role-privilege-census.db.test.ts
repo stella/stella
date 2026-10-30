@@ -249,6 +249,28 @@ describePostgres("database role privilege census", () => {
         WHERE country = 'ZZP' AND language = 'xtrusted'
       `),
       ).toEqual([{ status: "retired" }]);
+      await database.unsafe(`
+        UPDATE public.case_law_decisions SET projection_epoch = projection_epoch + 1
+        WHERE id = '00000000-0000-4000-8000-000000000002';
+        INSERT INTO public.corpus_index_generations (family, generation, cluster, manifest_digest, status)
+        VALUES ('case_law', 'case_law_v999998', 'q09', repeat('a', 64), 'retiring'),
+          ('case_law', 'case_law_v999997', 'q09', repeat('a', 64), 'retired');
+        INSERT INTO public.corpus_index_projection_states (family, generation, entity_id, desired_action, desired_epoch)
+        SELECT generation.family, generation.generation, decision.id, 'erase', decision.projection_epoch
+        FROM public.corpus_index_generations generation CROSS JOIN public.case_law_decisions decision
+        WHERE generation.generation IN ('case_law_v999998', 'case_law_v999997')
+          AND decision.id = '00000000-0000-4000-8000-000000000002';
+      `);
+      expect(
+        await database.unsafe(`
+        SELECT * FROM public.purge_rebuilding_corpus_index_projection_history('case_law', 'case_law_v999998', 1)
+        UNION ALL
+        SELECT * FROM public.purge_retired_corpus_index_projection_history('case_law', 'case_law_v999997', 1)
+      `),
+      ).toEqual([
+        { deleted_state_count: 1, deleted_intent_count: 0 },
+        { deleted_state_count: 1, deleted_intent_count: 0 },
+      ]);
     });
   }, 120_000);
 

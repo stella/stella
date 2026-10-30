@@ -1,6 +1,62 @@
 SET lock_timeout = '3s';
 SET statement_timeout = '30s';
 
+CREATE OR REPLACE FUNCTION public."guard_corpus_index_projection_history_delete"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  generation_status text;
+  rebuild_fenced boolean;
+BEGIN
+  SELECT generation."status"
+  INTO generation_status
+  FROM public."corpus_index_generations" generation
+  WHERE generation."family" = OLD."family"
+    AND generation."generation" = OLD."generation";
+
+  IF generation_status NOT IN ('retiring', 'retired') THEN
+    RAISE EXCEPTION 'corpus index projection history requires a retiring or retired generation';
+  END IF;
+
+  IF generation_status = 'retiring' THEN
+    SELECT EXISTS (
+      SELECT 1
+      FROM pg_catalog.pg_locks held
+      WHERE held."locktype" = 'advisory'
+        AND held."pid" = pg_catalog.pg_backend_pid()
+        AND held."classid" = 1937007986::oid
+        AND held."objid" = 1::oid
+        AND held."objsubid" = 2
+        AND held."mode" = 'ExclusiveLock'
+        AND held."granted"
+    ) INTO rebuild_fenced;
+    IF NOT rebuild_fenced THEN
+      RAISE EXCEPTION 'retiring corpus index projection history requires the rebuild fence';
+    END IF;
+    RETURN OLD;
+  END IF;
+
+  IF TG_TABLE_NAME = 'corpus_index_projection_intents'
+     AND (to_jsonb(OLD)->>'status') NOT IN ('settled', 'cancelled') THEN
+    RAISE EXCEPTION 'nonterminal corpus index projection intent cannot be deleted';
+  END IF;
+
+  IF TG_TABLE_NAME = 'corpus_index_projection_states' AND EXISTS (
+    SELECT 1
+    FROM public."corpus_index_projection_intents" intent
+    WHERE intent."family" = OLD."family"
+      AND intent."generation" = OLD."generation"
+      AND intent."entity_id" = OLD."entity_id"
+      AND intent."status" NOT IN ('settled', 'cancelled')
+  ) THEN
+    RAISE EXCEPTION 'projection state with nonterminal intents cannot be deleted';
+  END IF;
+
+  RETURN OLD;
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION public.case_law_provision_extraction_input_digest(decision public.case_law_decisions)
 RETURNS bytea
 LANGUAGE sql
