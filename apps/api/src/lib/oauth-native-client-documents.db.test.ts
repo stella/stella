@@ -50,7 +50,7 @@ const { workspaceMembers, workspaces } = await import("@/api/db/schema");
 const { createSafeId, toSafeId } = await import("@/api/lib/branded-types");
 const { readSignedQuery } = await import("@/api/tests/helpers/oauth-grant");
 const { login } = await import("../../../../packages/cli/src/auth/login.ts");
-const { CLI_DEFAULT_RESOURCE_SCOPES, CLI_KNOWN_SCOPES, CLI_REQUIRED_SCOPES } =
+const { CLI_DEFAULT_RESOURCE_SCOPES, CLI_REQUIRED_SCOPES } =
   await import("../../../../packages/cli/src/auth/constants.ts");
 const { CLI_CLIENT_METADATA_PATH, buildCliClientMetadataDocument } =
   await import("@stll/cli/client-metadata-document");
@@ -77,9 +77,6 @@ const SERVER_URL = PUBLIC_URL;
 /** Where the test server actually answers. */
 const LOCAL_URL = env.BETTER_AUTH_URL;
 
-/** Whether discovery hides client metadata document support, as an older server would. */
-let hideDocumentSupport = false;
-
 /** Every request the CLI or the simulated browser makes, served in process. */
 const serveInProcess = async (
   input: string | URL | Request,
@@ -96,21 +93,9 @@ const serveInProcess = async (
       ...(body ? { body } : {}),
     },
   );
-  const response = url.pathname.startsWith("/api/auth/")
+  return url.pathname.startsWith("/api/auth/")
     ? await getAuth().handler(local)
     : await api.fetch(local);
-  if (
-    !hideDocumentSupport ||
-    !url.pathname.endsWith("/.well-known/oauth-authorization-server")
-  ) {
-    return response;
-  }
-  const metadata = v.parse(
-    v.record(v.string(), v.unknown()),
-    await response.json(),
-  );
-  const { client_id_metadata_document_supported: _hidden, ...rest } = metadata;
-  return Response.json(rest, { status: response.status });
 };
 
 const redirectSchema = v.looseObject({ url: v.string() });
@@ -170,7 +155,6 @@ const cliLogin = async (browser: Browser) => {
     {
       configDir,
       orgHint: undefined,
-      registrationScopes: CLI_KNOWN_SCOPES,
       requiredScopes: CLI_REQUIRED_SCOPES,
       resourceScopes: CLI_DEFAULT_RESOURCE_SCOPES,
       serverFlag: SERVER_URL,
@@ -322,7 +306,6 @@ describe("stella CLI client document", () => {
   });
 
   test("signs the CLI in with every scope it asks for", async () => {
-    hideDocumentSupport = false;
     const browser = await signInWithOrganization("cli-document@example.test");
     const signedIn = await cliLogin(browser);
     expect(signedIn.grantedScopes.split(" ")).toEqual(
@@ -343,19 +326,58 @@ describe("stella CLI client document", () => {
     });
   });
 
-  test("a registered client with the same redirects gets the open subset", async () => {
-    hideDocumentSupport = true;
-    try {
-      const browser = await signInWithOrganization(
-        "cli-registered@example.test",
-      );
-      const signedIn = await cliLogin(browser);
-      const granted = signedIn.grantedScopes.split(" ");
-      expect(granted).toContain("stella:read");
-      expect(granted).not.toContain("stella:admin_read");
-    } finally {
-      hideDocumentSupport = false;
+  test("a client registering as the CLI, with its redirect, is an unverified app", async () => {
+    const browser = await signInWithOrganization("cli-lookalike@example.test");
+    const registration = await serveInProcess(
+      new URL("/api/auth/oauth2/register", SERVER_URL),
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          ...buildCliClientMetadataDocument(CLI_CLIENT_ID),
+          client_id: undefined,
+        }),
+      },
+    );
+    expect(registration.status).toBe(201);
+    const { client_id: clientId } = v.parse(
+      v.looseObject({ client_id: v.string() }),
+      await registration.json(),
+    );
+    expect(clientId).not.toBe(CLI_CLIENT_ID);
+
+    const details = await serveInProcess(
+      new URL(
+        `/api/auth/oauth2/consent-info?client_id=${encodeURIComponent(clientId)}`,
+        SERVER_URL,
+      ),
+      { headers: { cookie: browser.cookieHeader() } },
+    );
+    expect(details.status).toBe(200);
+    expect(await details.json()).toMatchObject({
+      client: { type: "unverified", name: "stella-cli" },
+    });
+  });
+
+  test("the CLI's client id is refused a redirect outside its shape", async () => {
+    const browser = await signInWithOrganization("cli-redirect@example.test");
+    const authorize = new URL("/api/auth/oauth2/authorize", SERVER_URL);
+    for (const [name, value] of Object.entries({
+      response_type: "code",
+      client_id: CLI_CLIENT_ID,
+      redirect_uri: "https://connector.example/callback",
+      code_challenge: sha256Base64Url("verifier".repeat(6)),
+      code_challenge_method: "S256",
+      state: "state",
+      scope: "openid stella:read",
+    })) {
+      authorize.searchParams.set(name, value);
     }
+    const refused = await serveInProcess(authorize, {
+      headers: { accept: "application/json", cookie: browser.cookieHeader() },
+    });
+    expect(refused.status).toBe(400);
+    expect(await refused.json()).toMatchObject({ error: "invalid_redirect" });
   });
 });
 
@@ -370,7 +392,6 @@ describe("stella mobile client document", () => {
   });
 
   test("signs the app in for the REST API, which then lists the person's matters", async () => {
-    hideDocumentSupport = false;
     const browser = await signInWithOrganization(
       "mobile-document@example.test",
     );
