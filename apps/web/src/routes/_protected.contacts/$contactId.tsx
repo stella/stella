@@ -192,11 +192,14 @@ function ContactDetailPage() {
           )}
           {canCreateMatter && (
             <Button
-              onClick={() =>
+              onClick={(event) =>
                 openCreateMatter({
-                  id: contact.id,
-                  displayName: contact.displayName,
-                  type: contact.type,
+                  opener: event.currentTarget,
+                  client: {
+                    id: contact.id,
+                    displayName: contact.displayName,
+                    type: contact.type,
+                  },
                 })
               }
               size="sm"
