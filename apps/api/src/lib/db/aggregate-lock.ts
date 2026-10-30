@@ -3373,3 +3373,12 @@ export const lockUnbillableRateCandidates = async (
     .from(timeEntries)
     .where(condition)
     .for("update");
+
+/** Serialize legislation matter-link count and insert operations per matter. */
+export const lockLegislationMatterLinks = async (
+  tx: Transaction,
+  workspaceId: SafeId<"workspace">,
+) =>
+  await tx.execute(
+    sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}), hashtext('legislation-matter-links'))`,
+  );

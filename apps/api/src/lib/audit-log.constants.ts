@@ -28,6 +28,7 @@ export const AUDIT_RESOURCE_TYPE = {
   ANNOUNCEMENT: "announcement",
   BILLING_CODE: "billing_code",
   CASE_LAW_MATTER_LINK: "case_law_matter_link",
+  LEGISLATION_MATTER_LINK: "legislation_matter_link",
   CASE_LAW_DECISION_ANNOTATION: "case_law_decision_annotation",
   CASE_LAW_READER_ANSWER: "case_law_reader_answer",
   CASE_LAW_RESEARCH_COLUMN: "case_law_research_column",
