@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import { CHAT_MESSAGE_EDIT_ERROR_CODE } from "@stll/api-contract";
@@ -8,6 +8,7 @@ import { chatMessages, chatThreads } from "@/api/db/schema";
 import { resolveEditedUserMessageId } from "@/api/handlers/chat/chat-schema";
 import type { ChatSendRequest } from "@/api/handlers/chat/chat-schema";
 import { canAcceptChatTurnOnTx } from "@/api/handlers/chat/chat-turn-persistence";
+import type { ChatTurnRefusal } from "@/api/handlers/chat/chat-turn-persistence";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -23,13 +24,15 @@ type EditStanding = "editable" | "missing" | "not-user-message" | "running";
 
 export type ChatUserMessageEditRefusal = HandlerError<404 | 409>;
 
+const missingRefusal = () =>
+  new HandlerError({
+    code: CHAT_MESSAGE_EDIT_ERROR_CODE.targetMissing,
+    message: "The message to edit is not in this chat",
+    status: 404,
+  });
+
 const REFUSALS = {
-  missing: () =>
-    new HandlerError({
-      code: CHAT_MESSAGE_EDIT_ERROR_CODE.targetMissing,
-      message: "The message to edit is not in this chat",
-      status: 404,
-    }),
+  missing: missingRefusal,
   "not-user-message": () =>
     new HandlerError({
       code: CHAT_MESSAGE_EDIT_ERROR_CODE.targetNotUserMessage,
@@ -46,6 +49,36 @@ const REFUSALS = {
   Exclude<EditStanding, "editable">,
   () => ChatUserMessageEditRefusal
 >;
+
+/** An edit whose target left the thread after it was authorized. */
+export const refuseChatUserMessageEditTarget = missingRefusal;
+
+/**
+ * Why saving an edit failed under the thread lock, typed like every other
+ * edit refusal: a turn that started after the authorization, or a thread
+ * another turn changed in between.
+ */
+export const refuseChatUserMessageEditTurn = (
+  refusal: ChatTurnRefusal,
+): HandlerError<409> => {
+  switch (refusal) {
+    case "turn-running":
+      return new HandlerError({
+        code: CHAT_MESSAGE_EDIT_ERROR_CODE.turnRunning,
+        message: "A chat turn started before the edit was saved",
+        status: 409,
+      });
+    case "history-changed":
+      return new HandlerError({
+        code: CHAT_MESSAGE_EDIT_ERROR_CODE.historyChanged,
+        message: "The chat changed while the edit was being saved",
+        status: 409,
+      });
+    default:
+      refusal satisfies never;
+      return panic("Unhandled chat turn refusal");
+  }
+};
 
 /**
  * Whether the requester may replace `targetMessageId` and drop every turn

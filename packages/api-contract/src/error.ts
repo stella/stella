@@ -82,8 +82,11 @@ export const CHAT_TURN_NOT_OWNED_ERROR_CODE = "chat_turn_not_owned" as const;
  *   organization (another user's, another thread's, or one already dropped).
  * - `targetNotUserMessage`: the message is not a user message.
  * - `turnRunning`: a turn of the thread still runs.
+ * - `historyChanged`: another turn changed the thread while the edit was
+ *   being saved.
  */
 export const CHAT_MESSAGE_EDIT_ERROR_CODE = {
+  historyChanged: "chat_edit_history_changed",
   targetMissing: "chat_edit_target_missing",
   targetNotUserMessage: "chat_edit_target_not_user_message",
   turnRunning: "chat_edit_turn_running",

@@ -217,6 +217,27 @@ describe("editing a sent message", () => {
     expect(draft?.chips.at(0)?.html).toContain('data-label="NDA.docx"');
   });
 
+  test("a stored message opening with an autolink or a literal < opens intact", () => {
+    for (const [stored, editable] of [
+      [
+        "<https://example.com/terms> has the terms",
+        "https://example.com/terms has the terms",
+      ],
+      ["<3 thanks for the draft", "<3 thanks for the draft"],
+    ] as const) {
+      const view = renderMessage({
+        actions: createActions().actions,
+        target: {
+          id: MESSAGE_ID,
+          parts: [{ type: "text", content: stored }],
+          role: "user",
+        },
+      });
+      expect(openEditor(view).value).toBe(editable);
+      cleanup();
+    }
+  });
+
   test("offers no edit without actions or on another role", () => {
     const withoutActions = renderMessage({ actions: undefined });
     expect(

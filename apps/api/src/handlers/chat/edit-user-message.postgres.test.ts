@@ -176,6 +176,25 @@ const suite = (
     return threadId;
   };
 
+  /** A turn of `threadId` that runs on a live lease. */
+  const seedRunningTurn = async (
+    owner: Member,
+    threadId: SafeId<"chatThread">,
+    userMessageId: SafeId<"chatMessage">,
+  ) => {
+    await database.insert(chatTurns).values({
+      executionId: Bun.randomUUIDv7(),
+      id: createSafeId<"chatTurn">(),
+      leaseExpiresAt: LIVE_LEASE,
+      organizationId: owner.organizationId,
+      status: "running",
+      threadId,
+      userId: owner.userId,
+      userMessageId,
+      workspaceId: null,
+    });
+  };
+
   const turn = (index: number) => {
     const userMessageId = createSafeId<"chatMessage">();
     const answerId = createSafeId<"chatMessage">();
@@ -437,17 +456,7 @@ const suite = (
       const [first, firstAnswer] = turn(1);
       const [running] = turn(2);
       const threadId = await seedThread(owner, [first, firstAnswer, running]);
-      await database.insert(chatTurns).values({
-        executionId: Bun.randomUUIDv7(),
-        id: createSafeId<"chatTurn">(),
-        leaseExpiresAt: LIVE_LEASE,
-        organizationId: owner.organizationId,
-        status: "running",
-        threadId,
-        userId: owner.userId,
-        userMessageId: running.id,
-        workspaceId: null,
-      });
+      await seedRunningTurn(owner, threadId, running.id);
       const before = await storedThread(threadId);
 
       streamChatMock.mockClear();
@@ -463,6 +472,53 @@ const suite = (
       expect(result).toMatchObject({
         code: 409,
         response: { code: CHAT_MESSAGE_EDIT_ERROR_CODE.turnRunning },
+      });
+      expect(streamChatMock).not.toHaveBeenCalled();
+      expect(await storedThread(threadId)).toEqual(before);
+    });
+
+    test("when a turn starts between the authorization and the save", async () => {
+      const { owner } = await seedOrganization();
+      const [first, firstAnswer] = turn(1);
+      const [second, secondAnswer] = turn(2);
+      const threadId = await seedThread(owner, [
+        first,
+        firstAnswer,
+        second,
+        secondAnswer,
+      ]);
+      const before = await storedThread(threadId);
+      // The authorization is the handler's first transaction; the turn
+      // starts right after it, so only the save under the thread lock can
+      // see it.
+      const authorizedSafeDb = rlsSafeDb(owner);
+      let transactions = 0;
+      const racingSafeDb: SafeDb = async (operation, retry) => {
+        const result = await authorizedSafeDb(operation, retry);
+        transactions += 1;
+        if (transactions === 1) {
+          await seedRunningTurn(owner, threadId, second.id);
+        }
+        return result;
+      };
+
+      streamChatMock.mockClear();
+      const result = await sendMessage.handler({
+        ...editContext({
+          requester: owner,
+          targetMessageId: first.id,
+          text: "Edited as a turn starts",
+          threadId,
+        }),
+        safeDb: racingSafeDb,
+      });
+
+      expect(result).toEqual({
+        code: 409,
+        response: {
+          code: CHAT_MESSAGE_EDIT_ERROR_CODE.turnRunning,
+          message: "A chat turn started before the edit was saved",
+        },
       });
       expect(streamChatMock).not.toHaveBeenCalled();
       expect(await storedThread(threadId)).toEqual(before);

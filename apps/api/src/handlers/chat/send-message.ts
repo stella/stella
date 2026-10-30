@@ -127,7 +127,11 @@ import {
 } from "@/api/handlers/chat/data-scope";
 import { createTurnDecisionPassageStamper } from "@/api/handlers/chat/decision-passage-numbers";
 import type { DecisionPassageNumbers } from "@/api/handlers/chat/decision-passage-numbers";
-import { authorizeRequestedUserMessageEdit } from "@/api/handlers/chat/edit-user-message";
+import {
+  authorizeRequestedUserMessageEdit,
+  refuseChatUserMessageEditTarget,
+  refuseChatUserMessageEditTurn,
+} from "@/api/handlers/chat/edit-user-message";
 import { ChatError } from "@/api/handlers/chat/errors";
 import { generateThreadTitle } from "@/api/handlers/chat/generate-thread-title";
 import {
@@ -1334,6 +1338,10 @@ const acceptIncomingTurn = async ({
     });
     const isExplicitRegeneration =
       body.turnIntent === CHAT_TURN_INTENT.regenerate;
+    // An edit rewrites a user message this thread already stores; it was
+    // authorized before the turn was read (`authorizeRequestedUserMessageEdit`)
+    // and every later refusal carries the edit's typed codes.
+    const isEdit = body.turnIntent === CHAT_TURN_INTENT.edit;
     if (
       isExplicitRegeneration &&
       (parsedMessage.message.role !== "user" ||
@@ -1374,10 +1382,12 @@ const acceptIncomingTurn = async ({
       );
       if (truncationTarget === null) {
         return Result.err(
-          new HandlerError({
-            status: 400,
-            message: "Truncation target was not found in the chat thread",
-          }),
+          isEdit
+            ? refuseChatUserMessageEditTarget()
+            : new HandlerError({
+                status: 400,
+                message: "Truncation target was not found in the chat thread",
+              }),
         );
       }
       messagesForPersistence = truncationTarget.messagesForPersistence;
@@ -1407,21 +1417,17 @@ const acceptIncomingTurn = async ({
       storedMessages: messagesForPersistence,
       incomingMessageExists,
     });
-    // A regeneration or an edit rewrites a user message this thread already
-    // stores (authorized before the turn was read: `resolveEditedUserMessageId`
-    // and `authorizeChatUserMessageEdit`).
-    const isEdit = body.turnIntent === CHAT_TURN_INTENT.edit;
     if (
       (isExplicitRegeneration || isEdit) &&
       baseLatestMessagePlan.persistencePlan.type !== "none"
     ) {
       return Result.err(
-        new HandlerError({
-          status: 409,
-          message: isEdit
-            ? "Edit target is not a persisted user message"
-            : "Regeneration target is not a persisted user message",
-        }),
+        isEdit
+          ? refuseChatUserMessageEditTarget()
+          : new HandlerError({
+              status: 409,
+              message: "Regeneration target is not a persisted user message",
+            }),
       );
     }
     const rewritePlan = {
@@ -1610,6 +1616,7 @@ const acceptIncomingTurn = async ({
       const persistenceResult = await persistAcceptedMessageWithClaim({
         ...persistenceProps,
         plannedOnHistory,
+        ...(isEdit ? { refuseTurn: refuseChatUserMessageEditTurn } : {}),
         turnAcceptance,
       });
       if (Result.isError(persistenceResult)) {

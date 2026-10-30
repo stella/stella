@@ -5,8 +5,8 @@ import { createChatPastedTextPart } from "@stll/api-contract/chat";
 import type { ChatPart } from "@/components/chat/chat-ui-tools";
 import {
   buildEditedUserMessage,
+  composeUserMessageEdit,
   createUserMessageEditDraft,
-  userMessageEditHtml,
   userMessageEditText,
 } from "@/components/chat/user-message-edit.logic";
 import { mentionAttrsToHref } from "@/components/references/reference.logic";
@@ -87,6 +87,25 @@ describe("the text an edit starts from", () => {
     });
   });
 
+  test("a stored message opening with an autolink keeps its URL", () => {
+    expect(
+      userMessageEditText("<https://example.com/terms> has the terms"),
+    ).toEqual({
+      chips: [],
+      text: "https://example.com/terms has the terms",
+    });
+  });
+
+  test("a stored message opening with a literal < keeps its text", () => {
+    expect(userMessageEditText("<3 thanks for the draft").text).toBe(
+      "<3 thanks for the draft",
+    );
+    // The server stores a typed tag escaped; it reads back as typed.
+    expect(userMessageEditText("\\<p> is the paragraph tag").text).toBe(
+      "<p> is the paragraph tag",
+    );
+  });
+
   test("paragraphs, lists and line breaks keep their lines", () => {
     expect(
       userMessageEditText("First paragraph\\\nnext line\n\n- one\n- two").text,
@@ -95,47 +114,74 @@ describe("the text an edit starts from", () => {
 });
 
 describe("the markup an edit sends", () => {
+  const MENTION_A = '<entity-mention data-id="a"></entity-mention>';
+  const MENTION_B = '<entity-mention data-id="b"></entity-mention>';
+  const chipA = { html: MENTION_A, token: "@A" };
+  const chipB = { html: MENTION_B, token: "@B" };
+
   test("escapes the text and splits it into paragraphs and lines", () => {
     expect(
-      userMessageEditHtml({
+      composeUserMessageEdit({
         chips: [],
         text: '  a < b & c\nnext\n\n\nlast "quoted"  ',
       }),
-    ).toBe("<p>a &lt; b &amp; c<br>next</p><p>last &quot;quoted&quot;</p>");
+    ).toEqual({
+      html: "<p>a &lt; b &amp; c<br>next</p><p>last &quot;quoted&quot;</p>",
+      removedChips: [],
+    });
   });
 
-  test("writes each chip whose token remains back in its place, in order", () => {
-    const chips = [
-      { html: '<entity-mention data-id="1"></entity-mention>', token: "@A" },
-      { html: '<entity-mention data-id="2"></entity-mention>', token: "@B" },
-      { html: '<entity-mention data-id="3"></entity-mention>', token: "@A" },
-    ];
-    expect(userMessageEditHtml({ chips, text: "@A then @A" })).toBe(
-      '<p><entity-mention data-id="1"></entity-mention> then <entity-mention data-id="3"></entity-mention></p>',
-    );
-  });
-
-  test("a chip whose token the user deleted is gone", () => {
-    const { chips } = userMessageEditText(
-      `Compare [NDA.docx](${hrefOf({ category: "entity", id: ENTITY_ID })})`,
-    );
-    expect(userMessageEditHtml({ chips, text: "Compare the NDA" })).toBe(
-      "<p>Compare the NDA</p>",
-    );
-  });
-
-  test("a token typed where no chip stood stays text", () => {
-    const chip = {
-      html: '<entity-mention data-id="1"></entity-mention>',
-      token: "@Acme",
-    };
+  test("reordering two chips keeps both references, each where it now stands", () => {
     expect(
-      userMessageEditHtml({ chips: [chip], text: "@Acme\n\nthen @Acme" }),
-    ).toBe(
-      '<p><entity-mention data-id="1"></entity-mention></p><p>then @Acme</p>',
+      composeUserMessageEdit({ chips: [chipA, chipB], text: "@B then @A" }),
+    ).toEqual({
+      html: `<p>${MENTION_B} then ${MENTION_A}</p>`,
+      removedChips: [],
+    });
+  });
+
+  test("deleting one chip's token removes only that reference", () => {
+    expect(
+      composeUserMessageEdit({ chips: [chipA, chipB], text: "Only @B now" }),
+    ).toEqual({
+      html: `<p>Only ${MENTION_B} now</p>`,
+      removedChips: [chipA],
+    });
+  });
+
+  test("a longer token is not read as the shorter one it starts with", () => {
+    const acme = { html: MENTION_A, token: "@Acme" };
+    const acmeCorp = { html: MENTION_B, token: "@Acme Corp" };
+    expect(
+      composeUserMessageEdit({
+        chips: [acme, acmeCorp],
+        text: "@Acme Corp and @Acme",
+      }).html,
+    ).toBe(`<p>${MENTION_B} and ${MENTION_A}</p>`);
+  });
+
+  test("two references with one label keep their own tokens through a reorder", () => {
+    const first = hrefOf({ category: "entity", id: ENTITY_ID });
+    const second = hrefOf({ category: "workspace", id: MATTER_ID });
+    const editable = userMessageEditText(
+      `[Acme](${first}) beside [Acme](${second})`,
     );
-    expect(userMessageEditHtml({ chips: [], text: "Ask @Acme" })).toBe(
-      "<p>Ask @Acme</p>",
+    expect(editable.text).toBe("@Acme beside @Acme (2)");
+    const [entityChip, matterChip] = editable.chips;
+    expect(
+      composeUserMessageEdit({
+        chips: editable.chips,
+        text: "@Acme (2) beside @Acme",
+      }).html,
+    ).toBe(`<p>${matterChip?.html ?? ""} beside ${entityChip?.html ?? ""}</p>`);
+  });
+
+  test("a token typed again where no chip stood stays text", () => {
+    expect(
+      composeUserMessageEdit({ chips: [chipA], text: "@A\n\nthen @A" }).html,
+    ).toBe(`<p>${MENTION_A}</p><p>then @A</p>`);
+    expect(composeUserMessageEdit({ chips: [], text: "Ask @A" }).html).toBe(
+      "<p>Ask @A</p>",
     );
   });
 });

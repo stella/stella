@@ -116,19 +116,44 @@ const referenceMarkup = (
   }
 };
 
-const linkChip = (href: string, label: string): UserMessageEditChip | null => {
+/** The composer markup of a link to a stella reference; null for any other
+ *  link, which stays text. */
+const linkChipMarkup = (href: string, label: string): string | null => {
   if (href.startsWith(SKILL_REF_HREF_PREFIX)) {
-    return {
-      html: `<a href="${escapeHtml(href)}">${escapeHtml(label)}</a>`,
-      token: `@${label}`,
-    };
+    return `<a href="${escapeHtml(href)}">${escapeHtml(label)}</a>`;
   }
   const parsed = referenceFromHref(href, label);
-  if (parsed?.type !== "reference") {
-    return null;
-  }
-  const html = referenceMarkup(href, parsed.reference);
-  return html === null ? null : { html, token: `@${label}` };
+  return parsed?.type === "reference"
+    ? referenceMarkup(href, parsed.reference)
+    : null;
+};
+
+/**
+ * The chips of one edited message, each under a token no other chip of the
+ * message spells: two references with the same label read `@Acme` and
+ * `@Acme (2)`, so a token names one reference wherever the user moves it.
+ */
+type ChipCollector = {
+  readonly chips: UserMessageEditChip[];
+  /** Records a chip and returns the token the text spells it with. */
+  add: (label: string, html: string) => string;
+};
+
+const createChipCollector = (): ChipCollector => {
+  const chips: UserMessageEditChip[] = [];
+  const taken = new Set<string>();
+  return {
+    chips,
+    add: (label, html) => {
+      let token = `@${label}`;
+      for (let copy = 2; taken.has(token); copy += 1) {
+        token = `@${label} (${String(copy)})`;
+      }
+      taken.add(token);
+      chips.push({ html, token });
+      return token;
+    },
+  };
 };
 
 /** Children joined the way their parent lays them out. */
@@ -147,7 +172,7 @@ const BLOCK_SEPARATOR: Partial<Record<MarkdownNode["type"], string>> = {
 const flattenMarkdown = (
   nodes: readonly MarkdownNode[],
   separator: string,
-  chips: UserMessageEditChip[],
+  chips: ChipCollector,
 ): string =>
   nodes
     .map((node): string => {
@@ -160,10 +185,9 @@ const flattenMarkdown = (
           return node.alt ?? "";
         case "link": {
           const label = flattenMarkdown(node.children, "", chips);
-          const chip = linkChip(node.url, label);
-          if (chip !== null) {
-            chips.push(chip);
-            return chip.token;
+          const markup = linkChipMarkup(node.url, label);
+          if (markup !== null) {
+            return chips.add(label, markup);
           }
           return label === node.url ? node.url : `${label} (${node.url})`;
         }
@@ -215,10 +239,7 @@ const BLOCK_TAGS = new Set(["P", "DIV", "BLOCKQUOTE", "PRE", ...LIST_TAGS]);
  * A just-sent message still holds the composer's markup until the stored copy
  * replaces it. Its mention tags are already composer markup, kept verbatim.
  */
-const flattenComposerHtml = (
-  html: string,
-  chips: UserMessageEditChip[],
-): string => {
+const flattenComposerHtml = (html: string, chips: ChipCollector): string => {
   const body = new DOMParser().parseFromString(html, "text/html").body;
   const visit = (node: Node): string => {
     if (node.nodeType === Node.TEXT_NODE) {
@@ -235,25 +256,19 @@ const flattenComposerHtml = (
         // The composer writes the tag empty; a self-closing tag parses with
         // the text after it as its content, which stays the user's text.
         const tag = node.cloneNode(false);
-        const chip = {
-          html: tag instanceof Element ? tag.outerHTML : "",
-          token: `@${label}`,
-        };
-        chips.push(chip);
+        const token = chips.add(
+          label,
+          tag instanceof Element ? tag.outerHTML : "",
+        );
         return (
-          chip.token +
-          Array.from(node.childNodes, (child) => visit(child)).join("")
+          token + Array.from(node.childNodes, (child) => visit(child)).join("")
         );
       }
       case TAG_NAME.anchor: {
         const label = node.textContent ?? "";
         const href = node.getAttribute("href") ?? "";
-        const chip = linkChip(href, label);
-        if (chip === null) {
-          return label;
-        }
-        chips.push(chip);
-        return chip.token;
+        const markup = linkChipMarkup(href, label);
+        return markup === null ? label : chips.add(label, markup);
       }
       case TAG_NAME.listItem:
         return `- ${Array.from(node.childNodes, (child) => visit(child)).join("")}`;
@@ -274,22 +289,42 @@ const flattenComposerHtml = (
     .trim();
 };
 
-const isComposerHtml = (content: string): boolean =>
-  content.trimStart().startsWith("<");
+/** The block tags the composer's editor serializes its document as. */
+const COMPOSER_BLOCK = "(?:p|ul|ol|blockquote|pre|h[1-6])";
+const COMPOSER_OPENING = new RegExp(`^<${COMPOSER_BLOCK}(?:\\s[^>]*)?>`, "u");
+const COMPOSER_CLOSING = new RegExp(`</${COMPOSER_BLOCK}>$`, "u");
 
-/** The text the edit form starts from, with the chips its tokens stand for. */
-export const userMessageEditText = (
-  content: string,
-): { chips: UserMessageEditChip[]; text: string } => {
-  const chips: UserMessageEditChip[] = [];
-  if (isComposerHtml(content)) {
-    return { chips, text: flattenComposerHtml(content, chips) };
+/**
+ * Whether a text part still holds the composer's own serialization (a
+ * just-sent message, until the stored copy replaces it). The editor always
+ * writes its document as block elements, so the part opens with a block tag
+ * and closes with one. A stored message is Markdown whose `<` the server
+ * escapes, so it never takes that shape: an autolink (`<https://…>`) or a
+ * literal `<3` is Markdown, whatever its first character.
+ */
+const isComposerSerialization = (content: string): boolean => {
+  const trimmed = content.trim();
+  return COMPOSER_OPENING.test(trimmed) && COMPOSER_CLOSING.test(trimmed);
+};
+
+const editableText = (content: string, chips: ChipCollector): string => {
+  if (isComposerSerialization(content)) {
+    return flattenComposerHtml(content, chips);
   }
   const tree = fromMarkdown(content, {
     extensions: [gfm()],
     mdastExtensions: [gfmFromMarkdown()],
   });
-  return { chips, text: flattenMarkdown(tree.children, "\n\n", chips).trim() };
+  return flattenMarkdown(tree.children, "\n\n", chips).trim();
+};
+
+/** The text the edit form starts from, with the chips its tokens stand for. */
+export const userMessageEditText = (
+  content: string,
+): { chips: UserMessageEditChip[]; text: string } => {
+  const chips = createChipCollector();
+  const text = editableText(content, chips);
+  return { chips: chips.chips, text };
 };
 
 const isEditAttachmentPart = (
@@ -305,18 +340,17 @@ export const createUserMessageEditDraft = (
   createId: () => string,
 ): UserMessageEditDraft => {
   const texts: string[] = [];
-  const chips: UserMessageEditChip[] = [];
+  // One collector for every text part, so no two chips share a token.
+  const chips = createChipCollector();
   const attachments: UserMessageEditAttachment[] = [];
   for (const part of message.parts) {
     if (isEditAttachmentPart(part)) {
       attachments.push({ id: createId(), part });
     } else if (part.type === "text") {
-      const editable = userMessageEditText(part.content);
-      texts.push(editable.text);
-      chips.push(...editable.chips);
+      texts.push(editableText(part.content, chips));
     }
   }
-  return { attachments, chips, text: texts.join("\n\n") };
+  return { attachments, chips: chips.chips, text: texts.join("\n\n") };
 };
 
 /** Typed text as composer markup: a blank line starts a paragraph, a line
@@ -326,30 +360,51 @@ const textToComposerHtml = (text: string): string =>
     .replaceAll(/\n{2,}/gu, "</p><p>")
     .replaceAll("\n", "<br>");
 
-/** The draft's text as composer markup, each chip whose token remains back
- *  in its place, in order. */
-export const userMessageEditHtml = ({
+/**
+ * The draft's text as composer markup, with what became of its chips. Each
+ * token is read where the edited text spells it, in the edited order, and
+ * stands for the one chip it names; a longer token wins over one it starts
+ * with. A chip whose token the user deleted is in `removedChips`: deleting
+ * the token is how a reference is taken out, so none leaves unaccounted for.
+ */
+export const composeUserMessageEdit = ({
   chips,
   text,
-}: Pick<UserMessageEditDraft, "chips" | "text">): string => {
+}: Pick<UserMessageEditDraft, "chips" | "text">): {
+  html: string;
+  removedChips: UserMessageEditChip[];
+} => {
   const trimmed = text.trim();
-  if (trimmed.length === 0) {
-    return "";
-  }
-  // Chips are inline, so the text between them carries every paragraph
-  // and line break; each stretch converts on its own.
+  const longestFirst = chips.toSorted(
+    (left, right) => right.token.length - left.token.length,
+  );
+  const placed = new Set<UserMessageEditChip>();
+  const chipAt = (position: number): UserMessageEditChip | undefined =>
+    longestFirst.find(
+      (candidate) =>
+        !placed.has(candidate) && trimmed.startsWith(candidate.token, position),
+    );
+  // Chips are inline, so the text between them carries every paragraph and
+  // line break; each stretch converts on its own.
   let html = "";
-  let cursor = 0;
-  for (const chip of chips) {
-    const at = trimmed.indexOf(chip.token, cursor);
-    if (at === -1) {
+  let stretchStart = 0;
+  let index = 0;
+  while (index < trimmed.length) {
+    const chip = chipAt(index);
+    if (chip === undefined) {
+      index += 1;
       continue;
     }
-    html += textToComposerHtml(trimmed.slice(cursor, at)) + chip.html;
-    cursor = at + chip.token.length;
+    placed.add(chip);
+    html += textToComposerHtml(trimmed.slice(stretchStart, index)) + chip.html;
+    index += chip.token.length;
+    stretchStart = index;
   }
-  html += textToComposerHtml(trimmed.slice(cursor));
-  return `<p>${html}</p>`;
+  html += textToComposerHtml(trimmed.slice(stretchStart));
+  return {
+    html: trimmed.length === 0 ? "" : `<p>${html}</p>`,
+    removedChips: chips.filter((chip) => !placed.has(chip)),
+  };
 };
 
 /** Whether the draft would send anything: text or a kept attachment. */
@@ -369,7 +424,9 @@ export const buildEditedUserMessage = ({
   messageId: string;
 }): ChatUserMessageInput => {
   const id = toSafeId<"chatMessage">(messageId);
-  const html = userMessageEditHtml(draft);
+  // A removed chip is one whose token the user deleted on purpose; the
+  // request carries every other chip, wherever the edit moved it.
+  const { html } = composeUserMessageEdit(draft);
   const attachments = draft.attachments.map(({ part }) => part);
   if (attachments.length === 0) {
     return { id, content: html };
