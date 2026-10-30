@@ -4,6 +4,7 @@ import { cents } from "./cents";
 import {
   currencyMinorUnitDigits,
   formatMoneyCents,
+  parseLocaleDecimal,
   parseLocaleMinorUnits,
   toMajorUnits,
   toMinorUnits,
@@ -85,6 +86,44 @@ describe("parseLocaleMinorUnits", () => {
         locale: "en-US",
       }).unwrap(),
     ).toBe(cents(123_456));
+  });
+
+  test("treats every supported whitespace separator as grouping", () => {
+    for (const locale of ["sk-SK", "cs-CZ", "pl-PL", "fr-FR"]) {
+      for (const separator of [" ", "\u00a0", "\u202f"]) {
+        expect(
+          parseLocaleMinorUnits({
+            amount: `1${separator}234`,
+            currency: "EUR",
+            locale,
+          }).unwrap(),
+        ).toBe(cents(123_400));
+      }
+    }
+  });
+
+  test("distinguishes excessive precision from range and ambiguity", () => {
+    const precision = parseLocaleMinorUnits({
+      amount: "12,345",
+      currency: "EUR",
+      locale: "sk-SK",
+    });
+    expect(precision.isErr() && precision.error.reason).toBe("precision");
+    const ambiguous = parseLocaleMinorUnits({
+      amount: "1,234",
+      currency: "EUR",
+      locale: "en-US",
+    });
+    expect(ambiguous.isErr() && ambiguous.error.reason).toBe("ambiguous");
+  });
+
+  test("normalizes non-money decimals with the same separator rules", () => {
+    expect(
+      parseLocaleDecimal({ amount: "1 234,56", locale: "sk-SK" }).unwrap(),
+    ).toBe("1234.56");
+    expect(
+      parseLocaleDecimal({ amount: "1.234", locale: "sk-SK" }).isErr(),
+    ).toBe(true);
   });
 });
 

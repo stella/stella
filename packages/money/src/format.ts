@@ -54,7 +54,7 @@ export class LocaleAmountParseError extends TaggedError(
   "LocaleAmountParseError",
 )<{
   message: string;
-  reason: "empty" | "syntax" | "ambiguous" | "unsafe-integer";
+  reason: "empty" | "syntax" | "ambiguous" | "precision" | "unsafe-integer";
 }> {}
 
 export type ParseLocaleMinorUnitsParams = {
@@ -64,22 +64,31 @@ export type ParseLocaleMinorUnitsParams = {
 };
 
 const localeSeparators = (locale: string) => {
+  const formatter = new Intl.NumberFormat(locale, { useGrouping: false });
   const parts = new Intl.NumberFormat(locale).formatToParts(12_345.6);
+  const digits = new Map<string, string>();
+  for (let digit = 0; digit <= 9; digit += 1) {
+    digits.set(formatter.format(digit), String(digit));
+  }
   return {
     decimal: parts.find((part) => part.type === "decimal")?.value ?? ".",
     group: parts.find((part) => part.type === "group")?.value,
+    digits,
   };
 };
 
-/** Parse human-entered major units according to their formatting locale. */
-export const parseLocaleMinorUnits = ({
+export type ParseLocaleDecimalParams = {
+  amount: string;
+  locale: string;
+  maximumFractionDigits?: number;
+};
+
+/** Normalize a human-entered locale decimal without converting through a float. */
+export const parseLocaleDecimal = ({
   amount,
-  currency,
   locale,
-}: ParseLocaleMinorUnitsParams): Result<
-  CentsAmount,
-  LocaleAmountParseError
-> => {
+  maximumFractionDigits,
+}: ParseLocaleDecimalParams): Result<string, LocaleAmountParseError> => {
   const text = amount.trim();
   if (text.length === 0) {
     return Result.err(
@@ -89,11 +98,15 @@ export const parseLocaleMinorUnits = ({
       }),
     );
   }
-  const { decimal, group } = localeSeparators(locale);
+  const { decimal, group, digits } = localeSeparators(locale);
   const whitespaceGroup = group !== undefined && /^\s$/u.test(group);
+  let localizedDigits = "";
+  for (const character of text) {
+    localizedDigits += digits.get(character) ?? character;
+  }
   const normalizedWhitespace = whitespaceGroup
-    ? text.replace(/[\u0020\u00a0\u202f]/gu, () => group)
-    : text;
+    ? localizedDigits.replace(/[\u0020\u00a0\u202f]/gu, () => group)
+    : localizedDigits;
   const grouping =
     decimal === "," && normalizedWhitespace.includes(".") ? "." : group;
   const sign = /^[+-]/u.exec(normalizedWhitespace)?.at(0) ?? "";
@@ -112,11 +125,21 @@ export const parseLocaleMinorUnits = ({
   }
   const whole = decimalParts.at(0) ?? "";
   const fraction = decimalParts.at(1);
+  if (
+    maximumFractionDigits !== undefined &&
+    fraction !== undefined &&
+    fraction.length > maximumFractionDigits
+  ) {
+    return Result.err(
+      new LocaleAmountParseError({
+        reason: "precision",
+        message: "Amount has too many fraction digits",
+      }),
+    );
+  }
   let wholeDigits = whole;
   if (grouping !== undefined && whole.includes(grouping)) {
-    // A separator with no decimal part has two plausible readings in locales
-    // where the separator is also commonly used as an ASCII decimal point.
-    if (fraction === undefined) {
+    if (fraction === undefined && (grouping === "." || grouping === ",")) {
       return Result.err(
         new LocaleAmountParseError({
           reason: "ambiguous",
@@ -149,8 +172,30 @@ export const parseLocaleMinorUnits = ({
       }),
     );
   }
+  return Result.ok(
+    `${sign}${wholeDigits}${fraction === undefined ? "" : `.${fraction}`}`,
+  );
+};
+
+/** Parse human-entered major units according to their formatting locale. */
+export const parseLocaleMinorUnits = ({
+  amount,
+  currency,
+  locale,
+}: ParseLocaleMinorUnitsParams): Result<
+  CentsAmount,
+  LocaleAmountParseError
+> => {
+  const normalized = parseLocaleDecimal({
+    amount,
+    locale,
+    maximumFractionDigits: currencyMinorUnitDigits(currency),
+  });
+  if (normalized.isErr()) {
+    return normalized;
+  }
   const parsed = tryToMinorUnits({
-    amount: `${sign}${wholeDigits}${fraction === undefined ? "" : `.${fraction}`}`,
+    amount: normalized.value,
     currency,
   });
   return parsed === null

@@ -25,11 +25,30 @@ describe("invoiceTakesPayments", () => {
 });
 
 describe("checkPaymentAmount", () => {
+  test("accepts Slovak decimals and rejects an ambiguous dot", () => {
+    expect(
+      checkPaymentAmount({
+        input: "1234,56",
+        currency: "EUR",
+        locale: "sk-SK",
+        outstandingAmount: 200_000,
+      }),
+    ).toEqual({ type: "ok", amount: 123_456 });
+    expect(
+      checkPaymentAmount({
+        input: "1.234",
+        currency: "EUR",
+        locale: "sk-SK",
+        outstandingAmount: 200_000,
+      }),
+    ).toEqual({ type: "not_positive" });
+  });
   test("accepts up to the outstanding amount, in the invoice's minor units", () => {
     expect(
       checkPaymentAmount({
         input: "60.00",
         currency: "USD",
+        locale: "en-US",
         outstandingAmount: 6000,
       }),
     ).toEqual({ type: "ok", amount: 6000 });
@@ -37,6 +56,7 @@ describe("checkPaymentAmount", () => {
       checkPaymentAmount({
         input: "12.5",
         currency: "EUR",
+        locale: "en-US",
         outstandingAmount: 6000,
       }),
     ).toEqual({ type: "ok", amount: 1250 });
@@ -45,6 +65,7 @@ describe("checkPaymentAmount", () => {
       checkPaymentAmount({
         input: "100",
         currency: "JPY",
+        locale: "en-US",
         outstandingAmount: 100,
       }),
     ).toEqual({ type: "ok", amount: 100 });
@@ -55,6 +76,7 @@ describe("checkPaymentAmount", () => {
       checkPaymentAmount({
         input: "60.01",
         currency: "USD",
+        locale: "en-US",
         outstandingAmount: 6000,
       }),
     ).toEqual({ type: "more_than_outstanding" });
@@ -62,6 +84,7 @@ describe("checkPaymentAmount", () => {
       checkPaymentAmount({
         input: "101",
         currency: "JPY",
+        locale: "en-US",
         outstandingAmount: 100,
       }),
     ).toEqual({ type: "more_than_outstanding" });
@@ -70,7 +93,12 @@ describe("checkPaymentAmount", () => {
   test("refuses nothing, zero and text that is not an amount", () => {
     for (const input of ["", "0", "0.00", "-5", "abc"]) {
       expect(
-        checkPaymentAmount({ input, currency: "USD", outstandingAmount: 6000 }),
+        checkPaymentAmount({
+          input,
+          currency: "USD",
+          locale: "en-US",
+          outstandingAmount: 6000,
+        }),
       ).toEqual({ type: "not_positive" });
     }
   });

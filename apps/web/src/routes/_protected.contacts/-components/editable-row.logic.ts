@@ -2,12 +2,9 @@ import { panic } from "better-result";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { PARTY_IDENTIFIER_MAX_LENGTH } from "@stll/api-contract";
-import { tryToMinorUnits } from "@stll/money";
+import { parseLocaleMinorUnits } from "@stll/money";
 
-import {
-  majorUnitInput,
-  normalizeMajorUnitInput,
-} from "@/components/billing/amount-input.logic";
+import { majorUnitInput } from "@/components/billing/amount-input.logic";
 import type { ContactUpdate } from "@/lib/contacts/mutations";
 import type { EditableField } from "@/routes/_protected.contacts/-components/types";
 
@@ -139,18 +136,18 @@ export const buildContactRatePayload = ({
   if (!currency || trimmedInput.startsWith("-")) {
     return { status: "invalid" } as const;
   }
-  const canonicalInput = normalizeMajorUnitInput({
-    input: trimmedInput,
+  const amount = parseLocaleMinorUnits({
+    amount: trimmedInput,
+    currency,
     locale,
   });
-  if (canonicalInput === null) {
+  if (amount.isErr() || amount.value < 0) {
     return { status: "invalid" } as const;
   }
-  const amount = tryToMinorUnits({ amount: canonicalInput, currency });
-  if (amount === null || amount < 0) {
-    return { status: "invalid" } as const;
-  }
-  return { status: "valid", payload: { defaultHourlyRate: amount } } as const;
+  return {
+    status: "valid",
+    payload: { defaultHourlyRate: amount.value },
+  } as const;
 };
 
 export const buildTextContactPayload = (

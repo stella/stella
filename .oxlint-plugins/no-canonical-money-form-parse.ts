@@ -25,7 +25,8 @@ export default eslintCompatPlugin({
               if (
                 specifier.type === "ImportSpecifier" &&
                 specifier.imported.type === "Identifier" &&
-                specifier.imported.name === "tryToMinorUnits"
+                (specifier.imported.name === "tryToMinorUnits" ||
+                  specifier.imported.name === "toMinorUnits")
               ) {
                 canonicalNames.add(specifier.local.name);
               }
@@ -39,7 +40,11 @@ export default eslintCompatPlugin({
               return;
             }
             const text = context.sourceCode.getText(node.arguments.at(0));
-            if (/\b(?:currentTarget|target|state)\.value\b/u.test(text)) {
+            if (
+              /\b(?:currentTarget|target|state|dataset)\.value\b|\b(?:amountInputValue|draft|input)\b/u.test(
+                text,
+              )
+            ) {
               context.report({ node, messageId: "localeParser" });
             }
           },

@@ -8,9 +8,9 @@ import {
 
 test("localized decimal normalization preserves every digit and is canonical", () => {
   const decimal = "90071992547409.915";
-  for (const locale of ["en", "cs", "de", "fr", "ar-u-nu-arab"]) {
-    expect(normalizeMajorUnitInput({ input: decimal, locale })).toBe(decimal);
-  }
+  expect(normalizeMajorUnitInput({ input: decimal, locale: "en" })).toBe(
+    decimal,
+  );
   expect(
     normalizeMajorUnitInput({ input: "90071992547409,915", locale: "cs" }),
   ).toBe(decimal);
@@ -27,8 +27,9 @@ test("a rate typed under one currency is scaled by the one submitted", () => {
   // it is then changed to JPY, and the entry is submitted. 100 is 100 yen.
   expect(
     submittedRateCents({
-      draft: "100.00",
+      draft: "100",
       currency: "JPY",
+      locale: "en-US",
       resolvedRateCents: 10_000,
     }),
   ).toBe(100);
@@ -36,6 +37,7 @@ test("a rate typed under one currency is scaled by the one submitted", () => {
     submittedRateCents({
       draft: "100.00",
       currency: "USD",
+      locale: "en-US",
       resolvedRateCents: 0,
     }),
   ).toBe(10_000);
@@ -43,6 +45,7 @@ test("a rate typed under one currency is scaled by the one submitted", () => {
     submittedRateCents({
       draft: "100",
       currency: "KWD",
+      locale: "en-US",
       resolvedRateCents: 0,
     }),
   ).toBe(100_000);
@@ -53,6 +56,7 @@ test("a rate that is not overridden keeps the one rate resolution supplied", () 
     submittedRateCents({
       draft: null,
       currency: "JPY",
+      locale: "en-US",
       resolvedRateCents: 4500,
     }),
   ).toBe(4500);
@@ -61,7 +65,12 @@ test("a rate that is not overridden keeps the one rate resolution supplied", () 
 test("a draft the currency cannot express falls back rather than storing nothing", () => {
   for (const draft of ["", "abc", "99999999999999999"]) {
     expect(
-      submittedRateCents({ draft, currency: "USD", resolvedRateCents: 4500 }),
+      submittedRateCents({
+        draft,
+        currency: "USD",
+        locale: "en-US",
+        resolvedRateCents: 4500,
+      }),
     ).toBe(4500);
   }
 });
@@ -70,10 +79,30 @@ test("the draft scales the decimal rather than a float parsed from it", () => {
   expect(
     submittedRateCents({
       draft: "1.005",
-      currency: "USD",
+      currency: "KWD",
+      locale: "en-US",
       resolvedRateCents: 0,
     }),
-  ).toBe(101);
+  ).toBe(1005);
+});
+
+test("a Slovak rate accepts its decimal mark and rejects an ambiguous dot", () => {
+  expect(
+    submittedRateCents({
+      draft: "1234,56",
+      currency: "EUR",
+      locale: "sk-SK",
+      resolvedRateCents: 0,
+    }),
+  ).toBe(123_456);
+  expect(
+    submittedRateCents({
+      draft: "1.234",
+      currency: "EUR",
+      locale: "sk-SK",
+      resolvedRateCents: 777,
+    }),
+  ).toBe(777);
 });
 
 test("the input text shows the places the currency counts", () => {

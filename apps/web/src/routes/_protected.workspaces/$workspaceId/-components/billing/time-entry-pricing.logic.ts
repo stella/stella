@@ -17,12 +17,14 @@ type DeriveTimeEntryPricingOptions = {
   lookup:
     | Pick<QueryState<RateResolution>, "status" | "fetchStatus" | "data">
     | undefined;
+  locale: string;
 };
 
 /** Automatic prices belong to the current lookup; only manual prices are stored. */
 export const deriveTimeEntryPricing = ({
   selection,
   lookup,
+  locale,
 }: DeriveTimeEntryPricingOptions) => {
   let status: "pending" | "ready" | "error" = "pending";
   if (
@@ -43,6 +45,7 @@ export const deriveTimeEntryPricing = ({
           draft: selection.draft,
           currency: selection.currency,
           resolvedRateCents: 0,
+          locale,
         }),
         currency: selection.currency,
       };

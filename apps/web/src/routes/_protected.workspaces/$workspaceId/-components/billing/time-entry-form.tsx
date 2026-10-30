@@ -6,7 +6,7 @@ import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
 import { CURRENCY_CODE_LENGTH } from "@stll/api-contract/currency-code";
-import { tryToMinorUnits } from "@stll/money";
+import { parseLocaleMinorUnits } from "@stll/money";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { Field, FieldError, FieldLabel } from "@stll/ui/field";
@@ -32,6 +32,7 @@ import { MatterCombobox } from "@/components/billing/matter-combobox";
 import { TimeEntryNarrativeField } from "@/components/billing/time-entry-narrative-field";
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
 import { localISODate } from "@/lib/local-iso-date";
 import type { QueryView } from "@/lib/query-view.logic";
@@ -335,6 +336,7 @@ const TimeEntryRateInput = ({
   setRateInputValue: (value: string) => void;
 }) => {
   const t = useTranslations();
+  const locale = useFormattingLocale();
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between">
@@ -359,14 +361,17 @@ const TimeEntryRateInput = ({
               // Display only: tidy the draft to the places the currency
               // counts. The draft stays in major units, and the scaling
               // that reaches the API waits for submit.
-              const rate = tryToMinorUnits({
+              const rate = parseLocaleMinorUnits({
                 amount: rateInputValue,
                 currency: currentCurrency,
+                locale,
               });
-              if (rate === null) {
+              if (rate.isErr()) {
                 return;
               }
-              setRateInputValue(majorUnitInput(rate, currentCurrency));
+              setRateInputValue(
+                majorUnitInput(rate.value, currentCurrency, locale),
+              );
             }}
             onChange={(e) => setRateInputValue(e.currentTarget.value)}
             placeholder="350.00"
@@ -436,6 +441,7 @@ const useTimeEntryFormState = ({
   contextState = "available",
 }: TimeEntryFormProps) => {
   const t = useTranslations();
+  const locale = useFormattingLocale();
   const queryClient = useQueryClient();
   const [pricingSelection, setPricingSelection] = useState(() =>
     initialPricingSelection(defaultValues),
@@ -459,6 +465,7 @@ const useTimeEntryFormState = ({
         // Read the exact submitted lookup again: validation may outlive a render.
         const pricing = deriveTimeEntryPricing({
           selection: pricingSelection,
+          locale,
           lookup: queryClient.getQueryState(
             resolvedRateOptions({
               workspaceId,
@@ -495,6 +502,7 @@ const useTimeEntryFormState = ({
   const resolvedView = queryView(resolvedQuery);
   const pricing = deriveTimeEntryPricing({
     selection: pricingSelection,
+    locale,
     lookup: resolvedQuery.isPlaceholderData ? undefined : resolvedQuery,
   });
   const currentRate = pricing.rateAtEntry;

@@ -49,7 +49,7 @@ test.each(["1e2", "1.5", " 60", "+60", "-0", "0", "Infinity", "2147483648"])(
   },
 );
 
-test.each(["1e2", " 80", "0", "0.001", "100.01", "Infinity"])(
+test.each(["1e2", "0", "0.001", "100.01", "Infinity"])(
   "percentage input refuses the noncanonical or out-of-range token %s",
   (alertThreshold) => {
     expect(v.safeParse(schema, { ...input, alertThreshold }).success).toBe(

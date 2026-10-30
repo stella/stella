@@ -15,6 +15,7 @@ import { Input } from "@stll/ui/input";
 
 import { majorUnitInput } from "@/components/billing/amount-input.logic";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useCapabilityMutation } from "@/lib/capabilities/use-capability-mutation";
@@ -93,6 +94,7 @@ const HourlyArrangementForm = ({
   workspaceId: string;
 }) => {
   const t = useTranslations();
+  const locale = useFormattingLocale();
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
   const save = useCapabilityMutation({
@@ -132,7 +134,10 @@ const HourlyArrangementForm = ({
   });
   const hourly = arrangement?.mode === "hourly" ? arrangement : null;
   const currency = hourly?.currency ?? "USD";
-  const schema = hourlyArrangementSchema(t("billing.arrangement.invalidCap"));
+  const schema = hourlyArrangementSchema(
+    t("billing.arrangement.invalidCap"),
+    locale,
+  );
   const form = useForm(
     schemaFormOptions({
       schema,

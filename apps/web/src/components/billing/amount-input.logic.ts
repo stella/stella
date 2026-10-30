@@ -1,7 +1,8 @@
 import {
   currencyMinorUnitDigits,
+  parseLocaleDecimal,
+  parseLocaleMinorUnits,
   toMajorUnits,
-  tryToMinorUnits,
 } from "@stll/money";
 
 /**
@@ -18,10 +19,16 @@ import {
  * The stored amount as the decimal text the input edits, at the number of
  * places the currency counts: a yen amount shows none, a dinar amount three.
  */
-export const majorUnitInput = (amountCents: number, currency: string): string =>
-  toMajorUnits({ amountCents, currency }).toFixed(
-    currencyMinorUnitDigits(currency),
-  );
+export const majorUnitInput = (
+  amountCents: number,
+  currency: string,
+  locale = "en",
+): string =>
+  new Intl.NumberFormat(locale, {
+    minimumFractionDigits: currencyMinorUnitDigits(currency),
+    maximumFractionDigits: currencyMinorUnitDigits(currency),
+    useGrouping: false,
+  }).format(toMajorUnits({ amountCents, currency }));
 
 /** Canonical decimal text, without grouping or a floating-point conversion. */
 type NormalizeMajorUnitInputOptions = {
@@ -32,26 +39,8 @@ type NormalizeMajorUnitInputOptions = {
 export const normalizeMajorUnitInput = ({
   input,
   locale,
-}: NormalizeMajorUnitInputOptions): string | null => {
-  const formatter = new Intl.NumberFormat(locale, { useGrouping: false });
-  const decimal = formatter
-    .formatToParts(1.1)
-    .find((part) => part.type === "decimal")?.value;
-  const digits = new Map<string, string>();
-  for (let digit = 0; digit <= 9; digit += 1) {
-    digits.set(formatter.format(digit), String(digit));
-  }
-  let canonical = "";
-  for (const character of input) {
-    canonical +=
-      character === decimal ? "." : (digits.get(character) ?? character);
-  }
-  // Dot always means a decimal, including where the locale uses it for grouping.
-  // Grouping and mixed decimal separators are deliberately not accepted.
-  return /^[+]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)$/u.test(canonical)
-    ? canonical
-    : null;
-};
+}: NormalizeMajorUnitInputOptions): string | null =>
+  parseLocaleDecimal({ amount: input, locale }).unwrapOr(null);
 
 export type SubmittedRateParams = {
   /** The major-unit text the rate input holds, or null when it is not overridden. */
@@ -60,6 +49,7 @@ export type SubmittedRateParams = {
   currency: string;
   /** The rate the form already carries, in minor units of that currency. */
   resolvedRateCents: number;
+  locale: string;
 };
 
 /**
@@ -76,7 +66,10 @@ export const submittedRateCents = ({
   draft,
   currency,
   resolvedRateCents,
+  locale,
 }: SubmittedRateParams): number =>
   draft === null
     ? resolvedRateCents
-    : (tryToMinorUnits({ amount: draft, currency }) ?? resolvedRateCents);
+    : parseLocaleMinorUnits({ amount: draft, currency, locale }).unwrapOr(
+        resolvedRateCents,
+      );

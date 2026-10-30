@@ -1,5 +1,5 @@
 import type { InvoiceStatus } from "@stll/api-contract";
-import { tryToMinorUnits } from "@stll/money";
+import { parseLocaleMinorUnits } from "@stll/money";
 
 /**
  * An issued invoice takes payments while it is finalized or sent (firms often
@@ -29,15 +29,18 @@ export const checkPaymentAmount = ({
   input,
   currency,
   outstandingAmount,
+  locale,
 }: {
   input: string;
   currency: string;
   outstandingAmount: number;
+  locale: string;
 }): PaymentAmountCheck => {
-  const amount = tryToMinorUnits({ amount: input, currency });
-  if (amount === null || amount <= 0) {
+  const parsed = parseLocaleMinorUnits({ amount: input, currency, locale });
+  if (parsed.isErr() || parsed.value <= 0) {
     return { type: "not_positive" };
   }
+  const amount = parsed.value;
   return amount > outstandingAmount
     ? { type: "more_than_outstanding" }
     : { type: "ok", amount };

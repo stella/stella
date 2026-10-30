@@ -238,6 +238,8 @@ export {
   formatMoneyCents,
   type FormatMoneyCentsParams,
   LocaleAmountParseError,
+  parseLocaleDecimal,
+  type ParseLocaleDecimalParams,
   parseLocaleMinorUnits,
   type ParseLocaleMinorUnitsParams,
   toMajorUnits,
