@@ -77,7 +77,11 @@ const View = (props: ThreadProps) => (
                   onAskUserSubmit={() => {}}
                   onCreateDocumentResolve={() => {}}
                   onOpenCreatedDocument={() => {}}
-                  streamdownComponents={{}}
+                  streamdownComponents={{
+                    a: ({ children, ...anchorProps }) => (
+                      <a {...anchorProps}>{children}</a>
+                    ),
+                  }}
                   showToolCalls
                 />
               </ChatEditorProvider>

@@ -1,20 +1,24 @@
 import { expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 import ts from "typescript6";
 
-const OWNER = "src/components/chat/chat-turn-status.tsx";
+import { sourceFileIndex } from "@stll/scripts/src/source-file-index";
+
+const SOURCE_ROOT = fileURLToPath(new URL("../../", import.meta.url));
+const OWNER = "components/chat/chat-turn-status.tsx";
+const CHAT_SOURCE_PATH = /^(?:components|features)\/chat\//u;
 const ALLOWED_NON_TURN_LOADERS = {
-  "src/components/chat/ask-user-card.tsx": "submitting a user answer",
-  "src/components/chat/chat-message-actions-menu.tsx": "export action",
-  "src/components/chat/chat-prompt-improve-button.tsx": "prompt rewrite action",
-  "src/components/chat/connect-connector-card.tsx": "connector authorization",
-  "src/components/chat/message-export-menu.tsx": "message export action",
-  "src/components/chat/needs-matter-card.tsx": "matter creation action",
-  "src/components/chat/request-secret-card.tsx": "secret submission action",
-  "src/components/chat/side-panel-chat-status.tsx":
-    "side-panel connection status",
-  "src/components/chat/spawn-subagents-card.tsx": "subagent action",
-  "src/components/chat/tool-approval-card.tsx": "approval submission action",
-  "src/features/chat/components/chat-title-rename.tsx": "title rename action",
+  "components/chat/ask-user-card.tsx": "submitting a user answer",
+  "components/chat/chat-message-actions-menu.tsx": "export action",
+  "components/chat/chat-prompt-improve-button.tsx": "prompt rewrite action",
+  "components/chat/connect-connector-card.tsx": "connector authorization",
+  "components/chat/message-export-menu.tsx": "message export action",
+  "components/chat/needs-matter-card.tsx": "matter creation action",
+  "components/chat/request-secret-card.tsx": "secret submission action",
+  "components/chat/side-panel-chat-status.tsx": "side-panel connection status",
+  "components/chat/spawn-subagents-card.tsx": "subagent action",
+  "components/chat/tool-approval-card.tsx": "approval submission action",
+  "features/chat/components/chat-title-rename.tsx": "title rename action",
 } as const;
 
 // Computed props cannot prove the absence of a running mark. Require explicit
@@ -82,31 +86,30 @@ test("detects literal, computed, aliased, and spread running marks", () => {
   }
 });
 
-test("the turn status owner is the only turn loader or elapsed ticker", async () => {
-  const files = [
-    ...new Bun.Glob("src/components/chat/**/*.{ts,tsx}").scanSync("."),
-    ...new Bun.Glob("src/features/chat/**/*.{ts,tsx}").scanSync("."),
-  ];
-  expect(files).toContain(OWNER);
+test("the turn status owner is the only turn loader or elapsed ticker", () => {
+  const files = sourceFileIndex(SOURCE_ROOT).filter(({ relativePath }) =>
+    CHAT_SOURCE_PATH.test(relativePath),
+  );
+  const owner = files.find(({ relativePath }) => relativePath === OWNER);
+  expect(owner).toBeDefined();
   const violations: string[] = [];
-  for (const file of files) {
-    if (file.endsWith(".test.ts") || file.endsWith(".test.tsx")) {
+  for (const { relativePath, sourceText } of files) {
+    if (/\.test\.tsx?$/u.test(relativePath)) {
       continue;
     }
-    const source = await Bun.file(file).text();
     const ownsLiveIndicator =
-      source.includes("@stll/ui/loader") ||
-      source.includes("use-live-elapsed") ||
-      hasPotentialRunningMark(source) ||
-      source.includes("animate-spin");
+      sourceText.includes("@stll/ui/loader") ||
+      sourceText.includes("use-live-elapsed") ||
+      hasPotentialRunningMark(sourceText) ||
+      sourceText.includes("animate-spin");
     if (
       ownsLiveIndicator &&
-      file !== OWNER &&
-      !(file in ALLOWED_NON_TURN_LOADERS)
+      relativePath !== OWNER &&
+      !(relativePath in ALLOWED_NON_TURN_LOADERS)
     ) {
-      violations.push(file);
+      violations.push(relativePath);
     }
   }
   expect(violations).toEqual([]);
-  expect(await Bun.file(OWNER).text()).toContain("data-turn-live-status");
+  expect(owner?.sourceText).toContain("data-turn-live-status");
 });

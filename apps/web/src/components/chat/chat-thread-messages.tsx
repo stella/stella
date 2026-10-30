@@ -505,13 +505,17 @@ export const ChatThreadMessages = ({
           const active = generationActive && turnIndex === turns.length - 1;
           const status = active ? (
             <ChatTurnStatus
-              turn={{
-                state: assistant === undefined ? "submitted" : "streaming",
-                phase: turnPhaseFromParts(assistant?.parts ?? [], (name) =>
-                  t(getChatToolTitleKey(name)),
-                ),
-                timing: assistant?.metadata?.turnTiming,
-              }}
+              turn={
+                assistant === undefined
+                  ? { state: "submitted", phase: null }
+                  : {
+                      state: "streaming",
+                      phase: turnPhaseFromParts(assistant.parts, (name) =>
+                        t(getChatToolTitleKey(name)),
+                      ),
+                      timing: assistant.metadata?.turnTiming,
+                    }
+              }
             />
           ) : null;
           if (turn.type === "orphan") {
