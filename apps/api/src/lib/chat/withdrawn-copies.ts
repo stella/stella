@@ -39,8 +39,11 @@ const loadChatCopyProjection = async ({
       : await tx
           .select({
             id: chatThreads.id,
+            title: chatThreads.title,
+            titleSource: chatThreads.titleSource,
+            generationProvenance: chatThreads.generationProvenance,
             subjectDecisionId: chatThreads.subjectDecisionId,
-            parent: sql`(select jsonb_build_object('subjectDecisionId', parent.subject_decision_id, 'title', parent.title) from chat_threads parent where parent.id = ${chatThreads.parentThreadId} limit 1)`,
+            parent: sql`(select jsonb_build_object('subjectDecisionId', parent.subject_decision_id, 'title', parent.title, 'titleSource', parent.title_source, 'generationProvenance', parent.generation_provenance) from chat_threads parent where parent.id = ${chatThreads.parentThreadId} limit 1)`,
             // These windows cover the send/list readers. A separately paged older
             // page contributes its own rows through `values` before the lookup.
             messages: sql`(select jsonb_agg(r.content) from (select ${chatMessages.content} from ${chatMessages} where ${chatMessages.threadId} = ${chatThreads.id} order by ${chatMessages.createdAt} desc, ${chatMessages.id} desc limit ${LIMITS.chatSendHistoryWindowMax}) r)`,

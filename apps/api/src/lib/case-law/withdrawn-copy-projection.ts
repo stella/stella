@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import {
   chatDecisionPassagesIn,
   findCanonicalChatResourceHrefs,
@@ -13,6 +15,8 @@ import type {
   legalReaderAnswers,
 } from "@/api/db/schema";
 import { proveTextOnlyPersistedChatMessageContent } from "@/api/lib/chat/persisted-message-content";
+import { readArtefactOrigin } from "@/api/lib/generated-artefact-provenance";
+import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 
 import { isDecisionReferenceKey } from "./withdrawn-copy-fields";
 
@@ -70,6 +74,10 @@ export const decisionReferencesIn = (value: unknown): DecisionReferences => {
   visit(value, "");
   return references;
 };
+
+/** Source capture brands only identities the canonical reference parser validated. */
+export const sourceDecisionIdsIn = (value: unknown) =>
+  [...decisionReferencesIn(value)].map(brandPersistedCaseLawDecisionId);
 
 /** A batch's verdict is shared by all projections assembled from that batch. */
 export class WithdrawnCopyProjection {
@@ -138,20 +146,51 @@ export class WithdrawnCopyProjection {
     return marker === null ? row : { ...row, content: marker, citations: [] };
   }
 
+  threadTitleMarker<
+    T extends {
+      title: unknown;
+      titleSource: unknown;
+      subjectDecisionId?: string | null;
+      generationProvenance: unknown;
+    },
+  >(row: T): string | null {
+    if (row.titleSource === "user") {
+      return null;
+    }
+    const origin = readArtefactOrigin(row.generationProvenance, "title");
+    switch (origin.type) {
+      case "authored":
+        return null;
+      case "generated":
+        return this.marker([row.title, origin], row.subjectDecisionId);
+      case "legacy": {
+        const { generationProvenance: _provenance, ...legacy } = row;
+        return this.marker(legacy, row.subjectDecisionId);
+      }
+      default:
+        origin satisfies never;
+        return panic("Unhandled title origin");
+    }
+  }
+
   thread<
     T extends Pick<
       typeof chatThreads.$inferSelect,
       "title" | "titleSource" | "subjectDecisionId"
-    > & { recapText?: string | null },
+    > & { recapText?: string | null; generationProvenance: unknown },
   >(row: T): T {
-    const marker = this.marker(row, row.subjectDecisionId);
-    if (marker === null) {
+    const titleMarker = this.threadTitleMarker(row);
+    const { generationProvenance: _provenance, ...legacy } = row;
+    const marker = this.marker(legacy, row.subjectDecisionId);
+    if (marker === null && titleMarker === null) {
       return row;
     }
     return {
       ...row,
-      title: row.titleSource === "user" ? row.title : marker,
-      ...(row.recapText === undefined ? {} : { recapText: marker }),
+      title: titleMarker ?? row.title,
+      ...(row.recapText === undefined || marker === null
+        ? {}
+        : { recapText: marker }),
     };
   }
 

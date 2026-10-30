@@ -187,6 +187,7 @@ const readWorkspaceActivity = createSafeHandler(
               id: chatThreads.id,
               title: chatThreads.title,
               titleSource: chatThreads.titleSource,
+              generationProvenance: chatThreads.generationProvenance,
               subjectDecisionId: chatThreads.subjectDecisionId,
             })
             .from(chatThreads)

@@ -5,6 +5,7 @@ import * as v from "valibot";
 import type { Transaction } from "@/api/db/root";
 import { CHAT_TITLE_SOURCE, chatThreads } from "@/api/db/schema";
 import type { ChatTitleSource } from "@/api/db/schema";
+import { aiTitlingMayReplace } from "@/api/handlers/chat/thread-title";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -176,6 +177,30 @@ export const readArtefactOrigin = (
   );
 };
 
+/** A deterministic fork inherits only the value it actually copies. */
+export const copyThreadArtefactTitle = (
+  row: Pick<
+    typeof chatThreads.$inferSelect,
+    "title" | "titleSource" | "generationProvenance"
+  >,
+) => {
+  const origin =
+    row.titleSource === CHAT_TITLE_SOURCE.USER
+      ? ({ type: "authored" } as const)
+      : readArtefactOrigin(row.generationProvenance, "title");
+  return {
+    title: row.title,
+    titleSource: row.titleSource,
+    generationProvenance:
+      origin.type === "legacy"
+        ? null
+        : ({
+            version: 1,
+            slots: { title: origin },
+          } satisfies StoredArtefactProvenance),
+  };
+};
+
 type ReadArtefactTextOptions = {
   value: string;
   origin: ArtefactOrigin;
@@ -226,6 +251,9 @@ export const writeThreadArtefactTitle = async ({
 }: WriteThreadArtefactTitleOptions): Promise<boolean> => {
   const { value, origin } = artefact[readValue]();
   const generated = origin.type === "generated";
+  if (generated && !aiTitlingMayReplace(expected.source)) {
+    return false;
+  }
   const updated = await tx
     .update(chatThreads)
     .set({

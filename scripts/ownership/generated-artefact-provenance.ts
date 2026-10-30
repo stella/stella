@@ -13,7 +13,18 @@ export default {
   enforcement: {
     kind: "import",
     specifiers: ["@/api/lib/generated-artefact-provenance"],
-    names: ["generateArtefact", "authorArtefact", "writeThreadArtefactTitle"],
-    allowed: [],
+    names: [
+      "generateArtefact",
+      "authorArtefact",
+      "writeThreadArtefactTitle",
+      "copyThreadArtefactTitle",
+    ],
+    allowed: [
+      {
+        path: "apps/api/src/handlers/chat/fork/create.ts",
+        reason:
+          "Copies a persisted title through the provenance owner without dispatching a model.",
+      },
+    ],
   },
 } as const satisfies OwnershipEntry;

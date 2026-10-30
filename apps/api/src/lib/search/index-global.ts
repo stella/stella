@@ -1018,6 +1018,7 @@ const readGlobalSearch = async (
         w.name AS workspace_name,
         t.title,
         t.title_source,
+        t.generation_provenance,
         t.subject_decision_id,
         (SELECT coalesce(jsonb_agg(jsonb_build_object(
           'role', source_message.role,

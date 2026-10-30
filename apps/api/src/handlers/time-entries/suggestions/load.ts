@@ -330,6 +330,7 @@ const readChatSignals = async (tx: Transaction, scope: SuggestionReadScope) =>
       threadId: chatMessages.threadId,
       title: chatThreads.title,
       titleSource: chatThreads.titleSource,
+      generationProvenance: chatThreads.generationProvenance,
       subjectDecisionId: chatThreads.subjectDecisionId,
       createdAt: chatMessages.createdAt,
     })

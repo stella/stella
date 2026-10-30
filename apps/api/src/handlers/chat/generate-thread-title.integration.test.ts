@@ -1,10 +1,18 @@
+import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { and, eq, inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 import { CHAT_TITLE_SOURCE, chatThreads } from "@/api/db/schema";
 import type { ChatTitleSource } from "@/api/db/schema";
+import { createScopedDb } from "@/api/db/scoped";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  generateArtefact,
+  readArtefactOrigin,
+  writeThreadArtefactTitle,
+} from "@/api/lib/generated-artefact-provenance";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
   releaseRlsFixture,
@@ -12,11 +20,7 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
-// Exercises the title_source column against PGlite: the schema default a new
-// thread receives, and the conditional UPDATE the background title generator
-// runs. The column is varchar(7); if it were left at the old varchar(4) the
-// "default" value would truncate to "defa" and every guard below would break,
-// so these round-trips also pin the migration's length change.
+// Exercise the production typed writer against the RLS fixture.
 
 let testDb: TestDatabase;
 let ids: TestIds;
@@ -56,35 +60,49 @@ const seedThread = async (
 
 const readTitleState = async (threadId: SafeId<"chatThread">) => {
   const [row] = await testDb
-    .select({ title: chatThreads.title, titleSource: chatThreads.titleSource })
+    .select({
+      title: chatThreads.title,
+      titleSource: chatThreads.titleSource,
+      generationProvenance: chatThreads.generationProvenance,
+    })
     .from(chatThreads)
     .where(eq(chatThreads.id, threadId))
     .limit(1);
   if (!row) {
-    throw new TypeError(`thread ${threadId} not found`);
+    panic("Missing title fixture");
   }
   return row;
 };
 
-// Mirrors the guarded write in generate-thread-title.ts: replace the title only
-// while the source is still "default" and the text still matches what the
-// generator observed at dispatch time, then stamp "ai".
 const runGeneratorWrite = async (
   threadId: SafeId<"chatThread">,
   title: string,
   initialTitle: string,
-) =>
-  await testDb
-    .update(chatThreads)
-    .set({ title, titleSource: CHAT_TITLE_SOURCE.AI })
-    .where(
-      and(
-        eq(chatThreads.id, threadId),
-        eq(chatThreads.titleSource, CHAT_TITLE_SOURCE.DEFAULT),
-        eq(chatThreads.title, initialTitle),
-      ),
-    )
-    .returning({ id: chatThreads.id });
+) => {
+  const artefact = (
+    await generateArtefact({
+      generator: "apps/api/src/handlers/chat/generate-thread-title.ts",
+      sources: { decisionIds: [], inputs: [] },
+      generate: () => title,
+    })
+  ).unwrap();
+  const updated = await createScopedDb(
+    testDb,
+    [ids.wsA1],
+    ids.orgA,
+    ids.userA1,
+  )(
+    async (tx) =>
+      await writeThreadArtefactTitle({
+        tx: asTestRaw(tx),
+        threadId,
+        artefact,
+        expected: { title: initialTitle, source: CHAT_TITLE_SOURCE.DEFAULT },
+        recordAuditEvent: async () => undefined,
+      }),
+  );
+  return updated ? [{ id: threadId }] : [];
+};
 
 describe("chat thread title source", () => {
   test("a new thread defaults to the AI-replaceable 'default' source", async () => {
@@ -102,7 +120,12 @@ describe("chat thread title source", () => {
     );
     expect(updated).toHaveLength(1);
 
-    const { title, titleSource } = await readTitleState(threadId);
+    const { title, titleSource, generationProvenance } =
+      await readTitleState(threadId);
+    expect(readArtefactOrigin(generationProvenance, "title")).toMatchObject({
+      type: "generated",
+      decisionIds: [],
+    });
     expect(title).toBe("Contract review");
     expect(titleSource).toBe(CHAT_TITLE_SOURCE.AI);
   });

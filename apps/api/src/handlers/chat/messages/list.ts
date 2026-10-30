@@ -329,6 +329,7 @@ const getMessages = createSafeRootHandler(
                 id: true,
                 title: true,
                 titleSource: true,
+                generationProvenance: true,
                 subjectDecisionId: true,
                 workspaceId: true,
               },
@@ -362,7 +363,11 @@ const getMessages = createSafeRootHandler(
         const maskedParent =
           parent === undefined
             ? undefined
-            : { ...parent, title: parentWithdrawal.thread(parent).title };
+            : {
+                id: parent.id,
+                title: parentWithdrawal.thread(parent).title,
+                workspaceId: parent.workspaceId,
+              };
         return {
           kind: "ok" as const,
           attachedFiles,

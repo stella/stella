@@ -6,6 +6,7 @@ import { WithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-proje
 import type { ArtefactOrigin } from "./generated-artefact-provenance";
 import {
   authorArtefact,
+  copyThreadArtefactTitle,
   generateArtefact,
   projectArtefactText,
   readArtefactOrigin,
@@ -219,4 +220,37 @@ test("an ignored tool source overflow prevents publishing an artefact", async ()
   if (result.isErr()) {
     expect(result.error).toBeInstanceOf(ArtefactSourceLimitError);
   }
+});
+
+test("thread copies retain the title origin without copying other slots", () => {
+  const title = {
+    type: "generated",
+    generator,
+    decisionIds: [first],
+    coverage: "complete",
+  } as const;
+  const source = {
+    title: text,
+    titleSource: "ai" as const,
+    generationProvenance: {
+      version: 1 as const,
+      slots: {
+        title: { ...title, decisionIds: [...title.decisionIds] },
+        recap: { type: "authored" as const },
+      },
+    },
+  };
+  expect(copyThreadArtefactTitle(source)).toEqual({
+    title: text,
+    titleSource: "ai",
+    generationProvenance: { version: 1, slots: { title } },
+  });
+  const authored = copyThreadArtefactTitle({ ...source, titleSource: "user" });
+  expect(readArtefactOrigin(authored.generationProvenance, "title")).toEqual({
+    type: "authored",
+  });
+  expect(
+    copyThreadArtefactTitle({ ...source, generationProvenance: null })
+      .generationProvenance,
+  ).toBeNull();
 });

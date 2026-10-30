@@ -48,6 +48,7 @@ import {
   OrganizationFileUsageError,
 } from "@/api/lib/files/organization-file-usage";
 import { createUserFileKey } from "@/api/lib/files/utils";
+import { copyThreadArtefactTitle } from "@/api/lib/generated-artefact-provenance";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { isMissingS3ObjectError } from "@/api/lib/s3";
 import {
@@ -103,6 +104,7 @@ const FORKED_THREAD_COLUMNS = {
   dataWorkspaceIds: chatThreads.dataWorkspaceIds,
   title: chatThreads.title,
   titleSource: chatThreads.titleSource,
+  generationProvenance: chatThreads.generationProvenance,
   subjectDecisionId: chatThreads.subjectDecisionId,
   usedAnonymization: chatThreads.usedAnonymization,
   webSearchEnabled: chatThreads.webSearchEnabled,
@@ -635,6 +637,7 @@ export const createForkThread = ({
             parentThreadId: chatThreads.parentThreadId,
             title: chatThreads.title,
             titleSource: chatThreads.titleSource,
+            generationProvenance: chatThreads.generationProvenance,
             subjectDecisionId: chatThreads.subjectDecisionId,
           })
           .from(chatThreads)
@@ -889,8 +892,7 @@ export const createForkThread = ({
           id: newThreadId,
           organizationId: session.activeOrganizationId,
           parentThreadId: params.threadId,
-          title: source.title,
-          titleSource: source.titleSource,
+          ...copyThreadArtefactTitle(source),
           subjectDecisionId: source.subjectDecisionId,
           usedAnonymization: source.usedAnonymization,
           userId: user.id,

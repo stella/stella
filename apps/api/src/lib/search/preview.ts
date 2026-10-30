@@ -72,6 +72,7 @@ type SearchPreviewChatMessageRow = {
 };
 
 type SearchPreviewChatRow = {
+  generationProvenance?: unknown;
   subjectDecisionId?: unknown;
   titleSource?: unknown;
   isTitleOnlyMatch: unknown;
@@ -458,6 +459,7 @@ export const buildSearchPreviewQuery = ({
           cst.title,
           t.subject_decision_id AS "subjectDecisionId",
           t.title_source AS "titleSource",
+          t.generation_provenance AS "generationProvenance",
           ${chatPreviewTitleOnlyMatch(tsQuery)},
           ${chatPreviewMessages(locatorTsQuery)}
         FROM chat_thread_search_documents cst
@@ -560,10 +562,13 @@ export const readSearchPreview = async (
     const withdrawal = await readWithdrawnCopyProjection({ values: row });
     const subject =
       typeof row.subjectDecisionId === "string" ? row.subjectDecisionId : null;
-    const titleMarker =
-      row.titleSource === "user"
-        ? null
-        : withdrawal.marker([row.title, row.messages], subject);
+    const titleMarker = withdrawal.threadTitleMarker({
+      title: row.title,
+      titleSource: row.titleSource,
+      subjectDecisionId: subject?.toLowerCase() ?? null,
+      generationProvenance: row.generationProvenance,
+      messages: row.messages,
+    });
     if (titleMarker !== null) {
       return { type: "plain-text", content: titleMarker };
     }

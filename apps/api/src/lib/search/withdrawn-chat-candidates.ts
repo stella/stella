@@ -101,14 +101,14 @@ export const projectChatSearchCandidates = async ({
       typeof row["subject_decision_id"] === "string"
         ? row["subject_decision_id"]
         : null;
-    const marker = projection.marker(
-      [row["title"], row["source_messages"]],
-      subject,
-    );
-    const title =
-      marker === null || row["title_source"] === "user"
-        ? String(row["title"])
-        : "";
+    const titleMarker = projection.threadTitleMarker({
+      title: row["title"],
+      titleSource: row["title_source"],
+      subjectDecisionId: subject?.toLowerCase() ?? null,
+      generationProvenance: row["generation_provenance"],
+      source_messages: row["source_messages"],
+    });
+    const title = titleMarker === null ? String(row["title"]) : "";
     const messages = isUnknownArray(row["source_messages"])
       ? row["source_messages"]
       : [];
@@ -172,17 +172,17 @@ export const projectChatSearchCandidates = async ({
       typeof row["subject_decision_id"] === "string"
         ? row["subject_decision_id"]
         : null;
-    const label = projection.marker(
-      [row["title"], row["source_messages"]],
-      subject,
-    );
+    const titleMarker = projection.threadTitleMarker({
+      title: row["title"],
+      titleSource: row["title_source"],
+      subjectDecisionId: subject?.toLowerCase() ?? null,
+      generationProvenance: row["generation_provenance"],
+      source_messages: row["source_messages"],
+    });
     return [
       {
         ...row,
-        title:
-          row["title_source"] === "user"
-            ? row["title"]
-            : (label ?? row["title"]),
+        title: titleMarker ?? row["title"],
         score: safe.score,
         tier: safe.tier,
         headline: safe.headline,

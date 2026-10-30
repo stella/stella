@@ -155,6 +155,7 @@ const THREAD_LIST_PROJECTION = {
   subjectDecisionId: chatThreads.subjectDecisionId,
   title: chatThreads.title,
   titleSource: chatThreads.titleSource,
+  generationProvenance: chatThreads.generationProvenance,
   updatedAt: chatThreads.updatedAt,
   usedAnonymization: chatThreads.usedAnonymization,
   updatedAtCursor:
