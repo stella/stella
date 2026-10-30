@@ -93,7 +93,8 @@ api_pid=$!
 
 ready=false
 for ((attempt = 0; attempt < 90; attempt++)); do
-  if curl --connect-timeout 2 --max-time 5 -sf "$origin/live" > /dev/null 2>&1; then
+  if RETRY_ATTEMPTS=3 RETRY_DELAYS_SECONDS=1 bash scripts/retry.sh \
+    curl --connect-timeout 2 --max-time 5 -sf "$origin/live" > /dev/null 2>&1; then
     ready=true
     break
   fi
