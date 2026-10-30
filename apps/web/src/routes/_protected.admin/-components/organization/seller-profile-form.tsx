@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactElement } from "react";
 import { useId } from "react";
 
 import { useForm, useSelector } from "@tanstack/react-form";
@@ -258,5 +258,5 @@ const SellerReplyEmailField = ({
   children,
 }: {
   admission: FeatureAdmission<"invoice-links">;
-  children: ReactNode;
-}) => children;
+  children: ReactElement;
+}): ReactElement => children;

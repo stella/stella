@@ -117,14 +117,14 @@ test("a revisit after the freshness window shows the current balance and payment
   });
   try {
     setSystemTime(new Date("2026-10-30T10:00:00Z"));
-    expect(await client.fetchQuery(options)).toEqual(opened);
+    expect(await client.query(options)).toEqual(opened);
     current = partlyPaid;
     // Repeat renders inside the window reuse the audited view.
     setSystemTime(new Date("2026-10-30T10:00:30Z"));
-    expect(await client.fetchQuery(options)).toEqual(opened);
+    expect(await client.query(options)).toEqual(opened);
     expect(views).toBe(1);
     setSystemTime(new Date("2026-10-30T10:01:01Z"));
-    expect(await client.fetchQuery(options)).toEqual(partlyPaid);
+    expect(await client.query(options)).toEqual(partlyPaid);
     expect(views).toBe(2);
   } finally {
     setSystemTime();
