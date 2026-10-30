@@ -707,9 +707,20 @@ describe("declared handler locks", () => {
       expect(verify(sources)).toBe(1);
       sources.set(
         service,
-        `import { Result } from "better-result"; import { withAggregateLock, withAggregateTransaction } from "@/api/lib/db/aggregate-lock"; export const renewExample = async ({ db }) => { const outcome = await Result.tryPromise({ try: async () => await withAggregateTransaction(db, async (tx) => { const lock = ${acquisition} }) }); return outcome; };`,
+        `import { Result } from "better-result"; import { withAggregateLock, withAggregateTransaction } from "@/api/lib/db/aggregate-lock"; export const renewExample = async ({ db }) => { const outcome = await Result.tryPromise({ try: async () => await withAggregateTransaction(db, budget, async (tx) => { const lock = ${acquisition} }) }); return outcome; };`,
       );
       expect(verify(sources)).toBe(1);
+      for (const call of [
+        `await withAggregateTransaction(db, async (tx) => { ${acquisition} })`,
+        `await withAggregateTransaction(db, async (tx) => { ${acquisition} }, async () => {})`,
+        `withAggregateTransaction(db, budget, async (tx) => { ${acquisition} })`,
+      ]) {
+        sources.set(
+          service,
+          `import { withAggregateLock, withAggregateTransaction } from "@/api/lib/db/aggregate-lock"; export const renewExample = async ({ db }) => { ${call}; };`,
+        );
+        expect(() => verify(sources)).toThrow("must await withAggregateLock");
+      }
       sources.set(
         service,
         `import { abortableTx, safeDbFromScoped } from "@/api/db/safe-db"; ${lockImport} export const renewExample = async ({ value }) => { return await abortableTx(safeDbFromScoped(value.scopedDb), async (tx) => { ${acquisition} }); };`,

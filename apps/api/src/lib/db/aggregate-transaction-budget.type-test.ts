@@ -4,12 +4,11 @@ import {
 } from "./aggregate-transaction-budget";
 
 export const overMigrationLockBudget: AggregateTransactionBudget = {
-  kind: "aggregate",
-  // @ts-expect-error Aggregate transactions may not outwait online DDL.
-  milliseconds: 120_001,
-  reason: "online-DDL lock retry ceiling",
+  ...AGGREGATE_TRANSACTION_BUDGETS.migrationCeiling,
+  // @ts-expect-error Aggregate transactions must end before the online-DDL ladder.
+  milliseconds: 120_000,
 };
 
-// @ts-expect-error Dedicated corpus owners retain their connection deadline, not an aggregate timeout.
+// @ts-expect-error Lease-coordinated corpus owners are not aggregate timeout policies.
 export const dedicatedBudgetIsNotAggregate: AggregateTransactionBudget =
   AGGREGATE_TRANSACTION_BUDGETS.legislationFacetRefresh;

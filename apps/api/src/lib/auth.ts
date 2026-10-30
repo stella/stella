@@ -3484,20 +3484,14 @@ type AuthSafeDb = ReturnType<
   typeof createMembershipSafeDb<TransactionOf<typeof rlsDb>>
 >;
 
-/** Membership-scoped handles for one credential member's request authority. */
+/** Membership-scoped handles for one credential member's authority. */
 export const createAuthDatabases = (
   databaseIdentity: Parameters<
     typeof createMembershipScopedDb<TransactionOf<typeof rlsDb>>
   >[1],
 ): { scopedDb: AuthScopedDb; safeDb: AuthSafeDb } => ({
-  scopedDb: createMembershipScopedDb(rlsDb, {
-    ...databaseIdentity,
-    budget: AGGREGATE_TRANSACTION_BUDGETS.scopedRequest,
-  }),
-  safeDb: createMembershipSafeDb(rlsDb, {
-    ...databaseIdentity,
-    budget: AGGREGATE_TRANSACTION_BUDGETS.scopedRequest,
-  }),
+  scopedDb: createMembershipScopedDb(rlsDb, databaseIdentity),
+  safeDb: createMembershipSafeDb(rlsDb, databaseIdentity),
 });
 
 type AuthWorkspaceAccessOptions = {
@@ -3870,6 +3864,7 @@ const resolveValidateAuth = async ({
     return true;
   };
   const databaseIdentity = {
+    budget: AGGREGATE_TRANSACTION_BUDGETS.scopedRequest,
     featureAccessSnapshot,
     organizationId: activeOrganizationId,
     serverValidatedWorkspaceIds,

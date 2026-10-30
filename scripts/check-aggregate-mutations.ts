@@ -938,7 +938,7 @@ const JOINING_RUNNERS = {
     {
       module: REGISTRY,
       exported: "withAggregateTransaction",
-      argument: 1,
+      argument: 2,
       suppliesTransaction: true,
     },
   ],

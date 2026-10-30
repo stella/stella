@@ -3127,7 +3127,10 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
           primitive === "transaction-boundary" ||
           primitive === "native-transaction-boundary",
       ).length,
-  },
+  } as const satisfies Extract<
+    RatchetMetric,
+    { scope: "file"; measurement?: never }
+  >,
   {
     scope: "file",
     id: "unsignalled-skip",
