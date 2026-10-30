@@ -21,7 +21,9 @@ import {
   flowsOptions,
   knowledgeKeys,
 } from "@/lib/knowledge/queries";
+import { pageTitle } from "@/lib/page-title";
 import { toSafeId } from "@/lib/safe-id";
+import { routePresentation } from "@/routes/-route-presentation";
 import { FlowEditor } from "@/routes/knowledge/-components/flow-editor";
 import type { FlowExampleKey } from "@/routes/knowledge/-components/flow-examples";
 import {
@@ -40,12 +42,20 @@ type View =
   | { kind: "editor"; flowId: string | null; example?: FlowExampleKey };
 
 export const Route = createFileRoute("/knowledge/workflows")({
+  staticData: {
+    presentation: routePresentation({
+      type: "label",
+      labelKey: "common.workflows",
+      to: "/knowledge/workflows",
+    }),
+  },
   beforeLoad: () => {
     if (!workflowsRouteAvailable()) {
       throw redirect({ to: "/knowledge" });
     }
   },
   component: GuardedWorkflowsPage,
+  head: () => ({ meta: [{ title: pageTitle("common.workflows") }] }),
 });
 
 // The GET response carries workspace ids as plain strings; the PUT body

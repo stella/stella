@@ -3,9 +3,9 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import { PlusIcon, RotateCcwIcon, WorkflowIcon } from "@stll/ui/icons";
 import { Skeleton } from "@stll/ui/skeleton";
+import { Switch } from "@stll/ui/switch";
 
 import { FlowTriggerBadge } from "@/components/flows/flow-badges";
-import { FlowSwitch } from "@/components/flows/flow-switch";
 import { guideAnchor } from "@/features/guides/guide-anchor";
 import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -233,7 +233,7 @@ const FlowRow = ({
         </div>
         <span className="sr-only">{t("common.edit")}</span>
       </button>
-      <FlowSwitch
+      <Switch
         aria-label={
           flow.enabled ? t("flows.disableFlow") : t("flows.enableFlow")
         }

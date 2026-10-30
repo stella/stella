@@ -85,7 +85,7 @@ const mount = (emailAvailable: boolean) => {
     localPassword: false,
     reviewPasswordSignIn: false,
     bootstrap: false,
-    social: { google: false, microsoft: false },
+    social: { google: false, microsoft: false, apple: false },
     transactionalEmail: emailAvailable,
   });
   render(

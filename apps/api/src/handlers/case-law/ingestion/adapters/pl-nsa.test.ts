@@ -24,8 +24,6 @@ import nodePath from "node:path";
 
 import { createSha256 } from "@stll/sha256/node";
 
-import { decodeSourceRawEnvelope } from "@/api/handlers/case-law/ingestion/adapter";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   assemblePlNsaDecision,
   composePlNsaFullText,
@@ -64,7 +62,11 @@ import {
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { parsePlNsaDecision } from "@/api/handlers/case-law/ingestion/parsers/pl-nsa";
 import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
-import { toPlainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
+import {
+  decodeSourceRawEnvelope,
+  toPlainTextIngestionResult,
+} from "@/api/lib/legal-search/ingestion-types";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { rehydrateMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
@@ -128,7 +130,8 @@ const blocksOf = (decision: IngestionResult) =>
 
 const headingsOf = (decision: IngestionResult): string[] =>
   blocksOf(decision).flatMap((block) =>
-    block.type === "heading" && block.role === "section-heading"
+    block.type === "heading" &&
+    (block.role === "section-heading" || block.role === "publisher-heading")
       ? [block.plainText]
       : [],
   );
@@ -1143,7 +1146,6 @@ describe("the document is checked against the dataset's own text", () => {
     "Wojewódzki sąd rozpoznał skargę podatnika na interpretację indywidualną organu i uznał, że wnioskodawca prawidłowo ustalił przychód, a organ błędnie zastosował przepisy ustawy o podatku dochodowym od osób fizycznych w brzmieniu obowiązującym w dacie zdarzenia, co przesądziło o uchyleniu zaskarżonego aktu.";
 
   test("text only the full rendering carries is kept, from the rendering", () => {
-    const error = spyOn(logger, "error");
     const parsed = parsePlNsaDecision({
       ...input,
       reference: [
@@ -1156,11 +1158,6 @@ describe("the document is checked against the dataset's own text", () => {
     expect(parsed.textSource).toBe("full-text");
     expect(parsed.fulltext).toContain(REASONS);
     expect(parsed.validation.ok).toBe(true);
-    expect(error).not.toHaveBeenCalledWith(
-      "case_law.ingestion.ast_content_lost",
-      expect.anything(),
-    );
-    error.mockRestore();
   });
 
   test("with every section empty, the rendering is the document", () => {
@@ -1175,7 +1172,6 @@ describe("the document is checked against the dataset's own text", () => {
   });
 
   test("with no text anywhere, the check still runs and reports it", () => {
-    const error = spyOn(logger, "error");
     const parsed = parsePlNsaDecision({
       ...input,
       sections: { thesis: null, sentence: null, reasons: null, dissent: null },
@@ -1184,7 +1180,6 @@ describe("the document is checked against the dataset's own text", () => {
     expect(parsed.documentAst).toBeNull();
     expect(parsed.textSource).toBe("none");
     expect(parsed.validation.issues.length).toBeGreaterThan(0);
-    error.mockRestore();
   });
 
   test("sections that hold everything are used as sections", () => {

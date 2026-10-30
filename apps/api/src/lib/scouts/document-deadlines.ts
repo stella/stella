@@ -67,7 +67,10 @@ class DocumentDeadlineScoutError extends TaggedError(
   cause: unknown;
 }> {}
 
-type DeadlineScoutDb = Pick<typeof rootDb, "select" | "update">;
+type DeadlineScoutDb = Pick<
+  typeof rootDb,
+  "select" | "update" | "execute" | "transaction"
+>;
 
 export type RunDocumentDeadlineScoutArgs = {
   db: DeadlineScoutDb;

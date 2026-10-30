@@ -8,13 +8,15 @@ import {
   RefreshControl,
   SectionList,
   StyleSheet,
-  Text,
   View,
 } from "react-native";
 import { useTranslations } from "use-intl";
 
-import { EmptyCard } from "@/components/empty-state-screen";
+import { Text } from "@stll/ui/text";
+
+import { EmptyCard, screenStyles } from "@/components/empty-state-screen";
 import { EntityRow } from "@/components/entity-row";
+import { LoadFailedCard } from "@/components/load-failure";
 import { epochMilliseconds } from "@/connection/clock";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
@@ -50,7 +52,7 @@ export const MatterEntities = ({
       cursor: previous.nextCursor,
     });
     if (Result.isError(result) && result.error._tag === "SignedOutError") {
-      end();
+      end(source);
     }
     return applyEntityPage(previous, result, epochMilliseconds());
   };
@@ -111,8 +113,6 @@ const LoadedEntities = ({
     return null;
   }
 
-  const firstPageFailed =
-    current.error !== null && current.entities.length === 0;
   const retryButton = (onPress: () => void) => (
     <Pressable
       accessibilityRole="button"
@@ -166,14 +166,19 @@ const LoadedEntities = ({
 
   return (
     <SectionList
+      // An empty matter holds only its card, which fits: nothing to bounce.
+      alwaysBounceVertical={current.entities.length > 0}
       contentContainerStyle={styles.content}
       contentInsetAdjustmentBehavior="automatic"
       keyExtractor={(entity) => entity.entityId}
       ListEmptyComponent={
-        firstPageFailed ? (
-          <EmptyCard description={t("loadFailed")} title={t("emptyTitle")}>
-            {retryButton(onReload)}
-          </EmptyCard>
+        current.error !== null && current.entities.length === 0 ? (
+          <LoadFailedCard
+            error={current.error}
+            onRetry={onReload}
+            retryLabel={t("retry")}
+            title={t("loadFailed")}
+          />
         ) : (
           <EmptyCard
             description={t("emptyDescription")}
@@ -181,7 +186,7 @@ const LoadedEntities = ({
           />
         )
       }
-      ListFooterComponent={footer}
+      ListFooterComponent={footer ?? undefined}
       refreshControl={
         <RefreshControl
           onRefresh={onReload}
@@ -193,6 +198,18 @@ const LoadedEntities = ({
         <EntityRow
           entity={item}
           onPress={() => {
+            // A document opens to its pages; a folder or task to its details.
+            if (item.kind === "document") {
+              router.push({
+                pathname: "/document/[workspaceId]/[entityId]",
+                params: {
+                  workspaceId,
+                  entityId: item.entityId,
+                  ...(item.name === null ? {} : { name: item.name }),
+                },
+              });
+              return;
+            }
             router.push({
               pathname: "/matter/[workspaceId]/[entityId]",
               params: { workspaceId, entityId: item.entityId },
@@ -227,6 +244,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   content: {
+    ...screenStyles.readable,
     paddingBottom: 32,
     paddingHorizontal: 20,
   },

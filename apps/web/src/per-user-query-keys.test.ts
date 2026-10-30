@@ -17,6 +17,7 @@ import { chatToolGrantsOptions } from "@/features/chat/chat-tool-grants";
 import { desktopPresenceOptions } from "@/features/desktop/desktop-presence";
 import { lawHistoryKeys } from "@/features/law-search-history/law-search-history-query";
 import { timeTimersOptions } from "@/features/time-timers/queries";
+import { accountDataExportLatestOptions } from "@/lib/account/account-data-export-queries";
 import {
   linkedAccountsOptions,
   pendingDeletionTasksOptions,
@@ -55,6 +56,10 @@ import {
 import { myTimeEntriesInfiniteOptions } from "@/lib/workspaces/queries/my-time-entries";
 import { myTimeSuggestionsOptions } from "@/lib/workspaces/queries/my-time-suggestions";
 import { reportExportsKeys } from "@/lib/workspaces/queries/report-exports";
+import {
+  timeApprovalPendingOptions,
+  timeApprovalQueueOptions,
+} from "@/lib/workspaces/queries/time-approvals";
 import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
 import { viewTemplateKeys } from "@/lib/workspaces/queries/view-templates";
 import { workspaceMemberPreviewsOptions } from "@/lib/workspaces/queries/workspace-member-previews";
@@ -123,7 +128,13 @@ const READ_FRESH = "read fresh at each use, never cached";
 // Keyed by handler path under apps/api/src/handlers.
 const PER_USER_READS: Record<string, PerUserRead> = {
   "account-exports/download.ts": { kind: "not-per-user", reason: DOWNLOAD },
-  "account-exports/get.ts": { kind: "no-web-caller", calls: [] },
+  "account-exports/download/get.ts": { kind: "no-web-caller", calls: [] },
+  "account-exports/get.ts": {
+    kind: "keyed",
+    calls: ['api.me["data-exports"].get'],
+    files: ["lib/account/account-data-export-queries.ts"],
+    keys: () => [accountDataExportLatestOptions(USER).queryKey],
+  },
   "account-exports/status/get.ts": { kind: "no-web-caller", calls: [] },
   "files/thumbnail.ts": { kind: "owned-id", reason: OWNED_FILE },
   "search-history/list.ts": {
@@ -625,6 +636,7 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     files: ["lib/knowledge/queries.ts"],
     keys: () => [skillsOptions(ORG, USER).queryKey],
   },
+  "tasks/list.ts": { kind: "no-web-caller", calls: ["api.tasks.get"] },
   "templates/condition-decisions/get.ts": {
     kind: "not-per-user",
     reason: "the caller is recorded for usage only",
@@ -654,8 +666,13 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     keys: () => [timeEntriesKeys.list(WORKSPACE, USER, {})],
   },
   "time-entries/approval-queue/list.ts": {
-    kind: "no-web-caller",
+    kind: "keyed",
     calls: ['api["time-entries"]["approval-queue"].get'],
+    files: ["lib/workspaces/queries/time-approvals.ts"],
+    keys: () => [
+      timeApprovalQueueOptions(ORG, USER, {}).queryKey,
+      timeApprovalPendingOptions(ORG, USER).queryKey,
+    ],
   },
   "time-entries/me/list.ts": {
     kind: "keyed",

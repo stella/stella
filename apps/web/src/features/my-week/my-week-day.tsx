@@ -39,7 +39,10 @@ type MyWeekDayProps = SuggestionActions & {
   busyFingerprints: ReadonlySet<string>;
   canDecide: boolean;
   canEdit: boolean;
+  /** Per-entry notes from the last submission, by entry id. */
+  notes: ReadonlyMap<string, string>;
   onEditEntry: (entry: MyTimeEntry) => void;
+  onCreate: () => void;
 };
 
 const LONG_DAY = {
@@ -94,12 +97,16 @@ const DaySuggestions = ({
 const EntryRow = ({
   entry,
   canEdit,
+  note,
   onEditEntry,
 }: {
   entry: MyTimeEntry;
   canEdit: boolean;
+  /** Why the last submission left this draft behind. */
+  note: string | undefined;
   onEditEntry: (entry: MyTimeEntry) => void;
 }) => {
+  const t = useTranslations("timesheets.week");
   const tBilling = useTranslations("billing");
   const tCommon = useTranslations("common");
   const tDay = useTranslations("timesheets.day");
@@ -128,6 +135,16 @@ const EntryRow = ({
             tBilling(entry.billable ? "billable" : "nonBillable"),
           ].join(" · ")}
         </span>
+        {entry.status === "draft" && entry.returnComment !== null && (
+          <BidiText as="p" className="text-sm">
+            {t("returned", { comment: entry.returnComment })}
+          </BidiText>
+        )}
+        {note !== undefined && (
+          <p className="text-destructive text-sm" role="alert">
+            {note}
+          </p>
+        )}
       </div>
       <span className="shrink-0 text-sm tabular-nums">
         {entry.timerStartedAt === null
@@ -159,10 +176,13 @@ export const MyWeekDay = ({
   busyFingerprints,
   canDecide,
   canEdit,
+  notes,
   onEditEntry,
+  onCreate,
   ...actions
 }: MyWeekDayProps) => {
   const t = useTranslations("timesheets.week");
+  const tCommon = useTranslations("common");
   const format = useFormatter();
   const pending = canDecide && suggestions.length > 0;
 
@@ -195,6 +215,7 @@ export const MyWeekDay = ({
             <EntryRow
               canEdit={canEdit}
               entry={entry}
+              note={notes.get(entry.id)}
               key={entry.id}
               onEditEntry={onEditEntry}
             />
@@ -202,9 +223,14 @@ export const MyWeekDay = ({
         </ul>
       )}
       {!pending && entriesComplete && (
-        <p className="text-muted-foreground rounded-lg border border-dashed py-8 text-center text-sm">
-          {entries.length === 0 ? t("noActivity") : t("allLogged")}
-        </p>
+        <div className="text-muted-foreground flex flex-col items-center gap-3 rounded-lg border border-dashed py-8 text-center text-sm">
+          <p>{entries.length === 0 ? t("noActivity") : t("allLogged")}</p>
+          {entries.length === 0 && canDecide && (
+            <Button onClick={onCreate} variant="outline">
+              {tCommon("logTime")}
+            </Button>
+          )}
+        </div>
       )}
     </section>
   );

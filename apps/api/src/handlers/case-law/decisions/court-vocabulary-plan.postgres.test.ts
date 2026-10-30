@@ -21,6 +21,7 @@ import {
   explainRoot,
   scanOccurrences,
 } from "@/api/tests/query-plans/plan-walker";
+import { vacuumUntilAllVisible } from "@/api/tests/query-plans/visibility";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const PUBLISHED_INDEX = CASE_LAW_COURT_DATE_PUBLISHED_INDEX.name;
@@ -42,7 +43,7 @@ const indexScans = (
 };
 
 describe.skipIf(!enabled)("published court walks (postgres)", () => {
-  // timeout: isolated schema setup, two corpus sizes and VACUUM need an integration budget.
+  // timeout: isolated schema setup, two corpus sizes and the all-visible wait need an integration budget.
   test("vocabulary and browse seek published index ranges at both corpus sizes", async () => {
     const databaseUrl =
       process.env["DATABASE_URL"] ?? panic("DATABASE_URL is required");
@@ -129,7 +130,7 @@ describe.skipIf(!enabled)("published court walks (postgres)", () => {
                 '{"_stellaPartialObservation":{"isListingOnly":true}}'::jsonb ELSE '{}'::jsonb END
             FROM generate_series(1, ${decisions}::int) n
             CROSS JOIN (VALUES ('published'), ('redacted'), ('listing-only')) statuses(status)`);
-          await db.execute(sql`VACUUM (ANALYZE) case_law_decisions`);
+          await vacuumUntilAllVisible({ db, table: "case_law_decisions" });
           await db.execute(sql`ANALYZE case_law_sources`);
           captured.length = 0;
           expect(await readCourtNames({ caseLawDb, country: "CZE" })).toEqual(

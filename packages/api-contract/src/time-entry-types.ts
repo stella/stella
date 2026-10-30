@@ -1,7 +1,8 @@
 import type { TimeEntrySource } from "./billing";
 import type { EntityContextReference } from "./entity-reference";
 
-export type TimeEntryStatus = "draft" | "approved" | "billed" | "written_off";
+export type TimeEntryStatus =
+  "draft" | "submitted" | "approved" | "billed" | "written_off";
 
 export type { TimeEntrySource } from "./billing";
 
@@ -19,6 +20,8 @@ export type TimeEntry = {
   narrativeLanguage: string | null;
   noCharge: boolean;
   rateAtEntry: number;
+  /** Why an approver returned the entry to draft; cleared once approved. */
+  returnComment: string | null;
   source: TimeEntrySource;
   status: TimeEntryStatus;
   taskCode: string | null;

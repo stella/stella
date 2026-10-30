@@ -74,6 +74,66 @@ describe("online DDL lock census", () => {
     );
   });
 
+  test("a gated atomic block classifies its complete conditional body", () => {
+    const text = `DO $probe$
+DECLARE state record;
+BEGIN
+  SELECT true AS ready INTO state;
+  IF state.ready THEN
+    ALTER TABLE public.probe ADD COLUMN value text;
+  END IF;
+END $probe$`;
+    const source = `${ownerSource}\nconst fixture = lockTaking({ tableName: "probe", lockQueue: "blocks_writers", text: ${JSON.stringify(text)} });`;
+    expect(censusOnlineDdlSource(source)).toEqual([]);
+  });
+
+  test.each([
+    "ALTER TABLE public.probe ADD COLUMN value text",
+    "CREATE INDEX probe_idx ON public.probe (id)",
+    "LOCK TABLE public.probe IN ACCESS EXCLUSIVE MODE",
+  ])("a nested block statement retains its writer-blocking gate: %s", (sql) => {
+    const text = `DO $probe$ BEGIN IF true THEN ${sql}; END IF; END $probe$`;
+    const source = `${ownerSource}\nconst fixture = lockTaking({ tableName: "probe", lockQueue: "beside_writers", text: ${JSON.stringify(text)} });`;
+    expect(censusOnlineDdlSource(source).join("\n")).toContain(
+      "must use blocks_writers",
+    );
+  });
+
+  test.each([
+    "CREATE MATERIALIZED VIEW probe_view AS SELECT 1",
+    "EXECUTE 'CREATE MATERIALIZED VIEW probe_view AS SELECT 1'",
+  ])("an unknown nested command remains visible: %s", (sql) => {
+    const text = `DO $probe$ BEGIN IF true THEN ${sql}; END IF; END $probe$`;
+    const source = `${ownerSource}\nconst fixture = lockTaking({ tableName: "probe", lockQueue: "blocks_writers", text: ${JSON.stringify(text)} });`;
+    expect(censusOnlineDdlSource(source).join("\n")).toMatch(
+      /unknown|unclassified|unsupported/iu,
+    );
+  });
+
+  test("an unresolved dynamic command inside a block retains the strongest gate", () => {
+    const text = `DO $probe$ DECLARE command text; BEGIN EXECUTE command; END $probe$`;
+    const source = `${ownerSource}\nconst fixture = lockTaking({ tableName: "probe", lockQueue: "beside_writers", text: ${JSON.stringify(text)} });`;
+    expect(censusOnlineDdlSource(source).join("\n")).toContain(
+      "must use blocks_writers for ACCESS EXCLUSIVE unresolved-execute",
+    );
+  });
+
+  test("a routine body cannot hide an unsupported statement", () => {
+    const text = `CREATE FUNCTION public.probe() RETURNS void LANGUAGE plpgsql AS $probe$ BEGIN CREATE MATERIALIZED VIEW probe_view AS SELECT 1; END $probe$`;
+    const source = `${ownerSource}\nconst fixture = lockTaking({ tableName: "probe", lockQueue: "blocks_writers", text: ${JSON.stringify(text)} });`;
+    expect(censusOnlineDdlSource(source).join("\n")).toMatch(
+      /unknown|unclassified|unsupported/iu,
+    );
+  });
+
+  test("an atomic body cannot hide an unclassified sibling command", () => {
+    const text = `DO $probe$ BEGIN ALTER TABLE public.probe ADD COLUMN value text; END $probe$; UNKNOWN COMMAND`;
+    const source = `${ownerSource}\nconst fixture = lockTaking({ tableName: "probe", lockQueue: "blocks_writers", text: ${JSON.stringify(text)} });`;
+    expect(censusOnlineDdlSource(source).join("\n")).toContain(
+      "unclassified SQL statement: UNKNOWN COMMAND",
+    );
+  });
+
   test("unknown DDL in a gated SQL template fails the census", () => {
     const source = `${ownerSource}\nconst fixture = lockTaking({ tableName: "probe", lockQueue: "blocks_writers", text: \`CREATE MATERIALIZED VIEW probe_view AS SELECT 1\` });`;
     expect(censusOnlineDdlSource(source).join("\n")).toMatch(
@@ -121,6 +181,101 @@ describe("online DDL lock census", () => {
     const source = `${ownerSource}\nconst fixture = lockTaking({ tableName: "probe", lockQueue: "blocks_writers", text: \`ALTER TABLE probe ADD COLUMN added text \${suppliedSql}\` });`;
     expect(censusOnlineDdlSource(source).join("\n")).toMatch(
       /lockTaking SQL argument .* unresolved SQL variant/iu,
+    );
+  });
+
+  test.each([
+    'const CATALOG_READ = "SELECT 1 AS value";',
+    "const CATALOG_READ = `SELECT 1 AS value`;",
+    `const CATALOG_READ = \`SELECT \${quoteLiteral("quoted value")} AS value\`;`,
+    `const CATALOG_READ = \`SELECT \${quoteLiteral("CREATE MATERIALIZED VIEW stored_text AS SELECT 1")} AS value\`;`,
+    `const INNER_READ = "SELECT 1 AS value"; const CATALOG_READ = \`WITH source AS (\${INNER_READ}) SELECT * FROM source\`;`,
+  ])(
+    "complete immutable read-query constants retain their SQL proof: %s",
+    (declaration) => {
+      const source = `${ownerSource}\n${declaration}\nconst fixture = lockTaking({ tableName: "probe", lockQueue: "blocks_writers", text: \`DO $read_query$ DECLARE state record; BEGIN SELECT * INTO state FROM (\${CATALOG_READ}) source; ALTER TABLE public.probe ADD COLUMN added text; END $read_query$\` });`;
+      expect(censusOnlineDdlSource(source)).toEqual([]);
+    },
+  );
+
+  test.each([
+    'let CATALOG_READ = "SELECT 1";',
+    'var CATALOG_READ = "SELECT 1";',
+    `const CATALOG_READ = \`SELECT \${suppliedSql}\`;`,
+    `const CATALOG_READ = \`SELECT \${CATALOG_READ}\`;`,
+    `const FIRST_READ = \`SELECT \${CATALOG_READ}\`; const CATALOG_READ = \`SELECT \${FIRST_READ}\`;`,
+    'const CATALOG_READ = "WHERE condition";',
+  ])(
+    "unresolved read-query constants cannot supply a SQL proof: %s",
+    (declaration) => {
+      const source = `${ownerSource}\n${declaration}\nconst fixture = lockTaking({ tableName: "probe", lockQueue: "blocks_writers", text: \`DO $read_query$ BEGIN PERFORM (\${CATALOG_READ}); ALTER TABLE public.probe ADD COLUMN added text; END $read_query$\` });`;
+      expect(censusOnlineDdlSource(source).join("\n")).toMatch(
+        /unresolved SQL variant/iu,
+      );
+    },
+  );
+
+  test.each([
+    "const wrapper = (CATALOG_READ: string) =>",
+    "const wrapper = ({ CATALOG_READ }: { CATALOG_READ: string }) =>",
+    "const wrapper = () => { const CATALOG_READ = suppliedSql; return",
+  ])(
+    "shadowed read-query names cannot borrow a module constant: %s",
+    (wrapper) => {
+      const closing = wrapper.includes("return") ? "; };" : ";";
+      const source = `${ownerSource}\nconst CATALOG_READ = "SELECT 1";\n${wrapper} lockTaking({ tableName: "probe", lockQueue: "blocks_writers", text: \`DO $read_query$ BEGIN PERFORM (\${CATALOG_READ}); ALTER TABLE public.probe ADD COLUMN added text; END $read_query$\` })${closing}`;
+      expect(censusOnlineDdlSource(source).join("\n")).toMatch(
+        /unresolved SQL variant/iu,
+      );
+    },
+  );
+
+  test("a non-module read-query declaration cannot supply a constant proof", () => {
+    const source = `${ownerSource}\nconst wrapper = () => { const CATALOG_READ = "SELECT 1"; return lockTaking({ tableName: "probe", lockQueue: "blocks_writers", text: \`DO $read_query$ BEGIN PERFORM (\${CATALOG_READ}); ALTER TABLE public.probe ADD COLUMN added text; END $read_query$\` }); };`;
+    expect(censusOnlineDdlSource(source).join("\n")).toMatch(
+      /unresolved SQL variant/iu,
+    );
+  });
+
+  test("schema statements inside a resolved read-query constant keep their full lock classification", () => {
+    const source = `${ownerSource}\nconst CATALOG_READ = "SELECT 1; ALTER TABLE public.probe ADD COLUMN added text";\nconst fixture = lockTaking({ tableName: "probe", lockQueue: "beside_writers", text: \`\${CATALOG_READ}\` });`;
+    const errors = censusOnlineDdlSource(source).join("\n");
+    expect(errors).toContain(
+      "must use blocks_writers for ACCESS EXCLUSIVE add-column",
+    );
+    expect(errors).not.toContain("unresolved SQL variant");
+  });
+
+  test("unsupported schema statements inside a resolved query cannot disappear from the census", () => {
+    const source = `${ownerSource}\nconst CATALOG_READ = "SELECT 1; CREATE MATERIALIZED VIEW probe_view AS SELECT 1";\nconst fixture = lockTaking({ tableName: "probe", lockQueue: "blocks_writers", text: \`\${CATALOG_READ}\` });`;
+    const errors = censusOnlineDdlSource(source).join("\n");
+    expect(errors).toMatch(/unknown|unclassified|unsupported/iu);
+    expect(errors).toContain("CREATE MATERIALIZED VIEW");
+    expect(errors).not.toContain("unresolved SQL variant");
+  });
+
+  test.each([
+    'const wrapper = (quoteLiteral: (text: string) => string) => quoteLiteral("ALTER TABLE public.probe ADD COLUMN added text");',
+    'const anotherQuote = (text: string) => text; const value = anotherQuote("ALTER TABLE public.probe ADD COLUMN added text");',
+  ])(
+    "only the canonical escaping owner can mark a direct SQL-looking argument as data: %s",
+    (declaration) => {
+      const source = `${ownerSource}\n${declaration}`;
+      expect(censusOnlineDdlSource(source).join("\n")).toContain(
+        "must be passed through lockTaking",
+      );
+    },
+  );
+
+  test("a changed escaping owner cannot mark SQL text as quoted data", () => {
+    const changedOwner = ownerSource.replace(
+      'value.replaceAll("\'", "\'\'")',
+      "value",
+    );
+    expect(changedOwner).not.toBe(ownerSource);
+    const source = `${changedOwner}\nconst value = quoteLiteral("ALTER TABLE public.probe ADD COLUMN added text");`;
+    expect(censusOnlineDdlSource(source).join("\n")).toContain(
+      "must be passed through lockTaking",
     );
   });
 
