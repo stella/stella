@@ -60,6 +60,16 @@ export const READ_BUDGETS = {
     reason:
       "One 100-row completion page measured against a fully completed 100,000-decision source: 1,201 shared pages, plus 299 pages (25% headroom) for B-tree layout variation. The source page, receipt, and index-job decision indexes bound work before eligibility filtering.",
   },
+  "statement.caseLaw.backgroundReplayProbe": {
+    surface: "statement",
+    pages: 32,
+    reason:
+      "One background replay lag probe against a 100,000-decision source the replay has caught up with, its worst case: index descents that find no row behind the current parser and none whose stored input is unparsed, a few pages each whatever the source's size.",
+    overBudget: {
+      reason:
+        "The probe walks the source's decisions by id and compares each row's parsed input hashes, so a caught-up source is read whole before the probe can answer.",
+    },
+  },
   "scheduled.caseLaw.reportFreshness": {
     surface: "scheduled-job",
     pages: 12_500,

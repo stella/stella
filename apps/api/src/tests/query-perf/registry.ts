@@ -2,6 +2,7 @@ import type { SQLWrapper } from "drizzle-orm";
 
 import type { TransactionOf } from "@/api/db/scoped";
 import { buildEuCompletionPageQuery } from "@/api/handlers/case-law/ingestion/eu-completion-store";
+import { buildBackgroundReplayProbe } from "@/api/handlers/case-law/ingestion/replay";
 import { legislationCandidateRowsStatement } from "@/api/handlers/legislation/search";
 import type {
   ReadBudgetId,
@@ -20,6 +21,7 @@ import {
   CASE_LAW_SCENARIOS,
   LEGISLATION_CANDIDATE_COUNT,
   LEGISLATION_GENERATION,
+  REPLAY_PARSER_VERSION,
   seedSitemapReadBudget,
 } from "./corpus-seed";
 import { QUERY_PERF_OWNER_DEADLINES } from "./owner-deadlines";
@@ -69,6 +71,19 @@ export const corpusStatementRegistry = (seed: CorpusReadBudgetSeed) =>
         }),
       ownerDeadlineMs:
         QUERY_PERF_OWNER_DEADLINES["statement.caseLaw.euCompletionPage"],
+    },
+    {
+      budgetId: "statement.caseLaw.backgroundReplayProbe",
+      build: (tx: TransactionOf<GatedTestDb>) =>
+        buildBackgroundReplayProbe(tx, {
+          sourceId: seed.replaySourceId,
+          currentParserVersion: REPLAY_PARSER_VERSION,
+          mode: "dry-run",
+        }),
+      // Caught up: the probe must rule out every row to answer.
+      expectedRows: 0,
+      ownerDeadlineMs:
+        QUERY_PERF_OWNER_DEADLINES["statement.caseLaw.backgroundReplayProbe"],
     },
     {
       budgetId: "statement.legislation.candidateRows",
@@ -190,6 +205,7 @@ export const READ_BUDGET_PROFILES = {
   "scheduled.requests.sweepReceipts": "corpus",
   "statement.caseLaw.coverageSources": "coverage",
   "statement.caseLaw.euCompletionPage": "corpus",
+  "statement.caseLaw.backgroundReplayProbe": "corpus",
   "statement.legislation.candidateRows": "corpus",
   "statement.documents.searchHits": "tenant",
 } as const satisfies Record<

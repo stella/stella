@@ -732,12 +732,6 @@
     "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/background-replay-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
-    "file": "apps/api/src/handlers/case-law/ingestion/background-replay-store.ts",
-    "fingerprint": "fd69d5d1514280f58e3110603475ae27128a3377427f61b171e9da04309fc6aa",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/handlers/case-law/ingestion/background-replay-store.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
-  },
-  {
     "file": "apps/api/src/handlers/case-law/ingestion/decision-identifier-backfill.ts",
     "fingerprint": "07022d20d5cca0acfb3575d8afa2cefebffc1d933be57d1ba457cd88cdd71c66",
     "count": 1,

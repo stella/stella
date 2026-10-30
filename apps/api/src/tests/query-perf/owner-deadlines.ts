@@ -1,4 +1,5 @@
 import { PUBLIC_READ_STATEMENT_TIMEOUT_MS } from "@/api/db/shared-pool-timeouts";
+import { REPLAY_STATEMENT_TIMEOUT_MS } from "@/api/handlers/case-law/ingestion/background-replay-store";
 import { READ_BUDGETS, type ReadBudgetId } from "@/api/lib/db/read-budgets";
 import { REQUEST_RECEIPT_RETENTION_STATEMENT_BUDGET_MS } from "@/api/lib/idempotency/request-receipts";
 import { CASE_LAW_COVERAGE_REFRESH_STATEMENT_TIMEOUT_MS } from "@/api/lib/scheduler/tasks/case-law-coverage-refresh";
@@ -15,6 +16,7 @@ export const QUERY_PERF_OWNER_DEADLINES = {
     CASE_LAW_COVERAGE_REFRESH_STATEMENT_TIMEOUT_MS,
   "statement.caseLaw.euCompletionPage":
     READ_BUDGETS["statement.caseLaw.euCompletionPage"].statementDeadlineMs,
+  "statement.caseLaw.backgroundReplayProbe": REPLAY_STATEMENT_TIMEOUT_MS,
   "statement.legislation.candidateRows":
     PUBLIC_READ_STATEMENT_TIMEOUT_MS.search,
   "statement.documents.searchHits": undefined,
