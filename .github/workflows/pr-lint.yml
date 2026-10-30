@@ -10,7 +10,7 @@ on:
     # rerun with "run-pr-lint". This metadata-only workflow reads the
     # title and must never check out or execute PR code, so it is safe
     # to run for forks without approval.
-    types: [opened, labeled]
+    types: [opened, edited, labeled]
 
 concurrency:
   # Keep manual reruns cancellable, but do not let unrelated label
@@ -27,10 +27,34 @@ permissions:
   pull-requests: write
 
 jobs:
+  pr-body-log-lines:
+    if: >-
+      github.event.action == 'opened'
+      || github.event.action == 'edited'
+      || github.event.label.name == 'run-pr-lint'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Checkout trusted workflow revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
+        with:
+          node-version: 24
+
+      - name: Reject tool log lines
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: node scripts/check-pr-body.ts
+
   pr-lint:
     if: >-
       github.event.pull_request.user.login != 'dependabot[bot]'
       && (github.event.action == 'opened'
+          || github.event.action == 'edited'
           || github.event.label.name == 'run-pr-lint')
     # Reusable workflow only consumes the auto-provided GITHUB_TOKEN.
     # Do not switch to `secrets: inherit` — that widens the blast radius
