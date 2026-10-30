@@ -926,6 +926,8 @@ export const assembleAtFindokDecision = (
     logger.error(AST_CONTENT_LOST, {
       parser: ADAPTER_KEYS.AT_FINDOK,
       caseNumber: item.gz,
+      language: LANGUAGE,
+      url: artifactUrl(item.pathPdf),
       codes: "TEXT_FIDELITY_MISMATCH",
       fidelity: parsed.textFidelity.status,
       missingChars: parsed.textFidelity.missingChars,

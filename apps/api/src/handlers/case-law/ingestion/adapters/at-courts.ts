@@ -1257,6 +1257,8 @@ export const assembleAtRisDecision = (
     logger.error(AST_CONTENT_LOST, {
       parser: source.key,
       caseNumber: data.caseNumber,
+      language: LANGUAGE,
+      url: data.sourceUrl,
       codes: "TEXT_FIDELITY_MISMATCH",
       fidelity: parsed.textFidelity.status,
       missingChars: parsed.textFidelity.missingChars,
