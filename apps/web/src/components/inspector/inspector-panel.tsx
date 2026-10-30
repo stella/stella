@@ -415,6 +415,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
   // and we avoid calling hooks inside the pdfTabs.map.
   const ribbonContextMenu = useTabContextMenu({
     tabId: activeTab?.id ?? "",
+    tabLabel: activeTab?.label ?? "",
     onClose: () => {
       if (activeTab) {
         handleCloseTab(activeTab.id);

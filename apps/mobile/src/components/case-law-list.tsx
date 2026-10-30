@@ -11,14 +11,14 @@ import {
 import { useLocale, useTranslations } from "use-intl";
 
 import { SEARCH_QUERY_MAX_LENGTH } from "@stll/api-contract/limits";
+import { Button } from "@stll/ui/button";
+import { Text } from "@stll/ui/text";
 
 import { DecisionRow } from "@/components/decision-row";
 import { EmptyCard, screenStyles } from "@/components/empty-state-screen";
 import { useHeaderSearch } from "@/components/header-search";
 import { PagingFooter, RetryButton } from "@/components/retry-button";
 import type { PagingState } from "@/components/retry-button";
-import { Button } from "@/components/ui/button";
-import { Text } from "@/components/ui/text";
 import { epochMilliseconds } from "@/connection/clock";
 import type { Load } from "@/state/api-request";
 import {
@@ -205,7 +205,6 @@ const DecisionTimeline = ({
               <Button
                 accessibilityState={{ selected: option === country }}
                 key={option}
-                label={countryLabel(option)}
                 onPress={() => {
                   if (option !== country) {
                     onCountry(option);
@@ -213,7 +212,9 @@ const DecisionTimeline = ({
                 }}
                 size="sm"
                 variant={option === country ? "secondary" : "ghost"}
-              />
+              >
+                {countryLabel(option)}
+              </Button>
             ))}
           </ScrollView>
           {query === "" ? <Text variant="section">{t("newest")}</Text> : null}
