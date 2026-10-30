@@ -211,7 +211,18 @@
     "packages/transactional": { "entry": ["emails/*.tsx"] },
     "packages/ui": {
       // Browser fixture CSS imports Tailwind; the Vite plugin consumes its peer.
-      "ignoreDependencies": ["tailwindcss"],
+      // The React Native renderers (src/components/*.native.tsx) import React
+      // Native, uniwind, react-native-svg and lucide-react-native as optional
+      // peers: the app that renders them installs them, and declaring them for
+      // development would pull the React Native graph into every install of
+      // this package (scripts/ci-scoped-install.test.ts).
+      "ignoreDependencies": [
+        "lucide-react-native",
+        "react-native",
+        "react-native-svg",
+        "tailwindcss",
+        "uniwind"
+      ],
       "entry": [
         "src/components/*.tsx",
         "src/hooks/*.ts",

@@ -20,6 +20,7 @@ import {
   notifyUserError,
   reportUserVisibleError,
 } from "@/lib/errors/user-toast";
+import { REPLAY_CAPABLE_ROUTES } from "@/lib/idempotency/replay-routes.gen";
 import type { SafeId } from "@/lib/safe-id";
 
 export type WebApiRoutes = WebRoutes["v1"];
@@ -71,6 +72,7 @@ export type {
 } from "@/generated/api-routes.gen";
 
 export const webApiClientOptions = {
+  requestReplayRoutes: REPLAY_CAPABLE_ROUTES,
   fetcher: createWebApiFetcher(fetchWithTimeout),
   async onRequest() {
     await waitForSimulatedApiDelay();
