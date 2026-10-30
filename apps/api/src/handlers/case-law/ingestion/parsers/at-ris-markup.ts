@@ -278,7 +278,7 @@ const holdsBlock = (node: Element): boolean =>
       (isTag(child) && specOf(child.name) === undefined && holdsBlock(child)),
   );
 
-const readBlocks = (
+const readRisBlocks = (
   nodes: readonly AnyNode[],
   reader: Reader,
   items: RisItem[],
@@ -300,7 +300,7 @@ const readBlocks = (
     if (spec === undefined) {
       reader.unknown.add(node.name);
       if (holdsBlock(node)) {
-        readBlocks(node.children, reader, items);
+        readRisBlocks(node.children, reader, items);
         continue;
       }
     }
@@ -310,7 +310,7 @@ const readBlocks = (
         break;
       }
       case "container": {
-        readBlocks(node.children, reader, items);
+        readRisBlocks(node.children, reader, items);
         break;
       }
       case "break": {
@@ -366,14 +366,13 @@ const readBlocks = (
 export const readRisContent = (content: Element): RisReading => {
   const reader: Reader = { unknown: new Set() };
   const items: RisItem[] = [];
-  readBlocks(content.children, reader, items);
+  readRisBlocks(content.children, reader, items);
   return { items, unknownElements: [...reader.unknown] };
 };
 
-const NON_SPACE = /[^\s\u00a0]/gu;
+const SPACE = /[\s\u00a0]/gu;
 
-const nonSpaceChars = (text: string): string =>
-  (text.match(NON_SPACE) ?? []).join("");
+const nonSpaceChars = (text: string): string => text.replaceAll(SPACE, "");
 
 const sourceNonSpace = (node: AnyNode): string => {
   if (isText(node)) {
