@@ -154,6 +154,7 @@ test.each(cases)(
         path.join(root, "bin/bun"),
         `#!/bin/bash
 if [[ "$1" == scripts/ci-generated-sources.ts && "$2" == prepare ]]; then touch prepared; exit "$PREPARE_EXIT"; fi
+if [[ "$1" == "$GITHUB_WORKSPACE/scripts/generate-tailwind-classes.ts" && "$2" == --write ]]; then touch tailwind_cache_generated; exit 0; fi
 if [[ "$1" == scripts/autofix-plan.ts && "$2" == run ]]; then cp changed.ts generated.html.txt; exit 0; fi
 if [[ "$2" == oxlint && ! -f prepared ]]; then exit 2; fi
 if [[ "$1" == scripts/typecheck-coverage.ts && "$2" == --autofix ]]; then touch compiler_checked; printf '%s\\n' "$@" > compiler_args; fi
@@ -188,6 +189,7 @@ exec '${process.execPath}' "$@"
         env: {
           ...process.env,
           RUNNER_TEMP: root,
+          GITHUB_WORKSPACE: root,
           GENERATOR_IDS: "fixture",
           PREPARE_EXIT: failure === "prepare" ? "1" : "0",
           PATH: `${path.join(root, "bin")}:${process.env["PATH"] ?? ""}`,
@@ -202,6 +204,9 @@ exec '${process.execPath}' "$@"
         ).toBe(0);
         expect(readFileSync(path.join(root, "changed.ts"), "utf-8")).toBe(
           source.replace('value["name"]', "value.name"),
+        );
+        expect(existsSync(path.join(root, "tailwind_cache_generated"))).toBe(
+          true,
         );
       } else if (failure === "unfixed") {
         expect(

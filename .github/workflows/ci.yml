@@ -2193,8 +2193,12 @@ jobs:
             packages/mcp-apps/src/shared/generated/reader-messages.json
             packages/mcp-apps/src/shared/generated/reader-inputs.json
             packages/mcp-apps/src/shared/generated/style.css
+            packages/mcp-apps/src/generated/runtime.js.txt
+            packages/mcp-apps/src/generated/runtime.css.txt
             packages/mcp-apps/src/generated/bundles.ts
             packages/mcp-apps/src/*/generated/app.html.txt
+            packages/mcp-apps/src/*/generated/app.js.txt
+            packages/mcp-apps/src/*/generated/app.css.txt
           )
           for output in "${outputs[@]}"; do
             test -s "$output" || { echo "::error::$output was not generated"; exit 1; }
