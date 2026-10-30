@@ -230,6 +230,17 @@ export const createResponseSizeSample = (
   };
 };
 
+const recordQueryCount = (
+  record: NetworkRecord,
+  headers: Readonly<Record<string, unknown>>,
+) => {
+  const header = Object.entries(headers).find(
+    ([name]) => name.toLowerCase() === DB_QUERIES_HEADER,
+  )?.[1];
+  record.dbQueryHeaderMissing = header === undefined;
+  record.dbQueries = header === undefined ? null : Number(header);
+};
+
 type ReconcileNetworkRecordsOptions = {
   records: readonly NetworkRecord[];
   requests: Iterable<Request>;
@@ -349,7 +360,11 @@ export const createNetworkCollector = (
         "Network.requestWillBeSent",
         ({ requestId, request, type, wallTime, redirectResponse }) => {
           if (redirectResponse !== undefined) {
-            byRequestId.get(requestId)?.responseSize.complete();
+            const previous = byRequestId.get(requestId);
+            if (previous !== undefined) {
+              recordQueryCount(previous, redirectResponse.headers);
+              previous.responseSize.complete();
+            }
             byRequestId.delete(requestId);
           }
           if (
@@ -381,13 +396,7 @@ export const createNetworkCollector = (
           if (record === undefined) {
             return;
           }
-          const header = Object.entries(response.headers).find(
-            ([name]) => name.toLowerCase() === DB_QUERIES_HEADER,
-          )?.[1];
-          record.dbQueryHeaderMissing = header === undefined;
-          if (header !== undefined) {
-            record.dbQueries = Number(header);
-          }
+          recordQueryCount(record, response.headers);
           if (
             type === "EventSource" ||
             type === "WebSocket" ||

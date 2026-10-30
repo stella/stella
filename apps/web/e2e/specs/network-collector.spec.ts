@@ -5,7 +5,7 @@ import type { ServerResponse } from "node:http";
 
 import { sleep } from "@stll/concurrency/sleep";
 
-import { createNetworkCollector } from "../helpers/network";
+import { createNetworkCollector, summarizeCapture } from "../helpers/network";
 
 test.use({
   storageState: { cookies: [], origins: [] },
@@ -18,9 +18,39 @@ test.use({
 const BODY_PREFIX = "first chunk; ";
 const BODY_SUFFIX = "last chunk";
 
-const startBodyServer = async (contentType = "text/plain") => {
+const startBodyServer = async ({
+  contentType = "text/plain",
+  port = 0,
+}: {
+  contentType?: string;
+  port?: number;
+} = {}) => {
   const pending = new Set<ServerResponse>();
   const server = createServer((request, response) => {
+    if (request.url === "/redirect-page") {
+      response.setHeader("content-type", "text/html");
+      response.end(
+        '<script>fetch("/redirect-one").then(response => response.text())</script>',
+      );
+      return;
+    }
+    if (request.url === "/redirect-one" || request.url === "/redirect-two") {
+      const first = request.url === "/redirect-one";
+      response.writeHead(first ? 302 : 307, {
+        location: first ? "/redirect-two" : "/redirect-final",
+        "x-db-queries": first ? "3" : "5",
+      });
+      response.end();
+      return;
+    }
+    if (request.url === "/redirect-final") {
+      response.writeHead(200, {
+        "x-db-queries": "7",
+        "content-type": "text/plain",
+      });
+      response.end("done");
+      return;
+    }
     if (request.url === "/iframe") {
       const address = server.address();
       if (address === null || typeof address === "string") {
@@ -52,8 +82,12 @@ const startBodyServer = async (contentType = "text/plain") => {
     );
     pending.add(response);
   });
-  await new Promise<void>((resolve) => {
-    server.listen(0, "127.0.0.1", resolve);
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(port, "127.0.0.1", () => {
+      server.off("error", reject);
+      resolve();
+    });
   });
   const address = server.address();
   if (address === null || typeof address === "string") {
@@ -61,6 +95,7 @@ const startBodyServer = async (contentType = "text/plain") => {
   }
   return {
     url: `http://127.0.0.1:${address.port}`,
+    port: address.port,
     finishBody: () => {
       for (const response of pending) {
         response.end(BODY_SUFFIX);
@@ -150,7 +185,7 @@ for (const contentType of ["text/event-stream", "text/plain"]) {
   test(`capture promptly excludes an unfinished ${contentType} response without waiting for its body`, async ({
     page,
   }) => {
-    const server = await startBodyServer(contentType);
+    const server = await startBodyServer({ contentType });
     const network = createNetworkCollector({
       apiOrigin: server.url,
       bodyCompletionTimeoutMs: 5000,
@@ -236,6 +271,55 @@ test("API requests in an out-of-process iframe remain explicitly unmeasured", as
       error:
         "CDP Network events were not observed; the request may belong to an out-of-process iframe",
     });
+  } finally {
+    await detach();
+    await server.close();
+  }
+});
+
+test("fixture setup rejects when its listening port is occupied", async () => {
+  const server = await startBodyServer();
+  try {
+    await expect(startBodyServer({ port: server.port })).rejects.toMatchObject({
+      code: "EADDRINUSE",
+    });
+  } finally {
+    await server.close();
+  }
+});
+
+test("redirect hops retain individual request counts and database query headers", async ({
+  page,
+}) => {
+  const server = await startBodyServer();
+  const network = createNetworkCollector({
+    apiOrigin: server.url,
+    responseSizeBudgetKeys: new Set([
+      "GET /redirect-one",
+      "GET /redirect-two",
+      "GET /redirect-final",
+    ]),
+  });
+  const detach = await network.trackPage(page);
+  try {
+    const finalResponse = page.waitForResponse(`${server.url}/redirect-final`);
+    await page.goto(`${server.url}/redirect-page`, {
+      waitUntil: "domcontentloaded",
+    });
+    await finalResponse;
+    const result = summarizeCapture(await network.capture());
+    expect(result.requestCounts).toEqual({
+      "GET /redirect-one": 1,
+      "GET /redirect-two": 1,
+      "GET /redirect-final": 1,
+    });
+    expect(result.dbQueries).toEqual({
+      "GET /redirect-one": 3,
+      "GET /redirect-two": 5,
+      "GET /redirect-final": 7,
+    });
+    expect(result.missingDbQueryCounts).toEqual({});
+    expect(result.responseSizeFailures).toEqual({});
   } finally {
     await detach();
     await server.close();
