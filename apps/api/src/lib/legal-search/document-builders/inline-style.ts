@@ -1,4 +1,3 @@
-// parser-output-unchanged: a new reader of an element's own style attribute; no parser calls it until it imports it, and the callers that do bump their versions.
 import type { Element } from "domhandler";
 
 /** What a property's declaration means, or undefined for a value CSS rejects. */
@@ -41,3 +40,59 @@ export const inlineStyleValue = <T>(
   }
   return winner === undefined ? undefined : { value: winner.value };
 };
+
+/** Whether the element's own weight requests bold emphasis. */
+export const inlineStyleIsBold = (element: Element): boolean =>
+  inlineStyleValue(element, (property, value) => {
+    if (property !== "font-weight") {
+      return undefined;
+    }
+    if (value === "bold" || value === "bolder") {
+      return { value: true };
+    }
+    if (value === "normal" || value === "lighter") {
+      return { value: false };
+    }
+    if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/u.test(value)) {
+      return undefined;
+    }
+    const weight = Number(value);
+    return weight >= 1 && weight <= 1000 ? { value: weight >= 600 } : undefined;
+  })?.value ?? false;
+
+/** Whether the element's own font style requests italic emphasis. */
+export const inlineStyleIsItalic = (element: Element): boolean =>
+  inlineStyleValue(element, (property, value) => {
+    if (property !== "font-style") {
+      return undefined;
+    }
+    if (value === "italic" || value === "oblique") {
+      return { value: true };
+    }
+    return value === "normal" ? { value: false } : undefined;
+  })?.value ?? false;
+
+/** Aspose's explicit horizontal-space markers. */
+export const inlineStyleIsAsposeSpacer = (element: Element): boolean =>
+  inlineStyleValue(element, (property, value) =>
+    property === "-aw-import" && value.length > 0
+      ? { value: value === "ignore" || value === "spaces" }
+      : undefined,
+  )?.value ?? false;
+
+/** Whether the element's own display is the inline-block keyword. */
+export const inlineStyleIsInlineBlock = (element: Element): boolean =>
+  inlineStyleValue(element, (property, value) =>
+    property === "display" && value.length > 0
+      ? { value: value === "inline-block" }
+      : undefined,
+  )?.value ?? false;
+
+/** Whether a nonempty declaration names this property, regardless of its value. */
+export const inlineStyleDeclaresProperty = (
+  element: Element,
+  propertyName: string,
+): boolean =>
+  inlineStyleValue(element, (property, value) =>
+    property === propertyName && value.length > 0 ? { value: true } : undefined,
+  )?.value ?? false;

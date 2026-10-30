@@ -42,6 +42,12 @@ import { hasInlineChildren } from "@stll/legal-ast/document-ast";
 // parser-output-unchanged: the inline-line helpers moved unchanged to their package owner so library parsers can import them.
 import { stripInlinePrefix } from "@stll/legal-ast/inline-line";
 
+import {
+  inlineStyleIsAsposeSpacer,
+  inlineStyleIsBold,
+  inlineStyleIsInlineBlock,
+  inlineStyleIsItalic,
+} from "@/api/lib/legal-search/document-builders/inline-style";
 // parser-output-unchanged: the visible-text helpers moved unchanged to visible-html-text.ts so AST validation can reuse them without importing the parser module.
 import {
   EXCLUDED_HTML_SELECTOR,
@@ -215,8 +221,6 @@ export const walkInlines = (
       }
 
       if (options.parseSpanStyle && tag === "span") {
-        const style = $child.attr("style") ?? "";
-
         // Aspose spacer spans carry horizontal space rather than words:
         // tab stops, alignment fills, and the gap between two
         // letter-spaced words. Emit that gap instead of dropping the
@@ -226,9 +230,8 @@ export const walkInlines = (
         // words inside these spans, so only whitespace-only spans become
         // a gap.
         if (
-          style.includes("-aw-import:ignore") ||
-          style.includes("-aw-import:spaces") ||
-          style.includes("display:inline-block")
+          inlineStyleIsAsposeSpacer(child) ||
+          inlineStyleIsInlineBlock(child)
         ) {
           const innerText = $child.text().trim();
           if (!innerText) {
@@ -237,8 +240,8 @@ export const walkInlines = (
           }
         }
 
-        const isBold = style.includes("font-weight:bold");
-        const isItalic = style.includes("font-style:italic");
+        const isBold = inlineStyleIsBold(child);
+        const isItalic = inlineStyleIsItalic(child);
         const children = walk($child, childAnon);
         if (children.length === 0) {
           return;

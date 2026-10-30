@@ -21,6 +21,7 @@ import { type AnyNode, isTag } from "domhandler";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Block, Inline } from "@stll/legal-ast/document-ast";
 
+import { inlineStyleDeclaresProperty } from "@/api/lib/legal-search/document-builders/inline-style";
 import { markupResidueIn } from "@/api/lib/legal-search/parsers/markup-residue";
 import type { MarkupResidue } from "@/api/lib/legal-search/parsers/markup-residue";
 import { logger } from "@/api/lib/observability/logger";
@@ -473,7 +474,11 @@ export const validateAst = (
     }
   } else {
     const $ = options?.document ?? cheerio.load(source);
-    $("div[style*='-aw-headerfooter-type']").remove();
+    $("div")
+      .filter((_, el) =>
+        inlineStyleDeclaresProperty(el, "-aw-headerfooter-type"),
+      )
+      .remove();
     // <br> is a word boundary in the rendered document, but cheerio's
     // .text() drops it outright, gluing adjacent words ("wraz<br/>z" →
     // "wrazz") and producing phantom MISSING_WORDS reports against a
