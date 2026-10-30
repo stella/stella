@@ -13,14 +13,6 @@ import {
 import type { ActivityManualAssignment } from "./activity-types";
 
 type ActivityRange = { start: string; end: string };
-type CanAssignOptions = {
-  editable: boolean;
-  timeBillingEnabled: boolean;
-};
-
-export const canAssign = ({ editable, timeBillingEnabled }: CanAssignOptions) =>
-  editable && timeBillingEnabled;
-
 export type MatchConfidence = "strong" | "likely" | "manual" | "unmatched";
 export type MatchedSegment = TimedSegment & {
   matter: DesktopTimeEntryMatterCandidate | null;

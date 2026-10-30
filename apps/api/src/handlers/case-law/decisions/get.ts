@@ -47,6 +47,7 @@ import {
   readWholeDecisionHeadnote,
 } from "@/api/lib/case-law/decision-text";
 import { decisionPayloadKey } from "@/api/lib/case-law/decision-versioned-payload";
+import { decisionWorkOf } from "@/api/lib/case-law/decision-work";
 import { listPublicDecisionLanguageAlternates } from "@/api/lib/case-law/language-alternates";
 import { loadPublicCourtWeightsWithin } from "@/api/lib/case-law/public-case-law-config";
 import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
@@ -352,6 +353,7 @@ export const decisionRecordQuery = (
       languageGroupKey: publishedCaseLawDecisions.languageGroupKey,
       decisionDate: publishedCaseLawDecisions.decisionDate,
       decisionType: publishedCaseLawDecisions.decisionType,
+      extractionWarnings: publishedCaseLawDecisions.extractionWarnings,
       citationCount: publishedCaseLawDecisions.citationCount,
       pgAstPresent: sql<boolean>`${publishedCaseLawDecisions.documentAst} IS NOT NULL`,
       sourceUrl: publishedCaseLawDecisions.sourceUrl,
@@ -464,6 +466,8 @@ export const readDecisionHandler = definePublicLawSharedQuery(
     const { metadata, textFields } = readDecisionTextMetadata(
       decision.metadata,
     );
+    // Both citation streams list the citations of every language version.
+    const work = decisionWorkOf(subject);
 
     const [
       courtWeights,
@@ -487,7 +491,7 @@ export const readDecisionHandler = definePublicLawSharedQuery(
         : listOutgoingDecisionCitations({
             tx,
             cursor: citationPageCursor(citationCursors.from),
-            decisionId,
+            work: await work,
             countries: subject.countries,
           }),
       citationCursors.to.status === CITATION_STREAM_CURSOR_STATUS.EXHAUSTED
@@ -495,7 +499,7 @@ export const readDecisionHandler = definePublicLawSharedQuery(
         : listIncomingDecisionCitations({
             tx,
             cursor: citationPageCursor(citationCursors.to),
-            decisionId,
+            work: await work,
             countries: subject.countries,
           }),
       listCaseFileDocuments({ tx, decision, cursor: caseFileCursor }),
@@ -627,6 +631,7 @@ export const readDecisionHandler = definePublicLawSharedQuery(
       decisionType: decision.decisionType,
       citationCount: decision.citationCount,
       documentAst,
+      extractionWarnings: decision.extractionWarnings,
       sections,
       projectionDigest:
         decision.redactedAt === null ? astRead.projectionDigest : null,
