@@ -65,7 +65,11 @@ import type { ComposerModelsMenuProps } from "@/components/chat/chat-model-optio
 import { ComposerControlSlot } from "@/components/chat/composer-control-slot";
 import { ComposerPlusMenu } from "@/components/chat/composer-plus-menu";
 import type { ComposerContextMenuProps } from "@/components/chat/composer-plus-menu";
-import { DockedChatSurface } from "@/components/chat/docked-chat-stack";
+import {
+  DOCKED_CHAT_COLUMN_SLOT,
+  DockedChatSurface,
+  isPressOutsideDockedChat,
+} from "@/components/chat/docked-chat-stack";
 import {
   DOC_FLOAT_SURFACE_CLASS,
   DockedComposer,
@@ -73,6 +77,7 @@ import {
 } from "@/components/chat/docked-composer";
 import { PromptEditorContent } from "@/components/prompt-editor";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePulse } from "@/hooks/use-pulse";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
@@ -302,27 +307,48 @@ type PromptBarProps = {
  * Collapse affordance rendered by `ChatThreadCard` in its top end
  * corner, so the composer bar never carries a thread-visibility
  * control. The card reopens automatically on the next send.
+ *
+ * `cue` lights the control up when a press lands outside the open card,
+ * so a reader who clicks back into the document sees where the card
+ * closes. The flash is a tint fading in and out twice; with reduced
+ * motion it holds still for the same time instead.
  */
 const ThreadCardCollapseButton = ({
+  cue,
   onCollapse,
 }: {
+  cue: { seq: number; shown: boolean };
   onCollapse: () => void;
 }) => {
   const t = useTranslations();
   return (
-    <Button
-      aria-label={t("chat.hideThread")}
-      className="text-muted-foreground hover:text-foreground rounded-full"
-      onClick={onCollapse}
-      size="icon-xs"
-      tooltip={t("chat.hideThread")}
-      type="button"
-      variant="ghost"
-    >
-      <ChevronDownIcon aria-hidden="true" className="size-3.5" />
-    </Button>
+    <span className="relative inline-flex rounded-full">
+      <Button
+        aria-label={t("chat.hideThread")}
+        className="text-muted-foreground hover:text-foreground rounded-full"
+        onClick={onCollapse}
+        size="icon-xs"
+        tooltip={t("chat.hideThread")}
+        type="button"
+        variant="ghost"
+      >
+        <ChevronDownIcon aria-hidden="true" className="size-3.5" />
+      </Button>
+      {cue.shown && (
+        // Keyed on the press, so a second press restarts the flash.
+        <span
+          aria-hidden
+          className="bg-primary/20 animate-attention-flash-twice pointer-events-none absolute inset-0 rounded-full opacity-0 motion-reduce:animate-none motion-reduce:opacity-100"
+          data-collapse-cue=""
+          key={cue.seq}
+        />
+      )}
+    </span>
   );
 };
+
+// `animate-attention-flash-twice`: two 700ms flashes.
+const COLLAPSE_CUE_MS = 1400;
 
 type ChatThreadCardProps = {
   /** Scroll container ref for the transcript inside the card. */
@@ -353,6 +379,41 @@ export const ChatThreadCard = ({
   children,
 }: ChatThreadCardProps) => {
   const t = useTranslations();
+  // A press on the page behind the open card (the document being read)
+  // does not close it, which would lose the conversation mid-read; it
+  // points at the control that does.
+  const [collapseCueSeq, setCollapseCueSeq] = useState(0);
+  const { isPulsing: collapseCueShown, pulse: pulseCollapseCue } =
+    usePulse(COLLAPSE_CUE_MS);
+  const cueCollapse = useLatestCallback(() => {
+    setCollapseCueSeq((seq) => seq + 1);
+    pulseCollapseCue();
+  });
+  const watchOutsidePresses = useCallback(
+    (card: HTMLDivElement | null) => {
+      if (card === null) {
+        return undefined;
+      }
+      const column =
+        card.closest(`[data-slot="${DOCKED_CHAT_COLUMN_SLOT}"]`) ?? card;
+      const onPointerDown = (event: PointerEvent) => {
+        if (
+          event.button === 0 &&
+          isPressOutsideDockedChat({ column, target: event.target })
+        ) {
+          cueCollapse();
+        }
+      };
+      // Capture phase: the reader handles its own presses (selection,
+      // links) and may stop them before they bubble to the document.
+      const owner = card.ownerDocument;
+      owner.addEventListener("pointerdown", onPointerDown, true);
+      return () => {
+        owner.removeEventListener("pointerdown", onPointerDown, true);
+      };
+    },
+    [cueCollapse],
+  );
   return (
     <DockedChatSurface slot="thread">
       <div
@@ -366,6 +427,7 @@ export const ChatThreadCard = ({
           "shadow-[0_1px_2px_rgb(0_0_0/0.06),0_20px_64px_rgb(0_0_0/0.18)]",
           "animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-1 motion-reduce:animate-none",
         )}
+        ref={watchOutsidePresses}
         role="dialog"
       >
         {/* The header is its own opaque row with a hairline under it, so the
@@ -377,7 +439,10 @@ export const ChatThreadCard = ({
               {titleSlot}
             </div>
           )}
-          <ThreadCardCollapseButton onCollapse={onCollapse} />
+          <ThreadCardCollapseButton
+            cue={{ seq: collapseCueSeq, shown: collapseCueShown }}
+            onCollapse={onCollapse}
+          />
         </div>
         {/* Plain scroll container — bypasses the legacy Conversation's
           `size-full` chain, which only resolves when the parent has an

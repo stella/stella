@@ -88,7 +88,7 @@ test.each(["when-used", "always"] as const)(
           usesFeature,
           projectInputSchema: (schemas) => schemas,
         },
-      },
+      } satisfies HandlerConfig,
       async function* () {
         return Result.ok({ success: true });
       },

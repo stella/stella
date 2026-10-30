@@ -29,6 +29,7 @@ import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
+import { createOrganizationScopedTestDb } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -109,6 +110,10 @@ const createFor = async (body: CreateCtx["body"]) => {
       request,
       route: "/v1/time-entries/internal" satisfies ApiRoutePath,
       safeDb: createSafeDb(db, [], ids.orgA, ids.userA1),
+      scopedDb: createOrganizationScopedTestDb(db, {
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+      }),
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userA1 },
       memberRole: sessionMemberRole("member"),
