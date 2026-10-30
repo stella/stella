@@ -40,6 +40,10 @@ export const READ_BUDGETS = {
     pages: 150,
     reason:
       "A governed coverage refresh reads the source policy, computes the bounded coverage snapshot, and writes its summary and audit record. The production-shape corpus fixture measures 142 pages; 150 pages leaves headroom for production-height indexes.",
+    overBudget: {
+      reason:
+        "measured 142-173 pages across runs of the corpus fixture; materialized top courts and batched facet reads reduce it; maintained per-source counts bring it under",
+    },
   },
   "statement.caseLaw.globalSearchHits": {
     surface: "statement",

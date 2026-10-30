@@ -46,6 +46,41 @@ type PgFtsBrowseFacetsBatchOptions = {
   limit: number;
 };
 
+const facetsByCountry = (
+  countries: readonly string[],
+  rows: readonly unknown[],
+): ReadonlyMap<string, LegalBrowseFacets> => {
+  const result = new Map<string, LegalBrowseFacets>();
+  for (const country of countries) {
+    result.set(country, { country: [], court: [], year: [] });
+  }
+  for (const row of rows) {
+    if (
+      !isRecord(row) ||
+      typeof row["country"] !== "string" ||
+      typeof row["kind"] !== "string" ||
+      typeof row["value"] !== "string" ||
+      typeof row["total"] !== "number"
+    ) {
+      panic("Invalid case-law browse facet row");
+    }
+    const facets = result.get(row["country"]);
+    if (facets === undefined) {
+      panic("Case-law browse facet returned an unrequested country");
+    }
+    if (
+      row["kind"] === "country" ||
+      row["kind"] === "court" ||
+      row["kind"] === "year"
+    ) {
+      facets[row["kind"]].push({ value: row["value"], count: row["total"] });
+    } else {
+      panic("Invalid case-law browse facet kind");
+    }
+  }
+  return result;
+};
+
 export const readPgFtsBrowseFacetsBatch = async (
   tx: CaseLawPublicReadTransaction,
   { countries, excludedSourceIds, limit }: PgFtsBrowseFacetsBatchOptions,
@@ -56,18 +91,66 @@ export const readPgFtsBrowseFacetsBatch = async (
     .orderBy(caseLawBrowseFacetCounts.kind)
     .limit(1);
   if (snapshot.length === 0) {
-    const readCountry = async (
-      country: string,
-    ): Promise<[string, LegalBrowseFacets]> => [
-      country,
-      await readLivePgFtsBrowseFacets(tx, {
-        jurisdiction: country,
-        excludedSourceIds,
-        limit,
-      }),
-    ];
-    const entries = await Promise.all(countries.map(readCountry));
-    return new Map(entries);
+    const liveSourceExclusion =
+      excludedSourceIds.length === 0
+        ? sql`true`
+        : sql`decisions.source_id NOT IN (${sql.join(
+            excludedSourceIds.map((sourceId) => sql`${sourceId}`),
+            sql`, `,
+          )})`;
+    // sql-perf-allow: bounded by the indexed published corpus during fresh-install fallback before the first materialized snapshot
+    const rows = executedRows(
+      await tx.execute(sql`
+        WITH totals AS (
+          SELECT decisions.country, 'country' AS kind,
+            decisions.country AS value, count(*)::int AS total
+          FROM ${publishedCaseLawDecisions} AS decisions
+          INNER JOIN ${caseLawSources} ON ${caseLawSources.id} = decisions.source_id
+          WHERE decisions.country = ANY(ARRAY[${sql.join(
+            countries.map((country) => sql`${country}`),
+            sql`, `,
+          )}]::text[])
+            AND ${redistributableCaseLawSource}
+            AND ${liveSourceExclusion}
+          GROUP BY decisions.country
+          UNION ALL
+          SELECT decisions.country, 'court', decisions.court, count(*)::int
+          FROM ${publishedCaseLawDecisions} AS decisions
+          INNER JOIN ${caseLawSources} ON ${caseLawSources.id} = decisions.source_id
+          WHERE decisions.country = ANY(ARRAY[${sql.join(
+            countries.map((country) => sql`${country}`),
+            sql`, `,
+          )}]::text[])
+            AND decisions.court IS NOT NULL
+            AND ${redistributableCaseLawSource}
+            AND ${liveSourceExclusion}
+          GROUP BY decisions.country, decisions.court
+          UNION ALL
+          SELECT decisions.country, 'year',
+            to_char(decisions.decision_date, 'YYYY'), count(*)::int
+          FROM ${publishedCaseLawDecisions} AS decisions
+          INNER JOIN ${caseLawSources} ON ${caseLawSources.id} = decisions.source_id
+          WHERE decisions.country = ANY(ARRAY[${sql.join(
+            countries.map((country) => sql`${country}`),
+            sql`, `,
+          )}]::text[])
+            AND decisions.decision_date IS NOT NULL
+            AND ${redistributableCaseLawSource}
+            AND ${liveSourceExclusion}
+          GROUP BY decisions.country, to_char(decisions.decision_date, 'YYYY')
+        ), ranked AS (
+          SELECT *, row_number() OVER (
+            PARTITION BY country, kind
+            ORDER BY CASE WHEN kind = 'year' THEN 0 ELSE total END DESC, value DESC
+          ) AS position
+          FROM totals
+        )
+        SELECT country, kind, value, total FROM ranked
+        WHERE position <= ${limit}
+        ORDER BY country, kind, position
+      `),
+    );
+    return facetsByCountry(countries, rows);
   }
 
   const sourceExclusion =
@@ -104,37 +187,7 @@ export const readPgFtsBrowseFacetsBatch = async (
     ORDER BY country, kind, position
   `),
   );
-  const result = new Map<string, LegalBrowseFacets>();
-  for (const country of countries) {
-    result.set(country, { country: [], court: [], year: [] });
-  }
-  for (const row of rows) {
-    if (
-      !isRecord(row) ||
-      typeof row["country"] !== "string" ||
-      typeof row["kind"] !== "string" ||
-      typeof row["value"] !== "string" ||
-      typeof row["total"] !== "number"
-    ) {
-      panic("Invalid materialized case-law browse facet row");
-    }
-    const facets = result.get(row["country"]);
-    if (facets === undefined) {
-      panic(
-        "Materialized case-law browse facet returned an unrequested country",
-      );
-    }
-    if (
-      row["kind"] === "country" ||
-      row["kind"] === "court" ||
-      row["kind"] === "year"
-    ) {
-      facets[row["kind"]].push({ value: row["value"], count: row["total"] });
-    } else {
-      panic("Invalid materialized case-law browse facet kind");
-    }
-  }
-  return result;
+  return facetsByCountry(countries, rows);
 };
 
 /** Serve fresh installs before the first scheduled snapshot refresh. */
@@ -196,6 +249,7 @@ const readLivePgFtsBrowseFacets = async (
       eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
     )
     .where(and(isNotNull(publishedCaseLawDecisions.decisionDate), ...scope))
+    // sql-perf-allow: bounded by the indexed published corpus during fresh-install fallback before the first materialized snapshot
     .groupBy(decisionYear)
     .orderBy(desc(decisionYear))
     .limit(query.limit);
