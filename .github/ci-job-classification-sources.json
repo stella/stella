@@ -48,7 +48,7 @@
       ".github/workflows/label-sync.yml": "# Reusable workflow: apply labels.yml to the calling repository.\n#\n# A repo opts in with a thin caller workflow. Each run uses that repo's own\n# GITHUB_TOKEN, so no credential is stored anywhere and nothing can write\n# outside the repository that invoked it.\n#\n# The manifest is read from stella/.github, which is public, so fetching it\n# needs no authentication.\n\nname: Label Sync\n\non:\n  workflow_call:\n    inputs:\n      mode:\n        description: plan, apply, or apply-with-prune\n        type: string\n        default: plan\n  workflow_dispatch:\n    inputs:\n      mode:\n        description: What the run is allowed to do\n        type: choice\n        default: plan\n        options:\n          - plan\n          - apply\n          - apply-with-prune\n\njobs:\n  sync:\n    runs-on: ubuntu-latest\n    timeout-minutes: 10\n    permissions:\n      contents: read\n      issues: write\n\n    steps:\n      - name: Check out the label manifest\n        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6\n        with:\n          repository: ${{ github.repository_owner }}/.github\n          sparse-checkout: |\n            labels.yml\n            labels/\n            scripts/sync-labels.sh\n          sparse-checkout-cone-mode: false\n\n      - name: Sync labels\n        env:\n          GH_TOKEN: ${{ github.token }}\n          MODE: ${{ inputs.mode || 'plan' }}\n          TARGET: ${{ github.repository }}\n        run: bash scripts/sync-labels.sh \"$MODE\" \"$TARGET\" | tee \"$GITHUB_STEP_SUMMARY\"\n"
     }
   },
-  "supplier7": {
+  "supplier8": {
     "origin": {
       "type": "git",
       "owner": "stella",
