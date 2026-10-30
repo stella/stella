@@ -11,6 +11,6 @@ export default {
     kind: "custom-rule",
     rule: "apps/api/src/db/function-dependent-index-reindex.postgres.test.ts",
     reason:
-      "The catalog-backed guard requires a registered repair for each new indexed immutable function replacement.",
+      "The catalog-backed guard requires a registered repair for each indexed immutable function replacement from the declared revision.",
   },
 } as const satisfies OwnershipEntry;

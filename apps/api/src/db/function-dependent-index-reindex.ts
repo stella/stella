@@ -10,6 +10,9 @@ import type {
   OnlineRepair,
 } from "./online-migration-connection";
 
+// Earlier replacements were audited on 2026-10-30; one index rebuild is handled separately.
+export const FUNCTION_REPLACEMENT_GUARD_FROM_REVISION = "20261029175101";
+
 const dependentIndexSchema = v.object({
   name: v.string(),
   tableName: v.string(),

@@ -1,7 +1,7 @@
 import { panic, Result } from "better-result";
 import type { SQL } from "bun";
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
@@ -19,6 +19,7 @@ import { withIsolatedPostgresCluster } from "../tests/isolated-postgres-cluster"
 import {
   createFunctionDependentIndexReindex,
   FUNCTION_DEPENDENT_INDEX_REINDEXES,
+  FUNCTION_REPLACEMENT_GUARD_FROM_REVISION,
   readFunctionDependentIndexes,
 } from "./function-dependent-index-reindex";
 import { createUngatedTableGateForTests } from "./online-ddl";
@@ -27,7 +28,7 @@ import type { OnlineMigrationConnection } from "./online-migration-connection";
 import { ONLINE_MIGRATION_REPAIRS } from "./online-migrations";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
-const revision = "20261030000000_function_reindex_fixture";
+const revision = `${FUNCTION_REPLACEMENT_GUARD_FROM_REVISION}_function_reindex_fixture`;
 const signature = "public.function_reindex_fixture(integer)";
 const definition = `CREATE OR REPLACE FUNCTION public.function_reindex_fixture(value integer)
 RETURNS integer LANGUAGE sql IMMUTABLE AS $$ SELECT value + 1 $$;`;
@@ -176,6 +177,11 @@ const missingReplacementRepairs = async ({
   }
   const missing: string[] = [];
   for (const migration of migrations) {
+    if (
+      migration.revision.slice(0, 14) < FUNCTION_REPLACEMENT_GUARD_FROM_REVISION
+    ) {
+      continue;
+    }
     for (const statement of parseMigrationStatements(migration.sql)) {
       const tokens = migrationStatementTokens(statement);
       if (
@@ -410,6 +416,15 @@ describe.skipIf(!enabled)("immutable function dependent-index rebuilds", () => {
         migrations,
         repairs: [],
       });
+      const priorRevision = `${(BigInt(FUNCTION_REPLACEMENT_GUARD_FROM_REVISION) - 1n).toString()}_prior_fixture`;
+      expect(
+        await missingReplacementRepairs({
+          connection,
+          migrations: [{ revision: priorRevision, sql: definition }],
+          repairs: [],
+        }),
+      ).toEqual([]);
+
       expect(missing).toHaveLength(1);
       expect(missing.at(0)).toContain(revision);
       const repair = createFunctionDependentIndexReindex({
@@ -470,33 +485,18 @@ describe.skipIf(!enabled)("immutable function dependent-index rebuilds", () => {
     });
   }, 30_000);
 
-  test("new immutable replacements with catalog-dependent indexes have registered rebuilds", async () => {
-    const root = path.resolve(import.meta.dir, "../../../..");
-    const base = process.env["CI_COMPARISON_BASE"] ?? "origin/main";
-    const diff = Bun.spawnSync(
-      [
-        "git",
-        "diff",
-        "--name-only",
-        "--diff-filter=AM",
-        `${base}...HEAD`,
-        "--",
-        "apps/api/drizzle",
-      ],
-      { cwd: root },
-    );
-    if (diff.exitCode !== 0) {
-      return panic(
-        `Cannot enumerate replacement migrations: ${new TextDecoder().decode(diff.stderr)}`,
-      );
-    }
-    const migrations = new TextDecoder()
-      .decode(diff.stdout)
-      .split("\n")
-      .filter((file) => file.endsWith("/migration.sql"))
-      .map((file) => ({
-        revision: path.basename(path.dirname(file)),
-        sql: readFileSync(path.join(root, file), "utf-8"),
+  test("immutable replacements from the cutover revision have registered rebuilds", async () => {
+    const root = path.resolve(import.meta.dir, "../../drizzle");
+    const migrations = readdirSync(root)
+      .filter(
+        (directory) =>
+          /^\d{14}_/u.test(directory) &&
+          directory.slice(0, 14) >= FUNCTION_REPLACEMENT_GUARD_FROM_REVISION,
+      )
+      .toSorted()
+      .map((directory) => ({
+        revision: directory,
+        sql: readFileSync(path.join(root, directory, "migration.sql"), "utf-8"),
       }));
     if (migrations.length === 0) {
       return;
