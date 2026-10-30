@@ -7,7 +7,7 @@ import { deferred } from "@stll/test-kit";
 
 import type { OnlineMigrationConnection } from "@/api/db/online-migration-connection";
 import {
-  legislationWorks,
+  legislationWorkNames,
   schedulerJobRuns,
   schedulerJobs,
 } from "@/api/db/schema";
@@ -23,7 +23,7 @@ import type { SchedulerTask } from "./types";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
-const tableName = getTableName(legislationWorks);
+const tableName = getTableName(legislationWorkNames);
 
 describe.skipIf(!enabled)(
   "scheduler task table lease settlement (postgres)",

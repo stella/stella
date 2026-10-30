@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import type { ReservedSQL } from "bun";
 import { describe, expect, test } from "bun:test";
 import { getTableName } from "drizzle-orm";
@@ -6,14 +7,13 @@ import { fileURLToPath } from "node:url";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
-import { createSafeId } from "../lib/branded-types";
 import {
   type GatedTestClientScope,
   withGatedTestClients,
 } from "../tests/gated-test-database";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
 import { onlineMigrationParams } from "./online-migration-connection";
-import { caseLawDecisions, legislationWorks } from "./schema";
+import { caseLawDecisions, legislationWorkNames } from "./schema";
 import {
   acquireJobTableLeases,
   acquireMigrationTableLeases,
@@ -30,7 +30,7 @@ const migrationsFolder = fileURLToPath(
   new URL("../../drizzle", import.meta.url),
 );
 const requestedTable = getTableName(caseLawDecisions);
-const otherTable = getTableName(legislationWorks);
+const otherTable = getTableName(legislationWorkNames);
 
 const adapt = (connection: ReservedSQL): OnlineMigrationConnection => ({
   execute: async (query, params = []) => {
@@ -63,16 +63,11 @@ const executor = (connection: ReservedSQL) => ({
 const claim = async (
   connection: ReservedSQL,
   holderId: string,
-  tables = [requestedTable],
+  tables: readonly string[] = [requestedTable],
 ) => {
   await connection.unsafe("BEGIN");
   try {
     const acquired = await acquireJobTableLeases({
-      execution: {
-        token: holderId,
-        jobId: holderId,
-        runId: createSafeId<"schedulerJobRun">(),
-      },
       tx: executor(connection),
       holderId,
       tables,
@@ -163,11 +158,14 @@ describe.skipIf(!enabled)("Postgres table lease queue", () => {
           [jobId],
         );
         await renewJobTableLeases(executor(connection), jobId, 60_000);
-        const [{ expired }] = await connection.unsafe<{ expired: boolean }[]>(
+        const expiredRows = await connection.unsafe<{ expired: boolean }[]>(
           "SELECT expires_at <= clock_timestamp() AS expired FROM scheduler_table_leases WHERE holder_id = $1",
           [jobId],
         );
-        expect(expired).toBe(true);
+        expect(expiredRows).toHaveLength(1);
+        const expiredRow =
+          expiredRows.at(0) ?? panic("Missing expired job lease");
+        expect(expiredRow.expired).toBe(true);
         const held = await acquireMigrationTableLeases({
           connection: adapt(connection),
           tables: [requestedTable],

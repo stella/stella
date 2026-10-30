@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, getTableName } from "drizzle-orm";
 
@@ -6,7 +7,7 @@ import { deferred } from "@stll/test-kit";
 import type { OnlineMigrationConnection } from "@/api/db/online-migration-connection";
 import {
   caseLawDecisions,
-  legislationWorks,
+  legislationWorkNames,
   schedulerJobRuns,
   schedulerJobs,
 } from "@/api/db/schema";
@@ -22,7 +23,7 @@ import type { SchedulerTask } from "./types";
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const requestedTable = getTableName(caseLawDecisions);
-const unrelatedTable = getTableName(legislationWorks);
+const unrelatedTable = getTableName(legislationWorkNames);
 
 describe.skipIf(!enabled)("scheduler table lease admission (postgres)", () => {
   test("every scheduler declaration names a migrated public table", async () => {
@@ -35,7 +36,7 @@ describe.skipIf(!enabled)("scheduler table lease admission (postgres)", () => {
           ...tables.reads,
           ...tables.writes,
         ]),
-        ...REGISTERED_SCHEDULER_TASK_NAMES.flatMap((task) =>
+        ...[...REGISTERED_SCHEDULER_TASK_NAMES].flatMap((task) =>
           tablesForSchedulerTask(task),
         ),
       ]),
@@ -296,7 +297,10 @@ describe.skipIf(!enabled)("scheduler table lease admission (postgres)", () => {
             "SELECT granted_at FROM scheduler_table_leases WHERE holder_kind = 'migration' AND holder_id = $1 AND table_name = $2",
             [prefix, infrastructureTable],
           );
-          expect(pending).toEqual([{ granted_at: null }]);
+          expect(pending).toHaveLength(1);
+          const request =
+            pending.at(0) ?? panic("Missing pending migration request");
+          expect(request.granted_at).toBeNull();
           await db.insert(schedulerJobs).values({
             id: laterId,
             description: "execution waiting for infrastructure migration",
