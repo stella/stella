@@ -291,3 +291,8 @@ export const writeThreadArtefactTitle = async ({
   });
   return true;
 };
+
+/** Preserve the provenance column when a reader rebuilds a complete thread row. */
+export const projectThreadArtefactProvenance = <const Value>(value: Value) => ({
+  generationProvenance: value,
+});
