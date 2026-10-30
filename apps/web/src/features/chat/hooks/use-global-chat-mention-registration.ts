@@ -21,7 +21,6 @@ import type {
 import { useMentionProviders } from "@/components/chat-mention-providers";
 import { buildSourceMentionOptions } from "@/features/chat/chat-source-mentions";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { usePublicLawPreviewEnabled } from "@/hooks/use-public-law-preview";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useI18nStore } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
@@ -38,8 +37,9 @@ import {
 import {
   PublicLawUnavailableError,
   toPublicLawError,
-  unwrapPublicLawEden,
+  unwrapPublicLawResponse,
 } from "@/lib/public-law-api";
+import { isPublicLawEnabled } from "@/lib/public-law-launch";
 import { toSafeId } from "@/lib/safe-id";
 import {
   isPublicStatuteCountry,
@@ -93,12 +93,15 @@ const searchCaseLawMentions = async ({
     // not a defect to report on every keystroke; the picker simply has no
     // decisions to offer.
     if (!PublicLawUnavailableError.is(error)) {
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "searchCaseLawMentions:failure",
+        scope: { type: "handler", handlerId: "searchCaseLawMentions:failure" },
+      });
     }
     return [];
   }
 
-  const data = unwrapPublicLawEden(response, "searchPublicCaseLawMentions");
+  const data = unwrapPublicLawResponse(response, "searchPublicCaseLawMentions");
 
   return data.hits.map((hit) => ({
     resource: resourceRef({
@@ -128,7 +131,7 @@ const corpusLabelFor =
 type LoadSourceMentionsOptions = {
   corpusLabel: (scope: ChatCorpusScope) => string;
   organizationId: string;
-  publicLawPreviewEnabled: boolean;
+  publicLawEnabled: boolean;
   queryClient: QueryClient;
   userId: string;
 };
@@ -142,7 +145,7 @@ type LoadSourceMentionsOptions = {
 const loadSourceMentions = async ({
   corpusLabel,
   organizationId,
-  publicLawPreviewEnabled,
+  publicLawEnabled,
   queryClient,
   userId,
 }: LoadSourceMentionsOptions): Promise<ChatMentionOption[]> => {
@@ -156,17 +159,21 @@ const loadSourceMentions = async ({
     ),
   ]);
   if (Result.isError(catalog)) {
-    getAnalytics().captureError(catalog.error);
+    getAnalytics().captureError(catalog.error, {
+      fingerprintKey: "loadSourceMentions:catalog",
+      scope: { type: "handler", handlerId: "loadSourceMentions:catalog" },
+    });
   }
   if (Result.isError(connections)) {
-    getAnalytics().captureError(connections.error);
+    getAnalytics().captureError(connections.error, {
+      fingerprintKey: "loadSourceMentions:connections",
+      scope: { type: "handler", handlerId: "loadSourceMentions:connections" },
+    });
   }
   const connectorCatalog = Result.isOk(catalog) ? catalog.value : null;
   return buildSourceMentionOptions({
-    caseLawCountries: publicLawPreviewEnabled ? CASE_LAW_SOURCE_COUNTRIES : [],
-    legislationCountries: publicLawPreviewEnabled
-      ? LEGISLATION_SOURCE_COUNTRIES
-      : [],
+    caseLawCountries: publicLawEnabled ? CASE_LAW_SOURCE_COUNTRIES : [],
+    legislationCountries: publicLawEnabled ? LEGISLATION_SOURCE_COUNTRIES : [],
     corpusLabel,
     catalog: connectorCatalog,
     connections: Result.isOk(connections) ? connections.value.connections : [],
@@ -176,7 +183,7 @@ const loadSourceMentions = async ({
 export const useGlobalChatMentionRegistration = () => {
   const { registerExtension } = useChatEditorExtensions();
   const mentionProviders = useMentionProviders();
-  const publicLawPreviewEnabled = usePublicLawPreviewEnabled();
+  const publicLawEnabled = isPublicLawEnabled();
   const locale = useI18nStore((state) => state.loadedLang);
   const country = defaultCaseLawCountryForLocale(locale);
   const queryClient = useQueryClient();
@@ -198,7 +205,7 @@ export const useGlobalChatMentionRegistration = () => {
               loadSourceMentions({
                 corpusLabel: corpusLabelFor(tCorpus, format),
                 organizationId: activeOrganizationId,
-                publicLawPreviewEnabled,
+                publicLawEnabled,
                 queryClient,
                 userId,
               }),
@@ -206,7 +213,7 @@ export const useGlobalChatMentionRegistration = () => {
             return [...contextItems, ...sourceItems];
           },
           searchItems:
-            publicLawPreviewEnabled && country !== null
+            publicLawEnabled && country !== null
               ? async (query) => await searchCaseLawMentions({ country, query })
               : undefined,
         },
@@ -221,7 +228,7 @@ export const useGlobalChatMentionRegistration = () => {
     country,
     format,
     mentionProviders,
-    publicLawPreviewEnabled,
+    publicLawEnabled,
     queryClient,
     registerExtension,
     tCorpus,

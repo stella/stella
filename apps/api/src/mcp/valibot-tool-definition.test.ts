@@ -310,6 +310,7 @@ describe("Valibot-backed MCP tool definitions", () => {
     const definition = defineValibotMcpTool({
       consumesServices: false,
       access: "read",
+      permissions: { type: "open-read", reason: "reads only fixture data" },
       readClass: "tenant",
       annotations: {
         title: "Read example",
@@ -369,6 +370,7 @@ describe("Valibot-backed MCP tool definitions", () => {
     const definition = defineValibotMcpTool({
       consumesServices: false,
       access: "read",
+      permissions: { type: "open-read", reason: "reads only fixture data" },
       readClass: "tenant",
       annotations: {
         title: "Read example",
@@ -548,6 +550,7 @@ describe("Valibot-backed MCP tool definitions", () => {
       defineValibotMcpTool({
         consumesServices: false,
         access: "read",
+        permissions: { type: "open-read", reason: "reads only fixture data" },
         readClass: "tenant",
         annotations: {
           title: "Read example",
@@ -570,6 +573,7 @@ describe("Valibot-backed MCP tool definitions", () => {
       defineValibotMcpTool({
         consumesServices: false,
         access: "read",
+        permissions: { type: "open-read", reason: "reads only fixture data" },
         readClass: "tenant",
         annotations: {
           title: "Read example",
@@ -595,6 +599,7 @@ describe("Valibot-backed MCP tool definitions", () => {
       defineValibotMcpTool({
         consumesServices: false,
         access: "read",
+        permissions: { type: "open-read", reason: "reads only fixture data" },
         readClass: "tenant",
         annotations: {
           title: "Read example",

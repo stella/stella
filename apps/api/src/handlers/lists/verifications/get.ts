@@ -2,7 +2,7 @@ import { Result } from "better-result";
 
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { recordVerificationRead } from "@/api/lib/lists/verification/read-audit";
@@ -26,7 +26,9 @@ const config = {
     reason: "document_processing",
     consumesServices: false,
   },
-  params: workspaceParams({ runId: tSafeId("legalListVerificationRun") }),
+  params: workspaceParams({
+    runId: resourceIdSchema("legalListVerificationRun"),
+  }),
 } satisfies WorkspaceHandlerConfig;
 
 const readVerification = createSafeHandler(

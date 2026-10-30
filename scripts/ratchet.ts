@@ -38,6 +38,7 @@ import { compareCodeUnit } from "@stll/collation";
 
 import { GRADED_HANDLER_CODE_REASON } from "../apps/api/src/lib/errors/graded-handler-codes";
 import { MCP_WRITE_ONLY_RESOURCE_SCOPES } from "../packages/api-contract/src/mcp";
+import { treeBaseRevision } from "../packages/scripts/src/tree-base-revision";
 import { countDbAwaitInLoopDirectives } from "./db-await-in-loop";
 import {
   collectLintDirectives,
@@ -77,7 +78,7 @@ import {
   statusWriteCalls,
   unmanagedTransitionTables,
 } from "./status-write-shapes";
-import { countUndeclaredEdenWrites } from "./undeclared-eden-writes";
+import { countUndeclaredApiClientWrites } from "./undeclared-api-client-writes";
 import {
   countUnsignalledSkips,
   isExcludedSkipSource,
@@ -89,11 +90,14 @@ const REPO_ROOT = path.resolve(SCRIPTS_DIR, "..");
 const INTERNAL_MODULE_MOCK_LEDGER_REL =
   "scripts/internal-module-mock-ledger.json";
 
-// The single owners of a transport: callers reach fetch and Bun SQL clients
-// through them, so their own acquisition is the capability, not a legacy site.
+// The single owners of a transport: callers reach fetch, Bun SQL and SQS
+// clients through them, so their own acquisition is the capability, not a
+// legacy site.
 const TRANSPORT_OWNER_MODULES: ReadonlySet<string> = new Set([
   "apps/api/src/lib/safe-outbound-fetch.ts",
+  "apps/api/src/lib/observability/operator-endpoint-fetch.ts",
   "apps/api/src/db/sql-client.ts",
+  "apps/api/src/lib/email/sns-queue-drain.ts",
 ]);
 
 // Shared source globs + exclusions for the app-source metrics.
@@ -370,6 +374,72 @@ const countAsCasts: FileCounter = (content, { file }) => {
   visit(source);
   return total;
 };
+
+const isObviousNumericCoercionLiteral = (node: ts.Expression): boolean => {
+  let expression = node;
+  while (ts.isParenthesizedExpression(expression)) {
+    expression = expression.expression;
+  }
+  if (
+    ts.isStringLiteralLike(expression) ||
+    ts.isNumericLiteral(expression) ||
+    ts.isBigIntLiteral(expression) ||
+    expression.kind === ts.SyntaxKind.TrueKeyword ||
+    expression.kind === ts.SyntaxKind.FalseKeyword ||
+    expression.kind === ts.SyntaxKind.NullKeyword
+  ) {
+    return true;
+  }
+  return (
+    ts.isPrefixUnaryExpression(expression) &&
+    (expression.operator === ts.SyntaxKind.PlusToken ||
+      expression.operator === ts.SyntaxKind.MinusToken) &&
+    (ts.isNumericLiteral(expression.operand) ||
+      ts.isBigIntLiteral(expression.operand))
+  );
+};
+
+const countRawNumericCoercions: FileCounter = (content, { file }) => {
+  const source = parseSource({ fileName: file, text: content });
+  let total = 0;
+  const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node)) {
+      const callee = node.expression;
+      const isGlobalCoercion =
+        ts.isIdentifier(callee) &&
+        (callee.text === "Number" ||
+          callee.text === "parseInt" ||
+          callee.text === "parseFloat");
+      const isNumberParser =
+        ts.isPropertyAccessExpression(callee) &&
+        ts.isIdentifier(callee.expression) &&
+        callee.expression.text === "Number" &&
+        (callee.name.text === "parseInt" || callee.name.text === "parseFloat");
+      const argument = node.arguments.at(0);
+      if (
+        (isGlobalCoercion || isNumberParser) &&
+        argument !== undefined &&
+        !isObviousNumericCoercionLiteral(argument)
+      ) {
+        total += 1;
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return total;
+};
+
+const RAW_NUMERIC_COERCION_SOURCE_GLOBS = [
+  "apps/*/src/**/*.{ts,tsx}",
+  "packages/*/src/**/*.{ts,tsx}",
+] as const;
+
+const isExcludedRawNumericCoercionSource = (file: string): boolean =>
+  isExcludedSource(file) ||
+  file.includes("/scripts/") ||
+  file.includes("/evals/") ||
+  file === "packages/agent-input/src/numeric-token.ts";
 
 // `transition` is also an ordinary word and a discriminator value
 // (`kind: "transition"`), so it counts only in a class-list position.
@@ -2464,14 +2534,6 @@ const countInternalModuleMockLedgerEntries: FileCounter = (content) => {
   return parsed.length;
 };
 
-const countParserValidatorLedgerEntries: FileCounter = (content) => {
-  const parsed: unknown = JSON.parse(content);
-  if (!Array.isArray(parsed)) {
-    panic("parser-validator-call ledger must be a JSON array");
-  }
-  return parsed.length;
-};
-
 const countOutboundIndirectAccessExceptions = (
   context: ScanContext,
 ): RepoMetricResult => {
@@ -3164,6 +3226,17 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
   },
   {
     scope: "file",
+    id: "raw-numeric-coercions",
+    description:
+      "Number/parseInt/parseFloat calls on non-literal arguments in app and package source; syntax-only, so variable number/bigint conversions are conservatively counted; tests, generated files, scripts/evals, and numeric-token's parser are excluded; each file only shrinks",
+    include: RAW_NUMERIC_COERCION_SOURCE_GLOBS,
+    exclude: isExcludedRawNumericCoercionSource,
+    perFile: true,
+    growth: "shrink-only",
+    count: countRawNumericCoercions,
+  },
+  {
+    scope: "file",
     id: "legacy-paint-transitions",
     description:
       "Tailwind utilities and CSS declarations (in TS, CSS and .astro sources) that transition paint properties instead of transform/opacity; at 0 — keep it there",
@@ -3293,7 +3366,7 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
   },
   {
     scope: "file",
-    id: "undeclared-eden-writes",
+    id: "undeclared-api-client-writes",
     description:
       "Eden post/put/patch/delete calls in apps/web outside an invokeCapability or useCapabilityMutation callback, so they run without declaring a catalog capability; each file's count can only shrink",
     include: ["apps/web/src/**/*.{ts,tsx}"],
@@ -3301,7 +3374,7 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
     perFile: true,
     growth: "shrink-only",
     count: ((content, { file }) =>
-      countUndeclaredEdenWrites(content, file)) satisfies FileCounter,
+      countUndeclaredApiClientWrites(content, file)) satisfies FileCounter,
   },
   {
     scope: "file",
@@ -3549,15 +3622,6 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
     include: ["apps/api/src/db/schema/**/*.ts"],
     exclude: isExcludedSource,
     count: countWorkspaceOnlyRlsOnOrgTables,
-  },
-  {
-    scope: "file",
-    id: "parser-validator-call-ledger-entries",
-    description:
-      "legacy parser validator imports and calls; validation moves to the pipeline and this ledger only shrinks",
-    include: ["scripts/parser-validator-call-ledger.json"],
-    exclude: () => false,
-    count: countParserValidatorLedgerEntries,
   },
   {
     scope: "file",
@@ -4120,17 +4184,19 @@ const metricStatus = (current: number, baseline: number): MetricStatus => {
 type DiffOptions = {
   perFile?: true | undefined;
   allowlist?: true | undefined;
+  renamedFrom?: ReadonlyMap<string, string> | undefined;
 };
 
 const diffMetric = (
   id: string,
   current: MetricSnapshot,
   baseline: MetricSnapshot,
-  { perFile, allowlist }: DiffOptions = {},
+  { perFile, allowlist, renamedFrom }: DiffOptions = {},
 ): MetricDiff => {
   const regressedFiles: RegressedFile[] = [];
   for (const [file, to] of Object.entries(current.files)) {
-    const from = baseline.files[file] ?? 0;
+    const baselineFile = renamedFrom?.get(file) ?? file;
+    const from = baseline.files[baselineFile] ?? 0;
     if (to > from) {
       regressedFiles.push({ file, from, to });
     }
@@ -4139,8 +4205,11 @@ const diffMetric = (
 
   const staleFiles: RegressedFile[] = [];
   if (allowlist === true) {
+    const renamedTo = new Map(
+      [...(renamedFrom ?? [])].map(([to, from]) => [from, to]),
+    );
     for (const [file, from] of Object.entries(baseline.files)) {
-      const to = current.files[file] ?? 0;
+      const to = current.files[renamedTo.get(file) ?? file] ?? 0;
       if (to < from) {
         staleFiles.push({ file, from, to });
       }
@@ -4224,19 +4293,21 @@ type AssessMeasurementsOptions = {
   current: Baseline;
   baseline: Baseline;
   metrics?: readonly RatchetMetric[];
+  renamedFrom?: ReadonlyMap<string, string>;
 };
 
 export const assessMeasurements = ({
   current,
   baseline,
   metrics = RATCHET_METRICS,
+  renamedFrom,
 }: AssessMeasurementsOptions): MeasurementAssessment => {
   const diffs = metrics.map((metric) =>
     diffMetric(
       metric.id,
       requireSnapshot(current, metric.id),
       baseline[metric.id] ?? { count: 0, files: {} },
-      { perFile: metricGate(metric).perFile },
+      { perFile: metricGate(metric).perFile, renamedFrom },
     ),
   );
   return {
@@ -4257,13 +4328,37 @@ const revisionOption = (flag: "--base" | "--head"): string | undefined => {
 const resolveCommit = (ref: string): string =>
   readGit(["rev-parse", "--verify", "--end-of-options", `${ref}^{commit}`]);
 
+const renamedFiles = (
+  base: string,
+  head: string | undefined,
+): ReadonlyMap<string, string> => {
+  const output = readGit([
+    "diff",
+    "--find-renames",
+    "--name-status",
+    "-z",
+    base,
+    ...(head === undefined ? [] : [head]),
+    "--",
+  ]);
+  const fields = output.split("\0");
+  const renamedFrom = new Map<string, string>();
+  for (let index = 0; index < fields.length;) {
+    const status = fields[index++] ?? "";
+    const source = fields[index++] ?? "";
+    if (!status.startsWith("R")) {
+      continue;
+    }
+    const destination = fields[index++] ?? "";
+    renamedFrom.set(destination, source);
+  }
+  return renamedFrom;
+};
+
 const comparisonBase = (headRef?: string): string => {
   const explicitBase =
     revisionOption("--base") ?? process.env["RATCHET_BASE_REF"];
-  if (explicitBase !== undefined) {
-    return resolveCommit(explicitBase);
-  }
-  if (headRef !== undefined) {
+  if (explicitBase === undefined && headRef !== undefined) {
     readGit([
       "fetch",
       "--no-tags",
@@ -4271,9 +4366,11 @@ const comparisonBase = (headRef?: string): string => {
       "+refs/heads/main:refs/remotes/origin/main",
     ]);
   }
-  return resolveCommit(
-    readGit(["merge-base", "origin/main", headRef ?? "HEAD"]),
-  );
+  return treeBaseRevision({
+    repoRoot: REPO_ROOT,
+    baseRef: explicitBase,
+    headRef,
+  });
 };
 
 const ALLOWANCE_DIRECTORY = "scripts/ratchet-allowances";
@@ -4558,7 +4655,11 @@ const runCheck = (): number => {
   const drops: MetricDiff[] = [];
   const remedies = new Set<string>();
 
-  const assessment = assessMeasurements({ current, baseline });
+  const assessment = assessMeasurements({
+    current,
+    baseline,
+    renamedFrom: renamedFiles(base, headRef),
+  });
   for (const [index, diff] of assessment.diffs.entries()) {
     const metric =
       RATCHET_METRICS.at(index) ?? panic("ratchet diff has no metric");
@@ -4610,7 +4711,8 @@ const runCheck = (): number => {
   if (regressions.some(({ id }) => PER_FILE_METRIC_IDS.has(id))) {
     console.error(
       "\nA per-file metric fails on any file above its own baseline, even when\n" +
-        "the total did not rise: move the new occurrence behind the owner instead.",
+        "the total did not rise: move the new occurrence behind the owner instead.\n" +
+        "File moves follow Git rename detection; edits below Git's similarity threshold are treated as a deletion plus an addition.",
     );
   }
   for (const remedy of remedies) {
@@ -4683,6 +4785,26 @@ const SELF_TEST_PACKAGE_AS_CASTS = [
   "",
 ].join("\n");
 const EXPECTED_PACKAGE_AS_CASTS = 2;
+
+const SELF_TEST_RAW_NUMERIC_COERCIONS = [
+  "Number(amount)",
+  "parseInt(text, 10)",
+  "parseFloat(decimal)",
+  "Number.parseInt(text, 10)",
+  "Number.parseFloat(decimal)",
+  'Number("12")',
+  "Number(12)",
+  "Number(12n)",
+  "Number(true)",
+  "Number(null)",
+  "Number(-12)",
+  "Number(+12n)",
+  "schema.Number(amount)",
+  "other.parseInt(text)",
+  "// Number(amount) and parseInt(text)",
+  'const example = "Number(amount)";',
+].join("\n");
+const EXPECTED_RAW_NUMERIC_COERCIONS = 5;
 
 const LEGACY_PAINT_TRANSITION_FIXTURE_LINES = [
   `const directClass = "transition transition-colors";`,
@@ -4858,12 +4980,12 @@ const SHARED_WEB_HELPER_FIXTURE_LINES = [
   "// title={formatFullTimestamp(value)} must not count.",
 ];
 const SELF_TEST_SHARED_WEB_HELPERS = `${SHARED_WEB_HELPER_FIXTURE_LINES.join("\n")}\n`;
-const UNDECLARED_EDEN_WRITE_FIXTURE_LINES = [
-  'import { api, memoriesApi as memories } from "@/lib/api";',
+const UNDECLARED_API_CLIENT_WRITE_FIXTURE_LINES = [
+  'import { api, apiClient as client } from "@/lib/api";',
   'import { invokeCapability } from "@/lib/capabilities/capability-request";',
   'import { useCapabilityMutation } from "@/lib/capabilities/use-capability-mutation";',
   "await api.items.post(body);",
-  "await memories({ id }).delete();",
+  "await client.v1.memories({ id }).delete();",
   "const route = api.items({ id });",
   "await route.patch(body);",
   'await invokeCapability("items.create", async (request) => await api.items.post(body, request));',
@@ -4871,10 +4993,10 @@ const UNDECLARED_EDEN_WRITE_FIXTURE_LINES = [
   "await api.items.get();",
   "map.delete(key);",
 ];
-const SELF_TEST_UNDECLARED_EDEN_WRITES = `${UNDECLARED_EDEN_WRITE_FIXTURE_LINES.join("\n")}\n`;
+const SELF_TEST_UNDECLARED_API_CLIENT_WRITES = `${UNDECLARED_API_CLIENT_WRITE_FIXTURE_LINES.join("\n")}\n`;
 // The bare post, the aliased delete and the write through `route`; declared
 // writes, reads and unrelated `delete` calls are excluded.
-const EXPECTED_UNDECLARED_EDEN_WRITES = 3;
+const EXPECTED_UNDECLARED_API_CLIENT_WRITES = 3;
 const EXPECTED_RAW_USER_AVATAR_PRIMITIVES = 1;
 const EXPECTED_SHADOWED_USER_NAME_HELPERS = 2;
 const EXPECTED_AD_HOC_RELATIVE_TIME_FORMATTING = 3;
@@ -4980,6 +5102,7 @@ const DIRECT_ERROR_FIXTURE_LINES = [
   "stellaToast.add({ title: result.error.message ?? fallback });",
   "if (APIError.is(error) &&",
   "    error.message) {",
+  "}",
   "const internal = userErrorMessage(response.error, fallback);",
   'const literal = "error.message ?? fallback";',
   "// error instanceof Error ? error.message : fallback",
@@ -5440,12 +5563,6 @@ const SELF_TEST_INTERNAL_MODULE_MOCK_LEDGER = `${JSON.stringify(
   2,
 )}\n`;
 const EXPECTED_INTERNAL_MODULE_MOCK_LEDGER_ENTRIES = 3;
-const SELF_TEST_PARSER_VALIDATOR_LEDGER = `${JSON.stringify([
-  "apps/api/src/handlers/case-law/ingestion/parsers/alpha.ts::import::1",
-  "apps/api/src/handlers/case-law/ingestion/parsers/alpha.ts::call::1",
-  "apps/api/src/lib/legal-search/parsers/beta.ts::call::1",
-])}\n`;
-const EXPECTED_PARSER_VALIDATOR_LEDGER_ENTRIES = 3;
 // Expected: the two tables that declare organizationId AND spread wsPolicies().
 // Excluded: the workspace-only table with no organizationId column, the table
 // already on wsOrganizationPolicies, the org-only table, the table whose only
@@ -6072,13 +6189,64 @@ const asCastSelfTestFailures = (snapshot: Baseline): string[] => {
   return failures;
 };
 
+const rawNumericCoercionSelfTestFailures = (snapshot: Baseline): string[] => {
+  const failures: string[] = [];
+  const id = "raw-numeric-coercions";
+  const metric = RATCHET_METRICS.find((entry) => entry.id === id);
+  const measured = requireSnapshot(snapshot, id);
+  if (metric?.scope !== "file") {
+    return [`${id} is not registered as a file metric`];
+  }
+  if (metric.growth !== "shrink-only" || metric.perFile !== true) {
+    failures.push(`${id} is not per-file shrink-only`);
+  }
+  if (measured.count !== EXPECTED_RAW_NUMERIC_COERCIONS) {
+    failures.push(
+      `${id} counted ${measured.count}, expected ${EXPECTED_RAW_NUMERIC_COERCIONS}`,
+    );
+  }
+  for (const file of [
+    "apps/web/src/raw-numeric-coercions.test.ts",
+    "apps/web/src/raw-numeric-coercions.gen.ts",
+    "apps/web/src/scripts/raw-numeric-coercions.ts",
+    "packages/example/src/evals/raw-numeric-coercions.ts",
+    "packages/agent-input/src/numeric-token.ts",
+  ]) {
+    if (file in measured.files) {
+      failures.push(`${id} counted excluded source ${file}`);
+    }
+  }
+  const newCall = "Number(variable)";
+  const after = metric.count(`${SELF_TEST_RAW_NUMERIC_COERCIONS}\n${newCall}`, {
+    file: "apps/web/src/raw-numeric-coercions.ts",
+    role: "head",
+  });
+  const change = diffMetric(
+    id,
+    {
+      count: after,
+      files: { "apps/web/src/raw-numeric-coercions.ts": after },
+    },
+    {
+      count: EXPECTED_RAW_NUMERIC_COERCIONS,
+      files: {
+        "apps/web/src/raw-numeric-coercions.ts": EXPECTED_RAW_NUMERIC_COERCIONS,
+      },
+    },
+    metricGate(metric),
+  );
+  if (
+    after !== EXPECTED_RAW_NUMERIC_COERCIONS + 1 ||
+    change.status !== "regressed"
+  ) {
+    failures.push(`${id} did not reject a newly added Number(variable) call`);
+  }
+  return failures;
+};
+
 const ledgerSelfTestFailures = (snapshot: Baseline): string[] => {
   const failures: string[] = [];
   for (const { id, expected } of [
-    {
-      id: "parser-validator-call-ledger-entries",
-      expected: EXPECTED_PARSER_VALIDATOR_LEDGER_ENTRIES,
-    },
     {
       id: "internal-module-mock-ledger-entries",
       expected: EXPECTED_INTERNAL_MODULE_MOCK_LEDGER_ENTRIES,
@@ -6512,6 +6680,36 @@ const runSelfTest = (): number => {
     writeFixture(root, "apps/api/src/casts.ts", SELF_TEST_AS_CASTS);
     writeFixture(
       root,
+      "apps/web/src/raw-numeric-coercions.ts",
+      SELF_TEST_RAW_NUMERIC_COERCIONS,
+    );
+    writeFixture(
+      root,
+      "apps/web/src/raw-numeric-coercions.test.ts",
+      "Number(testValue)",
+    );
+    writeFixture(
+      root,
+      "apps/web/src/raw-numeric-coercions.gen.ts",
+      "Number(generatedValue)",
+    );
+    writeFixture(
+      root,
+      "apps/web/src/scripts/raw-numeric-coercions.ts",
+      "Number(scriptValue)",
+    );
+    writeFixture(
+      root,
+      "packages/example/src/evals/raw-numeric-coercions.ts",
+      "Number(evalValue)",
+    );
+    writeFixture(
+      root,
+      "packages/agent-input/src/numeric-token.ts",
+      "Number(tokenValue)",
+    );
+    writeFixture(
+      root,
       "apps/web/src/legacy-paint-transitions.tsx",
       SELF_TEST_LEGACY_PAINT_TRANSITIONS,
     );
@@ -6571,8 +6769,8 @@ const runSelfTest = (): number => {
     );
     writeFixture(
       root,
-      "apps/web/src/undeclared-eden-writes.ts",
-      SELF_TEST_UNDECLARED_EDEN_WRITES,
+      "apps/web/src/undeclared-api-client-writes.ts",
+      SELF_TEST_UNDECLARED_API_CLIENT_WRITES,
     );
     writeFixture(
       root,
@@ -6709,11 +6907,6 @@ const runSelfTest = (): number => {
       root,
       "apps/api/src/lib/case-law/public-subject.ts",
       SELF_TEST_AD_HOC_SUBJECT_GATE,
-    );
-    writeFixture(
-      root,
-      "scripts/parser-validator-call-ledger.json",
-      SELF_TEST_PARSER_VALIDATOR_LEDGER,
     );
     writeFixture(
       root,
@@ -6918,6 +7111,7 @@ const runSelfTest = (): number => {
     failures.push(...schemaIntrospectionSelfTestFailures(snapshot));
 
     failures.push(...asCastSelfTestFailures(snapshot));
+    failures.push(...rawNumericCoercionSelfTestFailures(snapshot));
     failures.push(...failureSinkSelfTestFailures(snapshot));
     failures.push(...ownerHandleAllowlistSelfTestFailures(snapshot));
 
@@ -6990,7 +7184,7 @@ const runSelfTest = (): number => {
           EXPECTED_LEGACY_PAINT_TRANSITIONS_ASTRO,
       ],
       ["raw-user-avatar-primitive", EXPECTED_RAW_USER_AVATAR_PRIMITIVES],
-      ["undeclared-eden-writes", EXPECTED_UNDECLARED_EDEN_WRITES],
+      ["undeclared-api-client-writes", EXPECTED_UNDECLARED_API_CLIENT_WRITES],
       ["shadowed-user-name-helpers", EXPECTED_SHADOWED_USER_NAME_HELPERS],
       [
         "ad-hoc-relative-time-formatting",

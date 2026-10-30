@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 1,
+  "reason": "The canonical public case-law writer stamps only the parser input hash, hash version and immutable raw key after payload settlement, under its existing row lock and source compare-and-set. The proof remains persisted with the derived output; this metadata operation inherits the existing public-ingestion audit exemption and cannot edit tenant or user data."
+}

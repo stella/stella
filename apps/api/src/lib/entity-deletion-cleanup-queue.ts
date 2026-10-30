@@ -21,6 +21,7 @@ import type {
 } from "@/api/lib/entity-deletion-effect-store";
 import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
 import { deleteS3Keys } from "@/api/lib/files/utils";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import { createBullMqConnection } from "@/api/lib/redis-client";
@@ -288,7 +289,12 @@ export const initEntityDeletionCleanupWorker = ({
   );
 
   worker.on("failed", (job, error) => {
-    captureError(error, { requestId: job?.data.requestId ?? "" });
+    captureError(
+      error,
+      handlerErrorContext("lib.initEntityDeletionCleanupWorker", {
+        requestId: job?.data.requestId ?? "",
+      }),
+    );
     logger.error("entity_deletion_cleanup.failed", {
       "error.type": errorTag(error),
       requestId: job?.data.requestId ?? "",
@@ -304,7 +310,7 @@ export const initEntityDeletionCleanupWorker = ({
       await enqueuePendingEntityDeletionCleanupRequests(db);
     },
     onError: (error) => {
-      captureError(error);
+      captureError(error, handlerErrorContext("entityDeletion.reconcile"));
       logger.error(
         "entity_deletion_cleanup.reconcile_failed",
         errorSystemFields(error),

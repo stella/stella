@@ -23,6 +23,7 @@ export default {
       "apps/api/src/handlers/contacts/update.ts",
       "apps/api/src/handlers/entities/clip.ts",
       "apps/api/src/handlers/entities/copy.ts",
+      "apps/api/src/handlers/entities/folder-from-selection/create.ts",
       "apps/api/src/handlers/entities/create.ts",
       "apps/api/src/handlers/entities/duplicate.ts",
       "apps/api/src/handlers/entities/rename-operation.ts",

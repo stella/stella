@@ -147,7 +147,7 @@ const Graph = ({ model, busy }: { model: GraphModel; busy: boolean }) => {
                   if (node.type === "resolved") {
                     bridge.detached(
                       controller.open(node.id, node.decision.url),
-                      "open citation decision",
+                      "citationGraph.openDecision",
                     );
                   }
                 })}
@@ -219,7 +219,7 @@ const CitationList = ({
                   onClick={containedEventHandler(() =>
                     bridge.detached(
                       controller.open(decision.decisionId, url),
-                      "open citation decision",
+                      "citationGraph.openDecision",
                     ),
                   )}
                 >
@@ -272,7 +272,7 @@ const CitationList = ({
                 onClick={containedEventHandler(() =>
                   bridge.detached(
                     controller.read(decision.decisionId),
-                    "expand citation node",
+                    "citationGraph.expandNode",
                   ),
                 )}
               >
@@ -305,7 +305,7 @@ const App = () => {
         {host.result.status === "error" && (
           <Button
             onClick={containedEventHandler(() =>
-              bridge.detached(bridge.retry(), "retry citation graph"),
+              bridge.detached(bridge.retry(), "citationGraph.retry"),
             )}
           >
             {t("retry")}
@@ -367,7 +367,7 @@ const App = () => {
               onClick={containedEventHandler(() =>
                 bridge.detached(
                   controller.read(page.decisionId),
-                  "load citation page",
+                  "citationGraph.loadPage",
                 ),
               )}
             >
@@ -397,4 +397,4 @@ const root = document.querySelector("#app");
 if (root !== null) {
   createRoot(root).render(<LocalizedApp />);
 }
-bridge.detached(bridge.connect(), "connect citation graph");
+bridge.detached(bridge.connect(), "citationGraph.connect");

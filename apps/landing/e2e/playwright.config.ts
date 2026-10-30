@@ -6,6 +6,7 @@ import marketingBaseConfig from "@stll/playwright-tools/marketing-config";
 const REPO_ROOT = path.resolve(import.meta.dirname, "../../..");
 
 export default defineConfig(marketingBaseConfig, {
+  retries: 0,
   testDir: ".",
   testMatch: /landing-.*\.spec\.ts$/u,
   outputDir: path.join(REPO_ROOT, "apps/landing/test-results"),

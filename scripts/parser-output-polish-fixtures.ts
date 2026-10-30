@@ -2,10 +2,6 @@ import { panic } from "better-result";
 import { readdir } from "node:fs/promises";
 import nodePath from "node:path";
 
-import type {
-  DecisionSupplement,
-  IngestionResult,
-} from "../apps/api/src/handlers/case-law/ingestion/adapter";
 import {
   buildPlDecision,
   normalizeSaosDumpItem,
@@ -55,6 +51,10 @@ import {
   readPlTkCasePage,
   readPlTkRuling,
 } from "../apps/api/src/handlers/case-law/ingestion/parsers/pl-tk";
+import type {
+  DecisionSupplement,
+  IngestionResult,
+} from "../apps/api/src/lib/legal-search/ingestion-types";
 import { isRecord } from "../apps/api/src/lib/type-guards";
 
 /** Replay recorded responses through the same pure builders as ingestion. */
@@ -132,9 +132,12 @@ const collectKio = async ({
           detailHtml: names.includes(detailName)
             ? await text({ dir: adapterDir, name: detailName })
             : undefined,
-          documentHtml: names.includes(contentName)
-            ? await text({ dir: adapterDir, name: contentName })
-            : undefined,
+          document: names.includes(contentName)
+            ? {
+                type: "read",
+                html: await text({ dir: adapterDir, name: contentName }),
+              }
+            : { type: "unavailable" },
         }).decision,
       );
     }
@@ -149,9 +152,12 @@ const collectKio = async ({
       assemblePlKioDecision({
         item: { id },
         detailHtml: await text({ dir: adapterDir, name }),
-        documentHtml: names.includes(contentName)
-          ? await text({ dir: adapterDir, name: contentName })
-          : undefined,
+        document: names.includes(contentName)
+          ? {
+              type: "read",
+              html: await text({ dir: adapterDir, name: contentName }),
+            }
+          : { type: "unavailable" },
       }).decision,
     );
   }
@@ -545,6 +551,12 @@ const collectCourts = async ({ adapterDir, json, rowsFor }: FixtureContext) => {
   for (const name of [
     "pl-courts-detail-common.json.gz",
     "pl-courts-detail-chamber.json.gz",
+    "pl-courts-detail-303939.json.gz",
+    "pl-courts-detail-472699.json.gz",
+    "pl-courts-detail-501501.json.gz",
+    "pl-courts-detail-628.json.gz",
+    "pl-courts-detail-summary-brak.json.gz",
+    "pl-courts-detail-summary-nietezowane.json.gz",
   ]) {
     const payload = await json({ dir: adapterDir, name });
     if (!isRecord(payload) || !isRecord(payload["data"])) {

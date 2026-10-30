@@ -1,7 +1,8 @@
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
 
+import { useFormatter } from "@/i18n/formatting-context";
 import { APIError } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import type { VatRate } from "@/lib/organization/vat-rates";

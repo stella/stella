@@ -238,21 +238,23 @@ if (!databaseUrl || !enabled) {
           });
           for (const document of ["judgment", "standalone"]) {
             // db-await-in-loop: seed production writes commit before the actors start
-            const seeded = await processDecision({
-              input: input(document, "a".repeat(64)),
-              observationOrder: 1n,
-              sourceId,
-              scopedDb,
-              observedAt: new Date("2026-01-01"),
-              refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
-              corpus,
-            });
+            const seeded = (
+              await processDecision({
+                input: input(document, "a".repeat(64)),
+                observationOrder: 1n,
+                sourceId,
+                scopedDb,
+                observedAt: new Date("2026-01-01"),
+                refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
+                corpus,
+              })
+            ).unwrap();
             expect(seeded.status).toBe("complete");
           }
           const observed = observeDecision({
             input: input("standalone", "b".repeat(64)),
             sourceId,
-          });
+          }).unwrap();
           const identity = await scopedDb(
             async (tx) =>
               await resolveDecisionIdentityTx(tx, {
@@ -300,6 +302,7 @@ if (!databaseUrl || !enabled) {
             observedAt: new Date("2026-01-02"),
             observationOrder: 2n,
             sourceFingerprintVersion: 0,
+            inputProvenance: { type: "observation" },
             shape: classifyObservation({
               result: observed.observed,
               existing: identity.existing,

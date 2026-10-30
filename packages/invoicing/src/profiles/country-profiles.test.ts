@@ -42,6 +42,16 @@ describe("invoice country profiles", () => {
     expect(invoiceCountryOf({ country: "Austria", vatId: "AT123" })).toBe("EU");
   });
 
+  test("selects Poland from the address country or VAT ID prefix", () => {
+    expect(invoiceCountryOf({ country: "PL", vatId: null })).toBe("PL");
+    expect(invoiceCountryOf({ country: null, vatId: "PL5260001246" })).toBe(
+      "PL",
+    );
+    expect(
+      invoiceCountryOf({ country: "Austria", vatId: "PL5260001246" }),
+    ).toBe("EU");
+  });
+
   test.each([
     ["DE", "SK1234567890", "DE", "EU"],
     ["Germany", "SK1234567890", "DE", "EU"],
@@ -78,6 +88,22 @@ describe("invoice country profiles", () => {
     ).toEqual([
       "Prenesenie daňovej povinnosti. Reverse charge.",
       "Dodanie je oslobodené od dane. The supply is exempt from tax. § 38",
+    ]);
+  });
+
+  test("keeps mandated Polish wording and appends required exemption bases", () => {
+    const profile = INVOICE_COUNTRY_PROFILES.PL;
+    expect(
+      legalNotesFor({
+        profile,
+        language: "pl",
+        treatments: ["reverse_charge", "exempt", "not_vat_payer"],
+        exemptionReasons: ["art. 43 ust. 1 pkt 29"],
+      }),
+    ).toEqual([
+      "odwrotne obciążenie",
+      "Zwolnienie z podatku: art. 43 ust. 1 pkt 29",
+      "Zwolnienie z podatku: art. 43 ust. 1 pkt 29",
     ]);
   });
 });

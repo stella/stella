@@ -39,6 +39,8 @@ export type ChangedFileScopeInput = {
   suiteDepth: string;
   heavyOnly: boolean;
   prTitle: string;
+  /** An armed pull request proves the queue-only suites at merge-group scope. */
+  armed?: boolean;
   versionChangedInHead?: boolean;
   root?: string | undefined;
 };
@@ -71,6 +73,17 @@ const widenScope = (message: string) => {
   console.log(`::warning title=Changed-file scope::${message}`);
 };
 
+const reportDetectorCrash = (name: string, error: unknown) => {
+  console.log(
+    `::error title=Changed-file scope detector::kind=infra class=scope-detector detector=${JSON.stringify(name)} error=${JSON.stringify(String(error))}`,
+  );
+};
+
+class MigrationDetectorError extends Error {
+  override name = "MigrationDetectorError";
+  readonly _tag = "MigrationDetectorError";
+}
+
 // A detector that throws or answers a non-boolean cannot prove a scope
 // unaffected, so its checks run and the run says why. The planner runs before
 // the dependency install, so this boundary catches without better-result.
@@ -84,6 +97,7 @@ const failClosedDetector = (name: string, detect: () => unknown) => {
       `${name} detector failed (a non-boolean answer); running its checks`,
     );
   } catch (error) {
+    reportDetectorCrash(name, error);
     widenScope(
       `${name} detector failed (${String(error)}); running its checks`,
     );
@@ -91,18 +105,53 @@ const failClosedDetector = (name: string, detect: () => unknown) => {
   return true;
 };
 
+// The migration checks share their path predicate with the security workflow
+// detector, so one script decides both.
+const migrationsChanged = (files: readonly string[], root = REPO_ROOT) => {
+  const result = Bun.spawnSync(
+    [
+      "bash",
+      "scripts/detect-security-workflow-changes.sh",
+      "migrations",
+      "--files",
+      ...files,
+    ],
+    { cwd: root, stdout: "pipe", stderr: "pipe" },
+  );
+  const answer = result.stdout.toString().trim();
+  if (result.exitCode !== 0) {
+    throw new MigrationDetectorError(
+      `migration detector exited ${String(result.exitCode)}: ${result.stderr.toString().trim()}`,
+    );
+  }
+  if (answer !== TRUE && answer !== FALSE) {
+    throw new MigrationDetectorError(
+      `migration detector returned ${JSON.stringify(answer)}`,
+    );
+  }
+  return answer === TRUE;
+};
+
 // A service-suite detector failure cannot prove any suite unaffected.
-const failClosedServiceSuites = (
+export const failClosedServiceSuites = (
   files: readonly string[],
   root: string | undefined,
+  detect = planServiceSuites,
 ) => {
   try {
-    return planServiceSuites(files, root);
+    return detect(files, root, REPO_ROOT);
   } catch (error) {
+    reportDetectorCrash("service suite", error);
     widenScope(
       `service suite detector failed (${String(error)}); running every service suite`,
     );
-    return { postgres: true, corpus: true, valkey: true, collab: true };
+    return {
+      postgres: true,
+      corpus: true,
+      valkey: true,
+      collab: true,
+      devSeed: true,
+    };
   }
 };
 
@@ -160,12 +209,17 @@ export const MODEL_CATALOG_DRIFT_INPUTS = [
   "packages/ai-catalog/src/capabilities.gen.ts",
   "packages/ai-catalog/src/document-input-overrides.ts",
   "packages/ai-catalog/src/index.ts",
+  "packages/ai-catalog/src/model-defaults-ledger.ts",
   "packages/ai-catalog/src/model-rate-policy.ts",
   "packages/ai-catalog/src/model-rate.ts",
   "packages/ai-catalog/src/model-rates.gen.ts",
+  "packages/ai-catalog/src/reasoning-capabilities.ts",
+  "packages/fetch/src/connection-failure.ts",
+  "packages/fetch/src/index.ts",
   "packages/scripts/src/model-catalog-capabilities-gen.ts",
   "packages/scripts/src/model-catalog-capabilities.ts",
   "packages/scripts/src/model-catalog-rates-gen.ts",
+  "packages/scripts/src/model-catalog-snapshot.ts",
 ] as const;
 
 export const ROUTE_TREE_INPUTS = [
@@ -218,6 +272,7 @@ export const DESKTOP_WINDOWS_DRY_RUN_INPUTS = [
   "scripts/release-channel.sh",
   "scripts/rename-desktop-artifacts.sh",
   "scripts/check-api-deployment.ts",
+  "scripts/check-release-publication-source.sh",
   "scripts/gh-retry.sh",
   "scripts/retry.sh",
   "scripts/build-desktop-dmg.sh",
@@ -328,6 +383,7 @@ const wideScope = (input: ChangedFileScopeInput): Record<string, string> => {
     api_image_platforms: BOTH_PLATFORMS,
     api_image_smoke_required: TRUE,
     postgres_suites_required: TRUE,
+    dev_seed_required: TRUE,
     corpus_suites_required: TRUE,
     valkey_suites_required: TRUE,
     collaboration_suite_required: TRUE,
@@ -346,7 +402,12 @@ const wideScope = (input: ChangedFileScopeInput): Record<string, string> => {
     legal_atlas_image_required: TRUE,
     legal_atlas_image_pr_required: TRUE,
     dependency_malware_required: TRUE,
+    // The dependency jobs run only for pull requests and merge groups.
+    dependency_changes_required: bool(
+      input.eventName === "pull_request" || input.eventName === "merge_group",
+    ),
     lockfile_ages_required: FALSE,
+    database_migrations_required: TRUE,
     migration_rehearsal_required: TRUE,
     mobile_build_required: TRUE,
     model_catalog_drift_required: TRUE,
@@ -412,6 +473,7 @@ const deriveScopeFacts = (
         api_image_platforms: "[]",
         api_image_smoke_required: FALSE,
         postgres_suites_required: api,
+        dev_seed_required: api,
         corpus_suites_required: api,
         valkey_suites_required: api,
         collaboration_suite_required: FALSE,
@@ -428,7 +490,9 @@ const deriveScopeFacts = (
         legal_atlas_image_required: FALSE,
         legal_atlas_image_pr_required: FALSE,
         dependency_malware_required: FALSE,
+        dependency_changes_required: FALSE,
         lockfile_ages_required: FALSE,
+        database_migrations_required: FALSE,
         migration_rehearsal_required: FALSE,
         mobile_build_required: FALSE,
         model_catalog_drift_required: FALSE,
@@ -498,6 +562,9 @@ const deriveNormalScopeFacts = (
     desktopBrowser = false;
   }
   const full = input.suiteDepth === "full";
+  // An armed pull request proves the queue-only suites at merge-group scope.
+  const heavyScope =
+    full || (input.eventName === "pull_request" && input.armed === true);
   const version = files.includes("VERSION");
   const imageInputs = anyMatches(files, [
     "*/Dockerfile",
@@ -553,21 +620,24 @@ const deriveNormalScopeFacts = (
   if (e2eCore || routeSmoke) {
     webBuild = true;
   }
+  const landingPaths = () =>
+    p([
+      "apps/landing/*",
+      "docs/changelog/*",
+      "VERSION",
+      "packages/*",
+      "patches/*",
+      "bun.lock",
+      "package.json",
+      ".github/workflows/ci.yml",
+    ]);
   let landing =
     input.eventName === "pull_request"
       ? failClosedDetector("landing build", () =>
           detectors.landingBuild({ changed: scopeFiles, root }),
-        )
-      : p([
-          "apps/landing/*",
-          "docs/changelog/*",
-          "VERSION",
-          "packages/*",
-          "patches/*",
-          "bun.lock",
-          "package.json",
-          ".github/workflows/ci.yml",
-        ]);
+        ) ||
+        (heavyScope && landingPaths())
+      : landingPaths();
   // e2e-landing runs the same landing build before it tests the preview.
   if (e2eLanding) {
     landing = false;
@@ -597,10 +667,21 @@ const deriveNormalScopeFacts = (
     "scripts/retry.sh",
   ]);
   const legal = legalAtlasImageSelected(files);
-  const postgres = full ? packageChecks : services.postgres;
-  const corpus = full ? packageChecks : services.corpus;
-  const valkey = full ? packageChecks : services.valkey;
-  const collaboration = full ? collab : services.collab;
+  const {
+    postgres,
+    devSeed,
+    corpus,
+    valkey,
+    collab: collaboration,
+  } = full
+    ? {
+        postgres: packageChecks,
+        devSeed: packageChecks,
+        corpus: packageChecks,
+        valkey: packageChecks,
+        collab,
+      }
+    : services;
   const servicePr =
     services.postgres || services.corpus || services.valkey || services.collab;
   const fixTest =
@@ -624,6 +705,7 @@ const deriveNormalScopeFacts = (
     services,
     desktopBrowser,
     full,
+    heavyScope,
     version,
     imageInputs,
     p,
@@ -637,6 +719,7 @@ const deriveNormalScopeFacts = (
     sandbox,
     legal,
     postgres,
+    devSeed,
     corpus,
     valkey,
     collaboration,
@@ -656,6 +739,7 @@ export const OUTPUT_ORDER = [
   "api_image_platforms",
   "api_image_smoke_required",
   "postgres_suites_required",
+  "dev_seed_required",
   "corpus_suites_required",
   "valkey_suites_required",
   "collaboration_suite_required",
@@ -672,7 +756,9 @@ export const OUTPUT_ORDER = [
   "legal_atlas_image_required",
   "legal_atlas_image_pr_required",
   "dependency_malware_required",
+  "dependency_changes_required",
   "lockfile_ages_required",
+  "database_migrations_required",
   "migration_rehearsal_required",
   "mobile_build_required",
   "model_catalog_drift_required",
@@ -728,8 +814,9 @@ export const OUTPUT_RULES = {
         bool((sandbox || apiDeps) && imageInputs),
     ),
   api_image_platforms: (facts) =>
-    scopeRule(facts, "api_image_platforms", ({ full, version }) =>
-      full || version ? BOTH_PLATFORMS : ARM_PLATFORM,
+    // Full depth, arming and a version change build every architecture.
+    scopeRule(facts, "api_image_platforms", ({ heavyScope, version }) =>
+      heavyScope || version ? BOTH_PLATFORMS : ARM_PLATFORM,
     ),
   api_image_smoke_required: (facts) =>
     scopeRule(facts, "api_image_smoke_required", ({ p }) =>
@@ -768,6 +855,8 @@ export const OUTPUT_RULES = {
     scopeRule(facts, "postgres_suites_required", ({ postgres }) =>
       bool(postgres),
     ),
+  dev_seed_required: (facts) =>
+    scopeRule(facts, "dev_seed_required", ({ devSeed }) => bool(devSeed)),
   corpus_suites_required: (facts) =>
     scopeRule(facts, "corpus_suites_required", ({ corpus }) => bool(corpus)),
   valkey_suites_required: (facts) =>
@@ -832,6 +921,40 @@ export const OUTPUT_RULES = {
     scopeRule(facts, "dependency_malware_required", ({ files }) =>
       bool(requiresMalwareScan(files)),
     ),
+  dependency_changes_required: (facts) =>
+    scopeRule(facts, "dependency_changes_required", ({ p }) =>
+      bool(
+        p([
+          "scripts/dependency-audit*",
+          "scripts/check-trusted-dependencies.ts",
+          "scripts/retry.sh",
+          "bun.lock",
+          "*/bun.lock",
+          "package.json",
+          "*/package.json",
+          "bunfig.toml",
+          "*/bunfig.toml",
+          "patches/*",
+          ".github/workflows/*",
+          "action.yml",
+          "action.yaml",
+          "*/action.yml",
+          "*/action.yaml",
+          "Cargo.toml",
+          "*/Cargo.toml",
+          "Cargo.lock",
+          "*/Cargo.lock",
+          "pyproject.toml",
+          "*/pyproject.toml",
+          "uv.lock",
+          "*/uv.lock",
+          "requirements*.txt",
+          "*/requirements*.txt",
+          "requirements*.in",
+          "*/requirements*.in",
+        ]),
+      ),
+    ),
   lockfile_ages_required: (facts) =>
     scopeRule(facts, "lockfile_ages_required", ({ p }) =>
       bool(
@@ -843,6 +966,14 @@ export const OUTPUT_RULES = {
           "scripts/check-stll-quarantine-excludes.ts",
           "scripts/bun-lock-text.ts",
         ]),
+      ),
+    ),
+  database_migrations_required: (facts) =>
+    scopeRule(facts, "database_migrations_required", ({ files, input }) =>
+      bool(
+        failClosedDetector("migration change", () =>
+          migrationsChanged(files, input.root),
+        ),
       ),
     ),
   migration_rehearsal_required: (facts) =>
@@ -901,6 +1032,11 @@ export const OUTPUT_RULES = {
             "patches/*",
             "scripts/check-published-exports.ts",
             "scripts/prepare-publish.ts",
+            "scripts/publish-declarations.ts",
+            "scripts/pack-reproducibly.sh",
+            "scripts/check-publish-reproducibility.sh",
+            "scripts/publish-packages.ts",
+            "scripts/generate-npm-release-jobs.ts",
             "scripts/publish-manifest.ts",
             "scripts/published-export-guards.ts",
             "bun.lock",
@@ -1129,9 +1265,14 @@ if (import.meta.main) {
     suiteDepth: Bun.env["SUITE_DEPTH"] ?? "",
     heavyOnly,
     prTitle: Bun.env["PR_TITLE"] ?? "",
+    armed: Bun.env["ARMED"] === TRUE,
     versionChangedInHead,
   });
   const output = `${scopeOutputLines(scope).join("\n")}\n`;
+  writeFileSync(
+    path.join(runnerTemp, "changed-scope.json"),
+    `${JSON.stringify(scope)}\n`,
+  );
   if (Bun.env["GITHUB_OUTPUT"]) {
     await Bun.write(Bun.file(Bun.env["GITHUB_OUTPUT"]), output);
   } else {

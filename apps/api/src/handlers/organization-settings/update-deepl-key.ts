@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { organizationSettings } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -17,6 +17,7 @@ import {
   resolveDeepLBaseUrl,
 } from "@/api/lib/deepl/deepl";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 
 const FREE_BASE_URL = "https://api-free.deepl.com";
 
@@ -26,8 +27,8 @@ const DEEPL_KEY_ERROR_CODE = {
   rateLimited: "provider_rate_limited",
 } as const;
 
-const updateDeepLKeyBody = t.Object({
-  apiKey: t.String({ minLength: 1, maxLength: 256 }),
+const updateDeepLKeyBody = v.object({
+  apiKey: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
 });
 
 const config = {
@@ -89,10 +90,14 @@ const updateDeepLKey = createSafeRootHandler(
           }),
         );
       }
-      captureError(error);
+      captureError(
+        error,
+        handlerErrorContext("organizationsettings.updateDeepLKey"),
+      );
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "Could not reach DeepL to validate the key",
         }),
       );

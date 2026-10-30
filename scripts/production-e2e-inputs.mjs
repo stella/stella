@@ -3,9 +3,10 @@ import path from "node:path";
 
 import { isPathStrictlyInside } from "../packages/portable-path/src/index.ts";
 
+const REPOSITORY_ROOT = path.resolve(import.meta.dirname, "..");
 const CONFIG_PATH = path.resolve(
-  import.meta.dirname,
-  "../apps/web/e2e/playwright.config.ts",
+  REPOSITORY_ROOT,
+  "apps/web/e2e/playwright.config.ts",
 );
 const SOURCE_EXTENSION = /\.[cm]?[jt]sx?$/u;
 
@@ -100,10 +101,12 @@ export const productionE2eInputs = (configPath) => {
   return { testDirectory, files };
 };
 
-/** @param {readonly string[]} changedFiles Paths relative to the working directory. */
+/** @param {readonly string[]} changedFiles Paths relative to the repository root. */
 export const productionE2eChanged = (changedFiles) => {
   const root = path.dirname(CONFIG_PATH);
-  const absoluteFiles = changedFiles.map((file) => path.resolve(file));
+  const absoluteFiles = changedFiles.map((file) =>
+    path.resolve(REPOSITORY_ROOT, file),
+  );
   if (!absoluteFiles.some((file) => isPathStrictlyInside(root, file))) {
     return false;
   }

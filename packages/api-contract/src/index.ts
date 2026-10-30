@@ -27,6 +27,7 @@ export type { ChatSkillContextNeed, ChatSkillDocument } from "./agent-skills";
 export { AI_ERROR_KINDS, AI_FAILURE_CODES, isAIFailureCode } from "./ai-errors";
 export type { AIErrorKind, AIFailureCode } from "./ai-errors";
 export {
+  caseLawAnalysisProgressSchema,
   CASE_LAW_ANALYSIS_FAILURE_CODES,
   CASE_LAW_ANALYSIS_KEY_SOURCES,
   CASE_LAW_ANALYSIS_UNAVAILABLE_CODES,
@@ -34,6 +35,7 @@ export {
 export type {
   CaseLawAnalysisFailureCode,
   CaseLawAnalysisKeySource,
+  CaseLawAnalysisProgressResponse,
   CaseLawAnalysisUnavailableCode,
 } from "./case-law-analysis";
 export {
@@ -43,6 +45,7 @@ export {
   BROWSER_CONTROL_KEYS,
   BROWSER_CONTROL_LIMITS,
   BROWSER_CONTROL_PROTOCOL_VERSION,
+  BROWSER_CONTROL_TARGET_METADATA,
   BROWSER_CONTROL_TOOL_NAME,
   BROWSER_EXTENSION_MESSAGE_SOURCE,
   parseBrowserControlCommand,
@@ -56,6 +59,7 @@ export type {
   BrowserControlErrorCode,
   BrowserControlResult,
   BrowserControlSnapshot,
+  BrowserControlTargetMetadata,
   BrowserExtensionRequest,
   BrowserExtensionResponse,
 } from "./browser-control";
@@ -66,7 +70,11 @@ export {
   EXPENSE_CATEGORIES,
   INVOICE_LANGUAGES,
   INVOICE_LINE_SOURCE,
+  INVOICE_LINE_INPUT_LIMITS,
+  INVOICE_LINE_QUANTITY_PATTERN,
   INVOICE_LINE_SOURCES,
+  INVOICE_PAYMENT_INPUT_LIMITS,
+  INVOICE_PAYMENT_METHODS,
   INVOICE_STATUS,
   INVOICE_STATUSES,
   NUMBER_SERIES_DOCUMENT_TYPES,
@@ -77,11 +85,13 @@ export {
   TIME_ENTRY_STATUSES,
   TIME_ENTRY_SUGGESTION_STATUS,
   TIME_ENTRY_SUGGESTION_STATUSES,
+  UNPRICED_TIME_ENTRY_CURRENCY,
 } from "./billing";
 export type {
   ExpenseCategory,
   InvoiceLanguage,
   InvoiceLineSource,
+  InvoicePaymentMethod,
   InvoiceStatus,
   TimeEntrySource,
   TimeEntryActivityGroup,
@@ -93,6 +103,7 @@ export {
   BUSINESS_REGISTRY_CONFIGURATION,
   BUSINESS_REGISTRY_CREDENTIAL_SLUGS,
   BUSINESS_REGISTRY_LOOKUP_DETAILS,
+  BUSINESS_REGISTRY_SEARCH_CAPABILITIES,
   isBusinessRegistryCredentialSlug,
   isBusinessRegistrySlug,
 } from "./business-registries";
@@ -100,6 +111,7 @@ export type {
   BusinessRegistrySlug,
   BusinessRegistryCredentialSlug,
   BusinessRegistryLookupDetail,
+  BusinessRegistrySearchCapabilities,
 } from "./business-registries";
 export {
   CHAT_RUN_MODE,
@@ -216,6 +228,7 @@ export {
   CONTACT_IMPORT_SCHEMA_VERSION,
   CONTACT_IMPORT_TARGET_FIELDS,
   CONTACT_IMPORT_TAX_ID_SCHEMES,
+  CONTACT_IMPORT_WARNING_CODE,
   parseContactImportMapping,
 } from "./contact-import";
 export type {
@@ -226,6 +239,7 @@ export type {
   ContactImportMappingParseResult,
   ContactImportTargetField,
   ContactImportTaxIdScheme,
+  ContactImportWarningCode,
 } from "./contact-import";
 export {
   AUTHORED_DOCUMENT_PROPERTY_KEYS,
@@ -337,6 +351,8 @@ export {
   API_VALIDATION_CONSTRAINTS,
   API_VALIDATION_ERROR_CODE,
   API_VERSION_CONFLICT_ERROR_CODE,
+  IDEMPOTENCY_IN_PROGRESS_CODE,
+  IDEMPOTENCY_KEY_REUSED_CODE,
   CLAUSE_DIRECTIVES_INVALID_CODE,
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
   CHAT_TURN_NOT_OWNED_ERROR_CODE,
@@ -439,6 +455,7 @@ export {
   MCP_ANONYMIZED_HTTP_PATH,
   MCP_ANONYMIZED_RESOURCE_SCOPES,
   MCP_ANONYMIZED_SCOPE_BY_DEFAULT_SCOPE,
+  ACCOUNT_EXPORT_SCOPES,
   MCP_DEFAULT_RESOURCE_SCOPES,
   MCP_DOCUMENTS_HTTP_PATH,
   MCP_HTTP_PATH,
@@ -452,6 +469,7 @@ export type {
   McpDefaultResourceScope,
   McpOAuthScope,
   McpWriteOnlyResourceScope,
+  OAuthConsentClient,
   VerifiedOAuthClientBrand,
 } from "./mcp";
 export { OCR_EXPORT_STATUSES } from "./ocr-export";
@@ -463,6 +481,7 @@ export {
   parseOrganizationRealtimeEvent,
   parseUserRealtimeEvent,
   parseWorkspaceRealtimeEvent,
+  REALTIME_CHANNEL_EVENT_TYPES,
   REALTIME_EVENT_TYPE,
   RESOURCE_CHANGE_TYPE,
   resourceDeletedChange,
@@ -533,6 +552,7 @@ export type {
   DesktopEditSessionClientEvent,
   DesktopEditSessionRealtimeEvent,
   OrganizationRealtimeEvent,
+  RealtimeChannel,
   ResourceChange,
   ResourceRealtimeEvent,
   UserRealtimeEvent,
@@ -996,6 +1016,10 @@ export {
   rulingKeysOf,
   rulingGroupKeys,
 } from "./decision-ruling-identity";
+export {
+  AI_CELL_SETTLEMENT_TYPES,
+  type AiCellSettlement,
+} from "./ai-cell-settlement";
 export type {
   RulingIdentityInput,
   RulingIdentityKeys,

@@ -1,13 +1,14 @@
 import { expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript6";
+import type { SourceFile } from "tsrs/unstable/ast";
 
 import { scanQueryCacheTypes } from "./query-cache-types";
+import { createProgram } from "./typescript-program";
 
 // Both fixture modules resolve the installed library, including its unique tag
 // symbols. An imported plain object still compiles, which is the guard's boundary.
-test("exact cache access retains the producer's tag across module boundaries", () => {
+test("exact cache access retains the producer's tag across module boundaries", async () => {
   const cacheDirectory = path.join(import.meta.dir, "../.cache");
   mkdirSync(cacheDirectory, { recursive: true });
   const directory = mkdtempSync(path.join(cacheDirectory, "query-cache-test-"));
@@ -43,34 +44,44 @@ test("exact cache access retains the producer's tag across module boundaries", (
     unrelated.getQueryData(['unrelated']);
     client.invalidateQueries({ queryKey: ['items'] });
   `;
+  let opened: Awaited<ReturnType<typeof createProgram>> | undefined;
   try {
     writeFileSync(path.join(directory, "producer.ts"), producer);
     const consumerFile = path.join(directory, "consumer.ts");
     writeFileSync(consumerFile, consumer);
-    const program = ts.createProgram({
+    opened = await createProgram({
       rootNames: [consumerFile],
-      options: {
-        module: ts.ModuleKind.Preserve,
-        moduleResolution: ts.ModuleResolutionKind.Bundler,
+      compilerOptions: {
+        module: "preserve",
+        moduleResolution: "bundler",
         skipLibCheck: true,
         strict: true,
-        target: ts.ScriptTarget.ESNext,
+        target: "esnext",
       },
     });
-    expect(program.getSemanticDiagnostics()).toEqual([]);
-    const sourceFiles = program
-      .getSourceFiles()
-      .filter((file) => file.fileName.startsWith(directory));
+    const { program } = opened;
+    expect(await program.getSemanticDiagnostics()).toEqual([]);
+    const sourceFiles: SourceFile[] = [];
+    for (const fileName of await program.getSourceFileNames()) {
+      if (!fileName.startsWith(directory)) {
+        continue;
+      }
+      const file = await program.getSourceFile(fileName);
+      if (file !== undefined) {
+        sourceFiles.push(file);
+      }
+    }
     const expectedLines = consumer
       .split("\n")
       .flatMap((line, index) =>
         line.includes("// reject") ? [index + 1] : [],
       );
     expect(expectedLines).toHaveLength(5);
-    const diagnostics = scanQueryCacheTypes({ program, sourceFiles });
+    const diagnostics = await scanQueryCacheTypes({ ...opened, sourceFiles });
     expect(diagnostics.map(({ line }) => line)).toEqual(expectedLines);
     expect(diagnostics.every(({ file }) => file === consumerFile)).toBe(true);
   } finally {
+    await opened?.close();
     rmSync(directory, { force: true, recursive: true });
   }
 }, 30_000);

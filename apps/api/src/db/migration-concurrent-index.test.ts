@@ -4,6 +4,7 @@ import nodePath from "node:path";
 
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
 
+import { isGeneratedGateCheckBlock } from "./entity-feature-gate-migrations";
 import { ONLINE_VALIDATED_INDEX_NAMES } from "./online-migrations";
 
 const MIGRATIONS_DIR = nodePath.resolve(import.meta.dir, "../../drizzle");
@@ -48,6 +49,9 @@ const CUSTOM_BOUNDED_TYPE_CHANGE_MIGRATIONS = new Set([
 ]);
 const ENTITY_FEATURE_GATE_MIGRATION =
   "20261009112500_entity_feature_row_gates/migration.sql";
+/** Written by apps/api/scripts/generate-entity-feature-gate-propagation.ts. */
+const GENERATED_GATE_MIGRATION =
+  /^\d{14}_entity_feature_gate_registry\/migration\.sql$/u;
 // Migrations may execute only these exact reviewed DO blocks.
 // Fingerprinting the complete statement makes comments, quoting tricks, and
 // dynamically assembled commands unable to bypass migration safety checks.
@@ -665,6 +669,13 @@ const isUnapprovedProceduralStatement = (
     return false;
   }
 
+  // A gate migration the generator wrote may add the gate checks it owns.
+  if (
+    GENERATED_GATE_MIGRATION.test(relativePath) &&
+    isGeneratedGateCheckBlock(statement)
+  ) {
+    return false;
+  }
   const hash = hashSha256Hex(statement);
   if (
     relativePath === ENTITY_FEATURE_GATE_MIGRATION &&
@@ -1950,6 +1961,8 @@ const REPLAY_SAFE_BEFORE_SPLIT: readonly RegExp[] = [
   /^DO\b/iu,
   /^(?:GRANT|REVOKE)\b/iu,
   /^COMMENT\s+ON\b/iu,
+  // Setting a policy's expressions again leaves the same policy; a rename does not.
+  /^ALTER\s+POLICY\b(?![\s\S]*\bRENAME\s+TO\b)/iu,
   /^CREATE\s+OR\s+REPLACE\b/iu,
   /^CREATE\s+(?:UNIQUE\s+)?INDEX\s+(?:CONCURRENTLY\s+)?IF\s+NOT\s+EXISTS\b/iu,
   /^CREATE\s+(?:TABLE|SEQUENCE|EXTENSION|SCHEMA)\s+IF\s+NOT\s+EXISTS\b/iu,
@@ -2099,7 +2112,7 @@ const isReplaySafeBeforeSplit = (
 const isRowScanningStatement = (relativePath: string, statement: string) => {
   if (
     /^CREATE(?:\s+OR\s+REPLACE)?\s+FUNCTION\b/iu.test(statement) ||
-    /^CREATE\s+POLICY\b/iu.test(statement) ||
+    /^(?:CREATE|ALTER)\s+POLICY\b/iu.test(statement) ||
     (/^DO\b/iu.test(statement) &&
       !isUnapprovedProceduralStatement(relativePath, statement))
   ) {
@@ -2203,6 +2216,8 @@ describe("split-transaction migrations", () => {
         false,
       ],
       [`CREATE POLICY "p" ON "t" FOR SELECT TO r USING (true)`, [], false],
+      [`ALTER POLICY "p" ON "t" USING (true) WITH CHECK (true)`, [], true],
+      [`ALTER POLICY "p" ON "t" RENAME TO "q"`, [], false],
       [
         `CREATE POLICY "p" ON "t" FOR SELECT TO r USING (true)`,
         [`DROP POLICY IF EXISTS "p" ON "t"`],
@@ -2308,6 +2323,17 @@ describe("entity feature gate migration semantics", () => {
     expect(isUnapprovedProceduralStatement("other/migration.sql", valid)).toBe(
       true,
     );
+    // A generated gate migration adds the same checks to any gated table,
+    // and nothing else.
+    const generated =
+      "20261030034001_entity_feature_gate_registry/migration.sql";
+    expect(isUnapprovedProceduralStatement(generated, wrongRelation)).toBe(
+      false,
+    );
+    expect(isUnapprovedProceduralStatement(generated, wrongCheck)).toBe(true);
+    expect(isUnapprovedProceduralStatement(generated, injectedUpdate)).toBe(
+      true,
+    );
   });
 
   test("does not treat stored function bodies or policy checks as row scans", () => {
@@ -2323,6 +2349,12 @@ describe("entity feature gate migration semantics", () => {
         "fixture/migration.sql",
         "CREATE POLICY gate_policy ON public.items AS RESTRICTIVE FOR ALL " +
           "USING (true) WITH CHECK (value > 0)",
+      ),
+    ).toBe(false);
+    expect(
+      isRowScanningStatement(
+        "fixture/migration.sql",
+        "ALTER POLICY gate_policy ON public.items WITH CHECK (value > 0)",
       ),
     ).toBe(false);
     expect(

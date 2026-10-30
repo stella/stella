@@ -150,8 +150,15 @@ const DATABASE_POOLS = [
   },
   {
     file: "src/lib/public-law-read-db.ts",
-    constructor: 1,
+    constructor: 2,
     maximum: { type: "configured", key: "PUBLIC_LAW_DATABASE_POOL_MAX" },
+    processes: SHARED_POOL_PROCESSES,
+    admission: "pooled",
+  },
+  {
+    file: "src/lib/public-law-read-db.ts",
+    constructor: 1,
+    maximum: { type: "fixed", value: 1 },
     processes: SHARED_POOL_PROCESSES,
     admission: "pooled",
   },
@@ -227,7 +234,7 @@ const DATABASE_POOLS = [
     admission: "pooled",
   },
   {
-    file: "src/scripts/better-auth-migration-audit.ts",
+    file: "src/scripts/better-auth-migration-audit-command.ts",
     constructor: 1,
     maximum: { type: "fixed", value: 1 },
     processes: ["authAudit"],

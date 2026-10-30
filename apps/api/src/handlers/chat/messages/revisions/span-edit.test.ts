@@ -1,14 +1,15 @@
 import { describe, expect, test } from "bun:test";
 
 import { sha256Hex } from "@stll/sha256/bun";
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import { createProposeMessageSpanEdit } from "@/api/handlers/chat/messages/revisions/span-edit";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createScopedDbMock,
@@ -115,8 +116,11 @@ const runProposal = async ({
       managedAIResidency: "eu",
       memberRole: sessionMemberRole("owner"),
       promptCachingEnabled: false,
-      request: new Request("https://example.test/chat/span-edit"),
-      route: "/chat/span-edit",
+      request: new Request(
+        `https://example.test/v1/chat/threads/${threadId}/messages/${messageId}/span-edit`,
+      ),
+      route:
+        "/v1/chat/threads/:threadId/messages/:messageId/span-edit" satisfies ApiRoutePath,
     }),
   );
   return { result, modelCalls };

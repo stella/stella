@@ -6,7 +6,7 @@ import { INVOICE_PDF_LABELS } from "./pdf-labels";
 
 export { INVOICE_LANGUAGES, type InvoiceLanguage };
 
-export const INVOICE_COUNTRIES = ["SK", "CZ", "EU"] as const;
+export const INVOICE_COUNTRIES = ["SK", "CZ", "PL", "EU"] as const;
 export type InvoiceCountry = (typeof INVOICE_COUNTRIES)[number];
 export type InvoicePartyId = "registration" | "taxId" | "vatId";
 
@@ -20,13 +20,15 @@ export type InvoiceCountryProfile = {
    * when the profile prescribes none. Until invoices carry an exchange rate,
    * a VAT invoice in any other currency cannot be finalized.
    */
-  vatCurrency: "EUR" | "CZK" | null;
+  vatCurrency: "EUR" | "CZK" | "PLN" | null;
+  domesticTaxIdLabel: string | null;
   supplyDateLabel: Record<InvoiceLanguage, string>;
   partyIds: {
     seller: readonly InvoicePartyId[];
     buyer: readonly InvoicePartyId[];
   };
   legalNotes: Record<VatTreatment, LegalNote | null>;
+  exemptionReasonTreatments: readonly VatTreatment[];
 };
 
 const NOTE_TRANSLATIONS = {
@@ -142,6 +144,7 @@ export const INVOICE_COUNTRY_PROFILES = {
   SK: {
     // § 74 ods. 1 písm. i): "výšku dane spolu v eurách".
     vatCurrency: "EUR",
+    domesticTaxIdLabel: null,
     supplyDateLabel: supplyDateLabels(),
     partyIds: commonPartyIds,
     legalNotes: {
@@ -175,12 +178,14 @@ export const INVOICE_COUNTRY_PROFILES = {
         cs: "Dodání je osvobozeno od daně.",
       }),
     },
+    exemptionReasonTreatments: ["exempt"],
   },
   // Zákon č. 235/2004 Sb. o dani z přidané hodnoty, version in force from
   // 2026-01-01 (e-Sbírka), § 29.
   CZ: {
     // § 29 odst. 1 písm. l): "výši daně; tato daň se uvádí v české měně".
     vatCurrency: "CZK",
+    domesticTaxIdLabel: null,
     supplyDateLabel: supplyDateLabels(),
     partyIds: commonPartyIds,
     legalNotes: {
@@ -214,12 +219,58 @@ export const INVOICE_COUNTRY_PROFILES = {
         sk: "Plnenie oslobodené od dane.",
       }),
     },
+    exemptionReasonTreatments: ["exempt"],
+  },
+  // Ustawa z dnia 11 marca 2004 r. o podatku od towarów i usług,
+  // consolidated text, art. 106e.
+  PL: {
+    // Art. 106e ust. 11: kwoty podatku wykazuje się w złotych.
+    vatCurrency: "PLN",
+    domesticTaxIdLabel: "NIP",
+    supplyDateLabel: supplyDateLabels(),
+    // Art. 106e ust. 1 pkt 4 and 5 require the seller's and buyer's NIP.
+    partyIds: {
+      seller: ["taxId", "vatId"],
+      buyer: ["taxId", "vatId"],
+    },
+    legalNotes: {
+      domestic_vat: null,
+      // Art. 113 ust. 13 pkt 2 lit. a excludes legal services; the basis is required.
+      not_vat_payer: note("Zwolnienie z podatku:", {
+        ...NOTE_TRANSLATIONS.exempt,
+        pl: "Zwolnienie z podatku:",
+        en: "Tax exemption:",
+      }),
+      // Art. 106e ust. 1 pkt 18 mandates the wording „odwrotne obciążenie”.
+      reverse_charge: note("odwrotne obciążenie", {
+        ...NOTE_TRANSLATIONS.reverse_charge,
+        pl: "odwrotne obciążenie",
+      }),
+      // Not prescribed wording; the place of supply is outside Poland.
+      outside_scope: note(
+        "Usługa niepodlegająca opodatkowaniu na terytorium kraju.",
+        {
+          ...NOTE_TRANSLATIONS.outside_scope,
+          pl: "Usługa niepodlegająca opodatkowaniu na terytorium kraju.",
+        },
+      ),
+      // Art. 106e ust. 1 pkt 19 requires the exemption statement and legal basis.
+      exempt: note("Zwolnienie z podatku:", {
+        ...NOTE_TRANSLATIONS.exempt,
+        pl: "Zwolnienie z podatku:",
+        en: "Tax exemption:",
+      }),
+      // Art. 106e ust. 1 pkt 18a does not apply: legal services are not in Annex 15.
+    },
+    exemptionReasonTreatments: ["exempt", "not_vat_payer"],
   },
   EU: {
     vatCurrency: null,
+    domesticTaxIdLabel: null,
     supplyDateLabel: supplyDateLabels(),
     partyIds: commonPartyIds,
     legalNotes: noLegalNotes,
+    exemptionReasonTreatments: ["exempt"],
   },
 } as const satisfies Record<InvoiceCountry, InvoiceCountryProfile>;
 
@@ -258,7 +309,9 @@ export const invoiceCountryOf = (
   seller: InvoiceSellerCountryInput,
 ): InvoiceCountry => {
   const country = invoiceSellerCountryOf(seller);
-  return country === "SK" || country === "CZ" ? country : "EU";
+  return country === "SK" || country === "CZ" || country === "PL"
+    ? country
+    : "EU";
 };
 
 export const legalNotesFor = ({
@@ -284,10 +337,9 @@ export const legalNotesFor = ({
       translated === legalNote.mandated
         ? legalNote.mandated
         : `${legalNote.mandated} ${translated}`;
-    const reasons =
-      treatment === "exempt"
-        ? exemptionReasons.filter((reason) => reason.trim() !== "")
-        : [];
+    const reasons = profile.exemptionReasonTreatments.includes(treatment)
+      ? exemptionReasons.filter((reason) => reason.trim() !== "")
+      : [];
     notes.push(
       reasons.length === 0
         ? wording

@@ -1,5 +1,4 @@
-import type { Static } from "@sinclair/typebox";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { LEGISLATION_WINDOW_DISPOSITION_BASIS_VALUES } from "@stll/api-contract/legislation-expression";
 import {
@@ -32,9 +31,9 @@ export const PUBLIC_ERROR_TEXT_BYTES = {
   versionCount: 8,
 } as const;
 
-export const publicInconsistentVersionsSchema = t.Array(
-  t.Object(
-    {
+export const publicInconsistentVersionsSchema = v.pipe(
+  v.array(
+    v.object({
       id: boundedString(LIMITS.legislationSearchTextBytes.documentId),
       language: boundedString(LIMITS.legislationSearchTextBytes.language),
       versionValidFrom: nullableBoundedString(
@@ -43,46 +42,41 @@ export const publicInconsistentVersionsSchema = t.Array(
       versionValidTo: nullableBoundedString(
         PUBLIC_ERROR_TEXT_BYTES.versionDate,
       ),
-      basis: t.Union([
-        t.UnionEnum(LEGISLATION_WINDOW_DISPOSITION_BASIS_VALUES),
-        t.Null(),
+      basis: v.union([
+        v.picklist(LEGISLATION_WINDOW_DISPOSITION_BASIS_VALUES),
+        v.null(),
       ]),
-    },
-    { additionalProperties: false },
+    }),
   ),
-  { maxItems: PUBLIC_ERROR_TEXT_BYTES.versionCount },
+  v.maxLength(PUBLIC_ERROR_TEXT_BYTES.versionCount),
 );
 
-export const safePublicHandlerErrorResponseSchema = t.Object(
-  {
-    message: boundedString(PUBLIC_ERROR_TEXT_BYTES.message),
-    code: t.Optional(boundedString(PUBLIC_ERROR_TEXT_BYTES.code)),
-    hint: t.Optional(boundedString(PUBLIC_ERROR_TEXT_BYTES.hint)),
-    contactUrl: t.Optional(boundedString(PUBLIC_ERROR_TEXT_BYTES.contactUrl)),
-    retryable: t.Optional(t.Boolean()),
-    type: t.Optional(t.Literal("conflict")),
-    versions: t.Optional(publicInconsistentVersionsSchema),
-    country: t.Optional(boundedString(PUBLIC_ERROR_TEXT_BYTES.country)),
-    domain: t.Optional(t.Enum(PUBLIC_LAW_DOMAIN)),
-    status: t.Optional(boundedString(PUBLIC_ERROR_TEXT_BYTES.status)),
-    reason: t.Optional(boundedString(PUBLIC_ERROR_TEXT_BYTES.reason)),
-    issues: t.Optional(
-      t.Array(
-        t.Object(
-          {
-            path: boundedString(PUBLIC_ERROR_TEXT_BYTES.issuePath),
-            message: boundedString(PUBLIC_ERROR_TEXT_BYTES.issueMessage),
-          },
-          { additionalProperties: false },
-        ),
-        { maxItems: PUBLIC_ERROR_TEXT_BYTES.issueCount },
+export const safePublicHandlerErrorResponseSchema = v.object({
+  message: boundedString(PUBLIC_ERROR_TEXT_BYTES.message),
+  code: v.optional(boundedString(PUBLIC_ERROR_TEXT_BYTES.code)),
+  hint: v.optional(boundedString(PUBLIC_ERROR_TEXT_BYTES.hint)),
+  contactUrl: v.optional(boundedString(PUBLIC_ERROR_TEXT_BYTES.contactUrl)),
+  retryable: v.optional(v.boolean()),
+  type: v.optional(v.literal("conflict")),
+  versions: v.optional(publicInconsistentVersionsSchema),
+  country: v.optional(boundedString(PUBLIC_ERROR_TEXT_BYTES.country)),
+  domain: v.optional(v.enum(PUBLIC_LAW_DOMAIN)),
+  status: v.optional(boundedString(PUBLIC_ERROR_TEXT_BYTES.status)),
+  reason: v.optional(boundedString(PUBLIC_ERROR_TEXT_BYTES.reason)),
+  issues: v.optional(
+    v.pipe(
+      v.array(
+        v.object({
+          path: boundedString(PUBLIC_ERROR_TEXT_BYTES.issuePath),
+          message: boundedString(PUBLIC_ERROR_TEXT_BYTES.issueMessage),
+        }),
       ),
+      v.maxLength(PUBLIC_ERROR_TEXT_BYTES.issueCount),
     ),
-  },
-  { additionalProperties: false },
-);
+  ),
+});
 
-export const safePublicHandlerErrorOrStatusTextResponseSchema = t.Union([
+export const safePublicHandlerErrorOrStatusTextResponseSchema = v.union([
   safePublicHandlerErrorResponseSchema,
   boundedString(PUBLIC_ERROR_TEXT_BYTES.statusText),
 ]);
@@ -96,7 +90,7 @@ const optionalText = (value: unknown, maxBytes: number) =>
 /** Public errors expose corrective fields, never authenticated ceremony details. */
 export const projectPublicErrorBody = (
   value: unknown,
-): Static<typeof safePublicHandlerErrorResponseSchema> => {
+): v.InferOutput<typeof safePublicHandlerErrorResponseSchema> => {
   if (!isObject(value)) {
     return { message: "Internal server error" };
   }

@@ -234,21 +234,57 @@ test("invalid arm ordering surfaces through the workflow script", async () => {
   ).toContain("Cannot establish auto-merge and push ordering");
 });
 
-for (const { headRepository, actor, runs } of [
-  { headRepository: "owner/repository", actor: "contributor", runs: true },
-  { headRepository: "fork/repository", actor: "contributor", runs: false },
-  { headRepository: "owner/repository", actor: "dependabot[bot]", runs: false },
-  { headRepository: "fork/repository", actor: "dependabot[bot]", runs: false },
-  { headRepository: "owner/repository", actor: trusted.login, runs: true },
+const armedAtPush = { enabled_at: "2026-01-01T00:00:00Z" };
+for (const { headRepository, actor, autoMerge, runs } of [
+  {
+    headRepository: "owner/repository",
+    actor: "contributor",
+    autoMerge: armedAtPush,
+    runs: true,
+  },
+  {
+    headRepository: "fork/repository",
+    actor: "contributor",
+    autoMerge: armedAtPush,
+    runs: false,
+  },
+  {
+    headRepository: "owner/repository",
+    actor: "dependabot[bot]",
+    autoMerge: armedAtPush,
+    runs: false,
+  },
+  {
+    headRepository: "fork/repository",
+    actor: "dependabot[bot]",
+    autoMerge: armedAtPush,
+    runs: false,
+  },
+  {
+    headRepository: "owner/repository",
+    actor: trusted.login,
+    autoMerge: armedAtPush,
+    runs: true,
+  },
+  // A push to a pull request that was not armed has nothing to disarm.
+  {
+    headRepository: "owner/repository",
+    actor: "contributor",
+    autoMerge: null,
+    runs: false,
+  },
 ]) {
-  test(`job token eligibility: ${headRepository}/${actor}`, () => {
+  test(`job token eligibility: ${headRepository}/${actor}/${autoMerge === null ? "unarmed" : "armed"}`, () => {
     expect(
       jobCondition.runInNewContext({
         github: {
           repository: "owner/repository",
           actor,
           event: {
-            pull_request: { head: { repo: { full_name: headRepository } } },
+            pull_request: {
+              head: { repo: { full_name: headRepository } },
+              auto_merge: autoMerge,
+            },
           },
         },
       }),

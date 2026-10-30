@@ -122,7 +122,7 @@ const persistedOutput = (adapter: string, raw: RawIngestionResult) => {
       "A recorded fixture is a valid ingestion result",
     ),
     schema,
-  );
+  ).unwrap("A recorded fixture has readable document content");
   const sections =
     result.sections ??
     (result.fulltext ? segmentDecision(result.fulltext) : []);
@@ -165,7 +165,9 @@ const persistedOutput = (adapter: string, raw: RawIngestionResult) => {
         : [
             ...new Set(
               result.judges
-                .map(({ nameAsPrinted }) => judgeNameKey(nameAsPrinted))
+                .map((judge) =>
+                  judgeNameKey(judge.nameAsPrinted ?? judge.czechDeclinedName),
+                )
                 .filter((key) => key !== ""),
             ),
           ],

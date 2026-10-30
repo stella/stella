@@ -1,7 +1,6 @@
 import { Result } from "better-result";
 import { eq } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import { sha256HexToBase64 } from "@stll/sha256";
 
@@ -12,14 +11,14 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { entityUploadRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { captureError } from "@/api/lib/analytics/capture";
+import { createErrorCapture } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { insertInChunks } from "@/api/lib/db/bulk-write";
 import {
   createSiblingNamePlan,
@@ -32,6 +31,7 @@ import {
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { resolveUploadMime } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { presignUploadUrl } from "@/api/lib/s3-presign";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
@@ -53,36 +53,39 @@ import {
 
 const TREE_KEY_MAX_LENGTH = 512;
 
-const treeDirectorySchema = t.Object({
-  key: t.String({ minLength: 1, maxLength: TREE_KEY_MAX_LENGTH }),
-  parentKey: t.Optional(
-    t.Nullable(t.String({ minLength: 1, maxLength: TREE_KEY_MAX_LENGTH })),
+const treeDirectorySchema = v.object({
+  key: v.pipe(v.string(), v.minLength(1), v.maxLength(TREE_KEY_MAX_LENGTH)),
+  parentKey: v.optional(
+    v.nullable(
+      v.pipe(v.string(), v.minLength(1), v.maxLength(TREE_KEY_MAX_LENGTH)),
+    ),
   ),
-  name: t.String({ minLength: 1, maxLength: 255 }),
+  name: v.pipe(v.string(), v.minLength(1), v.maxLength(255)),
 });
 
-const treeFileSchema = t.Object({
-  key: t.String({ minLength: 1, maxLength: TREE_KEY_MAX_LENGTH }),
-  parentKey: t.Optional(
-    t.Nullable(t.String({ minLength: 1, maxLength: TREE_KEY_MAX_LENGTH })),
+const treeFileSchema = v.object({
+  key: v.pipe(v.string(), v.minLength(1), v.maxLength(TREE_KEY_MAX_LENGTH)),
+  parentKey: v.optional(
+    v.nullable(
+      v.pipe(v.string(), v.minLength(1), v.maxLength(TREE_KEY_MAX_LENGTH)),
+    ),
   ),
   ...documentUploadFileFields,
 });
 
-const bodySchema = t.Object({
-  propertyId: t.Optional(t.Nullable(tSafeId("property"))),
-  parentId: t.Optional(t.Nullable(tSafeId("entity"))),
-  directories: t.Array(treeDirectorySchema, {
-    maxItems: LIMITS.entitiesCount,
-  }),
-  files: t.Array(treeFileSchema, {
-    maxItems: LIMITS.entitiesCount,
-  }),
+const bodySchema = v.object({
+  propertyId: v.optional(v.nullable(resourceIdSchema("property"))),
+  parentId: v.optional(v.nullable(resourceIdSchema("entity"))),
+  directories: v.pipe(
+    v.array(treeDirectorySchema),
+    v.maxLength(LIMITS.entitiesCount),
+  ),
+  files: v.pipe(v.array(treeFileSchema), v.maxLength(LIMITS.entitiesCount)),
 });
 
-type BodySchema = Static<typeof bodySchema>;
-type TreeDirectoryInput = Static<typeof treeDirectorySchema>;
-type TreeFileInput = Static<typeof treeFileSchema>;
+type BodySchema = v.InferOutput<typeof bodySchema>;
+type TreeDirectoryInput = v.InferOutput<typeof treeDirectorySchema>;
+type TreeFileInput = v.InferOutput<typeof treeFileSchema>;
 
 type NormalizedTreeDirectory = {
   key: string;
@@ -694,7 +697,9 @@ const entityCreateTree = createSafeHandler(
     }
 
     flushEntitySearchRepairs(writeResult.indexedDirectoryIds).catch(
-      captureError,
+      createErrorCapture(
+        handlerErrorContext("entityCreateTree.flushEntitySearchRepairs"),
+      ),
     );
 
     return Result.ok({

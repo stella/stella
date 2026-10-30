@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import * as v from "valibot";
 
-import { vApiDate } from "@stll/api-contract/api-date";
+import { apiDateSchema } from "@stll/api-contract/api-date";
 import { SIGNAL_SEVERITY } from "@stll/api-contract/signals";
 import type { SignalSeverity } from "@stll/api-contract/signals";
 import { failureGradeOf } from "@stll/errors";
@@ -67,7 +67,7 @@ export const deadlineExtractionSchema = v.object({
     v.array(
       v.object({
         label: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(200)),
-        dueDate: vApiDate,
+        dueDate: apiDateSchema,
         quote: v.pipe(
           v.string(),
           v.trim(),

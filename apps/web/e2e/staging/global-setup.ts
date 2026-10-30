@@ -238,6 +238,7 @@ const globalSetup = async (): Promise<void> => {
   const storageState = await fetchSmokeSessionStorageState({
     headers: EDGE_HEADERS,
     secret,
+    apiUrl: STAGING_API_URL,
     sessionUrl: `${STAGING_API_URL}/smoke/session`,
     webUrl: WEB_URL,
   });

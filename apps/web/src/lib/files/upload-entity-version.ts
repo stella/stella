@@ -2,12 +2,15 @@ import { panic } from "better-result";
 
 import { DOCUMENT_UPLOAD_PUT_TIMEOUT_MS } from "@stll/api-contract";
 import { fetchWithTimeout } from "@stll/fetch";
-import { sha256Hex as hashSha256Hex } from "@stll/sha256/browser";
 
 import { api } from "@/lib/api";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
-import { withActiveUpload } from "@/lib/files/active-uploads";
+import { unwrapApiResponse } from "@/lib/errors/api";
+import {
+  hashActiveUploadFile,
+  withActiveUpload,
+} from "@/lib/files/active-uploads";
 import { toSafeId } from "@/lib/safe-id";
+import type { SafeId } from "@/lib/safe-id";
 
 import {
   ATTACHED_TEMPLATE_UPLOAD_PREFLIGHT,
@@ -29,7 +32,11 @@ export const ENTITY_VERSION_UPLOAD_RESULT = {
 
 export type EntityVersionUploadResult =
   | { type: typeof ENTITY_VERSION_UPLOAD_RESULT.cancelled }
-  | { type: typeof ENTITY_VERSION_UPLOAD_RESULT.uploaded };
+  | {
+      type: typeof ENTITY_VERSION_UPLOAD_RESULT.uploaded;
+      entityVersionId: SafeId<"entityVersion">;
+      fileId: string;
+    };
 
 const abortUpload = async (
   workspaceId: string,
@@ -43,7 +50,7 @@ const abortUpload = async (
         uploadId,
       })
       .abort.post({});
-    unwrapEden(response);
+    unwrapApiResponse(response);
   } catch {
     // Preserve the original upload failure. Cleanup is intentionally best effort.
   }
@@ -75,7 +82,7 @@ export const uploadEntityVersion = async ({
   // The page holds the bytes until this settles, so a reload must prompt.
   return await withActiveUpload(async () => {
     signal?.throwIfAborted();
-    const sha256Hex = await hashSha256Hex(fileToUpload);
+    const sha256Hex = await hashActiveUploadFile(fileToUpload);
     signal?.throwIfAborted();
 
     const wsClient = api.uploads({
@@ -92,18 +99,16 @@ export const uploadEntityVersion = async ({
       },
       signal ? { fetch: { signal } } : undefined,
     );
-    const { uploadId, url, headers } = unwrapEden(presign);
+    const { uploadId, url, headers } = unwrapApiResponse(presign);
 
-    await completeEntityVersionUpload({
+    const finalized = await completeEntityVersionUpload({
       abort: async () => await abortUpload(workspaceId, uploadId),
       finalize: async () => {
         const response = await wsClient({ uploadId }).finalize.post(
           undefined,
           signal ? { fetch: { signal } } : undefined,
         );
-        if (response.error) {
-          throw toAPIError(response.error);
-        }
+        return unwrapApiResponse(response).finalizedResult;
       },
       put: async () =>
         await fetchWithTimeout(url, {
@@ -114,6 +119,13 @@ export const uploadEntityVersion = async ({
           timeoutMs: DOCUMENT_UPLOAD_PUT_TIMEOUT_MS,
         }),
     });
-    return { type: ENTITY_VERSION_UPLOAD_RESULT.uploaded };
+    if (finalized.type !== "entity_version") {
+      return panic("Entity version upload finalized with another purpose");
+    }
+    return {
+      type: ENTITY_VERSION_UPLOAD_RESULT.uploaded,
+      entityVersionId: finalized.entityVersionId,
+      fileId: finalized.fileId,
+    };
   });
 };

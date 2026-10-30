@@ -6,12 +6,15 @@ import path from "node:path";
 
 import { assertProperty } from "@stll/property-testing";
 
+import { DOC_SOURCE_EXCLUSIONS } from "../.claude/mcp/doc-sources";
 import { waiverKey } from "./dated-waiver-fix-task";
 import {
   collectWaivers,
   DAY_MS,
   DOC_SOURCE_FILE,
+  docProbeUrl,
   dueWaivers,
+  dueWaiverWarnings,
   expiredWaiverAnnotations,
   expiredWaiverFailures,
   expiryInstant,
@@ -159,6 +162,40 @@ test("an elapsed waiver annotates the change instead of failing it", () => {
     expiredWaiverFailures(entries, new Date("2026-10-02T01:02:03.000Z")),
   ).toEqual([]);
 });
+test("a due waiver warns on its file ahead of its date and fails only the change touching that file", () => {
+  const entries = inventory().filter(({ kind }) => kind === "no-llms-txt");
+  const unrelated = new Set(["apps/web/src/unrelated.ts"]);
+  const owner = new Set([DOC_SOURCE_FILE]);
+  expect(
+    dueWaiverWarnings(entries, new Date("2026-09-30T23:59:59.999Z"), unrelated),
+  ).toEqual([]);
+  const ahead = dueWaiverWarnings(
+    entries,
+    new Date("2026-10-01T00:00:00.000Z"),
+    owner,
+  );
+  expect(ahead).toHaveLength(1);
+  expect(ahead[0]).toStartWith(`::warning file=${DOC_SOURCE_FILE},line=`);
+  expect(ahead[0]).toContain("doc-package (no-llms-txt) expires at");
+
+  const elapsed = new Date("2026-10-06T00:00:00.000Z");
+  expect(dueWaiverWarnings(entries, elapsed, unrelated)).toHaveLength(1);
+  expect(expiredWaiverFailures(entries, elapsed, unrelated)).toEqual([]);
+  expect(dueWaiverWarnings(entries, elapsed, owner)).toEqual([]);
+  expect(expiredWaiverFailures(entries, elapsed, owner)).toEqual([
+    `${DOC_SOURCE_FILE}:${String(entries[0]?.line)} dated waiver expired: doc-package`,
+  ]);
+});
+// The recheck reads the first llms.txt URL an explanation names; without one
+// the waiver could only ever expire, never be rechecked.
+test("every documentation waiver names the llms.txt its recheck probes", () => {
+  for (const { dependency, explanation } of DOC_SOURCE_EXCLUSIONS) {
+    expect({ dependency, url: docProbeUrl(explanation) }).toEqual({
+      dependency,
+      url: expect.stringMatching(/^https:\/\/\S+\/llms\.txt$/u),
+    });
+  }
+});
 test("an elapsed flaky-test quarantine annotates the change gate instead of failing it", () => {
   const entries = collectWaivers({
     read,
@@ -222,7 +259,10 @@ test("an elapsed test quarantine and other elapsed waivers still fail the check"
     new Date("2026-10-07T00:00:00.000Z"),
   );
   expect(allElapsed).toHaveLength(
-    entries.filter(({ kind }) => kind !== "release-age-exclusion").length,
+    entries.filter(
+      ({ kind }) =>
+        kind !== "release-age-exclusion" && kind !== "dependency-audit",
+    ).length,
   );
   expect(allElapsed.some((failure) => failure.includes("new-package"))).toBe(
     false,
@@ -431,7 +471,11 @@ test("all waiver kinds retain their keys when unrelated lines shift their locato
     '// test-quarantine-expires: 2026-10-05\ntest.skip("case", () => {});';
   const entriesAt = (prefix: string) =>
     collectWaivers({
-      read: (file) => prefix + read(file),
+      read: (file) =>
+        prefix +
+        (file === "scripts/guard-rollouts/fixture-guard.ts"
+          ? 'export default { id: "fixture-guard" };'
+          : read(file)),
       docs: [doc],
       audit: [{ id: "GHSA-test", package: "pkg", expiresOn: "2026-10-03" }],
       bunfigs: ["bunfig.toml"],
@@ -441,6 +485,14 @@ test("all waiver kinds retain their keys when unrelated lines shift their locato
       quarantineSources: {
         "a.test.ts": `${prefix}${quarantined}`,
       },
+      guardRollouts: [
+        {
+          id: "fixture-guard",
+          type: "changed-lines",
+          expiresAt: "2026-10-20T00:00:00.000Z",
+          check: ["bun", "scripts/check-fixture.ts"],
+        },
+      ],
       flakyTestQuarantines: [flaky],
       pendingContractMigrations: [
         { name: "pending-contract", expiresAt: "2026-10-01" },
@@ -563,4 +615,71 @@ test("tracked-files input rejects absolute and parent paths", () => {
   } finally {
     rmSync(directory, { force: true, recursive: true });
   }
+});
+
+test("changed-lines guard rollouts enter the dated inventory with a full-scope probe", () => {
+  const entries = collectWaivers({
+    read: (file) =>
+      file === "scripts/guard-rollouts/fixture-guard.ts"
+        ? 'export default { id: "fixture-guard" };'
+        : read(file),
+    docs: [],
+    audit: [],
+    bunfigs: [],
+    releaseAgeSources: {},
+    guardRollouts: [
+      {
+        id: "fixture-guard",
+        type: "changed-lines",
+        expiresAt: "2026-10-20T00:00:00.000Z",
+        check: ["bun", "scripts/check-fixture.ts"],
+      },
+      {
+        id: "full-guard",
+        type: "full",
+        check: ["bun", "scripts/check-full.ts"],
+      },
+      {
+        id: "autofix-guard",
+        type: "autofix",
+        generator: "fixture-fix",
+        check: ["bun", "scripts/check-autofix.ts"],
+      },
+    ],
+  }).filter(({ kind }) => kind === "guard-rollout");
+  expect(entries).toHaveLength(1);
+  expect(entries.at(0)?.probe).toEqual({
+    command: [
+      "env",
+      "STELLA_GUARD_SCOPE=all",
+      "bun",
+      "scripts/check-fixture.ts",
+    ],
+    attempts: 20,
+  });
+  expect(
+    expiredWaiverFailures(entries, new Date("2026-10-19T23:59:59.999Z")),
+  ).toEqual([]);
+  expect(
+    expiredWaiverFailures(entries, new Date("2026-10-20T00:00:00.000Z")),
+  ).toEqual([
+    "scripts/guard-rollouts/fixture-guard.ts:1 dated waiver expired: fixture-guard",
+  ]);
+});
+
+test("dependency acceptance expiry warns on main and refuses only its owning file", () => {
+  const entries = inventory().filter(({ kind }) => kind === "dependency-audit");
+  const now = new Date("2026-10-07T00:00:00Z");
+  const source = "scripts/dependency-audit-baseline.json";
+  expect(entries.length).toBeGreaterThan(0);
+  for (const changes of [undefined, new Set<string>(), new Set(["bun.lock"])]) {
+    expect(expiredWaiverFailures(entries, now, changes)).toEqual([]);
+    expect(dueWaiverWarnings(entries, now, changes)).toHaveLength(
+      entries.length,
+    );
+  }
+  expect(expiredWaiverFailures(entries, now, new Set([source]))).toHaveLength(
+    entries.length,
+  );
+  expect(dueWaiverWarnings(entries, now, new Set([source]))).toEqual([]);
 });

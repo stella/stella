@@ -4,6 +4,7 @@ import type { AIProvider, TanStackAIProvider } from "@stll/ai-catalog";
 import type { SanctionsSource } from "@stll/sanctions";
 import { Temporal } from "@stll/time";
 
+import type { RAW_SOURCE_FAMILY } from "@/api/lib/legal-search/raw-source-family";
 import type { VerificationRunErrorCode } from "@/api/lib/lists/verification/contract";
 import type { RootPoolReport } from "@/api/lib/observability/root-pool-window";
 import type { BudgetName } from "@/api/lib/rate-limit/budget-observability";
@@ -34,6 +35,42 @@ import { isLocalDevOpen } from "@/api/runtime-mode";
 const METRIC_NAMESPACE = "Stella/Api";
 const METRIC_NAME = "RequestDuration";
 const FAILURE_METRIC_NAME = "RequestTransientFailures";
+
+type RawSourceStoredMetricInput = {
+  family: (typeof RAW_SOURCE_FAMILY)[keyof typeof RAW_SOURCE_FAMILY];
+  sourceId: string;
+  kind: "document" | "payload";
+  bytes: number;
+};
+
+/** Successful raw write volume; conditional duplicates contribute no sample. */
+export const emitRawSourceStoredMetric = ({
+  family,
+  sourceId,
+  kind,
+  bytes,
+}: RawSourceStoredMetricInput): void => {
+  writeMetricLine({
+    family,
+    source: sourceId,
+    kind,
+    RawSourceStoredBytes: bytes,
+    RawSourceStoredObjects: 1,
+    _aws: {
+      Timestamp: Temporal.Now.instant().epochMilliseconds,
+      CloudWatchMetrics: [
+        {
+          Namespace: METRIC_NAMESPACE,
+          Dimensions: [["family", "source", "kind"]],
+          Metrics: [
+            { Name: "RawSourceStoredBytes", Unit: "Bytes" },
+            { Name: "RawSourceStoredObjects", Unit: "Count" },
+          ],
+        },
+      ],
+    },
+  });
+};
 
 const REQUEST_STAGE_FAMILIES = {
   legislation_search: [
@@ -360,15 +397,36 @@ export type ProcessMemoryReport = {
   rssBytes: number;
   heapUsedBytes: number;
   arrayBuffersBytes: number;
-  uploadFinalizeInFlightBytes: number;
+  workPools: Record<
+    string,
+    {
+      inFlight: number;
+      queued: number;
+      bytesInFlight: number;
+      refusedBusy: number;
+      refusedMemory: number;
+      deadlineCancelled: number;
+    }
+  >;
 };
 
 /** Log-only: memory diagnostics must not create billable custom metrics. */
 export const emitProcessMemoryLog = (memory: ProcessMemoryReport): void => {
+  const poolFields = Object.fromEntries(
+    Object.entries(memory.workPools).flatMap(([pool, metrics]) =>
+      Object.entries(metrics).map(([field, value]) => [
+        `work_pool.${pool}.${field}`,
+        value,
+      ]),
+    ),
+  );
   writeMetricLine({
     severity: "INFO",
     message: "runtime.process_memory",
-    ...memory,
+    rssBytes: memory.rssBytes,
+    heapUsedBytes: memory.heapUsedBytes,
+    arrayBuffersBytes: memory.arrayBuffersBytes,
+    ...poolFields,
   });
 };
 
@@ -441,6 +499,8 @@ export const CASE_LAW_FRESHNESS_METRIC = {
   oldestUnpublishedAgeSeconds: "CaseLawOldestUnpublishedAgeSeconds",
   sourceSyncAgeSeconds: "CaseLawSourceSyncAgeSeconds",
   projectionConvergence: "CaseLawProjectionConvergence",
+  decisionIdentifierRepairs: "CaseLawDecisionIdentifierRepairs",
+  decisionIdentifierPassAgeSeconds: "CaseLawDecisionIdentifierPassAgeSeconds",
 } as const satisfies Record<string, string>;
 
 const buildCaseLawMetricRecord = ({
@@ -495,6 +555,22 @@ export const buildCaseLawSourceSyncAgeMetric = (
   }),
   source,
 });
+
+export const buildCaseLawDecisionIdentifierRepairMetric = (value: number) =>
+  buildCaseLawMetricRecord({
+    dimensions: [],
+    name: CASE_LAW_FRESHNESS_METRIC.decisionIdentifierRepairs,
+    unit: "Count",
+    value,
+  });
+
+export const buildCaseLawDecisionIdentifierPassAgeMetric = (value: number) =>
+  buildCaseLawMetricRecord({
+    dimensions: [],
+    name: CASE_LAW_FRESHNESS_METRIC.decisionIdentifierPassAgeSeconds,
+    unit: "Seconds",
+    value,
+  });
 
 export const buildCaseLawProjectionConvergenceMetric = (status: string) => ({
   ...buildCaseLawMetricRecord({

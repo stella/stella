@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -10,12 +10,13 @@ import type {
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  tDefaultVarchar,
-  tSafeId,
+  defaultVarcharSchema,
+  fileSchema,
+  resourceIdSchema,
   withDescription,
 } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
+import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import {
   type CreatedTemplate,
@@ -24,10 +25,10 @@ import {
 import { scanTemplateUpload } from "@/api/lib/templates/scan-template-upload";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
-const createTemplateBodySchema = t.Object({
-  file: t.File({ maxSize: FILE_SIZE_LIMITS.document }),
-  name: withDescription(tDefaultVarchar, "Template display name"),
-  categoryId: t.Optional(tSafeId("templateCategory")),
+const createTemplateBodySchema = v.object({
+  file: fileSchema({ maxBytes: FILE_SIZE_LIMIT_BYTES.document }),
+  name: withDescription(defaultVarcharSchema, "Template display name"),
+  categoryId: v.exactOptional(resourceIdSchema("templateCategory")),
 });
 
 type CreateTemplateProps = {

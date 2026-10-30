@@ -1,6 +1,5 @@
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
-import Elysia from "elysia";
 
 import { isValidLinkIconImage } from "@/api/handlers/chat/link-icons/image";
 import {
@@ -11,9 +10,15 @@ import type { LinkIconTarget } from "@/api/handlers/chat/link-icons/origin";
 import type { CacheableLinkIconOutcome } from "@/api/handlers/chat/link-icons/outcome";
 import { readLinkIcon } from "@/api/handlers/chat/link-icons/read";
 import { linkIconBody } from "@/api/handlers/chat/link-icons/response";
+import { createHttpApp } from "@/api/http/app";
+import { responseCachePolicy } from "@/api/http/cache";
+import { routes } from "@/api/http/route";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
+import { defineEndpoint } from "@/api/lib/endpoints";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { SafeOutboundFetchError } from "@/api/lib/safe-outbound-fetch";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 
 const ICON_BYTES = Uint8Array.fromBase64(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4nGNgAAIAAAUAAXpeqz8AAAAASUVORK5CYII=",
@@ -109,31 +114,41 @@ for (const failure of ["timeout", "deadline", 503] as const) {
       },
     } satisfies Parameters<typeof readLinkIcon>[0]["cache"];
     const permit = grantThirdPartyOutboundPermit();
-    const app = new Elysia().get("/icon", async ({ set }) =>
-      linkIconBody(
-        await readLinkIcon({
-          hostname: toRegistrableIconSite("example.com").unwrap(),
-          userId: toSafeId<"user">("retry-user"),
-          ip: "192.0.2.1",
-          cache,
-          readOrigin: async (hostname) => await origin(hostname, permit),
+    await using server = serveForTest(
+      createHttpApp({
+        routes: routes({
+          "/icon": {
+            GET: defineEndpoint.public({}, async ({ set }) =>
+              linkIconBody(
+                await readLinkIcon({
+                  hostname: toRegistrableIconSite("example.com").unwrap(),
+                  userId: toSafeId<"user">("retry-user"),
+                  ip: "192.0.2.1",
+                  cache,
+                  readOrigin: async (hostname) =>
+                    await origin(hostname, permit),
+                }),
+                set,
+              ),
+            ),
+          },
         }),
-        set,
-      ),
+        middleware: [responseCachePolicy, errorBoundary],
+      }),
     );
     const request = () => new Request("http://localhost/icon");
-    const first = await app.handle(request());
+    const first = await server.fetch(request());
     expect(await first.json()).toEqual({ type: "temporary" });
     expect(first.headers.get("cache-control")).toContain("no-store");
     expect(stored).toBeUndefined();
     expect(requests).toBe(1);
     // Pass the short lease while staying well inside the one-hour negative TTL.
     now = 11_000;
-    const recovered = await app.handle(request());
+    const recovered = await server.fetch(request());
     expect(recovered.headers.get("content-type")).toBe("image/png");
     expect(new Uint8Array(await recovered.arrayBuffer())).toEqual(ICON_BYTES);
     expect(requests).toBe(2);
-    const cached = await app.handle(request());
+    const cached = await server.fetch(request());
     expect(cached.headers.get("cache-control")).toContain("max-age=3600");
     expect(requests).toBe(2);
   });

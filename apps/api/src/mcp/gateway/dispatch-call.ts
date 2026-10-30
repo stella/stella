@@ -20,7 +20,7 @@ import {
 } from "@/api/lib/mcp-upstream/namespace";
 import { projectionPayload } from "@/api/lib/projection-totality";
 import type { McpMode } from "@/api/mcp/constants";
-import type { McpRequestContext } from "@/api/mcp/context";
+import type { McpRequestResources } from "@/api/mcp/context";
 import {
   SKILL_TOOL_INPUT,
   SKILL_TOOL_OUTPUT,
@@ -137,7 +137,7 @@ export const dispatchGatewayToolCall = async ({
   dependencies = defaultDependencies,
 }: {
   args: Record<string, unknown>;
-  context: McpRequestContext;
+  context: McpRequestResources;
   mode: McpMode;
   toolName: string;
   dependencies?: GatewayDispatchDependencies;

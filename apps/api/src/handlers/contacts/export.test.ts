@@ -8,12 +8,13 @@ import {
 
 import { contactToPortableImport } from "@/api/handlers/contacts/contact-import-export";
 import {
+  inspectContactImportDocument,
   parseContactImportDocument,
   previewContactImport,
 } from "@/api/handlers/contacts/contact-import-file";
 import { escapeCSV } from "@/api/lib/csv";
 
-test("the portable export field set roundtrips through import preview", () => {
+test("the portable export roundtrips through the mapping import suggests", () => {
   const portable = contactToPortableImport({
     type: "person",
     displayName: "Jane Doe",
@@ -53,6 +54,17 @@ test("the portable export field set roundtrips through import preview", () => {
     throw document.error;
   }
 
+  // The export promises a re-import without a mapping step, so the preview
+  // runs on what inspection suggests, never on a hand-written mapping.
+  const suggested = inspectContactImportDocument(document.value).columns.map(
+    ({ sourceIndex, targetField }) => ({ sourceIndex, targetField }),
+  );
+  expect(suggested).toEqual(
+    CONTACT_IMPORT_FIELDS.map((targetField, sourceIndex) => ({
+      sourceIndex,
+      targetField,
+    })),
+  );
   const preview = previewContactImport({
     document: document.value,
     mapping: {
@@ -60,10 +72,7 @@ test("the portable export field set roundtrips through import preview", () => {
       defaultType: "person",
       generateDisplayName: false,
       taxIdScheme: "none",
-      columns: CONTACT_IMPORT_FIELDS.map((targetField, sourceIndex) => ({
-        sourceIndex,
-        targetField,
-      })),
+      columns: suggested,
     },
   });
   expect(Result.isOk(preview)).toBe(true);

@@ -12,6 +12,8 @@ import {
   splitStatuteTitleCitation,
   statuteTitleCitationMentionRegex,
 } from "@stll/api-contract/statute-route";
+import { provisionCitationProfileFor } from "@stll/legal-atlas/provision-citation-profiles";
+import { nominativeTitle } from "@stll/legal-atlas/provision-citation-resolve";
 import { normalizeUnicode } from "@stll/text-normalize";
 
 import type { Transaction } from "@/api/db/root";
@@ -36,8 +38,10 @@ import type { LegislationReadTransaction } from "@/api/lib/legislation-public-re
  * word forms is kept anywhere, so a jurisdiction is covered by the titles it
  * stores and nothing else.
  *
- * What a title does not state is not matched: an inflected form, an
- * abbreviation, a long official name shortened in speech. A later deriver can
+ * What a title does not state is not matched: an abbreviation, a long
+ * official name shortened in speech. The one inflection read is the head a
+ * short title opens with (`zákona o …` for `zákon o …`), declined by the
+ * jurisdiction's citation profile at query time. A later deriver can
  * add such names as rows of its own `derivation` (with its provenance), and
  * the lookup below reads them unchanged; this module derives only what the
  * text itself says.
@@ -411,14 +415,43 @@ const NAMED_VERSION_LIMIT = 500;
 const CITED_KEY_LIMIT = 50;
 
 type NameLookup = {
-  matchKey: string;
+  matchKeys: readonly string[];
   country?: string | undefined;
 };
 
-const nameLookupWhere = ({ matchKey, country }: NameLookup): SQL[] => [
-  eq(legislationWorkNames.matchKey, matchKey),
+const nameLookupWhere = ({ matchKeys, country }: NameLookup): SQL[] => [
+  inArray(legislationWorkNames.matchKey, [...matchKeys]),
   ...(country === undefined ? [] : [eq(legislationWorkNames.country, country)]),
 ];
+
+/**
+ * The keys a query is compared with: its own, and, where it opens with a
+ * declined head of its jurisdiction's short titles, the key of the same name
+ * in the nominative a stored title states (`zákona o obětech trestných činů`
+ * matches `zákon o obětech trestných činů`). The declension is the citation
+ * profile's grammar, not a list of names.
+ */
+export const legislationNameQueryKeys = (
+  query: string,
+  country: string | undefined,
+): string[] => {
+  const keys = new Set<string>();
+  const own = legislationNameMatchKey(query);
+  if (own !== null) {
+    keys.add(own);
+  }
+  const profile =
+    country === undefined
+      ? null
+      : provisionCitationProfileFor(country.toUpperCase());
+  const nominative = profile === null ? null : nominativeTitle(query, profile);
+  const declined =
+    nominative === null ? null : legislationNameMatchKey(nominative);
+  if (declined !== null) {
+    keys.add(declined);
+  }
+  return [...keys];
+};
 
 /**
  * Versions whose own title states the name, by the match-key index. Exported
@@ -560,12 +593,12 @@ export const readNamedLegislationWorks = async (
       }));
     }
   }
-  const matchKey = legislationNameMatchKey(query);
-  if (matchKey === null) {
+  const matchKeys = legislationNameQueryKeys(query, country);
+  if (matchKeys.length === 0) {
     return [];
   }
-  const ownNames = await ownNameVersionsQuery(tx, { matchKey, country });
-  const citedKeys = await citedKeysQuery(tx, { matchKey, country });
+  const ownNames = await ownNameVersionsQuery(tx, { matchKeys, country });
+  const citedKeys = await citedKeysQuery(tx, { matchKeys, country });
 
   const citations = citedKeys.flatMap(({ country: citedCountry, citedKey }) =>
     citedKey === null ? [] : [{ country: citedCountry, citedKey }],

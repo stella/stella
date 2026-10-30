@@ -2,6 +2,7 @@ import { panic, Result, TaggedError } from "better-result";
 import * as slimdom from "slimdom";
 
 import { writeZipEntry } from "@stll/docx-utils";
+import { declareFingerprintFields } from "@stll/errors";
 import type { FolioReviewChangeKind } from "@stll/folio-core/server";
 
 import { loadDocxArchive } from "@/api/lib/docx-archive";
@@ -72,7 +73,11 @@ export class DocxTranslationError extends TaggedError("DocxTranslationError")<{
   message: string;
   reason: DocxTranslationErrorReason;
   cause?: unknown;
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 const fail = (
   reason: DocxTranslationErrorReason,

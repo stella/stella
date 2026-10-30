@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
 import { timeEntryRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
@@ -17,19 +17,27 @@ import { recordBillingCapCrossings } from "@/api/lib/billing/arrangements";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { formatTodayInTimeZone } from "@/api/lib/timezone";
 
-const splitEntryBodySchema = t.Object({
-  id: tSafeId("timeEntry"),
-  splits: t.Array(
-    t.Object({
-      workItemId: tSafeId("entity"),
-      percentage: t.Integer({ minimum: 1, maximum: 100 }),
-    }),
-    { minItems: 2, maxItems: 10 },
+const splitEntryBodySchema = v.object({
+  id: resourceIdSchema("timeEntry"),
+  splits: v.pipe(
+    v.array(
+      v.object({
+        workItemId: resourceIdSchema("entity"),
+        percentage: v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(1),
+          v.maxValue(100),
+        ),
+      }),
+    ),
+    v.minLength(2),
+    v.maxLength(10),
   ),
 });
 

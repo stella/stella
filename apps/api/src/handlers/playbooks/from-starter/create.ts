@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { createPlaybookDefinitionHandler } from "@/api/handlers/playbooks/create-shared";
 import { instantiateStarterPositions } from "@/api/handlers/playbooks/instantiate-starter";
@@ -12,8 +12,8 @@ import {
   STARTER_PLAYBOOK_IDS,
 } from "@/api/lib/workflow/starter-playbooks";
 
-const fromStarterBodySchema = t.Object({
-  starterId: t.UnionEnum(STARTER_PLAYBOOK_IDS),
+const fromStarterBodySchema = v.object({
+  starterId: v.picklist(STARTER_PLAYBOOK_IDS),
 });
 
 const config = {

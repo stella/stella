@@ -50,3 +50,50 @@ export const readScalingViolations = ({
   }
   return violations;
 };
+
+type WriteScalingMeasurement = {
+  statements: number;
+  transactionRoundTrips: number;
+  responseBytes: number;
+};
+
+type WriteScalingComparison = {
+  small: WriteScalingMeasurement;
+  large: WriteScalingMeasurement;
+};
+
+/** A write pays the same database round trips however much its scope holds. */
+export const writeScalingViolations = ({
+  small,
+  large,
+}: WriteScalingComparison) => {
+  for (const measurement of [small, large]) {
+    if (
+      measurement.statements <= 0 ||
+      [
+        measurement.statements,
+        measurement.transactionRoundTrips,
+        measurement.responseBytes,
+      ].some((value) => !Number.isFinite(value) || value < 0)
+    ) {
+      panic(
+        "Write scaling requires executed statements and finite nonnegative measurements",
+      );
+    }
+  }
+  const violations: string[] = [];
+  if (large.statements !== small.statements) {
+    violations.push(`statements: ${small.statements} -> ${large.statements}`);
+  }
+  if (large.transactionRoundTrips !== small.transactionRoundTrips) {
+    violations.push(
+      `transaction round trips: ${small.transactionRoundTrips} -> ${large.transactionRoundTrips}`,
+    );
+  }
+  if (large.responseBytes > small.responseBytes * 1.2) {
+    violations.push(
+      `response bytes: ${small.responseBytes} -> ${large.responseBytes}`,
+    );
+  }
+  return violations;
+};

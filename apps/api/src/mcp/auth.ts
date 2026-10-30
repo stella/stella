@@ -1,8 +1,8 @@
 import { oauthProviderResourceClient } from "@better-auth/oauth-provider/resource-client";
 import { Result } from "better-result";
 import type { JWTPayload } from "jose";
-import * as v from "valibot";
 
+import { ACCOUNT_EXPORT_SCOPES } from "@stll/api-contract";
 import type { PermissionInput } from "@stll/permissions";
 
 import {
@@ -12,24 +12,27 @@ import {
 import { getReviewAccountConfig } from "@/api/lib/auth/review-account";
 import { narrowReviewOrganizationScopes } from "@/api/lib/auth/review-account-policy";
 import type { ReviewAccountConfig } from "@/api/lib/auth/review-account-policy";
+import { isTokenRejectionError } from "@/api/lib/auth/token-verification-errors";
 import {
   SERVICE_CLIENT_PRINCIPAL,
   SERVICE_CLIENT_PRINCIPAL_CLAIM,
 } from "@/api/lib/db/service-client-contract";
-import {
-  isMachineApiKeyCredential,
-  machineApiKeyPermissionsSchema,
-  parseMachineApiKeyPermissions,
-} from "@/api/lib/machine-api-key-config";
-import { isRecord } from "@/api/lib/type-guards";
-import { AGENT_RUN_TOKEN_PURPOSE } from "@/api/mcp/agent-run-token";
-import { resolveMachineApiKeySession as defaultResolveMachineApiKeySession } from "@/api/mcp/api-key-auth";
+import { isMachineApiKeyCredential } from "@/api/lib/machine-api-key-config";
+import type { resolveMachineApiKeySession } from "@/api/mcp/api-key-auth";
 import type { McpMode } from "@/api/mcp/constants";
-import { getMcpResourceUrl, MCP_MEMBER_ID_CLAIM } from "@/api/mcp/constants";
+import {
+  AGENT_RUN_TOKEN_PURPOSE,
+  getMcpResourceUrl,
+  MCP_MEMBER_ID_CLAIM,
+} from "@/api/mcp/constants";
 import {
   McpAuthenticationError,
   McpTokenVerificationError,
 } from "@/api/mcp/errors";
+import {
+  getMcpResourceScopes,
+  MCP_MODES,
+} from "@/api/mcp/resource-policy-contract";
 
 export type McpSession = {
   userId: string;
@@ -66,13 +69,17 @@ export type McpSession = {
 /** Which kind of credential opened a session, for telemetry and reporting. */
 export type McpCredentialType = NonNullable<McpSession["credential"]>["type"];
 
-let verifyBearerToken:
-  | ReturnType<
-      ReturnType<typeof oauthProviderResourceClient<undefined>>["getActions"]
-    >["verifyBearerToken"]
-  | undefined;
+export type VerifyBearerToken = ReturnType<
+  ReturnType<typeof oauthProviderResourceClient<undefined>>["getActions"]
+>["verifyBearerToken"];
 
-const getVerifyBearerToken = () => {
+let verifyBearerToken: VerifyBearerToken | undefined;
+
+/**
+ * The OAuth provider's bearer verifier, shared by every resource this API
+ * serves so the provider's resource client is acquired in one place.
+ */
+export const getVerifyBearerToken = (): VerifyBearerToken => {
   verifyBearerToken ??=
     oauthProviderResourceClient().getActions().verifyBearerToken;
   return verifyBearerToken;
@@ -91,62 +98,6 @@ export const getMcpAccessTokenVerificationOptions = (
 const isStringArray = (value: unknown): value is string[] =>
   Array.isArray(value) &&
   value.every((item) => typeof item === "string" && item.length > 0);
-
-/**
- * A credential permission set recovered from the transport slot is re-validated
- * against the canonical statement map, exactly as it was when the key first
- * resolved: the slot is opaque state, so its permission set is re-derived
- * rather than trusted.
- */
-const isCredentialPermissions = (value: unknown): value is PermissionInput => {
-  const parsed = v.safeParse(machineApiKeyPermissionsSchema, value);
-  return (
-    parsed.success &&
-    parseMachineApiKeyPermissions(parsed.output).type === "valid"
-  );
-};
-
-const isMcpCredential = (
-  value: unknown,
-): value is NonNullable<McpSession["credential"]> => {
-  if (!isRecord(value) || typeof value["type"] !== "string") {
-    return false;
-  }
-  switch (value["type"]) {
-    case "agent_run":
-      return typeof value["runId"] === "string" && value["runId"].length > 0;
-    case "oauth_client":
-      return (
-        typeof value["clientId"] === "string" && value["clientId"].length > 0
-      );
-    case "personal_api_key":
-    case "machine_api_key":
-      return (
-        typeof value["id"] === "string" &&
-        value["id"].length > 0 &&
-        typeof value["name"] === "string" &&
-        value["name"].length > 0 &&
-        isCredentialPermissions(value["permissions"])
-      );
-    case "delegated_user":
-      return true;
-    default:
-      return false;
-  }
-};
-
-/** Validate session state recovered from an opaque framework transport slot. */
-export const isMcpSession = (value: unknown): value is McpSession =>
-  isRecord(value) &&
-  typeof value["userId"] === "string" &&
-  value["userId"].length > 0 &&
-  typeof value["organizationId"] === "string" &&
-  value["organizationId"].length > 0 &&
-  isStringArray(value["scopes"]) &&
-  (!("credential" in value) || isMcpCredential(value["credential"])) &&
-  (!("workspaceIds" in value) || isStringArray(value["workspaceIds"])) &&
-  (!("memberId" in value) ||
-    (typeof value["memberId"] === "string" && value["memberId"].length > 0));
 
 export const extractMcpSession = (
   payload: JWTPayload,
@@ -238,19 +189,6 @@ export const extractMcpSession = (
 };
 
 /**
- * A genuine token rejection surfaces as a better-call `APIError` with an
- * `UNAUTHORIZED` (401) status: `verifyBearerToken` maps expired tokens, invalid
- * signatures, wrong audience/issuer, no-matching-key, and a missing payload to
- * that shape. Everything else the verifier can throw is an infrastructure fault
- * (a JWKS fetch/network error re-thrown as a plain `Error`, or a jose JWKS
- * timeout/invalid error) and must not be reported to the caller as a bad token.
- */
-const isTokenRejectionError = (error: unknown): boolean =>
-  isRecord(error) &&
-  error["name"] === "APIError" &&
-  (error["status"] === "UNAUTHORIZED" || error["statusCode"] === 401);
-
-/**
  * Classify a failure thrown while resolving the bearer token. A genuine token
  * rejection (bad claims from `extractMcpSession`, or an `UNAUTHORIZED` verifier
  * error) becomes an `McpAuthenticationError` (surfaces as 401). An
@@ -298,7 +236,7 @@ export type McpAuthenticationFailure =
 
 type VerifyMcpAccessTokenOptions = {
   mode: McpMode;
-  verifyToken?: ReturnType<typeof getVerifyBearerToken>;
+  verifyToken?: VerifyBearerToken;
 };
 
 export const verifyMcpAccessToken = async (
@@ -314,20 +252,24 @@ export const verifyMcpAccessToken = async (
     catch: classifyMcpTokenVerificationError,
   });
 
+/**
+ * The caller supplies the API key resolver: it reads members through the auth
+ * module, which reaches this one for the bearer verifier, so importing it here
+ * would close an import cycle.
+ */
 export const authenticateMcpRequest = async (
   bearerToken: string,
   {
     mode = "default",
-    resolveApiKeySession = defaultResolveMachineApiKeySession,
+    resolveApiKeySession,
     reviewAccount = getReviewAccountConfig(),
     verifyToken,
   }: {
     mode?: McpMode | undefined;
     reviewAccount?: Pick<ReviewAccountConfig, "organizationId"> | undefined;
-    resolveApiKeySession?:
-      typeof defaultResolveMachineApiKeySession | undefined;
-    verifyToken?: ReturnType<typeof getVerifyBearerToken>;
-  } = {},
+    resolveApiKeySession: typeof resolveMachineApiKeySession;
+    verifyToken?: VerifyBearerToken;
+  },
 ): Promise<Result<McpSession, McpAuthenticationFailure>> => {
   const authenticated = isMachineApiKeyCredential(bearerToken)
     ? await Result.tryPromise({
@@ -340,6 +282,45 @@ export const authenticateMcpRequest = async (
           ...(verifyToken === undefined ? {} : { verifyToken }),
         })
       ).andThen(extractMcpSession);
+  return authenticated.map((session) =>
+    narrowReviewOrganizationScopes(session, reviewAccount),
+  );
+};
+
+/** Only resource audiences advertising account consent may deliver exports. */
+export const authenticateAccountExportRequest = async (
+  bearerToken: string,
+  {
+    verifyToken,
+    reviewAccount = getReviewAccountConfig(),
+  }: {
+    verifyToken?: ReturnType<typeof getVerifyBearerToken>;
+    reviewAccount?: Pick<ReviewAccountConfig, "organizationId">;
+  } = {},
+): Promise<Result<McpSession, McpAuthenticationFailure>> => {
+  if (isMachineApiKeyCredential(bearerToken)) {
+    return Result.err(
+      new McpAuthenticationError({
+        message: "Account exports require OAuth consent",
+      }),
+    );
+  }
+  const audiences = MCP_MODES.filter((mode) =>
+    getMcpResourceScopes(mode).some(
+      (scope) => scope === ACCOUNT_EXPORT_SCOPES.read,
+    ),
+  ).map((mode) => getMcpResourceUrl(mode));
+  const options = getMcpAccessTokenVerificationOptions();
+  const authenticated = (
+    await Result.tryPromise({
+      try: async () =>
+        await (verifyToken ?? getVerifyBearerToken())(bearerToken, {
+          ...options,
+          verifyOptions: { ...options.verifyOptions, audience: audiences },
+        }),
+      catch: classifyMcpTokenVerificationError,
+    })
+  ).andThen(extractMcpSession);
   return authenticated.map((session) =>
     narrowReviewOrganizationScopes(session, reviewAccount),
   );

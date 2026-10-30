@@ -879,9 +879,15 @@ test("landing diagnostics follow the browser configuration output directory", ()
     );
     writeFileSync(
       path.join(sdkDirectory, "config.js"),
-      'export const defineConfig = (...values) => Object.assign({}, ...values); export const devices = { "Desktop Chrome": {} };',
+      'export const defineConfig = (...configs) => Object.assign({}, ...configs); export const devices = { "Desktop Chrome": {} };',
     );
-    for (const file of ["marketing-config.ts", "env.ts"]) {
+    for (const file of [
+      "marketing-config.ts",
+      "landing-marketing-config.ts",
+      "devices.ts",
+      "devices.gen.ts",
+      "env.ts",
+    ]) {
       writeFileSync(
         path.join(configDirectory, file),
         readFileSync(
@@ -917,7 +923,7 @@ test("landing diagnostics follow the browser configuration output directory", ()
       [
         process.execPath,
         "-e",
-        'import config from "./apps/landing/e2e/playwright.config.ts"; console.log(JSON.stringify(config));',
+        'import config from "./packages/playwright-tools/src/landing-marketing-config.ts"; console.log(JSON.stringify(config));',
       ],
       { cwd: directory },
     );
@@ -954,7 +960,6 @@ test("the dependency audit installs only the root workspace", () => {
 });
 
 const installFreeJobs = [
-  [".github/workflows/db-migrations.yml", "scope"],
   [".github/workflows/autofix.yml", "regenerate-scope"],
 ] as const;
 const setupSchema = v.looseObject({

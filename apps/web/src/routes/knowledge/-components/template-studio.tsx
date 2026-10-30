@@ -48,7 +48,7 @@ import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import {
   isTemplateFillDiscoverKey,
   knowledgeKeys,
@@ -694,7 +694,7 @@ export const TemplateStudioPage = ({
         (range) => from < range.to && to > range.from,
       );
       if (intersects) {
-        notifyUserError(undefined, t("templates.studio.noNestedMarkers"));
+        notifyUserProblem(t("templates.studio.noNestedMarkers"));
         return;
       }
       view.dispatch(view.state.tr.insertText(text, from, to).scrollIntoView());
@@ -880,13 +880,13 @@ export const TemplateStudioPage = ({
     const { selected } = useTemplateStudioStore.getState();
     const expr = selected?.expr.trim() ?? "";
     if (!view || !selected || selected.kind !== kind || expr === "") {
-      notifyUserError(undefined, t("errors.actionFailed"));
+      notifyUserProblem(t("errors.actionFailed"));
       return;
     }
     const sibling = findSiblingCell(view.state, selected.from);
     const range = sibling === null ? null : siblingWrapRange(sibling);
     if (range === null) {
-      notifyUserError(undefined, t("errors.actionFailed"));
+      notifyUserProblem(t("errors.actionFailed"));
       return;
     }
     if (kind === "if") {
@@ -1089,11 +1089,11 @@ export const TemplateStudioPage = ({
         useTemplateStudioStore.getState().pendingSlotRenames;
       const projected = await projectSessionIntoDocument();
       if (projected.status === "noEditor") {
-        notifyUserError(undefined, t("templates.saveFailed"));
+        notifyUserProblem(t("templates.saveFailed"));
         return false;
       }
       if (projected.status === "refused") {
-        notifyUserError(undefined, t("templates.saveFailed"), {
+        notifyUserProblem(t("templates.saveFailed"), {
           description:
             projected.refused.reason === "unwritable"
               ? t("templates.studio.fieldSettingBrackets", {
@@ -1107,7 +1107,7 @@ export const TemplateStudioPage = ({
       }
       const bytes = await editor.save();
       if (!bytes) {
-        notifyUserError(undefined, t("templates.saveFailed"));
+        notifyUserProblem(t("templates.saveFailed"));
         return false;
       }
       const file = new File([bytes], fileName, { type: DOCX_MIME });
@@ -1205,7 +1205,7 @@ export const TemplateStudioPage = ({
           // Re-mark dirty so the Save affordance (gated on isDirty) stays live
           // for the retry; the document itself already saved successfully.
           markDirty();
-          notifyUserError(slotRenameError, t("common.error"), {
+          notifyUserError(slotRenameError, t("errors.actionFailed"), {
             description: slotRenameErrorMessage,
           });
         }
@@ -1260,7 +1260,13 @@ export const TemplateStudioPage = ({
       // unmount's store reset.
       return slotRenameErrorMessage === null;
     } catch (error) {
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "TemplateStudioPage.handleSave:failure",
+        scope: {
+          type: "handler",
+          handlerId: "TemplateStudioPage.handleSave:failure",
+        },
+      });
       notifyUserError(error, t("templates.saveFailed"));
       return false;
     } finally {

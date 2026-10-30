@@ -90,7 +90,7 @@ const markNotificationRead = createSafeRootHandler(
   },
 );
 
-declareAggregateMutation(markNotificationRead.handler, {
+declareAggregateMutation(markNotificationRead, {
   type: "independent",
   reason:
     "Updates one caller-owned notification idempotently; unread count is a read-only response projection.",

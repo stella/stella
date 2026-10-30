@@ -3,6 +3,7 @@ import { panic } from "better-result";
 import { copyFile, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+import { E2E_API_ORIGIN } from "../helpers/api";
 import { fetchSmokeSessionStorageState } from "../helpers/smoke-session";
 import {
   JOURNEY_SEEDED_STORAGE_STATE,
@@ -48,6 +49,7 @@ const globalSetup = async (): Promise<void> => {
       return;
     case JOURNEY_SIGN_IN.smokeSession: {
       const storageState = await fetchSmokeSessionStorageState({
+        apiUrl: E2E_API_ORIGIN,
         headers: readJourneyEdgeHeaders(),
         secret: signIn.secret,
         sessionUrl: signIn.sessionUrl,

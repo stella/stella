@@ -1,6 +1,6 @@
 {
   "route": "/admin/audit-logs",
-  "reason": "Organization admin renders inside the app frame, which loads its shared chat, notification, timer and organization-settings data.",
+  "reason": "Organization admin renders inside the app frame, which loads its shared chat, notification, timer and organization-settings data. The sidebar's Time link reads the approval queue's bounded count of submitted time waiting for the signed-in person (one request, limit 1).",
   "budget": {
     "depth": 6,
     "requests": [
@@ -17,6 +17,7 @@
       "GET /v1/organization-settings/ai-availability",
       "GET /v1/organization-settings/deployment-features",
       "GET /v1/signals/count",
+      "GET /v1/time-entries/approval-queue",
       "GET /v1/time-timers",
       "GET /v1/workspaces/navigation"
     ],
@@ -35,7 +36,8 @@
       "GET /v1/organization-settings/deployment-features": 1,
       "GET /v1/signals/count": 1,
       "GET /v1/time-timers": 1,
-      "GET /v1/workspaces/navigation": 1
+      "GET /v1/workspaces/navigation": 1,
+      "GET /v1/time-entries/approval-queue": 1
     },
     "dbQueries": {
       "GET /api/auth/get-session": 4,
@@ -52,7 +54,8 @@
       "GET /v1/organization-settings/deployment-features": 5,
       "GET /v1/signals/count": 4,
       "GET /v1/time-timers": 7,
-      "GET /v1/workspaces/navigation": 7
+      "GET /v1/workspaces/navigation": 7,
+      "GET /v1/time-entries/approval-queue": 10
     },
     "responseSizes": {
       "GET /api/auth/get-session": 1024,
@@ -68,7 +71,8 @@
       "GET /v1/organization-settings/deployment-features": 1024,
       "GET /v1/signals/count": 1024,
       "GET /v1/time-timers": 1024,
-      "GET /v1/workspaces/navigation": 20480
+      "GET /v1/workspaces/navigation": 20480,
+      "GET /v1/time-entries/approval-queue": 1024
     }
   }
 }

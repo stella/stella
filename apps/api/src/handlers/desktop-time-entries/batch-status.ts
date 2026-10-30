@@ -1,10 +1,7 @@
-import { Type } from "@sinclair/typebox";
 import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import * as v from "valibot";
 
 import {
-  type DesktopTimeEntryBatchStatus,
   desktopTimeEntryBatchStatusRequestSchema,
   desktopTimeEntryBatchStatusSchema,
 } from "@stll/api-contract/desktop-time-entries";
@@ -19,16 +16,8 @@ import {
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
-import { jsonSchemaToTypeBox } from "@/api/lib/json-schema/json-schema-to-typebox";
-import { toJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
 
 import { authorizeDesktopTimeEntries } from "./authorize";
-
-const responseSchema = Type.Unsafe<DesktopTimeEntryBatchStatus>(
-  jsonSchemaToTypeBox(
-    toJsonSchema(v.union(desktopTimeEntryBatchStatusSchema.options)),
-  ),
-);
 
 export const createDesktopTimeEntryBatchStatusEndpoint = (
   authorizeAccount: typeof authorizeDesktopAccount = authorizeDesktopAccount,
@@ -40,7 +29,9 @@ export const createDesktopTimeEntryBatchStatusEndpoint = (
       mcp: { type: "internal", reason: "auth_plumbing" },
       cache: { kind: "none" },
       body: desktopTimeEntryBatchStatusRequestSchema,
-      response: safePublicHandlerResponseSchemasWithStatusText(responseSchema),
+      response: safePublicHandlerResponseSchemasWithStatusText(
+        desktopTimeEntryBatchStatusSchema,
+      ),
     },
     async function* ({ request, body: { idempotencyKey } }) {
       const account = yield* Result.await(
@@ -104,7 +95,7 @@ const desktopTimeEntryBatchStatusEndpoint =
 
 // Status reads and cancellation fencing serialize on the same desktopBatch
 // aggregate lock as the batch submission.
-declareAggregateMutation(desktopTimeEntryBatchStatusEndpoint.handler, {
+declareAggregateMutation(desktopTimeEntryBatchStatusEndpoint, {
   type: "aggregate",
   aggregates: ["desktopBatch"],
 });

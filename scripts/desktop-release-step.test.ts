@@ -350,18 +350,42 @@ test("resigning skips an absent updater zip", () => {
   mkdirSync(path.join(bundle, "nsis"), { recursive: true });
   writeFileSync(path.join(bundle, "nsis/Stella-setup.exe"), "installer");
   const signed: string[] = [];
-  resignWindowsArtifacts(bundle, (_cwd, file) => {
-    signed.push(file);
+  resignWindowsArtifacts({
+    bundleDir: bundle,
+    appVersion: "1.2.3",
+    run: ({ file }) => {
+      signed.push(file);
+    },
   });
   expect(signed).toEqual(["Stella-setup.exe"]);
+});
+
+test("resigning binds every updater signature to the stamped version", () => {
+  const bundle = temporary();
+  mkdirSync(path.join(bundle, "nsis"), { recursive: true });
+  writeFileSync(path.join(bundle, "nsis/Stella-setup.exe"), "installer");
+  writeFileSync(path.join(bundle, "nsis/Stella-setup.exe.zip"), "update");
+  const versions: string[] = [];
+  resignWindowsArtifacts({
+    bundleDir: bundle,
+    appVersion: "1.2.3",
+    run: ({ appVersion }) => {
+      versions.push(appVersion);
+    },
+  });
+  expect(versions).toEqual(["1.2.3", "1.2.3"]);
 });
 
 test("resigning rejects an empty artifact directory", () => {
   const bundle = temporary();
   mkdirSync(bundle, { recursive: true });
-  expect(() => resignWindowsArtifacts(bundle, () => undefined)).toThrow(
-    "No Windows installers found",
-  );
+  expect(() =>
+    resignWindowsArtifacts({
+      bundleDir: bundle,
+      appVersion: "1.2.3",
+      run: () => undefined,
+    }),
+  ).toThrow("No Windows installers found");
 });
 
 test("configure-windows rejects unknown modes", () => {

@@ -4,6 +4,7 @@
     "allowJs": false,
     "checkJs": false,
     "strict": true,
+    "types": ["bun-types"],
     "paths": {
       "@/*": ["./src/*"]
     }
@@ -11,7 +12,10 @@
   "include": [
     "src/**/*.ts",
     "src/**/*.tsx",
+    "app.config.ts",
+    "xcode.d.ts",
     ".expo/types/**/*.ts",
-    "expo-env.d.ts"
+    "expo-env.d.ts",
+    "uniwind-types.gen.d.ts"
   ]
 }

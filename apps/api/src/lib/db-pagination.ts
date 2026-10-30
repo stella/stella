@@ -1,6 +1,8 @@
 import { and, eq, gt, gte, lt, or, sql } from "drizzle-orm";
 import type { Column, SQL, SQLWrapper } from "drizzle-orm";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+
 import {
   decodePaginationCursor,
   encodePaginationCursor,
@@ -77,12 +79,24 @@ const hasValidTimestampParts = (groups: Record<string, string> | undefined) => {
   if (groups === undefined) {
     return false;
   }
-  const year = Number(groups["year"]);
-  const month = Number(groups["month"]);
-  const day = Number(groups["day"]);
-  const hour = Number(groups["hour"]);
-  const minute = Number(groups["minute"]);
-  const second = Number(groups["second"]);
+  const year = parseIntegerToken(groups["year"], { sign: "unsigned" }).unwrapOr(
+    -1,
+  );
+  const month = parseIntegerToken(groups["month"], {
+    sign: "unsigned",
+  }).unwrapOr(-1);
+  const day = parseIntegerToken(groups["day"], { sign: "unsigned" }).unwrapOr(
+    -1,
+  );
+  const hour = parseIntegerToken(groups["hour"], { sign: "unsigned" }).unwrapOr(
+    -1,
+  );
+  const minute = parseIntegerToken(groups["minute"], {
+    sign: "unsigned",
+  }).unwrapOr(-1);
+  const second = parseIntegerToken(groups["second"], {
+    sign: "unsigned",
+  }).unwrapOr(-1);
 
   return (
     year >= 1 &&

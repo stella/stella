@@ -1,12 +1,15 @@
-import { devices } from "@playwright/test";
-import type { PlaywrightTestConfig } from "@playwright/test";
+import { defineConfig } from "@playwright/test";
 import path from "node:path";
 
+import { devices } from "./devices";
 import { playwrightEnv } from "./env";
 
-const REPO_ROOT = path.resolve(import.meta.dirname, "../../..");
+export const MARKETING_REPO_ROOT = path.resolve(
+  import.meta.dirname,
+  "../../..",
+);
 
-export default {
+export default defineConfig({
   reporter: playwrightEnv.ci
     ? [
         ["dot"],
@@ -27,7 +30,7 @@ export default {
   timeout: 600_000,
   expect: { timeout: 15_000 },
   snapshotPathTemplate: path.join(
-    REPO_ROOT,
+    MARKETING_REPO_ROOT,
     "apps/landing/public/media/products/{arg}{ext}",
   ),
   use: {
@@ -45,4 +48,4 @@ export default {
     // the app specs.
     navigationTimeout: 60_000,
   },
-} satisfies PlaywrightTestConfig;
+});

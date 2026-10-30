@@ -246,6 +246,7 @@ export const seedMarketingCaseLaw = async ({
 }: SeedMarketingCaseLawOptions) => {
   requireLocalDevOpen("Seeding marketing case-law stories");
   const stories = await seedCorpusAnalyses();
+  const readerMarks: (typeof legalReaderAnnotations.$inferInsert)[] = [];
   await withAggregateTransaction(db, async (tx) => {
     for (const { scene, decision, highlight, underline } of stories) {
       const key = `marketing-case-law-${organizationId}-${userId}-${decision.id}`;
@@ -358,53 +359,62 @@ export const seedMarketingCaseLaw = async ({
           block: underline,
         },
       ] as const;
-      const annotations = marks.map((mark, index) => {
-        const startOffset =
-          mark.kind === "comment"
-            ? Math.max(0, mark.block.plainText.length - 100)
-            : 0;
-        const quote = mark.block.plainText.slice(
-          startOffset,
-          startOffset + (mark.kind === "comment" ? 100 : 180),
-        );
-        return {
-          id: seedId<"legalReaderAnnotation">(`${key}-mark-${index}`),
-          organizationId,
-          userId,
-          targetType: "decision",
-          targetId: decision.id,
-          kind: mark.kind,
-          visibility: "shared",
-          color: mark.color,
-          style: mark.style,
-          blockAnchorId: mark.block.anchorId,
-          startOffset,
-          endOffset: startOffset + quote.length,
-          quote,
-          body: mark.body,
-          createdAt: RECORDED_AT,
-          updatedAt: RECORDED_AT,
-        } as const;
-      });
-      await tx
-        .insert(legalReaderAnnotations)
-        .values(annotations)
-        .onConflictDoUpdate({
-          target: legalReaderAnnotations.id,
-          set: {
-            kind: sql`excluded.kind`,
-            color: sql`excluded.color`,
-            style: sql`excluded.style`,
-            body: sql`excluded.body`,
-            blockAnchorId: sql`excluded.block_anchor_id`,
-            startOffset: sql`excluded.start_offset`,
-            endOffset: sql`excluded.end_offset`,
-            quote: sql`excluded.quote`,
-            updatedAt: sql`excluded.updated_at`,
-            visibility: sql`excluded.visibility`,
-          },
-          setWhere: sql`${legalReaderAnnotations.organizationId} = ${organizationId} AND ${legalReaderAnnotations.userId} = ${userId}`,
-        });
+      readerMarks.push(
+        ...marks.map((mark, index) => {
+          const startOffset =
+            mark.kind === "comment"
+              ? Math.max(0, mark.block.plainText.length - 100)
+              : 0;
+          const quote = mark.block.plainText.slice(
+            startOffset,
+            startOffset + (mark.kind === "comment" ? 100 : 180),
+          );
+          return {
+            id: seedId<"legalReaderAnnotation">(`${key}-mark-${index}`),
+            organizationId,
+            userId,
+            targetType: "decision",
+            targetId: decision.id,
+            kind: mark.kind,
+            visibility: "shared",
+            color: mark.color,
+            style: mark.style,
+            blockAnchorId: mark.block.anchorId,
+            startOffset,
+            endOffset: startOffset + quote.length,
+            quote,
+            body: mark.body,
+            createdAt: RECORDED_AT,
+            updatedAt: RECORDED_AT,
+          } as const;
+        }),
+      );
     }
+  });
+  await withAggregateTransaction(db, async (tx) => {
+    // Reader marks force row-level security, so the transaction takes the
+    // application role and names its author the way a request does.
+    await tx.execute(
+      sql`SELECT set_config('role', 'stella', true), set_config('app.organization_id', ${organizationId}, true), set_config('app.user_id', ${userId}, true)`,
+    );
+    await tx
+      .insert(legalReaderAnnotations)
+      .values(readerMarks)
+      .onConflictDoUpdate({
+        target: legalReaderAnnotations.id,
+        set: {
+          kind: sql`excluded.kind`,
+          color: sql`excluded.color`,
+          style: sql`excluded.style`,
+          body: sql`excluded.body`,
+          blockAnchorId: sql`excluded.block_anchor_id`,
+          startOffset: sql`excluded.start_offset`,
+          endOffset: sql`excluded.end_offset`,
+          quote: sql`excluded.quote`,
+          updatedAt: sql`excluded.updated_at`,
+          visibility: sql`excluded.visibility`,
+        },
+        setWhere: sql`${legalReaderAnnotations.organizationId} = ${organizationId} AND ${legalReaderAnnotations.userId} = ${userId}`,
+      });
   });
 };

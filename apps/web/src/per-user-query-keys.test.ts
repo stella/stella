@@ -8,13 +8,16 @@ import { repoRelativePath } from "@stll/portable-path";
 import { savedTimeNarrativesKeys } from "@/components/billing/saved-time-narratives";
 import { companyFormatKeys } from "@/components/company-format-library";
 import { readerAnnotationKeys } from "@/components/legal-reader/annotations/reader-annotations-query";
+import { documentAnnotationKeys } from "@/components/pdf/annotations/document-annotations-query";
 import { savedSearchKeys } from "@/components/saved-searches.logic";
+import { claimCommentKeys } from "@/features/avt/claim-comments-query";
 import { readerAnswersOptions } from "@/features/case-law/components/case-viewer/reader-answers-query";
 import { chatKeys } from "@/features/chat/chat-query-contract";
 import { chatToolGrantsOptions } from "@/features/chat/chat-tool-grants";
 import { desktopPresenceOptions } from "@/features/desktop/desktop-presence";
 import { lawHistoryKeys } from "@/features/law-search-history/law-search-history-query";
 import { timeTimersOptions } from "@/features/time-timers/queries";
+import { accountDataExportLatestOptions } from "@/lib/account/account-data-export-queries";
 import {
   linkedAccountsOptions,
   pendingDeletionTasksOptions,
@@ -51,7 +54,12 @@ import {
   legalListSourcesOptions,
 } from "@/lib/workspaces/queries/legal-lists";
 import { myTimeEntriesInfiniteOptions } from "@/lib/workspaces/queries/my-time-entries";
+import { myTimeSuggestionsOptions } from "@/lib/workspaces/queries/my-time-suggestions";
 import { reportExportsKeys } from "@/lib/workspaces/queries/report-exports";
+import {
+  timeApprovalPendingOptions,
+  timeApprovalQueueOptions,
+} from "@/lib/workspaces/queries/time-approvals";
 import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
 import { viewTemplateKeys } from "@/lib/workspaces/queries/view-templates";
 import { workspaceMemberPreviewsOptions } from "@/lib/workspaces/queries/workspace-member-previews";
@@ -120,7 +128,13 @@ const READ_FRESH = "read fresh at each use, never cached";
 // Keyed by handler path under apps/api/src/handlers.
 const PER_USER_READS: Record<string, PerUserRead> = {
   "account-exports/download.ts": { kind: "not-per-user", reason: DOWNLOAD },
-  "account-exports/get.ts": { kind: "no-web-caller", calls: [] },
+  "account-exports/download/get.ts": { kind: "no-web-caller", calls: [] },
+  "account-exports/get.ts": {
+    kind: "keyed",
+    calls: ['api.me["data-exports"].get'],
+    files: ["lib/account/account-data-export-queries.ts"],
+    keys: () => [accountDataExportLatestOptions(USER).queryKey],
+  },
   "account-exports/status/get.ts": { kind: "no-web-caller", calls: [] },
   "files/thumbnail.ts": { kind: "owned-id", reason: OWNED_FILE },
   "search-history/list.ts": {
@@ -131,10 +145,11 @@ const PER_USER_READS: Record<string, PerUserRead> = {
       lawHistoryKeys.list({
         scope: { organizationId: ORG, userId: USER },
         filter: "all",
+        country: "CZE",
       }),
     ],
     opaqueKeys: {
-      "lawHistoryKeys.list({ scope: scope ?? keyScope, filter })":
+      "lawHistoryKeys.list({ scope: scope ?? keyScope, filter, country, })":
         KEY_TYPE_HAS_USER,
     },
   },
@@ -407,6 +422,34 @@ const PER_USER_READS: Record<string, PerUserRead> = {
       }).queryKey,
     ],
   },
+  "lists/verifications/claim-comments/list.ts": {
+    kind: "keyed",
+    calls: ['api.lists()["claim-comments"].get'],
+    files: ["features/avt/claim-comments-query.ts"],
+    keys: () => [
+      claimCommentKeys.forClaim({
+        claimId: "claim-probe",
+        runId: "run-probe",
+        viewer: { organizationId: ORG, userId: USER },
+        workspaceId: WORKSPACE,
+      }),
+    ],
+    opaqueKeys: { "claimCommentKeys.forClaim(key)": KEY_TYPE_HAS_USER },
+  },
+  "entities/annotations/list.ts": {
+    kind: "keyed",
+    calls: ["api.entities().entity().field().annotations.get"],
+    files: ["components/pdf/annotations/document-annotations-query.ts"],
+    keys: () => [
+      documentAnnotationKeys.forFile({
+        entityId: "entity-probe",
+        fieldId: "field-probe",
+        viewer: { organizationId: ORG, userId: USER },
+        workspaceId: WORKSPACE,
+      }),
+    ],
+    opaqueKeys: { "documentAnnotationKeys.forFile(key)": KEY_TYPE_HAS_USER },
+  },
   "lists/items/list.ts": {
     kind: "keyed",
     calls: ["api.lists()().items.get"],
@@ -476,7 +519,7 @@ const PER_USER_READS: Record<string, PerUserRead> = {
   // Filtered by row-level security rather than in the handler.
   "memories/list.ts": {
     kind: "keyed",
-    calls: ["memoriesApi.get", "fetchMemoriesPage"],
+    calls: ["api.memories.get", "fetchMemoriesPage"],
     files: [
       "lib/memory-api.ts",
       "routes/_protected.settings/-queries/memories.ts",
@@ -593,6 +636,7 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     files: ["lib/knowledge/queries.ts"],
     keys: () => [skillsOptions(ORG, USER).queryKey],
   },
+  "tasks/list.ts": { kind: "no-web-caller", calls: ["api.tasks.get"] },
   "templates/condition-decisions/get.ts": {
     kind: "not-per-user",
     reason: "the caller is recorded for usage only",
@@ -622,15 +666,35 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     keys: () => [timeEntriesKeys.list(WORKSPACE, USER, {})],
   },
   "time-entries/approval-queue/list.ts": {
-    kind: "no-web-caller",
+    kind: "keyed",
     calls: ['api["time-entries"]["approval-queue"].get'],
+    files: ["lib/workspaces/queries/time-approvals.ts"],
+    keys: () => [
+      timeApprovalQueueOptions(ORG, USER, {}).queryKey,
+      timeApprovalPendingOptions(ORG, USER).queryKey,
+    ],
   },
   "time-entries/me/list.ts": {
     kind: "keyed",
-    calls: ["myTimeEntriesApi.get"],
+    calls: ['api["time-entries"].me.get'],
     files: ["lib/workspaces/queries/my-time-entries.ts"],
     keys: () => [
-      myTimeEntriesInfiniteOptions(ORG, USER, "2026-01-01").queryKey,
+      myTimeEntriesInfiniteOptions(ORG, USER, {
+        startDate: "2026-01-05",
+        endDate: "2026-01-11",
+      }).queryKey,
+    ],
+  },
+  "time-entries/me/suggestions/list.ts": {
+    kind: "keyed",
+    calls: ['api["time-entries"].me.suggestions.get'],
+    files: ["lib/workspaces/queries/my-time-suggestions.ts"],
+    keys: () => [
+      myTimeSuggestionsOptions(ORG, USER, {
+        startDate: "2026-01-05",
+        endDate: "2026-01-11",
+        timezoneId: "UTC",
+      }).queryKey,
     ],
   },
   "time-entries/suggestions/list.ts": {
@@ -1307,11 +1371,11 @@ export const myTimeEntriesInfiniteOptions = (organizationId: string, date: strin
   infiniteQueryOptions({
     queryKey: myTimeEntriesKeys.day(organizationId, date),
     queryFn: async ({ signal }) =>
-      unwrapEden(await myTimeEntriesApi.get({ query: { date }, fetch: { signal } })),
+      unwrapApiResponse(await api["time-entries"].me.get({ query: { date }, fetch: { signal } })),
   });
 `;
 
-    expect(unkeyedQueries(source, ["myTimeEntriesApi.get"])).toEqual([
+    expect(unkeyedQueries(source, ['api["time-entries"].me.get'])).toEqual([
       "myTimeEntriesKeys.day(organizationId, date)",
     ]);
     expect(
@@ -1320,7 +1384,7 @@ export const myTimeEntriesInfiniteOptions = (organizationId: string, date: strin
           "(organizationId, date)",
           "(organizationId, userId, date)",
         ),
-        ["myTimeEntriesApi.get"],
+        ['api["time-entries"].me.get'],
       ),
     ).toEqual([]);
   });

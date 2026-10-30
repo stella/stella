@@ -1,5 +1,10 @@
 import path from "node:path";
 
+import {
+  PARSER_ENTRY_DIRECTORY,
+  PARSER_REGISTRY_OUTPUT,
+} from "./parser-registry";
+
 /**
  * Parser versions cover the source modules that can shape persisted parser
  * output. Traversal stops before the reviewed infrastructure boundaries below:
@@ -36,8 +41,6 @@ const PARSER_DIRECTORIES = [
   "apps/api/src/handlers/case-law/ingestion/parsers/",
   "apps/api/src/lib/legal-search/parsers/",
 ];
-const PARSER_VERSION_MODULE =
-  "apps/api/src/lib/legal-search/ingestion-constants.ts";
 const OUTPUT_SHAPING_ROOTS = [
   ADAPTER_DIRECTORY,
   LEGISLATION_ADAPTER_DIRECTORY,
@@ -52,7 +55,7 @@ const OUTPUT_UNCHANGED =
 const transpiler = new Bun.Transpiler({ loader: "ts" });
 const jsxTranspiler = new Bun.Transpiler({ loader: "tsx" });
 
-type SourceTree = ReadonlyMap<string, string>;
+export type SourceTree = ReadonlyMap<string, string>;
 export type ParserOutputBoundary = {
   path: string;
   reason: string;
@@ -87,6 +90,24 @@ type SourceOwnersResult = {
   registryErrors: readonly string[];
 };
 
+type MapEntriesOptions = {
+  file: string;
+  name: string;
+  expression: string;
+  seen: Set<string>;
+};
+
+type SpreadEntriesOptions = {
+  file: string;
+  name: string;
+  seen: Set<string>;
+};
+
+type StaticTreeOptions = {
+  boundaries: readonly ParserOutputBoundary[];
+  purpose?: "parser-output" | "dependency-graph";
+};
+
 // Only source is read: no importing the registry, adapter initialization,
 // dependencies, fixtures, or publisher clients into this check.
 class StaticTree {
@@ -100,10 +121,13 @@ class StaticTree {
 
   constructor(
     files: SourceTree,
-    boundaries: readonly ParserOutputBoundary[] = PARSER_OUTPUT_BOUNDARIES,
+    { boundaries, purpose = "parser-output" }: StaticTreeOptions,
   ) {
     this.files = files;
-    this.outputBoundaries = new Set(boundaries.map(({ path: file }) => file));
+    this.outputBoundaries = new Set([
+      ...boundaries.map(({ path: file }) => file),
+      ...(purpose === "parser-output" ? [PARSER_REGISTRY_OUTPUT] : []),
+    ]);
   }
 
   code(file: string): string {
@@ -258,6 +282,83 @@ class StaticTree {
     return undefined;
   }
 
+  private mapEntries({
+    file,
+    name,
+    expression,
+    seen,
+  }: MapEntriesOptions): StaticValue | undefined {
+    const end = expression.indexOf("}");
+    if (end === -1) {
+      return undefined;
+    }
+    const entries = new Map<string, string>();
+    for (const property of expression.slice(1, end).split(",")) {
+      const trimmed = property.trim();
+      if (trimmed === "") {
+        continue;
+      }
+      const spread = /^\.\.\.(\w+)$/u.exec(trimmed)?.at(1);
+      if (spread !== undefined) {
+        const spreadEntries = this.spreadEntries({
+          file,
+          name: spread,
+          seen,
+        });
+        if (spreadEntries === undefined) {
+          return undefined;
+        }
+        for (const [key, value] of spreadEntries) {
+          if (entries.has(key)) {
+            return undefined;
+          }
+          entries.set(key, value);
+        }
+        continue;
+      }
+      const entry =
+        /^\s*(?:\[([\w.]+)\]|"([^"]+)"|([\w]+))\s*:\s*("[^"]*"|[\w]+)\s*$/u.exec(
+          property,
+        );
+      const key = entry === null ? undefined : this.mapKey(file, entry);
+      const value = entry?.at(4);
+      if (key === undefined || value === undefined || entries.has(key)) {
+        return undefined;
+      }
+      entries.set(key, value);
+    }
+    return { type: "map", file, name, entries };
+  }
+
+  private spreadEntries({
+    file,
+    name,
+    seen,
+  }: SpreadEntriesOptions): ReadonlyMap<string, string> | undefined {
+    const imported = this.namedImport(file, name);
+    if (imported === undefined) {
+      return undefined;
+    }
+    const value = this.value(imported.module, imported.name, seen);
+    return value?.type === "map" ? value.entries : undefined;
+  }
+
+  private mapKey(file: string, entry: RegExpExecArray): string | undefined {
+    const computedKey = entry.at(1);
+    const literalKey = entry.at(2);
+    const propertyKey = entry.at(3);
+    if (literalKey !== undefined) {
+      return JSON.stringify(literalKey);
+    }
+    if (propertyKey !== undefined) {
+      return propertyKey;
+    }
+    if (computedKey === undefined) {
+      return undefined;
+    }
+    return JSON.stringify(this.key(file, computedKey) ?? computedKey);
+  }
+
   value(
     file: string,
     name: string,
@@ -280,27 +381,7 @@ class StaticTree {
         return { type: "number", file, name, value: Number(number) };
       }
       if (expression.startsWith("{")) {
-        const end = expression.indexOf("}");
-        if (end === -1) {
-          return undefined;
-        }
-        const entries = new Map<string, string>();
-        for (const property of expression.slice(1, end).split(",")) {
-          if (property.trim() === "") {
-            continue;
-          }
-          const entry =
-            /^\s*(?:\[([\w.]+)\]|([\w]+))\s*:\s*("[^"]*"|[\w]+)\s*$/u.exec(
-              property,
-            );
-          const key = entry?.at(1) ?? entry?.at(2);
-          const value = entry?.at(3);
-          if (key === undefined || value === undefined || entries.has(key)) {
-            return undefined;
-          }
-          entries.set(key, value);
-        }
-        return { type: "map", file, name, entries };
+        return this.mapEntries({ file, name, expression, seen });
       }
       return undefined;
     }
@@ -338,6 +419,9 @@ class StaticTree {
   }
 
   key(file: string, expression: string): string | undefined {
+    if (expression.startsWith('"')) {
+      return JSON.parse(expression);
+    }
     const [constant, member] = expression.split(".");
     if (constant === undefined || member === undefined) {
       return undefined;
@@ -528,7 +612,25 @@ class StaticTree {
 export const sourceOwners = (
   files: SourceTree,
   boundaries: readonly ParserOutputBoundary[] = PARSER_OUTPUT_BOUNDARIES,
-): SourceOwnersResult => new StaticTree(files, boundaries).owners();
+): SourceOwnersResult => new StaticTree(files, { boundaries }).owners();
+
+/**
+ * The repository modules each file imports by value (static imports and
+ * dynamic ones with a literal specifier; type-only imports are erased), and
+ * everything a file reaches through them, itself included. The same walk
+ * the version guard runs, without its output boundaries, for checks that
+ * need the whole reachable graph (the retention projections' independence).
+ */
+export const valueImportGraph = (files: SourceTree) => {
+  const tree = new StaticTree(files, {
+    boundaries: [],
+    purpose: "dependency-graph",
+  });
+  return {
+    imports: (file: string): readonly string[] => tree.imports(file),
+    closure: (file: string): ReadonlySet<string> => tree.closure(file),
+  };
+};
 
 // Match the original source rather than transpiled output: local types and
 // unused imports can be erased, but deleting them still needs a version decision.
@@ -680,7 +782,9 @@ const boundaryErrors = (
       return [`Parser output boundary does not exist in head tree: ${file}`];
     }
     if (
-      file === PARSER_VERSION_MODULE ||
+      file === PARSER_REGISTRY_OUTPUT ||
+      file === "apps/api/src/lib/legal-search/ingestion-constants.ts" ||
+      file.startsWith(PARSER_ENTRY_DIRECTORY) ||
       OUTPUT_SHAPING_ROOTS.some((root) => file.startsWith(root))
     ) {
       return [`Parser output boundary lies in an output-shaping root: ${file}`];
@@ -693,8 +797,8 @@ export const checkParserVersions = ({
   head,
   boundaries = PARSER_OUTPUT_BOUNDARIES,
 }: CheckParserVersionsOptions): string[] => {
-  const baseTree = new StaticTree(base, boundaries);
-  const headTree = new StaticTree(head, boundaries);
+  const baseTree = new StaticTree(base, { boundaries });
+  const headTree = new StaticTree(head, { boundaries });
   const before = baseTree.owners();
   const after = headTree.owners();
   const errors = [
@@ -791,24 +895,99 @@ export const checkParserVersions = ({
 type GitResult =
   { type: "ok"; output: Uint8Array } | { type: "failed"; detail: string };
 
-const git = (args: string[], input?: string): GitResult => {
-  const result = Bun.spawnSync(["git", ...args], {
-    cwd: path.resolve(import.meta.dir, ".."),
-    stdin: input === undefined ? "ignore" : new TextEncoder().encode(input),
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  return result.exitCode === 0
-    ? { type: "ok", output: result.stdout }
-    : { type: "failed", detail: result.stderr.toString().trim() };
+const gitIn =
+  (repository: string) =>
+  (args: string[], input?: string): GitResult => {
+    const result = Bun.spawnSync(["git", ...args], {
+      cwd: repository,
+      stdin: input === undefined ? "ignore" : new TextEncoder().encode(input),
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    return result.exitCode === 0
+      ? { type: "ok", output: result.stdout }
+      : { type: "failed", detail: result.stderr.toString().trim() };
+  };
+
+const REPOSITORY_ROOT = path.resolve(import.meta.dir, "..");
+const git = gitIn(REPOSITORY_ROOT);
+
+/**
+ * CI checks out a blobless clone (`filter: blob:none`), which holds only the
+ * blobs its checkout wrote; `cat-file --batch` would fetch every other one in
+ * a round trip of its own, so a large diff spent minutes on base versions.
+ * One fetch of every missing blob replaces those round trips.
+ */
+const fetchMissingObjects = (
+  objects: readonly string[],
+  runGit: typeof git,
+): GitResult => {
+  const check = runGit(
+    ["--no-lazy-fetch", "cat-file", "--batch-check=%(objectname)"],
+    `${objects.join("\n")}\n`,
+  );
+  if (check.type === "failed") {
+    return check;
+  }
+  const missing = new TextDecoder()
+    .decode(check.output)
+    .split("\n")
+    .flatMap((line) => {
+      const [object, state] = line.split(" ");
+      return state === "missing" && object !== undefined ? [object] : [];
+    });
+  if (missing.length === 0) {
+    return check;
+  }
+  const promisors = runGit([
+    "config",
+    "--get-regexp",
+    String.raw`^remote\..+\.promisor$`,
+  ]);
+  const remote =
+    promisors.type === "ok"
+      ? /^remote\.(.+)\.promisor true$/mu
+          .exec(new TextDecoder().decode(promisors.output))
+          ?.at(1)
+      : undefined;
+  if (remote === undefined) {
+    return {
+      type: "failed",
+      detail: `${String(missing.length)} source objects are missing and no promisor remote can supply them`,
+    };
+  }
+  // Match Git's lazy fetch: object IDs may be blobs, so commit negotiation
+  // must not interpret them as revision tips.
+  return runGit(
+    [
+      "-c",
+      "fetch.negotiationAlgorithm=noop",
+      "fetch",
+      "--no-tags",
+      "--no-write-fetch-head",
+      "--recurse-submodules=no",
+      "--filter=blob:none",
+      "--stdin",
+      remote,
+    ],
+    `${missing.join("\n")}\n`,
+  );
 };
 
 type ReadGitTreeResult =
   { type: "ok"; files: SourceTree } | { type: "failed"; detail: string };
 
+type ReadGitTreeOptions = {
+  repository?: string;
+};
+
 // Read immutable git objects in one batch, without checking out either tree.
-export const readGitTree = (ref: string): ReadGitTreeResult => {
-  const listing = git([
+export const readGitTree = (
+  ref: string,
+  { repository = REPOSITORY_ROOT }: ReadGitTreeOptions = {},
+): ReadGitTreeResult => {
+  const runGit = gitIn(repository);
+  const listing = runGit([
     "ls-tree",
     "-r",
     "-z",
@@ -836,10 +1015,15 @@ export const readGitTree = (ref: string): ReadGitTreeResult => {
       sources.push({ file, object });
     }
   }
-  const objects = git(
-    ["cat-file", "--batch"],
-    `${sources.map(({ object }) => object).join("\n")}\n`,
-  );
+  if (sources.length === 0) {
+    return { type: "ok", files };
+  }
+  const wanted = sources.map(({ object }) => object);
+  const fetched = fetchMissingObjects(wanted, runGit);
+  if (fetched.type === "failed") {
+    return fetched;
+  }
+  const objects = runGit(["cat-file", "--batch"], `${wanted.join("\n")}\n`);
   if (objects.type === "failed") {
     return objects;
   }
