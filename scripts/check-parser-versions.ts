@@ -32,6 +32,9 @@ const ADAPTER_DIRECTORY = "apps/api/src/handlers/case-law/ingestion/adapters/";
 const LEGISLATION_DIRECTORY = "apps/api/src/handlers/legislation/";
 const LEGISLATION_ADAPTER_DIRECTORY = `${LEGISLATION_DIRECTORY}ingestion/adapters/`;
 const CASE_LAW_DIRECTORY = "apps/api/src/lib/case-law/";
+const SEARCH_ONLY_CASE_LAW_MODULES = new Set([
+  "apps/api/src/lib/case-law/provision-search-index.ts",
+]);
 const PARSER_DIRECTORIES = [
   "apps/api/src/handlers/case-law/ingestion/parsers/",
   "apps/api/src/lib/legal-search/parsers/",
@@ -461,7 +464,8 @@ class StaticTree {
           // determine output even when no dedicated parser module exists.
           if (
             file.startsWith(ADAPTER_DIRECTORY) ||
-            file.startsWith(CASE_LAW_DIRECTORY)
+            (file.startsWith(CASE_LAW_DIRECTORY) &&
+              !SEARCH_ONLY_CASE_LAW_MODULES.has(file))
           ) {
             parsers.add(file);
           }

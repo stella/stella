@@ -38,7 +38,7 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
-import { citingDecisionIdsSubquery } from "@/api/lib/case-law/provision-filter";
+import { provisionScopeLinksQuery } from "@/api/lib/case-law/provision-filter";
 import { resetPublicCaseLawConfigForTesting } from "@/api/lib/case-law/public-case-law-config";
 import { createCorpusHitDispositionCounter } from "@/api/lib/legal-search/corpus-hit-telemetry";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
@@ -1553,7 +1553,7 @@ test.each([
   },
 );
 
-test("a provision-only list is the complete citing set with an exact total and its citing sentence", async () => {
+test("a provision-only list returns citing decisions and sentences without counting the full set", async () => {
   const listed = await listCaseLawProvisionDecisions({
     body: {
       ...SEARCH_BODY,
@@ -1574,7 +1574,7 @@ test("a provision-only list is the complete citing set with an exact total and i
   expect(listed.hits.map(({ decisionId }) => decisionId)).toEqual([
     String(czechId),
   ]);
-  expect(listed.total).toEqual({ type: "exact", count: 1 });
+  expect(listed.total).toEqual({ type: "not_counted" });
   expect(listed.nextCursor).toBeNull();
   expect(listed.hits.at(0)?.headline).toBe("sentence par_316-odst_2");
 
@@ -1590,10 +1590,7 @@ test("a provision-only list is the complete citing set with an exact total and i
       loadCourtWeights: async () => await Promise.resolve(courtWeights),
     },
   });
-  expect("hits" in none ? none.total : null).toEqual({
-    type: "exact",
-    count: 0,
-  });
+  expect("hits" in none ? none.total : null).toEqual({ type: "not_counted" });
 });
 
 test("a provision-only list escapes the citing sentence it shows as markup", async () => {
@@ -1676,7 +1673,7 @@ test("a provision-only list reads its page and excerpts in one snapshot", async 
       loadCourtWeights: async () => await Promise.resolve(courtWeights),
     },
   });
-  // One read for ids, total, citing sentences and rows (one repeatable-read
+  // One read for ids, citing sentences and rows (one repeatable-read
   // transaction), one for the language alternates.
   expect(reads - before).toBe(2);
 });
@@ -1727,7 +1724,7 @@ test("a provision-only list cursor resumes only the request it was issued for", 
     if (!("hits" in first) || first.nextCursor === null) {
       throw new Error("expected a first page with a continuation");
     }
-    expect(first.total).toEqual({ type: "exact", count: 2 });
+    expect(first.total).toEqual({ type: "not_counted" });
     const cursor = first.nextCursor;
 
     // The same request continues, to the other decision and the end.
@@ -1809,6 +1806,55 @@ test("a provision-only list cursor resumes only the request it was issued for", 
   }
 });
 
+test("a sparse broad provision walk resumes from its bounded examined candidates", async () => {
+  const db = drizzle({ client });
+  await db
+    .update(caseLawDecisions)
+    .set({ citationAuthority: 3 })
+    .where(eq(caseLawDecisions.id, slovakId));
+  const examined: number[] = [];
+  const request = {
+    ...SEARCH_BODY,
+    provision: { work: "262/2006 Sb.", anchor: "par_316" },
+    limit: 1,
+  } as const;
+  const list = async (cursor?: string) =>
+    await listCaseLawProvisionDecisions({
+      body: { ...request, ...(cursor === undefined ? {} : { cursor }) },
+      caseLawDb,
+      dependencies: {
+        candidateBudget: 1,
+        provisionIdSetMax: 0,
+        reportExaminedCandidates: (count) => {
+          examined.push(count);
+        },
+        servingGeneration: GENERATION,
+        provider: "corpus-index",
+        loadCourtWeights: async () => await Promise.resolve(courtWeights),
+      },
+    });
+  try {
+    const first = await list();
+    if (!("hits" in first) || first.nextCursor === null) {
+      throw new Error("expected an empty bounded page with a continuation");
+    }
+    expect(first.hits).toEqual([]);
+    const second = await list(first.nextCursor);
+    if (!("hits" in second)) {
+      throw new Error("expected the resumed page");
+    }
+    expect(second.hits.map(({ decisionId }) => decisionId)).toEqual([
+      String(czechId),
+    ]);
+    expect(examined).toEqual([1, 1]);
+  } finally {
+    await db
+      .update(caseLawDecisions)
+      .set({ citationAuthority: 1 })
+      .where(eq(caseLawDecisions.id, slovakId));
+  }
+});
+
 // The planner picks the decision-id or the work-subtree index by the data's
 // shape; either probes the provision's own links. Neither scans the table,
 // and neither walks every link of the act, which for a civil code is
@@ -1836,7 +1882,7 @@ test("the provision filter reads links through an index, never by scanning them"
         await tx.execute(sql`EXPLAIN (COSTS OFF) ${query.getSQL()}`),
       );
       expect(plan).toMatch(
-        /Index (?:Only )?Scan using case_law_provision_citations_(?:decision_span|work_citing)_idx/u,
+        /Index (?:Only )?Scan using case_law_provision_citations_decision_work_subtree_idx/u,
       );
       expect(plan).not.toContain("Seq Scan on case_law_provision_citations");
     }
@@ -1848,7 +1894,7 @@ test("every decision citing a provision is read from the provision's own anchor 
     await tx.execute(sql`SET LOCAL enable_seqscan = off`);
     const plan = JSON.stringify(
       await tx.execute(
-        sql`EXPLAIN (COSTS OFF) ${citingDecisionIdsSubquery(tx, {
+        sql`EXPLAIN (COSTS OFF) ${provisionScopeLinksQuery(tx, {
           jurisdiction: "CZE",
           // § 2910 písm. a): a level below a gap is compared within the
           // seek, never in place of it.

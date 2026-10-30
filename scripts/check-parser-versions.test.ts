@@ -252,6 +252,27 @@ test("adapter case-law helpers are owned without unrelated dependency fan-out", 
   expect(changed(base, head)).toEqual([]);
 });
 
+test("search-only case-law modules do not count as parser inputs", () => {
+  const searchIndex = "apps/api/src/lib/case-law/provision-search-index.ts";
+  const base = fixture({ adapters: ["A"] });
+  const head = fixture({ adapters: ["A"] });
+  for (const tree of [base, head]) {
+    const adapter = `${ADAPTERS}adapter-a.ts`;
+    tree.set(
+      adapter,
+      [
+        'import { indexName } from "@/api/lib/case-law/provision-search-index";',
+        tree.get(adapter),
+        "export const searchIndexName = indexName;",
+      ].join("\n"),
+    );
+    tree.set(searchIndex, 'export const indexName = "base";');
+  }
+  head.set(searchIndex, 'export const indexName = "changed";');
+
+  expect(changed(base, head)).toEqual([]);
+});
+
 test("a shared helper change fans out to every importing adapter", () => {
   const base = fixture();
   const oneVersionBumped = fixture({

@@ -203,16 +203,13 @@ export const manyRequiredTermsWarning = ({
 
 export const provisionCitedWidelyWarning = ({
   provision,
-  citingDecisions,
 }: {
   /** The provision as the caller wrote it. */
   provision: string;
-  /** How many decisions cite it, counted exactly. */
-  citingDecisions: number;
 }): AgentCaseLawSearchWarning => ({
   code: "provision_cited_widely",
-  message: `${provision} is cited by ${String(citingDecisions)} decisions, more than one search can filter by: these results are the topic's best matches that cite it, not all of them.`,
-  hint: "Add a subsection or letter to the provision, or more topic words, to narrow; or omit queries to list every decision citing it, with an exact total.",
+  message: `${provision} has more citation links than one search can enumerate: these results are the topic's best matches that cite it, not all of them.`,
+  hint: "Add a subsection or letter to the provision, or more topic words, to narrow; or omit queries to list every decision citing it, with pagination.",
 });
 
 export const partialMatchesAppendedWarning = ({
@@ -288,7 +285,6 @@ export const AGENT_CASE_LAW_SEARCH_WARNING_PRODUCERS = {
   provision_cited_widely: () =>
     provisionCitedWidelyWarning({
       provision: "§ 2910 OZ",
-      citingDecisions: 4037,
     }),
   many_required_terms: () =>
     manyRequiredTermsWarning({
