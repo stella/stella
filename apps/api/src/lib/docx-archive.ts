@@ -8,7 +8,7 @@
 import { Result, TaggedError } from "better-result";
 
 import { ZipArchive, ZipError, type ZipErrorReason } from "@stll/docx-core/zip";
-import { declareFingerprintFields } from "@stll/errors";
+import { declareFingerprintFields } from "@stll/errors/fingerprint-fields";
 
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 

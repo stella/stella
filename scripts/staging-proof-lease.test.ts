@@ -11,11 +11,25 @@ const actionPath = path.join(
   "../.github/actions/promote-dispatch/action.yml",
 );
 const leaseScriptPath = path.join(import.meta.dirname, "staging-wake.sh");
-const AFTER_LEASE_HOURS = 3;
+const AFTER_LEASE_HOURS = 4;
+const BEFORE_LEASE_HOURS = 1;
+const DEFAULT_LEASE_HOURS = 2;
 const field = (value: unknown, key: string): unknown =>
   typeof value === "object" && value !== null
     ? Reflect.get(value, key)
     : undefined;
+
+// staging-power.yml takes the hours as a choice; the lease owner mirrors it.
+const allowedLeaseHours = async (): Promise<number[]> => {
+  const script = await readFile(leaseScriptPath, "utf-8");
+  const declared = /^readonly allowed_lease_hours=\(([^)]*)\)$/mu.exec(
+    script,
+  )?.[1];
+  if (declared === undefined) {
+    throw new TypeError("staging-wake.sh declares no allowed lease hours");
+  }
+  return declared.trim().split(/\s+/u).map(Number);
+};
 
 describe("release-candidate staging power lease", () => {
   test("leases before promotion and renews before every smoke path", async () => {
@@ -27,7 +41,7 @@ describe("release-candidate staging power lease", () => {
       deploy,
     );
     expect(workflow.slice(deploy, firstSmoke)).toContain(
-      `staging-lease-before-hours: \${{ inputs.release_ref != '' && '1' || '' }}`,
+      `staging-lease-before-hours: \${{ inputs.release_ref != '' && '${BEFORE_LEASE_HOURS}' || '' }}`,
     );
     expect(workflow.slice(deploy, firstSmoke)).toContain(
       `staging-lease-after-hours: \${{ inputs.release_ref != '' && '${AFTER_LEASE_HOURS}' || '' }}`,
@@ -80,8 +94,13 @@ describe("release-candidate staging power lease", () => {
       budget += Number(minutes);
     }
     expect(AFTER_LEASE_HOURS * 60).toBeGreaterThanOrEqual(budget);
-    // Tight: one hour less would no longer cover the budget.
-    expect((AFTER_LEASE_HOURS - 1) * 60).toBeLessThan(budget);
+    // Tight: no smaller lease staging-power.yml offers covers the budget.
+    const allowed = await allowedLeaseHours();
+    expect(
+      allowed.filter(
+        (hours) => hours < AFTER_LEASE_HOURS && hours * 60 >= budget,
+      ),
+    ).toEqual([]);
   });
 
   test("the shared lease owner only dispatches action on with the requested hours", async () => {
@@ -91,7 +110,36 @@ describe("release-candidate staging power lease", () => {
     );
     expect(script).not.toContain("inputs[action]=off");
     expect(script).toContain(
-      `readonly lease_hours="\${STAGING_LEASE_HOURS:-2}"`,
+      `readonly lease_hours="\${STAGING_LEASE_HOURS:-${DEFAULT_LEASE_HOURS}}"`,
+    );
+  });
+
+  test("every requested lease is one staging-power.yml offers", async () => {
+    const allowed = await allowedLeaseHours();
+    for (const hours of [
+      BEFORE_LEASE_HOURS,
+      AFTER_LEASE_HOURS,
+      DEFAULT_LEASE_HOURS,
+    ]) {
+      expect(allowed).toContain(hours);
+    }
+  });
+
+  test("the lease owner refuses hours staging-power.yml does not offer", async () => {
+    const run = Bun.spawn(["bash", leaseScriptPath], {
+      env: {
+        PATH: process.env["PATH"] ?? "/usr/bin:/bin",
+        GH_RETRY_SCRIPT: "/nonexistent",
+        GITHUB_OUTPUT: "/dev/null",
+        DEPLOY_SHA: "a".repeat(40),
+        STAGING_LEASE_HOURS: "3",
+      },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(await run.exited).toBe(2);
+    expect(await new Response(run.stderr).text()).toContain(
+      "STAGING_LEASE_HOURS must be one of 1 2 4 8 (got '3')",
     );
   });
 });

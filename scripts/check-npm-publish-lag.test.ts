@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import * as v from "valibot";
 
 import {
   assessPublishLag,
@@ -16,7 +17,8 @@ import {
   renderLagTable,
   resolveRef,
 } from "./check-npm-publish-lag";
-import { ALL_PACKAGE_ORDER } from "./publish-packages";
+import { readNpmReleaseGraph } from "./generate-npm-release-jobs";
+import { ALL_PACKAGE_ORDER, npmReleaseJobId } from "./publish-packages";
 
 const cli = { directory: "cli", name: "@stll/cli", version: "3.8.6" };
 const found = (
@@ -406,7 +408,52 @@ describe("release workflows run the guard", () => {
   test("publish-npm.yml checks npm after publishing", async () => {
     const text = await workflow("publish-npm.yml");
     expect(text).toContain("bun scripts/check-npm-publish-lag.ts");
-    expect(text).toContain("needs: [release-trigger, pack, release]");
+    const { jobs } = v.parse(
+      v.looseObject({
+        jobs: v.record(
+          v.string(),
+          v.looseObject({
+            needs: v.optional(v.union([v.string(), v.array(v.string())])),
+          }),
+        ),
+      }),
+      Bun.YAML.parse(text),
+    );
+    const graph = readNpmReleaseGraph({
+      readManifest: (directory) =>
+        readFileSync(
+          path.join(
+            import.meta.dirname,
+            "..",
+            "packages",
+            directory,
+            "package.json",
+          ),
+          "utf-8",
+        ),
+    });
+    const needs = (id: string) => {
+      const job =
+        jobs[id] ?? expect.unreachable(`Missing publishing job: ${id}`);
+      return typeof job.needs === "string" ? [job.needs] : (job.needs ?? []);
+    };
+    for (const { directory, dependencies } of graph) {
+      expect(needs(npmReleaseJobId(directory))).toEqual([
+        "release-trigger",
+        "pack",
+        ...dependencies.map(npmReleaseJobId),
+      ]);
+    }
+    expect(needs("release-summary")).toEqual([
+      "release-trigger",
+      "pack",
+      ...graph.map(({ directory }) => npmReleaseJobId(directory)),
+    ]);
+    expect(needs("verify-npm")).toEqual([
+      "release-trigger",
+      "pack",
+      "release-summary",
+    ]);
   });
 
   test("release-tag.yml refuses a tag while the previous release lags", async () => {

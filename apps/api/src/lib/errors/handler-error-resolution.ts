@@ -1,11 +1,14 @@
 import { Panic, Result, UnhandledException } from "better-result";
 
+import { LIMITER_STORE_UNAVAILABLE } from "@stll/api-contract/action-admission";
+
 import { DocxArchiveError } from "@/api/lib/docx-archive";
 import {
   ActionAdmissionError,
   actionAdmissionRefusal,
 } from "@/api/lib/errors/action-admission-error";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LimiterStoreUnavailableError } from "@/api/lib/rate-limit/store-unavailable";
 
 /** How far a typed status is followed through transport wrappers. */
 export const MAX_TRANSPORT_WRAPPER_DEPTH = 3;
@@ -53,6 +56,12 @@ const admissionHandlerError = (
 ): HandlerError | null => {
   let candidate = error;
   for (let depth = 0; depth <= MAX_TRANSPORT_WRAPPER_DEPTH; depth++) {
+    if (LimiterStoreUnavailableError.is(candidate)) {
+      return new HandlerError({
+        ...LIMITER_STORE_UNAVAILABLE,
+        cause: candidate,
+      });
+    }
     if (ActionAdmissionError.is(candidate)) {
       return new HandlerError({
         ...actionAdmissionRefusal(candidate, contactUrl),
