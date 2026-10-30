@@ -2369,7 +2369,6 @@
     "unverifiedCitationHint": "Šo citātu neizdevās sasaistīt ar avota dokumentu.",
     "uploadFiles": "Augšupielādēt failus",
     "urlIdentifier": "Identifikators",
-    "urlIdentifierPlaceholder": "mana-organizacija",
     "user": "Lietotājs",
     "value": "Vērtība",
     "vatId": "PVN numurs",
@@ -4696,6 +4695,12 @@
       "selectedProvider": "{provider}",
       "usingDefaults": "Tiek izmantoti noklusējuma iestatījumi"
     },
+    "creationInvalidName": "Ievadiet derīgu organizācijas nosaukumu (ne vairāk kā {maxLength} rakstzīmes).",
+    "creationNotAllowed": "Ar šo kontu nevar izveidot organizācijas.",
+    "creationOutcomeUnknown": "Pieprasījums, iespējams, ir izveidojis organizāciju. Mēģiniet vēlreiz, lai pārbaudītu rezultātu.",
+    "creationRateLimited": "Pēdējā laikā izveidots pārāk daudz organizāciju. Mēģiniet vēlāk vēlreiz.",
+    "creationRefused": "Organizāciju neizdevās izveidot. Pārbaudiet datus un mēģiniet vēlreiz.",
+    "creationSlugConflict": "Šī organizācijas adrese jau tiek izmantota. Izvēlieties citu nosaukumu vai adresi.",
     "invitations": {
       "cancelInvitation": "Atcelt uzaicinājumu",
       "emailAddressLabel": "E-pasta adrese",
@@ -4760,6 +4765,9 @@
       "owner": "Īpašnieks"
     },
     "settingsDescription": "Rediģēt organizācijas nosaukumu un slug",
+    "startOver": "Sākt no jauna",
+    "startOverDescription": "Sākotnējais pieprasījums, iespējams, jau ir izveidojis organizāciju. Pirms sākat no jauna, pārbaudiet savas organizācijas; jauns pieprasījums var izveidot vēl vienu organizāciju.",
+    "startOverTitle": "Sākt jaunu izveides pieprasījumu?",
     "switchOrganization": "Mainīt organizāciju"
   },
   "publicTools": {
@@ -6086,8 +6094,7 @@
   "validation": {
     "invalidEmail": "Ievadiet derīgu e-pasta adresi.",
     "organizationNameRequired": "Organizācijas nosaukums ir obligāts",
-    "slugFormat": "Slug drīkst saturēt tikai mazos burtus, ciparus un defises",
-    "slugRequired": "Slug ir obligāts"
+    "slugFormat": "Slug drīkst saturēt tikai mazos burtus, ciparus un defises"
   },
   "verify": {
     "history": "{history, select, refiled {Izdrukāts ar atsauces numuru <bdi>{reference}</bdi>; tagad dokuments ir reģistrēts ar numuru <bdi>{currentReference}</bdi> lietā <bdi>{matterName}</bdi>.} superseded {Šis atsauces numurs norāda uz {version, number}. versiju; pašreizējā versija ir {currentVersion, number}.} other {Izdrukāts ar atsauces numuru <bdi>{reference}</bdi>; tagad dokuments ir reģistrēts ar numuru <bdi>{currentReference}</bdi> lietā <bdi>{matterName}</bdi>. Šis atsauces numurs norāda uz {version, number}. versiju; pašreizējā versija ir {currentVersion, number}.}}",

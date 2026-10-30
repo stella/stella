@@ -3,6 +3,7 @@ import * as v from "valibot";
 
 import { apiDateSchema } from "@stll/api-contract/api-date";
 import { AUDIT_CHANGES_STATUS } from "@stll/api-contract/audit-log";
+import { organizationCreateOutputSchema } from "@stll/api-contract/organization-create";
 import { BOE_SEARCH_PAGE_LIMITS, RELATION_TYPES } from "@stll/boe";
 import { parsePlainDate } from "@stll/time";
 
@@ -14,10 +15,7 @@ import {
 } from "@/api/handlers/audit-logs/query";
 import { mapBoeError } from "@/api/handlers/legislation/boe-error";
 import { updateOrganizationSettingsHandler } from "@/api/handlers/organization-settings/update";
-import {
-  organizationCreateBodySchema,
-  organizationCreateOutputSchema,
-} from "@/api/handlers/organizations/schema";
+import { organizationCreateBodySchema } from "@/api/handlers/organizations/schema";
 import { addWorkspaceMemberHandler } from "@/api/handlers/workspaces/members/add";
 import { removeWorkspaceMemberHandler } from "@/api/handlers/workspaces/members/remove";
 import {

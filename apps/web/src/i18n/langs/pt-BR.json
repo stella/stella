@@ -2369,7 +2369,6 @@
     "unverifiedCitationHint": "Não foi possível associar esta citação ao documento de origem.",
     "uploadFiles": "Carregar arquivos",
     "urlIdentifier": "Identificador de URL",
-    "urlIdentifierPlaceholder": "minha-organização",
     "user": "Usuário",
     "value": "Valor",
     "vatId": "Número de IVA",
@@ -4696,6 +4695,12 @@
       "selectedProvider": "{provider}",
       "usingDefaults": "Usando os padrões"
     },
+    "creationInvalidName": "Digite um nome de organização válido (até {maxLength} caracteres).",
+    "creationNotAllowed": "Esta conta não pode criar organizações.",
+    "creationOutcomeUnknown": "A solicitação pode ter criado uma organização. Tente novamente para verificar o resultado.",
+    "creationRateLimited": "Muitas organizações foram criadas recentemente. Tente novamente mais tarde.",
+    "creationRefused": "Não foi possível criar a organização. Confira os dados e tente novamente.",
+    "creationSlugConflict": "Este endereço de organização já está em uso. Escolha outro nome ou endereço.",
     "invitations": {
       "cancelInvitation": "Cancelar convite",
       "emailAddressLabel": "Endereço de e-mail",
@@ -4760,6 +4765,9 @@
       "owner": "Proprietário"
     },
     "settingsDescription": "Edite o nome e o slug da sua organização",
+    "startOver": "Recomeçar",
+    "startOverDescription": "A solicitação original pode já ter criado uma organização. Confira suas organizações antes de recomeçar; uma nova solicitação pode criar outra organização.",
+    "startOverTitle": "Iniciar uma nova solicitação de criação?",
     "switchOrganization": "Mudar de organização"
   },
   "publicTools": {
@@ -6086,8 +6094,7 @@
   "validation": {
     "invalidEmail": "Insira um endereço de e-mail válido.",
     "organizationNameRequired": "O nome da organização é obrigatório",
-    "slugFormat": "O slug deve conter letras minúsculas, números e hifens",
-    "slugRequired": "O slug é obrigatório"
+    "slugFormat": "O slug deve conter letras minúsculas, números e hifens"
   },
   "verify": {
     "history": "{history, select, refiled {Impresso com a referência <bdi>{reference}</bdi>; agora está arquivado com a referência <bdi>{currentReference}</bdi> no caso <bdi>{matterName}</bdi>.} superseded {Esta referência aponta para a versão {version, number}; a versão atual é a {currentVersion, number}.} other {Impresso com a referência <bdi>{reference}</bdi>; agora está arquivado com a referência <bdi>{currentReference}</bdi> no caso <bdi>{matterName}</bdi>. Esta referência aponta para a versão {version, number}; a versão atual é a {currentVersion, number}.}}",

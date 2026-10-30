@@ -2369,7 +2369,6 @@
     "unverifiedCitationHint": "This quote could not be matched to the source document.",
     "uploadFiles": "Upload files",
     "urlIdentifier": "Slug",
-    "urlIdentifierPlaceholder": "my-organization",
     "user": "User",
     "value": "Value",
     "vatId": "VAT ID",
@@ -4696,6 +4695,12 @@
       "selectedProvider": "{provider}",
       "usingDefaults": "Using defaults"
     },
+    "creationInvalidName": "Enter a valid organization name (up to {maxLength} characters).",
+    "creationNotAllowed": "This account cannot create organizations.",
+    "creationOutcomeUnknown": "The request may have created an organization. Retry to check its result.",
+    "creationRateLimited": "Too many organizations were created recently. Try again later.",
+    "creationRefused": "The organization could not be created. Check the details and try again.",
+    "creationSlugConflict": "This organization address is already in use. Choose another name or address.",
     "invitations": {
       "cancelInvitation": "Cancel invitation",
       "emailAddressLabel": "Email address",
@@ -4760,6 +4765,9 @@
       "owner": "Owner"
     },
     "settingsDescription": "Edit your organization name and slug",
+    "startOver": "Start over",
+    "startOverDescription": "The original request may already have created an organization. Check your organizations before starting again; a new request could create another organization.",
+    "startOverTitle": "Start a new creation request?",
     "switchOrganization": "Switch organization"
   },
   "publicTools": {
@@ -6086,8 +6094,7 @@
   "validation": {
     "invalidEmail": "Enter a valid email address.",
     "organizationNameRequired": "Organization name is required",
-    "slugFormat": "Slug must be lowercase letters, numbers, and hyphens",
-    "slugRequired": "Slug is required"
+    "slugFormat": "Slug must be lowercase letters, numbers, and hyphens"
   },
   "verify": {
     "history": "{history, select, refiled {Printed as <bdi>{reference}</bdi>; now filed as <bdi>{currentReference}</bdi> in <bdi>{matterName}</bdi>.} superseded {This reference points to version {version, number}; the current version is {currentVersion, number}.} other {Printed as <bdi>{reference}</bdi>; now filed as <bdi>{currentReference}</bdi> in <bdi>{matterName}</bdi>. This reference points to version {version, number}; the current version is {currentVersion, number}.}}",

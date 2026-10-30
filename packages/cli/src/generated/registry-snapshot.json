@@ -5559,7 +5559,7 @@
           "minLength": 1,
           "maxLength": 100,
           "pattern": "^[a-z0-9-]+$",
-          "description": "Optional URL slug. Omit to derive a unique slug from the name."
+          "description": "Optional URL slug. Omit to generate an opaque organization address."
         }
       }
     },

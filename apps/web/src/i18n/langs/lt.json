@@ -2369,7 +2369,6 @@
     "unverifiedCitationHint": "Nepavyko susieti šios citatos su šaltinio dokumentu.",
     "uploadFiles": "Įkelti failus",
     "urlIdentifier": "URL identifikatorius",
-    "urlIdentifierPlaceholder": "mano-organizacija",
     "user": "Naudotojas",
     "value": "Reikšmė",
     "vatId": "PVM mokėtojo kodas",
@@ -4696,6 +4695,12 @@
       "selectedProvider": "{provider}",
       "usingDefaults": "Naudojami numatytieji nustatymai"
     },
+    "creationInvalidName": "Įveskite tinkamą organizacijos pavadinimą (iki {maxLength} simbolių).",
+    "creationNotAllowed": "Ši paskyra negali kurti organizacijų.",
+    "creationOutcomeUnknown": "Užklausa galėjo sukurti organizaciją. Bandykite dar kartą, kad patikrintumėte rezultatą.",
+    "creationRateLimited": "Pastaruoju metu sukurta per daug organizacijų. Bandykite dar kartą vėliau.",
+    "creationRefused": "Organizacijos sukurti nepavyko. Patikrinkite duomenis ir bandykite dar kartą.",
+    "creationSlugConflict": "Šis organizacijos adresas jau naudojamas. Pasirinkite kitą pavadinimą arba adresą.",
     "invitations": {
       "cancelInvitation": "Atšaukti kvietimą",
       "emailAddressLabel": "El. pašto adresas",
@@ -4760,6 +4765,9 @@
       "owner": "Savininkas"
     },
     "settingsDescription": "Redaguokite organizacijos pavadinimą ir slug",
+    "startOver": "Pradėti iš naujo",
+    "startOverDescription": "Pradinė užklausa galėjo jau sukurti organizaciją. Prieš pradėdami iš naujo patikrinkite savo organizacijas; nauja užklausa gali sukurti dar vieną organizaciją.",
+    "startOverTitle": "Siųsti naują kūrimo užklausą?",
     "switchOrganization": "Pakeisti organizaciją"
   },
   "publicTools": {
@@ -6086,8 +6094,7 @@
   "validation": {
     "invalidEmail": "Įveskite galiojantį el. pašto adresą.",
     "organizationNameRequired": "Organizacijos pavadinimas yra privalomas",
-    "slugFormat": "Slug gali būti tik mažosios raidės, skaičiai ir brūkšneliai",
-    "slugRequired": "Slug yra privalomas"
+    "slugFormat": "Slug gali būti tik mažosios raidės, skaičiai ir brūkšneliai"
   },
   "verify": {
     "history": "{history, select, refiled {Atspausdinta su nuorodos numeriu <bdi>{reference}</bdi>; dabar dokumentas registruotas numeriu <bdi>{currentReference}</bdi> byloje <bdi>{matterName}</bdi>.} superseded {Šis nuorodos numeris rodo į {version, number} versiją; dabartinė versija yra {currentVersion, number}.} other {Atspausdinta su nuorodos numeriu <bdi>{reference}</bdi>; dabar dokumentas registruotas numeriu <bdi>{currentReference}</bdi> byloje <bdi>{matterName}</bdi>. Šis nuorodos numeris rodo į {version, number} versiją; dabartinė versija yra {currentVersion, number}.}}",

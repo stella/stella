@@ -2369,7 +2369,6 @@
     "unverifiedCitationHint": "Cette citation n'a pas pu être associée au document source.",
     "uploadFiles": "Importer des fichiers",
     "urlIdentifier": "Identifiant URL",
-    "urlIdentifierPlaceholder": "mon-organisation",
     "user": "Utilisateur",
     "value": "Valeur",
     "vatId": "Numéro de TVA",
@@ -4696,6 +4695,12 @@
       "selectedProvider": "{provider}",
       "usingDefaults": "Valeurs par défaut utilisées"
     },
+    "creationInvalidName": "Saisissez un nom d’organisation valide ({maxLength} caractères maximum).",
+    "creationNotAllowed": "Ce compte ne peut pas créer d’organisations.",
+    "creationOutcomeUnknown": "La demande a peut-être créé une organisation. Réessayez pour en vérifier le résultat.",
+    "creationRateLimited": "Trop d’organisations ont été créées récemment. Réessayez plus tard.",
+    "creationRefused": "L’organisation n’a pas pu être créée. Vérifiez les informations et réessayez.",
+    "creationSlugConflict": "Cette adresse d’organisation est déjà utilisée. Choisissez un autre nom ou une autre adresse.",
     "invitations": {
       "cancelInvitation": "Annuler l'invitation",
       "emailAddressLabel": "Adresse e-mail",
@@ -4760,6 +4765,9 @@
       "owner": "Propriétaire"
     },
     "settingsDescription": "Modifier le nom et le slug de votre organisation",
+    "startOver": "Recommencer",
+    "startOverDescription": "La demande initiale a peut-être déjà créé une organisation. Vérifiez vos organisations avant de recommencer ; une nouvelle demande pourrait créer une organisation supplémentaire.",
+    "startOverTitle": "Lancer une nouvelle demande de création ?",
     "switchOrganization": "Changer d'organisation"
   },
   "publicTools": {
@@ -6086,8 +6094,7 @@
   "validation": {
     "invalidEmail": "Saisissez une adresse e-mail valide.",
     "organizationNameRequired": "Le nom de l'organisation est requis",
-    "slugFormat": "Le slug ne doit contenir que des lettres minuscules, des chiffres et des tirets",
-    "slugRequired": "Le slug est requis"
+    "slugFormat": "Le slug ne doit contenir que des lettres minuscules, des chiffres et des tirets"
   },
   "verify": {
     "history": "{history, select, refiled {Imprimé sous la référence <bdi>{reference}</bdi> ; désormais classé sous la référence <bdi>{currentReference}</bdi> dans le dossier <bdi>{matterName}</bdi>.} superseded {Cette référence renvoie à la version {version, number} ; la version actuelle est la {currentVersion, number}.} other {Imprimé sous la référence <bdi>{reference}</bdi> ; désormais classé sous la référence <bdi>{currentReference}</bdi> dans le dossier <bdi>{matterName}</bdi>. Cette référence renvoie à la version {version, number} ; la version actuelle est la {currentVersion, number}.}}",

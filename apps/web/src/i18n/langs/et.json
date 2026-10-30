@@ -2369,7 +2369,6 @@
     "unverifiedCitationHint": "Seda tsitaati ei õnnestunud lähtedokumendiga sobitada.",
     "uploadFiles": "Laadi failid üles",
     "urlIdentifier": "Lühitunnus",
-    "urlIdentifierPlaceholder": "minu-organisatsioon",
     "user": "Kasutaja",
     "value": "Väärtus",
     "vatId": "Käibemaksukohustuslase number",
@@ -4696,6 +4695,12 @@
       "selectedProvider": "{provider}",
       "usingDefaults": "Kasutusel on vaikeseaded"
     },
+    "creationInvalidName": "Sisesta sobiv organisatsiooni nimi (kuni {maxLength} märki).",
+    "creationNotAllowed": "Selle kontoga ei saa organisatsioone luua.",
+    "creationOutcomeUnknown": "Päring võis organisatsiooni luua. Tulemuse kontrollimiseks proovi uuesti.",
+    "creationRateLimited": "Hiljuti on loodud liiga palju organisatsioone. Proovi hiljem uuesti.",
+    "creationRefused": "Organisatsiooni ei saanud luua. Kontrolli andmeid ja proovi uuesti.",
+    "creationSlugConflict": "See organisatsiooni aadress on juba kasutusel. Vali teine nimi või aadress.",
     "invitations": {
       "cancelInvitation": "Tühista kutse",
       "emailAddressLabel": "E-posti aadress",
@@ -4760,6 +4765,9 @@
       "owner": "Omanik"
     },
     "settingsDescription": "Muutke oma organisatsiooni nime ja slugi",
+    "startOver": "Alusta uuesti",
+    "startOverDescription": "Algne päring võis organisatsiooni juba luua. Enne uuesti alustamist kontrolli oma organisatsioone; uus päring võib luua veel ühe organisatsiooni.",
+    "startOverTitle": "Kas saata uus loomispäring?",
     "switchOrganization": "Vaheta organisatsiooni"
   },
   "publicTools": {
@@ -6086,8 +6094,7 @@
   "validation": {
     "invalidEmail": "Sisestage kehtiv e-posti aadress.",
     "organizationNameRequired": "Organisatsiooni nimi on kohustuslik",
-    "slugFormat": "Slug tohib sisaldada ainult väiketähti, numbreid ja sidekriipse",
-    "slugRequired": "Slug on kohustuslik"
+    "slugFormat": "Slug tohib sisaldada ainult väiketähti, numbreid ja sidekriipse"
   },
   "verify": {
     "history": "{history, select, refiled {Trükitud viitenumbriga <bdi>{reference}</bdi>; nüüd on dokument viitenumbriga <bdi>{currentReference}</bdi> toimikus <bdi>{matterName}</bdi>.} superseded {See viitenumber osutab versioonile {version, number}; praegune versioon on {currentVersion, number}.} other {Trükitud viitenumbriga <bdi>{reference}</bdi>; nüüd on dokument viitenumbriga <bdi>{currentReference}</bdi> toimikus <bdi>{matterName}</bdi>. See viitenumber osutab versioonile {version, number}; praegune versioon on {currentVersion, number}.}}",

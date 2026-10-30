@@ -2369,7 +2369,6 @@
     "unverifiedCitationHint": "تعذّر مطابقة هذا الاقتباس مع المستند المصدر.",
     "uploadFiles": "رفع الملفات",
     "urlIdentifier": "المعرّف",
-    "urlIdentifierPlaceholder": "my-organization",
     "user": "المستخدم",
     "value": "القيمة",
     "vatId": "رقم ضريبة القيمة المضافة",
@@ -4696,6 +4695,12 @@
       "selectedProvider": "{provider}",
       "usingDefaults": "تُستخدم الإعدادات الافتراضية"
     },
+    "creationInvalidName": "أدخل اسمًا صالحًا للمؤسسة (بحد أقصى {maxLength} حرفًا).",
+    "creationNotAllowed": "لا يمكن لهذا الحساب إنشاء مؤسسات.",
+    "creationOutcomeUnknown": "ربما أنشأ الطلب مؤسسة. أعد المحاولة للتحقق من النتيجة.",
+    "creationRateLimited": "تم إنشاء عدد كبير من المؤسسات مؤخرًا. حاول مرة أخرى لاحقًا.",
+    "creationRefused": "تعذّر إنشاء المؤسسة. تحقق من التفاصيل وحاول مرة أخرى.",
+    "creationSlugConflict": "عنوان المؤسسة هذا مستخدم بالفعل. اختر اسمًا أو عنوانًا آخر.",
     "invitations": {
       "cancelInvitation": "إلغاء الدعوة",
       "emailAddressLabel": "عنوان البريد الإلكتروني",
@@ -4760,6 +4765,9 @@
       "owner": "المالك"
     },
     "settingsDescription": "عدّل اسم مؤسستك والمعرّف",
+    "startOver": "البدء من جديد",
+    "startOverDescription": "ربما أنشأ الطلب الأصلي مؤسسة بالفعل. تحقق من مؤسساتك قبل البدء من جديد؛ فقد يؤدي طلب جديد إلى إنشاء مؤسسة أخرى.",
+    "startOverTitle": "هل تريد بدء طلب إنشاء جديد؟",
     "switchOrganization": "تبديل المؤسسة"
   },
   "publicTools": {
@@ -6086,8 +6094,7 @@
   "validation": {
     "invalidEmail": "أدخل عنوان بريد إلكتروني صالحًا.",
     "organizationNameRequired": "اسم المؤسسة مطلوب",
-    "slugFormat": "يجب أن يتكوّن المعرّف من أحرف صغيرة وأرقام وشُرَط",
-    "slugRequired": "المعرّف مطلوب"
+    "slugFormat": "يجب أن يتكوّن المعرّف من أحرف صغيرة وأرقام وشُرَط"
   },
   "verify": {
     "history": "{history, select, refiled {طُبع بالمرجع <bdi>{reference}</bdi>؛ وهو محفوظ الآن بالمرجع <bdi>{currentReference}</bdi> في الملف القانوني <bdi>{matterName}</bdi>.} superseded {يشير هذا المرجع إلى الإصدار {version, number}؛ الإصدار الحالي هو {currentVersion, number}.} other {طُبع بالمرجع <bdi>{reference}</bdi>؛ وهو محفوظ الآن بالمرجع <bdi>{currentReference}</bdi> في الملف القانوني <bdi>{matterName}</bdi>. يشير هذا المرجع إلى الإصدار {version, number}؛ الإصدار الحالي هو {currentVersion, number}.}}",

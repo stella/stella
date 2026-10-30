@@ -118,7 +118,7 @@ const createRequest = ({
 describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
   "organization creation through the shared handler on PostgreSQL",
   () => {
-    test("creates an owner with the same lifecycle defaults as onboarding, resolves slug collisions, replays retries and records account audit", async () => {
+    test("creates an owner with onboarding defaults, opaque slugs, replayed retries and account audit", async () => {
       const suffix = Bun.randomUUIDv7();
       const browser = await signInHuman(
         `organization-create-${suffix}@example.test`,
@@ -145,6 +145,8 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
       const created = v.parse(createdSchema, await response.json());
       expect(created.name).toBe(`Shared ${suffix}`);
       expect(created.role).toBe("owner");
+      expect(created.slug).toMatch(/^org-[a-z2-7]{10}$/u);
+      expect(created.slug).not.toContain(suffix);
       const organizationId = brandPersistedOrganizationId(
         created.organizationId,
       );
@@ -192,7 +194,21 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
       expect(collision.status, await collision.clone().text()).toBe(200);
       const second = v.parse(createdSchema, await collision.json());
       expect(second.organizationId).not.toBe(created.organizationId);
-      expect(second.slug).toBe(`${created.slug}-2`);
+      expect(second.slug).toMatch(/^org-[a-z2-7]{10}$/u);
+      expect(second.slug).not.toBe(created.slug);
+      expect(second.slug).not.toContain(suffix);
+      const explicitSlug = `custom-${suffix}`;
+      const explicit = await api.fetch(
+        createRequest({
+          browser,
+          name: "Explicit organization",
+          slug: explicitSlug,
+        }),
+      );
+      expect(explicit.status, await explicit.clone().text()).toBe(200);
+      expect(v.parse(createdSchema, await explicit.json()).slug).toBe(
+        explicitSlug,
+      );
       const conflictInput = {
         browser,
         name: "Explicit conflict",

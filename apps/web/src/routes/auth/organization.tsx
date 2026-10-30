@@ -64,7 +64,7 @@ import {
   hasSignedOauthQuery,
 } from "@/lib/oauth-provider";
 import { organizationListOptions } from "@/lib/organization/queries";
-import { createSlug, getOrganizationSchema } from "@/lib/organization/utils";
+import { getOrganizationSchema } from "@/lib/organization/utils";
 import { queryView } from "@/lib/query-view.logic";
 import {
   destinationNavigation,
@@ -435,7 +435,10 @@ const CreateOrganizationForm = ({
             await invokeCapability("organizations.create", async (request) =>
               unwrapApiResponse(
                 await api.organizations.post(
-                  { name: value.name, slug: value.slug },
+                  {
+                    name: value.name,
+                    ...(value.slug === undefined ? {} : { slug: value.slug }),
+                  },
                   {
                     ...request,
                     headers: {
@@ -531,11 +534,7 @@ const CreateOrganizationForm = ({
                 <Input
                   autoFocus
                   onBlur={field.handleBlur}
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    field.handleChange(value);
-                    form.setFieldValue("slug", createSlug(value));
-                  }}
+                  onChange={(event) => field.handleChange(event.target.value)}
                   placeholder={t("auth.organizationNamePlaceholder")}
                   required
                   value={field.state.value}
@@ -552,8 +551,6 @@ const CreateOrganizationForm = ({
                   dir="ltr"
                   onBlur={field.handleBlur}
                   onChange={(event) => field.handleChange(event.target.value)}
-                  placeholder={t("common.urlIdentifierPlaceholder")}
-                  required
                   value={field.state.value}
                 />
                 <FieldError />

@@ -22,19 +22,8 @@ export const organizationCreateBodySchema = v.strictObject({
       v.maxLength(ORGANIZATION_SLUG_MAX_LENGTH),
       v.regex(ORGANIZATION_SLUG_PATTERN),
       v.description(
-        "Optional URL slug. Omit to derive a unique slug from the name.",
+        "Optional URL slug. Omit to generate an opaque organization address.",
       ),
     ),
   ),
-});
-
-export const organizationCreateOutputSchema = v.strictObject({
-  organizationId: v.string(),
-  name: v.string(),
-  slug: v.string(),
-  role: v.literal("owner"),
-  nextCall: v.strictObject({
-    command: v.literal("stella auth login"),
-    instruction: v.string(),
-  }),
 });

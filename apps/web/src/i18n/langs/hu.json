@@ -2369,7 +2369,6 @@
     "unverifiedCitationHint": "Ezt az idézetet nem sikerült a forrásdokumentumhoz párosítani.",
     "uploadFiles": "Fájlok feltöltése",
     "urlIdentifier": "Azonosító (slug)",
-    "urlIdentifierPlaceholder": "szervezetem",
     "user": "Felhasználó",
     "value": "Érték",
     "vatId": "Áfaazonosító",
@@ -4696,6 +4695,12 @@
       "selectedProvider": "{provider}",
       "usingDefaults": "Alapértelmezett beállítások használatban"
     },
+    "creationInvalidName": "Adjon meg egy érvényes szervezetnevet (legfeljebb {maxLength} karakter).",
+    "creationNotAllowed": "Ezzel a fiókkal nem hozhatók létre szervezetek.",
+    "creationOutcomeUnknown": "Előfordulhat, hogy a kérés létrehozott egy szervezetet. Próbálja újra az eredmény ellenőrzéséhez.",
+    "creationRateLimited": "Az utóbbi időben túl sok szervezet jött létre. Próbálja újra később.",
+    "creationRefused": "Nem sikerült létrehozni a szervezetet. Ellenőrizze az adatokat, és próbálja újra.",
+    "creationSlugConflict": "Ez a szervezeti cím már használatban van. Válasszon másik nevet vagy címet.",
     "invitations": {
       "cancelInvitation": "Meghívó visszavonása",
       "emailAddressLabel": "E-mail cím",
@@ -4760,6 +4765,9 @@
       "owner": "Tulajdonos"
     },
     "settingsDescription": "Szervezet nevének és slugjának szerkesztése",
+    "startOver": "Újrakezdés",
+    "startOverDescription": "Előfordulhat, hogy az eredeti kérés már létrehozott egy szervezetet. Az újrakezdés előtt ellenőrizze a szervezeteit; egy új kérés újabb szervezetet hozhat létre.",
+    "startOverTitle": "Új létrehozási kérést indít?",
     "switchOrganization": "Szervezet váltása"
   },
   "publicTools": {
@@ -6086,8 +6094,7 @@
   "validation": {
     "invalidEmail": "Adjon meg egy érvényes e-mail-címet.",
     "organizationNameRequired": "A szervezet neve kötelező",
-    "slugFormat": "A slug csak kisbetűket, számokat és kötőjeleket tartalmazhat",
-    "slugRequired": "A slug kötelező"
+    "slugFormat": "A slug csak kisbetűket, számokat és kötőjeleket tartalmazhat"
   },
   "verify": {
     "history": "{history, select, refiled {Nyomtatáskor a(z) <bdi>{reference}</bdi> hivatkozási szám szerepelt rajta; a dokumentum most a(z) <bdi>{currentReference}</bdi> szám alatt szerepel a(z) <bdi>{matterName}</bdi> ügyben.} superseded {Ez a hivatkozási szám a(z) {version, number}. verzióra mutat; a jelenlegi verzió a(z) {currentVersion, number}.} other {Nyomtatáskor a(z) <bdi>{reference}</bdi> hivatkozási szám szerepelt rajta; a dokumentum most a(z) <bdi>{currentReference}</bdi> szám alatt szerepel a(z) <bdi>{matterName}</bdi> ügyben. Ez a hivatkozási szám a(z) {version, number}. verzióra mutat; a jelenlegi verzió a(z) {currentVersion, number}.}}",

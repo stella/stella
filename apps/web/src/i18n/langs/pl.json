@@ -2369,7 +2369,6 @@
     "unverifiedCitationHint": "Nie udało się dopasować tego cytatu do dokumentu źródłowego.",
     "uploadFiles": "Prześlij pliki",
     "urlIdentifier": "Identyfikator URL",
-    "urlIdentifierPlaceholder": "moja-organizacja",
     "user": "Użytkownik",
     "value": "Wartość",
     "vatId": "Numer VAT",
@@ -4696,6 +4695,12 @@
       "selectedProvider": "{provider}",
       "usingDefaults": "Używane są ustawienia domyślne"
     },
+    "creationInvalidName": "Wpisz prawidłową nazwę organizacji (maksymalnie {maxLength} znaków).",
+    "creationNotAllowed": "To konto nie może tworzyć organizacji.",
+    "creationOutcomeUnknown": "Żądanie mogło utworzyć organizację. Spróbuj ponownie, aby sprawdzić wynik.",
+    "creationRateLimited": "W ostatnim czasie utworzono zbyt wiele organizacji. Spróbuj ponownie później.",
+    "creationRefused": "Nie udało się utworzyć organizacji. Sprawdź dane i spróbuj ponownie.",
+    "creationSlugConflict": "Ten adres organizacji jest już używany. Wybierz inną nazwę lub inny adres.",
     "invitations": {
       "cancelInvitation": "Anuluj zaproszenie",
       "emailAddressLabel": "Adres e-mail",
@@ -4760,6 +4765,9 @@
       "owner": "Właściciel"
     },
     "settingsDescription": "Edytuj nazwę i slug organizacji",
+    "startOver": "Zacznij od nowa",
+    "startOverDescription": "Pierwotne żądanie mogło już utworzyć organizację. Zanim zaczniesz od nowa, sprawdź swoje organizacje; nowe żądanie może utworzyć kolejną organizację.",
+    "startOverTitle": "Wysłać nowe żądanie utworzenia?",
     "switchOrganization": "Przełącz organizację"
   },
   "publicTools": {
@@ -6086,8 +6094,7 @@
   "validation": {
     "invalidEmail": "Wpisz prawidłowy adres e-mail.",
     "organizationNameRequired": "Nazwa organizacji jest wymagana",
-    "slugFormat": "Slug może zawierać tylko małe litery, cyfry i myślniki",
-    "slugRequired": "Slug jest wymagany"
+    "slugFormat": "Slug może zawierać tylko małe litery, cyfry i myślniki"
   },
   "verify": {
     "history": "{history, select, refiled {Wydrukowano pod numerem <bdi>{reference}</bdi>; obecnie dokument jest prowadzony pod numerem <bdi>{currentReference}</bdi> w sprawie <bdi>{matterName}</bdi>.} superseded {Ten numer referencyjny wskazuje wersję {version, number}; bieżąca wersja to {currentVersion, number}.} other {Wydrukowano pod numerem <bdi>{reference}</bdi>; obecnie dokument jest prowadzony pod numerem <bdi>{currentReference}</bdi> w sprawie <bdi>{matterName}</bdi>. Ten numer referencyjny wskazuje wersję {version, number}; bieżąca wersja to {currentVersion, number}.}}",

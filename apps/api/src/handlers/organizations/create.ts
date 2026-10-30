@@ -28,7 +28,7 @@ const createOrganization = createSafeSessionHandler(
       consumesServices: false,
     },
     description:
-      "Create an organization that you will own. Requires stella:organization_create account consent for OAuth callers. Omit slug to derive a unique slug from the name. Explicit slug conflicts return organization_slug_conflict; restricted accounts return account_access_unavailable. Send Idempotency-Key to safely replay a creation. The current organization stays active. Run stella auth login and select the returned organization before acting in it.",
+      "Create an organization that you will own. Requires stella:organization_create account consent for OAuth callers. Omit slug to generate an opaque organization address. Explicit slug conflicts return organization_slug_conflict; restricted accounts return account_access_unavailable. Send Idempotency-Key to safely replay a creation. The current organization stays active. Run stella auth login and select the returned organization before acting in it.",
   },
   async function* ({ user, body: { name, slug }, request }) {
     const organization = yield* Result.await(

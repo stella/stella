@@ -2369,7 +2369,6 @@
     "unverifiedCitationHint": "Dieses Zitat konnte dem Quelldokument nicht zugeordnet werden.",
     "uploadFiles": "Dateien hochladen",
     "urlIdentifier": "URL-Kennung",
-    "urlIdentifierPlaceholder": "meine-organisation",
     "user": "Benutzer",
     "value": "Wert",
     "vatId": "Umsatzsteuer-ID",
@@ -4696,6 +4695,12 @@
       "selectedProvider": "{provider}",
       "usingDefaults": "Standardeinstellungen aktiv"
     },
+    "creationInvalidName": "Geben Sie einen gültigen Organisationsnamen ein (höchstens {maxLength} Zeichen).",
+    "creationNotAllowed": "Mit diesem Konto können keine Organisationen erstellt werden.",
+    "creationOutcomeUnknown": "Die Anfrage hat möglicherweise eine Organisation erstellt. Wiederholen Sie die Anfrage, um das Ergebnis zu prüfen.",
+    "creationRateLimited": "In letzter Zeit wurden zu viele Organisationen erstellt. Versuchen Sie es später erneut.",
+    "creationRefused": "Die Organisation konnte nicht erstellt werden. Prüfen Sie die Angaben und versuchen Sie es erneut.",
+    "creationSlugConflict": "Diese Organisationsadresse wird bereits verwendet. Wählen Sie einen anderen Namen oder eine andere Adresse.",
     "invitations": {
       "cancelInvitation": "Einladung stornieren",
       "emailAddressLabel": "E-Mail-Adresse",
@@ -4760,6 +4765,9 @@
       "owner": "Eigentümer"
     },
     "settingsDescription": "Name und Slug der Organisation bearbeiten",
+    "startOver": "Neu beginnen",
+    "startOverDescription": "Die ursprüngliche Anfrage hat möglicherweise bereits eine Organisation erstellt. Prüfen Sie Ihre Organisationen, bevor Sie neu beginnen; eine neue Anfrage könnte eine weitere Organisation erstellen.",
+    "startOverTitle": "Eine neue Erstellungsanfrage starten?",
     "switchOrganization": "Organisation wechseln"
   },
   "publicTools": {
@@ -6086,8 +6094,7 @@
   "validation": {
     "invalidEmail": "Geben Sie eine gültige E-Mail-Adresse ein.",
     "organizationNameRequired": "Organisationsname ist erforderlich",
-    "slugFormat": "Slug darf nur Kleinbuchstaben, Zahlen und Bindestriche enthalten",
-    "slugRequired": "Slug ist erforderlich"
+    "slugFormat": "Slug darf nur Kleinbuchstaben, Zahlen und Bindestriche enthalten"
   },
   "verify": {
     "history": "{history, select, refiled {Gedruckt unter <bdi>{reference}</bdi>; jetzt geführt unter <bdi>{currentReference}</bdi> in der Akte <bdi>{matterName}</bdi>.} superseded {Dieses Aktenzeichen verweist auf Version {version, number}; die aktuelle Version ist {currentVersion, number}.} other {Gedruckt unter <bdi>{reference}</bdi>; jetzt geführt unter <bdi>{currentReference}</bdi> in der Akte <bdi>{matterName}</bdi>. Dieses Aktenzeichen verweist auf Version {version, number}; die aktuelle Version ist {currentVersion, number}.}}",

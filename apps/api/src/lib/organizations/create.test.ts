@@ -112,10 +112,12 @@ describe("organization creation provider refusals", () => {
     async (code) => {
       const fixture = creationFixture();
       const attemptedSlugs: string[] = [];
+      let entropy = 0;
       const result = await createOrganizationForAccount(
         { userId: USER_ID, name: NAME, idempotencyKey: null },
         {
           database: fixture.database,
+          randomBytes: () => new Uint8Array(10).fill(entropy++),
           createOrganization: async ({ body: { slug } }) => {
             attemptedSlugs.push(slug);
             if (attemptedSlugs.length === 1) {
@@ -129,11 +131,17 @@ describe("organization creation provider refusals", () => {
         Result.ok({
           organizationId: "created-organization",
           name: NAME,
-          slug: "example-firm-2",
+          slug: "org-bbbbbbbbbb",
           role: "owner",
         }),
       );
-      expect(attemptedSlugs).toEqual(["example-firm", "example-firm-2"]);
+      expect(attemptedSlugs).toEqual(["org-aaaaaaaaaa", "org-bbbbbbbbbb"]);
+      expect(entropy).toBe(2);
+      for (const slug of attemptedSlugs) {
+        expect(slug).toMatch(/^org-[a-z2-7]{10}$/u);
+        expect(slug).not.toContain("example");
+        expect(slug).not.toContain("firm");
+      }
       expect(fixture.audits).toHaveLength(1);
       expect(fixture.audits.at(0)?.eventType).toBe("organization.created");
     },
@@ -148,6 +156,8 @@ describe("organization creation provider refusals", () => {
         { userId: USER_ID, name: NAME, slug: "reserved", idempotencyKey: null },
         {
           database: fixture.database,
+          randomBytes: () =>
+            panic("Explicit slugs must not consume random bytes"),
           createOrganization: async ({ body: { slug } }) => {
             attemptedSlugs.push(slug);
             throw slugConflict(code);

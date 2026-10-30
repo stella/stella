@@ -1,10 +1,16 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import {
+  API_VALIDATION_ERROR_CODE,
+  IDEMPOTENCY_IN_PROGRESS_CODE,
+} from "@stll/api-contract";
 import { CAPABILITY_REQUEST_HEADER } from "@stll/api-contract/capability-request";
+import { ORGANIZATION_NAME_MAX_LENGTH } from "@stll/api-contract/organization-create";
 
 import ar from "@/i18n/langs/ar.json";
 import en from "@/i18n/langs/en.json";
+import type { TranslationKey } from "@/i18n/types";
 import type { WebApiRoutes } from "@/lib/api";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
@@ -14,7 +20,7 @@ Object.assign(globalThis, {
   __APP_COMMIT_SHA__: "0000000000000000000000000000000000000000",
 });
 const { useState } = await import("react");
-const { act, cleanup, fireEvent, render, screen, waitFor } =
+const { act, cleanup, fireEvent, render, screen, waitFor, within } =
   await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
@@ -25,7 +31,7 @@ const {
   createRouter,
   RouterProvider,
 } = await import("@tanstack/react-router");
-const { IntlProvider } = await import("use-intl");
+const { IntlProvider, createTranslator } = await import("use-intl");
 const { Button } = await import("@stll/ui/button");
 const { TooltipProvider } = await import("@stll/ui/tooltip");
 const { drainReactScheduler } = await import("@/lib/react-scheduler-drain");
@@ -60,6 +66,8 @@ const creationKeys: (string | null)[] = [];
 // A receipt represents a committed server creation, even when its response is lost.
 const serverReceipts = new Map<string, CreatedOrganization>();
 let createOutcome: "created" | "refused" | "response-lost" = "created";
+let refusalResponse: { code: string; status: number } | undefined;
+let unknownFailureResponse: (() => Response) | undefined;
 let switchOutcome: "switched" | "refused" = "switched";
 let deferredCreate: Promise<Response> | undefined;
 let deferredSwitch: Promise<Response> | undefined;
@@ -87,6 +95,15 @@ globalThis.fetch = Object.assign(
       if (key === null) {
         throw new TypeError("Organization creation requires a replay key");
       }
+      if (refusalResponse !== undefined) {
+        return Response.json(
+          {
+            code: refusalResponse.code,
+            message: "Untranslated server refusal sentinel",
+          },
+          { status: refusalResponse.status },
+        );
+      }
       if (createOutcome === "refused") {
         return Response.json(
           {
@@ -98,8 +115,18 @@ globalThis.fetch = Object.assign(
       }
       let organization = serverReceipts.get(key);
       if (organization === undefined) {
-        organization = CREATED_ORGANIZATION;
+        organization =
+          serverReceipts.size === 0
+            ? CREATED_ORGANIZATION
+            : {
+                ...CREATED_ORGANIZATION,
+                organizationId: "019a0000-0000-7000-8000-000000000604",
+                slug: "new-firm-2",
+              };
         serverReceipts.set(key, organization);
+      }
+      if (unknownFailureResponse !== undefined) {
+        return unknownFailureResponse();
       }
       if (createOutcome === "response-lost") {
         throw new TypeError("Creation committed but its response was lost");
@@ -140,6 +167,8 @@ afterEach(async () => {
   creationKeys.length = 0;
   serverReceipts.clear();
   createOutcome = "created";
+  refusalResponse = undefined;
+  unknownFailureResponse = undefined;
   switchOutcome = "switched";
   deferredCreate = undefined;
   deferredSwitch = undefined;
@@ -281,14 +310,13 @@ const fillName = (messages: typeof en | typeof ar, name = "New firm") => {
   );
 };
 
-const createOrganization = async (messages: typeof en | typeof ar) => {
-  await act(async () => {
-    fireEvent.click(
-      screen.getByRole("button", {
-        name: messages.auth.createOrganizationButton,
-      }),
-    );
-    await drainReactScheduler();
+const createOrganization = (messages: typeof en | typeof ar) => {
+  act(() => {
+    const button = screen.getByRole("button", {
+      name: messages.auth.createOrganizationButton,
+    });
+    button.focus();
+    fireEvent.click(button);
   });
 };
 
@@ -396,11 +424,11 @@ test("a refused creation stays open and can be retried without switching", async
   const { messages, openDialog } = await renderCreationSurface();
   await openDialog();
   fillName(messages);
-  await createOrganization(messages);
+  createOrganization(messages);
   expect(await screen.findByRole("alert")).toBeTruthy();
   expect(serverReceipts.size).toBe(0);
   createOutcome = "created";
-  await createOrganization(messages);
+  createOrganization(messages);
   await expectCreated(messages);
   expect(switchRequests()).toHaveLength(0);
 });
@@ -410,7 +438,7 @@ test("a refused explicit switch can be retried without creating again", async ()
   const { messages, openDialog } = await renderCreationSurface();
   await openDialog();
   fillName(messages);
-  await createOrganization(messages);
+  createOrganization(messages);
   await switchOrganization(await expectCreated(messages));
   expect(await screen.findByRole("alert")).toBeTruthy();
   switchOutcome = "switched";
@@ -443,7 +471,7 @@ test("pending creation and pending switching ignore every dismissal gesture", as
   const creation = Promise.withResolvers<Response>();
   deferredCreate = creation.promise;
   fillName(messages);
-  await createOrganization(messages);
+  createOrganization(messages);
   await waitFor(() => expect(creationKeys).toHaveLength(1));
   attemptPendingDismissals(messages);
   creation.resolve(createdResponse());
@@ -476,7 +504,7 @@ test("a committed creation with a lost response survives sidebar remount and rep
   await original.openDialog();
   const exactDraft = "  New firm  ";
   fillName(original.messages, exactDraft);
-  await createOrganization(original.messages);
+  createOrganization(original.messages);
   expect(await screen.findByRole("alert")).toBeTruthy();
   expect(serverReceipts.size).toBe(1);
   await act(async () => {
@@ -501,7 +529,7 @@ test("a committed creation with a lost response survives sidebar remount and rep
       .getAttribute("value"),
   ).toBe(exactDraft);
   createOutcome = "created";
-  await createOrganization(reopened.messages);
+  createOrganization(reopened.messages);
   await expectCreated(reopened.messages);
   expect(creationKeys).toHaveLength(2);
   expect(creationKeys.at(0)).toBeTruthy();
@@ -524,7 +552,7 @@ test("a creation that completes after leaving the route waits for an explicit sw
   const creation = Promise.withResolvers<Response>();
   deferredCreate = creation.promise;
   fillName(messages);
-  await createOrganization(messages);
+  createOrganization(messages);
   await waitFor(() => expect(creationKeys).toHaveLength(1));
   await act(async () => {
     await router.navigate({ to: "/other" });
@@ -550,4 +578,285 @@ test("a creation that completes after leaving the route waits for an explicit sw
   await switchOrganization(switchButton);
   expect(await screen.findByText(messages.common.done)).toBeTruthy();
   expect(switchRequests()).toHaveLength(1);
+});
+
+const UNKNOWN_CREATION_OUTCOMES = {
+  network: () => {
+    throw new TypeError("The creation response was lost");
+  },
+  timeout: () => {
+    throw new DOMException("The creation response timed out", "TimeoutError");
+  },
+  server: () =>
+    Response.json(
+      {
+        code: "organization_slug_conflict",
+        message: "Private server error sentinel",
+      },
+      { status: 500 },
+    ),
+  unparsableRefusal: () =>
+    new Response("not JSON", {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    }),
+  unparsableSuccess: () =>
+    new Response("not JSON", {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }),
+  unclassifiedRefusal: () =>
+    Response.json({ message: "Unclassified server message" }, { status: 403 }),
+  pendingReceipt: () =>
+    Response.json(
+      {
+        code: IDEMPOTENCY_IN_PROGRESS_CODE,
+        message: "The creation is still pending",
+      },
+      { status: 409 },
+    ),
+};
+
+test.each(Object.entries(UNKNOWN_CREATION_OUTCOMES))(
+  "an unknown %s creation outcome locks the name and reuses its receipt on retry",
+  async (_outcome, respond) => {
+    unknownFailureResponse = respond;
+    const { messages, openDialog } = await renderCreationSurface();
+    await openDialog();
+    const exactDraft = "  New firm  ";
+    fillName(messages, exactDraft);
+    createOrganization(messages);
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      messages.organization.creationOutcomeUnknown,
+    );
+    const input = screen.getByRole("textbox", {
+      name: messages.common.organizationName,
+    });
+    expect(
+      input.hasAttribute("disabled") || input.hasAttribute("readonly"),
+    ).toBe(true);
+    expect(input.getAttribute("value")).toBe(exactDraft);
+    expect(creationKeys).toHaveLength(1);
+    expect(serverReceipts.size).toBe(1);
+    createOrganization(messages);
+    expect(await screen.findByRole("alert")).toBeTruthy();
+    expect(creationKeys).toHaveLength(2);
+    expect(creationKeys.at(1)).toBe(creationKeys.at(0));
+    expect(serverReceipts.size).toBe(1);
+    unknownFailureResponse = undefined;
+    createOrganization(messages);
+    await expectCreated(messages);
+    expect(creationKeys).toHaveLength(3);
+    expect(creationKeys.at(2)).toBe(creationKeys.at(0));
+    expect(serverReceipts.size).toBe(1);
+    expect(switchRequests()).toHaveLength(0);
+  },
+);
+
+const TYPED_CREATION_REFUSALS = {
+  accountAccess: {
+    code: "account_access_unavailable",
+    status: 403,
+    messageKey: "organization.creationNotAllowed",
+  },
+  rateLimit: {
+    code: "rate_limited",
+    status: 429,
+    messageKey: "organization.creationRateLimited",
+  },
+  validationLegacy: {
+    code: API_VALIDATION_ERROR_CODE,
+    status: 400,
+    messageKey: "organization.creationInvalidName",
+  },
+  validation: {
+    code: API_VALIDATION_ERROR_CODE,
+    status: 422,
+    messageKey: "organization.creationInvalidName",
+  },
+  slugConflict: {
+    code: "organization_slug_conflict",
+    status: 409,
+    messageKey: "organization.creationSlugConflict",
+  },
+  otherTypedRefusal: {
+    code: "custom_refusal",
+    status: 409,
+    messageKey: "organization.creationRefused",
+  },
+} as const satisfies Record<
+  string,
+  { code: string; status: number; messageKey: TranslationKey }
+>;
+
+test.each(
+  Object.entries(TYPED_CREATION_REFUSALS).flatMap(([label, refusal]) =>
+    supportedLanguages
+      .filter((locale) => locale === "en" || locale === "ar")
+      .map((locale) => [label, locale, refusal] as const),
+  ),
+)(
+  "a definite %s refusal in %s retains an editable draft across remount and creates a new intent on resubmission",
+  async (_label, locale, refusal) => {
+    refusalResponse = refusal;
+    const original = await renderCreationSurface({ locale });
+    await original.openDialog();
+    const exactDraft = "  New firm  ";
+    fillName(original.messages, exactDraft);
+    createOrganization(original.messages);
+    const alert = await screen.findByRole("alert");
+    const t = createTranslator({ locale, messages: original.messages });
+    const localizedMessage = t(refusal.messageKey, {
+      maxLength: ORGANIZATION_NAME_MAX_LENGTH,
+    });
+    expect(alert.textContent).toContain(localizedMessage);
+    expect(alert.textContent).not.toContain(
+      "Untranslated server refusal sentinel",
+    );
+    let input = screen.getByRole("textbox", {
+      name: original.messages.common.organizationName,
+    });
+    expect(input.hasAttribute("disabled")).toBe(false);
+    expect(input.hasAttribute("readonly")).toBe(false);
+    expect(input.getAttribute("value")).toBe(exactDraft);
+    expect(creationKeys).toHaveLength(1);
+    expect(serverReceipts.size).toBe(0);
+    fireEvent.click(
+      screen.getByRole("button", { name: original.messages.common.cancel }),
+    );
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await act(async () => {
+      original.unmount();
+      await drainReactScheduler();
+    });
+    const reopened = await renderCreationSurface({
+      locale,
+      queryClient: original.queryClient,
+    });
+    await reopened.openDialog();
+    input = screen.getByRole("textbox", {
+      name: reopened.messages.common.organizationName,
+    });
+    expect(input.hasAttribute("disabled")).toBe(false);
+    expect(input.hasAttribute("readonly")).toBe(false);
+    expect(input.getAttribute("value")).toBe(exactDraft);
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      localizedMessage,
+    );
+    refusalResponse = undefined;
+    createOrganization(reopened.messages);
+    await expectCreated(reopened.messages);
+    expect(creationKeys).toHaveLength(2);
+    expect(creationKeys.at(0)).toBeTruthy();
+    expect(creationKeys.at(1)).not.toBe(creationKeys.at(0));
+    expect(serverReceipts.size).toBe(1);
+    expect(switchRequests()).toHaveLength(0);
+  },
+);
+
+test("starting over after an unknown outcome requires confirmation and preserves the old intent when canceled", async () => {
+  createOutcome = "response-lost";
+  const { messages, openDialog } = await renderCreationSurface();
+  await openDialog();
+
+  const exactDraft = "  New firm  ";
+  fillName(messages, exactDraft);
+  createOrganization(messages);
+
+  expect(await screen.findByRole("alert")).toBeTruthy();
+  expect(serverReceipts.size).toBe(1);
+  act(() => {
+    const button = screen.getByRole("button", {
+      name: messages.organization.startOver,
+    });
+    button.focus();
+    fireEvent.click(button);
+  });
+
+  const firstConfirmation = await screen.findByRole("dialog", {
+    name: messages.organization.startOverTitle,
+  });
+
+  expect(
+    within(firstConfirmation).getByText(
+      messages.organization.startOverDescription,
+    ),
+  ).toBeTruthy();
+  act(() => {
+    const button = within(firstConfirmation).getByRole("button", {
+      name: messages.common.cancel,
+    });
+    button.focus();
+    fireEvent.click(button);
+  });
+
+  await waitFor(() =>
+    expect(
+      screen.queryByRole("dialog", {
+        name: messages.organization.startOverTitle,
+      }),
+    ).toBeNull(),
+  );
+
+  let input = screen.getByRole("textbox", {
+    name: messages.common.organizationName,
+  });
+  expect(input.hasAttribute("disabled") || input.hasAttribute("readonly")).toBe(
+    true,
+  );
+  expect(input.getAttribute("value")).toBe(exactDraft);
+
+  createOrganization(messages);
+
+  expect(await screen.findByRole("alert")).toBeTruthy();
+  expect(creationKeys).toHaveLength(2);
+  expect(creationKeys.at(1)).toBe(creationKeys.at(0));
+  expect(serverReceipts.size).toBe(1);
+  act(() => {
+    const button = screen.getByRole("button", {
+      name: messages.organization.startOver,
+    });
+    button.focus();
+    fireEvent.click(button);
+  });
+  const secondConfirmation = await screen.findByRole("dialog", {
+    name: messages.organization.startOverTitle,
+  });
+  expect(
+    within(secondConfirmation).getByText(
+      messages.organization.startOverDescription,
+    ),
+  ).toBeTruthy();
+  act(() => {
+    const button = within(secondConfirmation).getByRole("button", {
+      name: messages.organization.startOver,
+    });
+    button.focus();
+    fireEvent.click(button);
+  });
+  await waitFor(() =>
+    expect(
+      screen.queryByRole("dialog", {
+        name: messages.organization.startOverTitle,
+      }),
+    ).toBeNull(),
+  );
+  input = screen.getByRole("textbox", {
+    name: messages.common.organizationName,
+  });
+  expect(input.hasAttribute("disabled")).toBe(false);
+  expect(input.hasAttribute("readonly")).toBe(false);
+  expect(input.getAttribute("value")).toBe(exactDraft);
+  createOutcome = "created";
+  createOrganization(messages);
+  expect(await screen.findByText("new-firm-2")).toBeTruthy();
+  expect(creationKeys).toHaveLength(3);
+  expect(creationKeys.at(2)).not.toBe(creationKeys.at(0));
+  expect(serverReceipts.size).toBe(2);
+  expect(
+    new Set(
+      [...serverReceipts.values()].map(({ organizationId }) => organizationId),
+    ).size,
+  ).toBe(2);
+  expect(switchRequests()).toHaveLength(0);
 });

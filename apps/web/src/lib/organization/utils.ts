@@ -2,7 +2,6 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import {
-  createOrganizationSlug,
   ORGANIZATION_NAME_MAX_LENGTH,
   ORGANIZATION_SLUG_MAX_LENGTH,
   ORGANIZATION_SLUG_PATTERN,
@@ -11,8 +10,6 @@ import { Temporal } from "@stll/time";
 
 import { getTranslator, useI18nStore } from "@/i18n/i18n-store";
 import { requiredTrimmedStringSchema } from "@/lib/schema";
-
-export const createSlug = createOrganizationSlug;
 
 export const getOrganizationSchema = () => {
   const t = getTranslator();
@@ -25,9 +22,14 @@ export const getOrganizationSchema = () => {
     slug: v.pipe(
       v.string(),
       v.trim(),
-      v.nonEmpty(t("validation.slugRequired")),
-      v.maxLength(ORGANIZATION_SLUG_MAX_LENGTH),
-      v.regex(ORGANIZATION_SLUG_PATTERN, t("validation.slugFormat")),
+      v.transform((slug) => (slug.length === 0 ? undefined : slug)),
+      v.optional(
+        v.pipe(
+          v.string(),
+          v.maxLength(ORGANIZATION_SLUG_MAX_LENGTH),
+          v.regex(ORGANIZATION_SLUG_PATTERN, t("validation.slugFormat")),
+        ),
+      ),
     ),
   });
 };

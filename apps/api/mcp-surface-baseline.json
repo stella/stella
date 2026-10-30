@@ -31,7 +31,7 @@
       "default": {"title": 25, "description": 405, "inputSchema": 5212, "outputSchema": 2770, "annotations": 125, "payloadUtf8Bytes": 8647}
     },
     "create_organization": {
-      "advanced": {"title": 19, "description": 105, "inputSchema": 340, "outputSchema": 734, "annotations": 121, "payloadUtf8Bytes": 1423}
+      "advanced": {"title": 19, "description": 105, "inputSchema": 345, "outputSchema": 734, "annotations": 121, "payloadUtf8Bytes": 1428}
     },
     "create_reader_annotation": {
       "advanced": {"title": 24, "description": 327, "inputSchema": 2216, "outputSchema": 599, "annotations": 125, "payloadUtf8Bytes": 3400},

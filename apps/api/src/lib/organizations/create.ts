@@ -4,7 +4,7 @@ import { and, eq } from "drizzle-orm";
 
 import {
   createOrganizationSlug,
-  ORGANIZATION_SLUG_MAX_LENGTH,
+  ORGANIZATION_SLUG_RANDOM_BYTES,
 } from "@stll/api-contract/organization-create";
 
 import { rootDb } from "@/api/db/root";
@@ -42,6 +42,7 @@ type CreateOrganizationOptions = {
 };
 
 type OrganizationCreationDependencies = {
+  randomBytes?: () => Uint8Array;
   database?: Pick<
     typeof rootDb,
     "insert" | "select" | "delete" | "update" | "transaction"
@@ -62,6 +63,8 @@ export const createOrganizationForAccount = async (
   {
     database = rootDb,
     createOrganization = getAuth().api.createOrganization,
+    randomBytes = () =>
+      crypto.getRandomValues(new Uint8Array(ORGANIZATION_SLUG_RANDOM_BYTES)),
   }: OrganizationCreationDependencies = {},
 ) => {
   const fingerprint = fingerprintRequest({
@@ -140,11 +143,9 @@ export const createOrganizationForAccount = async (
     }
     return Result.err(error);
   };
-  const base = slug ?? createOrganizationSlug(name);
   for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt += 1) {
-    const suffix = attempt === 0 ? "" : `-${String(attempt + 1)}`;
-    const candidate = `${base.slice(0, ORGANIZATION_SLUG_MAX_LENGTH - suffix.length)}${suffix}`;
-    // no-network-await-in-loop: bounded collision retries must observe the preceding unique-slug refusal before choosing the next suffix.
+    const candidate = slug ?? createOrganizationSlug(randomBytes());
+    // no-network-await-in-loop: bounded collision retries must observe the preceding unique-slug refusal before drawing the next random slug.
     const created = await Result.tryPromise({
       try: async () =>
         await createOrganization({

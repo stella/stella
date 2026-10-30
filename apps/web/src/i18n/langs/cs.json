@@ -2369,7 +2369,6 @@
     "unverifiedCitationHint": "Tuto citaci se nepodařilo spárovat se zdrojovým dokumentem.",
     "uploadFiles": "Nahrát soubory",
     "urlIdentifier": "Identifikátor URL",
-    "urlIdentifierPlaceholder": "moje-organizace",
     "user": "Uživatel",
     "value": "Hodnota",
     "vatId": "DIČ",
@@ -4696,6 +4695,12 @@
       "selectedProvider": "{provider}",
       "usingDefaults": "Používá výchozí nastavení"
     },
+    "creationInvalidName": "Zadejte platný název organizace (nejvýše {maxLength} znaků).",
+    "creationNotAllowed": "Tento účet nemůže vytvářet organizace.",
+    "creationOutcomeUnknown": "Požadavek už mohl organizaci vytvořit. Zkuste to znovu a ověřte výsledek.",
+    "creationRateLimited": "V poslední době bylo vytvořeno příliš mnoho organizací. Zkuste to později.",
+    "creationRefused": "Organizaci se nepodařilo vytvořit. Zkontrolujte údaje a zkuste to znovu.",
+    "creationSlugConflict": "Tuto adresu organizace už někdo používá. Zvolte jiný název nebo adresu.",
     "invitations": {
       "cancelInvitation": "Zrušit pozvánku",
       "emailAddressLabel": "E-mailová adresa",
@@ -4760,6 +4765,9 @@
       "owner": "Vlastník"
     },
     "settingsDescription": "Upravte název a slug organizace",
+    "startOver": "Začít znovu",
+    "startOverDescription": "Původní požadavek už mohl organizaci vytvořit. Než začnete znovu, zkontrolujte své organizace; nový požadavek by mohl vytvořit další organizaci.",
+    "startOverTitle": "Zahájit nový požadavek na vytvoření?",
     "switchOrganization": "Přepnout organizaci"
   },
   "publicTools": {
@@ -6086,8 +6094,7 @@
   "validation": {
     "invalidEmail": "Zadejte platnou e-mailovou adresu.",
     "organizationNameRequired": "Název organizace je povinný",
-    "slugFormat": "Slug smí obsahovat pouze malá písmena, čísla a pomlčky",
-    "slugRequired": "Slug je povinný"
+    "slugFormat": "Slug smí obsahovat pouze malá písmena, čísla a pomlčky"
   },
   "verify": {
     "history": "{history, select, refiled {Vytištěno pod číslem <bdi>{reference}</bdi>; nyní je dokument veden pod číslem <bdi>{currentReference}</bdi> ve spisu <bdi>{matterName}</bdi>.} superseded {Toto referenční číslo odkazuje na verzi {version, number}; aktuální verze je {currentVersion, number}.} other {Vytištěno pod číslem <bdi>{reference}</bdi>; nyní je dokument veden pod číslem <bdi>{currentReference}</bdi> ve spisu <bdi>{matterName}</bdi>. Toto referenční číslo odkazuje na verzi {version, number}; aktuální verze je {currentVersion, number}.}}",

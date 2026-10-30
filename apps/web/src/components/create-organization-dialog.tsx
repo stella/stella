@@ -2,9 +2,13 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouter } from "@tanstack/react-router";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
+import * as v from "valibot";
 import { useStore } from "zustand";
 
-import { ORGANIZATION_NAME_MAX_LENGTH } from "@stll/api-contract/organization-create";
+import {
+  ORGANIZATION_NAME_MAX_LENGTH,
+  organizationCreateOutputSchema,
+} from "@stll/api-contract/organization-create";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import {
@@ -77,11 +81,15 @@ export const CreateOrganizationDialog = ({
         },
       );
       const result = await Result.tryPromise({
-        try: async () => unwrapApiResponse(await response),
+        try: async () =>
+          v.parse(
+            organizationCreateOutputSchema,
+            unwrapApiResponse(await response),
+          ),
         catch: transformUnknownError,
       });
       if (result.isErr()) {
-        owner.refused(intent);
+        owner.failed(intent, result.error);
         analytics.captureError(result.error, {
           fingerprintKey: "CreateOrganizationDialog:create",
           scope: {
@@ -147,6 +155,11 @@ export const CreateOrganizationDialog = ({
     <Dialog
       open={open}
       onOpenChange={(nextOpen, details) => {
+        if (!nextOpen && owner.state.getState().status === "confirm_restart") {
+          owner.cancelRestart();
+          details.cancel();
+          return;
+        }
         if (
           !nextOpen &&
           organizationCreationView(owner.state.getState()).pending
@@ -157,89 +170,134 @@ export const CreateOrganizationDialog = ({
         onOpenChange(nextOpen);
       }}
     >
-      <DialogPopup size="sm" showCloseButton={!view.pending}>
-        <DialogHeader>
-          <DialogTitle>{t("organization.newOrganization")}</DialogTitle>
-          <DialogDescription>
-            {t("organization.newOrganizationDescription")}
-          </DialogDescription>
-        </DialogHeader>
-        <Form
-          onSubmit={(event) => {
-            event.preventDefault();
-            detached(
-              singleFlight.runSettled((onSettled) => {
-                if (view.organization !== null) {
-                  const organization = owner.beginSwitch();
-                  if (organization === null) {
-                    onSettled();
-                    return;
-                  }
-                  switchOrganization.mutate(organization, { onSettled });
-                  return;
-                }
-                const intent = owner.begin(createUuid);
-                if (intent === null) {
-                  onSettled();
-                  return;
-                }
-                create.mutate(intent, { onSettled });
-              }),
-              "create-organization-dialog.submit",
-            );
-          }}
-        >
-          <DialogPanel className="space-y-4">
-            <Field name="organizationName">
-              <FieldLabel htmlFor="new-organization-name">
-                {t("common.organizationName")}
-              </FieldLabel>
-              <Input
-                autoFocus
-                id="new-organization-name"
-                maxLength={ORGANIZATION_NAME_MAX_LENGTH}
-                value={view.name}
-                onChange={(event) => owner.setName(event.target.value)}
-                disabled={!view.editable}
-              />
-            </Field>
-            {view.organization !== null && (
-              <BidiText as="p" direction="ltr">
-                {view.organization.slug}
-              </BidiText>
-            )}
-            {view.failed && (
-              <RecoverableErrorStatus
-                className="text-destructive text-sm"
-                message={t("errors.actionFailed")}
-                actions={null}
-              />
-            )}
-          </DialogPanel>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              type="button"
-              disabled={view.pending}
-              onClick={() => {
-                if (!organizationCreationView(owner.state.getState()).pending) {
-                  onOpenChange(false);
-                }
+      <DialogPopup
+        size="sm"
+        showCloseButton={!view.pending && state.status !== "confirm_restart"}
+      >
+        {state.status === "confirm_restart" ? (
+          <>
+            <DialogHeader>
+              <DialogTitle>{t("organization.startOverTitle")}</DialogTitle>
+              <DialogDescription>
+                {t("organization.startOverDescription")}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => owner.cancelRestart()}
+              >
+                {t("common.cancel")}
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={() => owner.confirmRestart()}
+              >
+                {t("organization.startOver")}
+              </Button>
+            </DialogFooter>
+          </>
+        ) : (
+          <>
+            <DialogHeader>
+              <DialogTitle>{t("organization.newOrganization")}</DialogTitle>
+              <DialogDescription>
+                {t("organization.newOrganizationDescription")}
+              </DialogDescription>
+            </DialogHeader>
+            <Form
+              onSubmit={(event) => {
+                event.preventDefault();
+                detached(
+                  singleFlight.runSettled((onSettled) => {
+                    if (view.organization !== null) {
+                      const organization = owner.beginSwitch();
+                      if (organization === null) {
+                        onSettled();
+                        return;
+                      }
+                      switchOrganization.mutate(organization, { onSettled });
+                      return;
+                    }
+                    const intent = owner.begin(createUuid);
+                    if (intent === null) {
+                      onSettled();
+                      return;
+                    }
+                    create.mutate(intent, { onSettled });
+                  }),
+                  "create-organization-dialog.submit",
+                );
               }}
             >
-              {t("common.cancel")}
-            </Button>
-            <Button
-              type="submit"
-              loading={view.pending}
-              disabled={view.pending || !view.name.trim()}
-            >
-              {view.organization === null
-                ? t("auth.createOrganizationButton")
-                : t("organization.switchOrganization")}
-            </Button>
-          </DialogFooter>
-        </Form>
+              <DialogPanel className="space-y-4">
+                <Field name="organizationName">
+                  <FieldLabel htmlFor="new-organization-name">
+                    {t("common.organizationName")}
+                  </FieldLabel>
+                  <Input
+                    autoFocus
+                    id="new-organization-name"
+                    maxLength={ORGANIZATION_NAME_MAX_LENGTH}
+                    value={view.name}
+                    onChange={(event) => owner.setName(event.target.value)}
+                    disabled={!view.editable}
+                  />
+                </Field>
+                {view.organization !== null && (
+                  <BidiText as="p" direction="ltr">
+                    {view.organization.slug}
+                  </BidiText>
+                )}
+                {view.message !== null && (
+                  <RecoverableErrorStatus
+                    className="text-destructive text-sm"
+                    message={t(view.message, {
+                      maxLength: ORGANIZATION_NAME_MAX_LENGTH,
+                    })}
+                    actions={null}
+                  />
+                )}
+              </DialogPanel>
+              <DialogFooter>
+                {view.canRestart && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => owner.requestRestart()}
+                  >
+                    {t("organization.startOver")}
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  type="button"
+                  disabled={view.pending}
+                  onClick={() => {
+                    if (
+                      !organizationCreationView(owner.state.getState()).pending
+                    ) {
+                      onOpenChange(false);
+                    }
+                  }}
+                >
+                  {t("common.cancel")}
+                </Button>
+                <Button
+                  type="submit"
+                  loading={view.pending}
+                  disabled={view.pending || !view.name.trim()}
+                >
+                  {view.organization === null
+                    ? t("auth.createOrganizationButton")
+                    : t("organization.switchOrganization")}
+                </Button>
+              </DialogFooter>
+            </Form>
+          </>
+        )}
       </DialogPopup>
     </Dialog>
   );

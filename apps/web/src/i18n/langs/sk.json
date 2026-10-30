@@ -2369,7 +2369,6 @@
     "unverifiedCitationHint": "Túto citáciu sa nepodarilo priradiť k zdrojovému dokumentu.",
     "uploadFiles": "Nahrať súbory",
     "urlIdentifier": "Identifikátor URL",
-    "urlIdentifierPlaceholder": "moja-organizacia",
     "user": "Používateľ",
     "value": "Hodnota",
     "vatId": "IČ DPH",
@@ -4696,6 +4695,12 @@
       "selectedProvider": "{provider}",
       "usingDefaults": "Používa predvolené nastavenia"
     },
+    "creationInvalidName": "Zadajte platný názov organizácie (najviac {maxLength} znakov).",
+    "creationNotAllowed": "Tento účet nemôže vytvárať organizácie.",
+    "creationOutcomeUnknown": "Požiadavka už mohla organizáciu vytvoriť. Skúste to znova a overte výsledok.",
+    "creationRateLimited": "V poslednom čase bolo vytvorených príliš veľa organizácií. Skúste to neskôr.",
+    "creationRefused": "Organizáciu sa nepodarilo vytvoriť. Skontrolujte údaje a skúste to znova.",
+    "creationSlugConflict": "Túto adresu organizácie už niekto používa. Vyberte iný názov alebo adresu.",
     "invitations": {
       "cancelInvitation": "Zrušiť pozvánku",
       "emailAddressLabel": "E-mailová adresa",
@@ -4760,6 +4765,9 @@
       "owner": "Vlastník"
     },
     "settingsDescription": "Upravte názov a slug organizácie",
+    "startOver": "Začať odznova",
+    "startOverDescription": "Pôvodná požiadavka už mohla organizáciu vytvoriť. Skôr než začnete odznova, skontrolujte svoje organizácie; nová požiadavka by mohla vytvoriť ďalšiu organizáciu.",
+    "startOverTitle": "Začať novú požiadavku na vytvorenie?",
     "switchOrganization": "Prepnúť organizáciu"
   },
   "publicTools": {
@@ -6086,8 +6094,7 @@
   "validation": {
     "invalidEmail": "Zadajte platnú e-mailovú adresu.",
     "organizationNameRequired": "Názov organizácie je povinný",
-    "slugFormat": "Slug smie obsahovať iba malé písmená, čísla a pomlčky",
-    "slugRequired": "Slug je povinný"
+    "slugFormat": "Slug smie obsahovať iba malé písmená, čísla a pomlčky"
   },
   "verify": {
     "history": "{history, select, refiled {Vytlačené pod číslom <bdi>{reference}</bdi>; teraz je dokument vedený pod číslom <bdi>{currentReference}</bdi> v spise <bdi>{matterName}</bdi>.} superseded {Toto referenčné číslo odkazuje na verziu {version, number}; aktuálna verzia je {currentVersion, number}.} other {Vytlačené pod číslom <bdi>{reference}</bdi>; teraz je dokument vedený pod číslom <bdi>{currentReference}</bdi> v spise <bdi>{matterName}</bdi>. Toto referenčné číslo odkazuje na verziu {version, number}; aktuálna verzia je {currentVersion, number}.}}",
