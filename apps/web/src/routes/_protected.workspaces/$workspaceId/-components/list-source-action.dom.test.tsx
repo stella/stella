@@ -1,7 +1,16 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import type { InferDataFromTag } from "@tanstack/react-query";
 import { panic } from "better-result";
-import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  expect,
+  type Mock,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
 import type { OrganizationRoleName } from "@stll/auth-model";
 import { sleep } from "@stll/concurrency/sleep";
@@ -19,18 +28,7 @@ GlobalRegistrator.register({ url: "http://localhost:3000" });
 let respondRequest: (request: Request) => Promise<Response> = async () => {
   throw new TypeError("Unexpected source request");
 };
-const fetchBoundary = spyOn(globalThis, "fetch").mockImplementation(
-  Object.assign(
-    async (input: RequestInfo | URL, init?: RequestInit) => {
-      const request = new Request(input, init);
-      if (new URL(request.url).pathname.startsWith("/api/auth/")) {
-        return Response.json(null);
-      }
-      return await respondRequest(request);
-    },
-    { preconnect: () => undefined },
-  ),
-);
+let fetchBoundary: Mock<typeof globalThis.fetch>;
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { act, cleanup, fireEvent, render, waitFor } =
@@ -279,7 +277,23 @@ const save = async (mounted: Awaited<ReturnType<typeof mountAction>>) => {
     );
   });
 };
+beforeEach(() => {
+  fetchBoundary = spyOn(globalThis, "fetch").mockImplementation(
+    Object.assign(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const request = new Request(input, init);
+        if (new URL(request.url).pathname.startsWith("/api/auth/")) {
+          return Response.json(null);
+        }
+        return await respondRequest(request);
+      },
+      { preconnect: () => undefined },
+    ),
+  );
+});
+
 afterEach(() => {
+  mock.restore();
   cleanup();
   for (const client of clients.splice(0)) {
     client.clear();
@@ -315,6 +329,7 @@ for (const { locale, messages } of [
     await save(mounted);
     await waitFor(() => expect(mounted.created).toEqual([itemEntityId]));
     const post = requests.find((request) => request.method === "POST");
+    expect(post?.headers.get("Idempotency-Key")).toBeNull();
     expect(await post?.json()).toEqual({
       listId,
       itemEntityId,

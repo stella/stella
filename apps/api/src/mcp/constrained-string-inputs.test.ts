@@ -69,12 +69,8 @@ const HAND_CONSTRAINED_STRING_INPUTS: ReadonlyMap<
   ConstrainedInputPath,
   string
 > = new Map([
-  // A structured provision path from the citation resolver; the filter
+  // A provision path level from the citation resolver; the filter
   // canonicalises each value, so the bound limits size, not spelling.
-  [
-    "POST /v1/case/decisions/search.body.provision.sectionSuffix",
-    "provision path value bounded in size; the filter canonicalises case and leading zeros",
-  ],
   [
     "POST /v1/case/decisions/search.body.provision.subsection",
     "provision path value bounded in size; the filter canonicalises case and leading zeros",

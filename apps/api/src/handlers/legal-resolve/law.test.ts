@@ -76,6 +76,8 @@ const documentFor = (
     sections: null,
   });
 const preview = projectProvisionPreview({
+  country: "CZE",
+  url: null,
   documentId,
   language: "cs",
   anchorId: "par_12a",
@@ -95,6 +97,7 @@ const dependencies = (
     expect(input.anchor).toBe(anchor);
     return {
       ...preview,
+      country: "CZE",
       url: buildLegislationDocumentAppUrl({
         country: "CZE",
         documentId,
@@ -232,7 +235,150 @@ describe("law citation resolution", () => {
       }),
     ).toEqual({ status: "not_found", reason: "unknown_document" });
   });
+});
 
+const CONSTITUTIONAL_COURT_ACT_ELI =
+  "https://www.e-sbirka.cz/eli/cz/sb/1993/182";
+const VICTIMS_ACT_ELI = "https://www.e-sbirka.cz/eli/cz/sb/2013/45";
+
+type WrittenCitationRead = {
+  eli: string | undefined;
+  namesRead: string[];
+  reported: string[];
+  response: Awaited<ReturnType<typeof resolveCzechLaw>>;
+};
+
+type ReadWrittenCitationOptions = {
+  citation: string;
+  asOf?: string;
+  namedWorks?: readonly { eli: string }[];
+};
+
+/** Resolves a written citation, recording the ELI opened, names read and misses reported. */
+const readWrittenCitation = async ({
+  citation,
+  asOf,
+  namedWorks = [],
+}: ReadWrittenCitationOptions): Promise<WrittenCitationRead> => {
+  let openedEli: string | undefined;
+  const namesRead: string[] = [];
+  const reported: string[] = [];
+  const response = await resolveCzechLaw(
+    { citation, section: "2", ...(asOf === undefined ? {} : { asOf }) },
+    {
+      ...dependencies("par_2"),
+      resolveExpression: (async (input) => {
+        openedEli = input.eli;
+        return { type: "expression", id: documentId };
+      }) satisfies typeof resolveStatuteExpression,
+      readNamedWorks: async (name) => {
+        namesRead.push(name);
+        return await Promise.resolve(namedWorks);
+      },
+      reportUnresolvedAct: (actName) => {
+        reported.push(actName);
+      },
+      today: () => "2026-10-26",
+    },
+  );
+  return { eli: openedEli, namesRead, reported, response };
+};
+
+describe("written law citations", () => {
+  test.each([
+    "zákona o Ústavním soudu",
+    "§ 43 odst. 1 písm. a) zákona o Ústavním soudu",
+    "[§ 43 odst. 1 písm. a) zákona o Ústavním soudu]",
+    "zákona č. 182/1993 Sb.",
+  ])("%s opens 182/1993 Sb.", async (citation) => {
+    const read = await readWrittenCitation({ citation, asOf: "2026-10-06" });
+    expect(read.response.status).toBe("resolved");
+    expect(read.eli).toBe(CONSTITUTIONAL_COURT_ACT_ELI);
+    expect(read.namesRead).toEqual([]);
+    expect(read.reported).toEqual([]);
+  });
+
+  test("a recodified title opens the act in force on the date asked about", async () => {
+    expect(
+      (
+        await readWrittenCitation({
+          citation: "občanského zákoníku",
+          asOf: "2010-06-30",
+        })
+      ).eli,
+    ).toBe("https://www.e-sbirka.cz/eli/cz/sb/1964/40");
+    expect(
+      (await readWrittenCitation({ citation: "občanského zákoníku" })).eli,
+    ).toBe("https://www.e-sbirka.cz/eli/cz/sb/2012/89");
+  });
+
+  test("a short title the profile does not list is read from the corpus's titles", async () => {
+    const read = await readWrittenCitation({
+      citation: "§ 2 odst. 4 písm. b) zákona o obětech trestných činů",
+      namedWorks: [{ eli: VICTIMS_ACT_ELI }],
+    });
+    expect(read.namesRead).toEqual(["zákona o obětech trestných činů"]);
+    expect(read.eli).toBe(VICTIMS_ACT_ELI);
+    expect(read.response.status).toBe("resolved");
+    expect(read.reported).toEqual([]);
+  });
+
+  test("a short title that names no act is reported, then answered as unknown", async () => {
+    const read = await readWrittenCitation({
+      citation: "zákona o obětech trestných činů",
+    });
+    expect(read.response).toEqual({
+      status: "not_found",
+      reason: "unknown_document",
+    });
+    expect(read.eli).toBeUndefined();
+    expect(read.reported).toEqual(["zákona o obětech trestných činů"]);
+  });
+
+  test("a name the corpus gives several acts opens none and reports nothing", async () => {
+    const read = await readWrittenCitation({
+      citation: "zákona o obětech trestných činů",
+      namedWorks: [
+        { eli: VICTIMS_ACT_ELI },
+        { eli: CONSTITUTIONAL_COURT_ACT_ELI },
+      ],
+    });
+    expect(read.response).toEqual({
+      status: "not_found",
+      reason: "unknown_document",
+    });
+    expect(read.reported).toEqual([]);
+  });
+
+  test.each([
+    "89/2012 Sb. rozh.",
+    "67/2013 Sb. m. s.",
+    "§ 2 zákona č. 12/2020 Sb. NSS",
+  ])(
+    "%s names a reporter or treaty, not a statute, and opens nothing",
+    async (citation) => {
+      const read = await readWrittenCitation({ citation });
+      expect(read.response).toEqual({
+        status: "not_found",
+        reason: "unknown_document",
+      });
+      expect(read.eli).toBeUndefined();
+      expect(read.namesRead).toEqual([]);
+      expect(read.reported).toEqual([]);
+    },
+  );
+
+  test("text that is not shaped like an act name is not reported", async () => {
+    const read = await readWrittenCitation({ citation: "unknown" });
+    expect(read.response).toEqual({
+      status: "not_found",
+      reason: "unknown_document",
+    });
+    expect(read.reported).toEqual([]);
+  });
+});
+
+describe("country admission", () => {
   test("returns country unavailable outside Czechia", async () => {
     expect(
       await resolveLawCitation({

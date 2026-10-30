@@ -8,31 +8,47 @@
 // byte ceiling each. A file that grows past its ceiling fails, and an entry
 // whose file is gone or back within the limit fails as stale, so the baseline
 // can only shrink unless a reviewed change adds to it.
+//
+// A generator whose output names are content hashes gets one entry naming the
+// generator instead of a path: its ceiling covers each oversized file among
+// the outputs scripts/generated-files.ts declares, so regenerating under new
+// names leaves the baseline as it is.
 import { panic } from "better-result";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
 
 import { BASELINE_PATHS } from "./baseline-paths";
+import { GENERATORS, matchesGeneratedGlob } from "./generated-files";
 import { ledgerGitEnv } from "./ledger-membership";
 
 export const TRACKED_FILE_SIZE_LIMIT_BYTES = 1024 * 1024;
 
 const BASELINE_REL = BASELINE_PATHS.trackedFileSizes;
 
-const BaselineSchema = v.array(
-  v.strictObject({
-    path: v.pipe(v.string(), v.minLength(1, "path is required")),
-    maxBytes: v.pipe(
-      v.number(),
-      v.integer(),
-      v.minValue(
-        TRACKED_FILE_SIZE_LIMIT_BYTES + 1,
-        "maxBytes must exceed the limit; a file within it needs no entry",
-      ),
+const Ceiling = {
+  maxBytes: v.pipe(
+    v.number(),
+    v.integer(),
+    v.minValue(
+      TRACKED_FILE_SIZE_LIMIT_BYTES + 1,
+      "maxBytes must exceed the limit; a file within it needs no entry",
     ),
-    reason: v.pipe(v.string(), v.trim(), v.minLength(1, "reason is required")),
-  }),
+  ),
+  reason: v.pipe(v.string(), v.trim(), v.minLength(1, "reason is required")),
+};
+
+const BaselineSchema = v.array(
+  v.union([
+    v.strictObject({
+      path: v.pipe(v.string(), v.minLength(1, "path is required")),
+      ...Ceiling,
+    }),
+    v.strictObject({
+      generator: v.pipe(v.string(), v.minLength(1, "generator is required")),
+      ...Ceiling,
+    }),
+  ]),
 );
 
 export type SizeBaselineEntry = v.InferOutput<typeof BaselineSchema>[number];
@@ -48,7 +64,9 @@ export const parseSizeBaseline = (
       `${label}: ${parsed.issues.map((issue) => issue.message).join("; ")}`,
     );
   }
-  const paths = parsed.output.map((entry) => entry.path);
+  const paths = parsed.output.map((entry) =>
+    "path" in entry ? entry.path : `generator ${entry.generator}`,
+  );
   const duplicate = paths.find((file, index) => paths.indexOf(file) !== index);
   if (duplicate !== undefined) {
     return panic(`${label}: duplicate entry ${duplicate}`);
@@ -95,19 +113,47 @@ const describeSize = (bytes: number) =>
 
 export type SizeReport = { errors: string[]; baselined: number };
 
+type GeneratorOutputs = (id: string) => readonly string[] | undefined;
+
+const declaredOutputs: GeneratorOutputs = (id) =>
+  GENERATORS.find((generator) => generator.id === id)?.outputs;
+
 /** Oversized blobs the baseline does not cover, and baseline entries now stale. */
 export const evaluateSizes = (
   blobs: readonly TrackedBlob[],
   baseline: readonly SizeBaselineEntry[],
+  outputsOf: GeneratorOutputs = declaredOutputs,
 ): SizeReport => {
-  const entries = new Map(baseline.map((entry) => [entry.path, entry]));
+  const errors: string[] = [];
+  const entries = new Map(
+    baseline.flatMap((entry) =>
+      "path" in entry ? [[entry.path, entry] as const] : [],
+    ),
+  );
+  const generated = baseline.flatMap((entry) => {
+    if ("path" in entry) {
+      return [];
+    }
+    const outputs = outputsOf(entry.generator);
+    if (outputs === undefined) {
+      errors.push(
+        `${BASELINE_REL}: entry names unknown generator ${entry.generator}; use an id from scripts/generated-files.ts`,
+      );
+      return [];
+    }
+    return [{ entry, outputs }];
+  });
+  const covering = (file: string) =>
+    entries.get(file) ??
+    generated.find(({ outputs }) =>
+      outputs.some((glob) => matchesGeneratedGlob(glob, file)),
+    )?.entry;
   const sizes = new Map(blobs.map((blob) => [blob.path, blob.bytes]));
   const oversized = blobs.filter(
     (blob) => blob.bytes > TRACKED_FILE_SIZE_LIMIT_BYTES,
   );
-  const errors: string[] = [];
   for (const { path: file, bytes } of oversized) {
-    const entry = entries.get(file);
+    const entry = covering(file);
     if (entry === undefined) {
       errors.push(
         `${file}: ${describeSize(bytes)} exceeds the ${describeSize(TRACKED_FILE_SIZE_LIMIT_BYTES)} limit for tracked files. Generated output belongs in .gitignore and is built where it is used; a file that must be tracked needs a { path, maxBytes, reason } entry in ${BASELINE_REL}.`,
@@ -120,7 +166,18 @@ export const evaluateSizes = (
       );
     }
   }
-  for (const { path: file } of baseline) {
+  for (const { entry, outputs } of generated) {
+    if (
+      !oversized.some(({ path: file }) =>
+        outputs.some((glob) => matchesGeneratedGlob(glob, file)),
+      )
+    ) {
+      errors.push(
+        `${BASELINE_REL}: stale entry for generator ${entry.generator}; none of its outputs exceeds the limit, so delete the entry`,
+      );
+    }
+  }
+  for (const { path: file } of entries.values()) {
     const bytes = sizes.get(file);
     if (bytes === undefined) {
       errors.push(
@@ -136,7 +193,8 @@ export const evaluateSizes = (
   }
   return {
     errors,
-    baselined: oversized.filter((blob) => entries.has(blob.path)).length,
+    baselined: oversized.filter((blob) => covering(blob.path) !== undefined)
+      .length,
   };
 };
 

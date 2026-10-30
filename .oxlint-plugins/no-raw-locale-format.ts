@@ -12,7 +12,7 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 // render inconsistently across surfaces.
 //
 // Route through the central formatter instead:
-//   - React:     useFormatter() / useLocale() from use-intl
+//   - React:     useFormatter() / useFormattingLocale() from @/i18n/formatting-context
 //   - non-React: getFormatter() from @/i18n/i18n-store
 //   - or pass getFormattingLocale() explicitly as the locale argument.
 //
@@ -25,7 +25,7 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 //
 // Allowed (carries the full formatting locale):
 //   new Intl.RelativeTimeFormat(getFormattingLocale(), opts)
-//   date.toLocaleDateString(locale, opts)   // locale = useLocale()
+//   date.toLocaleDateString(locale, opts)   // locale = useFormattingLocale()
 //
 // The central formatting modules build these from a resolved locale and
 // are allowlisted in oxlint.config.ts.

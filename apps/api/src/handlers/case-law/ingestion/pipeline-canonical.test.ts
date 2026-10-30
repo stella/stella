@@ -49,6 +49,11 @@ import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 
+beforeEach(() => {
+  putPacksMock.mockReset();
+  putPacksMock.mockImplementation(putPacksDefault);
+});
+
 /**
  * `canonical` storage mode moves the payload out of Postgres, so what a
  * type cannot check is the ordering: the row and durable upload intent must
@@ -88,19 +93,18 @@ const packedDocumentIds = (pack: EncodedPack): string[] => [
 // redundancy decision and encodes a real pack, so a payload the planner
 // refuses contributes no member here for the same reason it would in
 // production, not because a fixture said so.
-const putPacksMock = mock(
-  async ({
-    packs,
-  }: Parameters<typeof putCorpusPacks>[0]): Promise<
-    Result<void, CorpusPackError>
-  > => {
-    for (const pack of packs) {
-      transferredPacks.push(pack);
-      events.push(`corpus-pack:${packedDocumentIds(pack).join(",")}`);
-    }
-    return await Promise.resolve(Result.ok(undefined));
-  },
-);
+const putPacksDefault = async ({
+  packs,
+}: Parameters<typeof putCorpusPacks>[0]): Promise<
+  Result<void, CorpusPackError>
+> => {
+  for (const pack of packs) {
+    transferredPacks.push(pack);
+    events.push(`corpus-pack:${packedDocumentIds(pack).join(",")}`);
+  }
+  return await Promise.resolve(Result.ok(undefined));
+};
+const putPacksMock = mock(putPacksDefault);
 
 /** A transfer that fails the way an unreachable bucket does. */
 const failTheTransfer = () => {
@@ -481,75 +485,86 @@ describe("processDecision — canonical storage mode", () => {
   });
 
   test("repairs a pending mirror from a listing-only replay without degrading detail", async () => {
-    const decisionId = createSafeId<"caseLawDecision">();
-    existingDecision = {
-      id: decisionId,
-      caseNumber: decision.caseNumber,
-      caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
-      ecli: "ECLI:CZ:TEST:2026:1",
-      metadata: { recoveredDetail: true },
-      sourceHash: "recovered-detail-hash",
-      sourceObservedAt: new Date("2026-07-31T11:00:00.000Z"),
-      sourceObservationHash: "first-listing-hash",
-      sourceObservationOrder: 1n,
-      corpusMirrorStatus: "pending",
-      contentHash: null,
-      textS3Key: null,
-      normalizedS3Key: null,
-      astS3Key: null,
-      redactedAt: null,
-      sourceRawS3Key: "raw/recovered-detail.html",
-      sourceRawContentType: "text/html",
-      sourceUrl: "https://publisher.example/detail/1",
-      fulltext: "Recovered decision text.",
-      sections: null,
-      documentAst: {},
-      hasStoredDocument: true,
-    };
-
-    const outcome = await processDecision({
-      input: plainTextIngestionResult({
-        ...decision,
-        fulltext: undefined,
-        isListingOnly: true,
-        metadata: { listedOnly: true },
-        rawHash: "listing-only-replay-hash",
-        sourceRaw: "<tr>listing only</tr>",
+    const fake = startFakeS3();
+    try {
+      const decisionId = createSafeId<"caseLawDecision">();
+      existingDecision = {
+        id: decisionId,
+        caseNumber: decision.caseNumber,
+        caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+        ecli: "ECLI:CZ:TEST:2026:1",
+        metadata: { recoveredDetail: true },
+        sourceHash: "recovered-detail-hash",
+        sourceObservedAt: new Date("2026-07-31T11:00:00.000Z"),
+        sourceObservationHash: "first-listing-hash",
+        sourceObservationOrder: 1n,
+        corpusMirrorStatus: "pending",
+        contentHash: null,
+        textS3Key: null,
+        normalizedS3Key: null,
+        astS3Key: null,
+        redactedAt: null,
+        sourceRawS3Key: "raw/recovered-detail.html",
         sourceRawContentType: "text/html",
-      }),
-      observationOrder: 2n,
-      sourceId: createSafeId<"caseLawSource">(),
-      scopedDb,
-      observedAt: new Date("2026-07-31T12:00:00.000Z"),
-    });
+        sourceUrl: "https://publisher.example/detail/1",
+        fulltext: "Recovered decision text.",
+        sections: null,
+        documentAst: {},
+        hasStoredDocument: true,
+      };
 
-    expect(outcome).toEqual({
-      status: "complete",
-      inserted: true,
-      searchVectorFailed: false,
-    });
-    // One pack, carrying the repaired decision's members and nothing else.
-    expect(transferredPacks).toHaveLength(1);
-    expect(
-      packedDocumentIds(transferredPacks.at(0) ?? expect.unreachable()),
-    ).toEqual([decisionId]);
-    expect(updatedDecisionRows[0]).toMatchObject({
-      sourceHash: "recovered-detail-hash",
-      sourceObservationHash: "listing-only-replay-hash",
-      sourceObservationOrder: 2n,
-    });
-    // The row already holds the payload it is replaying, so the claim does
-    // not copy it back in; the pack above carries it from the row.
-    for (const column of ["fulltext", "sections", "documentAst"]) {
-      expect(updatedDecisionRows[0]).not.toHaveProperty(column);
+      const outcome = await processDecision({
+        input: plainTextIngestionResult({
+          ...decision,
+          fulltext: undefined,
+          isListingOnly: true,
+          metadata: { listedOnly: true },
+          rawHash: "listing-only-replay-hash",
+          sourceRaw: "<tr>listing only</tr>",
+          sourceRawContentType: "text/html",
+        }),
+        observationOrder: 2n,
+        sourceId: createSafeId<"caseLawSource">(),
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      });
+
+      expect(outcome).toEqual({
+        status: "complete",
+        inserted: true,
+        searchVectorFailed: false,
+      });
+      expect([...fake.objects.values()]).toEqual([
+        {
+          bytes: new TextEncoder().encode("<tr>listing only</tr>"),
+          contentType: "text/html",
+        },
+      ]);
+      // One pack, carrying the repaired decision's members and nothing else.
+      expect(transferredPacks).toHaveLength(1);
+      expect(
+        packedDocumentIds(transferredPacks.at(0) ?? expect.unreachable()),
+      ).toEqual([decisionId]);
+      expect(updatedDecisionRows[0]).toMatchObject({
+        sourceHash: "recovered-detail-hash",
+        sourceObservationHash: "listing-only-replay-hash",
+        sourceObservationOrder: 2n,
+      });
+      // The row already holds the payload it is replaying, so the claim does
+      // not copy it back in; the pack above carries it from the row.
+      for (const column of ["fulltext", "sections", "documentAst"]) {
+        expect(updatedDecisionRows[0]).not.toHaveProperty(column);
+      }
+      expect(updatedDecisionRows[0]).not.toHaveProperty("caseNumber");
+      expect(updatedDecisionRows[0]).not.toHaveProperty("metadata");
+      expect(updatedDecisionRows[0]).not.toHaveProperty("sourceRawS3Key");
+      expect(updatedDecisionRows.at(-1)).toMatchObject({
+        corpusMirrorStatus: "settled",
+        fulltext: null,
+      });
+    } finally {
+      fake.stop();
     }
-    expect(updatedDecisionRows[0]).not.toHaveProperty("caseNumber");
-    expect(updatedDecisionRows[0]).not.toHaveProperty("metadata");
-    expect(updatedDecisionRows[0]).not.toHaveProperty("sourceRawS3Key");
-    expect(updatedDecisionRows.at(-1)).toMatchObject({
-      corpusMirrorStatus: "settled",
-      fulltext: null,
-    });
   });
 
   test("keeps the served payload when the failed write was a refresh", async () => {

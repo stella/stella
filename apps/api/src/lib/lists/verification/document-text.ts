@@ -7,12 +7,11 @@
  * else is refused rather than guessed at.
  */
 
-import { PDF } from "@libpdf/core";
-
 import { envBase } from "@/api/env-base";
 import type { SafeId } from "@/api/lib/branded-types";
 import { openScannedDocxReviewer } from "@/api/lib/file-scan/document-parsers";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
+import { readPdfPageTexts } from "@/api/lib/files/pdf-page-text";
 import { createFileKey } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { readS3ObjectBounded } from "@/api/lib/s3";
@@ -54,18 +53,14 @@ const pdfPageId = (pageNumber: number): string => `P${String(pageNumber)}`;
 const readPdfBlocks = async (
   bytes: Uint8Array,
 ): Promise<VerificationBlock[]> => {
-  const pdf = await PDF.load(bytes);
   const blocks: VerificationBlock[] = [];
-  for (const page of pdf.extractText()) {
-    // Offsets index into this exact string, so it is kept as extracted rather
-    // than trimmed.
-    if (page.text.trim().length === 0) {
+  for (const { pageNumber, text } of await readPdfPageTexts({ bytes })) {
+    if (text.trim().length === 0) {
       continue;
     }
-    const pageNumber = page.pageIndex + 1;
     blocks.push({
       id: pdfPageId(pageNumber),
-      text: page.text,
+      text,
       source: { type: "pdf-page", pageNumber },
     });
   }

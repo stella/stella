@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import type { VerifiedOAuthClientBrand } from "@stll/api-contract";
 
 import type { OAuthConsentInfo } from "@/lib/oauth-provider";
@@ -27,28 +29,35 @@ export type ConsentClientIdentity =
 
 /**
  * Who the consent screen says is asking. Only the server's verified brand
- * selects a product name, mark and publisher; the client's registered name is
- * shown as its own claim, so a client claiming a known product's name from an
- * unknown location reads as an unverified app with that name and no mark.
+ * selects a product name, mark and publisher; otherwise the client's
+ * registered name is shown as its own claim, so a client claiming a known
+ * product's name from an unknown location reads as an unverified app with that
+ * name and no mark. `fallbackName` stands in for a client that registered none.
  */
 export const resolveConsentClientIdentity = (
   info: OAuthConsentInfo | null | undefined,
-  claimedName: string,
+  fallbackName: string,
 ): ConsentClientIdentity => {
   if (!info) {
-    return { type: "unknown", name: claimedName };
+    return { type: "unknown", name: fallbackName };
   }
-  if (info.unverified) {
-    return { type: "unverified", name: claimedName };
+  const { client } = info;
+  switch (client.type) {
+    case "verified": {
+      const identity = VERIFIED_CLIENT_IDENTITY[client.brand];
+      return {
+        type: "verified",
+        brand: client.brand,
+        name: identity.name,
+        publisher: identity.publisher,
+      };
+    }
+    case "verified_unbranded":
+      return { type: "verified_unbranded", name: client.name ?? fallbackName };
+    case "unverified":
+      return { type: "unverified", name: client.name ?? fallbackName };
+    default:
+      client satisfies never;
+      return panic("Unhandled consent client presentation");
   }
-  if (info.verifiedBrand === null) {
-    return { type: "verified_unbranded", name: claimedName };
-  }
-  const identity = VERIFIED_CLIENT_IDENTITY[info.verifiedBrand];
-  return {
-    type: "verified",
-    brand: info.verifiedBrand,
-    name: identity.name,
-    publisher: identity.publisher,
-  };
 };

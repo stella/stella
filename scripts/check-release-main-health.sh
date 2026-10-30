@@ -25,7 +25,8 @@ refuse() { echo "::error::$1" >&2; exit 1; }
 required_contexts='["staging/verified","main/heavy","main/pr-depth"]'
 receipt=false
 coverage=uncovered
-if bash "$script_dir/check-release-receipt-coverage.sh" "$repo" "$sha"; then
+rc_tags=$(git tag --points-at "$sha" --list 'v*-rc.*')
+if [[ -z "$rc_tags" ]] && bash "$script_dir/check-release-receipt-coverage.sh" "$repo" "$sha"; then
   receipt=true
   coverage=covered
   required_contexts='["staging/verified"]'
@@ -64,18 +65,27 @@ validate_workflow_status() {
     .id == $id and .html_url == $url and .repository.full_name == $repo and
     .path == $workflow and .head_branch == "main" and
     (.event == "push" or .event == "workflow_dispatch" or .event == "schedule") and
-    .display_title == ($title + $sha) and
+    (.display_title | test("^(" + $title + ") " + $sha + "$")) and
     (.event == "workflow_dispatch" or .head_sha == $sha) and
     .status == "completed" and .conclusion == "success"
   ' <<< "$run" >/dev/null || refuse "$code: run provenance or conclusion does not match"
 }
-if [[ "$proof" != "$sha" ]]; then
-  validate_workflow_status "staging/verified" ".github/workflows/deploy-staging.yml" "Staging release proof " "RELEASE_STAGING_NOT_GREEN"
+if [[ "$proof" != "$sha" || -n "$rc_tags" ]]; then
+  # Title patterns follow each workflow's run-name (scripts/proof-run-titles.test.ts).
+  # A commit carrying RC tags is proven only by a staging proof of one of
+  # those tags: an ordinary main deploy builds its own images, and another
+  # candidate's proof covers other digests.
+  staging_title="Staging release proof v[0-9]+[.][0-9]+[.][0-9]+-rc[.][1-9][0-9]*|Deploy main to staging"
+  if [[ -n "$rc_tags" ]]; then
+    candidate_tags=$(grep -E '^v[0-9]+[.][0-9]+[.][0-9]+-rc[.][1-9][0-9]*$' <<< "$rc_tags" || true)
+    [[ -n "$candidate_tags" ]] \
+      || refuse "RELEASE_STAGING_NOT_GREEN: no well-formed RC tag points at $sha"
+    staging_title="Staging release proof ($(sed 's/[.]/[.]/g' <<< "$candidate_tags" | paste -sd '|' -))"
+  fi
+  validate_workflow_status "staging/verified" ".github/workflows/deploy-staging.yml" "$staging_title" "RELEASE_STAGING_NOT_GREEN"
 fi
 if [[ "$receipt" != true ]]; then
-  validate_workflow_status "main/heavy" ".github/workflows/main-heavy.yml" "Main heavy suites " "RELEASE_HEAVY_NOT_GREEN"
-  validate_workflow_status "main/pr-depth" ".github/workflows/main-pr-depth.yml" "Main PR-depth checks " "RELEASE_PR_DEPTH_NOT_GREEN"
+  validate_workflow_status "main/heavy" ".github/workflows/main-heavy.yml" "Main heavy suites" "RELEASE_HEAVY_NOT_GREEN"
+  validate_workflow_status "main/pr-depth" ".github/workflows/main-pr-depth.yml" "Main PR-depth checks" "RELEASE_PR_DEPTH_NOT_GREEN"
 fi
-incidents=$(bash "$gh_retry_script" api --paginate --slurp "repos/$repo/issues?state=open&labels=main-health-incident&per_page=100")
-jq -e '[.[][]] | length == 0' <<< "$incidents" >/dev/null \
-  || refuse 'RELEASE_OPEN_MAIN_INCIDENT: an unresolved main-health incident blocks tagging'
+bash "$script_dir/check-release-open-incidents.sh" "$repo"

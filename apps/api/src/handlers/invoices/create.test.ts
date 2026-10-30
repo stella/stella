@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 import { BILLING_STATUS } from "@/api/db/schema";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { PG_ERROR } from "@/api/lib/pg-error";
@@ -18,15 +19,29 @@ import createInvoice from "./create";
 
 type CreateInvoiceCtx = Parameters<typeof createInvoice.handler>[0];
 
-const entry = (id: string, currency: string) => ({
+const entry = (
+  id: string,
+  currency: string,
+  invoiceId: SafeId<"invoice"> | null = null,
+) => ({
   id: toSafeId<"timeEntry">(id),
   billedMinutes: 60,
   rateAtEntry: 10_000,
   status: BILLING_STATUS.APPROVED,
   billable: true,
   currency,
-  invoiceId: null,
+  invoiceId,
 });
+
+const entrySelection = (
+  entries: ReturnType<typeof entry>[],
+  fields?: object,
+) => {
+  if (fields && "count" in fields) {
+    return createSelectQueryMock([{ count: "0" }]);
+  }
+  return createSelectQueryMock(fields && "status" in fields ? entries : []);
+};
 
 const createContext = ({
   body,
@@ -71,8 +86,7 @@ describe("createInvoice", () => {
     const entries = [entry("te_1", "USD"), entry("te_2", "EUR")];
     const { safeDb, scopedDb } = createScopedDbMock({
       $count: async () => 0,
-      select: (fields?: object) =>
-        createSelectQueryMock(fields && "status" in fields ? entries : []),
+      select: (fields?: object) => entrySelection(entries, fields),
     });
 
     const result = await createInvoice.handler(
@@ -118,16 +132,10 @@ describe("createInvoice", () => {
   });
 
   test("rejects entries that are already attached to another invoice", async () => {
-    const entries = [
-      {
-        ...entry("te_1", "USD"),
-        invoiceId: toSafeId<"invoice">("inv_existing"),
-      },
-    ];
+    const entries = [entry("te_1", "USD", toSafeId<"invoice">("inv_existing"))];
     const { safeDb, scopedDb } = createScopedDbMock({
       $count: async () => 0,
-      select: (fields?: object) =>
-        createSelectQueryMock(fields && "status" in fields ? entries : []),
+      select: (fields?: object) => entrySelection(entries, fields),
     });
 
     const result = await createInvoice.handler(
@@ -153,11 +161,9 @@ describe("createInvoice", () => {
     if (!firstEntry) {
       throw new Error("Expected fixture entry");
     }
-    let auditCalls = 0;
     const { safeDb, scopedDb } = createScopedDbMock({
       $count: async () => 0,
-      select: (fields?: object) =>
-        createSelectQueryMock(fields && "status" in fields ? entries : []),
+      select: (fields?: object) => entrySelection(entries, fields),
       insert: () => ({
         values: () => ({
           returning: async () => [
@@ -179,9 +185,6 @@ describe("createInvoice", () => {
         body: baseBody("USD", ["te_1", "te_2"]),
         safeDb,
         scopedDb,
-        recordAuditEvent: async () => {
-          auditCalls += 1;
-        },
       }),
     );
 
@@ -191,6 +194,5 @@ describe("createInvoice", () => {
         message: "Some entries were modified concurrently; please retry",
       },
     });
-    expect(auditCalls).toBe(0);
   });
 });

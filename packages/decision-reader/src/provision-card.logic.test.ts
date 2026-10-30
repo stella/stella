@@ -7,9 +7,11 @@ import {
   fullProvisionOutcome,
   informativeProvisionTrail,
   PROVISION_CARD_SCOPE,
+  PROVISION_WORDING_EMPHASIS,
   provisionCardPassage,
   provisionCardScope,
   provisionCardsOf,
+  provisionWordingRuns,
 } from "./provision-card.logic";
 import type { CitedProvisionTarget } from "./reader-types";
 
@@ -143,6 +145,8 @@ describe("provision cards of one paragraph", () => {
     expect(
       cards.at(0)?.citations.map(({ payload }) => payload.highlightAnchorId),
     ).toEqual(["par_226-odst_1"]);
+    // Both occurrences stay the card's, so either one in a selection finds it.
+    expect(cards.at(0)?.citationIds).toEqual(["a", "b"]);
   });
 
   test("parts of one provision share its card in citation order", () => {
@@ -334,6 +338,71 @@ describe("a provision card's passage", () => {
       ]);
       expect(provisionCardPassage(citations, wording([]))).toEqual(
         provisionCardPassage(citations),
+      );
+    }
+  });
+});
+
+describe("a provision card's quoted runs", () => {
+  const blocks = [
+    "par_5-odst_1",
+    "par_5-odst_1-pism_a",
+    "par_5-odst_1-pism_b",
+    "par_5-odst_2",
+    "par_5-odst_3",
+    "par_5-odst_3-pism_a",
+  ].map((anchorId) => ({ anchorId, id: anchorId, text: anchorId }));
+  const runs = (cited: readonly string[]) =>
+    provisionWordingRuns(blocks, new Set(cited)).map(
+      ({ blocks: run, emphasis }) => ({
+        emphasis,
+        ids: run.map(({ id }) => id),
+      }),
+    );
+
+  test("a quote that is all cited, or not cited at all, is one plain unit", () => {
+    const whole = [
+      {
+        emphasis: PROVISION_WORDING_EMPHASIS.plain,
+        ids: blocks.map(({ id }) => id),
+      },
+    ];
+    expect(runs(blocks.map(({ id }) => id))).toEqual(whole);
+    expect(runs([])).toEqual(whole);
+  });
+
+  test("a cited paragraph and its letters are one marked unit beside the context", () => {
+    expect(
+      runs([
+        "par_5-odst_1",
+        "par_5-odst_1-pism_a",
+        "par_5-odst_1-pism_b",
+        "par_5-odst_3-pism_a",
+      ]),
+    ).toEqual([
+      {
+        emphasis: PROVISION_WORDING_EMPHASIS.cited,
+        ids: ["par_5-odst_1", "par_5-odst_1-pism_a", "par_5-odst_1-pism_b"],
+      },
+      {
+        emphasis: PROVISION_WORDING_EMPHASIS.plain,
+        ids: ["par_5-odst_2", "par_5-odst_3"],
+      },
+      {
+        emphasis: PROVISION_WORDING_EMPHASIS.cited,
+        ids: ["par_5-odst_3-pism_a"],
+      },
+    ]);
+  });
+
+  test("runs keep every block once, in order", () => {
+    for (const cited of [
+      [],
+      ["par_5-odst_2"],
+      ["par_5-odst_1", "par_5-odst_3"],
+    ]) {
+      expect(runs(cited).flatMap(({ ids }) => ids)).toEqual(
+        blocks.map(({ id }) => id),
       );
     }
   });

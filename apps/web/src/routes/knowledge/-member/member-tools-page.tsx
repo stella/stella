@@ -15,7 +15,7 @@ import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserProblem } from "@/lib/errors/user-toast";
 import {
   catalogueKeys,
   catalogueOptions,
@@ -85,7 +85,7 @@ export function MemberToolsPage({
           );
           return;
         }
-        notifyUserError(undefined, t("knowledge.mcp.errorTitle"), {
+        notifyUserProblem(t("knowledge.mcp.errorTitle"), {
           description: t("knowledge.mcp.errorDescription"),
         });
       }),

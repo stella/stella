@@ -7,7 +7,12 @@ import fc from "fast-check";
 import { withTimeout } from "@stll/concurrency/with-timeout";
 import { assertProperty } from "@stll/property-testing";
 
-import { BULLMQ_QUEUE_HOSTS, BullMqWorker } from "@/api/lib/bullmq-queue";
+import { rootDb } from "@/api/db/root";
+import {
+  BULLMQ_QUEUE_HOSTS,
+  BullMqWorker,
+  createBullMqWorkerHost,
+} from "@/api/lib/bullmq-queue";
 import { createBullMqConnection } from "@/api/lib/redis-client";
 
 class QueueProbeError extends TaggedError("QueueProbeError")<{
@@ -47,6 +52,74 @@ const failureCases = (marker: string) => {
 type ProbeData = { failure: ReturnType<typeof failureCases>[number]["type"] };
 
 describe.skipIf(!enabled)("queue failure records over Valkey", () => {
+  test("the derivative host consumes API-enqueued work and retains failed work for retry", async () => {
+    const prefix = `derivative-host-probe-${Bun.randomUUIDv7()}`;
+    const queueConnection = createBullMqConnection({
+      storeClass: "durable-coordination",
+    });
+    const workerConnection = createBullMqConnection({
+      storeClass: "durable-coordination",
+    });
+    const queue = new Queue<{ crash: boolean }>("file-derivatives", {
+      connection: queueConnection,
+      prefix,
+    });
+    const completed = Promise.withResolvers<undefined>();
+    const failed = Promise.withResolvers<undefined>();
+    const host = createBullMqWorkerHost(
+      "file-derivative-worker",
+      { db: rootDb },
+      "enabled",
+      [
+        () => {
+          const worker = new BullMqWorker<{ crash: boolean }>(
+            "file-derivatives",
+            async ({ data }) => {
+              if (data.crash) {
+                throw new Error("simulated process loss");
+              }
+              completed.resolve(undefined);
+            },
+            { connection: workerConnection, prefix },
+          );
+          worker.on("failed", () => failed.resolve(undefined));
+          return {
+            queues: ["file-derivatives"] as const,
+            close: async () => await worker.close(),
+          };
+        },
+      ],
+    );
+    try {
+      await queue.add("api-produced", { crash: false });
+      await withTimeout(async () => await completed.promise, {
+        label: "derivative host completion",
+        timeoutMs: SETTLE_TIMEOUT_MS,
+      });
+      const retryable = await queue.add(
+        "crash",
+        { crash: true },
+        { attempts: 2, backoff: { type: "fixed", delay: 60_000 } },
+      );
+      await withTimeout(async () => await failed.promise, {
+        label: "derivative host failure",
+        timeoutMs: SETTLE_TIMEOUT_MS,
+      });
+      if (retryable.id === undefined) {
+        throw new TypeError("Retryable derivative job must have an id");
+      }
+      const stored = await queue.getJob(retryable.id);
+      expect(await stored?.getState()).toBe("delayed");
+      expect(stored?.attemptsMade).toBe(1);
+    } finally {
+      await host.close();
+      await queue.obliterate({ force: true });
+      await queue.close();
+      queueConnection.disconnect();
+      workerConnection.disconnect();
+    }
+  });
+
   test("every registered queue stores fixed failure records", async () => {
     await assertProperty(
       "every registered queue stores fixed failure records",

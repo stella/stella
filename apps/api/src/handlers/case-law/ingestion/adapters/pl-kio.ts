@@ -57,6 +57,7 @@ import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/ad
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
+import { readPlKioLayout } from "@/api/handlers/case-law/ingestion/parsers/pl-kio-layout";
 import {
   legacyQuarantineHtmlText,
   visibleHtmlText,
@@ -871,12 +872,21 @@ const loadPlKioHtmlForParser = (html: string) => {
     // oxlint-disable-next-line result-boundary/no-throw-outside-boundary -- the shared parser's callback contract returns a CheerioAPI; the enclosing Result.try in assemblePlKioDecision records the rejection via plKioParseError
     throw loaded.error;
   }
+  // The converter's print layout is read back before the parser walks the
+  // document; see pl-kio-layout.ts.
+  readPlKioLayout(loaded.value);
   return loaded.value;
 };
 
-const PL_KIO_PARSER_BOUNDS = {
+/**
+ * How the Polish parser reads this publisher's documents: bounded, through
+ * the layout reader, with `<sup>` and the small-type indices it lifts kept
+ * raised.
+ */
+const PL_KIO_PARSER_OPTIONS = {
   loadHtml: loadPlKioHtmlForParser,
   htmlExpansionBudget: PL_KIO_HTML_BUDGET,
+  superscripts: true,
 } as const;
 
 const plKioDocumentOf = (
@@ -1105,7 +1115,7 @@ export const assemblePlKioDecision = ({
               documentUrl:
                 id === undefined ? undefined : documentUrlOf(id, kind),
               content,
-              ...PL_KIO_PARSER_BOUNDS,
+              ...PL_KIO_PARSER_OPTIONS,
               keywords: itemsOf(
                 detail,
                 "Zagadnienia merytoryczne w odwołaniu z Indeksu tematycznego",

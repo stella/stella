@@ -39,9 +39,8 @@ import { contactsKeys } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { toSafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
-import { createUuid } from "@/lib/uuid";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import type { MatterDraftClient } from "@/lib/workspaces/create-matter-store";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { useCreateWorkspace } from "@/lib/workspaces/mutations";
@@ -142,7 +141,7 @@ const CreateMatterDialogBody = ({
   const workspacesDataQuery = useChromeQuery({
     ...workspacesOptions(currentUser.activeOrganizationId),
   });
-  const workspacesDataView = useQueryView(workspacesDataQuery);
+  const workspacesDataView = queryView(workspacesDataQuery);
   useQueryViewError(workspacesDataView, "CreateMatterDialogBody:query");
   const workspacesData =
     workspacesDataView.type === "items" ? workspacesDataView.items : undefined;
@@ -152,12 +151,9 @@ const CreateMatterDialogBody = ({
   };
 
   const handleCreateClient = async (displayName: string, type: ContactType) => {
-    const id = toSafeId<"contact">(createUuid());
-
     const result = await Result.tryPromise(
       async () =>
         await createContact.mutateAsync({
-          id,
           type,
           displayName,
         }),
@@ -179,7 +175,7 @@ const CreateMatterDialogBody = ({
     });
 
     setSelectedClient({
-      id,
+      id: result.value.id,
       displayName,
       type,
     });

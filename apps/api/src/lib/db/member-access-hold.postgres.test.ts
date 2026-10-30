@@ -2,6 +2,8 @@ import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
+import { waitForExternalState } from "@stll/property-testing/external-state";
+
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import { safeDbFromScoped } from "@/api/db/safe-db";
@@ -31,7 +33,7 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
-const BLOCK_OBSERVATION_ATTEMPTS = 500;
+const BLOCK_OBSERVATION_TIMEOUT_MS = 5000;
 
 const seedMember = async (db: GatedTestDb) => {
   const organizationId = mintAuthProviderId<"organization">();
@@ -117,18 +119,37 @@ const expectTransactionToBlockClient = async (
   tx: Transaction,
   waiterPid: number,
 ) => {
-  for (let attempt = 0; attempt < BLOCK_OBSERVATION_ATTEMPTS; attempt += 1) {
-    const rows = await tx.execute<{ blocked: boolean }>(sql`
-      SELECT pg_backend_pid() = ANY(pg_blocking_pids(${waiterPid}::integer)) AS blocked
-    `);
-    if (rows.at(0)?.blocked === true) {
-      return;
-    }
-    await Bun.sleep(10);
-  }
-  expect.unreachable(
-    "The contender must wait behind the held transaction before the barrier opens",
-  );
+  await waitForExternalState({
+    description:
+      "the contender waits behind the held transaction before the barrier opens",
+    timeoutMs: BLOCK_OBSERVATION_TIMEOUT_MS,
+    read: async () =>
+      (
+        await tx.execute<{ blocked: boolean }>(sql`
+          SELECT pg_backend_pid() = ANY(pg_blocking_pids(${waiterPid}::integer)) AS blocked
+        `)
+      ).at(0)?.blocked === true,
+  });
+};
+
+/** Resolves once some backend waits on `holderPid`. */
+const waitUntilBlocking = async (
+  observerDb: GatedTestDb,
+  holderPid: number,
+) => {
+  await waitForExternalState({
+    description: `a backend waits on ${String(holderPid)}`,
+    timeoutMs: BLOCK_OBSERVATION_TIMEOUT_MS,
+    read: async () =>
+      (
+        await observerDb.execute<{ blocked: boolean }>(sql`
+          SELECT EXISTS (
+            SELECT 1 FROM pg_stat_activity
+            WHERE ${holderPid} = ANY(pg_blocking_pids(pid))
+          ) AS blocked
+        `)
+      ).at(0)?.blocked === true,
+  });
 };
 
 type Seeded = Awaited<ReturnType<typeof seedMember>>;
@@ -205,24 +226,7 @@ if (!databaseUrl || !runPostgresTests) {
               removed = true;
             })();
 
-            let blocked = false;
-            for (
-              let attempt = 0;
-              attempt < BLOCK_OBSERVATION_ATTEMPTS && !blocked;
-              attempt += 1
-            ) {
-              const rows = await observerDb.execute<{ blocked: boolean }>(sql`
-                SELECT EXISTS (
-                  SELECT 1 FROM pg_stat_activity
-                  WHERE ${holderPid} = ANY(pg_blocking_pids(pid))
-                ) AS blocked
-              `);
-              blocked = rows.at(0)?.blocked === true;
-              if (!blocked) {
-                await Bun.sleep(10);
-              }
-            }
-            expect(blocked).toBe(true);
+            await waitUntilBlocking(observerDb, holderPid);
             expect(removed).toBe(false);
 
             release.resolve(undefined);
@@ -272,24 +276,7 @@ if (!databaseUrl || !runPostgresTests) {
             reading = readerDb.transaction(
               async (tx) => await readAccess(tx, seeded),
             );
-            let blocked = false;
-            for (
-              let attempt = 0;
-              attempt < BLOCK_OBSERVATION_ATTEMPTS && !blocked;
-              attempt += 1
-            ) {
-              const rows = await observerDb.execute<{ blocked: boolean }>(sql`
-                SELECT EXISTS (
-                  SELECT 1 FROM pg_stat_activity
-                  WHERE ${writerPid} = ANY(pg_blocking_pids(pid))
-                ) AS blocked
-              `);
-              blocked = rows.at(0)?.blocked === true;
-              if (!blocked) {
-                await Bun.sleep(10);
-              }
-            }
-            expect(blocked).toBe(true);
+            await waitUntilBlocking(observerDb, writerPid);
             release.resolve(undefined);
             await writing;
             expect(await reading).toBe(false);

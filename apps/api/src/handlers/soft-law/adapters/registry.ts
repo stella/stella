@@ -1,9 +1,14 @@
+import { Result } from "better-result";
+
 import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-source";
+import { SoftLawIngestionError } from "@/api/lib/legal-search/soft-law-types";
 import type {
+  SoftLawAdapterConfiguration,
   SoftLawAuthority,
   SoftLawSourceAdapter,
 } from "@/api/lib/legal-search/soft-law-types";
 
+import { bfdiAdapter } from "./bfdi";
 import { edpbAdapter } from "./edpb";
 import { wp29Adapter } from "./wp29";
 
@@ -72,7 +77,17 @@ export const SOFT_LAW_ADMISSIONS = {
   "ee-aki": unverified,
   "fi-ombudsman": unverified,
   "fr-cnil": held,
-  "de-bfdi": held,
+  "de-bfdi": {
+    state: "registered",
+    adapter: bfdiAdapter,
+    descriptor: {
+      license: "restricted",
+      attribution: "BfDI; https://www.bfdi.bund.de",
+      allowsRedistribution: false,
+      allowsDerivedAi: false,
+    },
+    reuseNotice: "https://www.bfdi.bund.de",
+  },
   "el-hdpa": unverified,
   "hu-naih": unverified,
   "is-personuvernd": unverified,
@@ -132,3 +147,23 @@ export type RegisteredSoftLawAuthority = {
     ? Authority
     : never;
 }[SoftLawAuthority];
+
+type RegisteredSoftLawAdapter =
+  (typeof SOFT_LAW_ADMISSIONS)[RegisteredSoftLawAuthority]["adapter"];
+
+export const configureSoftLawAdapter = async (
+  adapter: RegisteredSoftLawAdapter,
+  configuration: SoftLawAdapterConfiguration,
+) => {
+  if ("configure" in adapter) {
+    return await adapter.configure(configuration);
+  }
+  if (configuration.type === "default") {
+    return Result.ok(adapter);
+  }
+  return Result.err(
+    new SoftLawIngestionError({
+      message: "This source does not accept an admission file",
+    }),
+  );
+};

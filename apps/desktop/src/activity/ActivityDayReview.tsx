@@ -32,6 +32,7 @@ import { Label } from "@stll/ui/label";
 import { MatterIcon } from "@stll/ui/matter-icon";
 import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
 import type { ReviewStatusTone } from "@stll/ui/review-status-badge";
+import { Switch } from "@stll/ui/switch";
 import { Textarea } from "@stll/ui/textarea";
 
 import type { DesktopMessages } from "../i18n/index";
@@ -829,7 +830,7 @@ const ReviewEntries = ({
           return (
             <div
               key={matter.id}
-              className={`grid grid-cols-[1.25rem_minmax(0,1fr)] gap-3 px-4 py-3.5 sm:grid-cols-[1.25rem_minmax(0,1fr)_auto] ${!edit.selected ? "opacity-55" : ""}`}
+              className={`grid grid-cols-[1.25rem_minmax(0,1fr)] gap-3 px-4 py-3.5 min-[40rem]:grid-cols-[1.25rem_minmax(0,1fr)_auto] ${!edit.selected ? "opacity-55" : ""}`}
             >
               <Checkbox
                 className="mt-0.5"
@@ -879,7 +880,7 @@ const ReviewEntries = ({
                   }
                 />
               </div>
-              <div className="col-start-2 flex items-center justify-between gap-2 sm:col-start-3 sm:flex-col sm:items-end">
+              <div className="col-start-2 flex items-center justify-between gap-2 min-[40rem]:col-start-3 min-[40rem]:flex-col min-[40rem]:items-end">
                 <div className="text-base font-semibold tabular-nums">
                   {t("hours", { hours: hours(group.roundedTenths / 10) })}
                   <span className="text-muted-foreground text-2xs block font-normal">
@@ -887,22 +888,15 @@ const ReviewEntries = ({
                   </span>
                 </div>
                 <Label className="text-muted-foreground gap-1.5 text-xs">
-                  <Button
-                    role="switch"
+                  <Switch
                     aria-label={t("entryBillable")}
                     aria-describedby={`review-matter-${matter.id}`}
-                    aria-checked={edit.billable}
+                    checked={edit.billable}
                     disabled={!editable}
-                    size="icon-xs"
-                    variant="ghost"
-                    className={`h-4 w-7 rounded-full border-0 ${edit.billable ? "bg-primary" : "bg-input"}`}
-                    onClick={() => update(group, { billable: !edit.billable })}
-                  >
-                    <span
-                      aria-hidden="true"
-                      className={`bg-primary-foreground absolute start-0.5 size-3 rounded-full transition-transform motion-reduce:transition-none ${edit.billable ? "translate-x-2.5 rtl:-translate-x-2.5" : ""}`}
-                    />
-                  </Button>
+                    onCheckedChange={(checked) =>
+                      update(group, { billable: checked })
+                    }
+                  />
                   {t("entryBillable")}
                 </Label>
               </div>
