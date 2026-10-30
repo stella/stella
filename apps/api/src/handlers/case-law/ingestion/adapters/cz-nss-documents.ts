@@ -177,7 +177,11 @@ export const readNssRegistryMetadata = ({
         return false;
       }
       const cell = link.closest("td");
-      const index = cell.parent().children("td").toArray().indexOf(cell.get(0));
+      const cellNode = cell.get(0);
+      if (cellNode === undefined) {
+        return false;
+      }
+      const index = cell.parent().children("td").toArray().indexOf(cellNode);
       const header = cell
         .closest("table")
         .children("thead")
