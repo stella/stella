@@ -2394,6 +2394,9 @@ const createHarness = ({
           if (query.includes("database_backfill_states")) {
             return queryBackfillCheckpoint(query, params);
           }
+          if (query.includes("transaction_isolation")) {
+            return [{ isolation: "read committed" }];
+          }
           if (query.includes("pg_constraint")) {
             const constraintName = params.at(2);
             if (typeof constraintName !== "string") {
