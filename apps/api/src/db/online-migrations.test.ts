@@ -10,6 +10,10 @@ import { readOnlineIndexConfig } from "../env-online-index";
 import { REWRITTEN_MIGRATION_INDEXES } from "../lib/db/migration-history";
 import { ACCOUNT_AUDIT_CONSTRAINT_VALIDATION } from "./account-audit-constraint-validation";
 import { BackfillHeldError } from "./backfill-runtime";
+import {
+  CASE_LAW_IDENTIFIER_RETRY_CONSTRAINT_VALIDATION,
+  CASE_LAW_IDENTIFIER_RETRY_CONSTRAINTS,
+} from "./case-law-identifier-retry-constraint-validation";
 import { CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR } from "./corpus-projection-delete-receipt-repair";
 import {
   createDecisionDateCeilingRepair,
@@ -161,6 +165,15 @@ const CLEANUP_STALL_CONSTRAINTS = [
 ] as const;
 
 describe("online migrations", () => {
+  test("registers the identifier retry shape for bounded online validation", () => {
+    expect(ONLINE_MIGRATION_REPAIRS).toContain(
+      CASE_LAW_IDENTIFIER_RETRY_CONSTRAINT_VALIDATION,
+    );
+    expect(ONLINE_CONSTRAINT_VALIDATIONS).toContain(
+      CASE_LAW_IDENTIFIER_RETRY_CONSTRAINTS[0],
+    );
+  });
+
   test("keeps executable and validation-only unique indexes in their roles", () => {
     expectTypeOf(
       onlineUniqueIndexDefinition(
