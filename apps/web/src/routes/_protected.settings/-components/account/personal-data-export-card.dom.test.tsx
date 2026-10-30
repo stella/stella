@@ -11,7 +11,7 @@ GlobalRegistrator.register({
   url: "http://localhost:3000/settings/account/profile",
 });
 const originalFetch = globalThis.fetch;
-const { act, cleanup, fireEvent, render, screen, waitFor } =
+const { act, cleanup, fireEvent, render, screen, waitFor, within } =
   await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
@@ -173,8 +173,14 @@ test("a failed export offers a replacement request", async () => {
   renderAccountCard();
 
   const failure = await screen.findByRole("alert");
-  expect(failure.textContent).toBe("Your export could not be prepared.");
-  fireEvent.click(screen.getByRole("button", { name: "Request a new export" }));
+  expect(
+    within(failure).getByText("Your export could not be prepared.", {
+      exact: true,
+    }),
+  ).toBeTruthy();
+  fireEvent.click(
+    within(failure).getByRole("button", { name: "Request a new export" }),
+  );
   expect(await screen.findByText("Preparing your export…")).toBeTruthy();
   expect(requestedPaths).toContain("POST /v1/me/data-exports");
 });
