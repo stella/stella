@@ -25,7 +25,9 @@
 // parser-output-unchanged: [us-courtlistener] registered replay fixture fields are unchanged by numeric index normalization.
 import { normalizeUnicode } from "./unicode.js";
 
-const NUMERIC_SUPERSCRIPT_INDEX = /(?<=\d)[⁰¹²³⁴⁵⁶⁷⁸⁹]+/gu;
+// Any decimal digit, not only ASCII: NFKC folds full-width `５０５⁹` to `5059`
+// just as it folds `505⁹`.
+const NUMERIC_SUPERSCRIPT_INDEX = /(?<=\p{Nd})[⁰¹²³⁴⁵⁶⁷⁸⁹]+/gu;
 
 /**
  * Keep a numeric superscript attached to a number distinct from its digits.
