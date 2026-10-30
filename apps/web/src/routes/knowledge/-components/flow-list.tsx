@@ -3,6 +3,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import { PlusIcon, RotateCcwIcon, WorkflowIcon } from "@stll/ui/icons";
 import { Switch } from "@stll/ui/switch";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { FlowTriggerBadge } from "@/components/flows/flow-badges";
 import { guideAnchor } from "@/features/guides/guide-anchor";
@@ -195,9 +196,13 @@ const FlowRow = ({
           <WorkflowIcon className="text-muted-foreground size-4" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium" dir="auto">
+          <TruncatedText
+            className="text-sm font-medium"
+            dir="auto"
+            render={<p />}
+          >
             {flow.name}
-          </p>
+          </TruncatedText>
           <div className="text-muted-foreground mt-0.5 flex items-center gap-2 text-xs">
             <FlowTriggerBadge triggerType={flow.triggerType} />
             <span>{t("common.stepCount", { count: flow.stepCount })}</span>

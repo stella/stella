@@ -32,6 +32,7 @@ import { CalendarEntityChip } from "@/routes/_protected.workspaces/$workspaceId/
 import { TASK_STATUS_DOT_COLORS } from "@/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-utils";
 
 import "./view-layout-preview.css";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 export type ViewLayoutPreviewKind = ViewLayoutType | "template";
 
@@ -152,7 +153,7 @@ const PreviewKanbanColumn = ({
         className="size-2 shrink-0 rounded-full"
         style={{ backgroundColor: TASK_STATUS_DOT_COLORS[status] }}
       />
-      <span className="truncate">{label}</span>
+      <TruncatedText>{label}</TruncatedText>
     </span>
     {children}
   </div>
@@ -191,8 +192,8 @@ const TablePreview = () => {
   return (
     <div className="flex h-full flex-col justify-center text-xs">
       <div className="text-muted-foreground grid grid-cols-[1.6fr_1fr] gap-2 border-b px-1 pb-1.5 font-medium">
-        <span className="truncate">{t("common.name")}</span>
-        <span className="truncate">{t("tasks.status")}</span>
+        <TruncatedText>{t("common.name")}</TruncatedText>
+        <TruncatedText>{t("tasks.status")}</TruncatedText>
       </div>
       <PreviewTableRow
         icon={
@@ -233,7 +234,7 @@ const PreviewTableRow = ({ icon, name, status }: PreviewTableRowProps) => (
   <div className="grid grid-cols-[1.6fr_1fr] items-center gap-2 border-b px-1 py-1.5 last:border-0">
     <span className="flex min-w-0 items-center gap-1.5">
       {icon}
-      <span className="truncate">{name}</span>
+      <TruncatedText>{name}</TruncatedText>
     </span>
     {status ? (
       <span className="min-w-0">
@@ -256,7 +257,7 @@ const PreviewStatusChip = ({ status }: { status: TaskStatus }) => {
   return (
     <span className="bg-muted/60 text-muted-foreground flex max-w-full min-w-0 items-center gap-1 rounded px-1.5 py-0.5 text-xs leading-none">
       <Icon className={cn("size-3 shrink-0", STATUS_COLORS[status])} />
-      <span className="truncate">{t(labelKey)}</span>
+      <TruncatedText>{t(labelKey)}</TruncatedText>
     </span>
   );
 };
@@ -266,7 +267,7 @@ const ListPreview = () => (
     <span className="flex min-w-0 items-center gap-1.5 px-1 py-0.5 font-medium">
       <ChevronDownIcon className="text-muted-foreground size-3 shrink-0" />
       <EntityKindIcon className="size-3.5 shrink-0" kind="folder" />
-      <span className="truncate">{SAMPLE_NAMES.folder}</span>
+      <TruncatedText>{SAMPLE_NAMES.folder}</TruncatedText>
     </span>
     <span className="flex min-w-0 items-center gap-1.5 py-0.5 ps-6">
       <EntityKindIcon
@@ -274,7 +275,7 @@ const ListPreview = () => (
         kind="document"
         mimeType={DOCX_MIME}
       />
-      <span className="truncate">{SAMPLE_NAMES.contract}</span>
+      <TruncatedText>{SAMPLE_NAMES.contract}</TruncatedText>
     </span>
     <span className="flex min-w-0 items-center gap-1.5 px-1 py-0.5 font-medium">
       <DirectionalIcon
@@ -282,7 +283,7 @@ const ListPreview = () => (
         icon={ChevronRightIcon}
       />
       <EntityKindIcon className="size-3.5 shrink-0" kind="folder" />
-      <span className="truncate">{SAMPLE_NAMES.evidence}</span>
+      <TruncatedText>{SAMPLE_NAMES.evidence}</TruncatedText>
     </span>
   </div>
 );

@@ -3,6 +3,7 @@ import { useTranslations } from "use-intl";
 
 import { AUDIT_CHANGES_STATUS } from "@stll/api-contract/audit-log";
 import { TableCell } from "@stll/ui/table";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import type { fetchAuditLogs } from "@/routes/_protected.admin/-queries/audit-logs";
 
@@ -26,11 +27,8 @@ export const AuditChangeDetails = ({
     case AUDIT_CHANGES_STATUS.visible: {
       const text = changes ? JSON.stringify(changes) : "-";
       return (
-        <TableCell
-          className="max-w-[200px] truncate font-mono text-xs"
-          title={changes ? text : ""}
-        >
-          <bdi>{text}</bdi>
+        <TableCell className="max-w-[200px] font-mono text-xs">
+          <TruncatedText render={<bdi />}>{text}</TruncatedText>
         </TableCell>
       );
     }

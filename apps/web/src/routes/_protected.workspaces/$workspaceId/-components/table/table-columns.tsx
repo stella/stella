@@ -15,6 +15,7 @@ import {
   UserIcon,
 } from "@stll/ui/icons";
 import type { LucideIcon } from "@stll/ui/icons";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import type { ColumnSortKind } from "@stll/workspace-ui/column-sort";
 
 import {
@@ -172,9 +173,9 @@ const useColumnDefFactory = (
               header: metadataHeader(TextIcon, "text"),
               cell: ({ row }) => (
                 <div className="flex min-w-0 items-center gap-2">
-                  <span className="truncate font-medium" dir="auto">
+                  <TruncatedText className="font-medium" dir="auto">
                     <HighlightedText text={row.original.name ?? ""} />
-                  </span>
+                  </TruncatedText>
                   {row.original.kind === "document" ? (
                     <DocumentExtractionStatus
                       processingStatus={readDocumentProcessingStatus(

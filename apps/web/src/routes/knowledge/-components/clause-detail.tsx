@@ -64,6 +64,7 @@ import {
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/tabs";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { matchesComboboxItem } from "@/components/combobox-filter.logic";
@@ -763,7 +764,7 @@ const ClauseHeader = ({
         />
       ) : (
         <button
-          className="flex-1 overflow-hidden text-start text-lg font-semibold text-ellipsis whitespace-pre disabled:cursor-default"
+          className="min-w-0 flex-1 text-start text-lg font-semibold disabled:cursor-default"
           dir="auto"
           disabled={!canEdit}
           onClick={() => {
@@ -772,7 +773,9 @@ const ClauseHeader = ({
           }}
           type="button"
         >
-          {detail.title}
+          <TruncatedText className="whitespace-pre">
+            {detail.title}
+          </TruncatedText>
         </button>
       )}
 

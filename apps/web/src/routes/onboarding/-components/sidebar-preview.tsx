@@ -10,6 +10,7 @@ import {
   UsersIcon,
 } from "@stll/ui/icons";
 import { MatterIcon, MattersNavIcon } from "@stll/ui/matter-icon";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { PROVIDER_LABELS } from "@/components/ai-config-role-models.logic";
@@ -75,7 +76,7 @@ const NavItem = ({
     )}
   >
     <Icon className="size-4" />
-    <span className="flex-1 truncate">{label}</span>
+    <TruncatedText className="flex-1">{label}</TruncatedText>
     {trailing}
   </div>
 );
@@ -119,9 +120,12 @@ export const SidebarPreview = ({
       {/* Org name */}
       <div className="border-b px-4 py-2.5">
         {organizationName ? (
-          <div className="animate-slide-in text-foreground truncate text-sm font-medium">
+          <TruncatedText
+            className="animate-slide-in text-foreground text-sm font-medium"
+            render={<div />}
+          >
             {organizationName}
-          </div>
+          </TruncatedText>
         ) : (
           <div className="text-foreground-subtle text-sm font-medium">
             {t("onboarding.orgNameLabel")}
@@ -165,9 +169,9 @@ export const SidebarPreview = ({
               className="size-3.5 shrink-0"
               matter={{ id: matterName, color: null }}
             />
-            <span className="text-foreground truncate text-sm">
+            <TruncatedText className="text-foreground text-sm">
               {matterName}
-            </span>
+            </TruncatedText>
           </div>
         ) : (
           <div className="flex items-center gap-2 rounded-md px-2 py-1.5">

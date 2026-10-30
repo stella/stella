@@ -17,6 +17,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@stll/ui/menu";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import {
   ResponsiveActionToolbar,
@@ -328,9 +329,13 @@ const ClauseRow = ({
           <TextQuoteIcon className="text-muted-foreground size-4" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium" dir="auto">
+          <TruncatedText
+            className="text-sm font-medium"
+            dir="auto"
+            render={<p />}
+          >
             {clause.title}
-          </p>
+          </TruncatedText>
           <p className="text-muted-foreground text-xs">
             {categoryName ?? t("common.uncategorized")}
             {" \u00b7 "}

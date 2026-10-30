@@ -49,6 +49,7 @@ import {
   TableHeader,
   TableRow,
 } from "@stll/ui/table";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { useExternalFileDrop } from "@/hooks/use-external-file-drop";
@@ -596,9 +597,9 @@ const MappingStep = ({
                 <TableCell className="text-muted-foreground max-w-96">
                   <div className="flex flex-wrap gap-x-3 gap-y-1">
                     {column.samples.map((sample) => (
-                      <BidiText className="truncate" key={sample}>
+                      <TruncatedText key={sample} render={<BidiText />}>
                         {sample}
-                      </BidiText>
+                      </TruncatedText>
                     ))}
                   </div>
                 </TableCell>

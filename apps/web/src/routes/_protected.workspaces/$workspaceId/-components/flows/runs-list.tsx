@@ -3,6 +3,7 @@ import { useTranslations } from "use-intl";
 import { Temporal } from "@stll/time";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronRightIcon } from "@stll/ui/icons";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import {
   FlowStatusBadge,
@@ -61,9 +62,13 @@ const RunRow = ({
       >
         <FlowStatusBadge status={run.status} />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium" dir="auto">
+          <TruncatedText
+            className="text-sm font-medium"
+            dir="auto"
+            render={<p />}
+          >
             {run.name}
-          </p>
+          </TruncatedText>
           <div className="text-muted-foreground mt-0.5 flex items-center gap-2 text-xs">
             <FlowTriggerBadge triggerType={run.triggerType} />
             <span className="tabular-nums">

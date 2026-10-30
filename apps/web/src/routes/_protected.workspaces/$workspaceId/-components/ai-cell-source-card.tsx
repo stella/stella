@@ -9,6 +9,7 @@ import {
   PreviewCardTrigger,
 } from "@stll/ui/preview-card";
 import { LEGAL_TEXT_CLASS_NAME } from "@stll/ui/prose";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { UserIdentityAvatar } from "@/components/user-avatar";
@@ -121,9 +122,9 @@ export const AICellSourceCard = ({
             kind="document"
             mimeType={primaryFile.mimeType}
           />
-          <BidiText as="span" className="truncate">
+          <TruncatedText render={<BidiText as="span" />}>
             {primaryFile.fileName}
-          </BidiText>
+          </TruncatedText>
           {sourceFiles.length > 1 && (
             <span className="text-muted-foreground shrink-0">
               +{sourceFiles.length - 1}
@@ -148,11 +149,11 @@ export const AICellSourceCard = ({
             <span
               className={cn(
                 LEGAL_TEXT_CLASS_NAME,
-                "text-muted-foreground line-clamp-3 text-xs leading-relaxed text-wrap italic",
+                "text-muted-foreground text-xs leading-relaxed text-wrap italic",
               )}
               key={quote.key}
             >
-              "{quote.text}"
+              <TruncatedText lines={3}>"{quote.text}"</TruncatedText>
             </span>
           ))}
         </span>
@@ -273,7 +274,7 @@ const CellFlagProvenanceRow = ({
             image={provenance.addedByImage}
             name={provenance.addedByName}
           />
-          <span className="truncate">
+          <TruncatedText>
             {provenance.addedByName ? (
               <>
                 <BidiText>{provenance.addedByName}</BidiText>
@@ -281,7 +282,7 @@ const CellFlagProvenanceRow = ({
               </>
             ) : null}
             {formatRelativeTime(provenance.addedAt)}
-          </span>
+          </TruncatedText>
         </span>
       )}
     </span>

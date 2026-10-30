@@ -19,6 +19,7 @@ import { ArrowLeftIcon, FileTextIcon } from "@stll/ui/icons";
 import { Label } from "@stll/ui/label";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { MessageResponse } from "@/components/ai-elements/message";
 import { openEntityInInspector } from "@/components/chat/entity-open";
@@ -264,9 +265,9 @@ const StepRunCard = ({
             {format.number(stepRun.index + 1)}
           </span>
           <Icon className="text-muted-foreground size-4 shrink-0" />
-          <span className="truncate text-sm font-medium" dir="auto">
+          <TruncatedText className="text-sm font-medium" dir="auto">
             {definitionStep?.name || t(FLOW_STEP_KIND_LABEL_KEYS[stepRun.kind])}
-          </span>
+          </TruncatedText>
         </div>
         <div className="flex items-center gap-2">
           {stepRun.finishedAt && (

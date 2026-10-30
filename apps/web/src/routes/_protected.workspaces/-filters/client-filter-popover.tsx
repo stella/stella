@@ -8,6 +8,7 @@ import { Button } from "@stll/ui/button";
 import { CheckIcon, XIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Separator } from "@stll/ui/separator";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { useFormattingLocale } from "@/i18n/formatting-context";
@@ -81,9 +82,9 @@ export const ClientFilterPopover = ({
                 onClick={() => toggle(c.id)}
                 type="button"
               >
-                <BidiText as="span" className="truncate">
+                <TruncatedText render={<BidiText as="span" />}>
                   {c.displayName}
-                </BidiText>
+                </TruncatedText>
                 {active && (
                   <CheckIcon className="text-primary size-3.5 shrink-0" />
                 )}

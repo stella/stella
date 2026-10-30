@@ -1,5 +1,6 @@
 import { useTranslations } from "use-intl";
 
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { usePermissions } from "@/hooks/use-permissions";
@@ -123,7 +124,7 @@ export const TemplateCategorySidebar = ({
           {tags.map((tag) => (
             <button
               className={cn(
-                "w-full truncate rounded-md px-3 py-1.5 text-start text-sm",
+                "w-full rounded-md px-3 py-1.5 text-start text-sm",
                 selectedTag === tag
                   ? "bg-muted font-medium"
                   : "hover:bg-muted/50",
@@ -132,7 +133,7 @@ export const TemplateCategorySidebar = ({
               onClick={() => onSelectTag(selectedTag === tag ? null : tag)}
               type="button"
             >
-              {tag}
+              <TruncatedText>{tag}</TruncatedText>
             </button>
           ))}
         </>

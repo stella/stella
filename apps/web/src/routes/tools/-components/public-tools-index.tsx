@@ -28,6 +28,7 @@ import {
   InputGroupInput,
 } from "@stll/ui/input-group";
 import { Prose } from "@stll/ui/prose";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import Tooltip from "@/components/tooltip";
@@ -536,12 +537,13 @@ function OutcomeToolCard({
           <h3 className="text-foreground font-semibold text-balance">
             {t(TASK_LABEL_KEY[task])}
           </h3>
-          <BidiText
-            as="p"
-            className="text-muted-foreground mt-1 line-clamp-2 text-sm font-medium"
+          <TruncatedText
+            className="text-muted-foreground mt-1 text-sm font-medium"
+            lines={2}
+            render={<BidiText as="p" />}
           >
             {entry.displayName}
-          </BidiText>
+          </TruncatedText>
         </div>
       </div>
       {(entry.author !== "stella" || entry.jurisdictions.length > 0) && (
@@ -561,12 +563,13 @@ function OutcomeToolCard({
           ))}
         </div>
       )}
-      <BidiText
-        as="p"
-        className="text-muted-foreground mt-3 line-clamp-2 text-sm leading-6 text-pretty"
+      <TruncatedText
+        className="text-muted-foreground mt-3 text-sm leading-6 text-pretty"
+        lines={2}
+        render={<BidiText as="p" />}
       >
         {body}
-      </BidiText>
+      </TruncatedText>
       <div className="mt-4">{children}</div>
       <span className="text-foreground mt-auto inline-flex items-center gap-2 pt-4 text-sm font-medium">
         {t("publicTools.discovery.openSkill")}

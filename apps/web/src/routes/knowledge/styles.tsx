@@ -33,6 +33,7 @@ import {
 } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { StyleSetEditorDialog } from "@/features/style-sets/style-set-editor-dialog";
 import type { StyleSetEditorTarget } from "@/features/style-sets/style-set-editor-types";
@@ -402,8 +403,12 @@ const StyleSetRow = ({
       <FileTextIcon className="text-muted-foreground size-5" />
     </div>
     <div className="min-w-0 flex-1">
-      <p className="truncate text-sm font-medium">{name}</p>
-      <p className="text-muted-foreground truncate text-xs">{description}</p>
+      <TruncatedText className="text-sm font-medium" render={<p />}>
+        {name}
+      </TruncatedText>
+      <TruncatedText className="text-muted-foreground text-xs" render={<p />}>
+        {description}
+      </TruncatedText>
     </div>
     {trailing}
   </li>

@@ -3,6 +3,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import { Form } from "@stll/ui/form";
 import { XIcon } from "@stll/ui/icons";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { JurisdictionPicker } from "@/components/jurisdiction-picker";
@@ -135,7 +136,7 @@ export const JurisdictionGlobePreview = ({
               )}
               key={jurisdiction.countryCode}
             >
-              <span className="truncate">{name}</span>
+              <TruncatedText>{name}</TruncatedText>
               {jurisdiction.isPrimary && selected.length > 1 && (
                 <span className="bg-primary/10 text-primary text-3xs rounded-full px-1.5 py-0.5">
                   {t("onboarding.jurisdictionPrimary")}

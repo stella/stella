@@ -6,6 +6,7 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { ScrollArea } from "@stll/ui/scroll-area";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import { MatterRefLink } from "@/components/matter-ref-link";
@@ -67,8 +68,10 @@ function CorrespondenceDetailPage() {
       <div className="flex items-center gap-3 border-b px-4 py-3">
         <BackToCorrespondenceLink workspaceId={workspaceId} />
 
-        <h1 className="min-w-0 flex-1 truncate text-sm font-medium">
-          <bdi dir="auto">{record.subject || t("emailViewer.noSubject")}</bdi>
+        <h1 className="min-w-0 flex-1 text-sm font-medium">
+          <TruncatedText>
+            <bdi dir="auto">{record.subject || t("emailViewer.noSubject")}</bdi>
+          </TruncatedText>
         </h1>
         {canUpdate && (
           <Button
@@ -225,9 +228,9 @@ function CorrespondenceDetailPage() {
                       type="button"
                       variant="link"
                     >
-                      <bdi className="block truncate" dir="auto">
+                      <TruncatedText dir="auto" render={<bdi />}>
                         {attachment.filename}
-                      </bdi>
+                      </TruncatedText>
                     </Button>
                     <span className="text-muted-foreground text-xs">
                       {format.number(attachment.byteSize, {

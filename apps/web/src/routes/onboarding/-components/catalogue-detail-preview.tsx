@@ -14,6 +14,7 @@ import {
   UserIcon,
   XIcon,
 } from "@stll/ui/icons";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { CatalogueEntryIcon } from "@/components/catalogue/catalogue-entry-icon";
 import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
@@ -72,10 +73,12 @@ export const CatalogueDetailPreview = ({
           />
           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
             <h2
-              className="text-foreground truncate text-base leading-tight font-semibold"
+              className="text-foreground min-w-0 text-base leading-tight font-semibold"
               dir="auto"
             >
-              {labelKey ? t(labelKey) : entry.displayName}
+              <TruncatedText>
+                {labelKey ? t(labelKey) : entry.displayName}
+              </TruncatedText>
             </h2>
             <p className="text-muted-foreground text-xs tracking-wider uppercase">
               {t(`catalogue.filter.${kindToFilter(entry.kind)}`)}
@@ -206,9 +209,9 @@ const Field = ({
         aria-hidden="true"
         className="text-muted-foreground size-4 shrink-0"
       />
-      <span className="text-foreground min-w-0 truncate text-sm font-medium">
+      <TruncatedText className="text-foreground text-sm font-medium">
         {value}
-      </span>
+      </TruncatedText>
     </div>
   );
 };
@@ -231,9 +234,9 @@ const AuthorField = ({
         aria-hidden="true"
         className="text-muted-foreground size-4 shrink-0"
       />
-      <span className="text-foreground min-w-0 truncate text-sm font-medium">
+      <TruncatedText className="text-foreground text-sm font-medium">
         {value}
-      </span>
+      </TruncatedText>
       {safeAuthorUrl && (
         <ExternalLinkIcon
           aria-hidden="true"

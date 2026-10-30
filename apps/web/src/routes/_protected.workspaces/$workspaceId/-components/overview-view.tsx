@@ -624,7 +624,9 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                           status={task.status}
                         />
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm">{task.name}</p>
+                          <TruncatedText className="text-sm" render={<p />}>
+                            {task.name}
+                          </TruncatedText>
                           <span className="text-muted-foreground flex items-center gap-1 text-xs">
                             {task.assignedTo !== null && (
                               <PersonMentionLabel
@@ -1042,7 +1044,7 @@ const OverviewSectionHeader = ({
   <div className="mb-3 flex h-7 items-center justify-between gap-3">
     <h2 className="text-muted-foreground flex min-w-0 items-center gap-1.5 text-sm font-medium [&_svg]:size-3.5 [&_svg]:shrink-0">
       {icon}
-      <span className="truncate">{title}</span>
+      <TruncatedText>{title}</TruncatedText>
     </h2>
     <Button
       className="relative h-7 shrink-0 after:absolute after:-inset-2 md:after:hidden"

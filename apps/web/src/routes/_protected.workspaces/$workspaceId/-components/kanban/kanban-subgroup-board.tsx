@@ -18,6 +18,7 @@ import type {
   KanbanGroup,
 } from "@stll/ui/kanban";
 import type { OptionColor } from "@stll/ui/option-color";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { UserIdentity } from "@/components/user-avatar";
@@ -443,14 +444,18 @@ const SubgroupIdentity = ({ group }: { group: KanbanGroup }) => {
           className="size-2.5 shrink-0 rounded-full"
           style={{ backgroundColor: group.color }}
         />
-        <span className="truncate text-sm font-medium">{group.label}</span>
+        <TruncatedText className="text-sm font-medium">
+          {group.label}
+        </TruncatedText>
       </span>
     );
   }
   return (
     <span className="flex max-w-80 items-center gap-2">
       <Rows3Icon className="text-muted-foreground size-4 shrink-0" />
-      <span className="truncate text-sm font-medium">{group.label}</span>
+      <TruncatedText className="text-sm font-medium">
+        {group.label}
+      </TruncatedText>
     </span>
   );
 };

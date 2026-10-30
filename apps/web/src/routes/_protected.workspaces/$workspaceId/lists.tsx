@@ -29,6 +29,7 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 import { Skeleton } from "@stll/ui/skeleton";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
@@ -202,7 +203,7 @@ function LegalListsPage() {
               }
               variant="ghost"
             >
-              <span className="truncate">{list.name}</span>
+              <TruncatedText>{list.name}</TruncatedText>
             </Button>
           ))}
         </div>
@@ -491,7 +492,9 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
       {reviewRun && <QueryViewFeedback view={candidatesView} />}
       <header className="flex items-start justify-between gap-4 border-b px-6 py-4">
         <div className="min-w-0">
-          <h2 className="truncate text-lg font-semibold">{listData.name}</h2>
+          <h2 className="min-w-0 text-lg font-semibold">
+            <TruncatedText>{listData.name}</TruncatedText>
+          </h2>
           {listData.description && (
             <p className="text-muted-foreground mt-1 text-sm">
               {listData.description}
@@ -667,13 +670,17 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
                     className="bg-background w-80 shrink-0 rounded-lg border p-3"
                     key={candidate.id}
                   >
-                    <h3 className="truncate text-sm font-medium">
-                      {candidate.name}
+                    <h3 className="min-w-0 text-sm font-medium">
+                      <TruncatedText>{candidate.name}</TruncatedText>
                     </h3>
                     {candidate.description && (
-                      <p className="text-muted-foreground mt-1 line-clamp-2 text-xs">
+                      <TruncatedText
+                        className="text-muted-foreground mt-1 text-xs"
+                        lines={2}
+                        render={<p />}
+                      >
                         {candidate.description}
-                      </p>
+                      </TruncatedText>
                     )}
                     <div className="mt-3 flex justify-end gap-1">
                       <Button
@@ -769,12 +776,12 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
                       }
                       variant="link"
                     >
-                      <span className="truncate">{item.name}</span>
+                      <TruncatedText>{item.name}</TruncatedText>
                     </Button>
                   </div>
                 </td>
-                <td className="text-muted-foreground max-w-96 truncate px-4 py-3">
-                  {item.description ?? ""}
+                <td className="text-muted-foreground max-w-96 px-4 py-3">
+                  <TruncatedText>{item.description ?? ""}</TruncatedText>
                 </td>
                 <td className="text-muted-foreground px-4 py-3">
                   {listData.sections.find(

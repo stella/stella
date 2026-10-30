@@ -17,6 +17,7 @@ import {
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ArrowLeftIcon, LayoutTemplateIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { TemplateForm } from "@/components/templates/template-form";
 import { useTemplateFillSchema } from "@/components/templates/use-template-fill-schema";
@@ -191,9 +192,9 @@ const TemplatePickList = ({
               <div className="bg-muted flex size-8 shrink-0 items-center justify-center rounded-lg">
                 <LayoutTemplateIcon className="text-muted-foreground size-4" />
               </div>
-              <span className="min-w-0 flex-1 truncate text-sm font-medium">
+              <TruncatedText className="flex-1 text-sm font-medium">
                 {template.name}
-              </span>
+              </TruncatedText>
               <span className="text-muted-foreground shrink-0 text-xs">
                 {t("templates.fieldCount", { count: template.fieldCount })}
               </span>

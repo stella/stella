@@ -12,6 +12,7 @@ import {
   XIcon,
 } from "@stll/ui/icons";
 import type { LucideIcon } from "@stll/ui/icons";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import Tooltip from "@/components/tooltip";
@@ -413,7 +414,7 @@ export const VerdictBadge = ({
             style={{ color: color.foreground }}
           />
         )}
-        <span className="truncate">{label}</span>
+        <TruncatedText>{label}</TruncatedText>
       </span>
     </span>
   );

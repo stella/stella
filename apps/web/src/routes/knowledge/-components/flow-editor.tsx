@@ -36,6 +36,7 @@ import { Skeleton } from "@stll/ui/skeleton";
 import { Switch } from "@stll/ui/switch";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import {
   FLOW_SCHEDULE_FREQUENCIES,
@@ -1004,9 +1005,7 @@ const FileUploadConfig = ({
                       toggleWorkspace(workspace.id, checked)
                     }
                   />
-                  <span className="truncate" dir="auto">
-                    {workspace.name}
-                  </span>
+                  <TruncatedText dir="auto">{workspace.name}</TruncatedText>
                 </label>
               ))}
           </div>
