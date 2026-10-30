@@ -1,4 +1,3 @@
-import { tenantDecisionTableNames } from "@/api/lib/account-export/schema-census";
 import type { DatabaseSchema } from "@/api/lib/account-export/schema-census";
 import type { SafeId } from "@/api/lib/branded-types";
 
@@ -387,14 +386,6 @@ type ConflictingCopyColumn = {
 }[keyof Registry];
 true satisfies UnclassifiedCopyColumn extends never ? true : never;
 true satisfies ConflictingCopyColumn extends never ? true : never;
-
-/** Require a projection for every schema-derived decision-associated store. */
-export const unregisteredDecisionCopyStores = (
-  tables?: Record<string, unknown>,
-): string[] =>
-  tenantDecisionTableNames(tables).filter(
-    (name) => !Object.hasOwn(WITHDRAWN_COPY_REGISTRY, name),
-  );
 
 /** The copied words each read projection must replace for a withdrawn decision. */
 export const quoteFieldsForProjection = (

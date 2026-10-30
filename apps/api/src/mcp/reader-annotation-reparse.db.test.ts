@@ -13,6 +13,7 @@ import {
   createMembershipScopedDb,
 } from "@/api/db/scoped";
 import type { SafeId } from "@/api/lib/branded-types";
+import { WithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-projection";
 import { createReaderAnnotationHandler } from "@/api/lib/legal-search/reader-annotations/create";
 import { createAnnotationBodySchema } from "@/api/lib/legal-search/reader-annotations/schema";
 import { PUBLIC_LAW_ANNOTATION_PLACEMENT } from "@/api/lib/legal-search/reader-annotations/target";
@@ -135,6 +136,8 @@ const requestContext = (
     userId,
     userEmail: "reader@example.test",
     testDependencies: {
+      readWithdrawnCopies: async () =>
+        new WithdrawnCopyProjection([], "Withdrawn by publisher"),
       // The corpus gate has its own tests; here the decision is open to the
       // agent, in whichever parse the step reads.
       resolveAnnotationTarget: async () =>

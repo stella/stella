@@ -613,6 +613,8 @@ export const AnnotationToolbar = ({
                       blockAnchorId: span.blockAnchorId,
                       endOffset: span.endOffset,
                       quote: span.quote,
+                      quotePrefix: span.quotePrefix,
+                      quoteSuffix: span.quoteSuffix,
                       startOffset: span.startOffset,
                     })),
                   );

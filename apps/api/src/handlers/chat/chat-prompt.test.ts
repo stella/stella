@@ -201,6 +201,14 @@ describe("reader marks in the prompt", () => {
     expect(formatted).not.toContain("[p-2]");
   });
 
+  test("marks have no anchored location when the decision has no AST", () => {
+    const formatted = formatAnnotationsForPrompt([mark(0, 40, 40)], null);
+    expect(formatted).toContain(
+      "with no place in the anchored document text above",
+    );
+    expect(formatted).not.toContain("at [");
+  });
+
   test("lists every mark when the whole set fits", () => {
     const formatted = formatAnnotationsForPrompt(
       Array.from({ length: 3 }).map((_unused, index) => mark(index, 40, 40)),

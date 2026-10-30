@@ -127,7 +127,7 @@ const TARGET_REFUSAL_HINT =
   "Tell the user; they can highlight or comment on it in the reader themselves.";
 
 type TargetAccessResult =
-  | { status: "available"; readBlocks: () => Promise<readonly Block[]> }
+  | { status: "available"; loadBlocks: () => Promise<readonly Block[]> }
   | { status: "refused"; result: InternalToolErrorResult };
 
 /**
@@ -161,7 +161,7 @@ const resolveTargetForAgent = async ({
   }
   switch (access.value.status) {
     case "available":
-      return access.value;
+      return { status: "available", loadBlocks: access.value.readBlocks };
     case "not_found":
       return {
         status: "refused",
@@ -307,7 +307,7 @@ const handleListTool: TypedMcpToolHandler<
   // placed by its quote in the text the agent reads now, or reported
   // orphaned, never handed back at a position that names other words.
   const blocks = await Result.tryPromise(async () =>
-    listed.value.items.length === 0 ? NO_BLOCKS : await target.readBlocks(),
+    listed.value.items.length === 0 ? NO_BLOCKS : await target.loadBlocks(),
   );
   if (Result.isError(blocks)) {
     return internalFailureResult(
@@ -493,7 +493,7 @@ const handleCreateTool: TypedMcpToolHandler<
   if (target.status === "refused") {
     return target.result;
   }
-  const blocks = await Result.tryPromise(target.readBlocks);
+  const blocks = await Result.tryPromise(target.loadBlocks);
   if (Result.isError(blocks)) {
     return internalFailureResult(
       blocks.error,

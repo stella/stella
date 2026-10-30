@@ -271,6 +271,8 @@ const markOn = (overrides: Partial<DocumentMark>): DocumentMark => {
     pageNumber: 1,
     pageTextSha256: "page-digest",
     quote: "deliver the goods",
+    quotePrefix: "",
+    quoteSuffix: "",
     startOffset,
   };
   return {

@@ -678,13 +678,15 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
           if (table === "legal_reader_annotations") {
             expect(rows).toMatchObject([
               {
-                quote: marker,
-                quotePrefix: marker,
-                quoteSuffix: marker,
-                body: own,
-                blockAnchorId: "p1",
-                startOffset: 0,
-                endOffset: secret.length,
+                data: {
+                  quote: marker,
+                  quotePrefix: marker,
+                  quoteSuffix: marker,
+                  body: own,
+                  blockAnchorId: "p1",
+                  startOffset: 0,
+                  endOffset: secret.length,
+                },
               },
             ]);
           }

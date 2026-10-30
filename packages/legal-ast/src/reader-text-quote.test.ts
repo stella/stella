@@ -259,25 +259,26 @@ describe("reader marks across a re-parse", () => {
   });
 
   test("keeps the marks it places and sets the rest aside with the reason", () => {
-    const marks = [
-      { ...markOn(before, "p-reasons-2", "przepisy ustawy."), id: "kept" },
-      { ...markOn(before, "p-reasons-1", "rozważył"), id: "gone" },
-    ];
+    const kept = {
+      ...markOn(before, "p-reasons-2", "przepisy ustawy."),
+      id: "kept",
+    };
+    const gone = { ...markOn(before, "p-reasons-1", "rozważył"), id: "gone" };
+    const marks = [kept, gone];
     const result = placeReaderMarks(marks, [
       { anchorId: "p-1", text: "Sąd przepisy ustawy. rozpatrzył" },
     ]);
 
     expect(result.placed).toEqual([
       {
-        ...marks[0],
-        id: "kept",
+        ...kept,
         blockAnchorId: "p-1",
         startOffset: 4,
         endOffset: 20,
       },
     ]);
     expect(result.orphaned).toEqual([
-      { mark: marks[1], reason: "quote_not_found" },
+      { mark: gone, reason: "quote_not_found" },
     ]);
   });
 });
