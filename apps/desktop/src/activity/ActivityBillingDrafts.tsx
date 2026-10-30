@@ -14,6 +14,12 @@ import type {
   DesktopBillingDraftReview,
 } from "@stll/api-contract/desktop-billing-drafts";
 import type { DesktopTimeEntryClassification } from "@stll/api-contract/desktop-time-entries";
+import {
+  Accordion,
+  AccordionItem,
+  AccordionPanel,
+  AccordionTrigger,
+} from "@stll/ui/accordion";
 import { AiLabel } from "@stll/ui/ai-label";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
@@ -27,6 +33,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { Form } from "@stll/ui/form";
 import {
   AiActionIcon,
   AlertTriangleIcon,
@@ -39,6 +46,7 @@ import { Label } from "@stll/ui/label";
 import { ReviewDiffText } from "@stll/ui/review-diff-text";
 import { diffWords } from "@stll/ui/review-word-diff";
 import { Skeleton } from "@stll/ui/skeleton";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 
 import {
   DESKTOP_TELEMETRY_ERROR_CODES,
@@ -317,7 +325,7 @@ const BillingDraftSteerInput = ({
   ];
   const steer = text.trim();
   return (
-    <form
+    <Form
       className="flex flex-col gap-2"
       onSubmit={(event) => {
         event.preventDefault();
@@ -380,7 +388,7 @@ const BillingDraftSteerInput = ({
           </Label>
         ) : null}
       </div>
-    </form>
+    </Form>
   );
 };
 
@@ -667,18 +675,28 @@ export const BillingClassificationCodes = ({
     case "ledes":
       return (
         <span className="ms-auto flex gap-1.5 tabular-nums">
-          <code
-            className="text-foreground text-2xs rounded-md border px-1.5"
-            title={t("aiTaskCode")}
-          >
-            {classification.taskCode}
-          </code>
-          <code
-            className="text-foreground text-2xs rounded-md border px-1.5"
-            title={t("aiActivityCode")}
-          >
-            {classification.activityCode}
-          </code>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <code className="text-foreground text-2xs rounded-md border px-1.5" />
+              }
+              tabIndex={0}
+            >
+              {classification.taskCode}
+            </TooltipTrigger>
+            <TooltipPopup>{t("aiTaskCode")}</TooltipPopup>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <code className="text-foreground text-2xs rounded-md border px-1.5" />
+              }
+              tabIndex={0}
+            >
+              {classification.activityCode}
+            </TooltipTrigger>
+            <TooltipPopup>{t("aiActivityCode")}</TooltipPopup>
+          </Tooltip>
         </span>
       );
     // Matter entries bill to the client group; a chip would repeat it on every row.
@@ -778,36 +796,40 @@ const EarlierEntries = ({ entries }: { entries: readonly EarlierEntry[] }) => {
   const t = useTranslations("activity");
   const format = useFormatter();
   return (
-    <details className="text-muted-foreground text-xs">
-      <summary className="cursor-pointer">
-        {t("aiConsistentWith", { count: entries.length })}
-      </summary>
-      <ul className="mt-1.5 flex flex-col gap-1">
-        {entries.map((entry) => (
-          <li
-            key={entry.id}
-            className="grid grid-cols-[5.5rem_3rem_minmax(0,1fr)] gap-2 tabular-nums"
-          >
-            <span>
-              {format.dateTime(calendarDate(entry.dateWorked), {
-                dateStyle: "medium",
-              })}
-            </span>
-            <span>
-              {t("hours", {
-                hours: format.number(entry.durationMinutes / 60, {
-                  minimumFractionDigits: 1,
-                  maximumFractionDigits: 1,
-                }),
-              })}
-            </span>
-            <BidiText as="span" className="min-w-0 wrap-break-word">
-              {entry.narrative}
-            </BidiText>
-          </li>
-        ))}
-      </ul>
-    </details>
+    <Accordion className="text-muted-foreground text-xs">
+      <AccordionItem value="earlier-entries">
+        <AccordionTrigger size="compact">
+          {t("aiConsistentWith", { count: entries.length })}
+        </AccordionTrigger>
+        <AccordionPanel size="compact">
+          <ul className="mt-1.5 flex flex-col gap-1">
+            {entries.map((entry) => (
+              <li
+                key={entry.id}
+                className="grid grid-cols-[5.5rem_3rem_minmax(0,1fr)] gap-2 tabular-nums"
+              >
+                <span>
+                  {format.dateTime(calendarDate(entry.dateWorked), {
+                    dateStyle: "medium",
+                  })}
+                </span>
+                <span>
+                  {t("hours", {
+                    hours: format.number(entry.durationMinutes / 60, {
+                      minimumFractionDigits: 1,
+                      maximumFractionDigits: 1,
+                    }),
+                  })}
+                </span>
+                <BidiText as="span" className="min-w-0 wrap-break-word">
+                  {entry.narrative}
+                </BidiText>
+              </li>
+            ))}
+          </ul>
+        </AccordionPanel>
+      </AccordionItem>
+    </Accordion>
   );
 };
 
