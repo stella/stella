@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { createTestState } from "@stll/test-state";
 
-import { createTestState } from "../apps/api/src/tests/helpers/test-state";
 import {
   type Advisory,
   AuditCommandError,
