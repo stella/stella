@@ -1,4 +1,4 @@
-import { expect, spyOn, test } from "bun:test";
+import { beforeAll, expect, spyOn, test } from "bun:test";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import {
@@ -32,6 +32,20 @@ import { GENERATORS } from "./generated-files";
 const repositoryRoot = path.resolve(import.meta.dir, "..");
 const pluginPath = path.join(repositoryRoot, "node_modules/oxlint-tailwindcss");
 const generatedCache = path.join(repositoryRoot, ".tailwind-cache");
+
+// timeout: Cold generation compiles every repository Tailwind design system.
+beforeAll(async () => {
+  const generated = Bun.spawn(
+    ["bun", "scripts/generate-tailwind-classes.ts", "--write"],
+    { cwd: repositoryRoot, stdout: "pipe", stderr: "pipe" },
+  );
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(generated.stdout).text(),
+    new Response(generated.stderr).text(),
+    generated.exited,
+  ]);
+  expect(exitCode, stdout + stderr).toBe(0);
+}, 60_000);
 const report = v.object({
   diagnostics: v.array(
     v.object({
@@ -413,9 +427,9 @@ test("the cache check compares digests and never compiles", async () => {
   }
 });
 
-test("the cache check names each stylesheet whose snapshot is missing", async () => {
-  const committed = await readdir(generatedCache);
-  const shards = new Set(committed.filter((name) => name.includes(".decl-")));
+test("the cache check names each stylesheet whose derived snapshot is missing", async () => {
+  const generated = await readdir(generatedCache);
+  const shards = new Set(generated.filter((name) => name.includes(".decl-")));
   const stylesheets = [
     ...new Set(tailwindEntryPoints.map(({ stylesheet }) => stylesheet)),
   ];
@@ -572,6 +586,7 @@ test("the repository lint refuses a missing cache without any env", async () => 
 test("the cache is a derived output with every Tailwind entry point as input", () => {
   const generator = GENERATORS.find(({ id }) => id === "tailwind-class-cache");
   expect(generator?.outputKind).toBe("derived");
+  expect(generator?.selectsConsumers).toBe(false);
   expect(tailwindEntryPoints.map(({ root }) => root)).toContain("apps/landing");
   for (const { root } of tailwindEntryPoints) {
     expect(
@@ -586,7 +601,9 @@ test("the cache is a derived output with every Tailwind entry point as input", (
     path.join(repositoryRoot, ".github/workflows/autofix.yml"),
     "utf-8",
   );
-  expect(autofix).toContain("bun run generate:tailwind-cache");
+  expect(autofix).toContain(
+    'bun "$GITHUB_WORKSPACE/scripts/generate-tailwind-classes.ts" --write',
+  );
   const tracked = Bun.spawnSync(["git", "ls-files", ".tailwind-cache"], {
     cwd: repositoryRoot,
   });
@@ -594,7 +611,7 @@ test("the cache is a derived output with every Tailwind entry point as input", (
   expect(tracked.stdout.toString()).toBe("");
 });
 
-test("generated cache keeps the generator's compact form", async () => {
+test("derived cache keeps the generator's compact form", async () => {
   // The generator writes compact JSON; a formatter rewriting these files on
   // commit would make every --check report them stale.
   const names = await readdir(generatedCache);

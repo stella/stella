@@ -639,7 +639,7 @@ jobs:
             # Type-aware fixes need the complete generated type graph. set -e
             # aborts on preparation errors before any fixer runs.
             bun scripts/ci-generated-sources.ts prepare
-            bun run generate:tailwind-cache
+            bun "$GITHUB_WORKSPACE/scripts/generate-tailwind-classes.ts" --write
             backup="$RUNNER_TEMP/autofix-lint-backup"
             for path in "${lint_paths[@]}"; do
               mkdir -p "$backup/$(dirname "$path")"

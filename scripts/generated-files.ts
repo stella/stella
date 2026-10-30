@@ -33,6 +33,8 @@ type GeneratorCheck =
 export type Generator = {
   id: string;
   outputs: readonly string[];
+  /** Whether a source change should select consumers of the derived outputs. */
+  selectsConsumers?: boolean;
   blocks?: readonly { path: string; begin: string; end: string }[];
   inputs: readonly string[];
   /** Inputs read only while checking generated outputs, never while writing them. */
@@ -920,6 +922,8 @@ const GENERATOR_DECLARATIONS = [
     id: "tailwind-class-cache",
     outputKind: "derived",
     outputs: [".tailwind-cache/**"],
+    // Lint consumes this through its Turbo dependency, not as package source.
+    selectsConsumers: false,
     inputs: [
       // Each Tailwind entry point in oxlint.config.ts: its stylesheets, linted
       // sources and package versions (chat and workspace-ui use the web
