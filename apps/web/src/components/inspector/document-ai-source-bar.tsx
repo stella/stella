@@ -8,6 +8,7 @@ import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronLeftIcon, ChevronRightIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -430,16 +431,18 @@ export const DocumentAiSourceBar = ({
         )}
         <button
           aria-expanded={isAnswerExpanded}
-          className="min-w-0 flex-1 truncate text-start"
+          className="min-w-0 flex-1 text-start"
           onClick={() => setIsAnswerExpanded((expanded) => !expanded)}
           type="button"
         >
-          {propertyName && (
-            <span className="text-muted-foreground">{propertyName}: </span>
-          )}
-          <span className="font-medium">
-            {shortAnswer ?? t("workspaces.pdf.evidence")}
-          </span>
+          <TruncatedText>
+            {propertyName && (
+              <span className="text-muted-foreground">{propertyName}: </span>
+            )}
+            <span className="font-medium">
+              {shortAnswer ?? t("workspaces.pdf.evidence")}
+            </span>
+          </TruncatedText>
         </button>
         <Button
           aria-label={t("common.previous")}

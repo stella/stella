@@ -12,6 +12,7 @@ import { Button } from "@stll/ui/button";
 import { AlertTriangleIcon, PaperclipIcon } from "@stll/ui/icons";
 import { Skeleton } from "@stll/ui/skeleton";
 import { textMarkClass } from "@stll/ui/text-mark";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
@@ -352,11 +353,11 @@ export const EmailHtmlViewer = ({
               data-stella-email-anchor={EMAIL_HEADER_CITATION_ID.date}
             >
               <dt>{t("common.date")}</dt>
-              <dd className="min-w-0 truncate">
+              <TruncatedText render={<dd />}>
                 <time dateTime={parsedDate?.toISOString()}>
                   {formattedDate}
                 </time>
-              </dd>
+              </TruncatedText>
             </div>
           ) : null}
         </dl>
@@ -420,10 +421,13 @@ export const EmailHtmlViewer = ({
                         attachment.mimeType ?? "application/octet-stream"
                       }
                     />
-                    <BidiText as="span" className="max-w-48 min-w-0 truncate">
+                    <TruncatedText
+                      className="max-w-48"
+                      render={<BidiText as="span" />}
+                    >
                       {attachment.fileName ??
                         t("emailViewer.unnamedAttachment")}
-                    </BidiText>
+                    </TruncatedText>
                     {attachment.sizeBytes > 0 ? (
                       <span className="text-muted-foreground shrink-0">
                         {formatAttachmentSize(attachment.sizeBytes, format)}

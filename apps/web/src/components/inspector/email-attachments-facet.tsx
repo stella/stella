@@ -30,6 +30,7 @@ import { MenuItem, MenuPopup } from "@stll/ui/menu";
 import { Skeleton } from "@stll/ui/skeleton";
 import { SplitButton } from "@stll/ui/split-button";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import type { FileChatOverlayActivation } from "@/components/ai-suggestions/file-viewer-with-ai-config";
@@ -404,13 +405,13 @@ const AttachmentPreview = ({
         >
           <DirectionalIcon className="size-3.5" icon={ArrowLeftIcon} />
         </Button>
-        <BidiText
-          as="span"
-          className="min-w-0 flex-1 truncate text-sm font-medium"
+        <TruncatedText
+          className="flex-1 text-sm font-medium"
           id={fileNameId}
+          render={<BidiText as="span" />}
         >
           {fileName}
-        </BidiText>
+        </TruncatedText>
         {previewKind === EMAIL_ATTACHMENT_PREVIEW_KIND.pdf ? (
           <div className="flex shrink-0 items-center gap-1">
             <PeekPdfControls
@@ -680,13 +681,13 @@ const AttachmentListItem = ({
             fileName={fileName}
             mimeType={attachment.mimeType ?? "application/octet-stream"}
           />
-          <BidiText
-            as="span"
-            className="min-w-0 flex-1 truncate"
+          <TruncatedText
+            className="flex-1"
             id={fileNameId}
+            render={<BidiText as="span" />}
           >
             {fileName}
-          </BidiText>
+          </TruncatedText>
           {!attachment.previewable ? (
             <span className="text-muted-foreground shrink-0">
               {unsupportedLabel}

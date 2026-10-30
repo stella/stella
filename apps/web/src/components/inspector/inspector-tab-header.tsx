@@ -8,6 +8,7 @@ import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ArrowLeftIcon, XIcon } from "@stll/ui/icons";
 import { MatterIcon } from "@stll/ui/matter-icon";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { InlineEdit } from "@/components/inline-edit";
@@ -237,11 +238,11 @@ export const MatterOriginLink = ({
   onClick,
 }: MatterOriginLinkProps) => (
   <button
-    className="text-muted-foreground hover:text-foreground hover:bg-accent text-2xs inline-flex max-w-[220px] items-center gap-1 truncate rounded-md px-1.5 py-0.5"
+    className="text-muted-foreground hover:text-foreground hover:bg-accent text-2xs inline-flex max-w-[220px] items-center gap-1 rounded-md px-1.5 py-0.5"
     onClick={onClick}
     type="button"
   >
     <MatterIcon className="size-3 shrink-0" matter={{ id, color }} />
-    <span className="truncate">{name}</span>
+    <TruncatedText>{name}</TruncatedText>
   </button>
 );
