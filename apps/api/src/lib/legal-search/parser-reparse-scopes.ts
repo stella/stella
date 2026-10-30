@@ -197,11 +197,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_NCOURT]: {
-    version: 17,
+    version: 19,
     scope: {
       type: "all",
       reason:
-        "Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters.",
+        "Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters. Re-read portal statute links against their anchor text: links whose provisions the anchor does not print lose them, links naming another act or a bare paragraph become plain text, and the metadata lists what was dropped. Also revalidates publisher head-matter ordering across the complete document AST.",
     },
   },
   [ADAPTER_KEYS.AT_COURTS]: {

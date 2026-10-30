@@ -63,6 +63,7 @@ import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import {
   invalidateTemplateClauseSources,
   knowledgeKeys,
@@ -1581,6 +1582,7 @@ const SaveRecipeDialog = ({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) => {
+  const idempotentSubmit = useIdempotentSubmit();
   const t = useTranslations();
   const queryClient = useQueryClient();
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
@@ -1597,9 +1599,10 @@ const SaveRecipeDialog = ({
       return;
     }
     setSaving(true);
-    const response = await api["template-recipes"].put({
-      name: trimmed,
-      definition,
+    const response = await idempotentSubmit.run({
+      operation: "template-recipes.create",
+      body: { name: trimmed, definition },
+      send: async (body, request) => api["template-recipes"].put(body, request),
     });
     setSaving(false);
     if (response.error) {

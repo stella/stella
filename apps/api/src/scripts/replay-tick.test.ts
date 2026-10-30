@@ -10,7 +10,10 @@ import { ebsBalance } from "@stll/db-load-gate/indicators";
 
 import { readReplayTickEnvironment } from "@/api/env-replay";
 import type { BackgroundReplayTickReport } from "@/api/handlers/case-law/ingestion/background-replay";
-import { REPLAY_HEALTH_CONFIG } from "@/api/handlers/case-law/ingestion/replay-enrolment";
+import {
+  REPLAY_ENROLMENT,
+  REPLAY_HEALTH_CONFIG,
+} from "@/api/handlers/case-law/ingestion/replay-enrolment";
 import { createSafeId } from "@/api/lib/branded-types";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import {
@@ -129,6 +132,22 @@ describe("scheduled replay entrypoint", () => {
       ).toBe(0);
       expect(ticks).toBe(1);
     }
+  });
+
+  // A parser version change previews its replay; enrolling a source to write
+  // stays a reviewed step of its own. The committed map's type already admits
+  // no enrolled source, so this checks the preview budget.
+  test("committed enrolment only previews, within the preview budget, and enrols nothing", () => {
+    const previews = Object.values(REPLAY_ENROLMENT).filter(
+      ({ mode }) => mode !== "off",
+    );
+    for (const preview of previews) {
+      expect(preview).toEqual({ mode: "dry-run", dailyBudget: 10_000 });
+    }
+    expect(REPLAY_ENROLMENT[ADAPTER_KEYS.CZ_US]).toEqual({
+      mode: "dry-run",
+      dailyBudget: 10_000,
+    });
   });
 
   test("default-off environment, global kill and unenrolled sources perform no setup", async () => {
