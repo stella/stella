@@ -32,6 +32,9 @@ const emptySnapshot = createFeatureAccessSnapshot({
 });
 const TOKYO_TIME_ZONE =
   parseTimeZoneId("Asia/Tokyo") ?? panic("Runtime does not know Asia/Tokyo");
+const PRAGUE_TIME_ZONE =
+  parseTimeZoneId("Europe/Prague") ??
+  panic("Runtime does not know Europe/Prague");
 
 // Identity resolves through the member join; the enrolment read finds no rows.
 const unenrolledSettingsDatabase = (email: string) =>
@@ -76,7 +79,7 @@ describe("projectOrganizationSettingsRow", () => {
       { countryCode: "SK", isPrimary: false },
     ]);
     expect(result.timeZone).toBe(TOKYO_TIME_ZONE);
-    expect(result.primaryJurisdictionTimeZone).toBe("Europe/Prague");
+    expect(result.primaryJurisdictionTimeZone).toBe(PRAGUE_TIME_ZONE);
     expect(result.documentProcessingMode).toBe("searchable-text");
     expect(result.managedAIResidency).toBe("us");
   });
