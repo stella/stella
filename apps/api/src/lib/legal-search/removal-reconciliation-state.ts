@@ -82,6 +82,7 @@ export const removalRetryPayloadSchema = v.union([
   v.strictObject({
     type: v.literal("pending"),
     operation: v.literal("erase"),
+    claim: v.optional(v.literal("accepted")),
     evidence: removalEvidenceSchema,
     decisionId: uuid,
     reason: v.picklist([
@@ -94,6 +95,11 @@ export const removalRetryPayloadSchema = v.union([
 export type RemovalRetryPayload = v.InferOutput<
   typeof removalRetryPayloadSchema
 >;
+export const isClaimedErasureRetry = (payload: RemovalRetryPayload) =>
+  payload.type === "pending" &&
+  payload.operation === "erase" &&
+  payload.claim === "accepted";
+
 export type UnprobeableRemovalRead = Omit<
   Extract<RemovalRetryPayload, { type: "unprobeable" }>,
   "decisionId"

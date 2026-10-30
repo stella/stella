@@ -33,6 +33,7 @@ import {
   supersededRemovalEvidence,
 } from "@/api/lib/legal-search/removal-evidence";
 import {
+  isClaimedErasureRetry,
   REMOVAL_PENDING_REASON,
   REMOVAL_RETRY_KIND,
   REMOVAL_UNPROBEABLE_REASON,
@@ -329,8 +330,8 @@ const readRemovalDecision = async ({
 }: Pick<
   ProcessRemovalDecisionOptions,
   "scopedDb" | "sourceId" | "decisionId"
->) =>
-  await scopedDb(async (tx) =>
+>) => {
+  const decision = await scopedDb(async (tx) =>
     (
       await tx
         .select({
@@ -351,6 +352,19 @@ const readRemovalDecision = async ({
         .limit(1)
     ).at(0),
   );
+  return decision === undefined
+    ? undefined
+    : {
+        ...decision,
+        evidenceRevision: {
+          decisionId: decision.id,
+          sourceId: decision.sourceId,
+          sourceObservationOrder:
+            decision.sourceObservationOrder?.toString() ?? null,
+          sourceObservedAt: decision.sourceObservedAt?.toISOString() ?? null,
+        },
+      };
+};
 
 /** Every item-local failure is an explicit durable disposition, never an enumeration stop. */
 const processRemovalDecision = async ({
@@ -382,18 +396,18 @@ const processRemovalDecision = async ({
         return { type: "settled" };
       }
       if (evidence !== undefined) {
-        const reason = supersededRemovalEvidence(evidence, decision);
+        const acceptedRetry =
+          mode.type === "retry" && isClaimedErasureRetry(mode.item.payload);
+        const reason =
+          supersededRemovalEvidence(evidence, decision) ??
+          (acceptedRetry && decision.redactedAt === null
+            ? REMOVAL_SUPERSEDED_REASON.RESTORED
+            : null);
         if (reason !== null) {
           return { type: "superseded", reason, evidence };
         }
       }
-      const revision = {
-        decisionId,
-        sourceId,
-        sourceObservationOrder:
-          decision.sourceObservationOrder?.toString() ?? null,
-        sourceObservedAt: decision.sourceObservedAt?.toISOString() ?? null,
-      };
+      const revision = decision.evidenceRevision;
       const erasureRetry = evidence !== undefined;
       if (decision.redactedAt === null) {
         if (decision.sourceDocumentId === null) {
@@ -777,7 +791,10 @@ const retryPublisherRemovals = async ({
         sourceId,
         decisionId: item.decisionId,
       });
-      if (decision?.redactedAt === null) {
+      if (
+        decision?.redactedAt === null &&
+        !isClaimedErasureRetry(item.payload)
+      ) {
         continue;
       }
     }
@@ -933,9 +950,10 @@ export const reconcilePublisherRemovals = async ({
           type: "complete",
           checked: 0,
           retried: first.retried,
-          nextRetryAt: await nextRemovalRetryAt(scopedDb, sourceId, [
-            REMOVAL_RETRY_KIND.ERASURE,
-          ]),
+          nextRetryAt: await nextRemovalRetryAt(scopedDb, sourceId, {
+            kinds: [REMOVAL_RETRY_KIND.ERASURE],
+            acceptedOnly: true,
+          }),
         } as const;
       }
       if (prepared.type !== "ready") {
@@ -943,9 +961,10 @@ export const reconcilePublisherRemovals = async ({
           ...prepared,
           retried: first.retried,
           nextRetryAt:
-            (await nextRemovalRetryAt(scopedDb, sourceId, [
-              REMOVAL_RETRY_KIND.ERASURE,
-            ])) ?? (prepared.type === "paused" ? prepared.resumeAt : null),
+            (await nextRemovalRetryAt(scopedDb, sourceId, {
+              kinds: [REMOVAL_RETRY_KIND.ERASURE],
+              acceptedOnly: true,
+            })) ?? (prepared.type === "paused" ? prepared.resumeAt : null),
         };
       }
       const discovered = await discoverPublisherRemovals(context);
@@ -962,9 +981,10 @@ export const reconcilePublisherRemovals = async ({
           retried: first.retried,
           nextRetryAt:
             discovered.type === "disabled"
-              ? await nextRemovalRetryAt(scopedDb, sourceId, [
-                  REMOVAL_RETRY_KIND.ERASURE,
-                ])
+              ? await nextRemovalRetryAt(scopedDb, sourceId, {
+                  kinds: [REMOVAL_RETRY_KIND.ERASURE],
+                  acceptedOnly: true,
+                })
               : now(),
         };
       }

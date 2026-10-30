@@ -40,7 +40,10 @@ import {
   REMOVAL_RETRY_KIND,
 } from "@/api/lib/legal-search/removal-reconciliation-state";
 import type { RemovalCheckpoint } from "@/api/lib/legal-search/removal-reconciliation-state";
-import { selectDueErasureSources } from "@/api/lib/legal-search/removal-reconciliation-store";
+import {
+  retainClaimedErasureTx,
+  selectDueErasureSources,
+} from "@/api/lib/legal-search/removal-reconciliation-store";
 import { logger } from "@/api/lib/observability/logger";
 import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import {
@@ -358,6 +361,97 @@ if (!databaseUrl || !runPostgresTests) {
         ).toEqual([]);
       },
     );
+
+    test("a claimed retry classifies a restored decision without a publisher probe", async () => {
+      const sourceId = createSafeId<"caseLawSource">();
+      const decisionId = createSafeId<"caseLawDecision">();
+      await insertSource(sourceId);
+      await insertDecision({
+        id: decisionId,
+        sourceId,
+        sourceDocumentId: "restored/1",
+        ordinal: "restored",
+      });
+      await db
+        .update(caseLawSources)
+        .set({ config: {} })
+        .where(eq(caseLawSources.id, sourceId));
+      await db
+        .update(caseLawDecisions)
+        .set({ redactedAt: FIXED_NOW, fulltext: null })
+        .where(eq(caseLawDecisions.id, decisionId));
+      await scopedDb(
+        async (tx) =>
+          await retainClaimedErasureTx(tx, {
+            sourceId,
+            decisionId,
+            now: FIXED_NOW,
+            evidence: {
+              type: "existing-redaction",
+              sourceId,
+              decisionId,
+              sourceDocumentId: "restored/1",
+              sourceObservationOrder: null,
+              sourceObservedAt: null,
+              observedAt: FIXED_NOW.toISOString(),
+            },
+          }),
+      );
+      await db
+        .update(caseLawDecisions)
+        .set({
+          redactedAt: null,
+          fulltext: "Restored decision",
+          sourceObservationOrder: 2n,
+        })
+        .where(eq(caseLawDecisions.id, decisionId));
+      expect(
+        await selectDueErasureSources({
+          scopedDb,
+          after: null,
+          now: FIXED_NOW,
+          limit: 1,
+        }),
+      ).toEqual([{ id: sourceId }]);
+      let erasures = 0;
+      const outcome = await reconcilePublisherRemovals({
+        scopedDb,
+        sourceId,
+        mode: "claimed-erasures",
+        now: () => FIXED_NOW,
+        signal: AbortSignal.timeout(10_000),
+        remove: makeRemove(async () => {
+          erasures++;
+          return { type: "swept", legacy: "none" };
+        }),
+      });
+      expect(outcome.unwrap()).toMatchObject({ retried: 1, nextRetryAt: null });
+      expect(erasures).toBe(0);
+      expect(
+        (
+          await db
+            .select({ fulltext: caseLawDecisions.fulltext })
+            .from(caseLawDecisions)
+            .where(eq(caseLawDecisions.id, decisionId))
+        ).at(0)?.fulltext,
+      ).toBe("Restored decision");
+      expect(
+        (
+          await db
+            .select({ payload: caseLawRemovalReconciliationItems.payload })
+            .from(caseLawRemovalReconciliationItems)
+            .where(eq(caseLawRemovalReconciliationItems.decisionId, decisionId))
+        ).at(0)?.payload,
+      ).toMatchObject({ type: "superseded" });
+      expect(
+        await selectDueErasureSources({
+          scopedDb,
+          after: null,
+          now: FIXED_NOW,
+          limit: 1,
+        }),
+      ).toEqual([]);
+    });
 
     test("advances past a missing identity and retains one typed unprobeable retry", async () => {
       const sourceId = createSafeId<"caseLawSource">();

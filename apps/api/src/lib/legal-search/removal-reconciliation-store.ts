@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, eq, exists, gt, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, eq, exists, gt, inArray, isNotNull, or, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { DAY_IN_MS } from "@stll/time";
@@ -52,6 +52,23 @@ type SelectRemovalRetriesOptions = {
   acceptedOnly?: boolean;
 };
 
+/** Persisted claims remain classifiable when a later observation restores the row. */
+const acceptedErasure = (tx: Pick<Transaction, "select">) =>
+  exists(
+    tx
+      .select({ id: caseLawDecisions.id })
+      .from(caseLawDecisions)
+      .where(
+        and(
+          eq(caseLawDecisions.id, caseLawRemovalReconciliationItems.decisionId),
+          or(
+            isNotNull(caseLawDecisions.redactedAt),
+            sql`${caseLawRemovalReconciliationItems.payload}->>'claim' = 'accepted'`,
+          ),
+        ),
+      ),
+  );
+
 /** Each kind uses a bounded, ordered range of the same reconciliation lane. */
 export const selectDueRemovalRetries = async ({
   scopedDb,
@@ -78,22 +95,7 @@ export const selectDueRemovalRetries = async ({
             and(
               eq(caseLawRemovalReconciliationItems.sourceId, sourceId),
               eq(caseLawRemovalReconciliationItems.kind, kind),
-              acceptedOnly
-                ? exists(
-                    tx
-                      .select({ id: caseLawDecisions.id })
-                      .from(caseLawDecisions)
-                      .where(
-                        and(
-                          eq(
-                            caseLawDecisions.id,
-                            caseLawRemovalReconciliationItems.decisionId,
-                          ),
-                          isNotNull(caseLawDecisions.redactedAt),
-                        ),
-                      ),
-                  )
-                : undefined,
+              acceptedOnly ? acceptedErasure(tx) : undefined,
               sql`${caseLawRemovalReconciliationItems.nextAttemptAt} <= ${now.toISOString()}::timestamptz`,
             ),
           )
@@ -158,6 +160,7 @@ export const retainClaimedErasureTx = async (
   const payload = {
     type: "pending",
     operation: "erase",
+    claim: "accepted",
     decisionId: evidence.decisionId,
     evidence,
     reason: REMOVAL_PENDING_REASON.STORES_PENDING,
@@ -216,11 +219,13 @@ type RemovalPayloadOptions = Pick<
   "decisionId" | "origin"
 > & {
   outcome: Exclude<RemovalStepOutcome, { type: "settled" }>;
+  previousPayload?: unknown;
 };
 const removalOutcomePayload = ({
   decisionId,
   outcome,
   origin,
+  previousPayload,
 }: RemovalPayloadOptions) => {
   switch (outcome.type) {
     case "superseded":
@@ -248,6 +253,11 @@ const removalOutcomePayload = ({
           decisionId,
           reason: outcome.reason,
           evidence: outcome.evidence,
+          claim:
+            outcome.claim ??
+            (v.is(v.object({ claim: v.literal("accepted") }), previousPayload)
+              ? previousPayload.claim
+              : undefined),
         } as const satisfies RemovalRetryPayload;
       }
       return {
@@ -274,6 +284,7 @@ export const persistRemovalOutcomeTx = async (
       .select({
         id: caseLawRemovalReconciliationItems.id,
         attempts: caseLawRemovalReconciliationItems.attempts,
+        payload: caseLawRemovalReconciliationItems.payload,
       })
       .from(caseLawRemovalReconciliationItems)
       .where(
@@ -323,7 +334,12 @@ export const persistRemovalOutcomeTx = async (
     ) ?? panic("Missing removal retry delay");
   const pending = {
     kind: removalRetryKind(outcome),
-    payload: removalOutcomePayload({ decisionId, outcome, origin }),
+    payload: removalOutcomePayload({
+      decisionId,
+      outcome,
+      origin,
+      previousPayload: previous?.payload,
+    }),
     attempts,
     nextAttemptAt: new Date(
       now.getTime() + (discoveryErasure || newlyAuthorizedErasure ? 0 : delay),
@@ -365,7 +381,13 @@ export const persistRemovalOutcomeTx = async (
 export const nextRemovalRetryAt = async (
   scopedDb: ScopedDb,
   sourceId: SafeId<"caseLawSource">,
-  kinds: readonly (typeof REMOVAL_RETRY_KINDS)[number][] = REMOVAL_RETRY_KINDS,
+  {
+    kinds = REMOVAL_RETRY_KINDS,
+    acceptedOnly = false,
+  }: {
+    kinds?: readonly (typeof REMOVAL_RETRY_KINDS)[number][];
+    acceptedOnly?: boolean;
+  } = {},
 ): Promise<Date | null> => {
   let next: Date | null = null;
   for (const kind of kinds) {
@@ -379,6 +401,7 @@ export const nextRemovalRetryAt = async (
             and(
               eq(caseLawRemovalReconciliationItems.sourceId, sourceId),
               eq(caseLawRemovalReconciliationItems.kind, kind),
+              acceptedOnly ? acceptedErasure(tx) : undefined,
             ),
           )
           .orderBy(
@@ -431,20 +454,7 @@ export const selectDueErasureSources = async ({
                       caseLawRemovalReconciliationItems.kind,
                       REMOVAL_RETRY_KIND.ERASURE,
                     ),
-                    exists(
-                      tx
-                        .select({ id: caseLawDecisions.id })
-                        .from(caseLawDecisions)
-                        .where(
-                          and(
-                            eq(
-                              caseLawDecisions.id,
-                              caseLawRemovalReconciliationItems.decisionId,
-                            ),
-                            isNotNull(caseLawDecisions.redactedAt),
-                          ),
-                        ),
-                    ),
+                    acceptedErasure(tx),
                     sql`${caseLawRemovalReconciliationItems.nextAttemptAt} <= ${now.toISOString()}::timestamptz`,
                   ),
                 ),
