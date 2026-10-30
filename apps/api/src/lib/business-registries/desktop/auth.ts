@@ -141,6 +141,7 @@ export const createDesktopCredentialAuthorizers = ({
       catch: () =>
         new HandlerError({
           status: 503,
+          code: "internal_error",
           message: "Registry authorization is unavailable",
         }),
     });
@@ -229,6 +230,7 @@ export const createDesktopCredentialAuthorizers = ({
         catch: () =>
           new HandlerError({
             status: 503,
+            code: "internal_error",
             message: "Desktop connection cleanup failed",
           }),
       });
@@ -242,6 +244,7 @@ export const createDesktopCredentialAuthorizers = ({
       catch: () =>
         new HandlerError({
           status: 503,
+          code: "internal_error",
           message: "Registry authorization is unavailable",
         }),
     });

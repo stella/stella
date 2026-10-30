@@ -408,7 +408,7 @@ describe("--input contract help", () => {
     expect(completeExample(help)).toEqual({ value: "right" });
   });
 
-  test("carries parent numeric bounds into an Elysia integer branch", () => {
+  test("carries parent numeric bounds into a string-encoded integer branch", () => {
     const schema: JsonSchema = {
       type: "object",
       properties: {

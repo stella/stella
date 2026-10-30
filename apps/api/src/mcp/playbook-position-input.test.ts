@@ -1,4 +1,3 @@
-import { Value } from "@sinclair/typebox/value";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import * as v from "valibot";
@@ -450,7 +449,7 @@ describe("save_playbook position merge", () => {
     expect(written?.change).toBe("added");
     expect(result.items[1]?.sourceId).toBe(written?.sourceId);
     expect(written?.sourceId).not.toBe(stored[0]?.sourceId);
-    expect(Value.Check(positionSchema, result.items[1])).toBe(true);
+    expect(v.is(positionSchema, result.items[1])).toBe(true);
   });
 
   test("a replaced position keeps the ids of unchanged lines, its derived ask, and its check", () => {
@@ -536,7 +535,7 @@ describe("save_playbook position merge", () => {
 
     const [added] = merge({ stored: [], positions: [parsed] }).items;
 
-    expect(Value.Check(positionSchema, added)).toBe(true);
+    expect(v.is(positionSchema, added)).toBe(true);
     expect(added).not.toHaveProperty("guidance");
     expect(
       added?.mode === "graded" && added.standard.source === "tiers"
@@ -859,8 +858,8 @@ describe("save_playbook position input mirrors positionSchema", () => {
     inputKey === "tiers" ? "standard" : camelCaseKey(inputKey);
 
   const storedBranch = (mode: Position["mode"]) => {
-    const branch = positionSchema.anyOf.find(
-      (candidate) => candidate.properties.mode.const === mode,
+    const branch = positionSchema.options.find(
+      (candidate) => candidate.entries.mode.literal === mode,
     );
     if (branch === undefined) {
       throw new TypeError(`positionSchema has no ${mode} branch`);
@@ -883,13 +882,13 @@ describe("save_playbook position input mirrors positionSchema", () => {
     (mode) => {
       const inputKeys = Object.keys(inputBranch(mode).entries).map(storedKeyOf);
       expect([...inputKeys, ...SERVER_OWNED_KEYS[mode]].toSorted()).toEqual(
-        Object.keys(storedBranch(mode).properties).toSorted(),
+        Object.keys(storedBranch(mode).entries).toSorted(),
       );
     },
   );
 
   test("the negotiation fields match", () => {
-    const stored = storedBranch("graded").properties;
+    const stored = storedBranch("graded").entries;
     const input = inputBranch("graded").entries;
     if (!("negotiation" in stored) || !("negotiation" in input)) {
       throw new TypeError("expected negotiation on both graded branches");
@@ -898,7 +897,7 @@ describe("save_playbook position input mirrors positionSchema", () => {
       Object.keys(input.negotiation.wrapped.entries)
         .map(camelCaseKey)
         .toSorted(),
-    ).toEqual(Object.keys(stored.negotiation.properties).toSorted());
+    ).toEqual(Object.keys(stored.negotiation.wrapped.entries).toSorted());
   });
 });
 

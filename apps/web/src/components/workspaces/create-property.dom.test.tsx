@@ -4,8 +4,11 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { DOCUMENT_OCR_AVAILABILITY } from "@stll/api-contract/document-ocr-availability";
+
 import { aiUnavailableResponse } from "@/__fixtures__/ai-availability";
 import messages from "@/i18n/langs/en.json";
+import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 import type { WorkspaceProperty } from "@/lib/types";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
@@ -21,6 +24,8 @@ const { QueryClient, QueryClientProvider } =
 const router = await import("@tanstack/react-router");
 const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
+const { AuthenticatedUserProvider } =
+  await import("@/lib/authenticated-user-context");
 const { ActionCapabilitiesProvider } =
   await import("@/lib/organization/feature-access/capability-actions");
 const { resolveActionCapabilities } =
@@ -119,16 +124,26 @@ for (const triggerVariant of Object.values(triggerVariants)) {
       role: "member",
       ai: false,
       deepl: false,
-      ocr: false,
+      ocr: DOCUMENT_OCR_AVAILABILITY.unconfigured,
       desktop: "none",
       settings: undefined,
     });
     expect(capabilities.capabilities.ai.type).toBe("unavailable");
+    const user = {
+      activeOrganizationId: "organization-a",
+      email: "member@example.test",
+      id: "member",
+      image: null,
+      name: "Member",
+      preferredName: null,
+      timezoneId: "UTC",
+      wordEditShortcut: null,
+    } satisfies AuthenticatedUser;
     const root = router.createRootRoute({ component: router.Outlet });
     const protectedRoute = router.createRoute({
       getParentRoute: () => root,
       id: "_protected",
-      beforeLoad: () => ({ user: { activeOrganizationId: "organization-a" } }),
+      beforeLoad: () => ({ user }),
       component: router.Outlet,
     });
     const route = router.createRoute({
@@ -164,7 +179,9 @@ for (const triggerVariant of Object.values(triggerVariants)) {
         <IntlProvider locale="en" messages={messages} timeZone="UTC">
           <ActionCapabilitiesProvider value={capabilities}>
             <FormattingProvider locale="en" timeZone="UTC">
-              <router.RouterProvider router={appRouter} />
+              <AuthenticatedUserProvider user={user}>
+                <router.RouterProvider router={appRouter} />
+              </AuthenticatedUserProvider>
             </FormattingProvider>
           </ActionCapabilitiesProvider>
         </IntlProvider>

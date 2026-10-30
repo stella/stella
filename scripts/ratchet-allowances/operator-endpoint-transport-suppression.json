@@ -1,0 +1,5 @@
+{
+  "metric": "lint-suppression-directives",
+  "delta": 1,
+  "reason": "Two narrow call-site suppressions replace the posthog-node and OpenTelemetry exporter transports, while the removed posthog-node wrapper drops one. postToOperatorEndpoint in operator-endpoint-fetch.ts, the transport owner for operator-configured endpoints, takes the suppression require-safe-outbound-target prescribes for runtime-configured services: its URL is an operator setting from the API environment, and the operator-endpoint-transport ownership row confines its callers to the PostHog and OTLP clients. The PostHog client serializes its public project key into the batch request body, which is the request, never a log line."
+}

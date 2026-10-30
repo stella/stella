@@ -93,12 +93,16 @@ import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useUnsavedWork } from "@/hooks/use-unsaved-work";
-import { useLocale, useStepsMarkerStyle } from "@/i18n/formatting-context";
+import {
+  useFormattingLocale,
+  useStepsMarkerStyle,
+} from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { APIError, toAPIError, unwrapEden } from "@/lib/errors/api";
+import { APIError, toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import {
   duplicatePosition,
   extractToGraded,
@@ -120,8 +124,9 @@ import {
   knowledgeKeys,
   playbookDetailOptions,
 } from "@/lib/knowledge/queries";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { usePlaybookNavStore } from "@/stores/knowledge/playbook-nav-store";
 
 import { usePlaybookPaneLifecycle } from "./use-playbook-pane-lifecycle";
@@ -138,9 +143,9 @@ const VERSION_CONFLICT_TOAST_TIMEOUT_MS = 10_000;
 const POSITION_REMOVED_TOAST_TIMEOUT_MS = 10_000;
 
 // A 409 the optimistic-concurrency guard raised, off either channel the
-// editor uses: Eden's error field on a direct call, or the `APIError`
-// `unwrapEden` throws inside a mutation.
-const isEdenVersionConflict = (error: ApiErrorInput): boolean =>
+// editor uses: the API client's error field on a direct call, or the `APIError`
+// `unwrapApiResponse` throws inside a mutation.
+const isApiVersionConflict = (error: ApiErrorInput): boolean =>
   normalizeApiError(error).code === API_VERSION_CONFLICT_ERROR_CODE;
 
 const isThrownVersionConflict = (error: unknown): boolean =>
@@ -365,7 +370,7 @@ const PlaybookEditorLoader = ({
         ? false
         : OPEN_EDITOR_REFETCH_INTERVAL_MS,
   });
-  const detailView = useQueryView(detailQuery, {
+  const detailView = queryView(detailQuery, {
     isEmpty: (detail) => !("positions" in detail),
   });
   const seed = resolveDetailSeed({
@@ -664,6 +669,7 @@ const PlaybookEditorForm = ({
   host,
   onReload,
 }: PlaybookEditorFormProps) => {
+  const idempotentSubmit = useIdempotentSubmit();
   const t = useTranslations();
   const queryClient = useQueryClient();
   const isEdit = playbookId !== null;
@@ -740,8 +746,8 @@ const PlaybookEditorForm = ({
     initial.draft.documentTypeKey,
   );
   const documentTypesDataQuery = useQuery(documentTypesOptions(organizationId));
-  const documentTypesDataView = useQueryView(documentTypesDataQuery);
-  useQueryViewError(documentTypesDataView);
+  const documentTypesDataView = queryView(documentTypesDataQuery);
+  useQueryViewError(documentTypesDataView, "PlaybookEditorForm:query");
   const documentTypesData =
     documentTypesDataView.type === "items"
       ? documentTypesDataView.items
@@ -1098,7 +1104,7 @@ const PlaybookEditorForm = ({
         );
       }
       if (refused === "approval" || !autosaves) {
-        notifyUserError(undefined, failure.title, {
+        notifyUserProblem(failure.title, {
           description: failure.description,
         });
       }
@@ -1110,7 +1116,7 @@ const PlaybookEditorForm = ({
         "playbook-editor.refetch-after-conflict",
       );
     }
-    notifyUserError(undefined, failure.title, {
+    notifyUserProblem(failure.title, {
       description: failure.description,
       ...(onReload
         ? {
@@ -1142,12 +1148,17 @@ const PlaybookEditorForm = ({
       draft: savedDraft,
       persistedIds: baseline.persistedIds,
     });
-    // Each branch awaits its own Eden call and inspects `.error` before
-    // touching `.data`: Eden resolves rather than throwing, so a failed
+    // Each branch awaits its own API call and inspects `.error` before
+    // touching `.data`: the client resolves rather than throwing, so a failed
     // request reads as success anywhere the response is not checked.
     const response =
       playbookId === null
-        ? await api.playbooks.post(payload)
+        ? await idempotentSubmit.run({
+            operation: "api.playbooks",
+            body: payload,
+            send: async (creationPayload) =>
+              api.playbooks.post(creationPayload),
+          })
         : await api
             .playbooks({
               playbookId: toSafeId<"playbookDefinition">(playbookId),
@@ -1159,7 +1170,7 @@ const PlaybookEditorForm = ({
               ...(expectedUpdatedAt === null ? {} : { expectedUpdatedAt }),
             });
     if (response.error) {
-      return isEdenVersionConflict(response.error)
+      return isApiVersionConflict(response.error)
         ? { type: "conflict", error: response.error }
         : { type: "failed", error: response.error };
     }
@@ -1231,15 +1242,12 @@ const PlaybookEditorForm = ({
   const handleSave = async (): Promise<boolean> => {
     if (nameMissing) {
       setAttemptedSave(true);
-      notifyUserError(undefined, t("knowledge.playbooks.nameRequired"));
+      notifyUserProblem(t("knowledge.playbooks.nameRequired"));
       return false;
     }
     if (invalidIds.length > 0) {
       revealInvalidPositions();
-      notifyUserError(
-        undefined,
-        t("knowledge.playbooks.fixErrorsBeforeSaving"),
-      );
+      notifyUserProblem(t("knowledge.playbooks.fixErrorsBeforeSaving"));
       return false;
     }
 
@@ -1342,7 +1350,7 @@ const PlaybookEditorForm = ({
       organizationId,
       playbookId,
       onReadError: (error) => {
-        notifyUserError(undefined, t("common.unexpectedError"), {
+        notifyUserError(error, t("common.unexpectedError"), {
           description: userErrorFromThrown(error, t("common.unexpectedError")),
         });
       },
@@ -1463,7 +1471,7 @@ const PlaybookEditorForm = ({
       const response = await api
         .playbooks({ playbookId: toSafeId<"playbookDefinition">(id) })
         .approve.post({ expectedUpdatedAt });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: (data) => {
       setStatus("approved");
@@ -1906,7 +1914,7 @@ const OutlineRail = ({
   onJump: (sourceId: string) => void;
 }) => {
   const t = useTranslations();
-  const formattingLocale = useLocale();
+  const formattingLocale = useFormattingLocale();
   const markerStyle = useStepsMarkerStyle();
   return (
     <nav

@@ -1,14 +1,15 @@
 import { panic } from "better-result";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript6";
 
 import { compareCodeUnit } from "@stll/collation";
 
 /**
  * These suites change committed tables in the common PostgreSQL test database.
  * They run after every ordinary suite, each in its own test process, so no CRUD
- * transaction can retain a conflicting table lock while their DDL runs.
+ * transaction can retain a conflicting table lock while their DDL runs. Each
+ * starts on a fresh clone of the template, so rows the earlier suites left in
+ * shared tables cannot change what it observes.
  */
 export const EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS: ReadonlySet<string> =
   new Set([
@@ -19,6 +20,7 @@ export const EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS: ReadonlySet<string> =
     "src/handlers/entities/versions/list.postgres.test.ts",
     "src/lib/account-export/store.postgres.test.ts",
     "src/lib/business-registries/desktop/proof.postgres.test.ts",
+    "src/lib/case-law/sitemap-removal-refresh.postgres.test.ts",
     "src/lib/hosted-usage-provider/replay.postgres.test.ts",
     "src/lib/lists/sanctions/monitoring-concurrency.postgres.test.ts",
     "src/lib/lists/sanctions/monitoring-migrations.postgres.test.ts",
@@ -151,63 +153,35 @@ const isMigrationRunnerModule = (testPath: string, specifier: string) => {
   );
 };
 
-/** Migration bundles can change roles shared by every database in the cluster. */
-export const clusterExclusiveMigrationTests = (
+// Bun's scan lists the modules a file loads at run time: value imports,
+// `require` calls and dynamic `import()`, never type-only imports.
+const runtimeImports = new Bun.Transpiler({ loader: "ts" });
+
+// Snapshot visibility depends on transactions across the entire cluster.
+const CLUSTER_VISIBILITY_TESTS = new Set([
+  "src/lib/case-law/sitemap-fairness-drain.postgres.test.ts",
+  "src/lib/case-law/sitemap-removal-refresh.postgres.test.ts",
+  "src/lib/case-law/sitemap-shard-refresh.postgres.test.ts",
+  "src/lib/case-law/sitemap-backlog-drain.postgres.test.ts",
+  "src/lib/case-law/sitemap-visibility-drain.postgres.test.ts",
+]);
+
+/** Migration roles and visibility proofs require every other cluster worker to finish. */
+export const clusterExclusivePostgresTests = (
   sources: ReadonlyMap<string, string>,
 ): Set<string> => {
   const paths = new Set<string>();
   for (const [testPath, source] of sources) {
-    const file = ts.createSourceFile(
-      testPath,
-      source,
-      ts.ScriptTarget.Latest,
-      true,
-    );
-    const visit = (node: ts.Node) => {
-      if (
-        ts.isImportDeclaration(node) &&
-        ts.isStringLiteral(node.moduleSpecifier) &&
-        isMigrationRunnerModule(testPath, node.moduleSpecifier.text) &&
-        node.importClause?.phaseModifier !== ts.SyntaxKind.TypeKeyword
-      ) {
-        const bindings = node.importClause?.namedBindings;
-        if (
-          bindings === undefined ||
-          ts.isNamespaceImport(bindings) ||
-          node.importClause?.name !== undefined ||
-          bindings.elements.some((element) => !element.isTypeOnly)
-        ) {
-          paths.add(testPath);
-        }
-      }
-      if (
-        ts.isImportEqualsDeclaration(node) &&
-        !node.isTypeOnly &&
-        ts.isExternalModuleReference(node.moduleReference) &&
-        ts.isStringLiteral(node.moduleReference.expression) &&
-        isMigrationRunnerModule(testPath, node.moduleReference.expression.text)
-      ) {
-        paths.add(testPath);
-      }
-      if (
-        ts.isCallExpression(node) &&
-        (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
-          (ts.isIdentifier(node.expression) &&
-            node.expression.text === "require")) &&
-        node.arguments.length === 1
-      ) {
-        const specifier = node.arguments.at(0);
-        if (
-          specifier !== undefined &&
-          ts.isStringLiteral(specifier) &&
-          isMigrationRunnerModule(testPath, specifier.text)
-        ) {
-          paths.add(testPath);
-        }
-      }
-      ts.forEachChild(node, visit);
-    };
-    visit(file);
+    if (
+      CLUSTER_VISIBILITY_TESTS.has(testPath) ||
+      runtimeImports
+        .scanImports(source)
+        .some(({ path: specifier }) =>
+          isMigrationRunnerModule(testPath, specifier),
+        )
+    ) {
+      paths.add(testPath);
+    }
   }
   return paths;
 };
@@ -232,7 +206,7 @@ export const classifyPostgresTestIsolation = async (
     sharedTables: readSharedTableNames(apiRoot),
   });
   if (violations.length === 0) {
-    return clusterExclusiveMigrationTests(sources);
+    return clusterExclusivePostgresTests(sources);
   }
   return panic(
     `PostgreSQL tests that run DDL on shared tables require an exclusive test process:\n${violations

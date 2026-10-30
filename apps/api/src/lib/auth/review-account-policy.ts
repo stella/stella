@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 
 import type { McpOAuthScope } from "@stll/api-contract";
 
+import { normalizeEmail } from "@/api/lib/email/normalized-email";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 /**
@@ -76,8 +77,6 @@ export const REVIEW_ACCOUNT_POLICY = {
 
 export const REVIEW_ACCOUNT_REFUSAL_MESSAGE =
   "This operation is unavailable for this account.";
-
-const normalizeEmail = (email: string) => email.trim().toLowerCase();
 
 export const isReviewAccountEmail = ({
   email,
@@ -292,6 +291,8 @@ export const resolveReviewAccountBodyEmailOperation = ({
 
 /** Scopes a token for the review organization never carries. */
 export const REVIEW_ACCOUNT_EXCLUDED_SCOPES = [
+  "stella:account_export_read",
+  "stella:account_export_write",
   "stella:admin_read",
   "stella:admin_write",
   "stella:billing_write",

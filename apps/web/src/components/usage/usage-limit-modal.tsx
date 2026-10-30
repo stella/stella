@@ -14,7 +14,7 @@ import {
 
 import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 
@@ -48,7 +48,7 @@ export const UsageLimitModal = ({
   const managementMutation = useMutation({
     mutationFn: async () => {
       const response = await api.usage.hosted.management.post();
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: ({ url }) => {
       window.location.href = url;
@@ -89,7 +89,7 @@ export const UsageLimitModal = ({
 
         <DialogFooter>
           <DialogClose render={<Button variant="ghost" />}>
-            {t("settings.organization.usageLimitNotNow")}
+            {t("common.notNow")}
           </DialogClose>
           {hasHostedEntitlement ? (
             <Button

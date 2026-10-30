@@ -20,11 +20,12 @@ import { stellaToast } from "@stll/ui/toast";
 
 import { McpAuthorizationReview } from "@/components/mcp-authorization-review";
 import { SecretInput } from "@/components/secret-input";
-import { api } from "@/lib/api";
+import { api, mcpConnectorConnection } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
+import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { knowledgeKeys } from "@/lib/knowledge/queries";
 import { catalogueKeys } from "@/lib/knowledge/queries/catalogue";
 import { openMcpOAuthWindow } from "@/lib/mcp-oauth-channel";
@@ -98,10 +99,8 @@ export const AddMcpServerSheet = ({
 
   const connectMutation = useMutation({
     mutationFn: async (connector: CreatedConnector) => {
-      const response = await api.mcp
-        .connectors({ slug: connector.slug })
-        .connect.post({});
-      return { connector, data: unwrapEden(response) };
+      const data = await mcpConnectorConnection.start(connector.slug);
+      return { connector, data };
     },
     onSuccess: ({ connector, data }) => {
       if (data.type === "bearer") {
@@ -111,7 +110,7 @@ export const AddMcpServerSheet = ({
       if (data.type === "oauth2") {
         const openStatus = openMcpOAuthWindow(data.authorizeUrl);
         if (openStatus === "invalid") {
-          notifyUserError(undefined, t("knowledge.mcp.errorTitle"), {
+          notifyUserProblem(t("knowledge.mcp.errorTitle"), {
             description: t("knowledge.mcp.errorDescription"),
           });
           return;
@@ -130,10 +129,10 @@ export const AddMcpServerSheet = ({
     onError: handleApiError,
   });
 
-  const addServerMutation = useMutation({
+  const addServerMutation = useIdempotentMutation({
     mutationFn: async (params: AddServerParams) => {
       const response = await api.mcp.connectors.post(params);
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: (data, { url }) => {
       switch (data.type) {
@@ -156,13 +155,13 @@ export const AddMcpServerSheet = ({
     onError: handleApiError,
   });
 
-  const saveTokenMutation = useMutation({
+  const saveTokenMutation = useIdempotentMutation({
     mutationFn: async (payload: { connectorSlug: string; token: string }) => {
       const response = await api.mcp.connections.post({
         connectorSlug: payload.connectorSlug,
         token: payload.token,
       });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: () => {
       stellaToast.add({

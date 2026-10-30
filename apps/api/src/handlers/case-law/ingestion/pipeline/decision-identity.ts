@@ -26,6 +26,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { canonicalDecisionIdSql } from "@/api/lib/case-law/decision-alias";
 import { resolveDecisionCourtId } from "@/api/lib/case-law/decision-court-identity";
 import { rowHoldsDocumentFor } from "@/api/lib/case-law/stored-payload";
+import type { StoredCorpusValidationError } from "@/api/lib/errors/tagged-errors";
 import {
   STATED_ECLI_IDENTITY,
   type StatedEcliIdentity,
@@ -80,8 +81,9 @@ export type ObservedDecision = {
   sourceIdentityCandidates: string[];
   /**
    * The dockets a legacy null-id row of this document may be stored under:
-   * the observed docket, and the publisher's spelling where ingestion cut a
-   * tail from it, since an older release stored that spelling as it came.
+   * the observed docket, the publisher's spelling where ingestion cut a tail
+   * from it, since an older release stored that spelling as it came, and the
+   * docket an older adapter version derived (`legacyCaseNumber`).
    */
   legacyCaseNumbers: string[];
 };
@@ -100,8 +102,15 @@ export const observeDecision = ({
   metadataUrlSchema,
   input,
   sourceId,
-}: ObserveDecisionOptions): ObservedDecision => {
-  const observed = sanitizeResult(input, metadataUrlSchema);
+}: ObserveDecisionOptions): Result<
+  ObservedDecision,
+  StoredCorpusValidationError
+> => {
+  const sanitized = sanitizeResult(input, metadataUrlSchema);
+  if (sanitized.isErr()) {
+    return sanitized;
+  }
+  const observed = sanitized.value;
   const docket = observedDocketOf(input);
   if (docket.type !== "kept") {
     // The row is written either way; the event is the flag an operator
@@ -116,10 +125,17 @@ export const observeDecision = ({
         : { canonical: docket.caseNumber.slice(0, MAX_LOGGED_DOCKET_LENGTH) }),
     });
   }
-  const legacyCaseNumbers =
-    docket.type === "trimmed"
-      ? [observed.caseNumber, input.caseNumber.replace(DANGEROUS_CHARS, "")]
-      : [observed.caseNumber];
+  const legacyCaseNumbers = [
+    ...new Set([
+      observed.caseNumber,
+      ...(docket.type === "trimmed"
+        ? [input.caseNumber.replace(DANGEROUS_CHARS, "")]
+        : []),
+      ...(input.legacyCaseNumber === undefined
+        ? []
+        : [input.legacyCaseNumber.replace(DANGEROUS_CHARS, "")]),
+    ]),
+  ];
   // An adapter maps its source's court to a directory id and rejects what the
   // directory does not admit before a result gets here. One that reaches the
   // write path unresolved is an adapter defect, and writing it would store a
@@ -174,14 +190,14 @@ export const observeDecision = ({
   if (sourceIdentityCandidates.length > MAX_SOURCE_IDENTITY_CANDIDATES) {
     panic("Too many publisher identities for one decision");
   }
-  return {
+  return Result.ok({
     observed,
     persistedDecisionDate,
     exactSourceIdentityCandidates,
     repairSourceIdentityCandidates,
     sourceIdentityCandidates,
     legacyCaseNumbers,
-  };
+  });
 };
 
 const IDENTITY_COLUMNS = {

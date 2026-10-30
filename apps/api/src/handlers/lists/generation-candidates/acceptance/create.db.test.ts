@@ -4,6 +4,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
 import type { ListItemType } from "@stll/api-contract/entity-options";
+import { createTestState } from "@stll/test-state";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -21,13 +22,13 @@ import {
 } from "@/api/db/schema";
 import { env } from "@/api/env";
 import type acceptGenerationCandidateDefinition from "@/api/handlers/lists/generation-candidates/acceptance/create";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { isRecord } from "@/api/lib/type-guards";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type {
@@ -350,10 +351,14 @@ const runAcceptance = async (
       },
       memberRole: sessionMemberRole("owner"),
       recordAuditEvent: noAuditRows,
-      request: new Request("https://example.test/v1/lists/candidates/accept", {
-        method: "POST",
-      }),
-      route: "/v1/lists/candidates/accept",
+      request: new Request(
+        `https://example.test/v1/lists/${seeded.workspaceId}/generation-candidates/accept`,
+        {
+          method: "POST",
+        },
+      ),
+      route:
+        "/v1/lists/:workspaceId/generation-candidates/accept" satisfies ApiRoutePath,
       safeDb: testSafeDb,
       session: { activeOrganizationId: seeded.organizationId },
       user: { id: seeded.userId },

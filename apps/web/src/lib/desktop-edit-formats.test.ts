@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { DOCX_MIME, PPTX_MIME, XLSX_MIME } from "@/lib/consts";
 import {
   canOpenDesktopEdit,
+  canReleaseDesktopEditLock,
   DESKTOP_EDIT_FILE_TYPE_DETAILS,
   getDesktopEditFileType,
 } from "@/lib/desktop-edit-formats";
@@ -127,5 +128,33 @@ describe("desktop-edit format detection", () => {
         readOnly: true,
       }),
     ).toBe(false);
+  });
+
+  test("offers a lock release only on a writable single row whose Office file is locked", () => {
+    const locked = {
+      context: "row",
+      fileType: "docx",
+      lockState: "locked-by-other",
+      readOnly: false,
+    } as const;
+    expect(canReleaseDesktopEditLock(locked)).toBe(true);
+    expect(
+      canReleaseDesktopEditLock({ ...locked, lockState: "locked-by-me" }),
+    ).toBe(true);
+    expect(
+      canReleaseDesktopEditLock({ ...locked, lockState: "unlocked" }),
+    ).toBe(false);
+    expect(canReleaseDesktopEditLock({ ...locked, context: "cell" })).toBe(
+      false,
+    );
+    expect(canReleaseDesktopEditLock({ ...locked, context: "bulk" })).toBe(
+      false,
+    );
+    expect(canReleaseDesktopEditLock({ ...locked, fileType: null })).toBe(
+      false,
+    );
+    expect(canReleaseDesktopEditLock({ ...locked, readOnly: true })).toBe(
+      false,
+    );
   });
 });

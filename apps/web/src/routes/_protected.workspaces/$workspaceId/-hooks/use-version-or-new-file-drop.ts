@@ -95,7 +95,13 @@ export const useVersionOrNewFileDrop = ({
     if (Result.isError(result)) {
       // A failed lookup costs the offer to file this as a version, not the
       // upload: the dialog falls back to comparing extensions.
-      analytics.captureError(result.error);
+      analytics.captureError(result.error, {
+        fingerprintKey: "useVersionOrNewFileDrop.resolveReference:failure",
+        scope: {
+          type: "handler",
+          handlerId: "useVersionOrNewFileDrop.resolveReference:failure",
+        },
+      });
     }
 
     setDrop((current) =>
@@ -124,6 +130,10 @@ export const useVersionOrNewFileDrop = ({
   };
 
   const { isDropTarget } = useExternalFileDrop({
+    exceptionScope: {
+      type: "handler",
+      handlerId: "useVersionOrNewFileDrop.useExternalFileDrop",
+    },
     enabled: canAcceptDrop,
     externalRef: rowRef,
     onDrop: (files) => {

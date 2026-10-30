@@ -1,6 +1,4 @@
-import type { TSchema } from "@sinclair/typebox";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import { safePublicHandlerResponseSchemasWithStatusText } from "@/api/lib/api-handlers";
 import { SANCTIONS_MATCH_LIMIT } from "@/api/lib/lists/sanctions/screening-service";
@@ -30,85 +28,76 @@ export type PublicSanctionsScreening = SanctionsScreening & {
 type ListOutcome = SanctionsScreening["lists"][number];
 type PossibleMatch = ListOutcome["possibleMatches"][number];
 
-const matchSchema = t.Object(
-  {
-    sourceEntryId: boundedString(TEXT_BYTES.id),
-    editionId: boundedString(TEXT_BYTES.id),
-    score: t.Number(),
-    sourceUrl: boundedString(TEXT_BYTES.url),
-    name: nullableBoundedString(TEXT_BYTES.metadata),
-    referenceNumber: nullableBoundedString(TEXT_BYTES.metadata),
-    entityType: t.UnionEnum(SANCTIONS_ENTITY_TYPES),
-    programme: nullableBoundedString(TEXT_BYTES.metadata),
-    listedOn: nullableBoundedString(TEXT_BYTES.date),
-    evidence: t.Object(
-      {
-        nameScore: t.Number(),
-        matchedName: nullableBoundedString(TEXT_BYTES.metadata),
-        birthDate: t.UnionEnum(SANCTIONS_FIELD_COMPARISONS),
-        nationality: t.UnionEnum(SANCTIONS_FIELD_COMPARISONS),
-        entityType: t.UnionEnum(SANCTIONS_FIELD_COMPARISONS),
-        identifier: t.UnionEnum(SANCTIONS_FIELD_COMPARISONS),
-        conflicts: t.Array(t.UnionEnum(SANCTIONS_IDENTITY_FIELDS), {
-          maxItems: SANCTIONS_IDENTITY_FIELDS.length,
-        }),
-      } satisfies Record<keyof PossibleMatch["evidence"], TSchema>,
-      { additionalProperties: false },
+const matchSchema = v.object({
+  sourceEntryId: boundedString(TEXT_BYTES.id),
+  editionId: boundedString(TEXT_BYTES.id),
+  score: v.number(),
+  sourceUrl: boundedString(TEXT_BYTES.url),
+  name: nullableBoundedString(TEXT_BYTES.metadata),
+  referenceNumber: nullableBoundedString(TEXT_BYTES.metadata),
+  entityType: v.picklist(SANCTIONS_ENTITY_TYPES),
+  programme: nullableBoundedString(TEXT_BYTES.metadata),
+  listedOn: nullableBoundedString(TEXT_BYTES.date),
+  evidence: v.object({
+    nameScore: v.number(),
+    matchedName: nullableBoundedString(TEXT_BYTES.metadata),
+    birthDate: v.picklist(SANCTIONS_FIELD_COMPARISONS),
+    nationality: v.picklist(SANCTIONS_FIELD_COMPARISONS),
+    entityType: v.picklist(SANCTIONS_FIELD_COMPARISONS),
+    identifier: v.picklist(SANCTIONS_FIELD_COMPARISONS),
+    conflicts: v.pipe(
+      v.array(v.picklist(SANCTIONS_IDENTITY_FIELDS)),
+      v.maxLength(SANCTIONS_IDENTITY_FIELDS.length),
     ),
-  } satisfies Record<keyof PossibleMatch, TSchema>,
-  { additionalProperties: false },
-);
+  } satisfies Record<keyof PossibleMatch["evidence"], v.GenericSchema>),
+} satisfies Record<keyof PossibleMatch, v.GenericSchema>);
 
-const successSchema = t.Object(
-  {
-    status: t.UnionEnum(SANCTIONS_SCREENING_STATUSES),
-    checkedAt: boundedString(TEXT_BYTES.date),
-    cutoff: t.Number(),
-    lists: t.Array(
-      t.Object(
-        {
-          source: t.UnionEnum(SANCTIONS_SOURCE_IDS),
-          issuer: boundedString(2),
-          classification: t.UnionEnum(SANCTIONS_CLASSIFICATIONS),
-          status: t.UnionEnum(SANCTIONS_SCREENING_STATUSES),
-          reason: t.Union([
-            t.UnionEnum(SANCTIONS_PUBLIC_UNAVAILABLE_REASONS),
-            t.Null(),
-          ]),
-          editionId: nullableBoundedString(TEXT_BYTES.id),
-          publishedAt: nullableBoundedString(TEXT_BYTES.date),
-          verifiedAt: nullableBoundedString(TEXT_BYTES.date),
-          pendingUpdate: t.Union([
-            t.Object(
-              {
-                code: t.UnionEnum(SANCTIONS_PENDING_UPDATE_CODES),
-                heldAt: boundedString(TEXT_BYTES.date),
-                previousCount: t.Union([t.Number(), t.Null()]),
-                nextCount: t.Union([t.Number(), t.Null()]),
-              } satisfies Record<
-                keyof NonNullable<ListOutcome["pendingUpdate"]>,
-                TSchema
-              >,
-              { additionalProperties: false },
-            ),
-            t.Null(),
-          ]),
-          totalMatches: t.Number(),
-          truncated: t.Boolean(),
-          possibleMatches: t.Array(matchSchema, {
-            maxItems: SANCTIONS_MATCH_LIMIT,
-          }),
-        } satisfies Record<keyof ListOutcome, TSchema>,
-        { additionalProperties: false },
-      ),
-      { maxItems: SANCTIONS_SOURCE_IDS.length },
+const successSchema = v.object({
+  status: v.picklist(SANCTIONS_SCREENING_STATUSES),
+  checkedAt: boundedString(TEXT_BYTES.date),
+  cutoff: v.number(),
+  lists: v.pipe(
+    v.array(
+      v.object({
+        source: v.picklist(SANCTIONS_SOURCE_IDS),
+        issuer: boundedString(2),
+        classification: v.picklist(SANCTIONS_CLASSIFICATIONS),
+        status: v.picklist(SANCTIONS_SCREENING_STATUSES),
+        reason: v.union([
+          v.picklist(SANCTIONS_PUBLIC_UNAVAILABLE_REASONS),
+          v.null(),
+        ]),
+        editionId: nullableBoundedString(TEXT_BYTES.id),
+        publishedAt: nullableBoundedString(TEXT_BYTES.date),
+        verifiedAt: nullableBoundedString(TEXT_BYTES.date),
+        pendingUpdate: v.union([
+          v.object({
+            code: v.picklist(SANCTIONS_PENDING_UPDATE_CODES),
+            heldAt: boundedString(TEXT_BYTES.date),
+            previousCount: v.union([v.number(), v.null()]),
+            nextCount: v.union([v.number(), v.null()]),
+          } satisfies Record<
+            keyof NonNullable<ListOutcome["pendingUpdate"]>,
+            v.GenericSchema
+          >),
+          v.null(),
+        ]),
+        totalMatches: v.number(),
+        truncated: v.boolean(),
+        possibleMatches: v.pipe(
+          v.array(matchSchema),
+          v.maxLength(SANCTIONS_MATCH_LIMIT),
+        ),
+      } satisfies Record<keyof ListOutcome, v.GenericSchema>),
     ),
-    retryAfterSeconds: t.Union([t.Number(), t.Null()]),
-  } satisfies Record<keyof PublicSanctionsScreening, TSchema>,
-  { additionalProperties: false },
-);
+    v.maxLength(SANCTIONS_SOURCE_IDS.length),
+  ),
+  retryAfterSeconds: v.union([v.number(), v.null()]),
+} satisfies Record<keyof PublicSanctionsScreening, v.GenericSchema>);
 
-true satisfies PublicSanctionsScreening extends Static<typeof successSchema>
+true satisfies PublicSanctionsScreening extends v.InferOutput<
+  typeof successSchema
+>
   ? true
   : never;
 

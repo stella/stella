@@ -73,7 +73,7 @@ const deleteReaderAnswer = createSafeRootHandler(
     );
   },
 );
-declareAggregateMutation(deleteReaderAnswer.handler, {
+declareAggregateMutation(deleteReaderAnswer, {
   type: "aggregate",
   aggregates: ["readerAnswer"],
 });

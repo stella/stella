@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, desc, eq, lte, sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   searchHistoryEntries,
@@ -10,7 +10,7 @@ import {
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { searchHistoryAuditEvent } from "@/api/lib/audit-log";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -40,8 +40,8 @@ const config = {
     reason: "personal_history",
     consumesServices: false,
   },
-  params: t.Object({
-    entryId: tSafeId("searchHistoryEntry", {
+  params: v.object({
+    entryId: resourceIdSchema("searchHistoryEntry", {
       description: "The entry's `id` from `search-history.list`.",
     }),
   }),
@@ -186,7 +186,7 @@ const deleteSearchHistoryEntry = createSafeRootHandler(
   },
 );
 
-declareAggregateMutation(deleteSearchHistoryEntry.handler, {
+declareAggregateMutation(deleteSearchHistoryEntry, {
   type: "independent",
   reason:
     "Owner-serialized delete records an identity cutoff and erases the entry in one audited transaction.",

@@ -1,9 +1,19 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import Elysia, { status, t } from "elysia";
+import * as v from "valibot";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
+import { createHttpApp } from "@/api/http/app";
+import { toResponse } from "@/api/http/respond";
+import { mount, routes } from "@/api/http/route";
+import type { Middleware, RouteEntry, RouteTable } from "@/api/http/route";
+import { status } from "@/api/http/status";
 import { toSafeId } from "@/api/lib/branded-types";
 import { parseTrustedProxies } from "@/api/lib/client-ip";
+import { defineEndpoint } from "@/api/lib/endpoints";
+import { httpFailureAnswer } from "@/api/lib/errors/http-failure-answer";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import {
   resetMetricLineSinkForTesting,
   setMetricLineSinkForTesting,
@@ -19,7 +29,9 @@ import {
   OTP_ACCOUNT_BUDGET,
 } from "@/api/lib/rate-limit/otp-account-budget";
 import {
+  closeRateLimitContexts,
   InMemoryRateLimitContext,
+  isRateLimitMiddleware,
   rateLimit,
   scopedGenerator,
   scopedRateLimitKey,
@@ -29,10 +41,67 @@ import {
   createRedisRateLimitRequestKey,
   RedisRateLimitContext,
 } from "@/api/lib/rate-limit/redis-context";
+import { LimiterStoreUnavailableError } from "@/api/lib/rate-limit/store-unavailable";
 import { consumeSignupOtpRateLimit } from "@/api/lib/signup-abuse";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
+import { serveForTest } from "@/api/tests/helpers/test-server";
+import type { TestServer } from "@/api/tests/helpers/test-server";
 
 const WINDOW_MS = 1000;
+
+/** A public route answering with `answer()`. */
+const answering = (answer: () => unknown) =>
+  defineEndpoint.public({}, () => answer());
+
+const failing = (message: string) =>
+  defineEndpoint.public({}, () => {
+    throw new TypeError(message);
+  });
+
+const NAMED_BODY = { body: v.object({ name: v.string() }) };
+
+/**
+ * Serve `table` on a real `Bun.serve` with the limiters as app-wide stages,
+ * so they see every request (an unknown path included), inside a boundary
+ * that answers whatever the stages and routes throw.
+ */
+const serveLimited = (
+  table: RouteTable,
+  limiters: readonly Middleware[],
+  boundary: Middleware = errorBoundary,
+): TestServer =>
+  serveForTest(
+    createHttpApp({
+      routes: routes(table),
+      middleware: [boundary, ...limiters],
+    }),
+  );
+
+const serveEntries = (entries: readonly RouteEntry[]): TestServer =>
+  serveForTest(createHttpApp({ routes: entries, middleware: [errorBoundary] }));
+
+/**
+ * An outer boundary that answers every failure with its own sanitized body,
+ * at the status the failure calls for: it runs after the limiter has seen
+ * the throw, as the production error boundary does.
+ */
+const sanitizingBoundary: Middleware = async (ctx, inner) => {
+  try {
+    return await inner();
+  } catch (error) {
+    return toResponse(
+      status(httpFailureAnswer(error).status, { message: "sanitized" }),
+      ctx.set,
+    );
+  }
+};
+
+const postJson = (path: string, body: string): Request =>
+  new Request(`http://localhost${path}`, {
+    body,
+    headers: { "content-type": "application/json" },
+    method: "POST",
+  });
 
 const RATE_LIMIT_OPTIONS = {
   duration: WINDOW_MS,
@@ -82,8 +151,12 @@ class TrackingRateLimitContext implements RateLimitContext {
 
 test("client-bound windows isolate clients and share the daily budget across routes", async () => {
   const context = new TrackingRateLimitContext();
-  const app = new Elysia()
-    .use(
+  await using server = serveLimited(
+    {
+      "/law": { GET: answering(() => "law") },
+      "/case": { GET: answering(() => "case") },
+    },
+    [
       rateLimit({
         context,
         duration: 60_000,
@@ -99,11 +172,10 @@ test("client-bound windows isolate clients and share the daily budget across rou
           },
         ],
       }),
-    )
-    .get("/law", () => "law")
-    .get("/case", () => "case");
+    ],
+  );
   const call = async (client: string, route: string) =>
-    await app.handle(
+    await server.fetch(
       new Request(`http://localhost/${route}`, {
         headers: { "x-client": client },
       }),
@@ -131,8 +203,9 @@ test("client-bound windows isolate clients and share the daily budget across rou
 
 test("handler failures refund every window the request consumed", async () => {
   const context = new TrackingRateLimitContext();
-  const app = new Elysia()
-    .use(
+  await using server = serveLimited(
+    { "/fail": { GET: failing("Synthetic handler failure") } },
+    [
       rateLimit({
         context,
         duration: 60_000,
@@ -142,13 +215,9 @@ test("handler failures refund every window the request consumed", async () => {
           { key: "daily", duration: 86_400_000, max: 2 },
         ],
       }),
-    )
-    .get("/fail", () => {
-      throw new TypeError("Synthetic handler failure");
-    });
-  expect((await app.handle(new Request("http://localhost/fail"))).status).toBe(
-    500,
+    ],
   );
+  expect((await server.fetch("http://localhost/fail")).status).toBe(500);
   expect(context.decrementedKeys.toSorted()).toEqual(["daily", "minute"]);
 });
 
@@ -166,22 +235,16 @@ test("a failing later window refunds the windows already charged", async () => {
     }
   }
   const context = new FailingDailyContext();
-  const app = new Elysia()
-    .use(
-      rateLimit({
-        context,
-        duration: 60_000,
-        generator: () => "minute",
-        max: 2,
-        additionalBudgets: () => [
-          { key: "daily", duration: 86_400_000, max: 2 },
-        ],
-      }),
-    )
-    .get("/ok", () => "ok");
-  expect((await app.handle(new Request("http://localhost/ok"))).status).toBe(
-    500,
-  );
+  await using server = serveLimited({ "/ok": { GET: answering(() => "ok") } }, [
+    rateLimit({
+      context,
+      duration: 60_000,
+      generator: () => "minute",
+      max: 2,
+      additionalBudgets: () => [{ key: "daily", duration: 86_400_000, max: 2 }],
+    }),
+  ]);
+  expect((await server.fetch("http://localhost/ok")).status).toBe(500);
   expect(context.incrementedKeys).toEqual(["minute"]);
   expect(context.decrementedKeys).toEqual(["minute"]);
 });
@@ -271,8 +334,9 @@ test("HTTP quota rejection emits its named policy once without the counter key",
   setMetricLineSinkForTesting((line) => {
     metrics.push(line);
   });
-  const app = new Elysia()
-    .use(
+  const server = serveLimited(
+    { "/limited": { POST: answering(() => "served") } },
+    [
       rateLimit({
         context,
         duration: WINDOW_MS,
@@ -280,23 +344,17 @@ test("HTTP quota rejection emits its named policy once without the counter key",
         generator: () => "private-caller-credential",
         budget: () => ({ name: "mcp.transport.bearer", keyKind: "bearer" }),
       }),
-    )
-    .post("/limited", () => "served");
+    ],
+  );
   try {
     expect(
-      (
-        await app.handle(
-          new Request("http://localhost/limited", { method: "POST" }),
-        )
-      ).status,
+      (await server.fetch("http://localhost/limited", { method: "POST" }))
+        .status,
     ).toBe(200);
     expect(metrics).toHaveLength(0);
     expect(
-      (
-        await app.handle(
-          new Request("http://localhost/limited", { method: "POST" }),
-        )
-      ).status,
+      (await server.fetch("http://localhost/limited", { method: "POST" }))
+        .status,
     ).toBe(429);
     const rejections = logs.records.filter(
       ({ message }) => message === "rate_limit.rejected",
@@ -317,6 +375,7 @@ test("HTTP quota rejection emits its named policy once without the counter key",
       "private-caller-credential",
     );
   } finally {
+    await server.stop();
     logs.restore();
     resetMetricLineSinkForTesting();
     context.kill();
@@ -329,12 +388,8 @@ describe("RedisRateLimitContext", () => {
       failurePolicy: "fail_open_local",
       scope: "api",
     });
-    const firstRequest = Object.assign(new Request("http://localhost/one"), {
-      cookie: {},
-    });
-    const secondRequest = Object.assign(new Request("http://localhost/two"), {
-      cookie: {},
-    });
+    const firstRequest = new Request("http://localhost/one");
+    const secondRequest = new Request("http://localhost/two");
 
     const firstKey = await generator(firstRequest, null);
     const repeatedKey = await generator(firstRequest, null);
@@ -481,8 +536,9 @@ describe("RedisRateLimitContext", () => {
       await complete(key);
       completed.push(key);
     };
-    const app = new Elysia()
-      .use(
+    await using server = serveLimited(
+      { "/resolve": { GET: answering(() => "resolved") } },
+      [
         rateLimit({
           context,
           duration: 60_000,
@@ -492,16 +548,13 @@ describe("RedisRateLimitContext", () => {
             { key: requestKey("daily"), duration: 86_400_000, max: 1 },
           ],
         }),
-      )
-      .get("/resolve", () => "resolved");
+      ],
+    );
     for (let attempt = 0; attempt < 40; attempt += 1) {
-      const response = await app.handle(
-        new Request("http://localhost/resolve"),
-      );
+      const response = await server.fetch("http://localhost/resolve");
       expect(response.status).toBe(attempt === 0 ? 200 : 429);
     }
-    // After-response hooks finish asynchronously; wait for this observable work.
-    await Bun.sleep(0);
+    // Charges settle before the answer leaves the limiter.
     expect(completed).toHaveLength(80);
     expect(
       [...state.entries.values()].map(({ attempts }) => attempts.size),
@@ -655,17 +708,31 @@ describe("RedisRateLimitContext", () => {
       });
       context.init(RATE_LIMIT_OPTIONS);
 
-      const counter = await context.increment("api:client", WINDOW_MS, 1000);
-
-      expect(counter.count).toBe(
-        failurePolicy === "fail_open_local" ? 1 : Number.MAX_SAFE_INTEGER,
+      const increment = context.increment("api:client", WINDOW_MS, 1000);
+      if (failurePolicy === "fail_open_local") {
+        expect((await increment).count).toBe(1);
+      } else {
+        expect(await rejectionOf(increment)).toBeInstanceOf(
+          LimiterStoreUnavailableError,
+        );
+      }
+      expect(operations).toEqual(
+        failurePolicy === "fail_open_local" ? ["increment"] : [],
       );
-      expect(operations).toEqual(["increment"]);
       expect(clientCreations).toBe(1);
-      await context.increment("api:client", WINDOW_MS, 1000);
+      const nextIncrement = context.increment("api:client", WINDOW_MS, 1000);
+      if (failurePolicy === "fail_open_local") {
+        expect((await nextIncrement).count).toBe(2);
+      } else {
+        expect(await rejectionOf(nextIncrement)).toBeInstanceOf(
+          LimiterStoreUnavailableError,
+        );
+      }
       expect(clientCreations).toBe(1);
       expect(sendCalls).toBe(1);
-      expect(operations).toEqual(["increment", "increment"]);
+      expect(operations).toEqual(
+        failurePolicy === "fail_open_local" ? ["increment", "increment"] : [],
+      );
 
       context.kill();
     });
@@ -942,7 +1009,7 @@ describe("RedisRateLimitContext", () => {
     context.kill();
   });
 
-  test("can fail closed with normal rate-limit counter semantics", async () => {
+  test("reports an unavailable store without inventing an exhausted window", async () => {
     const context = new RedisRateLimitContext({
       createRedis: () => ({
         send: async () => {
@@ -954,14 +1021,9 @@ describe("RedisRateLimitContext", () => {
     });
     context.init(RATE_LIMIT_OPTIONS);
 
-    const counter = await context.increment(
-      "translate:client",
-      WINDOW_MS,
-      1000,
-    );
-
-    expect(counter.count).toBe(Number.MAX_SAFE_INTEGER);
-    expect(counter.nextReset).toEqual(new Date(2000));
+    expect(
+      await rejectionOf(context.increment("translate:client", WINDOW_MS, 1000)),
+    ).toBeInstanceOf(LimiterStoreUnavailableError);
     context.kill();
   });
 
@@ -969,12 +1031,12 @@ describe("RedisRateLimitContext", () => {
     const redisState = createFakeRedisState();
     const firstContext = createContext(redisState);
     const secondContext = createContext(redisState);
-    const firstApp = createRateLimitedApp(firstContext);
-    const secondApp = createRateLimitedApp(secondContext);
+    await using firstServer = serveRateLimited(firstContext);
+    await using secondServer = serveRateLimited(secondContext);
 
-    const first = await firstApp.handle(new Request("http://localhost/"));
-    const second = await secondApp.handle(new Request("http://localhost/"));
-    const limited = await firstApp.handle(new Request("http://localhost/"));
+    const first = await firstServer.fetch("http://localhost/");
+    const second = await secondServer.fetch("http://localhost/");
+    const limited = await firstServer.fetch("http://localhost/");
 
     expect(first.status).toBe(200);
     expect(second.status).toBe(200);
@@ -990,15 +1052,17 @@ describe("RedisRateLimitContext", () => {
 
   test("refunds only requests that reached a failing handler", async () => {
     const context = new TrackingRateLimitContext();
-    const app = createTrackingRateLimitedApp({ context, max: 1 })
-      .get("/fails", () => {
-        throw new TypeError("handler failed");
-      })
-      .get("/passes", () => "ok");
+    await using server = serveLimited(
+      {
+        "/fails": { GET: failing("handler failed") },
+        "/passes": { GET: answering(() => "ok") },
+      },
+      [trackingRateLimit({ context, max: 1 })],
+    );
 
-    const failed = await app.handle(new Request("http://localhost/fails"));
-    const passed = await app.handle(new Request("http://localhost/passes"));
-    const limited = await app.handle(new Request("http://localhost/passes"));
+    const failed = await server.fetch("http://localhost/fails");
+    const passed = await server.fetch("http://localhost/passes");
+    const limited = await server.fetch("http://localhost/passes");
 
     expect(failed.status).toBe(500);
     expect(passed.status).toBe(200);
@@ -1008,43 +1072,39 @@ describe("RedisRateLimitContext", () => {
 
   test("counts handlers that return a failed status", async () => {
     const context = new TrackingRateLimitContext();
-    const app = createTrackingRateLimitedApp({ context, max: 1 })
-      .get("/fails", () => status(400, { message: "failed" }))
-      .get("/passes", () => "ok");
+    await using server = serveLimited(
+      {
+        "/fails": { GET: answering(() => status(400, { message: "failed" })) },
+        "/passes": { GET: answering(() => "ok") },
+      },
+      [trackingRateLimit({ context, max: 1 })],
+    );
 
-    const failed = await app.handle(new Request("http://localhost/fails"));
-    const limited = await app.handle(new Request("http://localhost/passes"));
+    const failed = await server.fetch("http://localhost/fails");
+    const limited = await server.fetch("http://localhost/passes");
 
     expect(failed.status).toBe(400);
     expect(limited.status).toBe(429);
     expect(context.decrementedKeys).toEqual([]);
   });
 
-  test("refunds thrown failures after an earlier error handler returns", async () => {
+  test("refunds thrown failures that an outer boundary answers", async () => {
     const context = new TrackingRateLimitContext();
-    const app = new Elysia()
-      .onError(({ set }) => {
-        set.status = 500;
-        return { message: "sanitized" };
-      })
-      .use(
-        rateLimit({
-          context,
-          duration: WINDOW_MS,
-          generator: () => "shared-client",
-          max: 1,
-        }),
-      )
-      .get("/fails", () => {
-        throw new TypeError("handler failed");
-      })
-      .get("/passes", () => "ok");
+    await using server = serveLimited(
+      {
+        "/fails": { GET: failing("handler failed") },
+        "/passes": { GET: answering(() => "ok") },
+      },
+      [trackingRateLimit({ context, max: 1 })],
+      sanitizingBoundary,
+    );
 
-    const failed = await app.handle(new Request("http://localhost/fails"));
-    const passed = await app.handle(new Request("http://localhost/passes"));
-    const limited = await app.handle(new Request("http://localhost/passes"));
+    const failed = await server.fetch("http://localhost/fails");
+    const passed = await server.fetch("http://localhost/passes");
+    const limited = await server.fetch("http://localhost/passes");
 
     expect(failed.status).toBe(500);
+    expect(await failed.json()).toEqual({ message: "sanitized" });
     expect(passed.status).toBe(200);
     expect(limited.status).toBe(429);
     expect(context.decrementedKeys).toEqual(["shared-client"]);
@@ -1052,55 +1112,53 @@ describe("RedisRateLimitContext", () => {
 
   test("skipped failing requests cannot refund another request", async () => {
     const context = new TrackingRateLimitContext();
-    const app = createTrackingRateLimitedApp({
-      context,
-      max: 1,
-      skip: (request) => new URL(request.url).pathname === "/skipped",
-    })
-      .get("/skipped", () => {
-        throw new TypeError("skipped handler failed");
-      })
-      .get("/limited", () => "ok");
+    const skippedEntries: (string | undefined)[] = [];
+    await using server = serveLimited(
+      {
+        "/skipped": { GET: failing("skipped handler failed") },
+        "/limited": { GET: answering(() => "ok") },
+      },
+      [
+        trackingRateLimit({
+          context,
+          max: 1,
+          skip: (request, entry) => {
+            const skipped = new URL(request.url).pathname === "/skipped";
+            if (skipped) {
+              skippedEntries.push(entry?.path);
+            }
+            return skipped;
+          },
+        }),
+      ],
+    );
 
-    const skipped = await app.handle(new Request("http://localhost/skipped"));
-    const passed = await app.handle(new Request("http://localhost/limited"));
-    const limited = await app.handle(new Request("http://localhost/limited"));
+    const skipped = await server.fetch("http://localhost/skipped");
+    const passed = await server.fetch("http://localhost/limited");
+    const limited = await server.fetch("http://localhost/limited");
 
     expect(skipped.status).toBe(500);
     expect(passed.status).toBe(200);
     expect(limited.status).toBe(429);
+    // The skip decision sees the route the request matched.
+    expect(skippedEntries).toEqual(["/skipped"]);
     expect(context.incrementedKeys).toEqual(["shared-client", "shared-client"]);
     expect(context.decrementedKeys).toEqual([]);
   });
 
   test("counts malformed and request-validation failures", async () => {
     const context = new TrackingRateLimitContext();
-    const app = createTrackingRateLimitedApp({ context, max: 2 }).post(
-      "/",
-      () => "ok",
-      { body: t.Object({ name: t.String() }) },
+    await using server = serveLimited(
+      { "/": { POST: defineEndpoint.public(NAMED_BODY, () => "ok") } },
+      [trackingRateLimit({ context, max: 2 })],
     );
 
-    const malformed = await app.handle(
-      new Request("http://localhost/", {
-        body: "{",
-        headers: { "content-type": "application/json" },
-        method: "POST",
-      }),
+    const malformed = await server.fetch(postJson("/", "{"));
+    const invalid = await server.fetch(
+      postJson("/", JSON.stringify({ name: 42 })),
     );
-    const invalid = await app.handle(
-      new Request("http://localhost/", {
-        body: JSON.stringify({ name: 42 }),
-        headers: { "content-type": "application/json" },
-        method: "POST",
-      }),
-    );
-    const limited = await app.handle(
-      new Request("http://localhost/", {
-        body: JSON.stringify({ name: "Stella" }),
-        headers: { "content-type": "application/json" },
-        method: "POST",
-      }),
+    const limited = await server.fetch(
+      postJson("/", JSON.stringify({ name: "Stella" })),
     );
 
     expect(malformed.status).toBe(400);
@@ -1111,73 +1169,32 @@ describe("RedisRateLimitContext", () => {
       "shared-client",
       "shared-client",
     ]);
+    expect(context.decrementedKeys).toEqual([]);
   });
 
-  test("accounts for early failures after an earlier error handler returns", async () => {
+  test("accounts for early failures that an outer boundary answers", async () => {
     const context = new TrackingRateLimitContext();
-    const app = new Elysia()
-      .onError(({ code, set }) => {
-        switch (code) {
-          case "NOT_FOUND":
-            set.status = 404;
-            break;
-          case "PARSE":
-            set.status = 400;
-            break;
-          case "VALIDATION":
-            set.status = 422;
-            break;
-          case "INTERNAL_SERVER_ERROR":
-          case "INVALID_COOKIE_SIGNATURE":
-          case "INVALID_FILE_TYPE":
-          case "UNKNOWN":
-            set.status = 500;
-            break;
-          default:
-            set.status = 500;
-        }
-        return { message: "sanitized" };
-      })
-      .use(
-        rateLimit({
-          context,
-          duration: WINDOW_MS,
-          generator: () => "shared-client",
-          max: 3,
-        }),
-      )
-      .post("/known", () => "ok", {
-        body: t.Object({ name: t.String() }),
-      });
+    await using server = serveLimited(
+      { "/known": { POST: defineEndpoint.public(NAMED_BODY, () => "ok") } },
+      [trackingRateLimit({ context, max: 3 })],
+      sanitizingBoundary,
+    );
 
-    const malformed = await app.handle(
-      new Request("http://localhost/known", {
-        body: "{",
-        headers: { "content-type": "application/json" },
-        method: "POST",
-      }),
+    const malformed = await server.fetch(postJson("/known", "{"));
+    const invalid = await server.fetch(
+      postJson("/known", JSON.stringify({ name: 42 })),
     );
-    const invalid = await app.handle(
-      new Request("http://localhost/known", {
-        body: JSON.stringify({ name: 42 }),
-        headers: { "content-type": "application/json" },
-        method: "POST",
-      }),
-    );
-    const missing = await app.handle(
-      new Request("http://localhost/missing", { method: "POST" }),
-    );
-    const limited = await app.handle(
-      new Request("http://localhost/known", {
-        body: JSON.stringify({ name: "Stella" }),
-        headers: { "content-type": "application/json" },
-        method: "POST",
-      }),
+    const missing = await server.fetch("http://localhost/missing", {
+      method: "POST",
+    });
+    const limited = await server.fetch(
+      postJson("/known", JSON.stringify({ name: "Stella" })),
     );
 
     expect(malformed.status).toBe(400);
     expect(invalid.status).toBe(422);
     expect(missing.status).toBe(404);
+    expect(await missing.json()).toEqual({ message: "sanitized" });
     expect(limited.status).toBe(429);
     expect(context.incrementedKeys).toEqual([
       "shared-client",
@@ -1185,41 +1202,19 @@ describe("RedisRateLimitContext", () => {
       "shared-client",
       "shared-client",
     ]);
+    expect(context.decrementedKeys).toEqual([]);
   });
 
   test("returns the rate-limit body when an early failure exceeds the quota", async () => {
     const context = new TrackingRateLimitContext();
-    const app = new Elysia()
-      .onError(({ set }) => {
-        set.status = 400;
-        return { message: "sanitized" };
-      })
-      .use(
-        rateLimit({
-          context,
-          duration: WINDOW_MS,
-          generator: () => "shared-client",
-          max: 1,
-        }),
-      )
-      .post("/known", () => "ok", {
-        body: t.Object({ name: t.String() }),
-      });
+    await using server = serveLimited(
+      { "/known": { POST: defineEndpoint.public(NAMED_BODY, () => "ok") } },
+      [trackingRateLimit({ context, max: 1 })],
+      sanitizingBoundary,
+    );
 
-    const first = await app.handle(
-      new Request("http://localhost/known", {
-        body: "{",
-        headers: { "content-type": "application/json" },
-        method: "POST",
-      }),
-    );
-    const limited = await app.handle(
-      new Request("http://localhost/known", {
-        body: "{",
-        headers: { "content-type": "application/json" },
-        method: "POST",
-      }),
-    );
+    const first = await server.fetch(postJson("/known", "{"));
+    const limited = await server.fetch(postJson("/known", "{"));
 
     expect(first.status).toBe(400);
     expect(limited.status).toBe(429);
@@ -1229,81 +1224,63 @@ describe("RedisRateLimitContext", () => {
     expect(await limited.text()).toBe("rate-limit reached");
   });
 
-  test("counts unknown routes that bypass before-handle hooks", async () => {
+  test("counts unknown routes when the limiter runs for every request", async () => {
     const context = new TrackingRateLimitContext();
-    const app = createTrackingRateLimitedApp({ context, max: 1 }).get(
-      "/known",
-      () => "ok",
+    await using server = serveLimited(
+      { "/known": { GET: answering(() => "ok") } },
+      [trackingRateLimit({ context, max: 1 })],
     );
 
-    const missing = await app.handle(new Request("http://localhost/missing"));
-    const limited = await app.handle(new Request("http://localhost/known"));
+    const missing = await server.fetch("http://localhost/missing");
+    const limited = await server.fetch("http://localhost/known");
 
     expect(missing.status).toBe(404);
     expect(limited.status).toBe(429);
     expect(context.incrementedKeys).toEqual(["shared-client", "shared-client"]);
   });
 
-  test("registers equal-limit scoped plugins independently", async () => {
+  test("keeps equal-limit route groups on independent limiters", async () => {
     const firstContext = new TrackingRateLimitContext();
     const secondContext = new TrackingRateLimitContext();
-    const app = new Elysia()
-      .use(
-        createTrackingRateLimitedApp({
-          context: firstContext,
-          max: 1,
-          prefix: "/first",
-        }).get("/", () => "first"),
-      )
-      .use(
-        createTrackingRateLimitedApp({
-          context: secondContext,
-          max: 1,
-          prefix: "/second",
-        }).get("/", () => "second"),
-      );
+    await using server = serveEntries([
+      ...mount([routes({ "/": { GET: answering(() => "first") } })], {
+        prefix: "/first",
+        middleware: [trackingRateLimit({ context: firstContext, max: 1 })],
+      }),
+      ...mount([routes({ "/": { GET: answering(() => "second") } })], {
+        prefix: "/second",
+        middleware: [trackingRateLimit({ context: secondContext, max: 1 })],
+      }),
+    ]);
 
-    const first = await app.handle(new Request("http://localhost/first/"));
-    const second = await app.handle(new Request("http://localhost/second/"));
+    const first = await server.fetch("http://localhost/first/");
+    const second = await server.fetch("http://localhost/second/");
 
     expect(first.status).toBe(200);
+    expect(await first.text()).toBe("first");
     expect(second.status).toBe(200);
+    expect(await second.text()).toBe("second");
     expect(firstContext.incrementedKeys).toEqual(["shared-client"]);
     expect(secondContext.incrementedKeys).toEqual(["shared-client"]);
   });
-
-  test("cleans up its context when the app stops", async () => {
-    const context = new TrackingRateLimitContext();
-    const app = createTrackingRateLimitedApp({ context, max: 1 })
-      .get("/", () => "ok")
-      .listen({ hostname: "127.0.0.1", port: 0 });
-
-    await app.stop();
-
-    expect(context.killCount).toBe(1);
-  });
 });
 
-const createTrackingRateLimitedApp = ({
+const trackingRateLimit = ({
   context,
   max,
-  prefix,
   skip,
 }: {
   context: TrackingRateLimitContext;
   max: number;
-  prefix?: string;
   skip?: RateLimitOptions["skip"];
-}) =>
-  new Elysia(prefix === undefined ? {} : { prefix }).use(
-    rateLimit({
-      context,
-      duration: WINDOW_MS,
-      generator: () => "shared-client",
-      max,
-      ...(skip === undefined ? {} : { skip }),
-    }),
-  );
+}): Middleware =>
+  rateLimit({
+    context,
+    duration: WINDOW_MS,
+    generator: () => "shared-client",
+    max,
+    ...(skip === undefined ? {} : { skip }),
+  });
 
 type FakeRedisEntry = {
   attempts: Set<string>;
@@ -1348,16 +1325,13 @@ const createContext = (redisState: FakeRedisState): RedisRateLimitContext => {
   return context;
 };
 
-const createRateLimitedApp = (context: RedisRateLimitContext) =>
-  new Elysia()
-    .use(
-      rateLimit({
-        ...RATE_LIMIT_OPTIONS,
-        context,
-      }),
-    )
-    .get("/", () => "ok");
-
+const serveRateLimited = (context: RedisRateLimitContext): TestServer =>
+  serveLimited({ "/": { GET: answering(() => "ok") } }, [
+    rateLimit({
+      ...RATE_LIMIT_OPTIONS,
+      context,
+    }),
+  ]);
 describe("client address counters", () => {
   const clientAddressOptions = {
     trusted: parseTrustedProxies("10.0.0.0/8"),
@@ -1506,30 +1480,29 @@ describe("composed rate-limit response policies", () => {
         panic("Missing test policy");
       }
       for (const ordered of [policies, policies.toReversed()]) {
-        let app = new Elysia();
-        for (const policy of ordered) {
-          app = app.use(
-            rateLimit({
-              max: policy.max,
-              duration: 60_000,
-              generator: () => "fixture",
-              context: {
-                complete: () => undefined,
-                init: () => undefined,
-                decrement: () => undefined,
-                kill: () => undefined,
-                increment: (_key, _duration, requestTime = 0) => ({
-                  count: policy.count,
-                  start: requestTime,
-                  nextReset: new Date(requestTime + policy.reset * 1000),
-                }),
-              },
-            }),
-          );
-        }
-        const response = await app
-          .get("/policies", () => "ok")
-          .handle(new Request("http://localhost/policies"));
+        const limiters = ordered.map((policy) =>
+          rateLimit({
+            max: policy.max,
+            duration: 60_000,
+            generator: () => "fixture",
+            context: {
+              complete: () => undefined,
+              init: () => undefined,
+              decrement: () => undefined,
+              kill: () => undefined,
+              increment: (_key, _duration, requestTime = 0) => ({
+                count: policy.count,
+                start: requestTime,
+                nextReset: new Date(requestTime + policy.reset * 1000),
+              }),
+            },
+          }),
+        );
+        await using server = serveLimited(
+          { "/policies": { GET: answering(() => "ok") } },
+          limiters,
+        );
+        const response = await server.fetch("http://localhost/policies");
         expect(response.status).toBe(200);
         expect(response.headers.get("RateLimit-Limit")).toBe(
           String(expected.max),
@@ -1542,5 +1515,29 @@ describe("composed rate-limit response policies", () => {
         );
       }
     }
+  });
+});
+
+describe("limiter lifecycle", () => {
+  test("only middleware rateLimit built is recognised as a limiter", () => {
+    const limiter = trackingRateLimit({
+      context: new TrackingRateLimitContext(),
+      max: 1,
+    });
+    const passThrough: Middleware = async (_ctx, inner) => await inner();
+    expect(isRateLimitMiddleware(limiter)).toBe(true);
+    expect(isRateLimitMiddleware(passThrough)).toBe(false);
+  });
+
+  // Last in the file: closing releases every limiter's store, as the server
+  // does once on shutdown.
+  test("closes each limiter's counter store once when the server shuts down", async () => {
+    const context = new TrackingRateLimitContext();
+    trackingRateLimit({ context, max: 1 });
+
+    await closeRateLimitContexts();
+    await closeRateLimitContexts();
+
+    expect(context.killCount).toBe(1);
   });
 });

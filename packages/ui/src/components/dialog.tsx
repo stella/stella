@@ -20,10 +20,17 @@ import { renderTooltipTrigger } from "./tooltip-trigger-helper";
 
 const DialogCreateHandle = DialogPrimitive.createHandle;
 
-type DialogLabels = { close: string; unsavedChanges: string };
+type DialogLabels = {
+  close: string;
+  /** The hint after Escape on unsaved changes: press it again to discard. */
+  unsavedChanges: string;
+  /** The hint after a click outside or on a close button: close again. */
+  unsavedChangesClose: string;
+};
 const DialogLabelsContext = createContext<DialogLabels>({
   close: "Close",
   unsavedChanges: "Unsaved changes. Press Esc again to discard",
+  unsavedChangesClose: "Unsaved changes. Close again to discard",
 });
 
 const DialogProvider = ({
@@ -33,9 +40,28 @@ const DialogProvider = ({
   <DialogLabelsContext value={labels}>{children}</DialogLabelsContext>
 );
 
-const DialogDismissalContext = createContext<"idle" | "confirm-discard">(
-  "idle",
-);
+/**
+ * Where a dismissal of unsaved changes stands. The first request to close
+ * (Escape, a click outside, a close button) is held back with a hint; the
+ * next one discards. The hint names the gesture that asked, so a pointer
+ * user is not told to press a key.
+ */
+type DialogDismissal = "idle" | "confirm-escape" | "confirm-close";
+
+const DialogDismissalContext = createContext<DialogDismissal>("idle");
+
+/**
+ * The close requests the guard holds back. A programmatic close
+ * (`imperative-action`, or a controlled `open` set to false after a save) is
+ * the owner's decision and passes straight through.
+ */
+const GUARDED_CLOSE_REASONS: ReadonlySet<string> = new Set([
+  "close-press",
+  "escape-key",
+  "focus-out",
+  "outside-press",
+  "trigger-press",
+]);
 
 const Dialog = <Payload,>({
   dirty = false,
@@ -43,9 +69,7 @@ const Dialog = <Payload,>({
   onOpenChangeComplete,
   ...props
 }: DialogPrimitive.Root.Props<Payload> & { dirty?: boolean }) => {
-  const [dismissal, setDismissal] = useState<"idle" | "confirm-discard">(
-    "idle",
-  );
+  const [dismissal, setDismissal] = useState<DialogDismissal>("idle");
   const pendingDiscard = useRef<(() => void)[]>([]);
   const [forms] = useState(() => ({
     sources: new Map<string, DialogFormSource>(),
@@ -60,14 +84,21 @@ const Dialog = <Payload,>({
             const hasChanges =
               dirty ||
               [...forms.sources.values()].some((source) => source.dirty);
+            const isEscape = details.reason === "escape-key";
+            // Keydowns repeated by one held Escape are one request, so holding
+            // the key never runs through the hint into a discard.
+            const isRepeat =
+              isEscape &&
+              details.event instanceof KeyboardEvent &&
+              details.event.repeat;
             if (
               !open &&
-              details.reason === "escape-key" &&
               hasChanges &&
-              (dismissal === "idle" || details.event.repeat)
+              GUARDED_CLOSE_REASONS.has(details.reason) &&
+              (dismissal === "idle" || isRepeat)
             ) {
               details.cancel();
-              setDismissal("confirm-discard");
+              setDismissal(isEscape ? "confirm-escape" : "confirm-close");
               return;
             }
             onOpenChange?.(open, details);
@@ -108,7 +139,7 @@ function DialogTrigger({
   ...props
 }: DialogPrimitive.Trigger.Props & { tooltip?: React.ReactNode }) {
   return renderTooltipTrigger({
-    tooltip: tooltip ?? props["aria-label"] ?? props.title,
+    tooltip,
     trigger: <DialogPrimitive.Trigger data-slot="dialog-trigger" {...props} />,
   });
 }
@@ -118,7 +149,7 @@ function DialogClose({
   ...props
 }: DialogPrimitive.Close.Props & { tooltip?: React.ReactNode }) {
   return renderTooltipTrigger({
-    tooltip: tooltip ?? props["aria-label"] ?? props.title,
+    tooltip,
     trigger: <DialogPrimitive.Close data-slot="dialog-close" {...props} />,
   });
 }
@@ -156,19 +187,64 @@ const DialogViewport = ({
   />
 );
 
+/** How the popup sits below `sm`; from `sm` up it is always centred. */
+const DIALOG_MOBILE_LAYOUT = {
+  /** Pinned to the bottom edge, leaving the page visible above it. */
+  bottomSheet: "bottom-sheet",
+  /** Centred like the wide layout. */
+  centered: "centered",
+  /** The whole viewport, inset by the safe areas; for search-like surfaces
+   * that need the height and have no backdrop left to tap. */
+  fullscreen: "fullscreen",
+} as const;
+type DialogMobileLayout =
+  (typeof DIALOG_MOBILE_LAYOUT)[keyof typeof DIALOG_MOBILE_LAYOUT];
+
+const DIALOG_MOBILE_VIEWPORT_CLASS_NAMES = {
+  "bottom-sheet": "max-sm:grid-rows-[1fr_auto] max-sm:p-0 max-sm:pt-12",
+  centered: undefined,
+  fullscreen: "max-sm:grid-rows-[0_1fr_0] max-sm:p-0",
+} as const satisfies Record<DialogMobileLayout, string | undefined>;
+
+const DIALOG_MOBILE_POPUP_CLASS_NAMES = {
+  "bottom-sheet":
+    "max-sm:max-w-none max-sm:rounded-none max-sm:border-x-0 max-sm:border-t max-sm:border-b-0 max-sm:pb-(--safe-area-bottom) max-sm:opacity-[calc(1-min(var(--nested-dialogs),1))] max-sm:before:hidden max-sm:before:rounded-none max-sm:data-ending-style:translate-y-4 max-sm:data-starting-style:translate-y-4",
+  centered: undefined,
+  fullscreen:
+    "max-sm:h-full max-sm:max-w-none max-sm:rounded-none max-sm:border-0 max-sm:ps-(--safe-area-inline-start) max-sm:pe-(--safe-area-inline-end) max-sm:pt-(--safe-area-top) max-sm:pb-(--safe-area-bottom) max-sm:opacity-[calc(1-min(var(--nested-dialogs),1))] max-sm:before:hidden",
+} as const satisfies Record<DialogMobileLayout, string | undefined>;
+
+/**
+ * How wide the popup may grow. `sm` is a confirmation or a single field,
+ * `default` a short form, `lg` a form with two columns or a table, `xl` a
+ * review or a document picker. Unprefixed like the width it replaces, so a
+ * caller's own `max-w-*` still wins; below `sm` the bottom-sheet and
+ * fullscreen layouts lift the cap and a centred popup keeps it.
+ */
+type DialogSize = "sm" | "default" | "lg" | "xl";
+
+const DIALOG_SIZE_CLASS_NAMES = {
+  sm: "max-w-sm",
+  default: "max-w-lg",
+  lg: "max-w-2xl",
+  xl: "max-w-4xl",
+} as const satisfies Record<DialogSize, string>;
+
 const DialogPopup = ({
   backdropClassName,
   className,
   children,
   showCloseButton = true,
-  bottomStickOnMobile = true,
+  mobileLayout = DIALOG_MOBILE_LAYOUT.bottomSheet,
   layer = "default",
+  size = "default",
   viewportClassName,
   ...props
 }: DialogPrimitive.Popup.Props & {
+  size?: DialogSize | undefined;
   backdropClassName?: string;
   showCloseButton?: boolean;
-  bottomStickOnMobile?: boolean;
+  mobileLayout?: DialogMobileLayout;
   layer?: OverlayLayer;
   viewportClassName?: string;
 }) => {
@@ -179,34 +255,36 @@ const DialogPopup = ({
       <DialogBackdrop className={backdropClassName} layer={layer} />
       <DialogViewport
         className={cn(
-          bottomStickOnMobile &&
-            "max-sm:grid-rows-[1fr_auto] max-sm:p-0 max-sm:pt-12",
+          DIALOG_MOBILE_VIEWPORT_CLASS_NAMES[mobileLayout],
           viewportClassName,
         )}
         layer={layer}
       >
         <DialogPrimitive.Popup
           className={cn(
-            "bg-popover text-popover-foreground relative row-start-2 flex max-h-full min-h-0 w-full max-w-lg min-w-0 -translate-y-[calc(1.25rem*var(--nested-dialogs))] scale-[calc(1-0.1*var(--nested-dialogs))] flex-col rounded-2xl border opacity-[calc(1-0.1*var(--nested-dialogs))] shadow-lg/5 transition-[scale,opacity,translate] duration-200 ease-out will-change-transform not-dark:bg-clip-padding before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-2xl)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] data-ending-style:scale-98 data-ending-style:opacity-0 data-ending-style:duration-150 data-nested:data-ending-style:translate-y-8 data-nested-dialog-open:origin-top data-starting-style:scale-98 data-starting-style:opacity-0 data-nested:data-starting-style:translate-y-8 dark:before:shadow-[0_-1px_--theme(--color-white/6%)]",
-            bottomStickOnMobile &&
-              "max-sm:max-w-none max-sm:rounded-none max-sm:border-x-0 max-sm:border-t max-sm:border-b-0 max-sm:pb-(--safe-area-bottom) max-sm:opacity-[calc(1-min(var(--nested-dialogs),1))] max-sm:before:hidden max-sm:before:rounded-none max-sm:data-ending-style:translate-y-4 max-sm:data-starting-style:translate-y-4",
+            "bg-popover text-popover-foreground relative row-start-2 flex max-h-full min-h-0 w-full min-w-0 -translate-y-[calc(1.25rem*var(--nested-dialogs))] scale-[calc(1-0.1*var(--nested-dialogs))] flex-col rounded-2xl border opacity-[calc(1-0.1*var(--nested-dialogs))] shadow-lg/5 transition-[scale,opacity,translate] duration-200 ease-out will-change-transform not-dark:bg-clip-padding before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-2xl)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] data-ending-style:scale-98 data-ending-style:opacity-0 data-ending-style:duration-150 data-nested:data-ending-style:translate-y-8 data-nested-dialog-open:origin-top data-starting-style:scale-98 data-starting-style:opacity-0 data-nested:data-starting-style:translate-y-8 dark:before:shadow-[0_-1px_--theme(--color-white/6%)]",
+            DIALOG_SIZE_CLASS_NAMES[size],
+            DIALOG_MOBILE_POPUP_CLASS_NAMES[mobileLayout],
             className,
           )}
+          data-size={size}
           data-slot="dialog-popup"
           {...props}
         >
-          {dismissal === "confirm-discard" && (
+          {dismissal !== "idle" && (
             <div className="flex shrink-0 justify-end ps-2 pe-12 pt-2">
               <span
                 className="text-muted-foreground max-w-64 px-2 py-1 text-xs"
                 role="status"
               >
-                {labels.unsavedChanges}
+                {dismissal === "confirm-escape"
+                  ? labels.unsavedChanges
+                  : labels.unsavedChangesClose}
               </span>
             </div>
           )}
           {children}
-          {(showCloseButton || dismissal === "confirm-discard") && (
+          {(showCloseButton || dismissal !== "idle") && (
             <DialogPrimitive.Close
               aria-label={labels.close}
               className="absolute end-2 top-2"
@@ -288,7 +366,10 @@ const DialogPanel = ({
   </ScrollArea>
 );
 
+export type { DialogLabels, DialogMobileLayout, DialogSize };
 export {
+  DIALOG_MOBILE_LAYOUT,
+  DIALOG_SIZE_CLASS_NAMES,
   DialogCreateHandle,
   DialogProvider,
   Dialog,

@@ -38,7 +38,7 @@ import {
 import {
   PublicLawUnavailableError,
   toPublicLawError,
-  unwrapPublicLawEden,
+  unwrapPublicLawResponse,
 } from "@/lib/public-law-api";
 import { toSafeId } from "@/lib/safe-id";
 import {
@@ -93,12 +93,15 @@ const searchCaseLawMentions = async ({
     // not a defect to report on every keystroke; the picker simply has no
     // decisions to offer.
     if (!PublicLawUnavailableError.is(error)) {
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "searchCaseLawMentions:failure",
+        scope: { type: "handler", handlerId: "searchCaseLawMentions:failure" },
+      });
     }
     return [];
   }
 
-  const data = unwrapPublicLawEden(response, "searchPublicCaseLawMentions");
+  const data = unwrapPublicLawResponse(response, "searchPublicCaseLawMentions");
 
   return data.hits.map((hit) => ({
     resource: resourceRef({
@@ -156,10 +159,16 @@ const loadSourceMentions = async ({
     ),
   ]);
   if (Result.isError(catalog)) {
-    getAnalytics().captureError(catalog.error);
+    getAnalytics().captureError(catalog.error, {
+      fingerprintKey: "loadSourceMentions:catalog",
+      scope: { type: "handler", handlerId: "loadSourceMentions:catalog" },
+    });
   }
   if (Result.isError(connections)) {
-    getAnalytics().captureError(connections.error);
+    getAnalytics().captureError(connections.error, {
+      fingerprintKey: "loadSourceMentions:connections",
+      scope: { type: "handler", handlerId: "loadSourceMentions:connections" },
+    });
   }
   const connectorCatalog = Result.isOk(catalog) ? catalog.value : null;
   return buildSourceMentionOptions({

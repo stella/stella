@@ -53,6 +53,7 @@ import {
   toPersistedChatMessages,
   withCurrentChatMessages,
 } from "@/features/chat/chat-persisted-messages";
+import { getChatRuntimeContextKind } from "@/features/chat/chat-query-contract";
 import { keepShownRejoinMessages } from "@/features/chat/chat-rejoin-messages";
 import { createChatSendTiming } from "@/features/chat/chat-send-timing";
 import { keepPostedMessagesInSnapshots } from "@/features/chat/chat-snapshot-history";
@@ -679,6 +680,13 @@ export const createChatRuntime = ({
             message:
               "Chat sent without the browser extension bridge mounted; the browser tool is unavailable for this turn",
           }),
+          {
+            fingerprintKey: "chatRuntime:browserBridgeUnmounted",
+            scope: {
+              type: "handler",
+              handlerId: "chatRuntime:browserBridgeUnmounted",
+            },
+          },
         );
       }
       const prepared = Result.try({
@@ -710,11 +718,23 @@ export const createChatRuntime = ({
             messages.slice(-1),
             requestBody,
             abortSignal,
-            runContext,
+            {
+              ...runContext,
+              // The API owns tool schemas and derives browser availability
+              // from browserClient. Keep local executors registered without
+              // uploading their schemas on every send and continuation.
+              clientTools: [],
+            },
           ),
         ),
-        (diagnostic) => {
-          providerDiagnostic = diagnostic;
+        {
+          scope: {
+            type: "handler",
+            handlerId: `chat-provider-diagnostic.${key.scope}.${getChatRuntimeContextKind(context)}`,
+          },
+          onDiagnostic: (diagnostic) => {
+            providerDiagnostic = diagnostic;
+          },
         },
       );
     },

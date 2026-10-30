@@ -5,6 +5,8 @@ import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { agentSkillResources, agentSkills } from "@/api/db/schema";
 import type { AgentSkillOrigin, AgentSkillScope } from "@/api/db/schema";
+import { UNBOUND } from "@/api/lib/agent-skills/binding";
+import type { SkillBinding } from "@/api/lib/agent-skills/binding";
 import {
   hashSkillPackageContent,
   skillContentHashAfter,
@@ -40,6 +42,11 @@ type InstallSkillSource =
   | { origin: Exclude<AgentSkillOrigin, "url">; parsed: ParsedSkillPackage };
 
 type InstallSkillProps = InstallSkillSource & {
+  /**
+   * The matter or client the new skill is bound to, already authorized by
+   * the caller (`authorizeSkillBinding`). Absent installs an unbound skill.
+   */
+  binding?: SkillBinding;
   // Install as a draft (hidden until the user finishes). Defaults to true so
   // existing upload/import callers keep installing enabled skills.
   enabled?: boolean;
@@ -206,6 +213,7 @@ const urlReplayIdentityOf = (
 
 export const installSkill = async (props: InstallSkillProps) => {
   const {
+    binding = UNBOUND,
     enabled = true,
     memberRole,
     onInstalled,
@@ -220,7 +228,11 @@ export const installSkill = async (props: InstallSkillProps) => {
   } = props;
   const urlReplayIdentity = urlReplayIdentityOf(props);
   const contentHash = hashSkillPackageContent(parsed);
-  const authorization = authorizeSkillInstallScope({ memberRole, scope });
+  const authorization = authorizeSkillInstallScope({
+    boundToMatter: binding.boundWorkspaceId !== null,
+    memberRole,
+    scope,
+  });
   if (Result.isError(authorization)) {
     return Result.err(authorization.error);
   }
@@ -345,6 +357,7 @@ export const installSkill = async (props: InstallSkillProps) => {
             body: parsed.body,
             enabled,
             invocation: parsed.invocation,
+            ...binding,
           });
           const rows = urlReplayIdentity
             ? await insert
@@ -498,15 +511,23 @@ export const isUnchangedUrlSkill = ({
   }
 };
 
+/**
+ * Team skills install for admins and owners only, except one bound to a
+ * matter, which any member who reaches that matter may add (the caller checks
+ * the binding itself with `authorizeSkillBinding`; row security backs both).
+ */
 export const authorizeSkillInstallScope = ({
+  boundToMatter = false,
   memberRole,
   scope,
 }: {
+  boundToMatter?: boolean;
   memberRole: AuthorizedMemberRole;
   scope: AgentSkillScope;
 }): Result<void, HandlerError> => {
   if (
     scope !== "team" ||
+    boundToMatter ||
     hasManagementPermission(memberRole, { agentSkill: ["create"] })
   ) {
     return Result.ok(undefined);

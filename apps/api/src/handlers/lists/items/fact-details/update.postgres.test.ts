@@ -1,8 +1,9 @@
-import { Value } from "@sinclair/typebox/value";
 import { describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
+import * as v from "valibot";
 
 import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
+import { createTestState } from "@stll/test-state";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
@@ -37,7 +38,6 @@ import {
   createTestHandlerContext,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
-import { createTestState } from "@/api/tests/helpers/test-state";
 
 const testState = createTestState({ file: import.meta.path, config: env });
 const databaseUrl = process.env["DATABASE_URL"];
@@ -205,7 +205,7 @@ if (!databaseUrl || !runPostgres) {
             interpretationNote,
             scoring,
           };
-          expect(Value.Check(updateFactDetails.config.body, body)).toBe(true);
+          expect(v.is(updateFactDetails.config.body, body)).toBe(true);
           return await updateFactDetails.handler(
             createTestHandlerContext<
               Parameters<typeof updateFactDetails.handler>[0]

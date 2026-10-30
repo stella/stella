@@ -23,7 +23,7 @@ function AlertDialogTrigger({
   ...props
 }: AlertDialogPrimitive.Trigger.Props & { tooltip?: React.ReactNode }) {
   return renderTooltipTrigger({
-    tooltip: tooltip ?? props["aria-label"] ?? props.title,
+    tooltip,
     trigger: (
       <AlertDialogPrimitive.Trigger
         data-slot="alert-dialog-trigger"
@@ -173,7 +173,7 @@ function AlertDialogClose({
   ...props
 }: AlertDialogPrimitive.Close.Props & { tooltip?: React.ReactNode }) {
   return renderTooltipTrigger({
-    tooltip: tooltip ?? props["aria-label"] ?? props.title,
+    tooltip,
     trigger: (
       <AlertDialogPrimitive.Close data-slot="alert-dialog-close" {...props} />
     ),

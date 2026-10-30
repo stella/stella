@@ -1,7 +1,13 @@
 import { describe, expect, mock, test } from "bun:test";
-import Elysia from "elysia";
 
 import { createCurrentMachineApiKeyHandler } from "@/api/handlers/api-keys/current";
+import { createHttpApp } from "@/api/http/app";
+import {
+  CACHE_CONTROL_HEADER,
+  PRIVATE_CACHE_CONTROL,
+  responseCachePolicy,
+} from "@/api/http/cache";
+import { routes } from "@/api/http/route";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   API_KEY_KIND,
@@ -9,12 +15,10 @@ import {
   MACHINE_API_KEY_PREFIX,
   PERSONAL_API_KEY_AUDIENCES,
 } from "@/api/lib/machine-api-key-config";
-import {
-  CACHE_CONTROL_HEADER,
-  PRIVATE_CACHE_CONTROL,
-} from "@/api/lib/security-headers";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { resolveOwnMachineApiKeyCredential } from "@/api/mcp/api-key-auth";
 import { McpAuthenticationError } from "@/api/mcp/errors";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 
 type ResolveCredential = typeof resolveOwnMachineApiKeyCredential;
 type ResolveCredentialInput = Parameters<ResolveCredential>[0];
@@ -22,10 +26,17 @@ type ResolveCredentialInput = Parameters<ResolveCredential>[0];
 const expiresAt = new Date("2026-10-08T12:00:00.000Z");
 const presentedCredential = `${MACHINE_API_KEY_PREFIX}secret-credential-value`;
 
+// The pipeline's cache stage and error boundary, as production composes them.
 const createApp = (resolveCredential: ResolveCredential) =>
-  new Elysia().get(
-    "/current",
-    createCurrentMachineApiKeyHandler(resolveCredential).handler,
+  serveForTest(
+    createHttpApp({
+      routes: routes({
+        "/current": {
+          GET: createCurrentMachineApiKeyHandler(resolveCredential),
+        },
+      }),
+      middleware: [responseCachePolicy, errorBoundary],
+    }),
   );
 
 const requestCurrent = (authorization?: string) =>
@@ -53,7 +64,8 @@ describe("GET /current", () => {
         },
       };
     };
-    const response = await createApp(resolveCredential).handle(
+    await using app = createApp(resolveCredential);
+    const response = await app.fetch(
       requestCurrent(`Bearer ${presentedCredential}`),
     );
 
@@ -80,7 +92,7 @@ describe("GET /current", () => {
         session: { userId: "user-1", organizationId: "org-1", scopes: [] },
       };
     };
-    const app = createApp(resolveCredential);
+    await using app = createApp(resolveCredential);
     const invalidAuthorizations = [
       undefined,
       "Bearer stella_wrong_secret",
@@ -88,7 +100,7 @@ describe("GET /current", () => {
     ];
 
     for (const authorization of invalidAuthorizations) {
-      const response = await app.handle(requestCurrent(authorization));
+      const response = await app.fetch(requestCurrent(authorization));
       expect(response.status).toBe(401);
       expect(response.headers.get(CACHE_CONTROL_HEADER)).toBe(
         PRIVATE_CACHE_CONTROL,
@@ -104,15 +116,21 @@ describe("GET /current", () => {
         throw failure;
       });
 
-    const unauthorized = await appFor(
+    await using unauthorizedApp = appFor(
       new McpAuthenticationError({ message: "Invalid or expired API key" }),
-    ).handle(requestCurrent(`Bearer ${presentedCredential}`));
-    const unavailable = await appFor(
+    );
+    await using unavailableApp = appFor(
       new HandlerError({
         status: 500,
         message: "credential store unavailable",
       }),
-    ).handle(requestCurrent(`Bearer ${presentedCredential}`));
+    );
+    const unauthorized = await unauthorizedApp.fetch(
+      requestCurrent(`Bearer ${presentedCredential}`),
+    );
+    const unavailable = await unavailableApp.fetch(
+      requestCurrent(`Bearer ${presentedCredential}`),
+    );
 
     expect(unauthorized.status).toBe(401);
     expect(unavailable.status).toBe(503);
@@ -171,7 +189,8 @@ describe("GET /current audience reach", () => {
           resolveAuthorization,
           resolvePersonalPolicy: async () => "enabled",
         });
-      const response = await createApp(resolveCredential).handle(
+      await using app = createApp(resolveCredential);
+      const response = await app.fetch(
         requestCurrent(`Bearer ${presentedCredential}`),
       );
 

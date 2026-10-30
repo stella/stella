@@ -227,7 +227,10 @@ export const loadPDF = async ({
         const xfaHtml = await firstPage.proxy
           .getXfa()
           .catch((error: unknown) => {
-            getAnalytics().captureError(error);
+            getAnalytics().captureError(error, {
+              fingerprintKey: "loadPDF:failure",
+              scope: { type: "handler", handlerId: "loadPDF:failure" },
+            });
             return null;
           });
         isXfa = xfaHtml !== null;

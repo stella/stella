@@ -1,3 +1,5 @@
+import type { JsonSchemaValidator } from "@modelcontextprotocol/client";
+import type { AjvJsonSchemaValidator } from "@modelcontextprotocol/client/validators/ajv";
 import { Ajv } from "ajv";
 import type { ValidateFunction } from "ajv";
 import addFormats from "ajv-formats";
@@ -31,6 +33,12 @@ export const compileWireSchema = (
   ajv: Ajv,
   schema: Readonly<Record<string, unknown>>,
 ): ValidateFunction => ajv.compile(schema);
+
+/** Applies the same plain-JSON boundary to the official client's validator. */
+export const compileClientWireSchema = (
+  validator: AjvJsonSchemaValidator,
+  schema: Readonly<Record<string, unknown>>,
+): JsonSchemaValidator<unknown> => validator.getValidator(schema);
 
 type SchemaNode = Record<string, unknown>;
 

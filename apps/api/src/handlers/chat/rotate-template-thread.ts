@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   createTemplateChatThread,
@@ -9,7 +9,7 @@ import {
 import type { TemplateThreadScope } from "@/api/handlers/chat/template-thread-shared";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
@@ -17,9 +17,7 @@ const config = {
   permissions: { chat: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "assistant_chat" },
-  body: t.Object({
-    templateId: tSafeId("template"),
-  }),
+  body: v.object({ templateId: resourceIdSchema("template") }),
 } satisfies HandlerConfig;
 
 /**

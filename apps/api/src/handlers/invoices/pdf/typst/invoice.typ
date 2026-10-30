@@ -81,11 +81,11 @@
 #v(14pt)
 
 // Lines: the header row repeats on every page the table breaks onto.
-#show table: set text(number-width: "tabular")
+#show table: set text(size: 8.5pt, number-width: "tabular")
 #table(
   columns: (1fr, auto, auto, auto, auto, auto),
   stroke: (x, y) => if y == 0 { (bottom: 0.8pt + accent) } else { (bottom: 0.4pt + rule) },
-  inset: (x: 5pt, y: 6pt),
+  inset: (x: 5pt, y: 7pt),
   align: (x, y) => if x == 0 { start + top } else { end + top },
   table.header(
     repeat: true,
@@ -98,14 +98,22 @@
       data.labels.total,
     ).map(h => text(size: 7pt, weight: "semibold", fill: muted, upper(h))),
   ),
-  ..data.lines.map(line => (
-    table.cell(colspan: 6, inset: (x: 5pt, top: 6pt, bottom: 2pt), text(size: 8pt, line.description)),
-    [],
-    if line.quantity != none { [#data.labels.quantity: #line.quantity] } else { [] },
-    if line.unitPrice != none { [#data.labels.unitPrice: #line.unitPrice] } else { [] },
-    line.net,
-    [#line.vat \ #text(size: 7pt, fill: muted, line.vatLabel)],
-    text(weight: "medium", line.total),
+  // Lines grouped by matter; one row per line, the description wrapping in its
+  // own column beside the figures.
+  ..data.groups.map(group => (
+    table.cell(colspan: 6, fill: tint, text(weight: "semibold", group.workspaceName)),
+    ..group.lines.map(line => (
+      line.description,
+      if line.quantity != none { line.quantity } else { [] },
+      if line.unitPrice != none { line.unitPrice } else { [] },
+      line.net,
+      [#line.vat \ #text(size: 7pt, fill: muted, line.vatLabel)],
+      text(weight: "medium", line.total),
+    )).flatten(),
+    table.cell(colspan: 3, text(weight: "semibold", data.labels.total + ": " + group.workspaceName)),
+    text(weight: "semibold", group.net),
+    text(weight: "semibold", group.vat),
+    text(weight: "semibold", group.total),
   )).flatten(),
 )
 #v(10pt)
@@ -113,17 +121,46 @@
 // Totals, VAT breakdown and the amount due, which is the most prominent figure.
 #align(end, block(width: 62%, breakable: false, {
   set text(number-width: "tabular")
+  // VAT breakdown per rate, then the summed net and VAT.
   grid(
-    columns: (1fr, auto),
+    columns: (1fr, auto, auto),
+    column-gutter: 14pt,
     row-gutter: 6pt,
-    align: (start, end),
-    data.labels.net, data.totals.net,
-    data.labels.vat, data.totals.vat,
+    align: (start, end, end),
+    [], label-text(data.labels.net), label-text(data.labels.vat),
     ..data.totals.breakdown.map(b => (
-      text(fill: muted, size: 8pt, b.label),
-      text(fill: muted, size: 8pt, [#b.net / #b.vat]),
+      text(fill: muted, b.label), text(fill: muted, b.net), text(fill: muted, b.vat),
     )).flatten(),
+    // A single rate is its own sum; with none or several, the summed row carries the totals.
+    ..if data.totals.breakdown.len() != 1 {
+      (
+        grid.hline(stroke: 0.4pt + rule),
+        text(weight: "semibold", data.labels.total),
+        text(weight: "semibold", data.totals.net),
+        text(weight: "semibold", data.totals.vat),
+      )
+    } else { () },
   )
+  if data.totals.homeVat != none {
+    v(8pt)
+    grid(
+      columns: (1fr, auto),
+      row-gutter: 5pt,
+      align: (start, end),
+      ..data.totals.homeVat.breakdown.map(b => (
+        text(fill: muted, size: 8pt, [#data.labels.vatHome — #b.label]),
+        text(fill: muted, size: 8pt, b.vat),
+      )).flatten(),
+      text(weight: "semibold", data.labels.vatHomeTotal),
+      text(weight: "semibold", data.totals.homeVat.total),
+    )
+    v(5pt)
+    text(fill: muted, size: 8pt, [
+      #data.labels.exchangeRate: #data.totals.homeVat.rate; \
+      #data.labels.rateSource: #data.totals.homeVat.source; \
+      #data.labels.rateDate: #data.totals.homeVat.date
+    ])
+  }
   v(8pt)
   block(fill: accent, inset: (x: 12pt, y: 10pt), radius: 5pt, width: 100%,
     grid(

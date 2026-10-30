@@ -23,7 +23,12 @@
 import { Result } from "better-result";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import {
+  booleanFromString,
+  numberFromString,
+} from "@stll/api-contract/http-input";
 
 import {
   documentReviewFindings,
@@ -33,8 +38,8 @@ import {
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import {
-  tPaginationCursor,
-  tSafeId,
+  paginationCursorSchema,
+  resourceIdSchema,
   workspaceParams,
 } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
@@ -106,15 +111,21 @@ const config = {
   access: "read",
   mcp: { type: "internal", reason: "document_processing" },
   params: workspaceParams({}),
-  query: t.Object({
-    entityId: tSafeId("entity"),
-    fileFieldId: tSafeId("field"),
-    cursor: t.Optional(tPaginationCursor()),
-    limit: t.Optional(t.Integer({ minimum: 1, maximum: RUNS_PAGE_SIZE_MAX })),
-    // Send the newest run's findings with the page. Only the first page has a
-    // newest run to send, so a cursored request answers with `latest: null`
-    // even when it asks.
-    includeLatest: t.Optional(t.Boolean()),
+  query: v.object({
+    entityId: resourceIdSchema("entity"),
+    fileFieldId: resourceIdSchema("field"),
+    cursor: v.optional(paginationCursorSchema()),
+    limit: v.optional(
+      numberFromString(
+        v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(1),
+          v.maxValue(RUNS_PAGE_SIZE_MAX),
+        ),
+      ),
+    ),
+    includeLatest: v.optional(booleanFromString()),
   }),
 } satisfies WorkspaceHandlerConfig;
 

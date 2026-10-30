@@ -1,8 +1,11 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { runWithPublicReadStatementTimeout } from "@/api/lib/legal-search/public-read-timeout-context";
 import {
   assertPublicLawDatabaseRolePermissions,
   type PublicLawDatabaseRolePermissions,
+  publicLawReadDb,
 } from "@/api/lib/public-law-read-db";
 import {
   PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
@@ -88,4 +91,24 @@ describe("external public-law database boundary", () => {
       );
     },
   );
+});
+
+test("a cancelled public read stops before opening a transaction", async () => {
+  const controller = new AbortController();
+  const reason = new DOMException("Read cancelled", "AbortError");
+  controller.abort(reason);
+  let entered = false;
+  const result = await runWithPublicReadStatementTimeout(
+    { budgetMs: 1000, signal: controller.signal },
+    async () =>
+      await Result.tryPromise({
+        try: async () =>
+          await publicLawReadDb(async () => {
+            entered = true;
+          }),
+        catch: (error: unknown) => error,
+      }),
+  );
+  expect(entered).toBe(false);
+  expect(result).toEqual(Result.err(reason));
 });

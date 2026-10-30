@@ -5,9 +5,9 @@ import { repoRelativePath } from "../packages/portable-path/src/index";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 
-// TypeScript 7 publishes no classic compiler API at `typescript`: the package
-// root is only its version, so `ts.createSourceFile` and friends would be
-// undefined at run time. The lint rule covers static imports in linted files;
+// The repository depends on no `typescript` package: what resolves there is
+// whichever copy a linter peers on. The classic API is `typescript6`, the
+// TypeScript 7 API is `tsrs/unstable/*`. The lint rule covers static imports in linted files;
 // this census also covers `require`, dynamic `import()`, and files the linter
 // never reads (shell scripts that embed `bun -e` programs, plain .mjs).
 const CLASSIC_API_IMPORT =
@@ -41,7 +41,7 @@ test("the pattern recognizes every import form", () => {
   }
   for (const source of [
     'import ts from "typescript6";',
-    'import { API } from "typescript/unstable/sync";',
+    'import { API } from "tsrs/unstable/sync";',
     'const language = "typescript";',
   ]) {
     expect(CLASSIC_API_IMPORT.test(source)).toBe(false);

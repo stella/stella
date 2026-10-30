@@ -1,5 +1,3 @@
-import type { TSchema } from "@sinclair/typebox";
-import { Value } from "@sinclair/typebox/value";
 import {
   afterAll,
   afterEach,
@@ -12,6 +10,7 @@ import {
   test,
 } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
+import * as v from "valibot";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 
@@ -122,8 +121,8 @@ const context = (workspaceIds = [ids.wsA1]) => ({
   },
 });
 
-const checkedBody = <T>(schema: TSchema, body: T) => {
-  expect(Value.Check(schema, body)).toBe(true);
+const checkedBody = <T>(schema: v.GenericSchema, body: T) => {
+  expect(v.is(schema, body)).toBe(true);
   return body;
 };
 

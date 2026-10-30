@@ -101,6 +101,7 @@ export const refusedCredentialIssuerProbes = {
       deviceJkt: "A".repeat(43),
       userId,
       organizationId,
+      sessionId: "issuing-session",
       db: {
         delete: () => {
           panic("The grant store was not expected to run");

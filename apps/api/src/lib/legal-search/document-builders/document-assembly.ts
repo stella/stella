@@ -1,5 +1,6 @@
 import { panic, Result, TaggedError } from "better-result";
 
+import { declareFingerprintFields } from "@stll/errors";
 import {
   projectPlainText,
   withProjectedPlainText,
@@ -21,7 +22,11 @@ const DOCUMENT_BUILD_FAILURES = ["no-content-root", "no-blocks"] as const;
 export class DocumentBuildError extends TaggedError("DocumentBuildError")<{
   message: string;
   reason: (typeof DOCUMENT_BUILD_FAILURES)[number];
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 /** The text axes of a block a builder drafts, derived from its inlines. */
 export const draftText = (

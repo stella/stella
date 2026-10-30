@@ -110,6 +110,7 @@ export const DownloadSplitButton = ({
         aria-label={downloadLabel}
         onClick={() => onDownload("original")}
         size="xs"
+        tooltip={downloadLabel}
         variant="ghost"
       >
         <DownloadIcon className="size-3.5" />
@@ -118,6 +119,7 @@ export const DownloadSplitButton = ({
   }
   return (
     <SplitButton
+      primaryContent="icon"
       primaryLabel={downloadLabel}
       menuLabel={downloadAsLabel}
       onPrimaryClick={() => onDownload("original")}

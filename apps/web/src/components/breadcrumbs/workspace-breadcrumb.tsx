@@ -12,6 +12,7 @@ import { BreadcrumbItem, BreadcrumbSeparator } from "@stll/ui/breadcrumb";
 import { InlineRenameInput } from "@stll/ui/inline-rename";
 import { MatterIcon } from "@stll/ui/matter-icon";
 
+import { MatterSwitcher } from "@/components/breadcrumbs/matter-switcher";
 import { BreadcrumbQueryContent } from "@/components/breadcrumbs/query-content";
 import { MatterNumberHint } from "@/components/matter-number-hint";
 import Tooltip from "@/components/tooltip";
@@ -25,7 +26,7 @@ import { useInlineRename } from "@/hooks/use-inline-rename";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { useMatterNumberingEnabled } from "@/lib/organization/use-matter-numbering";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 import { useUpdateWorkspace } from "@/lib/workspaces/mutations";
 import { workspaceOptions } from "@/lib/workspaces/queries";
 import { useReferenceConflictMessage } from "@/lib/workspaces/use-reference-conflict-message";
@@ -50,7 +51,7 @@ export const WorkspaceBreadcrumb = ({
   });
   const [refInputEl, setRefInputEl] = useState<HTMLInputElement | null>(null);
   const workspaceQuery = useQuery(workspaceOptions(workspaceId));
-  const workspaceView = useQueryView(workspaceQuery);
+  const workspaceView = queryView(workspaceQuery);
   const cachedWorkspace =
     workspaceView.type === "items" ? workspaceView.items : undefined;
   const updateWorkspace = useUpdateWorkspace();
@@ -382,6 +383,7 @@ export const WorkspaceBreadcrumb = ({
                     </span>
                   ) : null}
                 </Link>
+                {isEditingRef ? null : <MatterSwitcher matter={workspace} />}
               </>
             );
           })()}
@@ -444,6 +446,7 @@ export const WorkspaceBreadcrumb = ({
           {displayName}
         </Link>
         {referenceSegment}
+        {isEditingRef ? null : <MatterSwitcher matter={workspace} />}
         {referenceHint}
         {referenceConfirmationDialog}
       </BreadcrumbItem>

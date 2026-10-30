@@ -2,7 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 
 import { env } from "@/env";
 import { api } from "@/lib/api";
-import { shouldRetryAPIRequest, unwrapEden } from "@/lib/errors/api";
+import { shouldRetryAPIRequest, unwrapApiResponse } from "@/lib/errors/api";
 import type { QueryOptionsInput } from "@/lib/react-query";
 
 type UsageEntitlementKey = {
@@ -41,7 +41,7 @@ const fetchUsageEntitlement = async ({
   const response = await api.usage.entitlement.get({
     fetch: { signal },
   });
-  return unwrapEden(response);
+  return unwrapApiResponse(response);
 };
 
 export const usageEntitlementOptions = ({
@@ -88,7 +88,7 @@ const fetchUsageLane = async ({
   const response = await api.usage.lane.get({
     fetch: { signal },
   });
-  return unwrapEden(response);
+  return unwrapApiResponse(response);
 };
 
 /**
@@ -129,5 +129,5 @@ export const organizationAccessOptions = ({
     queryKey: organizationAccessKeys.byOrganization({ organizationId }),
     retry: shouldRetryAPIRequest,
     queryFn: async ({ signal }) =>
-      unwrapEden(await api.usage.access.get({ fetch: { signal } })),
+      unwrapApiResponse(await api.usage.access.get({ fetch: { signal } })),
   });

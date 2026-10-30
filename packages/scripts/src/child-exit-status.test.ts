@@ -89,6 +89,7 @@ test("Bun and Node signal-killed children produce a failing parent status", asyn
   }
 
   const syncChild = spawnSync("sleep", ["30"], {
+    maxBuffer: 2 ** 30,
     timeout: 20,
     killSignal: "SIGTERM",
   });

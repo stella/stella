@@ -101,6 +101,7 @@ export const readPgFtsBrowseFacets = definePublicLawSharedQuery(
     const snapshotRows = await tx
       .select({ kind: caseLawBrowseFacetCounts.kind })
       .from(caseLawBrowseFacetCounts)
+      .orderBy(caseLawBrowseFacetCounts.kind)
       .limit(1);
     if (snapshotRows.length === 0) {
       return await readLivePgFtsBrowseFacets(tx, query);

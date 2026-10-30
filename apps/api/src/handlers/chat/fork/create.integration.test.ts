@@ -8,7 +8,7 @@ import {
   mock,
   test,
 } from "bun:test";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
@@ -28,6 +28,8 @@ import {
   createChatAttachmentPart,
   toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
+import type { PersistedChatMessageContent } from "@/api/handlers/chat/types";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -55,6 +57,10 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 import getMessages from "../messages/list";
 import getThreads from "../threads/list";
 import { createForkThread } from "./create";
+
+beforeEach(() => {
+  indexChatThreadMock.mockClear();
+});
 
 // Search indexing writes through the root (unscoped) database, which this
 // fixture deliberately does not stand up; the handler takes it as an injectable
@@ -281,6 +287,7 @@ const forkContext = ({
     query: workspaceId ? { workspaceId } : {},
     recordAuditEvent: async () => await Promise.resolve(),
     request: new Request("http://localhost/v1/chat/threads/fork"),
+    route: "/v1/chat/threads/:threadId/fork" satisfies ApiRoutePath,
     safeDb: db,
     session: { activeOrganizationId: organizationId ?? ids.orgA },
     user: { id: userId ?? ids.userA1 },
@@ -288,6 +295,8 @@ const forkContext = ({
 
 const threadsContext = (): ThreadsCtx =>
   asTestRaw<ThreadsCtx>({
+    request: new Request("http://localhost/v1/chat/threads"),
+    route: "/v1/chat/threads" satisfies ApiRoutePath,
     memberRole: sessionMemberRole("owner"),
     query: { limit: 100 },
     safeDb,
@@ -336,7 +345,7 @@ const messageTexts = (
   );
 
 /**
- * A safe handler returns its payload directly and an Elysia status response on
+ * A safe handler returns its payload directly and an HTTP core status response on
  * failure, so a `code` property is how a rejection presents itself here.
  */
 const expectForked = async (pending: ReturnType<typeof forkThread.handler>) => {
@@ -355,6 +364,54 @@ const messageAt = (seeded: SeededThread, index: number) => {
   }
   return id;
 };
+
+test("a fork copies what a newer release stored exactly, parts and fields this release cannot read included", async () => {
+  // A row a newer release wrote: a part type, a nested field and a top-level
+  // field this release has never seen.
+  const answer = {
+    data: [
+      {
+        content: "Answer one",
+        laterField: { nested: true },
+        type: "text",
+      },
+      { quote: "Clause 4", type: "citation" },
+    ],
+    version: 3,
+  };
+  const source = await seedThread({ texts: ["Ask one", "Answer one"] });
+  const answerId = messageAt(source, 1);
+  await testDb
+    .update(chatMessages)
+    .set({ content: asTestRaw<PersistedChatMessageContent>(answer) })
+    .where(eq(chatMessages.id, answerId));
+  const newThreadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
+  seededThreadIds.push(newThreadId);
+
+  await expectForked(
+    forkThread.handler(
+      forkContext({
+        newThreadId,
+        threadId: source.threadId,
+        upToMessageId: answerId,
+      }),
+    ),
+  );
+
+  // Read past the stored-content codec: what the database holds.
+  const storedText = async (threadId: SafeId<"chatThread">) =>
+    (
+      await testDb
+        .select({ content: sql<string>`${chatMessages.content}::text` })
+        .from(chatMessages)
+        .where(eq(chatMessages.threadId, threadId))
+        .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id))
+    ).map((row): unknown => JSON.parse(row.content));
+  const copied = await storedText(newThreadId);
+  const original = await storedText(source.threadId);
+  expect(copied).toEqual(original);
+  expect(copied.at(1)).toEqual(answer);
+});
 
 test("copies the prefix, preserves the title, and projects fork provenance", async () => {
   const source = await seedThread({
@@ -770,6 +827,7 @@ test("get-messages reports the fork's provenance and loses it when the parent go
         promptCachingEnabled: false,
         query: {},
         request: new Request("http://localhost/v1/chat/threads/messages"),
+        route: "/v1/chat/threads/:threadId/messages" satisfies ApiRoutePath,
         safeDb,
         session: { activeOrganizationId: ids.orgA },
         user: { id: ids.userA1 },
@@ -837,6 +895,7 @@ test("a parent outside the reader's scope reports as unavailable, not by title",
       promptCachingEnabled: false,
       query: {},
       request: new Request("http://localhost/v1/chat/threads/messages"),
+      route: "/v1/chat/threads/:threadId/messages" satisfies ApiRoutePath,
       safeDb: narrowed,
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userA1 },
@@ -862,6 +921,7 @@ test("a thread that was never forked reports no provenance", async () => {
       promptCachingEnabled: false,
       query: {},
       request: new Request("http://localhost/v1/chat/threads/messages"),
+      route: "/v1/chat/threads/:threadId/messages" satisfies ApiRoutePath,
       safeDb,
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userA1 },
