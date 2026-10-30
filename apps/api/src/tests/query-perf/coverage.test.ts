@@ -9,17 +9,13 @@ import {
 } from "@/api/db/schema";
 import { readCaseLawCoverageSourcesQuery } from "@/api/handlers/case-law/decisions/coverage";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
-import {
-  CASE_LAW_COVERAGE_COURT_INDEX,
-  CASE_LAW_COVERAGE_FILING_DATE_INDEX,
-  CASE_LAW_COVERAGE_INDEX,
-} from "@/api/lib/case-law/coverage-index";
 import { READ_BUDGETS } from "@/api/lib/db/read-budgets";
 import { CASE_LAW_COVERAGE_REFRESH_STATEMENT_TIMEOUT_MS } from "@/api/lib/scheduler/tasks/case-law-coverage-refresh";
 import { isRecord } from "@/api/lib/type-guards";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
+import { coverageIndexBuildSql } from "./coverage-indexes";
 import {
   budgetProblem,
   metricsFromPlan,
@@ -93,25 +89,9 @@ describe.skipIf(!enabled)("coverage refresh read budget", () => {
               sql`CREATE VIEW ${schema}.${sql.identifier(config.name)} AS (${sql.raw(dialect.sqlToQuery(config.query).sql)})`,
             );
           }
-          for (const index of [
-            CASE_LAW_COVERAGE_INDEX,
-            CASE_LAW_COVERAGE_FILING_DATE_INDEX,
-            CASE_LAW_COVERAGE_COURT_INDEX,
-          ]) {
+          for (const build of coverageIndexBuildSql(schemaName)) {
             // db-await-in-loop: install the production online coverage indexes in the isolated fixture.
-            await db.execute(
-              sql.raw(
-                index.createSql
-                  .replace(
-                    "CREATE INDEX CONCURRENTLY",
-                    "CREATE INDEX IF NOT EXISTS",
-                  )
-                  .replace(
-                    'public."case_law_decisions"',
-                    () => `"${schemaName}"."case_law_decisions"`,
-                  ),
-              ),
-            );
+            await db.execute(sql.raw(build));
           }
           await db.execute(sql`INSERT INTO case_law_sources (id, adapter_key, name)
           SELECT ('01990000-eeee-7000-8000-' || lpad(n::text, 12, '0'))::uuid, 'coverage-budget-' || n, 'Coverage fixture' FROM generate_series(1, 4) n`);
