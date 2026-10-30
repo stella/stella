@@ -5,6 +5,7 @@ import { sql, TransactionRollbackError } from "drizzle-orm";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { withInterleaving } from "@/api/tests/helpers/transaction-interleaving";
@@ -43,77 +44,99 @@ if (!databaseUrl || !enabled) {
           aggregate: "definitionCap",
           id: { definitionId: createSafeId<"flowDefinition">() },
         } as const;
-        await withAggregateTransaction(db, async (parent) => {
-          await parent.execute(
-            sql`INSERT INTO aggregate_savepoint_values VALUES (1)`,
-          );
-          const database = createAggregateSavepointDatabase(parent);
-          await withAggregateLock({ ...earlier, tx: parent });
-          expect(
-            await withAggregateTransaction(database, async (child) => {
-              await withAggregateLock({ ...later, tx: child });
-              await child.execute(
-                sql`INSERT INTO aggregate_savepoint_values VALUES (2)`,
-              );
-              return "complete";
-            }),
-          ).toBe("complete");
-          expect(
-            await rejectionOf(
-              withAggregateTransaction(database, async (child) => {
-                await child.execute(
-                  sql`INSERT INTO aggregate_savepoint_values VALUES (3)`,
-                );
-                child.rollback();
-              }),
-            ),
-          ).toBeInstanceOf(TransactionRollbackError);
-          expect(
+        await withAggregateTransaction(
+          db,
+          AGGREGATE_TRANSACTION_BUDGETS.requestPath,
+          async (parent) => {
             await parent.execute(
-              sql`SELECT value FROM aggregate_savepoint_values ORDER BY value`,
-            ),
-          ).toEqual([{ value: 1 }, { value: 2 }]);
-          const nextEarlier = {
-            aggregate: "orgFeatureAdmission",
-            id: {
-              organizationId: mintAuthProviderId<"organization">(),
-              featureId: "flows",
-            },
-          } as const;
-          expect(
-            await rejectionOf(
-              withAggregateTransaction(
+              sql`INSERT INTO aggregate_savepoint_values VALUES (1)`,
+            );
+            const database = createAggregateSavepointDatabase(parent);
+            await withAggregateLock({ ...earlier, tx: parent });
+            expect(
+              await withAggregateTransaction(
                 database,
-                async (child) =>
-                  await withAggregateLock({ ...nextEarlier, tx: child }),
+                AGGREGATE_TRANSACTION_BUDGETS.requestPath,
+                async (child) => {
+                  await withAggregateLock({ ...later, tx: child });
+                  await child.execute(
+                    sql`INSERT INTO aggregate_savepoint_values VALUES (2)`,
+                  );
+                  return "complete";
+                },
               ),
-            ),
-          ).toMatchObject({ message: "Aggregate lock rank inversion" });
-          expect(
-            await rejectionOf(
-              withAggregateTransaction(parent, async () => "unused"),
-            ),
-          ).toMatchObject({
-            message:
-              "Use the aggregate savepoint owner for nested transactions",
-          });
-        });
+            ).toBe("complete");
+            expect(
+              await rejectionOf(
+                withAggregateTransaction(
+                  database,
+                  AGGREGATE_TRANSACTION_BUDGETS.requestPath,
+                  async (child) => {
+                    await child.execute(
+                      sql`INSERT INTO aggregate_savepoint_values VALUES (3)`,
+                    );
+                    child.rollback();
+                  },
+                ),
+              ),
+            ).toBeInstanceOf(TransactionRollbackError);
+            expect(
+              await parent.execute(
+                sql`SELECT value FROM aggregate_savepoint_values ORDER BY value`,
+              ),
+            ).toEqual([{ value: 1 }, { value: 2 }]);
+            const nextEarlier = {
+              aggregate: "orgFeatureAdmission",
+              id: {
+                organizationId: mintAuthProviderId<"organization">(),
+                featureId: "flows",
+              },
+            } as const;
+            expect(
+              await rejectionOf(
+                withAggregateTransaction(
+                  database,
+                  AGGREGATE_TRANSACTION_BUDGETS.requestPath,
+                  async (child) =>
+                    await withAggregateLock({ ...nextEarlier, tx: child }),
+                ),
+              ),
+            ).toMatchObject({ message: "Aggregate lock rank inversion" });
+            expect(
+              await rejectionOf(
+                withAggregateTransaction(
+                  parent,
+                  AGGREGATE_TRANSACTION_BUDGETS.requestPath,
+                  async () => "unused",
+                ),
+              ),
+            ).toMatchObject({
+              message:
+                "Use the aggregate savepoint owner for nested transactions",
+            });
+          },
+        );
         expect(
           await rejectionOf(
-            withAggregateTransaction(db, async (parent) => {
-              await parent.execute(
-                sql`INSERT INTO aggregate_savepoint_values VALUES (4)`,
-              );
-              await withAggregateTransaction(
-                createAggregateSavepointDatabase(parent),
-                async (child) => {
-                  await child.execute(
-                    sql`INSERT INTO aggregate_savepoint_values VALUES (5)`,
-                  );
-                },
-              );
-              parent.rollback();
-            }),
+            withAggregateTransaction(
+              db,
+              AGGREGATE_TRANSACTION_BUDGETS.requestPath,
+              async (parent) => {
+                await parent.execute(
+                  sql`INSERT INTO aggregate_savepoint_values VALUES (4)`,
+                );
+                await withAggregateTransaction(
+                  createAggregateSavepointDatabase(parent),
+                  AGGREGATE_TRANSACTION_BUDGETS.requestPath,
+                  async (child) => {
+                    await child.execute(
+                      sql`INSERT INTO aggregate_savepoint_values VALUES (5)`,
+                    );
+                  },
+                );
+                parent.rollback();
+              },
+            ),
           ),
         ).toBeInstanceOf(TransactionRollbackError);
         expect(

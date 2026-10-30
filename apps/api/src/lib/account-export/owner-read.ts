@@ -10,6 +10,7 @@ import { legalReaderAnnotations } from "@/api/db/schema";
 import type { AnyDrizzle } from "@/api/db/scoped";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 
 /** The read needs only these two capabilities, so every Postgres driver's
  * transaction (production and test databases alike) satisfies it. */
@@ -34,20 +35,24 @@ export const readAccountExportAnnotationPage = async ({
   extraWhere,
   limit,
 }: ReadAccountExportAnnotationPageOptions) =>
-  await withAggregateTransaction(database, async (tx) => {
-    await tx.execute(sql`SELECT
+  await withAggregateTransaction(
+    database,
+    AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch,
+    async (tx) => {
+      await tx.execute(sql`SELECT
       set_config(${SETTING_ACCOUNT_EXPORT_ORGANIZATION_ID}, ${organizationId}, true),
       set_config(${SETTING_ACCOUNT_EXPORT_USER_ID}, ${userId}, true)`);
-    return await tx
-      .select()
-      .from(legalReaderAnnotations)
-      .where(
-        and(
-          eq(legalReaderAnnotations.organizationId, organizationId),
-          eq(legalReaderAnnotations.userId, userId),
-          extraWhere,
-        ),
-      )
-      .orderBy(asc(legalReaderAnnotations.id))
-      .limit(limit);
-  });
+      return await tx
+        .select()
+        .from(legalReaderAnnotations)
+        .where(
+          and(
+            eq(legalReaderAnnotations.organizationId, organizationId),
+            eq(legalReaderAnnotations.userId, userId),
+            extraWhere,
+          ),
+        )
+        .orderBy(asc(legalReaderAnnotations.id))
+        .limit(limit);
+    },
+  );

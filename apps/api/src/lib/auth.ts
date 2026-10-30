@@ -263,6 +263,7 @@ import {
   hasCredentialAccount,
 } from "@/api/lib/db/account-row";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import {
   resolveWorkspaceMemberAccess,
   resolveWorkspaceMemberAuthority,
@@ -1734,6 +1735,7 @@ export const createAuth = (
     }: NewMembership) => {
       await withAggregateTransaction(
         rootDb,
+        AGGREGATE_TRANSACTION_BUDGETS.requestPath,
         async (tx) =>
           await recordOrganizationProfessionalUse({
             tx,

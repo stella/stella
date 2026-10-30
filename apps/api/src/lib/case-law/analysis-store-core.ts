@@ -1,3 +1,4 @@
+import { panic, Result, type UnhandledException } from "better-result";
 /**
  * The row a decision analysis lives in, and the compare-and-swap that takes
  * it. Pure over a Drizzle handle: no env, no connection of its own, so the
@@ -8,8 +9,6 @@
  * the row may have been re-parsed since a run began, and a run's result or
  * sentinel cleanup must then leave the newer parse's state alone.
  */
-
-import { panic, Result, type UnhandledException } from "better-result";
 import {
   and,
   eq,
@@ -28,6 +27,7 @@ import type { Transaction } from "@/api/db/root";
 import { caseLawAnalysisFailures, caseLawDecisions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { redactedProviderDiagnostic } from "@/api/lib/errors/redacted-provider-diagnostic";
 
 import {
@@ -383,43 +383,47 @@ export const createDbAnalysisStore = (
     // `FOR UPDATE` reads, and an UPDATE of this one row needs none.
     const outcome = await Result.tryPromise(
       async () =>
-        await withAggregateTransaction(db, async (tx) => {
-          const claimed = await swapAnalysisRow(tx, {
-            decisionId,
-            observed,
-            sentinel,
-          });
-          if (claimed === null) {
-            return null;
-          }
-          await hooks.afterClaimLock?.(tx);
-          const [failure] = await tx
-            .select({ keyTag: caseLawAnalysisFailures.keyTag })
-            .from(caseLawAnalysisFailures)
-            .where(
-              and(
-                eq(caseLawAnalysisFailures.decisionId, decisionId),
-                eq(caseLawAnalysisFailures.keyTag, unlessFailed.keyTag),
-                eq(caseLawAnalysisFailures.inputFingerprint, fingerprint),
-                eq(caseLawAnalysisFailures.keySource, unlessFailed.keySource),
-                sql`${caseLawAnalysisFailures.provider} IS NOT DISTINCT FROM ${unlessFailed.provider}`,
-                // The same hold as `failureMatchesGuard`.
-                or(
-                  sql`${caseLawAnalysisFailures.retryAfter} > ${unlessFailed.now.toISOString()}::timestamptz`,
-                  ...(unlessFailed.heldSince === null
-                    ? []
-                    : [
-                        sql`${caseLawAnalysisFailures.recordedAt} > ${unlessFailed.heldSince.toISOString()}::timestamptz`,
-                      ]),
+        await withAggregateTransaction(
+          db,
+          AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh,
+          async (tx) => {
+            const claimed = await swapAnalysisRow(tx, {
+              decisionId,
+              observed,
+              sentinel,
+            });
+            if (claimed === null) {
+              return null;
+            }
+            await hooks.afterClaimLock?.(tx);
+            const [failure] = await tx
+              .select({ keyTag: caseLawAnalysisFailures.keyTag })
+              .from(caseLawAnalysisFailures)
+              .where(
+                and(
+                  eq(caseLawAnalysisFailures.decisionId, decisionId),
+                  eq(caseLawAnalysisFailures.keyTag, unlessFailed.keyTag),
+                  eq(caseLawAnalysisFailures.inputFingerprint, fingerprint),
+                  eq(caseLawAnalysisFailures.keySource, unlessFailed.keySource),
+                  sql`${caseLawAnalysisFailures.provider} IS NOT DISTINCT FROM ${unlessFailed.provider}`,
+                  // The same hold as `failureMatchesGuard`.
+                  or(
+                    sql`${caseLawAnalysisFailures.retryAfter} > ${unlessFailed.now.toISOString()}::timestamptz`,
+                    ...(unlessFailed.heldSince === null
+                      ? []
+                      : [
+                          sql`${caseLawAnalysisFailures.recordedAt} > ${unlessFailed.heldSince.toISOString()}::timestamptz`,
+                        ]),
+                  ),
                 ),
-              ),
-            )
-            .limit(1);
-          if (failure !== undefined) {
-            tx.rollback();
-          }
-          return claimed;
-        }),
+              )
+              .limit(1);
+            if (failure !== undefined) {
+              tx.rollback();
+            }
+            return claimed;
+          },
+        ),
     );
     // The refusal's rollback is an answer, not a failure.
     if (

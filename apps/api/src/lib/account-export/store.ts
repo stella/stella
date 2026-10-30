@@ -17,6 +17,7 @@ import {
   withAggregateRowQuery,
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transition } from "@/api/lib/db/transitions";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -182,85 +183,89 @@ export const requestAccountExport = async (
   { db }: RequestAccountExportOptions = {},
 ): Promise<Result<AccountExportRow, HandlerError>> => {
   const database = await resolveDatabase(db);
-  return await withAggregateTransaction(database, async (tx) => {
-    await lockActiveAccountRow(tx, userId);
-    await scopeAccount(tx, userId);
-    const existing = await tx
-      .select({ id: accountExports.id })
-      .from(accountExports)
-      .where(
-        and(
-          eq(accountExports.userId, userId),
-          inArray(accountExports.status, ACCOUNT_EXPORT_ACTIVE_STATUSES),
-        ),
-      )
-      .limit(1);
-    const activeId = existing.at(0)?.id;
-    const active =
-      activeId === undefined
-        ? undefined
-        : ((await lockAccountExport(tx, { id: activeId, userId })) ??
-          panic("Active account export left under the account lock"));
-    if (active !== undefined) {
-      switch (active.row.status) {
-        case "requested":
-        case "processing":
-          return Result.ok(active.row);
-        case "ready":
-          if (!active.readyElapsed) {
+  return await withAggregateTransaction(
+    database,
+    AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch,
+    async (tx) => {
+      await lockActiveAccountRow(tx, userId);
+      await scopeAccount(tx, userId);
+      const existing = await tx
+        .select({ id: accountExports.id })
+        .from(accountExports)
+        .where(
+          and(
+            eq(accountExports.userId, userId),
+            inArray(accountExports.status, ACCOUNT_EXPORT_ACTIVE_STATUSES),
+          ),
+        )
+        .limit(1);
+      const activeId = existing.at(0)?.id;
+      const active =
+        activeId === undefined
+          ? undefined
+          : ((await lockAccountExport(tx, { id: activeId, userId })) ??
+            panic("Active account export left under the account lock"));
+      if (active !== undefined) {
+        switch (active.row.status) {
+          case "requested":
+          case "processing":
             return Result.ok(active.row);
-          }
-          break;
-        case "failed":
-        case "expired":
-          break;
-        default:
-          active.row.status satisfies never;
-          panic("Unknown account export status");
+          case "ready":
+            if (!active.readyElapsed) {
+              return Result.ok(active.row);
+            }
+            break;
+          case "failed":
+          case "expired":
+            break;
+          default:
+            active.row.status satisfies never;
+            panic("Unknown account export status");
+        }
       }
-    }
-    // The account lock serializes this indexed, bounded budget check with
-    // insertion. Returning an active export never consumes a request slot.
-    const budgetExhausted = await tx
-      .select({ id: accountExports.id })
-      .from(accountExports)
-      .where(
-        and(
-          eq(accountExports.userId, userId),
-          sql`${accountExports.createdAt} > CURRENT_TIMESTAMP - (${ACCOUNT_EXPORT_LIMITS.requestWindowMs} * INTERVAL '1 millisecond')`,
-        ),
-      )
-      .offset(ACCOUNT_EXPORT_LIMITS.requestsPerWindow - 1)
-      .limit(1);
-    if (budgetExhausted.at(0) !== undefined) {
-      return Result.err(
-        new HandlerError({
-          status: 429,
-          code: "account_export_request_limited",
-          message: "Try again later.",
-        }),
-      );
-    }
-    if (
-      active?.row.status === "ready" &&
-      !(await expireReadyAccountExport(tx, active.row))
-    ) {
-      panic("Locked account export changed under its lock");
-    }
-    const rows = await tx
-      .insert(accountExports)
-      .values({ id: Bun.randomUUIDv7(), userId })
-      .returning();
-    const created = rows.at(0);
-    if (created === undefined) {
-      panic("Account export insertion returned no row");
-    }
-    await createBackgroundAuditRecorder({ account: { userId } })(tx, {
-      type: "account.data_export.requested",
-      resourceId: created.id,
-    });
-    return Result.ok(created);
-  });
+      // The account lock serializes this indexed, bounded budget check with
+      // insertion. Returning an active export never consumes a request slot.
+      const budgetExhausted = await tx
+        .select({ id: accountExports.id })
+        .from(accountExports)
+        .where(
+          and(
+            eq(accountExports.userId, userId),
+            sql`${accountExports.createdAt} > CURRENT_TIMESTAMP - (${ACCOUNT_EXPORT_LIMITS.requestWindowMs} * INTERVAL '1 millisecond')`,
+          ),
+        )
+        .offset(ACCOUNT_EXPORT_LIMITS.requestsPerWindow - 1)
+        .limit(1);
+      if (budgetExhausted.at(0) !== undefined) {
+        return Result.err(
+          new HandlerError({
+            status: 429,
+            code: "account_export_request_limited",
+            message: "Try again later.",
+          }),
+        );
+      }
+      if (
+        active?.row.status === "ready" &&
+        !(await expireReadyAccountExport(tx, active.row))
+      ) {
+        panic("Locked account export changed under its lock");
+      }
+      const rows = await tx
+        .insert(accountExports)
+        .values({ id: Bun.randomUUIDv7(), userId })
+        .returning();
+      const created = rows.at(0);
+      if (created === undefined) {
+        panic("Account export insertion returned no row");
+      }
+      await createBackgroundAuditRecorder({ account: { userId } })(tx, {
+        type: "account.data_export.requested",
+        resourceId: created.id,
+      });
+      return Result.ok(created);
+    },
+  );
 };
 
 type ReadScopedAccountExportOptions = {
@@ -292,10 +297,14 @@ export const readAccountExport = async ({
   db,
 }: ReadAccountExportOptions): Promise<AccountExportRow | null> => {
   const database = await resolveDatabase(db);
-  return await withAggregateTransaction(database, async (tx) => {
-    await scopeAccount(tx, userId);
-    return await readScopedAccountExport({ tx, id, userId });
-  });
+  return await withAggregateTransaction(
+    database,
+    AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch,
+    async (tx) => {
+      await scopeAccount(tx, userId);
+      return await readScopedAccountExport({ tx, id, userId });
+    },
+  );
 };
 
 export const readLatestAccountExport = async (
@@ -303,19 +312,23 @@ export const readLatestAccountExport = async (
   db?: AccountExportDb,
 ): Promise<AccountExportRow | null> => {
   const database = await resolveDatabase(db);
-  return await withAggregateTransaction(database, async (tx) => {
-    await scopeAccount(tx, userId);
-    const rows = await tx
-      .select({ id: accountExports.id })
-      .from(accountExports)
-      .where(eq(accountExports.userId, userId))
-      .orderBy(desc(accountExports.createdAt), desc(accountExports.id))
-      .limit(1);
-    const latest = rows.at(0);
-    return latest === undefined
-      ? null
-      : await readScopedAccountExport({ tx, id: latest.id, userId });
-  });
+  return await withAggregateTransaction(
+    database,
+    AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch,
+    async (tx) => {
+      await scopeAccount(tx, userId);
+      const rows = await tx
+        .select({ id: accountExports.id })
+        .from(accountExports)
+        .where(eq(accountExports.userId, userId))
+        .orderBy(desc(accountExports.createdAt), desc(accountExports.id))
+        .limit(1);
+      const latest = rows.at(0);
+      return latest === undefined
+        ? null
+        : await readScopedAccountExport({ tx, id: latest.id, userId });
+    },
+  );
 };
 
 const claimSource = ({ row, leaseElapsed }: LockedAccountExport) => {
@@ -329,71 +342,75 @@ export const claimAccountExport = async (
   id: string,
   db: AccountExportDb,
 ): Promise<AccountExportClaim | null> =>
-  await withAggregateTransaction(db, async (tx) => {
-    const owners = await tx
-      .select({ userId: accountExports.userId })
-      .from(accountExports)
-      .where(eq(accountExports.id, id))
-      .limit(1);
-    const userId = owners.at(0)?.userId;
-    if (userId === undefined) {
-      return null;
-    }
-    await lockActiveAccountRow(tx, userId);
-    const locked = await lockAccountExport(tx, { id, userId });
-    const source = locked === null ? null : claimSource(locked);
-    if (locked === null || source === null) {
-      return null;
-    }
-    // A crashed final attempt becomes terminal before another worker can claim.
-    if (locked.row.attemptCount >= ACCOUNT_EXPORT_LIMITS.attempts) {
-      const exhausted = await transition({
+  await withAggregateTransaction(
+    db,
+    AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch,
+    async (tx) => {
+      const owners = await tx
+        .select({ userId: accountExports.userId })
+        .from(accountExports)
+        .where(eq(accountExports.id, id))
+        .limit(1);
+      const userId = owners.at(0)?.userId;
+      if (userId === undefined) {
+        return null;
+      }
+      await lockActiveAccountRow(tx, userId);
+      const locked = await lockAccountExport(tx, { id, userId });
+      const source = locked === null ? null : claimSource(locked);
+      if (locked === null || source === null) {
+        return null;
+      }
+      // A crashed final attempt becomes terminal before another worker can claim.
+      if (locked.row.attemptCount >= ACCOUNT_EXPORT_LIMITS.attempts) {
+        const exhausted = await transition({
+          tx,
+          spec: TRANSITIONS.accountExports,
+          id,
+          options: { from: [source], to: "failed", set: RELEASED_ATTEMPT },
+          recordTransitionAuditEvent: executionStateOnly,
+        });
+        if (exhausted.type === "stale") {
+          panic("Locked account export changed under its lock");
+        }
+        return null;
+      }
+      const token = Bun.randomUUIDv7();
+      const objectKey = `account-exports/${userId}/${id}/${token}.zip`;
+      // Reclaiming an expired lease stays in processing: a same-state write the
+      // transition owner permits without a graph edge.
+      const claimed = await transition({
         tx,
         spec: TRANSITIONS.accountExports,
         id,
-        options: { from: [source], to: "failed", set: RELEASED_ATTEMPT },
+        options: {
+          from: [source],
+          to: "processing",
+          set: {
+            claimToken: token,
+            leaseExpiresAt: sql`clock_timestamp() + (${ACCOUNT_EXPORT_LIMITS.leaseMs} * INTERVAL '1 millisecond')`,
+            objectKey,
+            attemptCount: sql`${accountExports.attemptCount} + 1`,
+            attemptObjectKeys: sql`${accountExports.attemptObjectKeys} || jsonb_build_array(${objectKey}::text)`,
+            updatedAt: sql`clock_timestamp()`,
+          },
+        },
         recordTransitionAuditEvent: executionStateOnly,
       });
-      if (exhausted.type === "stale") {
+      if (claimed.type === "stale") {
         panic("Locked account export changed under its lock");
       }
-      return null;
-    }
-    const token = Bun.randomUUIDv7();
-    const objectKey = `account-exports/${userId}/${id}/${token}.zip`;
-    // Reclaiming an expired lease stays in processing: a same-state write the
-    // transition owner permits without a graph edge.
-    const claimed = await transition({
-      tx,
-      spec: TRANSITIONS.accountExports,
-      id,
-      options: {
-        from: [source],
-        to: "processing",
-        set: {
-          claimToken: token,
-          leaseExpiresAt: sql`clock_timestamp() + (${ACCOUNT_EXPORT_LIMITS.leaseMs} * INTERVAL '1 millisecond')`,
-          objectKey,
-          attemptCount: sql`${accountExports.attemptCount} + 1`,
-          attemptObjectKeys: sql`${accountExports.attemptObjectKeys} || jsonb_build_array(${objectKey}::text)`,
-          updatedAt: sql`clock_timestamp()`,
-        },
-      },
-      recordTransitionAuditEvent: executionStateOnly,
-    });
-    if (claimed.type === "stale") {
-      panic("Locked account export changed under its lock");
-    }
-    const leases = await tx
-      .select({ leaseExpiresAt: accountExports.leaseExpiresAt })
-      .from(accountExports)
-      .where(eq(accountExports.id, id))
-      .limit(1);
-    const leaseExpiresAt =
-      leases.at(0)?.leaseExpiresAt ??
-      panic("Claimed export requires a lease deadline");
-    return { id, userId, token, objectKey, leaseExpiresAt };
-  });
+      const leases = await tx
+        .select({ leaseExpiresAt: accountExports.leaseExpiresAt })
+        .from(accountExports)
+        .where(eq(accountExports.id, id))
+        .limit(1);
+      const leaseExpiresAt =
+        leases.at(0)?.leaseExpiresAt ??
+        panic("Claimed export requires a lease deadline");
+      return { id, userId, token, objectKey, leaseExpiresAt };
+    },
+  );
 
 type CompleteAccountExportOptions = {
   claim: AccountExportClaim;
@@ -408,81 +425,94 @@ export const completeAccountExport = async ({
   if (objectKey !== claim.objectKey) {
     panic("Account export object differs from its claim");
   }
-  return await withAggregateTransaction(db, async (tx) => {
-    await lockActiveAccountRow(tx, claim.userId);
-    const locked = await lockAccountExport(tx, claim);
-    if (!holdsClaim(locked, claim)) {
-      return false;
-    }
-    const moved = await transition({
-      tx,
-      spec: TRANSITIONS.accountExports,
-      id: claim.id,
-      options: {
-        from: ["processing"],
-        to: "ready",
-        set: {
-          claimToken: null,
-          leaseExpiresAt: null,
-          expiresAt: sql`clock_timestamp() + (${ACCOUNT_EXPORT_LIMITS.ttlMs} * INTERVAL '1 millisecond')`,
-          updatedAt: sql`clock_timestamp()`,
+  return await withAggregateTransaction(
+    db,
+    AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch,
+    async (tx) => {
+      await lockActiveAccountRow(tx, claim.userId);
+      const locked = await lockAccountExport(tx, claim);
+      if (!holdsClaim(locked, claim)) {
+        return false;
+      }
+      const moved = await transition({
+        tx,
+        spec: TRANSITIONS.accountExports,
+        id: claim.id,
+        options: {
+          from: ["processing"],
+          to: "ready",
+          set: {
+            claimToken: null,
+            leaseExpiresAt: null,
+            expiresAt: sql`clock_timestamp() + (${ACCOUNT_EXPORT_LIMITS.ttlMs} * INTERVAL '1 millisecond')`,
+            updatedAt: sql`clock_timestamp()`,
+          },
         },
-      },
-      recordTransitionAuditEvent: recordAccountExportTransition(
-        claim.userId,
-        "account.data_export.ready",
-      ),
-    });
-    return moved.type === "transitioned";
-  });
+        recordTransitionAuditEvent: recordAccountExportTransition(
+          claim.userId,
+          "account.data_export.ready",
+        ),
+      });
+      return moved.type === "transitioned";
+    },
+  );
 };
 
 export const failAccountExport = async (
   claim: AccountExportClaim,
   db: AccountExportDb,
 ): Promise<boolean> =>
-  await withAggregateTransaction(db, async (tx) => {
-    const locked = await lockAccountExport(tx, claim);
-    if (!holdsClaim(locked, claim)) {
-      return false;
-    }
-    const exhausted = locked.row.attemptCount >= ACCOUNT_EXPORT_LIMITS.attempts;
-    const moved = await transition({
-      tx,
-      spec: TRANSITIONS.accountExports,
-      id: claim.id,
-      options: exhausted
-        ? { from: ["processing"], to: "failed", set: RELEASED_ATTEMPT }
-        : { from: ["processing"], to: "requested", set: RELEASED_ATTEMPT },
-      recordTransitionAuditEvent: executionStateOnly,
-    });
-    return moved.type === "transitioned";
-  });
+  await withAggregateTransaction(
+    db,
+    AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch,
+    async (tx) => {
+      const locked = await lockAccountExport(tx, claim);
+      if (!holdsClaim(locked, claim)) {
+        return false;
+      }
+      const exhausted =
+        locked.row.attemptCount >= ACCOUNT_EXPORT_LIMITS.attempts;
+      const moved = await transition({
+        tx,
+        spec: TRANSITIONS.accountExports,
+        id: claim.id,
+        options: exhausted
+          ? { from: ["processing"], to: "failed", set: RELEASED_ATTEMPT }
+          : { from: ["processing"], to: "requested", set: RELEASED_ATTEMPT },
+        recordTransitionAuditEvent: executionStateOnly,
+      });
+      return moved.type === "transitioned";
+    },
+  );
 
 export const expireAccountExport = async (
   id: string,
   db: AccountExportDb,
 ): Promise<AccountExportRow | null> =>
-  await withAggregateTransaction(db, async (tx) => {
-    const owners = await tx
-      .select({ userId: accountExports.userId })
-      .from(accountExports)
-      .where(eq(accountExports.id, id))
-      .limit(1);
-    const userId = owners.at(0)?.userId;
-    if (userId === undefined) {
-      return null;
-    }
-    const locked = await lockAccountExport(tx, { id, userId });
-    if (
-      locked?.row.status !== "ready" ||
-      !locked.readyElapsed ||
-      !(await expireReadyAccountExport(tx, locked.row))
-    ) {
-      return null;
-    }
-    return await readScopedAccountExport({ tx, id, userId });
-  });
+  await withAggregateTransaction(
+    db,
+    AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch,
+    async (tx) => {
+      const owners = await tx
+        .select({ userId: accountExports.userId })
+        .from(accountExports)
+        .where(eq(accountExports.id, id))
+        .limit(1);
+      const userId = owners.at(0)?.userId;
+      if (userId === undefined) {
+        return null;
+      }
+      const locked = await lockAccountExport(tx, { id, userId });
+      if (
+        locked?.row.status !== "ready" ||
+        !locked.readyElapsed ||
+        !(await expireReadyAccountExport(tx, locked.row))
+      ) {
+        return null;
+      }
+      return await readScopedAccountExport({ tx, id, userId });
+    },
+  );
 
 const artifactCleanupEligible = () =>
   and(
@@ -494,26 +524,34 @@ export const canReclaimAccountExportObjects = async (
   id: string,
   db: AccountExportDb,
 ): Promise<boolean> =>
-  await withAggregateTransaction(db, async (tx) => {
-    const rows = await tx
-      .select({ id: accountExports.id })
-      .from(accountExports)
-      .where(and(eq(accountExports.id, id), artifactCleanupEligible()))
-      .limit(1);
-    return rows.length > 0;
-  });
+  await withAggregateTransaction(
+    db,
+    AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch,
+    async (tx) => {
+      const rows = await tx
+        .select({ id: accountExports.id })
+        .from(accountExports)
+        .where(and(eq(accountExports.id, id), artifactCleanupEligible()))
+        .limit(1);
+      return rows.length > 0;
+    },
+  );
 
 export const clearAccountExportObjects = async (
   id: string,
   db: AccountExportDb,
 ): Promise<void> => {
-  await withAggregateTransaction(db, async (tx) => {
-    // audit: skip - Artifact reclamation clears derived storage references after lifecycle expiry or failure.
-    await tx
-      .update(accountExports)
-      .set({ attemptObjectKeys: [], updatedAt: sql`clock_timestamp()` })
-      .where(and(eq(accountExports.id, id), artifactCleanupEligible()));
-  });
+  await withAggregateTransaction(
+    db,
+    AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch,
+    async (tx) => {
+      // audit: skip - Artifact reclamation clears derived storage references after lifecycle expiry or failure.
+      await tx
+        .update(accountExports)
+        .set({ attemptObjectKeys: [], updatedAt: sql`clock_timestamp()` })
+        .where(and(eq(accountExports.id, id), artifactCleanupEligible()));
+    },
+  );
 };
 
 /** Attempt keys are never reused after a claim is revoked. A worker may
@@ -522,27 +560,31 @@ export const canReclaimAccountExportAttempt = async (
   claim: AccountExportClaim,
   db: AccountExportDb,
 ): Promise<boolean> =>
-  await withAggregateTransaction(db, async (tx) => {
-    const rows = await tx
-      .select({
-        status: accountExports.status,
-        objectKey: accountExports.objectKey,
-      })
-      .from(accountExports)
-      .where(
-        and(
-          eq(accountExports.id, claim.id),
-          eq(accountExports.userId, claim.userId),
-        ),
-      )
-      .limit(1);
-    const row = rows.at(0);
-    return (
-      row === undefined ||
-      row.objectKey !== claim.objectKey ||
-      (row.status !== "processing" && row.status !== "ready")
-    );
-  });
+  await withAggregateTransaction(
+    db,
+    AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch,
+    async (tx) => {
+      const rows = await tx
+        .select({
+          status: accountExports.status,
+          objectKey: accountExports.objectKey,
+        })
+        .from(accountExports)
+        .where(
+          and(
+            eq(accountExports.id, claim.id),
+            eq(accountExports.userId, claim.userId),
+          ),
+        )
+        .limit(1);
+      const row = rows.at(0);
+      return (
+        row === undefined ||
+        row.objectKey !== claim.objectKey ||
+        (row.status !== "processing" && row.status !== "ready")
+      );
+    },
+  );
 
 export const recordAccountExportDownload = async ({
   id,
@@ -550,27 +592,31 @@ export const recordAccountExportDownload = async ({
   db,
 }: ReadAccountExportOptions): Promise<AccountExportRow | null> => {
   const database = await resolveDatabase(db);
-  return await withAggregateTransaction(database, async (tx) => {
-    await lockActiveAccountRow(tx, userId);
-    await scopeAccount(tx, userId);
-    const result = await withAggregateRowQuery({
-      tx,
-      aggregate: "accountExport",
-      id: { id, userId },
-      mode: "share",
-      select: (lockedTx) => lockedTx.select().from(accountExports),
-      where: sql`${eq(accountExports.status, "ready")} AND ${gt(accountExports.expiresAt, sql`clock_timestamp()`)}`,
-    });
-    const row = result.rows.at(0);
-    if (row === undefined) {
-      return null;
-    }
-    await createBackgroundAuditRecorder({ account: { userId } })(tx, {
-      type: "account.data_export.downloaded",
-      resourceId: id,
-    });
-    return row;
-  });
+  return await withAggregateTransaction(
+    database,
+    AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch,
+    async (tx) => {
+      await lockActiveAccountRow(tx, userId);
+      await scopeAccount(tx, userId);
+      const result = await withAggregateRowQuery({
+        tx,
+        aggregate: "accountExport",
+        id: { id, userId },
+        mode: "share",
+        select: (lockedTx) => lockedTx.select().from(accountExports),
+        where: sql`${eq(accountExports.status, "ready")} AND ${gt(accountExports.expiresAt, sql`clock_timestamp()`)}`,
+      });
+      const row = result.rows.at(0);
+      if (row === undefined) {
+        return null;
+      }
+      await createBackgroundAuditRecorder({ account: { userId } })(tx, {
+        type: "account.data_export.downloaded",
+        resourceId: id,
+      });
+      return row;
+    },
+  );
 };
 
 export const listRecoverableAccountExports = async (
@@ -583,35 +629,39 @@ export const listRecoverableAccountExports = async (
   if (cursor && (parts?.length !== 1 || !isUuidPaginationCursorPart(afterId))) {
     panic("Account export recovery cursor is malformed");
   }
-  return await withAggregateTransaction(db, async (tx) => {
-    const rows = await tx
-      .select()
-      .from(accountExports)
-      .where(
-        and(
-          or(
-            claimable(),
-            and(
-              eq(accountExports.status, "ready"),
-              lte(accountExports.expiresAt, sql`clock_timestamp()`),
+  return await withAggregateTransaction(
+    db,
+    AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch,
+    async (tx) => {
+      const rows = await tx
+        .select()
+        .from(accountExports)
+        .where(
+          and(
+            or(
+              claimable(),
+              and(
+                eq(accountExports.status, "ready"),
+                lte(accountExports.expiresAt, sql`clock_timestamp()`),
+              ),
+              and(
+                artifactCleanupEligible(),
+                sql`jsonb_array_length(${accountExports.attemptObjectKeys}) > 0`,
+              ),
             ),
-            and(
-              artifactCleanupEligible(),
-              sql`jsonb_array_length(${accountExports.attemptObjectKeys}) > 0`,
-            ),
+            typeof afterId === "string"
+              ? gt(accountExports.id, afterId)
+              : undefined,
           ),
-          typeof afterId === "string"
-            ? gt(accountExports.id, afterId)
-            : undefined,
-        ),
-      )
-      .orderBy(asc(accountExports.id))
-      .limit(ACCOUNT_EXPORT_LIMITS.recoveryPageSize + 1);
-    const page = createCursorPage({
-      rows,
-      limit: ACCOUNT_EXPORT_LIMITS.recoveryPageSize,
-      cursorForItem: ({ id }) => encodePaginationCursor([id]),
-    });
-    return page;
-  });
+        )
+        .orderBy(asc(accountExports.id))
+        .limit(ACCOUNT_EXPORT_LIMITS.recoveryPageSize + 1);
+      const page = createCursorPage({
+        rows,
+        limit: ACCOUNT_EXPORT_LIMITS.recoveryPageSize,
+        cursorForItem: ({ id }) => encodePaginationCursor([id]),
+      });
+      return page;
+    },
+  );
 };

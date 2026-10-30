@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * The persisted per-organization access state (see
  * `organization_access_states`). While `FEATURE_ORG_ACCESS_STATE` is off
@@ -5,8 +6,6 @@
  * recorded at organization creation so enabling the flag later changes no
  * existing organization's standing.
  */
-
-import { panic } from "better-result";
 import { and, eq, inArray, notExists, sql } from "drizzle-orm";
 import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 
@@ -33,6 +32,7 @@ import {
   lockOrganizationSettingsWrites,
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import {
   transitionScopedBatch,
@@ -169,6 +169,7 @@ export const recordNewOrganizationAccessState = async (
   if (!("rollback" in db)) {
     await withAggregateTransaction(
       db,
+      AGGREGATE_TRANSACTION_BUDGETS.requestPath,
       async (tx) =>
         await recordNewOrganizationAccessState(tx, { organizationId, now }),
     );

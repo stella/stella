@@ -34,6 +34,7 @@ import {
   tryLockCaseLawSitemapMonth,
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { READ_BUDGETS } from "@/api/lib/db/read-budgets";
 import { LIMITS } from "@/api/lib/limits";
@@ -360,45 +361,49 @@ const recountMonth = async (
   { db, budget, signal }: RunContext,
   target: SitemapMonth,
 ): Promise<boolean> =>
-  await withAggregateTransaction(db, async (tx) => {
-    await setTransactionBudget(tx, budget);
-    if (!(await tryLockCaseLawSitemapMonth({ tx, month: target }))) {
-      return false;
-    }
-    // Skip an already held month before waiting on the shared removal fence.
-    // Hold that fence from the count's snapshot through publication.
-    await lockCaseLawRemovalSnapshots(tx);
-    const counted = executedRows(
-      await tx.execute(sitemapMonthCountSql(target)),
-    ).map((row) => v.parse(monthCountRowSchema, row));
-    const consumed = counted.at(0)?.consumed ?? null;
-    const buckets = counted.flatMap((row) =>
-      row.bucket === null ? [] : [row],
-    );
-    const rows = shardRows(target, buckets);
-    await tx
-      .delete(caseLawSitemapShards)
-      .where(
-        and(
-          eq(caseLawSitemapShards.country, target.country),
-          eq(caseLawSitemapShards.year, target.year),
-          eq(caseLawSitemapShards.month, target.month),
-        ),
+  await withAggregateTransaction(
+    db,
+    AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh,
+    async (tx) => {
+      await setTransactionBudget(tx, budget);
+      if (!(await tryLockCaseLawSitemapMonth({ tx, month: target }))) {
+        return false;
+      }
+      // Skip an already held month before waiting on the shared removal fence.
+      // Hold that fence from the count's snapshot through publication.
+      await lockCaseLawRemovalSnapshots(tx);
+      const counted = executedRows(
+        await tx.execute(sitemapMonthCountSql(target)),
+      ).map((row) => v.parse(monthCountRowSchema, row));
+      const consumed = counted.at(0)?.consumed ?? null;
+      const buckets = counted.flatMap((row) =>
+        row.bucket === null ? [] : [row],
       );
-    if (rows.length > 0) {
-      await tx.insert(caseLawSitemapShards).values(rows);
-    }
-    if (consumed !== null) {
+      const rows = shardRows(target, buckets);
       await tx
-        .delete(caseLawSitemapChanges)
+        .delete(caseLawSitemapShards)
         .where(
-          sql`${caseLawSitemapChanges.id} = ANY(string_to_array(${consumed}, ',')::bigint[])`,
+          and(
+            eq(caseLawSitemapShards.country, target.country),
+            eq(caseLawSitemapShards.year, target.year),
+            eq(caseLawSitemapShards.month, target.month),
+          ),
         );
-    }
-    // A run whose lease was lost while it wrote rolls back here.
-    throwIfAborted(signal);
-    return true;
-  });
+      if (rows.length > 0) {
+        await tx.insert(caseLawSitemapShards).values(rows);
+      }
+      if (consumed !== null) {
+        await tx
+          .delete(caseLawSitemapChanges)
+          .where(
+            sql`${caseLawSitemapChanges.id} = ANY(string_to_array(${consumed}, ',')::bigint[])`,
+          );
+      }
+      // A run whose lease was lost while it wrote rolls back here.
+      throwIfAborted(signal);
+      return true;
+    },
+  );
 
 const wholeCountryRow = (country: string): SitemapMonth => ({
   country,
@@ -441,36 +446,40 @@ const expandCountry = async (
   { db, budget, signal }: RunContext,
   country: string,
 ): Promise<void> => {
-  await withAggregateTransaction(db, async (tx) => {
-    await setTransactionBudget(tx, budget);
-    const whole = await readLoggedIds(tx, wholeCountryRow(country));
-    const held = executedRows(
-      await tx.execute(sitemapCountryMonthsSql(country)),
-    ).map((row) => v.parse(monthRowSchema, row));
-    const listed = await tx
-      .selectDistinct({
-        year: caseLawSitemapShards.year,
-        month: caseLawSitemapShards.month,
-      })
-      .from(caseLawSitemapShards)
-      .where(eq(caseLawSitemapShards.country, country));
-    const months = new Map<string, SitemapMonth>();
-    for (const { year, month } of [...held, ...listed]) {
-      const target = { country, year, month };
-      months.set(monthKey(target), target);
-    }
-    if (months.size > 0) {
-      await tx
-        .insert(caseLawSitemapChanges)
-        .values(
-          [...months.values()].toSorted((a, b) =>
-            compareCodeUnit(monthKey(a), monthKey(b)),
-          ),
-        );
-    }
-    await deleteLoggedIds(tx, whole);
-    throwIfAborted(signal);
-  });
+  await withAggregateTransaction(
+    db,
+    AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh,
+    async (tx) => {
+      await setTransactionBudget(tx, budget);
+      const whole = await readLoggedIds(tx, wholeCountryRow(country));
+      const held = executedRows(
+        await tx.execute(sitemapCountryMonthsSql(country)),
+      ).map((row) => v.parse(monthRowSchema, row));
+      const listed = await tx
+        .selectDistinct({
+          year: caseLawSitemapShards.year,
+          month: caseLawSitemapShards.month,
+        })
+        .from(caseLawSitemapShards)
+        .where(eq(caseLawSitemapShards.country, country));
+      const months = new Map<string, SitemapMonth>();
+      for (const { year, month } of [...held, ...listed]) {
+        const target = { country, year, month };
+        months.set(monthKey(target), target);
+      }
+      if (months.size > 0) {
+        await tx
+          .insert(caseLawSitemapChanges)
+          .values(
+            [...months.values()].toSorted((a, b) =>
+              compareCodeUnit(monthKey(a), monthKey(b)),
+            ),
+          );
+      }
+      await deleteLoggedIds(tx, whole);
+      throwIfAborted(signal);
+    },
+  );
 };
 
 /**
@@ -484,30 +493,36 @@ const expandEveryCountry = async ({
   budget,
   signal,
 }: RunContext): Promise<void> => {
-  await withAggregateTransaction(db, async (tx) => {
-    await setTransactionBudget(tx, budget);
-    const every = await readLoggedIds(
-      tx,
-      wholeCountryRow(SITEMAP_WHOLE_COUNTRY),
-    );
-    const held = executedRows(await tx.execute(sitemapCountriesSql())).map(
-      (row) => v.parse(v.object({ country: v.string() }), row).country,
-    );
-    const listed = await tx
-      .selectDistinct({ country: caseLawSitemapShards.country })
-      .from(caseLawSitemapShards);
-    const countries = new Set([
-      ...held,
-      ...listed.map(({ country }) => country),
-    ]);
-    if (countries.size > 0) {
-      await tx
-        .insert(caseLawSitemapChanges)
-        .values([...countries].toSorted(compareCodeUnit).map(wholeCountryRow));
-    }
-    await deleteLoggedIds(tx, every);
-    throwIfAborted(signal);
-  });
+  await withAggregateTransaction(
+    db,
+    AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh,
+    async (tx) => {
+      await setTransactionBudget(tx, budget);
+      const every = await readLoggedIds(
+        tx,
+        wholeCountryRow(SITEMAP_WHOLE_COUNTRY),
+      );
+      const held = executedRows(await tx.execute(sitemapCountriesSql())).map(
+        (row) => v.parse(v.object({ country: v.string() }), row).country,
+      );
+      const listed = await tx
+        .selectDistinct({ country: caseLawSitemapShards.country })
+        .from(caseLawSitemapShards);
+      const countries = new Set([
+        ...held,
+        ...listed.map(({ country }) => country),
+      ]);
+      if (countries.size > 0) {
+        await tx
+          .insert(caseLawSitemapChanges)
+          .values(
+            [...countries].toSorted(compareCodeUnit).map(wholeCountryRow),
+          );
+      }
+      await deleteLoggedIds(tx, every);
+      throwIfAborted(signal);
+    },
+  );
 };
 
 /** Read the oldest bounded row range before deduplicating months. Exported for its plan guard. */
@@ -523,11 +538,15 @@ const readPendingMonths = async ({
   db,
   budget,
 }: RunContext): Promise<SitemapMonth[]> =>
-  await withAggregateTransaction(db, async (tx) => {
-    await tx.execute(sql`SET TRANSACTION READ ONLY`);
-    await setTransactionBudget(tx, budget);
-    const rows = executedRows(await tx.execute(sitemapPendingMonthsSql())).map(
-      (row) =>
+  await withAggregateTransaction(
+    db,
+    AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh,
+    async (tx) => {
+      await tx.execute(sql`SET TRANSACTION READ ONLY`);
+      await setTransactionBudget(tx, budget);
+      const rows = executedRows(
+        await tx.execute(sitemapPendingMonthsSql()),
+      ).map((row) =>
         v.parse(
           v.object({
             country: v.string(),
@@ -536,34 +555,39 @@ const readPendingMonths = async ({
           }),
           row,
         ),
-    );
-    return [...new Map(rows.map((item) => [monthKey(item), item])).values()];
-  });
+      );
+      return [...new Map(rows.map((item) => [monthKey(item), item])).values()];
+    },
+  );
 
 /** The public index's size, read back for the capacity alarm. */
 const readPublicShardExtent = async (
   db: RefreshDb,
   budget: SitemapRefreshBudget,
 ): Promise<{ largestShard: number; shards: number }> =>
-  await withAggregateTransaction(db, async (tx) => {
-    await tx.execute(sql`SET TRANSACTION READ ONLY`);
-    await setTransactionBudget(tx, budget);
-    const [extent] = await tx
-      .select({
-        largestShard: max(caseLawSitemapShards.total),
-        shards: sql<number>`count(*)::int`,
-      })
-      .from(caseLawSitemapShards)
-      .where(
-        inArray(caseLawSitemapShards.country, [
-          ...PUBLIC_CASE_LAW_PAGE_COUNTRIES,
-        ]),
-      );
-    return {
-      largestShard: extent?.largestShard ?? 0,
-      shards: extent?.shards ?? 0,
-    };
-  });
+  await withAggregateTransaction(
+    db,
+    AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh,
+    async (tx) => {
+      await tx.execute(sql`SET TRANSACTION READ ONLY`);
+      await setTransactionBudget(tx, budget);
+      const [extent] = await tx
+        .select({
+          largestShard: max(caseLawSitemapShards.total),
+          shards: sql<number>`count(*)::int`,
+        })
+        .from(caseLawSitemapShards)
+        .where(
+          inArray(caseLawSitemapShards.country, [
+            ...PUBLIC_CASE_LAW_PAGE_COUNTRIES,
+          ]),
+        );
+      return {
+        largestShard: extent?.largestShard ?? 0,
+        shards: extent?.shards ?? 0,
+      };
+    },
+  );
 
 /**
  * How long one run recounts before it stops at the next month boundary. It

@@ -1,3 +1,4 @@
+import { member, organization, session, user } from "@/api/db/auth-schema";
 /**
  * Root-db helpers for the synthetic-monitoring session endpoint
  * (handlers/smoke). The route is unauthenticated (secret-guarded),
@@ -14,8 +15,6 @@
  * here configures its AI: the smoke caller sets that up through the
  * organization settings API, exactly as a real owner would.
  */
-
-import { member, organization, session, user } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import { env } from "@/api/env";
 import { seedDefaultSkills } from "@/api/lib/agent-skills/default-skills";
@@ -23,6 +22,7 @@ import { sessionCookieName } from "@/api/lib/auth/auth-cookie-name";
 import { acceptProfessionalUse } from "@/api/lib/auth/professional-use";
 import { createSignedSessionCookieValue } from "@/api/lib/auth/signed-session-cookie";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { logger } from "@/api/lib/observability/logger";
 import {
   brandPersistedOrganizationId,
@@ -164,12 +164,16 @@ export const mintSmokeSession = async (
   // A real new account has accepted the professional-use statement before it
   // works in the product. The synthetic principal accepts as its operator on
   // every mint, so a principal created before acceptances existed converges.
-  await withAggregateTransaction(rootDb, async (tx) => {
-    await acceptProfessionalUse({
-      tx,
-      userId: brandPersistedUserId(record.user.id),
-    });
-  });
+  await withAggregateTransaction(
+    rootDb,
+    AGGREGATE_TRANSACTION_BUDGETS.requestPath,
+    async (tx) => {
+      await acceptProfessionalUse({
+        tx,
+        userId: brandPersistedUserId(record.user.id),
+      });
+    },
+  );
 
   // No cleanup of prior rows: sessions expire after 15 minutes and
   // better-auth ignores expired rows, so one row per deploy is inert.

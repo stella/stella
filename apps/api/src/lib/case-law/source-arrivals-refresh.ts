@@ -6,6 +6,7 @@ import { caseLawSourceArrivals } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { SOURCE_ARRIVALS_WINDOW_MS } from "@/api/lib/case-law/source-arrivals-window";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 
 /** The connection the scheduler task opens; the refresh owns its transaction. */
 type RefreshDb = {
@@ -66,24 +67,28 @@ export const refreshCaseLawSourceArrivals = async (
   db: RefreshDb,
   { now, signal }: { now: Date; signal?: AbortSignal },
 ) =>
-  await withAggregateTransaction(db, async (tx) => {
-    await tx.delete(caseLawSourceArrivals).where(sql`true`);
-    await tx.execute(sql`
+  await withAggregateTransaction(
+    db,
+    AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh,
+    async (tx) => {
+      await tx.delete(caseLawSourceArrivals).where(sql`true`);
+      await tx.execute(sql`
       INSERT INTO ${caseLawSourceArrivals}
         (source_id, added_last_week, counted_at)
       SELECT source_id, added_last_week, ${now.toISOString()}::timestamptz
       FROM (${sourceArrivalsRefreshQuery(now)}) AS counted
     `);
 
-    const [summary] = await tx
-      .select({ sources: sql<number>`count(*)::int` })
-      .from(caseLawSourceArrivals);
-    if (!summary) {
-      panic("Source arrivals refresh aggregate returned no row.");
-    }
-    signal?.throwIfAborted();
-    return { sources: summary.sources };
-  });
+      const [summary] = await tx
+        .select({ sources: sql<number>`count(*)::int` })
+        .from(caseLawSourceArrivals);
+      if (!summary) {
+        panic("Source arrivals refresh aggregate returned no row.");
+      }
+      signal?.throwIfAborted();
+      return { sources: summary.sources };
+    },
+  );
 
 /** A changed source has no arrivals snapshot until its next recount. */
 export const invalidateCaseLawSourceArrivalsTx = async (

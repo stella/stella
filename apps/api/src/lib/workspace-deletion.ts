@@ -17,6 +17,7 @@ import {
   lockWorkspaceLifecycle,
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { handoffCommittedEntityDeletionCleanupBatch } from "@/api/lib/entity-deletion-cleanup-handoff";
 import { enqueueEntityDeletionCleanup } from "@/api/lib/entity-deletion-cleanup-queue";
 import { isMemberRole } from "@/api/lib/member-roles";
@@ -165,113 +166,120 @@ export const executeAuthorizedWorkspaceDeletion = async (
     attempt = 0,
   ): Promise<TransactionWorkspaceDeletionOutcome> => {
     try {
-      return await withAggregateTransaction(database, async (tx) => {
-        const actorRole = await lockAuthorizedActorRole({
-          actorUserId,
-          organizationId,
-          tx,
-        });
-        if (actorRole === null) {
-          return { status: "not-authorized" } as const;
-        }
+      return await withAggregateTransaction(
+        database,
+        AGGREGATE_TRANSACTION_BUDGETS.requestPath,
+        async (tx) => {
+          const actorRole = await lockAuthorizedActorRole({
+            actorUserId,
+            organizationId,
+            tx,
+          });
+          if (actorRole === null) {
+            return { status: "not-authorized" } as const;
+          }
 
-        await lockWorkspaceLifecycle(tx, workspaceId);
-        await lockMatterAccessWorkspaceRows({
-          tx,
-          organizationId,
-          workspaceIds: [workspaceId],
-          mode: "update",
-        });
+          await lockWorkspaceLifecycle(tx, workspaceId);
+          await lockMatterAccessWorkspaceRows({
+            tx,
+            organizationId,
+            workspaceIds: [workspaceId],
+            mode: "update",
+          });
 
-        const workspaceRows = await tx
-          .select({
-            billingReference: workspaces.billingReference,
-            clientId: workspaces.clientId,
-            color: workspaces.color,
-            id: workspaces.id,
-            name: workspaces.name,
-            reference: workspaces.reference,
-            status: workspaces.status,
-          })
-          .from(workspaces)
-          .where(
-            and(
-              eq(workspaces.id, workspaceId),
-              eq(workspaces.organizationId, organizationId),
-            ),
-          )
-          .limit(1);
-        const workspace = workspaceRows.at(0);
-        if (!workspace) {
-          return { status: "not-found" } as const;
-        }
-
-        const authorized = await actorCanAccessWorkspace({
-          actorRole,
-          actorUserId,
-          organizationId,
-          tx,
-          workspace,
-        });
-        if (!authorized) {
-          return { status: "not-authorized" } as const;
-        }
-        if (workspace.status !== "active") {
-          return { status: "workspace-unavailable" } as const;
-        }
-
-        const runningOcrRuns = await tx
-          .select({ id: documentProcessingRuns.id })
-          .from(documentProcessingRuns)
-          .where(
-            and(
-              eq(documentProcessingRuns.workspaceId, workspaceId),
-              eq(documentProcessingRuns.status, "running"),
-            ),
-          )
-          .limit(1);
-        if (runningOcrRuns.length > 0) {
-          return { status: "document-processing-running" } as const;
-        }
-
-        // audit: skip; internal write fence for the DELETE event below.
-        const fenced = await tx
-          .update(workspaces)
-          .set({ status: "deleting" })
-          .where(
-            and(
-              eq(workspaces.id, workspaceId),
-              not(
-                workspaceRetainsBillingHistory({ organizationId, workspaceId }),
+          const workspaceRows = await tx
+            .select({
+              billingReference: workspaces.billingReference,
+              clientId: workspaces.clientId,
+              color: workspaces.color,
+              id: workspaces.id,
+              name: workspaces.name,
+              reference: workspaces.reference,
+              status: workspaces.status,
+            })
+            .from(workspaces)
+            .where(
+              and(
+                eq(workspaces.id, workspaceId),
+                eq(workspaces.organizationId, organizationId),
               ),
-            ),
-          )
-          .returning({ id: workspaces.id });
-        if (fenced.length === 0) {
-          throw new WorkspaceBillingHistoryError({
-            message:
-              "This matter has time, expenses or invoices and cannot be deleted. Archive it to keep its billing records intact.",
+            )
+            .limit(1);
+          const workspace = workspaceRows.at(0);
+          if (!workspace) {
+            return { status: "not-found" } as const;
+          }
+
+          const authorized = await actorCanAccessWorkspace({
+            actorRole,
+            actorUserId,
+            organizationId,
+            tx,
+            workspace,
+          });
+          if (!authorized) {
+            return { status: "not-authorized" } as const;
+          }
+          if (workspace.status !== "active") {
+            return { status: "workspace-unavailable" } as const;
+          }
+
+          const runningOcrRuns = await tx
+            .select({ id: documentProcessingRuns.id })
+            .from(documentProcessingRuns)
+            .where(
+              and(
+                eq(documentProcessingRuns.workspaceId, workspaceId),
+                eq(documentProcessingRuns.status, "running"),
+              ),
+            )
+            .limit(1);
+          if (runningOcrRuns.length > 0) {
+            return { status: "document-processing-running" } as const;
+          }
+
+          // audit: skip; internal write fence for the DELETE event below.
+          const fenced = await tx
+            .update(workspaces)
+            .set({ status: "deleting" })
+            .where(
+              and(
+                eq(workspaces.id, workspaceId),
+                not(
+                  workspaceRetainsBillingHistory({
+                    organizationId,
+                    workspaceId,
+                  }),
+                ),
+              ),
+            )
+            .returning({ id: workspaces.id });
+          if (fenced.length === 0) {
+            throw new WorkspaceBillingHistoryError({
+              message:
+                "This matter has time, expenses or invoices and cannot be deleted. Archive it to keep its billing records intact.",
+              workspaceId,
+            });
+          }
+
+          const teardown = await completeWorkspaceDeletion({
+            organizationId,
+            tx,
             workspaceId,
           });
-        }
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.DELETE,
+            resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE,
+            resourceId: workspaceId,
+            changes: { deleted: { old: workspace, new: null } },
+          });
 
-        const teardown = await completeWorkspaceDeletion({
-          organizationId,
-          tx,
-          workspaceId,
-        });
-        await recordAuditEvent(tx, {
-          action: AUDIT_ACTION.DELETE,
-          resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE,
-          resourceId: workspaceId,
-          changes: { deleted: { old: workspace, new: null } },
-        });
-
-        return {
-          cleanupRequestIds: teardown.requestIds,
-          status: "deleted",
-        } as const;
-      });
+          return {
+            cleanupRequestIds: teardown.requestIds,
+            status: "deleted",
+          } as const;
+        },
+      );
     } catch (error) {
       if (
         getPgErrorCode(error) === PG_ERROR.DEADLOCK_DETECTED &&

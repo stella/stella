@@ -15,6 +15,7 @@ import { parseArgs } from "node:util";
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import {
   applyKeylessOrganizationMoves,
@@ -36,13 +37,16 @@ if (apply !== (actor !== undefined && actor !== "")) {
 
 const db = openMaintenanceDb({ readOnly: !apply });
 await runScriptWithErrorOutput(async () => {
-  const results = await withAggregateTransaction(db, async (tx) =>
-    apply
-      ? await applyKeylessOrganizationMoves(tx, {
-          now: new Date(),
-          actor: actor ?? panic(USAGE),
-        })
-      : await classifyKeylessOrganizationMoves(tx),
+  const results = await withAggregateTransaction(
+    db,
+    AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch,
+    async (tx) =>
+      apply
+        ? await applyKeylessOrganizationMoves(tx, {
+            now: new Date(),
+            actor: actor ?? panic(USAGE),
+          })
+        : await classifyKeylessOrganizationMoves(tx),
   );
 
   for (const result of results) {

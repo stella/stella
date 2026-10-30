@@ -20,6 +20,7 @@ import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import {
   moveKeylessOrganizationsToFree,
   recordNewOrganizationAccessState,
@@ -210,11 +211,14 @@ if (!databaseUrl || !runPostgres) {
             });
             await written.promise;
 
-            const move = withAggregateTransaction(moverDb, async (tx) =>
-              moveKeylessOrganizationsToFree(asTestRaw<Transaction>(tx), {
-                now: new Date(),
-                actor: "operator:test",
-              }),
+            const move = withAggregateTransaction(
+              moverDb,
+              AGGREGATE_TRANSACTION_BUDGETS.requestPath,
+              async (tx) =>
+                moveKeylessOrganizationsToFree(asTestRaw<Transaction>(tx), {
+                  now: new Date(),
+                  actor: "operator:test",
+                }),
             );
             const { sql: observer } = openClient({ max: 1 });
             await waitForBlockedPid(observer, {

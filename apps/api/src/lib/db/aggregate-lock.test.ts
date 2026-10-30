@@ -1,7 +1,12 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { type SQL, TransactionRollbackError } from "drizzle-orm";
+import {
+  type SQL,
+  sql as drizzleSql,
+  TransactionRollbackError,
+} from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
+import ts from "typescript6";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
@@ -9,11 +14,12 @@ import type { Transaction } from "@/api/db/root";
 import { createSafeId } from "@/api/lib/branded-types";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import { PG_ERROR } from "@/api/lib/pg-error";
+import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import {
   aggregateExecutionRows,
   aggregateFences as fences,
 } from "@/api/tests/fixtures/aggregate-lock-order";
+import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createSelectQueryMock } from "@/api/tests/scoped-db-mock";
@@ -25,11 +31,16 @@ import {
   lockInvoiceInStatus,
   lockRequestReceiptPrincipalRows,
   withAggregateLock,
+  withAggregateTransaction,
   withAutomatedFlowRunCapLock,
   withInvoiceMatterLocks,
   withSkipLockedBatch,
 } from "./aggregate-lock";
 import namespaceLedger from "./aggregate-lock-namespaces.json" with { type: "json" };
+import {
+  AGGREGATE_TRANSACTION_BUDGETS,
+  AggregateTransactionTimeoutError,
+} from "./aggregate-transaction-budget";
 
 test.each(["present", "missing"] as const)(
   "invoice matter batches retain only visible sorted row locks (%s)",
@@ -97,6 +108,73 @@ test("an empty invoice matter plan refuses before any lock query", async () => {
   });
   expect(executions).toBe(0);
 });
+
+test("every aggregate transaction call supplies a named budget", async () => {
+  const root = new URL("../../..", import.meta.url).pathname;
+  const glob = new Bun.Glob("**/*.ts");
+  const missing: string[] = [];
+  for await (const path of glob.scan({ cwd: root, absolute: true })) {
+    const source = ts.createSourceFile(
+      path,
+      await Bun.file(path).text(),
+      ts.ScriptTarget.Latest,
+      true,
+    );
+    const visit = (node: ts.Node): void => {
+      if (
+        ts.isCallExpression(node) &&
+        ts.isIdentifier(node.expression) &&
+        node.expression.text === "withAggregateTransaction" &&
+        (node.arguments.length < 3 ||
+          !node.arguments[1]
+            ?.getText(source)
+            .startsWith("AGGREGATE_TRANSACTION_BUDGETS."))
+      ) {
+        missing.push(
+          `${path}:${source.getLineAndCharacterOfPosition(node.getStart()).line + 1}`,
+        );
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(source);
+  }
+  expect(missing).toEqual([]);
+});
+
+const aggregateBudgetDatabaseUrl = process.env["DATABASE_URL"];
+if (aggregateBudgetDatabaseUrl) {
+  describe("aggregate transaction budget (postgres)", () => {
+    // timeout: the five-second database deadline must expire before the assertion.
+    test("cancels cumulative short statements and names the budget", async () => {
+      await withGatedTestClients(
+        aggregateBudgetDatabaseUrl,
+        async ({ openClient }) => {
+          const failure = await rejectionOf(
+            withAggregateTransaction(
+              openClient({ max: 1 }).db,
+              AGGREGATE_TRANSACTION_BUDGETS.requestPath,
+              async (tx) => {
+                await tx.execute(
+                  drizzleSql`SELECT set_config('statement_timeout', '4s', true)`,
+                );
+                await tx.execute(drizzleSql`SELECT pg_sleep(3)`);
+                await tx.execute(drizzleSql`SELECT pg_sleep(3)`);
+              },
+            ),
+          );
+          expect(failure).toBeInstanceOf(AggregateTransactionTimeoutError);
+          if (!(failure instanceof AggregateTransactionTimeoutError)) {
+            throw failure;
+          }
+          expect(failure.budget).toBe(
+            AGGREGATE_TRANSACTION_BUDGETS.requestPath,
+          );
+          expect(getPgErrorCode(failure.cause)).toBe("25P04");
+        },
+      );
+    }, 10_000);
+  });
+}
 
 test("an overflowing invoice matter plan refuses before acquiring any matter lock", async () => {
   const workspaceId = createSafeId<"workspace">();
@@ -166,13 +244,19 @@ test("the flow cap owner opens one transaction and awaits its fence before runni
     { definitionId: createSafeId<"flowDefinition">(), database },
     async (transaction) => {
       expect(transaction).toBe(tx);
-      expect(events).toEqual(["opened", "locked"]);
+      expect(events).toEqual(["opened", "locked", "locked"]);
       events.push("decision");
       return "started";
     },
   );
   expect(result).toBe("started");
-  expect(events).toEqual(["opened", "locked", "decision", "committed"]);
+  expect(events).toEqual([
+    "opened",
+    "locked",
+    "locked",
+    "decision",
+    "committed",
+  ]);
 });
 
 test("skip-locked batches preserve their bound and close the blocking acquisition path", async () => {

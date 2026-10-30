@@ -4,6 +4,7 @@ import { PgDialect } from "drizzle-orm/pg-core";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import {
   aggregateExecutionRows,
   aggregateFences,
@@ -183,6 +184,7 @@ describe("blocking aggregate order regressions", () => {
     };
     const escaped = await withAggregateTransaction(
       database,
+      AGGREGATE_TRANSACTION_BUDGETS.requestPath,
       async (transaction) => transaction,
     );
     const fixture = aggregateFences();

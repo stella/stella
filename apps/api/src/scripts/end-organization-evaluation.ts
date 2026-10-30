@@ -12,6 +12,7 @@ import { parseArgs } from "node:util";
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { parseAuthProviderId } from "@/api/lib/safe-id-boundaries";
 import { endOrganizationEvaluation } from "@/api/lib/usage/organization-access-state";
@@ -38,6 +39,7 @@ const db = openMaintenanceDb({ readOnly: false });
 await runScriptWithErrorOutput(async () => {
   const ended = await withAggregateTransaction(
     db,
+    AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch,
     async (tx) =>
       await endOrganizationEvaluation(tx, {
         organizationId,

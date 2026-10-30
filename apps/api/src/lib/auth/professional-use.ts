@@ -29,6 +29,7 @@ import {
   withAggregateLock,
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { MemberRole } from "@/api/lib/member-roles";
 import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
@@ -508,18 +509,22 @@ export const recordAccountProfessionalUse = async ({
 > =>
   await Result.tryPromise({
     try: async () => {
-      await withAggregateTransaction(rootDb, async (tx) => {
-        await withAggregateLock({
-          tx,
-          aggregate: "professionalUseAcceptance",
-          id: { userId },
-        });
-        await recordProfessionalUseAcceptance({
-          tx,
-          userId,
-          provenance: ACCOUNT_ACCEPTANCE_PROVENANCE[source](userId),
-        });
-      });
+      await withAggregateTransaction(
+        rootDb,
+        AGGREGATE_TRANSACTION_BUDGETS.requestPath,
+        async (tx) => {
+          await withAggregateLock({
+            tx,
+            aggregate: "professionalUseAcceptance",
+            id: { userId },
+          });
+          await recordProfessionalUseAcceptance({
+            tx,
+            userId,
+            provenance: ACCOUNT_ACCEPTANCE_PROVENANCE[source](userId),
+          });
+        },
+      );
       return await readUserProfessionalUse(rootDb, userId);
     },
     catch: (cause) =>

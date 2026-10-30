@@ -38,6 +38,7 @@ import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane
 import type { CaseLawWriteHandles } from "@/api/lib/case-law/maintenance-lane";
 import { canonicalDecisionDate } from "@/api/lib/dates";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { readGzipJson } from "@/api/lib/gzip-json";
 import { FIXTURE_SOURCE_KEYS } from "@/api/lib/legal-search/adapter-manifest";
 import { indexDecision } from "@/api/lib/legal-search/case-law-search-index";
@@ -361,6 +362,7 @@ const seedFixtures = async ({ rootDb, ingestionDb }: CaseLawWriteHandles) => {
       if (!decisionId) {
         const existing = await withAggregateTransaction(
           rootDb,
+          AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh,
           async (tx) =>
             await tx
               .select({ id: caseLawDecisions.id })

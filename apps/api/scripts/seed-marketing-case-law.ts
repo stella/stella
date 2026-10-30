@@ -28,6 +28,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { analysisInputOf } from "@/api/lib/case-law/analysis-prompt";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import type { MaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { readGzipJson } from "@/api/lib/gzip-json";
 import { requireLocalDevOpen } from "@/api/runtime-mode";
@@ -96,6 +97,7 @@ const seedCorpusAnalyses = async () => {
   try {
     const rows = await withAggregateTransaction(
       lane.rootDb,
+      AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh,
       async (tx) =>
         await tx
           .select({
@@ -247,174 +249,183 @@ export const seedMarketingCaseLaw = async ({
   requireLocalDevOpen("Seeding marketing case-law stories");
   const stories = await seedCorpusAnalyses();
   const readerMarks: (typeof legalReaderAnnotations.$inferInsert)[] = [];
-  await withAggregateTransaction(db, async (tx) => {
-    for (const { scene, decision, highlight, underline } of stories) {
-      const key = `marketing-case-law-${organizationId}-${userId}-${decision.id}`;
-      const threadId = seedId<"chatThread">(`${key}-thread`);
-      const readerPath = createCaseLawDecisionPath(
-        createCaseLawDecisionRouteParams({
-          caseNumber: decision.caseNumber,
-          decisionId: decision.id,
-          country: decision.country,
-          court: decision.court,
-          language: decision.language,
-          languageAlternates: null,
-          slug: decision.slug,
-        }),
-      );
-      const cite = (anchor: string) =>
-        `[${decision.caseNumber}](${readerPath}#${anchor})`;
-      const turns = [
-        { role: "user", text: scene.question },
-        {
-          role: "assistant",
-          text: `${scene.answer} ${cite(highlight.anchorId)}`,
-        },
-        { role: "user", text: scene.followUp },
-        {
-          role: "assistant",
-          text: `${scene.followUpAnswer} ${cite(underline.anchorId)}`,
-        },
-      ] as const satisfies readonly {
-        role: ChatMessage["role"];
-        text: string;
-      }[];
-      const messages = turns.map(({ role, text }, index) => {
-        const id = seedId<"chatMessage">(`${key}-message-${index}`);
-        return {
-          id,
-          threadId,
+  await withAggregateTransaction(
+    db,
+    AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh,
+    async (tx) => {
+      for (const { scene, decision, highlight, underline } of stories) {
+        const key = `marketing-case-law-${organizationId}-${userId}-${decision.id}`;
+        const threadId = seedId<"chatThread">(`${key}-thread`);
+        const readerPath = createCaseLawDecisionPath(
+          createCaseLawDecisionRouteParams({
+            caseNumber: decision.caseNumber,
+            decisionId: decision.id,
+            country: decision.country,
+            court: decision.court,
+            language: decision.language,
+            languageAlternates: null,
+            slug: decision.slug,
+          }),
+        );
+        const cite = (anchor: string) =>
+          `[${decision.caseNumber}](${readerPath}#${anchor})`;
+        const turns = [
+          { role: "user", text: scene.question },
+          {
+            role: "assistant",
+            text: `${scene.answer} ${cite(highlight.anchorId)}`,
+          },
+          { role: "user", text: scene.followUp },
+          {
+            role: "assistant",
+            text: `${scene.followUpAnswer} ${cite(underline.anchorId)}`,
+          },
+        ] as const satisfies readonly {
+          role: ChatMessage["role"];
+          text: string;
+        }[];
+        const messages = turns.map(({ role, text }, index) => {
+          const id = seedId<"chatMessage">(`${key}-message-${index}`);
+          return {
+            id,
+            threadId,
+            userId,
+            workspaceId: null,
+            role,
+            content: chatMessageContentFromMessage(
+              toPersistableChatMessage({
+                id,
+                role,
+                parts: [{ type: "text", content: text }],
+                ...(role === "assistant"
+                  ? { metadata: { turnOutcome: { type: "completed" } } }
+                  : {}),
+              }),
+            ),
+            createdAt: new Date(RECORDED_AT.getTime() + index * 60_000),
+          };
+        });
+        const last =
+          messages.at(-1) ?? panic("Marketing case-law chat is empty");
+        const thread = {
+          id: threadId,
+          organizationId,
           userId,
           workspaceId: null,
-          role,
-          content: chatMessageContentFromMessage(
-            toPersistableChatMessage({
-              id,
-              role,
-              parts: [{ type: "text", content: text }],
-              ...(role === "assistant"
-                ? { metadata: { turnOutcome: { type: "completed" } } }
-                : {}),
-            }),
-          ),
-          createdAt: new Date(RECORDED_AT.getTime() + index * 60_000),
-        };
-      });
-      const last = messages.at(-1) ?? panic("Marketing case-law chat is empty");
-      const thread = {
-        id: threadId,
-        organizationId,
-        userId,
-        workspaceId: null,
-        subjectDecisionId: decision.id,
-        title: `Case review · ${decision.caseNumber}`,
-        titleSource: "user",
-        createdAt: RECORDED_AT,
-        updatedAt: last.createdAt,
-        recapText: scene.aiNote,
-        recapMessageId: last.id,
-        recapPromptVersion: RECAP_PROMPT_VERSION,
-        recapGeneratedAt: RECORDED_AT,
-      } as const;
-      await tx
-        .insert(chatThreads)
-        .values(thread)
-        .onConflictDoUpdate({
-          target: chatThreads.id,
-          set: thread,
-          setWhere: sql`${chatThreads.organizationId} = ${organizationId} AND ${chatThreads.userId} = ${userId}`,
-        });
-      await tx
-        .insert(chatMessages)
-        .values(messages)
-        .onConflictDoUpdate({
-          target: chatMessages.id,
-          set: {
-            content: sql`excluded.content`,
-            role: sql`excluded.role`,
-            createdAt: sql`excluded.created_at`,
+          subjectDecisionId: decision.id,
+          title: `Case review · ${decision.caseNumber}`,
+          titleSource: "user",
+          createdAt: RECORDED_AT,
+          updatedAt: last.createdAt,
+          recapText: scene.aiNote,
+          recapMessageId: last.id,
+          recapPromptVersion: RECAP_PROMPT_VERSION,
+          recapGeneratedAt: RECORDED_AT,
+        } as const;
+        await tx
+          .insert(chatThreads)
+          .values(thread)
+          .onConflictDoUpdate({
+            target: chatThreads.id,
+            set: thread,
+            setWhere: sql`${chatThreads.organizationId} = ${organizationId} AND ${chatThreads.userId} = ${userId}`,
+          });
+        await tx
+          .insert(chatMessages)
+          .values(messages)
+          .onConflictDoUpdate({
+            target: chatMessages.id,
+            set: {
+              content: sql`excluded.content`,
+              role: sql`excluded.role`,
+              createdAt: sql`excluded.created_at`,
+            },
+            setWhere: sql`${chatMessages.threadId} = ${threadId} AND ${chatMessages.userId} = ${userId}`,
+          });
+        const marks = [
+          {
+            kind: "highlight",
+            color: "yellow",
+            style: "highlight",
+            body: null,
+            block: highlight,
           },
-          setWhere: sql`${chatMessages.threadId} = ${threadId} AND ${chatMessages.userId} = ${userId}`,
-        });
-      const marks = [
-        {
-          kind: "highlight",
-          color: "yellow",
-          style: "highlight",
-          body: null,
-          block: highlight,
-        },
-        {
-          kind: "highlight",
-          color: "sky",
-          style: "underline",
-          body: null,
-          block: underline,
-        },
-        {
-          kind: "comment",
-          color: null,
-          style: null,
-          body: scene.comment,
-          block: underline,
-        },
-      ] as const;
-      readerMarks.push(
-        ...marks.map((mark, index) => {
-          const startOffset =
-            mark.kind === "comment"
-              ? Math.max(0, mark.block.plainText.length - 100)
-              : 0;
-          const quote = mark.block.plainText.slice(
-            startOffset,
-            startOffset + (mark.kind === "comment" ? 100 : 180),
-          );
-          return {
-            id: seedId<"legalReaderAnnotation">(`${key}-mark-${index}`),
-            organizationId,
-            userId,
-            targetType: "decision",
-            targetId: decision.id,
-            kind: mark.kind,
-            visibility: "shared",
-            color: mark.color,
-            style: mark.style,
-            blockAnchorId: mark.block.anchorId,
-            startOffset,
-            endOffset: startOffset + quote.length,
-            quote,
-            body: mark.body,
-            createdAt: RECORDED_AT,
-            updatedAt: RECORDED_AT,
-          } as const;
-        }),
+          {
+            kind: "highlight",
+            color: "sky",
+            style: "underline",
+            body: null,
+            block: underline,
+          },
+          {
+            kind: "comment",
+            color: null,
+            style: null,
+            body: scene.comment,
+            block: underline,
+          },
+        ] as const;
+        readerMarks.push(
+          ...marks.map((mark, index) => {
+            const startOffset =
+              mark.kind === "comment"
+                ? Math.max(0, mark.block.plainText.length - 100)
+                : 0;
+            const quote = mark.block.plainText.slice(
+              startOffset,
+              startOffset + (mark.kind === "comment" ? 100 : 180),
+            );
+            return {
+              id: seedId<"legalReaderAnnotation">(`${key}-mark-${index}`),
+              organizationId,
+              userId,
+              targetType: "decision",
+              targetId: decision.id,
+              kind: mark.kind,
+              visibility: "shared",
+              color: mark.color,
+              style: mark.style,
+              blockAnchorId: mark.block.anchorId,
+              startOffset,
+              endOffset: startOffset + quote.length,
+              quote,
+              body: mark.body,
+              createdAt: RECORDED_AT,
+              updatedAt: RECORDED_AT,
+            } as const;
+          }),
+        );
+      }
+    },
+  );
+  await withAggregateTransaction(
+    db,
+    AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh,
+    async (tx) => {
+      // Reader marks force row-level security, so the transaction takes the
+      // application role and names its author the way a request does.
+      await tx.execute(
+        sql`SELECT set_config('role', 'stella', true), set_config('app.organization_id', ${organizationId}, true), set_config('app.user_id', ${userId}, true)`,
       );
-    }
-  });
-  await withAggregateTransaction(db, async (tx) => {
-    // Reader marks force row-level security, so the transaction takes the
-    // application role and names its author the way a request does.
-    await tx.execute(
-      sql`SELECT set_config('role', 'stella', true), set_config('app.organization_id', ${organizationId}, true), set_config('app.user_id', ${userId}, true)`,
-    );
-    await tx
-      .insert(legalReaderAnnotations)
-      .values(readerMarks)
-      .onConflictDoUpdate({
-        target: legalReaderAnnotations.id,
-        set: {
-          kind: sql`excluded.kind`,
-          color: sql`excluded.color`,
-          style: sql`excluded.style`,
-          body: sql`excluded.body`,
-          blockAnchorId: sql`excluded.block_anchor_id`,
-          startOffset: sql`excluded.start_offset`,
-          endOffset: sql`excluded.end_offset`,
-          quote: sql`excluded.quote`,
-          updatedAt: sql`excluded.updated_at`,
-          visibility: sql`excluded.visibility`,
-        },
-        setWhere: sql`${legalReaderAnnotations.organizationId} = ${organizationId} AND ${legalReaderAnnotations.userId} = ${userId}`,
-      });
-  });
+      await tx
+        .insert(legalReaderAnnotations)
+        .values(readerMarks)
+        .onConflictDoUpdate({
+          target: legalReaderAnnotations.id,
+          set: {
+            kind: sql`excluded.kind`,
+            color: sql`excluded.color`,
+            style: sql`excluded.style`,
+            body: sql`excluded.body`,
+            blockAnchorId: sql`excluded.block_anchor_id`,
+            startOffset: sql`excluded.start_offset`,
+            endOffset: sql`excluded.end_offset`,
+            quote: sql`excluded.quote`,
+            updatedAt: sql`excluded.updated_at`,
+            visibility: sql`excluded.visibility`,
+          },
+          setWhere: sql`${legalReaderAnnotations.organizationId} = ${organizationId} AND ${legalReaderAnnotations.userId} = ${userId}`,
+        });
+    },
+  );
 };

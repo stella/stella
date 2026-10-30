@@ -9,6 +9,7 @@ import {
 import type { StoredRawReader } from "@/api/handlers/case-law/ingestion/adapter";
 import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { LIMITS } from "@/api/lib/limits";
 import { readS3ObjectBoundedIfPresent } from "@/api/lib/s3";
@@ -66,6 +67,7 @@ const readReservedReplayInput = async (
   (
     await withAggregateTransaction(
       rootDb,
+      AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh,
       async (tx) =>
         await tx
           .select({

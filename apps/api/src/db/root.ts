@@ -9,6 +9,7 @@ import {
   queryCountLogger,
 } from "@/api/lib/db-query-counter";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { runTransactionsInCallerContext } from "@/api/lib/db/caller-async-context";
 import { recordLegalResolveAuditInTransaction } from "@/api/lib/db/legal-resolve-audit";
 import type { LegalResolveAudit } from "@/api/lib/db/legal-resolve-audit";
@@ -195,8 +196,10 @@ export type Transaction = TransactionOf<RootDatabase>;
 
 /** The deployment operator receives only audited activity aggregates. */
 export const readOperatorActivitySummary = async (now: number) =>
-  await withAggregateTransaction(rootDb, async (tx) =>
-    readAuditedActivitySummary(tx, now),
+  await withAggregateTransaction(
+    rootDb,
+    AGGREGATE_TRANSACTION_BUDGETS.requestPath,
+    async (tx) => readAuditedActivitySummary(tx, now),
   );
 
 /** Organization-bound OAuth operations never expose the owner connection. */
@@ -207,6 +210,7 @@ export const createServiceOAuthClient = async (
 ) =>
   await withAggregateTransaction(
     rootDb,
+    AGGREGATE_TRANSACTION_BUDGETS.requestPath,
     async (tx) =>
       await createServiceOAuthClientInTransaction({ ...options, tx }),
   );
@@ -215,6 +219,7 @@ export const changeServiceOAuthClient = async (
 ) =>
   await withAggregateTransaction(
     rootDb,
+    AGGREGATE_TRANSACTION_BUDGETS.requestPath,
     async (tx) =>
       await changeServiceOAuthClientInTransaction({ ...options, tx }),
   );
@@ -228,6 +233,7 @@ export const createPartnerOAuthClient = async (
 ) =>
   await withAggregateTransaction(
     rootDb,
+    AGGREGATE_TRANSACTION_BUDGETS.requestPath,
     async (tx) =>
       await createPartnerOAuthClientInTransaction({ ...options, tx }),
   );
@@ -236,12 +242,14 @@ export const changePartnerOAuthClient = async (
 ) =>
   await withAggregateTransaction(
     rootDb,
+    AGGREGATE_TRANSACTION_BUDGETS.requestPath,
     async (tx) =>
       await changePartnerOAuthClientInTransaction({ ...options, tx }),
   );
 export const recordLegalResolveAudit = async (options: LegalResolveAudit) =>
   await withAggregateTransaction(
     rootDb,
+    AGGREGATE_TRANSACTION_BUDGETS.requestPath,
     async (tx) =>
       await recordLegalResolveAuditInTransaction({ ...options, tx }),
   );

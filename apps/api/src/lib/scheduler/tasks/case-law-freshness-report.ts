@@ -1,4 +1,5 @@
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import {
   emitCaseLawFreshnessReport,
   readCaseLawFreshnessReportTx,
@@ -11,6 +12,7 @@ export const REPORT_CASE_LAW_FRESHNESS_TASK =
 export const reportCaseLawFreshnessTask: SchedulerTask = async ({ db }) => {
   const report = await withAggregateTransaction(
     db,
+    AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh,
     readCaseLawFreshnessReportTx,
   );
   emitCaseLawFreshnessReport(report);

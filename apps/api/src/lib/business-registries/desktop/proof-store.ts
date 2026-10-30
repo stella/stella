@@ -13,6 +13,7 @@ import {
   withAggregateTransaction,
   withSkipLockedBatch,
 } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const MAX_PRUNE_ROWS = 100;
@@ -108,6 +109,7 @@ export class ConsumedDesktopDeviceProof {
       try: async () =>
         await withAggregateTransaction(
           db,
+          AGGREGATE_TRANSACTION_BUDGETS.requestPath,
           async (tx) =>
             // audit: skip - Authentication receipts preserve single-use request authority independently.
             await tx

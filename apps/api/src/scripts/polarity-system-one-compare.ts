@@ -18,6 +18,7 @@ import {
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { openCaseLawReadOnlySession } from "@/api/lib/case-law/maintenance-lane";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { readCorpusText } from "@/api/lib/legal-search/corpus-reads";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
@@ -334,37 +335,41 @@ await runScriptWithErrorOutput(async () => {
   const { rootDb } = await openCaseLawReadOnlySession();
 
   const readSample = async () =>
-    await withAggregateTransaction(rootDb, async (tx) => {
-      const citations = await tx.execute<SampledCitation>(
-        sql.join(
-          planSampleBuckets(options).map((bucket) => bucketQuery(tx, bucket)),
-          sql.raw(" UNION ALL "),
-        ),
-      );
-      const citingIds = [
-        ...new Set(citations.map((citation) => citation.citingDecisionId)),
-      ].map(brandPersistedCaseLawDecisionId);
-      const decisions = new Map<string, CitingDecision>();
-      if (citingIds.length === 0) {
+    await withAggregateTransaction(
+      rootDb,
+      AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch,
+      async (tx) => {
+        const citations = await tx.execute<SampledCitation>(
+          sql.join(
+            planSampleBuckets(options).map((bucket) => bucketQuery(tx, bucket)),
+            sql.raw(" UNION ALL "),
+          ),
+        );
+        const citingIds = [
+          ...new Set(citations.map((citation) => citation.citingDecisionId)),
+        ].map(brandPersistedCaseLawDecisionId);
+        const decisions = new Map<string, CitingDecision>();
+        if (citingIds.length === 0) {
+          return { citations, decisions };
+        }
+        const rows = await tx
+          .select({
+            id: publishedCaseLawDecisions.id,
+            language: publishedCaseLawDecisions.language,
+            court: publishedCaseLawDecisions.court,
+            caseNumber: publishedCaseLawDecisions.caseNumber,
+            sections: publishedCaseLawDecisions.sections,
+            fulltext: publishedCaseLawDecisions.fulltext,
+            textS3Key: publishedCaseLawDecisions.textS3Key,
+          })
+          .from(publishedCaseLawDecisions)
+          .where(inArray(publishedCaseLawDecisions.id, citingIds));
+        for (const { id, ...decision } of rows) {
+          decisions.set(id, decision);
+        }
         return { citations, decisions };
-      }
-      const rows = await tx
-        .select({
-          id: publishedCaseLawDecisions.id,
-          language: publishedCaseLawDecisions.language,
-          court: publishedCaseLawDecisions.court,
-          caseNumber: publishedCaseLawDecisions.caseNumber,
-          sections: publishedCaseLawDecisions.sections,
-          fulltext: publishedCaseLawDecisions.fulltext,
-          textS3Key: publishedCaseLawDecisions.textS3Key,
-        })
-        .from(publishedCaseLawDecisions)
-        .where(inArray(publishedCaseLawDecisions.id, citingIds));
-      for (const { id, ...decision } of rows) {
-        decisions.set(id, decision);
-      }
-      return { citations, decisions };
-    });
+      },
+    );
 
   const { citations, decisions } = await readSample();
 

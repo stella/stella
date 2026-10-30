@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * Organization settings loaders read through the caller's handle. Under a
  * request scope (role `stella`), the `organization_settings` policy is what
@@ -5,8 +6,6 @@
  * membership-scoped factory request authentication builds, with the other
  * organization's settings row present.
  */
-
-import { panic } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -51,6 +50,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { encryptContent } from "@/api/lib/content-encryption";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
   loadWebSearchKeys,
@@ -656,6 +656,7 @@ test("auth settings reads leave the database reusable for later transactions", a
     expect(providerKeys(settings.orgAIConfig)).toEqual(["model-a-key"]);
     const members = await withAggregateTransaction(
       testDb,
+      AGGREGATE_TRANSACTION_BUDGETS.requestPath,
       async (tx) =>
         await tx
           .select({ userId: member.userId })

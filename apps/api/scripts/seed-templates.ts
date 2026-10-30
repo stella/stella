@@ -37,6 +37,7 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ClauseBody, ClauseParagraph } from "@/api/lib/clauses/types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { deriveManifestFromDocx } from "@/api/lib/docx/derived-manifest";
 import type { FieldMeta } from "@/api/lib/docx/types";
@@ -2570,6 +2571,7 @@ export async function seedTemplates(
   // repointed; on-conflict-do-nothing preserves a user's current thread.
   const templateChatCount = await withAggregateTransaction(
     db,
+    AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch,
     async (tx) =>
       await seedTemplateChatThreads(tx, {
         organizationId: ORG_ID,

@@ -10,6 +10,7 @@ import {
   legislationFacetRefreshes,
 } from "@/api/db/schema";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { isLatestOpenedVersionOfWorkAt } from "@/api/lib/legal-search/legislation-listed-version";
 import { publishedLegislationCountryFor } from "@/api/lib/legal-search/legislation-redistribution";
@@ -72,60 +73,64 @@ export const refreshLegislationFacetCounts = async (
     bucketCap = LIMITS.legislationDocumentTypeBucketLimit,
   }: RefreshOptions = {},
 ) =>
-  await withAggregateTransaction(db, async (tx) => {
-    await tx.delete(legislationFacetCounts).where(sql`true`);
-    await tx.execute(sql`
+  await withAggregateTransaction(
+    db,
+    AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh,
+    async (tx) => {
+      await tx.delete(legislationFacetCounts).where(sql`true`);
+      await tx.execute(sql`
       INSERT INTO ${legislationFacetCounts}
         (country, source_id, document_type, works)
       SELECT country, source_id, document_type, works
       FROM (${legislationFacetRefreshQuery(tx)}) AS counted
     `);
 
-    // Committed with the buckets: from here on the snapshot is the answer,
-    // even when a reader can see none of its rows.
-    await tx
-      .insert(legislationFacetRefreshes)
-      .values({ singleton: true, refreshedAt: sql`now()` })
-      .onConflictDoUpdate({
-        target: legislationFacetRefreshes.singleton,
-        set: { refreshedAt: sql`now()` },
-      });
+      // Committed with the buckets: from here on the snapshot is the answer,
+      // even when a reader can see none of its rows.
+      await tx
+        .insert(legislationFacetRefreshes)
+        .values({ singleton: true, refreshedAt: sql`now()` })
+        .onConflictDoUpdate({
+          target: legislationFacetRefreshes.singleton,
+          set: { refreshedAt: sql`now()` },
+        });
 
-    const [summary] = await tx
-      .select({ buckets: sql<number>`count(*)::int` })
-      .from(legislationFacetCounts);
-    if (!summary) {
-      panic("Legislation facet refresh aggregate returned no row.");
-    }
+      const [summary] = await tx
+        .select({ buckets: sql<number>`count(*)::int` })
+        .from(legislationFacetCounts);
+      if (!summary) {
+        panic("Legislation facet refresh aggregate returned no row.");
+      }
 
-    // One row per admitted jurisdiction, a closed list in code: the snapshot
-    // counts nothing else, so more rows than that is a broken invariant.
-    const kinds = await readBounded(
-      tx
-        .select({
-          country: legislationFacetCounts.country,
-          kinds: sql<number>`count(DISTINCT ${legislationFacetCounts.documentType})::int`,
-        })
-        .from(legislationFacetCounts)
-        .groupBy(legislationFacetCounts.country),
-      PUBLIC_LEGISLATION_COUNTRIES.length,
-    );
-    if (kinds.type === "overflow") {
-      return panic(
-        "Legislation facet snapshot holds a jurisdiction that is not admitted.",
+      // One row per admitted jurisdiction, a closed list in code: the snapshot
+      // counts nothing else, so more rows than that is a broken invariant.
+      const kinds = await readBounded(
+        tx
+          .select({
+            country: legislationFacetCounts.country,
+            kinds: sql<number>`count(DISTINCT ${legislationFacetCounts.documentType})::int`,
+          })
+          .from(legislationFacetCounts)
+          .groupBy(legislationFacetCounts.country),
+        PUBLIC_LEGISLATION_COUNTRIES.length,
       );
-    }
-    const overflowing = kinds.rows.filter((row) => row.kinds > bucketCap);
-    for (const row of overflowing) {
-      logger.warn("legislation.facets.bucket_overflow", {
-        country: row.country,
-        kinds: row.kinds,
-        cap: bucketCap,
-      });
-    }
-    signal?.throwIfAborted();
-    return {
-      buckets: summary.buckets,
-      overflowing: overflowing.map((row) => row.country),
-    };
-  });
+      if (kinds.type === "overflow") {
+        return panic(
+          "Legislation facet snapshot holds a jurisdiction that is not admitted.",
+        );
+      }
+      const overflowing = kinds.rows.filter((row) => row.kinds > bucketCap);
+      for (const row of overflowing) {
+        logger.warn("legislation.facets.bucket_overflow", {
+          country: row.country,
+          kinds: row.kinds,
+          cap: bucketCap,
+        });
+      }
+      signal?.throwIfAborted();
+      return {
+        buckets: summary.buckets,
+        overflowing: overflowing.map((row) => row.country),
+      };
+    },
+  );

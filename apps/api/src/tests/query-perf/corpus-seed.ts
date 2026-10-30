@@ -9,6 +9,7 @@ import {
   tryLockCaseLawSitemapMonth,
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   CORPUS_INDEX_MANIFESTS,
@@ -579,18 +580,22 @@ export const seedSitemapReadBudget = async ({
   await database.execute(sql`VACUUM (ANALYZE) case_law_sitemap_changes`);
   const acquired = Promise.withResolvers<undefined>();
   const release = Promise.withResolvers<undefined>();
-  const holding = withAggregateTransaction(openClient().db, async (tx) => {
-    if (
-      !(await tryLockCaseLawSitemapMonth({
-        tx,
-        month: { country: "XQN", year: "2024", month: "01" },
-      }))
-    ) {
-      panic("Sitemap fixture backlog month is already held");
-    }
-    acquired.resolve(undefined);
-    await release.promise;
-  });
+  const holding = withAggregateTransaction(
+    openClient().db,
+    AGGREGATE_TRANSACTION_BUDGETS.requestPath,
+    async (tx) => {
+      if (
+        !(await tryLockCaseLawSitemapMonth({
+          tx,
+          month: { country: "XQN", year: "2024", month: "01" },
+        }))
+      ) {
+        panic("Sitemap fixture backlog month is already held");
+      }
+      acquired.resolve(undefined);
+      await release.promise;
+    },
+  );
   await Promise.race([
     acquired.promise,
     holding.then(() => panic("Sitemap fixture lock released before capture")),

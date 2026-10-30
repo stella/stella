@@ -10,6 +10,7 @@ import {
   caseLawRootHandleUnderCorpusSchemaLane,
 } from "@/api/lib/case-law/maintenance-lane";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { SCHEDULER_BACKFILL_CONFIG } from "@/api/lib/scheduler/backfill-config";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 
@@ -24,7 +25,12 @@ const readDecisionTableVerdict = async (
 ): Promise<Verdict> =>
   await createDatabaseLoadVerdictReader({
     db: {
-      transaction: async (work) => await withAggregateTransaction(db, work),
+      transaction: async (work) =>
+        await withAggregateTransaction(
+          db,
+          AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh,
+          work,
+        ),
     },
     tableName: "case_law_decisions",
     config: SCHEDULER_BACKFILL_CONFIG,

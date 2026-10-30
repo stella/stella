@@ -30,6 +30,7 @@ import {
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import type { BoundedReadResult } from "@/api/lib/db/read-bounded";
 import {
@@ -415,10 +416,14 @@ const clearBillingRecords = async (
   }
   const outcome = await Result.tryPromise({
     try: async () =>
-      await withAggregateTransaction(scope.db, async (tx) => {
-        await scope.fence.assert(tx);
-        return await clearReviewOrganizationBilling(tx, organizationId);
-      }),
+      await withAggregateTransaction(
+        scope.db,
+        AGGREGATE_TRANSACTION_BUDGETS.requestPath,
+        async (tx) => {
+          await scope.fence.assert(tx);
+          return await clearReviewOrganizationBilling(tx, organizationId);
+        },
+      ),
     catch: (cause) => cause,
   });
   if (Result.isError(outcome)) {
@@ -624,41 +629,45 @@ const sweepRemainingRows = async (
   }
   const outcome = await Result.tryPromise({
     try: async () =>
-      await withAggregateTransaction(scope.db, async (tx) => {
-        await scope.fence.assert(tx);
-        if (scope.signal.aborted) {
-          abortTransaction(
-            new ReviewSweepBlockedError({
-              message: "The reset was cancelled; the sweep did not run",
-            }),
+      await withAggregateTransaction(
+        scope.db,
+        AGGREGATE_TRANSACTION_BUDGETS.requestPath,
+        async (tx) => {
+          await scope.fence.assert(tx);
+          if (scope.signal.aborted) {
+            abortTransaction(
+              new ReviewSweepBlockedError({
+                message: "The reset was cancelled; the sweep did not run",
+              }),
+            );
+          }
+          // The storage census seals and records every matter still standing,
+          // and a matter that survives must keep its objects. Counted under the
+          // organization-row lock: a matter insert checks its foreign key to
+          // that row, so none can appear between this count and the commit.
+          const remainingMatters = await tx.$count(
+            workspaces,
+            eq(workspaces.organizationId, organizationId),
           );
-        }
-        // The storage census seals and records every matter still standing,
-        // and a matter that survives must keep its objects. Counted under the
-        // organization-row lock: a matter insert checks its foreign key to
-        // that row, so none can appear between this count and the commit.
-        const remainingMatters = await tx.$count(
-          workspaces,
-          eq(workspaces.organizationId, organizationId),
-        );
-        if (remainingMatters > 0) {
-          abortTransaction(
-            new ReviewSweepBlockedError({
-              message: `${remainingMatters} matter(s) remain; the sweep did not run`,
-            }),
+          if (remainingMatters > 0) {
+            abortTransaction(
+              new ReviewSweepBlockedError({
+                message: `${remainingMatters} matter(s) remain; the sweep did not run`,
+              }),
+            );
+          }
+          const teardown = await recordOrganizationStorageTeardown({
+            organizationId,
+            tx,
+          });
+          const removed = await sweepReviewOrganization(
+            tx,
+            organizationId,
+            scope.target.userId,
           );
-        }
-        const teardown = await recordOrganizationStorageTeardown({
-          organizationId,
-          tx,
-        });
-        const removed = await sweepReviewOrganization(
-          tx,
-          organizationId,
-          scope.target.userId,
-        );
-        return { removed, requestIds: teardown.requestIds };
-      }),
+          return { removed, requestIds: teardown.requestIds };
+        },
+      ),
     catch: (cause) => cause,
   });
   if (Result.isError(outcome)) {

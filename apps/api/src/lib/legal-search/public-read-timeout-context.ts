@@ -8,6 +8,7 @@ import type { Transaction } from "@/api/db/root";
 import type { AnyDrizzle } from "@/api/db/scoped";
 import { detached } from "@/api/lib/analytics/capture";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { fetchPublicReadRequest } from "@/api/lib/safe-outbound-fetch";
@@ -335,7 +336,11 @@ export const withPublicReadIo = async <T>(
       readTransaction: async (database, operation) =>
         await trackPublicRead(context?.work, async () => {
           context?.signal?.throwIfAborted();
-          return await withAggregateTransaction(database, operation);
+          return await withAggregateTransaction(
+            database,
+            AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh,
+            operation,
+          );
         }),
       fetchStream: async (input, init, fetcher) =>
         await fetchPublicRead({

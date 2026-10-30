@@ -32,6 +32,7 @@ import { sessionCookieName } from "@/api/lib/auth/auth-cookie-name";
 import { acceptProfessionalUse } from "@/api/lib/auth/professional-use";
 import { toSafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { assertConfiguredBetterAuthOAuthPolicy } from "@/api/lib/db/assert-better-auth-oauth-policy";
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { ensureDefaultDocumentTypes } from "@/api/lib/document-types/defaults";
@@ -113,50 +114,54 @@ export const ensureUserExists = async ({
   email: string;
   image?: string;
 }) =>
-  withAggregateTransaction(db, async (transaction) => {
-    await transaction
-      .insert(user)
-      .values({
-        id,
-        name,
-        email,
-        image,
-        emailVerified: true,
-        createdAt: now,
-        updatedAt: now,
-      })
-      .onConflictDoNothing();
+  withAggregateTransaction(
+    db,
+    AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch,
+    async (transaction) => {
+      await transaction
+        .insert(user)
+        .values({
+          id,
+          name,
+          email,
+          image,
+          emailVerified: true,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .onConflictDoNothing();
 
-    const matches = await transaction
-      .select({ id: user.id })
-      .from(user)
-      .where(or(eq(user.id, id), eq(user.email, email)))
-      .limit(2);
-    const match = matches.at(0);
-    if (!match || matches.length !== 1) {
-      return panic(
-        `Seed user identity is ambiguous for id ${id} and email ${email}`,
-      );
-    }
-    const resolvedId = match.id;
+      const matches = await transaction
+        .select({ id: user.id })
+        .from(user)
+        .where(or(eq(user.id, id), eq(user.email, email)))
+        .limit(2);
+      const match = matches.at(0);
+      if (!match || matches.length !== 1) {
+        return panic(
+          `Seed user identity is ambiguous for id ${id} and email ${email}`,
+        );
+      }
+      const resolvedId = match.id;
 
-    // Reconcile every seed-owned display/login field in place. The unique
-    // lookup above proves no second row owns the target email.
-    await transaction
-      .update(user)
-      .set({ email, emailVerified: true, image, name, updatedAt: now })
-      .where(eq(user.id, resolvedId));
+      // Reconcile every seed-owned display/login field in place. The unique
+      // lookup above proves no second row owns the target email.
+      await transaction
+        .update(user)
+        .set({ email, emailVerified: true, image, name, updatedAt: now })
+        .where(eq(user.id, resolvedId));
 
-    // A seeded account stands for one that registered, which accepted the
-    // professional-use statement there; without it every seeded session would
-    // stop at the acceptance prompt.
-    await acceptProfessionalUse({
-      tx: transaction,
-      userId: toSafeId<"user">(resolvedId),
-    });
+      // A seeded account stands for one that registered, which accepted the
+      // professional-use statement there; without it every seeded session would
+      // stop at the acceptance prompt.
+      await acceptProfessionalUse({
+        tx: transaction,
+        userId: toSafeId<"user">(resolvedId),
+      });
 
-    return resolvedId;
-  });
+      return resolvedId;
+    },
+  );
 
 export const ensureOrganizationExists = async (organizationId: string) => {
   const org = getSeedOrganizationIdentity(organizationId);
