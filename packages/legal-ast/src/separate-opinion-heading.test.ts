@@ -4,8 +4,8 @@ import { normalizeUnicode } from "@stll/text-normalize";
 
 import {
   separateOpinionAuthorLine,
+  separateOpinionHeading,
   separateOpinionHeadingNamesAuthor,
-  separateOpinionHeadingTail,
 } from "./separate-opinion-heading.js";
 
 const HEADING_CASES = [
@@ -43,7 +43,7 @@ describe("CS/SK separate-opinion heading vocabulary", () => {
   test.each(HEADING_CASES)(
     "reads %j without changing its tail",
     (heading, tail) => {
-      expect(separateOpinionHeadingTail(heading, 300)).toBe(tail);
+      expect(separateOpinionHeading(heading, 300)?.tail).toBe(tail);
     },
   );
 
@@ -61,22 +61,22 @@ describe("CS/SK separate-opinion heading vocabulary", () => {
     "Stanovisko",
     "stanovisko",
   ])("leaves prose or an unsupported bare title as text: %s", (heading) => {
-    expect(separateOpinionHeadingTail(heading, 300)).toBeUndefined();
+    expect(separateOpinionHeading(heading, 300)?.tail).toBeUndefined();
   });
 
   test("preserves decomposed diacritics and spacing in the original tail", () => {
     const title = normalizeUnicode("Konkurujúce\tstanovisko", "NFD");
     const tail = normalizeUnicode("  sudkyne Ľudmily Novákovej", "NFD");
     expect(tail).not.toBe(normalizeUnicode(tail, "NFC"));
-    expect(separateOpinionHeadingTail(`${title}${tail}`, 300)).toBe(tail);
+    expect(separateOpinionHeading(`${title}${tail}`, 300)?.tail).toBe(tail);
   });
 
   test("enforces the caller's heading length boundary", () => {
     const heading =
       "Odlišné stanovisko soudce Petra Nováka dle § 55a soudního řádu správního k rozhodnutí rozšířeného senátu ze dne 30. 6. 2021 ve věci sp. zn. 9 As 264/2020";
     expect(heading.length).toBeGreaterThan(120);
-    expect(separateOpinionHeadingTail(heading, 120)).toBeUndefined();
-    expect(separateOpinionHeadingTail(heading, heading.length)).toBe(
+    expect(separateOpinionHeading(heading, 120)?.tail).toBeUndefined();
+    expect(separateOpinionHeading(heading, heading.length)?.tail).toBe(
       heading.slice("Odlišné stanovisko".length),
     );
   });
@@ -96,7 +96,7 @@ test.each([
   " JUDr. Jana Nováka",
   normalizeUnicode(" sudkýň Ľudmily Novákovej", "NFD"),
 ])("the heading's own author vocabulary also identifies names: %s", (tail) => {
-  expect(separateOpinionHeadingTail(`Odlišné stanovisko${tail}`, 300)).toBe(
+  expect(separateOpinionHeading(`Odlišné stanovisko${tail}`, 300)?.tail).toBe(
     tail,
   );
   expect(separateOpinionHeadingNamesAuthor(tail)).toBe(true);
@@ -127,7 +127,7 @@ test.each([
   "ku sp.zn. 1/2026",
 ])("legal reference targets do not require invented spacing: %s", (target) => {
   const tail = ` ${target}`;
-  expect(separateOpinionHeadingTail(`Odlišné stanovisko${tail}`, 300)).toBe(
+  expect(separateOpinionHeading(`Odlišné stanovisko${tail}`, 300)?.tail).toBe(
     tail,
   );
 });
@@ -180,7 +180,7 @@ for (const title of CONCURRING_TITLES) {
     `concurring title %s requires an author beyond its legal context: ${title}`,
     (tail) => {
       expect(
-        separateOpinionHeadingTail(`${title}${tail}`, 300),
+        separateOpinionHeading(`${title}${tail}`, 300)?.tail,
       ).toBeUndefined();
     },
   );
@@ -194,7 +194,35 @@ for (const title of CONCURRING_TITLES) {
   ])(
     `concurring title accepts punctuation or an author: ${title}%s`,
     (tail) => {
-      expect(separateOpinionHeadingTail(`${title}${tail}`, 300)).toBe(tail);
+      expect(separateOpinionHeading(`${title}${tail}`, 300)?.tail).toBe(tail);
     },
   );
 }
+
+test.each([
+  ["Odlišné stanovisko soudce Jana Nováka", "dissent"],
+  ["STANOVISKO", "dissent"],
+  ["Paralelní stanovisko soudce Jana Nováka", "concurring"],
+  ["Konkurujúce stanovisko sudkyne Evy Novákovej", "concurring"],
+] as const)("a heading reports its opinion kind: %s", (heading, kind) => {
+  expect(separateOpinionHeading(heading, 300)?.kind).toBe(kind);
+});
+
+test.each([
+  " k rozhodnutí soudce prvního stupně",
+  " ku rozhodnutiu sudcu prvého stupňa",
+  " soudců senátu",
+])("a concurring title needs a named author, not a generic one:%s", (tail) => {
+  for (const title of ["Souhlasné stanovisko", "Súhlasné stanovisko"]) {
+    expect(separateOpinionHeading(`${title}${tail}`, 300)).toBeUndefined();
+  }
+});
+
+test.each([" JUDr. Jana Nováka", " soudce JUDr. Jana Nováka"])(
+  "a concurring title accepts an author named after a title:%s",
+  (tail) => {
+    expect(
+      separateOpinionHeading(`Souhlasné stanovisko${tail}`, 300)?.tail,
+    ).toBe(tail);
+  },
+);

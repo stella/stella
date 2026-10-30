@@ -70,6 +70,7 @@ import {
   type DecisionDocumentAst,
   hasInlineChildren,
   type Inline,
+  type ParagraphRole,
   plainTextOf,
 } from "@stll/legal-ast/document-ast";
 // parser-output-unchanged: mapInlineText moved unchanged to the shared inline-line module.
@@ -97,9 +98,11 @@ import { collapseLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spa
 import { readRtfString } from "@/api/lib/legal-search/parsers/rtf-reader";
 import { runContentVisibleText } from "@/api/lib/legal-search/parsers/run-content-text";
 import {
+  type OpinionHeadingKind,
   separateOpinionAuthorLine,
+  type SeparateOpinionHeading,
+  separateOpinionHeading,
   separateOpinionHeadingNamesAuthor,
-  separateOpinionHeadingTail,
 } from "@/api/lib/legal-search/parsers/separate-opinion-heading";
 import { RTF_SOURCE_OPTIONS } from "@/api/lib/legal-search/rtf-source-registry";
 import { segmentDecisionBlocks } from "@/api/lib/legal-search/segment-decision";
@@ -713,7 +716,8 @@ type UsClassificationState = {
   blockIndex: number;
   inRuling: boolean;
   inOduvodneni: boolean;
-  inDissent: boolean;
+  /** The separate opinion the lines belong to, if any. */
+  separateOpinion: OpinionHeadingKind | null;
   /** Whether the ruling zone has produced a holding yet. */
   sawHolding: boolean;
   consumedLines: Set<ParsedLine>;
@@ -806,9 +810,9 @@ const classifyUsBodyLine = ({
 
   // A separate opinion runs to the end of the document, so the heading
   // opens a zone rather than a section.
-  const dissentTail = opinionHeadingTail(normalized);
-  if (dissentTail !== undefined) {
-    state.inDissent = true;
+  const opinion = opinionHeading(normalized);
+  if (opinion !== undefined) {
+    state.separateOpinion = opinion.kind;
     state.blockIndex += 1;
     blocks.push({
       id: makeUsBlockId(state),
@@ -816,7 +820,7 @@ const classifyUsBodyLine = ({
       type: "heading",
       level: 2,
       role: "section-heading",
-      ...(separateOpinionHeadingNamesAuthor(dissentTail)
+      ...(separateOpinionHeadingNamesAuthor(opinion.tail)
         ? { inlines, plainText }
         : withAuthorContinuation({ heading: normalized, i, lines, state })),
     });
@@ -979,7 +983,10 @@ const classifyUsBodyLine = ({
     id: makeUsBlockId(state),
     anchorId: makeAnchorId("p", state.blockIndex),
     type: "paragraph",
-    role: state.inDissent ? "dissent" : undefined,
+    role:
+      state.separateOpinion === null
+        ? undefined
+        : OPINION_PARAGRAPH_ROLE[state.separateOpinion],
     inlines,
     plainText,
   });
@@ -1003,16 +1010,29 @@ const opensRuling = (
   state: UsClassificationState,
   plainText: string,
 ): boolean =>
-  !state.inOduvodneni && !state.inDissent && TAKTO_TAIL_RE.test(plainText);
+  !state.inOduvodneni &&
+  state.separateOpinion === null &&
+  TAKTO_TAIL_RE.test(plainText);
 
 /**
- * What follows the title of a separate opinion's heading on its line, or
- * `undefined` for a line that is no such heading. The court numbers some of
- * these headings; the number is stripped for the match alone, because the
- * heading block carries the line the court printed.
+ * The role of a separate opinion's paragraphs. A concurring judge agrees with
+ * the outcome; the opinion is that judge's reasoning, not a dissent.
  */
-const opinionHeadingTail = (line: ParsedLineData): string | undefined =>
-  separateOpinionHeadingTail(
+const OPINION_PARAGRAPH_ROLE = {
+  dissent: "dissent",
+  concurring: "argumentation",
+} as const satisfies Record<OpinionHeadingKind, ParagraphRole>;
+
+/**
+ * A separate opinion's heading on this line, or `undefined` for a line that
+ * is no such heading. The court numbers some of these headings; the number is
+ * stripped for the match alone, because the heading block carries the line
+ * the court printed.
+ */
+const opinionHeading = (
+  line: ParsedLineData,
+): SeparateOpinionHeading | undefined =>
+  separateOpinionHeading(
     stripInlineLinePrefix(line, NUMBERED_PARA_RE).line.plainText,
     DISSENT_HEADING_MAX_CHARS,
   );
@@ -1079,7 +1099,7 @@ export const classifyUsDocumentLines = (
     blockIndex: 0,
     inRuling: false,
     inOduvodneni: false,
-    inDissent: false,
+    separateOpinion: null,
     sawHolding: false,
     consumedLines: new Set(),
   };

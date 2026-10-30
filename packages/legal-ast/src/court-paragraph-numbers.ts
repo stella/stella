@@ -22,7 +22,7 @@ import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { closedQuotationParagraphStarts } from "./closed-quotation-paragraphs";
 import type { Block, ParagraphBlock } from "./document-ast.js";
 import { normalizeInlineLine, stripInlineLinePrefix } from "./inline-line.js";
-import { separateOpinionHeadingTail } from "./separate-opinion-heading.js";
+import { separateOpinionHeading } from "./separate-opinion-heading.js";
 
 /** The three ways Czech and Slovak courts print a paragraph number. */
 const COURT_PARAGRAPH_MARKER_STYLES = ["bracket", "dot", "paren"] as const;
@@ -208,7 +208,7 @@ const bodyOf = (blocks: readonly Block[]): Body => {
     if (block.type === "heading") {
       headingSinceBody = true;
       const opinionHeading =
-        separateOpinionHeadingTail(
+        separateOpinionHeading(
           block.plainText.replace(/^\d+[.)]\s*/u, ""),
           1000,
         ) !== undefined;

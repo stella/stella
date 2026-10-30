@@ -2,7 +2,7 @@ import { escapeRegExp, stripDiacritics } from "@stll/text-normalize";
 
 const OPINION_HEADING_KINDS = ["dissent", "concurring"] as const;
 
-type OpinionHeadingKind = (typeof OPINION_HEADING_KINDS)[number];
+export type OpinionHeadingKind = (typeof OPINION_HEADING_KINDS)[number];
 
 type OpinionLanguageVocabulary = {
   readonly titles: Readonly<
@@ -184,6 +184,32 @@ const AUTHOR_LINE_RE = new RegExp(`^(?:${authorPattern})(?=$|[\\s,.:])`, "iu");
 const HEADING_WORDS_RE =
   /^(?<first>[\p{L}\p{M}]+)\s+(?<second>[\p{L}\p{M}]+)(?<tail>(?:[^\p{L}\p{M}\r\n].*)?)$/u;
 
+const AUTHOR_WORDS: ReadonlySet<string> = new Set(
+  languages.flatMap(({ authors }) => authors.map(stripDiacritics)),
+);
+const ACADEMIC_TITLES: ReadonlySet<string> = new Set(
+  OPINION_HEADING_VOCABULARY.academicTitles.map(stripDiacritics),
+);
+
+/**
+ * Whether a tail names a person: an author noun or an academic title followed
+ * by a capitalized word ("soudce Jana Nováka", "JUDr. Novák"), not an author
+ * noun used generically ("soudce prvního stupně").
+ */
+const namesAuthorByName = (tail: string): boolean => {
+  const words = stripDiacritics(tail)
+    .split(/[\s,]+/u)
+    .filter((word) => word.length > 0);
+  return words.some((word, index) => {
+    const next = words[index + 1];
+    return (
+      next !== undefined &&
+      (AUTHOR_WORDS.has(word.toLowerCase()) || ACADEMIC_TITLES.has(word)) &&
+      /^\p{Lu}/u.test(next)
+    );
+  });
+};
+
 /** Whether a validated heading tail explicitly names an opinion's author. */
 export const separateOpinionHeadingNamesAuthor = (tail: string): boolean =>
   NAMES_AUTHOR_RE.test(stripDiacritics(tail));
@@ -192,23 +218,32 @@ export const separateOpinionHeadingNamesAuthor = (tail: string): boolean =>
 export const separateOpinionAuthorLine = (text: string): boolean =>
   AUTHOR_LINE_RE.test(stripDiacritics(text));
 
+/** A separate opinion's heading: whether it dissents or concurs, and the
+ * original text after its title. */
+export type SeparateOpinionHeading = {
+  readonly kind: OpinionHeadingKind;
+  readonly tail: string;
+};
+
 /**
- * Return the original text after a CS/SK separate-opinion title. A sentence
+ * Read a CS/SK separate-opinion heading: its kind and the original text
+ * after its title. A sentence
  * such as "Odlišné stanovisko odůvodňuji takto:" remains prose. The caller
  * supplies its court's heading length bound; bare uppercase STANOVISKO is
  * the older plenary heading whose authors follow on their own lines.
  */
-export const separateOpinionHeadingTail = (
+export const separateOpinionHeading = (
   plainText: string,
   maxChars: number,
-): string | undefined => {
+): SeparateOpinionHeading | undefined => {
   if (plainText.length > maxChars) {
     return undefined;
   }
+  // The bare plenary heading introduces the dissenting judges.
   if (
     OPINION_HEADING_VOCABULARY.bareTitles.some((title) => title === plainText)
   ) {
-    return "";
+    return { kind: "dissent", tail: "" };
   }
   const groups = HEADING_WORDS_RE.exec(plainText)?.groups;
   const first = groups?.["first"];
@@ -230,13 +265,14 @@ export const separateOpinionHeadingTail = (
     return undefined;
   }
   // Consent from an administrative authority uses the same concurring title.
-  // A legal context alone therefore cannot establish a separate opinion.
+  // A legal context, or an author noun naming no one ("k rozhodnutí soudce
+  // prvního stupně"), therefore cannot establish a separate opinion.
   if (
     kind === "concurring" &&
     !EMPTY_TAIL_RE.test(tail) &&
-    !separateOpinionHeadingNamesAuthor(tail)
+    !namesAuthorByName(tail)
   ) {
     return undefined;
   }
-  return tail;
+  return { kind, tail };
 };

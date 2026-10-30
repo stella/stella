@@ -1,5 +1,7 @@
 export {
+  type OpinionHeadingKind,
+  type SeparateOpinionHeading,
   separateOpinionAuthorLine,
   separateOpinionHeadingNamesAuthor,
-  separateOpinionHeadingTail,
+  separateOpinionHeading,
 } from "@stll/legal-ast/separate-opinion-heading";
