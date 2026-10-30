@@ -5,9 +5,9 @@ import { assertProperty } from "@stll/property-testing";
 
 import {
   authenticLanguageTag,
-  AUTHORITY_LANGUAGE_TAGS,
   preferredLanguageVersionsFirst,
 } from "@/api/lib/case-law/decision-language";
+import { AUTHORITY_LANGUAGE_TAGS } from "@/api/lib/case-law/decision-language-sql";
 
 // The database reads the language of the case through a spelled-out table;
 // it must say what `authenticLanguageTag` says for every code it holds.

@@ -41,7 +41,7 @@ import {
   decodeDecisionDateCursor,
   encodeDecisionDateCursor,
 } from "@/api/lib/case-law/decision-date-order";
-import { languageVersionRankSql } from "@/api/lib/case-law/decision-language";
+import { languageVersionRankSql } from "@/api/lib/case-law/decision-language-sql";
 import {
   decisionPageOffsetSchema,
   decisionPageRequestRefusal,
@@ -229,7 +229,6 @@ const decisionBandWalk = ({
           sibling.languageGroupKey,
           publishedCaseLawDecisions.languageGroupKey,
         ),
-        // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- column against column inside one statement, nothing round-trips through a JS Date
         sql`(${siblingRank}, ${sibling.createdAt}, ${sibling.id}) < (${rowRank}, ${publishedCaseLawDecisions.createdAt}, ${publishedCaseLawDecisions.id})`,
         redistributableCaseLawSourceFor(siblingSource.descriptor),
         ...decisionFilterConditions(query, sibling),

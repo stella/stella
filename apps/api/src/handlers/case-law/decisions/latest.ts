@@ -19,7 +19,7 @@ import { status } from "@/api/http/status";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { decisionDateSortKeySql } from "@/api/lib/case-law/decision-date-order";
-import { languageVersionRankSql } from "@/api/lib/case-law/decision-language";
+import { languageVersionRankSql } from "@/api/lib/case-law/decision-language-sql";
 import { readDecisionHeadnote } from "@/api/lib/case-law/decision-text";
 import {
   type PublicDecisionLanguageAlternate,
