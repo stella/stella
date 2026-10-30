@@ -7,7 +7,8 @@
  * spread that may replace cwd but cannot be resolved counts as the checkout.
  * A git-named wrapper without a directory argument is followed to its local
  * definition (or the one a factory passes to a callback); an unresolved one
- * runs in the checkout. Fixture directories (mkdtemp, parameters, and their
+ * runs in the checkout. A non-literal `git -C` operand decides the repository
+ * instead of the cwd. Fixture directories (mkdtemp, parameters, and their
  * aliases) need no exemptions. Arbitrary shell strings, explicit PATH
  * overrides, other interprocedural cwd forwarding and dynamically built argv
  * are outside this syntactic check.
@@ -33,6 +34,7 @@ import {
 const CHECKOUT_PATH_CALLS = new Set([
   "resolve",
   "join",
+  "dirname",
   "normalize",
   "fileURLToPath",
   "URL",
@@ -148,11 +150,12 @@ const checkoutPath = ({
   return false;
 };
 
+/** Where an options object sends the spawned process. */
 type CwdSetting =
   { type: "absent" } | { type: "set"; value: AstNode } | { type: "unresolved" };
 
-const CWD_ABSENT: CwdSetting = { type: "absent" };
-const CWD_UNRESOLVED: CwdSetting = { type: "unresolved" };
+const CWD_ABSENT = { type: "absent" } as const satisfies CwdSetting;
+const CWD_UNRESOLVED = { type: "unresolved" } as const satisfies CwdSetting;
 
 type CwdSettingOptions = {
   context: ScopeContext;
@@ -179,7 +182,7 @@ const cwdSetting = ({
     return CWD_ABSENT;
   }
   seen.add(node);
-  let setting = CWD_ABSENT;
+  let setting: CwdSetting = CWD_ABSENT;
   for (const property of node.properties) {
     if (!isAstNode(property)) {
       continue;
@@ -205,8 +208,8 @@ const cwdSetting = ({
 };
 
 // An explicit executable search path may select a fixture's Git stub.
-const overridesGitPath = (value: unknown): boolean => {
-  const node = unwrapExpression(value);
+const overridesGitPath = (context: ScopeContext, value: unknown): boolean => {
+  const node = resolveStable(context, value);
   if (node?.type !== "ObjectExpression" || !Array.isArray(node.properties)) {
     return false;
   }
@@ -214,7 +217,7 @@ const overridesGitPath = (value: unknown): boolean => {
     if (!isAstNode(property) || getPropertyName(property.key) !== "env") {
       return false;
     }
-    const env = unwrapExpression(property.value);
+    const env = resolveStable(context, property.value);
     return (
       env?.type === "ObjectExpression" &&
       Array.isArray(env.properties) &&
@@ -223,6 +226,69 @@ const overridesGitPath = (value: unknown): boolean => {
       )
     );
   });
+};
+
+/** Git global options whose value is the next argv word. */
+const GIT_VALUE_OPTIONS = new Set(["-C", "-c"]);
+
+type GitInvocation = {
+  /** The executable an argv call runs, when it is a literal. */
+  executable: string | null;
+  /** Non-literal `-C` operands before the subcommand, in order. */
+  directories: AstNode[];
+};
+
+/**
+ * Reads `spawn(["git", ...])` and `execFile("git", [...])`. Literal `-C`
+ * operands are relative to the ones before them, so only non-literal operands
+ * can name another repository.
+ */
+const gitInvocation = (
+  context: ScopeContext,
+  args: readonly unknown[],
+): GitInvocation => {
+  const first = resolveStable(context, args.at(0));
+  const second = resolveStable(context, args.at(1));
+  const command =
+    first?.type === "ArrayExpression" && Array.isArray(first.elements)
+      ? {
+          executable: staticStringValue(
+            resolveStable(context, first.elements.at(0)),
+          ),
+          options: first.elements.slice(1),
+        }
+      : {
+          executable: staticStringValue(first),
+          options:
+            second?.type === "ArrayExpression" && Array.isArray(second.elements)
+              ? second.elements
+              : [],
+        };
+  const directories: AstNode[] = [];
+  if (command.executable !== "git") {
+    return { executable: command.executable, directories };
+  }
+  for (let index = 0; index < command.options.length; index++) {
+    const word = staticStringValue(
+      resolveStable(context, command.options.at(index)),
+    );
+    if (word === null || !word.startsWith("-")) {
+      break;
+    }
+    if (!GIT_VALUE_OPTIONS.has(word)) {
+      continue;
+    }
+    index++;
+    const operand = resolveStable(context, command.options.at(index));
+    if (
+      word === "-C" &&
+      operand !== null &&
+      staticStringValue(operand) === null
+    ) {
+      directories.push(operand);
+    }
+  }
+  return { executable: command.executable, directories };
 };
 
 const calleeName = (callee: unknown) => {
@@ -443,9 +509,7 @@ export const createTestBasePlugin = (enforcesLine = guardEnforcesLine) =>
                 return;
               }
               if (
-                node.arguments.some((arg) =>
-                  overridesGitPath(resolveStable(context, arg)),
-                )
+                node.arguments.some((arg) => overridesGitPath(context, arg))
               ) {
                 return;
               }
@@ -462,7 +526,19 @@ export const createTestBasePlugin = (enforcesLine = guardEnforcesLine) =>
               ) {
                 return;
               }
-              if (!argv.includes("git") && !gitWrapper) {
+              const invocation = gitInvocation(context, node.arguments);
+              if (invocation.executable !== "git" && !gitWrapper) {
+                return;
+              }
+              // `git -C <dir>` chooses the repository whatever the cwd is.
+              const gitDirectory = invocation.directories.at(-1);
+              if (gitDirectory !== undefined) {
+                if (
+                  checkoutPath({ context, value: gitDirectory }) &&
+                  enforces(node)
+                ) {
+                  context.report({ node, messageId: "liveBase" });
+                }
                 return;
               }
               // A merge-base call is safe but still belongs to the shared owner:
@@ -482,7 +558,7 @@ export const createTestBasePlugin = (enforcesLine = guardEnforcesLine) =>
                   break;
                 }
                 case "absent": {
-                  // Literal words, argv arrays and spawner options are not a
+                  // Literal words, argv arrays and options objects are not a
                   // directory; with no other argument the call runs in the
                   // checkout, for spawners and Git-named wrappers alike.
                   const directories = node.arguments.filter((arg) => {
@@ -491,10 +567,7 @@ export const createTestBasePlugin = (enforcesLine = guardEnforcesLine) =>
                       isAstNode(arg) &&
                       resolved?.type !== "ArrayExpression" &&
                       resolved?.type !== "TemplateLiteral" &&
-                      !(
-                        SPAWN_CALLS.has(name) &&
-                        resolved?.type === "ObjectExpression"
-                      ) &&
+                      resolved?.type !== "ObjectExpression" &&
                       staticStringValue(resolved) === null
                     );
                   });
@@ -524,7 +597,7 @@ export const createTestBasePlugin = (enforcesLine = guardEnforcesLine) =>
                 }
                 default: {
                   cwd satisfies never;
-                  return panic("Unhandled cwd setting");
+                  panic("Unhandled cwd setting");
                 }
               }
               if (enforces(node)) {

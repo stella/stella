@@ -38,9 +38,15 @@ test("rejects moving test baselines in the checkout", async () => {
         // A local wrapper that spawns Git without a cwd runs in the checkout.
         'const localGit = (...args) => Bun.spawnSync(["git", ...args]);',
         'localGit("show", "origin/main:x");',
+        'Bun.spawnSync(["git", "show", "origin/main:x"], { cwd: path.dirname(import.meta.dir) });',
+        // `-C` selects the repository whatever the spawn cwd is.
+        'Bun.spawnSync(["git", "-C", REPO_ROOT, "show", "origin/main:x"], { cwd: fixture });',
+        'run(["git", "show", "origin/main:x"], { stdout: "pipe" });',
       ].join("\n"),
     ),
-  ).toEqual([3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 15, 17, 18, 19, 20, 22]);
+  ).toEqual([
+    3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 15, 17, 18, 19, 20, 22, 23, 24, 25,
+  ]);
 });
 
 test("allows fixture repositories and pinned reads without exemptions", async () => {
@@ -69,6 +75,9 @@ test("allows fixture repositories and pinned reads without exemptions", async ()
         'withFixture((root, git) => { git("show", "origin/main:x"); git("merge-base", "origin/main", "HEAD"); });',
         'function fixtureGit(...args) { return Bun.spawnSync(["git", ...args], { cwd: fixture }); }',
         'fixtureGit("show", "origin/main:x");',
+        'Bun.spawnSync(["git", "-C", fixture, "show", "origin/main:x"]);',
+        // A non-Git executable may take `git` as a word.
+        'Bun.spawnSync(["echo", "git", "origin/main"]);',
       ].join("\n"),
     ),
   ).toEqual([]);
@@ -149,6 +158,8 @@ test("command assertions and explicit Git stubs do not read a checkout baseline"
         'const expectedArgv = ["git", "show", "origin/main:baseline.json"];',
         "expect(command).toEqual(expectedArgv);",
         'expect(command).toEqual(["git", "show", "origin/main:baseline.json"]);',
+        "const stubEnv = { ...process.env, PATH: stubPath };",
+        'Bun.spawnSync(["git", "show", "origin/main:x"], { env: stubEnv });',
       ].join("\n"),
     ),
   ).toEqual([]);
