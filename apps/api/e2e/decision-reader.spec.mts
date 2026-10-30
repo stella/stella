@@ -1398,26 +1398,25 @@ test("search notes use one compact disclosure and hide model-only instructions",
   });
   const notice = app.locator("[data-app-notice]");
   await expect(notice).toHaveCount(1);
-  await expect(notice.locator("summary")).toContainText(
-    "Žádná odpovídající rozhodnutí",
-  );
-  await expect(notice.locator("summary")).toContainText(
-    "Žádné výsledky s filtry: Soud",
-  );
-  await expect(notice).not.toHaveAttribute("open");
+  const trigger = notice.getByRole("button");
+  await expect(trigger).toHaveCount(1);
+  await expect(trigger).toContainText("Žádná odpovídající rozhodnutí");
+  await expect(trigger).toContainText("Žádné výsledky s filtry: Soud");
+  await expect(trigger).toHaveAttribute("aria-expanded", "false");
   await expect(notice.locator("ul")).toBeHidden();
   const collapsedHeight = await notice.evaluate(
     (element) => element.getBoundingClientRect().height,
   );
   expect(collapsedHeight).toBeLessThanOrEqual(24);
-  await notice.locator("summary").press("Enter");
-  await expect(notice).toHaveAttribute("open", "");
+  await trigger.press("Enter");
+  await expect(trigger).toHaveAttribute("aria-expanded", "true");
   await expect(notice.locator("li")).toHaveCount(2);
   await expect(notice.locator("li").first()).toBeVisible();
   await expect(app.getByText("MODEL ONLY", { exact: false })).toHaveCount(0);
   await expect(app.getByText("Pass strict", { exact: false })).toHaveCount(0);
-  await notice.locator("summary").press("Space");
-  await expect(notice).not.toHaveAttribute("open");
+  await trigger.press("Space");
+  await expect(trigger).toHaveAttribute("aria-expanded", "false");
+  await expect(notice.locator("ul")).toBeHidden();
 });
 
 test("search pages with only model guidance have no notice", async ({
