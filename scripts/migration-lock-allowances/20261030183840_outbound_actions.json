@@ -1,0 +1,5 @@
+{
+  "add-foreign-key": "The child table is created empty in this migration, so foreign-key validation reads no existing child rows. Referenced-table locks are bounded by the 1s lock timeout and 5s statement timeout.",
+  "row-level-security": "These statements affect only the new outbound_actions table before it is available to application traffic; no existing table or rows change their row-security setting.",
+  "create-policy": "Policies are installed on the new empty outbound_actions table in the same migration before application access; they do not alter policy semantics on an existing table."
+}
