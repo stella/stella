@@ -98,6 +98,11 @@ export const getFileTabHeaderProps = ({
 type FileTabHeaderActionsOptions = {
   desktopEditTarget: Pick<DesktopOpenTarget, "fileType" | "propertyId"> | null;
   downloadRenditions: readonly DownloadRendition[];
+  /**
+   * The main view's toolbar already offers download and sign for this file,
+   * so the header leaves them out rather than showing them twice.
+   */
+  mainViewHasFileActions: boolean;
   /** The current PDF file the signer may sign, or `null` to offer no signing. */
   pdfSignTarget: PdfSignTarget | null;
   tab: FileTab;
@@ -111,6 +116,7 @@ type FileTabHeaderActionsOptions = {
 export const fileTabHeaderActions = ({
   desktopEditTarget,
   downloadRenditions,
+  mainViewHasFileActions,
   pdfSignTarget,
   tab,
 }: FileTabHeaderActionsOptions): HeaderAction[] => {
@@ -128,8 +134,9 @@ export const fileTabHeaderActions = ({
       "file-tab-panel.download-tab-file",
     );
   };
-  const actions: HeaderAction[] = [
-    {
+  const actions: HeaderAction[] = [];
+  if (!mainViewHasFileActions) {
+    actions.push({
       id: "download",
       requires: AVAILABLE_EVERYWHERE,
       render: () => (
@@ -138,8 +145,8 @@ export const fileTabHeaderActions = ({
           renditions={downloadRenditions}
         />
       ),
-    },
-  ];
+    });
+  }
   if (desktopEditTarget !== null) {
     actions.push({
       id: "open-in-desktop-app",
@@ -155,7 +162,7 @@ export const fileTabHeaderActions = ({
       ),
     });
   }
-  if (pdfSignTarget !== null) {
+  if (pdfSignTarget !== null && !mainViewHasFileActions) {
     actions.push({
       id: "sign",
       requires: AVAILABLE_EVERYWHERE,

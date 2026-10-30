@@ -12,6 +12,7 @@
  * source version the decision no longer holds is dropped.
  */
 
+import { PDF } from "@libpdf/core";
 import { Panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
@@ -40,7 +41,13 @@ import {
   parkDocumentFetch,
   requeueParkedDocuments,
 } from "@/api/lib/legal-search/sk-document-backfill";
+import type { SkDocumentRawStorage } from "@/api/lib/legal-search/sk-document-raw";
+import {
+  decodeSourceRawEnvelopeObjects,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@/api/lib/legal-search/source-raw-envelope";
 import { readOfResponse } from "@/api/tests/helpers/publisher-read";
+import { memorySkDocumentRawStorage } from "@/api/tests/helpers/sk-document-raw-storage";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -292,14 +299,21 @@ const fetchState = async (label: string) =>
 
 type FetchSeededOptions = {
   label: string;
+  rawStorage?: SkDocumentRawStorage;
   answer: () => Promise<Response>;
   observe?: DocumentStageObserver;
 };
 
 /** One pass of the unit the walk runs, over a seeded decision. */
-const fetchSeeded = async ({ answer, label, observe }: FetchSeededOptions) =>
+const fetchSeeded = async ({
+  answer,
+  label,
+  observe,
+  rawStorage = memorySkDocumentRawStorage().storage,
+}: FetchSeededOptions) =>
   await fetchDecisionDocument({
     checkRetention: () => undefined,
+    rawStorage,
     onDocumentObservation: observe,
     decisionId: idFor(label),
     fetchDocument: async () =>
@@ -326,6 +340,48 @@ const insertFetchable = async (
     sourceHash,
   });
 };
+
+test("every complete document body remains readable from its raw envelope after parsing", async () => {
+  const pdf = PDF.create();
+  pdf
+    .addPage({ size: "letter" })
+    .drawText("Rozsudok retained document text", { x: 72, y: 720, size: 12 });
+  const parsedBytes = Uint8Array.from(await pdf.save());
+  for (const { label, bytes, status } of [
+    { label: "raw-parsed", bytes: parsedBytes, status: "filled" },
+    { label: "raw-unreadable", bytes: UNREADABLE_PDF, status: "parked" },
+  ] as const) {
+    await insertFetchable(label);
+    const memory = memorySkDocumentRawStorage();
+    const outcome = await fetchSeeded({
+      label,
+      rawStorage: memory.storage,
+      answer: async () => await Promise.resolve(new Response(bytes)),
+    });
+    expect(outcome.status).toBe(status);
+    const row = await testDb.query.caseLawDecisions.findFirst({
+      where: { id: { eq: idFor(label) } },
+      columns: {
+        sourceRawS3Key: true,
+        sourceRawContentType: true,
+        fulltext: true,
+      },
+    });
+    expect(row?.sourceRawContentType).toBe(SOURCE_RAW_ENVELOPE_CONTENT_TYPE);
+    const key = row?.sourceRawS3Key;
+    if (key === undefined || key === null) {
+      expect.unreachable("Fetched document has a stored raw envelope");
+    }
+    const envelope = new TextDecoder().decode(memory.objects.get(key));
+    const object = decodeSourceRawEnvelopeObjects(envelope)["document-pdf"];
+    expect(object?.contentType).toBe("application/pdf");
+    expect(object?.byteLength).toBe(bytes.byteLength);
+    expect(memory.objects.get(object?.location ?? "missing-document")).toEqual(
+      bytes,
+    );
+    expect(Boolean(row?.fulltext)).toBe(status === "filled");
+  }
+});
 
 describe("a failure that may affect every document", () => {
   test("post-response body faults retain their typed outcome without an ok event", async () => {
@@ -495,6 +551,7 @@ describe("a stale claim", () => {
       const urls: string[] = [];
       const outcome = await fetchDecisionDocument({
         checkRetention: () => undefined,
+        rawStorage: memorySkDocumentRawStorage().storage,
         decisionId: buffered.id,
         fetchDocument: async (url) => {
           urls.push(url.href);
