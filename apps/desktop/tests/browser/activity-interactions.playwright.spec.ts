@@ -15,6 +15,13 @@ import type { ActivityDaySnapshot } from "../../src/activity/activity-types";
 import previewApps from "../../src/activity/preview-apps.json" with { type: "json" };
 import arMessages from "../../src/i18n/langs/ar.json" with { type: "json" };
 import enMessages from "../../src/i18n/langs/en.json" with { type: "json" };
+import { DESKTOP_WINDOW_SIZES } from "../desktop-window-sizes";
+import {
+  ACCOUNT,
+  APP_STATE,
+  PERMISSIONS,
+  SHORTCUT,
+} from "./fixtures/desktop-window-snapshots";
 import { installTauriIpc, tauriInvocations } from "./tauri-ipc";
 import type { TauriInvocation } from "./tauri-ipc";
 
@@ -77,6 +84,13 @@ type InstallNativeBoundaryOptions = {
     "available" | "keyMissing" | "unreadable" | "mixed" | "incompatible";
   /** How long the first paint may take; the default suits small fixtures. */
   firstRenderTimeoutMs?: number;
+  /**
+   * The activity window, or the Settings window on its Activity tab. Both
+   * read the same native state, so a change in one shows in the other.
+   */
+  view?: "activity" | "settings";
+  /** Whether the account has the activity feature. */
+  activityEnabled?: boolean;
 };
 
 // timeout: A review of 101 matters with 101 timeline segments renders every
@@ -93,11 +107,13 @@ const installNativeBoundary = async ({
   batchReceipt = "save",
   historyDeletion = "available",
   firstRenderTimeoutMs,
+  view = "activity",
+  activityEnabled = true,
 }: InstallNativeBoundaryOptions) => {
   expect(isActivityDaySnapshot(snapshot)).toBe(true);
   await setFixedBrowserTime(page, new Date(`${snapshot.today}T10:00:00Z`));
   await installTauriIpc(page, {
-    windowLabel: "activity",
+    windowLabel: view === "settings" ? "main" : "activity",
     unhandled: "resolveUndefined",
     arg: {
       snapshot,
@@ -107,6 +123,13 @@ const installNativeBoundary = async ({
       batchValidation,
       batchReceipt,
       historyDeletion,
+      settingsWindow: {
+        account: ACCOUNT,
+        activityEnabled,
+        appState: APP_STATE,
+        permissions: PERMISSIONS,
+        shortcut: SHORTCUT,
+      },
     },
     handlers: (
       {
@@ -117,6 +140,7 @@ const installNativeBoundary = async ({
         batchValidation: validation,
         batchReceipt: receipt,
         historyDeletion: historyState,
+        settingsWindow,
       },
       { emit },
     ) => {
@@ -146,6 +170,63 @@ const installNativeBoundary = async ({
             date: args["date"] ?? activitySnapshot.date,
           };
         },
+        // The native settings read: the day's settings and deletion state
+        // with the names of its apps, longest first, never its segments.
+        activity_get_settings: (args) => {
+          const day =
+            otherDays.find((candidate) => candidate.date === args["date"]) ??
+            activitySnapshot;
+          const totals = new Map<
+            string,
+            { identifier: string; name: string; durationMs: number }
+          >();
+          for (const segment of day.segments) {
+            const durationMs =
+              Date.parse(segment.end) - Date.parse(segment.start);
+            const total = totals.get(segment.appIdentifier);
+            if (total) {
+              total.durationMs += durationMs;
+              continue;
+            }
+            totals.set(segment.appIdentifier, {
+              identifier: segment.appIdentifier,
+              name: segment.appName,
+              durationMs,
+            });
+          }
+          return {
+            date: args["date"] ?? activitySnapshot.date,
+            today: day.today,
+            earliestDate: day.earliestDate,
+            latestDate: day.latestDate,
+            deletionStatus: day.deletionStatus,
+            persistence: day.persistence,
+            retention: day.retention,
+            excludedApps: day.excludedApps,
+            otherAccountHistoryDays: day.otherAccountHistoryDays,
+            captureDetails: day.captureDetails,
+            detectCalls: day.detectCalls,
+            appNameOnlyApps: day.appNameOnlyApps,
+            detailsAccess: day.detailsAccess,
+            browserApps: day.browserApps,
+            browserTitleApps: day.browserTitleApps,
+            sourceAppVisuals: day.sourceAppVisuals,
+            apps: [...totals.values()]
+              .toSorted(
+                (left, right) =>
+                  right.durationMs - left.durationMs ||
+                  left.name.localeCompare(right.name),
+              )
+              .map(({ identifier, name }) => ({ identifier, name })),
+          };
+        },
+        is_activity_enabled: () => settingsWindow.activityEnabled,
+        get_state: () => settingsWindow.appState,
+        account_get_state: () => settingsWindow.account,
+        get_desktop_telemetry_enabled: () => true,
+        permissions_get_snapshot: () => settingsWindow.permissions,
+        shortcut_get_snapshot: () => settingsWindow.shortcut,
+        chatgpt_auth_get_status: () => null,
         activity_delete_all: (args) => {
           if (
             args["recovery"] === "discardUnreadable" &&
@@ -320,21 +401,37 @@ const installNativeBoundary = async ({
       };
     },
   });
-  await page.goto("/");
   const messages = language === "ar" ? arMessages : enMessages;
-  if (snapshot.persistence === "deletionOnly") {
+  const deletionOnlyNotice = page.getByText(
+    {
+      keyMissing: messages.activity.deletionOnly,
+      unreadable: messages.activity.unreadableEraseNotice,
+      available: messages.activity.errorRead,
+      pending: messages.activity.errorRead,
+      unavailable: messages.activity.errorRead,
+      incompatible: messages.activity.incompatibleActivity,
+    }[snapshot.deletionStatus],
+  );
+  if (view === "settings") {
+    await page.setViewportSize(DESKTOP_WINDOW_SIZES.settings);
+    await page.goto("/#activity");
+    if (!activityEnabled) {
+      await expect(page.getByRole("tabpanel")).toBeVisible();
+      return;
+    }
     await expect(
-      page.getByText(
-        {
-          keyMissing: messages.activity.deletionOnly,
-          unreadable: messages.activity.unreadableEraseNotice,
-          available: messages.activity.errorRead,
-          pending: messages.activity.errorRead,
-          unavailable: messages.activity.errorRead,
-          incompatible: messages.activity.incompatibleActivity,
-        }[snapshot.deletionStatus],
-      ),
+      snapshot.persistence === "deletionOnly"
+        ? deletionOnlyNotice
+        : page.getByRole("heading", {
+            name: messages.activity.byApp,
+            exact: true,
+          }),
     ).toBeVisible();
+    return;
+  }
+  await page.goto("/");
+  if (snapshot.persistence === "deletionOnly") {
+    await expect(deletionOnlyNotice).toBeVisible();
   } else if (
     snapshot.recordingStatus === "off" &&
     snapshot.pendingBatch === null &&
@@ -353,24 +450,13 @@ const installNativeBoundary = async ({
         : { timeout: firstRenderTimeoutMs },
     );
   }
-  if (
-    (snapshot.recordingStatus !== "off" ||
-      snapshot.pendingBatch !== null ||
-      snapshot.deletionStatus === "pending") &&
-    snapshot.persistence !== "deletionOnly"
-  ) {
-    await page
-      .locator("summary")
-      .filter({ hasText: messages.activity.settings })
-      .click();
-  }
 };
 
 for (const history of ["keep", "delete"] as const) {
   test(`excluding an app waits for the ${history} history choice`, async ({
     page,
   }) => {
-    await installNativeBoundary({ page });
+    await installNativeBoundary({ page, view: "settings" });
     await page
       .getByRole("button", { name: "Stop recording Example Editor" })
       .click();
@@ -401,7 +487,7 @@ for (const history of ["keep", "delete"] as const) {
 test("canceling exclusion leaves recording and history unchanged", async ({
   page,
 }) => {
-  await installNativeBoundary({ page });
+  await installNativeBoundary({ page, view: "settings" });
   await page
     .getByRole("button", { name: "Stop recording Example Editor" })
     .click();
@@ -771,7 +857,7 @@ test("native validation rejection leaves the review editable and a corrected sel
   expect(submitted.at(1)?.key).not.toBe(submitted.at(0)?.key);
 });
 
-test("unresolved draft creation protects activity deletion and retains its batch key", async ({
+test("unresolved draft creation offers no deletion and retains its batch key", async ({
   page,
 }) => {
   await installNativeBoundary({
@@ -782,22 +868,20 @@ test("unresolved draft creation protects activity deletion and retains its batch
   await page
     .getByRole("button", { name: "Create 1 draft", exact: true })
     .click();
+  // Deletion lives in the Settings window, which the native pending state
+  // blocks (see the pending settings test below).
   for (const name of [
     enMessages.activity.deleteDay,
     enMessages.activity.deleteAll,
     enMessages.activity.deleteOtherAccountHistory,
+    enMessages.activity.excludeApp.replace("{name}", "Example Editor"),
   ]) {
-    await expect(
-      page.getByRole("button", { name, exact: true }),
-    ).toBeDisabled();
+    await expect(page.getByRole("button", { name, exact: true })).toHaveCount(
+      0,
+    );
   }
   await expect(
     page.getByRole("button", { name: enMessages.activity.previousDay }),
-  ).toBeDisabled();
-  await expect(
-    page.getByRole("button", {
-      name: enMessages.activity.excludeApp.replace("{name}", "Example Editor"),
-    }),
   ).toBeDisabled();
   await page.evaluate(() => {
     const changed = Reflect.get(window, "__STELLA_TEST_ACTIVITY_CHANGED__");
@@ -813,12 +897,6 @@ test("unresolved draft creation protects activity deletion and retains its batch
     exact: true,
   });
   await expect(retry).toBeEnabled();
-  await expect(
-    page.getByRole("button", {
-      name: enMessages.activity.deleteDay,
-      exact: true,
-    }),
-  ).toBeDisabled();
   const before = await tauriInvocations(page);
   await retry.click();
   await expect(page.getByRole("status")).toContainText("1 draft created");
@@ -889,8 +967,47 @@ for (const recoveryState of ["empty", "unreadable", "off"] as const) {
   });
 }
 
+test("pending drafts protect every deletion in the activity settings", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    view: "settings",
+    snapshot: {
+      ...SNAPSHOT,
+      deletionStatus: "pending",
+      otherAccountHistoryDays: 1,
+    },
+  });
+  for (const name of [
+    enMessages.activity.deleteDay,
+    enMessages.activity.deleteAll,
+    enMessages.activity.deleteOtherAccountHistory,
+    enMessages.activity.excludeApp.replace("{name}", "Example Editor"),
+  ]) {
+    await expect(
+      page.getByRole("button", { name, exact: true }),
+    ).toBeDisabled();
+  }
+  await expect(
+    page.getByText(enMessages.activity.pendingActivityProtected, {
+      exact: true,
+    }),
+  ).toBeVisible();
+  for (const command of [
+    "activity_delete_day",
+    "activity_delete_all",
+    "activity_delete_other_account_history",
+    "activity_exclude_app",
+  ]) {
+    expect(await tauriInvocations(page)).not.toContainEqual(
+      expect.objectContaining({ command }),
+    );
+  }
+});
+
 for (const recordingStatus of ["recording", "off"] as const) {
-  test(`pending drafts on another day protect deletion while ${recordingStatus} and permit recovery navigation`, async ({
+  test(`pending drafts on another day permit recovery navigation while ${recordingStatus}`, async ({
     page,
   }) => {
     await installNativeBoundary({
@@ -902,12 +1019,6 @@ for (const recordingStatus of ["recording", "off"] as const) {
         deletionStatus: "pending",
       },
     });
-    await expect(
-      page.getByRole("button", {
-        name: enMessages.activity.deleteAll,
-        exact: true,
-      }),
-    ).toBeDisabled();
     await expect(
       page.getByRole("button", { name: enMessages.activity.previousDay }),
     ).toBeEnabled();
@@ -963,6 +1074,7 @@ test("unreadable saved activity explains why deletion is unavailable", async ({
 }) => {
   await installNativeBoundary({
     page,
+    view: "settings",
     snapshot: {
       ...SNAPSHOT,
       persistence: "deletionOnly",
@@ -986,6 +1098,90 @@ test("unreadable saved activity explains why deletion is unavailable", async ({
       exact: true,
     }),
   ).toBeDisabled();
+});
+
+for (const deletionStatus of ["keyMissing", "unreadable"] as const) {
+  test(`saved activity that cannot be opened (${deletionStatus}) sends recovery to the settings`, async ({
+    page,
+  }) => {
+    await installNativeBoundary({
+      page,
+      snapshot: {
+        ...SNAPSHOT,
+        persistence: "deletionOnly",
+        recordingStatus: "off",
+        deletionStatus,
+        otherAccountHistoryDays: 3,
+      },
+    });
+    for (const name of [
+      enMessages.activity.deleteAll,
+      enMessages.activity.unreadableEraseAction,
+      enMessages.activity.deleteOtherAccountHistory,
+    ]) {
+      await expect(page.getByRole("button", { name, exact: true })).toHaveCount(
+        0,
+      );
+    }
+    await page
+      .getByRole("button", { name: enMessages.activity.settings, exact: true })
+      .click();
+    expect(await tauriInvocations(page)).toContainEqual({
+      command: "activity_open_settings",
+      args: {},
+    });
+  });
+}
+
+test("the activity window opens its settings in the Settings window", async ({
+  page,
+}) => {
+  await installNativeBoundary({ page });
+  await page
+    .getByRole("button", { name: enMessages.activity.settings, exact: true })
+    .click();
+  expect(await tauriInvocations(page)).toContainEqual({
+    command: "activity_open_settings",
+    args: {},
+  });
+});
+
+test("the Activity tab is absent while the activity feature is off", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    view: "settings",
+    activityEnabled: false,
+  });
+  await expect(
+    page.getByRole("tab", { name: enMessages.settings.general, exact: true }),
+  ).toHaveAttribute("aria-selected", "true");
+  await expect(
+    page.getByRole("tab", { name: enMessages.activity.title, exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("heading", { name: enMessages.activity.byApp, exact: true }),
+  ).toHaveCount(0);
+  expect(await tauriInvocations(page)).toContainEqual({
+    command: "is_activity_enabled",
+    args: {},
+  });
+  expect(await tauriInvocations(page)).not.toContainEqual(
+    expect.objectContaining({ command: "activity_get_settings" }),
+  );
+});
+
+test("the Activity tab reads settings, never the day timeline", async ({
+  page,
+}) => {
+  await installNativeBoundary({ page, view: "settings" });
+  await expect(
+    page.getByRole("tab", { name: enMessages.activity.title, exact: true }),
+  ).toHaveAttribute("aria-selected", "true");
+  const commands = (await tauriInvocations(page)).map(({ command }) => command);
+  expect(commands).toContain("activity_get_settings");
+  expect(commands).not.toContain("activity_get_day");
 });
 
 test("empty recovery keeps its saved receipt visible until navigating to another day", async ({
@@ -1104,6 +1300,7 @@ for (const currentKeyStatus of ["available", "keyMissing"] as const) {
   }) => {
     await installNativeBoundary({
       page,
+      view: "settings",
       historyDeletion: "keyMissing",
       snapshot: {
         ...SNAPSHOT,
@@ -1193,25 +1390,39 @@ test("pending drafts dated after today remain reachable after the clock moves ba
   await expect(next).toBeDisabled();
 });
 
+const UNREADABLE_PENDING_SNAPSHOT = {
+  ...SNAPSHOT,
+  segments: [],
+  pendingBatch: PENDING_BATCH,
+  unreadable: true,
+  deletionStatus: "unreadable",
+} satisfies ActivityDaySnapshot;
+
+test("stored pending retry over unreadable activity stays retryable", async ({
+  page,
+}) => {
+  await installNativeBoundary({ page, snapshot: UNREADABLE_PENDING_SNAPSHOT });
+  await expect(
+    page.getByRole("button", {
+      name: enMessages.activity.pendingRetry,
+      exact: true,
+    }),
+  ).toBeVisible();
+});
+
 test("stored pending retry permits confirmed unreadable repair while ordinary deletion stays blocked", async ({
   page,
 }) => {
   await installNativeBoundary({
     page,
-    snapshot: {
-      ...SNAPSHOT,
-      segments: [],
-      pendingBatch: PENDING_BATCH,
-      unreadable: true,
-      deletionStatus: "unreadable",
-    },
+    view: "settings",
+    snapshot: UNREADABLE_PENDING_SNAPSHOT,
   });
-  await expect(
-    page.getByRole("button", {
-      name: enMessages.activity.deleteDay,
-      exact: true,
-    }),
-  ).toBeDisabled();
+  const deleteDay = page.getByRole("button", {
+    name: enMessages.activity.deleteDay,
+    exact: true,
+  });
+  await expect(deleteDay).toBeDisabled();
   const repair = page.getByRole("button", {
     name: enMessages.activity.unreadableEraseAction,
     exact: true,
@@ -1225,15 +1436,8 @@ test("stored pending retry permits confirmed unreadable repair while ordinary de
     .getByRole("dialog")
     .getByRole("button", { name: enMessages.activity.delete, exact: true })
     .click();
-  await expect(
-    page.getByText(enMessages.activity.empty, { exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("button", {
-      name: enMessages.activity.pendingRetry,
-      exact: true,
-    }),
-  ).toHaveCount(0);
+  await expect(repair).toHaveCount(0);
+  await expect(deleteDay).toBeEnabled();
   expect(await tauriInvocations(page)).toContainEqual({
     command: "activity_delete_all",
     args: { recovery: "discardUnreadable" },
@@ -1245,6 +1449,7 @@ test("unreadable activity erase requires confirmation of lost pending recovery",
 }) => {
   await installNativeBoundary({
     page,
+    view: "settings",
     snapshot: { ...SNAPSHOT, unreadable: true, deletionStatus: "unreadable" },
   });
   await page
@@ -1274,6 +1479,7 @@ test("inactive unreadable history reaches its dedicated confirmed recovery path"
 }) => {
   await installNativeBoundary({
     page,
+    view: "settings",
     historyDeletion: "unreadable",
     snapshot: { ...SNAPSHOT, otherAccountHistoryDays: 3 },
   });
@@ -1305,6 +1511,7 @@ test("mixed inactive recovery failures use one confirmation and one discard mode
 }) => {
   await installNativeBoundary({
     page,
+    view: "settings",
     historyDeletion: "mixed",
     snapshot: { ...SNAPSHOT, otherAccountHistoryDays: 3 },
   });
@@ -1342,41 +1549,47 @@ test("mixed inactive recovery failures use one confirmation and one discard mode
   ]);
 });
 
-test("incompatible saved activity asks for an app update and exposes no erase action", async ({
-  page,
-}) => {
-  await installNativeBoundary({
+for (const view of ["activity", "settings"] as const) {
+  test(`incompatible saved activity asks for an app update and exposes no erase action (${view})`, async ({
     page,
-    snapshot: {
-      ...SNAPSHOT,
-      persistence: "deletionOnly",
-      recordingStatus: "off",
-      deletionStatus: "incompatible",
-    },
+  }) => {
+    await installNativeBoundary({
+      page,
+      view,
+      snapshot: {
+        ...SNAPSHOT,
+        persistence: "deletionOnly",
+        recordingStatus: "off",
+        deletionStatus: "incompatible",
+      },
+    });
+    await expect(
+      page.getByText(enMessages.activity.incompatibleActivity, {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", {
+        name: enMessages.activity.deleteAll,
+        exact: true,
+      }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("button", {
+        name: enMessages.activity.unreadableEraseAction,
+        exact: true,
+      }),
+    ).toHaveCount(0);
+    await expect(page.getByRole("dialog")).toHaveCount(0);
   });
-  await expect(
-    page.getByText(enMessages.activity.incompatibleActivity, { exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("button", {
-      name: enMessages.activity.deleteAll,
-      exact: true,
-    }),
-  ).toHaveCount(0);
-  await expect(
-    page.getByRole("button", {
-      name: enMessages.activity.unreadableEraseAction,
-      exact: true,
-    }),
-  ).toHaveCount(0);
-  await expect(page.getByRole("dialog")).toHaveCount(0);
-});
+}
 
 test("healthy current activity shows incompatible history guidance and protects deletion", async ({
   page,
 }) => {
   await installNativeBoundary({
     page,
+    view: "settings",
     snapshot: {
       ...SNAPSHOT,
       deletionStatus: "incompatible",
@@ -1408,7 +1621,7 @@ test("an open erase dialog disappears safely when saved history becomes incompat
 }) => {
   const pageErrors: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
-  await installNativeBoundary({ page });
+  await installNativeBoundary({ page, view: "settings" });
   await page
     .getByRole("button", { name: enMessages.activity.deleteDay, exact: true })
     .click();
@@ -1438,6 +1651,7 @@ test("inactive incompatible history closes consent and requests an app update", 
 }) => {
   await installNativeBoundary({
     page,
+    view: "settings",
     historyDeletion: "incompatible",
     snapshot: { ...SNAPSHOT, otherAccountHistoryDays: 3 },
   });
@@ -1466,6 +1680,7 @@ test("missing-key erase requires explicit confirmation that draft recovery will 
 }) => {
   await installNativeBoundary({
     page,
+    view: "settings",
     snapshot: {
       ...SNAPSHOT,
       persistence: "deletionOnly",
@@ -1544,6 +1759,7 @@ for (const state of [
   }) => {
     await installNativeBoundary({
       page,
+      view: "settings",
       snapshot: {
         ...SNAPSHOT,
         ...state,
@@ -1596,7 +1812,7 @@ for (const state of [
 test("no other-account history note is shown when its day count is zero", async ({
   page,
 }) => {
-  await installNativeBoundary({ page });
+  await installNativeBoundary({ page, view: "settings" });
   await expect(
     page.getByRole("button", {
       name: enMessages.activity.deleteOtherAccountHistory,
@@ -1625,17 +1841,12 @@ test("detail capture is unchecked in welcome and recording starts without enabli
   await expect(
     page.getByRole("button", { name: enMessages.activity.pause, exact: true }),
   ).toBeVisible();
-  await page
-    .locator("summary")
-    .filter({ hasText: enMessages.activity.settings })
-    .click();
-  await expect(details).not.toBeChecked();
   expect(await tauriInvocations(page)).not.toContainEqual(
     expect.objectContaining({ command: "activity_set_capture_details" }),
   );
 });
 
-test("detail capture changes only on explicit choice and can be turned off in settings", async ({
+test("detail capture changes only on explicit choice in the welcome", async ({
   page,
 }) => {
   await installNativeBoundary({
@@ -1657,10 +1868,22 @@ test("detail capture changes only on explicit choice and can be turned off in se
   await expect(
     page.getByRole("button", { name: enMessages.activity.pause, exact: true }),
   ).toBeVisible();
-  await page
-    .locator("summary")
-    .filter({ hasText: enMessages.activity.settings })
-    .click();
+});
+
+test("detail capture is unchecked in the settings until chosen and can be turned off", async ({
+  page,
+}) => {
+  await installNativeBoundary({ page, view: "settings" });
+  const details = page.getByRole("checkbox", {
+    name: enMessages.activity.captureDetails,
+  });
+  await expect(details).not.toBeChecked();
+  await details.check();
+  await expect(details).toBeChecked();
+  expect(await tauriInvocations(page)).toContainEqual({
+    command: "activity_set_capture_details",
+    args: { enabled: true },
+  });
   await details.uncheck();
   await expect(details).not.toBeChecked();
   expect(await tauriInvocations(page)).toContainEqual({
@@ -1674,6 +1897,7 @@ test("accessibility hint opens system settings only after a user request", async
 }) => {
   await installNativeBoundary({
     page,
+    view: "settings",
     snapshot: {
       ...SNAPSHOT,
       captureDetails: true,
@@ -1704,6 +1928,7 @@ test("per-app detail controls keep time recording and allow details to be restor
 }) => {
   await installNativeBoundary({
     page,
+    view: "settings",
     snapshot: {
       ...SNAPSHOT,
       captureDetails: true,
@@ -1757,6 +1982,7 @@ test("browser title capture is a separate unticked opt-in and can be turned off"
   };
   await installNativeBoundary({
     page,
+    view: "settings",
     snapshot: {
       ...SNAPSHOT,
       captureDetails: true,
@@ -1802,6 +2028,7 @@ for (const prerequisite of ["globalOff", "appNameOnly"] as const) {
     };
     await installNativeBoundary({
       page,
+      view: "settings",
       snapshot: {
         ...SNAPSHOT,
         captureDetails: prerequisite !== "globalOff",
@@ -1941,28 +2168,51 @@ for (const language of ["en", "ar"] as const) {
   });
 }
 
-test("timeline and totals reuse local app visuals and keep a neutral fallback", async ({
+const ICON_DATA_URL =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jB1sAAAAASUVORK5CYII=";
+
+const VISUALS_SNAPSHOT = {
+  ...SNAPSHOT,
+  sourceAppVisuals: [
+    { key: "com.example.editor", iconDataUrl: ICON_DATA_URL, color: null },
+  ],
+  segments: [
+    ...SNAPSHOT.segments,
+    {
+      appIdentifier: "com.example.viewer",
+      appName: "Preview",
+      start: "2026-10-07T10:00:00Z",
+      end: "2026-10-07T10:10:00Z",
+    },
+  ],
+} satisfies ActivityDaySnapshot;
+
+test("the timeline reuses local app visuals and keeps a neutral fallback", async ({
   page,
 }) => {
-  const iconDataUrl =
-    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jB1sAAAAASUVORK5CYII=";
+  await installNativeBoundary({ page, snapshot: VISUALS_SNAPSHOT });
+  const lane = page.getByRole("region", {
+    name: enMessages.activity.reviewToday,
+  });
+  await expect(
+    lane.getByRole("button", { name: /Example Editor$/u }).locator("img"),
+  ).toHaveAttribute("src", ICON_DATA_URL);
+  await expect(
+    lane
+      .getByRole("button", { name: /Preview$/u })
+      .locator("svg")
+      .first(),
+  ).toBeVisible();
+});
+
+test("the settings app list reuses local app visuals and keeps a neutral fallback", async ({
+  page,
+}) => {
+  const iconDataUrl = ICON_DATA_URL;
   await installNativeBoundary({
     page,
-    snapshot: {
-      ...SNAPSHOT,
-      sourceAppVisuals: [
-        { key: "com.example.editor", iconDataUrl, color: null },
-      ],
-      segments: [
-        ...SNAPSHOT.segments,
-        {
-          appIdentifier: "com.example.viewer",
-          appName: "Preview",
-          start: "2026-10-07T10:00:00Z",
-          end: "2026-10-07T10:10:00Z",
-        },
-      ],
-    },
+    view: "settings",
+    snapshot: VISUALS_SNAPSHOT,
   });
   const totals = page
     .getByRole("heading", { name: enMessages.activity.byApp, exact: true })
@@ -1974,18 +2224,6 @@ test("timeline and totals reuse local app visuals and keep a neutral fallback", 
   const fallback = totals.getByRole("listitem").filter({ hasText: "Preview" });
   await expect(fallback.locator("img")).toHaveCount(0);
   await expect(fallback.locator("svg").first()).toBeVisible();
-  const lane = page.getByRole("region", {
-    name: enMessages.activity.reviewToday,
-  });
-  await expect(
-    lane.getByRole("button", { name: /Example Editor$/u }).locator("img"),
-  ).toHaveAttribute("src", iconDataUrl);
-  await expect(
-    lane
-      .getByRole("button", { name: /Preview$/u })
-      .locator("svg")
-      .first(),
-  ).toBeVisible();
   await page
     .getByRole("button", { name: "Stop recording Example Editor" })
     .click();
@@ -2172,8 +2410,7 @@ test("a call segment reads as a call in the timeline and its tooltip", async ({
 test("call recording is on by default and changes only on explicit choice", async ({
   page,
 }) => {
-  // The boundary opens settings for a recording day.
-  await installNativeBoundary({ page });
+  await installNativeBoundary({ page, view: "settings" });
   const calls = page.getByRole("checkbox", {
     name: enMessages.activity.detectCalls,
   });

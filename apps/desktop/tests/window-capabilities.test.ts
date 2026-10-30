@@ -35,14 +35,10 @@ const SHELL_INVOKE_SOURCES = [
 
 /**
  * The branch `main.tsx` renders for a window, keyed by that window's
- * capability. Local-only windows come from their feature entry.
+ * capability. Local-only modules come from their feature entry, added to
+ * any shell modules the same window renders.
  */
-const WINDOW_MODULES: Record<string, readonly string[]> = {
-  ...Object.fromEntries(
-    LOCAL_ONLY_FEATURES.flatMap((feature) =>
-      Object.entries(feature.windowModules),
-    ),
-  ),
+const SHELL_WINDOW_MODULES: Record<string, readonly string[]> = {
   "src-tauri/capabilities/default.json": [
     "src/mainview/App.tsx",
     "src/mainview/AgentSubscriptionsSection.tsx",
@@ -65,6 +61,18 @@ const WINDOW_MODULES: Record<string, readonly string[]> = {
     "src/shared/use-clipboard-shortcut.ts",
   ],
 };
+
+const WINDOW_MODULES: Record<string, readonly string[]> = {
+  ...SHELL_WINDOW_MODULES,
+};
+for (const [capability, modules] of LOCAL_ONLY_FEATURES.flatMap((feature) =>
+  Object.entries(feature.windowModules),
+)) {
+  WINDOW_MODULES[capability] = [
+    ...(WINDOW_MODULES[capability] ?? []),
+    ...modules,
+  ];
+}
 
 /**
  * The static prompt windows Rust opens: plain HTML with no shell behind it,
