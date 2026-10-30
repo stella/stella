@@ -4,6 +4,11 @@ import type { JobProgress, QueueOptions, WorkerListener } from "bullmq";
 
 import type { rootDb } from "@/api/db/root";
 import { captureError } from "@/api/lib/analytics/capture";
+import { BULLMQ_QUEUE_HOSTS } from "@/api/lib/bullmq-queue-hosts";
+import type {
+  BullMqQueueName,
+  BullMqWorkerHost,
+} from "@/api/lib/bullmq-queue-hosts";
 import { runWithStatementCeiling } from "@/api/lib/db/statement-ceiling";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { withExceptionScope } from "@/api/lib/observability/exception-scope";
@@ -11,6 +16,9 @@ import {
   createBullMqConnection,
   type RedisClientOverrides,
 } from "@/api/lib/redis-client";
+
+export { BULLMQ_QUEUE_HOSTS };
+export type { BullMqQueueName, BullMqWorkerHost };
 
 const QUEUE_JOB_FAILED_MESSAGE = "Queue job failed";
 
@@ -109,37 +117,6 @@ export class BullMqWorker<
     );
   }
 }
-
-/**
- * Every BullMQ queue and the process that hosts its worker. The union this
- * table defines is what `createLazyBullMqQueue` accepts and what each host's
- * worker set must cover exactly (see `createBullMqWorkerHost`), so a queue
- * cannot be added without deciding where its worker runs, and a host cannot
- * start without it.
- */
-export const BULLMQ_QUEUE_HOSTS = {
-  "account-deletion-cleanup": "api",
-  "account-exports": "api",
-  "bilingual-translation-runs": "api",
-  "document-deadline-scouts": "api",
-  "document-processing": "document-processing-worker",
-  "document-review-runs-v2": "api",
-  "document-translation-runs": "api",
-  "entity-deletion-cleanup": "api",
-  "file-derivatives": "file-derivative-worker",
-  "flow-run": "api",
-  "legal-list-verification-runs": "api",
-  "report-exports": "api",
-  "style-set-package-cleanup": "api",
-  "uploaded-mail-correspondence": "api",
-  workflow: "api",
-  "workflow-flex": "api",
-} as const satisfies Record<string, BullMqWorkerHost>;
-
-export type BullMqWorkerHost =
-  "api" | "document-processing-worker" | "file-derivative-worker";
-
-export type BullMqQueueName = keyof typeof BULLMQ_QUEUE_HOSTS;
 
 /** Queue names whose worker the given host must start. */
 type BullMqQueueHostedBy<Host extends BullMqWorkerHost> = {
