@@ -95,6 +95,7 @@ const citationDecision = {
   languageAlternates: [],
   decisionDate: "2026-01-29",
   decisionType: "judgment",
+  decisionTypeKind: "judgment",
   sourceUrl: null,
   headnote: {
     type: TEXT_FIELD_TYPE.ABSENT,
