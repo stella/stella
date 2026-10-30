@@ -38,7 +38,7 @@
     "reconnectAccount": "Znova pripojiť k stella web…"
   },
   "notification": {
-    "checkpointDelayedBody": "{fileName} — Zmeny zostávajú lokálne a budú automaticky zopakované",
+    "checkpointDelayedBody": "{fileName}: zmeny zostávajú lokálne a budú automaticky zopakované",
     "checkpointDelayedTitle": "Synchronizácia kontrolného bodu oneskorená",
     "diagnosticsCopiedBody": "Vložte ju do žiadosti o podporu, keď bude potrebná.",
     "diagnosticsCopiedTitle": "Diagnostika skopírovaná",
@@ -54,9 +54,9 @@
     "recoveryResetTitle": "Lokálne dáta obnovy boli resetované",
     "revisionCreatedBody": "{fileName} uložený ako verzia {versionNumber}. Úpravy na desktope dokončené",
     "revisionCreatedTitle": "Revízia stella vytvorená",
-    "sessionClosedSaved": "{fileName} — Lokálna kópia zostáva zachovaná v Dočasných pracovných kópiách",
-    "sessionClosedUnsaved": "{fileName} — Máte neuložené lokálne úpravy. Svoju kópiu nájdete v Dočasných pracovných kópiách.",
-    "takenOverBody": "{fileName} — Znova otvorte zo stella tu, aby ste si prevzali úpravy späť",
+    "sessionClosedSaved": "{fileName}: lokálna kópia zostáva zachovaná v Dočasných pracovných kópiách",
+    "sessionClosedUnsaved": "{fileName}: máte neuložené lokálne úpravy. Svoju kópiu nájdete v Dočasných pracovných kópiách.",
+    "takenOverBody": "{fileName}: znova otvorte zo stella tu, aby ste si prevzali úpravy späť",
     "takenOverLocalError": "Úpravy na desktope presunuté na iné zariadenie. Táto lokálna kópia je zachovaná.",
     "takenOverTitle": "Úpravy presunuté na iné zariadenie"
   },

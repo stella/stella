@@ -43,7 +43,7 @@ describe("agent-auth manifest route", () => {
     expect(response.headers.get("Access-Control-Allow-Origin")).toBe("*");
 
     const body = await response.text();
-    expect(body).toContain("# stella — agent registration (auth.md)");
+    expect(body).toContain("# stella: agent registration (auth.md)");
     expect(body).toContain("service_auth");
   });
 

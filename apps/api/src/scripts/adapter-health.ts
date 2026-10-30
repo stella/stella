@@ -485,7 +485,7 @@ const buildReport = async (
 
 const formatTable = (report: HealthReport): string => {
   const lines: string[] = [
-    `Case Law Health Report — ${report.generatedAt}`,
+    `Case Law Health Report: ${report.generatedAt}`,
     `Window: ${report.windowHours}h`,
     "",
   ];

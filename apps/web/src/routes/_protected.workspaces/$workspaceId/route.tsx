@@ -64,7 +64,7 @@ export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
     if (import.meta.env.DEV) {
       // oxlint-disable-next-line no-console -- dev-only stack trace to debug stale doubled URLs
       console.trace(
-        "[stella] notFoundComponent triggered — redirecting to /workspaces. Current URL:",
+        "[stella] notFoundComponent triggered; redirecting to /workspaces. Current URL:",
         globalThis.location.href,
       );
     }

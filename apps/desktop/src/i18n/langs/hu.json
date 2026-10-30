@@ -38,7 +38,7 @@
     "reconnectAccount": "Újracsatlakozás a stella webhez…"
   },
   "notification": {
-    "checkpointDelayedBody": "{fileName} — A változtatások helyben maradnak, és automatikusan újrapróbálkoznak",
+    "checkpointDelayedBody": "{fileName}: a változtatások helyben maradnak, és automatikusan újrapróbálkoznak",
     "checkpointDelayedTitle": "Ellenőrzőpont szinkronizálása késik",
     "diagnosticsCopiedBody": "Illessze be a támogatási kérelmébe, amikor szükséges.",
     "diagnosticsCopiedTitle": "Diagnosztika másolva",
@@ -54,9 +54,9 @@
     "recoveryResetTitle": "A helyi helyreállítási adatok visszaállítva",
     "revisionCreatedBody": "{fileName} mentve {versionNumber}. verzióként. Asztali szerkesztés befejezve",
     "revisionCreatedTitle": "stella verzió létrehozva",
-    "sessionClosedSaved": "{fileName} — A helyi másolat megőrzésre kerül az Ideiglenes munkamásolatokban",
-    "sessionClosedUnsaved": "{fileName} — Mentetlen helyi szerkesztései vannak. Másolatát az Ideiglenes munkamásolatok között találja.",
-    "takenOverBody": "{fileName} — Nyissa meg újra a stella-ból, hogy visszavegye a szerkesztést",
+    "sessionClosedSaved": "{fileName}: a helyi másolat megőrzésre kerül az Ideiglenes munkamásolatokban",
+    "sessionClosedUnsaved": "{fileName}: mentetlen helyi szerkesztései vannak. Másolatát az Ideiglenes munkamásolatok között találja.",
+    "takenOverBody": "{fileName}: nyissa meg újra a stella-ból, hogy visszavegye a szerkesztést",
     "takenOverLocalError": "Az asztali szerkesztés másik eszközre lett áthelyezve. Ez a helyi másolat megőrzésre kerül.",
     "takenOverTitle": "Szerkesztés másik eszközre áthelyezve"
   },

@@ -199,12 +199,12 @@
   "avt": {
     "anchorFacts": {
       "addInterpretationNote": "Értelmezési megjegyzés hozzáadása",
-      "description": "Közvetlen bizonyítékok — e-mailek, üzenetek, banki nyilvántartások és nem vitatott tények — olyan referenciatény-nyilvántartásba rendezve, amelyhez az állításokat viszonyítjuk. A tények ellenőrizhetők, szerkeszthetők vagy kézzel hozzáadhatók.",
+      "description": "Közvetlen bizonyítékok (e-mailek, üzenetek, banki nyilvántartások és nem vitatott tények) olyan referenciatény-nyilvántartásba rendezve, amelyhez az állításokat viszonyítjuk. A tények ellenőrizhetők, szerkeszthetők vagy kézzel hozzáadhatók.",
       "editInterpretationNote": "Értelmezési megjegyzés szerkesztése",
       "empty": "Jelölje meg a lista elemeit tényként, amelyekhez az iratokat viszonyítja a rendszer.",
       "extractionAndReview": "Kinyerés és ellenőrzés",
       "factCount": "{count, plural, one {# tény} other {# tény}}",
-      "heldDescription": "E kinyert adatok jelentése <strong>valóban bizonytalan</strong> — a tartalom előzetes vagy nincs megerősítve, nem pusztán kézzel írt. Addig nem számítanak bele az értékelésbe, amíg egy ellenőr meg nem erősíti, nem szerkeszti vagy újra nem gépeli őket. Olvasható forrás soha nem kerül várólistára pusztán az adathordozója miatt.",
+      "heldDescription": "E kinyert adatok jelentése <strong>valóban bizonytalan</strong>: a tartalom előzetes vagy nincs megerősítve, nem pusztán kézzel írt. Addig nem számítanak bele az értékelésbe, amíg egy ellenőr meg nem erősíti, nem szerkeszti vagy újra nem gépeli őket. Olvasható forrás soha nem kerül várólistára pusztán az adathordozója miatt.",
       "heldForReview": "Ellenőrzésre visszatartva",
       "holdOutOfScoring": "Kihagyás a pontozásból",
       "inScoring": "Pontozásban",
@@ -218,10 +218,10 @@
       "title": "Referenciatények"
     },
     "claimDetail": {
-      "escalatedReview": "Továbbítva a bizonyítékkezelő csapatnak — az alapul szolgáló ellentmondás feloldásáig itt nincs megerősíthető vagy vitatható következtetés.",
+      "escalatedReview": "Továbbítva a bizonyítékkezelő csapatnak; az alapul szolgáló ellentmondás feloldásáig itt nincs megerősíthető vagy vitatható következtetés.",
       "flagDispute": "Vita megjelölése",
       "humanReview": "Emberi ellenőrzés",
-      "interpretationCaveat": "Az egyik figyelembe vett tényhez lényeges értelmezési fenntartás tartozik — a bizonyíték jelentése bizonytalan, nem pedig az adathordozó, amelyen érkezett.",
+      "interpretationCaveat": "Az egyik figyelembe vett tényhez lényeges értelmezési fenntartás tartozik: a bizonyíték jelentése bizonytalan, nem pedig az adathordozó, amelyen érkezett.",
       "notVerifiable": {
         "reopen": "Újranyitás → összevetés a nyilvántartással",
         "reopenExplanation": "<strong>Nem ellenőrizhetőként félretéve.</strong> Ha ez az állítás mégis ellenőrizhető, nyissa újra: az AVT megőrzi az átsorolást, és csak a korábban kihagyott nyilvántartás-ellenőrzést futtatja le.",
@@ -231,15 +231,15 @@
         "add": "Megjegyzés / javítás hozzáadása",
         "heading": "Saját megjegyzés · {savedAt}",
         "headingUndated": "Saját megjegyzés",
-        "placeholder": "Rögzítsen egy javítást vagy magyarázatot. A mentés csak ehhez az állításhoz rögzíti a megjegyzést — nem módosítja a következtetést vagy a referenciatény-nyilvántartást.",
+        "placeholder": "Rögzítsen egy javítást vagy magyarázatot. A mentés csak ehhez az állításhoz rögzíti a megjegyzést; nem módosítja a következtetést vagy a referenciatény-nyilvántartást.",
         "saveCorrection": "Javítás mentése"
       },
       "overridden": "Felülírva",
-      "overrideNotice": "A következtetés felülírva erre: <strong>{verdict}</strong> — az eszköz saját elemzése változatlanul látható alább.",
+      "overrideNotice": "A következtetés felülírva erre: <strong>{verdict}</strong>; az eszköz saját elemzése változatlanul látható alább.",
       "overrideTooltip": "Egy ellenőr eltérő következtetést rögzített. Az eszköz saját elemzése változatlanul látható alább.",
       "overrideVerdict": "Következtetés felülírása",
       "recordConflict": {
-        "description": "Két referenciatény ugyanarra a kérdésre vonatkozik — <strong>{subject}</strong> —, de ellentmond egymásnak. Mindkettő <strong>nagy bizonyosságú</strong> forrásból származik, ezért ez nem megbízhatósági probléma: maga a nyilvántartás belsőleg ellentmondásos. Az AVT nem ad következtetést és nem pontozza az állítást, mert annak eldöntése és rögzítése, hogy melyik adat legyen irányadó, az Ön mérlegelését igényli — az eszköz nem dönthet erről észrevétlenül.",
+        "description": "Két referenciatény ugyanarra a kérdésre vonatkozik (<strong>{subject}</strong>), de ellentmond egymásnak. Mindkettő <strong>nagy bizonyosságú</strong> forrásból származik, ezért ez nem megbízhatósági probléma: maga a nyilvántartás belsőleg ellentmondásos. Az AVT nem ad következtetést és nem pontozza az állítást, mert annak eldöntése és rögzítése, hogy melyik adat legyen irányadó, az Ön mérlegelését igényli; az eszköz nem dönthet erről észrevétlenül.",
         "escalatedNotice": "Megjelölve a bizonyítékkezelő csapatnak. A nyilvántartási ellentmondás mindaddig nyitott és beleszámít az összesítésbe, amíg nincs kiválasztva az irányadó nyilvántartás.",
         "flagForEvidenceTeam": "Megjelölés a bizonyítékkezelő csapatnak",
         "governed": "<strong>{value}</strong> az irányadó: az állítást e nyilvántartás alapján ítéljük meg. A másik nyilvántartás megmarad.",
@@ -256,46 +256,46 @@
       "score": {
         "anchorFactsDisagree": "A referenciatények ellentmondanak egymásnak",
         "conflictCount": "{count, plural, one {# ellentmondás} other {# ellentmondás}}",
-        "noCoverage": "<strong>A nyilvántartás nem tartalmaz erre vonatkozó adatot.</strong> Az adatbázis egyetlen referenciaténye sem foglalkozik ezzel az állítással. Ez nem gyenge értékelést jelent — egyelőre nincs mihez viszonyítani az állítást.",
-        "notVerifiable": "<strong>Nem ellenőrizhető állítás.</strong> Ezt a fajta állítást egyetlen irat sem döntheti el — például feltételezés, előrejelzés, szándéknyilatkozat, jogi következtetés vagy túl homályos állítás. Pontozás helyett félretesszük.",
+        "noCoverage": "<strong>A nyilvántartás nem tartalmaz erre vonatkozó adatot.</strong> Az adatbázis egyetlen referenciaténye sem foglalkozik ezzel az állítással. Ez nem gyenge értékelést jelent: egyelőre nincs mihez viszonyítani az állítást.",
+        "notVerifiable": "<strong>Nem ellenőrizhető állítás.</strong> Ezt a fajta állítást egyetlen irat sem döntheti el: például feltételezés, előrejelzés, szándéknyilatkozat, jogi következtetés vagy túl homályos állítás. Pontozás helyett félretesszük.",
         "outOf100": "<strong>/ 100</strong> alátámasztottsági pontszám",
         "supportCount": "{count, plural, one {# alátámasztó tény} other {# alátámasztó tény}}",
         "verdictWithheld": "Következtetés visszatartva"
       },
       "sourceCount": "{count, plural, one {# forrás} other {# forrás}}",
-      "whyScore": "A pontszám indoka — referenciatények"
+      "whyScore": "A pontszám indoka: referenciatények"
     },
     "claimTypes": {
       "fact": {
-        "hint": "Objektív, ellenőrizhető állítás — a nyilvántartás alapján pontozzuk. Ide tartoznak a beismerésként vagy tagadásként megfogalmazott állítások is: az alapul szolgáló kijelentést értékeljük, nem pusztán a szavakat."
+        "hint": "Objektív, ellenőrizhető állítás; a nyilvántartás alapján pontozzuk. Ide tartoznak a beismerésként vagy tagadásként megfogalmazott állítások is: az alapul szolgáló kijelentést értékeljük, nem pusztán a szavakat."
       },
       "opinion": {
-        "hint": "Értékítélet vagy minősítés — egyetlen irat sem tudja megerősíteni vagy cáfolni, ezért pontozás nélkül félretesszük.",
+        "hint": "Értékítélet vagy minősítés: egyetlen irat sem tudja megerősíteni vagy cáfolni, ezért pontozás nélkül félretesszük.",
         "label": "Vélemény"
       },
       "setAside": "félretéve",
       "unverifiable": {
-        "hint": "Olyan állítás, amelyet egyetlen irat sem dönthet el — feltételezés, előrejelzés, szándék- vagy véleménynyilatkozat, jogi következtetés vagy túl homályos állítás. Pontozás nélkül félretesszük. Nem azonos a Nincs lefedettség állapottal, amely ellenőrizhető tényt jelöl, de a nyilvántartás nem tartalmaz róla adatot.",
+        "hint": "Olyan állítás, amelyet egyetlen irat sem dönthet el: feltételezés, előrejelzés, szándék- vagy véleménynyilatkozat, jogi következtetés vagy túl homályos állítás. Pontozás nélkül félretesszük. Nem azonos a Nincs lefedettség állapottal, amely ellenőrizhető tényt jelöl, de a nyilvántartás nem tartalmaz róla adatot.",
         "label": "Nem ellenőrizhető"
       }
     },
     "confidence": {
       "interpretation": "Értelmezés",
-      "tooltip": "Értelmezési bizonyosság — mennyire egyértelmű e bizonyíték jelentése. Független a forrás adathordozójától (kézírás, szkennelt kép stb.)."
+      "tooltip": "Értelmezési bizonyosság: mennyire egyértelmű e bizonyíték jelentése. Független a forrás adathordozójától (kézírás, szkennelt kép stb.)."
     },
     "confirm": {
       "acknowledge": "Tudomásul veszem",
       "recordConflict": "Feloldás megerősítése",
-      "supported": "Megerősítés — kész",
+      "supported": "Megerősítés: kész",
       "verdict": "Következtetés megerősítése"
     },
     "disposition": {
-      "contested": "A következtetés egyértelmű, de az egyik figyelembe vett tény értelmezése vitatott — jóváhagyás előtt érdemes átnézni.",
+      "contested": "A következtetés egyértelmű, de az egyik figyelembe vett tény értelmezése vitatott; jóváhagyás előtt érdemes átnézni.",
       "contradicted": "A nyilvántartás eltér ettől az állítástól. A következtetés jóváhagyásához emberi döntés szükséges.",
       "nocover": "Egyetlen referenciatény sem foglalkozik ezzel az állítással, ezért nincs mihez viszonyítani. A jóváhagyás nem kötelező.",
-      "notverifiable": "Nem ellenőrizhetőként félretéve — a jóváhagyás nem kötelező. Ha mégis ellenőrizhető, nyissa újra alább.",
-      "recordconflict": "Az ügyirat két bizonyítéka ellentmond egymásnak. Fent válassza ki az irányadó bizonyítékot, vagy jelezze a bizonyítékkezelő csapatnak — az eszköz nem dönt Ön helyett.",
-      "supported": "A nyilvántartás megerősíti ezt az állítást. Jóváhagyásával azt igazolja, hogy az eszköz helyesen értelmezte — nincs szükség mérlegelésre.",
+      "notverifiable": "Nem ellenőrizhetőként félretéve; a jóváhagyás nem kötelező. Ha mégis ellenőrizhető, nyissa újra alább.",
+      "recordconflict": "Az ügyirat két bizonyítéka ellentmond egymásnak. Fent válassza ki az irányadó bizonyítékot, vagy jelezze a bizonyítékkezelő csapatnak; az eszköz nem dönt Ön helyett.",
+      "supported": "A nyilvántartás megerősíti ezt az állítást. Jóváhagyásával azt igazolja, hogy az eszköz helyesen értelmezte; nincs szükség mérlegelésre.",
       "tension": "A nyilvántartás csak részben támasztja alá ezt az állítást. A következtetés jóváhagyása előtt mérlegelje a fenti alátámasztó és ellentmondó tényeket."
     },
     "documents": {
@@ -354,7 +354,7 @@
       "failed": "Nincs mentve",
       "failedTitle": "A módosítás mentése sikertelen volt"
     },
-    "sourceMediumTooltip": "A forrás adathordozója — semleges leíró adat. Önmagában nem csökkenti a bizonyosságot.",
+    "sourceMediumTooltip": "A forrás adathordozója: semleges leíró adat. Önmagában nem csökkenti a bizonyosságot.",
     "states": {
       "contradicted": {
         "chip": "Cáfolt",
@@ -384,7 +384,7 @@
     "verification": {
       "acceptRoutine": "{count, plural, one {# rutinjellegű állítás} other {# rutinjellegű állítás}} elfogadása",
       "attentionComplete": "<strong>Minden mérlegelést igénylő állítás rendezve van.</strong> {count, plural, one {A fennmaradó # rutinjellegű megállapítás nem igényel egyedi ellenőrzést.} other {A fennmaradó # rutinjellegű megállapítás nem igényel egyedi ellenőrzést.}}",
-      "attentionOpen": "<strong>{count, plural, one {# állítás} other {# állítás}} igényli az Ön mérlegelését</strong> — ellentmondások és vitatott értelmezések. {routineCount, plural, one {A másik # rutinjellegű, és nem igényel egyedi jóváhagyást.} other {A többi # rutinjellegű, és nem igényel egyedi jóváhagyást.}}",
+      "attentionOpen": "<strong>{count, plural, one {# állítás} other {# állítás}} igényli az Ön mérlegelését</strong>: ellentmondások és vitatott értelmezések. {routineCount, plural, one {A másik # rutinjellegű, és nem igényel egyedi jóváhagyást.} other {A többi # rutinjellegű, és nem igényel egyedi jóváhagyást.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, vitatott} other {}}{reviewStatus, select, reviewed {, ellenőrzött} disputed {, vitatott} other {}})",
       "documentView": {
         "label": "Dokumentumnézet",
@@ -1448,7 +1448,7 @@
     "attachment": "Melléklet",
     "audioContent": "Generált hang",
     "cancelQueuedMessage": "Sorba állított üzenet visszavonása",
-    "caseLawGreeting": "Kérdezzen erről a határozatról — a teljes szöveg itt elérhető.",
+    "caseLawGreeting": "Kérdezzen erről a határozatról; a teljes szöveg itt elérhető.",
     "chatAbout": "Beszúrás az AI-csevegésbe",
     "choosePromptImprovementStrategy": "Promptjavítási lehetőségek",
     "commandsSection": "Parancsok",
@@ -1894,7 +1894,7 @@
       "characterCount": "{count, plural, one {# karakter} other {# karakter}}",
       "consoleLogs": "Konzolkimenet",
       "exactCall": "Pontos hívás",
-      "failed": "Ez a lépés nem sikerült — a stella másképp oldja meg.",
+      "failed": "Ez a lépés nem sikerült; a stella másképp oldja meg.",
       "field": "Mező",
       "input": "Bemenet",
       "interrupted": "Befejezés előtt megszakadt",
@@ -1914,7 +1914,7 @@
     },
     "unsupportedFileType": "Nem támogatott fájltípus",
     "uploadFailed": "A fájl feldolgozása sikertelen",
-    "usageFallbackNotice": "A napi AI-keret elfogyott — a válaszok a normál modellen folytatódnak.",
+    "usageFallbackNotice": "A napi AI-keret elfogyott; a válaszok a normál modellen folytatódnak.",
     "videoContent": "Generált videó",
     "webSearch": {
       "answer": "Webes keresés összefoglalója",
@@ -4155,7 +4155,7 @@
       "derivedQuestion": "Kinyerési kérdés",
       "derivedType": "Válaszformátum",
       "descriptionPlaceholder": "Mit ellenőriz ez a playbook?",
-      "disabledBadge": "Kikapcsolva — a futtatások kihagyják",
+      "disabledBadge": "Kikapcsolva: a futtatások kihagyják",
       "discardChanges": "Módosítások elvetése",
       "duplicatePosition": "Álláspont duplikálása",
       "empty": "Még nincsenek playbookok",
@@ -4170,7 +4170,7 @@
         "restricted": "A válasznak hiányoznia kell"
       },
       "extractOnlyBadge": "Csak kinyerés",
-      "extractOnlyDescription": "Nincs értékelés — az érték bekerül a táblázatba.",
+      "extractOnlyDescription": "Nincs értékelés; az érték bekerül a táblázatba.",
       "extraction": "Kinyerés",
       "extractionAuto": "Automatikus",
       "extractionManual": "Kézi",
@@ -4566,7 +4566,7 @@
     "continue": "Folytatás",
     "enterTeamName": "Adja meg fent a csapat nevét",
     "getStarted": "Kezdés",
-    "inviteExternal": "Külső felhasználó — hozzáférést kap a dokumentumaihoz",
+    "inviteExternal": "Külső felhasználó: hozzáférést kap a dokumentumaihoz",
     "inviteHint": "Több címet vesszővel válasszon el, vagy illesszen be egy listát.",
     "inviteInvalidEmail": "Érvénytelen e-mail: {value}",
     "inviteSubtitle": "E-mailt kapnak egy csatlakozási linkkel.",
@@ -5254,7 +5254,7 @@
       "practiceJurisdictions": "Joghatóságok",
       "practiceJurisdictionsDescription": "Válassza ki az Önre vonatkozó joghatóságokat.",
       "promptCaching": {
-        "description": "Bekapcsolva a stella gyorsítótár-jelzőket ad hozzá, így az ugyanazon dokumentumra vagy szálra vonatkozó ismételt AI-kérések ~10× kevesebbe kerülnek és gyorsabban befejeződnek. A gyorsítótárazott promptok legfeljebb 5 percig maradnak az AI-szolgáltatónál, a szervezetére korlátozva. Kikapcsolás esetén a stella nem küld többé gyorsítótár-jelzőket, de a szolgáltatók továbbra is opportunista módon gyorsítótárazhatnak — csak az AI-szolgáltatóval kötött Zero Data Retention szerződés tiltja le teljesen a szerveroldali gyorsítótárazást.",
+        "description": "Bekapcsolva a stella gyorsítótár-jelzőket ad hozzá, így az ugyanazon dokumentumra vagy szálra vonatkozó ismételt AI-kérések ~10× kevesebbe kerülnek és gyorsabban befejeződnek. A gyorsítótárazott promptok legfeljebb 5 percig maradnak az AI-szolgáltatónál, a szervezetére korlátozva. Kikapcsolás esetén a stella nem küld többé gyorsítótár-jelzőket, de a szolgáltatók továbbra is opportunista módon gyorsítótárazhatnak; csak az AI-szolgáltatóval kötött Zero Data Retention szerződés tiltja le teljesen a szerveroldali gyorsítótárazást.",
         "title": "Prompt gyorsítótárazás",
         "toggleLabel": "Prompt gyorsítótárazás engedélyezése az AI-szolgáltatóknál"
       },
@@ -5891,7 +5891,7 @@
       "fieldSettingBrackets": "A sablonjelölő nem tartalmazhat kapcsos zárójelet. Távolítsa el őket a(z) „{fieldPath}” beállításaiból.",
       "fieldWithoutMarker": "A(z) „{fieldPath}” mezőnek nincs jelölője a dokumentumban, ezért a beállításai nem lettek mentve.",
       "fillFormPreview": "Így jelenik meg az űrlapon",
-      "fillStale": "Mentetlen módosítások — mentsen, hogy a legfrissebb mezőkkel töltse ki.",
+      "fillStale": "Mentetlen módosítások; mentsen, hogy a legfrissebb mezőkkel töltse ki.",
       "filledByPerson": "Személy",
       "formulaExampleLabel": "Példa",
       "formulaNoFields": "Először adjon hozzá egy számmezőt, hogy a képletnek legyen mit kiszámítania.",
@@ -6632,7 +6632,7 @@
       "personalDescription": "A személyes ügyek csak az Ön számára láthatók. Léptesse elő ügyfélüggyé a csapattal való megosztáshoz.",
       "personalLabel": "Személyes",
       "promoteCta": "Előléptetés ügyfélüggyé",
-      "promoteDescription": "Csatoljon ügyfelet az ügy csapattal való megosztásához. Az előléptetés végleges — az előléptetett ügy nem vonható vissza személyesre.",
+      "promoteDescription": "Csatoljon ügyfelet az ügy csapattal való megosztásához. Az előléptetés végleges: az előléptetett ügy nem vonható vissza személyesre.",
       "promoteToClientConfirm": "A(z) <bdi>{matterName}</bdi> ügyet hozzárendeljük a(z) <bdi>{clientName}</bdi> ügyfélhez, és megosztjuk a csapattal. Ezután nem állítható vissza személyesre.",
       "promotedSuccess": "Ügy előléptetve",
       "recentClients": "Legutóbbi ügyfelek",
@@ -6852,7 +6852,7 @@
       "optionsLabel": "Lehetőségek",
       "person": "Személy",
       "previewEmpty": "Az AI nem adott vissza értéket.",
-      "previewMockNotice": "Mock előnézet — a háttér még nincs bekötve.",
+      "previewMockNotice": "Mock előnézet: a háttér még nincs bekötve.",
       "previewOnFirst": "Előnézet: {document}",
       "previewSkipped": "Ezen a dokumentumon nincs alkalmazható bemenet.",
       "previewSubject": "Próbálja ki egy mintán",

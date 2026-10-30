@@ -1,3 +1,4 @@
+// parser-output-unchanged: only exclusion rationale punctuation changes; parsed decision fields are unchanged.
 // parser-output-unchanged: Bounded crawl retries and cursor encoding change fetch control without changing parsed decision output.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
@@ -1252,7 +1253,7 @@ const CZ_NSS_EXCLUSION = {
   PROCEEDING_HISTORY:
     "The proceeding around the document: what was challenged, which court or authority it came from, and what became of it afterwards. The row models one decision and carries no field for the proceeding.",
   PROCEEDING_DATES:
-    "Docket dates of the proceeding — opened, closed, in legal force, written out, dispatched. The row states the decision date, which is what a citation and a date filter ask for.",
+    "Docket dates of the proceeding: opened, closed, in legal force, written out, dispatched. The row states the decision date, which is what a citation and a date filter ask for.",
   PARTY_GRID:
     "Columns of the participants grid: each party, its role, its representative and that representative's kind. The participants line the portal states for the decision is stored; the grid repeats it per person, and a decision row keeps no personal detail beyond what the decision itself states.",
   REPORTER_PUBLICATION:

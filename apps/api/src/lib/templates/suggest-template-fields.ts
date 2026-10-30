@@ -54,18 +54,18 @@ const SYSTEM_PROMPT =
   "the values that should become fillable fields and copy their exact text. " +
   "You never invent values or map text that does not appear verbatim.";
 
-const FIELD_SUGGESTION_SPEC = `Identify the values in this document that should become fillable fields — party names, addresses, registration numbers (KRS / NIP / REGON), monetary amounts, dates, the signatory's name and role, and free-text sections such as the scope of a power of attorney.
+const FIELD_SUGGESTION_SPEC = `Identify the values in this document that should become fillable fields: party names, addresses, registration numbers (KRS / NIP / REGON), monetary amounts, dates, the signatory's name and role, and free-text sections such as the scope of a power of attorney.
 
 For each, return:
 - literalText: the EXACT text in the document to replace, copied verbatim
-- fieldPath: a dot-separated name, e.g. company.name, company.krs, signatory.name, signatory.role, signing_date, scope. Only letters, digits, underscores, dashes and dots — for list positions use dots (attorneys.0.name), NEVER brackets
+- fieldPath: a dot-separated name, e.g. company.name, company.krs, signatory.name, signatory.role, signing_date, scope. Only letters, digits, underscores, dashes and dots; for list positions use dots (attorneys.0.name), NEVER brackets
 - inputType: one of text, number, boolean, date, select
 - label: a short user-facing question or name for the fill form, in the document's language (e.g. "Company name")
-- hint: a short hint for the person filling the field — the expected format or where to find the value (e.g. "10-digit KRS number from the company register"), in the document's language, under 200 characters. Use null when the label is self-explanatory
+- hint: a short hint for the person filling the field: the expected format or where to find the value (e.g. "10-digit KRS number from the company register"), in the document's language, under 200 characters. Use null when the label is self-explanatory
 - exampleValue: a realistic example of the value, copied or derived from the document
-- aiPrompt: ONLY for free-text sections that should be drafted by AI at fill time (e.g. the scope of the power of attorney) — an instruction describing what to draft. Use null for ordinary fields.
+- aiPrompt: ONLY for free-text sections that should be drafted by AI at fill time (e.g. the scope of the power of attorney): an instruction describing what to draft. Use null for ordinary fields.
 
-If the document is bilingual or multi-column (e.g. a two-column table with parallel language versions side by side), the SAME value appears once per language. Return a SEPARATE entry for EACH occurrence, all sharing the SAME fieldPath, each with its own literalText copied verbatim from that language/column — so every column becomes fillable, not just the first. Never leave one language hardcoded while the other is a field.`;
+If the document is bilingual or multi-column (e.g. a two-column table with parallel language versions side by side), the SAME value appears once per language. Return a SEPARATE entry for EACH occurrence, all sharing the SAME fieldPath, each with its own literalText copied verbatim from that language/column, so every column becomes fillable, not just the first. Never leave one language hardcoded while the other is a field.`;
 
 // The model occasionally invents bracket-indexed paths (attorneys[0].name)
 // despite the prompt; the marker grammar only knows dotted segments, and

@@ -56,7 +56,7 @@ const createWorkspaceDocumentInputSchema = v.strictObject({
         "####), paragraphs, bold/italic/strikethrough, inline code, bullet " +
         "and numbered lists (incl. nesting), pipe tables, blockquotes, and " +
         "links. Rendered into a paginated DOCX using stella's house style " +
-        "(fonts, spacing, numbering) — do not attempt manual page layout.",
+        "(fonts, spacing, numbering); do not attempt manual page layout.",
     ),
   ),
 });
@@ -175,7 +175,7 @@ export const createCreateWorkspaceDocumentTools = ({
     description:
       "Create a brand-new DOCX in the active matter from a Markdown body, " +
       "rendered with stella's house style (fonts, spacing, list numbering). " +
-      "Runs immediately in the active matter (after user approval) — unlike " +
+      "Runs immediately in the active matter (after user approval); unlike " +
       "`create-document`, there is no destination-matter picker, so only use " +
       "this when a matter is already active. Does NOT edit, convert, or " +
       "preserve formatting from an existing DOCX; never use it when the user " +

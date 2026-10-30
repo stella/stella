@@ -199,12 +199,12 @@
   "avt": {
     "anchorFacts": {
       "addInterpretationNote": "Add interpretation note",
-      "description": "Hard evidence — emails, messages, bank records, agreed facts — extracted into the anchor-fact record that claims are checked against. Review, edit, or add facts by hand.",
+      "description": "Hard evidence (emails, messages, bank records, agreed facts) extracted into the anchor-fact record that claims are checked against. Review, edit, or add facts by hand.",
       "editInterpretationNote": "Edit interpretation note",
       "empty": "Mark items of this list as facts to check documents against them.",
       "extractionAndReview": "Extraction & review",
       "factCount": "{count, plural, one {# fact} other {# facts}}",
-      "heldDescription": "These extractions are <strong>genuinely uncertain in meaning</strong> — the content is provisional or unconfirmed, not merely written by hand. They are held out of scoring until a reviewer confirms, edits, or retypes them. A legible source is never queued just for its medium.",
+      "heldDescription": "These extractions are <strong>genuinely uncertain in meaning</strong>: the content is provisional or unconfirmed, not merely written by hand. They are held out of scoring until a reviewer confirms, edits, or retypes them. A legible source is never queued just for its medium.",
       "heldForReview": "Held for review",
       "holdOutOfScoring": "Hold out of scoring",
       "inScoring": "In scoring",
@@ -218,10 +218,10 @@
       "title": "Anchor facts"
     },
     "claimDetail": {
-      "escalatedReview": "Escalated to the evidence team — no verdict to confirm or dispute here until the underlying conflict is resolved.",
+      "escalatedReview": "Escalated to the evidence team; no verdict to confirm or dispute here until the underlying conflict is resolved.",
       "flagDispute": "Flag dispute",
       "humanReview": "Human review",
-      "interpretationCaveat": "A contributing fact carries a substantive interpretation caveat — what the evidence means, not the medium it came in, is what is uncertain.",
+      "interpretationCaveat": "A contributing fact carries a substantive interpretation caveat: what the evidence means, not the medium it came in, is what is uncertain.",
       "notVerifiable": {
         "reopen": "Re-open → check against record",
         "reopenExplanation": "<strong>Set aside as not verifiable.</strong> If this is actually a checkable claim, re-open it: AVT keeps your reclassification and runs only the record-check it skipped.",
@@ -231,15 +231,15 @@
         "add": "Add note / correction",
         "heading": "Your note · {savedAt}",
         "headingUndated": "Your note",
-        "placeholder": "Record a correction or an explanation. Saving records the note against this claim only — it does not change the verdict or the anchor-fact record.",
+        "placeholder": "Record a correction or an explanation. Saving records the note against this claim only; it does not change the verdict or the anchor-fact record.",
         "saveCorrection": "Save correction"
       },
       "overridden": "Overridden",
-      "overrideNotice": "Overridden to <strong>{verdict}</strong> — the analysis below is the tool's own, shown unchanged.",
+      "overrideNotice": "Overridden to <strong>{verdict}</strong>; the analysis below is the tool's own, shown unchanged.",
       "overrideTooltip": "A reviewer has recorded a different verdict. The analysis below is the tool's own, unchanged.",
       "overrideVerdict": "Override verdict",
       "recordConflict": {
-        "description": "Two anchor facts speak to the same point — <strong>{subject}</strong> — but disagree. Both are <strong>high-confidence</strong> sources, so this is not a reliability problem: the record itself is internally inconsistent. AVT withholds a verdict rather than score the claim, because picking one record over the other is a judgement for you to make and record — not one the tool should make silently.",
+        "description": "Two anchor facts speak to the same point (<strong>{subject}</strong>) but disagree. Both are <strong>high-confidence</strong> sources, so this is not a reliability problem: the record itself is internally inconsistent. AVT withholds a verdict rather than score the claim, because picking one record over the other is a judgement for you to make and record, not one the tool should make silently.",
         "escalatedNotice": "Flagged for the evidence team. The record conflict stays open and counted until a governing record is chosen.",
         "flagForEvidenceTeam": "Flag for evidence team",
         "governed": "<strong>{value}</strong> governs: the claim is judged against this record. The other record stays on file.",
@@ -256,46 +256,46 @@
       "score": {
         "anchorFactsDisagree": "Anchor facts disagree",
         "conflictCount": "{count, plural, one {# conflict} other {# conflicts}}",
-        "noCoverage": "<strong>The record is silent.</strong> No anchor fact in the database addresses this claim. This is distinct from a weak score — it means there is nothing to check it against yet.",
-        "notVerifiable": "<strong>Not a verifiable assertion.</strong> This is the kind of statement no document could ever settle — a counterfactual, a prediction, a statement of intent, a legal conclusion, or a claim too vague to check. Set aside rather than scored.",
+        "noCoverage": "<strong>The record is silent.</strong> No anchor fact in the database addresses this claim. This is distinct from a weak score: it means there is nothing to check it against yet.",
+        "notVerifiable": "<strong>Not a verifiable assertion.</strong> This is the kind of statement no document could ever settle: a counterfactual, a prediction, a statement of intent, a legal conclusion, or a claim too vague to check. Set aside rather than scored.",
         "outOf100": "<strong>/ 100</strong> support score",
         "supportCount": "{count, plural, one {# support} other {# supports}}",
         "verdictWithheld": "Verdict withheld"
       },
       "sourceCount": "{count, plural, one {# source} other {# sources}}",
-      "whyScore": "Why this score — anchor facts"
+      "whyScore": "Why this score: anchor facts"
     },
     "claimTypes": {
       "fact": {
-        "hint": "Objective, checkable assertion — scored against the record. Includes claims framed as admissions or denials: judged on the underlying proposition, not the bare words."
+        "hint": "Objective, checkable assertion, scored against the record. Includes claims framed as admissions or denials: judged on the underlying proposition, not the bare words."
       },
       "opinion": {
-        "hint": "A value judgement or characterisation — no document can confirm or contradict it, so it is set aside, not scored.",
+        "hint": "A value judgement or characterisation: no document can confirm or contradict it, so it is set aside, not scored.",
         "label": "Opinion"
       },
       "setAside": "set aside",
       "unverifiable": {
-        "hint": "An assertion no document could ever settle — a counterfactual, a prediction, a statement of intent or belief, a legal conclusion, or a claim too vague to check. Set aside, not scored. Distinct from No coverage, which is a checkable fact the record is merely silent on.",
+        "hint": "An assertion no document could ever settle: a counterfactual, a prediction, a statement of intent or belief, a legal conclusion, or a claim too vague to check. Set aside, not scored. Distinct from No coverage, which is a checkable fact the record is merely silent on.",
         "label": "Not verifiable"
       }
     },
     "confidence": {
       "interpretation": "Interpretation",
-      "tooltip": "Interpretive confidence — how unambiguous this evidence's meaning is. Independent of the source medium (handwriting, scan, etc.)."
+      "tooltip": "Interpretive confidence: how unambiguous this evidence's meaning is. Independent of the source medium (handwriting, scan, etc.)."
     },
     "confirm": {
       "acknowledge": "Mark as noted",
       "recordConflict": "Confirm resolution",
-      "supported": "Confirm — ready",
+      "supported": "Confirm: ready",
       "verdict": "Confirm verdict"
     },
     "disposition": {
-      "contested": "The verdict is clean, but a contributing fact's interpretation is contested — worth your eyes before sign-off.",
+      "contested": "The verdict is clean, but a contributing fact's interpretation is contested; worth your eyes before sign-off.",
       "contradicted": "The record departs from this claim. A human call is needed before this verdict stands.",
       "nocover": "No anchor fact addresses this claim, so there's nothing to confirm it against. Sign-off is optional.",
-      "notverifiable": "Set aside as not verifiable — sign-off is optional. Re-open below if it's actually checkable.",
-      "recordconflict": "Two exhibits in the record disagree. Resolve which governs above, or flag the evidence team — the tool won't pick for you.",
-      "supported": "The record affirms this. Your sign-off confirms the tool read it correctly — no judgement call needed.",
+      "notverifiable": "Set aside as not verifiable; sign-off is optional. Re-open below if it's actually checkable.",
+      "recordconflict": "Two exhibits in the record disagree. Resolve which governs above, or flag the evidence team; the tool won't pick for you.",
+      "supported": "The record affirms this. Your sign-off confirms the tool read it correctly; no judgement call needed.",
       "tension": "The record only partly supports this. Weigh the supporting and conflicting facts above before the verdict stands."
     },
     "documents": {
@@ -354,7 +354,7 @@
       "failed": "Not saved",
       "failedTitle": "Your change was not saved"
     },
-    "sourceMediumTooltip": "Source medium — a neutral descriptor. It does not lower confidence on its own.",
+    "sourceMediumTooltip": "Source medium: a neutral descriptor. It does not lower confidence on its own.",
     "states": {
       "contradicted": {
         "chip": "Contradicted",
@@ -384,7 +384,7 @@
     "verification": {
       "acceptRoutine": "Accept {count, plural, one {# routine claim} other {# routine claims}}",
       "attentionComplete": "<strong>Every claim needing judgement has been dispositioned.</strong> {count, plural, one {The # routine determination does not require individual review.} other {The # routine determinations do not require individual review.}}",
-      "attentionOpen": "<strong>{count, plural, one {# claim needs} other {# claims need}} your judgement</strong> — conflicts and contested interpretations. {routineCount, plural, one {The other # is routine and does not need individual sign-off.} other {The other # are routine and do not need individual sign-off.}}",
+      "attentionOpen": "<strong>{count, plural, one {# claim needs} other {# claims need}} your judgement</strong>: conflicts and contested interpretations. {routineCount, plural, one {The other # is routine and does not need individual sign-off.} other {The other # are routine and do not need individual sign-off.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, contested} other {}}{reviewStatus, select, reviewed {, reviewed} disputed {, disputed} other {}})",
       "documentView": {
         "label": "Document view",
@@ -1448,7 +1448,7 @@
     "attachment": "Attachment",
     "audioContent": "Generated audio",
     "cancelQueuedMessage": "Cancel queued message",
-    "caseLawGreeting": "Ask about this decision — its full text is available here.",
+    "caseLawGreeting": "Ask about this decision; its full text is available here.",
     "chatAbout": "Chat about this",
     "choosePromptImprovementStrategy": "Prompt improvement options",
     "commandsSection": "Commands",
@@ -1686,7 +1686,7 @@
       "tryOne": "Try one of these to start"
     },
     "queuedAttachmentCount": "{count, plural, one {# attachment} other {# attachments}}",
-    "queuedNotice": "Queued — sends when the current response finishes",
+    "queuedNotice": "Queued: sends when the current response finishes",
     "reasoning": "Reasoning trace",
     "reasoningTokens": "{count, plural, one {# reasoning token} other {# reasoning tokens}}",
     "recapLoading": "Recapping the conversation…",
@@ -1894,7 +1894,7 @@
       "characterCount": "{count, plural, one {# character} other {# characters}}",
       "consoleLogs": "Console output",
       "exactCall": "Exact call",
-      "failed": "This step failed — stella will work around it.",
+      "failed": "This step failed; stella will work around it.",
       "field": "Field",
       "input": "Input",
       "interrupted": "Interrupted before finishing",
@@ -1914,7 +1914,7 @@
     },
     "unsupportedFileType": "Unsupported file type",
     "uploadFailed": "Failed to process file",
-    "usageFallbackNotice": "Daily AI allowance used — replies continue on the standard model.",
+    "usageFallbackNotice": "Daily AI allowance used; replies continue on the standard model.",
     "videoContent": "Generated video",
     "webSearch": {
       "answer": "Web search summary",
@@ -2537,7 +2537,7 @@
     "extractProcuracao": {
       "dropZone": "Drop a power of attorney (.docx) here, or click to choose a file",
       "extracting": "Extracting grantor(s)…",
-      "fileHint": "stella reads the document and finds the grantor(s) — not the lawyer — automatically. Review the results before confirming.",
+      "fileHint": "stella reads the document and finds the grantor(s) (not the lawyer) automatically. Review the results before confirming.",
       "fileTooLarge": "The power-of-attorney file must be 50 MB or smaller.",
       "invalidFileType": "Please choose a .docx file.",
       "noOutorganteFound": "No grantor could be identified in this document.",
@@ -3370,7 +3370,7 @@
     "redoShortcut": "Redo (Ctrl+Y)",
     "rejectChange": "Reject Change",
     "removeLink": "Remove link",
-    "renderErrorDescription": "Something went wrong showing this part of the document. Reload the page — if it keeps happening, let us know.",
+    "renderErrorDescription": "Something went wrong showing this part of the document. Reload the page; if it keeps happening, let us know.",
     "saveCheckpointFailedDescription": "The DOCX was created locally, but stella could not upload the checkpoint. Keep the editor open and try saving again.",
     "saveCheckpointFailedTitle": "Could not upload save",
     "saveEditorUnavailableDescription": "The editor is not ready yet. Wait for the document to finish loading, then try saving again.",
@@ -4155,7 +4155,7 @@
       "derivedQuestion": "Extraction question",
       "derivedType": "Answer format",
       "descriptionPlaceholder": "What does this playbook check?",
-      "disabledBadge": "Off — skipped in runs",
+      "disabledBadge": "Off: skipped in runs",
       "discardChanges": "Discard changes",
       "duplicatePosition": "Duplicate position",
       "empty": "No playbooks yet",
@@ -4170,7 +4170,7 @@
         "restricted": "Answer must be absent"
       },
       "extractOnlyBadge": "Extract only",
-      "extractOnlyDescription": "No grading — captures the value into the table.",
+      "extractOnlyDescription": "No grading; captures the value into the table.",
       "extraction": "Extraction",
       "extractionAuto": "Auto",
       "extractionManual": "Manual",
@@ -4566,7 +4566,7 @@
     "continue": "Continue",
     "enterTeamName": "Enter your team name above",
     "getStarted": "Get Started",
-    "inviteExternal": "External — will have access to your documents",
+    "inviteExternal": "External: will have access to your documents",
     "inviteHint": "Separate multiple addresses with commas, or paste a list.",
     "inviteInvalidEmail": "Not a valid email: {value}",
     "inviteSubtitle": "They'll receive an email with a link to join.",
@@ -5254,7 +5254,7 @@
       "practiceJurisdictions": "Jurisdictions",
       "practiceJurisdictionsDescription": "Select the jurisdictions relevant to you.",
       "promptCaching": {
-        "description": "When on, stella adds cache markers so repeated AI requests over the same document or thread cost ~10x less and finish faster. Cached prompts live with the AI provider for up to 5 minutes, scoped to your organization. Turning off stops stella from sending cache markers, but providers may still cache opportunistically — only a Zero Data Retention contract with the provider fully disables server-side caching.",
+        "description": "When on, stella adds cache markers so repeated AI requests over the same document or thread cost ~10x less and finish faster. Cached prompts live with the AI provider for up to 5 minutes, scoped to your organization. Turning off stops stella from sending cache markers, but providers may still cache opportunistically; only a Zero Data Retention contract with the provider fully disables server-side caching.",
         "title": "Prompt caching",
         "toggleLabel": "Allow prompt caching with AI providers"
       },
@@ -5891,12 +5891,12 @@
       "fieldSettingBrackets": "A template marker cannot contain curly brackets. Remove them from the settings of “{fieldPath}”.",
       "fieldWithoutMarker": "“{fieldPath}” has no marker in the document, so its settings were not saved.",
       "fillFormPreview": "How it appears in the fill form",
-      "fillStale": "Unsaved changes — save to fill with the latest fields.",
+      "fillStale": "Unsaved changes; save to fill with the latest fields.",
       "filledByPerson": "Person",
       "formulaExampleLabel": "Example",
       "formulaNoFields": "Add a number field first to compute a formula.",
       "formulaNonNumberFields": "Not a number: {fields}",
-      "formulaNumbersOnlyHelp": "Calculations use number fields only — dates and text can't be used.",
+      "formulaNumbersOnlyHelp": "Calculations use number fields only; dates and text can't be used.",
       "formulaUnknownFields": "Not a field: {fields}",
       "gettingStartedField": "Write your text, then select a phrase → right-click → Make field.",
       "gettingStartedFill": "Try the result in the Fill tab.",
@@ -5942,7 +5942,7 @@
       "renameFieldInvalid": "That name is invalid or already taken",
       "repeatForEach": "Repeat for each…",
       "repeatable": "Allow multiple",
-      "repeatableHelp": "Let the filler add this field more than once — for example, a list of parties or items.",
+      "repeatableHelp": "Let the filler add this field more than once: for example, a list of parties or items.",
       "repeatableLoopHasOtherContent": "The repeating block around this field contains other content; remove it in the document.",
       "repeatableNested": "This field already sits inside a repeating block.",
       "repeats": "Repeats: {item}",
@@ -6632,7 +6632,7 @@
       "personalDescription": "Personal matters are private to you. Promote to a client to share with the team.",
       "personalLabel": "Personal",
       "promoteCta": "Promote to client",
-      "promoteDescription": "Attach a client to share this matter with the team. This is one-way — promoted matters cannot return to personal.",
+      "promoteDescription": "Attach a client to share this matter with the team. This is one-way: promoted matters cannot return to personal.",
       "promoteToClientConfirm": "<bdi>{matterName}</bdi> will be assigned to <bdi>{clientName}</bdi> and shared with the team. It cannot return to personal.",
       "promotedSuccess": "Matter promoted",
       "recentClients": "Recent clients",
@@ -6852,7 +6852,7 @@
       "optionsLabel": "Options",
       "person": "Person",
       "previewEmpty": "AI returned no value.",
-      "previewMockNotice": "Mock preview — backend not yet wired.",
+      "previewMockNotice": "Mock preview: backend not yet wired.",
       "previewOnFirst": "Preview on {document}",
       "previewSkipped": "No applicable input on this document.",
       "previewSubject": "Try it on a sample",

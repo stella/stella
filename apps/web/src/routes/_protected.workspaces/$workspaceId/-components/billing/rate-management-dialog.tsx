@@ -999,8 +999,8 @@ const RateEntryDetails = ({
       <span className="text-muted-foreground text-xs">
         {entry.effectiveFrom}
         {entry.effectiveTo
-          ? ` — ${entry.effectiveTo}`
-          : ` — ${t("billing.rates.ongoing")}`}
+          ? ` – ${entry.effectiveTo}`
+          : ` – ${t("billing.rates.ongoing")}`}
       </span>
     </div>
   );

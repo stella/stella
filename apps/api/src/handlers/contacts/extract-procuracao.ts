@@ -69,17 +69,17 @@ type ProcuracaoExtraction = v.InferOutput<
   typeof extractProcuracaoOutputSchema
 > & { truncated: boolean };
 
-const SYSTEM_PROMPT = `You extract the OUTORGANTE(S) — the person or entity granting power of attorney — from a Brazilian "procuração" (power of attorney) document. Never extract the OUTORGADO (the lawyer/attorney receiving the power) as an outorgante, even when their qualification (OAB number, address) appears alongside the outorgante's.
+const SYSTEM_PROMPT = `You extract the OUTORGANTE(S), the person or entity granting power of attorney, from a Brazilian "procuração" (power of attorney) document. Never extract the OUTORGADO (the lawyer/attorney receiving the power) as an outorgante, even when their qualification (OAB number, address) appears alongside the outorgante's.
 
 Copy every value verbatim from the document; never invent, guess, complete, or normalize a value the document does not state (do not expand abbreviations, do not infer a marital status from context, do not compute a CPF check digit). Return null for any field the document does not state for that person.
 
-A document may name more than one outorgante — for example spouses granting power together, or several co-owners. Return one entry per outorgante, including every one you find.
+A document may name more than one outorgante, for example spouses granting power together, or several co-owners. Return one entry per outorgante, including every one you find.
 
-When an outorgante is a minor represented or assisted by a parent or legal guardian, return the minor as their own entry — using the minor's own name, document numbers, and qualification — and do not also return the parent/guardian as a second entry, unless that parent or guardian is independently named as a separate, additional outorgante in their own right.
+When an outorgante is a minor represented or assisted by a parent or legal guardian, return the minor as their own entry (using the minor's own name, document numbers, and qualification) and do not also return the parent/guardian as a second entry, unless that parent or guardian is independently named as a separate, additional outorgante in their own right.
 
 When the outorgante is a pessoa jurídica (company) represented by an individual (e.g. "outorgante: [empresa], neste ato representada por seu sócio administrador [nome], CPF..."), return the company itself as the outorgante entry (nome = company name, taxId = CNPJ, contactType = "organization"); do not create a second entry for the representing individual.
 
-If the uploaded document is not a procuração, or you cannot identify any outorgante in it, return an empty outorgantes array — do not guess or fabricate an entry.
+If the uploaded document is not a procuração, or you cannot identify any outorgante in it, return an empty outorgantes array; do not guess or fabricate an entry.
 
 Field notes:
 - taxId: CPF (11 digits) for a person, CNPJ (14 digits) for a company. Copy the digits/punctuation as written; do not reformat.

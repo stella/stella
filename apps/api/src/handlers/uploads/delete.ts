@@ -86,7 +86,7 @@ const abortUpload = createSafeHandler(
       return Result.err(
         new HandlerError({
           status: 409,
-          message: "Upload already finalized — use entity delete instead",
+          message: "Upload already finalized; use entity delete instead",
         }),
       );
     }
@@ -141,7 +141,7 @@ const abortUpload = createSafeHandler(
           status: 409,
           message:
             latest.status === "finalized"
-              ? "Upload already finalized — use entity delete instead"
+              ? "Upload already finalized; use entity delete instead"
               : "Finalize already in progress for this upload",
         }),
       );

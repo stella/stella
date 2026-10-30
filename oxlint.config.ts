@@ -448,6 +448,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-section-sign-glyph.fixture.tsx", [
     "no-section-sign-glyph/no-section-sign-glyph",
   ]),
+  fixtureRuleOverride("no-em-dash-copy.fixture.tsx", [
+    "no-em-dash-copy/no-em-dash-copy",
+  ]),
   fixtureRuleOverride("no-inert-autofocus.fixture.tsx", [
     "no-inert-autofocus/no-inert-autofocus",
   ]),
@@ -1856,6 +1859,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-nanoid.ts",
     "./.oxlint-plugins/no-placeholder-stella-mark.ts",
     "./.oxlint-plugins/no-section-sign-glyph.ts",
+    "./.oxlint-plugins/no-em-dash-copy.ts",
     "./.oxlint-plugins/no-inert-autofocus.ts",
     "./.oxlint-plugins/no-constructed-fetch-object.ts",
     "./.oxlint-plugins/no-hand-built-date-range-filter.ts",
@@ -3307,6 +3311,24 @@ const config = defineConfig({
       ],
       rules: {
         "no-known-value-widening/no-known-value-widening": "error",
+      },
+    },
+    {
+      // Shipped source only: tests, fixtures and generated catalogues are not
+      // copy a reader sees.
+      files: ["apps/*/src/**/*.{ts,tsx}", "packages/*/src/**/*.{ts,tsx}"],
+      excludeFiles: [
+        "**/*.{test,spec}.{ts,tsx}",
+        "**/tests/**",
+        "**/__tests__/**",
+        "**/__fixtures__/**",
+        "**/fixtures/**",
+        "**/*.gen.ts",
+        "**/*.generated.ts",
+        "**/generated/**",
+      ],
+      rules: {
+        "no-em-dash-copy/no-em-dash-copy": "error",
       },
     },
     {

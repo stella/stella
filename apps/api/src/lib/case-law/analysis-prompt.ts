@@ -27,7 +27,7 @@ export const ANALYSIS_GUIDELINES = `
 1. Headings are a navigation aid with light substantive insights.
 2. Boilerplate sections (costs, poučení/Belehrung/instruction, routine
    procedural recitals) get a SINGLE heading with NO annotations.
-   Just the heading label — nothing more.
+   Just the heading label, nothing more.
 3. Substantively interesting sections (legal reasoning, key factual
    findings, pivotal arguments) get MULTIPLE annotations pointing at
    specific paragraphs with 1-sentence insights.
@@ -45,7 +45,7 @@ export const ANALYSIS_GUIDELINES = `
 8. Annotations should point at specific paragraphs (narrow
    startAnchorId–endAnchorId ranges), not span entire sections.
 9. Annotation summaries: one sentence, stating what the court
-   decided or found — not what the section "discusses".
+   decided or found, not what the section "discusses".
 10. A paragraph the court numbered shows its number after the
    anchor, as "(¶ 12)". When text you write refers to a paragraph,
    cite the court's number in the decision's language (for example

@@ -152,7 +152,7 @@ describe("row-form {% for %} markers", () => {
     expect(inlineErrors).toEqual([
       {
         message:
-          'Unclosed inline {% for %} — the {% endfor %} must be in the same paragraph in paragraph "{% for deliverable in deliverables %}{{ deliverable.item }}"',
+          'Unclosed inline {% for %}: the {% endfor %} must be in the same paragraph in paragraph "{% for deliverable in deliverables %}{{ deliverable.item }}"',
         paragraphIndex: 0,
         directive: "{% for deliverable in deliverables %}",
       },
@@ -198,7 +198,7 @@ describe("row-form {% for %} markers", () => {
       "{% endfor %}",
     ]);
     expect(inlineErrors[0]?.message).toStartWith(
-      "Unclosed inline {% for %} — the {% endfor %} must be in the same paragraph",
+      "Unclosed inline {% for %}: the {% endfor %} must be in the same paragraph",
     );
   });
 

@@ -643,7 +643,7 @@ Answer every supplied position exactly once, preserving its positionId. Classify
 Cite only exact block IDs supplied in the input; target citations must be blocks of the target document, and any standard block ID must be one of that position's passages. Block IDs belong in targetCitations and delta fields only; never write one inside rationale or recommendation, which a person reads. In rationale and recommendation write "the target" and "the standard", never source keys. rationale states what each side does with the term and how they differ. recommendation is one imperative sentence, or empty when nothing should change.
 
 Fill only the delta fields the position's termKind needs; leave the rest null, empty or false:
-- parameter: targetValue and standardValue. text is the term exactly as that side's block writes it, character for character, including any words in brackets ("12 (twelve) months", "EUR 1,000,000"); value is its number, unit its unit ("months", "EUR", "%"); blockId is the block stating it. Null on a side that states no such term. Do not paraphrase text — it is matched against the block.
+- parameter: targetValue and standardValue. text is the term exactly as that side's block writes it, character for character, including any words in brackets ("12 (twelve) months", "EUR 1,000,000"); value is its number, unit its unit ("months", "EUR", "%"); blockId is the block stating it. Null on a side that states no such term. Do not paraphrase text; it is matched against the block.
 - enumeration: items, one entry per limb, with inTarget, inStandard, and the target's blockId when the target has that limb.
 - presence: term, inTarget, inStandard.
 - language: nothing else.

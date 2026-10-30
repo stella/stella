@@ -165,7 +165,7 @@ const renderSourceBranch = (type: TemplateFieldSourceType): string => {
   const { detail, properties } = SOURCE_BRANCH_DOCS[type];
   const propertyPart =
     properties.length === 0 ? "" : ` ${properties.join("; ")}.`;
-  return `- \`{ "type": "${type}" }\` — ${detail}${propertyPart}`;
+  return `- \`{ "type": "${type}" }\`: ${detail}${propertyPart}`;
 };
 
 /**
@@ -190,8 +190,8 @@ export const buildFieldReference = (): string => {
       "publishes the document.",
     "",
     "Send one entry per field path. Every entry's `path` must be something " +
-      "the template can carry — its own value marker, the `{% if %}` tag " +
-      "that reads it, or the keyed markers that render its registry hit — " +
+      "the template can carry (its own value marker, the `{% if %}` tag " +
+      "that reads it, or the keyed markers that render its registry hit) " +
       "and unknown properties are rejected. A " +
       "property you send replaces what the marker says; one you leave out " +
       "keeps it, except that naming a `source` replaces the whole answer to " +

@@ -2010,7 +2010,7 @@ const NotComparedDisclosure = ({
         <ul className="mt-1 basis-full space-y-0.5">
           {skipped.map((entry) => (
             <li className="leading-6" key={entry.subject}>
-              <BidiText as="span">{`${entry.subject} — ${reasonText(entry.reason)}`}</BidiText>
+              <BidiText as="span">{`${entry.subject}: ${reasonText(entry.reason)}`}</BidiText>
             </li>
           ))}
         </ul>

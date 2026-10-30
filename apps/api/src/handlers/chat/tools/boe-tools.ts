@@ -14,7 +14,7 @@ const lawIdSchema = v.pipe(
   v.string(),
   v.regex(
     /^BOE-[A-Z]-\d{4}-\d+$/,
-    "BOE law id (e.g. BOE-A-1889-4763) — letter section, year, sequence",
+    "BOE law id (e.g. BOE-A-1889-4763): letter section, year, sequence",
   ),
   v.description(
     "BOE document identifier, e.g. BOE-A-1889-4763 for the Código Civil.",
@@ -138,7 +138,7 @@ export const createBoeTools = () => {
             v.pipe(
               v.boolean(),
               v.description(
-                "Include the full consolidated text. Default false — can be very large.",
+                "Include the full consolidated text. Default false; can be very large.",
               ),
             ),
           ),
@@ -217,7 +217,7 @@ export const createBoeTools = () => {
     borme_get_summary: toolDefinition({
       name: "borme_get_summary",
       description:
-        "Fetch the daily BORME (Boletín Oficial del Registro Mercantil) — Spain's commercial registry gazette. Use this for due diligence: company formations, director changes, capital increases, dissolutions published on a given day. The Spanish business registry has no real-time API, so this is the canonical source for recent corporate events.",
+        "Fetch the daily BORME (Boletín Oficial del Registro Mercantil), Spain's commercial registry gazette. Use this for due diligence: company formations, director changes, capital increases, dissolutions published on a given day. The Spanish business registry has no real-time API, so this is the canonical source for recent corporate events.",
       inputSchema: toTanStackToolSchema(v.strictObject({ date: dateSchema })),
     }).server(async ({ date }) => ({
       date,

@@ -78,7 +78,7 @@ export const normalizeSheetNumbersStatement = (limit: number): SQL => sql`
   ),
   -- The key these decisions are losing, not the one they will gain. A citation
   -- that went ambiguous because two decisions shared a sheet-bearing key holds
-  -- no target, so the retraction above cannot reach it — and one of the two
+  -- no target, so the retraction above cannot reach it, and one of the two
   -- candidates leaving the key is exactly what makes the other unique. The key
   -- backfill that follows announces the new key, which says nothing about the
   -- old one, so this is the only place those rows are reachable.

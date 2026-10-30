@@ -127,7 +127,8 @@ export const caseLawProjectionTitle = ({
     canonicalIdentifiers.length === 0
       ? caseNumber
       : canonicalIdentifiers.map(({ value }) => value).join(" · ");
-  return `${reference} — ${court}`;
+  // Preserve the persisted projection title format without re-projecting the corpus.
+  return `${reference} \u2014 ${court}`;
 };
 
 type PublisherFingerprintFields = {

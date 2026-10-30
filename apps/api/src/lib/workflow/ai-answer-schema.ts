@@ -170,6 +170,6 @@ export const answerShapeHint = (
 ): string => {
   const { hint } = ANSWER_CONTEXT[content.type];
   return content.type === "single-select" || content.type === "multi-select"
-    ? `${hint} — ${describeOptions(content)}`
+    ? `${hint}. ${describeOptions(content)}`
     : hint;
 };

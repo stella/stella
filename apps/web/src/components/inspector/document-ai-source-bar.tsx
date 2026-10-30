@@ -616,10 +616,10 @@ const DocxSourceCitationChip = ({
   tooltip: string | undefined;
 }) => {
   const page = useFolioBlockPage(entityId, fieldId, blockId);
-  // Page resolution races the editor's paginator on first mount —
-  // fall back to an em dash so the chip stays the same width and
-  // the layout doesn't reshuffle when the number lands.
-  const label = page !== null ? `p. ${page}` : "p. —";
+  // Page resolution races the editor's paginator on first mount, so
+  // fall back to an ellipsis while the number is pending; the chip keeps
+  // nearly the same width and the layout doesn't reshuffle when it lands.
+  const label = page !== null ? `p. ${page}` : "p. …";
 
   return (
     <button

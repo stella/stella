@@ -1,3 +1,4 @@
+// parser-output-unchanged: only diagnostic punctuation changes; fetched and parsed decision fields are unchanged.
 // parser-output-unchanged: This change only classifies failed listing fetches as source unreachable and does not change parser output.
 // parser-output-unchanged: completion batches use the shared owner with identical items and cursor boundaries; parsed content is unchanged.
 import { panic, Result } from "better-result";
@@ -555,7 +556,7 @@ const materialiseConfiguredWalks = ({
   const refuse = (detail: string): Result<never, AdapterFetchError> =>
     Result.err(
       new AdapterFetchError({
-        message: `${adapterKey}: unusable walk policy — ${detail}`,
+        message: `${adapterKey}: unusable walk policy: ${detail}`,
         adapterKey,
         cursor,
       }),

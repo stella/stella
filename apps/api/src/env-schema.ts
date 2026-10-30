@@ -798,7 +798,7 @@ export const envApiServerSchema = {
       v.trim(),
       v.minLength(
         1,
-        "EDGAR_USER_AGENT must be a non-empty identifying string (e.g. '<App name> <contact@email>') — the SEC returns 403 without one.",
+        "EDGAR_USER_AGENT must be a non-empty identifying string (e.g. '<App name> <contact@email>'); the SEC returns 403 without one.",
       ),
     ),
   ),
@@ -819,7 +819,7 @@ export const envApiServerSchema = {
       v.trim(),
       v.minLength(
         1,
-        "COMPANIES_HOUSE_API_KEY must be a non-empty API key from https://developer.company-information.service.gov.uk — the API returns 401 without one.",
+        "COMPANIES_HOUSE_API_KEY must be a non-empty API key from https://developer.company-information.service.gov.uk; the API returns 401 without one.",
       ),
     ),
   ),

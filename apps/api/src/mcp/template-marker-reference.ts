@@ -51,7 +51,7 @@ const DIRECTIVE_DESCRIPTIONS = {
     title: "Fillable value",
     detail:
       "Any dotted path is a fillable field. Use dotted segments to group " +
-      "(`{{ company.name }}`) and numeric segments — never brackets — to " +
+      "(`{{ company.name }}`) and numeric segments (never brackets) to " +
       "index repeats (`{{ attorneys.0.name }}`). Identical paths anywhere in " +
       "the document collapse to one field and one question. A `| filter` " +
       "chain on the marker configures the field (see below).",
@@ -84,7 +84,7 @@ const DIRECTIVE_DESCRIPTIONS = {
     title: "Repeating block (open)",
     detail:
       "Repeat the enclosed paragraphs once per item in a list. The loop names " +
-      "its item, and the body addresses fields through that name — not " +
+      "its item, and the body addresses fields through that name, not " +
       "through the list path.",
     example: "{% for attorney in attorneys %} {{ attorney.name }} {% endfor %}",
   },
@@ -266,7 +266,7 @@ const NON_DIRECTIVE_RULES = [
       "A tag pair (`{% if %}` or `{% for %}` family) confined to ONE table " +
       "row acts on the whole row: the row repeats per item, or is dropped " +
       "when no branch wins. Inside such a row the pair may either own its " +
-      "paragraphs or hug the row's text — the opener directly in FRONT of one " +
+      "paragraphs or hug the row's text: the opener directly in FRONT of one " +
       "cell's text and the closer directly BEHIND a later cell's text, which " +
       "keeps the row readable as a table. A repeating row: first cell " +
       "`{% for d in deliverables %}{{ d.item }}`, last cell " +
@@ -337,7 +337,7 @@ export const buildMarkerReference = (): string => {
       "prints a value; `{% ... %}` opens or closes a block and sits alone in " +
       "its paragraph (`{%p ... %}` says so explicitly, `{%tr ... %}` makes the " +
       "table row the unit). Inside a table row a pair may instead wrap the " +
-      "row's own text — see the table rule.",
+      "row's own text; see the table rule.",
     "",
     "Marker kinds:",
     directiveLines,

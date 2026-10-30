@@ -974,7 +974,7 @@ describe("chat thread messages", () => {
     expect(html).toContain(">1 analysis<");
     expect(html).not.toContain("3 steps");
     expect(html).not.toContain("<details open");
-    expect(html).toContain("This step failed — stella will work around it.");
+    expect(html).toContain("This step failed; stella will work around it.");
     expect(html).toContain(">Show details<");
     expect(html).toContain("Here is the answer.");
   });

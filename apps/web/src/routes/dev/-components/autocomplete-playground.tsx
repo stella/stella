@@ -399,7 +399,7 @@ export const AutocompletePlayground = () => {
     <div className="folio-ai-host flex h-full w-full flex-col gap-4 p-8">
       <header className="flex flex-col gap-1">
         <h1 className="text-xl font-semibold">
-          stella autocomplete — dev playground
+          stella autocomplete: dev playground
         </h1>
         <p className="text-muted-foreground text-sm">
           Bare ProseMirror, no paged renderer. Type and pause; Tab to accept
@@ -417,7 +417,7 @@ export const AutocompletePlayground = () => {
           last request sent to model
         </div>
         {debugInfo === null ? (
-          <div className="opacity-60">— none yet —</div>
+          <div className="opacity-60">(none yet)</div>
         ) : (
           <div className="flex flex-col gap-1">
             <div>

@@ -96,7 +96,7 @@ export const Route = createFileRoute(
       if (import.meta.env.DEV) {
         // oxlint-disable-next-line no-console -- dev-only stack trace to debug stale doubled URLs
         console.trace(
-          `[stella] beforeLoad rejected viewId="${params.viewId}" — redirecting. URL:`,
+          `[stella] beforeLoad rejected viewId="${params.viewId}"; redirecting. URL:`,
           globalThis.location.href,
         );
       }

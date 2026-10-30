@@ -64,7 +64,7 @@ export const locateAbbreviatedProvisionCitations = (
   return citations;
 };
 
-const CJEU_DASH_CHARACTERS = "-‑–—­";
+const CJEU_DASH_CHARACTERS = "-‑–\u2014­";
 
 const normalizeCjeuCaseNumber = (value: string): string =>
   Array.from(value, (character) => {
