@@ -136,14 +136,22 @@ const UNSUPPORTED_SCHEMA_KEYWORDS = [
 ] as const;
 
 /** Pull the `tools` array from a tools/list body (bare, `{tools}`, or envelope). */
+const featureCapabilityNamesSchema = v.pipe(
+  v.array(v.pipe(v.string(), v.minLength(1), v.maxLength(256))),
+  v.maxLength(10_000),
+);
+const featureToolNamesSchema = v.pipe(
+  v.array(v.pipe(v.string(), v.regex(MCP_TOOL_NAME_PATTERN))),
+  v.maxLength(MAX_TOOLS),
+);
 const featureAccessSnapshotSchema = v.object({
-  capabilities: v.pipe(
-    v.array(v.pipe(v.string(), v.minLength(1), v.maxLength(256))),
-    v.maxLength(10_000),
-  ),
-  tools: v.pipe(
-    v.array(v.pipe(v.string(), v.regex(MCP_TOOL_NAME_PATTERN))),
-    v.maxLength(MAX_TOOLS),
+  capabilities: featureCapabilityNamesSchema,
+  tools: featureToolNamesSchema,
+  disabled: v.exactOptional(
+    v.object({
+      capabilities: featureCapabilityNamesSchema,
+      tools: featureToolNamesSchema,
+    }),
   ),
 });
 
@@ -536,6 +544,19 @@ export const validateFetchedToolsList = (rawBody: string): TrustResult => {
   );
   if (!featureAccess.success) {
     return { ok: false, violation: "feature access snapshot is invalid" };
+  }
+  const disabled = featureAccess.output.disabled;
+  if (
+    disabled !== undefined &&
+    (disabled.tools.some((name) => featureAccess.output.tools.includes(name)) ||
+      disabled.capabilities.some((id) =>
+        featureAccess.output.capabilities.includes(id),
+      ))
+  ) {
+    return {
+      ok: false,
+      violation: "feature access snapshot contains contradictory decisions",
+    };
   }
   return {
     ok: true,

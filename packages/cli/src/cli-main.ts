@@ -36,7 +36,11 @@ import {
   resolveCommandTree,
 } from "./registry-refresh.js";
 import { timingEnd } from "./timing.js";
-import { unavailableCommandError } from "./unavailable-command.js";
+import {
+  commandUnavailableExitCode,
+  commandUnavailableMessage,
+  resolveCommandUnavailableCause,
+} from "./unavailable-command.js";
 
 const resolvePreamble = async (
   serverFlag: string | undefined,
@@ -187,6 +191,11 @@ const main = async (): Promise<void> => {
         unsupportedLine = outcome.nudge;
       }
     }
+    if (outcome.status === "incompatible") {
+      process.stderr.write(`${commandUnavailableMessage(outcome.cause)}\n`);
+      process.exitCode = EXIT_CODES.server;
+      return;
+    }
     if (outcome.status === "admission-refused") {
       refuseAdmission(outcome.refusal, argv);
       return;
@@ -202,7 +211,9 @@ const main = async (): Promise<void> => {
     unsupportedLine = await cachedUnsupportedLine({ serverUrl, cacheEnv });
   }
   if (!versionExempt && unsupportedLine !== undefined) {
-    process.stderr.write(`${unsupportedLine}\n`);
+    process.stderr.write(
+      `${commandUnavailableMessage({ type: "protocol-incompatible", message: unsupportedLine })}\n`,
+    );
     process.exitCode = EXIT_CODES.server;
     return;
   }
@@ -215,14 +226,18 @@ const main = async (): Promise<void> => {
     ...(currentRegistry === undefined ? {} : { registry: currentRegistry }),
     ...(featureAccess === undefined ? {} : { featureAccess }),
   });
-  const unavailable = unavailableCommandError({
+  const unavailable = resolveCommandUnavailableCause({
     argv,
     baked: generatedRouteMap,
     current: tree,
+    token,
+    serverUrl,
+    evidence: currentRegistry,
+    featureAccess,
   });
   if (unavailable !== undefined) {
-    process.stderr.write(unavailable);
-    process.exitCode = EXIT_CODES.server;
+    process.stderr.write(`${commandUnavailableMessage(unavailable)}\n`);
+    process.exitCode = commandUnavailableExitCode(unavailable);
     return;
   }
   if (drift !== undefined) {
@@ -266,6 +281,11 @@ const main = async (): Promise<void> => {
         force: true,
         configDir,
       });
+      if (outcome.status === "incompatible") {
+        process.stderr.write(`${commandUnavailableMessage(outcome.cause)}\n`);
+        process.exitCode = EXIT_CODES.server;
+        return;
+      }
       if (outcome.status === "admission-refused") {
         refuseAdmission(outcome.refusal, argv);
         return;

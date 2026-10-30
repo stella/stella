@@ -640,3 +640,58 @@ test("every curated command binding matches the current server registry and prot
     await rm(directory, { recursive: true, force: true });
   }
 }, 30_000);
+
+test("caller feature denials retain valid decisions and reject malformed or contradictory evidence", () => {
+  const featureAccess = {
+    tools: ["list_matters"],
+    capabilities: ["lists.list"],
+    disabled: {
+      tools: ["list_time_entries"],
+      capabilities: ["lists.verifications.get"],
+    },
+  };
+  const envelope = (snapshot: unknown) =>
+    JSON.stringify({
+      tools: [validTool()],
+      _meta: { featureAccess: snapshot },
+    });
+  const valid = validateFetchedToolsList(envelope(featureAccess));
+  expect(valid.ok).toBe(true);
+  if (valid.ok) {
+    expect(valid.featureAccess).toEqual(featureAccess);
+  }
+  for (const disabled of [
+    { tools: ["contains spaces"], capabilities: [] },
+    { tools: [], capabilities: [""] },
+    { tools: [], capabilities: ["x".repeat(257)] },
+    {
+      tools: Array.from({ length: MAX_TOOLS + 1 }, () => "list_time_entries"),
+      capabilities: [],
+    },
+    {
+      tools: [],
+      capabilities: Array.from(
+        { length: 10_001 },
+        () => "lists.verifications.get",
+      ),
+    },
+    { tools: "list_time_entries", capabilities: [] },
+    { tools: [] },
+    null,
+  ]) {
+    expect(
+      validateFetchedToolsList(envelope({ ...featureAccess, disabled })),
+    ).toEqual({ ok: false, violation: "feature access snapshot is invalid" });
+  }
+  for (const disabled of [
+    { tools: ["list_matters"], capabilities: [] },
+    { tools: [], capabilities: ["lists.list"] },
+  ]) {
+    expect(
+      validateFetchedToolsList(envelope({ ...featureAccess, disabled })),
+    ).toEqual({
+      ok: false,
+      violation: "feature access snapshot contains contradictory decisions",
+    });
+  }
+});

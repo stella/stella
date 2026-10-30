@@ -35,6 +35,7 @@ import {
   MCP_ADVANCED_RESOURCE_SCOPES,
   MCP_OAUTH_PROTOCOL_SCOPES,
   STELLA_API_CONTRACT,
+  STELLA_MCP_API_CONTRACT_HEADER,
 } from "@/api/mcp/constants";
 import { MCP_ERROR_CODES } from "@/api/mcp/error-codes";
 import { hasGrantedScope } from "@/api/mcp/gateway/static-tool-visibility";
@@ -288,6 +289,7 @@ await Bun.write(
 
 export const MCP_CAPABILITY_EXECUTORS = ${JSON.stringify(MCP_CAPABILITY_EXECUTORS, null, 2)} as const;
 export const MCP_HTTP_PATH = ${JSON.stringify(MCP_ADVANCED_HTTP_PATH)} as const;
+export const MCP_API_CONTRACT_HEADER = ${JSON.stringify(STELLA_MCP_API_CONTRACT_HEADER)} as const;
 export const MCP_DISCOVERY_PATH = ${JSON.stringify(MCP_ADVANCED_DISCOVERY_PATH)} as const;
 export const MCP_TOOL_NAME_MAX_LENGTH = ${MCP_TOOL_NAME_MAX_LENGTH};
 export const MCP_TOOL_NAME_PATTERN_SOURCE = ${JSON.stringify(MCP_TOOL_NAME_PATTERN.source)} as const;

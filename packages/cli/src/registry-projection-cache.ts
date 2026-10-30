@@ -21,6 +21,7 @@ const cacheSchema = v.strictObject({
   fetchedAt: v.number(),
   raw: v.strictObject({
     rawBody: v.string(),
+    apiProtocol: v.exactOptional(v.string()),
     cliMinimum: v.exactOptional(v.string()),
     cliLatest: v.exactOptional(v.string()),
     grantedScopes: names,

@@ -17,6 +17,7 @@ import {
 import type { CallerFeatureAccess } from "./feature-command-projection.js";
 import type { CapabilityCatalogEntry } from "./generate-capability-tree.js";
 import { buildCliRouteTree } from "./generate-capability-tree.js";
+import { CLI_SUPPORTED_API_PROTOCOLS } from "./generated/api-contract.js";
 import { CLI_VERSION } from "./generated/cli-version.js";
 import { generatedRouteMap } from "./generated/route-map.js";
 import { generatedToolAnnotations as TOOL_ANNOTATIONS } from "./generated/tool-annotations.js";
@@ -52,6 +53,7 @@ import type {
   RouteNode,
   ToolAnnotation,
 } from "./route-types.js";
+import type { CommandUnavailableCause } from "./unavailable-command.js";
 
 const SNAPSHOT_URL = new URL(
   "generated/registry-snapshot.json",
@@ -290,6 +292,13 @@ export const resolveCommandTree = async ({
 
 /** The outcome of a cache-refresh attempt (spec S5.3/S5.5 + addendum nudge). */
 export type RefreshOutcome =
+  | {
+      status: "incompatible";
+      cause: Extract<
+        CommandUnavailableCause,
+        { type: "protocol-incompatible" }
+      >;
+    }
   | { status: "skipped"; reason: "no-cache" | "fresh" }
   | { status: "failed"; warning: string }
   | { status: "admission-refused"; refusal: CliActionAdmissionRefusal }
@@ -391,6 +400,22 @@ export const refreshRegistryCache = async ({
     return {
       status: "failed",
       warning: `registry refresh skipped: ${raw.error.message}`,
+    };
+  }
+
+  const apiProtocol = raw.value.apiProtocol;
+  if (
+    apiProtocol !== undefined &&
+    !CLI_SUPPORTED_API_PROTOCOLS.some(
+      (supported) => String(supported) === apiProtocol,
+    )
+  ) {
+    return {
+      status: "incompatible",
+      cause: {
+        type: "protocol-incompatible",
+        message: `Server API protocol ${apiProtocol} is incompatible; this CLI supports ${CLI_SUPPORTED_API_PROTOCOLS.join(", ")}.`,
+      },
     };
   }
 

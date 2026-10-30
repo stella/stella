@@ -6,6 +6,7 @@ import path from "node:path";
 import { PassThrough } from "node:stream";
 
 import { respondToMcpLifecycle } from "../tests/mcp-test-lifecycle.js";
+import { scopeGranted, scopePreflightFailure } from "./auth/command-scopes.js";
 import { CLI_IDENTITY_SCOPES } from "./auth/constants.js";
 import { parseScopesFlag } from "./auth/scopes.js";
 import type { Context } from "./context.js";
@@ -27,9 +28,9 @@ import {
   requestIdLine,
   reservedFlagUsageError,
   runLeafCommand,
-  scopePreflightFailure,
   toolErrorLines,
 } from "./run-leaf-command.js";
+import { commandUnavailableMessage } from "./unavailable-command.js";
 
 const specWith = (flags: readonly FlagSpec[]): LeafCommandSpec => ({
   commandPath: ["x", "y"],
@@ -995,11 +996,54 @@ describe("scopePreflightFailure: the hint must survive a re-parse", () => {
         token: tokenGranting(granted),
       });
       expect(result === undefined).toBe(admitted);
+      expect(
+        scopeGranted({ token: tokenGranting(granted), scope: required }),
+      ).toBe(admitted);
       if (!admitted) {
-        expect(result?.missingScope).toBe(required);
+        expect(result?.scope).toBe(`stella:${required}`);
       }
     },
   );
+
+  test("current server grants override token claims and login retains the selected server", () => {
+    const failure = scopePreflightFailure({
+      scope: "billing_write",
+      token: tokenGranting("stella:billing_write"),
+      grantedScopes: ["openid", "stella:read"],
+      serverUrl: "https://tenant.example",
+    });
+    expect(failure).toEqual({
+      type: "missing-scope",
+      scope: "stella:billing_write",
+      loginCommand:
+        "stella auth login --scopes stella:read,stella:billing_write --server https://tenant.example",
+    });
+    expect(
+      scopePreflightFailure({
+        scope: "billing_write",
+        token: tokenGranting("stella:read"),
+        grantedScopes: ["stella:billing_write"],
+      }),
+    ).toBeUndefined();
+    if (failure === undefined) {
+      throw new TypeError("Missing scope evidence required");
+    }
+    expect(commandUnavailableMessage(failure)).toContain(
+      "stella:billing_write",
+    );
+    expect(commandUnavailableMessage(failure)).toContain(failure.loginCommand);
+  });
+
+  test("login hints quote the selected server as one shell argument", () => {
+    const failure = scopePreflightFailure({
+      scope: "billing_write",
+      token: tokenGranting("stella:read"),
+      serverUrl: "https://tenant.example/?q=a'b",
+    });
+    expect(failure?.loginCommand).toBe(
+      "stella auth login --scopes stella:read,stella:billing_write --server 'https://tenant.example/?q=a'\\''b'",
+    );
+  });
 
   // The hint used to echo every granted scope, identity scopes included, so
   // following it re-ran login without `offline_access` and left the session
@@ -1035,7 +1079,7 @@ describe("scopePreflightFailure: the hint must survive a re-parse", () => {
 describe("toolErrorLines", () => {
   const FLAGS = new Set(["matter_id", "entity_id"]);
 
-  test("an unknown tool explains organization availability", () => {
+  test("an unknown tool stays distinct from disabled features and version incompatibility", () => {
     expect(
       toolErrorLines({
         code: "unknown_tool",
@@ -1044,7 +1088,10 @@ describe("toolErrorLines", () => {
         issues: [],
       }),
     ).toEqual([
-      "This tool is not enabled for this organization. Check enabled features and your access.",
+      commandUnavailableMessage({
+        type: "unknown-to-server",
+        command: "Unknown tool: invoke_capability",
+      }),
     ]);
   });
 

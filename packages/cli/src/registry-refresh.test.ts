@@ -21,6 +21,7 @@ import {
 import {
   PROJECTION_TTL_MS,
   projectionCachePath,
+  writeProjectionCache,
 } from "./registry-projection-cache.js";
 import {
   type CurrentRegistry,
@@ -967,4 +968,38 @@ describe("trusted projections survive separate invocations", () => {
     await refreshRegistryCache(options);
     expect(fetches).toBe(4);
   });
+});
+
+test("cached incompatible API protocol fails closed without fetching another registry", async () => {
+  const env = await makeCacheEnv();
+  const options = {
+    serverOrigin: ORIGIN,
+    token: "cached-protocol-token",
+    configDir: env.XDG_CACHE_HOME,
+    env,
+    now: 1_800_000_000_000,
+    currentVersion: CLI_VERSION,
+  };
+  const written = await writeProjectionCache({
+    filePath: projectionCachePath(options),
+    raw: { rawBody: toolsBody(["list_matters"]), apiProtocol: "999" },
+    now: options.now,
+  });
+  expect(written.isOk()).toBe(true);
+  let fetches = 0;
+  const outcome = await refreshRegistryCache({
+    ...options,
+    fetchRaw: async () => {
+      fetches += 1;
+      return await okFetch(toolsBody(["list_matters"]))();
+    },
+  });
+  expect(outcome).toEqual({
+    status: "incompatible",
+    cause: {
+      type: "protocol-incompatible",
+      message: "Server API protocol 999 is incompatible; this CLI supports 3.",
+    },
+  });
+  expect(fetches).toBe(0);
 });

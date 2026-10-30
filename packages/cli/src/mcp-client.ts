@@ -22,6 +22,7 @@ import {
 import { apiFetch } from "./api-fetch.js";
 import { CLI_LATEST_HEADER, CLI_MINIMUM_HEADER } from "./cli-version-nudge.js";
 import { CLI_VERSION } from "./generated/cli-version.js";
+import { MCP_API_CONTRACT_HEADER } from "./generated/mcp-contract.js";
 import { MCP_HTTP_PATH } from "./mcp-constants.js";
 import { timingEnd } from "./timing.js";
 
@@ -281,6 +282,7 @@ export const listTools = async ({
 /** The raw `tools/list` body plus server policy and omission-evidence headers. */
 export type RawToolsList = {
   rawBody: string;
+  apiProtocol?: string;
   cliMinimum?: string;
   cliLatest?: string;
   /** Effective scopes echoed by the authenticated server response. */
@@ -344,6 +346,10 @@ export const fetchToolsListRaw = async ({
     );
   }
   const out: RawToolsList = { rawBody: evidence.rawBody };
+  const apiProtocol = evidence.headers.get(MCP_API_CONTRACT_HEADER);
+  if (apiProtocol !== null) {
+    out.apiProtocol = apiProtocol;
+  }
   const cliMinimum = evidence.headers.get(CLI_MINIMUM_HEADER);
   if (cliMinimum !== null) {
     out.cliMinimum = cliMinimum;

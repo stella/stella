@@ -1001,6 +1001,23 @@ export const accessibleFeatureCapabilityIds = async (
     )
     .map((entry) => entry.id);
 
+export const disabledFeatureCapabilityIds = async (
+  context: McpRequestContext,
+): Promise<string[]> =>
+  (await getCatalog())
+    .filter(
+      (entry) =>
+        entry.featureAccess === "required" &&
+        !isMcpDescriptorFeatureEnabled({
+          context,
+          kind: "capabilities",
+          id: entry.id,
+          featureId: entry.featureId,
+        }),
+    )
+    .map((entry) => entry.id)
+    .toSorted();
+
 /**
  * Catalog capability ids gated off in this deployment, sorted: the ids
  * `list_capabilities` hides and describe/invoke refuse with `feature_disabled`.

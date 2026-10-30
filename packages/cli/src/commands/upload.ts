@@ -3,6 +3,7 @@ import type { Command } from "@stricli/core";
 import { Result } from "better-result";
 
 import { actionAdmissionRefusalOutput } from "../action-admission-refusal.js";
+import { scopeGranted } from "../auth/command-scopes.js";
 import type { Context } from "../context.js";
 import { formatCapabilityCommand } from "../generate-capability-tree.js";
 import { EXIT_CODES, resolveMcpErrorCodeExit } from "../mcp-constants.js";
@@ -18,7 +19,6 @@ import {
   renderClientError,
   renderToolError,
   reservedFlagUsageError,
-  scopeGranted,
   setExit,
   writersFor,
 } from "../run-leaf-command.js";

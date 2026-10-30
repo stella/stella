@@ -9,6 +9,7 @@ import { Result } from "better-result";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 
+import { scopePreflightFailure } from "./auth/command-scopes.js";
 import type { Context } from "./context.js";
 import { MCP_CAPABILITY_EXECUTORS } from "./generated/mcp-contract.js";
 import { callTool, type CallToolResult } from "./mcp-client.js";
@@ -24,13 +25,13 @@ import {
   renderCommandResult,
   RESERVED_FLAG_KEYS,
   reservedFlagUsageError,
-  scopePreflightFailure,
   setExit,
   setPath,
   streamOrRenderAllPages,
   writeInputSchema,
   writersFor,
 } from "./run-leaf-command.js";
+import { commandUnavailableMessage } from "./unavailable-command.js";
 
 type LeafFlags = Record<string, unknown>;
 
@@ -121,11 +122,10 @@ export const runCapabilityCommand = async ({
     additionalScopes: spec.additionalScopes,
     scope: spec.scope,
     token,
+    serverUrl,
   });
   if (scopeFailure !== undefined) {
-    writers.stderr(
-      `Missing scope stella:${scopeFailure.missingScope}. Re-run '${scopeFailure.loginCommand}' to grant the complete scope set.\n`,
-    );
+    writers.stderr(`${commandUnavailableMessage(scopeFailure)}\n`);
     setExit(context, EXIT_CODES.auth);
     return;
   }

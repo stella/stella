@@ -1,10 +1,4 @@
 import { panic, Result } from "better-result";
-// The generic executor every generated leaf command dispatches through (spec 051
-// S3/S4). It builds the tool-args object from parsed flags (or the `--input`
-// escape hatch), runs the client-side scope precheck, confirms destructive ops,
-// calls the MCP endpoint (following cursors under `--all`, bounded by the
-// ceilings), and renders the result. Exit codes are set on `process.exitCode`
-// directly so stricli's `??=` never overrides them.
 import { readFile } from "node:fs/promises";
 import { createInterface } from "node:readline/promises";
 import { text as readStreamText } from "node:stream/consumers";
@@ -19,13 +13,11 @@ import {
   actionAdmissionRefusalOutput,
   readCliActionAdmissionRefusal,
 } from "./action-admission-refusal.js";
-import { decodeAccessTokenClaims } from "./auth/jwt.js";
-import { RESOURCE_SCOPE_PREFIX } from "./auth/scopes.js";
+import { scopePreflightFailure } from "./auth/command-scopes.js";
 import type { Context } from "./context.js";
 import { expandSchemaDefs } from "./expand-schema-defs.js";
 import { flagKey } from "./flag-name.js";
 import { kebabCase } from "./generate-route-map.js";
-import { MCP_SCOPE_IMPLICATIONS } from "./generated/mcp-contract.js";
 import { normalizeInputKeyCasing } from "./input-key-casing.js";
 import {
   LOCAL_FILE_FLAG,
@@ -68,6 +60,13 @@ import type {
   LeafCommandSpec,
 } from "./route-types.js";
 import { timingEnd } from "./timing.js";
+// The generic executor every generated leaf command dispatches through (spec 051
+// S3/S4). It builds the tool-args object from parsed flags (or the `--input`
+// escape hatch), runs the client-side scope precheck, confirms destructive ops,
+// calls the MCP endpoint (following cursors under `--all`, bounded by the
+// ceilings), and renders the result. Exit codes are set on `process.exitCode`
+// directly so stricli's `??=` never overrides them.
+import { commandUnavailableMessage } from "./unavailable-command.js";
 
 export { flagKey } from "./flag-name.js";
 export { RESERVED_FLAG_KEYS } from "./reserved-flag-keys.js";
@@ -420,81 +419,6 @@ export const parseInputObject = async ({
   // would reject lenient agent spellings before that canonical reader sees
   // them.
   return parsed.value;
-};
-
-export const scopeGranted = ({
-  token,
-  scope,
-}: {
-  token: string;
-  scope: string;
-}): boolean => {
-  const claims = decodeAccessTokenClaims(token);
-  if (claims?.scope === undefined) {
-    // Opaque token or no scope claim: cannot verify locally, let the server rule.
-    return true;
-  }
-  return claims.scope.split(/\s+/u).includes(`stella:${scope}`);
-};
-
-export const scopePreflightFailure = ({
-  additionalScopes,
-  scope,
-  token,
-}: {
-  additionalScopes?: readonly string[] | undefined;
-  scope?: string | undefined;
-  token: string;
-}): { loginCommand: string; missingScope: string } | undefined => {
-  const claims = decodeAccessTokenClaims(token);
-  if (claims?.scope === undefined) {
-    // Opaque token or no scope claim: cannot verify locally, let the server rule.
-    return undefined;
-  }
-
-  const requiredScopes: string[] = [];
-  if (scope !== undefined) {
-    requiredScopes.push(scope);
-  }
-  if (additionalScopes !== undefined) {
-    requiredScopes.push(...additionalScopes);
-  }
-
-  const grantedScopes = claims.scope
-    .split(/\s+/u)
-    .filter((grantedScope) => grantedScope.length > 0);
-  const grantedScopeSet = new Set(grantedScopes);
-  const missingScope = requiredScopes.find(
-    (requiredScope) =>
-      !grantedScopeSet.has(`${RESOURCE_SCOPE_PREFIX}${requiredScope}`) &&
-      !MCP_SCOPE_IMPLICATIONS.some(
-        ({ grant, scope: impliedScope }) =>
-          impliedScope === `${RESOURCE_SCOPE_PREFIX}${requiredScope}` &&
-          grantedScopeSet.has(grant),
-      ),
-  );
-  if (missingScope === undefined) {
-    return undefined;
-  }
-
-  // `--scopes` takes resource scopes only (the CLI always requests the
-  // identity set itself), so the hint must not echo granted identity scopes
-  // back: a command that `parseScopesFlag` rejects is a hint that loses the
-  // user their refresh token.
-  const requestedScopes = [
-    ...new Set([
-      ...grantedScopes.filter((grantedScope) =>
-        grantedScope.startsWith(RESOURCE_SCOPE_PREFIX),
-      ),
-      ...requiredScopes.map(
-        (requiredScope) => `${RESOURCE_SCOPE_PREFIX}${requiredScope}`,
-      ),
-    ]),
-  ];
-  return {
-    loginCommand: `stella auth login --scopes ${requestedScopes.join(",")}`,
-    missingScope,
-  };
 };
 
 export const confirmDestructive = async ({
@@ -1144,7 +1068,10 @@ export const toolErrorLines = (
 ): string[] => {
   if (envelope.code === "unknown_tool") {
     return [
-      "This tool is not enabled for this organization. Check enabled features and your access.",
+      commandUnavailableMessage({
+        type: "unknown-to-server",
+        command: envelope.message,
+      }),
     ];
   }
   const admission = readCliActionAdmissionRefusal(envelope);
@@ -1401,11 +1328,10 @@ export const runLeafCommand = async ({
     additionalScopes: spec.additionalScopes,
     scope: spec.scope,
     token,
+    serverUrl,
   });
   if (scopeFailure !== undefined) {
-    writers.stderr(
-      `Missing scope stella:${scopeFailure.missingScope}. Re-run '${scopeFailure.loginCommand}' to grant the complete scope set.\n`,
-    );
+    writers.stderr(`${commandUnavailableMessage(scopeFailure)}\n`);
     setExit(context, EXIT_CODES.auth);
     return;
   }
