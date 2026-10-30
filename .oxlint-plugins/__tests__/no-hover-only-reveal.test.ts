@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 
+import type { HoverRevealExemptionKind } from "../no-hover-only-reveal.ts";
 import { lintSingleRule } from "./lint-single-rule.ts";
 
 const lint = async (source: string) =>
@@ -125,4 +126,192 @@ test("checks template parts and decoration boundaries", async () => {
         'const f = <button className={cn(active && "opacity-0 hover:opacity-100")} />;',
     ),
   ).toEqual([1, 2, 5, 6]);
+});
+
+const exemptionScopes = [
+  { prefix: "", covering: [""] },
+  { prefix: "md:", covering: ["", "md:"] },
+  { prefix: "lg:", covering: ["", "lg:"] },
+  { prefix: "dark:", covering: ["", "dark:"] },
+  { prefix: "md:dark:", covering: ["", "md:", "dark:", "md:dark:"] },
+  { prefix: "focus-visible:", covering: ["", "focus-visible:"] },
+  {
+    prefix: "has-[[aria-expanded=true]]:",
+    covering: ["", "has-[[aria-expanded=true]]:"],
+  },
+];
+
+type UtilityExemptionFixture = {
+  name: string;
+  hide: string;
+  show: string;
+  decision: string;
+};
+type ElementExemptionFixture = {
+  name: string;
+  render: (classes: string) => string;
+};
+type ExemptionFixtures =
+  | {
+      type: "utility";
+      cases: readonly [UtilityExemptionFixture, ...UtilityExemptionFixture[]];
+    }
+  | {
+      type: "element";
+      cases: readonly [ElementExemptionFixture, ...ElementExemptionFixture[]];
+    };
+
+const exemptionFixtures = {
+  touch: {
+    type: "utility",
+    cases: [
+      {
+        name: "touch opacity reveal",
+        hide: "opacity-0",
+        show: "opacity-100",
+        decision: "pointer-coarse:opacity-100",
+      },
+      {
+        name: "any-pointer visibility reveal",
+        hide: "invisible",
+        show: "visible",
+        decision: "any-pointer-coarse:visible",
+      },
+      {
+        name: "important touch reveal",
+        hide: "opacity-0!",
+        show: "opacity-100!",
+        decision: "pointer-coarse:opacity-100!",
+      },
+      {
+        name: "explicit touch display hide",
+        hide: "opacity-0",
+        show: "opacity-100",
+        decision: "pointer-coarse:hidden",
+      },
+      {
+        name: "explicit touch opacity hide",
+        hide: "opacity-0",
+        show: "opacity-100",
+        decision: "pointer-coarse:opacity-0",
+      },
+      {
+        name: "explicit touch visibility hide",
+        hide: "invisible",
+        show: "visible",
+        decision: "pointer-coarse:invisible",
+      },
+    ],
+  },
+  state: {
+    type: "utility",
+    cases: [
+      {
+        name: "data state reveal",
+        hide: "opacity-0",
+        show: "opacity-100",
+        decision: "data-[state=open]:opacity-100",
+      },
+      {
+        name: "has state reveal",
+        hide: "opacity-0",
+        show: "opacity-100",
+        decision: "has-[:checked]:opacity-100",
+      },
+      {
+        name: "important state reveal",
+        hide: "invisible!",
+        show: "visible!",
+        decision: "aria-expanded:visible!",
+      },
+    ],
+  },
+  "pointer-inert": {
+    type: "utility",
+    cases: [
+      {
+        name: "pointer-inert decoration",
+        hide: "opacity-0",
+        show: "opacity-100",
+        decision: "pointer-events-none",
+      },
+    ],
+  },
+  decoration: {
+    type: "element",
+    cases: [
+      {
+        name: "aria-hidden",
+        render: (classes) => `<span aria-hidden className="${classes}" />`,
+      },
+      {
+        name: "icon",
+        render: (classes) => `<ChevronIcon className="${classes}" />`,
+      },
+    ],
+  },
+} as const satisfies Record<HoverRevealExemptionKind, ExemptionFixtures>;
+
+for (const group of Object.values(exemptionFixtures)) {
+  switch (group.type) {
+    case "utility":
+      for (const { name, hide, show, decision } of group.cases) {
+        test(`every exemption covers the hide scope: ${name}`, async () => {
+          const source: string[] = [];
+          const expected: number[] = [];
+          for (const hideScope of exemptionScopes) {
+            for (const exemptionScope of exemptionScopes) {
+              source.push(
+                `const c${source.length} = "${hideScope.prefix}${hide} ${hideScope.prefix}hover:${show} ${exemptionScope.prefix}${decision}";`,
+              );
+              if (!hideScope.covering.includes(exemptionScope.prefix)) {
+                expected.push(source.length);
+              }
+            }
+          }
+          expect(await lint(source.join("\n"))).toEqual(expected);
+        });
+      }
+      break;
+    case "element":
+      for (const { name, render } of group.cases) {
+        test(`element decoration covers every hide scope: ${name}`, async () => {
+          const source = exemptionScopes.map(
+            ({ prefix }, index) =>
+              `const c${index} = ${render(`${prefix}opacity-0 ${prefix}hover:opacity-100`)};`,
+          );
+          expect(await lint(source.join("\n"))).toEqual([]);
+        });
+      }
+      break;
+    default:
+      group satisfies never;
+  }
+}
+
+test("conditional element decoration does not exempt a hide", async () => {
+  const source: string[] = [];
+  const expected: number[] = [];
+  for (const { prefix } of exemptionScopes) {
+    const classes = `${prefix}opacity-0 ${prefix}hover:opacity-100`;
+    source.push(
+      `const c${source.length} = <span aria-hidden={false} className="${classes}" />;`,
+    );
+    expected.push(source.length);
+    source.push(
+      `const c${source.length} = <span aria-hidden={hidden} className="${classes}" />;`,
+    );
+    expected.push(source.length);
+  }
+  expect(await lint(source.join("\n"))).toEqual(expected);
+});
+
+test("pointer-inert decisions must cover touch without hover", async () => {
+  expect(
+    await lint(`const a = "opacity-0 hover:opacity-100 md:pointer-events-none";
+const b = "opacity-0 hover:opacity-100 hover:pointer-events-none";
+const c = "opacity-0 hover:opacity-100 has-[:hover]:pointer-events-none";
+const d = "opacity-0 hover:opacity-100 pointer-events-none";
+const e = "opacity-0 hover:opacity-100 pointer-events-none hover:pointer-events-auto";`),
+  ).toEqual([1, 2, 3, 5]);
 });

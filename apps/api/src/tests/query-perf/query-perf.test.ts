@@ -4,6 +4,7 @@ import { getTableName, is, sql } from "drizzle-orm";
 import { PgTable } from "drizzle-orm/pg-core";
 
 import * as schema from "@/api/db/schema";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import { READ_BUDGETS } from "@/api/lib/db/read-budgets";
 import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
@@ -11,7 +12,15 @@ import {
   corpusProjectionUnpublishedIntentProbe,
 } from "@/api/lib/legal-search/corpus-index-projection-convergence";
 import { DECLARED_SCHEDULER_JOBS } from "@/api/lib/scheduler/jobs";
+import { scanOccurrences } from "@/api/tests/query-plans/plan-walker";
 
+import {
+  CASE_LAW_SEARCH_FETCH_LIMIT,
+  CASE_LAW_SEARCH_SIZES,
+  caseLawSearchStatement,
+  seedCaseLawSearch,
+  unboundedCaseLawSearchStatement,
+} from "./case-law-search-fixture";
 import {
   CASE_LAW_SCENARIOS,
   type CaseLawScenarioGeneration,
@@ -28,6 +37,7 @@ import {
   scaleViolations,
   shapeViolations,
 } from "./measurement";
+import { QUERY_PERF_OWNER_DEADLINES } from "./owner-deadlines";
 import { QUERY_PERF_PROFILES } from "./profiles";
 import {
   corpusStatementRegistry,
@@ -53,7 +63,9 @@ const log = (record: Record<string, unknown>) => {
   console.info(JSON.stringify(record));
 };
 
-const profileBudgets = (profile: "corpus" | "tenant") =>
+const profileBudgets = (
+  profile: (typeof READ_BUDGET_PROFILES)[keyof typeof READ_BUDGET_PROFILES],
+) =>
   Object.entries(READ_BUDGET_PROFILES)
     .filter(([, owner]) => owner === profile)
     .map(([id]) => id)
@@ -112,6 +124,114 @@ test("corpus page markers still reflect pages within the execution guard", () =>
 });
 
 describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
+  test("global Case Law search enriches only its page at both corpus sizes", async () => {
+    const budgetId = "statement.caseLaw.globalSearchHits";
+    const databaseUrl =
+      process.env["DATABASE_URL"] ??
+      panic("DATABASE_URL required for query perf");
+    const measurements: number[] = [];
+    await withQueryPerfFixture({
+      databaseUrl,
+      profileId: "corpus",
+      timeoutMs: CORPUS_PROFILE_TIMEOUT_MS,
+      run: async (db, deadline) => {
+        for (const rows of CASE_LAW_SEARCH_SIZES) {
+          // db-await-in-loop: grow and measure each isolated corpus sequentially.
+          await deadline.run(`case-law search corpus ${rows}`, async () => {
+            await seedCaseLawSearch(db, rows);
+            const good = await measureOwnerStatement({
+              database: db,
+              build: caseLawSearchStatement,
+              owner: budgetId,
+              ownerDeadlineMs: QUERY_PERF_OWNER_DEADLINES[budgetId],
+              profileId: "corpus",
+            });
+            const bad = await measureOwnerStatement({
+              database: db,
+              build: unboundedCaseLawSearchStatement,
+              owner: budgetId,
+              ownerDeadlineMs: QUERY_PERF_OWNER_DEADLINES[budgetId],
+              profileId: "corpus",
+            });
+            log({
+              event: "read_budget_measurement",
+              budgetId,
+              rows,
+              budgetPages: READ_BUDGETS[budgetId].pages,
+              after: good.metrics,
+              before: bad.metrics,
+            });
+            log({
+              event: "read_budget_plan",
+              budgetId,
+              rows,
+              plan: good.plan.Plan,
+              formerPlan: bad.plan.Plan,
+            });
+            expect(good.plan.Plan["Actual Rows"]).toBe(
+              CASE_LAW_SEARCH_FETCH_LIMIT,
+            );
+            expect(bad.plan.Plan["Actual Rows"]).toBe(
+              CASE_LAW_SEARCH_FETCH_LIMIT,
+            );
+            expect(budgetProblem(budgetId, good.metrics)).toBeUndefined();
+            // Fixed text hits must not walk unrelated decisions before LIMIT.
+            expect(
+              good.planViolations.filter(
+                ({ kind, node }) =>
+                  kind === "large-scan" &&
+                  node["Relation Name"] ===
+                    getTableName(schema.caseLawDecisions),
+              ),
+            ).toEqual([]);
+            expect(
+              budgetViolations(bad.metrics, READ_BUDGETS[budgetId].pages).map(
+                ({ kind }) => kind,
+              ),
+            ).toContain("shared-buffer-budget");
+            // Same values and order, including snippets, identifiers and ranking.
+            const before = executedRows(
+              await db.execute(unboundedCaseLawSearchStatement()),
+            );
+            const after = executedRows(
+              await db.execute(caseLawSearchStatement()),
+            );
+            expect(after).toEqual(before);
+            expect(after).toHaveLength(CASE_LAW_SEARCH_FETCH_LIMIT);
+            expect(Object.keys(after.at(0) ?? {}).toSorted()).toEqual(
+              [
+                "id",
+                "case_number",
+                "ecli",
+                "case_number_type",
+                "court",
+                "country",
+                "decision_date",
+                "slug",
+                "language",
+                "language_group_key",
+                "identifiers",
+                "headline",
+                "tier",
+                "score",
+                "updated_at",
+              ].toSorted(),
+            );
+            measurements.push(good.metrics.sharedBlocks);
+          });
+        }
+      },
+    });
+    expect(measurements).toHaveLength(CASE_LAW_SEARCH_SIZES.length);
+    expect(
+      scaleViolations({
+        size: measurements.at(0) ?? panic("Missing small measurement"),
+        double: measurements.at(1) ?? panic("Missing growth measurement"),
+      }),
+    ).toEqual([]);
+    expect(profileBudgets("case-law")).toEqual([budgetId]);
+  }, 420_000); // timeout: two corpus sizes, warm-cache measurements and mutation checks on an isolated database.
+
   test("document search stays within its budget at both sizes and a correlated policy exceeds it", async () => {
     const databaseUrl =
       process.env["DATABASE_URL"] ??
@@ -284,6 +404,39 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
           note(budgetProblem(budgetId, result.metrics));
           for (const violation of result.planViolations) {
             note(violation.message);
+          }
+          if (budgetId === "statement.caseLaw.euCompletionPage") {
+            const scans = scanOccurrences(result.plan.Plan).filter(
+              ({ relation }) =>
+                relation === "case_law_decisions" ||
+                relation === "eu_completion_receipts" ||
+                relation === "case_law_index_jobs",
+            );
+            note(
+              scans.length > 0 &&
+                scans.every(({ nodeType }) => nodeType.includes("Index"))
+                ? undefined
+                : `${budgetId}: completion relations must use index scans`,
+            );
+            for (const index of [
+              "case_law_decisions_source_id_page_idx",
+              "case_law_index_jobs_decision_idx",
+            ]) {
+              note(
+                scans.some((scan) => scan.index === index)
+                  ? undefined
+                  : `${budgetId}: missing ${index}`,
+              );
+            }
+            const rows = await db.transaction(
+              async (tx) => await entry.read(tx),
+            );
+            note(
+              rows.length === entry.expectedRows &&
+                rows.every((row) => !row.eligible)
+                ? undefined
+                : `${budgetId}: expected 100 ineligible rows`,
+            );
           }
         }
 
