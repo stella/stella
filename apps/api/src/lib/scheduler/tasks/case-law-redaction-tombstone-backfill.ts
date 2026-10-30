@@ -13,6 +13,7 @@ import {
   caseLawSearchDocuments,
   schedulerJobs,
 } from "@/api/db/schema";
+import { setSharedTransactionTimeouts } from "@/api/db/shared-pool-timeouts";
 import type { SafeId } from "@/api/lib/branded-types";
 import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
@@ -21,6 +22,9 @@ import type { SchedulerTask } from "@/api/lib/scheduler/types";
 export const BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK =
   "caseLaw.backfillRedactionTombstones" as const;
 
+export const REDACTION_TOMBSTONE_BACKFILL_JOB_ID =
+  "caseLaw.backfillRedactionTombstones.v3";
+export const REDACTION_TOMBSTONE_BACKFILL_STATEMENT_TIMEOUT_MS = 30_000;
 const BACKFILL_LIMIT = 100;
 
 const extendRepairedDecisions = async (
@@ -67,6 +71,10 @@ export const backfillCaseLawRedactionTombstones: SchedulerTask = async ({
     panic("Case-law redaction tombstone backfill requires a scheduler lease");
 
   const outcome = await withAggregateTransaction(db, async (tx) => {
+    await setSharedTransactionTimeouts(tx, {
+      statementTimeoutMs: REDACTION_TOMBSTONE_BACKFILL_STATEMENT_TIMEOUT_MS,
+      lockTimeoutMs: 1000,
+    });
     const page = await tx
       .selectDistinct({ decisionId: caseLawIndexJobs.decisionId })
       .from(caseLawIndexJobs)

@@ -2,9 +2,12 @@ import { PUBLIC_READ_STATEMENT_TIMEOUT_MS } from "@/api/db/shared-pool-timeouts"
 import { READ_BUDGETS, type ReadBudgetId } from "@/api/lib/db/read-budgets";
 import { REQUEST_RECEIPT_RETENTION_STATEMENT_BUDGET_MS } from "@/api/lib/idempotency/request-receipts";
 import { CASE_LAW_COVERAGE_REFRESH_STATEMENT_TIMEOUT_MS } from "@/api/lib/scheduler/tasks/case-law-coverage-refresh";
+import { REDACTION_TOMBSTONE_BACKFILL_STATEMENT_TIMEOUT_MS } from "@/api/lib/scheduler/tasks/case-law-redaction-tombstone-backfill";
 
 /** The deadline each measured runtime owner applies, or no owner deadline. */
 export const QUERY_PERF_OWNER_DEADLINES = {
+  "scheduled.caseLaw.redactionTombstones.v3":
+    REDACTION_TOMBSTONE_BACKFILL_STATEMENT_TIMEOUT_MS,
   "scheduled.caseLaw.refreshCoverage":
     CASE_LAW_COVERAGE_REFRESH_STATEMENT_TIMEOUT_MS,
   "statement.caseLaw.globalSearchHits": undefined,

@@ -45,7 +45,10 @@ import {
   RECONCILE_CASE_LAW_RAW_ROWS_TASK,
   RECONCILE_CASE_LAW_RAW_SWEEPS_TASK,
 } from "@/api/lib/scheduler/tasks/case-law-raw-storage";
-import { BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK } from "@/api/lib/scheduler/tasks/case-law-redaction-tombstone-backfill";
+import {
+  BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK,
+  REDACTION_TOMBSTONE_BACKFILL_JOB_ID,
+} from "@/api/lib/scheduler/tasks/case-law-redaction-tombstone-backfill";
 import { REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK } from "@/api/lib/scheduler/tasks/case-law-sitemap-shard-refresh";
 import { REFRESH_CASE_LAW_SOURCE_ARRIVALS_TASK } from "@/api/lib/scheduler/tasks/case-law-source-arrivals-refresh";
 import { SWEEP_CHAT_RUN_LOGS_TASK } from "@/api/lib/scheduler/tasks/chat-run-log-retention";
@@ -540,11 +543,11 @@ export const DECLARED_SCHEDULER_JOBS = [
   {
     description:
       "Backfill durable case-law redaction tombstones and search cleanup",
-    id: "caseLaw.backfillRedactionTombstones.v3",
+    id: REDACTION_TOMBSTONE_BACKFILL_JOB_ID,
     mode: "oneShot",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK,
-    reads: "unmeasured",
+    reads: { budget: "scheduled.caseLaw.redactionTombstones.v3" },
   },
   {
     description: "Move stored agent client values to the shared envelope",

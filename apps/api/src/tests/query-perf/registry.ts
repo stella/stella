@@ -11,6 +11,10 @@ import type { LegislationReadTransaction } from "@/api/lib/legislation-public-re
 import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
 import { REFRESH_CASE_LAW_COVERAGE_TASK } from "@/api/lib/scheduler/tasks/case-law-coverage-refresh";
 import { REPORT_CASE_LAW_FRESHNESS_TASK } from "@/api/lib/scheduler/tasks/case-law-freshness-report";
+import {
+  BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK,
+  REDACTION_TOMBSTONE_BACKFILL_JOB_ID,
+} from "@/api/lib/scheduler/tasks/case-law-redaction-tombstone-backfill";
 import { REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK } from "@/api/lib/scheduler/tasks/case-law-sitemap-shard-refresh";
 import { SWEEP_REQUEST_RECEIPTS_TASK } from "@/api/lib/scheduler/tasks/request-receipt-retention";
 import { buildDocumentSearchQueries } from "@/api/lib/search/pg-fts-search-query";
@@ -28,6 +32,10 @@ import {
   sitemapRefreshRetiredChanges,
 } from "./corpus-seed";
 import { QUERY_PERF_OWNER_DEADLINES } from "./owner-deadlines";
+import {
+  redactionTombstonePageCompleted,
+  type RedactionTombstoneScenario,
+} from "./redaction-tombstone-seed";
 import type { RequestReceiptScenario } from "./request-receipt-seed";
 import type { seedQueryPerf } from "./seed";
 
@@ -100,7 +108,9 @@ export const corpusStatementRegistry = (seed: CorpusReadBudgetSeed) =>
   }[];
 
 export type ScheduledJobScenario =
-  { type: "case-law"; served: ServedCaseLaw } | RequestReceiptScenario;
+  | { type: "case-law"; served: ServedCaseLaw }
+  | RequestReceiptScenario
+  | RedactionTombstoneScenario;
 
 type ScheduledJobMeasurement = {
   prepare?: typeof seedSitemapReadBudget;
@@ -128,6 +138,14 @@ type ScheduledJobMeasurement = {
 export const SCHEDULED_JOB_MEASUREMENTS: Readonly<
   Record<string, ScheduledJobMeasurement>
 > = {
+  [REDACTION_TOMBSTONE_BACKFILL_JOB_ID]: {
+    task: BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK,
+    executed: redactionTombstonePageCompleted,
+    scenarios: (["repair", "inline-raw", "settled"] as const).map((cohort) => ({
+      size: { type: "redaction-tombstones", rows: 60_000, cohort },
+      double: { type: "redaction-tombstones", rows: 120_000, cohort },
+    })),
+  },
   [SCHEDULER_BACKFILL_IDS.coverage]: {
     task: REFRESH_CASE_LAW_COVERAGE_TASK,
     prepare: prepareCoverageRefreshMeasurement,
@@ -210,6 +228,7 @@ export const scheduledJobMeasurementViolations = (
 
 /** Which profile measures each budget; every budget has exactly one. */
 export const READ_BUDGET_PROFILES = {
+  "scheduled.caseLaw.redactionTombstones.v3": "corpus",
   "scheduled.caseLaw.refreshCoverage": "corpus",
   "statement.caseLaw.globalSearchHits": "case-law",
   "scheduled.caseLaw.refreshSitemapShards": "corpus",
