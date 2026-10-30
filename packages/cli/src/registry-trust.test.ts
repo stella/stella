@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import * as v from "valibot";
 
 import {
@@ -530,7 +531,7 @@ test("every curated command binding matches the current server registry and prot
         `--projection-output=${projectionPath}`,
       ],
       {
-        cwd: new URL("../../../apps/api/", import.meta.url).pathname,
+        cwd: fileURLToPath(new URL("../../../apps/api/", import.meta.url)),
         stdout: "pipe",
         stderr: "pipe",
         timeout: 25_000,

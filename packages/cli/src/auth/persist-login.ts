@@ -6,10 +6,9 @@
 
 import { readCliConfig, writeCliConfig } from "./cli-config.js";
 import {
-  readCredentialFile,
   setDefaultOrg,
+  updateCredentialFile,
   upsertCredential,
-  writeCredentialFile,
 } from "./credential-store.js";
 import type { StoredCredential } from "./credential-store.js";
 
@@ -22,15 +21,15 @@ export const persistLogin = async ({
   readonly configDir: string;
   readonly credential: StoredCredential;
 }): Promise<void> => {
-  const existingFile = await readCredentialFile(configDir);
-  await writeCredentialFile(
-    configDir,
-    setDefaultOrg(
-      upsertCredential(existingFile, credential),
+  await updateCredentialFile(configDir, (file) => ({
+    status: "updated",
+    value: undefined,
+    file: setDefaultOrg(
+      upsertCredential(file, credential),
       credential.serverUrl,
       credential.orgId,
     ),
-  );
+  }));
 
   const config = await readCliConfig(configDir);
   await writeCliConfig(configDir, {

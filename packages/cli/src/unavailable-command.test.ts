@@ -283,3 +283,35 @@ test("explicit caller enrolment denials distinguish disabled tools and capabilit
     ).toEqual({ type: "unknown-to-server", command: argv.join(" ") });
   }
 });
+
+for (const flag of ["--help", "-h", "--schema"]) {
+  test(`visible command ${flag} describes the binding without requiring execution grants`, () => {
+    const options = {
+      argv: ["template", "save-filled", "new-version", flag],
+      baked: generatedRouteMap,
+      current: generatedRouteMap,
+      effectiveGrants: resolveEffectiveGrants({
+        registry: { grantedScopes: ["stella:documents_write"] },
+      }),
+    };
+    expect(resolveCommandUnavailableCause(options)).toBeUndefined();
+    expect(
+      resolveCommandUnavailableCause({
+        ...options,
+        current: { kind: "route", children: {} },
+      }),
+    ).toMatchObject({ type: "missing-scope", scope: "stella:templates" });
+    expect(
+      resolveCommandUnavailableCause({
+        ...options,
+        argv: ["template", "save-filled", "new-version", "--", flag],
+      }),
+    ).toMatchObject({ type: "missing-scope", scope: "stella:templates" });
+    expect(
+      resolveCommandUnavailableCause({
+        ...options,
+        evidence: { featureOmittedTools: ["save_filled_template"] },
+      }),
+    ).toMatchObject({ type: "feature-disabled" });
+  });
+}

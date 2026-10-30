@@ -1,13 +1,20 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { chmod, mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import * as v from "valibot";
 
 import { respondToMcpLifecycle } from "../tests/mcp-test-lifecycle.js";
 import { writeCredentialFile } from "./auth/credential-store.js";
 import { MCP_CAPABILITY_EXECUTORS } from "./generated/mcp-contract.js";
 import registry from "./generated/registry-snapshot.json";
+import {
+  CACHE_SCHEMA_VERSION,
+  cachePathFor,
+  readCacheFile,
+  writeCacheFile,
+} from "./registry-cache.js";
 
 // timeout: two CLI subprocesses each have a bounded 10-second startup deadline.
 // Exercise the real shell twice: an in-memory cache cannot satisfy this test.
@@ -88,7 +95,7 @@ test("separate invocations reuse registry and token caches while tracing only du
       const child = Bun.spawn(
         [
           process.execPath,
-          new URL("cli.ts", import.meta.url).pathname,
+          fileURLToPath(new URL("cli.ts", import.meta.url)),
           "matter",
           "list",
           "--json",
@@ -134,7 +141,7 @@ test("separate invocations reuse registry and token caches while tracing only du
     expect(outputs.at(0)).toBe(outputs.at(1));
     expect(requests).toEqual({ registry: 1, call: 2, unexpected: 0 });
   } finally {
-    server.stop(true);
+    await server.stop(true);
     await rm(directory, { recursive: true, force: true });
   }
 }, 30_000);
@@ -246,7 +253,7 @@ test.each([
         const child = Bun.spawn(
           [
             process.execPath,
-            new URL("cli.ts", import.meta.url).pathname,
+            fileURLToPath(new URL("cli.ts", import.meta.url)),
             cause === "feature-disabled" ? "time-entry" : "matter",
             "list",
             "--json",
@@ -313,7 +320,7 @@ test.each([
       expect(registryRequests).toBe(1);
       expect(toolCalls).toBe(0);
     } finally {
-      server.stop(true);
+      await server.stop(true);
       await rm(directory, { recursive: true, force: true });
     }
   },
@@ -420,7 +427,7 @@ test("server grants override JWT claims in native and advanced capability execut
         const child = Bun.spawn(
           [
             process.execPath,
-            new URL("cli.ts", import.meta.url).pathname,
+            fileURLToPath(new URL("cli.ts", import.meta.url)),
             ...argv,
             "--json",
           ],
@@ -460,7 +467,138 @@ test("server grants override JWT claims in native and advanced capability execut
     ]);
     expect(registryRequests).toBe(1);
   } finally {
-    server.stop(true);
+    await server.stop(true);
     await rm(directory, { recursive: true, force: true });
   }
 }, 45_000);
+
+// timeout: two CLI subprocesses each have a bounded 10-second deadline.
+// POSIX permissions are the failure boundary; root and Windows cannot model it.
+test.skipIf(process.platform === "win32" || process.getuid?.() === 0)(
+  "successful registry evidence overrides an unwritable stale minimum-version cache",
+  async () => {
+    const directory = await mkdtemp(
+      path.join(os.tmpdir(), "stella-version-cache-"),
+    );
+    const configHome = path.join(directory, "config");
+    const cacheHome = path.join(directory, "cache");
+    let registryRequests = 0;
+    let calls = 0;
+    const server = Bun.serve({
+      port: 0,
+      fetch: async (request) => {
+        if (request.method !== "POST") {
+          return new Response(null, { status: 405 });
+        }
+        const body = v.parse(
+          v.object({
+            id: v.exactOptional(v.union([v.number(), v.string()])),
+            method: v.exactOptional(v.string()),
+          }),
+          await request.json(),
+        );
+        const lifecycle = respondToMcpLifecycle(body);
+        if (lifecycle !== null) {
+          return lifecycle;
+        }
+        switch (body.method) {
+          case "tools/list":
+            registryRequests += 1;
+            return Response.json(
+              { jsonrpc: "2.0", id: body.id, result: { tools: registry } },
+              { headers: { "x-stella-cli-minimum": "1.0.0" } },
+            );
+          case "tools/call":
+            calls += 1;
+            return Response.json({
+              jsonrpc: "2.0",
+              id: body.id,
+              result: {
+                content: [
+                  {
+                    type: "text",
+                    text: JSON.stringify({ matters: [], nextCursor: null }),
+                  },
+                ],
+              },
+            });
+          default:
+            return new Response(null, { status: 404 });
+        }
+      },
+    });
+    const filePath = cachePathFor(server.url.origin, {
+      XDG_CACHE_HOME: cacheHome,
+    });
+    try {
+      const now = Date.now();
+      await writeCredentialFile(path.join(configHome, "stella"), {
+        version: 1,
+        defaultOrgByServer: { [server.url.origin]: "organization" },
+        credentials: [
+          {
+            serverUrl: server.url.origin,
+            orgId: "organization",
+            clientId: "client",
+            accessToken: "synthetic-token",
+            scope: "",
+            tokenType: "Bearer",
+            expiresAt: now + 3_600_000,
+            createdAt: now,
+            updatedAt: now,
+          },
+        ],
+      });
+      await writeCacheFile(filePath, {
+        version: CACHE_SCHEMA_VERSION,
+        serverOrigin: server.url.origin,
+        fetchedAt: new Date(now).toISOString(),
+        ttlSeconds: 86_400,
+        cliMinimum: "999.0.0",
+      });
+      await chmod(filePath, 0o400);
+      for (let invocation = 0; invocation < 2; invocation += 1) {
+        const child = Bun.spawn(
+          [
+            process.execPath,
+            fileURLToPath(new URL("cli.ts", import.meta.url)),
+            "matter",
+            "list",
+            "--json",
+          ],
+          {
+            env: {
+              ...process.env,
+              STELLA_API_KEY: "",
+              STELLA_SERVER_URL: server.url.origin,
+              XDG_CONFIG_HOME: configHome,
+              XDG_CACHE_HOME: cacheHome,
+            },
+            stdout: "pipe",
+            stderr: "pipe",
+            timeout: 10_000,
+          },
+        );
+        const [exitCode, stdout, stderr] = await Promise.all([
+          child.exited,
+          new Response(child.stdout).text(),
+          new Response(child.stderr).text(),
+        ]);
+        expect(exitCode).toBe(0);
+        expect(JSON.parse(stdout)).toEqual({ matters: [], nextCursor: null });
+        expect(stderr).toContain(
+          "Registry cache could not be saved; a later command may fetch it again.",
+        );
+        expect(stderr).not.toContain("999.0.0");
+      }
+      expect((await readCacheFile(filePath))?.cliMinimum).toBe("999.0.0");
+      expect(registryRequests).toBe(1);
+      expect(calls).toBe(2);
+    } finally {
+      await server.stop(true);
+      await chmod(filePath, 0o600);
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+  30_000,
+);

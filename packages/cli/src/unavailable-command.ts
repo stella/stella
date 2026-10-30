@@ -75,6 +75,13 @@ export const resolveCommandUnavailableCause = ({
   featureAccess,
 }: ResolveCommandUnavailableCauseOptions):
   CommandUnavailableCause | undefined => {
+  const delimiterIndex = argv.indexOf("--");
+  const options = delimiterIndex === -1 ? argv : argv.slice(0, delimiterIndex);
+  const intent = ["--help", "-h", "--schema"].some((flag) =>
+    options.includes(flag),
+  )
+    ? "describe"
+    : "execute";
   let known: RouteNode = baked;
   let visible: RouteNode | undefined = current;
   let skipServerValue = false;
@@ -112,6 +119,7 @@ export const resolveCommandUnavailableCause = ({
         return boundCommandUnavailableCause({
           known,
           current: visible,
+          intent,
           effectiveGrants,
           serverUrl,
           evidence,
@@ -132,12 +140,14 @@ type BoundCommandUnavailableCauseOptions = Pick<
 > & {
   known: Exclude<RouteNode, { kind: "route" }>;
   current: RouteNode | undefined;
+  intent: "describe" | "execute";
 };
 
 /** Attribute a resolved binding only to attested feature denials or known missing grants. */
 const boundCommandUnavailableCause = ({
   known,
   current,
+  intent,
   effectiveGrants,
   serverUrl,
   evidence,
@@ -155,13 +165,16 @@ const boundCommandUnavailableCause = ({
           known.spec.capabilityId,
         ) === true;
   const command = known.spec.commandPath.join(" ");
-  if (omittedForFeature === true) {
+  if (omittedForFeature) {
     const feature = known.spec.featureId ?? known.spec.feature;
     return {
       type: "feature-disabled",
       command,
       ...(feature === undefined ? {} : { feature }),
     };
+  }
+  if (current !== undefined && intent === "describe") {
+    return undefined;
   }
   const scopeFailure = scopePreflightFailure({
     scope: known.spec.scope,

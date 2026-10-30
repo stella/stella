@@ -4,6 +4,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { PassThrough } from "node:stream";
+import * as v from "valibot";
 
 import { respondToMcpLifecycle } from "../tests/mcp-test-lifecycle.js";
 import {
@@ -32,6 +33,7 @@ import {
   requestIdLine,
   reservedFlagUsageError,
   runLeafCommand,
+  streamOrRenderAllPages,
   toolErrorLines,
 } from "./run-leaf-command.js";
 import { commandUnavailableMessage } from "./unavailable-command.js";
@@ -1236,3 +1238,86 @@ test("verification limit envelopes retain recovery metadata and select their exi
     }
   }
 });
+
+for (const format of ["jsonl", "json"] as const) {
+  test(`--all ${format} reports rendering time without awaited API time`, async () => {
+    let now = 0;
+    let page = 0;
+    const durations: number[] = [];
+    const output: string[] = [];
+    const server = Bun.serve({
+      port: 0,
+      async fetch(request) {
+        if (request.method === "GET") {
+          return new Response(null, { status: 405 });
+        }
+        const body = v.parse(
+          v.object({
+            method: v.exactOptional(v.string()),
+            id: v.exactOptional(v.number()),
+          }),
+          await request.json(),
+        );
+        const lifecycle = respondToMcpLifecycle(body);
+        if (lifecycle !== null) {
+          return lifecycle;
+        }
+        now += 1000;
+        page += 1;
+        return Response.json({
+          jsonrpc: "2.0",
+          id: body.id,
+          result: {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({
+                  items: [{ id: page }],
+                  nextCursor: page === 1 ? "page-two" : null,
+                }),
+              },
+            ],
+          },
+        });
+      },
+    });
+    const tty = makeTtyContext({
+      serverUrl: server.url.origin,
+      stdinData: "",
+      isTTY: false,
+    });
+    try {
+      await streamOrRenderAllPages({
+        context: tty.context,
+        writers: {
+          stdout: (text) => {
+            output.push(text);
+            now += 3;
+          },
+          stderr: (text) => {
+            throw new TypeError(`Unexpected error output: ${text}`);
+          },
+        },
+        format,
+        textPath: undefined,
+        itemsKey: "items",
+        baseArgs: {},
+        serverUrl: server.url.origin,
+        token: "opaque-token",
+        toolName: "list_items",
+        cursorInto: (base, cursor) => ({ ...base, cursor }),
+        now: () => now,
+        reportOutputDuration: (durationMs) => {
+          durations.push(durationMs);
+        },
+      });
+      expect(page).toBe(2);
+      expect(output.join("")).toMatch(/"id":\s*1/u);
+      expect(output.join("")).toMatch(/"id":\s*2/u);
+      expect(durations).toEqual([format === "jsonl" ? 6 : 3]);
+      expect(now).toBe(2000 + (format === "jsonl" ? 6 : 3));
+    } finally {
+      await server.stop(true);
+    }
+  });
+}

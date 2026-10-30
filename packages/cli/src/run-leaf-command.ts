@@ -59,7 +59,7 @@ import type {
   FlagSpec,
   LeafCommandSpec,
 } from "./route-types.js";
-import { timingEnd } from "./timing.js";
+import { timingDuration, timingEnd } from "./timing.js";
 // The generic executor every generated leaf command dispatches through (spec 051
 // S3/S4). It builds the tool-args object from parsed flags (or the `--input`
 // escape hatch), runs the client-side scope precheck, confirms destructive ops,
@@ -950,6 +950,8 @@ export const streamOrRenderAllPages = async ({
   toolName,
   cursorInto,
   requestTimeoutMs,
+  now = () => performance.now(),
+  reportOutputDuration = (durationMs) => timingDuration("output", durationMs),
 }: {
   context: Context;
   writers: Writers;
@@ -966,71 +968,90 @@ export const streamOrRenderAllPages = async ({
     cursor: string,
   ) => Record<string, unknown>;
   requestTimeoutMs?: number;
+  now?: () => number;
+  reportOutputDuration?: (durationMs: number) => void;
 }): Promise<void> => {
-  const streaming = format === "jsonl" && textPath === undefined;
-  const outcome = await followAll({
-    textPath,
-    itemsKey,
-    baseArgs,
-    serverUrl,
-    token,
-    toolName,
-    cursorInto,
-    ...(requestTimeoutMs === undefined ? {} : { requestTimeoutMs }),
-    ...(streaming
-      ? {
-          stream: (item: unknown) => {
-            writers.stdout(jsonlLine(item));
-          },
+  let outputDurationMs = 0;
+  const measureOutput = (render: () => void): void => {
+    const started = now();
+    render();
+    outputDurationMs += now() - started;
+  };
+  try {
+    const streaming = format === "jsonl" && textPath === undefined;
+    const outcome = await followAll({
+      textPath,
+      itemsKey,
+      baseArgs,
+      serverUrl,
+      token,
+      toolName,
+      cursorInto,
+      ...(requestTimeoutMs === undefined ? {} : { requestTimeoutMs }),
+      ...(streaming
+        ? {
+            stream: (item: unknown) => {
+              measureOutput(() => writers.stdout(jsonlLine(item)));
+            },
+          }
+        : {}),
+    });
+    if (Result.isError(outcome)) {
+      const failure = outcome.error;
+      switch (failure.type) {
+        case "client":
+          measureOutput(() =>
+            renderClientError({
+              context,
+              error: failure.error,
+              writers,
+              format,
+            }),
+          );
+          return;
+        case "tool":
+          measureOutput(() =>
+            renderToolError({
+              context,
+              result: failure.result,
+              writers,
+              format,
+            }),
+          );
+          return;
+        default: {
+          failure satisfies never;
+          panic("Unknown pagination failure");
         }
-      : {}),
-  });
-  if (Result.isError(outcome)) {
-    switch (outcome.error.type) {
-      case "client":
-        renderClientError({
-          context,
-          error: outcome.error.error,
-          writers,
-          format,
-        });
-        return;
-      case "tool":
-        renderToolError({
-          context,
-          result: outcome.error.result,
-          writers,
-          format,
-        });
-        return;
-      default: {
-        outcome.error satisfies never;
-        panic("Unknown pagination failure");
       }
     }
-  }
-  if (!streaming) {
-    const plan = buildRenderPlan({
-      payload: outcome.value.payload,
-      itemsKey,
-      textPath: outcome.value.textPath,
-      singleReadActive: false,
-      columns: undefined,
+    measureOutput(() => {
+      if (!streaming) {
+        const plan = buildRenderPlan({
+          payload: outcome.value.payload,
+          itemsKey,
+          textPath: outcome.value.textPath,
+          singleReadActive: false,
+          columns: undefined,
+        });
+        renderResult({
+          plan,
+          format,
+          writers,
+          allActive: true,
+          width: terminalWidth(context),
+        });
+        setPlanExit(context, plan);
+      }
+      const { count, resumeCursor } = outcome.value;
+      if (resumeCursor !== null) {
+        writers.stderr(
+          `--all truncated at ${count} items/pages; resume with --cursor ${resumeCursor}\n`,
+        );
+      }
     });
-    renderResult({
-      plan,
-      format,
-      writers,
-      allActive: true,
-      width: terminalWidth(context),
-    });
-    setPlanExit(context, plan);
-  }
-  const { count, resumeCursor } = outcome.value;
-  if (resumeCursor !== null) {
-    writers.stderr(
-      `--all truncated at ${count} items/pages; resume with --cursor ${resumeCursor}\n`,
-    );
+  } finally {
+    reportOutputDuration(outputDurationMs);
   }
 };
 

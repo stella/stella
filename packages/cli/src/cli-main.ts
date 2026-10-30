@@ -31,11 +31,9 @@ import { EXIT_CODES, resolveMcpErrorCodeExit } from "./mcp-constants.js";
 import { preparseServerFlag } from "./preparse-server-flag.js";
 import { cachePathFor, readCacheFile } from "./registry-cache.js";
 import { removedCommandError } from "./registry-drift.js";
+import { refreshRegistryWithDiagnostics } from "./registry-refresh-output.js";
 import type { CurrentRegistry } from "./registry-refresh.js";
-import {
-  refreshRegistryCache,
-  resolveCommandTree,
-} from "./registry-refresh.js";
+import { resolveCommandTree } from "./registry-refresh.js";
 import { timingEnd } from "./timing.js";
 import {
   commandUnavailableExitCode,
@@ -175,7 +173,7 @@ const main = async (): Promise<void> => {
   let featureAccess: CallerFeatureAccess | undefined;
   if (serverUrl !== undefined && token !== undefined && needsRegistry) {
     const registryStarted = performance.now();
-    const outcome = await refreshRegistryCache({
+    const outcome = await refreshRegistryWithDiagnostics({
       serverOrigin: serverUrl,
       token,
       env: cacheEnv,
@@ -183,9 +181,6 @@ const main = async (): Promise<void> => {
     });
     timingEnd("registry-load-refresh", registryStarted);
     if (outcome.status === "refreshed") {
-      if (outcome.cacheWarning !== undefined) {
-        process.stderr.write(`${outcome.cacheWarning}\n`);
-      }
       featureAccess = outcome.featureAccess;
       currentRegistry = outcome.registry;
       if (outcome.unsupported === true) {
@@ -201,14 +196,9 @@ const main = async (): Promise<void> => {
       refuseAdmission(outcome.refusal, argv);
       return;
     }
-    if (outcome.status === "failed") {
-      process.stderr.write(`${outcome.warning}\n`);
-    } else if (outcome.status === "refreshed" && outcome.nudge !== undefined) {
-      process.stderr.write(`${outcome.nudge}\n`);
-    }
   }
 
-  if (serverUrl !== undefined && unsupportedLine === undefined) {
+  if (serverUrl !== undefined && currentRegistry === undefined) {
     unsupportedLine = await cachedUnsupportedLine({ serverUrl, cacheEnv });
   }
   if (!versionExempt && unsupportedLine !== undefined) {
@@ -285,7 +275,7 @@ const main = async (): Promise<void> => {
   if (isAuthLogin) {
     const refreshed = await resolvePreamble(serverFlag);
     if (refreshed.serverUrl !== undefined && refreshed.token !== undefined) {
-      const outcome = await refreshRegistryCache({
+      const outcome = await refreshRegistryWithDiagnostics({
         serverOrigin: refreshed.serverUrl,
         token: refreshed.token,
         env: cacheEnv,
@@ -300,14 +290,6 @@ const main = async (): Promise<void> => {
       if (outcome.status === "admission-refused") {
         refuseAdmission(outcome.refusal, argv);
         return;
-      }
-      if (outcome.status === "failed") {
-        process.stderr.write(`${outcome.warning}\n`);
-      } else if (
-        outcome.status === "refreshed" &&
-        outcome.nudge !== undefined
-      ) {
-        process.stderr.write(`${outcome.nudge}\n`);
       }
     }
   }

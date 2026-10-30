@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { chmod, mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -11,6 +11,7 @@ import {
 import type { CredentialFile, StoredCredential } from "./credential-store.js";
 import { ensureFreshCredential } from "./ensure-fresh-credential.js";
 import type { AuthorizationServerMetadata } from "./oauth-metadata.js";
+import { credentialLockPath } from "./refresh-lock.js";
 
 const buildCredential = (
   overrides: Partial<StoredCredential> = {},
@@ -47,7 +48,7 @@ const seedCredential = async (
 
 /** A mock `/oauth2/token` endpoint whose response depends on the test scenario, plus a request counter. */
 const startMockProvider = (
-  handleTokenRequest: (body: URLSearchParams) => Response,
+  handleTokenRequest: (body: URLSearchParams) => Response | Promise<Response>,
 ) => {
   let requestCount = 0;
   const server = Bun.serve({
@@ -209,6 +210,107 @@ describe("ensureFreshCredential", () => {
       }
       expect(provider.getRequestCount()).toBe(0);
     } finally {
+      provider.close();
+    }
+  });
+
+  test.each(["organization", "server"] as const)(
+    "unrelated %s refreshes exchange concurrently and preserve every stored generation",
+    async (identity) => {
+      const ready = Promise.withResolvers<undefined>();
+      let entered = 0;
+      const provider = startMockProvider(async (body) => {
+        entered += 1;
+        if (entered === 2) {
+          ready.resolve(undefined);
+        }
+        await ready.promise;
+        const token = body.get("refresh_token");
+        return Response.json({
+          access_token: `new-${token}`,
+          refresh_token: `rotated-${token}`,
+          expires_in: 900,
+          token_type: "Bearer",
+        });
+      });
+      try {
+        const first = buildCredential({ refreshToken: "first" });
+        const second = buildCredential({
+          refreshToken: "second",
+          ...(identity === "organization"
+            ? { orgId: "org-2" }
+            : { serverUrl: "https://other.example" }),
+        });
+        await writeCredentialFile(
+          configDir,
+          upsertCredential(upsertCredential(EMPTY_FILE, first), second),
+        );
+        const results = await Promise.all(
+          [first, second].map(
+            async (credential) =>
+              await ensureFreshCredential({
+                configDir,
+                credential,
+                metadata: provider.metadata,
+                now: 20_000,
+              }),
+          ),
+        );
+        expect(results.map((result) => result.isOk())).toEqual([true, true]);
+        expect(provider.getRequestCount()).toBe(2);
+        const stored = await readCredentialFile(configDir);
+        expect(
+          stored.credentials
+            .map((credential) => credential.accessToken)
+            .toSorted(),
+        ).toEqual(["new-first", "new-second"]);
+        expect(
+          stored.credentials
+            .map((credential) => credential.refreshToken)
+            .toSorted(),
+        ).toEqual(["rotated-first", "rotated-second"]);
+      } finally {
+        provider.close();
+      }
+    },
+  );
+
+  test("a provider rejection and failed lock release report both the OAuth cause and lock recovery", async () => {
+    if (process.getuid?.() === 0) {
+      return;
+    }
+    const provider = startMockProvider(async () => {
+      await chmod(configDir, 0o500);
+      return Response.json(
+        {
+          error: "invalid_grant",
+          error_description: "synthetic-refresh-rejected",
+        },
+        { status: 400 },
+      );
+    });
+    const credential = buildCredential();
+    try {
+      await seedCredential(configDir, credential);
+      const result = await ensureFreshCredential({
+        configDir,
+        credential,
+        metadata: provider.metadata,
+        now: 20_000,
+      });
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error.message).toContain("synthetic-refresh-rejected");
+        expect(result.error.message).toContain(
+          credentialLockPath(configDir, credential),
+        );
+        expect(result.error.message).toContain(
+          "remove this lock before retrying",
+        );
+        expect(result.error.message).not.toContain("old-refresh-token");
+      }
+    } finally {
+      await chmod(configDir, 0o700);
       provider.close();
     }
   });

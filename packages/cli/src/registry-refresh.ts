@@ -538,7 +538,7 @@ const persistTrustedRegistry = async ({
       : Result.ok(undefined);
   const cacheWarning =
     savedMetadata.isErr() || savedProjection.isErr()
-      ? "Registry cache could not be saved; the next command will fetch it again."
+      ? "Registry cache could not be saved; a later command may fetch it again."
       : undefined;
   return {
     status: "refreshed",

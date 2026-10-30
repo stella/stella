@@ -16,7 +16,7 @@ test("refresh locks restrict permissions and serialize contenders until release"
     if (Result.isError(first)) {
       return;
     }
-    const lockPath = path.join(configDir, "credentials.refresh.lock");
+    const lockPath = path.join(configDir, "credentials.store.lock");
     expect((await stat(lockPath)).mode % 0o1000).toBe(0o600);
     expect(await readFile(lockPath, "utf-8")).toBe(`${process.pid}\n`);
     let acquired = false;
@@ -43,7 +43,7 @@ test("abandoned refresh locks fail within a bound and permit explicit recovery",
   const configDir = await mkdtemp(
     path.join(os.tmpdir(), "stella-refresh-lock-"),
   );
-  const lockPath = path.join(configDir, "credentials.refresh.lock");
+  const lockPath = path.join(configDir, "credentials.store.lock");
   try {
     await writeFile(lockPath, "abandoned-owner\n", { mode: 0o600 });
     const result = await acquireRefreshLock(configDir);
