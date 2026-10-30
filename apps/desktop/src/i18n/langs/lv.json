@@ -1,11 +1,11 @@
 {
   "tray": {
     "activeEdits": "{count, plural, zero {{count} aktīvu labojumu} one {{count} aktīvs labojums} other {{count} aktīvi labojumi}}",
-    "clipboard": "Starpliktuves vēsture",
     "activity": "Darbība",
     "activityRecording": "Darbība: Ierakstīšana · šodien {hours} st.",
     "activityPaused": "Darbība: Apturēta · šodien {hours} st.",
     "activityOff": "Darbība: Izslēgta",
+    "openActivity": "Atvērt darbību",
     "activityNow": "Tagad: {name}",
     "activityPause": "Apturēt ierakstīšanu",
     "activityResume": "Atsākt ierakstīšanu",
@@ -149,6 +149,7 @@
     "handoffUnavailable": "Neizdevās atvērt dokumentu. Sāciet no jauna no Stella.",
     "handoffRetry": "Mēģināt vēlreiz",
     "unsavedChangesEscape": "Nesaglabātas izmaiņas. Vēlreiz nospiediet Esc, lai tās atmestu",
+    "unsavedChangesClose": "Nesaglabātas izmaiņas. Vēlreiz aizveriet, lai tās atmestu",
     "handoffConnectToSign": "Pievienojiet stella desktop, lai parakstītu šo dokumentu",
     "handoffConnectToOpen": "Pievienojiet stella desktop, lai atvērtu šo dokumentu",
     "handoffConnectDetail": "Pievienojiet savu stella kontu. Dokuments tiks atvērts automātiski pēc pievienošanas.",
@@ -299,7 +300,7 @@
     "moreOptions": "Vairāk iespēju",
     "moreItemActions": "Vairāk darbību vienumam {number}",
     "noResults": "Nav atbilstošu izgriezumu",
-    "noResultsDescription": "Vai tā vietā meklēt “{query}” reģistros?",
+    "noResultsSearchRegistries": "Meklēt “{query}” reģistros",
     "noGroup": "Bez grupas",
     "newGroupOption": "Jauna grupa…",
     "copyItem": "Kopēt vienumu {number}",
@@ -368,7 +369,8 @@
     "welcomeShortcutDescription": "Nospiediet {shortcut}, lai pārlūkotu vēsturi un izvēlētos izgriezumu.",
     "welcomeShortcutTitle": "Atveriet to jebkur.",
     "welcomeStart": "Sākt kopēšanu",
-    "welcomeTitle": "Iepazīstiet savu starpliktuvi"
+    "welcomeTitle": "Iepazīstiet savu starpliktuvi",
+    "registryIdentifierSearchHint": "Ievadiet {identifiers}."
   },
   "activity": {
     "title": "Darbība",

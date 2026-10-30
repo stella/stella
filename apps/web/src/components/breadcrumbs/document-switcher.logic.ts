@@ -19,3 +19,8 @@ export const filterDocumentsByQuery = <TDocument extends SearchableDocument>(
     query,
     fields: ({ fileName, name }) => [fileName, name],
   });
+
+type DocumentFile = { entityId: string; fieldId: string };
+
+export const isCurrentDocument = (file: DocumentFile, current: DocumentFile) =>
+  file.entityId === current.entityId && file.fieldId === current.fieldId;

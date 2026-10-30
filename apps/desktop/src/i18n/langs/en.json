@@ -1,11 +1,11 @@
 {
   "tray": {
     "activeEdits": "{count, plural, one {1 active edit} other {{count} active edits}}",
-    "clipboard": "Clipboard history",
     "activity": "Activity",
     "activityRecording": "Activity: Recording · {hours} h today",
     "activityPaused": "Activity: Paused · {hours} h today",
     "activityOff": "Activity: Off",
+    "openActivity": "Open activity",
     "activityNow": "Now: {name}",
     "activityPause": "Pause recording",
     "activityResume": "Resume recording",
@@ -149,6 +149,7 @@
     "handoffUnavailable": "Could not open the document. Start again from Stella.",
     "handoffRetry": "Retry",
     "unsavedChangesEscape": "Unsaved changes. Press Esc again to discard",
+    "unsavedChangesClose": "Unsaved changes. Close again to discard",
     "handoffConnectToSign": "Connect stella desktop to sign this document",
     "handoffConnectToOpen": "Connect stella desktop to open this document",
     "handoffConnectDetail": "Connect your stella account. The document opens automatically once you're connected.",
@@ -299,7 +300,7 @@
     "moreOptions": "More options",
     "moreItemActions": "More actions for item {number}",
     "noResults": "No matching clips",
-    "noResultsDescription": "Search registries for “{query}” instead?",
+    "noResultsSearchRegistries": "Search registries for “{query}”",
     "noGroup": "No group",
     "newGroupOption": "New group…",
     "copyItem": "Copy item {number}",
@@ -368,7 +369,8 @@
     "welcomeShortcutDescription": "Press {shortcut} to browse your history and choose a clip.",
     "welcomeShortcutTitle": "Open it anywhere.",
     "welcomeStart": "Start copying",
-    "welcomeTitle": "Meet your clipboard"
+    "welcomeTitle": "Meet your clipboard",
+    "registryIdentifierSearchHint": "Enter {identifiers}."
   },
   "activity": {
     "title": "Activity",

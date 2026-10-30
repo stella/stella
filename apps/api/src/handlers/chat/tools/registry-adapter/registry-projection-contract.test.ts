@@ -45,6 +45,7 @@ import type { readWorkspaceMembersHandler } from "@/api/handlers/workspaces/work
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { RegistryLookupResponse } from "@/api/lib/business-registries/dispatch";
+import { WithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-projection";
 import {
   deriveRefMediationEntry,
   projectForChat,
@@ -262,6 +263,8 @@ const buildContext = (tx: unknown): AuthorizedMcpRequestContext => {
       userId: toSafeId<"user">("user_1"),
       userEmail: "standard@example.test",
       testDependencies: {
+        readWithdrawnCopies: async () =>
+          new WithdrawnCopyProjection([], "Withdrawn by publisher"),
         // Billing reads are enrolment-gated; this caller is enrolled so every
         // projectable read runs.
         featureAccessSnapshot: enrolledTimeBillingSnapshot({
@@ -1639,6 +1642,7 @@ const CONTRACT_CORPUS = {
               headline: "…dobré <em>mravy</em>…",
               language: "cs",
               textWithheldReason: null,
+              textAvailability: "available",
               matchingPassages: 3,
               match,
               headnote: { type: "absent", reason: "not_published" },
@@ -1718,6 +1722,7 @@ const CONTRACT_CORPUS = {
               headline: "…dobré <em>mravy</em>…",
               language: "cs",
               textWithheldReason: null,
+              textAvailability: "available",
               matchingPassages: 3,
               match: "all_terms",
               headnote: { type: "absent", reason: "not_published" },
@@ -1744,6 +1749,7 @@ const CONTRACT_CORPUS = {
       buildArgs: () => ({ decision_ids: [uid(54)] }),
       setup: () => {
         readGatedDecisionWithDocumentMock.mockResolvedValue({
+          extractionWarnings: [],
           hasDocument: true,
           documentPending: false,
           documentReadFailed: false,
@@ -1910,6 +1916,7 @@ const CONTRACT_CORPUS = {
               {
                 id: toSafeId<"caseLawCitation">(uid(57)),
                 citationText: "22 Cdo 1000/2020",
+                extractionWarnings: [],
                 textWithheldReason: null,
                 sectionIndex: 1,
                 doctrine: "unread",
@@ -2590,6 +2597,7 @@ describe("decision text in chat projection", () => {
   test("decision read preserves its text through the chat projection", async () => {
     const text = "[23] Žaloba se zamítá. Náklady řízení nese žalobce.";
     readGatedDecisionWithDocumentMock.mockResolvedValue({
+      extractionWarnings: [],
       hasDocument: true,
       documentPending: false,
       documentReadFailed: false,

@@ -1,11 +1,11 @@
 {
   "tray": {
     "activeEdits": "{count, plural, one {1 aktív szerkesztés} other {{count} aktív szerkesztés}}",
-    "clipboard": "Vágólap előzményei",
     "activity": "Tevékenység",
     "activityRecording": "Tevékenység: Rögzítés · ma {hours} ó",
     "activityPaused": "Tevékenység: Szünetel · ma {hours} ó",
     "activityOff": "Tevékenység: Kikapcsolva",
+    "openActivity": "Tevékenység megnyitása",
     "activityNow": "Most: {name}",
     "activityPause": "Rögzítés szüneteltetése",
     "activityResume": "Rögzítés folytatása",
@@ -149,6 +149,7 @@
     "handoffUnavailable": "Nem sikerült megnyitni a dokumentumot. Kezdje újra a Stellából.",
     "handoffRetry": "Újrapróbálkozás",
     "unsavedChangesEscape": "Nem mentett módosítások. Az elvetéshez nyomja meg újra az Esc billentyűt",
+    "unsavedChangesClose": "Nem mentett módosítások. Az elvetéshez zárja be újra",
     "handoffConnectToSign": "Csatlakoztassa a stella desktopot a dokumentum aláírásához",
     "handoffConnectToOpen": "Csatlakoztassa a stella desktopot a dokumentum megnyitásához",
     "handoffConnectDetail": "Csatlakoztassa stella-fiókját. A dokumentum a csatlakozás után automatikusan megnyílik.",
@@ -299,7 +300,7 @@
     "moreOptions": "További lehetőségek",
     "moreItemActions": "További műveletek a(z) {number}. elemhez",
     "noResults": "Nincs egyező kivágás",
-    "noResultsDescription": "Szeretné inkább a nyilvántartásokban keresni ezt: „{query}”?",
+    "noResultsSearchRegistries": "„{query}” keresése a nyilvántartásokban",
     "noGroup": "Nincs csoport",
     "newGroupOption": "Új csoport…",
     "copyItem": "{number}. elem másolása",
@@ -368,7 +369,8 @@
     "welcomeShortcutDescription": "A {shortcut} megnyomásával böngészhet az előzmények között és kiválaszthat egy kivágást.",
     "welcomeShortcutTitle": "Bárhonnan megnyitható.",
     "welcomeStart": "Másolás megkezdése",
-    "welcomeTitle": "Ismerje meg a vágólapot"
+    "welcomeTitle": "Ismerje meg a vágólapot",
+    "registryIdentifierSearchHint": "Adja meg a következőt: {identifiers}."
   },
   "activity": {
     "title": "Tevékenység",

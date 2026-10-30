@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { readdirSync } from "node:fs";
 import nodePath from "node:path";
@@ -128,13 +129,24 @@ describe("analysis error messages", () => {
     });
   });
 
-  test("a decision the server will never analyse says it is unavailable", () => {
-    for (const code of CASE_LAW_ANALYSIS_UNAVAILABLE_CODES) {
-      expect(analysisErrorMessage({ kind: "unavailable", code })).toEqual({
-        kind: "unavailable",
+  for (const { locale, messages } of catalogs) {
+    test(`unavailable reasons remain distinct and readable in ${locale}`, () => {
+      const t = createTranslator({ locale, messages });
+      const rendered = CASE_LAW_ANALYSIS_UNAVAILABLE_CODES.map((code) => {
+        const message = analysisErrorMessage({ kind: "unavailable", code });
+        if (message.kind !== "unavailable") {
+          return panic("Unavailable analysis must preserve its reason");
+        }
+        const text = t(message.key);
+        expect(text).not.toBe(message.key);
+        expect(text.length).toBeGreaterThan(20);
+        return text;
       });
-    }
-  });
+      expect(new Set(rendered).size).toBe(
+        CASE_LAW_ANALYSIS_UNAVAILABLE_CODES.length,
+      );
+    });
+  }
 
   test("only a failed run whose provider named a retry time has one", () => {
     const retryAt = new Date("2026-10-16T19:30:00.000Z");

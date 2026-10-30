@@ -725,6 +725,12 @@ export const validateSchemaIntrospection = async ({
             specifier.startsWith(".") ||
             specifier.startsWith("@/");
           if (local) {
+            if (
+              module.endsWith(".json") &&
+              existsSync(path.join(repoRoot, module))
+            ) {
+              return;
+            }
             const target = [
               `${module}.ts`,
               `${module}.tsx`,

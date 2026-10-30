@@ -10,6 +10,7 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 
 import ar from "@/i18n/langs/ar.json";
 import en from "@/i18n/langs/en.json";
+import { toSafeId } from "@/lib/safe-id";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type {
@@ -38,6 +39,9 @@ const statute = {
   title: "178/2026 Sb., o portálu kritické infrastruktury",
 } satisfies Parameters<typeof statuteLawCrumbTrailOf>[0];
 const decision = {
+  caseFile: { items: [], nextCursor: null, limit: 50 },
+  id: toSafeId<"caseLawDecision">("decision-7-azs-172-2025"),
+  languageGroupKey: null,
   court: "Nejvyšší správní soud",
   courtAbbreviation: "NSS",
   courtTier: "supreme",

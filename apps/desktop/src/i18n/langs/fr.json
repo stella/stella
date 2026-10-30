@@ -1,11 +1,11 @@
 {
   "tray": {
     "activeEdits": "{count, plural, one {{count} modification active} other {{count} modifications actives}}",
-    "clipboard": "Historique du presse-papiers",
     "activity": "Activité",
     "activityRecording": "Activité : Enregistrement · {hours} h aujourd’hui",
     "activityPaused": "Activité : En pause · {hours} h aujourd’hui",
     "activityOff": "Activité : Désactivée",
+    "openActivity": "Ouvrir l’activité",
     "activityNow": "Maintenant : {name}",
     "activityPause": "Mettre l’enregistrement en pause",
     "activityResume": "Reprendre l’enregistrement",
@@ -149,6 +149,7 @@
     "handoffUnavailable": "Impossible d’ouvrir le document. Recommencez depuis Stella.",
     "handoffRetry": "Réessayer",
     "unsavedChangesEscape": "Modifications non enregistrées. Appuyez à nouveau sur Échap pour les abandonner",
+    "unsavedChangesClose": "Modifications non enregistrées. Fermez à nouveau pour les abandonner",
     "handoffConnectToSign": "Connectez stella desktop pour signer ce document",
     "handoffConnectToOpen": "Connectez stella desktop pour ouvrir ce document",
     "handoffConnectDetail": "Connectez votre compte stella. Le document s'ouvrira automatiquement une fois la connexion établie.",
@@ -299,7 +300,7 @@
     "moreOptions": "Plus d’options",
     "moreItemActions": "Plus d’actions pour l’élément {number}",
     "noResults": "Aucun extrait correspondant",
-    "noResultsDescription": "Voulez-vous plutôt rechercher « {query} » dans les registres ?",
+    "noResultsSearchRegistries": "Rechercher « {query} » dans les registres",
     "noGroup": "Aucun groupe",
     "newGroupOption": "Nouveau groupe…",
     "copyItem": "Copier l’élément {number}",
@@ -368,7 +369,8 @@
     "welcomeShortcutDescription": "Appuyez sur {shortcut} pour parcourir l’historique et choisir un extrait.",
     "welcomeShortcutTitle": "Ouvrez-le partout.",
     "welcomeStart": "Commencer à copier",
-    "welcomeTitle": "Découvrez votre presse-papiers"
+    "welcomeTitle": "Découvrez votre presse-papiers",
+    "registryIdentifierSearchHint": "Saisissez {identifiers}."
   },
   "activity": {
     "title": "Activité",

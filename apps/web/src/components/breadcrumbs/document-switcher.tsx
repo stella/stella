@@ -12,6 +12,7 @@ import {
   CommandItem,
   CommandList,
 } from "@stll/ui/command";
+import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import { CheckIcon, ChevronDownIcon } from "@stll/ui/icons";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import {
@@ -20,9 +21,11 @@ import {
   TooltipTrigger,
 } from "@stll/ui/tooltip";
 
-import { filterDocumentsByQuery } from "@/components/breadcrumbs/document-switcher.logic";
+import {
+  filterDocumentsByQuery,
+  isCurrentDocument,
+} from "@/components/breadcrumbs/document-switcher.logic";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
-import { ReferenceFileTypeIcon } from "@/components/references/reference-chip";
 import { detached } from "@/lib/detached";
 import { queryView } from "@/lib/query-view.logic";
 import { useQueryViewError } from "@/lib/use-query-view";
@@ -31,6 +34,7 @@ import { workspaceFilesOptions } from "@/lib/workspaces/queries/entities";
 type DocumentSwitcherProps = {
   /** The document the main view shows, checked in the list. */
   entityId: string;
+  fieldId: string;
   viewId: string;
   workspaceId: string;
 };
@@ -42,6 +46,7 @@ type DocumentSwitcherProps = {
  */
 export const DocumentSwitcher = ({
   entityId,
+  fieldId,
   viewId,
   workspaceId,
 }: DocumentSwitcherProps) => {
@@ -71,7 +76,7 @@ export const DocumentSwitcher = ({
 
   const openDocument = (file: { entityId: string; fieldId: string }) => {
     changeOpen(false);
-    if (file.entityId === entityId) {
+    if (isCurrentDocument(file, { entityId, fieldId })) {
       return;
     }
     detached(
@@ -124,7 +129,10 @@ export const DocumentSwitcher = ({
                 </p>
               ) : null}
               {visible.map((file) => {
-                const isCurrent = file.entityId === entityId;
+                const isCurrent = isCurrentDocument(file, {
+                  entityId,
+                  fieldId,
+                });
                 return (
                   <CommandItem
                     aria-current={isCurrent ? "page" : undefined}
@@ -132,7 +140,7 @@ export const DocumentSwitcher = ({
                     onClick={() => openDocument(file)}
                     value={file.fieldId}
                   >
-                    <ReferenceFileTypeIcon mimeType={file.mimeType} />
+                    <DocumentIdentityBadge identity={{ kind: "unknown" }} />
                     <BidiText as="span" className="min-w-0 truncate">
                       {file.fileName}
                     </BidiText>
