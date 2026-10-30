@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { getTableConfig } from "drizzle-orm/pg-core";
 import type { PgTable } from "drizzle-orm/pg-core";
 
@@ -8,6 +9,7 @@ import {
 import type { EntityFeatureGateDescriptor } from "../src/db/entity-feature-gate-metadata";
 import type { EffectiveEntityFeatureGateDefinitions } from "../src/db/entity-feature-gate-migrations";
 import { entityFeaturePolicyDefinitions } from "../src/db/entity-feature-policies";
+import rolePrivilegeCensus from "../src/lib/db/role-privilege-census.json" with { type: "json" };
 
 const breakpoint = "\n--> statement-breakpoint\n";
 const quote = (value: string) => `"${value.replaceAll('"', '""')}"`;
@@ -88,9 +90,30 @@ const GATE_ROLE_ROUTINES: ReadonlySet<string> = new Set([
 const GATE_ROLE_SWITCH_REVIEW =
   "-- stella-migration-safety: reviewed grant-privileges - the migrator is already a member of the gate role; this only allows SET ROLE around the generated gate statements and withdraws it after them, as the gate migration does";
 
+type GateRoleCensus = readonly {
+  role: string;
+  attributes: readonly string[];
+}[];
+
 /** The migration safety review of a regenerated gate routine. */
-const GATE_ROUTINE_REVIEW =
-  "-- stella-migration-safety: reviewed security-definer - a gate routine generated from the schema's gate graph, replaced in place as its owner, the gate role, which is neither superuser nor BYPASSRLS; search_path is pinned to pg_catalog, then pg_temp";
+export const gateRoutineReview = (census: GateRoleCensus): string => {
+  const gateRole = census.find(({ role }) => role === "stella_entity_gate");
+  if (gateRole === undefined) {
+    return panic(
+      "Role stella_entity_gate is missing from the privilege census.",
+    );
+  }
+  for (const attribute of ["SUPERUSER:false", "BYPASSRLS:false"]) {
+    if (!gateRole.attributes.includes(attribute)) {
+      return panic(
+        `Role stella_entity_gate is missing required attribute ${attribute}.`,
+      );
+    }
+  }
+  return "-- stella-migration-safety: reviewed security-definer - a gate routine generated from the schema's gate graph, replaced in place as its owner, the gate role, which is neither superuser nor BYPASSRLS; search_path is pinned to pg_catalog, then pg_temp";
+};
+
+const GATE_ROUTINE_REVIEW = gateRoutineReview(rolePrivilegeCensus);
 
 /**
  * Statements run as the gate role. The gate migration leaves the migrator a

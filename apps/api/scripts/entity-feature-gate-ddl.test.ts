@@ -10,12 +10,66 @@ import {
 } from "../src/db/entity-feature-gate-migrations";
 import { entityFeaturePolicyDefinitions } from "../src/db/entity-feature-policies";
 import * as schema from "../src/db/schema";
+import rolePrivilegeCensus from "../src/lib/db/role-privilege-census.json" with { type: "json" };
 import { createPolicyStatementsOf } from "../src/tests/helpers/lock-taking-sql";
 import {
   createPolicyStatement,
   entityFeatureGatePieces,
   entityFeatureGateTableSql,
+  gateRoutineReview,
 } from "./entity-feature-gate-ddl";
+
+const expectedGateRoutineReview =
+  "-- stella-migration-safety: reviewed security-definer - a gate routine generated from the schema's gate graph, replaced in place as its owner, the gate role, which is neither superuser nor BYPASSRLS; search_path is pinned to pg_catalog, then pg_temp";
+
+test("the committed census supports the gate routine review", () => {
+  expect(gateRoutineReview(rolePrivilegeCensus)).toBe(
+    expectedGateRoutineReview,
+  );
+});
+
+for (const attribute of ["SUPERUSER", "BYPASSRLS"]) {
+  test(`${attribute}:true invalidates the gate routine review`, () => {
+    const census = rolePrivilegeCensus.map((entry) =>
+      entry.role === "stella_entity_gate"
+        ? {
+            ...entry,
+            attributes: entry.attributes.map((value) =>
+              value === `${attribute}:false` ? `${attribute}:true` : value,
+            ),
+          }
+        : entry,
+    );
+    expect(() => gateRoutineReview(census)).toThrow(
+      `Role stella_entity_gate is missing required attribute ${attribute}:false.`,
+    );
+  });
+}
+
+test("a missing gate role attribute invalidates the routine review", () => {
+  const census = rolePrivilegeCensus.map((entry) =>
+    entry.role === "stella_entity_gate"
+      ? {
+          ...entry,
+          attributes: entry.attributes.filter(
+            (value) => value !== "SUPERUSER:false",
+          ),
+        }
+      : entry,
+  );
+  expect(() => gateRoutineReview(census)).toThrow(
+    "Role stella_entity_gate is missing required attribute SUPERUSER:false.",
+  );
+});
+
+test("a missing gate role invalidates the routine review", () => {
+  const census = rolePrivilegeCensus.filter(
+    ({ role }) => role !== "stella_entity_gate",
+  );
+  expect(() => gateRoutineReview(census)).toThrow(
+    "Role stella_entity_gate is missing from the privilege census.",
+  );
+});
 
 /** The gate role switch, carrying its migration safety review. */
 const reviewedRoleSwitch = (set: "TRUE" | "FALSE") =>
