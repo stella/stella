@@ -1475,6 +1475,7 @@ const job = (
 ) => ({
   conclusion,
   name,
+  run_attempt: 1,
   status,
 });
 
@@ -1495,15 +1496,38 @@ const fakeGitHub = (responses: Record<string, unknown>) => {
   return Object.assign(read, { paths });
 };
 
+// The unmet checks ci-result publishes beside the required-jobs record.
+const heavyViolations = (overrides: Record<string, unknown> = {}) => ({
+  run_id: 11,
+  run_attempt: 1,
+  head_sha: CUT_SHA,
+  evaluated: true,
+  violations: "marketing-screenshots (planned, failure)",
+  ...overrides,
+});
+
+// The two artifacts ci-result uploads; null stands for unreadable.
+const fakeRecord =
+  (record: unknown, violations: unknown = heavyViolations()) =>
+  async (_runId: string, artifact: string): Promise<unknown> => {
+    const found = artifact === "ci-required-summary" ? record : violations;
+    if (found === null) {
+      throw new Error(`no ${artifact} artifact`);
+    }
+    return found;
+  };
+
 const cutRefusal = async (
   responses: Record<string, unknown>,
+  record: unknown = null,
+  violations: unknown = heavyViolations(),
 ): Promise<string> => {
   const written: string[] = [];
   try {
     await assertReleaseCutReady(
       CUT_SHA,
       false,
-      fakeGitHub(responses),
+      { json: fakeGitHub(responses), record: fakeRecord(record, violations) },
       (text) => {
         written.push(text);
       },
@@ -1525,7 +1549,7 @@ describe("release cut readiness", () => {
     });
     const written: string[] = [];
 
-    await assertReleaseCutReady(CUT_SHA, false, read, (text) => {
+    await assertReleaseCutReady(CUT_SHA, false, { json: read }, (text) => {
       written.push(text);
     });
 
@@ -1565,6 +1589,295 @@ describe("release cut readiness", () => {
     );
   });
 
+  const MARKETING_JOB = "suites / marketing-screenshots / check";
+  const COMPARISON_FAILED_STEPS = [
+    { name: "Set up job", conclusion: "success" },
+    { name: "Capture marketing screenshots", conclusion: "failure" },
+    { name: "Read screenshot comparison phase", conclusion: "success" },
+    { name: "Screenshot comparison failed", conclusion: "success" },
+  ];
+  const marketingJob = (steps: unknown[] = COMPARISON_FAILED_STEPS) => ({
+    ...job(MARKETING_JOB, "failure"),
+    steps,
+  });
+  const heavyRecord = (overrides: Record<string, unknown> = {}) => ({
+    version: 1,
+    run_id: 11,
+    head_sha: CUT_SHA,
+    basis: "evaluated",
+    depth: "heavy",
+    run_attempt: 1,
+    verdict: "failure",
+    required: [
+      { job: "ci-tests", conclusion: "success" },
+      { job: "marketing-screenshots", conclusion: "failure" },
+    ],
+    ...overrides,
+  });
+  const heavyRun = (overrides: Record<string, unknown> = {}) => ({
+    id: 11,
+    html_url: `${RUN_PREFIX}11`,
+    repository: { full_name: "stella/stella" },
+    path: ".github/workflows/main-heavy.yml",
+    head_branch: "main",
+    event: "push",
+    display_title: `Main heavy suites ${CUT_SHA}`,
+    run_attempt: 1,
+    head_sha: CUT_SHA,
+    status: "completed",
+    conclusion: "failure",
+    ...overrides,
+  });
+  type HeavyFailureOptions = { run?: Record<string, unknown>; total?: number };
+  const heavyFailure = (
+    jobs: unknown[],
+    { run = heavyRun(), total = jobs.length }: HeavyFailureOptions = {},
+  ) => ({
+    [STATUSES_PATH]: [
+      commitStatus("main/heavy", "failure", 11),
+      PR_DEPTH_GREEN,
+    ],
+    [jobsPath(11)]: { total_count: total, jobs },
+    "/actions/runs/11": run,
+  });
+  const rollups = [
+    job("suites / ci-result", "failure"),
+    job("status", "failure"),
+  ];
+
+  test("cuts with a warning when main/heavy failed only in the screenshot comparison", async () => {
+    const written: string[] = [];
+    await assertReleaseCutReady(
+      CUT_SHA,
+      false,
+      {
+        json: fakeGitHub(
+          heavyFailure([
+            job("suites / web-tests", "success"),
+            marketingJob(),
+            ...rollups,
+          ]),
+        ),
+        record: fakeRecord(heavyRecord()),
+      },
+      (text) => {
+        written.push(text);
+      },
+    );
+    expect(written).toEqual([
+      `::warning::maintenance-release: main/heavy failed only in advisory jobs (${MARKETING_JOB}) ${RUN_PREFIX}11\n`,
+      `maintenance-release: main/heavy and main/pr-depth are green on ${CUT_SHA}\n`,
+    ]);
+  });
+
+  test("refuses when another job failed beside marketing screenshots", async () => {
+    const message = await cutRefusal(
+      heavyFailure([
+        marketingJob(),
+        job("suites / api-tests (2)", "failure"),
+        ...rollups,
+      ]),
+      heavyRecord(),
+    );
+    expect(message).toContain("failing job: suites / api-tests (2) (failure)");
+  });
+
+  test.each([
+    [
+      "a skipped planned required job",
+      heavyRecord({
+        required: [
+          { job: "e2e-production-shard", conclusion: "skipped" },
+          { job: "marketing-screenshots", conclusion: "failure" },
+        ],
+      }),
+      heavyViolations(),
+    ],
+    [
+      "a folded sub-suite that is not success",
+      heavyRecord(),
+      heavyViolations({
+        violations:
+          "marketing-screenshots (planned, failure), api-image-deps (planned, failure)",
+      }),
+    ],
+    [
+      "unevaluated violations",
+      heavyRecord(),
+      heavyViolations({ evaluated: false }),
+    ],
+    ["an absent violations artifact", heavyRecord(), null],
+    [
+      "a violations artifact of another run",
+      heavyRecord(),
+      heavyViolations({ run_id: 12 }),
+    ],
+    [
+      "a violations artifact of another commit",
+      heavyRecord(),
+      heavyViolations({ head_sha: "e".repeat(40) }),
+    ],
+    ["an unreadable required-jobs record", null, heavyViolations()],
+    ["a record of another run", heavyRecord({ run_id: 12 }), heavyViolations()],
+  ])(
+    "refuses an advisory failure beside %s",
+    async (_label, record, violations) => {
+      const message = await cutRefusal(
+        heavyFailure([marketingJob(), ...rollups]),
+        record,
+        violations,
+      );
+      expect(message).toContain("main/heavy: failure");
+    },
+  );
+
+  test.each([
+    [
+      "a seed step",
+      [
+        { name: "Set up job", conclusion: "success" },
+        { name: "Capture marketing screenshots", conclusion: "failure" },
+        { name: "Screenshot comparison failed", conclusion: "skipped" },
+      ],
+    ],
+    [
+      "an earlier step beside the comparison",
+      [
+        { name: "Checkout", conclusion: "failure" },
+        { name: "Capture marketing screenshots", conclusion: "failure" },
+        { name: "Screenshot comparison failed", conclusion: "success" },
+      ],
+    ],
+  ])(
+    "refuses a failure in %s inside the screenshots job",
+    async (_label, steps) => {
+      const message = await cutRefusal(
+        heavyFailure([marketingJob(steps), ...rollups]),
+        heavyRecord(),
+      );
+      expect(message).toContain(
+        "failing job: suites / marketing-screenshots / check (failure)",
+      );
+    },
+  );
+
+  test("refuses artifacts of attempt 1 when the run is at attempt 2", async () => {
+    const message = await cutRefusal(
+      heavyFailure([marketingJob(), ...rollups], {
+        run: heavyRun({ run_attempt: 2 }),
+      }),
+      heavyRecord(),
+      heavyViolations(),
+    );
+    expect(message).toContain("main/heavy: failure");
+  });
+
+  test("cuts when the jobs and both artifacts are from the run's attempt", async () => {
+    const attempt2 = [marketingJob(), ...rollups].map((entry) => ({
+      ...entry,
+      run_attempt: 2,
+    }));
+    const written: string[] = [];
+    await assertReleaseCutReady(
+      CUT_SHA,
+      false,
+      {
+        json: fakeGitHub(
+          heavyFailure(attempt2, { run: heavyRun({ run_attempt: 2 }) }),
+        ),
+        record: fakeRecord(
+          heavyRecord({ run_attempt: 2 }),
+          heavyViolations({ run_attempt: 2 }),
+        ),
+      },
+      (text) => {
+        written.push(text);
+      },
+    );
+    expect(written.join("")).toContain("green on");
+  });
+
+  test("refuses a job list from an earlier attempt than the run's", async () => {
+    const message = await cutRefusal(
+      heavyFailure([marketingJob(), ...rollups], {
+        run: heavyRun({ run_attempt: 2 }),
+      }),
+      heavyRecord({ run_attempt: 2 }),
+      heavyViolations({ run_attempt: 2 }),
+    );
+    expect(message).toContain("main/heavy: failure");
+  });
+
+  test("refuses a job count different from total_count", async () => {
+    const message = await cutRefusal(
+      heavyFailure([marketingJob(), ...rollups], { total: 4 }),
+      heavyRecord(),
+    );
+    expect(message).toContain("main/heavy: failure");
+  });
+
+  test.each([
+    [
+      "a cancelled advisory job",
+      [{ ...marketingJob(), conclusion: "cancelled" }, ...rollups],
+    ],
+    [
+      "an unknown job name",
+      [{ ...marketingJob(), name: "suites / other-shots / check" }],
+    ],
+    ["only the aggregates failing", rollups],
+  ])("refuses %s", async (_label, jobs) => {
+    expect(await cutRefusal(heavyFailure(jobs), heavyRecord())).toContain(
+      "main/heavy: failure",
+    );
+  });
+
+  test.each([
+    ["a different workflow", { path: ".github/workflows/ci.yml" }],
+    ["a different head_sha", { head_sha: "e".repeat(40) }],
+    ["a different title commit", { display_title: "Main heavy suites x" }],
+    ["a run that is not completed", { status: "in_progress" }],
+    ["a cancelled run", { conclusion: "cancelled" }],
+    ["a successful run", { conclusion: "success" }],
+    ["another repository", { repository: { full_name: "other/stella" } }],
+  ])(
+    "refuses an advisory-only status linking to %s",
+    async (_label, overrides) => {
+      const message = await cutRefusal(
+        heavyFailure([marketingJob(), ...rollups], {
+          run: heavyRun(overrides),
+        }),
+        heavyRecord(),
+      );
+      expect(message).toContain("main/heavy: failure");
+    },
+  );
+
+  test("an unreadable run is a refusal", async () => {
+    const message = await cutRefusal(
+      {
+        ...heavyFailure([marketingJob(), ...rollups]),
+        "/actions/runs/11": new Error("HTTP 502"),
+      },
+      heavyRecord(),
+    );
+    expect(message).toContain("main/heavy: failure");
+  });
+
+  test("an error status is never advisory", async () => {
+    const message = await cutRefusal(
+      {
+        [STATUSES_PATH]: [
+          commitStatus("main/heavy", "error", 11),
+          PR_DEPTH_GREEN,
+        ],
+        [jobsPath(11)]: { total_count: 3, jobs: [marketingJob(), ...rollups] },
+      },
+      heavyRecord(),
+    );
+    expect(message).toContain("main/heavy: failure (status error)");
+  });
+
   test("reads only the newest status of each gate", async () => {
     const newerRed = await cutRefusal({
       [STATUSES_PATH]: [
@@ -1585,7 +1898,12 @@ describe("release cut readiness", () => {
         commitStatus("main/heavy", "failure", 10),
       ],
     });
-    await assertReleaseCutReady(CUT_SHA, false, newerGreen, () => undefined);
+    await assertReleaseCutReady(
+      CUT_SHA,
+      false,
+      { json: newerGreen },
+      () => undefined,
+    );
   });
 
   test("refuses a missing main/heavy status and says how to run it", async () => {
@@ -1643,7 +1961,12 @@ describe("release cut readiness", () => {
       [STATUSES_PATH]: [HEAVY_GREEN],
       [SCHEDULED_PR_DEPTH_PATH]: scheduledRun("completed", "success"),
     });
-    await assertReleaseCutReady(CUT_SHA, false, read, () => undefined);
+    await assertReleaseCutReady(
+      CUT_SHA,
+      false,
+      { json: read },
+      () => undefined,
+    );
     expect(read.paths).toEqual([STATUSES_PATH, SCHEDULED_PR_DEPTH_PATH]);
 
     const failed = await cutRefusal({
@@ -1710,7 +2033,12 @@ describe("release cut readiness", () => {
       ],
     });
 
-    await assertReleaseCutReady(CUT_SHA, false, read, () => undefined);
+    await assertReleaseCutReady(
+      CUT_SHA,
+      false,
+      { json: read },
+      () => undefined,
+    );
     expect(read.paths).toHaveLength(2);
   });
 
@@ -1720,7 +2048,7 @@ describe("release cut readiness", () => {
     await assertReleaseCutReady(
       CUT_SHA,
       true,
-      fakeGitHub({ [STATUSES_PATH]: [PR_DEPTH_GREEN] }),
+      { json: fakeGitHub({ [STATUSES_PATH]: [PR_DEPTH_GREEN] }) },
       (text) => {
         written.push(text);
       },

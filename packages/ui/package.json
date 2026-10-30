@@ -64,6 +64,8 @@
     "./calendar-primitives": "./src/calendar/primitives.tsx",
     "./resource-calendar": "./src/calendar/resource-calendar.tsx",
     "./resource-calendar.logic": "./src/calendar/resource-calendar.logic.ts",
+    "./day-calendar": "./src/calendar/day-calendar.tsx",
+    "./day-calendar.logic": "./src/calendar/day-calendar.logic.ts",
     "./data-table": "./src/data-table/index.ts",
     "./date-picker-popover": "./src/components/date-picker-popover.tsx",
     "./details-grid": "./src/components/details-grid.tsx",
