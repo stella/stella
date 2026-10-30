@@ -5,9 +5,7 @@ import { isRecord } from "../type-guards";
 /** The statement that opens every backfill unit's transaction. */
 export const READ_COMMITTED_BEGIN = "BEGIN ISOLATION LEVEL READ COMMITTED";
 
-export class ReadCommittedUnitError extends TaggedError(
-  "ReadCommittedUnitError",
-)<{
+class ReadCommittedUnitError extends TaggedError("ReadCommittedUnitError")<{
   message: string;
   isolation: string;
 }> {}
