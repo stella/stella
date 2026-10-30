@@ -174,6 +174,34 @@ describe("check-migration-safety", () => {
       expectClean(
         runChecker(reviewedDefiner('SET search_path TO pg_catalog, "pg_temp"')),
       );
+      expectClean(
+        runChecker(
+          reviewedDefiner("SET search_path = 'pg_catalog, public, pg_temp'"),
+        ),
+      );
+      expectClean(
+        runChecker(
+          reviewedDefiner("SET search_path = pg_catalog, 'public', pg_temp"),
+        ),
+      );
+    });
+
+    it("reads quoted entries without allowing values after pg_temp", () => {
+      expectFinding(
+        runChecker(
+          reviewedDefiner("SET search_path = pg_catalog, pg_temp, 'public'"),
+        ),
+        "security-definer-search-path",
+      );
+    });
+
+    it("rejects unparseable SECURITY DEFINER search paths by function name", () => {
+      const result = runChecker(
+        reviewedDefiner("SET search_path = pg_catalog + pg_temp"),
+      );
+
+      expectFinding(result, "security-definer-search-path");
+      expect(result.stderr).toContain("function probe");
     });
 
     it("rejects column-target ON CONFLICT clauses", () => {

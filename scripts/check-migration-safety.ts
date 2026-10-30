@@ -75,7 +75,7 @@ type GuardedRule = {
 // Never acknowledgeable: the statement has to be rewritten.
 type StatementInvariantRule = {
   id: MigrationSafetyRuleId;
-  description: string;
+  description: string | ((statement: Statement) => string);
   matches: (statement: Statement) => boolean;
   guidance: string;
 };
@@ -898,49 +898,179 @@ const ROUTINE_OPTION_KEYWORDS = new Set([
   "window",
 ]);
 
-const securityDefinerSearchPathEndsWithPgTemp = (
+type SearchPathSetting =
+  | { type: "configured"; entries: string[] }
+  | { type: "missing" }
+  | { type: "unparseable" };
+
+const parseSearchPathValue = (value: string): SearchPathSetting => {
+  let cursor = 0;
+  const entries: string[] = [];
+  const skipWhitespace = () => {
+    while (/\s/u.test(value[cursor] ?? "")) {
+      cursor++;
+    }
+  };
+
+  skipWhitespace();
+  if (value[cursor] === "=") {
+    cursor++;
+  } else {
+    const to = /^TO\b/iu.exec(value.slice(cursor));
+    if (!to) {
+      return { type: "unparseable" };
+    }
+    cursor += to[0].length;
+  }
+
+  while (cursor < value.length) {
+    skipWhitespace();
+    const quote = value[cursor];
+    if (quote === "'") {
+      cursor++;
+      let literal = "";
+      let closed = false;
+      while (cursor < value.length) {
+        if (value[cursor] !== "'") {
+          literal += value[cursor];
+          cursor++;
+          continue;
+        }
+        if (value[cursor + 1] === "'") {
+          literal += "'";
+          cursor += 2;
+          continue;
+        }
+        cursor++;
+        closed = true;
+        break;
+      }
+      if (!closed) {
+        return { type: "unparseable" };
+      }
+      const literalEntries = literal.split(",").map((entry) => entry.trim());
+      if (literalEntries.some((entry) => entry.length === 0)) {
+        return { type: "unparseable" };
+      }
+      entries.push(...literalEntries);
+    } else if (quote === '"') {
+      cursor++;
+      let identifier = "";
+      let closed = false;
+      while (cursor < value.length) {
+        if (value[cursor] !== '"') {
+          identifier += value[cursor];
+          cursor++;
+          continue;
+        }
+        if (value[cursor + 1] === '"') {
+          identifier += '"';
+          cursor += 2;
+          continue;
+        }
+        cursor++;
+        closed = true;
+        break;
+      }
+      if (!closed || identifier.length === 0) {
+        return { type: "unparseable" };
+      }
+      entries.push(identifier);
+    } else {
+      const identifier = /^[A-Za-z_][A-Za-z0-9_$]*/u.exec(
+        value.slice(cursor),
+      )?.[0];
+      if (!identifier) {
+        return { type: "unparseable" };
+      }
+      entries.push(identifier);
+      cursor += identifier.length;
+    }
+
+    skipWhitespace();
+    if (cursor === value.length) {
+      break;
+    }
+    if (value[cursor] !== ",") {
+      return { type: "unparseable" };
+    }
+    cursor++;
+    skipWhitespace();
+    if (cursor === value.length) {
+      return { type: "unparseable" };
+    }
+  }
+
+  return entries.length === 0
+    ? { type: "unparseable" }
+    : { type: "configured", entries };
+};
+
+const readSecurityDefinerSearchPath = (
   statement: Statement,
-): boolean => {
+): { functionName: string; setting: SearchPathSetting } | undefined => {
   const tokens = indexTokens(statement);
+  const functionIndex = tokens.findIndex((token) =>
+    isIndexKeyword(token, "function"),
+  );
   const isSecurityDefinerFunction = tokens.some(
     (token, index) =>
       isIndexKeyword(token, "security") &&
       isIndexKeyword(tokens[index + 1], "definer"),
   );
-  if (
-    !isSecurityDefinerFunction ||
-    !tokens.some((token) => isIndexKeyword(token, "function"))
-  ) {
-    return true;
+  if (!isSecurityDefinerFunction || functionIndex === -1) {
+    return undefined;
   }
 
+  const functionName = tokens[functionIndex + 1]?.value ?? "<unknown>";
   const settingIndex = tokens.findIndex(
     (token, index) =>
       isIndexKeyword(token, "set") &&
       tokens[index + 1]?.value.toLowerCase() === "search_path",
   );
   if (settingIndex === -1) {
-    return false;
+    return { functionName, setting: { type: "missing" } };
   }
 
-  const pathStart = settingIndex + 2;
-  const pathEnd = tokens.findIndex(
+  const valueStart = tokens[settingIndex + 1]?.index;
+  if (valueStart === undefined) {
+    return { functionName, setting: { type: "unparseable" } };
+  }
+  const pathEnd = tokens.find(
     (token, index) =>
-      index >= pathStart &&
+      index > settingIndex + 1 &&
       token.kind !== "punctuation" &&
       ROUTINE_OPTION_KEYWORDS.has(token.value.toLowerCase()),
+  )?.index;
+  const leadingMaskedCharacters = statement.text.length - statement.raw.length;
+  const originalValue = statement.raw.slice(
+    valueStart - leadingMaskedCharacters + "search_path".length,
+    pathEnd === undefined ? undefined : pathEnd - leadingMaskedCharacters,
   );
-  const pathTokens = tokens
-    .slice(pathStart, pathEnd === -1 ? undefined : pathEnd)
-    .filter((token) => token.kind !== "punctuation" && token.value !== "to");
-  return pathTokens.at(-1)?.value.toLowerCase() === "pg_temp";
+  return { functionName, setting: parseSearchPathValue(originalValue) };
+};
+
+const securityDefinerSearchPathEndsWithPgTemp = (
+  statement: Statement,
+): boolean => {
+  const result = readSecurityDefinerSearchPath(statement);
+  if (!result) {
+    return true;
+  }
+  return (
+    result.setting.type === "configured" &&
+    result.setting.entries.at(-1)?.toLowerCase() === "pg_temp"
+  );
 };
 
 const STATEMENT_INVARIANT_RULES = [
   {
     id: "security-definer-search-path",
-    description:
-      "defines a SECURITY DEFINER function without a search_path ending in pg_temp",
+    description: (statement) => {
+      const functionName =
+        readSecurityDefinerSearchPath(statement)?.functionName;
+      return `defines SECURITY DEFINER function ${functionName ?? "<unknown>"} without a parseable search_path ending in pg_temp`;
+    },
     matches: (statement) =>
       !statement.deferred &&
       !securityDefinerSearchPathEndsWithPgTemp(statement),
@@ -2645,7 +2775,10 @@ const checkSource = (
           file,
           line: statement.line,
           ruleId: rule.id,
-          description: rule.description,
+          description:
+            typeof rule.description === "string"
+              ? rule.description
+              : rule.description(statement),
           guidance: rule.guidance,
         });
       }
