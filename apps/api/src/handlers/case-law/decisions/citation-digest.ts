@@ -31,6 +31,7 @@ import type {
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import { decisionTextWithheldReason } from "@/api/lib/legal-search/corpus-source";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -94,23 +95,28 @@ export const readGatedDecisionCitationDigest = async ({
       const printingIds = [
         ...new Set(cites.items.map(({ printedBy }) => printedBy)),
       ];
-      const sources =
+      const sourceRead =
         printingIds.length === 0
-          ? []
-          : await subject.tx
-              .select({
-                id: publishedCaseLawDecisions.id,
-                descriptor: caseLawSources.descriptor,
-              })
-              .from(publishedCaseLawDecisions)
-              .innerJoin(
-                caseLawSources,
-                eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
-              )
-              .where(inArray(publishedCaseLawDecisions.id, printingIds))
-              .limit(LIMITS.caseLawDecisionCitationPageSize);
+          ? { type: "complete" as const, rows: [] }
+          : await readBounded(
+              subject.tx
+                .select({
+                  id: publishedCaseLawDecisions.id,
+                  descriptor: caseLawSources.descriptor,
+                })
+                .from(publishedCaseLawDecisions)
+                .innerJoin(
+                  caseLawSources,
+                  eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
+                )
+                .where(inArray(publishedCaseLawDecisions.id, printingIds)),
+              printingIds.length,
+            );
+      if (sourceRead.type === "overflow") {
+        return panic("Citation source lookup exceeded its printing decisions");
+      }
       const policies = new Map(
-        sources.map(({ id, descriptor }) => [
+        sourceRead.rows.map(({ id, descriptor }) => [
           id,
           decisionTextWithheldReason(descriptor),
         ]),
