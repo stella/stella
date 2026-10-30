@@ -154,12 +154,41 @@ describe.skipIf(!enabled)("monthly sitemap removal fence (postgres)", () => {
       asTestRaw<Parameters<typeof refreshCaseLawSitemapShards>[0]>(db);
     await refreshCaseLawSitemapShards(refreshDb);
     await refreshCaseLawSitemapShards(refreshDb);
-    expect(
-      await db
-        .select()
-        .from(caseLawSitemapChanges)
-        .where(eq(caseLawSitemapChanges.country, country)),
-    ).toEqual([]);
+    const remainingChanges = await db
+      .select()
+      .from(caseLawSitemapChanges)
+      .where(eq(caseLawSitemapChanges.country, country));
+    if (remainingChanges.length > 0) {
+      const diagnostics = executedRows(
+        await db.execute(sql`SELECT
+          (SELECT jsonb_agg(to_jsonb(held)) FROM (
+            SELECT pid, classid, objid, objsubid, mode, granted, virtualtransaction
+            FROM pg_locks
+            WHERE locktype = 'advisory'
+              AND database = (SELECT oid FROM pg_database WHERE datname = current_database())
+            ORDER BY pid, classid, objid, objsubid
+          ) held) AS advisory_locks,
+          (SELECT jsonb_agg(to_jsonb(backend)) FROM (
+            SELECT pid, state, backend_xmin::text, backend_xid::text, xact_start,
+              application_name, wait_event_type, wait_event, left(query, 80) AS query
+            FROM pg_stat_activity
+            WHERE datname = current_database()
+            ORDER BY pid
+          ) backend) AS activity,
+          (SELECT jsonb_agg(to_jsonb(change)) FROM (
+            SELECT * FROM case_law_sitemap_changes WHERE country = ${country} ORDER BY id
+          ) change) AS remaining_changes`),
+      );
+      process.stderr.write(
+        `${JSON.stringify({
+          event: "sitemap_removal_refresh_not_drained",
+          country,
+          failedChangeIds: remainingChanges.map(({ id }) => id),
+          diagnostics,
+        })}\n`,
+      );
+    }
+    expect(remainingChanges).toEqual([]);
     expect(
       await db
         .select({ month: caseLawSitemapShards.month })
