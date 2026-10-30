@@ -16,9 +16,9 @@ describe("citation probe candidates", () => {
 
   test("an authority file number joined by non-breaking hyphens is benign", () => {
     expect(
-      residual("č. j. ABCD‑123456‑12/XY‑2020‑1234AB"),
+      residual("č. j. ABCD\\u2011123456\\u201112/XY\\u20112020\\u20111234AB"),
     ).toBe(false);
-    expect(residual("č. j. ÚOHS‑S123/2019/VZ")).toBe(false);
+    expect(residual("č. j. ÚOHS\\u2011S123/2019/VZ")).toBe(false);
   });
 
   test("an enforcement-officer or arbitration file is benign, a docket is not", () => {
