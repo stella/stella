@@ -5,8 +5,9 @@
  */
 
 import { panic, Result, UnhandledException } from "better-result";
-import { DrizzleQueryError, sql } from "drizzle-orm";
+import { DrizzleQueryError, is, sql } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
+import { PgAsyncTransaction } from "drizzle-orm/pg-core";
 
 import {
   SETTING_ORGANIZATION_ID,
@@ -25,6 +26,7 @@ import type { ScopedTransactionBudget } from "@/api/lib/db/aggregate-transaction
 import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   getPendingTransactionBudget,
+  inheritTransactionBudget,
   initializeTransactionBudget,
 } from "@/api/lib/db/transaction-budget-owner";
 import {
@@ -62,7 +64,9 @@ export type TransactionOf<TDatabase extends AnyDrizzle> =
 const RLS_DATABASE_MARKER: unique symbol = Symbol("stella.rlsDatabase");
 
 export type RlsDatabaseMarker = {
-  readonly [RLS_DATABASE_MARKER]: true;
+  readonly [RLS_DATABASE_MARKER]:
+    | { kind: "database" }
+    | { kind: "transaction"; parent: ScopedTransactionBase };
 };
 
 export type RlsDatabase<
@@ -72,7 +76,11 @@ export type RlsDatabase<
 export const markRlsDatabase = <TDatabase extends AnyDrizzle>(
   database: TDatabase,
 ): TDatabase & RlsDatabaseMarker =>
-  Object.assign(database, { [RLS_DATABASE_MARKER]: true as const });
+  Object.assign(database, {
+    [RLS_DATABASE_MARKER]: is(database, PgAsyncTransaction)
+      ? ({ kind: "transaction", parent: database } as const)
+      : ({ kind: "database" } as const),
+  });
 
 export type SafeDbRetryConfig<E = unknown> = {
   retry?: {
@@ -228,6 +236,37 @@ type ScopedDbOptions = {
   userId: SafeId<"user"> | null;
 };
 
+type InitializeScopedBudgetOptions = {
+  database: RlsDatabase;
+  tx: ScopedTransactionBase;
+  budget: ScopedTransactionBudget;
+};
+
+/** A nested Drizzle transaction opens a savepoint, not a new deadline owner. */
+const initializeScopedBudget = async ({
+  database,
+  tx,
+  budget,
+}: InitializeScopedBudgetOptions): Promise<void> => {
+  const state = database[RLS_DATABASE_MARKER];
+  switch (state.kind) {
+    case "transaction":
+      inheritTransactionBudget(state.parent, tx);
+      return;
+    case "database":
+      await initializeTransactionBudget(
+        tx,
+        getPendingTransactionBudget() ?? budget,
+      );
+      return;
+    default:
+      return panic(
+        "Unknown RLS database transaction state",
+        state satisfies never,
+      );
+  }
+};
+
 const runScopedTransaction = async <
   TTransaction extends ScopedTransactionBase,
   T,
@@ -241,10 +280,7 @@ const runScopedTransaction = async <
   featureAccessSnapshot,
 }: RunScopedTransactionOptions<TTransaction, T>): Promise<T> =>
   await database.transaction(async (tx: TTransaction) => {
-    await initializeTransactionBudget(
-      tx,
-      getPendingTransactionBudget() ?? budget,
-    );
+    await initializeScopedBudget({ database, tx, budget });
     if (
       featureAccessSnapshot !== undefined &&
       (featureAccessSnapshot.organizationId !== organizationId ||
@@ -302,10 +338,7 @@ export const createTenantlessDb =
   ) =>
   async <T>(fn: (tx: TTransaction) => Promise<T>): Promise<T> =>
     await database.transaction(async (tx: TTransaction) => {
-      await initializeTransactionBudget(
-        tx,
-        getPendingTransactionBudget() ?? budget,
-      );
+      await initializeScopedBudget({ database, tx, budget });
       await tx.execute(
         sql`SELECT set_config('role', '${sql.raw(stella.name)}', true)`,
       );

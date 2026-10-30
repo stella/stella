@@ -139,16 +139,13 @@ describe("branded types", () => {
         userId: toSafeId<"user">("user_test"),
       });
 
-      createScopedDb(
-        fakeDb,
+      createScopedDb(fakeDb, {
+        budget: BUDGETS.scopedRequest,
         // @ts-expect-error - plain strings must not satisfy the RLS workspace boundary
-        {
-          budget: BUDGETS.scopedRequest,
-          workspaceScope: ["ws_test"],
-          organizationId: toSafeId<"organization">("org_test"),
-          userId: toSafeId<"user">("user_test"),
-        },
-      );
+        workspaceScope: ["ws_test"],
+        organizationId: toSafeId<"organization">("org_test"),
+        userId: toSafeId<"user">("user_test"),
+      });
     });
   });
 });

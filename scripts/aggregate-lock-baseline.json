@@ -679,15 +679,15 @@
   },
   {
     "file": "apps/api/src/db/scoped.ts",
-    "fingerprint": "5bc05d7a3b76004c322638216c4b0a9329b710bd84624ce2388acc6bf8b04c91",
+    "fingerprint": "33757e85b2ed95f5d9ce7b45f2e68e552468b0c760a9610985dec5dcb2ff3212",
     "count": 1,
-    "reason": "Initialize the existing runScopedTransaction physical transaction with its required typed budget through the canonical budget owner before feature, role, and tenant settings; the transaction count and scope are unchanged."
+    "reason": "Initialize the existing createTenantlessDb physical transaction with its required typed budget, or inherit the parent budget for a scoped savepoint, before its role setting; the transaction count and deny-by-default tenantless scope are unchanged."
   },
   {
     "file": "apps/api/src/db/scoped.ts",
-    "fingerprint": "7a4ab67c3ce6f3d9a60c2f14d6806633da95f0082cbfa88dc90032bbce974f0c",
+    "fingerprint": "5ff0f107c32ba531bee38d5ae7b405bd8529924c91258785caf60ade468257e0",
     "count": 1,
-    "reason": "Initialize the existing createTenantlessDb physical transaction with its required typed budget through the canonical budget owner before its role setting; the transaction count and deny-by-default tenantless scope are unchanged."
+    "reason": "Initialize the existing runScopedTransaction physical transaction with its required typed budget, or inherit the parent budget for a scoped savepoint, before feature, role, and tenant settings; the transaction count and scope are unchanged."
   },
   {
     "file": "apps/api/src/handlers/case-law/citation-authority.ts",

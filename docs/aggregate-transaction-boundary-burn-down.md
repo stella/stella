@@ -6,11 +6,11 @@ The starting source census for this change is 257 raw API transaction occurrence
 
 The ratchet applies these UTC checkpoints in addition to the per-file shrink-only rule:
 
-| Effective at UTC | Maximum raw boundaries |
-| ---------------- | ---------------------: |
-| 2026-11-13 00:00 |                    200 |
-| 2026-11-27 00:00 |                    100 |
-| 2026-12-11 00:00 |                      0 |
+| Effective date (UTC) | Maximum raw boundaries |
+| -------------------- | ---------------------: |
+| 2026-11-13           |                    200 |
+| 2026-11-27           |                    100 |
+| 2026-12-11           |                      0 |
 
 The first checkpoint removes at least 57 occurrences from the starting census. Main pushes and scheduled checks fail above the active ceiling. Pull requests and merge groups fail above it when they increase the raw-site count or touch a file with raw sites in either the measured base or head; this includes deleting or migrating a raw-site file. Unrelated changes receive a warning annotation with the current count, active ceiling, and next deadline instead. Local checks default to this change scope against the same measured comparison base. The per-file growth guard remains blocking in every mode, and allowances cannot fund deadline failures.
 
