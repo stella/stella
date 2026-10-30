@@ -309,39 +309,74 @@ export const restampMigrations = ({
     earliest = target + 60_000;
     return target === own ? [] : [{ directory, target: new Date(target) }];
   });
-  // Stamps only move forward, and a target equal to a later migration's
-  // current name means that migration moves too; applying the plan from the
-  // last move vacates every destination (and rewrites its references) first.
-  const applied = moves.toReversed().map(({ directory, target }) => {
+  const plan = moves.map(({ directory, target }) => {
     const oldName = path.posix.basename(directory);
-    const suffix = oldName.slice(15);
-    const newName = `${dateToStamp(target)}_${suffix}`;
-    const sqlPath = path.join(cwd, directory, "migration.sql");
-    const sqlBytes = readFileSync(sqlPath);
-    const references = trackedReferenceFiles(cwd, oldName).filter(
-      (file) => !file.startsWith(`${directory}/`),
+    return {
+      directory,
+      oldName,
+      newName: `${dateToStamp(target)}_${oldName.slice(15)}`,
+      movedDirectory: `${path.posix.dirname(directory)}/${dateToStamp(target)}_${oldName.slice(15)}`,
+      sql: readFileSync(path.join(cwd, directory, "migration.sql")),
+    };
+  });
+  // References are found while every path is still tracked; migration SQL
+  // is never rewritten, so its bytes stay identical.
+  const referenceFiles = [
+    ...new Set(
+      plan.flatMap(({ oldName }) => trackedReferenceFiles(cwd, oldName)),
+    ),
+  ].filter((file) => path.posix.basename(file) !== "migration.sql");
+  // Stamps only move forward, and a target equal to a later migration's
+  // current name means that migration moves too; renaming from the last move
+  // vacates every destination first.
+  for (const { directory, movedDirectory } of plan.toReversed()) {
+    renameSync(path.join(cwd, directory), path.join(cwd, movedDirectory));
+  }
+  const movedPath = (file: string) => {
+    const owner = plan.find(({ directory }) =>
+      file.startsWith(`${directory}/`),
     );
-    renameSync(
-      path.join(cwd, directory),
-      path.join(cwd, path.posix.dirname(directory), newName),
+    return owner === undefined
+      ? file
+      : `${owner.movedDirectory}${file.slice(owner.directory.length)}`;
+  };
+  // One pass replaces every old name at once, so a new name that equals
+  // another migration's old name is never rewritten twice.
+  const renames = new Map(
+    plan.map(({ oldName, newName }) => [oldName, newName]),
+  );
+  const oldNames = new RegExp(
+    [...renames.keys()]
+      .toSorted((left, right) => right.length - left.length)
+      .map((name) =>
+        name.replaceAll(
+          /[.*+?^${}()|[\]\\]/gu,
+          (character) => `\\${character}`,
+        ),
+      )
+      .join("|"),
+    "gu",
+  );
+  for (const file of referenceFiles) {
+    const filePath = path.join(cwd, movedPath(file));
+    writeFileSync(
+      filePath,
+      readFileSync(filePath, "utf-8").replaceAll(
+        oldNames,
+        (name) =>
+          renames.get(name) ?? panic(`Unplanned migration name ${name}`),
+      ),
     );
-    for (const file of references) {
-      const filePath = path.join(cwd, file);
-      const contents = readFileSync(filePath, "utf-8");
-      writeFileSync(
-        filePath,
-        contents.replaceAll(oldName, () => newName),
-      );
-    }
+  }
+  for (const { oldName, movedDirectory, sql } of plan) {
     const movedSql = readFileSync(
-      path.join(cwd, path.posix.dirname(directory), newName, "migration.sql"),
+      path.join(cwd, movedDirectory, "migration.sql"),
     );
-    if (!sqlBytes.equals(movedSql)) {
+    if (!sql.equals(movedSql)) {
       panic(`Migration SQL changed while re-stamping ${oldName}`);
     }
-    return { oldName, newName };
-  });
-  return applied.toReversed();
+  }
+  return plan.map(({ oldName, newName }) => ({ oldName, newName }));
 };
 
 export const checkMigrationStamps = ({
