@@ -17,11 +17,17 @@ import * as v from "valibot";
 
 import { generateCapabilityRuntime } from "../apps/api/scripts/generate-capability-runtime";
 import { pinnedParserInputs } from "../packages/catalogue/scripts/pinned-content-facts";
+import { MCP_APPS } from "../packages/mcp-apps/src/manifest";
 import { repoRelativePath } from "../packages/portable-path/src/index";
 import { API_TYPECHECK_REGENERATION_COMMANDS } from "../packages/scripts/src/api-typecheck-regenerate";
 import { ciGeneratedFiles } from "../packages/scripts/src/generated-file-inventory";
+import { MCP_APP_DIRECTORY_OUTPUTS } from "../packages/scripts/src/generated-files";
 import { parseSource } from "../packages/scripts/src/syntax-tree";
 import { createProgram } from "../packages/scripts/src/typescript-program";
+import {
+  MCP_APP_OUTPUT_PATTERNS,
+  mcpAppOutputFailures,
+} from "./check-mcp-app-outputs";
 import { CHECK_POOL_JOBS } from "./ci-check-pool-registry";
 import {
   computeChangedFileScope,
@@ -1027,20 +1033,14 @@ test("CI diff path guards stay pinned to manifest outputs", () => {
   // Derived outputs are untracked, so a diff would pass on anything: the
   // guard instead requires every declared output to exist after the build
   // and runs the tracking check.
-  const declared = (bundle.split("outputs=(\n")[1] ?? "")
-    .split("\n)")[0]
-    ?.split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
-  expect(declared?.toSorted()).toEqual(
+  expect(MCP_APP_OUTPUT_PATTERNS.toSorted()).toEqual(
     [
       ...generator("mcp-app-contracts").outputs,
       ...generator("mcp-app-bundles").outputs,
     ].toSorted(),
   );
   expect(bundle).not.toContain("git diff --exit-code");
-  expect(bundle).toContain('test -s "$output"');
-  expect(bundle).toContain('test -f "$output"');
+  expect(bundle).toContain("bun scripts/check-mcp-app-outputs.ts");
   expect(bundle).toContain("bun scripts/check-mcp-generated-tracking.ts");
   const preparation = readFileSync(
     new URL("ci-generated-sources.ts", import.meta.url),
@@ -1490,31 +1490,85 @@ test("a CLI registry change plans the MCP app bundles it reads", () => {
   }
 });
 
-test("MCP output guard accepts empty shared CSS fragments and rejects absent or empty required artifacts", async () => {
-  const directory = await mkdtemp(nodePath.join(tmpdir(), "mcp-output-guard-"));
+const withMcpOutputs = async (
+  run: (root: string, appDirectories: readonly string[]) => Promise<void>,
+) => {
+  const root = await mkdtemp(nodePath.join(tmpdir(), "mcp-output-guard-"));
+  const appDirectories = MCP_APPS.slice(0, 2).map(({ directory }) => directory);
   try {
-    const run = ciGeneratedStepRun("MCP app derived outputs guard");
-    const loop = run.slice(
-      run.indexOf("for output in "),
-      run.indexOf("bun scripts/check-mcp-generated-tracking.ts"),
+    const outputs = [
+      ...generator("mcp-app-contracts").outputs,
+      ...generator("mcp-app-bundles").outputs,
+    ].flatMap((pattern) =>
+      pattern.includes("/*/")
+        ? appDirectories.map((directory) =>
+            pattern.replace("/*/", () => `/${directory}/`),
+          )
+        : [pattern],
     );
-    const generated = "packages/mcp-apps/src/citation-graph/generated";
-    await mkdir(nodePath.join(directory, generated), { recursive: true });
-    const css = `${generated}/app.css.txt`;
-    const html = `${generated}/app.html.txt`;
-    await writeFile(nodePath.join(directory, css), "");
-    await writeFile(nodePath.join(directory, html), "<html></html>");
-    const check = () =>
-      Bun.spawnSync(["bash", "-c", `outputs=("${css}" "${html}")\n${loop}`], {
-        cwd: directory,
+    for (const file of outputs) {
+      await mkdir(nodePath.dirname(nodePath.join(root, file)), {
+        recursive: true,
       });
-    expect(check().exitCode).toBe(0);
-    await writeFile(nodePath.join(directory, html), "");
-    expect(check().exitCode).not.toBe(0);
-    await writeFile(nodePath.join(directory, html), "<html></html>");
-    await rm(nodePath.join(directory, css));
-    expect(check().exitCode).not.toBe(0);
+      await writeFile(
+        nodePath.join(root, file),
+        file.endsWith("/app.css.txt") ? "" : "generated",
+      );
+    }
+    await run(root, appDirectories);
   } finally {
-    await rm(directory, { recursive: true, force: true });
+    await rm(root, { recursive: true, force: true });
   }
+};
+
+test("every declared app output is checked even when another app has that output", async () => {
+  await withMcpOutputs(async (root, appDirectories) => {
+    expect(appDirectories).toHaveLength(2);
+    expect(mcpAppOutputFailures({ root, appDirectories })).toEqual([]);
+    for (const file of MCP_APP_DIRECTORY_OUTPUTS) {
+      const missing = `packages/mcp-apps/src/${appDirectories.at(1)}/generated/${file}`;
+      const target = nodePath.join(root, missing);
+      await rm(target);
+      expect(mcpAppOutputFailures({ root, appDirectories })).toEqual([
+        `${missing}: missing generated file`,
+      ]);
+      await writeFile(target, file === "app.css.txt" ? "" : "generated");
+    }
+  });
+});
+
+test("an absent app directory cannot disappear from the expected output inventory", async () => {
+  await withMcpOutputs(async (root, appDirectories) => {
+    const missingApp = `packages/mcp-apps/src/${appDirectories.at(1)}`;
+    await rm(nodePath.join(root, missingApp), { recursive: true });
+    expect(mcpAppOutputFailures({ root, appDirectories }).toSorted()).toEqual(
+      MCP_APP_DIRECTORY_OUTPUTS.map(
+        (file) => `${missingApp}/generated/${file}: missing generated file`,
+      ).toSorted(),
+    );
+  });
+});
+
+test("empty per-app CSS passes while every other empty artifact is reported", async () => {
+  await withMcpOutputs(async (root, appDirectories) => {
+    expect(mcpAppOutputFailures({ root, appDirectories })).toEqual([]);
+    const outputs = [
+      ...generator("mcp-app-contracts").outputs,
+      ...generator("mcp-app-bundles").outputs,
+    ]
+      .flatMap((pattern) =>
+        pattern.includes("/*/")
+          ? appDirectories.map((directory) =>
+              pattern.replace("/*/", () => `/${directory}/`),
+            )
+          : [pattern],
+      )
+      .filter((file) => !file.endsWith("/app.css.txt"));
+    for (const file of outputs) {
+      await writeFile(nodePath.join(root, file), "");
+    }
+    expect(mcpAppOutputFailures({ root, appDirectories }).toSorted()).toEqual(
+      outputs.map((file) => `${file}: empty generated file`).toSorted(),
+    );
+  });
 });

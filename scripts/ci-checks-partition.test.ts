@@ -1176,6 +1176,9 @@ const baseSteps = legSteps(baseline, baselineIds).map((step) => {
   const fields = stepFields(step);
   if (step.name === "MCP app derived outputs guard") {
     let run = v.parse(v.string(), fields.run);
+    if (run.includes("bun scripts/check-mcp-app-outputs.ts\n")) {
+      return step;
+    }
     const declaredOutputs = GENERATORS.filter(
       ({ id }) => id === "mcp-app-contracts" || id === "mcp-app-bundles",
     ).flatMap(({ outputs }) => outputs);
@@ -1190,12 +1193,29 @@ const baseSteps = legSteps(baseline, baselineIds).map((step) => {
         () => `${anchor}${additions.map((output) => `  ${output}\n`).join("")}`,
       );
     }
-    // Shared styles can leave a valid per-app CSS fragment empty. Every
-    // other artifact retains the original nonempty-file requirement.
-    run = run.replace(
-      '  test -s "$output" || { echo "::error::$output was not generated"; exit 1; }',
-      '  case "$output" in\n    packages/mcp-apps/src/*/generated/app.css.txt) test -f "$output" ;;\n    *) test -s "$output" ;;\n  esac || { echo "::error::$output was not generated"; exit 1; }',
-    );
+    const start = run.indexOf("outputs=(\n");
+    if (start === -1) {
+      return step;
+    }
+    const end = run.indexOf("done\n", start) + "done\n".length;
+    expect(end).toBeGreaterThan(start);
+    const legacy = run.slice(start, end);
+    const [declarations, loop] = legacy.split(")\n");
+    expect(
+      declarations
+        ?.slice("outputs=(\n".length)
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .toSorted(),
+    ).toEqual(declaredOutputs.toSorted());
+    expect([
+      `for output in "\${outputs[@]}"; do\n  test -s "$output" || { echo "::error::$output was not generated"; exit 1; }\ndone\n`,
+      `for output in "\${outputs[@]}"; do\n  test -e "$output" || { echo "::error::$output was not generated"; exit 1; }\ndone\n`,
+      `for output in "\${outputs[@]}"; do\n  case "$output" in\n    packages/mcp-apps/src/*/generated/app.css.txt) test -f "$output" ;;\n    *) test -s "$output" ;;\n  esac || { echo "::error::$output was not generated"; exit 1; }\ndone\n`,
+    ]).toContain(loop);
+    // Only the declared output loop migrates; build, budgets and tracking remain.
+    run = `${run.slice(0, start)}bun scripts/check-mcp-app-outputs.ts\n${run.slice(end)}`;
     return { ...step, run };
   }
   if (step.name === "CLI sharded registry and derived runtime guard") {
