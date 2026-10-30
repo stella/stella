@@ -533,7 +533,7 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:@stll/fetch"],
   },
   {
-    path: "apps/api/src/mcp/auth.ts",
+    path: "apps/api/src/lib/auth/oauth-grant-admission.ts",
     class: "vendor-sdk",
     reason:
       "Verifies MCP resource access tokens through the OAuth provider client.",

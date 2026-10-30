@@ -155,7 +155,7 @@ export const classifyMcpTokenVerificationError = (
   });
 };
 
-export const OAUTH_REVOCATION_CLOCK_SKEW_SECONDS = 5;
+const OAUTH_REVOCATION_CLOCK_SKEW_SECONDS = 5;
 
 const admittedOAuthCredential = Symbol("admittedOAuthCredential");
 type OAuthCredential = Extract<
