@@ -108,7 +108,7 @@ export const readOrCreateDevContentEncryptionKey = (
     const written = Result.try({
       try: () => {
         mkdirSync(path.join(rootDir, DEV_STATE_DIR), { recursive: true });
-        writeFileSync(temporaryPath, randomBytes(32).toString("hex"), {
+        writeFileSync(temporaryPath, randomBytes(32).toHex(), {
           flag: "wx",
           mode: 0o600,
         });

@@ -14,6 +14,7 @@ import { listsRoute } from "@/api/handlers/lists/routes";
 import { createHttpApp } from "@/api/http/app";
 import type { RouteDefinition, RouteEntry } from "@/api/http/route";
 import { decodeRouteInput, routeContext } from "@/api/http/route-input";
+import type { SafeHandlerLogContext } from "@/api/lib/api-handlers";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   createFeatureAccessSnapshot,
@@ -248,7 +249,10 @@ for (const transport of [
             ...handlerCtx,
             session: { ...handlerCtx.session, id: "fixture-session" },
           };
-          const execute = async (ctx: object) => {
+          const execute = async (
+            ctx: Pick<SafeHandlerLogContext, "request" | "route"> &
+              Record<string, unknown>,
+          ) => {
             switch (capability) {
               case "lists.items.sources.list":
                 return await readSources.handler(

@@ -20,8 +20,8 @@ import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
+import { queryView } from "@/lib/query-view.logic";
 import { COMMON_TIMEZONES } from "@/lib/timezones";
-import { useQueryView } from "@/lib/use-query-view";
 import {
   organizationSettingsKeys,
   organizationSettingsOptions,
@@ -44,7 +44,7 @@ export const OrganizationTimeZoneCard = () => {
   const selectId = useId();
   const user = useAuthenticatedUser();
   const canEdit = usePermissions({ organizationSettings: ["update"] });
-  const view = useQueryView(
+  const view = queryView(
     useQuery(
       organizationSettingsOptions({
         organizationId: user.activeOrganizationId,
@@ -54,6 +54,10 @@ export const OrganizationTimeZoneCard = () => {
   );
 
   const mutation = useSettingsMutation({
+    exceptionScope: {
+      type: "handler",
+      handlerId: "OrganizationTimeZoneCard.mutation.useSettingsMutation",
+    },
     mutationFn: async (timeZone: string | null) =>
       unwrapApiResponse(await api["organization-settings"].post({ timeZone })),
     invalidate: organizationSettingsKeys.all,

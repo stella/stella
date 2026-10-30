@@ -8,6 +8,10 @@ import {
 } from "@stll/oxlint-config";
 
 import concurrencyExceptions from "./.oxlint-plugins/no-hand-rolled-concurrency-exceptions.json" with { type: "json" };
+import {
+  nativeEntries,
+  nativeRuleId,
+} from "./.oxlint-plugins/no-native-ui-registry.ts";
 import { PUBLIC_LAW_MIXED_MODULES } from "./.oxlint-plugins/public-law-decision-surface-modules.ts";
 import auditMutationLedger from "./.oxlint-plugins/require-audit-on-mutation-ledger.json" with { type: "json" };
 import { factoriesWhere } from "./apps/api/src/lib/safe-handler-factories.ts";
@@ -16,6 +20,7 @@ import {
   AUDIT_MUTATION_LEDGER_SCOPE,
   auditMutationBudgets,
 } from "./scripts/audit-mutation-ledger-scope.ts";
+import { CI_INSTALL_PREINSTALL_FILES } from "./scripts/ci-install-preinstall-files.ts";
 import { DERIVED_ATTRIBUTES } from "./scripts/derived-attributes.ts";
 import designLintBaseline from "./scripts/design-lint-baseline.json" with { type: "json" };
 import {
@@ -32,7 +37,10 @@ import { withCanonicalDisableRuleIds } from "./scripts/oxlint-disable-rule-ids.t
 import core from "./scripts/oxlint-presets/core.mjs";
 import react from "./scripts/oxlint-presets/react.mjs";
 import shadcn from "./scripts/oxlint-presets/shadcn.mjs";
-import { PRODUCT_FRONTEND_FILES } from "./scripts/product-frontend-files.ts";
+import {
+  DESIGN_SYSTEM_CONSUMER_FILES,
+  PRODUCT_FRONTEND_FILES,
+} from "./scripts/product-frontend-files.ts";
 import {
   DECLARATION_FILE_GLOB,
   RESULT_CONVENTION_ENABLED_GLOBS,
@@ -173,11 +181,17 @@ const derivedAttributeRuleOptions = {
   })),
 };
 
+// One rule per @stll/ui component that replaces native markup, generated
+// from .oxlint-plugins/no-native-ui-registry.ts.
+const NO_NATIVE_UI_RULE_IDS = nativeEntries().map(({ module }) =>
+  nativeRuleId(module),
+);
+
 const fixtureRuleOverrides = [
   {
     files: [".oxlint-plugins/__fixtures__/no-raw-sha256.fixture.ts"],
     rules: {
-      "no-raw-sha256/no-raw-sha256": "error",
+      "no-raw-sha256/no-raw-sha256": ["error", { hmacTarget: "bun" }],
       "no-unused-vars": "off",
       "no-new": "off",
       "prefer-const": "off",
@@ -191,6 +205,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("require-stable-geometry.fixture.ts", [
     "require-stable-geometry/require-stable-geometry",
+  ]),
+  fixtureRuleOverride("no-raw-e2e-router-push.fixture.ts", [
+    "no-raw-e2e-router-push/no-raw-e2e-router-push",
   ]),
   fixtureRuleOverride("no-raw-api-error-telemetry.fixture.ts", [
     "no-raw-api-error-telemetry/no-raw-api-error-telemetry",
@@ -220,6 +237,12 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-test-support-import.fixture.ts", [
     "no-test-support-import/no-test-support-import",
+  ]),
+  fixtureRuleOverride("retention-source-independence.fixture.ts", [
+    "retention-source-independence/retention-source-independence",
+  ]),
+  fixtureRuleOverride("retention-oracle-owner.fixture.ts", [
+    "retention-oracle-owner/retention-oracle-owner",
   ]),
   fixtureRuleOverride("no-failure-as-empty.fixture.ts", [
     "no-failure-as-empty/no-failure-as-empty",
@@ -261,6 +284,10 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-async-context-enter-with.fixture.ts", [
     "no-async-context-enter-with/no-async-context-enter-with",
   ]),
+  fixtureRuleOverride("prefer-bun-native.fixture.ts", [
+    "prefer-bun-native/no-buffer-string-encoding",
+    "prefer-bun-native/no-headers-from-entries",
+  ]),
   fixtureRuleOverride("request-lifetime.fixture.ts", [
     "request-lifetime/confine-request-reads",
   ]),
@@ -295,6 +322,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-first-observer-entry.fixture.ts", [
     "no-first-observer-entry/no-first-observer-entry",
+  ]),
+  fixtureRuleOverride("no-hookless-use-function.fixture.ts", [
+    "no-hookless-use-function/no-hookless-use-function",
   ]),
   fixtureRuleOverride("no-inline-style-colors.fixture.tsx", [
     "no-inline-style-colors/no-inline-style-colors",
@@ -349,6 +379,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-raw-error-output.fixture.ts", [
     "no-raw-error-output/no-raw-error-output",
   ]),
+  fixtureRuleOverride("require-fingerprint-fields.fixture.ts", [
+    "require-fingerprint-fields/require-fingerprint-fields",
+  ]),
   fixtureRuleOverride("no-raw-mcp-error-result.fixture.ts", [
     "no-raw-mcp-error-result/no-raw-mcp-error-result",
   ]),
@@ -372,6 +405,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-rendered-error-translation.fixture.tsx", [
     "no-rendered-error-translation/no-rendered-error-translation",
+  ]),
+  fixtureRuleOverride("require-valibot-message.fixture.ts", [
+    "require-valibot-message/require-valibot-message",
   ]),
   fixtureRuleOverride("no-raw-child-exit-status.fixture.ts", [
     "no-raw-child-exit-status/no-raw-child-exit-status",
@@ -412,17 +448,36 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-section-sign-glyph.fixture.tsx", [
     "no-section-sign-glyph/no-section-sign-glyph",
   ]),
+  fixtureRuleOverride("no-inert-autofocus.fixture.tsx", [
+    "no-inert-autofocus/no-inert-autofocus",
+  ]),
+  fixtureRuleOverride("no-constructed-fetch-object.fixture.ts", [
+    "no-constructed-fetch-object/no-constructed-fetch-object",
+  ]),
   fixtureRuleOverride("no-ad-hoc-text-mark.fixture.tsx", [
     "no-ad-hoc-text-mark/no-ad-hoc-text-mark",
   ]),
   fixtureRuleOverride("no-raw-file-input.fixture.tsx", [
     "no-raw-file-input/no-raw-file-input",
   ]),
+  fixtureRuleOverride("no-native-ui.fixture.tsx", NO_NATIVE_UI_RULE_IDS),
+  fixtureRuleOverride("no-person-select.fixture.tsx", [
+    "no-person-select/no-person-select",
+  ]),
   fixtureRuleOverride("no-ad-hoc-chat-link.fixture.tsx", [
     "no-ad-hoc-chat-link/no-ad-hoc-chat-link",
   ]),
   fixtureRuleOverride("no-font-utility-in-reader.fixture.tsx", [
     "no-font-utility-in-reader/no-font-utility-in-reader",
+  ]),
+  fixtureRuleOverride("no-auto-hyphenation-in-reader.fixture.tsx", [
+    "no-auto-hyphenation-in-reader/no-auto-hyphenation-in-reader",
+  ]),
+  fixtureRuleOverride("no-justified-reader-text.fixture.tsx", [
+    "no-justified-reader-text/no-justified-reader-text",
+  ]),
+  fixtureRuleOverride("no-sm-breakpoint-in-desktop.fixture.tsx", [
+    "no-sm-breakpoint-in-desktop/no-sm-breakpoint-in-desktop",
   ]),
   fixtureRuleOverride("dialog-footer-owns-actions.fixture.tsx", [
     "dialog-footer-owns-actions/dialog-footer-owns-actions",
@@ -486,8 +541,10 @@ const fixtureRuleOverrides = [
     "bun-test-hygiene/no-disabled-tests",
     "bun-test-hygiene/no-identical-title",
     "bun-test-hygiene/no-promise-matchers",
+    "bun-test-hygiene/no-global-testing-library-screen",
     "bun-test-hygiene/no-unmanaged-database-client",
     "bun-test-hygiene/no-forced-database-drop",
+    "bun-test-hygiene/require-module-mock-reset",
   ]),
   fixtureRuleOverride("no-same-fixture-member-oracle.fixture.ts", [
     "no-same-fixture-member-oracle/no-same-fixture-member-oracle",
@@ -509,6 +566,7 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("public-law-read-boundary.fixture.ts", [
     "public-law-read-boundary/require-language-alternate-counts",
     "public-law-read-boundary/require-configured-read-transaction",
+    "public-law-read-boundary/require-owned-public-read-transport",
   ]),
   fixtureRuleOverride("require-billing-cap-crossings.fixture.ts", [
     "require-billing-cap-crossings/require-billing-cap-crossings",
@@ -658,6 +716,12 @@ const noZodImport = {
   message: "Use 'valibot' instead of 'zod'.",
 };
 
+// XML is read with saxes, one pass that validates while it reads.
+const noFastXmlParserImport = {
+  name: "fast-xml-parser",
+  message: "Read XML with 'saxes'.",
+};
+
 const noClassicTypeScriptImport = {
   name: "typescript",
   message:
@@ -725,17 +789,43 @@ const webCrossWorkspaceImports = [
 // Bans reaching sideways into an application, into a private workspace
 // package, and back into itself through the package name (the intra-package
 // graph is relative, so a self-reference would only survive in-repo).
+const uiAppCodeImportBan = {
+  group: ["@/*", "@/**", "apps/*", "apps/**", "**/apps/**"],
+  message:
+    "@stll/ui must not reach into application code; move the shared part into the package or keep the component in the app.",
+};
+
 const uiStandaloneImports = [
   {
     group: ["@stll/*", "@stll/*/**"],
     message:
       "@stll/ui must build standalone; it may not import another workspace package, including itself by name.",
   },
+  uiAppCodeImportBan,
+];
+
+// Workspace packages that exist only to help tests, each a devDependency of
+// @stll/ui. A ui test file may import them: tsdown builds no test file (see packages/ui/tsdown.config.ts), so the
+// dependency is a devDependency that never ships. Production src stays banned,
+// and so does every package not named here.
+const UI_TEST_HELPER_PACKAGES = ["@stll/property-testing"] as const;
+
+const UI_TEST_FILES = [
+  "packages/ui/src/**/*.test.{ts,tsx}",
+  "packages/ui/src/**/*.dom.test.tsx",
+];
+
+const uiTestStandaloneImports = [
   {
-    group: ["@/*", "@/**", "apps/*", "apps/**", "**/apps/**"],
+    group: [
+      "@stll/*",
+      "@stll/*/**",
+      ...UI_TEST_HELPER_PACKAGES.flatMap((name) => [`!${name}`, `!${name}/**`]),
+    ],
     message:
-      "@stll/ui must not reach into application code; move the shared part into the package or keep the component in the app.",
+      "@stll/ui tests may import only the workspace test-helper packages; any other workspace package, including @stll/ui by name, would break the standalone build.",
   },
+  uiAppCodeImportBan,
 ];
 
 // The all-locales folio catalog entries (and their `getFolioMessages`) bundle
@@ -760,6 +850,44 @@ const webDatePickerImport = {
   ],
   message:
     "Use '@/components/date-picker-popover' so locale labels are injected.",
+};
+
+// use-intl's formatter formats in the UI language; FormattingProvider's
+// formatter applies the reader's region, calendar, numbering and week start.
+const webUseIntlFormatterImport = {
+  name: "use-intl",
+  importNames: ["useFormatter"],
+  message:
+    "Import useFormatter from '@/i18n/formatting-context', which formats in the reader's formatting locale rather than the UI language.",
+};
+
+// A citation's kind decides its chip: a paragraph of the open decision
+// previews from its loaded text, another decision from its metadata. The one
+// owner dispatches on that kind, so a surface never picks a chip itself.
+const webCitationChipImport = {
+  group: ["**/paragraph-reference", "**/decision-citation-chip"],
+  message:
+    "Render citations through '@/components/references/citation-chip', which picks the chip by citation kind.",
+};
+
+// use-intl's useLocale is the UI language, which differs from the formatting
+// locale whenever the reader picks a regional format. Each has one named owner,
+// so a call site states which one it reads.
+const webUseIntlLocaleImport = {
+  name: "use-intl",
+  importNames: ["useLocale"],
+  message:
+    "Read the UI language with useMessageLocale from '@/i18n/message-locale', or the formatting locale with useFormattingLocale from '@/i18n/formatting-context'.",
+};
+
+// The package formats in the host's formatting locale, which reaches it
+// through WorkspaceUiFormattingProvider; use-intl's formatter and locale are
+// the UI language.
+const workspaceUiUseIntlFormattingImport = {
+  name: "use-intl",
+  importNames: ["useFormatter", "useLocale"],
+  message:
+    "Import useFormatter or useFormattingLocale from './formatting', which format in the host's formatting locale rather than the UI language.",
 };
 
 const apiSafeIdBrandingImport = {
@@ -944,13 +1072,13 @@ const customCssClassNames = [
   "reader-body",
   "reader-case-law",
   "reader-chrome",
-  "reader-justify",
   "reader-note-back",
   "reader-note-label",
   "reader-note-ref",
   "reader-page-marker",
   "reader-page-tick",
   "reader-paper",
+  "reader-prose",
   "reader-scroll",
   "reader-signature",
   "reader-statute",
@@ -971,7 +1099,146 @@ const customCssClassNames = [
   "word",
 ] satisfies string[];
 
+// Exact files with verified Bun execution owners; new paths do not inherit a runtime.
+const bunNativeFiles = [
+  ".oxlint-plugins/__tests__/no-raw-sha256.test.ts",
+  ".oxlint-plugins/__tests__/prefer-bun-native.test.ts",
+  "apps/api/evals/template-authoring.ts",
+  "apps/api/scripts/ai-native-image-canary.ts",
+  "apps/api/scripts/ai-provider-canary.ts",
+  "apps/api/scripts/seed-dev.ts",
+  "apps/api/scripts/visual-sandbox-fonts.test.ts",
+  "apps/api/scripts/visual-sandbox-fonts.ts",
+  "apps/api/src/agent-auth/credentials.ts",
+  "apps/api/src/db/schema/bytea.test.ts",
+  "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj-notice.test.ts",
+  "apps/api/src/handlers/case-law/ingestion/adapters/hu-bhgy.ts",
+  "apps/api/src/handlers/case-law/ingestion/adapters/pl-nsa.ts",
+  "apps/api/src/handlers/case-law/ingestion/adapters/sk-us.test.ts",
+  "apps/api/src/handlers/case-law/ingestion/parsers/eu-ecj-formex-parts.ts",
+  "apps/api/src/handlers/chat/link-icons/cache.ts",
+  "apps/api/src/handlers/chat/message-page.test.ts",
+  "apps/api/src/handlers/chat/third-party-boundary.test.ts",
+  "apps/api/src/handlers/chat/upload-files.test.ts",
+  "apps/api/src/handlers/chat/upload-files.ts",
+  "apps/api/src/handlers/desktop-registry/redeem-link.postgres.test.ts",
+  "apps/api/src/handlers/docx-suggestions/cursor.property.test.ts",
+  "apps/api/src/handlers/entities/pdf-signing-certificate.ts",
+  "apps/api/src/handlers/entities/pdf-signing-signature.integration.test.ts",
+  "apps/api/src/handlers/entities/pdf-signing-signature.ts",
+  "apps/api/src/handlers/entities/version-cursor.test.ts",
+  "apps/api/src/handlers/legal-resolve/authorization.test.ts",
+  "apps/api/src/handlers/legislation/search-relaxed.contract.test.ts",
+  "apps/api/src/handlers/lists/verifications/get.db.test.ts",
+  "apps/api/src/handlers/sharepoint/graph-oauth.ts",
+  "apps/api/src/handlers/soft-law/adapters/edpb.test.ts",
+  "apps/api/src/handlers/soft-law/adapters/edpb.ts",
+  "apps/api/src/handlers/soft-law/adapters/wp29.test.ts",
+  "apps/api/src/handlers/soft-law/adapters/wp29.ts",
+  "apps/api/src/handlers/soft-law/eu-expressions.db.test.ts",
+  "apps/api/src/handlers/soft-law/ingestion.db.test.ts",
+  "apps/api/src/handlers/templates/list-cursor.test.ts",
+  "apps/api/src/handlers/templates/prepare.ts",
+  "apps/api/src/handlers/workspaces/activity-cursor.test.ts",
+  "apps/api/src/lib/agent-client-credential-storage.postgres.test.ts",
+  "apps/api/src/lib/agent-client-credentials.postgres.test.ts",
+  "apps/api/src/lib/agent-client-credentials.test.ts",
+  "apps/api/src/lib/auth/http-basic-auth.ts",
+  "apps/api/src/lib/auth/mcp-web-handoff.ts",
+  "apps/api/src/lib/auth/session-lifetime-store.ts",
+  "apps/api/src/lib/bbox/ai-generate-b-boxes.ts",
+  "apps/api/src/lib/business-registries/desktop/proof.test.ts",
+  "apps/api/src/lib/business-registries/desktop/proof.ts",
+  "apps/api/src/lib/business-registries/desktop/renewal.postgres.test.ts",
+  "apps/api/src/lib/chat/provider-image-input.test.ts",
+  "apps/api/src/lib/chat/provider-image-input.ts",
+  "apps/api/src/lib/content-encryption.test.ts",
+  "apps/api/src/lib/content-encryption.ts",
+  "apps/api/src/lib/data-url.ts",
+  "apps/api/src/lib/db-pagination.test.ts",
+  "apps/api/src/lib/db/operator-registrations/input.test.ts",
+  "apps/api/src/lib/db/service-client-operator.ts",
+  "apps/api/src/lib/email/inbound/address.ts",
+  "apps/api/src/lib/email/inbound/authentication.test.ts",
+  "apps/api/src/lib/email/inbound/email-file.test-fixture.ts",
+  "apps/api/src/lib/email/inbound/message.test.ts",
+  "apps/api/src/lib/email/inbound/original-signature.test.ts",
+  "apps/api/src/lib/email/inbound/upload.db.test.ts",
+  "apps/api/src/lib/entities/window-cursor.ts",
+  "apps/api/src/lib/files/email-attachment-token.ts",
+  "apps/api/src/lib/files/email-to-html.test.ts",
+  "apps/api/src/lib/files/email-to-html.ts",
+  "apps/api/src/lib/files/organization-file-usage-reconcile.ts",
+  "apps/api/src/lib/files/pdf-signing/certificate-chain.test.ts",
+  "apps/api/src/lib/files/pdf-signing/certificate-chain.ts",
+  "apps/api/src/lib/files/pdf-signing/sign-pdf.test.ts",
+  "apps/api/src/lib/files/pdf-signing/sign-pdf.ts",
+  "apps/api/src/lib/files/pdf-signing/stamp-glyphs.ts",
+  "apps/api/src/lib/files/pdf-signing/timestamp-trust.test.ts",
+  "apps/api/src/lib/folio-collab-rooms.test.ts",
+  "apps/api/src/lib/folio-collab-rooms.ts",
+  "apps/api/src/lib/health/database-login-probe.postgres.test.ts",
+  "apps/api/src/lib/hosted-usage-provider/verify-signature.test.ts",
+  "apps/api/src/lib/hosted-usage-provider/verify-signature.ts",
+  "apps/api/src/lib/legal-search/corpus-search-cursor.test.ts",
+  "apps/api/src/lib/legal-search/corpus-search-cursor.ts",
+  "apps/api/src/lib/mcp-upstream/oauth.ts",
+  "apps/api/src/lib/member-credential-lifecycle.db.test.ts",
+  "apps/api/src/lib/pagination.property.test.ts",
+  "apps/api/src/lib/pagination.ts",
+  "apps/api/src/lib/provider-document-adapters.test.ts",
+  "apps/api/src/lib/search/cursor.test.ts",
+  "apps/api/src/lib/search/cursor.ts",
+  "apps/api/src/lib/stella-openrouter-text-adapter.test.ts",
+  "apps/api/src/lib/tanstack-ai-models.test.ts",
+  "apps/api/src/lib/workflow/ai-generate-batch.ts",
+  "apps/api/src/mcp/decision-reader.logic.test.ts",
+  "apps/api/src/mcp/feedback-approval.ts",
+  "apps/api/src/mcp/file-comparison-links-tool.test.ts",
+  "apps/api/src/mcp/file-comparison-prepare-tool.test.ts",
+  "apps/api/src/mcp/file-comparison-prepare-tool.ts",
+  "apps/api/src/mcp/file-comparison-run.test.ts",
+  "apps/api/src/mcp/sha256-storage-parity.test.ts",
+  "apps/api/src/mcp/template-tools.test.ts",
+  "apps/api/src/mcp/template-tools.ts",
+  "apps/api/src/scripts/mcp-canary.ts",
+  "apps/api/src/tests/helpers/case-law-enrolled-fixtures.ts",
+  "apps/api/src/tests/helpers/oauth-grant.ts",
+  "apps/api/src/tests/helpers/read-fault-drivers.ts",
+  "apps/api/src/tests/security/business-registry-credentials-rls.integration.test.ts",
+  "apps/collab/src/server.test.ts",
+  "apps/collab/src/server.ts",
+  "apps/landing/scripts/render-og-card.ts",
+  "apps/landing/src/lib/og-card.ts",
+  "apps/web/src/lib/desktop-bridge.test.ts",
+  "packages/agent-engine/scripts/e2e-mcp-canary.ts",
+  "packages/agent-engine/src/bun-docker/provider.ts",
+  "packages/business-registries/src/companies-house/client.test.ts",
+  "packages/catalogue/scripts/generate-manifest.ts",
+  "packages/mcp-apps/scripts/build-mcp-apps.ts",
+  "packages/property-testing/src/sha256.property.test.ts",
+  "packages/scripts/src/dev-runtime.ts",
+  "packages/sha256/src/sha256.test.ts",
+  "scripts/check-published-versions.test.ts",
+  "scripts/ci-checks-partition.test.ts",
+  "scripts/ci-windows-dry-run-result.test.ts",
+  "scripts/cla-workflow.test.ts",
+  "scripts/dated-waiver-fix-task.ts",
+  "scripts/dated-waiver-publish.ts",
+  "scripts/dependency-review-workflow.test.ts",
+  "scripts/generated-conflicts.ts",
+  "scripts/gh-retry.test.ts",
+  "scripts/product-media.test.ts",
+  "scripts/product-media.ts",
+  "scripts/verify.test.ts",
+  "scripts/verify.ts",
+];
+
+const sha256AllowedFiles = sha256MigrationLedger.map(({ id }) => id);
+
 const config = defineConfig({
+  // Oxlint does not inherit `env` through `extends`.
+  env: core.env,
   extends: [core, react, shadcn],
   // `typeAware` and `reportUnusedDisableDirectives` stay CLI flags: the
   // pre-commit hook and the docs-source check run without type information,
@@ -995,10 +1262,6 @@ const config = defineConfig({
     },
     tailwindcss: {
       entryPoint: [
-        {
-          files: "packages/mcp-apps/**",
-          use: "packages/mcp-apps/src/shared/style.css",
-        },
         { files: "apps/web/**", use: "apps/web/src/styles/app.css" },
         {
           files: "apps/desktop/**",
@@ -1031,7 +1294,7 @@ const config = defineConfig({
     "confine-aggregate-lock/confine-aggregate-lock": "error",
     "no-raw-sha256/no-raw-sha256": [
       "error",
-      { allowedFiles: sha256MigrationLedger.map(({ id }) => id) },
+      { allowedFiles: sha256AllowedFiles },
     ],
     // Every base rule is decided here or in the vendored presets, never by a
     // spread: a spread replaces preset severities without naming the rules,
@@ -1227,6 +1490,7 @@ const config = defineConfig({
       {
         paths: [
           noZodImport,
+          noFastXmlParserImport,
           noClassicTypeScriptImport,
           ...noRetiredHttpFrameworkImports,
         ],
@@ -1269,6 +1533,8 @@ const config = defineConfig({
     "no-direct-folio-snapshot-retirement/no-direct-folio-snapshot-retirement":
       "error",
     "no-direct-legislation-revision-write/no-direct-legislation-revision-write":
+      "error",
+    "no-direct-decision-identifier-column-write/no-direct-decision-identifier-column-write":
       "error",
     "no-unvalidated-clause-write/no-unvalidated-clause-write": "error",
     "no-direct-template-version-write/no-direct-template-version-write":
@@ -1332,6 +1598,7 @@ const config = defineConfig({
     ],
     "no-nanoid/no-nanoid": "error",
     "no-section-sign-glyph/no-section-sign-glyph": "error",
+    "no-inert-autofocus/no-inert-autofocus": "error",
     "no-hand-built-date-range-filter/no-hand-built-date-range-filter": "error",
     "confine-server-reads/confine-server-reads": "error",
     "no-direct-matter-glyph/no-direct-matter-glyph": "error",
@@ -1507,6 +1774,7 @@ const config = defineConfig({
     // Bundled API-owned schemas: validate their source and regenerate this artifact.
     "packages/mcp-apps/src/shared/generated/contracts.js",
     "**/*.config.js",
+    "**/*.config.cjs",
     // Module-augmentation files must use `interface` for declaration
     // merging; oxlint's --fix would rewrite it to `type` and break it.
     "types/**/*.d.ts",
@@ -1555,6 +1823,7 @@ const config = defineConfig({
     "oxlint-tailwindcss",
     "@stll/oxlint-config/no-raw-colors",
     "./.oxlint-plugins/no-raw-date-input.ts",
+    "./.oxlint-plugins/no-native-ui.ts",
     "./.oxlint-plugins/no-raw-date-parsing.ts",
     "./.oxlint-plugins/prefer-temporal.ts",
     "./.oxlint-plugins/no-raw-locale-format.ts",
@@ -1566,6 +1835,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-raw-foreground-opacity.ts",
     "./.oxlint-plugins/no-ad-hoc-inline-rename.ts",
     "./.oxlint-plugins/no-first-observer-entry.ts",
+    "./.oxlint-plugins/no-hookless-use-function.ts",
     "./.oxlint-plugins/no-inline-style-colors.ts",
     "./.oxlint-plugins/no-inline-heavy-host-props.ts",
     "./.oxlint-plugins/no-ad-hoc-find-shortcut.ts",
@@ -1580,21 +1850,27 @@ const config = defineConfig({
     "./.oxlint-plugins/no-raw-error-output.ts",
     "./.oxlint-plugins/no-raw-mcp-error-result.ts",
     "./.oxlint-plugins/failure-sink-handle.ts",
+    "./.oxlint-plugins/require-fingerprint-fields.ts",
     "./.oxlint-plugins/no-redacted-log-attribute-key.ts",
     "./.oxlint-plugins/no-untyped-updates.ts",
     "./.oxlint-plugins/no-nanoid.ts",
     "./.oxlint-plugins/no-placeholder-stella-mark.ts",
     "./.oxlint-plugins/no-section-sign-glyph.ts",
+    "./.oxlint-plugins/no-inert-autofocus.ts",
+    "./.oxlint-plugins/no-constructed-fetch-object.ts",
     "./.oxlint-plugins/no-hand-built-date-range-filter.ts",
     "./.oxlint-plugins/no-direct-matter-glyph.ts",
     "./.oxlint-plugins/no-unowned-icon.ts",
     "./.oxlint-plugins/no-direct-entity-glyph.ts",
     "./.oxlint-plugins/no-direct-lucide-import.ts",
     "./.oxlint-plugins/no-test-support-import.ts",
+    "./.oxlint-plugins/retention-source-independence.ts",
+    "./.oxlint-plugins/retention-oracle-owner.ts",
     "./.oxlint-plugins/no-banned-glyph.ts",
     "./.oxlint-plugins/no-hand-built-step-marker.ts",
     "./.oxlint-plugins/no-custom-account-modal.ts",
     "./.oxlint-plugins/no-raw-file-input.ts",
+    "./.oxlint-plugins/no-person-select.ts",
     "./.oxlint-plugins/no-ad-hoc-text-mark.ts",
     "./.oxlint-plugins/no-raw-user-avatar-primitive.ts",
     "./.oxlint-plugins/no-shadowed-user-name-helpers.ts",
@@ -1612,18 +1888,22 @@ const config = defineConfig({
     "./.oxlint-plugins/no-ref-mirror.ts",
     "./.oxlint-plugins/no-adhoc-loader.ts",
     "./.oxlint-plugins/no-shared-suspense-query.ts",
+    "./.oxlint-plugins/no-raw-query-error-capture.ts",
     "./.oxlint-plugins/no-bare-chrome-query.ts",
     "./.oxlint-plugins/query-data-requires-state.ts",
     "./.oxlint-plugins/no-strict-route-read-in-chrome.ts",
+    "./.oxlint-plugins/no-route-context-in-panel-tabs.ts",
     "./.oxlint-plugins/require-schema-form-options.ts",
     "./.oxlint-plugins/require-router-select.ts",
     "./.oxlint-plugins/require-loader-prefetch.ts",
+    "./.oxlint-plugins/query-invalidation-scope.ts",
     "./.oxlint-plugins/require-matter-affordance.ts",
     "./.oxlint-plugins/require-matter-option-label.ts",
     "./.oxlint-plugins/no-raw-route-query-client.ts",
     "./.oxlint-plugins/no-discarded-toast-error.ts",
     "./.oxlint-plugins/no-direct-error-toast.ts",
     "./.oxlint-plugins/no-rendered-error-translation.ts",
+    "./.oxlint-plugins/require-valibot-message.ts",
     "./.oxlint-plugins/no-raw-child-exit-status.ts",
     "./.oxlint-plugins/no-raw-router-invalidation.ts",
     "./.oxlint-plugins/no-optional-mutation-command.ts",
@@ -1643,7 +1923,6 @@ const config = defineConfig({
     "./.oxlint-plugins/no-direct-ingestion-checkpoint-write.ts",
     "./.oxlint-plugins/no-literal-decision-court.ts",
     "./.oxlint-plugins/no-literal-derived-attribute.ts",
-    "./.oxlint-plugins/no-parser-validator-calls.ts",
     "./.oxlint-plugins/no-raw-parser-html.ts",
     "./.oxlint-plugins/no-swallowed-item-error.ts",
     "./.oxlint-plugins/no-failure-as-empty.ts",
@@ -1697,6 +1976,7 @@ const config = defineConfig({
     "./.oxlint-plugins/fill-diagnostics.ts",
     "./.oxlint-plugins/no-direct-folio-snapshot-retirement.ts",
     "./.oxlint-plugins/no-direct-legislation-revision-write.ts",
+    "./.oxlint-plugins/no-direct-decision-identifier-column-write.ts",
     "./.oxlint-plugins/no-unvalidated-clause-write.ts",
     "./.oxlint-plugins/no-direct-template-version-write.ts",
     "./.oxlint-plugins/no-direct-entity-insert.ts",
@@ -1729,6 +2009,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-bounded-request-schema.ts",
     "./.oxlint-plugins/no-unbounded-response-body.ts",
     "./.oxlint-plugins/no-computed-key-record-assignment.ts",
+    "./.oxlint-plugins/no-dynamic-key-in-operator.ts",
     "./.oxlint-plugins/no-truncated-timestamp-comparison.ts",
     "./.oxlint-plugins/no-spread-input-in-query-key.ts",
     "./.oxlint-plugins/require-query-key-factory.ts",
@@ -1737,24 +2018,31 @@ const config = defineConfig({
     "./.oxlint-plugins/no-vacuous-throw-assertion.ts",
     "./.oxlint-plugins/no-serial-lint-case.ts",
     "./.oxlint-plugins/no-direct-dom-unregister.ts",
+    "./.oxlint-plugins/no-dropped-fake-timers.ts",
     "./.oxlint-plugins/no-internal-module-mock.ts",
     "./.oxlint-plugins/no-direct-test-state.ts",
     "./.oxlint-plugins/no-shared-checkout-mutation.ts",
     "./.oxlint-plugins/no-centered-scroll-column.ts",
     "./.oxlint-plugins/no-raw-overflow-scroll.ts",
+    "./.oxlint-plugins/no-hover-only-reveal.ts",
     "./.oxlint-plugins/no-imported-class-constant.ts",
     "./.oxlint-plugins/no-static-devtools-import.ts",
     "./.oxlint-plugins/no-static-catalogue-route-import.ts",
     "./.oxlint-plugins/require-json-import-attribute.ts",
     "./.oxlint-plugins/require-stable-geometry.ts",
+    "./.oxlint-plugins/no-raw-e2e-router-push.ts",
     "./.oxlint-plugins/no-workspace-field-value-drift.ts",
     "./.oxlint-plugins/icon-button-requires-tooltip.ts",
+    "./.oxlint-plugins/semantic-controls.ts",
     "./.oxlint-plugins/no-disabled-tooltip-trigger.ts",
     "./.oxlint-plugins/no-dialog-trigger-menu-item.ts",
     "./.oxlint-plugins/no-decorated-search-input.ts",
     "./.oxlint-plugins/no-decorative-heading-accent.ts",
     "./.oxlint-plugins/no-ad-hoc-chat-link.ts",
     "./.oxlint-plugins/no-font-utility-in-reader.ts",
+    "./.oxlint-plugins/no-auto-hyphenation-in-reader.ts",
+    "./.oxlint-plugins/no-justified-reader-text.ts",
+    "./.oxlint-plugins/no-sm-breakpoint-in-desktop.ts",
     "./.oxlint-plugins/dialog-footer-owns-actions.ts",
     "./.oxlint-plugins/field-parts-inside-field.ts",
     "./.oxlint-plugins/require-safe-window-open.ts",
@@ -1772,13 +2060,18 @@ const config = defineConfig({
     "./.oxlint-plugins/no-ambient-dev-docker.ts",
     "./.oxlint-plugins/no-eager-singleton.ts",
     "./.oxlint-plugins/no-network-await-in-loop.ts",
+    "./.oxlint-plugins/no-network-in-transaction.ts",
     "./.oxlint-plugins/require-cached-collator.ts",
+    "./.oxlint-plugins/no-case-folded-search-match.ts",
     "./.oxlint-plugins/require-query-signal.ts",
     "./.oxlint-plugins/require-stable-snapshot.ts",
     "./.oxlint-plugins/require-stable-editor-options.ts",
     "./.oxlint-plugins/require-use-shallow.ts",
     "./.oxlint-plugins/no-raw-stored-json.ts",
     "./.oxlint-plugins/no-raw-browser-storage.ts",
+    "./.oxlint-plugins/no-raw-history-state.ts",
+    "./.oxlint-plugins/no-literal-view-id.ts",
+    "./.oxlint-plugins/no-route-identity-from-path.ts",
     "./.oxlint-plugins/no-detached-void.ts",
     "./.oxlint-plugins/no-broad-translation-callable.ts",
     "./.oxlint-plugins/no-partial-record-satisfies.ts",
@@ -1790,15 +2083,18 @@ const config = defineConfig({
     "./.oxlint-plugins/confine-owner.ts",
     "./.oxlint-plugins/mcp-authorized-context-owner.ts",
     "./.oxlint-plugins/no-unanchored-footnotes.ts",
+    "./.oxlint-plugins/no-parser-inline-flatten.ts",
     "./.oxlint-plugins/confine-aggregate-lock.ts",
     "./.oxlint-plugins/no-direct-status-set.ts",
     "./.oxlint-plugins/no-discarded-transition-result.ts",
     "./.oxlint-plugins/queue-worker-error-sink.ts",
     "./.oxlint-plugins/require-coordination-key.ts",
     "./.oxlint-plugins/no-async-context-enter-with.ts",
+    "./.oxlint-plugins/prefer-bun-native.ts",
     "./.oxlint-plugins/request-lifetime.ts",
     "./.oxlint-plugins/no-omitted-prop-respread.ts",
     "./.oxlint-plugins/no-duplicate-jsx-sibling-key.ts",
+    "./.oxlint-plugins/no-lazy-wrapped-content.ts",
     "./.oxlint-plugins/bun-test-hygiene.ts",
     "./.oxlint-plugins/test-timing.ts",
     "./.oxlint-plugins/no-same-fixture-member-oracle.ts",
@@ -1819,6 +2115,14 @@ const config = defineConfig({
       ],
       rules: {
         "narrative-prose-component/require-prose": "error",
+      },
+    },
+    {
+      files: [
+        ".oxlint-plugins/__fixtures__/no-raw-query-error-capture.fixture.ts",
+      ],
+      rules: {
+        "no-raw-query-error-capture/no-raw-query-error-capture": "error",
       },
     },
     {
@@ -1920,6 +2224,20 @@ const config = defineConfig({
       rules: { "no-test-support-import/no-test-support-import": "error" },
     },
     {
+      files: [
+        "apps/api/src/handlers/case-law/ingestion/retention/sources/**/*.ts",
+      ],
+      excludeFiles: ["**/*.test.ts"],
+      rules: {
+        "retention-source-independence/retention-source-independence": "error",
+      },
+    },
+    {
+      files: ["apps/api/src/**/*.ts"],
+      excludeFiles: ["**/*.test.ts", "apps/api/src/tests/**"],
+      rules: { "retention-oracle-owner/retention-oracle-owner": "error" },
+    },
+    {
       files: ["apps/api/src/lib/proofs/checked-transaction.ts"],
       rules: {
         "gdp-ts/no-define-proof": "off",
@@ -1942,6 +2260,15 @@ const config = defineConfig({
       },
     },
     {
+      // A member's decision page swaps its gated fallback reader for the
+      // authenticated one; the navigation owner waits for the one that stays.
+      files: ["apps/web/e2e/**/*.ts"],
+      excludeFiles: ["apps/web/e2e/helpers/decision-reader.ts"],
+      rules: {
+        "no-raw-e2e-router-push/no-raw-e2e-router-push": "error",
+      },
+    },
+    {
       // Plugin fixtures include intentional lexical reads and class references
       // before declaration to exercise rule diagnostics.
       files: [".oxlint-plugins/__fixtures__/**"],
@@ -1955,6 +2282,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
             ],
@@ -2022,6 +2350,12 @@ const config = defineConfig({
     ...(core.overrides ?? []),
     ...libraryOverrides,
     {
+      // `apps/web` runs each DOM test file in its own process; the packages
+      // run them together, where `screen` reads another file's document.
+      files: ["packages/**/*.dom.test.{ts,tsx}"],
+      rules: { "bun-test-hygiene/no-global-testing-library-screen": "error" },
+    },
+    {
       // The built-in jest/vitest rules do not recognise `bun:test`; these
       // resolve test functions through their `bun:test` import.
       files: [
@@ -2034,6 +2368,7 @@ const config = defineConfig({
         "bun-test-hygiene/no-identical-title": "error",
         "bun-test-hygiene/no-promise-matchers": "error",
         "bun-test-hygiene/no-forced-database-drop": "error",
+        "bun-test-hygiene/require-module-mock-reset": "error",
         "no-same-fixture-member-oracle/no-same-fixture-member-oracle": "error",
       },
     },
@@ -2446,6 +2781,17 @@ const config = defineConfig({
     },
     {
       files: [
+        ".oxlint-plugins/__fixtures__/query-invalidation-scope.fixture.ts",
+        "apps/web/src/lib/workspaces/mutations/entities.ts",
+        "apps/web/src/lib/workspaces/mutations/entities.logic.ts",
+        "apps/web/src/lib/workspaces/queries/entities.ts",
+      ],
+      rules: {
+        "query-invalidation-scope/query-invalidation-scope": "error",
+      },
+    },
+    {
+      files: [
         ".oxlint-plugins/__fixtures__/no-strict-route-read-in-chrome.fixture.tsx",
       ],
       rules: {
@@ -2602,7 +2948,7 @@ const config = defineConfig({
             // same file still fails.
             allowedFiles: [
               {
-                path: "apps/web/src/components/globe.tsx",
+                path: "apps/web/src/routes/onboarding/-components/globe.tsx",
                 reason:
                   "Decorative globe canvas fades in once after it draws; nothing waits on it.",
                 utilities: ["duration-700"],
@@ -2710,6 +3056,20 @@ const config = defineConfig({
       },
     },
     {
+      // Hermes, the mobile app's JavaScript engine, has no `Array#toSorted`,
+      // `Array#toReversed` or `Array#toSpliced`; app code sorts or reverses a
+      // fresh array instead (apps/mobile/src/architecture.test.ts and
+      // packages/transcript/src/portability.test.ts).
+      files: [
+        "apps/mobile/src/**/*.{ts,tsx}",
+        "packages/transcript/src/**/*.ts",
+      ],
+      rules: {
+        "unicorn/no-array-sort": "off",
+        "unicorn/no-array-reverse": "off",
+      },
+    },
+    {
       // Two guards contradict each other in apps/web; this override picks one.
       //
       // React Compiler: bails out of any component or hook containing a logical
@@ -2800,6 +3160,11 @@ const config = defineConfig({
         ".oxlint-plugins/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}",
       ],
       rules: { "no-raw-path-relative/no-raw-path-relative": "error" },
+    },
+    {
+      // Pre-install tooling cannot import the workspace path owner before dependencies exist.
+      files: [...CI_INSTALL_PREINSTALL_FILES],
+      rules: { "no-raw-path-relative/no-raw-path-relative": "off" },
     },
     {
       // published package cannot depend on the private portable-path owner until it is publishable; tracked follow-up
@@ -3096,6 +3461,18 @@ const config = defineConfig({
       },
     },
     {
+      // Native preferences require this exact Bun execution enrollment.
+      files: bunNativeFiles,
+      rules: {
+        "prefer-bun-native/no-buffer-string-encoding": "error",
+        "prefer-bun-native/no-headers-from-entries": "error",
+        "no-raw-sha256/no-raw-sha256": [
+          "error",
+          { allowedFiles: sha256AllowedFiles, hmacTarget: "bun" },
+        ],
+      },
+    },
+    {
       // Chat tools write rows through the shared write primitives in
       // `apps/api/src/lib`, which own each write's checks and audit event.
       files: ["apps/api/src/handlers/chat/tools/**/*.ts"],
@@ -3157,6 +3534,42 @@ const config = defineConfig({
       ],
       rules: {
         "no-raw-browser-storage/no-raw-browser-storage": "error",
+      },
+    },
+    {
+      // In-app back navigation reads the router's history, never the
+      // browser's state or length; the router setup is the one owner.
+      files: [
+        "apps/web/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-raw-history-state.fixture.ts",
+      ],
+      rules: {
+        "no-raw-history-state/no-raw-history-state": "error",
+      },
+    },
+    {
+      // The default `$viewId` slug lives in its owner; navigations keep the
+      // view on screen or name the owner's constant.
+      files: [
+        "apps/web/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-literal-view-id.fixture.tsx",
+      ],
+      rules: {
+        "no-literal-view-id/no-literal-view-id": "error",
+      },
+    },
+    {
+      // The matter page on screen is read from the route matches; a path
+      // parser or regex restates the route tree and reads sibling pages as
+      // views or documents. Tests are out of scope: their fetch stubs route
+      // API requests by path, which names no page on screen.
+      files: [
+        "apps/web/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-route-identity-from-path.fixture.ts",
+      ],
+      excludeFiles: ["apps/web/src/**/*.test.ts", "apps/web/src/**/*.test.tsx"],
+      rules: {
+        "no-route-identity-from-path/no-route-identity-from-path": "error",
       },
     },
     {
@@ -3263,6 +3676,18 @@ const config = defineConfig({
       ],
       rules: {
         "icon-button-requires-tooltip/icon-button-requires-tooltip": "error",
+      },
+    },
+    {
+      files: [
+        "apps/web/src/**/*.tsx",
+        "packages/workspace-ui/src/**/*.tsx",
+        ".oxlint-plugins/__fixtures__/semantic-controls.fixture.tsx",
+      ],
+      rules: {
+        "semantic-controls/require-menu-anchor": "error",
+        "semantic-controls/require-context-menu-target": "error",
+        "semantic-controls/require-specific-icon-label": "error",
       },
     },
     {
@@ -3373,6 +3798,18 @@ const config = defineConfig({
       },
     },
     {
+      // A person is chosen through MemberCombobox, which searches members by
+      // name and email as people type. A Select over members cannot be
+      // searched, so a long list turns into scrolling.
+      files: [
+        "apps/web/src/**/*.tsx",
+        ".oxlint-plugins/__fixtures__/no-person-select.fixture.tsx",
+      ],
+      rules: {
+        "no-person-select/no-person-select": "error",
+      },
+    },
+    {
       // Words in running text are marked through `@stll/ui/text-mark`, so a
       // search hit, a reader's highlight and a verdict underline share one
       // shape and differ only in hue and line.
@@ -3415,12 +3852,50 @@ const config = defineConfig({
       },
     },
     {
+      // Keys on the chat stream and message paths are read off the wire
+      // (event types, part types, tool names); `key in table` also matches
+      // inherited names, so membership goes through the own-key helpers.
+      files: [
+        "packages/chat/src/**/*.{ts,tsx}",
+        "apps/web/src/features/chat/**/*.{ts,tsx}",
+        "apps/web/src/components/chat/**/*.{ts,tsx}",
+        "apps/api/src/handlers/chat/**/*.{ts,tsx}",
+        "apps/api/src/lib/chat/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-dynamic-key-in-operator.fixture.ts",
+      ],
+      excludeFiles: ["**/*.{test,spec}.{ts,tsx}"],
+      rules: {
+        "no-dynamic-key-in-operator/no-dynamic-key-in-operator": "error",
+      },
+    },
+    {
+      // Reader prose must choose manual word breaks; automated hyphenation
+      // varies by browser and language. Model rationale keeps its own contract.
+      files: [
+        "packages/decision-reader/src/**/*.{ts,tsx}",
+        "packages/ui/src/components/prose.tsx",
+        "apps/web/src/components/references/decision-citation-chip.tsx",
+        "apps/web/src/components/legal-reader/**/*.{ts,tsx}",
+        "apps/web/src/features/statutes/**/*.{ts,tsx}",
+        "apps/web/src/features/case-law/**/*.{ts,tsx}",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/ai-cell-source-card.tsx",
+        ".oxlint-plugins/__fixtures__/no-auto-hyphenation-in-reader.fixture.tsx",
+      ],
+      excludeFiles: [
+        "apps/web/src/features/case-law/research/question-cell.tsx",
+      ],
+      rules: {
+        "no-auto-hyphenation-in-reader/no-auto-hyphenation-in-reader": "error",
+      },
+    },
+    {
       // The reader's face is inherited from the reader root, which reader.css
       // sets from `--reader-body-font`. A font utility on one element inside
       // it mixes two faces in one document; chrome that is sans on purpose
       // says so with `reader-chrome`, quoted text outside the root with
       // `reader-body`.
       files: [
+        "packages/decision-reader/src/**/*.tsx",
         "apps/web/src/components/legal-reader/**/*.tsx",
         "apps/web/src/features/case-law/components/case-viewer/**/*.tsx",
         "apps/web/src/features/statutes/components/**/*.tsx",
@@ -3428,6 +3903,32 @@ const config = defineConfig({
       ],
       rules: {
         "no-font-utility-in-reader/no-font-utility-in-reader": "error",
+      },
+    },
+    {
+      // Reader text is start-aligned by `reader-prose` in reader.css;
+      // justification stretches word spaces around long unbreakable tokens.
+      files: [
+        "packages/decision-reader/src/**/*.tsx",
+        "apps/web/src/components/legal-reader/**/*.tsx",
+        "apps/web/src/features/case-law/**/*.tsx",
+        "apps/web/src/features/statutes/**/*.tsx",
+        "apps/landing/src/components/react/previews/CaseLawReaderPreview.tsx",
+        ".oxlint-plugins/__fixtures__/no-justified-reader-text.fixture.tsx",
+      ],
+      excludeFiles: ["**/*.test.tsx"],
+      rules: {
+        "no-justified-reader-text/no-justified-reader-text": "error",
+      },
+    },
+    {
+      // Desktop windows start `sm` at zero so the design system's pointer
+      // sizes apply in every window; a layout that follows the window's
+      // width names that width instead (apps/desktop/src/mainview/index.css).
+      files: ["apps/desktop/src/**/*.{ts,tsx}"],
+      excludeFiles: ["**/*.test.{ts,tsx}"],
+      rules: {
+        "no-sm-breakpoint-in-desktop/no-sm-breakpoint-in-desktop": "error",
       },
     },
     {
@@ -3493,6 +3994,20 @@ const config = defineConfig({
       ],
       rules: {
         "no-duplicate-jsx-sibling-key/no-duplicate-jsx-sibling-key": "error",
+      },
+    },
+    {
+      // React mounts a Suspense boundary's content in place of its fallback,
+      // so a lazy chunk mounted around content already on screen (a reader,
+      // a viewer) replaces it, DOM node, scroll position and focus included.
+      // Lazy chunks mount beside the content they add to.
+      files: [
+        "apps/*/src/**/*.tsx",
+        "packages/*/src/**/*.tsx",
+        ".oxlint-plugins/__fixtures__/no-lazy-wrapped-content.fixture.tsx",
+      ],
+      rules: {
+        "no-lazy-wrapped-content/no-lazy-wrapped-content": "error",
       },
     },
     {
@@ -3667,12 +4182,34 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               uiPragmaticDragAdapterImport,
             ],
             patterns: [
               ...uiStandaloneImports,
+              pragmaticDragAdapterDeepImportBan,
+            ],
+          },
+        ],
+      },
+    },
+    {
+      files: UI_TEST_FILES,
+      rules: {
+        "no-restricted-imports": [
+          "error",
+          {
+            paths: [
+              noZodImport,
+              noFastXmlParserImport,
+              noClassicTypeScriptImport,
+              ...noRetiredHttpFrameworkImports,
+              uiPragmaticDragAdapterImport,
+            ],
+            patterns: [
+              ...uiTestStandaloneImports,
               pragmaticDragAdapterDeepImportBan,
             ],
           },
@@ -3690,6 +4227,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
             ],
@@ -3710,6 +4248,23 @@ const config = defineConfig({
       // bundler from paying for re-exports it does not touch.
       files: ["packages/ui/src/index.ts"],
       rules: { "oxc/no-barrel-file": "off" },
+    },
+    {
+      files: ["packages/workspace-ui/src/**/*.{ts,tsx}"],
+      rules: {
+        "no-restricted-imports": [
+          "error",
+          {
+            paths: [
+              noZodImport,
+              noFastXmlParserImport,
+              noClassicTypeScriptImport,
+              ...noRetiredHttpFrameworkImports,
+              workspaceUiUseIntlFormattingImport,
+            ],
+          },
+        ],
+      },
     },
     {
       files: ["apps/web/src/hooks/use-effect.ts"],
@@ -3817,6 +4372,39 @@ const config = defineConfig({
       },
     },
     {
+      // Sources the React Compiler compiles: the web and MCP app bundles
+      // with the workspace packages they import, and the Expo app. The
+      // compiler skips a `use*` function that calls no hook.
+      files: [
+        ...PRODUCT_FRONTEND_FILES,
+        "packages/*/src/**/*.{ts,tsx}",
+        "apps/mobile/src/**/*.{ts,tsx}",
+      ],
+      excludeFiles: [
+        "**/*.{test,spec}.{ts,tsx}",
+        "**/__tests__/**",
+        // The compiler's own exclusion (REACT_COMPILER_EXCLUDE).
+        "**/src/hooks/use-effect.ts",
+      ],
+      rules: {
+        "no-hookless-use-function/no-hookless-use-function": "error",
+      },
+    },
+    {
+      // On React Native the global Response and Request are the whatwg-fetch
+      // polyfill, which reads a stream body as "[object ReadableStream]".
+      // Tests stub fetch with real responses and stay out of scope.
+      files: ["apps/mobile/src/**/*.{ts,tsx}"],
+      excludeFiles: [
+        "**/*.{test,spec}.{ts,tsx}",
+        "**/__tests__/**",
+        "**/test-support/**",
+      ],
+      rules: {
+        "no-constructed-fetch-object/no-constructed-fetch-object": "error",
+      },
+    },
+    {
       files: ["apps/web/src/**/*.{ts,tsx}"],
       rules: {
         "no-restricted-imports": [
@@ -3824,10 +4412,13 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
+              webUseIntlFormatterImport,
+              webUseIntlLocaleImport,
             ],
             patterns: [
               {
@@ -3836,6 +4427,38 @@ const config = defineConfig({
               },
               ...webCrossWorkspaceImports,
               webDatePickerImport,
+              webCitationChipImport,
+              pragmaticDragAdapterDeepImportBan,
+            ],
+          },
+        ],
+      },
+    },
+    {
+      // The UI-language owner: the one web module that reads use-intl's
+      // useLocale. Every other apps/web import restriction still applies.
+      files: ["apps/web/src/i18n/message-locale.ts"],
+      rules: {
+        "no-restricted-imports": [
+          "error",
+          {
+            paths: [
+              noZodImport,
+              noFastXmlParserImport,
+              noClassicTypeScriptImport,
+              ...noRetiredHttpFrameworkImports,
+              webPragmaticDragAdapterImport,
+              ...webFolioAllLocalesImports,
+              webUseIntlFormatterImport,
+            ],
+            patterns: [
+              {
+                group: webLocalApiImportGroup,
+                message: "Use '@/lib/api-contract' instead of '@/api/'.",
+              },
+              ...webCrossWorkspaceImports,
+              webDatePickerImport,
+              webCitationChipImport,
               pragmaticDragAdapterDeepImportBan,
             ],
           },
@@ -3861,9 +4484,12 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               ...webFolioAllLocalesImports,
+              webUseIntlFormatterImport,
+              webUseIntlLocaleImport,
             ],
             patterns: [
               {
@@ -3872,6 +4498,7 @@ const config = defineConfig({
               },
               ...webCrossWorkspaceImports,
               webDatePickerImport,
+              webCitationChipImport,
               pragmaticDragAdapterDeepImportBan,
             ],
           },
@@ -3984,24 +4611,6 @@ const config = defineConfig({
     },
     {
       files: [
-        "apps/api/src/handlers/case-law/ingestion/{parsers,adapters}/**/*.ts",
-        "apps/api/src/lib/legal-search/parsers/**/*.ts",
-        ".oxlint-plugins/__fixtures__/no-parser-validator-calls.fixture.ts",
-        ".oxlint-plugins/__fixtures__/no-parser-validator-calls.fixture.import.ts",
-        ".oxlint-plugins/__fixtures__/no-parser-validator-calls.fixture.call.ts",
-        ".oxlint-plugins/__fixtures__/no-parser-validator-calls.fixture.legacy.ts",
-        ".oxlint-plugins/__fixtures__/no-parser-validator-calls.fixture.stale.ts",
-      ],
-      excludeFiles: [
-        "**/*.test.ts",
-        "apps/api/src/lib/legal-search/parsers/validate-ast.ts",
-      ],
-      rules: {
-        "no-parser-validator-calls/no-parser-validator-calls": "error",
-      },
-    },
-    {
-      files: [
         ".oxlint-plugins/__fixtures__/no-literal-decision-court.fixture.ts",
       ],
       rules: {
@@ -4070,6 +4679,14 @@ const config = defineConfig({
       },
     },
     {
+      files: [
+        ".oxlint-plugins/__fixtures__/no-network-in-transaction.fixture.ts",
+      ],
+      rules: {
+        "no-network-in-transaction/no-network-in-transaction": "error",
+      },
+    },
+    {
       // The locale-injecting wrapper around the UI date picker: the one web
       // module that has to import the primitive it wraps. Every other
       // apps/web import restriction still applies, so they are restated here.
@@ -4080,10 +4697,13 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
+              webUseIntlFormatterImport,
+              webUseIntlLocaleImport,
             ],
             patterns: [
               {
@@ -4091,6 +4711,44 @@ const config = defineConfig({
                 message: "Use '@/lib/api-contract' instead of '@/api/'.",
               },
               ...webCrossWorkspaceImports,
+              webCitationChipImport,
+              pragmaticDragAdapterDeepImportBan,
+            ],
+          },
+        ],
+      },
+    },
+    {
+      // The citation chip owner, and the tests that render the decision chip
+      // itself: the modules that import the chips it dispatches to. Every
+      // other apps/web import restriction still applies, so they are restated
+      // here.
+      files: [
+        "apps/web/src/components/references/citation-chip.tsx",
+        "apps/web/src/components/references/decision-citation-chip.dom.test.tsx",
+        "apps/web/src/components/legal-reader/annotations/selection-anchor-contract.dom.test.tsx",
+      ],
+      rules: {
+        "no-restricted-imports": [
+          "error",
+          {
+            paths: [
+              noZodImport,
+              noFastXmlParserImport,
+              noClassicTypeScriptImport,
+              ...noRetiredHttpFrameworkImports,
+              webPragmaticDragAdapterImport,
+              ...webFolioAllLocalesImports,
+              webUseIntlFormatterImport,
+              webUseIntlLocaleImport,
+            ],
+            patterns: [
+              {
+                group: webLocalApiImportGroup,
+                message: "Use '@/lib/api-contract' instead of '@/api/'.",
+              },
+              ...webCrossWorkspaceImports,
+              webDatePickerImport,
               pragmaticDragAdapterDeepImportBan,
             ],
           },
@@ -4108,10 +4766,13 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
+              webUseIntlFormatterImport,
+              webUseIntlLocaleImport,
               {
                 name: "@tanstack/react-router",
                 importNames: ["getRouteApi", "useRouteContext"],
@@ -4126,6 +4787,7 @@ const config = defineConfig({
               },
               ...webCrossWorkspaceImports,
               webDatePickerImport,
+              webCitationChipImport,
               pragmaticDragAdapterDeepImportBan,
             ],
           },
@@ -4144,10 +4806,13 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
+              webUseIntlFormatterImport,
+              webUseIntlLocaleImport,
             ],
             patterns: [
               {
@@ -4161,6 +4826,7 @@ const config = defineConfig({
               },
               ...webCrossWorkspaceImports,
               webDatePickerImport,
+              webCitationChipImport,
               pragmaticDragAdapterDeepImportBan,
             ],
           },
@@ -4191,10 +4857,13 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
+              webUseIntlFormatterImport,
+              webUseIntlLocaleImport,
               {
                 name: "@/lib/api",
                 importNames: ["api"],
@@ -4214,6 +4883,7 @@ const config = defineConfig({
               },
               ...webCrossWorkspaceImports,
               webDatePickerImport,
+              webCitationChipImport,
               pragmaticDragAdapterDeepImportBan,
             ],
           },
@@ -4236,10 +4906,13 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
+              webUseIntlFormatterImport,
+              webUseIntlLocaleImport,
               {
                 name: "@/routes/-auth-context",
                 message:
@@ -4269,6 +4942,7 @@ const config = defineConfig({
               },
               ...webCrossWorkspaceImports,
               webDatePickerImport,
+              webCitationChipImport,
               pragmaticDragAdapterDeepImportBan,
             ],
           },
@@ -4328,6 +5002,7 @@ const config = defineConfig({
     {
       files: ["apps/web/src/**"],
       rules: {
+        "no-raw-query-error-capture/no-raw-query-error-capture": "error",
         "query-data-requires-state/query-data-requires-state": "error",
       },
     },
@@ -4376,6 +5051,26 @@ const config = defineConfig({
       ],
       rules: {
         "no-strict-route-read-in-chrome/no-strict-route-read-in-chrome":
+          "error",
+      },
+    },
+    {
+      // Tabs can remain open while another route family is active. Context
+      // belongs to shared providers, including for tabs owned outside inspector.
+      files: [
+        ".oxlint-plugins/__fixtures__/no-route-context-in-panel-tabs.fixture.tsx",
+        "apps/web/src/**/*inspector*.tsx",
+        "apps/web/src/components/inspector/**/*.tsx",
+        "apps/web/src/components/inspector/**/*.ts",
+        "apps/web/src/features/knowledge/playbook-editor/playbook-draft-view.tsx",
+        "apps/web/src/features/knowledge/views/tools/tool-detail-panel-view.tsx",
+        "apps/web/src/components/workspaces/tasks/task-detail-panel.tsx",
+        "apps/web/src/components/workspaces/matter-metadata-sheet.tsx",
+        "apps/web/src/components/workspaces/hooks/use-start-workflow.ts",
+        "apps/web/src/components/workspaces/hooks/use-create-b-boxes.ts",
+      ],
+      rules: {
+        "no-route-context-in-panel-tabs/no-route-context-in-panel-tabs":
           "error",
       },
     },
@@ -4461,8 +5156,11 @@ const config = defineConfig({
               "apps/api/src/env-db-timeouts.ts",
               "apps/api/src/env-replay.ts",
               "apps/api/src/env-eu-completion.ts",
+              "apps/api/src/env-ingestion.ts",
               "apps/api/src/env-schema.ts",
               "apps/api/src/env-document-processing-worker.ts",
+              "apps/api/src/env-file-derivative-worker.ts",
+              "apps/api/src/env-converter.ts",
               "apps/api/src/db-url.ts",
               "apps/api/src/handlers/case-law/ingestion/adapters/utils.ts",
               // Publisher pacing must distinguish deployed runtimes without
@@ -4476,7 +5174,6 @@ const config = defineConfig({
               // environment before any app module loads; the web app's env
               // contract is the Vite build, not this process.
               "apps/web/src/runtime.ts",
-              "apps/api/src/lib/analytics/posthog-node.ts",
               // dispatch.ts is imported transitively by the chat tool
               // catalogue from contexts that do not run full env
               // validation (workers, scripts, tests). Reading
@@ -4521,6 +5218,9 @@ const config = defineConfig({
               // to tune fast-check at assert time. Never imported by runtime
               // code, so there is no app env module to route through.
               "packages/property-testing/src/index.ts",
+              // Test-only fixture that records and restores the environment
+              // keys a test writes; it owns those writes by design.
+              "packages/test-state/src/test-state.ts",
             ],
           },
         ],
@@ -4814,6 +5514,7 @@ const config = defineConfig({
       ],
       rules: {
         "no-network-await-in-loop/no-network-await-in-loop": "error",
+        "no-network-in-transaction/no-network-in-transaction": "error",
       },
     },
     {
@@ -4910,6 +5611,7 @@ const config = defineConfig({
       ],
       rules: {
         "failure-sink-handle/failure-sink-handle": "error",
+        "require-fingerprint-fields/require-fingerprint-fields": "error",
       },
     },
     {
@@ -5023,6 +5725,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               apiValibotJsonSchemaImport,
@@ -5052,6 +5755,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               {
@@ -5085,6 +5789,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               apiValibotJsonSchemaImport,
@@ -5105,6 +5810,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               apiSafeIdBrandingImport,
@@ -5128,6 +5834,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               apiValibotJsonSchemaImport,
@@ -5319,6 +6026,17 @@ const config = defineConfig({
     {
       files: [
         "apps/api/src/handlers/case-law/ingestion/parsers/**/*.ts",
+        "apps/api/src/lib/legal-search/parsers/**/*.ts",
+        ".oxlint-plugins/__fixtures__/no-parser-inline-flatten.fixture.ts",
+      ],
+      excludeFiles: ["apps/api/src/**/*.test.ts"],
+      rules: {
+        "no-parser-inline-flatten/no-parser-inline-flatten": "error",
+      },
+    },
+    {
+      files: [
+        "apps/api/src/handlers/case-law/ingestion/parsers/**/*.ts",
         ".oxlint-plugins/__fixtures__/no-unanchored-footnotes.fixture.ts",
       ],
       excludeFiles: ["apps/api/src/**/*.test.ts"],
@@ -5494,6 +6212,22 @@ const config = defineConfig({
       },
     },
     {
+      // The packages whose tests render React in happy-dom, where component
+      // libraries keep module state behind their timeouts.
+      files: [
+        "apps/desktop/**/*.{ts,tsx}",
+        "apps/web/**/*.{ts,tsx}",
+        "packages/decision-reader/**/*.{ts,tsx}",
+        "packages/mcp-apps/**/*.{ts,tsx}",
+        "packages/render-probe/**/*.{ts,tsx}",
+        "packages/ui/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-dropped-fake-timers.fixture.ts",
+      ],
+      rules: {
+        "no-dropped-fake-timers/no-dropped-fake-timers": "error",
+      },
+    },
+    {
       // Rule tests only: the shared runner (lint-single-rule.ts) owns the
       // one-oxlint-process slot and runs its lone fallbacks in turn.
       files: [
@@ -5611,6 +6345,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               apiValibotJsonSchemaImport,
@@ -5666,6 +6401,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               apiValibotJsonSchemaImport,
@@ -5739,6 +6475,7 @@ const config = defineConfig({
           {
             paths: [
               noZodImport,
+              noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               apiValibotJsonSchemaImport,
@@ -5799,6 +6536,13 @@ const config = defineConfig({
       files: ["apps/api/src/handlers/case-law/decisions/search.ts"],
       rules: {
         "public-law-read-boundary/require-language-alternate-counts": "error",
+      },
+    },
+    {
+      files: ["apps/api/src/**/*.{ts,tsx}"],
+      excludeFiles: ["**/*.test.{ts,tsx}", "**/tests/**"],
+      rules: {
+        "public-law-read-boundary/require-owned-public-read-transport": "error",
       },
     },
     {
@@ -6033,6 +6777,32 @@ const config = defineConfig({
       },
     },
     {
+      // Client-side "does this text match what the user typed" goes through
+      // createSearchQueryMatcher / filterBySearchQuery in @stll/text-normalize/search-query-matcher,
+      // which fold case, accents and ß/ł/ø alike in every UI locale; a
+      // lowercase-only compare misses "Dvořák" for "dvorak". The decision
+      // reader's find and query marks fold through the same key. The contact
+      // import derives custom field ids from labels with stripDiacritics, an
+      // id rather than a match, and ids already minted must not change. Tests
+      // compute expected values independently of the owner, and the design
+      // system's browser fixtures render primitives bare.
+      files: [
+        "apps/web/src/**/*.{ts,tsx}",
+        "packages/decision-reader/src/**/*.{ts,tsx}",
+        "packages/ui/src/**/*.{ts,tsx}",
+        "packages/workspace-ui/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-case-folded-search-match.fixture.tsx",
+      ],
+      excludeFiles: [
+        "**/*.test.{ts,tsx}",
+        "apps/web/src/routes/_protected.contacts/-import-candidate.ts",
+        "packages/ui/src/components/fixtures/**",
+      ],
+      rules: {
+        "no-case-folded-search-match/no-case-folded-search-match": "error",
+      },
+    },
+    {
       // App chrome scrolls through ScrollArea, which owns the scrollbar's
       // width, states, and overlay behaviour; a raw overflow utility hands
       // that to the platform and two panes in the same shell then disagree.
@@ -6056,6 +6826,38 @@ const config = defineConfig({
       },
     },
     {
+      // Touch screens have no hover, so a control that is transparent until
+      // hovered never appears on a phone or tablet. Whatever hides until
+      // hover says what coarse pointers see instead.
+      files: [
+        "apps/web/src/**/*.tsx",
+        "apps/desktop/src/**/*.tsx",
+        "packages/ui/src/**/*.tsx",
+        "packages/workspace-ui/src/**/*.tsx",
+        ".oxlint-plugins/__fixtures__/no-hover-only-reveal.fixture.tsx",
+      ],
+      excludeFiles: ["**/*.{test,spec}.tsx", "**/__tests__/**"],
+      rules: {
+        "no-hover-only-reveal/no-hover-only-reveal": "error",
+      },
+    },
+    {
+      // Surfaces that render through @stll/ui never hand-roll the native
+      // markup one of its components wraps (a role="switch" button, a raw
+      // <select>, a title tooltip); each rule names the import to use. The
+      // design system renders that markup itself and is not in this scope;
+      // tests render bare harness markup.
+      files: [...DESIGN_SYSTEM_CONSUMER_FILES],
+      excludeFiles: [
+        "**/*.{test,spec}.{ts,tsx}",
+        "**/__tests__/**",
+        "**/__fixtures__/**",
+      ],
+      rules: Object.fromEntries(
+        NO_NATIVE_UI_RULE_IDS.map((rule) => [rule, "error"] as const),
+      ),
+    },
+    {
       // `shadcn/no-restyle` judges a className by reading its classes. An
       // identifier imported from another module is opaque to it, so the
       // restyle it exists to catch ships unreported. Scoped to apps/web:
@@ -6071,6 +6873,19 @@ const config = defineConfig({
     {
       files: ["apps/web/src/**/*.{ts,tsx}", "apps/api/src/mcp/**/*.{ts,tsx}"],
       rules: { "require-contract-domains/require-contract-domains": "error" },
+    },
+    {
+      files: [
+        "apps/web/src/lib/schema.ts",
+        "apps/web/src/lib/organization/role-assignment.logic.ts",
+        "apps/web/src/components/auth/password-sign-in-form.tsx",
+        "apps/web/src/components/auth/sign-in-panel.tsx",
+        "apps/web/src/components/organization/invite-member-dialog.tsx",
+        "apps/web/src/routes/auth/-components/social-recovery-panel.tsx",
+      ],
+      rules: {
+        "require-valibot-message/require-valibot-message": "error",
+      },
     },
     ...fixtureRuleOverrides,
     // Last: oxlint resolves overrides by replacement, so a scope that enables

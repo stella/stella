@@ -11,6 +11,8 @@ import {
   beforeEach,
   describe,
   expect,
+  type Mock,
+  mock,
   setDefaultTimeout,
   spyOn,
   test,
@@ -110,13 +112,17 @@ const SUMMARY_MARKDOWN = [
   "</modified-files>",
 ].join("\n");
 
-const settingsSpy = spyOn(aiConfigLoader, "loadOrgAISettings");
-const budgetSpy = spyOn(compactionBudget, "resolveChatCompactionBudget");
-const modelSpy = spyOn(modelTransport, "generateTanStackTextForTask");
+let settingsSpy: Mock<typeof aiConfigLoader.loadOrgAISettings>;
+let budgetSpy: Mock<typeof compactionBudget.resolveChatCompactionBudget>;
+let modelSpy: Mock<typeof modelTransport.generateTanStackTextForTask>;
 const logs = installRecordingLogger();
 const seededThreadIds: SafeId<"chatThread">[] = [];
 
 beforeEach(() => {
+  settingsSpy = spyOn(aiConfigLoader, "loadOrgAISettings");
+  budgetSpy = spyOn(compactionBudget, "resolveChatCompactionBudget");
+  modelSpy = spyOn(modelTransport, "generateTanStackTextForTask");
+
   settingsSpy.mockReset();
   budgetSpy.mockReset();
   modelSpy.mockReset();
@@ -133,6 +139,7 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
+  mock.restore();
   if (seededThreadIds.length > 0) {
     // Cascades to the seeded messages and checkpoints.
     await testDb

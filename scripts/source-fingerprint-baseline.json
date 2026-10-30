@@ -172,6 +172,11 @@
       "fingerprint": "1d971155bcbfa4cb1b5c3cd95753dafa463456a8334c9256ea3825d937440660",
       "storedInputIdentity": "efe87bb0d99d98b98db9ce07f28738d2b29f95d6ad8d8955b55fd09d57d023a9",
       "version": 0
+    },
+    "uk-fcl::decision": {
+      "fingerprint": "a4800bb2eec653d32f890ac246a55785130128226537b0da2293cbeaf72065d4",
+      "storedInputIdentity": "59e013dbb2441a606a1bbfd513589f9791fa491d4030173ce073c32ad03a0ff2",
+      "version": 0
     }
   },
   "files": {

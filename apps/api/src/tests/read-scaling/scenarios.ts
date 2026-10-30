@@ -3,6 +3,7 @@ import { panic } from "better-result";
 import readFilesystemTree from "@/api/handlers/entities/filesystem-tree/get";
 import readEntities from "@/api/handlers/entities/list";
 import readVersions from "@/api/handlers/entities/versions/list";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { HttpStatusResponse } from "@/api/http/status";
 import { runWithMeasuredQueryCounter } from "@/api/lib/db-query-counter";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -28,7 +29,7 @@ export const readScalingScenarios = [
             body: { limit: 10, fieldIds: fixture.propertyIds.slice(0, 1) },
             safeDb: fixture.safeDb,
             request: new Request("https://example.test/v1/entities/query"),
-            route: "/v1/entities/:workspaceId/query",
+            route: "/v1/entities/:workspaceId/query" satisfies ApiRoutePath,
           }),
         );
         if (response instanceof HttpStatusResponse) {
@@ -62,7 +63,8 @@ export const readScalingScenarios = [
             query: {},
             safeDb: fixture.safeDb,
             request: new Request("https://example.test/v1/entities/versions"),
-            route: "/v1/entities/:workspaceId/entity/:entityId/versions",
+            route:
+              "/v1/entities/:workspaceId/entity/:entityId/versions" satisfies ApiRoutePath,
           }),
         );
         if (response instanceof HttpStatusResponse) {

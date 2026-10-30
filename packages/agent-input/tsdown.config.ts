@@ -1,5 +1,7 @@
 import { defineConfig } from "tsdown";
 
+import { resolvePackageBinary } from "../../scripts/resolve-package-binary.ts";
+
 export default defineConfig({
   entry: [
     "src/index.ts",
@@ -11,7 +13,13 @@ export default defineConfig({
   ],
   format: ["esm"],
   platform: "neutral",
-  dts: true,
+  // Isolated declarations cannot express the TaggedError base classes, so tsrs emits the declarations.
+  dts: {
+    generator: "tsgo",
+    tsgo: {
+      path: resolvePackageBinary(import.meta.url, "tsrs"),
+    },
+  },
   outDir: "dist",
   clean: true,
 });

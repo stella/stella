@@ -13,6 +13,7 @@ import * as v from "valibot";
 import { member, user as authUser } from "@/api/db/auth-schema";
 import { featureEnrolments, timeDailyTargets } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { dailyTargetBody } from "@/api/lib/billing/daily-target";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -105,7 +106,7 @@ const updateOwn = async ({
     asTestRaw<OwnContext>({
       body: { minutes },
       request: new Request("https://example.test/time-entries/me/daily-target"),
-      route: "/time-entries/me/daily-target",
+      route: "/v1/time-entries/me/daily-target" satisfies ApiRoutePath,
       safeDb: createSafeDb(db, [], organizationId, ids.userA1),
       session: { activeOrganizationId: organizationId },
       user: { id: ids.userA1 },
@@ -134,7 +135,8 @@ const updateMember = async ({
       request: new Request(
         "https://example.test/time-entries/members/daily-target",
       ),
-      route: "/time-entries/members/:userId/daily-target",
+      route:
+        "/v1/time-entries/members/:userId/daily-target" satisfies ApiRoutePath,
       safeDb: createSafeDb(db, [], ids.orgA, actorId),
       session: { activeOrganizationId: ids.orgA },
       user: { id: actorId },

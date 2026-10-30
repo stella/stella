@@ -15,6 +15,8 @@
 import { panic, Result, TaggedError, UnhandledException } from "better-result";
 import { eq } from "drizzle-orm";
 
+import { declareFingerprintFields } from "@stll/errors";
+
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { chatThreads } from "@/api/db/schema";
@@ -34,6 +36,7 @@ import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { holdMemberAccessOnTx } from "@/api/lib/db/member-access-hold";
 import { errorTag } from "@/api/lib/errors/utils";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { runScheduledBackgroundWork } from "@/api/lib/rate-limit/queued-action-admission";
 import {
   createRootMembershipSafeDb,
@@ -153,10 +156,13 @@ const drainCompactionQueue = async ({
     });
     if (Result.isError(outcome)) {
       failed += 1;
-      captureError(outcome.error, {
-        feature: "chat.thread_compactor",
-        threadId: thread.threadId,
-      });
+      captureError(
+        outcome.error,
+        handlerErrorContext("tasks.processThreadAt.outcome_error", {
+          feature: "chat.thread_compactor",
+          threadId: thread.threadId,
+        }),
+      );
       logger.warn("scheduler.chat_compactor_failed", {
         "error.type": errorTag(outcome.error),
         "thread.id": thread.threadId,
@@ -443,7 +449,11 @@ const compactThread = async ({
 class OwnerAccessLostError extends TaggedError("OwnerAccessLostError")<{
   message: string;
   reason: OwnerAccessLostReason;
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 const OWNER_ACCESS_LOST_MESSAGE = {
   [OWNER_ACCESS_LOST_REASON.ORGANIZATION]:

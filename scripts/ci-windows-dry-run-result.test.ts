@@ -193,7 +193,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 const args = process.argv.slice(2);
 const mode = readFileSync(${JSON.stringify(path.join(root, "proof-mode"))}, "utf-8");
 if (mode === "api-failure") process.exit(1);
-if (args[1]?.includes("/contents/")) { console.log(JSON.stringify({ content: Buffer.from("executed recipe").toString("base64"), encoding: "base64" })); process.exit(0); }
+if (args[1]?.includes("/contents/")) { console.log(JSON.stringify({ content: Buffer.from("executed recipe").toBase64(), encoding: "base64" })); process.exit(0); }
 if (args[0] === "run") {
   const dir = args[args.indexOf("--dir") + 1];
   const name = args[args.indexOf("--name") + 1];

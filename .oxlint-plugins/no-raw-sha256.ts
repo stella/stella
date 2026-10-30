@@ -41,6 +41,8 @@ const cryptoImportPath = ({
     switch (imported) {
       case "createHash":
         return "createHash";
+      case "createHmac":
+        return "createHmac";
       case "webcrypto":
         return "crypto";
       case "subtle":
@@ -129,12 +131,24 @@ const primitivePath = (
   return key === null ? null : `${base}.${key}`;
 };
 
-const normalizedPath = (value: string | null) =>
-  value
-    ?.replace(/^\./u, "")
-    .replace(/^nodeCrypto\.webcrypto/u, "crypto")
-    .replace(/^nodeCrypto\.createHash$/u, "createHash")
-    .replace(/^nodeCrypto\.subtle/u, "crypto.subtle") ?? null;
+const normalizedPath = (
+  context: ScopeContext & { options?: readonly unknown[] },
+  value: string | null,
+) => {
+  const normalized =
+    value
+      ?.replace(/^\./u, "")
+      .replace(/^nodeCrypto\.webcrypto/u, "crypto")
+      .replace(/^nodeCrypto\.createHash$/u, "createHash")
+      .replace(/^nodeCrypto\.createHmac$/u, "createHmac")
+      .replace(/^nodeCrypto\.subtle/u, "crypto.subtle") ?? null;
+  const options = context.options?.at(0);
+  const bunHmac =
+    typeof options === "object" &&
+    options !== null &&
+    Reflect.get(options, "hmacTarget") === "bun";
+  return normalized === "createHmac" && !bunHmac ? null : normalized;
+};
 
 const algorithmName = (
   context: ScopeContext,
@@ -178,6 +192,7 @@ const algorithmName = (
 
 const isPrimitive = (value: string | null) =>
   value === "createHash" ||
+  value === "createHmac" ||
   value === "Bun.CryptoHasher" ||
   value === "Bun.SHA256" ||
   value === "Bun.SHA256.hash" ||
@@ -241,7 +256,7 @@ const sourceContainsCryptoExport = ({
 }: CryptoSourceOptions): boolean => {
   switch (source.type) {
     case "path":
-      return isCryptoBearingValue(normalizedPath(source.value));
+      return isCryptoBearingValue(normalizedPath(context, source.value));
     case "expression":
       return containsCryptoExport({ context, value: source.value, seen });
     default:
@@ -262,7 +277,7 @@ const expandCryptoSource = ({
   if (!isAstNode(node) || seen.has(node)) {
     return [];
   }
-  const path = normalizedPath(primitivePath(context, node));
+  const path = normalizedPath(context, primitivePath(context, node));
   if (path !== null) {
     return [{ type: "path", value: path }];
   }
@@ -769,7 +784,9 @@ const containsCryptoExport = ({
     return false;
   }
   seen.add(node);
-  if (isCryptoBearingValue(normalizedPath(primitivePath(context, node)))) {
+  if (
+    isCryptoBearingValue(normalizedPath(context, primitivePath(context, node)))
+  ) {
     return true;
   }
   const loaded = dynamicModuleSourceForEnforcement(node, context);
@@ -992,6 +1009,7 @@ export default eslintCompatPlugin({
             type: "object",
             properties: {
               allowedFiles: { type: "array", items: { type: "string" } },
+              hmacTarget: { enum: ["bun"] },
             },
             additionalProperties: false,
           },
@@ -999,6 +1017,7 @@ export default eslintCompatPlugin({
         messages: {
           owned:
             "Use the SHA-256 owner for this runtime; raw SHA-256 primitives are confined to the registered owners.",
+          hmac: "Use `new Bun.CryptoHasher(algorithm, key)` for HMAC in this Bun-owned file.",
         },
       },
       createOnce(context) {
@@ -1036,7 +1055,7 @@ export default eslintCompatPlugin({
             return;
           }
           if (parent.type === "MemberExpression") {
-            const path = normalizedPath(primitivePath(context, node));
+            const path = normalizedPath(context, primitivePath(context, node));
             if (
               unwrapExpression(parent.object) === node &&
               isRawMemberAccess({
@@ -1061,7 +1080,7 @@ export default eslintCompatPlugin({
           ) {
             return;
           }
-          const path = normalizedPath(primitivePath(context, node));
+          const path = normalizedPath(context, primitivePath(context, node));
           if (
             isCryptoNamespace(path) &&
             parent.type === "VariableDeclarator" &&
@@ -1093,7 +1112,10 @@ export default eslintCompatPlugin({
           if (!Array.isArray(node.arguments)) {
             return;
           }
-          const primitive = normalizedPath(primitivePath(context, node.callee));
+          const primitive = normalizedPath(
+            context,
+            primitivePath(context, node.callee),
+          );
           const algorithm = algorithmName(context, node.arguments.at(0));
           const sha256 =
             algorithm?.toLowerCase().replaceAll("-", "") === "sha256";
@@ -1111,6 +1133,10 @@ export default eslintCompatPlugin({
             if (algorithm !== null && !sha256) {
               return;
             }
+          } else if (primitive === "createHmac") {
+            // Every HMAC is unified on Bun's hasher, whatever its algorithm.
+            context.report({ node, messageId: "hmac" });
+            return;
           } else if (
             primitive !== "Bun.SHA256" &&
             primitive !== "Bun.SHA256.hash"
@@ -1141,11 +1167,14 @@ export default eslintCompatPlugin({
                 : isIdentifier(property.key)
                   ? property.key.name
                   : staticStringValue(property.key);
-              const base = normalizedPath(primitivePath(context, node.init));
+              const base = normalizedPath(
+                context,
+                primitivePath(context, node.init),
+              );
               const path =
                 base === null || key === null
                   ? null
-                  : normalizedPath(`${base}.${key}`);
+                  : normalizedPath(context, `${base}.${key}`);
               if (isPrimitive(path) && !isExportValue(node)) {
                 context.report({ node: property, messageId: "owned" });
               }

@@ -2,8 +2,6 @@ import { panic, Result } from "better-result";
 import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import * as v from "valibot";
 
-import { CONTACT_IMPORT_ISSUE_CODE } from "@stll/api-contract";
-
 import {
   type ContactImportReceiptResult,
   contactImportRequests,
@@ -11,13 +9,11 @@ import {
 } from "@/api/db/schema";
 import { lockContactCapacity } from "@/api/handlers/contacts/contact-capacity";
 import {
+  contactImportSkipReason,
   importedTaxIdentifiers,
-  validateContactImportCandidate,
+  validateContactImportCandidates,
 } from "@/api/handlers/contacts/contact-import-file";
-import type {
-  ContactImportCandidate,
-  ContactImportIssue,
-} from "@/api/handlers/contacts/contact-import-file";
+import type { ContactImportCandidate } from "@/api/handlers/contacts/contact-import-file";
 import { fingerprintContactImport } from "@/api/handlers/contacts/contact-import-receipt";
 import {
   contactImportCandidateSchema,
@@ -25,7 +21,7 @@ import {
 } from "@/api/handlers/contacts/contact-import-schema";
 import { normalizeContactMetadata } from "@/api/handlers/contacts/contact-metadata";
 import { dateOfBirthToColumns } from "@/api/handlers/contacts/person-details";
-import { captureError } from "@/api/lib/analytics/capture";
+import { createErrorCapture } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditEvent } from "@/api/lib/audit-log";
@@ -35,6 +31,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { flushContactSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueContactSearchRepairs } from "@/api/lib/search/projection-repair-queue";
 
@@ -54,13 +51,6 @@ const importContactsBodySchema = v.object({
   ),
 });
 
-type ImportSkipReason =
-  ContactImportReceiptResult["results"][number] extends infer R
-    ? R extends { status: "skipped"; reason: infer Reason }
-      ? Reason
-      : never
-    : never;
-
 type ImportResultRow = ContactImportReceiptResult["results"][number];
 
 type ValidatedImportRow = {
@@ -70,20 +60,6 @@ type ValidatedImportRow = {
   /** Normalized digits under `br_cpf_cnpj`; null when no scheme dedupes. */
   dedupeTaxId: string | null;
 };
-
-const TAX_ID_ISSUE_CODES: ReadonlySet<ContactImportIssue["code"]> = new Set([
-  CONTACT_IMPORT_ISSUE_CODE.INVALID_TAX_ID,
-  CONTACT_IMPORT_ISSUE_CODE.TAX_ID_REQUIRED,
-]);
-
-// A row the validator rejects is skipped, never partially stored; tax-id
-// problems keep their own reason so the receipt says which rule failed.
-const skipReasonForIssues = (
-  issues: readonly ContactImportIssue[],
-): Extract<ImportSkipReason, "invalid_row" | "invalid_tax_id"> =>
-  issues.some(({ code }) => TAX_ID_ISSUE_CODES.has(code))
-    ? "invalid_tax_id"
-    : "invalid_row";
 
 const config = {
   contract: "patch",
@@ -136,17 +112,20 @@ const importContacts = createSafeRootHandler(
         const seenContactIds = new Set<SafeId<"contact">>();
         const seenTaxIds = new Set<string>();
 
-        for (const [index, { id, ...candidate }] of body.rows.entries()) {
-          const { contact, issues } = validateContactImportCandidate({
-            candidate,
-            taxIdScheme: body.taxIdScheme,
-            rowNumber: index + 1,
-          });
+        const validatedBatch = validateContactImportCandidates({
+          candidates: body.rows.map(({ id: _, ...candidate }) => candidate),
+          rowNumbers: body.rows.map((_, index) => index + 1),
+          taxIdScheme: body.taxIdScheme,
+        });
+        for (const [index, { id }] of body.rows.entries()) {
+          const { contact, issues } =
+            validatedBatch.at(index) ??
+            panic("Contact import validation omitted a row");
           if (issues.length > 0) {
             resultByIndex.set(index, {
               index,
               status: "skipped",
-              reason: skipReasonForIssues(issues),
+              reason: contactImportSkipReason(issues),
             });
             continue;
           }
@@ -374,7 +353,11 @@ const importContacts = createSafeRootHandler(
       result.status === "created" ? [result.contactId] : [],
     );
     if (createdContactIds.length > 0) {
-      flushContactSearchRepairs(createdContactIds).catch(captureError);
+      flushContactSearchRepairs(createdContactIds).catch(
+        createErrorCapture(
+          handlerErrorContext("importContacts.flushContactSearchRepairs"),
+        ),
+      );
     }
 
     return Result.ok({

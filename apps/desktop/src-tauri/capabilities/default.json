@@ -29,6 +29,12 @@
     "allow-shortcut-set",
     "allow-permissions-get-snapshot",
     "allow-permissions-request",
-    "allow-permissions-open-settings"
+    "allow-permissions-open-settings",
+    "allow-chatgpt-auth-get-status",
+    "allow-chatgpt-auth-start",
+    "allow-chatgpt-auth-cancel",
+    "allow-chatgpt-auth-complete",
+    "allow-chatgpt-auth-disconnect",
+    "allow-chatgpt-auth-open-usage"
   ]
 }

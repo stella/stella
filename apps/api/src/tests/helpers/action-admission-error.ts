@@ -19,7 +19,10 @@ export const actionAdmissionErrorFor = (
     case "period_exhausted":
     case "not_enabled":
     case "not_on_plan":
-    case "unavailable":
+    case "store_unavailable":
+    case "configuration_incomplete":
+    case "organization_state_unreadable":
+    case "lease_lost":
       return new ActionAdmissionError({ reason, message });
     default:
       reason satisfies never;

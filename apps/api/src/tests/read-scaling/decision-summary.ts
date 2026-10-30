@@ -11,6 +11,7 @@ import {
 import readDecisionSummary, {
   type createReadDecisionSummaryHandler,
 } from "@/api/handlers/case-law/decisions/summary/get";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { HttpStatusResponse } from "@/api/http/status";
 import { createSafeId } from "@/api/lib/branded-types";
 import type {
@@ -111,7 +112,8 @@ export const decisionSummaryScalingScenario = {
             request: new Request(
               `https://example.test/v1/case/decisions/${first.id}/summary`,
             ),
-            route: "/v1/case/decisions/:decisionId/summary",
+            route:
+              "/v1/case/decisions/:decisionId/summary" satisfies ApiRoutePath,
             set: { headers: {} },
           }),
         );

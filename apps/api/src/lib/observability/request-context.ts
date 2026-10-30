@@ -1,6 +1,14 @@
+// parser-output-unchanged: records declared request scopes for exception capture only; parser inputs and outputs are unchanged.
+import { panic } from "better-result";
 import { AsyncLocalStorage } from "node:async_hooks";
 
-import type { FailureGrade, FailureReason } from "@stll/errors";
+import type {
+  FailureGrade,
+  FailureReason,
+  HandlerExceptionScope,
+  RequestExceptionScope,
+} from "@stll/errors";
+import type { UiLocale } from "@stll/locales";
 
 import type { ClientAddress, ClientAddressSource } from "@/api/lib/client-ip";
 
@@ -28,6 +36,24 @@ type RequestFailureObservation = {
   readonly sink: string;
 };
 
+type RequestCaptureScope = RequestExceptionScope | HandlerExceptionScope;
+const requestCaptureScopes = new WeakMap<Request, RequestCaptureScope>();
+
+/** Bound only from declared framework routes or canonical capability identities. */
+export const recordRequestExceptionScope = (
+  request: Request,
+  scope: RequestCaptureScope,
+): void => {
+  requestCaptureScopes.set(request, scope);
+};
+
+/** A request-bearing observer must cross its framework boundary first. */
+export const requireRequestExceptionScope = (
+  request: Request,
+): RequestCaptureScope =>
+  requestCaptureScopes.get(request) ??
+  panic("Request exception scope was not bound");
+
 /**
  * Everything the server knows about the request in flight, held in the async
  * scope the HTTP layer opens around it (see `runWithRequestScope`). Code that
@@ -51,6 +77,7 @@ type AmbientRequestState = {
    * inside fill/suggest helpers, MCP tools) need no extra threading.
    */
   isAiRequest: boolean;
+  uiLocale: UiLocale;
   /**
    * The address the request arrived from, resolved once while its edge
    * headers were still present. A stage that hands inner stages a derived
@@ -66,8 +93,14 @@ const requestStore = new AsyncLocalStorage<AmbientRequestState>();
  * calls this around the whole pipeline; {@link openRequestContext} fills it
  * in once the request's id exists.
  */
-export const runWithRequestIdScope = <TResult>(fn: () => TResult): TResult =>
-  requestStore.run({ context: undefined, isAiRequest: false }, fn);
+export const runWithRequestIdScope = <TResult>(
+  fn: () => TResult,
+  uiLocale: UiLocale = "en",
+): TResult =>
+  requestStore.run({ context: undefined, isAiRequest: false, uiLocale }, fn);
+
+export const getRequestUiLocale = (): UiLocale =>
+  requestStore.getStore()?.uiLocale ?? "en";
 
 /**
  * Tag the active request as AI-classed for the split latency SLO. Called
@@ -203,6 +236,7 @@ export const runWithRequestId = <TResult>(
     {
       context: { startTime: performance.now(), requestId },
       isAiRequest: false,
+      uiLocale: "en",
     },
     fn,
   );

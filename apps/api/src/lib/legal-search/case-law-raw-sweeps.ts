@@ -23,6 +23,7 @@ import {
   rawDocumentPrefix,
 } from "@/api/lib/legal-search/raw-source-storage";
 import type { RawDocumentErasureIncompleteError } from "@/api/lib/legal-search/raw-source-storage";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { listS3ObjectPage } from "@/api/lib/s3";
 
 /**
@@ -480,11 +481,17 @@ export const reconcileCaseLawRawSweeps = async ({
         : swept;
     if (Result.isError(outcome)) {
       result.failed += 1;
-      captureError(outcome.error, {
-        decisionId: owner.decisionId,
-        prefix: rawDocumentPrefix(documentOwner(owner)),
-        step: "reconcileCaseLawRawSweeps.sweep",
-      });
+      captureError(
+        outcome.error,
+        handlerErrorContext(
+          "legalsearch.reconcileCaseLawRawSweeps.outcome_error",
+          {
+            decisionId: owner.decisionId,
+            prefix: rawDocumentPrefix(documentOwner(owner)),
+            step: "reconcileCaseLawRawSweeps.sweep",
+          },
+        ),
+      );
       continue;
     }
     if (outcome.value.type === "swept") {

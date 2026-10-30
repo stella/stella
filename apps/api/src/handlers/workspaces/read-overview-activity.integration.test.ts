@@ -12,6 +12,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import type { Transaction } from "@/api/db/root";
 import { auditLogs, entities } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
@@ -201,6 +202,9 @@ const readActivityOfWorkspaceA1 = async (
 ): Promise<ActivityItem[]> => {
   const result = await readOverviewActivity.handler(
     asTestRaw<Parameters<typeof readOverviewActivity.handler>[0]>({
+      request: new Request("https://api.example.test/activity"),
+      route:
+        "/v1/workspaces/:workspaceId/overview/activity" satisfies ApiRoutePath,
       memberRole: sessionMemberRole("owner"),
       query,
       safeDb: createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
@@ -325,6 +329,9 @@ describe("matter overview activity", () => {
     };
     const jsonResult = await exportOverviewActivity.handler(
       asTestRaw<Parameters<typeof exportOverviewActivity.handler>[0]>({
+        request: new Request("https://api.example.test/activity"),
+        route:
+          "/v1/workspaces/:workspaceId/overview/activity" satisfies ApiRoutePath,
         ...context,
         query: { format: "json" },
       }),
@@ -351,6 +358,9 @@ describe("matter overview activity", () => {
 
     const csvResult = await exportOverviewActivity.handler(
       asTestRaw<Parameters<typeof exportOverviewActivity.handler>[0]>({
+        request: new Request("https://api.example.test/activity"),
+        route:
+          "/v1/workspaces/:workspaceId/overview/activity" satisfies ApiRoutePath,
         ...context,
         query: { format: "csv" },
       }),
@@ -456,6 +466,9 @@ describe("matter overview activity", () => {
     try {
       const result = await readOverviewActivityActors.handler(
         asTestRaw<Parameters<typeof readOverviewActivityActors.handler>[0]>({
+          request: new Request("https://api.example.test/activity"),
+          route:
+            "/v1/workspaces/:workspaceId/overview/activity" satisfies ApiRoutePath,
           memberRole: sessionMemberRole("owner"),
           query: {},
           safeDb: createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),

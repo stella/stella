@@ -6,6 +6,7 @@ import type {
 } from "@stll/api-contract";
 
 import { HTTP_FAILURE, HttpFailureError } from "@/api/http/errors";
+import { hasRequestBody } from "@/api/http/request-body";
 
 /** Keys that would walk up the prototype chain if written onto an object. */
 const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype"]);
@@ -94,7 +95,7 @@ export const readBody = async (
   request: Request,
   mode: BodyMode,
 ): Promise<unknown> => {
-  if (mode === "none" || request.body === null) {
+  if (mode === "none" || !hasRequestBody(request)) {
     return undefined;
   }
   if (mode === "text") {

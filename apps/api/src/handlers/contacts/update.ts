@@ -23,7 +23,7 @@ import {
   validatePersonDetails,
 } from "@/api/handlers/contacts/person-details";
 import { contactTypeSchema } from "@/api/handlers/contacts/schema";
-import { captureError } from "@/api/lib/analytics/capture";
+import { createErrorCapture } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -39,6 +39,7 @@ import {
 } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { pickDefined } from "@/api/lib/pick-defined";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { flushContactSearchRepairs } from "@/api/lib/search/projection-repair-flush";
@@ -214,6 +215,8 @@ const lockExistingContact = async ({
 // Shared contact-update logic reused by the HTTP handler and the
 // `save_contact` MCP tool, so both emit identical audit events and
 // search-index writes.
+const CONTACT_REPAIR_KEY = "updateContactHandler.flushContactSearchRepairs";
+
 export const updateContactHandler = async function* ({
   safeDb,
   organizationId,
@@ -411,7 +414,9 @@ export const updateContactHandler = async function* ({
     return Result.ok(outcome.row);
   }
 
-  flushContactSearchRepairs([contactId]).catch(captureError);
+  flushContactSearchRepairs([contactId]).catch(
+    createErrorCapture(handlerErrorContext(CONTACT_REPAIR_KEY)),
+  );
 
   return Result.ok(outcome.row);
 };

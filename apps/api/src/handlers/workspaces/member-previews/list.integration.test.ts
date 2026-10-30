@@ -13,6 +13,7 @@ import * as v from "valibot";
 import { member, user } from "@/api/db/auth-schema";
 import { workspaceMembers } from "@/api/db/schema";
 import { createMembershipSafeDb } from "@/api/db/scoped";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -93,6 +94,8 @@ const listPreviewsAs = async ({
       session: { activeOrganizationId: organizationId },
       user: { id: userId },
       query: { workspaceIds },
+      request: new Request("https://api.test/v1/workspaces/member-previews"),
+      route: "/v1/workspaces/member-previews" satisfies ApiRoutePath,
     }),
   );
   return asTestRaw<WorkspaceMemberPreviewResponse>(result).previews;

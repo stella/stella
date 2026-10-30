@@ -4,7 +4,7 @@
 
 import type { NetworkCapture } from "../helpers/network";
 
-const DRIVE_COMMANDS = ["snap", "run", "measure"] as const;
+const DRIVE_COMMANDS = ["snap", "run", "measure", "census"] as const;
 type DriveCommand = (typeof DRIVE_COMMANDS)[number];
 
 const COLOR_SCHEMES = ["light", "dark"] as const;
@@ -20,6 +20,7 @@ export type DriveOptions = {
   colorScheme: ColorScheme;
   compare: string | undefined;
   fullPage: boolean;
+  flows: string;
   samples: number;
   save: string | undefined;
   viewport: Viewport;
@@ -39,6 +40,7 @@ const DRIVE_USAGE = `Usage:
   agent:drive snap <path>... [--wait-for <selector>] [--viewport 1440x900]
                              [--color-scheme light|dark] [--full-page]
   agent:drive run <script.ts> [--viewport ...] [--color-scheme ...]
+  agent:drive census [--samples 3] [--flows all|matter,chat,...]
   agent:drive measure <path> [--samples 3] [--save <label>]
                              [--compare <label>]
 
@@ -57,6 +59,7 @@ const isColorScheme = (value: string): value is ColorScheme =>
 
 const VALUE_FLAGS = [
   "--color-scheme",
+  "--flows",
   "--compare",
   "--samples",
   "--save",
@@ -109,7 +112,10 @@ export const parseDriveArgs = (argv: readonly string[]): DriveArgsResult => {
     targets.push(arg);
   }
 
-  if (targets.length === 0) {
+  if (command === "census" && targets.length > 0) {
+    return error("census does not take targets");
+  }
+  if (command !== "census" && targets.length === 0) {
     return error(`${command} needs at least one target`);
   }
   if (command !== "snap" && targets.length > 1) {
@@ -117,6 +123,14 @@ export const parseDriveArgs = (argv: readonly string[]): DriveArgsResult => {
   }
   if (command !== "run" && targets.some((target) => !target.startsWith("/"))) {
     return error("Paths must start with /");
+  }
+
+  const flows = values.get("--flows") ?? "all";
+  if (values.has("--flows") && command !== "census") {
+    return error("--flows only applies to census");
+  }
+  if (!/^[a-z]+(?:-[a-z]+)*(?:,[a-z]+(?:-[a-z]+)*)*$/u.test(flows)) {
+    return error("--flows takes all or comma-separated flow names");
   }
 
   const viewportValue = values.get("--viewport");
@@ -153,7 +167,10 @@ export const parseDriveArgs = (argv: readonly string[]): DriveArgsResult => {
 
   if (
     command !== "measure" &&
-    MEASURE_ONLY_FLAGS.some((flag) => values.has(flag))
+    MEASURE_ONLY_FLAGS.some(
+      (flag) =>
+        values.has(flag) && !(command === "census" && flag === "--samples"),
+    )
   ) {
     return error(`${MEASURE_ONLY_FLAGS.join(", ")} only apply to measure`);
   }
@@ -166,6 +183,7 @@ export const parseDriveArgs = (argv: readonly string[]): DriveArgsResult => {
         colorScheme,
         compare: values.get("--compare"),
         fullPage,
+        flows,
         samples,
         save: values.get("--save"),
         viewport,

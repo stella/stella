@@ -23,6 +23,7 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
  */
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { getS3 } from "@/api/lib/s3";
 import { tmpUploadKeys } from "@/api/lib/uploads/runtime";
 
@@ -157,11 +158,14 @@ const abortUpload = createSafeHandler(
       await getS3()
         .delete(key)
         .catch((error: unknown) =>
-          captureError(error, {
-            key,
-            uploadId,
-            stage: "tmp-cleanup-after-abort",
-          }),
+          captureError(
+            error,
+            handlerErrorContext("uploads.abortUpload", {
+              key,
+              uploadId,
+              stage: "tmp-cleanup-after-abort",
+            }),
+          ),
         );
     }
 

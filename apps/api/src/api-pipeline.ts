@@ -1,6 +1,5 @@
 import { REQUEST_ID_HEADER } from "@stll/api-contract";
 import { CAPABILITY_REQUEST_HEADER } from "@stll/api-contract/capability-request";
-import { AUTH_SESSION_STARTUP_HEADER } from "@stll/auth-model";
 
 import { env } from "@/api/env";
 import { mcpTransportMethodRefusal } from "@/api/handlers/mcp/routes-core";
@@ -10,6 +9,7 @@ import { setResponseHeaders } from "@/api/http/headers";
 import { toResponse } from "@/api/http/respond";
 import type { Middleware } from "@/api/http/route";
 import { status } from "@/api/http/status";
+import { APPLE_FORM_POST } from "@/api/lib/auth/apple-callback";
 import {
   isAllowedBrowserOrigin,
   shouldRejectBrowserMutation,
@@ -23,17 +23,23 @@ import {
   socketPeerOnce,
   stampClientAddressHeader,
 } from "@/api/lib/client-ip";
+import { runWithStatementCeiling } from "@/api/lib/db/statement-ceiling";
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
 import { httpError } from "@/api/lib/errors/http-error";
-import { FORMATTING_LOCALE_HEADER } from "@/api/lib/locale";
+import {
+  extractLangFromRequest,
+  FORMATTING_LOCALE_HEADER,
+} from "@/api/lib/locale";
 import {
   clientTooOldError,
   LOCAL_CLIENT_IDENTITY_HEADER,
 } from "@/api/lib/mcp-connectors/local-client-support";
+import { withExceptionScope } from "@/api/lib/observability/exception-scope";
 import {
   enrichRequestContext,
   getRequestId,
   openRequestContext,
+  recordRequestExceptionScope,
 } from "@/api/lib/observability/request-context";
 import {
   errorBoundary,
@@ -77,8 +83,24 @@ const ALLOWED_BROWSER_ORIGINS = allowedBrowserOrigins();
  * query count. Opened with `run`, so nothing outside the request's own
  * callback tree adopts it.
  */
-const requestScope: Middleware = async (_ctx, inner) =>
-  await runWithHttpRequestScope(async () => await inner());
+const requestScope: Middleware = async (ctx, inner) =>
+  await runWithHttpRequestScope(async () => {
+    const scope = {
+      type: "request",
+      method: ctx.request.method,
+      routeTemplate: ctx.route ?? "unmatched",
+    } as const;
+    recordRequestExceptionScope(ctx.request, scope);
+    return await withExceptionScope(
+      scope,
+      async () =>
+        await runWithStatementCeiling({
+          kind: "request",
+          key: `${ctx.request.method} ${ctx.route ?? "<unmatched>"}`,
+          run: inner,
+        }),
+    );
+  }, extractLangFromRequest(ctx.request));
 
 /**
  * Who is calling and from where, resolved once while the edge headers are
@@ -124,12 +146,20 @@ const clientTooOld: Middleware = async (ctx, inner) => {
     : toResponse(status(426, error), ctx.set);
 };
 
+/**
+ * Cross-site form posts the API accepts: Apple's sign-in response, posted by
+ * appleid.apple.com to the Apple callback (see `APPLE_FORM_POST`).
+ */
+const CROSS_SITE_FORM_POSTS = [APPLE_FORM_POST];
+
 /** A browser mutation from an origin the app does not run on is refused. */
 const browserOriginGuard: Middleware = async (ctx, inner) =>
   shouldRejectBrowserMutation({
     allowedOrigins: ALLOWED_BROWSER_ORIGINS,
+    crossSiteFormPosts: CROSS_SITE_FORM_POSTS,
     method: ctx.request.method,
     origin: ctx.request.headers.get("origin"),
+    pathname: new URL(ctx.request.url).pathname,
     secFetchSite: ctx.request.headers.get("sec-fetch-site"),
   })
     ? toResponse(status(403, httpError("Untrusted browser origin")), ctx.set)
@@ -154,12 +184,12 @@ export const apiPipeline: readonly Middleware[] = [
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: [
       "Content-Type",
+      "Idempotency-Key",
       "Authorization",
       "MCP-Protocol-Version",
       LOCAL_CLIENT_IDENTITY_HEADER,
       FORMATTING_LOCALE_HEADER,
       SESSION_ID_HEADER,
-      AUTH_SESSION_STARTUP_HEADER,
       TANSTACK_RUN_ID_HEADER,
       CAPABILITY_REQUEST_HEADER,
     ],

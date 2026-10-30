@@ -5,7 +5,11 @@ import * as v from "valibot";
 import { justifications } from "@/api/db/schema";
 import type { BoundingBox } from "@/api/db/schema-validators";
 import { workspaceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { memberAIAccessError } from "@/api/lib/ai-config-response";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import {
+  memberAIAccessError,
+  storedAIConfigUnreadableError,
+} from "@/api/lib/ai-config-response";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import { captureError } from "@/api/lib/analytics/capture";
 import {
@@ -18,6 +22,7 @@ import { generateBBoxes } from "@/api/lib/bbox/generate-b-boxes";
 import { generateBBoxesMock } from "@/api/lib/bbox/generate-b-boxes-mock";
 import { prepareJustificationData } from "@/api/lib/bbox/generate-b-boxes-shared";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { mockAnswersForOrganization } from "@/api/lib/tanstack-ai-models";
 
 const config = {
@@ -49,6 +54,10 @@ const generateBoundingBoxes = createSafeHandler(
     promptCachingEnabled,
     request,
   }) {
+    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+      return Result.err(storedAIConfigUnreadableError());
+    }
+
     const accessError = memberAIAccessError(orgAIConfigStatus);
     if (accessError) {
       return Result.err(accessError);
@@ -64,10 +73,16 @@ const generateBoundingBoxes = createSafeHandler(
     );
 
     if (Result.isError(preparedDataResult)) {
-      captureError(preparedDataResult.error, {
-        method: "POST",
-        path: `/workspaces/${workspaceId}/bounding-boxes`,
-      });
+      captureError(
+        preparedDataResult.error,
+        handlerErrorContext(
+          "workspaces.generateBoundingBoxes.preparedDataResult_error",
+          {
+            method: "POST",
+            path: `/workspaces/${workspaceId}/bounding-boxes`,
+          },
+        ),
+      );
 
       return Result.ok({ boxes: [] });
     }
@@ -104,11 +119,17 @@ const generateBoundingBoxes = createSafeHandler(
       });
 
       if (Result.isError(pageBoxesResult)) {
-        captureError(pageBoxesResult.error, {
-          feature: "bbox.generate",
-          workspaceId,
-          organizationId,
-        });
+        captureError(
+          pageBoxesResult.error,
+          handlerErrorContext(
+            "workspaces.generateBoundingBoxes.pageBoxesResult_error",
+            {
+              feature: "bbox.generate",
+              workspaceId,
+              organizationId,
+            },
+          ),
+        );
         // `WorkflowIntegrationError.cause` carries the underlying
         // provider failure — classify
         // against that so quota/usage-limit errors map to 429/402 instead of

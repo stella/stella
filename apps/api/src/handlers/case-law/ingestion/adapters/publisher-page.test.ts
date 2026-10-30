@@ -279,3 +279,16 @@ describe("publisher response contracts", () => {
     ).toBe(bytes);
   });
 });
+
+test("inherited publisher failures preserve their finite rejection reason", () => {
+  for (const [reason, failureReason] of [
+    ["too-small", "upstream_unavailable"],
+    ["invalid-shape", "tagged_failure"],
+  ] as const) {
+    const error = new PublisherPageError({ ...context, reason });
+    expect(readEvidence(error).nodes.at(0)?.discriminators).toEqual({
+      reason,
+      failureReason,
+    });
+  }
+});

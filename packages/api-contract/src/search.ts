@@ -18,6 +18,52 @@ export type SearchSort = (typeof SEARCH_SORTS)[number];
 
 export const DEFAULT_SEARCH_SORT = SEARCH_SORTS[0];
 
+/** Facets offered without the optional court/year matrix. */
+export const DEFAULT_CASE_LAW_SEARCH_FACETS = [
+  "court",
+  "decisionType",
+  "source",
+  "language",
+  "year",
+] as const;
+
+export const CASE_LAW_SEARCH_FACET_NAMES = [
+  ...DEFAULT_CASE_LAW_SEARCH_FACETS,
+  "courtYear",
+] as const;
+
+/**
+ * The orders the case-law browse listing (no query) may be read in: by
+ * decision date, either way. A listing has nothing to rank, so relevance is
+ * not one of them.
+ *
+ * `newest` is first because `DEFAULT_DECISION_LIST_SORT` reads slot 0, the
+ * order a listing that names none is read in.
+ */
+export const DECISION_LIST_SORTS = ["newest", "oldest"] as const;
+
+export type DecisionListSort = (typeof DECISION_LIST_SORTS)[number];
+
+export const DEFAULT_DECISION_LIST_SORT = DECISION_LIST_SORTS[0];
+
+/**
+ * Every order a case-law results address may name: the search's and the
+ * listing's, each once. Which one applies depends on whether the address
+ * carries a query.
+ */
+export const DECISION_SORTS = ["relevance", "newest", "oldest"] as const;
+
+export type DecisionSort = (typeof DECISION_SORTS)[number];
+
+// Both vocabularies, nothing else: an order neither endpoint serves has no
+// place in an address, and one an address cannot carry no link can share.
+true satisfies SearchSort | DecisionListSort extends DecisionSort
+  ? true
+  : never;
+true satisfies DecisionSort extends SearchSort | DecisionListSort
+  ? true
+  : never;
+
 /** Public statute HTTP pages and their web client share the same bound. */
 export const PUBLIC_STATUTE_SEARCH_PAGE_SIZE_MAX = 20;
 
@@ -209,3 +255,6 @@ export const searchPageEnd = ({
     ? SEARCH_PAGE_END.COMPLETE
     : SEARCH_PAGE_END.STOPPED;
 };
+
+export const GLOBAL_SEARCH_RANK_WORK_LIMIT_CODE =
+  "global_search_rank_work_limit";

@@ -1054,9 +1054,9 @@ export const createCollabServer = async (
             expectedGeneration: snapshot.generation,
             expectedSnapshotRevision: snapshot.snapshotRevision,
             roomId: snapshot.roomId,
-            snapshotBase64: Buffer.from(encodeStateAsUpdate(document)).toString(
-              "base64",
-            ),
+            snapshotBase64: Buffer.from(
+              encodeStateAsUpdate(document),
+            ).toBase64(),
           },
           path: "/folio-collab-rooms/snapshot/store",
           schema: storeSnapshotResponseSchema,

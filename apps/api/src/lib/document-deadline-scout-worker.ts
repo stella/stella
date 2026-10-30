@@ -7,6 +7,7 @@ import {
   type DocumentDeadlineScoutJobData,
 } from "@/api/lib/document-processing-enqueue";
 import { errorTag } from "@/api/lib/errors/utils";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import { createBullMqConnection } from "@/api/lib/redis-client";
@@ -32,10 +33,13 @@ export const initDocumentDeadlineScoutWorker = ({
   );
 
   worker.on("failed", (job, error) => {
-    captureError(error, {
-      scout: DEADLINE_SCOUT_JOB_NAME,
-      sourceRunId: job?.data.sourceRunId ?? "",
-    });
+    captureError(
+      error,
+      handlerErrorContext("lib.initDocumentDeadlineScoutWorker", {
+        scout: DEADLINE_SCOUT_JOB_NAME,
+        sourceRunId: job?.data.sourceRunId ?? "",
+      }),
+    );
     logger.error("scout.document_deadlines.failed", {
       "error.type": errorTag(error),
       "source.run.id": job?.data.sourceRunId ?? "",

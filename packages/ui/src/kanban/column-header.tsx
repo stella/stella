@@ -44,6 +44,7 @@ export const KanbanColumnHeader = ({
       KANBAN_CHROME_ROW_HEIGHT,
       className,
     )}
+    data-kanban-column-header=""
   >
     {/* How far the name may travel: up to where the row's own controls begin,
      * so a name holding the visible edge of a board scrolled sideways never

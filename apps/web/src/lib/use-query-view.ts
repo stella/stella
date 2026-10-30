@@ -1,17 +1,11 @@
 import { useRef } from "react";
 
-import type { UseQueryResult } from "@tanstack/react-query";
-
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import type { ExceptionFingerprintKey } from "@/lib/analytics/exception-fingerprint";
 import { useAnalytics } from "@/lib/analytics/provider";
 import type { NotApiErrorEnvelope } from "@/lib/analytics/types";
-import { queryView, queryViewError } from "@/lib/query-view.logic";
-import type { QueryView, QueryViewOptions } from "@/lib/query-view.logic";
-
-export const useQueryView = <TData, TError>(
-  query: UseQueryResult<TData, TError>,
-  options?: QueryViewOptions<TData>,
-): QueryView<TData, TError> => queryView(query, options);
+import { queryViewError } from "@/lib/query-view.logic";
+import type { QueryView } from "@/lib/query-view.logic";
 
 // The envelope guard sits on the parameter because a conditional constraint on
 // TError itself is circular; `captureError<TError>` keeps the guarded
@@ -20,19 +14,24 @@ export const useQueryView = <TData, TError>(
 /** Optional reads keep their cached content and report failures without blocking it. */
 export const useQueryViewError = <TData, TError>(
   view: QueryView<TData, TError & NotApiErrorEnvelope<TError>>,
+  fingerprintKey: ExceptionFingerprintKey,
 ) => {
   const analytics = useAnalytics();
   const error = queryViewError(view);
   useExternalSyncEffect(() => {
     if (error !== undefined) {
-      analytics.captureError<TError>(error);
+      analytics.captureError<TError>(error, {
+        fingerprintKey,
+        scope: { type: "handler", handlerId: fingerprintKey },
+      });
     }
-  }, [analytics, error]);
+  }, [analytics, error, fingerprintKey]);
 };
 
 /** Dynamic query batches report each active failure once across renders. */
 export const useQueryViewErrors = <TData, TError>(
   views: readonly QueryView<TData, TError & NotApiErrorEnvelope<TError>>[],
+  fingerprintKey: ExceptionFingerprintKey,
 ) => {
   const analytics = useAnalytics();
   const reportedErrors = useRef(new Set<TError>());
@@ -45,9 +44,12 @@ export const useQueryViewErrors = <TData, TError>(
       }
       currentErrors.add(error);
       if (!reportedErrors.current.has(error)) {
-        analytics.captureError<TError>(error);
+        analytics.captureError<TError>(error, {
+          fingerprintKey,
+          scope: { type: "handler", handlerId: fingerprintKey },
+        });
       }
     }
     reportedErrors.current = currentErrors;
-  }, [analytics, views]);
+  }, [analytics, views, fingerprintKey]);
 };

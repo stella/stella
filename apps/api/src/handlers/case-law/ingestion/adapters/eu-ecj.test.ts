@@ -10,6 +10,7 @@ import {
   celexToCaseNumber,
   ECJ_DECISION_PATTERN,
   ECJ_TOTAL_COUNT_QUERY,
+  ecjCaseNumber,
   ecjListingIdentity,
   euEcjAdapter as ecjAdapter,
   fetchDecisionsByCelex,
@@ -113,6 +114,44 @@ const frBinding = withManifestation(firstFixtureBinding, {
 const deBinding = withManifestation(firstFixtureBinding, {
   cellarLanguage: "DEU",
   manifestationId: DE_MANIFESTATION_ID,
+});
+
+// -- the case number the publisher states --
+
+describe("ecjCaseNumber", () => {
+  test.each([
+    // Before 1989 the Court of Justice numbered cases without a letter.
+    { celex: "61978CJ0120", statements: ["Case 120/78."], expected: "120/78" },
+    { celex: "61955CJ0008", statements: ["Case 8-55."], expected: "8/55" },
+    { celex: "61987CJ0302", statements: ["Věc 302/87."], expected: "302/87" },
+    // A case still pending in 1989 took the letter.
+    {
+      celex: "61988CJ0070",
+      statements: ["Case C-70/88."],
+      expected: "C-70/88",
+    },
+    {
+      celex: "61990CJ0006",
+      statements: ["Joined Cases C-6/90 and C-9/90."],
+      expected: "C-6/90",
+    },
+    { celex: "62022CJ0128", statements: ["C-128/22"], expected: "C-128/22" },
+    { celex: "62005FJ0001", statements: ["Case F-1/05."], expected: "F-1/05" },
+  ])("$statements → $expected", ({ celex, statements, expected }) => {
+    expect(ecjCaseNumber(celex, statements)).toBe(expected);
+  });
+
+  test("reads the docket the CELEX names, not another one beside it", () => {
+    // A joined case's second docket is not this document's.
+    expect(
+      ecjCaseNumber("61990CJ0009", ["Joined Cases C-6/90 and C-9/90."]),
+    ).toBe("C-9/90");
+    expect(ecjCaseNumber("61978CJ0120", ["Case 121/78."])).toBe("C-120/78");
+  });
+
+  test("keeps the CELEX reading when the publisher states no docket", () => {
+    expect(ecjCaseNumber("62024CJ0436", [])).toBe("C-436/24");
+  });
 });
 
 // -- celexToCaseNumber --
@@ -828,6 +867,119 @@ describe("language variant completion", () => {
         `https://publications.europa.eu/resource/cellar/${EN_MANIFESTATION_ID}`,
         `https://publications.europa.eu/resource/cellar/${lastId}`,
       ]);
+    },
+  );
+});
+
+describe("translations published as the Court's HTML", () => {
+  const originalFetch = globalThis.fetch;
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const HTML_MANIFESTATION_ID = "5980acd6-b5e4-11ee-b164-01aa75ed71a1.0011.01";
+  const typed = <T extends object>(binding: T, type: string) => ({
+    ...binding,
+    manifestationType: { type: "literal", value: type },
+  });
+
+  test("the listing asks for every document manifestation type", () => {
+    // The Office publishes a translation as the Court's HTML first and
+    // converts it to XHTML later, if ever; a listing limited to XHTML holds a
+    // decision in the few languages already converted and no others.
+    const listing = buildListingQuery({
+      dateFrom: "2026-10-06",
+      dateTo: "2026-10-06",
+    });
+    expect(ECJ_DECISION_PATTERN).toContain('IN ("xhtml", "html")');
+    expect(listing).toContain("?manifestationType\nWHERE");
+    expect(ECJ_TOTAL_COUNT_QUERY).toContain(ECJ_DECISION_PATTERN);
+  });
+
+  test.each(["crawl", "celex", "reconciliation"] as const)(
+    "%s stores a variant listed only as HTML",
+    async (walk) => {
+      const { documentFetches } = installSparqlMock({
+        bindings: [
+          typed(
+            withManifestation(firstFixtureBinding, {
+              cellarLanguage: "ENG",
+              manifestationId: HTML_MANIFESTATION_ID,
+            }),
+            "html",
+          ),
+        ],
+        served: [HTML_MANIFESTATION_ID],
+      });
+      const decisions = await variantDecisions(walk);
+
+      expect(
+        decisions.map(({ plainTextOutcome }) => plainTextOutcome.type),
+      ).toEqual(["accepted"]);
+      expect(decisions.map(({ sourceDocumentId }) => sourceDocumentId)).toEqual(
+        [`${enBinding.celex.value}:en`],
+      );
+      expect(decisions.at(0)?.metadata).toMatchObject({
+        manifestationType: "html",
+      });
+      expect(documentFetches.at(0)).toContain(HTML_MANIFESTATION_ID);
+    },
+  );
+
+  test.each(["crawl", "celex", "reconciliation"] as const)(
+    "%s reads a variant listed in both types from its XHTML",
+    async (walk) => {
+      // Listed HTML first, as the endpoint may order them: the preference,
+      // not the listing order, decides which manifestation is read.
+      const { documentFetches } = installSparqlMock({
+        bindings: [
+          typed(
+            withManifestation(firstFixtureBinding, {
+              cellarLanguage: "ENG",
+              manifestationId: HTML_MANIFESTATION_ID,
+            }),
+            "html",
+          ),
+          typed(enBinding, "xhtml"),
+        ],
+        served: [HTML_MANIFESTATION_ID, EN_MANIFESTATION_ID],
+      });
+      const decisions = await variantDecisions(walk);
+
+      expect(decisions).toHaveLength(1);
+      expect(decisions.at(0)?.documentUrl).toContain(EN_MANIFESTATION_ID);
+      expect(decisions.at(0)?.metadata).toMatchObject({
+        manifestationType: "xhtml",
+      });
+      expect(documentFetches).toEqual([
+        `https://publications.europa.eu/resource/cellar/${EN_MANIFESTATION_ID}`,
+      ]);
+    },
+  );
+
+  test.each(["crawl", "celex", "reconciliation"] as const)(
+    "%s falls back to the HTML when the XHTML is not served",
+    async (walk) => {
+      const { documentFetches } = installSparqlMock({
+        bindings: [
+          typed(enBinding, "xhtml"),
+          typed(
+            withManifestation(firstFixtureBinding, {
+              cellarLanguage: "ENG",
+              manifestationId: HTML_MANIFESTATION_ID,
+            }),
+            "html",
+          ),
+        ],
+        served: [HTML_MANIFESTATION_ID],
+      });
+      const decisions = await variantDecisions(walk);
+
+      expect(
+        decisions.map(({ plainTextOutcome }) => plainTextOutcome.type),
+      ).toEqual(["accepted"]);
+      expect(decisions.at(0)?.documentUrl).toContain(HTML_MANIFESTATION_ID);
+      expect(documentFetches.at(0)).toContain(EN_MANIFESTATION_ID);
     },
   );
 });

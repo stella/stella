@@ -55,7 +55,7 @@ export const tenantActionAdmission =
       if (Result.isError(bounded)) {
         return actionSizeErrorResponse(bounded.error, limits.responseBytes);
       }
-      const response = await inner({ ...ctx, request: bounded.value });
+      const response = await inner({ ...ctx, request: bounded.value.request });
       return await boundActionJsonResponse(response, {
         maximum: limits.responseBytes,
         disposition:

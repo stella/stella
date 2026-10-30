@@ -1,18 +1,20 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import { classifyFailure } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
-import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
 import { INVOICE_STATUS } from "@/api/db/schema";
 import { INVOICE_DETAIL_RELATIONS } from "@/api/handlers/invoices/invoice-detail";
-import { readInvoiceDocumentLines } from "@/api/handlers/invoices/invoice-lines";
 import { renderInvoiceWithTypst } from "@/api/handlers/invoices/pdf/typst/render-typst";
 import { openTypstSession } from "@/api/handlers/invoices/pdf/typst/session";
 import type { TypstRenderOutcome } from "@/api/handlers/invoices/pdf/typst/session";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
+import { ownerSyntheticSessionAuthorityReader } from "@/api/lib/auth";
+import { readInvoiceDocumentLines } from "@/api/lib/billing/invoice-lines";
+import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { holdMemberAccessOnTx } from "@/api/lib/db/member-access-hold";
@@ -58,6 +60,7 @@ const invoiceRenderRejection = ({
   return classifyFailure(
     new HandlerError({
       status: infrastructureFailure ? 503 : 409,
+      code: "internal_error",
       message: infrastructureFailure
         ? "The invoice PDF renderer is temporarily unavailable."
         : diagnostics.join("\n") || `Invoice rendering was rejected: ${reason}`,
@@ -90,6 +93,25 @@ const holdsInvoiceMatter = async (
   });
   return access.type === "held" && access.workspaceIds.includes(workspaceId);
 };
+const config = {
+  contract: "patch",
+  contentDelivery: { type: "audited" },
+  description:
+    "Download an invoice, advance invoice or credit note as PDF, including its parties, lines, VAT breakdown and payment QR. Drafts have no document number. Returns a short-lived downloadUrl, fileName and expiresAt; hand the URL to the user without reading the file bytes.",
+  permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  featureAccess: { featureId: "time-billing", type: "required" },
+  access: "write",
+  mcp: {
+    type: "capability",
+    reason: "billing_admin",
+    consumesServices: false,
+  },
+  params: workspaceParams({ invoiceId: resourceIdSchema("invoice") }),
+  realtime: noResourceSetUpdates(
+    "Stores a generated PDF download; nothing a web view lists changes.",
+  ),
+} satisfies WorkspaceHandlerConfig;
 
 // permissions-exempt: rendering a temporary copy needs the same matter read
 // permission as the invoice; it does not modify the invoice.
@@ -98,25 +120,7 @@ export const createInvoicePdfExport = (
   renderInvoice = renderInvoiceWithTypst,
 ) =>
   createSafeHandler(
-    {
-      contract: "patch",
-      contentDelivery: { type: "audited" },
-      description:
-        "Download an invoice, advance invoice or credit note as PDF, including its parties, lines, VAT breakdown and payment QR. Drafts have no document number. Returns a short-lived downloadUrl, fileName and expiresAt; hand the URL to the user without reading the file bytes.",
-      permissions: { workspace: ["read"] },
-      accountAccess: ACCOUNT_ACCESS.sandbox,
-      featureAccess: { featureId: "time-billing", type: "required" },
-      access: "write",
-      mcp: {
-        type: "capability",
-        reason: "billing_admin",
-        consumesServices: false,
-      },
-      params: workspaceParams({ invoiceId: resourceIdSchema("invoice") }),
-      realtime: noResourceSetUpdates(
-        "Stores a generated PDF download; nothing a web view lists changes.",
-      ),
-    },
+    config,
     async function* ({
       safeDb,
       workspaceId,
@@ -130,7 +134,7 @@ export const createInvoicePdfExport = (
           const invoice = await tx.query.invoices.findFirst({
             where: {
               id: { eq: params.invoiceId },
-              workspaceId: { eq: workspaceId },
+              RAW: (table) => invoiceInMatter(table, workspaceId),
               organizationId: { eq: session.activeOrganizationId },
             },
             with: INVOICE_DETAIL_RELATIONS,
@@ -153,12 +157,18 @@ export const createInvoicePdfExport = (
               : await tx.query.invoices.findFirst({
                   where: {
                     id: { eq: invoice.originalInvoiceId },
-                    workspaceId: { eq: workspaceId },
+                    RAW: (table) => invoiceInMatter(table, workspaceId),
                     organizationId: { eq: session.activeOrganizationId },
                   },
                   columns: { invoiceNumber: true },
                 });
+          const matter = await tx.query.workspaces.findFirst({
+            where: { id: { eq: workspaceId } },
+            columns: { name: true },
+          });
           return {
+            matterName:
+              matter?.name ?? panic("Authorized invoice matter disappeared"),
             invoice,
             seller: seller ?? null,
             originalNumber: original?.invoiceNumber ?? null,
@@ -191,7 +201,7 @@ export const createInvoicePdfExport = (
           }),
         );
       }
-      const amounts = yield* readInvoiceDocumentLines(loaded.invoice);
+      const amounts = readInvoiceDocumentLines(loaded.invoice);
       const outcome = yield* Result.await(
         Result.tryPromise({
           try: async () =>
@@ -202,18 +212,30 @@ export const createInvoicePdfExport = (
                 ...loaded,
                 invoice: {
                   ...loaded.invoice,
-                  lines: amounts.lines.map((line) => ({
-                    description: line.description,
-                    quantity: line.quantity,
-                    unit: line.unit,
-                    unitPrice: line.unitPrice,
-                    netAmount: line.netAmountMinor,
-                    vatAmount: line.vatAmountMinor,
-                    grossAmount: line.grossAmountMinor,
-                    vatRateBps: line.vatRateBps,
-                    vatTreatment: line.vatTreatment,
-                    exemptionReason: line.exemptionReason,
-                  })),
+                  lines: amounts.lines.map((line, index) => {
+                    // Stored lines come first; a legacy invoice follows them
+                    // with lines for its attached entries, which belong to the
+                    // invoice's own matter.
+                    const stored = loaded.invoice.lines.at(index);
+                    const matter = stored
+                      ? (stored.workspace ??
+                        panic("Invoice line matter is missing"))
+                      : null;
+                    return {
+                      workspaceId: stored ? stored.workspaceId : workspaceId,
+                      workspaceName: matter ? matter.name : loaded.matterName,
+                      description: line.description,
+                      quantity: line.quantity,
+                      unit: line.unit,
+                      unitPrice: line.unitPrice,
+                      netAmount: line.netAmountMinor,
+                      vatAmount: line.vatAmountMinor,
+                      grossAmount: line.grossAmountMinor,
+                      vatRateBps: line.vatRateBps,
+                      vatTreatment: line.vatTreatment,
+                      exemptionReason: line.exemptionReason,
+                    };
+                  }),
                 },
                 totals: amounts.totals,
               },
@@ -246,6 +268,7 @@ export const createInvoicePdfExport = (
           catch: (cause) =>
             new HandlerError({
               status: 502,
+              code: "internal_error",
               message: "The invoice PDF could not be stored.",
               cause,
             }),

@@ -17,7 +17,7 @@ import {
 } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { organizationWorkspaceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, createErrorCapture } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -66,6 +66,7 @@ import {
   DEFAULT_MATTER_NUMBER_PADDING,
   DEFAULT_MATTER_NUMBER_PATTERN,
 } from "@/api/lib/matter-reference";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { requireComputedColumnInputs } from "@/api/lib/properties/computed-column-input";
 import { computedColumnInputHandlerError } from "@/api/lib/properties/computed-column-input-handler-error";
 import {
@@ -472,7 +473,13 @@ const cleanupCopiedS3Keys = async ({
   );
 
   if (Result.isError(cleanupResult)) {
-    captureError(cleanupResult.error, { targetWorkspaceId });
+    captureError(
+      cleanupResult.error,
+      handlerErrorContext(
+        "workspaces.cleanupCopiedS3Keys.cleanupResult_error",
+        { targetWorkspaceId },
+      ),
+    );
   }
 };
 
@@ -1154,18 +1161,32 @@ export const createDuplicateWorkspace = (
       // made durable: projection marks and immutable-source extraction runs.
       dependencies
         .flushWorkspaceSearchRepairs([txResult.value.workspaceId])
-        .catch(captureError);
+        .catch(
+          createErrorCapture(
+            handlerErrorContext("matterDuplicate.flushMatterSearch"),
+          ),
+        );
       dependencies
         .flushEntitySearchRepairs([
           ...txResult.value.entityIds[SEARCH_INDEX_OWNER.searchMark],
           ...txResult.value.entityIds[SEARCH_INDEX_OWNER.durableExtraction],
         ])
-        .catch(captureError);
+        .catch(
+          createErrorCapture(
+            handlerErrorContext("matterDuplicate.flushEntitySearch"),
+          ),
+        );
 
       handoffCommittedDocumentProcessingRuns({
         enqueue: dependencies.enqueueDocumentProcessingRun,
         runIds: txResult.value.nativeExtractionRunIds,
-      }).catch(captureError);
+      }).catch(
+        createErrorCapture(
+          handlerErrorContext(
+            "createDuplicateWorkspace.handoffCommittedDocumentProcessingRuns",
+          ),
+        ),
+      );
 
       return Result.ok({ workspaceId: txResult.value.workspaceId });
     },

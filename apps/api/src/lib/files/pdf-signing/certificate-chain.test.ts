@@ -60,7 +60,7 @@ const servingFetcher = (
 };
 
 const hex = (chain: readonly Uint8Array[]) =>
-  chain.map((der) => Buffer.from(der).toString("hex"));
+  chain.map((der) => Buffer.from(der).toHex());
 
 describe("completing the signer's certificate chain", () => {
   test("orders the issuers the desktop sent and drops the ones that issued nothing", async () => {

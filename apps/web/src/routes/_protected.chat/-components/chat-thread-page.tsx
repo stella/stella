@@ -43,6 +43,7 @@ import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
 import { getUserMessageHtmlHistory } from "@/components/chat/chat-ui-tools";
 import { ComposerVeil } from "@/components/chat/composer-veil";
+import { McpReconnectNotice } from "@/components/chat/mcp-reconnect-notice";
 import { PromptSuggestions } from "@/components/chat/prompt-suggestions";
 import { useChatModelSelection } from "@/components/chat/use-chat-model-selection";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
@@ -97,10 +98,11 @@ import { unwrapApiResponse } from "@/lib/errors/api";
 import { hasOrganizationManagementAccess } from "@/lib/organization/role-assignment.logic";
 import type { PromptSuggestion } from "@/lib/prompts/types";
 import { useSuggestedSkills } from "@/lib/prompts/use-suggested-skills";
+import { queryView } from "@/lib/query-view.logic";
 import { runReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
 import { usageEntitlementOptions } from "@/lib/usage-queries";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { ChatThreadFilesButton } from "@/routes/_protected.chat/-components/chat-file-stack";
 import { ChatForkedFromBanner } from "@/routes/_protected.chat/-components/chat-forked-from-banner";
 import { ChatHistoryLink } from "@/routes/_protected.chat/-components/chat-history-link";
@@ -130,7 +132,7 @@ export const ChatThreadPage = ({
   workspaceId,
 }: ChatThreadPageProps) => {
   const t = useTranslations();
-  const { ensureAIAvailable } = useAIKeyGate();
+  const { availability, ensureAIAvailable } = useAIKeyGate();
   const userContext = useChatUserContext();
   const getUserContext = useLatestCallback(() => userContext);
   const suggestedSkills = useSuggestedSkills();
@@ -144,8 +146,8 @@ export const ChatThreadPage = ({
     ...roleOptions,
     staleTime: Number.POSITIVE_INFINITY,
   });
-  const currentUserRoleView = useQueryView(currentUserRoleQuery);
-  useQueryViewError(currentUserRoleView);
+  const currentUserRoleView = queryView(currentUserRoleQuery);
+  useQueryViewError(currentUserRoleView, "ChatThreadPage:query");
   const currentUserRole =
     currentUserRoleView.type === "items" &&
     currentUserRoleView.refetchError === undefined
@@ -232,8 +234,8 @@ export const ChatThreadPage = ({
     ...usageEntitlementOptions({ organizationId: activeOrganizationId }),
     enabled: env.VITE_FEATURE_USAGE && canManageOrganization,
   });
-  const usageEntitlementDataView = useQueryView(usageEntitlementDataQuery);
-  useQueryViewError(usageEntitlementDataView);
+  const usageEntitlementDataView = queryView(usageEntitlementDataQuery);
+  useQueryViewError(usageEntitlementDataView, "ChatThreadPage:query-2");
   const usageEntitlementData =
     usageEntitlementDataView.type === "items"
       ? usageEntitlementDataView.items
@@ -271,6 +273,8 @@ export const ChatThreadPage = ({
     handleDeny,
     handleRequestSecret,
     continueRequestSecret,
+    handleConnectConnector,
+    continueConnectConnector,
     resolveSecretTarget,
     secretAvailabilityKey,
     handleAskUserSubmit,
@@ -284,6 +288,7 @@ export const ChatThreadPage = ({
     streamdownComponents,
     approvalPendingMessageId,
   } = useChatSession({
+    exceptionScope: { type: "handler", handlerId: "chat-session.thread-page" },
     chat,
     timingSurface: "chat-thread",
     conversationId: threadRef.threadId,
@@ -619,6 +624,8 @@ export const ChatThreadPage = ({
             handleDeny,
             handleRequestSecret,
             continueRequestSecret,
+            handleConnectConnector,
+            continueConnectConnector,
             resolveSecretTarget,
             secretAvailabilityKey,
           }}
@@ -796,6 +803,7 @@ export const ChatThreadPage = ({
                   threadId={threadRef.threadId}
                 />
                 {env.VITE_FEATURE_USAGE && <UsageFallbackNotice />}
+                <McpReconnectNotice editor={controller.editor} />
                 {/* Glass tray behind the composer + status row: the shared
                   `ComposerVeil` (one owner of the blur/tint values across
                   every chat surface) fills this `relative isolate` wrapper
@@ -804,6 +812,7 @@ export const ChatThreadPage = ({
                 <div className="relative isolate p-2">
                   <ComposerVeil />
                   <ChatInputSurface
+                    sendDisabled={availability !== "available"}
                     anonymized={anonymized}
                     autoFocus
                     context={{ activeOrganizationId, threadRef }}
@@ -945,7 +954,10 @@ const useChatWebSearchSeed = ({
       onSettled(threadRef.threadId, true);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useChatWebSearchSeed:failure",
+        scope: { type: "handler", handlerId: "useChatWebSearchSeed:failure" },
+      });
       onSettled(threadRef.threadId, false);
     },
   });

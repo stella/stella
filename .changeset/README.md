@@ -17,8 +17,10 @@ include a Changeset describing the user-visible change and its semver impact:
 - `@stll/conditions`
 - `@stll/country-codes`
 - `@stll/docx-utils`
+- `@stll/fetch`
 - `@stll/mcp-kit`
 - `@stll/money`
+- `@stll/scan-engine`
 - `@stll/ssr-kit`
 - `@stll/ssr-testkit`
 - `@stll/stable-stringify`

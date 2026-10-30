@@ -38,7 +38,13 @@ export const useSuggestChatThreadTitle = (threadRef: ChatThreadRef) => {
     setIsPending(false);
 
     if (Result.isError(result)) {
-      getAnalytics().captureError(result.error);
+      getAnalytics().captureError(result.error, {
+        fingerprintKey: "useSuggestChatThreadTitle.suggest:failure",
+        scope: {
+          type: "handler",
+          handlerId: "useSuggestChatThreadTitle.suggest:failure",
+        },
+      });
       notifyUserError(result.error, t("common.somethingWentWrong"));
       return null;
     }
