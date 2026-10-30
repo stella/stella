@@ -37,6 +37,7 @@ import {
   invoiceLines,
   invoices,
   organizationSettings,
+  outboundActions,
   playbookDefinitions,
   rateEntries,
   rateTables,
@@ -1191,6 +1192,43 @@ describe("review organization reset task", () => {
   });
 
   test("is registered ungated and, without time billing, seeds everything else", async () => {
+    const owners = [
+      { organizationId: fixture.reviewOrgId, userId: fixture.reviewUserId },
+      { organizationId: fixture.foreignOrgId, userId: fixture.otherUserId },
+    ];
+    const prepared = owners.map((owner) => ({
+      ...owner,
+      threadId: createSafeId<"chatThread">(),
+      actionId: createSafeId<"outboundAction">(),
+    }));
+    await testDb.insert(chatThreads).values(
+      prepared.map(({ threadId, organizationId, userId }) => ({
+        id: threadId,
+        organizationId,
+        userId,
+        title: "Prepared action",
+      })),
+    );
+    await testDb.insert(outboundActions).values(
+      prepared.map(({ threadId, actionId, organizationId, userId }) => ({
+        id: actionId,
+        organizationId,
+        userId,
+        chatThreadId: threadId,
+        kind: "email.send" as const,
+        status: "pending" as const,
+        previewEncrypted: Buffer.from("preview"),
+        previewIv: Buffer.alloc(12),
+        previewHash: "a".repeat(64),
+        expiresAt: new Date("2099-01-01T00:00:00Z"),
+      })),
+    );
+    expect(
+      await testDb.$count(
+        outboundActions,
+        eq(outboundActions.organizationId, fixture.reviewOrgId),
+      ),
+    ).toBe(1);
     // Enrolments survive resets (they are the account's preferences).
     await testDb
       .delete(featureEnrolments)
@@ -1223,6 +1261,18 @@ describe("review organization reset task", () => {
       panic("The registered reset task must return its Result");
     }
     outcome.unwrap("Expected the reset run to succeed without time billing");
+    expect(
+      await testDb.$count(
+        outboundActions,
+        eq(outboundActions.organizationId, fixture.reviewOrgId),
+      ),
+    ).toBe(0);
+    expect(
+      await testDb.$count(
+        outboundActions,
+        eq(outboundActions.organizationId, fixture.foreignOrgId),
+      ),
+    ).toBe(1);
     expect(await countRows(fixture.reviewOrgId)).toEqual({
       ...SAMPLE_COUNTS,
       timeEntries: 0,
