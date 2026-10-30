@@ -11,6 +11,7 @@ export const CASE_LAW_IDENTIFIER_RETRY_CONSTRAINTS = [
 ] as const satisfies readonly OnlineConstraintValidation[];
 
 export const CASE_LAW_IDENTIFIER_RETRY_CONSTRAINT_VALIDATION = {
+  introducedBy: "20261030012354_decision_identifier_reconciliation",
   name: CONSTRAINT_NAME,
   readCompletion: async (connection) =>
     await readConstraintCompletion({

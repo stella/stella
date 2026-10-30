@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
+import { DEPLOY_ENV_CONTRACT } from "@/api/deploy-env-contract";
 import { envBase } from "@/api/env-base";
 import { createHealthRoute } from "@/api/handlers/health/routes";
 import { createHttpApp } from "@/api/http/app";
+import { API_READINESS_DEPENDENCIES } from "@/api/lib/health/readiness";
 import type { ReadinessOutcome } from "@/api/lib/health/readiness";
 import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { APP_COMMIT_SHA, APP_VERSION } from "@/api/lib/version";
@@ -48,9 +50,20 @@ describe("health routes", () => {
 
     const response = await server.fetch(new Request("http://localhost/ready"));
     expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({
+    const body = await response.json();
+    expect(body).toMatchObject({
       deployEnvironment: envBase.DEPLOY_ENVIRONMENT ?? null,
     });
+    expect(
+      DEPLOY_ENV_CONTRACT.flatMap(({ readinessField }) =>
+        readinessField === undefined ? [] : [readinessField],
+      ),
+    ).toEqual(["deployEnvironment"]);
+    for (const { readinessField } of DEPLOY_ENV_CONTRACT) {
+      if (readinessField !== undefined) {
+        expect(body).toHaveProperty(readinessField);
+      }
+    }
   });
 
   for (const deployEnvironment of [
@@ -103,23 +116,31 @@ describe("health routes", () => {
     });
   }
 
-  test("readiness fails closed", async () => {
-    let readinessCalls = 0;
-    await using server = serveHealth({
-      probeReadiness: async () => {
-        readinessCalls++;
-        return { status: "not-ready", failed: ["object-storage"] };
-      },
-    });
+  test.each(API_READINESS_DEPENDENCIES)(
+    "readiness fails closed while liveness stays open when %s is unavailable",
+    async (dependency) => {
+      let readinessCalls = 0;
+      await using server = serveHealth({
+        probeReadiness: async () => {
+          readinessCalls++;
+          return { status: "not-ready", failed: [dependency] };
+        },
+      });
 
-    const response = await server.fetch(new Request("http://localhost/ready"));
-    expect(response.status).toBe(503);
-    expect(await response.json()).toMatchObject({
-      status: "error",
-      message: "Required dependency unavailable",
-    });
-    expect(readinessCalls).toBe(1);
-  });
+      const response = await server.fetch(
+        new Request("http://localhost/ready"),
+      );
+      expect(response.status).toBe(503);
+      expect(await response.json()).toMatchObject({
+        status: "error",
+        message: "Required dependency unavailable",
+      });
+      const health = await server.fetch(new Request("http://localhost/health"));
+      expect(health.status).toBe(200);
+      expect(await health.json()).toMatchObject({ status: "ok" });
+      expect(readinessCalls).toBe(1);
+    },
+  );
 
   test("turns an unexpected probe rejection into a generic 503", async () => {
     await using server = serveHealth({

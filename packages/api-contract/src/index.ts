@@ -103,6 +103,7 @@ export {
   BUSINESS_REGISTRY_CONFIGURATION,
   BUSINESS_REGISTRY_CREDENTIAL_SLUGS,
   BUSINESS_REGISTRY_LOOKUP_DETAILS,
+  BUSINESS_REGISTRY_SEARCH_CAPABILITIES,
   isBusinessRegistryCredentialSlug,
   isBusinessRegistrySlug,
 } from "./business-registries";
@@ -110,6 +111,7 @@ export type {
   BusinessRegistrySlug,
   BusinessRegistryCredentialSlug,
   BusinessRegistryLookupDetail,
+  BusinessRegistrySearchCapabilities,
 } from "./business-registries";
 export {
   CHAT_RUN_MODE,
@@ -349,6 +351,8 @@ export {
   API_VALIDATION_CONSTRAINTS,
   API_VALIDATION_ERROR_CODE,
   API_VERSION_CONFLICT_ERROR_CODE,
+  IDEMPOTENCY_IN_PROGRESS_CODE,
+  IDEMPOTENCY_KEY_REUSED_CODE,
   CLAUSE_DIRECTIVES_INVALID_CODE,
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
   CHAT_TURN_NOT_OWNED_ERROR_CODE,

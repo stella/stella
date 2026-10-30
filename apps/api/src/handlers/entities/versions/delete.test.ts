@@ -296,6 +296,14 @@ describe("delete-version chain-of-custody guard", () => {
             "Session-resume staleness check: reads versionNumber only. The byte-serving chokepoint (readVersionDocxTarget) separately requires deletedAt IS NULL.",
         },
       ],
+      "mcp/stella-tools.ts": [
+        {
+          anchor:
+            "A newer tombstone invalidates a legacy extraction's cached provenance.",
+          reason:
+            "Window-cache provenance reads only the newest version ID across tombstones; matching it to the admitted live current version prevents a rollback from reusing stale extracted text.",
+        },
+      ],
       "mcp/document-tools.ts": [
         {
           anchor: "Provenance fence: include tombstones",

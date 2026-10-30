@@ -473,6 +473,49 @@ describe("every ingested category, as the service served it", () => {
     }
   });
 
+  test("unreadable fetched PDFs retain their bytes and participate in the source hash", async () => {
+    const row = rowFor(700_041);
+    const rawParts = plKisRawPartsOf(
+      row,
+      JSON.stringify(detailFor("700041", undefined)),
+    );
+    const firstPdf = new TextEncoder().encode("%PDF-unreadable-first");
+    const secondPdf = new TextEncoder().encode("%PDF-unreadable-second");
+    const first = await assemblePlKisDecision({
+      row,
+      rawParts,
+      pdfBytes: firstPdf,
+    });
+    const again = await assemblePlKisDecision({
+      row,
+      rawParts,
+      pdfBytes: firstPdf,
+    });
+    const second = await assemblePlKisDecision({
+      row,
+      rawParts,
+      pdfBytes: secondPdf,
+    });
+
+    expect(first.type).toBe("detail-unavailable");
+    expect(second.type).toBe("detail-unavailable");
+    expect(first.decision.fulltext).toBeUndefined();
+    expect(first.decision.sourceRawObjects?.["document-pdf"]).toEqual({
+      bytes: firstPdf,
+      contentType: "application/pdf",
+    });
+    expect(second.decision.sourceRawObjects?.["document-pdf"]?.bytes).toEqual(
+      secondPdf,
+    );
+    expect(first.decision.rawHash).toBe(again.decision.rawHash);
+    expect(first.decision.rawHash).not.toBe(second.decision.rawHash);
+    const firstRaw =
+      first.decision.sourceRaw ?? panic("first source envelope missing");
+    expect(first.decision.rawHash).toBe(
+      legacySha256Hex(`${firstRaw}\n${legacySha256Hex(firstPdf)}`),
+    );
+  });
+
   test("a corrected PDF under an unchanged detail changes the hash", async () => {
     const row = rowFor(700_040);
     const rawParts = plKisRawPartsOf(
@@ -1176,6 +1219,10 @@ describe("the crawl", () => {
         "https://eureka.mf.gov.pl/api/public/v1/informacje/600000/eksport/PDF",
       );
       const [decision] = Result.isOk(page) ? page.value.decisions : [];
+      expect(decision?.sourceRawObjects?.["document-pdf"]).toEqual({
+        bytes: new TextEncoder().encode("not a pdf"),
+        contentType: "application/pdf",
+      });
       // The listing proves the document exists (rule 20).
       expect(decision?.sourceDocumentId).toBe("600000");
       expect(decision?.isListingOnly).toBe(true);

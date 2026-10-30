@@ -1,8 +1,10 @@
 import { use, useState } from "react";
 
 import { Result } from "better-result";
-import { RefreshControl, SectionList, StyleSheet, Text } from "react-native";
+import { RefreshControl, SectionList, View } from "react-native";
 import { useTimeZone, useTranslations } from "use-intl";
+
+import { Text } from "@stll/ui/text";
 
 import { ChatThreadRow } from "@/components/chat-thread-row";
 import { EmptyCard, screenStyles } from "@/components/empty-state-screen";
@@ -99,7 +101,9 @@ const ThreadTimeline = ({
 
   return (
     <SectionList
-      contentContainerStyle={[screenStyles.content, styles.content]}
+      contentContainerStyle={screenStyles.content}
+      // The header is the platform's translucent bar; the list scrolls under it.
+      contentInsetAdjustmentBehavior="automatic"
       // A chat found by a search opens on the first tap, the keyboard up.
       keyboardShouldPersistTaps="handled"
       keyExtractor={(thread) => thread.id}
@@ -136,9 +140,9 @@ const ThreadTimeline = ({
         <ChatThreadRow section={section.key} thread={item} />
       )}
       renderSectionHeader={({ section }) => (
-        <Text style={[styles.sectionHeader, { color: colors.muted }]}>
-          {t(`sections.${section.key}`)}
-        </Text>
+        <View className="pt-4 pb-1">
+          <Text variant="section">{t(`sections.${section.key}`)}</Text>
+        </View>
       )}
       sections={sectionThreads(threads, loadedAt, timeZone)}
       stickySectionHeadersEnabled={false}
@@ -161,17 +165,3 @@ const NoThreads = ({ search }: { search: string }) => {
     />
   );
 };
-
-const styles = StyleSheet.create({
-  // The screen's heading sits above the list, already padded.
-  content: {
-    paddingTop: 20,
-  },
-  sectionHeader: {
-    fontSize: 13,
-    fontWeight: "600",
-    letterSpacing: 0.4,
-    marginBottom: 8,
-    textTransform: "uppercase",
-  },
-});

@@ -77,6 +77,7 @@ import { ChatNotificationsCard } from "@/routes/_protected.settings/-components/
 import { DeletionTaskReassignments } from "@/routes/_protected.settings/-components/account/deletion-task-reassignments";
 import type { DeletionTaskGroup } from "@/routes/_protected.settings/-components/account/deletion-task-reassignments";
 import { SessionsCard } from "@/routes/_protected.settings/-components/account/sessions-card";
+import { SignInMethods } from "@/routes/_protected.settings/-components/account/sign-in-methods";
 import { TwoFactorCard } from "@/routes/_protected.settings/-components/account/two-factor-card";
 
 import {
@@ -596,6 +597,7 @@ function ProfilePageBody() {
 
       <ChatNotificationsCard />
 
+      <SignInMethods />
       <TwoFactorCard />
 
       <SessionsCard />

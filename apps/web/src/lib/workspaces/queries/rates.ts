@@ -13,11 +13,17 @@ const ratesKeys = {
     "entries",
     rateTableId,
   ],
-  resolve: (workspaceId: string, userId: string, date: string) => [
+  resolve: ({
+    workspaceId,
+    userId,
+    date,
+    activityCode,
+  }: ResolvedRateOptions) => [
     ...ratesKeys.all(workspaceId),
     "resolve",
     userId,
     date,
+    activityCode,
   ],
 };
 
@@ -48,18 +54,30 @@ export const rateEntriesOptions = (workspaceId: string, rateTableId: string) =>
     enabled: rateTableId.length > 0,
   });
 
-export const resolvedRateOptions = (
-  workspaceId: string,
-  userId: string,
-  date: string,
-) =>
+type ResolvedRateOptions = {
+  workspaceId: string;
+  userId: string;
+  date: string;
+  activityCode: string;
+};
+
+export const resolvedRateOptions = ({
+  workspaceId,
+  userId,
+  date,
+  activityCode,
+}: ResolvedRateOptions) =>
   queryOptions({
-    queryKey: ratesKeys.resolve(workspaceId, userId, date),
+    queryKey: ratesKeys.resolve({ workspaceId, userId, date, activityCode }),
     queryFn: async ({ signal }) => {
       const response = await api
         .rates({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .resolve.get({
-          query: { userId: toSafeId<"user">(userId), date },
+          query: {
+            userId: toSafeId<"user">(userId),
+            date,
+            ...(activityCode && { activityCode }),
+          },
           fetch: { signal },
         });
 
