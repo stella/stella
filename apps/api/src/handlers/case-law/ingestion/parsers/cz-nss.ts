@@ -476,8 +476,24 @@ const paragraphLayoutOf = (
     : "unknown";
 };
 
-const FONT_WEIGHT_RE = /^(?:normal|bold|bolder|lighter|\d{1,4})$/u;
+const FONT_WEIGHT_KEYWORD_RE = /^(?:normal|bold|bolder|lighter)$/u;
+const NUMERIC_FONT_WEIGHT_RE = /^\d{1,4}$/u;
 const BOLD_WEIGHT = 600;
+/** CSS rejects a numeric weight outside 1–1000; the earlier one stays. */
+const MAX_FONT_WEIGHT = 1000;
+
+const fontWeightBoldness = (value: string): boolean | undefined => {
+  if (FONT_WEIGHT_KEYWORD_RE.test(value)) {
+    return value === "bold" || value === "bolder";
+  }
+  if (!NUMERIC_FONT_WEIGHT_RE.test(value)) {
+    return undefined;
+  }
+  const weight = parseDecimalToken(value).unwrapOr(0);
+  return weight >= 1 && weight <= MAX_FONT_WEIGHT
+    ? weight >= BOLD_WEIGHT
+    : undefined;
+};
 
 /**
  * Whether an element's own style sets it bold (`true`) or not (`false`), read
@@ -485,17 +501,19 @@ const BOLD_WEIGHT = 600;
  */
 const ownBoldness = (node: AnyNode | undefined): boolean | undefined =>
   node !== undefined && isTag(node)
-    ? inlineStyleValue(node, (property, value) =>
-        property === "font-weight" && FONT_WEIGHT_RE.test(value)
-          ? {
-              value:
-                value === "bold" ||
-                value === "bolder" ||
-                parseDecimalToken(value).unwrapOr(0) >= BOLD_WEIGHT,
-            }
-          : undefined,
-      )?.value
+    ? inlineStyleValue(node, (property, value) => {
+        if (property !== "font-weight") {
+          return undefined;
+        }
+        const bold = fontWeightBoldness(value);
+        return bold === undefined ? undefined : { value: bold };
+      })?.value
     : undefined;
+
+/** Elements a browser sets bold by default. */
+const BOLD_TAGS: ReadonlySet<string> = new Set(["b", "strong"]);
+
+const SOFT_HYPHEN_OR_SPACE = /[\s\u00ad]/gu;
 
 /** A block reads as bold when nearly all of its text is set bold. */
 const BOLD_SHARE = 0.7;
@@ -511,13 +529,14 @@ const boldCharacterCount = (root: AnyNode | undefined): number => {
   let count = 0;
   const visit = (node: AnyNode, bold: boolean): void => {
     if (isText(node)) {
-      count += bold ? node.data.replaceAll(/\s/gu, "").length : 0;
+      // `plainText` drops soft hyphens, so the count does too.
+      count += bold ? node.data.replaceAll(SOFT_HYPHEN_OR_SPACE, "").length : 0;
       return;
     }
     if (!isTag(node) || isExcludedHtmlTag(node.name)) {
       return;
     }
-    const weight = ownBoldness(node) ?? bold;
+    const weight = ownBoldness(node) ?? (BOLD_TAGS.has(node.name) || bold);
     for (const child of node.children) {
       visit(child, weight);
     }
@@ -527,6 +546,15 @@ const boldCharacterCount = (root: AnyNode | undefined): number => {
   }
   return count;
 };
+
+/**
+ * Whether nearly all of a block's visible text is set bold. `plainText` is
+ * trimmed and non-empty, so it holds a non-space character and a bold block
+ * holds at least one bold character.
+ */
+const mostlyBold = (node: AnyNode | undefined, plainText: string): boolean =>
+  boldCharacterCount(node) >=
+  (plainText.match(NON_SPACE)?.length ?? 0) * BOLD_SHARE;
 
 /**
  * One leaf paragraph or <div> as a chunk, its heading cues read from the
@@ -544,16 +572,11 @@ const styledBlockChunk = (
     return null;
   }
 
-  // `plainText` is trimmed and non-empty, so it holds a non-space character
-  // and a bold block holds at least one bold character.
-  const bold =
-    boldCharacterCount($el.get(0)) >=
-    (plainText.match(NON_SPACE)?.length ?? 0) * BOLD_SHARE;
   return {
     inlines,
     plainText,
     centered: styleCentres($el.get(0)),
-    bold,
+    bold: mostlyBold($el.get(0), plainText),
     letterSpacing:
       style.includes("letter-spacing") ||
       $el.find("span[style*='letter-spacing']").length > 0,
@@ -742,7 +765,7 @@ const extractChunks = ($: cheerio.CheerioAPI): PChunk[] => {
           inlines,
           plainText,
           centered: styleCentres(liEl),
-          bold: ownBoldness(liEl) === true,
+          bold: mostlyBold(liEl, plainText),
           letterSpacing: false,
           fontSize: 12,
           paragraphLayout: "unknown",

@@ -1387,6 +1387,41 @@ describe("layout read from inline style", () => {
     );
   });
 
+  test.each([
+    [
+      `<p style="text-align:center"><strong>2. Posouzení věci</strong></p>`,
+      "heading",
+    ],
+    [`<p style="text-align:center"><b>2. Posouzení věci</b></p>`, "heading"],
+    [
+      `<p style="text-align:center;font-weight:normal;font-weight:1200">2. Posouzení věci</p>`,
+      "paragraph",
+    ],
+    [
+      `<p style="text-align:center">2. Posouzení věci<span style="font-weight:bold">${"\u00ad".repeat(20)}</span></p>`,
+      "paragraph",
+    ],
+  ])("reads bold the way it prints: %s", (html, type) => {
+    expect(ownWeightSection(html).map(([blockType]) => blockType)).toEqual([
+      type,
+    ]);
+  });
+
+  test("a bold list item whose text a span sets back to normal is not a heading", () => {
+    const blocks = parseNssDecisionHtml(
+      baseInput(
+        nssUnitDecisionHtml.replace(
+          "<p>[2] Krajský soud",
+          () =>
+            `<ol><li style="text-align:center;font-weight:bold"><span style="font-weight:normal">Vymezení věci</span></li></ol><p>[2] Krajský soud`,
+        ),
+      ),
+    ).documentAst.blocks.filter((block) =>
+      block.plainText.includes("Vymezení věci"),
+    );
+    expect(blocks.map((block) => block.type)).toEqual(["paragraph"]);
+  });
+
   test("bold spaces beside normal text do not make it bold", () => {
     expect(
       ownWeightSection(
