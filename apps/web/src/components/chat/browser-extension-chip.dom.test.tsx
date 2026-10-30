@@ -189,15 +189,12 @@ test("the mounted chip changes from checking to install when the announcement de
 test("the connected tooltip explains the separate website tab", async () => {
   await states[BROWSER_EXTENSION_STATUS.connected]();
   showChip();
-  const trigger = screen
-    .getByText(messages.chat.browserExtension.connected)
-    .closest("[data-slot=tooltip-trigger]");
-  expect(trigger).toBeInstanceOf(HTMLElement);
-  if (trigger instanceof HTMLElement) {
-    await act(async () => {
-      trigger.focus();
-    });
-  }
+  const trigger = screen.getByRole("button", {
+    name: messages.chat.browserExtension.connected,
+  });
+  await act(async () => {
+    trigger.focus();
+  });
   expect(
     await screen.findByText(messages.chat.browserExtension.description),
   ).toBeTruthy();
