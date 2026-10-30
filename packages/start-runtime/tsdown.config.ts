@@ -1,10 +1,9 @@
 import { defineConfig } from "tsdown";
 
 import { resolvePackageBinary } from "../../scripts/resolve-package-binary.ts";
-import packageJson from "./package.json" with { type: "json" };
 
 export default defineConfig({
-  entry: Object.values(packageJson.exports),
+  entry: ["src/**/*.ts", "!src/**/*.test.ts"],
   deps: {
     neverBundle: ["bun", "node:path", "node:url"],
   },

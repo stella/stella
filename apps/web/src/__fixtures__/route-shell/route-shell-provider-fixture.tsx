@@ -30,6 +30,7 @@ import {
 } from "@/__fixtures__/route-shell/route-shell-public-fixtures";
 import { withRequestI18n } from "@/i18n/request-i18n.server";
 import { defaultPresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
+import { memberSessionFor } from "@/lib/account/auth-session.test-fixtures";
 import type { api, WebApiRoutes } from "@/lib/api";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 import { sessionOptions } from "@/lib/auth-query-options";
@@ -262,6 +263,11 @@ const installFixtureNetwork = () => {
     userId: toSafeId<"user">(user.id),
     activeOrganizationId: toSafeId<"organization">("org-fixture"),
   };
+  const member = memberSessionFor({ userId: user.id, locale: "en" });
+  const authSession = {
+    session: { ...member.session, ...session },
+    user: { ...member.user, ...user },
+  };
   const originalEventSource = globalThis.EventSource;
   globalThis.EventSource = createFixtureEventSource();
   const timeZone = parseTimeZoneId("UTC");
@@ -318,7 +324,7 @@ const installFixtureNetwork = () => {
       }
       if (pathname === "/api/auth/get-session") {
         return Response.json(
-          state.audience === "member" ? { session, user } : null,
+          state.audience === "member" ? authSession : null,
         );
       }
       if (pathname === "/api/auth/organization/get-active-member-role") {
