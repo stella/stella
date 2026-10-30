@@ -761,6 +761,88 @@ const withoutPreparedGeneration = (step: Step): Step => {
       }
     : step;
 };
+// The split bundles add outputs; app-local CSS alone may be empty. Match the
+// complete old census and loop so partial removals never become a migration.
+const MCP_OUTPUTS_BEFORE = `outputs=(
+  packages/mcp-apps/src/shared/generated/schemas.json
+  packages/mcp-apps/src/shared/generated/contracts.js
+  packages/mcp-apps/src/shared/generated/contracts.d.ts
+  packages/mcp-apps/src/shared/generated/messages.json
+  packages/mcp-apps/src/shared/generated/reader-messages.json
+  packages/mcp-apps/src/shared/generated/reader-inputs.json
+  packages/mcp-apps/src/shared/generated/style.css
+  packages/mcp-apps/src/generated/bundles.ts
+  packages/mcp-apps/src/*/generated/app.html.txt
+)
+for output in "\${outputs[@]}"; do
+  test -s "$output" || { echo "::error::$output was not generated"; exit 1; }
+done
+`;
+const MCP_OUTPUTS_AFTER = MCP_OUTPUTS_BEFORE.replace(
+  "  packages/mcp-apps/src/*/generated/app.html.txt\n",
+  () =>
+    [
+      "  packages/mcp-apps/src/generated/runtime.js.txt",
+      "  packages/mcp-apps/src/generated/runtime.css.txt",
+      "  packages/mcp-apps/src/*/generated/app.html.txt",
+      "  packages/mcp-apps/src/*/generated/app.js.txt",
+      "  packages/mcp-apps/src/*/generated/app.css.txt",
+      "",
+    ].join("\n"),
+).replace('  test -s "$output"', () =>
+  [
+    "  # An app can use only shared CSS, leaving its own stylesheet empty.",
+    '  if [[ "$output" == */generated/app.css.txt ]]; then',
+    '    test -f "$output" || { echo "::error::$output was not generated"; exit 1; }',
+    "    continue",
+    "  fi",
+    '  test -s "$output"',
+  ].join("\n"),
+);
+const withSplitMcpOutputs = (step: Step): Step =>
+  step.name === "MCP app derived outputs guard" &&
+  typeof step["run"] === "string"
+    ? {
+        ...step,
+        run: step["run"].replace(MCP_OUTPUTS_BEFORE, () => MCP_OUTPUTS_AFTER),
+      }
+    : step;
+
+test("split MCP output migration retains every output and guard assertion", () => {
+  const commands = [
+    "(cd apps/api && bun run generate:mcp-app-contracts)",
+    "(cd packages/mcp-apps && bun run build)",
+    "bun --preload ./scripts/offline-network-preload.ts scripts/bundle-baseline.ts --mcp-apps --check",
+  ].join("\n");
+  const step = {
+    name: "MCP app derived outputs guard",
+    run: `${commands}\n${MCP_OUTPUTS_BEFORE}bun scripts/check-mcp-generated-tracking.ts\n`,
+  };
+  const migrated = {
+    ...step,
+    run: step.run.replace(MCP_OUTPUTS_BEFORE, () => MCP_OUTPUTS_AFTER),
+  };
+  expect(migrated).not.toEqual(step);
+  expect(withSplitMcpOutputs(step)).toEqual(migrated);
+  expect(withSplitMcpOutputs(migrated)).toEqual(migrated);
+  expect(withSplitMcpOutputs({ ...step, name: "Other guard" })).toEqual({
+    ...step,
+    name: "Other guard",
+  });
+  // Every executable line matters: losing an output, command, or loop assertion
+  // on either side must remain visible to the census.
+  for (const candidate of [step, migrated]) {
+    for (const line of candidate.run.split("\n").filter(Boolean)) {
+      const changed = {
+        ...candidate,
+        run: candidate.run.replace(`${line}\n`, ""),
+      };
+      expect(changed).not.toEqual(candidate);
+      expect(withSplitMcpOutputs(changed), line).not.toEqual(migrated);
+    }
+  }
+});
+
 const PACKAGE_SCOPE = "needs.ci-plan.outputs.package_checks_required == 'true'";
 const DOCUMENTATION_CHECKS = new Set([
   "Documentation source policy rule",
@@ -930,6 +1012,7 @@ const ownedSteps = (steps: readonly Step[]) =>
     .map(documentationScope)
     .map(withoutContinuation)
     .map(withoutPreparedGeneration)
+    .map(withSplitMcpOutputs)
     .map(withoutTestTimeout)
     .map(withoutDelegatedGeneratorChecks)
     .map(withoutStepTimeout)

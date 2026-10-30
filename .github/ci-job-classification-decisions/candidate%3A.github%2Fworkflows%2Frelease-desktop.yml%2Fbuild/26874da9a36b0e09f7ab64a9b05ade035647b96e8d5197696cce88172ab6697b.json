@@ -1,5 +1,5 @@
 {
   "kind": "priority",
-  "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
+  "qualifier": "Builds and publishes desktop installers and updater artifacts with platform signing and Windows signature and timestamp verification.",
   "reviewedDigest": "26874da9a36b0e09f7ab64a9b05ade035647b96e8d5197696cce88172ab6697b"
 }

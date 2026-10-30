@@ -606,7 +606,14 @@ describe("staging image source bindings", () => {
       const inputs = record(attestation["with"]);
       expect(inputs["subject-name"]).toBe(`\${{ inputs.subject-name }}`);
       expect(inputs["subject-digest"]).toBe(`\${{ inputs.subject-digest }}`);
-      expect(inputs["push-to-registry"]).toBe(true);
+      expect(inputs["push-to-registry"]).toBe(
+        inputs["predicate-type"] === undefined
+          ? `\${{ inputs.subject-path == '' }}`
+          : true,
+      );
+      if (inputs["predicate-type"] === undefined) {
+        expect(inputs["subject-path"]).toBe(`\${{ inputs.subject-path }}`);
+      }
     }
     const generated = actionSteps.find(
       (step) =>

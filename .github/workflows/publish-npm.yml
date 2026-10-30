@@ -939,7 +939,9 @@ jobs:
         with:
           ref: ${{ github.workflow_sha }}
           persist-credentials: false
-          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout: |
+            scripts/gh-retry.sh
+            .github/actions/provenance
           sparse-checkout-cone-mode: false
 
       - name: Download standalone CLI binaries
@@ -961,7 +963,7 @@ jobs:
 
       - name: Attest release binaries and checksums
         timeout-minutes: 5
-        uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661 # v3
+        uses: ./.github/actions/provenance
         with:
           subject-path: native-cli/*
 

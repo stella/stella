@@ -776,7 +776,7 @@ test("native release provenance covers final binaries and checksums before publi
     (step) =>
       record(step) &&
       typeof step["uses"] === "string" &&
-      step["uses"].startsWith("actions/attest-build-provenance@"),
+      step["uses"] === "./.github/actions/provenance",
   );
   const publishIndex = steps.findIndex(
     (step) =>
@@ -791,9 +791,7 @@ test("native release provenance covers final binaries and checksums before publi
   if (!record(attestation) || !record(attestation["with"])) {
     throw new TypeError("Expected release provenance subjects");
   }
-  expect(attestation["uses"]).toMatch(
-    /^actions\/attest-build-provenance@[a-f0-9]{40}$/u,
-  );
+  expect(attestation["uses"]).toBe("./.github/actions/provenance");
   expect(attestation["with"]["subject-path"]).toBe("native-cli/*");
   const hashes = steps.at(hashIndex);
   if (!record(hashes) || typeof hashes["run"] !== "string") {

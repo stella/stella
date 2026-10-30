@@ -1,16 +1,22 @@
-name: Attest image provenance
+name: Attest build provenance
 description: >
-  Attest build provenance for an image digest and push the attestation to the
-  registry. Sigstore endpoints can time out transiently, so a failed attempt is
-  retried once before failing the job.
+  Attest build provenance for release files or an image digest; image
+  attestations are also pushed to the registry. A failed attempt is retried once
+  before failing the job.
 
 inputs:
   subject-name:
     description: Fully qualified image name (registry/repository)
-    required: true
+    required: false
+    default: ""
   subject-digest:
     description: Image digest (sha256:...) to attest
-    required: true
+    required: false
+    default: ""
+  subject-path:
+    description: Release file paths or glob; mutually exclusive with subject-digest
+    required: false
+    default: ""
   source-sha:
     description: Exact staging source checkout SHA (paired with main-sha)
     required: false
@@ -39,9 +45,10 @@ runs:
       continue-on-error: true
       uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
       with:
+        subject-path: ${{ inputs.subject-path }}
         subject-name: ${{ inputs.subject-name }}
         subject-digest: ${{ inputs.subject-digest }}
-        push-to-registry: true
+        push-to-registry: ${{ inputs.subject-path == '' }}
 
     - name: Wait before retry
       if: steps.attest.outcome == 'failure'
@@ -52,9 +59,10 @@ runs:
       if: steps.attest.outcome == 'failure'
       uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
       with:
+        subject-path: ${{ inputs.subject-path }}
         subject-name: ${{ inputs.subject-name }}
         subject-digest: ${{ inputs.subject-digest }}
-        push-to-registry: true
+        push-to-registry: ${{ inputs.subject-path == '' }}
 
     - name: Attest staging source binding
       if: inputs.source-sha != ''
