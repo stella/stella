@@ -148,7 +148,7 @@ const rolePrivilegeCensusQuery = `
              privilege.privilege_type
       FROM role_privileges privilege
       JOIN application_roles member ON member.oid = privilege.role_oid
-      JOIN application_roles parent
+      JOIN pg_catalog.pg_roles parent
         ON parent.oid <> member.oid
        AND pg_catalog.pg_has_role(member.oid, parent.oid, 'SET')
       WHERE NOT privilege.effective

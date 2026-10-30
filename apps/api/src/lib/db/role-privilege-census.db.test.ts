@@ -246,6 +246,50 @@ describePostgres("database role privilege census", () => {
   }, 120_000);
 
   // timeout: the self-test applies the complete migration chain before mutating its census fixture.
+  test("records SET-only privileges through roles outside the audited set", async () => {
+    await withMigratedDatabase(async (database) => {
+      const suffix = Bun.randomUUIDv7().replaceAll("-", "");
+      const parent = `external_census_parent_${suffix}`;
+      const member = `stella_census_member_${suffix}`;
+      const setReachable = "table:public.account:SELECT:SET_REACHABLE";
+      const censusAsParent = async () =>
+        database.begin(async (transaction) => {
+          await transaction.unsafe(
+            `SET LOCAL SESSION AUTHORIZATION "${parent}"`,
+          );
+          return readRolePrivilegeCensus(transaction);
+        });
+      try {
+        await database.unsafe(`
+          CREATE ROLE "${parent}" NOLOGIN;
+          CREATE ROLE "${member}" NOLOGIN;
+          GRANT SELECT ON TABLE public.account TO "${parent}";
+          GRANT "${parent}" TO "${member}" WITH INHERIT FALSE, SET TRUE;
+        `);
+        const withSet = await censusAsParent();
+        expect(
+          withSet.roles.some((entry) => entry.role === parent),
+        ).toBeFalse();
+        expect(privilegesFor(withSet, member)).toContain(setReachable);
+
+        await database.unsafe(
+          `GRANT "${parent}" TO "${member}" WITH INHERIT FALSE, SET FALSE`,
+        );
+        const withoutSet = await censusAsParent();
+        expect(privilegesFor(withoutSet, member)).not.toContain(setReachable);
+      } finally {
+        await database.unsafe(`
+          REVOKE "${parent}" FROM "${member}";
+          DROP OWNED BY "${member}";
+          DROP OWNED BY "${parent}";
+          DROP ROLE IF EXISTS "${member}";
+          DROP ROLE IF EXISTS "${parent}";
+        `);
+      }
+    });
+  }, 120_000);
+
+  // timeout: the self-test applies the complete migration chain before mutating its census fixture.
   test("reports a role granted CREATEDB", async () => {
     const expected = readExpectedCensus();
     await withMigratedDatabase(async (database, baseline) => {
