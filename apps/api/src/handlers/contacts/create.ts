@@ -93,6 +93,7 @@ export type CreateContactHandlerProps = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   recordAuditEvent: AuditRecorder;
+  contactId?: SafeId<"contact">;
   body: CreateContactBody;
 };
 
@@ -122,6 +123,7 @@ export type InsertContactRowProps = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   recordAuditEvent: AuditRecorder;
+  contactId?: SafeId<"contact">;
   body: CreateContactBody;
 };
 
@@ -135,9 +137,10 @@ export const insertContactRow = async ({
   organizationId,
   userId,
   recordAuditEvent,
+  contactId,
   body,
 }: InsertContactRowProps) => {
-  const id = mintContactId();
+  const id = contactId ?? mintContactId();
   const [row] = await tx
     .insert(contacts)
     .values({
@@ -218,6 +221,7 @@ export const createContactHandler = async function* ({
   organizationId,
   userId,
   recordAuditEvent,
+  contactId,
   body,
 }: CreateContactHandlerProps) {
   const personDetailsError = validatePersonDetails(body);
@@ -259,6 +263,7 @@ export const createContactHandler = async function* ({
         organizationId,
         userId,
         recordAuditEvent,
+        ...(contactId === undefined ? {} : { contactId }),
         body,
       });
 

@@ -68,9 +68,14 @@ import type {
   ReviewResetRefusalReason,
 } from "@/api/lib/review-organization/reset";
 import { sweepReviewOrganization } from "@/api/lib/review-organization/reset-scope";
-import { SAMPLE_COUNTS } from "@/api/lib/review-organization/sample-data";
+import {
+  SAMPLE_CONTACTS,
+  SAMPLE_COUNTS,
+  SAMPLE_MATTERS,
+} from "@/api/lib/review-organization/sample-data";
 import { seedReviewOrganization } from "@/api/lib/review-organization/seed";
 import type { ReviewSeedActor } from "@/api/lib/review-organization/seed-common";
+import { reviewSampleId } from "@/api/lib/review-organization/seed-common";
 import {
   createRootMembershipSafeDb,
   createRootMembershipScopedDb,
@@ -652,6 +657,50 @@ describe("review organization seed and reset", () => {
         ),
       ),
     ).toBe(SAMPLE_COUNTS.timeEntries);
+  });
+
+  test("a renamed sample contact keeps its identity and matter client reference", async () => {
+    const sampleContact = SAMPLE_CONTACTS.at(0) ?? panic("Expected a contact");
+    const sampleMatter =
+      SAMPLE_MATTERS.find(({ clientKey }) => clientKey === sampleContact.key) ??
+      panic("Expected a matter for the contact");
+    const contactId = reviewSampleId<"contact">(
+      fixture.reviewOrgId,
+      `contact:${sampleContact.key}`,
+    );
+    const matterId = reviewSampleId<"workspace">(
+      fixture.reviewOrgId,
+      `matter:${sampleMatter.key}`,
+    );
+
+    await testDb
+      .update(contacts)
+      .set({ displayName: "Renamed sample contact" })
+      .where(eq(contacts.id, contactId));
+
+    const again = (
+      await seedReviewOrganization(
+        actorFor(fixture.reviewOrgId, fixture.reviewUserId),
+        { documents: documentDependencies },
+      )
+    ).unwrap("Expected the second seed to succeed");
+
+    expect(again.contacts).toEqual({
+      created: 0,
+      existing: SAMPLE_COUNTS.contacts,
+    });
+    expect(
+      await testDb.$count(
+        contacts,
+        eq(contacts.organizationId, fixture.reviewOrgId),
+      ),
+    ).toBe(SAMPLE_COUNTS.contacts);
+    expect(
+      await testDb
+        .select({ clientId: workspaces.clientId })
+        .from(workspaces)
+        .where(eq(workspaces.id, matterId)),
+    ).toEqual([{ clientId: contactId }]);
   });
 
   test("a seed resumes a default rate table that has no fallback rate", async () => {

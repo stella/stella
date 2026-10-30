@@ -58,6 +58,11 @@ import type {
 } from "@/api/lib/workflow/playbook-positions";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
+const sampleContactId = (
+  organizationId: SafeId<"organization">,
+  contactKey: string,
+) => reviewSampleId<"contact">(organizationId, `contact:${contactKey}`);
+
 const contactBody = (contact: SampleContact) => {
   const email = [
     { type: "work" as const, address: contact.email, isPrimary: true },
@@ -82,41 +87,37 @@ const contactBody = (contact: SampleContact) => {
   };
 };
 
-const sampleContactDisplayName = (contact: SampleContact): string =>
-  contact.type === "organization"
-    ? contact.organizationName
-    : `${contact.firstName} ${contact.lastName}`;
-
 const seedContacts = async (
   actor: ReviewSeedActor,
   counts: ReviewSeedCounts,
 ): Promise<Result<void, ReviewSeedError>> => {
-  const bodies = SAMPLE_CONTACTS.map(contactBody);
+  const samples = SAMPLE_CONTACTS.map((contact) => ({
+    id: sampleContactId(actor.organizationId, contact.key),
+    body: contactBody(contact),
+  }));
   const existing = await actor.safeDb((tx) =>
     tx
-      .select({ displayName: contacts.displayName })
+      .select({ id: contacts.id })
       .from(contacts)
       .where(
         and(
           eq(contacts.organizationId, actor.organizationId),
           inArray(
-            contacts.displayName,
-            bodies.map((body) => body.displayName),
+            contacts.id,
+            samples.map(({ id }) => id),
           ),
         ),
       )
-      .limit(bodies.length),
+      .limit(samples.length),
   );
   if (Result.isError(existing)) {
     return Result.err(seedError("contacts", existing.error));
   }
-  const existingNames = new Set(
-    existing.value.map(({ displayName }) => displayName),
-  );
+  const existingIds = new Set(existing.value.map(({ id }) => id));
   return await inOrder(
-    bodies,
-    async (body) => {
-      if (existingNames.has(body.displayName)) {
+    samples,
+    async ({ id, body }) => {
+      if (existingIds.has(id)) {
         counts.contacts.existing += 1;
         return Result.ok(undefined);
       }
@@ -126,6 +127,7 @@ const seedContacts = async (
           organizationId: actor.organizationId,
           userId: actor.userId,
           recordAuditEvent: actor.recorderFor(null),
+          contactId: id,
           body,
         }),
       );
@@ -287,44 +289,22 @@ const seedMatters = async (
   const matterIds = SAMPLE_MATTERS.map((matter) =>
     reviewSampleId<"workspace">(actor.organizationId, `matter:${matter.key}`),
   );
-  const sampleContactNames = SAMPLE_CONTACTS.map(sampleContactDisplayName);
-  const contactRows = await actor.safeDb((tx) =>
+  const existing = await actor.safeDb((tx) =>
     tx
-      .select({
-        contactId: contacts.id,
-        displayName: contacts.displayName,
-        matterId: workspaces.id,
-      })
-      .from(contacts)
-      .leftJoin(
-        workspaces,
+      .select({ id: workspaces.id })
+      .from(workspaces)
+      .where(
         and(
           eq(workspaces.organizationId, actor.organizationId),
           inArray(workspaces.id, matterIds),
         ),
       )
-      .where(
-        and(
-          eq(contacts.organizationId, actor.organizationId),
-          inArray(contacts.displayName, sampleContactNames),
-        ),
-      )
-      .limit(SAMPLE_CONTACTS.length * SAMPLE_MATTERS.length),
+      .limit(matterIds.length),
   );
-  if (Result.isError(contactRows)) {
-    return Result.err(seedError("matter clients", contactRows.error));
+  if (Result.isError(existing)) {
+    return Result.err(seedError("matters", existing.error));
   }
-  const contactIdByName = new Map(
-    contactRows.value.map(({ contactId, displayName }) => [
-      displayName,
-      contactId,
-    ]),
-  );
-  const existingIds = new Set(
-    contactRows.value.flatMap(({ matterId }) =>
-      matterId === null ? [] : [matterId],
-    ),
-  );
+  const existingIds = new Set(existing.value.map(({ id }) => id));
   return await inOrder(
     SAMPLE_MATTERS.entries(),
     async ([index, matter]) => {
@@ -335,18 +315,6 @@ const seedMatters = async (
       if (existingIds.has(workspaceId)) {
         counts.matters.existing += 1;
       } else {
-        const client = SAMPLE_CONTACTS.find(
-          ({ key }) => key === matter.clientKey,
-        );
-        const clientId =
-          client === undefined
-            ? undefined
-            : contactIdByName.get(sampleContactDisplayName(client));
-        if (clientId === undefined) {
-          return Result.err(
-            seedError(`matter ${matter.name}`, "Sample client is missing"),
-          );
-        }
         const created = await Result.gen(() =>
           createWorkspaceHandler({
             userEmail: actor.userEmail,
@@ -358,7 +326,7 @@ const seedMatters = async (
               id: workspaceId,
               name: matter.name,
               filePropertyName: "File",
-              clientId,
+              clientId: sampleContactId(actor.organizationId, matter.clientKey),
             },
           }),
         );
