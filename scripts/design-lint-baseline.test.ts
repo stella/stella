@@ -97,6 +97,10 @@ test("a diagnostic code maps to its tracked rule for both plugin kinds", () => {
       "no-raw-overflow-scroll/no-raw-overflow-scroll",
     ],
     [
+      "no-raw-text-truncation(no-raw-text-truncation)",
+      "no-raw-text-truncation/no-raw-text-truncation",
+    ],
+    [
       "no-imported-class-constant(no-imported-class-constant)",
       "no-imported-class-constant/no-imported-class-constant",
     ],
@@ -154,6 +158,7 @@ test("a diagnostic code maps to its tracked rule for both plugin kinds", () => {
   expect([...DESIGN_LINT_TRACKED_PLUGINS]).toEqual([
     "shadcn",
     "no-raw-overflow-scroll",
+    "no-raw-text-truncation",
     "no-imported-class-constant",
     "require-bounded-request-schema",
     "no-unbounded-response-body",

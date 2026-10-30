@@ -2042,6 +2042,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-shared-checkout-mutation.ts",
     "./.oxlint-plugins/no-centered-scroll-column.ts",
     "./.oxlint-plugins/no-raw-overflow-scroll.ts",
+    "./.oxlint-plugins/no-raw-text-truncation.ts",
     "./.oxlint-plugins/no-hover-only-reveal.ts",
     "./.oxlint-plugins/no-imported-class-constant.ts",
     "./.oxlint-plugins/no-static-devtools-import.ts",
@@ -6852,6 +6853,22 @@ const config = defineConfig({
       ],
       rules: {
         "no-raw-overflow-scroll/no-raw-overflow-scroll": "error",
+      },
+    },
+    {
+      // Text that does not fit is cut through TruncatedText, which reveals
+      // the rest on hover, focus and tap only when the text was cut; a raw
+      // truncation utility hides it with no way to read it. The sanctioned
+      // owners in packages/ui are listed in the rule itself, and a test
+      // asserts on class strings rather than rendering text.
+      files: [
+        "apps/web/src/**/*.{ts,tsx}",
+        "apps/desktop/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-raw-text-truncation.fixture.tsx",
+      ],
+      excludeFiles: ["**/*.{test,spec}.{ts,tsx}", "**/__tests__/**"],
+      rules: {
+        "no-raw-text-truncation/no-raw-text-truncation": "error",
       },
     },
     {

@@ -149,6 +149,11 @@ through Folio gains one it does not have.
   element to a virtualizer or scroll restoration. Textareas, `<pre>`
   blocks, editor canvases and wide tables keep their native scroller.
   `no-raw-overflow-scroll` enforces it.
+- **Text is cut only through `TruncatedText`** (`@stll/ui/truncated-text`),
+  which shows the rest on hover, focus and tap when the text was cut;
+  `render` keeps the element, `lines` clamps, `tooltip` names the full
+  value. A raw `truncate`, `line-clamp-*` or `text-ellipsis` hides the
+  rest for good; `no-raw-text-truncation` rejects it.
 
 ## Interactions & Animations
 
@@ -238,7 +243,7 @@ through Folio gains one it does not have.
   (sorting, numbers, dates side by side).
 - **Nothing scrolls sideways.** Free text (descriptions, scope lists,
   notes) never sits in a `whitespace-nowrap` cell or row. Clamp it
-  (`line-clamp-1`/`-2` with `min-w-0` on the column), and collapse a
+  with `TruncatedText` (`lines={2}`, `min-w-0` on the column), and collapse a
   long list into a count that opens a popover ("15 permissions"). The
   trailing actions stay on screen at every width.
 - **Status is a dot plus a label** (`ListItemStatus` with a tone). The

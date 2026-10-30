@@ -171,6 +171,7 @@ export const DESIGN_LINT_BACKLOG_RULES = [
   "shadcn/no-restyle",
   "shadcn/no-arbitrary-values",
   "no-raw-overflow-scroll/no-raw-overflow-scroll",
+  "no-raw-text-truncation/no-raw-text-truncation",
   "no-imported-class-constant/no-imported-class-constant",
   "require-bounded-request-schema/require-bounded-request-schema",
   "no-unbounded-response-body/no-unbounded-response-body",
@@ -305,6 +306,13 @@ export const SHADCN_LINT_RULES = {
           pattern: "^(?:BidiText|UserText)$",
           allow: ["layout", "typography", "color"],
         },
+        // TruncatedText cuts the caller's text where its box ends: the
+        // caller owns the type and colour, the component owns the cut and
+        // the reveal of the rest.
+        {
+          pattern: "^TruncatedText$",
+          allow: ["layout", "typography", "color"],
+        },
         // A placeholder mirrors the shape of the content it stands in for.
         { pattern: "^Skeleton$", allow: ["layout", "shape"] },
         // RTL-flipping wrapper around an icon: the caller owns the icon's
@@ -430,6 +438,7 @@ export const DESIGN_LINT_MEASURED_RULES = {
   "shadcn/no-unknown-classes": "off",
   "shadcn/require-static-classes": "off",
   "no-raw-overflow-scroll/no-raw-overflow-scroll": "off",
+  "no-raw-text-truncation/no-raw-text-truncation": "off",
   "no-imported-class-constant/no-imported-class-constant": "off",
   "require-bounded-request-schema/require-bounded-request-schema": "off",
   "no-unbounded-response-body/no-unbounded-response-body": "off",

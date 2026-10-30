@@ -1,9 +1,9 @@
 // Design-system lint backlog guard.
 //
 // `oxlint.config.ts` enables the tracked rules (the `@shadcn/lint` pair, the
-// local `no-raw-overflow-scroll` and `no-imported-class-constant`, the API
-// size-bound rules `require-bounded-request-schema` and
-// `no-unbounded-response-body`, `no-computed-key-record-assignment`, and the
+// local `no-raw-overflow-scroll`, `no-raw-text-truncation` and
+// `no-imported-class-constant`, the API size-bound rules
+// `require-bounded-request-schema` and `no-unbounded-response-body`, `no-computed-key-record-assignment`, and the
 // function size limits `complexity`,
 // `max-lines-per-function` and `max-params`) for every file in their scope
 // except the ones this baseline lists per rule (scripts/design-lint-policy.ts
@@ -105,6 +105,7 @@ export const emptyBacklog = (): DesignLintBacklog => ({
   "shadcn/no-arbitrary-values": {},
   "shadcn/no-restyle": {},
   "no-raw-overflow-scroll/no-raw-overflow-scroll": {},
+  "no-raw-text-truncation/no-raw-text-truncation": {},
   "no-imported-class-constant/no-imported-class-constant": {},
   "require-bounded-request-schema/require-bounded-request-schema": {},
   "no-unbounded-response-body/no-unbounded-response-body": {},

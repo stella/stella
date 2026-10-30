@@ -197,6 +197,8 @@ TruncatedText.
 - Text that may not fit renders through `TruncatedText`
   (`@stll/ui/truncated-text`), never `truncate` plus a `title=`: it
   shows the full text only when it was cut, and on touch as well.
+  `no-raw-text-truncation` rejects a raw `truncate`, `line-clamp-*` or
+  `text-ellipsis` utility in the web and desktop apps.
 - Use semantic HTML (`<nav>`, `<main>`, `<section>`) over generic
   `<div>` with ARIA roles.
 - All interactive elements require a 44x44px minimum touch target

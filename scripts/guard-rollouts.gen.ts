@@ -6,6 +6,7 @@ import noDynamicKeyInOperator from "./guard-rollouts/no-dynamic-key-in-operator.
 import noGlobalTestingLibraryScreen from "./guard-rollouts/no-global-testing-library-screen.ts";
 import noInertAutofocus from "./guard-rollouts/no-inert-autofocus.ts";
 import noParserInlineFlatten from "./guard-rollouts/no-parser-inline-flatten.ts";
+import noRawTextTruncation from "./guard-rollouts/no-raw-text-truncation.ts";
 import portablePath from "./guard-rollouts/portable-path.ts";
 import semanticControls from "./guard-rollouts/semantic-controls.ts";
 import testBaseRevision from "./guard-rollouts/test-base-revision.ts";
@@ -21,6 +22,7 @@ export const GUARD_ROLLOUT_FILES = {
   "no-global-testing-library-screen": noGlobalTestingLibraryScreen,
   "no-inert-autofocus": noInertAutofocus,
   "no-parser-inline-flatten": noParserInlineFlatten,
+  "no-raw-text-truncation": noRawTextTruncation,
   "portable-path": portablePath,
   "semantic-controls": semanticControls,
   "test-base-revision": testBaseRevision,
