@@ -2183,9 +2183,21 @@ export const reindexWorkspacesForContact = async (
 export const rebuildSupplementalSearchIndex = async (
   organizationId: SafeId<"organization">,
 ): Promise<void> => {
-  await createRootOrganizationBackgroundDb(organizationId)(
+  const rows = await rootDb
+    .select({ id: workspaces.id })
+    .from(workspaces)
+    .where(eq(workspaces.organizationId, organizationId));
+  await createRootOrganizationBackgroundDb(
+    organizationId,
+    undefined,
+    rows.map(({ id }) => id),
+  )(
     async (database) =>
-      await rebuildSupplementalSearchDocuments(organizationId, database),
+      await rebuildSupplementalSearchDocuments(organizationId, {
+        query: database.query,
+        select: database.select.bind(database),
+        transaction: rootDb.transaction.bind(rootDb),
+      }),
   );
 };
 

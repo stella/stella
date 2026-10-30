@@ -77,6 +77,10 @@ type SearchProjectionRepairDb = Pick<
  */
 type SearchProjectionRepairDatabase = SearchProjectionRepairDb &
   Pick<typeof rootDb, "query" | "transaction">;
+type ProjectionRepairDatabase = Pick<
+  typeof rootDb,
+  "query" | "select" | "transaction"
+>;
 
 export type SearchProjectionRepairDeps = {
   db: SearchProjectionRepairDb;
@@ -106,7 +110,7 @@ type ClaimedRepair = {
  */
 const repairContactProjection = async (
   sourceId: string,
-  database: SearchProjectionRepairDatabase,
+  database: ProjectionRepairDatabase,
 ): Promise<void> => {
   const contactId = toSafeId<"contact">(sourceId);
   await upsertContactSearchDocument(contactId, database);
@@ -119,23 +123,56 @@ const repairContactProjection = async (
  */
 export const createSearchProjectionRepairDeps = (
   database: SearchProjectionRepairDatabase,
-): SearchProjectionRepairDeps => ({
-  db: database,
-  repair: {
-    contact: async (sourceId, organizationId: SafeId<"organization">) =>
-      await createRootOrganizationBackgroundDb(organizationId)(
-        async (scopedDatabase) =>
-          await repairContactProjection(sourceId, scopedDatabase),
-      ),
-    entity: async (sourceId) =>
-      await upsertSearchDocument(toSafeId<"entity">(sourceId), { database }),
-    workspace: async (sourceId) =>
-      await upsertWorkspaceSearchDocument(
-        toSafeId<"workspace">(sourceId),
-        database,
-      ),
-  },
-});
+): SearchProjectionRepairDeps => {
+  const repairInOrganization = async (
+    sourceId: string,
+    organizationId: SafeId<"organization">,
+    repair: (
+      id: string,
+      projectionDatabase: ProjectionRepairDatabase,
+    ) => Promise<void>,
+  ) => {
+    const workspaceIds = await database
+      .select({ id: workspaces.id })
+      .from(workspaces)
+      .where(eq(workspaces.organizationId, organizationId));
+    await createRootOrganizationBackgroundDb(
+      organizationId,
+      undefined,
+      workspaceIds.map(({ id }) => id),
+    )(async (scopedDatabase) => {
+      await repair(sourceId, {
+        query: scopedDatabase.query,
+        select: scopedDatabase.select.bind(scopedDatabase),
+        transaction: database.transaction.bind(database),
+      });
+    });
+  };
+
+  return {
+    db: database,
+    repair: {
+      contact: async (sourceId, organizationId: SafeId<"organization">) =>
+        await repairInOrganization(
+          sourceId,
+          organizationId,
+          repairContactProjection,
+        ),
+      entity: async (sourceId) =>
+        await upsertSearchDocument(toSafeId<"entity">(sourceId), { database }),
+      workspace: async (sourceId, organizationId: SafeId<"organization">) =>
+        await repairInOrganization(
+          sourceId,
+          organizationId,
+          async (id, projectionDatabase) =>
+            await upsertWorkspaceSearchDocument(
+              toSafeId<"workspace">(id),
+              projectionDatabase,
+            ),
+        ),
+    },
+  };
+};
 
 const uniqueIds = <T extends string>(ids: readonly T[]): T[] => [
   ...new Set(ids),
