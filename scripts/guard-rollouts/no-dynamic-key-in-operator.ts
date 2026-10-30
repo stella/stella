@@ -1,0 +1,24 @@
+import type { GuardRollout } from "../guard-rollout-policy.ts";
+
+export default {
+  id: "no-dynamic-key-in-operator",
+  rules: ["no-dynamic-key-in-operator/no-dynamic-key-in-operator"],
+  type: "changed-lines",
+  expiresAt: "2026-11-05T00:00:00.000Z",
+  check: [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "no-dynamic-key-in-operator/no-dynamic-key-in-operator",
+    "packages/chat/src",
+    "apps/web/src/features/chat",
+    "apps/web/src/components/chat",
+    "apps/api/src/handlers/chat",
+    "apps/api/src/lib/chat",
+  ],
+} as const satisfies GuardRollout;

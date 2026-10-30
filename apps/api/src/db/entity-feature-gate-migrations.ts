@@ -121,6 +121,22 @@ const ROUTINE_SIGNATURE =
 const pattern = (source: string) => new RegExp(source, "iu");
 const group = (match: RegExpExecArray, index: number) => match[index] ?? "";
 
+type GatedFunctionStatementKind =
+  | { type: "alter-function-set-search-path"; effect: "metadata-only" }
+  | { type: "other" };
+
+const classifyGatedFunctionStatement = (
+  sql: string,
+): GatedFunctionStatementKind => {
+  const searchPathEntry = `(?:"(?:[^"]|"")*"|[a-z_][a-z0-9_$]*)`;
+  const setSearchPath = pattern(
+    `^ALTER\\s+FUNCTION\\s+${GATE_ROUTINE}\\s*\\([^)]*\\)\\s+SET\\s+search_path\\s*=\\s*${searchPathEntry}(?:\\s*,\\s*${searchPathEntry})*\\s*;?$`,
+  );
+  return setSearchPath.test(sql)
+    ? { type: "alter-function-set-search-path", effect: "metadata-only" }
+    : { type: "other" };
+};
+
 type MapField =
   | "functions"
   | "policies"
@@ -525,6 +541,13 @@ const foldedStatements = (migration: string): string[] =>
     );
 
 const foldStatement = (state: FoldState, sql: string, migration: number) => {
+  const functionStatement = classifyGatedFunctionStatement(sql);
+  switch (functionStatement.type) {
+    case "alter-function-set-search-path":
+      return;
+    case "other":
+      break;
+  }
   for (const handler of STATEMENT_HANDLERS) {
     const match = handler.pattern.exec(sql);
     if (match) {

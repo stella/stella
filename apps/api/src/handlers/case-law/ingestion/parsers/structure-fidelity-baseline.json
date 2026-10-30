@@ -1,0 +1,3401 @@
+{
+  "comment": "Structure-fidelity findings per adapter and recorded fixture (structure-fidelity.ts). Shrink-only: a new finding fails the guard; a fixed one must be removed with apps/api/scripts/update-structure-fidelity-baseline.ts.",
+  "findings": {
+    "us-courtlistener": {
+      "courtlistener-clusters-2026-06-30.ndjson.gz[3]": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "o103998-p4",
+          "excerpt": " The District Court sustained demurrers to indictments\n[386] ⏎ for conspiracies forbidden by § 19 of the Criminal Code.1"
+        },
+        {
+          "rule": "page-number-block",
+          "anchorId": "o103998-p27",
+          "excerpt": "1"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "o103998-p28",
+          "excerpt": "ourt of Michigan. 28 U.S.C. § 344(a), 28 U.S.C.A. § 344(a).1 ⏎ 2"
+        },
+        {
+          "rule": "page-number-block",
+          "anchorId": "o103998-p29",
+          "excerpt": "2"
+        },
+        {
+          "rule": "page-number-block",
+          "anchorId": "o103998-p31",
+          "excerpt": "3"
+        },
+        {
+          "rule": "page-number-block",
+          "anchorId": "o103998-p33",
+          "excerpt": "4"
+        },
+        {
+          "rule": "page-number-block",
+          "anchorId": "o103998-p35",
+          "excerpt": "5"
+        },
+        {
+          "rule": "page-number-block",
+          "anchorId": "o103998-p37",
+          "excerpt": "6"
+        },
+        {
+          "rule": "page-number-block",
+          "anchorId": "o103998-p39",
+          "excerpt": "7"
+        },
+        {
+          "rule": "page-number-block",
+          "anchorId": "o103998-p41",
+          "excerpt": "8"
+        },
+        {
+          "rule": "page-number-block",
+          "anchorId": "o103998-p43",
+          "excerpt": "9"
+        },
+        {
+          "rule": "page-number-block",
+          "anchorId": "o103998-p45",
+          "excerpt": "10"
+        },
+        {
+          "rule": "page-number-block",
+          "anchorId": "o103998-p47",
+          "excerpt": "11"
+        }
+      ],
+      "courtlistener/html/html-383875.html (recorded document; census metadata)": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "o9109419-p11",
+          "excerpt": "1"
+        },
+        {
+          "rule": "page-number-block",
+          "anchorId": "o9109419-p13",
+          "excerpt": "2"
+        },
+        {
+          "rule": "page-number-block",
+          "anchorId": "o9109419-p15",
+          "excerpt": "3"
+        },
+        {
+          "rule": "page-number-block",
+          "anchorId": "o9109419-p17",
+          "excerpt": "4"
+        },
+        {
+          "rule": "page-number-block",
+          "anchorId": "o9109419-p19",
+          "excerpt": "5"
+        },
+        {
+          "rule": "page-number-block",
+          "anchorId": "o9109419-p21",
+          "excerpt": "6"
+        },
+        {
+          "rule": "page-number-block",
+          "anchorId": "o9109419-p23",
+          "excerpt": "7"
+        }
+      ]
+    },
+    "cz-nss": {
+      "cz-nss-57-af-17-2023.html.gz (recorded document; census metadata)": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-4",
+          "excerpt": "í Hrůšovou, advokátkou sídlem Veverkova 2707/1, 301 00 Plzeň ⏎ proti"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-6",
+          "excerpt": " úřad pro Plzeňský kraj sídlem Antonína Uxy 11, 301 00 Plzeň ⏎ o žalobě proti rozhodnutí žalovaného ze dne 5. 10. 2023, "
+        }
+      ]
+    },
+    "cz-us": {
+      "cz-us-pl-us-42-2000.html.gz (recorded document; census metadata)": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-57",
+          "excerpt": "dle odst. 1 písm. b) hranici 10 procent na hranici 6 procent ⏎ písm. c)"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-149",
+          "excerpt": "nodárce, rozhodně by však neměla absentovat jakákoli podobná ⏎ pojistka."
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-162",
+          "excerpt": "o změně a doplnění některých dalších zákonů, ve znění zákona ⏎ č. 204/2000 Sb., které zní \"Politické straně, politickému"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-165",
+          "excerpt": "átní příspěvek a jeho výše vycházejí až z výsledků voleb, na ⏎ rozdíl od kaucí, které mohou být někdy obtížně překonatel"
+        }
+      ],
+      "cz-us-page.json.gz[4]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-10",
+          "excerpt": "1"
+        }
+      ],
+      "cz-us-page.json.gz[6]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-12",
+          "excerpt": "1"
+        }
+      ],
+      "cz-us-page.json.gz[7]": [
+        {
+          "rule": "holding-after-signature",
+          "anchorId": "p-12",
+          "excerpt": "Poučení: Proti tomuto usnesení není odvolání přípustné."
+        },
+        {
+          "rule": "holding-after-signature",
+          "anchorId": "p-13",
+          "excerpt": "V Brně dne. 26. listopadu 1993"
+        },
+        {
+          "rule": "holding-after-signature",
+          "anchorId": "p-14",
+          "excerpt": "JUDr. Vojen Güttler"
+        }
+      ],
+      "cz-us-page.json.gz[10]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-11",
+          "excerpt": "1"
+        }
+      ],
+      "cz-us-page.json.gz[12]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-12",
+          "excerpt": "1"
+        }
+      ],
+      "cz-us-page.json.gz[14]": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-4",
+          "excerpt": "atele pana JUDr. ing. I.G., týkajícího se ústavní stížnosti, ⏎ takto Návrh se odmítá ."
+        }
+      ],
+      "cz-us-page.json.gz[15]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-11",
+          "excerpt": "2 -"
+        }
+      ],
+      "cz-us-page.json.gz[17]": [
+        {
+          "rule": "holding-after-signature",
+          "anchorId": "p-11",
+          "excerpt": "Pro úplnost se uvádí, že Ústavní soud není oprávněn ustanovovat stěžovateli z úřední povinnosti advokáta. Z ustanovení §"
+        },
+        {
+          "rule": "holding-after-signature",
+          "anchorId": "p-12",
+          "excerpt": "Poučení: proti tomuto usnesení není odvolání přípustné."
+        }
+      ],
+      "cz-us-page.json.gz[19]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-12",
+          "excerpt": "2 -"
+        }
+      ],
+      "cz-us-page.json.gz[20]": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-8",
+          "excerpt": "Stěžovatelka podala ústavní stížnost proti postupu Obvodního ⏎ soudu pro Prahu 10 v řízení vedeném u tamního soudu pod s"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-11",
+          "excerpt": "\"zrušení užívacího práva odpůrce a na vyklizení bytu\". Podle ⏎ obsahu stížnosti existují v uvedeném řízení neodůvodněné "
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-14",
+          "excerpt": "avní stížnost je nepřípustná; jestliže stěžovatel nevyčerpal ⏎ všechny prostředky, které mu zákon k ochraně jeho práv po"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-16",
+          "excerpt": "ínky tohoto ustanovení jsou v daném případě splněny, neboť v ⏎ době podání ústavní stížnosti bylo řízení před obvodním s"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-17",
+          "excerpt": "bě podání ústavní stížnosti bylo řízení před obvodním soudem ⏎ dosud v běhu a pravomocné rozhodnutí tedy nebylo vydáno ("
+        }
+      ],
+      "cz-us-page.json.gz[22]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-10",
+          "excerpt": "2 -"
+        }
+      ],
+      "cz-us-page.json.gz[23]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-11",
+          "excerpt": "2 -"
+        }
+      ],
+      "cz-us-page.json.gz[24]": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-4",
+          "excerpt": "Ústavou České republiky a Listinou základních práv a svobod, ⏎ takto Návrh se odmítá."
+        }
+      ],
+      "cz-us-page.json.gz[25]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-10",
+          "excerpt": "2 -"
+        }
+      ],
+      "cz-us-page.json.gz[26]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-13",
+          "excerpt": "1"
+        }
+      ],
+      "cz-us-page.json.gz[29]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-10",
+          "excerpt": "2 -"
+        }
+      ],
+      "cz-us-page.json.gz[31]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-9",
+          "excerpt": "2 -"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-10",
+          "excerpt": "ínky ustanovení § 43 odst. 1 písm. c) zák. o Ústavním soudu, ⏎ proto mimo ústní jednání usnesením návrh odmítl."
+        }
+      ],
+      "cz-us-page.json.gz[32]": [
+        {
+          "rule": "holding-after-signature",
+          "anchorId": "p-13",
+          "excerpt": "Poučení: proti tomuto usnesení není odvolání přípustné."
+        },
+        {
+          "rule": "holding-after-signature",
+          "anchorId": "p-15",
+          "excerpt": "JUDr. Vojen Güttler"
+        }
+      ],
+      "cz-us-page.json.gz[38]": [
+        {
+          "rule": "holding-after-signature",
+          "anchorId": "p-12",
+          "excerpt": "Poučení: proti tomuto usnesení není odvolání přípustné."
+        }
+      ],
+      "cz-us-page.json.gz[39]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-12",
+          "excerpt": "1"
+        }
+      ]
+    },
+    "cz-regional": {
+      "cz-regional-finaldoc-district.json.gz": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-3",
+          "excerpt": "stoupený advokátem Jméno advokáta A sídlem Adresa advokáta A ⏎ proti"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-5",
+          "excerpt": "stoupená advokátem Jméno advokáta B sídlem Adresa advokáta B ⏎ o zaplacení částky 32 600 Kč s příslušenstvím"
+        }
+      ],
+      "cz-regional-finaldoc-appellate.json.gz": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-3",
+          "excerpt": "stoupený advokátem Jméno advokáta A sídlem Adresa advokáta A ⏎ proti"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-5",
+          "excerpt": "stoupená advokátem Jméno advokáta B sídlem Adresa advokáta B ⏎ o zaplacení 32 600 Kč s příslušenstvím"
+        }
+      ],
+      "cz-regional-17-c-33-2019.finaldoc.json.gz (recorded document; census metadata)": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-3",
+          "excerpt": "obní údaje manželky zastoupená advokátem Mgr. jméno příjmení ⏎ sídlem adresa"
+        }
+      ],
+      "cz-regional-26-c-151-2021.finaldoc.json.gz (recorded document; census metadata)": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-3",
+          "excerpt": "sobní údaje žalobkyně zastoupená advokátkou údaje o zástupci ⏎ proti"
+        }
+      ],
+      "cz-regional-3-t-96-2026.finaldoc.json.gz (recorded document; census metadata)": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-5",
+          "excerpt": "ným obhájcem Jméno obviněné B, advokátem se sídlem adresa, a ⏎ obviněný"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-7",
+          "excerpt": "otorových vozidel a doprava, trvale bytem Adresa obviněného, ⏎ je vinen, že"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-12",
+          "excerpt": "becného zájmu a spáchal takový čin vůči úřední osobě (ad 1), ⏎ jednak poskytl jinému úplatek v souvislosti s obstarávání"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-13",
+          "excerpt": "becného zájmu a spáchal takový čin vůči úřední osobě (ad 2), ⏎ čímž spáchal"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-15",
+          "excerpt": " 1 alinea první, odst. 2 písm. b) trestního zákoníku (ad 1), ⏎ jednak zločin podplacení podle § 332 odst. 1 alinea první"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-16",
+          "excerpt": " 1 alinea první, odst. 2 písm. b) trestního zákoníku (ad 2), ⏎ a odsuzuje se"
+        }
+      ]
+    },
+    "sk-us": {
+      "conformance (synthetic field census; recorded documents where supplied)": [
+        {
+          "rule": "ast-missing",
+          "anchorId": "document",
+          "excerpt": "NÁLEZ\n\nÚstavný súd Slovenskej republiky v senáte o ústavnej sťažnosti sťažovateľa\n\nanonymizované takto\n\nrozhodol:\n\nZákla"
+        }
+      ],
+      "pps/api/src/handlers/case-law/ingestion/parsers/__fixtures__/sk-us-iii-us-265-2026.content.json.gz (recorded document; census metadata)": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p18",
+          "excerpt": "ústavnej sťažnosti sťažovateľa. Je tomu tak preto, že hoci 4 ⏎ fakulta univerzity nemá na rozdiel od univerzity právnu s"
+        }
+      ],
+      "pps/api/src/handlers/case-law/ingestion/parsers/__fixtures__/sk-us-pl-us-15-98.content.json.gz (recorded document; census metadata)": [
+        {
+          "rule": "ast-missing",
+          "anchorId": "document",
+          "excerpt": "SLOVENSKÁ REPUBLIKA\n\nNÁLEZ\n\nÚstavného súdu Slovenskej republiky\n\nV mene Slovenskej republiky\n\nPL. ÚS 15/98\n\nÚstavný súd "
+        }
+      ],
+      "pps/api/src/handlers/case-law/ingestion/parsers/__fixtures__/sk-us-pl-us-24-2014.content.json.gz (recorded document; census metadata)": [
+        {
+          "rule": "ast-missing",
+          "anchorId": "document",
+          "excerpt": "SLOVENSKÁ REPUBLIKA\n\nUZNESENIE\n\nÚstavného súdu Slovenskej republiky\n\nPL. ÚS 24/2014-22\n\nÚstavný súd Slovenskej republiky"
+        }
+      ],
+      "pps/api/src/handlers/case-law/ingestion/parsers/__fixtures__/sk-us-pl-us-10-2014.content.json.gz (recorded document; census metadata)": [
+        {
+          "rule": "ast-missing",
+          "anchorId": "document",
+          "excerpt": "SLOVENSKÁ REPUBLIKA\n\nNÁLEZ\n\nÚstavného súdu Slovenskej republiky\n\nV mene Slovenskej republiky\n\nPL. ÚS 10/2014-78\n\nÚstavný"
+        }
+      ]
+    },
+    "pl-courts": {
+      "pl-courts-page.json.gz[9]": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-5",
+          "excerpt": "wca)\nKazimierz Działocha\nMaria Łabor-Soroka\nStanisław Pawela ⏎ w sprawie z wniosku Polskiego Związku Hodowców Drobnego I"
+        }
+      ],
+      "pl-courts-page.json.gz[12]": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-5",
+          "excerpt": "ziowie TK:\nAdam Józefowicz (sprawozdawca)\nMaria Łabor-Soroka ⏎ po rozpoznaniu w dniu 21 września 1987 r. sprawy z wniosk"
+        }
+      ],
+      "pl-courts-page.json.gz[15]": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-5",
+          "excerpt": "iowie TK:\nAndrzej Kabat (sprawozdawca)\nRemigiusz Orzechowski ⏎ po rozpoznaniu w dniu 28 października 1987 r. na posiedze"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-6",
+          "excerpt": "r. Nr 53, poz. 272) oraz z art. 67 ust. 2 Konstytucji PRL?”, ⏎ na podstawie art. 4 ust. 2 ustawy z dnia 29 kwietnia 1985"
+        }
+      ],
+      "pl-courts-page.json.gz[18]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-2",
+          "excerpt": "10"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-6",
+          "excerpt": "owie TK: Kazimierz Buchała (sprawozdawca)\nMaria Łabor-Soroka ⏎ po rozpoznaniu w dniu 20 stycznia 1988 r. na posiedzeniu "
+        }
+      ],
+      "pl-courts-page.json.gz[19]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-2",
+          "excerpt": "11"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-6",
+          "excerpt": "ędziowie TK: Maria Łabor-Soroka (sprawozdawca)\nAndrzej Kabat ⏎ po rozpoznaniu w dniu 29 stycznia 1988 r. na posiedzeniu "
+        }
+      ],
+      "pl-courts-page.json.gz[20]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-2",
+          "excerpt": "12"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-6",
+          "excerpt": "dziowie TK: Kazimierz Działocha (sprawozdawca)\nAndrzej Kabat ⏎ po rozpoznaniu w dniu 2 marca 1988 r. na posiedzeniu niej"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-9",
+          "excerpt": "ółdzielcze (Dz. U. Nr 30, poz. 210 z późniejszymi zmianami), ⏎ na podstawie art. 4 ust. 2 ustawy z dnia 29 kwietnia 1985"
+        }
+      ],
+      "pl-courts-page.json.gz[21]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-102",
+          "excerpt": "12"
+        }
+      ],
+      "pl-courts-page.json.gz[22]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-2",
+          "excerpt": "14"
+        }
+      ],
+      "pl-courts-page.json.gz[23]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-2",
+          "excerpt": "15"
+        }
+      ],
+      "pl-courts-page.json.gz[27]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-2",
+          "excerpt": "16"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-6",
+          "excerpt": "wie TK: Maria Łabor-Soroka (sprawozdawca)\nCzesław Bakalarski ⏎ po rozpoznaniu w dniu 11 października 1988 r. na posiedze"
+        }
+      ],
+      "pl-courts-page.json.gz[28]": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-89",
+          "excerpt": "sportowej oraz oszczędności w zużyciu surowców i materiałów, ⏎ może dla niektórych jednostek gospodarczych:"
+        }
+      ],
+      "pl-courts-page.json.gz[29]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-2",
+          "excerpt": "17"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-6",
+          "excerpt": "roka\nLeonard Łukaszuk\nRemigiusz Orzechowski\nStanisław Pawela ⏎ po rozpoznaniu w dniu 26 października 1988 r., na rozpraw"
+        }
+      ],
+      "pl-courts-page.json.gz[30]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-1",
+          "excerpt": "18"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-7",
+          "excerpt": "e TK: Stanisław Pawela (sprawozdawca),\nRemigiusz Orzechowski ⏎ po rozpoznaniu w dniu 16 listopada 1988 r. na posiedzeniu"
+        }
+      ],
+      "pl-courts-page.json.gz[32]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-1",
+          "excerpt": "19"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-6",
+          "excerpt": "iowie: Remigiusz Orzechowski (sprawozdawca)\nStanisław Pawela ⏎ po rozpoznaniu w dniu 13 grudnia 1988 r. na posiedzeniu n"
+        }
+      ],
+      "pl-courts-page.json.gz[35]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-2",
+          "excerpt": "20"
+        }
+      ],
+      "pl-courts-page.json.gz[36]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-2",
+          "excerpt": "21"
+        }
+      ],
+      "pl-courts-page.json.gz[37]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-2",
+          "excerpt": "26"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-6",
+          "excerpt": "Soroka (sprawozdawca)\nRemigiusz Orzechowski\nStanisław Pawela ⏎ po rozpoznaniu na posiedzeniu niejawnym w dniu 18. I. 198"
+        }
+      ],
+      "pl-courts-page.json.gz[38]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-2",
+          "excerpt": "16"
+        }
+      ],
+      "pl-courts-page.json.gz[39]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-2",
+          "excerpt": "27"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-6",
+          "excerpt": "Sędziowie TK: Czesław Bakalarski (sprawozdawca)\nNatalia Gajl ⏎ w toku rozpoznania w dniu 8 lutego 1989 r. na posiedzeniu"
+        }
+      ],
+      "pl-courts-page.json.gz[40]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-2",
+          "excerpt": "17"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-6",
+          "excerpt": "Sędziowie TK: Czesław Bakalarski (sprawozdawca)\nNatalia Gajl ⏎ po rozpoznaniu w dniu 8 lutego 1989 r. na posiedzeniu nie"
+        }
+      ],
+      "pl-courts-page.json.gz[41]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-2",
+          "excerpt": "11"
+        }
+      ],
+      "pl-courts-page.json.gz[42]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-2",
+          "excerpt": "14"
+        }
+      ],
+      "pl-courts-page.json.gz[43]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-2",
+          "excerpt": "18"
+        }
+      ],
+      "pl-courts-page.json.gz[44]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-2",
+          "excerpt": "28"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-6",
+          "excerpt": "owie TK: Kazimierz Buchała\nMaria Łabor-Soroka (sprawozdawca) ⏎ po rozpoznaniu na posiedzeniu niejawnym w dniu 14 marca 1"
+        }
+      ],
+      "pl-courts-page.json.gz[45]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-2",
+          "excerpt": "29"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-6",
+          "excerpt": "owie TK: Henryk Groszyk\nRemigiusz Orzechowski (sprawozdawca) ⏎ po rozpoznaniu w dniu 15 marca 1989 r. na posiedzeniu nie"
+        }
+      ],
+      "pl-courts-page.json.gz[46]": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-5",
+          "excerpt": "ziowie TK: Henryk Groszyk, Maria Łabor-Soroka (sprawozdawca) ⏎ po rozpoznaniu w dniu 15 marca 1989 r. na posiedzeniu nie"
+        }
+      ],
+      "pl-courts-page.json.gz[47]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-2",
+          "excerpt": "30"
+        }
+      ],
+      "pl-courts-page.json.gz[48]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-2",
+          "excerpt": "12"
+        }
+      ],
+      "pl-courts-page.json.gz[49]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-2",
+          "excerpt": "31"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-6",
+          "excerpt": "ziowie TK: Henryk Groszyk,\nMaria Łabor-Soroka (sprawozdawca) ⏎ po rozpoznaniu z urzędu na posiedzeniu niejawnym w dniu 1"
+        }
+      ],
+      "pl-courts-page.json.gz[51]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-1",
+          "excerpt": "15"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-6",
+          "excerpt": "Sędziowie TK: Czesław Bakalarski\nNatalia Gajl (sprawozdawca) ⏎ po rozpoznaniu w dniu 19 kwietnia na posiedzeniu niejawny"
+        }
+      ],
+      "pl-courts-page.json.gz[54]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-2",
+          "excerpt": "10"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-5",
+          "excerpt": "wca),\nRemigiusz Orzechowski\nProtokolant: Grażyna Kołaczyńska ⏎ po rozpoznaniu w dniu 7 czerwca 1989 r. na rozprawie spra"
+        }
+      ],
+      "pl-courts-page.json.gz[55]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-2",
+          "excerpt": "19"
+        }
+      ],
+      "pl-courts-page.json.gz[56]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-2",
+          "excerpt": "22"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-6",
+          "excerpt": "dziowie TK: Henryk Groszyk\nMaria Łabor-Soroka (sprawozdawca) ⏎ po rozpoznaniu w dniu 25 września 1989 r. na posiedzeniu "
+        }
+      ],
+      "pl-courts-page.json.gz[58]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-2",
+          "excerpt": "21"
+        }
+      ],
+      "pl-courts-page.json.gz[63]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-2",
+          "excerpt": "20"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-6",
+          "excerpt": "wie TK: Henryk Groszyk,\nRemigiusz Orzechowski (sprawozdawca) ⏎ po rozpatrzeniu, w dniu 24 października 1989 r., na posie"
+        }
+      ],
+      "pl-courts-page.json.gz[65]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-2",
+          "excerpt": "32"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-6",
+          "excerpt": "prawozdawca)\nAndrzej Kabat\nMaria Łabor-Soroka (sprawozdawca) ⏎ po rozpoznaniu na posiedzeniu niejawnym w dniu 8 listopad"
+        }
+      ],
+      "pl-courts-page.json.gz[66]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-2",
+          "excerpt": "25"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-6",
+          "excerpt": " TK: Maria Łabor-Soroka\nRemigiusz Orzechowski (sprawozdawca) ⏎ po rozpatrzeniu w dniu 28 listopada 1989 r., na posiedzen"
+        }
+      ],
+      "pl-courts-page.json.gz[67]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-2",
+          "excerpt": "23"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-6",
+          "excerpt": " TK: Maria Łabor-Soroka\nRemigiusz Orzechowski (sprawozdawca) ⏎ po rozpatrzeniu, w dniu 18 grudnia 1989 r. na posiedzeniu"
+        }
+      ],
+      "pl-courts-page.json.gz[68]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-2",
+          "excerpt": "24"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-6",
+          "excerpt": " TK: Maria Łabor-Soroka (sprawozdawca)\nRemigiusz Orzechowski ⏎ po rozpoznaniu w dniu 28 grudnia 1989 r. na posiedzeniu n"
+        }
+      ],
+      "pl-courts-page.json.gz[69]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-2",
+          "excerpt": "18"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-6",
+          "excerpt": "ie TK: Maria Łabor-Soroka (sprawozdawca)\nWojciech Łączkowski ⏎ po rozpoznaniu w dniu 14 lutego 1990 r., na posiedzeniu n"
+        }
+      ],
+      "pl-courts-page.json.gz[70]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-1",
+          "excerpt": "16"
+        }
+      ],
+      "pl-courts-page.json.gz[72]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-2",
+          "excerpt": "31"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-6",
+          "excerpt": "awca)\nRemigiusz Orzechowski (sprawozdawca)\nJanina Zakrzewska ⏎ po rozpoznaniu z urzędu na posiedzeniu niejawnym w dniu 1"
+        }
+      ],
+      "pl-courts-page.json.gz[73]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-2",
+          "excerpt": "28"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-6",
+          "excerpt": "sz Orzechowski\nJanina Zakrzewska\nAndrzej Zoll (sprawozdawca) ⏎ na posiedzeniu w dniu 4 kwietnia 1990 r., po rozpoznaniu "
+        }
+      ],
+      "pl-courts-page.json.gz[74]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-2",
+          "excerpt": "12"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-6",
+          "excerpt": "dawca)\nKazimierz Działocha\nHenryk Groszyk\nMaria Łabor-Soroka ⏎ po rozpoznaniu na posiedzeniu niejawnym dnia 11 kwietnia "
+        }
+      ],
+      "pl-courts-page.json.gz[75]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-2",
+          "excerpt": "25"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-7",
+          "excerpt": "sz Orzechowski\nJanina Zakrzewska\nAndrzej Zoll (sprawozdawca) ⏎ po rozpoznaniu na posiedzeniu w dniu 2 maja 1990 r., w tr"
+        }
+      ],
+      "pl-courts-page.json.gz[77]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-2",
+          "excerpt": "17"
+        }
+      ],
+      "pl-courts-page.json.gz[78]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-2",
+          "excerpt": "20"
+        }
+      ],
+      "pl-courts-page.json.gz[79]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-2",
+          "excerpt": "19"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-6",
+          "excerpt": "ie TK: Maria Łabor-Soroka (sprawozdawca)\nWojciech Łączkowski ⏎ po rozpoznaniu w dniu 23 maja 1990 r., na posiedzeniu nie"
+        }
+      ],
+      "pl-courts-page.json.gz[80]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-2",
+          "excerpt": "24"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-7",
+          "excerpt": "bor-Soroka\nRemigiusz Orzechowski (sprawozdawca)\nAndrzej Zoll ⏎ po rozpoznaniu na posiedzeniu w dniu 31 maja 1990 r. w tr"
+        }
+      ],
+      "pl-courts-page.json.gz[81]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-2",
+          "excerpt": "15"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-6",
+          "excerpt": " TK: Czesław Bakalarski\nRemigiusz Orzechowski (sprawozdawca) ⏎ po rozpatrzeniu w dniu 13 czerwca 1990 r. na posiedzeniu "
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-15",
+          "excerpt": "udnia 1972 r. o podatku dochodowym (Dz. U. Nr 27, poz. 147), ⏎ jako że zawarte w § 2 pkt. 2 rozporządzenia z dnia 9 kwie"
+        }
+      ],
+      "pl-courts-page.json.gz[83]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-2",
+          "excerpt": "29"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-6",
+          "excerpt": "awozdawca)\nMaria Łabor-Soroka\nJanina Zakrzewska\nAndrzej Zoll ⏎ po rozpoznaniu na posiedzeniu niejawnym w dniu 31 lipca 1"
+        }
+      ],
+      "pl-courts-page.json.gz[85]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-2",
+          "excerpt": "32"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-6",
+          "excerpt": "sz Orzechowski\nJanina Zakrzewska (sprawozdawca)\nAndrzej Zoll ⏎ na posiedzeniu niejawnym w dniu 11 września 1990 r., w zw"
+        }
+      ],
+      "pl-courts-page.json.gz[86]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-2",
+          "excerpt": "30"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-7",
+          "excerpt": "bor-Soroka\nRemigiusz Orzechowski\nAndrzej Zoll (sprawozdawca) ⏎ po rozpoznaniu na posiedzeniu w dniu 12 września 1990 r. "
+        }
+      ],
+      "pl-courts-page.json.gz[87]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-2",
+          "excerpt": "10"
+        }
+      ],
+      "pl-courts-page.json.gz[88]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-2",
+          "excerpt": "27"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-7",
+          "excerpt": "dawca)\nMaria Łabor-Soroka\nRemigiusz Orzechowski\nAndrzej Zoll ⏎ po rozpoznaniu na posiedzeniu w dniu 18 września 1990 r. "
+        }
+      ],
+      "pl-courts-page.json.gz[89]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-2",
+          "excerpt": "21"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-6",
+          "excerpt": "iowie TK: Antoni Filcek\nRemigiusz Orzechowski (sprawozdawca) ⏎ po rozpoznaniu w dniu 19 września 1990 r., na posiedzeniu"
+        }
+      ],
+      "pl-courts-page.json.gz[90]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-2",
+          "excerpt": "26"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-7",
+          "excerpt": "bor-Soroka (sprawozdawca)\nRemigiusz Orzechowski\nAndrzej Zoll ⏎ po rozpoznaniu na posiedzeniu w dniu 19 września 1990 r. "
+        }
+      ],
+      "pl-courts-page.json.gz[91]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-2",
+          "excerpt": "13"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-6",
+          "excerpt": "sprawozdawca)\nAntoni Filcek\nWojciech Łączkowski\nAndrzej Zoll ⏎ po rozpoznaniu w dniu 3 października 1990 r. na posiedzen"
+        }
+      ],
+      "pl-courts-page.json.gz[93]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-2",
+          "excerpt": "23"
+        }
+      ],
+      "pl-courts-page.json.gz[94]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-2",
+          "excerpt": "22"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-6",
+          "excerpt": "ziowie TK: Remigiusz Orzechowski (sprawozdawca)\nAndrzej Zoll ⏎ po rozpatrzeniu w dniu 20 listopada 1990 r., na posiedzen"
+        }
+      ],
+      "pl-courts-page.json.gz[98]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-2",
+          "excerpt": "11"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-6",
+          "excerpt": "dawca)\nAntoni Filcek\nRemigiusz Orzechowski\nJanina Zakrzewska ⏎ po rozpoznaniu na posiedzeniu niejawnym w dniu 31 grudnia"
+        }
+      ],
+      "pl-courts-page.json.gz[99]": [
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-2",
+          "excerpt": "14"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-6",
+          "excerpt": "lcek Maria\nŁabor-Soroka (sprawozdawca)\nRemigiusz Orzechowski ⏎ po rozpoznaniu w dniu 31 grudnia 1990 r. na posiedzeniu n"
+        }
+      ],
+      "pl-courts-dump-day.json.gz:3": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-7",
+          "excerpt": "wie : SO Małgorzata Bartczak-Sobierajska, SO Joanna Rusińska ⏎ po rozpoznaniu w dniu 22 marca 2018 r. w Toruniu"
+        }
+      ],
+      "pl-courts-dump-day.json.gz:4": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-6",
+          "excerpt": " wspólności małżeńskiej gospodarstwa rolnego w skład którego ⏎ wchodziły działki o nr (...) o łącznej powierzchni 0,87"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-9",
+          "excerpt": "ły jej dzieci A. F., F. B., Z. R., B. B. i Z. C. w udziałach ⏎ po 1/5 części każde z nich. Postanowienie to nie zawierał"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-12",
+          "excerpt": "7), jako nie poparte żadnymi dokumentami a nadto sprzeczne z ⏎ wcześniejszymi twierdzeniami zgłoszonymi w sprawie I Ns 2"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-15",
+          "excerpt": "art. 52 ust. 3 ustawy o zaopatrzeniu emerytalnym oraz innych ⏎ świadczeniach dla rolników i ich rodzin przez S. B., ani "
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-18",
+          "excerpt": "dze decyzji naczelnika gminy, w żadnym razie nie oznacza, iż ⏎ wydanie takiej decyzji przez osobę działającą z upoważnie"
+        }
+      ],
+      "pl-courts-dump-day.json.gz:12": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-9",
+          "excerpt": "rozpoznaniu na rozprawie w dniu 22 marca 2018 roku w Kłodzku ⏎ sprawy z powództwa M. W."
+        }
+      ],
+      "pl-courts-dump-day.json.gz:13": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-10",
+          "excerpt": " art.297 § 1 kk w zb. z art.286 § 1 kk w zw. z art.11 § 2 kk ⏎ na skutek apelacji, wniesionych przez obrońców oskarżonyc"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-22",
+          "excerpt": "m znaczeniu dla uzyskania wymienionego wsparcia finansowego, ⏎ tj. o czyn z art. 297§ 1 k.k. w zb. z art. 286 § 1 k.k. w"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-25",
+          "excerpt": " z(...)Banku S.A. pożyczki nr (...) w wysokości 38226,30 zł, ⏎ tj. o czyn z art. 18 § 3 k.k. w zw. z art.297§ 1 k.k. w z"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-28",
+          "excerpt": "m znaczeniu dla uzyskania wymienionego wsparcia finansowego, ⏎ tj. o czyn z art. 18 § 3 k.k. w zw. z art.297§ 1 k.k. w z"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-31",
+          "excerpt": "m znaczeniu dla uzyskania wymienionego wsparcia finansowego, ⏎ tj. o czyn z art. 18 § 3 k.k. w zw. z art.297§ 1 k.k. w z"
+        }
+      ],
+      "pl-courts-dump-day.json.gz:15": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-8",
+          "excerpt": "rozpoznaniu w dniu 22 marca 2018 r. w Olsztynie na rozprawie ⏎ sprawy z powództwa Gminy O."
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-12",
+          "excerpt": "kutek apelacji powódki od wyroku Sądu Rejonowego w Olsztynie ⏎ z dnia 7 czerwca 2017 r., sygn. akt X C 3552/16,"
+        }
+      ],
+      "pl-courts-dump-day.json.gz:17": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-9",
+          "excerpt": "zpoznaniu w dniu 20 lutego 2018 r. w Szczecinie na rozprawie ⏎ sprawy z powództwa Z. Z. (1)"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-37",
+          "excerpt": "prywatnych samochodów osobowych do celów służbowych – k. 213 ⏎ umowa w sprawie używania telefonów komórkowych – k. 214-2"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-77",
+          "excerpt": "iadka W. A. – k.253- 254 wraz z okazanym na rozprawie SMS-em ⏎ zeznania Z. Z. (1) k. 254"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-83",
+          "excerpt": "ie do zapłaty z rachunkami k. 16-19 (w aktach XI GC 1287/16) ⏎ nota k. 20 (w aktach XI GC 1287/16)"
+        }
+      ],
+      "pl-courts-dump-day.json.gz:20": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-52",
+          "excerpt": "S. nr (...) o wartości 1.500,00 zł (tysiąc pięćset złotych), ⏎ tj. składniki majątkowe o łącznej wartości 167.000,00 zł "
+        }
+      ],
+      "pl-courts-dump-day.json.gz:21": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-10",
+          "excerpt": "le Prokuratora Prok. Rej. w Szczytnie Małgorzaty Kaszubskiej ⏎ po rozpoznaniu na rozprawie w dniu 22 marca 2018 r. spraw"
+        }
+      ],
+      "pl-courts-dump-day.json.gz:23": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-8",
+          "excerpt": "Prokop, Asesora Prokuratury Rejonowej w G.– Andrzeja Zagraby ⏎ po rozpoznaniu w dniu 24.11.2017 r., 12.01.2018 r., 16.02"
+        }
+      ],
+      "pl-courts-dump-day.json.gz:24": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-33",
+          "excerpt": "niższym niż 60 lat - dla kobiet i 65 lat - dla mężczyzn oraz ⏎ 2)okres składkowy i nieskładkowy, o którym mowa w art. 27"
+        }
+      ],
+      "pl-courts-dump-day.json.gz:26": [
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-2",
+          "excerpt": "22 marca 2018r."
+        },
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-29",
+          "excerpt": "26 października 2015r. Sąd Rejonowy w Płońsku stwierdził, że spadek po W. S., zmarłym 22 marca 2015r. na podstawie ustaw"
+        }
+      ],
+      "pl-courts-dump-day.json.gz:30": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-20",
+          "excerpt": "a działkę nr (...) wpisaną w księdze wieczystej KW nr (...), ⏎ za cenę 125.070 zł,"
+        }
+      ],
+      "pl-courts-dump-day.json.gz:32": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-7",
+          "excerpt": "w dniu 22 marca 2018 r. w Gliwicach na posiedzeniu niejawnym ⏎ sprawy z powództwa Kancelarii (...) Spółki Akcyjnej w K."
+        }
+      ],
+      "pl-courts-dump-day.json.gz:33": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-7",
+          "excerpt": "w dniu 22 marca 2018 r. w Gliwicach na posiedzeniu niejawnym ⏎ sprawy z powództwa A. P. (P.)"
+        }
+      ],
+      "pl-courts-dump-day.json.gz:34": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-17",
+          "excerpt": "wego w Siedlcach IV Wydziału Pracy i Ubezpieczeń Społecznych ⏎ z dnia 22 września 2017r. sygn. akt IV P 32/17"
+        }
+      ],
+      "pl-courts-dump-day.json.gz:38": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-58",
+          "excerpt": "ie społeczne wnioskodawcy – w najkorzystniejszym wariancie - ⏎ z przyjęciem do rozważań - wynagrodzeń :"
+        }
+      ],
+      "pl-courts-dump-day.json.gz:40": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-4",
+          "excerpt": "zpoznaniu w dniu 22 marca 2018 r., na posiedzeniu niejawnym, ⏎ sprawy z odwołania A. N."
+        }
+      ],
+      "pl-courts-dump-day.json.gz:41": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-8",
+          "excerpt": "zpoznaniu w dniu 22 marca 2018 r., na posiedzeniu niejawnym, ⏎ sprawy z odwołania (...) DRUKARNIA spółki z ograniczoną o"
+        }
+      ],
+      "pl-courts-dump-day.json.gz:50": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-19",
+          "excerpt": "cze uderzając w płot posesji nr (...) ul. (...) i ul. (...), ⏎ tj. o czyn z art. 86 § 1 k.w."
+        }
+      ],
+      "pl-courts-dump-day.json.gz:52": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-7",
+          "excerpt": "rozpoznaniu w dniu 22 marca 2018 r. w Olsztynie na rozprawie ⏎ sprawy z wniosku D. W."
+        }
+      ],
+      "pl-courts-dump-day.json.gz:53": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-8",
+          "excerpt": "rozpoznaniu w dniu 22 marca 2018 r. w Olsztynie na rozprawie ⏎ sprawy z powództwa S. R."
+        }
+      ],
+      "pl-courts-dump-day.json.gz:54": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-7",
+          "excerpt": " rozpoznaniu w dniu 8 marca 2018 r. w Olsztynie na rozprawie ⏎ sprawy z wniosku Gminy O."
+        }
+      ],
+      "pl-courts-dump-day.json.gz:55": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-12",
+          "excerpt": " Grzegorza Sobika Prokuratora Prokuratury Rejonowej w Żorach ⏎ po rozpoznaniu w dniu 22 marca 2018 r."
+        }
+      ],
+      "pl-courts-dump-day.json.gz:56": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-7",
+          "excerpt": "zpoznaniu w dniu 22 marca 2018 roku w Tomaszowie Mazowieckim ⏎ na rozprawie"
+        }
+      ],
+      "pl-courts-dump-day.json.gz:57": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-10",
+          "excerpt": " Felsztyńskiego Prokuratora Rejonowego w Wodzisławiu Śląskim ⏎ po rozpoznaniu w dniu 22 marca 2018 r."
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-45",
+          "excerpt": "enie biegłego A. M. (1) ma uwiarygodnić wniosek końcowy jego ⏎ opinii?;"
+        }
+      ],
+      "pl-courts-dump-day.json.gz:58": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-9",
+          "excerpt": "Sekurytyzacyjnego Funduszu Inwestycyjnego Zamkniętego we W., ⏎ przeciwko E. W."
+        }
+      ],
+      "pl-courts-dump-day.json.gz:59": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-9",
+          "excerpt": "Sekurytyzacyjnego Funduszu Inwestycyjnego Zamkniętego we W., ⏎ przeciwko A. M.,"
+        }
+      ],
+      "pl-courts-dump-day.json.gz:67": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-7",
+          "excerpt": "zy udziale Prokuratora Prokuratury Rejonowej Poznań Wilda -- ⏎ po rozpoznaniu dnia 22.03.2018r."
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-11",
+          "excerpt": " wysokości 4395 zł na szkodę sklepu (...) Spółka Komandytowa ⏎ tj. o przestępstwo z art. 278 § 1 kk"
+        }
+      ],
+      "pl-courts-dump-day.json.gz:68": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-8",
+          "excerpt": "życiela skarbowego Pierwszy Urząd Skarbowy: Małgorzata Smaga ⏎ po rozpoznaniu dnia 22.03.2018r."
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-14",
+          "excerpt": " w P., z siedzibą w P., ul. (...), w łącznej kwocie 1.068zł, ⏎ tj. o wykroczenie skarbowe określone w art.77 § 3 k.k.s. "
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-16",
+          "excerpt": " osoby fizyczne /Dz.U. z 1998r., Nr 144, poz.930 z póź.zm./, ⏎ tj. o wykroczenie skarbowe określone w art. 57 § 1 k.k.s."
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-18",
+          "excerpt": "d towarów i usług /t.j. Dz.U. z 2016r., poz.710 z późn.zm./, ⏎ tj. o wykroczenie skarbowe określone w art. 57 § 1 k.k.s."
+        }
+      ],
+      "pl-courts-dump-day.json.gz:69": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-7",
+          "excerpt": "rozpoznaniu na rozprawie w dniu 22 marca 2018 r. w Warszawie ⏎ sprawy z powództwa P. M."
+        },
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-30",
+          "excerpt": "8 września 2016 r. powódka nie pojawiła się w pracy i około godz. 10:00 poinformowała w wiadomości SMS przełożonego M. R"
+        },
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-34",
+          "excerpt": "12 września 2016 r. M. R. zwrócił się do dyrektora Agencji o podjęcie stosownych działań dyscyplinarnych w stosunku do p"
+        }
+      ],
+      "pl-courts-dump-day.json.gz:74": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-11",
+          "excerpt": " Ł. z dnia 20 lutego 2017 roku, w sprawie znak (...): 803/17 ⏎ o wysokość renty rodzinnej"
+        }
+      ],
+      "pl-courts-dump-day.json.gz:76": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-4",
+          "excerpt": "owy w Gliwicach VIII Wydział Pracy i Ubezpieczeń Społecznych ⏎ po rozpoznaniu w dniu 22 marca 2018 w Gliwicach"
+        }
+      ],
+      "pl-courts-dump-day.json.gz:77": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-11",
+          "excerpt": " w T. z dnia 1 września 2017 roku w sprawie ENS/20/042100902 ⏎ o prawo do emerytury"
+        }
+      ],
+      "pl-courts-dump-day.json.gz:80": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-9",
+          "excerpt": "aniu w dniu 22 marca 2018 r. w Gliwicach na rozprawie sprawy ⏎ z wniosku T. S., M. G., I. S. i H. N."
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-12",
+          "excerpt": "ości przekraczających zakres zwykłego zarządu rzeczą wspólną ⏎ na skutek apelacji wnioskodawców"
+        },
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-27",
+          "excerpt": "13 marca 2017 r. zmarła wnioskodawczyni U. G.. Postanowieniem z 27 kwietnia 2017 r. Sąd Rejonowy zawiesił postępowanie ("
+        }
+      ],
+      "pl-courts-dump-day.json.gz:81": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-14",
+          "excerpt": "czeń Społecznych w Gliwicach Ośrodka Zamiejscowego w Rybniku ⏎ z dnia 15 listopada 2017r. sygn. akt IX U 1264/17"
+        }
+      ],
+      "pl-courts-dump-day.json.gz:82": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-14",
+          "excerpt": "yroku Sądu Okręgowego - Sądu Pracy i Ubezpieczeń Społecznych ⏎ w Częstochowie z dnia 6 grudnia 2017r. sygn. akt IV U 122"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-38",
+          "excerpt": "mym spełnia wszystkie przesłanki nabycia prawa do emerytury, ⏎ wniósł o zmianę zaskarżonego wyroku i oddalenie odwołania"
+        }
+      ],
+      "pl-courts-dump-day.json.gz:83": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-22",
+          "excerpt": "ia 18 lutego 2014 r. o świadczenie usług telekomunikacyjnych ⏎ w sieci (...) k. 38 – 39, faktura VAT nr (...) – k. 40)."
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-29",
+          "excerpt": "zedaży wierzytelności – k. 25 – 30, wyciąg z elektronicznego ⏎ załącznika do umowy sprzedaży wierzytelności – k. 31)"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-32",
+          "excerpt": "domienie (...) Sp. z o. o. z siedzibą w W. z dnia 15 grudnia ⏎ 2015 r. – k. 36, wezwanie do zapłaty z dnia 08 stycznia 2"
+        }
+      ],
+      "pl-courts-dump-day.json.gz:84": [
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-4",
+          "excerpt": "22 marca 2018"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-14",
+          "excerpt": "żanie i onanizowanie się przed budynkiem internatu szkolnego ⏎ tj. o czyn z art. 140 k.w."
+        },
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-21",
+          "excerpt": "12 września 2017 około godziny 18.10 M. J. udał się w pobliże budynku internatu szkolnego położonego w K. przy ul. (...)"
+        }
+      ],
+      "pl-courts-dump-day.json.gz:85": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-11",
+          "excerpt": "zpoznaniu na rozprawie w dniu 22 marca 2018 roku w L. sprawy ⏎ z odwołania T. S."
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-13",
+          "excerpt": "rzeciwko Prezesowi Kasy Rolniczego Ubezpieczenia Społecznego ⏎ o wysokość jednorazowego odszkodowania"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-16",
+          "excerpt": "chód w Lublinie VII Wydziału Pracy i Ubezpieczeń Społecznych ⏎ z dnia 25 maja 2017 roku sygn. akt VII U 1591/15"
+        }
+      ],
+      "pl-courts-dump-day.json.gz:88": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-8",
+          "excerpt": "niu 8 marca 2018 roku w Piotrkowie Trybunalskim na rozprawie ⏎ sprawy z wniosku J. K."
+        }
+      ],
+      "pl-courts-dump-day.json.gz:91": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-46",
+          "excerpt": " w wysokości 1850 złotych płatna do dnia 30 marca 2018 roku, ⏎ a także zasądzenie od powódki na rzecz pozwanego kosztów "
+        }
+      ],
+      "pl-courts-dump-day.json.gz:93": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-15",
+          "excerpt": "du ciała tj. kończyny górnej lewej na okres około 4 miesięcy ⏎ to jest o czyn z art. 157 § 1 k.k."
+        }
+      ],
+      "pl-courts-dump-day.json.gz:94": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-3",
+          "excerpt": "a 26 lipca 1991 roku o podatku dochodowym od osób fizycznych ⏎ tj. o przestępstwo skarbowe z art. 56 § 1 kks."
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-8",
+          "excerpt": "s w związku z art. 63§l kk na poczet orzeczonej kary grzywny ⏎ zaliczył okres zatrzymania w dniu 14.10.2016 roku od godz"
+        }
+      ],
+      "pl-courts-dump-day.json.gz:95": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-8",
+          "excerpt": "Urzędu Skarbowego w Bełchatowie - Bogusławy Szynkowskiej-Sęk ⏎ po rozpoznaniu w dniu 16 marca 2018 roku"
+        }
+      ],
+      "pl-courts-dump-day.json.gz:96": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-9",
+          "excerpt": "rozpoznaniu w dniu 22 marca 2018 r. w Warszawie na rozprawie ⏎ sprawy z odwołania E. S."
+        }
+      ],
+      "pl-courts-dump-day.json.gz:97": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-8",
+          "excerpt": "y udziale Tadeusza Kaczana Prokuratora Prokuratury Okręgowej ⏎ po rozpoznaniu w dniu 22 marca 2018r."
+        }
+      ],
+      "pl-courts-dump-day.json.gz:99": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-8",
+          "excerpt": "niu 22 marca 2018 roku w Szczecinie na posiedzeniu niejawnym ⏎ sprawy z powództwa (...) Spółki Akcyjnej z siedzibą w B."
+        }
+      ]
+    },
+    "pl-kio": {
+      "pl-kio-listing-2010-so.html:1": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-10",
+          "excerpt": "poznaniu w dniu 18 grudnia 2009 r. w Szczecinie na rozprawie ⏎ sprawy ze skargi zamawiającego Tramwaje Szczecińskie spół"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-11",
+          "excerpt": "cińskie spółki z ograniczoną odpowiedzialnością w Szczecinie ⏎ na wyrok Krajowej Izby Odwoławczej przy Prezesie Urzędu Z"
+        }
+      ],
+      "pl-kio-listing-2025-09-01-p1.html:1": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-23",
+          "excerpt": "mówienia publicznego prowadzonym przez innego zamawiającego, ⏎ ii. nie upłynął 2-letni okres wykluczenia SAFEGE S.A.S. w"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-30",
+          "excerpt": "kę akcyjną w Warszawie – tytułem wynagrodzenia pełnomocnika, ⏎ 3.2. zasądza od wykonawcy A. Polska Spółka z ograniczoną "
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-35",
+          "excerpt": "kę akcyjną w Warszawie – tytułem wynagrodzenia pełnomocnika, ⏎ 4.2. zasądza od wykonawcy B-Act Spółka akcyjna w Bydgoszc"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-79",
+          "excerpt": "tyczące zgodności z przepisami o minimalnym wynagrodzeniu za ⏎ pracę oraz minimalnej stawce godzinowej, ustalonych na po"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-214",
+          "excerpt": "mówienia publicznego prowadzonym przez innego zamawiającego, ⏎ ii. nie upłynął 2-letni okres wykluczenia SAFEGE S.A.S. w"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-235",
+          "excerpt": "mówienia publicznego prowadzonym przez innego zamawiającego, ⏎ ii. nie upłynął 2-letni okres wykluczenia SAFEGE S.A.S. w"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-237",
+          "excerpt": "ie wykazał negatywnych przesłanek wykluczenia w postępowaniu ⏎ podlegają umorzeniu na podstawie art. 568 pkt 1 ustawy P."
+        }
+      ],
+      "pl-kio-listing-undated-p1.html:8": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-8",
+          "excerpt": "półka z ograniczoną odpowiedzialnością z siedzibą w Sieradzu ⏎ w postępowaniu prowadzonym przez"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-14",
+          "excerpt": "z ograniczoną odpowiedzialnością tytułem wpisu od odwołania, ⏎ 2.2. zasądza od Uniwersytetu Medycznego im. Piastów Śląsk"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-81",
+          "excerpt": "równowartość kwoty 20.000.000 euro, a dla dostaw lub usług - ⏎ 10.000.000 euro;"
+        }
+      ],
+      "pl-kio-detail-13694.html": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-8",
+          "excerpt": "półka z ograniczoną odpowiedzialnością z siedzibą w Sieradzu ⏎ w postępowaniu prowadzonym przez"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-14",
+          "excerpt": "z ograniczoną odpowiedzialnością tytułem wpisu od odwołania, ⏎ 2.2. zasądza od Uniwersytetu Medycznego im. Piastów Śląsk"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-81",
+          "excerpt": "równowartość kwoty 20.000.000 euro, a dla dostaw lub usług - ⏎ 10.000.000 euro;"
+        }
+      ],
+      "pl-kio-detail-30308.html": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-23",
+          "excerpt": "mówienia publicznego prowadzonym przez innego zamawiającego, ⏎ ii. nie upłynął 2-letni okres wykluczenia SAFEGE S.A.S. w"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-30",
+          "excerpt": "kę akcyjną w Warszawie – tytułem wynagrodzenia pełnomocnika, ⏎ 3.2. zasądza od wykonawcy A. Polska Spółka z ograniczoną "
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-35",
+          "excerpt": "kę akcyjną w Warszawie – tytułem wynagrodzenia pełnomocnika, ⏎ 4.2. zasądza od wykonawcy B-Act Spółka akcyjna w Bydgoszc"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-79",
+          "excerpt": "tyczące zgodności z przepisami o minimalnym wynagrodzeniu za ⏎ pracę oraz minimalnej stawce godzinowej, ustalonych na po"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-214",
+          "excerpt": "mówienia publicznego prowadzonym przez innego zamawiającego, ⏎ ii. nie upłynął 2-letni okres wykluczenia SAFEGE S.A.S. w"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-235",
+          "excerpt": "mówienia publicznego prowadzonym przez innego zamawiającego, ⏎ ii. nie upłynął 2-letni okres wykluczenia SAFEGE S.A.S. w"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-237",
+          "excerpt": "ie wykazał negatywnych przesłanek wykluczenia w postępowaniu ⏎ podlegają umorzeniu na podstawie art. 568 pkt 1 ustawy P."
+        }
+      ],
+      "pl-kio-detail-8247.html": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-10",
+          "excerpt": "poznaniu w dniu 18 grudnia 2009 r. w Szczecinie na rozprawie ⏎ sprawy ze skargi zamawiającego Tramwaje Szczecińskie spół"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-11",
+          "excerpt": "cińskie spółki z ograniczoną odpowiedzialnością w Szczecinie ⏎ na wyrok Krajowej Izby Odwoławczej przy Prezesie Urzędu Z"
+        }
+      ]
+    },
+    "pl-tk": {
+      "pl-tk-case-k-24-04.html.gz:238": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-62",
+          "excerpt": "n i zawierania kompromisów w procesie podejmowania decyzji), ⏎ wpływające na decyzje polityczne (mające prawo zmian proj"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-63",
+          "excerpt": "mające prawo zmian projektów, ale bez prawa ich odrzucenia), ⏎ słabe (pozbawione możliwości zmiany czy odrzucenia projek"
+        }
+      ]
+    },
+    "pl-ncourt": {
+      "pl-ncourt-listing-151025200001006_II_K_000937_2025_Uz_2026-03-09_001.xml:0": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-14",
+          "excerpt": "esie obowiązywania zakazu prowadzenia pojazdów mechanicznych ⏎ tj. o czyn z art. 178a§4 kk"
+        }
+      ],
+      "pl-ncourt-content-151025200001006_II_K_000937_2025_Uz_2026-03-09_001.xml.gz:minimal-listing-context": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-14",
+          "excerpt": "esie obowiązywania zakazu prowadzenia pojazdów mechanicznych ⏎ tj. o czyn z art. 178a§4 kk"
+        }
+      ]
+    },
+    "at-umse": {
+      "at-ris-listing-umse.json[0]+at-ris-umse-text.xml": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-91",
+          "excerpt": "Kat. Nr. 50.711: Sinter 1 (Filter AH 928), Messintervall von ⏎ jährlich auf 3 Jahre"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-100",
+          "excerpt": "Nr. 30.812: Entstaubungsanlage Rückgutweg, Messintervall von ⏎ jährlich auf 3 Jahre"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-103",
+          "excerpt": "Nr. 63.012: Direktverladung LD 3, Messintervall von jährlich ⏎ auf 3 Jahre"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-112",
+          "excerpt": "nachstehend angeführte Emissionsquellen sind Kataster Quelle ⏎ 53011 Altkunststoff-Entstaubung"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-168",
+          "excerpt": "tahl mit einem Emissionsmassenstrom an staubförmigen Stoffen ⏎ 1.von 1 kg/h bis 3 kg/h sind die relevanten Quellen mit M"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-174",
+          "excerpt": " abzusehen, wenn die Feststellung der Emissionen nach Nummer ⏎ 5.3.3 oder Nummer 5.3.4 erfolgt."
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-183",
+          "excerpt": "ng der Genehmigungsvoraussetzungen gemäß § 17 zulässig, wenn ⏎ 1.sie nach den Ergebnissen der Umweltverträglichkeitsprüf"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-184",
+          "excerpt": "chkeitsprüfung dem § 17 Abs. 2 bis 5 nicht widersprechen und ⏎ 2.die von der Änderung betroffenen Beteiligten gemäß § 19"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-189",
+          "excerpt": "n Schadstoffen sind nach dem Stand der Technik zu begrenzen, ⏎ 2.die Immissionsbelastung zu schützender Güter ist möglic"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-190",
+          "excerpt": " halten, wobei jedenfalls Immissionen zu vermeiden sind, die ⏎ a)das Leben oder die Gesundheit von Menschen oder das Eig"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-191",
+          "excerpt": "nstige dingliche Rechte der Nachbarn/Nachbarinnen gefährden, ⏎ b)erhebliche Belastungen der Umwelt durch nachhaltige Ein"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-192",
+          "excerpt": "nd oder den Zustand der Gewässer bleibend zu schädigen, oder ⏎ c)zu einer unzumutbaren Belästigung der Nachbarn/Nachbari"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-193",
+          "excerpt": "nen im Sinne des § 77 Abs. 2 der Gewerbeordnung 1994 führen, ⏎ 3.Abfälle sind nach dem Stand der Technik zu vermeiden od"
+        }
+      ]
+    },
+    "eu-ecj": {
+      "conformance (synthetic field census; recorded documents where supplied)": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-13",
+          "excerpt": "ten procedure and further to the hearing on 10 January 2023, ⏎ after considering the observations submitted on behalf of"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-20",
+          "excerpt": " by E. Montaguti, J. Tomkin and F. Wilman, acting as Agents, ⏎ after hearing the Opinion of the Advocate General at the "
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-21",
+          "excerpt": " of the Advocate General at the sitting on 7 September 2023, ⏎ gives the following"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-266",
+          "excerpt": "3/96/EEC, read in conjunction with Articles 4 and 5 thereof, ⏎ must be interpreted as not precluding legislation of gene"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-268",
+          "excerpt": " European Parliament and of the Council of 30 November 2017, ⏎ must be interpreted as not precluding legislation of a Me"
+        }
+      ],
+      "eu-ecj/61990CJ0006.en.html.gz (recorded document; census metadata)": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-21",
+          "excerpt": "Karen Banks, members of its Legal Service, acting as Agents, ⏎ having regard to the Report for the Hearing,"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-23",
+          "excerpt": "gent, and the Commission at the hearing on 27 February 1991, ⏎ after hearing the Opinion of the Advocate General at the "
+        }
+      ],
+      "eu-ecj/62004CJ0144.hu.html.gz (recorded document; census metadata)": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-12",
+          "excerpt": "l az írásbeli szakaszra és a 2005. április 26-i tárgyalásra, ⏎ figyelembe véve a következők által előterjesztett észrevé"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-17",
+          "excerpt": "alamint D. Martin és H. Kreppel, meghatalmazotti minőségben, ⏎ a főtanácsnok indítványának a 2005. június 30-i tárgyalás"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-18",
+          "excerpt": "05. június 30-i tárgyaláson történt meghallgatását követően, ⏎ meghozta a következő"
+        }
+      ],
+      "eu-ecj/62013TO0488.cs.html.gz (recorded document; census metadata)": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-3",
+          "excerpt": "üsseldorfu (Německo), zastoupená J. Schneidersem, advokátem, ⏎ žalobkyně,"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-6",
+          "excerpt": "ě zastoupenému A. Pohlmannem, poté S. Hannem jako zmocněnci, ⏎ žalovanému,"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-12",
+          "excerpt": "édnutím k žalobě došlé kanceláři Tribunálu dne 2. září 2013, ⏎ s přihlédnutím k vyjádření k žalobě došlému kanceláři Tri"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-13",
+          "excerpt": " k žalobě došlému kanceláři Tribunálu dne 16. prosince 2013, ⏎ s přihlédnutím k replice došlé kanceláři Tribunálu dne 11"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-14",
+          "excerpt": "tím k replice došlé kanceláři Tribunálu dne 11. března 2014, ⏎ s přihlédnutím k duplice došlé kanceláři Tribunálu dne 28"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-15",
+          "excerpt": "utím k duplice došlé kanceláři Tribunálu dne 28. dubna 2014, ⏎ s přihlédnutím k dopisu žalobkyně došlému kanceláři Tribu"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-16",
+          "excerpt": "isu žalobkyně došlému kanceláři Tribunálu dne 11. září 2013, ⏎ s ohledem na to, že účastníci řízení ve lhůtě jednoho měs"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-17",
+          "excerpt": "ribunálu rozhodl, že žalobu projedná bez ústní části řízení, ⏎ vydává toto"
+        }
+      ],
+      "eu-ecj/62017CJ0258.pl.html.gz (recorded document; census metadata)": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-13",
+          "excerpt": "owania i po przeprowadzeniu rozprawy w dniu 29 maja 2018 r., ⏎ rozważywszy uwagi przedstawione:"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-18",
+          "excerpt": "az B.R. Killmanna, działających w charakterze pełnomocników, ⏎ po zapoznaniu się z opinią rzecznika generalnego na posie"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-19",
+          "excerpt": "cznika generalnego na posiedzeniu w dniu 5 września 2018 r., ⏎ wydaje następujący"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "point9-5",
+          "excerpt": "zenie do czynu nierządnego wobec osoby młodej tej samej płci ⏎ § 129. Są karalne jako przestępstwo również następujące f"
+        }
+      ],
+      "eu-ecj/62018CC0311.fi.html.gz (recorded document; census metadata)": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "point28-7",
+          "excerpt": "liittyvien tutkimusten luottamuksellisuuden säilyttämiseksi, ⏎ ii) kaikista tahattomista tai luvattomista pääsyistä tiet"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "point28-8",
+          "excerpt": "ikista tahattomista tai luvattomista pääsyistä tietoihin, ja ⏎ iii) rekisteröidyiltä suoraan saaduista tiedusteluista ni"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "point76-4",
+          "excerpt": "ihmisoikeussopimus] (tai jokin muu unionin oikeussääntö) vai ⏎ ii) yhden tai useamman jäsenvaltion lainsäädäntö?"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "point76-8",
+          "excerpt": "t ja turvatoimenpiteet, joita noudatetaan kolmannessa maassa ⏎ vai"
+        }
+      ],
+      "eu-ecj/62018CJ0311.en.html.gz (recorded document; census metadata)": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-19",
+          "excerpt": "written procedure and further to the hearing on 9 July 2019, ⏎ after considering the observations submitted on behalf of"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-40",
+          "excerpt": "n Board (EDPB), by A. Jelinek and K. Behn, acting as Agents, ⏎ after hearing the Opinion of the Advocate General at the "
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-41",
+          "excerpt": " of the Advocate General at the sitting on 19 December 2019, ⏎ gives the following"
+        }
+      ],
+      "eu-ecj/62018CJ0311.lv.html.gz (recorded document; census metadata)": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-19",
+          "excerpt": "vērā rakstveida procesu un 2019. gada 9. jūlija tiesas sēdi, ⏎ ņemot vērā apsvērumus, ko sniedza:"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-40",
+          "excerpt": "s kolēģijas (EDAK) vārdā – A. Jelinek un K. Behn, pārstāvji, ⏎ noklausījusies ģenerāladvokāta secinājumus 2019. gada 19."
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-41",
+          "excerpt": "rāladvokāta secinājumus 2019. gada 19. decembra tiesas sēdē, ⏎ pasludina šo spriedumu."
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "point68-4",
+          "excerpt": "“ECPAK”)] (vai jebkura cita [Savienības] tiesību norma), vai ⏎ ii) vienas vai vairāku dalībvalstu valsts tiesību normas?"
+        }
+      ],
+      "eu-ecj/62019CO0791.en.html.gz (recorded document; census metadata)": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-6",
+          "excerpt": "ed by K. Banks, H. Krämer and S.L. Kalėda, acting as Agents, ⏎ applicant,"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-13",
+          "excerpt": "itz, H. Shev, J. Lundberg and H. Eklinder, acting as Agents, ⏎ interveners,"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-16",
+          "excerpt": "S. Żyrek, A. Dalkowska and A. Gołaszewska, acting as Agents, ⏎ defendant,"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-19",
+          "excerpt": "n, K. Jürimäe, C. Lycourgos, N. Piçarra and N. Wahl, Judges, ⏎ after hearing the Advocate General, E. Tanchev,"
+        }
+      ],
+      "eu-ecj/62022CJ0128.el.html.gz (recorded document; census metadata)": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-13",
+          "excerpt": "πιν της επ’ ακροατηρίου συζητήσεως της 10ης Ιανουαρίου 2023, ⏎ λαμβάνοντας υπόψη τις παρατηρήσεις που υπέβαλαν:"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-20",
+          "excerpt": "ύμενη από την E. Montaguti και τους J. Tomkin και F. Wilman, ⏎ αφού άκουσε τον γενικό εισαγγελέα, που ανέπτυξε τις προτά"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-21",
+          "excerpt": "ς προτάσεις του κατά τη συνεδρίαση της 7ης Σεπτεμβρίου 2023, ⏎ εκδίδει την ακόλουθη"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "point23-5",
+          "excerpt": "συγκεκριμένα στην καταπολέμηση του διασυνοριακού εγκλήματος· ⏎ iii) σχεδιάζονται και εκτελούνται κατά τρόπο σαφώς διαφορ"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "point23-6",
+          "excerpt": "ό τους συστηματικούς ελέγχους προσώπων στα εξωτερικά σύνορα, ⏎ iv) διενεργούνται βάσει δειγματοληπτικών ελέγχων·"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "point26-3",
+          "excerpt": "γείας και επαγγελματίες του τομέα της φροντίδας ηλικιωμένων· ⏎ ii. μεθοριακοί εργαζόμενοι·"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "point26-7",
+          "excerpt": "ικό πολιτικής προστασίας για την άσκηση των καθηκόντων τους· ⏎ vi. διερχόμενοι επιβάτες·"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "point26-9",
+          "excerpt": "βάτες που ταξιδεύουν για επιτακτικούς οικογενειακούς λόγους· ⏎ viii. ναυτικοί·"
+        }
+      ],
+      "eu-ecj/62022CJ0128.en.html.gz (recorded document; census metadata)": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-13",
+          "excerpt": "ten procedure and further to the hearing on 10 January 2023, ⏎ after considering the observations submitted on behalf of"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-20",
+          "excerpt": " by E. Montaguti, J. Tomkin and F. Wilman, acting as Agents, ⏎ after hearing the Opinion of the Advocate General at the "
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-21",
+          "excerpt": " of the Advocate General at the sitting on 7 September 2023, ⏎ gives the following"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-266",
+          "excerpt": "3/96/EEC, read in conjunction with Articles 4 and 5 thereof, ⏎ must be interpreted as not precluding legislation of gene"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-268",
+          "excerpt": " European Parliament and of the Council of 30 November 2017, ⏎ must be interpreted as not precluding legislation of a Me"
+        }
+      ],
+      "eu-ecj/62022CJ0128.en.page.html.gz (recorded document; census metadata)": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-13",
+          "excerpt": "ten procedure and further to the hearing on 10 January 2023, ⏎ after considering the observations submitted on behalf of"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-20",
+          "excerpt": " by E. Montaguti, J. Tomkin and F. Wilman, acting as Agents, ⏎ after hearing the Opinion of the Advocate General at the "
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-21",
+          "excerpt": " of the Advocate General at the sitting on 7 September 2023, ⏎ gives the following"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-266",
+          "excerpt": "3/96/EEC, read in conjunction with Articles 4 and 5 thereof, ⏎ must be interpreted as not precluding legislation of gene"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-268",
+          "excerpt": " European Parliament and of the Council of 30 November 2017, ⏎ must be interpreted as not precluding legislation of a Me"
+        }
+      ],
+      "eu-ecj/62023CO0786.en.html.gz (recorded document; census metadata)": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-6",
+          "excerpt": "iding in Brussels (Belgium), represented by R. Duta, avocat, ⏎ appellant,"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-15",
+          "excerpt": "ticle 181 of the Rules of Procedure of the Court of Justice, ⏎ makes the following"
+        }
+      ],
+      "eu-ecj/62023TJ0201.en.html.gz (recorded document; census metadata)": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-5",
+          "excerpt": "sented by T. Clay, T. Zahedi Vafa and K. Mehtiyeva, lawyers, ⏎ applicant,"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-8",
+          "excerpt": "d by D. Laurent, P. Mahnič and S. Lejeune, acting as Agents, ⏎ defendant,"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-14",
+          "excerpt": "ticle 106(3) of the Rules of Procedure of the General Court, ⏎ gives the following"
+        }
+      ],
+      "eu-ecj-61985CJ0214.cs.page.html.gz (recorded portal document; census metadata)": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-1",
+          "excerpt": "-notice/legal-notice.html?locale=en#5.%20Cookies%20notice\" } ⏎ document.addEventListener('DOMContentLoaded', function ()"
+        }
+      ],
+      "eu-ecj-61992TJ0027.sk.page.html.gz (recorded portal document; census metadata)": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-1",
+          "excerpt": "-notice/legal-notice.html?locale=en#5.%20Cookies%20notice\" } ⏎ document.addEventListener('DOMContentLoaded', function ()"
+        }
+      ],
+      "eu-ecj-61996TJ0183.lt.page.html.gz (recorded portal document; census metadata)": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-1",
+          "excerpt": "-notice/legal-notice.html?locale=en#5.%20Cookies%20notice\" } ⏎ document.addEventListener('DOMContentLoaded', function ()"
+        }
+      ]
+    },
+    "pl-kis": {
+      "pl-kis-listing-01-ind-2008.json:0": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-7",
+          "excerpt": "lowania zobowiązań związanych z zakupem opon od producentów, ⏎ reklamę,"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-10",
+          "excerpt": "owych technologii związanych z obsługą sklepu internetowego, ⏎ zmniejszenie finansowania działalności kapitałami obcymi,"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-13",
+          "excerpt": " związane z przekształceniem spółki jawnej w spółkę akcyjną, ⏎ doradztwo finansowe związane z przygotowaniem prospektu e"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-14",
+          "excerpt": "wo finansowe związane z przygotowaniem prospektu emisyjnego, ⏎ usługi biura maklerskiego,"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-16",
+          "excerpt": "widenta związane z badaniem sprawozdania finansowego spółki, ⏎ opłaty sądowe, skarbowe i notarialne,"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-18",
+          "excerpt": "awnych związany z podniesieniem kapitału zakładowego spółki, ⏎ wydatki administracyjne związane z drukiem, publikacją i "
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-19",
+          "excerpt": "ne z drukiem, publikacją i dystrybucją prospektu emisyjnego, ⏎ ogłoszenia wymagane przepisami prawa,"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-34",
+          "excerpt": " skróconej wersji, koszty oferowania papierów wartościowych, ⏎ stanowiły wartości niematerialne i prawne podlegające amo"
+        }
+      ],
+      "pl-kis-listing-01-ind-superseded.json:0": [
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-6",
+          "excerpt": "27 kwietnia 2026 r. wpłynął Pani wniosek o wydanie interpretacji indywidualnej. Treść wniosku jest następująca:"
+        }
+      ],
+      "pl-kis-listing-01-ind.json:0": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-44",
+          "excerpt": "ym niż uprawniony odbiorca w rozumieniu tych przepisów, albo ⏎ 3a) uprawnionym odbiorcy dokonującym nabycia wewnątrzwspó"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-55",
+          "excerpt": "go od paliw silnikowych lub gazu z innego tytułu niż import, ⏎ 1a) 10 dni od dnia powstania obowiązku zapłaty - w przypa"
+        }
+      ],
+      "pl-kis-listing-02-ind-zm.json:0": [
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-4",
+          "excerpt": "27 sierpnia 2020 roku do Dyrektora Krajowej Informacji Skarbowej wpłynął wniosek o wydanie interpretacji indywidualnej, "
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-67",
+          "excerpt": "a 12, 00‑916 Warszawa (art. 47 § 1 i art. 54 § 1 ww. ustawy) ⏎ lub"
+        }
+      ],
+      "pl-kis-document-05-objas.pdf": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-1",
+          "excerpt": "ochodowym od osób fizycznych-Rozdział 2-art. 10-ust. 1-pkt 7 ⏎ 1 [PIT] Ustawa o podatku dochodowym od osób fizycznych-Ro"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-3",
+          "excerpt": " ochronna 1. Przyczyna wydania objaśnień i czego one dotyczą ⏎ 2 Objaśnienia podatkowe omawiają zasady opodatkowania prz"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-6",
+          "excerpt": "akiego należy zakwalifikować przychody z waloryzacji środków ⏎ pieniężnych na takich rachunkach, - momentu powstania prz"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-7",
+          "excerpt": "u przez płatnika podatku od przychodów z waloryzacji środków ⏎ pieniężnych znajdujących się na takich rachunkach. Celem "
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-12",
+          "excerpt": "a lub inwestowania, prowadzonych przez podmiot uprawniony na ⏎ 3"
+        },
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-13",
+          "excerpt": "3"
+        },
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-20",
+          "excerpt": "5"
+        }
+      ],
+      "pl-kis-listing-06-wis.json:0": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-35",
+          "excerpt": "blicznej, są klasyfikowane według Nomenklatury scalonej (CN) ⏎ lub klasyfikacji wydanych na podstawie przepisów o statys"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-59",
+          "excerpt": "ą tych produktów jest to, że powracają one do stanu ciekłego ⏎ lub półciekłego, w temperaturze otoczenia zbliżonej do 0 "
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-78",
+          "excerpt": "ręczenia decyzji o zmianie WIS albo decyzji o uchyleniu WIS, ⏎ albo"
+        }
+      ],
+      "pl-kis-listing-09-wis-uch.json:0": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-74",
+          "excerpt": " owocowych, z orzechów i warzywnych, objętych pozycją 2009”, ⏎ czy do pozycji"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-111",
+          "excerpt": " usług podobnych wobec siebie, które w następstwie odesłania ⏎ do kodów CN, mógłby podlegać odmiennemu traktowaniu dla p"
+        }
+      ],
+      "pl-kis-listing-17-opw.json:0": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-3",
+          "excerpt": "akres wniosku o opinię w sprawie opodatkowania wyrównawczego ⏎ 1 stycznia 2026 r. wpłynął wniosek z 1 stycznia 2026 r. o"
+        },
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-4",
+          "excerpt": "1 stycznia 2026 r. wpłynął wniosek z 1 stycznia 2026 r. o opinię w sprawie opodatkowania wyrównawczego. Przedmiotowy wni"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-133",
+          "excerpt": "ion in the Transition Year and subsequent years. Rather than ⏎ requiring an MNE Group to undertake complex calculations "
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-212",
+          "excerpt": "f a Constituent Entity for the Fiscal Year shall be equal to ⏎ the current tax expense accrued in its Financial Accounti"
+        }
+      ],
+      "pl-kis-listing-18-opw-odm.json:0": [
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-4",
+          "excerpt": "29 stycznia 2026 r. wpłynął wniosek z 28 stycznia 2026 r. o opinię w sprawie opodatkowania wyrównawczego. 3 czerwca 2026"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-74",
+          "excerpt": "iałający w reżimie prawnym ułatwiającym pozyskanie kapitału, ⏎ mogłyby zostać osiągnięte niezależnie od tego, czy powoła"
+        }
+      ]
+    },
+    "pl-uodo": {
+      "conformance (synthetic field census; recorded documents where supplied)": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-3",
+          "excerpt": " str. 35), zwanego dalej również „rozporządzeniem 2016/679”, ⏎ po przeprowadzeniu wszczętego z urzędu postępowania admin"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-4",
+          "excerpt": "ą w G. przy ul. (…), Prezes Urzędu Ochrony Danych Osobowych, ⏎ stwierdzając naruszenie przez Prokuraturę Rejonową w G. z"
+        }
+      ],
+      "pl-uodo-listing-2023.json.gz:14": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-3",
+          "excerpt": " str. 35), zwanego dalej również „rozporządzeniem 2016/679”, ⏎ po przeprowadzeniu wszczętego z urzędu postępowania admin"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-4",
+          "excerpt": "ą w G. przy ul. (…), Prezes Urzędu Ochrony Danych Osobowych, ⏎ stwierdzając naruszenie przez Prokuraturę Rejonową w G. z"
+        }
+      ],
+      "pl-uodo-zsoss-440-82-2019.xml:recorded-listing-context": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-3",
+          "excerpt": "em i zwalczaniem przestępczości (Dz. U. z 2019 r. poz. 125), ⏎ po przeprowadzeniu postępowania administracyjnego w spraw"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-4",
+          "excerpt": "ionej jego danych osobowych przez Prokuraturę Okręgową w W., ⏎ umarzam postępowanie"
+        }
+      ]
+    },
+    "pl-uokik": {
+      "conformance (synthetic field census; recorded documents where supplied)": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-9",
+          "excerpt": "10 r. Prezes Urzędu Ochrony Konkurencji i Konsumentów (dalej ⏎ jako „Prezes Urzędu” lub „organ antymonopolowy”) wszczął "
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-10",
+          "excerpt": "ub „organ antymonopolowy”) wszczął postępowanie wyjaśniające ⏎ o sygn. akt DOK1-400-1/10/MF. (2) W toku ww. postępowania"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-12",
+          "excerpt": "czącymi systemu dystrybucji nawozów ogrodniczych oraz chemii ⏎ gospodarczej, kosmetyków i farmaceutyków wskazując, -e po"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-13",
+          "excerpt": "ków i farmaceutyków wskazując, -e postępowanie to ma na celu ⏎ ustalenie, czy doszło do naruszenia przepisów ustawy o oc"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-14",
+          "excerpt": "doszło do naruszenia przepisów ustawy o ochronie konkurencji ⏎ i konsumentów. Ponadto, Inco-Veritas S.A. z własnej inicj"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-16",
+          "excerpt": "śnieniami dotyczącymi systemu dystrybucji ww. grup produktów ⏎ w kontekście ewentualnego naruszenia przepisów wskazanej "
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-17",
+          "excerpt": "ww. postępowania wyjaśniającego przeprowadzono kontrolę wraz ⏎ z przeszukaniem Inco-Veritas S.A. z siedzibą w Warszawie."
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-18",
+          "excerpt": "es Urzędu działając na podstawie art. 49 ust. 1 oraz art. 88 ⏎ ust. 2 w zw. z art. 85 ustawy o ochronie konkurencji i ko"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-19",
+          "excerpt": " art. 85 ustawy o ochronie konkurencji i konsumentów wszczął ⏎ postępowanie w sprawie nało-enia na Inco-Veritas S.A. z s"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-20",
+          "excerpt": "e nało-enia na Inco-Veritas S.A. z siedzibą w Warszawie kary ⏎ pienię-nej, o której mowa w art. 106 ust. 2 pkt 3 ustawy "
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-25",
+          "excerpt": "polowy na podstawie zebranego w sprawie materiału dowodowego ⏎ ustalił, co następuje."
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-30",
+          "excerpt": "rców na krajowym rynku dystrybucji nawozów ogrodniczych oraz ⏎ 2 na krajowym rynku dystrybucji produktów chemii gospodar"
+        },
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-31",
+          "excerpt": "2 na krajowym rynku dystrybucji produktów chemii gospodarczej, kosmetyków i farmaceutyków, w szczególności ustalenie czy"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-33",
+          "excerpt": "dzenia kontroli k. 4-7; postanowienie SOKiK wyra,ające zgodę ⏎ na przeprowadzenie przeszukania k. 8-9)"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-42",
+          "excerpt": "m w trakcie kontroli. Kontrolujący, w celu sprawdzenia, jaki ⏎ 3 plik został usunięty posłu-yli się funkcją „przywróć”. "
+        },
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-43",
+          "excerpt": "3 plik został usunięty posłu-yli się funkcją „przywróć”. Plik został przywrócony, jednak-e nie mo-na było ustalić w jaki"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-51",
+          "excerpt": "w oddziale Inco-Veritas S.A. k. 40 oraz notatka z pozyskania ⏎ i zabezpieczenia materiału dowodowego w formie elektronic"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-55",
+          "excerpt": "z działań podejmowanych przez [informacja utajniona - pkt 20 ⏎ załącznika do decyzji] nie zmierzały do niszczenia, przer"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-56",
+          "excerpt": "a do decyzji] nie zmierzały do niszczenia, przerabiania, czy ⏎ ukrywania dokumentów objętych kontrolą; za takie działani"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-57",
+          "excerpt": "ia dokumentów objętych kontrolą; za takie działanie nie mo-e ⏎ uchodzić przeniesienie spornego pliku do foldera „kosz”, "
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-58",
+          "excerpt": "eniesienie spornego pliku do foldera „kosz”, nie stanowi ono ⏎ bowiem -adnej z opisanych powy-ej czynności;"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-60",
+          "excerpt": "rwca 2010 r. o godzinie 11.00 [informacja utajniona – pkt 21 ⏎ załącznika do decyzji] nie miał wiedzy na temat prowadzon"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-61",
+          "excerpt": "ecyzji] nie miał wiedzy na temat prowadzonej kontroli, a tym ⏎ bardziej na temat jej zakresu, co w ocenie strony wyklucz"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-62",
+          "excerpt": " na temat jej zakresu, co w ocenie strony wyklucza mo-liwość ⏎ 4"
+        },
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-63",
+          "excerpt": "4"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-64",
+          "excerpt": "działań dających się zakwalifikować jako brak współdziałania ⏎ w jej toku;"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-66",
+          "excerpt": "acja utajniona - pkt 22 załącznika do decyzji] współpracował ⏎ z kontrolującymi w toku kontroli, w szczególności w zakre"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-67",
+          "excerpt": " w toku kontroli, w szczególności w zakresie odnalezienia na ⏎ twardym dysku spornego pliku oraz przekazał kontrolującym"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-68",
+          "excerpt": "sku spornego pliku oraz przekazał kontrolującym przedmiotowy ⏎ dokument w wersji papierowej. Zachowanie to nie mo-e zate"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-69",
+          "excerpt": "rsji papierowej. Zachowanie to nie mo-e zatem być traktowane ⏎ jako brak współpracy w toku kontroli."
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-71",
+          "excerpt": "n antymonopolowy w oparciu o powy'szy stan faktyczny zwa'ył, ⏎ co następuje."
+        },
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-78",
+          "excerpt": "5"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-80",
+          "excerpt": "i, nale-y uznać za kwalifikowaną postać braku współdziałania ⏎ 1 w toku kontroli ."
+        },
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-81",
+          "excerpt": "1 w toku kontroli ."
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-82",
+          "excerpt": "wanego, obcią-a kontrolowanego przedsiębiorcę bez względu na ⏎ 2 to, czy wiedział on lub akceptował taką obstrukcję ."
+        },
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-83",
+          "excerpt": "2 to, czy wiedział on lub akceptował taką obstrukcję ."
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-89",
+          "excerpt": "aśnić, i- usunięcie z pierwotnej lokalizacji pliku dokumentu ⏎ 1"
+        },
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-90",
+          "excerpt": "1"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-91",
+          "excerpt": ". Stawicki, E. Stawicki (red.) Ustawa o ochronie konkurencji ⏎ i konsumentów. Komentarz, LEX, 2010. Por. równie- C. Bana"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-92",
+          "excerpt": ". równie- C. Banasiński i E.Piontek (red.) Ustawa o ochronie ⏎ konkurencji i konsumentów. Komentarz, Wydawnictwo LexisNe"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-94",
+          "excerpt": ". Stawicki, E. Stawicki (red.) Ustawa o ochronie konkurencji ⏎ i konsumentów. Komentarz, LEX, 2010 oraz decyzja Prezesa "
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-95",
+          "excerpt": "yzja Prezesa Urzędu z dnia 19 kwietnia 2007 r. nr DOK-48/07, ⏎ dostępna na www.uokik.gov.pl. Podobnie M. Król-Bogomilska"
+        },
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-99",
+          "excerpt": "6 było działaniem ewidentnie sprzecznym z obowiązkiem kontrolowanego - wynikającym z art. 105d ust. 1 pkt 3 ustawy o och"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-106",
+          "excerpt": " w „koszu”, który jest czymś w rodzaju siatki bezpieczeństwa ⏎ 7 przy usuwaniu plików lub folderów, w sytuacji gdyby u-y"
+        },
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-107",
+          "excerpt": "7 przy usuwaniu plików lub folderów, w sytuacji gdyby u-ytkownik pomyłkowo usunął"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-107",
+          "excerpt": "w lub folderów, w sytuacji gdyby u-ytkownik pomyłkowo usunął ⏎ 3 plik ."
+        },
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-108",
+          "excerpt": "3 plik ."
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-109",
+          "excerpt": "no „pozbywać się czegoś; sprawiać, -e coś (przewa-nie złego, ⏎ 4 niekorzystnego) przestaje istnieć” . Mniej obeznany u-y"
+        },
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-110",
+          "excerpt": "4 niekorzystnego) przestaje istnieć” . Mniej obeznany u-ytkownik komputera chcący pozbyć się pliku mo-e nie zdawać sobie"
+        },
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-116",
+          "excerpt": "3"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-119",
+          "excerpt": "wersalny słownik języka polskiego” pod red. Prof. S. Dubisza ⏎ tom 4, Wydawnictwo Naukowe PWN Warszawa 2003, s. 1037-103"
+        },
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-121",
+          "excerpt": "8"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-123",
+          "excerpt": "miocie i zakresie oraz o obowiązku współdziałania w jej toku ⏎ 5 i ewentualnych konsekwencjach braku takiego współdziała"
+        },
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-124",
+          "excerpt": "5 i ewentualnych konsekwencjach braku takiego współdziałania . Przedsiębiorca ma obowiązek zorganizowania swojej działal"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-124",
+          "excerpt": "i kontroli, zostaną przekazane pracownikom oraz, -e będą się ⏎ 6 oni stosowali do tego obowiązku ."
+        },
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-125",
+          "excerpt": "6 oni stosowali do tego obowiązku ."
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-127",
+          "excerpt": "iorcy objętą kontrolą i zapewnienie, aby ich zachowanie było ⏎ 5"
+        },
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-128",
+          "excerpt": "5"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-130",
+          "excerpt": " Urzędu z dnia 19 kwietnia 2007 r. nr DOK-48/07, dostępna na ⏎ www.uokik.gov.pl. 6"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-134",
+          "excerpt": "3, dostępne na http://ec.europa.eu/competition/index_en.html ⏎ 9 zgodne z wynikającym z ustawy o ochronie konkurencji i "
+        },
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-135",
+          "excerpt": "9 zgodne z wynikającym z ustawy o ochronie konkurencji i konsumentów obowiązkiem współdziałania przez przedsiębiorcę w j"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-137",
+          "excerpt": "owej wersji usuniętego pliku. Zdaniem spółki z powy-szego ma ⏎ 10 wynikać, i- [informacja utajniona – pkt 66 załącznika "
+        },
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-138",
+          "excerpt": "10 wynikać, i- [informacja utajniona – pkt 66 załącznika do decyzji] w pełni współdziałał w toku kontroli."
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-140",
+          "excerpt": "zględu na to, czy miały one wpływ na dalszy przebieg działań ⏎ 7 kontrolnych . W przedmiotowej sprawie zatem bez znaczen"
+        },
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-141",
+          "excerpt": "7 kontrolnych . W przedmiotowej sprawie zatem bez znaczenia dla mo-liwości nało-enia kary pienię-nej za brak współdziała"
+        },
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-144",
+          "excerpt": "7"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-146",
+          "excerpt": "index_en.html oraz decyzja Prezesa Urzędu z dnia 4 listopada ⏎ 2010 r. nr DOK–9/2010 dostępna na: www.uokik.gov.pl."
+        },
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-148",
+          "excerpt": "11"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-156",
+          "excerpt": "akresie nakładania kary przez Prezesa Urzędu spełnia funkcję ⏎ 8 okoliczności obcią-ającej . W niniejszej sprawie nie za"
+        },
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-157",
+          "excerpt": "8 okoliczności obcią-ającej . W niniejszej sprawie nie zaistniała podstawa do podwy-szenia wymiaru kary. Inco-Veritas S."
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-157",
+          "excerpt": "-Veritas S.A. nie był bowiem wcześniej prawomocnie uznany za ⏎ 8"
+        },
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-158",
+          "excerpt": "8"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-159",
+          "excerpt": "A. Jurkowska, D. Miąsik (red.) Ustawa o ochronie konkurencji ⏎ i konsumentów. Komentarz, Wydawnictwo C.H. Beck, Warszawa"
+        },
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-163",
+          "excerpt": "12 odpowiedzialnego za naruszenie przepisów o ochronie konkurencji określających obowiązki przedsiębiorcy w związku z pr"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-169",
+          "excerpt": "ględnia to, -e kara pienię-na nakładana przez Prezesa Urzędu ⏎ 13 powinna stanowić dla karanego przedsiębiorcy na tyle z"
+        },
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-170",
+          "excerpt": "13 powinna stanowić dla karanego przedsiębiorcy na tyle zauwa-alną dolegliwość, aby zniechęcić go do podobnych zachowań "
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-174",
+          "excerpt": " O-arów S.A. z siedzibą w Karsach karę pienię-ną w wysokości ⏎ 9 2.000.000 zł za zmianę treści dokumentu objętego zakres"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-175",
+          "excerpt": "iu kontrolującym wejścia na teren pomieszczeń kontrolowanego ⏎ 10 przedsiębiorcy . Ponadto Prezes Urzędu nało-ył na spół"
+        },
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-176",
+          "excerpt": "10 przedsiębiorcy . Ponadto Prezes Urzędu nało-ył na spółkę Polkomtel S.A. z siedzibą w Warszawie karę pienię-ną w wysok"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-176",
+          "excerpt": "nego rozpoczęcia czynności kontrolnych; niewykonanie -ądania ⏎ 9"
+        },
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-177",
+          "excerpt": "9"
+        },
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-180",
+          "excerpt": "14 kontrolujących przekazania dokumentów oraz niewydanie dysku twardego, na którym zapisane zostały w toku kontroli dane"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-181",
+          "excerpt": " plomby zało-onej przez kontrolujących w celu zabezpieczenia ⏎ 11 jednego z pomieszczeń kontrolowanego przedsiębiorcy . "
+        },
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-182",
+          "excerpt": "11 jednego z pomieszczeń kontrolowanego przedsiębiorcy . Za podobną obstrukcję kontroli, tj. za złamanie plomby, Komisja"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-182",
+          "excerpt": "złamanie plomby, Komisja Europejska ukarała ostatnio równie- ⏎ 12 Suez Environnement i Lyonnaise des Eaux karą w wysokoś"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-183",
+          "excerpt": "gające na zaniechaniu zablokowania kont e-mailowych, odmowie ⏎ 13 otwarcia zakodowanych e-maili czy przekierowaniu przyc"
+        },
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-184",
+          "excerpt": "13 otwarcia zakodowanych e-maili czy przekierowaniu przychodzących e-maili oraz przeciwko Sanofi-Aventis S.A. za odmowę "
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-184",
+          "excerpt": " dokumentów zanim francuski organ antymonopolowy przedstawił ⏎ 14 nakaz sądu ."
+        },
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-185",
+          "excerpt": "14 nakaz sądu ."
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-186",
+          "excerpt": "em o 30% wysokość kary za stwierdzoną praktykę ograniczającą ⏎ 15 konkurencję . Podobnie w sprawie Industrial Bags Komis"
+        },
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-187",
+          "excerpt": "15 konkurencję . Podobnie w sprawie Industrial Bags Komisja potraktowała zniszczenie podczas kontroli dokumentu przez pr"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-187",
+          "excerpt": "ącą podwy-szenie o 10% wysokość kary za stwierdzoną praktykę ⏎ 16 ograniczającą konkurencję ."
+        },
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-188",
+          "excerpt": "16 ograniczającą konkurencję ."
+        },
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-192",
+          "excerpt": "11"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-194",
+          "excerpt": "n/index_en.html. Decyzję Komisji potwierdził Sąd UE wyrokiem ⏎ z dnia 15 grudnia 2010 w sprawie T-141/08. 12"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-198",
+          "excerpt": "tion.do?reference=IP/11/632&format=HTML&aged=0&language=EN&g ⏎ uiLanguage=en 13"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-202",
+          "excerpt": "tion.do?reference=IP/10/1748&format=HTML&aged=1&language=EN& ⏎ guiLanguage=en 14"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-208",
+          "excerpt": "petition/antitrust/cases/dec_docs/38432/38432_526_5.pdf, pkt ⏎ 219 i n. 16"
+        },
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-209",
+          "excerpt": "219 i n. 16"
+        },
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-212",
+          "excerpt": "15"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-215",
+          "excerpt": "ust. 1 ustawy o ochronie konkurencji i konsumentów w związku ⏎ 28"
+        },
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-216",
+          "excerpt": "28"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-219",
+          "excerpt": "rszawie – Sądu Ochrony Konkurencji i Konsumentów, w terminie ⏎ dwutygodniowym od dnia jej doręczenia, za pośrednictwem P"
+        }
+      ],
+      "pl-uokik-view-2011.json.gz:200": [
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-9",
+          "excerpt": "10 r. Prezes Urzędu Ochrony Konkurencji i Konsumentów (dalej ⏎ jako „Prezes Urzędu” lub „organ antymonopolowy”) wszczął "
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-10",
+          "excerpt": "ub „organ antymonopolowy”) wszczął postępowanie wyjaśniające ⏎ o sygn. akt DOK1-400-1/10/MF. (2) W toku ww. postępowania"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-12",
+          "excerpt": "czącymi systemu dystrybucji nawozów ogrodniczych oraz chemii ⏎ gospodarczej, kosmetyków i farmaceutyków wskazując, -e po"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-13",
+          "excerpt": "ków i farmaceutyków wskazując, -e postępowanie to ma na celu ⏎ ustalenie, czy doszło do naruszenia przepisów ustawy o oc"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-14",
+          "excerpt": "doszło do naruszenia przepisów ustawy o ochronie konkurencji ⏎ i konsumentów. Ponadto, Inco-Veritas S.A. z własnej inicj"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-16",
+          "excerpt": "śnieniami dotyczącymi systemu dystrybucji ww. grup produktów ⏎ w kontekście ewentualnego naruszenia przepisów wskazanej "
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-17",
+          "excerpt": "ww. postępowania wyjaśniającego przeprowadzono kontrolę wraz ⏎ z przeszukaniem Inco-Veritas S.A. z siedzibą w Warszawie."
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-18",
+          "excerpt": "es Urzędu działając na podstawie art. 49 ust. 1 oraz art. 88 ⏎ ust. 2 w zw. z art. 85 ustawy o ochronie konkurencji i ko"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-19",
+          "excerpt": " art. 85 ustawy o ochronie konkurencji i konsumentów wszczął ⏎ postępowanie w sprawie nało-enia na Inco-Veritas S.A. z s"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-20",
+          "excerpt": "e nało-enia na Inco-Veritas S.A. z siedzibą w Warszawie kary ⏎ pienię-nej, o której mowa w art. 106 ust. 2 pkt 3 ustawy "
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-25",
+          "excerpt": "polowy na podstawie zebranego w sprawie materiału dowodowego ⏎ ustalił, co następuje."
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-30",
+          "excerpt": "rców na krajowym rynku dystrybucji nawozów ogrodniczych oraz ⏎ 2 na krajowym rynku dystrybucji produktów chemii gospodar"
+        },
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-31",
+          "excerpt": "2 na krajowym rynku dystrybucji produktów chemii gospodarczej, kosmetyków i farmaceutyków, w szczególności ustalenie czy"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-33",
+          "excerpt": "dzenia kontroli k. 4-7; postanowienie SOKiK wyra,ające zgodę ⏎ na przeprowadzenie przeszukania k. 8-9)"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-42",
+          "excerpt": "m w trakcie kontroli. Kontrolujący, w celu sprawdzenia, jaki ⏎ 3 plik został usunięty posłu-yli się funkcją „przywróć”. "
+        },
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-43",
+          "excerpt": "3 plik został usunięty posłu-yli się funkcją „przywróć”. Plik został przywrócony, jednak-e nie mo-na było ustalić w jaki"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-51",
+          "excerpt": "w oddziale Inco-Veritas S.A. k. 40 oraz notatka z pozyskania ⏎ i zabezpieczenia materiału dowodowego w formie elektronic"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-55",
+          "excerpt": "z działań podejmowanych przez [informacja utajniona - pkt 20 ⏎ załącznika do decyzji] nie zmierzały do niszczenia, przer"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-56",
+          "excerpt": "a do decyzji] nie zmierzały do niszczenia, przerabiania, czy ⏎ ukrywania dokumentów objętych kontrolą; za takie działani"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-57",
+          "excerpt": "ia dokumentów objętych kontrolą; za takie działanie nie mo-e ⏎ uchodzić przeniesienie spornego pliku do foldera „kosz”, "
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-58",
+          "excerpt": "eniesienie spornego pliku do foldera „kosz”, nie stanowi ono ⏎ bowiem -adnej z opisanych powy-ej czynności;"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-60",
+          "excerpt": "rwca 2010 r. o godzinie 11.00 [informacja utajniona – pkt 21 ⏎ załącznika do decyzji] nie miał wiedzy na temat prowadzon"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-61",
+          "excerpt": "ecyzji] nie miał wiedzy na temat prowadzonej kontroli, a tym ⏎ bardziej na temat jej zakresu, co w ocenie strony wyklucz"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-62",
+          "excerpt": " na temat jej zakresu, co w ocenie strony wyklucza mo-liwość ⏎ 4"
+        },
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-63",
+          "excerpt": "4"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-64",
+          "excerpt": "działań dających się zakwalifikować jako brak współdziałania ⏎ w jej toku;"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-66",
+          "excerpt": "acja utajniona - pkt 22 załącznika do decyzji] współpracował ⏎ z kontrolującymi w toku kontroli, w szczególności w zakre"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-67",
+          "excerpt": " w toku kontroli, w szczególności w zakresie odnalezienia na ⏎ twardym dysku spornego pliku oraz przekazał kontrolującym"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-68",
+          "excerpt": "sku spornego pliku oraz przekazał kontrolującym przedmiotowy ⏎ dokument w wersji papierowej. Zachowanie to nie mo-e zate"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-69",
+          "excerpt": "rsji papierowej. Zachowanie to nie mo-e zatem być traktowane ⏎ jako brak współpracy w toku kontroli."
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-71",
+          "excerpt": "n antymonopolowy w oparciu o powy'szy stan faktyczny zwa'ył, ⏎ co następuje."
+        },
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-78",
+          "excerpt": "5"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-80",
+          "excerpt": "i, nale-y uznać za kwalifikowaną postać braku współdziałania ⏎ 1 w toku kontroli ."
+        },
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-81",
+          "excerpt": "1 w toku kontroli ."
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-82",
+          "excerpt": "wanego, obcią-a kontrolowanego przedsiębiorcę bez względu na ⏎ 2 to, czy wiedział on lub akceptował taką obstrukcję ."
+        },
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-83",
+          "excerpt": "2 to, czy wiedział on lub akceptował taką obstrukcję ."
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-89",
+          "excerpt": "aśnić, i- usunięcie z pierwotnej lokalizacji pliku dokumentu ⏎ 1"
+        },
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-90",
+          "excerpt": "1"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-91",
+          "excerpt": ". Stawicki, E. Stawicki (red.) Ustawa o ochronie konkurencji ⏎ i konsumentów. Komentarz, LEX, 2010. Por. równie- C. Bana"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-92",
+          "excerpt": ". równie- C. Banasiński i E.Piontek (red.) Ustawa o ochronie ⏎ konkurencji i konsumentów. Komentarz, Wydawnictwo LexisNe"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-94",
+          "excerpt": ". Stawicki, E. Stawicki (red.) Ustawa o ochronie konkurencji ⏎ i konsumentów. Komentarz, LEX, 2010 oraz decyzja Prezesa "
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-95",
+          "excerpt": "yzja Prezesa Urzędu z dnia 19 kwietnia 2007 r. nr DOK-48/07, ⏎ dostępna na www.uokik.gov.pl. Podobnie M. Król-Bogomilska"
+        },
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-99",
+          "excerpt": "6 było działaniem ewidentnie sprzecznym z obowiązkiem kontrolowanego - wynikającym z art. 105d ust. 1 pkt 3 ustawy o och"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-106",
+          "excerpt": " w „koszu”, który jest czymś w rodzaju siatki bezpieczeństwa ⏎ 7 przy usuwaniu plików lub folderów, w sytuacji gdyby u-y"
+        },
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-107",
+          "excerpt": "7 przy usuwaniu plików lub folderów, w sytuacji gdyby u-ytkownik pomyłkowo usunął"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-107",
+          "excerpt": "w lub folderów, w sytuacji gdyby u-ytkownik pomyłkowo usunął ⏎ 3 plik ."
+        },
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-108",
+          "excerpt": "3 plik ."
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-109",
+          "excerpt": "no „pozbywać się czegoś; sprawiać, -e coś (przewa-nie złego, ⏎ 4 niekorzystnego) przestaje istnieć” . Mniej obeznany u-y"
+        },
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-110",
+          "excerpt": "4 niekorzystnego) przestaje istnieć” . Mniej obeznany u-ytkownik komputera chcący pozbyć się pliku mo-e nie zdawać sobie"
+        },
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-116",
+          "excerpt": "3"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-119",
+          "excerpt": "wersalny słownik języka polskiego” pod red. Prof. S. Dubisza ⏎ tom 4, Wydawnictwo Naukowe PWN Warszawa 2003, s. 1037-103"
+        },
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-121",
+          "excerpt": "8"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-123",
+          "excerpt": "miocie i zakresie oraz o obowiązku współdziałania w jej toku ⏎ 5 i ewentualnych konsekwencjach braku takiego współdziała"
+        },
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-124",
+          "excerpt": "5 i ewentualnych konsekwencjach braku takiego współdziałania . Przedsiębiorca ma obowiązek zorganizowania swojej działal"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-124",
+          "excerpt": "i kontroli, zostaną przekazane pracownikom oraz, -e będą się ⏎ 6 oni stosowali do tego obowiązku ."
+        },
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-125",
+          "excerpt": "6 oni stosowali do tego obowiązku ."
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-127",
+          "excerpt": "iorcy objętą kontrolą i zapewnienie, aby ich zachowanie było ⏎ 5"
+        },
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-128",
+          "excerpt": "5"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-130",
+          "excerpt": " Urzędu z dnia 19 kwietnia 2007 r. nr DOK-48/07, dostępna na ⏎ www.uokik.gov.pl. 6"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-134",
+          "excerpt": "3, dostępne na http://ec.europa.eu/competition/index_en.html ⏎ 9 zgodne z wynikającym z ustawy o ochronie konkurencji i "
+        },
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-135",
+          "excerpt": "9 zgodne z wynikającym z ustawy o ochronie konkurencji i konsumentów obowiązkiem współdziałania przez przedsiębiorcę w j"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-137",
+          "excerpt": "owej wersji usuniętego pliku. Zdaniem spółki z powy-szego ma ⏎ 10 wynikać, i- [informacja utajniona – pkt 66 załącznika "
+        },
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-138",
+          "excerpt": "10 wynikać, i- [informacja utajniona – pkt 66 załącznika do decyzji] w pełni współdziałał w toku kontroli."
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-140",
+          "excerpt": "zględu na to, czy miały one wpływ na dalszy przebieg działań ⏎ 7 kontrolnych . W przedmiotowej sprawie zatem bez znaczen"
+        },
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-141",
+          "excerpt": "7 kontrolnych . W przedmiotowej sprawie zatem bez znaczenia dla mo-liwości nało-enia kary pienię-nej za brak współdziała"
+        },
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-144",
+          "excerpt": "7"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-146",
+          "excerpt": "index_en.html oraz decyzja Prezesa Urzędu z dnia 4 listopada ⏎ 2010 r. nr DOK–9/2010 dostępna na: www.uokik.gov.pl."
+        },
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-148",
+          "excerpt": "11"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-156",
+          "excerpt": "akresie nakładania kary przez Prezesa Urzędu spełnia funkcję ⏎ 8 okoliczności obcią-ającej . W niniejszej sprawie nie za"
+        },
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-157",
+          "excerpt": "8 okoliczności obcią-ającej . W niniejszej sprawie nie zaistniała podstawa do podwy-szenia wymiaru kary. Inco-Veritas S."
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-157",
+          "excerpt": "-Veritas S.A. nie był bowiem wcześniej prawomocnie uznany za ⏎ 8"
+        },
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-158",
+          "excerpt": "8"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-159",
+          "excerpt": "A. Jurkowska, D. Miąsik (red.) Ustawa o ochronie konkurencji ⏎ i konsumentów. Komentarz, Wydawnictwo C.H. Beck, Warszawa"
+        },
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-163",
+          "excerpt": "12 odpowiedzialnego za naruszenie przepisów o ochronie konkurencji określających obowiązki przedsiębiorcy w związku z pr"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-169",
+          "excerpt": "ględnia to, -e kara pienię-na nakładana przez Prezesa Urzędu ⏎ 13 powinna stanowić dla karanego przedsiębiorcy na tyle z"
+        },
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-170",
+          "excerpt": "13 powinna stanowić dla karanego przedsiębiorcy na tyle zauwa-alną dolegliwość, aby zniechęcić go do podobnych zachowań "
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-174",
+          "excerpt": " O-arów S.A. z siedzibą w Karsach karę pienię-ną w wysokości ⏎ 9 2.000.000 zł za zmianę treści dokumentu objętego zakres"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-175",
+          "excerpt": "iu kontrolującym wejścia na teren pomieszczeń kontrolowanego ⏎ 10 przedsiębiorcy . Ponadto Prezes Urzędu nało-ył na spół"
+        },
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-176",
+          "excerpt": "10 przedsiębiorcy . Ponadto Prezes Urzędu nało-ył na spółkę Polkomtel S.A. z siedzibą w Warszawie karę pienię-ną w wysok"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-176",
+          "excerpt": "nego rozpoczęcia czynności kontrolnych; niewykonanie -ądania ⏎ 9"
+        },
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-177",
+          "excerpt": "9"
+        },
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-180",
+          "excerpt": "14 kontrolujących przekazania dokumentów oraz niewydanie dysku twardego, na którym zapisane zostały w toku kontroli dane"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-181",
+          "excerpt": " plomby zało-onej przez kontrolujących w celu zabezpieczenia ⏎ 11 jednego z pomieszczeń kontrolowanego przedsiębiorcy . "
+        },
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-182",
+          "excerpt": "11 jednego z pomieszczeń kontrolowanego przedsiębiorcy . Za podobną obstrukcję kontroli, tj. za złamanie plomby, Komisja"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-182",
+          "excerpt": "złamanie plomby, Komisja Europejska ukarała ostatnio równie- ⏎ 12 Suez Environnement i Lyonnaise des Eaux karą w wysokoś"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-183",
+          "excerpt": "gające na zaniechaniu zablokowania kont e-mailowych, odmowie ⏎ 13 otwarcia zakodowanych e-maili czy przekierowaniu przyc"
+        },
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-184",
+          "excerpt": "13 otwarcia zakodowanych e-maili czy przekierowaniu przychodzących e-maili oraz przeciwko Sanofi-Aventis S.A. za odmowę "
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-184",
+          "excerpt": " dokumentów zanim francuski organ antymonopolowy przedstawił ⏎ 14 nakaz sądu ."
+        },
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-185",
+          "excerpt": "14 nakaz sądu ."
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-186",
+          "excerpt": "em o 30% wysokość kary za stwierdzoną praktykę ograniczającą ⏎ 15 konkurencję . Podobnie w sprawie Industrial Bags Komis"
+        },
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-187",
+          "excerpt": "15 konkurencję . Podobnie w sprawie Industrial Bags Komisja potraktowała zniszczenie podczas kontroli dokumentu przez pr"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-187",
+          "excerpt": "ącą podwy-szenie o 10% wysokość kary za stwierdzoną praktykę ⏎ 16 ograniczającą konkurencję ."
+        },
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-188",
+          "excerpt": "16 ograniczającą konkurencję ."
+        },
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-192",
+          "excerpt": "11"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-194",
+          "excerpt": "n/index_en.html. Decyzję Komisji potwierdził Sąd UE wyrokiem ⏎ z dnia 15 grudnia 2010 w sprawie T-141/08. 12"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-198",
+          "excerpt": "tion.do?reference=IP/11/632&format=HTML&aged=0&language=EN&g ⏎ uiLanguage=en 13"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-202",
+          "excerpt": "tion.do?reference=IP/10/1748&format=HTML&aged=1&language=EN& ⏎ guiLanguage=en 14"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-208",
+          "excerpt": "petition/antitrust/cases/dec_docs/38432/38432_526_5.pdf, pkt ⏎ 219 i n. 16"
+        },
+        {
+          "rule": "stray-leading-number",
+          "anchorId": "p-209",
+          "excerpt": "219 i n. 16"
+        },
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-212",
+          "excerpt": "15"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-215",
+          "excerpt": "ust. 1 ustawy o ochronie konkurencji i konsumentów w związku ⏎ 28"
+        },
+        {
+          "rule": "page-number-block",
+          "anchorId": "p-216",
+          "excerpt": "28"
+        },
+        {
+          "rule": "sentence-cut",
+          "anchorId": "p-219",
+          "excerpt": "rszawie – Sądu Ochrony Konkurencji i Konsumentów, w terminie ⏎ dwutygodniowym od dnia jej doręczenia, za pośrednictwem P"
+        }
+      ]
+    }
+  }
+}
