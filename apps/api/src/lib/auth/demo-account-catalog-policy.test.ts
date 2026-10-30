@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import type { statements } from "@stll/permissions";
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import { ACCOUNT_ACCESS } from "@/api/lib/api-handlers";
@@ -11,7 +12,6 @@ import {
   NO_AUDIT,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 
 import { discoverSafeHandlers } from "../../../scripts/lib/enumerate-safe-handlers";

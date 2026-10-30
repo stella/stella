@@ -232,6 +232,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "packages/sha256/src/**/*.ts",
   "packages/start-runtime/src/**/*.ts",
   "packages/template-packs/src/**/*.ts",
+  "packages/test-state/src/**/*.ts",
   "packages/text-normalize/src/**/*.ts",
   "packages/transcript/src/**/*.ts",
   "packages/uuid-codec/src/**/*.ts",

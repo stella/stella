@@ -4,6 +4,7 @@ import { and, eq, sql } from "drizzle-orm";
 
 import { withTimeout } from "@stll/concurrency/with-timeout";
 import { waitForExternalState } from "@stll/property-testing/external-state";
+import { createTestState } from "@stll/test-state";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
@@ -40,7 +41,6 @@ import {
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
 import { invoiceLinksSnapshot } from "@/api/tests/helpers/invoice-links-feature-access";
-import { createTestState } from "@/api/tests/helpers/test-state";
 
 const testState = createTestState({ file: import.meta.path, config: env });
 testState.beforeAll(() => {

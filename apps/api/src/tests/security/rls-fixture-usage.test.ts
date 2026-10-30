@@ -58,7 +58,7 @@ const callsOutsideSetup = (file: string, source: string): number[] => {
   for (const statement of program.body) {
     if (
       statement.type !== "ImportDeclaration" ||
-      statement.source.value !== "@/api/tests/helpers/test-state" ||
+      statement.source.value !== "@stll/test-state" ||
       statement.importKind === "type"
     ) {
       continue;
@@ -173,7 +173,7 @@ test("RLS fixtures are acquired during suite setup", async () => {
 });
 
 const fixtureImport =
-  'import { createTestState as createState } from "@/api/tests/helpers/test-state";';
+  'import { createTestState as createState } from "@stll/test-state";';
 
 test("RLS fixture setup follows the imported fixture owner and registration", () => {
   for (const source of [

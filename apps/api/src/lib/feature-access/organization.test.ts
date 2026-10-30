@@ -1,12 +1,12 @@
 import { expect, test } from "bun:test";
 
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import { isOrganizationFeatureEnabled } from "@/api/lib/feature-access/organization";
 import { buildFeatureAccessSnapshot } from "@/api/lib/feature-access/snapshot";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
-import { createTestState } from "@/api/tests/helpers/test-state";
 
 const state = createTestState({ file: import.meta.path, config: env });
 

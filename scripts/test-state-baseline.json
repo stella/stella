@@ -683,20 +683,5 @@
     "count": 5,
     "owner": "web",
     "reason": "Existing environment setup and restoration; migrate through createTestState."
-  },
-  "packages/property-testing/src/assert-property.test.ts": {
-    "count": 21,
-    "owner": "guards",
-    "reason": "Existing environment setup and restoration; migrate through createTestState."
-  },
-  "packages/property-testing/src/index.test.ts": {
-    "count": 6,
-    "owner": "guards",
-    "reason": "Existing environment setup and restoration; migrate through createTestState."
-  },
-  "packages/scripts/src/prepared-generated-sources.test.ts": {
-    "count": 10,
-    "owner": "guards",
-    "reason": "Existing environment setup and restoration; migrate through createTestState."
   }
 }

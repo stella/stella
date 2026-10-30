@@ -2,6 +2,8 @@ import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
+import { createTestState } from "@stll/test-state";
+
 import { invoiceSends } from "@/api/db/schema";
 import {
   createScopedDb,
@@ -25,7 +27,6 @@ import {
   createTestHandlerContext,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { seedInvoiceSendScaling } from "@/api/tests/read-scaling/invoice-sends";
 

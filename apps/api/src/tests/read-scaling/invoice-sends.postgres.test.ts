@@ -1,11 +1,12 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { createTestState } from "@stll/test-state";
+
 import { env } from "@/api/env";
 import { apiApp } from "@/api/server";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
-import { createTestState } from "@/api/tests/helpers/test-state";
 
 import {
   invoiceSendScalingScenarios,
