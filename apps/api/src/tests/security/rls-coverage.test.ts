@@ -587,6 +587,7 @@ describe("policy coverage", () => {
     "audit_logs",
     "chat_message_revisions",
     "document_review_finding_decisions",
+    "legal_list_item_source_decisions",
   ]);
   const INSERT_ONLY = new Set([
     "entity_deletion_cleanup_requests",

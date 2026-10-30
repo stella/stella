@@ -200,6 +200,7 @@ const fullDecision = {
     name: "Synthetic source",
   },
   sourceAttributionUrl: null,
+  sourceLanguages: null,
   sourceUrl: "https://publisher.example.test/decision",
   textFields: {
     abstract: absentText,

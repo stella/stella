@@ -647,6 +647,13 @@ describe("check-migration-safety", () => {
           `CREATE FUNCTION copy_documents() RETURNS void LANGUAGE plpgsql AS $$ BEGIN FOR item IN SELECT id FROM documents LOOP INSERT INTO documents_v2 (id) VALUES (item.id); END LOOP; END $$;`,
           "pre-deploy-row-loop",
         ],
+        // A trigger routine is not callable, but a DO block that loops is
+        // refused whatever routine it sits beside.
+        [
+          `CREATE FUNCTION touch_children() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NULL; END $$;
+          DO $$ BEGIN FOR item IN SELECT id FROM documents LOOP PERFORM item.id; END LOOP; END $$;`,
+          "pre-deploy-row-loop",
+        ],
       ] as const;
 
       for (const [sql, ruleId] of refused) {
@@ -663,6 +670,22 @@ describe("check-migration-safety", () => {
             FOREIGN KEY ("state_id") REFERENCES "document_states" ("id") NOT VALID;
           CREATE INDEX "document_states_slug_idx" ON "document_states" ("slug");
           INSERT INTO "document_states" ("id", "slug") VALUES (1, 'ready'), (2, 'archived');
+        `),
+      );
+    });
+
+    it("allows a trigger routine that loops over the rows a write touched", () => {
+      expectClean(
+        runChecker(`
+          SET lock_timeout = '1s';
+          SET statement_timeout = '5s';
+          CREATE FUNCTION touch_children() RETURNS trigger LANGUAGE plpgsql AS $$
+          BEGIN
+            FOR child IN SELECT id FROM documents WHERE parent_id = NEW.id LOOP
+              PERFORM child.id;
+            END LOOP;
+            RETURN NULL;
+          END $$;
         `),
       );
     });

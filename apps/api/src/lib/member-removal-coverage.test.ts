@@ -363,6 +363,8 @@ const RETAINED_MEMBER_COLUMNS = {
     "Retained attribution or request history; this column grants no matter membership.",
   "legal_list_item_reviews.reviewer_id":
     "Retained attribution or request history; this column grants no matter membership.",
+  "legal_list_item_source_decisions.actor_id":
+    "Retained attribution or request history; this column grants no matter membership.",
   "legal_list_item_sources.verified_by":
     "Retained attribution or request history; this column grants no matter membership.",
   "legal_list_item_sources.created_by":
