@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { QueryClient } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, test } from "bun:test";
 
+import { UI_LOCALES } from "@stll/locales";
 import type { UiLocale } from "@stll/locales";
 import { runInRequest } from "@stll/start-runtime/test-request";
 import { getFirstWeekday } from "@stll/ui/week";
@@ -21,6 +22,7 @@ import {
   serializePresentationPrefs,
 } from "@/lib/account/presentation-prefs/preferences";
 
+import { documentPresentationSnapshot } from "./document-presentation";
 import { withRequestI18n } from "./request-i18n.server";
 
 let initialI18nState = useI18nStore.getState();
@@ -162,5 +164,15 @@ test.each([
         prefs,
       );
     });
+  },
+);
+
+test.each(UI_LOCALES)(
+  "the serialized visitor snapshot retains %s independently of the live catalogue",
+  (visitorLocale) => {
+    const prefs = { ...defaultPresentationPrefs, visitorLocale };
+    const snapshot = documentPresentationSnapshot(prefs);
+    expect(snapshot.locale).toBe(visitorLocale);
+    expect(snapshot.prefs).toBe(prefs);
   },
 );

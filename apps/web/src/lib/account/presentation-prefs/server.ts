@@ -1,4 +1,4 @@
-import { createServerFn } from "@tanstack/react-start";
+import { createServerFn, createServerOnlyFn } from "@tanstack/react-start";
 import {
   getCookie,
   getRequestHeader,
@@ -30,7 +30,7 @@ const patchSchema = v.strictObject({
 
 const COOKIE_MAX_AGE = 365 * 24 * 60 * 60;
 
-const readPrefs = () => {
+export const readRequestPresentationPrefs = createServerOnlyFn(() => {
   // Remove this fallback one year after cutover, when old cookies have expired.
   const prefs = parsePresentationPrefsWithLegacySidebar({
     prefsCookie: getCookie(PRESENTATION_PREFS_COOKIE),
@@ -51,17 +51,17 @@ const readPrefs = () => {
         statuteLayoutsCookieSchema,
       ) ?? {},
   };
-};
+});
 
 export const readPresentationPrefs = createServerFn({ method: "GET" }).handler(
-  () => readPrefs(),
+  () => readRequestPresentationPrefs(),
 );
 
 export const writePresentationPrefs = createServerFn({ method: "POST" })
   .validator((input: Partial<PresentationPrefs>) => v.parse(patchSchema, input))
   .handler(({ data }) => {
     const prefs = v.parse(presentationPrefsSchema, {
-      ...readPrefs(),
+      ...readRequestPresentationPrefs(),
       ...data,
     });
     setCookie(PRESENTATION_PREFS_COOKIE, serializePresentationPrefs(prefs), {

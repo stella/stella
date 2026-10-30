@@ -38,6 +38,12 @@ const { decisionProvisionsForLinkingOptions, statutesResolveOptions } =
 const { provisionPreviewOptions } =
   await import("@/lib/statutes/provision-preview");
 const { toSafeId } = await import("@/lib/safe-id");
+const { PresentationPrefsProvider } =
+  await import("@/lib/account/presentation-prefs/provider");
+const { defaultPresentationPrefs } =
+  await import("@/lib/account/presentation-prefs/preferences");
+const { createTestPresentationPrefsSync } =
+  await import("@/lib/account/presentation-prefs/sync.test-fixtures");
 const { DecisionWorkspace } = await import("./decision-workspace");
 const { dockedChatLegalPayloads } =
   await import("../../../../../e2e/helpers/docked-chat-legal-payloads");
@@ -180,15 +186,20 @@ const renderReader = async () => {
   });
   await router.load();
   return render(
-    <IntlProvider locale="en" messages={messages} timeZone="UTC">
-      <FormattingProvider locale="en" timeZone="UTC">
-        <TooltipProvider>
-          <QueryClientProvider client={client}>
-            <RouterProvider router={router} />
-          </QueryClientProvider>
-        </TooltipProvider>
-      </FormattingProvider>
-    </IntlProvider>,
+    <PresentationPrefsProvider
+      initialPrefs={defaultPresentationPrefs}
+      sync={createTestPresentationPrefsSync()}
+    >
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
+        <FormattingProvider locale="en" timeZone="UTC">
+          <TooltipProvider>
+            <QueryClientProvider client={client}>
+              <RouterProvider router={router} />
+            </QueryClientProvider>
+          </TooltipProvider>
+        </FormattingProvider>
+      </IntlProvider>
+    </PresentationPrefsProvider>,
   );
 };
 

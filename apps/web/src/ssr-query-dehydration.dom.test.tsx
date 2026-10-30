@@ -238,6 +238,14 @@ test("router hydration keeps the server catalogue until client presentation appl
       hydrate: restoreHydratedDocumentPresentation,
     });
     await hydrate(client);
+    const { initializeBrowserPresentationPrefs } =
+      await import("@/lib/account/presentation-prefs/provider");
+    const { createTestPresentationPrefsSync } =
+      await import("@/lib/account/presentation-prefs/sync.test-fixtures");
+    initializeBrowserPresentationPrefs(
+      defaultPresentationPrefs,
+      createTestPresentationPrefsSync(),
+    );
     expect(useI18nStore.getState().loadedLang).toBe("en");
     expect(legacyBrowserStorage.getItem(legacyKey).unwrap()).not.toBeNull();
 

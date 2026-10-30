@@ -10,7 +10,7 @@ import {
 import type { SupportedLanguage } from "@/i18n/i18n-store";
 import type { PresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
 import { initializeBrowserPresentationPrefs } from "@/lib/account/presentation-prefs/provider";
-import { readPresentationPrefs } from "@/lib/account/presentation-prefs/server";
+import { readRequestPresentationPrefs } from "@/lib/account/presentation-prefs/server";
 
 export const loadClientDocumentPresentation = async (
   queryClient: QueryClient,
@@ -33,12 +33,17 @@ export const restoreHydratedDocumentPresentation = async (presentation: {
   });
 };
 
+export const documentPresentationSnapshot = (prefs: PresentationPrefs) => ({
+  locale: resolveUiLocale(prefs.visitorLocale) ?? "en",
+  prefs,
+});
+
 // Public SSR is anonymous and must not render an identity-derived locale into
 // a cacheable document. The browser resolves the profile after hydration.
 export const loadServerDocumentPresentation = async (
   prefs: PresentationPrefs,
 ) => {
-  const locale = resolveUiLocale(prefs.visitorLocale) ?? "en";
+  const { locale } = documentPresentationSnapshot(prefs);
   const messages = await loadLocaleMessages(locale);
   initializeRenderedLocale({ locale, messages, prefs });
   return prefs;
@@ -48,5 +53,7 @@ export const loadDocumentPresentation = createIsomorphicFn()
   .client(loadClientDocumentPresentation)
   .server(
     async () =>
-      await loadServerDocumentPresentation(await readPresentationPrefs()),
+      await loadServerDocumentPresentation(
+        await readRequestPresentationPrefs(),
+      ),
   );

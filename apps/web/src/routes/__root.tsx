@@ -142,6 +142,9 @@ function RootErrorComponent(props: ErrorComponentProps) {
 }
 
 function RootComponent() {
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  });
   const navigate = useNavigate();
   const router = useRouter();
   // Public documents reuse server route context during hydration. Re-enter
@@ -169,7 +172,7 @@ function RootComponent() {
       );
     }
   });
-  const appContext = Route.useRouteContext({
+  const { analyticsValue, queryClient } = Route.useRouteContext({
     select: (context) => ({
       analyticsValue: context.analyticsValue,
       queryClient: context.queryClient,
@@ -177,22 +180,16 @@ function RootComponent() {
   });
 
   return (
-    <AppProviders
-      analyticsValue={appContext.analyticsValue}
-      queryClient={appContext.queryClient}
-    >
+    <AppProviders analyticsValue={analyticsValue} queryClient={queryClient}>
+      {!(isDev && pathname === "/dev") && (
+        <ClientDocumentPresentationBoot queryClient={queryClient} />
+      )}
       <RootApp />
     </AppProviders>
   );
 }
 
 function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
-  const pathname = useRouterState({
-    select: (state) => state.location.pathname,
-  });
-  const queryClient = Route.useRouteContext({
-    select: (context) => context.queryClient,
-  });
   const routeErrorLifecycle = Route.useRouteContext({
     select: (context) => context.routeErrorLifecycle,
   });
@@ -239,9 +236,6 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
           <script src="/prepaint-init.js" />
         </head>
         <body>
-          {!(isDev && pathname === "/dev") && (
-            <ClientDocumentPresentationBoot queryClient={queryClient} />
-          )}
           <RouteErrorLifecycleProvider controller={routeErrorLifecycle}>
             <RouteProviderScopeBoundary>
               <PresentationPrefsProvider initialPrefs={prefs}>

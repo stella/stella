@@ -1160,8 +1160,10 @@ describe("public law sitemap", () => {
     ]);
     expect(entry).toContain('import("@/client-runtime")');
 
-    expect(source).toContain("locale: useI18nStore.getState().loadedLang");
-    expect(source).toContain("prefs: await readPresentationPrefs()");
+    expect(source).toContain(
+      "documentPresentationSnapshot(readRequestPresentationPrefs())",
+    );
+    expect(source).not.toContain("useI18nStore.getState()");
     expect(source).toContain("hydrate: restoreHydratedDocumentPresentation");
     expect(source).not.toContain("localeUserId");
     expect(source).not.toContain("loadAuthContext");
@@ -1173,6 +1175,13 @@ describe("public law sitemap", () => {
     expect(root).toContain(
       "<ClientDocumentPresentationBoot queryClient={queryClient} />",
     );
+    const rootComponent = root.slice(
+      root.indexOf("function RootComponent"),
+      root.indexOf("function RootDocument"),
+    );
+    const rootDocument = root.slice(root.indexOf("function RootDocument"));
+    expect(rootComponent).toContain("ClientDocumentPresentationBoot");
+    expect(rootDocument).not.toContain("ClientDocumentPresentationBoot");
     expect(boot).toContain("loadClientDocumentPresentation(queryClient)");
     expect(runtime).toContain(
       'detached(Promise.resolve().then(hydrate), "client.hydration")',

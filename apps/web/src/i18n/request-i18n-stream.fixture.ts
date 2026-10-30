@@ -68,22 +68,24 @@ const streams = await Promise.all(
     const reader = stream.getReader();
     const shell = await reader.read();
     assert.equal(shell.done, false);
-    return { locale, messages, stream, reader, shell };
+    assert.ok(shell.value instanceof Uint8Array);
+    return { locale, messages, stream, reader, firstChunk: shell.value };
   }),
 );
 assert.equal(getRequestI18nStore(), undefined);
 release.resolve(undefined);
 await Promise.all(
-  streams.map(async ({ locale, messages, stream, reader, shell }) => {
+  streams.map(async ({ locale, messages, stream, reader, firstChunk }) => {
     await stream.allReady;
     const decoder = new TextDecoder();
-    const chunks = [decoder.decode(shell.value, { stream: true })];
+    const chunks = [decoder.decode(firstChunk, { stream: true })];
     while (true) {
       const chunk = await reader.read();
       if (chunk.done) {
         chunks.push(decoder.decode());
         break;
       }
+      assert.ok(chunk.value instanceof Uint8Array);
       chunks.push(decoder.decode(chunk.value, { stream: true }));
     }
     const html = chunks.join("");

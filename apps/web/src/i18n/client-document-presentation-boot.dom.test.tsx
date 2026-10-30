@@ -125,7 +125,11 @@ test("a sibling commit cannot apply the account before the root route hydrates",
           </Await>
         </Suspense>
       </div>,
-      { onRecoverableError: (error) => errors.push(error) },
+      {
+        onRecoverableError: (error) => {
+          errors.push(error);
+        },
+      },
     ),
   );
   try {

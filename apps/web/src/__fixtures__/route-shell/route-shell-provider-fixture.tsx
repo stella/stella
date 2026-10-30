@@ -619,7 +619,16 @@ const loadFixtureRuntime = async (
   const { parseRouteSearch, stringifyRouteSearch } =
     await import("@/route-search-params");
 
+  const { initializeBrowserPresentationPrefs } =
+    await import("@/lib/account/presentation-prefs/provider");
+  const { createTestPresentationPrefsSync } =
+    await import("@/lib/account/presentation-prefs/sync.test-fixtures");
+
   const createFixtureRouter = (initialEntry: string) => {
+    initializeBrowserPresentationPrefs(
+      defaultPresentationPrefs,
+      createTestPresentationPrefsSync(),
+    );
     const queryClient = createAppQueryClient();
     queryClient.setDefaultOptions({ queries: { retry: false } });
     const routeErrorLifecycle =

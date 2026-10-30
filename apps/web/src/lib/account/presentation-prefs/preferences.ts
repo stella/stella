@@ -30,6 +30,9 @@ export const parseLegacySidebarOpen = (
   raw: string | null | undefined,
 ): boolean | null => {
   switch (raw) {
+    case undefined:
+    case null:
+      return null;
     case SIDEBAR_STATE_VALUES.expanded:
       return true;
     case SIDEBAR_STATE_VALUES.collapsed:
