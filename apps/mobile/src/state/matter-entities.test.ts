@@ -178,6 +178,8 @@ describe("listing a matter's entities", () => {
     );
     expect(fileTypeOf("application/octet-stream", "výpis.Xlsx")).toBe("XLSX");
     expect(fileTypeOf(undefined, "bez přípony")).toBeUndefined();
+    expect(fileTypeOf("constructor", "a.pdf")).toBe("PDF");
+    expect(fileTypeOf("__proto__", undefined)).toBeUndefined();
   });
 
   test("the first page carries no cursor", async () => {

@@ -64,22 +64,28 @@ export type MatterEntity = Omit<EntityRow, "fields"> & {
 };
 
 /** Formats named by their media type; any other is named by its extension. */
-const FILE_TYPE_OF_MIME: Readonly<Record<string, string>> = {
-  "application/pdf": "PDF",
-  "application/msword": "DOC",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+// A Map, so a media type named like an object key ("constructor") finds
+// nothing rather than an inherited property.
+const FILE_TYPE_OF_MIME: ReadonlyMap<string, string> = new Map([
+  ["application/pdf", "PDF"],
+  ["application/msword", "DOC"],
+  [
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "DOCX",
-  "application/vnd.ms-excel": "XLS",
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "XLSX",
-  "application/vnd.ms-powerpoint": "PPT",
-  "application/vnd.openxmlformats-officedocument.presentationml.presentation":
+  ],
+  ["application/vnd.ms-excel", "XLS"],
+  ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "XLSX"],
+  ["application/vnd.ms-powerpoint", "PPT"],
+  [
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     "PPTX",
-  "application/rtf": "RTF",
-  "text/plain": "TXT",
-  "text/csv": "CSV",
-  "message/rfc822": "EML",
-  "application/vnd.ms-outlook": "MSG",
-};
+  ],
+  ["application/rtf", "RTF"],
+  ["text/plain", "TXT"],
+  ["text/csv", "CSV"],
+  ["message/rfc822", "EML"],
+  ["application/vnd.ms-outlook", "MSG"],
+]);
 
 /**
  * A file's format as a short tag: the known name of its media type, else
@@ -90,7 +96,7 @@ export const fileTypeOf = (
   fileName: string | undefined,
 ): string | undefined => {
   const media = mimeType?.split(";", 1)[0]?.trim().toLowerCase();
-  const known = media === undefined ? undefined : FILE_TYPE_OF_MIME[media];
+  const known = media === undefined ? undefined : FILE_TYPE_OF_MIME.get(media);
   if (known !== undefined) {
     return known;
   }
