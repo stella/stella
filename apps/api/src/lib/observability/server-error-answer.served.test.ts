@@ -39,6 +39,7 @@ import { ownedMessage } from "@/api/lib/observability/owned-message";
 import {
   enrichRequestContext,
   openRequestContext,
+  recordRequestExceptionScope,
 } from "@/api/lib/observability/request-context";
 import {
   errorBoundary,
@@ -70,6 +71,12 @@ const CAPTURE_ORGANIZATION_ID = "org_capture_probe";
 
 const requestScope: Middleware = async (ctx, inner) =>
   await runWithRequestScope(async () => {
+    // As the production pipeline does before any stage can answer.
+    recordRequestExceptionScope(ctx.request, {
+      type: "request",
+      method: ctx.request.method,
+      routeTemplate: ctx.route ?? "unmatched",
+    });
     openRequestContext(undefined, ctx.request);
     enrichRequestContext({
       posthogDistinctId: CAPTURE_DISTINCT_ID,
