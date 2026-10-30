@@ -1,17 +1,13 @@
 import { useCallback, useRef } from "react";
 
-import {
-  useIsMutating,
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useIsMutating, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
+import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { aiAvailabilityOptions } from "@/lib/organization/ai-config-queries";
 import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
@@ -50,12 +46,13 @@ export const useCreateBBoxes = ({
   inflightSetRef.current ??= new Set<string>();
   const inflight = inflightSetRef.current;
 
-  const mutation = useMutation({
+  const mutation = useIdempotentMutation({
+    idempotencyScope: `${workspaceId}:${justification.id}`,
     scope: {
       id: justification.id,
     },
     mutationKey: [CREATE_BBOXES_MUTATION_KEY],
-    mutationFn: async () => {
+    mutationFn: async (_variables) => {
       if (justification.boundingBoxes || inflight.has(justification.id)) {
         return undefined;
       }
