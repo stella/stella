@@ -13,8 +13,8 @@ import { tmpdir } from "node:os";
 import nodePath from "node:path";
 
 import { propertyConfig } from "@stll/property-testing";
+import { createTestState } from "@stll/test-state";
 
-import { createTestState } from "../apps/api/src/tests/helpers/test-state";
 import { parseChangelogMarkdown } from "../apps/landing/src/lib/changelog-markdown";
 import { parseChangesetEntry } from "./changeset-entry";
 import {
