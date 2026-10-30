@@ -136,6 +136,15 @@ export default eslintCompatPlugin({
           renderUpdate:
             "Do not navigate, redirect, or update React state during render. Move the action to an event handler or a sanctioned effect wrapper.",
         },
+        // `census: true` reports every finding, ignoring the per-file counts,
+        // so scripts/render-phase-update-baseline.ts can regenerate them.
+        schema: [
+          {
+            type: "object",
+            properties: { census: { type: "boolean" } },
+            additionalProperties: false,
+          },
+        ],
       },
       createOnce(context) {
         const setters = new Map();
@@ -205,8 +214,13 @@ export default eslintCompatPlugin({
             }
           },
           "Program:exit"() {
+            const options: unknown = context.options[0];
+            const census =
+              typeof options === "object" &&
+              options !== null &&
+              Reflect.get(options, "census") === true;
             const file = repoRelativeFilename(context);
-            const baseline = baselineCounts[file] ?? 0;
+            const baseline = census ? 0 : (baselineCounts[file] ?? 0);
             for (const finding of findings.slice(baseline)) {
               context.report(finding);
             }
