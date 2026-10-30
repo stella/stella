@@ -17,6 +17,7 @@ import { repoRelativePath } from "@stll/portable-path";
 import {
   type CutGateRunner,
   cutMaintenanceRelease,
+  IncompleteReleaseListingError,
   type MaintenanceCutEffects,
   MaintenanceReleaseError,
   runCutGate,
@@ -163,6 +164,7 @@ const runCut = async (
   root: string,
   script: GateScript,
   args: readonly string[] = [],
+  pulls: unknown = [],
 ): Promise<CutRun> => {
   const before = snapshot(root);
   const npmArgumentsPath = `${root}.npm-arguments.json`;
@@ -195,7 +197,7 @@ const runCut = async (
     assertCleanWorktree: () => undefined,
     resolveHeadSha: () => BASE_SHA,
     latestFinalVersion: () => "1.2.3",
-    assertNoOpenRelease: () => undefined,
+    listOpenPullRequests: () => pulls,
     openReleasePullRequest: () => undefined,
     runGate,
     queueHistoryWarning: () => null,
@@ -490,3 +492,47 @@ describe("a command gate", () => {
     ).toBe("exit 3");
   });
 });
+
+test("the cut names every blocking release PR and its head before running gates", async () => {
+  const proof = await runCut(
+    releaseTree(),
+    {},
+    [],
+    [
+      { number: 123, title: "chore: release v1.2.4", headRefOid: BASE_SHA },
+      {
+        number: 456,
+        title: "chore: release v1.2.5",
+        headRefOid: "d".repeat(40),
+      },
+    ],
+  );
+  expect(proof.error).toBeInstanceOf(MaintenanceReleaseError);
+  expect(String(proof.error)).toContain(
+    "#123 chore: release v1.2.4 (head ccccccc); land it first (merge-bar 123)",
+  );
+  expect(String(proof.error)).toContain(
+    "#456 chore: release v1.2.5 (head ddddddd); land it first (merge-bar 456)",
+  );
+  expect(proof.gatesRun).toEqual([]);
+  expect(proof.versioned).toBe(0);
+});
+
+for (const pulls of [
+  null,
+  {},
+  [{ title: "chore: release v1.2.4" }],
+  Array.from({ length: 500 }, () => ({
+    number: 123,
+    title: "fix: example",
+    headRefOid: BASE_SHA,
+  })),
+]) {
+  test(`an incomplete listing has a distinct typed refusal (${JSON.stringify(pulls).slice(0, 60)})`, async () => {
+    const proof = await runCut(releaseTree(), {}, [], pulls);
+    expect(proof.error).toBeInstanceOf(IncompleteReleaseListingError);
+    expect(String(proof.error)).toContain("listing is incomplete");
+    expect(String(proof.error)).not.toContain("land it first");
+    expect(proof.gatesRun).toEqual([]);
+  });
+}

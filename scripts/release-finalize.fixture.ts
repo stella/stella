@@ -26,6 +26,16 @@ type ProofFixture = {
   finalTag?: "candidate" | "previous";
   rcPublication?: "draft" | "published";
   publicationFails?: boolean;
+  pull?:
+    | "matching"
+    | "none"
+    | "multiple"
+    | "mismatch"
+    | "merged"
+    | "armed"
+    | "fork"
+    | "closed";
+  mergeFails?: boolean;
 };
 export const finalize = (fixture: ProofFixture = {}) => {
   const root = mkdtempSync(path.join(tmpdir(), "release-finalize-"));
@@ -57,6 +67,7 @@ export const finalize = (fixture: ProofFixture = {}) => {
     }
     for (const source of [
       "finalize-release.sh",
+      "land-release-pr.sh",
       "check-release-main-health.sh",
       "check-release-open-incidents.sh",
     ]) {
@@ -66,6 +77,28 @@ export const finalize = (fixture: ProofFixture = {}) => {
       path.join(root, "verifier.sh"),
       "#!/usr/bin/env bash\nexit 0\n",
     );
+    let pullState = "OPEN";
+    if (fixture.pull === "merged") {
+      pullState = "MERGED";
+    }
+    if (fixture.pull === "closed") {
+      pullState = "CLOSED";
+    }
+    const pull = {
+      number: 123,
+      title: "chore: release v1.2.3",
+      state: pullState,
+      headRefName: "release/v1.2.3",
+      headRefOid: fixture.pull === "mismatch" ? "f".repeat(40) : sha,
+      isCrossRepository: fixture.pull === "fork",
+      autoMergeRequest:
+        fixture.pull === "armed" ? { enabledAt: "2026-01-01T00:00:00Z" } : null,
+    };
+    const pulls = fixture.pull === "none" ? [] : [pull];
+    if (fixture.pull === "multiple") {
+      pulls.push({ ...pull, number: 456 });
+    }
+    writeFileSync(path.join(root, "pulls.json"), JSON.stringify(pulls));
     const contexts = [
       [
         "staging/verified",
@@ -110,10 +143,14 @@ export const finalize = (fixture: ProofFixture = {}) => {
 set -euo pipefail
 case "$*" in
   # A draft release is visible only to a token with push access.
+  'pr '*) [[ "$GH_TOKEN" == fixture-landing-token ]] ;;
   'release '*) [[ "$GH_TOKEN" == fixture-token ]] ;;
   *) [[ "$GH_TOKEN" == fixture-read-token ]] ;;
 esac
 case "$*" in
+  'pr list '*) cat "$TEST_ROOT/pulls.json" ;;
+  'pr merge '*)
+    ${fixture.mergeFails ? 'echo "merge failed" >&2; exit 1' : 'printf \'%s\\n\' "$*" >> "$TEST_ROOT/merges"'} ;;
   'release view '*) printf '%s\\n' '${fixture.rcPublication !== "published"}' ;;
   *statuses?*) cat "$TEST_ROOT/statuses.json" ;;
   *actions/runs/*) run="\u0024{!#}"; cat "$TEST_ROOT/run-\u0024{run##*/}.json" ;;
@@ -149,6 +186,15 @@ exec "${realGit}" "$@"
         RELEASE_TREE_PROOF_VERIFIER: path.join(root, "verifier.sh"),
       },
     );
+    const landing =
+      result.exitCode === 0 && !fixture.noRc
+        ? execute(root, ["bash", "land-release-pr.sh", "stella/stella", sha], {
+            ...process.env,
+            GH_TOKEN: "fixture-landing-token",
+            TEST_ROOT: root,
+            GH_RETRY_SCRIPT: path.join(root, "gh.sh"),
+          })
+        : null;
     const finalTag = execute(root, [
       realGit,
       "rev-parse",
@@ -161,6 +207,8 @@ exec "${realGit}" "$@"
     };
     return {
       result,
+      landing,
+      merges: readReceipt("merges"),
       sha,
       finalSha:
         finalTag.exitCode === 0 ? finalTag.stdout.toString().trim() : null,
