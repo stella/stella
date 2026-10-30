@@ -2,6 +2,9 @@
 // parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
 // parser-output-unchanged: Fetched PDF bodies are retained independently of parsing; document parsing and eligibility are unchanged.
 import { panic, Result } from "better-result";
+
+// parser-output-unchanged: imports the document AST from its package owner
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 /**
@@ -50,9 +53,6 @@ import { panic, Result } from "better-result";
  * months (`undated|<boundary id>|<page>`) and the ledger holds it as a slice
  * of its own, ahead of the first month.
  */
-
-// parser-output-unchanged: imports the document AST from its package owner
-import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
 import { createSha256, sha256Hex as hashContent } from "@stll/sha256/bun";
@@ -61,7 +61,6 @@ import { parsePlainDate, Temporal } from "@stll/time";
 
 import { ADAPTER_KEYS, PARSER_VERSIONS } from "@/api/handlers/case-law/consts";
 import {
-  decodeSourceRawEnvelopeObjects,
   defineSourceAdapter,
   EMPTY_AST,
   encodeSourceRawEnvelope,
@@ -72,7 +71,6 @@ import {
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
   sourceTotalRead,
-  STORED_RAW_REPARSE_REJECTION,
   storedSourceSurface,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
@@ -88,7 +86,7 @@ import type {
   SourceSurfaceDisposition,
   SourceTotalCount,
   StoredRawReparseInput,
-  StoredRawReparseOutcome,
+  StoredRawReparseValue,
   SyncPage,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
@@ -115,6 +113,7 @@ import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import { readStoredDocumentObject } from "@/api/lib/legal-search/stored-document-replay";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { toMetadataUrl } from "@/api/lib/sanitize-url";
@@ -1476,7 +1475,7 @@ const buildPlKisDecision = async (
 
 const reparsePlKisStoredRaw = async (
   stored: StoredRawReparseInput,
-): Promise<StoredRawReparseOutcome> => {
+): Promise<StoredRawReparseValue> => {
   const read = readStoredRawListing({
     stored,
     part: RAW_PART.LISTING,
@@ -1485,23 +1484,17 @@ const reparsePlKisStoredRaw = async (
   if (read.type === "rejected") {
     return read;
   }
-  const detail = readDetailPart(read.parts);
-  const objects = decodeSourceRawEnvelopeObjects(
-    new TextDecoder().decode(stored.raw),
-  );
-  if (
-    objects[PDF_OBJECT] !== undefined &&
-    detailString(detail, "TRESC_INTERESARIUSZ") === undefined
-  ) {
-    return {
-      type: "rejected",
-      rejection: STORED_RAW_REPARSE_REJECTION.UNSUPPORTED_CONTENT,
-      detail: "the document is the stored PDF, which a replay does not read",
-    };
+  const readObject = await readStoredDocumentObject(stored, PDF_OBJECT);
+  if (Result.isError(readObject)) {
+    return readObject;
   }
+  // A row with neither detail text nor a stored PDF replays from its listing
+  // and detail, as the ingestion builds it.
+  const pdfBytes = readObject.value;
   const built = await assemblePlKisDecision({
     row: read.listing,
     rawParts: read.parts,
+    ...(pdfBytes === null ? {} : { pdfBytes }),
   });
   return { type: "parsed", result: built.decision };
 };
