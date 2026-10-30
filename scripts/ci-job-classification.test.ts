@@ -2,6 +2,9 @@ import { expect, test } from "bun:test";
 
 import { generateClassification } from "./ci-job-classification/generate";
 import type { DerivedJob } from "./ci-job-classification/generate";
+import { expectedJobDigest } from "./ci-job-classification/job-digests";
+import { verifyPublicMetadata } from "./ci-job-classification/public-metadata";
+import { parseDocument } from "./ci-job-classification/yaml";
 
 const CALLER = "candidate:.github/workflows/caller.yml/call";
 const CALLEE = "candidate:.github/workflows/shared.yml/check";
@@ -56,6 +59,42 @@ const digest = (jobs: ReadonlyMap<string, DerivedJob>, key: string) => {
     throw new Error(`Missing fixture job: ${key}`);
   }
   return value;
+};
+
+const readerFor = (documents: Record<string, string>) => ({
+  workflows: () => [".github/workflows/caller.yml"],
+  read: (_repository: string, file: string) => {
+    const document = documents[file];
+    if (document === undefined) {
+      throw new Error(`Missing fixture document: ${file}`);
+    }
+    return document;
+  },
+});
+
+const generateApproved = (documents: Record<string, string>) => {
+  const jobs = jobsFor(documents);
+  const decisions = Object.fromEntries(
+    [...jobs].map(([key, job]) => [
+      key,
+      {
+        kind: "ordinary" as const,
+        qualifier: "fixture",
+        approvedDigests: [job.digest],
+      },
+    ]),
+  );
+  const reader = readerFor(documents);
+  const generated = generateClassification({
+    decisions,
+    snapshots: {},
+    reader,
+    localActionPath: (directory) => `${directory}/action.yml`,
+  });
+  if (generated.isErr()) {
+    throw generated.error;
+  }
+  return { generated: generated.value, reader };
 };
 
 const BASE_CALL = "    uses: ./.github/workflows/shared.yml";
@@ -220,6 +259,83 @@ jobs: {check: {steps: [{run: 'echo \${{ github.token }}'}]}}
   });
 
   expect(jobs.get(CALLEE)?.privileged).toBe(false);
+});
+
+test("an inherited privileged grant has one generation and verification digest", () => {
+  const documents = {
+    ".github/workflows/caller.yml": `on: push
+permissions: {actions: write}
+jobs: {call: {uses: ./.github/workflows/shared.yml}}
+`,
+    ".github/workflows/shared.yml": `on: workflow_call
+jobs: {check: {runs-on: ubuntu-latest, steps: [{run: echo inherited}]}}
+`,
+  };
+  const { generated, reader } = generateApproved(documents);
+
+  expect(verifyPublicMetadata({ manifest: generated, reader }).isOk()).toBe(
+    true,
+  );
+
+  const parsed = parseDocument(documents[".github/workflows/shared.yml"]);
+  if (parsed.isErr()) {
+    throw parsed.error;
+  }
+  const definition = parsed.value.jobs["check"];
+  if (!definition) {
+    throw new Error("Missing fixture callee");
+  }
+  const digestWithoutInheritedGrant = expectedJobDigest({
+    definition,
+    privileged: true,
+    dependencyDigests: {},
+  });
+  const withoutInheritedGrant = structuredClone(generated);
+  const callee = withoutInheritedGrant.nodes.find(
+    (node) => node.type === "metadata" && node.path.endsWith("shared.yml"),
+  );
+  if (!callee || callee.type !== "metadata") {
+    throw new Error("Missing generated callee");
+  }
+  const calleeJob = callee.jobs.find((job) => job.id === "check");
+  if (!calleeJob) {
+    throw new Error("Missing generated callee job");
+  }
+  calleeJob.digest = digestWithoutInheritedGrant;
+
+  const rejected = verifyPublicMetadata({
+    manifest: withoutInheritedGrant,
+    reader,
+  });
+  expect(rejected.isErr()).toBe(true);
+  if (rejected.isErr()) {
+    expect(rejected.error.message).toContain(
+      "Classification-relevant shape changed",
+    );
+  }
+});
+
+test.each([
+  ["ordinary", workflow(BASE_CALL, "run: echo ordinary")],
+  [
+    "privileged",
+    workflow(
+      BASE_CALL,
+      `env: {TOKEN: '${SECRET_REFERENCE}'}\n        run: echo privileged`,
+    ),
+  ],
+  [
+    "inherited privileged",
+    {
+      ".github/workflows/caller.yml": `on: push\npermissions: {contents: write}\njobs: {call: {uses: ./.github/workflows/shared.yml}}\n`,
+      ".github/workflows/shared.yml": `on: workflow_call\njobs: {check: {runs-on: ubuntu-latest, steps: []}}\n`,
+    },
+  ],
+] as const)("every generated %s fixture verifies", (_, documents) => {
+  const { generated, reader } = generateApproved(documents);
+  expect(verifyPublicMetadata({ manifest: generated, reader }).isOk()).toBe(
+    true,
+  );
 });
 
 test("changing workflow permissions changes a caller call-surface digest", () => {

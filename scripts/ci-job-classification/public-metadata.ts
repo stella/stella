@@ -5,6 +5,7 @@ import { compareCodeUnit } from "../../packages/collation/src/collation";
 import { CLASSIFICATIONS, sha256 } from "./classification-values";
 import { createGitProvider, resolveGitHead } from "./git-provider";
 import type { SOURCE_CONFIG } from "./git-provider";
+import { deriveJobPrivileges, expectedJobDigest } from "./job-digests";
 import {
   METADATA_ORIGIN,
   metadataReferenceIdentity,
@@ -63,10 +64,6 @@ export type MetadataReader = {
   workflows: () => string[];
   read: (repository: string, path: string) => string;
 };
-type MetadataNode = Extract<
-  PublicMetadata["nodes"][number],
-  { type: "metadata" }
->;
 // An explicit type annotation lets control-flow analysis narrow after calls.
 const reject: (message: string) => never = (message) => {
   throw new AdmissionError({ message });
@@ -85,43 +82,6 @@ const safePath = (path: string) => {
   }
 };
 
-type JobDigestMatchesOptions = {
-  definition: ParsedDocument["jobs"][string];
-  digest: string;
-  documentDigest: (id: string) => string;
-  node: MetadataNode;
-  nodes: ReadonlyMap<string, PublicMetadata["nodes"][number]>;
-};
-const jobDigestMatches = ({
-  definition,
-  digest,
-  documentDigest,
-  node,
-  nodes,
-}: JobDigestMatchesOptions) => {
-  const callsReusableWorkflow = Object.values(definition.dependencies).includes(
-    "reusable-workflow",
-  );
-  const dependencies = Object.fromEntries(
-    Object.keys(definition.dependencies)
-      .toSorted(compareCodeUnit)
-      .flatMap((reference) => {
-        const target = node.edges[reference];
-        return !callsReusableWorkflow &&
-          target &&
-          nodes.get(target)?.type === "metadata"
-          ? [[reference, documentDigest(target)]]
-          : [];
-      }),
-  );
-  return [definition.digest, definition.privilegedDigest]
-    .map((definitionDigest) =>
-      Object.keys(dependencies).length
-        ? sha256(JSON.stringify({ digest: definitionDigest, dependencies }))
-        : definitionDigest,
-    )
-    .includes(digest);
-};
 type ReferenceOptions = {
   callerRepository: string;
   callerOrigin: MetadataOrigin;
@@ -224,6 +184,68 @@ const verifyWorkflowInventory = (
     reject(
       `Unclassified workflows: ${observed.filter((path) => !metadata.workflows.some((workflow) => workflow.path === path)).join(", ")}. Classify their jobs, then ${REVIEW_INSTRUCTION}`,
     );
+  }
+};
+
+type VerifyJobDigestsOptions = {
+  nodes: ReadonlyMap<string, PublicMetadata["nodes"][number]>;
+  parsedDocuments: ReadonlyMap<string, ParsedDocument>;
+  documentDigest: (id: string) => string;
+  jobPrivileges: ReadonlyMap<string, boolean>;
+  inheritedGrants: ReadonlyMap<string, ReadonlyMap<string, unknown>>;
+};
+
+const verifyJobDigests = ({
+  nodes,
+  parsedDocuments,
+  documentDigest,
+  jobPrivileges,
+  inheritedGrants,
+}: VerifyJobDigestsOptions) => {
+  for (const node of nodes.values()) {
+    if (node.type !== "metadata") {
+      continue;
+    }
+    const parsed = parsedDocuments.get(node.id);
+    if (!parsed) {
+      reject("parsed metadata missing");
+    }
+    const changedJobs = node.jobs.filter((job) => {
+      const definition = parsed.jobs[job.id];
+      if (!definition) {
+        return true;
+      }
+      const callsReusableWorkflow = Object.values(
+        definition.dependencies,
+      ).includes("reusable-workflow");
+      const dependencyDigests = Object.fromEntries(
+        Object.keys(definition.dependencies)
+          .toSorted(compareCodeUnit)
+          .flatMap((reference) => {
+            const target = node.edges[reference];
+            return !callsReusableWorkflow &&
+              target &&
+              nodes.get(target)?.type === "metadata"
+              ? [[reference, documentDigest(target)]]
+              : [];
+          }),
+      );
+      const key = `${node.repository}:${node.path}/${job.id}`;
+      return (
+        job.digest !==
+        expectedJobDigest({
+          definition,
+          privileged: jobPrivileges.get(key) ?? false,
+          inheritedGrants: inheritedGrants.get(key),
+          dependencyDigests,
+        })
+      );
+    });
+    if (changedJobs.length) {
+      reject(
+        `Classification-relevant shape changed: ${changedJobs.map((job) => `${node.path}/${job.id}`).join(", ")}. Re-review kind and qualifier, then ${REVIEW_INSTRUCTION}`,
+      );
+    }
   }
 };
 
@@ -375,33 +397,28 @@ export const verifyPublicMetadata = ({ manifest, reader }: MetadataOptions) =>
         documentDigests.set(id, digest);
         return digest;
       };
-      for (const node of nodes.values()) {
-        if (node.type !== "metadata") {
-          continue;
-        }
-        const parsed = parsedDocuments.get(node.id);
-        if (!parsed) {
-          reject("parsed metadata missing");
-        }
-        const changedJobs = node.jobs.filter((job) => {
-          const definition = parsed.jobs[job.id];
-          if (!definition) {
-            return true;
-          }
-          return !jobDigestMatches({
-            definition,
-            digest: job.digest,
-            documentDigest,
-            node,
-            nodes,
-          });
-        });
-        if (changedJobs.length) {
-          reject(
-            `Classification-relevant shape changed: ${changedJobs.map((job) => `${node.path}/${job.id}`).join(", ")}. Re-review kind and qualifier, then ${REVIEW_INSTRUCTION}`,
-          );
-        }
-      }
+      const decisions = Object.fromEntries(
+        metadata.nodes.flatMap((node) =>
+          node.type === "metadata"
+            ? node.jobs.map((job) => [
+                `${node.repository}:${node.path}/${job.id}`,
+                { kind: job.kind },
+              ])
+            : [],
+        ),
+      );
+      const { jobPrivileges, inheritedGrants } = deriveJobPrivileges({
+        nodes,
+        parsedDocuments,
+        decisions,
+      });
+      verifyJobDigests({
+        nodes,
+        parsedDocuments,
+        documentDigest,
+        jobPrivileges,
+        inheritedGrants,
+      });
       return {
         workflowCount: metadata.workflows.length,
         jobCount,
