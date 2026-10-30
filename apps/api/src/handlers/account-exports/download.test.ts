@@ -10,6 +10,7 @@ import { status } from "@/api/http/status";
 import { AUTH_REJECTION_BODY } from "@/api/lib/auth";
 import { recordContentDeliveryReceipt } from "@/api/lib/files/content-delivery";
 import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
+import { admittedOAuthCredentialForTest } from "@/api/tests/helpers/admitted-oauth-credential";
 import { serveForTest } from "@/api/tests/helpers/test-server";
 
 const EXPORT_ID = "11111111-1111-4111-8111-111111111111";
@@ -17,12 +18,14 @@ const OWNER_ID = "22222222-2222-4222-8222-222222222222";
 const OTHER_USER_ID = "33333333-3333-4333-8333-333333333333";
 const ARCHIVE = "account export archive";
 
+const oauthCredential = await admittedOAuthCredentialForTest("cli");
+
 const tokenSession = (userId: string, scopes: string[]) =>
   Result.ok({
     userId,
     organizationId: "organization",
     scopes,
-    credential: { type: "oauth_client" as const, clientId: "cli" },
+    credential: oauthCredential,
   });
 
 const downloadRoute = createDownloadPersonalDataExport({

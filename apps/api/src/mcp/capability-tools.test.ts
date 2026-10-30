@@ -55,6 +55,7 @@ import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
 import { MAX_LIST_LIMIT } from "@/api/mcp/tool-utils";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { aggregateExecutionRows } from "@/api/tests/fixtures/aggregate-lock-order";
+import { admittedOAuthCredentialForTest } from "@/api/tests/helpers/admitted-oauth-credential";
 import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { modelViewOf } from "@/api/tests/helpers/mcp-model-view";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
@@ -125,6 +126,8 @@ type ToolCallResult = Awaited<ReturnType<typeof handleMcpToolCall>>;
  * envelope is unwrapped, as the CLI and the MCP apps do.
  */
 // oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- the type parameter IS the API: callers pin the parsed shape per assertion
+const admittedClientCredential = await admittedOAuthCredentialForTest("client");
+
 const parseToolPayload = asTestRaw<<T = unknown>(result: ToolCallResult) => T>(
   (result: ToolCallResult) => {
     const item = result.content.at(0);
@@ -1014,7 +1017,7 @@ describe("account export capability authority", () => {
   const entries = capabilityCatalog.filter((entry) =>
     entry.id.startsWith("account-exports."),
   );
-  const oauthCredential = { type: "oauth_client", clientId: "client" } as const;
+  const oauthCredential = admittedClientCredential;
 
   const listedAccountIds = async (context: AuthorizedMcpRequestContext) => {
     const result = await handleMcpToolCall({
@@ -1749,7 +1752,7 @@ describe("describe_capability", () => {
     const baseContext = createContext();
     const context = {
       ...baseContext,
-      credential: { type: "oauth_client", clientId: "catalog-schema-probe" },
+      credential: await admittedOAuthCredentialForTest("catalog-schema-probe"),
       grantedScopes: [
         ...baseContext.grantedScopes,
         ...Object.values(ACCOUNT_EXPORT_SCOPES),
@@ -4200,9 +4203,10 @@ for (const grants of [
 }
 
 describe("capability executor access isolation", () => {
+  const credential = admittedClientCredential;
   const enabledContext = () => {
     const context = createContext({
-      credential: { type: "oauth_client", clientId: "client" },
+      credential,
       grantedScopes: [...MCP_OAUTH_SCOPES],
     });
     const grants = Object.fromEntries(

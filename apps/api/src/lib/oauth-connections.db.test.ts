@@ -20,7 +20,7 @@ import {
   oauthRefreshToken,
   session,
 } from "@/api/db/auth-schema";
-import { oauthGrantRevocations } from "@/api/db/schema";
+import { accountAuditLogs, oauthGrantRevocations } from "@/api/db/schema";
 import { authenticateLegalResolveToken } from "@/api/handlers/legal-resolve/authentication";
 import { meRoute } from "@/api/handlers/me/routes";
 import { getAuth } from "@/api/lib/auth";
@@ -447,7 +447,7 @@ describe("disconnecting a connected app", () => {
       throw new Error("The disconnected grant must have a revocation");
     }
     const issuedAt = Math.floor(revocation.revokedAt.getTime() / 1000);
-    for (const offset of [0, 1]) {
+    for (const offset of [0, 5, 6]) {
       const token = await auth.api.signJWT({
         body: {
           payload: {
@@ -462,7 +462,7 @@ describe("disconnecting a connected app", () => {
           },
         },
       });
-      expect(await opensSession(token.token)).toBe(offset === 1);
+      expect(await opensSession(token.token)).toBe(offset === 6);
     }
 
     expect(await opensSession(keptGrant.accessToken)).toBe(true);
@@ -596,6 +596,41 @@ describe("disconnecting a connected app", () => {
         })
       ).ok,
     ).toBe(true);
+  });
+
+  test("records a disconnect without an organization in account history", async () => {
+    const browser = await signInHuman(
+      `account-connection-${Bun.randomUUIDv7()}@stella.dev`,
+    );
+    const client = await registerOAuthClient();
+    const consentId = Bun.randomUUIDv7();
+    await testDb.insert(oauthConsent).values({
+      id: consentId,
+      clientId: client.clientId,
+      userId: browser.userId,
+      referenceId: null,
+      scopes: ["openid"],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    expect((await disconnect(browser, consentId)).status).toBe(200);
+    const events = await testDb
+      .select({
+        type: accountAuditLogs.eventType,
+        resourceId: accountAuditLogs.resourceId,
+      })
+      .from(accountAuditLogs)
+      .where(eq(accountAuditLogs.userId, browser.userId));
+    expect(events).toContainEqual({
+      type: "account.oauth_connection.disconnected",
+      resourceId: client.clientId,
+    });
+    expect(
+      await testDb.$count(
+        oauthGrantRevocations,
+        eq(oauthGrantRevocations.userId, browser.userId),
+      ),
+    ).toBe(0);
   });
 
   test("refuses to disconnect another user's connection", async () => {

@@ -428,3 +428,5 @@ an autofix entry names an eligible generator in `scripts/generated-files.ts`.
 - [`no-ambient-dev-docker`](./no-ambient-dev-docker.ts) (`no-ambient-dev-docker`): keeps development Docker executable references and Bun Shell commands in the endpoint owner, which emits a validated host and captured TLS settings together. Follows shell aliases and configuration chains; checks command positions across compound commands while accepting printed text and unrelated tags.
 
 - [`no-ad-hoc-chat-link`](./no-ad-hoc-chat-link.ts) (`no-ad-hoc-chat-link`): chat content renderers use `ChatLink` from `@stll/chat/link` for external anchors and delegate markdown through citation classification. Rejects raw external/dynamic anchors and browser favicon URLs; shared owner, same-document navigation, internal legal labels and file attachment controls retain their contracts. Chat settings and matter navigation are outside content scope.
+
+- [`require-oauth-grant-admission`](./require-oauth-grant-admission.ts) (`require-oauth-grant-admission`): confines the OAuth resource verifier to the shared grant-admission owner, including aliased, namespace and dynamic imports.

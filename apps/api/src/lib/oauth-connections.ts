@@ -12,6 +12,7 @@ import {
 import { revokeOAuthClientAuthArtifacts } from "@/api/lib/auth-artifacts";
 import { ACCESS_TOKEN_EXPIRES_IN_SECONDS } from "@/api/lib/auth/access-token-lifetime";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
@@ -137,7 +138,7 @@ export const disconnectOAuthConnectionForUser = async ({
 > =>
   await Result.tryPromise({
     try: async () =>
-      await rootDb.transaction(async (tx) => {
+      await withAggregateTransaction(rootDb, async (tx) => {
         const deletedConsents = await tx
           .delete(oauthConsent)
           .where(
@@ -191,16 +192,27 @@ export const disconnectOAuthConnectionForUser = async ({
                 oauthGrantRevocations.grantId,
               ],
             });
-          const recordAuditEvent = createAuditRecorder({
+        }
+        const event = {
+          action: AUDIT_ACTION.DELETE,
+          resourceType: AUDIT_RESOURCE_TYPE.MCP_CONNECTION,
+          resourceId: consent.clientId,
+        } as const;
+        if (consent.referenceId) {
+          await createAuditRecorder({
             organizationId: brandPersistedOrganizationId(consent.referenceId),
             request,
             server: null,
             userId,
             workspaceId: null,
-          });
-          await recordAuditEvent(tx, {
-            action: AUDIT_ACTION.DELETE,
-            resourceType: AUDIT_RESOURCE_TYPE.MCP_CONNECTION,
+          })(tx, event);
+        } else {
+          await createAuditRecorder({
+            account: { userId },
+            request,
+            server: null,
+          })(tx, {
+            type: "account.oauth_connection.disconnected",
             resourceId: consent.clientId,
           });
         }

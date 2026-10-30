@@ -3546,12 +3546,6 @@
     "reason": "transaction-boundary in apps/api/src/lib/notifications.ts: Existing root transaction runner on database; opens the owning database transaction for this module."
   },
   {
-    "file": "apps/api/src/lib/oauth-connections.ts",
-    "fingerprint": "16a4236269601417e93d408fbff5c35a12c84e8d1e2a1d6f3d1d979a2483325d",
-    "count": 1,
-    "reason": "Existing disconnect transaction; it now records and prunes the OAuth grant revocation in the same transaction."
-  },
-  {
     "file": "apps/api/src/lib/organization-storage-teardown.ts",
     "fingerprint": "33d1c6792fd938df33d3cb07e4c16ab85588a984e42cd156e9535c6968f9f8be",
     "count": 1,
