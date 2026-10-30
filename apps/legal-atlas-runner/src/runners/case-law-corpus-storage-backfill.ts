@@ -135,6 +135,16 @@ const parseArgs = (argv: readonly string[]): ParseResult => {
 const backfillRow = async (
   row: BackfillRow,
 ): Promise<"written" | "skipped" | "failed"> => {
+  const reportFailure = (error: unknown) => {
+    captureError(
+      error,
+      handlerErrorContext("runners.backfillRow", {
+        decisionId: row.id,
+        step: "caseLawCorpusStorageBackfill",
+      }),
+    );
+    return "failed" as const;
+  };
   try {
     // The batch snapshot can go stale while earlier rows in it write.
     // Re-check the compare-and-set precondition first, so a row whose
@@ -169,14 +179,7 @@ const backfillRow = async (
       stored: null,
     });
     if (written.isErr()) {
-      captureError(
-        written.error,
-        handlerErrorContext("runners.backfillRow", {
-          decisionId: row.id,
-          step: "caseLawCorpusStorageBackfill",
-        }),
-      );
-      return "failed";
+      return reportFailure(written.error);
     }
     const outcome = written.value;
     if (outcome.type === "skipped-empty") {
@@ -215,20 +218,23 @@ const backfillRow = async (
     // points nowhere, and only the recording makes the work durable.
     return recorded.length > 0 ? "written" : "skipped";
   } catch (error) {
-    captureError(
-      error,
-      handlerErrorContext("runners.backfillRow", {
-        decisionId: row.id,
-        step: "caseLawCorpusStorageBackfill",
-      }),
-    );
-    return "failed";
+    return reportFailure(error);
   }
 };
 
 const backfillLegislationRow = async (
   row: LegislationBackfillRow,
 ): Promise<"written" | "skipped" | "failed"> => {
+  const reportFailure = (error: unknown) => {
+    captureError(
+      error,
+      handlerErrorContext("runners.backfillLegislationRow", {
+        documentId: row.id,
+        step: "legislationCorpusStorageBackfill",
+      }),
+    );
+    return "failed" as const;
+  };
   try {
     // Same shape as the case-law pass: refuse the PUTs when the recording
     // compare-and-set below would already refuse the row.
@@ -262,14 +268,7 @@ const backfillLegislationRow = async (
       stored: null,
     });
     if (written.isErr()) {
-      captureError(
-        written.error,
-        handlerErrorContext("runners.backfillLegislationRow", {
-          documentId: row.id,
-          step: "legislationCorpusStorageBackfill",
-        }),
-      );
-      return "failed";
+      return reportFailure(written.error);
     }
     const outcome = written.value;
     if (outcome.type === "skipped-empty") {
@@ -306,14 +305,7 @@ const backfillLegislationRow = async (
 
     return recorded.length > 0 ? "written" : "skipped";
   } catch (error) {
-    captureError(
-      error,
-      handlerErrorContext("runners.backfillLegislationRow", {
-        documentId: row.id,
-        step: "legislationCorpusStorageBackfill",
-      }),
-    );
-    return "failed";
+    return reportFailure(error);
   }
 };
 
