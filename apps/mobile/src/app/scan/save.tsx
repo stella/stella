@@ -1,12 +1,16 @@
 import { Suspense, useState, useTransition } from "react";
 
 import { Result } from "better-result";
-import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import {
+  Stack,
+  useLocalSearchParams,
+  useNavigation,
+  useRouter,
+} from "expo-router";
 import { ActivityIndicator, ScrollView, View } from "react-native";
 import { useFormatter, useTranslations } from "use-intl";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
-import { Input } from "@stll/ui/input";
 import { Text } from "@stll/ui/text";
 
 import { useChanged } from "@/components/changes";
@@ -14,54 +18,49 @@ import { screenStyles } from "@/components/empty-state-screen";
 import { MatterPicker } from "@/components/matter-picker";
 import { writeFailure, WriteFailureNotice } from "@/components/write-failure";
 import type { WriteFailure } from "@/components/write-failure";
-import { epochMilliseconds } from "@/connection/clock";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
 import { readFileProperty, uploadDocument } from "@/state/document-upload";
 import { listMatters } from "@/state/matters";
+import { sizeInUnits } from "@/state/scan-pages";
 import { useAppColors } from "@/theme";
 
 /**
- * A scan the document camera saved, presented as a sheet: its name, how many
- * pages it has and the matter it goes into, already chosen when the scan
- * began inside one. Upload adds it to the matter as a PDF.
+ * The reviewed scan, bound into a PDF, on its way into a matter: its name,
+ * pages and size, and the matter it goes into, already chosen when the scan
+ * began inside one. Upload adds it to the matter and closes the review too;
+ * the sheet stays open until the upload is done.
  */
-const ScanScreen = () => {
+const SaveScanScreen = () => {
   const { state } = useSession();
   return state.status === "signed-in" ? (
-    <ScanForm source={state.source} />
+    <SaveScanForm source={state.source} />
   ) : null;
 };
 
-const ScanForm = ({ source }: { source: AccessTokenSource }) => {
+const SaveScanForm = ({ source }: { source: AccessTokenSource }) => {
   const t = useTranslations("scan");
   const tabs = useTranslations("tabs");
   const format = useFormatter();
   const colors = useAppColors();
   const router = useRouter();
+  const navigation = useNavigation();
   const { end } = useSession();
   const changed = useChanged();
   const params = useLocalSearchParams<{
     matterId?: string;
+    name: string;
     pageCount: string;
     sha256Hex: string;
     size: string;
     uri: string;
   }>();
-  // The scanner writes both counts; a missing one reads as none.
+  // The review passes both counts; a missing one reads as none.
   const size = parseIntegerToken(params.size, { sign: "unsigned" }).unwrapOr(0);
   const pageCount = parseIntegerToken(params.pageCount, {
     sign: "unsigned",
   }).unwrapOr(0);
-  const [name, setName] = useState(() =>
-    t("defaultName", {
-      day: format.dateTime(epochMilliseconds(), {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      }),
-    }),
-  );
+  const sizeLabel = sizeInUnits(size);
   const [matterId, setMatterId] = useState(params.matterId ?? null);
   const [failure, setFailure] = useState<WriteFailure | null>(null);
   const [uploading, startUploading] = useTransition();
@@ -72,7 +71,7 @@ const ScanForm = ({ source }: { source: AccessTokenSource }) => {
     }
     return result;
   });
-  const ready = name.trim() !== "" && matterId !== null && !uploading;
+  const ready = matterId !== null && !uploading;
 
   const upload = () => {
     if (matterId === null) {
@@ -93,14 +92,19 @@ const ScanForm = ({ source }: { source: AccessTokenSource }) => {
             uri: params.uri,
           },
           matterId,
-          name: pdfName(name),
+          name: params.name,
           propertyId,
           source,
         });
       });
       if (Result.isOk(uploaded)) {
         changed("documents");
-        router.back();
+        // This sheet and the review under it, which removes the scan's files
+        // as it closes. A sheet closed meanwhile, as Escape can, leaves the
+        // review as it is.
+        if (navigation.isFocused()) {
+          router.dismiss(2);
+        }
         return;
       }
       if (uploaded.error._tag === "SignedOutError") {
@@ -115,9 +119,12 @@ const ScanForm = ({ source }: { source: AccessTokenSource }) => {
     <>
       <Stack.Screen
         options={{
-          title: t("title"),
+          // An upload in progress keeps the sheet up until it is done.
+          gestureEnabled: !uploading,
+          title: t("saveTitle"),
           unstable_headerLeftItems: () => [
             {
+              disabled: uploading,
               label: tabs("close"),
               onPress: () => {
                 router.back();
@@ -142,16 +149,16 @@ const ScanForm = ({ source }: { source: AccessTokenSource }) => {
         contentInsetAdjustmentBehavior="automatic"
         keyboardShouldPersistTaps="handled"
       >
-        <View className="gap-1">
-          <Input
-            accessibilityLabel={t("name")}
-            onChangeText={setName}
-            placeholder={t("name")}
-            value={name}
-          />
-          <View className="px-1">
-            <Text variant="caption">{t("pages", { count: pageCount })}</Text>
-          </View>
+        <View className="gap-1 px-1">
+          <Text numberOfLines={2} variant="rowTitle">
+            {params.name}
+          </Text>
+          <Text variant="caption">
+            {[
+              t("pages", { count: pageCount }),
+              t(sizeLabel.unit, { size: format.number(sizeLabel.value) }),
+            ].join(" · ")}
+          </Text>
         </View>
         {uploading ? <ActivityIndicator color={colors.muted} /> : null}
         <WriteFailureNotice failure={failure} message={t("uploadFailed")} />
@@ -172,12 +179,4 @@ const ScanForm = ({ source }: { source: AccessTokenSource }) => {
   );
 };
 
-/** The file name the document is stored under: the name, as a PDF. */
-function pdfName(name: string): string {
-  const trimmed = name.trim();
-  return trimmed.toLocaleLowerCase().endsWith(".pdf")
-    ? trimmed
-    : `${trimmed}.pdf`;
-}
-
-export default ScanScreen;
+export default SaveScanScreen;
