@@ -683,7 +683,7 @@ export const createChatRuntime = ({
         const response = await fetchWithTimeout(turnUrl("resume"), {
           credentials: "include",
           ...(signal === undefined || signal === null ? {} : { signal }),
-          timeout: { type: "idle", ms: CHAT_RESUME_PROBE_TIMEOUT_MS },
+          timeout: { type: "headers", ms: CHAT_RESUME_PROBE_TIMEOUT_MS },
         });
         if (!response.ok) {
           if (response.status === 404) {

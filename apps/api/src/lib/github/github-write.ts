@@ -70,7 +70,7 @@ export const githubWrite = async (
     try: async () =>
       await fetchWithTimeout(`${GITHUB_API_BASE}/${write.path}`, {
         method: write.method,
-        timeout: { type: "idle", ms: GITHUB_REQUEST_TIMEOUT_MS },
+        timeout: { type: "headers", ms: GITHUB_REQUEST_TIMEOUT_MS },
         headers: {
           accept: "application/vnd.github+json",
           authorization: `Bearer ${write.token}`,

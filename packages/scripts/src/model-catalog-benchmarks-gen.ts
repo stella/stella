@@ -30,8 +30,7 @@ import {
   MODEL_BENCHMARK_SPLIT,
 } from "@stll/ai-catalog/benchmarks";
 import type { ModelBenchmarkRating } from "@stll/ai-catalog/benchmarks";
-import { fetchWithTimeout } from "@stll/fetch";
-import { readCappedBytes } from "@stll/skills/streaming";
+import { fetchWithTimeout, readBodyWithIdleDeadline } from "@stll/fetch";
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import { formatInteger } from "./model-catalog-rates-gen";
@@ -210,12 +209,14 @@ const fetchPage = async (
     try: async () => {
       const response = await fetchArenaPage(pageUrl(offset));
       httpStatus = response.status;
-      const bytes =
-        response.body === null
-          ? new Uint8Array()
-          : await readCappedBytes(response.body, PAGE_MAX_BYTES);
+      const bytes = await readBodyWithIdleDeadline(response, {
+        idleMs: FETCH_TIMEOUT_MS,
+      });
       return {
-        payload: bytes === null ? null : new TextDecoder().decode(bytes),
+        payload:
+          bytes.byteLength > PAGE_MAX_BYTES
+            ? null
+            : new TextDecoder().decode(bytes),
         status: response.status,
       };
     },
@@ -660,7 +661,7 @@ export const runBenchmarkCheck = async ({
 const defaultArenaFetch: ArenaFetch = async (url) =>
   fetchWithTimeout(url, {
     headers: { accept: "application/json" },
-    timeout: { type: "idle", ms: FETCH_TIMEOUT_MS },
+    timeout: { type: "headers", ms: FETCH_TIMEOUT_MS },
   });
 
 const main = async (): Promise<void> => {

@@ -57,7 +57,7 @@ export const InvoicePdfDownloadButton = ({
     mutationFn: async () => {
       const { downloadUrl, fileName } = await requestPdf();
       const file = await fetchWithTimeout(downloadUrl, {
-        timeout: { type: "idle", ms: PDF_DOWNLOAD_TIMEOUT_MS },
+        timeout: { type: "headers", ms: PDF_DOWNLOAD_TIMEOUT_MS },
       });
       if (!file.ok) {
         unwrapApiResponse({

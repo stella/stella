@@ -7,7 +7,6 @@ const policies = [
   { timeoutMs: 1000 },
   { timeout: { type: "total", ms: 1000 } },
   { timeout: { type: "headers", ms: 1000 } },
-  { timeout: { type: "idle", ms: 1000 } },
 ] as const satisfies readonly FetchWithTimeoutInit[];
 
 describe("response body identity", () => {

@@ -115,7 +115,7 @@ export const streamReaderAnswer = async ({
         method: "POST",
         credentials: "include",
         signal,
-        timeout: { type: "idle", ms: READER_ANSWER_DEADLINE_MS },
+        timeout: { type: "headers", ms: READER_ANSWER_DEADLINE_MS },
         headers: {
           ...getApiRequestHeaders(),
           "Content-Type": "application/json",

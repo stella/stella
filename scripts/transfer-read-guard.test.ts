@@ -88,8 +88,8 @@ test("explicit transfer policies and bounded owner fixtures pass", () => {
       file,
       `
     export const download = async () => {
-      const response = await fetchWithTimeout(url, { timeout: { type: "idle", ms: 30_000 } });
-      return new Response(response.body);
+      const response = await fetchWithTimeout(url, { timeout: { type: "headers", ms: 30_000 } });
+      return readBodyWithIdleDeadline(response, { idleMs: 30_000 });
     };
     export const request = () => fetchWithTimeout(url, {
       timeout: { type: "total", ms: 30_000 },

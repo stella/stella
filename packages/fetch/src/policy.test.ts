@@ -108,7 +108,7 @@ describe("response timeout policies", () => {
   });
 
   test("abort after an ignoring fetcher resolves cancels the response body", async () => {
-    for (const type of ["headers", "idle"] as const) {
+    for (const type of ["headers"] as const) {
       const controller = new AbortController();
       const reason = new DOMException("Caller aborted", "AbortError");
       let cancelledWith: unknown;
@@ -134,41 +134,7 @@ describe("response timeout policies", () => {
     }
   });
 
-  test("idle timeout leaves the transport signal armed without replacing the response", async () => {
-    jest.useFakeTimers();
-    const original = new Response("content");
-    let signal: AbortSignal | null | undefined;
-    const request = createFetchWithTimeout(async (_input, init) => {
-      signal = init?.signal;
-      return original;
-    });
-    const response = await request("https://example.com", {
-      timeout: { type: "idle", ms: 20 },
-    });
-    expect(response).toBe(original);
-    expect(signal?.aborted).toBe(false);
-    await advance(20);
-    expect(signal?.aborted).toBe(true);
-    expect(jest.getTimerCount()).toBe(0);
-  });
-
-  test("response without a body leaves no idle timer", async () => {
-    jest.useFakeTimers();
-    const request = createFetchWithTimeout(
-      async () => new Response(null, { status: 204 }),
-    );
-    const response = await request("https://example.com", {
-      timeout: { type: "idle", ms: 20 },
-    });
-    expect(response.status).toBe(204);
-    expect(response.body).toBeNull();
-    expect(jest.getTimerCount()).toBe(0);
-  });
-
-  for (const policy of [
-    { timeout: { type: "headers", ms: 20 } },
-    { timeout: { type: "idle", ms: 20 } },
-  ] as const) {
+  for (const policy of [{ timeout: { type: "headers", ms: 20 } }] as const) {
     const { type } = policy.timeout;
     test(`${type} policy clears its timer when the transport rejects before headers`, async () => {
       jest.useFakeTimers();
@@ -232,7 +198,7 @@ describe("response timeout policies", () => {
     expect(fixture.signal()?.aborted).toBe(false);
   });
 
-  for (const type of ["headers", "idle"] as const) {
+  for (const type of ["headers"] as const) {
     test(`${type} timeout aborts a request whose headers never arrive`, async () => {
       jest.useFakeTimers();
       const request = createFetchWithTimeout(

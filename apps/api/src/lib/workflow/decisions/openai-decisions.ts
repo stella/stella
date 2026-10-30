@@ -243,7 +243,7 @@ export const createOpenAIDecisionsClient = ({
             },
             body,
             redirect: "error",
-            timeout: { type: "idle", ms: timeoutMs },
+            timeout: { type: "headers", ms: timeoutMs },
             signal: abortSignal,
           }),
         catch: (cause) =>

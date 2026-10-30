@@ -3,7 +3,7 @@ import path from "node:path";
 
 import type { BYOKProvider } from "@stll/ai-catalog";
 import { MODELS_DEV_RATE_PROVIDER_BY_CATALOG_PROVIDER } from "@stll/ai-catalog";
-import { fetchWithTimeout } from "@stll/fetch";
+import { fetchWithTimeout, readBodyWithIdleDeadline } from "@stll/fetch";
 
 export const MODELS_DEV_KEY_BY_PROVIDER = {
   ...MODELS_DEV_RATE_PROVIDER_BY_CATALOG_PROVIDER,
@@ -129,7 +129,7 @@ const fetchInput = async (
         const response = await fetchWithTimeout(url, {
           headers: { accept: "application/json" },
           signal,
-          timeout: { type: "idle", ms: 30_000 },
+          timeout: { type: "headers", ms: 30_000 },
         });
         if (!response.ok) {
           return Result.err(
@@ -138,7 +138,14 @@ const fetchInput = async (
             }),
           );
         }
-        const payload: unknown = await response.json();
+        const payload: unknown = JSON.parse(
+          new TextDecoder().decode(
+            await readBodyWithIdleDeadline(response, {
+              idleMs: 30_000,
+              signal,
+            }),
+          ),
+        );
         return Result.ok(payload);
       },
       catch: (cause) =>

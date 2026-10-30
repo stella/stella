@@ -1117,9 +1117,9 @@ export const scanTransferTree = async (): Promise<ReadFinding[]> => {
 
 const DEFAULT_REASON = {
   "numeric-timeout":
-    "Existing total timeout; select an explicit header or idle policy at the fetch owner.",
+    "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner.",
   "total-timeout-body":
-    "Existing total timeout; select an explicit header or idle policy at the fetch owner.",
+    "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner.",
   "constant-limit":
     "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract.",
   "fixed-page-size":
