@@ -1,4 +1,7 @@
-import { CalendarHeaderCell, CalendarHeaderRow } from "@stll/ui/calendar";
+import {
+  CalendarHeaderCell,
+  CalendarHeaderRow,
+} from "@stll/ui/calendar/primitives";
 import { cn } from "@stll/ui/utils";
 
 type CalendarWeekHeaderProps = {
