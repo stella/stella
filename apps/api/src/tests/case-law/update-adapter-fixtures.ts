@@ -126,6 +126,7 @@ const updateAdapter = async (
         fractionalSecondDigits: 3,
       }),
       page: {
+        observations: page.observations,
         decisions: page.decisions,
         // A page's supplements are part of what it served; a recording that
         // kept only its decisions would drop them from every replay.
