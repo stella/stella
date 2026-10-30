@@ -13,7 +13,8 @@ export const standaloneCandidate = (match: string): string => {
 // administrative-authority file numbers (letter blocks joined by dashes),
 // anonymization placeholders, and statute/collection references.
 const BENIGN: readonly RegExp[] = [
-  /[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ]{2,8}[-–][\w/–-]{0,30}\d/u,
+  // Dashes include the non-breaking hyphen (U+2011) some sources print.
+  /[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ]{2,8}[-–‑][\w/–‑-]{0,30}\d/u,
   /X{2,}/u,
   /\b\d{1,5}\/\d{2,4}\s{1,3}Sb\b/u,
   /\bZb\.\s*z\b/u,
@@ -25,9 +26,9 @@ const BENIGN: readonly RegExp[] = [
   /\bKIO\s{0,1}\/?\s{0,1}\d{1,5}\s{0,1}\/\s{0,1}\d{2,4}\b/u,
   // The procurement office's earlier arbitration-panel files
   // ("UZP/ZO/0-1234/05", also written with a letter O, and with a space
-  // or line break after the hyphen): same out-of-corpus quasi-judicial body
-  // under its pre-KIO file format.
-  /\bUZP\/ZO\/[0O]-\s{0,2}\d{1,5}\/\d{2,4}(?![\p{L}\d/-])/u,
+  // or line break around the slash or hyphen): same out-of-corpus
+  // quasi-judicial body under its pre-KIO file format.
+  /\bUZP\/ZO\/\s{0,2}[0O]\s{0,2}-\s{0,2}\d{1,5}\/\d{2,4}(?![\p{L}\d/-])/u,
   // A case-number prefix ("sp. zn.", "sen. zn.", "sygn.[ akt]", "č. j.")
   // with no digit anywhere in the captured tail is never a real citation:
   // every actual docket carries a number. Covers Polish anonymization
