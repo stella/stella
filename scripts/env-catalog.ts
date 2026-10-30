@@ -435,7 +435,7 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   DB_LOAD_GATE_EBS_SIGNAL:
     "Non-RDS, self-hosted and local databases must set `DB_LOAD_GATE_EBS_SIGNAL=disabled` to explicitly disable the EBS signal. The logged not_configured signal allows other health gates to govern maintenance. If neither setting is supplied, migrate fails before connecting, and background maintenance holds with an error event naming the missing configuration.",
   MIGRATE_MANUAL_DRAIN_CONFIRMED:
-    "Non-empty operator reason confirming a completed manual scheduler drain. Only migrate consumes it, overriding the check for active older workers without recent table leases; manifest validation, table leases, and lock timeouts remain enforced.",
+    "Non-empty operator reason confirming a completed manual scheduler drain. Only migrate consumes it, overriding the check for active or recent executions without matching table-lease claims; manifest validation, table leases, and lock timeouts remain enforced.",
   DB_LOAD_GATE_START_FLOOR:
     "EBS balance percentage required to start an online index build.",
   DB_LOAD_GATE_HARD_FLOOR:

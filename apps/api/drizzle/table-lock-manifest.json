@@ -14804,7 +14804,7 @@
       ]
     },
     "20261030213017_scheduler_table_leases": {
-      "hash": "1292d7367d2f3d7e108be5d450312f38a44f32dc1239043ad6d72cad3a862bb4",
+      "hash": "0a283c3f7602995fba0b916a95ebc906780847486c5cc6eed8bafe42fe262dd9",
       "locks": [
         {
           "relation": "*",
@@ -14813,6 +14813,10 @@
         {
           "relation": "scheduler_table_lease_activity",
           "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "scheduler_table_lease_activity",
+          "mode": "SHARE"
         },
         {
           "relation": "scheduler_table_leases",

@@ -2,7 +2,6 @@ import { sql } from "drizzle-orm";
 import {
   check,
   index,
-  integer,
   pgPolicy,
   pgTable,
   primaryKey,
@@ -10,6 +9,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 import { timestamptz } from "../columns";
+import { safeUuid } from "./common";
 
 const TABLE_LEASE_HOLDER_KINDS = ["job", "migration"] as const;
 const TABLE_LEASE_MODES = ["shared", "exclusive"] as const;
@@ -67,12 +67,20 @@ export const schedulerTableLeases = pgTable.withRLS(
   ],
 );
 
-/** Durable evidence of successful lease-aware scheduler admission. */
+/** Per-execution evidence outlives completion for the scheduler cutover window. */
 export const schedulerTableLeaseActivity = pgTable.withRLS(
   "scheduler_table_lease_activity",
   {
-    slot: integer("slot").primaryKey().default(0),
-    lastClaimedAt: timestamptz("last_claimed_at").notNull(),
+    executionToken: text("execution_token").primaryKey(),
+    holderId: text("holder_id").notNull(),
+    jobId: text("job_id").notNull(),
+    runId: safeUuid<"schedulerJobRun">("run_id")
+      .notNull()
+      .unique("scheduler_table_lease_activity_run_id_key"),
+    claimedAt: timestamptz("claimed_at")
+      .default(sql`clock_timestamp()`)
+      .notNull(),
+    expiresAt: timestamptz("expires_at").notNull(),
   },
   (table) => [
     pgPolicy("scheduler_table_lease_activity_owner_access", {
@@ -81,6 +89,7 @@ export const schedulerTableLeaseActivity = pgTable.withRLS(
       using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.scheduler_table_lease_activity'::regclass)`,
       withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.scheduler_table_lease_activity'::regclass)`,
     }),
-    check("scheduler_table_lease_activity_singleton", sql`${table.slot} = 0`),
+    index("scheduler_table_lease_activity_holder_idx").on(table.holderId),
+    index("scheduler_table_lease_activity_expiry_idx").on(table.expiresAt),
   ],
 );

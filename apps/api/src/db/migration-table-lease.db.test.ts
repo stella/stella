@@ -16,6 +16,7 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { readMigrationLockSources } from "../../../../scripts/check-migration-locks";
 import { generateMigrationLockManifest } from "../../../../scripts/generate-migration-lock-manifest";
+import { createSafeId } from "../lib/branded-types";
 import { DEFAULT_LEASE_MS } from "../lib/scheduler/lease-timing";
 import {
   type GatedTestClientScope,
@@ -117,6 +118,11 @@ describe.skipIf(!enabled)("migration runner table lease admission", () => {
             await job.db.transaction(
               async (tx) =>
                 await acquireJobTableLeases({
+                  execution: {
+                    token: holderId,
+                    jobId: holderId,
+                    runId: createSafeId<"schedulerJobRun">(),
+                  },
                   tx,
                   holderId,
                   tables: [requestedTable],
@@ -235,6 +241,11 @@ describe.skipIf(!enabled)("migration runner table lease admission", () => {
             await job.db.transaction(
               async (tx) =>
                 await acquireJobTableLeases({
+                  execution: {
+                    token: holderId,
+                    jobId: holderId,
+                    runId: createSafeId<"schedulerJobRun">(),
+                  },
                   tx,
                   holderId,
                   tables: [requestedTable],

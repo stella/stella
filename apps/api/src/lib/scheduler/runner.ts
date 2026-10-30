@@ -18,7 +18,7 @@ import { Temporal } from "@stll/time";
 import { rootDb } from "@/api/db/root";
 import { schedulerJobRuns, schedulerJobs } from "@/api/db/schema";
 import { captureError, detached } from "@/api/lib/analytics/capture";
-import type { SafeId } from "@/api/lib/branded-types";
+import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import {
   ConfigurationError,
   SchedulerJobTimeoutError,
@@ -35,6 +35,7 @@ import type {
   SchedulerTaskRegistry,
 } from "@/api/lib/scheduler/types";
 
+import { schedulerTableLeaseActivity } from "../../db/schema/table-leases";
 import {
   acquireJobTableLeases,
   jobTableLeasesAvailable,
@@ -409,11 +410,12 @@ export const acquireNextDueJob = async ({
       return null;
     }
 
-    const leaseToken = acquireLeaseToken(runnerId);
+    const { leaseToken, runId } = acquireExecutionIdentity(runnerId);
     const admitted = await acquireJobTableLeases({
       tx,
       tables: executionTableNames(tablesForTask(candidate.task)),
       holderId: tableLeaseHolderId(candidate.id, leaseToken),
+      execution: { token: leaseToken, jobId: candidate.id, runId },
       leaseMs,
     });
     if (!admitted) {
@@ -1176,9 +1178,24 @@ const createRun = async ({
   runnerId,
   startedAt,
 }: CreateRunOptions): Promise<SafeId<"schedulerJobRun">> => {
+  const [claim] = await db
+    .select({ runId: schedulerTableLeaseActivity.runId })
+    .from(schedulerTableLeaseActivity)
+    .where(
+      and(
+        eq(schedulerTableLeaseActivity.executionToken, leaseTokenOf(job)),
+        eq(schedulerTableLeaseActivity.jobId, job.id),
+        sql`${schedulerTableLeaseActivity.expiresAt} > clock_timestamp()`,
+      ),
+    )
+    .limit(1);
+  if (!claim) {
+    return panic("Scheduler execution has no unexpired table-lease claim");
+  }
   const [run] = await db
     .insert(schedulerJobRuns)
     .values({
+      id: claim.runId,
       jobId: job.id,
       runnerId,
       startedAt,
@@ -1388,10 +1405,11 @@ const defaultRunnerId = (): string => {
 // fits the column.
 const LEASE_TOKEN_COLUMN_LENGTH = 128;
 
-const acquireLeaseToken = (runnerId: string): string => {
-  const suffix = `#${Bun.randomUUIDv7()}`;
+const acquireExecutionIdentity = (runnerId: string) => {
+  const runId = createSafeId<"schedulerJobRun">();
+  const suffix = `#${runId}`;
   const prefix = runnerId.slice(0, LEASE_TOKEN_COLUMN_LENGTH - suffix.length);
-  return `${prefix}${suffix}`;
+  return { leaseToken: `${prefix}${suffix}`, runId };
 };
 
 // After a successful claim the acquired row carries its lease token in

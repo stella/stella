@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import { createSafeId } from "../lib/branded-types";
 import {
   type GatedTestClientScope,
   withGatedTestClients,
@@ -67,6 +68,11 @@ const claim = async (
   await connection.unsafe("BEGIN");
   try {
     const acquired = await acquireJobTableLeases({
+      execution: {
+        token: holderId,
+        jobId: holderId,
+        runId: createSafeId<"schedulerJobRun">(),
+      },
       tx: executor(connection),
       holderId,
       tables,

@@ -27,11 +27,15 @@ CREATE POLICY "scheduler_table_leases_owner_access" ON "scheduler_table_leases" 
 REVOKE ALL PRIVILEGES ON TABLE "scheduler_table_leases" FROM stella, PUBLIC;
 --> statement-breakpoint
 CREATE TABLE "scheduler_table_lease_activity" (
-      "slot" integer DEFAULT 0 PRIMARY KEY,
-      "last_claimed_at" timestamptz NOT NULL,
-      CONSTRAINT "scheduler_table_lease_activity_singleton" CHECK ("slot" = 0)
-    );
---> statement-breakpoint
+  "execution_token" text PRIMARY KEY,
+  "holder_id" text NOT NULL,
+  "job_id" text NOT NULL,
+  "run_id" uuid NOT NULL UNIQUE,
+  "claimed_at" timestamptz DEFAULT clock_timestamp() NOT NULL,
+  "expires_at" timestamptz NOT NULL
+);--> statement-breakpoint
+CREATE INDEX "scheduler_table_lease_activity_holder_idx" ON "scheduler_table_lease_activity" ("holder_id");--> statement-breakpoint
+CREATE INDEX "scheduler_table_lease_activity_expiry_idx" ON "scheduler_table_lease_activity" ("expires_at");--> statement-breakpoint
 ALTER TABLE "scheduler_table_lease_activity" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "scheduler_table_lease_activity" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE POLICY "scheduler_table_lease_activity_owner_access" ON "scheduler_table_lease_activity" FOR ALL TO public

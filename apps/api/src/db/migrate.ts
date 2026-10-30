@@ -47,7 +47,7 @@ await runScriptWithErrorOutput(async () => {
   const migrationsFolder = nodePath.resolve(import.meta.dir, "../../drizzle");
   const connection = await client.reserve();
   try {
-    // Active older workers require recent table leases or an explicit manual drain.
+    // Each active or recent scheduler execution needs its own claim evidence.
     // Non-scheduler readers and ingestion rely on lock_timeout and transaction budgets.
     const result = await runMigrationsUntilSettled({
       connection,

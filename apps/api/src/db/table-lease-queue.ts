@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as v from "valibot";
 
+import type { SafeId } from "../lib/branded-types";
 import { TABLE_LEASE_QUEUE_LOCK_QUERY } from "../lib/db/aggregate-lock";
 import { executedRows } from "../lib/db/executed-rows";
 import {
@@ -16,6 +17,9 @@ import type { OnlineMigrationConnection } from "./online-migration-connection";
 
 export const TABLE_LEASE_MIGRATION = "20261030213017_scheduler_table_leases";
 const HOLDER_REPORT_LIMIT = 100;
+// Completion retains execution identity beyond its last live lease for recent-run checks.
+export const SCHEDULER_EXECUTION_EVIDENCE_MS = 10 * 60_000;
+const EXPIRED_EXECUTION_PRUNE_LIMIT = 100;
 export const MIGRATION_TABLE_LEASE_WAIT_MS =
   DEFAULT_LEASE_MS + defaultHeartbeatIntervalMs(DEFAULT_LEASE_MS);
 
@@ -47,6 +51,7 @@ type AcquireJobTableLeasesOptions = {
   tables: readonly string[];
   holderId: string;
   leaseMs: number;
+  execution: { token: string; jobId: string; runId: SafeId<"schedulerJobRun"> };
 };
 
 export const acquireJobTableLeases = async ({
@@ -54,6 +59,7 @@ export const acquireJobTableLeases = async ({
   tables,
   holderId,
   leaseMs,
+  execution,
 }: AcquireJobTableLeasesOptions) => {
   if (tables.length === 0) {
     return true;
@@ -80,9 +86,14 @@ export const acquireJobTableLeases = async ({
       [...new Set(tables)].toSorted().map((table) => sql`${table}`),
       sql`, `,
     )}]::text[]) AS table_name`);
-  await tx.execute(sql`INSERT INTO scheduler_table_lease_activity (slot, last_claimed_at)
-    VALUES (0, clock_timestamp())
-    ON CONFLICT (slot) DO UPDATE SET last_claimed_at = EXCLUDED.last_claimed_at`);
+  await tx.execute(sql`DELETE FROM scheduler_table_lease_activity
+    WHERE execution_token IN (SELECT execution_token FROM scheduler_table_lease_activity
+      WHERE expires_at <= clock_timestamp() ORDER BY expires_at
+      LIMIT ${EXPIRED_EXECUTION_PRUNE_LIMIT})`);
+  await tx.execute(sql`INSERT INTO scheduler_table_lease_activity
+    (execution_token, holder_id, job_id, run_id, claimed_at, expires_at)
+    VALUES (${execution.token}, ${holderId}, ${execution.jobId}, ${execution.runId},
+      clock_timestamp(), clock_timestamp() + ${leaseMs + SCHEDULER_EXECUTION_EVIDENCE_MS}::integer * interval '1 millisecond')`);
   return true;
 };
 
@@ -94,6 +105,9 @@ export const renewJobTableLeases = async (
   const rows = await tx.execute(sql`UPDATE scheduler_table_leases
     SET expires_at = now() + ${leaseMs}::integer * interval '1 millisecond'
     WHERE holder_kind = 'job' AND holder_id = ${holderId} AND expires_at > clock_timestamp() RETURNING table_name`);
+  await tx.execute(sql`UPDATE scheduler_table_lease_activity
+    SET expires_at = clock_timestamp() + ${leaseMs + SCHEDULER_EXECUTION_EVIDENCE_MS}::integer * interval '1 millisecond'
+    WHERE holder_id = ${holderId} AND expires_at > clock_timestamp()`);
   return executedRows(rows).length;
 };
 

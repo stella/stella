@@ -18,9 +18,13 @@ scheduler_table_leases.expires_at    timestamptz  not null          table-leases
 
 ## scheduler_table_lease_activity · `schedulerTableLeaseActivity` · table-leases.ts:71 · rls
 
-Durable evidence of successful lease-aware scheduler admission.
+Per-execution evidence outlives completion for the scheduler cutover window.
 
 ```text
-scheduler_table_lease_activity.slot             integer      pk,default,not null  table-leases.ts:74
-scheduler_table_lease_activity.last_claimed_at  timestamptz  not null             table-leases.ts:75
+scheduler_table_lease_activity.execution_token  text         pk,not null       table-leases.ts:74
+scheduler_table_lease_activity.holder_id        text         not null          table-leases.ts:75
+scheduler_table_lease_activity.job_id           text         not null          table-leases.ts:76
+scheduler_table_lease_activity.run_id           safeUuid     unique,not null   table-leases.ts:77
+scheduler_table_lease_activity.claimed_at       timestamptz  default,not null  table-leases.ts:80
+scheduler_table_lease_activity.expires_at       timestamptz  not null          table-leases.ts:83
 ```

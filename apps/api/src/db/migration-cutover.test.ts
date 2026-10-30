@@ -14,41 +14,41 @@ const automatic = { type: "automatic" } as const;
 
 test.each([
   {
-    name: "fresh database without scheduler tables",
-    responses: [[{ jobsExist: false, activityExists: false }]],
-    outcome: "admitted",
-  },
-  {
-    name: "scheduler tables without recent work",
+    name: "fresh database without scheduler storage",
     responses: [
-      [{ jobsExist: true, activityExists: false }],
-      [{ active: false }],
+      [{ jobsExist: false, runsExist: false, activityExists: false }],
     ],
     outcome: "admitted",
   },
   {
-    name: "recent work without table leases",
+    name: "idle scheduler storage without execution records",
     responses: [
-      [{ jobsExist: true, activityExists: false }],
-      [{ active: true }],
+      [{ jobsExist: true, runsExist: true, activityExists: false }],
+      [{ uncovered: false }],
+    ],
+    outcome: "admitted",
+  },
+  {
+    name: "an uncovered execution refuses despite other covered executions",
+    responses: [
+      [{ jobsExist: true, runsExist: true, activityExists: true }],
+      [{ uncovered: true }],
     ],
     outcome: "refused",
   },
   {
-    name: "recent work with an expired lease watermark",
+    name: "an uncovered recent run refuses without claim storage",
     responses: [
-      [{ jobsExist: true, activityExists: true }],
-      [{ active: true }],
-      [{ recent: false }],
+      [{ jobsExist: false, runsExist: true, activityExists: false }],
+      [{ uncovered: true }],
     ],
     outcome: "refused",
   },
   {
-    name: "recent work with recent table leases",
+    name: "all relevant executions are covered regardless of claim age",
     responses: [
-      [{ jobsExist: true, activityExists: true }],
-      [{ active: true }],
-      [{ recent: true }],
+      [{ jobsExist: true, runsExist: true, activityExists: true }],
+      [{ uncovered: false }],
     ],
     outcome: "admitted",
   },

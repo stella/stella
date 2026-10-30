@@ -34,6 +34,7 @@ import {
   finishRunFailure,
   finishRunSkipped,
   finishRunSuccess,
+  runJob,
   runSchedulerOnce,
   type SchedulerDb,
   startLeaseHeartbeat,
@@ -378,6 +379,20 @@ test.each([{ taskTables: [] }, { taskTables: [getTableName(schedulerJobs)] }])(
       })) ?? panic("Expected a scheduler claim");
     const holderId = `${id}:${job.lockedBy}`;
     try {
+      const [claim] = await testDb
+        .select()
+        .from(schedulerTableLeaseActivity)
+        .where(
+          eq(
+            schedulerTableLeaseActivity.executionToken,
+            job.lockedBy ?? panic("Expected token"),
+          ),
+        );
+      expect(claim).toMatchObject({
+        holderId,
+        jobId: id,
+        executionToken: job.lockedBy,
+      });
       const leases = await testDb
         .select({ tableName: schedulerTableLeases.tableName })
         .from(schedulerTableLeases)
@@ -389,6 +404,29 @@ test.each([{ taskTables: [] }, { taskTables: [getTableName(schedulerJobs)] }])(
           getTableName(schedulerTableLeaseActivity),
         ].toSorted(),
       );
+      await runJob({
+        db,
+        job,
+        registry: noopRegistry,
+        runnerId: "infrastructure-reservation",
+        leaseMs: LEASE_MS,
+        heartbeatIntervalMs: LEASE_MS / 3,
+        maxRuntimeMs: LEASE_MS,
+        signal: undefined,
+      });
+      const run = await readLatestRun(id);
+      expect(run.id).toBe(claim?.runId);
+      expect(
+        await testDb
+          .select()
+          .from(schedulerTableLeaseActivity)
+          .where(
+            eq(
+              schedulerTableLeaseActivity.executionToken,
+              job.lockedBy ?? panic("Expected token"),
+            ),
+          ),
+      ).toHaveLength(1);
     } finally {
       await testDb
         .delete(schedulerTableLeases)
