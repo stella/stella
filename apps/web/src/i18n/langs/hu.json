@@ -2870,6 +2870,8 @@
       "forbidden": "Nincs jogosultsága ehhez a művelethez.",
       "hostedCheckoutOpen": "Ennél a szervezetnél már van megnyitott fizetési folyamat. Fejezze be, vagy indítson újat, miután lejárt.",
       "hostedSubscriptionLive": "Ennek a szervezetnek már van előfizetése. Módosítsa a „Hosztolt használat kezelése” részben.",
+      "idempotencyInProgress": "A kérés feldolgozása még folyamatban van. Várjon egy kicsit, majd próbálja újra.",
+      "idempotencyKeyReused": "Az adatok az előző próbálkozás óta megváltoztak. Állítsa alaphelyzetbe az űrlapot, majd próbálja újra.",
       "internalServerError": "Hiba történt. Próbálja újra.",
       "legalSourceEntityLimitReached": "Ez az ügy elérte az elemek korlátját, ezért a dokumentum nem hozható létre.",
       "legalSourceFilePropertyMissing": "Ebből az ügyből hiányzik egy fájltulajdonság, ezért a dokumentum nem hozható létre.",

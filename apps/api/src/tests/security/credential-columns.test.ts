@@ -60,6 +60,10 @@ const classificationSchema = v.variant("status", [
     reason: reasonSchema,
   }),
   v.strictObject({ status: v.literal("cleartext"), reason: reasonSchema }),
+  v.strictObject({
+    status: v.literal("resource_content"),
+    reason: reasonSchema,
+  }),
 ]);
 const registrySchema = v.record(v.string(), classificationSchema);
 type ClassificationRegistry = v.InferOutput<typeof registrySchema>;
@@ -102,6 +106,7 @@ const OPAQUE_CREDENTIAL_COLUMNS = new Set([
   "sharepoint_oauth_state.state",
   "mcp_oauth_clients.registration_response",
   "business_registry_credentials.ciphertext",
+  "request_idempotency_receipts.response_body",
 ]);
 
 const discoverTables = async () => {
@@ -242,7 +247,10 @@ const organizationCredentialTables = () => {
   const credentialTables = new Set(
     Object.entries(classifications)
       .filter(
-        ([, classification]) => classification.status !== "public_by_design",
+        ([, classification]) =>
+          classification.status === "hashed" ||
+          classification.status === "encrypted" ||
+          classification.status === "cleartext",
       )
       .map(([column]) => column.split(".").at(0)),
   );

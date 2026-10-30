@@ -41,6 +41,7 @@ import {
   SANCTIONS_COMPANY_REGISTRIES,
 } from "@/api/lib/business-registries/sanctions-check-vocabulary";
 import type { CITATION_TREATMENTS } from "@/api/lib/case-law/citation-vocabulary";
+import { CASE_LAW_COVERAGE_FRESHNESS } from "@/api/lib/case-law/coverage-freshness";
 import {
   DECISION_READ_ABSENCE_STATUSES,
   DECISION_READ_STATUS,
@@ -1451,6 +1452,11 @@ const decisionIdentifiersProjection = v.optional(
 const CASE_LAW_COVERAGE_COUNTRIES_PROJECTION = projectionBranch(
   v.strictObject({
     asOf: v.string(),
+    // refresh_pending: the figures are the last permitted answer, not a fresh one.
+    freshness: v.strictObject({
+      status: v.picklist(Object.values(CASE_LAW_COVERAGE_FRESHNESS)),
+      ageSeconds: v.number(),
+    }),
     countries: v.array(
       v.strictObject({
         country: v.string(),

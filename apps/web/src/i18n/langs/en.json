@@ -2870,6 +2870,8 @@
       "forbidden": "You do not have permission to do this.",
       "hostedCheckoutOpen": "A checkout for this organization is already open. Complete it, or start a new one after it expires.",
       "hostedSubscriptionLive": "This organization already has a subscription. Change it under Manage hosted usage.",
+      "idempotencyInProgress": "This request is still being processed. Wait a moment, then try again.",
+      "idempotencyKeyReused": "This submission changed since the previous attempt. Reset the form and try again.",
       "internalServerError": "The server could not complete the action. Please try again.",
       "legalSourceEntityLimitReached": "This matter has reached its item limit, so the document could not be created.",
       "legalSourceFilePropertyMissing": "This matter is missing a file property, so the document could not be created.",

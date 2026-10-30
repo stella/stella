@@ -61,6 +61,7 @@ import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { flowDetailOptions, knowledgeKeys } from "@/lib/knowledge/queries";
 import { WEEKDAY_NAME_FORMAT } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
@@ -317,6 +318,7 @@ const FlowEditorForm = ({
   onBack,
   onSaved,
 }: FlowEditorFormProps) => {
+  const idempotentSubmit = useIdempotentSubmit();
   const t = useTranslations();
   const queryClient = useQueryClient();
   const isEdit = flowId !== null;
@@ -420,7 +422,11 @@ const FlowEditorForm = ({
     setSaving(true);
     const response =
       flowId === null
-        ? await api.flows.post(body)
+        ? await idempotentSubmit.run({
+            operation: "api.flows",
+            body,
+            send: async (input) => api.flows.post(input),
+          })
         : await api
             .flows({ flowId: toSafeId<"flowDefinition">(flowId) })
             .put(body);

@@ -3,10 +3,12 @@ import { panic, Result } from "better-result";
 import type { Verdict } from "@stll/db-load-gate/health";
 
 import { createScriptBackfillRuntime } from "@/api/db/backfill-runtime";
+import type { Transaction } from "@/api/db/root";
 import { computeCaseLawCoverageAnswer } from "@/api/handlers/case-law/decisions/coverage";
 import { createSafeId } from "@/api/lib/branded-types";
 import { resetLocalCaseLawConfigForTesting } from "@/api/lib/case-law/local-case-law-config";
 import { resetPublicCaseLawConfigForTesting } from "@/api/lib/case-law/public-case-law-config";
+import { withAggregateSavepoint } from "@/api/lib/db/aggregate-lock";
 import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import { DECLARED_SCHEDULER_JOBS } from "@/api/lib/scheduler/jobs";
 import { createSchedulerTaskRegistry } from "@/api/lib/scheduler/registry";
@@ -19,6 +21,14 @@ import { metricsFromPlan, sumMetrics } from "./measurement";
 import { QUERY_PERF_OWNER_DEADLINES } from "./owner-deadlines";
 import { analyzePlan } from "./plan-analyzer";
 import { measureJobStatements } from "./statement-measurement";
+
+/** Lend fixture transactions through the aggregate savepoint owner. */
+export const scheduledMeasurementDatabase = (
+  tx: Pick<Transaction, "execute" | "transaction">,
+) => ({
+  transaction: async <T>(run: (child: Transaction) => Promise<T>) =>
+    await withAggregateSavepoint(tx, run),
+});
 
 const noopTask = () => undefined;
 
@@ -39,12 +49,14 @@ export const measureScheduledJobRun = async ({
   jobId,
   task: taskName,
   admission = QUERY_PERF_ADMISSION,
+  now = new Date("2026-01-10T12:00:00Z"),
 }: {
   database: GatedTestDb;
   jobId: string;
   task: string;
   /** The governor's verdict; a test passes a hold to prove the measurement notices one. */
   admission?: Verdict;
+  now?: Date;
 }) => {
   const job =
     DECLARED_SCHEDULER_JOBS.find(({ id }) => id === jobId) ??
@@ -80,8 +92,8 @@ export const measureScheduledJobRun = async ({
         asTestRaw<SchedulerTaskContext>({
           db,
           job: { id: job.id, task: job.task },
-          payload: null,
-          dueAt: DueSlot.of({ nextRunAt: new Date("2000-01-01") }),
+          payload: "payload" in job ? job.payload : null,
+          dueAt: DueSlot.of({ nextRunAt: now, lockedAt: now }),
           runId: createSafeId<"schedulerJobRun">(),
           signal: new AbortController().signal,
           scheduleContinuation: noopTask,

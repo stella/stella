@@ -73,6 +73,7 @@ import { RECORD_MISSING_ORGANIZATION_ACCESS_STATES_TASK } from "@/api/lib/schedu
 import { RECONCILE_ORGANIZATION_FILE_RESERVATIONS_TASK } from "@/api/lib/scheduler/tasks/organization-file-reservation-reconcile";
 import { SWEEP_REGISTRATIONS_TASK } from "@/api/lib/scheduler/tasks/registration-retention";
 import { RECONCILE_REPORT_EXPORTS_TASK } from "@/api/lib/scheduler/tasks/report-export-reconcile";
+import { SWEEP_REQUEST_RECEIPTS_TASK } from "@/api/lib/scheduler/tasks/request-receipt-retention";
 import { RESET_REVIEW_ORGANIZATION_TASK } from "@/api/lib/scheduler/tasks/review-organization-reset";
 import { DRAIN_SANCTIONS_MONITORING_TASK } from "@/api/lib/scheduler/tasks/sanctions-monitoring";
 import { BACKFILL_SANCTIONS_MONITORING_TASK } from "@/api/lib/scheduler/tasks/sanctions-monitoring-backfill";
@@ -286,6 +287,16 @@ type DeclaredSchedulerJob = SchedulerJobDefinition & {
  * was no work to do" — so the set has to be checkable from outside the loop.
  */
 export const DECLARED_SCHEDULER_JOBS = [
+  {
+    description: "Delete request receipts past their replay window",
+    id: "requests.sweepReceipts.hourly",
+    mode: "recurring",
+    payloadUpdate: "preserve",
+    payload: { paused: false },
+    schedule: { type: "interval", everyMs: 60 * 60 * 1000 },
+    task: SWEEP_REQUEST_RECEIPTS_TASK,
+    reads: { budget: "scheduled.requests.sweepReceipts" },
+  },
   {
     description: "Precompute the public case-law coverage answer",
     id: SCHEDULER_BACKFILL_IDS.coverage,

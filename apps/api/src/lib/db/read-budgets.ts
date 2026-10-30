@@ -41,6 +41,12 @@ export const READ_BUDGETS = {
     reason:
       "A governed coverage refresh reads the source policy, computes the bounded coverage snapshot, and writes its summary and audit record. The production-shape corpus fixture measures 89 pages; 150 pages leaves more than 50% headroom for production-height indexes.",
   },
+  "scheduled.requests.sweepReceipts": {
+    surface: "scheduled-job",
+    pages: 20_000,
+    reason:
+      "Four rounds each discover at most 128 completed and 128 pending receipts, then lock and delete at most 128 scoped rows: 2,048 row visits. Nine index/heap pages per visit leave 1,568 pages for tenant-scope reads and fixed probes under the 20,000-page ungoverned ceiling. State-leading ordered expiry probes keep this independent of total receipt cardinality; PostgreSQL measures quiet, expired and mixed cohorts at both sizes.",
+  },
   "statement.caseLaw.coverageSources": {
     surface: "statement",
     pages: 256,

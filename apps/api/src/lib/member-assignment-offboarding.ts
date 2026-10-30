@@ -35,6 +35,7 @@ import {
   mcpUserConnections,
   mcpWebHandoff,
   pdfSigningSessions,
+  requestIdempotencyReceipts,
   searchHistoryEntries,
   searchHistoryOwners,
   searchHistoryTombstones,
@@ -65,7 +66,10 @@ import {
   lockChatOwnerStoredContentTransitionOnTx,
   tryLockAccountChatOwnerStoredContentTransitionsOnTx,
 } from "@/api/lib/chat/thread-stored-content-egress";
-import { lockOpenSigningPage } from "@/api/lib/db/aggregate-lock";
+import {
+  lockOpenSigningPage,
+  lockRequestReceiptPrincipalRows,
+} from "@/api/lib/db/aggregate-lock";
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transitionBatch } from "@/api/lib/db/transitions";
 import { clearOrganizationCorrespondenceAssignments } from "@/api/lib/email/correspondence/offboarding";
@@ -814,6 +818,50 @@ const clearMemberTimeEntryApprovals = async ({
   }
 };
 
+/** Membership loss clears user-owned request results before the roster change commits. */
+const clearMemberRequestReceipts = async ({
+  tx,
+  scope,
+  userId,
+}: ClearMemberAssignmentsOptions) => {
+  // Matter removal retains organization-owned coordination for other matters;
+  // account erasure deletes every receipt through the user FK cascade.
+  if (scope.type !== "organization") {
+    return;
+  }
+  const { organizationId } = scope;
+  await runScopedWorkInTransaction({
+    tx,
+    organizationId,
+    userId,
+    workspaceScope: { type: WORKSPACE_ACCESS_MODE.explicit, workspaceIds: [] },
+    fn: async (scopedTx) => {
+      const locked = await lockRequestReceiptPrincipalRows({
+        tx: scopedTx,
+        organizationId,
+        userId,
+      });
+      if (locked.status === "busy") {
+        abortTransaction(removalBusy());
+      }
+      if (locked.rows.length === 0) {
+        return;
+      }
+      // audit: skip - the enclosing membership removal records its lifecycle audit in this transaction.
+      await scopedTx.delete(requestIdempotencyReceipts).where(
+        and(
+          eq(requestIdempotencyReceipts.organizationId, organizationId),
+          eq(requestIdempotencyReceipts.userId, userId),
+          inArray(
+            requestIdempotencyReceipts.id,
+            locked.rows.map(({ id }) => id),
+          ),
+        ),
+      );
+    },
+  });
+};
+
 /** Caller holds the departing memberships until cleanup and deletion commit. */
 export const clearMemberAssignments = async (
   options: ClearMemberAssignmentsOptions,
@@ -831,6 +879,7 @@ export const clearMemberAssignments = async (
   await clearMemberTimeEntryApprovals(options);
   await closeMemberExchanges(options);
   await clearMemberContactAssignments(options);
+  await clearMemberRequestReceipts(options);
 };
 
 type MemberCleanupWorkspaceOptions = {
@@ -1669,6 +1718,8 @@ export type MemberCleanupDisposition =
  * schema coverage guard derives its census from this list.
  */
 export const ORGANIZATION_MEMBER_CLEANUP_COLUMNS = [
+  [requestIdempotencyReceipts.userId, "cleared"],
+  [requestIdempotencyReceipts.responseBody, "cleared"],
   [member.userId, "cleared"],
   [desktopPresence.userId, "cleared"],
   [searchHistoryEntries.userId, "cleared"],

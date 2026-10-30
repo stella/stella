@@ -2870,6 +2870,8 @@
       "forbidden": "Neturite teisės atlikti šio veiksmo.",
       "hostedCheckoutOpen": "Šiai organizacijai jau atidarytas apmokėjimas. Užbaikite jį arba pradėkite naują, kai jis baigs galioti.",
       "hostedSubscriptionLive": "Ši organizacija jau turi prenumeratą. Pakeiskite ją skiltyje „Tvarkyti prieglobos naudojimą“.",
+      "idempotencyInProgress": "Ši užklausa vis dar apdorojama. Šiek tiek palaukite ir bandykite dar kartą.",
+      "idempotencyKeyReused": "Duomenys pasikeitė nuo ankstesnio bandymo. Iš naujo nustatykite formą ir bandykite dar kartą.",
       "internalServerError": "Kažkas nepavyko. Bandykite dar kartą.",
       "legalSourceEntityLimitReached": "Šioje byloje pasiektas elementų limitas, todėl dokumento sukurti nepavyko.",
       "legalSourceFilePropertyMissing": "Šioje byloje trūksta failo ypatybės, todėl dokumento sukurti nepavyko.",

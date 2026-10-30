@@ -37,6 +37,7 @@ import { useOptimisticAnnotationMutations } from "@/components/legal-reader/anno
 import { useReaderAnnotationHistory } from "@/components/legal-reader/annotations/use-reader-annotation-history";
 import type { ReaderAnnotationController } from "@/components/legal-reader/annotations/use-reader-annotation-history";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useSessionStorage } from "@/hooks/use-session-storage";
 import { SIGNED_OUT_QUERY_OWNER } from "@/lib/account/queries";
 import {
@@ -51,6 +52,8 @@ import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
+import type { IdempotentRequest } from "@/lib/idempotency/use-idempotent-submit";
 import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
 import { useQueryViewError } from "@/lib/use-query-view";
@@ -62,16 +65,32 @@ const GUEST_ANNOTATION_MIGRATION_CONCURRENCY = 4;
 /** Posts one guest mark to the signed-in account under its own request id. */
 const uploadGuestAnnotation = async (
   item: GuestAnnotation,
+  request: IdempotentRequest,
 ): Promise<Result<void, Error>> =>
   await Result.tryPromise(async () => {
-    const response = await api.reader.annotations.post({
-      ...item.input,
-      requestId: toSafeId<"legalReaderAnnotation">(item.requestId),
-      targetId: item.targetId,
-      targetType: item.targetType,
-    });
+    const response = await api.reader.annotations.post(
+      {
+        ...item.input,
+        requestId: toSafeId<"legalReaderAnnotation">(item.requestId),
+        targetId: item.targetId,
+        targetType: item.targetType,
+      },
+      request,
+    );
     unwrapApiResponse(response);
   });
+
+const useGuestAnnotationUpload = () => {
+  const submitIntent = useIdempotentSubmit();
+  return useLatestCallback(
+    async (item: GuestAnnotation) =>
+      await submitIntent.run({
+        operation: "reader.annotations.migrate",
+        body: item,
+        send: uploadGuestAnnotation,
+      }),
+  );
+};
 
 /** One failure per mark, grouped by the kind of document it was made on. */
 const captureGuestMigrationFailure = (
@@ -127,6 +146,8 @@ export const useReaderAnnotations = (
   const user = useMaybeAuthenticatedUser();
   const storage = useSessionStorage();
   const [localStore, setStore] = useState(EMPTY_GUEST_ANNOTATION_STORE);
+  const submitIntent = useIdempotentSubmit();
+  const migrateAnnotation = useGuestAnnotationUpload();
   const targetKey = readerAnnotationTargetKey(target);
 
   const annotationsQuery = readerAnnotationsOptions({
@@ -143,9 +164,10 @@ export const useReaderAnnotations = (
   const { create, remove, update } = useOptimisticAnnotationMutations({
     handlerId: `reader-annotations.${target.type}`,
     create: async (input: CreateAnnotationInput) => {
-      const response = await api.reader.annotations.post({
-        ...input,
-        ...targetKey,
+      const response = await submitIntent.run({
+        operation: "reader.annotations.create",
+        body: { ...input, ...targetKey },
+        send: api.reader.annotations.post,
       });
       return unwrapApiResponse(response);
     },
@@ -204,7 +226,7 @@ export const useReaderAnnotations = (
           limit: GUEST_ANNOTATION_MIGRATION_CONCURRENCY,
           owner: migrationOwner,
           storage,
-          upload: uploadGuestAnnotation,
+          upload: migrateAnnotation,
         });
         for (const [index, result] of results.entries()) {
           const item = items[index];
@@ -234,7 +256,7 @@ export const useReaderAnnotations = (
       })(),
       "legal-reader.migrate-guest-annotations",
     );
-  }, [queryClient, signedIn, storage, t]);
+  }, [migrateAnnotation, queryClient, signedIn, storage, t]);
 
   // The tab's marks as they are now, not as this render saw them: a step
   // taken right after another reads what that one left.

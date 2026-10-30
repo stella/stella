@@ -1,8 +1,4 @@
-import {
-  useMutation,
-  useQueryClient,
-  useSuspenseQuery,
-} from "@tanstack/react-query";
+import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -32,6 +28,7 @@ import {
 } from "@/lib/files/attached-template-upload-preflight";
 import { resolveDocumentReferenceMatches } from "@/lib/files/document-reference-queries";
 import { useDocumentReferenceUploadStore } from "@/lib/files/document-reference-upload-store";
+import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { toSafeId } from "@/lib/safe-id";
 import { UploadQueue } from "@/lib/upload-queue";
 import {
@@ -724,7 +721,8 @@ export const useCreateFileEntities = (workspaceId: string) => {
     }
   };
 
-  const { isPending, mutate } = useMutation({
+  const { isPending, mutate } = useIdempotentMutation({
+    idempotencyScope: workspaceId,
     mutationFn: async (input: CreateFileEntitiesInput) => {
       const parentId = input.parentId ?? null;
 
