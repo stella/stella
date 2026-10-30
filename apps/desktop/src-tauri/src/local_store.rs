@@ -242,9 +242,11 @@ pub enum RuntimeFileMode {
   Executable,
 }
 
+#[cfg(all(unix, not(target_os = "linux")))]
 #[derive(Debug)]
 pub struct UnsupportedPinnedOperation(pub &'static str);
 
+#[cfg(all(unix, not(target_os = "linux")))]
 impl std::fmt::Display for UnsupportedPinnedOperation {
   fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     write!(
@@ -255,6 +257,7 @@ impl std::fmt::Display for UnsupportedPinnedOperation {
   }
 }
 
+#[cfg(all(unix, not(target_os = "linux")))]
 impl std::error::Error for UnsupportedPinnedOperation {}
 
 pub fn create_runtime_file(
@@ -285,7 +288,7 @@ pub fn create_temporary_root() -> std::io::Result<PathBuf> {
 }
 
 #[cfg(unix)]
-pub fn bind_private_socket(path: &Path) -> std::io::Result<tokio::net::UnixListener> {
+pub fn bind_private_socket(path: &Path) -> std::io::Result<std::os::fd::OwnedFd> {
   platform::Parent::at(path)?.bind_socket()
 }
 
@@ -294,11 +297,16 @@ pub fn bind_private_socket(path: &Path) -> std::io::Result<tokio::net::UnixListe
 #[cfg(all(test, unix, not(target_os = "linux")))]
 pub(crate) fn bind_socket_fixture(
   path: &Path,
-) -> std::io::Result<tokio::net::UnixListener> {
-  use std::os::unix::fs::PermissionsExt;
-  let listener = tokio::net::UnixListener::bind(path)?;
-  fs::set_permissions(path, fs::Permissions::from_mode(0o600))?;
-  Ok(listener)
+) -> std::io::Result<std::os::fd::OwnedFd> {
+  platform::bind_socket_fixture(path)
+}
+
+#[cfg(windows)]
+pub(crate) const BROKER_PIPE_PREFIX: &str = r"\\.\pipe\stella-token-";
+
+#[cfg(windows)]
+pub fn open_broker_pipe(endpoint: &str) -> std::io::Result<fs::File> {
+  platform::open_broker_pipe(endpoint)
 }
 
 pub fn create_private_dir(directory: &Path) -> std::io::Result<()> {

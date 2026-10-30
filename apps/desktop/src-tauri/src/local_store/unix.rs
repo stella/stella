@@ -286,7 +286,7 @@ impl Parent {
   }
 
   #[cfg(target_os = "linux")]
-  pub(super) fn bind_socket(&self) -> io::Result<tokio::net::UnixListener> {
+  pub(super) fn bind_socket(&self) -> io::Result<std::os::fd::OwnedFd> {
     use std::os::fd::AsRawFd;
     let metadata = self.directory.metadata()?;
     check_owner(&self.directory)?;
@@ -298,7 +298,7 @@ impl Parent {
     }
     let path = PathBuf::from(format!("/proc/self/fd/{}", self.directory.as_raw_fd()))
       .join(&self.name);
-    let listener = tokio::net::UnixListener::bind(path)?;
+    let listener = std::os::unix::net::UnixListener::bind(path)?;
     // O_PATH can pin a socket inode without opening a connection to it. The
     // no-follow open also refuses to chmod a replaced symbolic link's target.
     let socket = File::from(fs::openat(
@@ -308,11 +308,11 @@ impl Parent {
       Mode::empty(),
     )?);
     restrict_socket(&socket)?;
-    Ok(listener)
+    Ok(listener.into())
   }
 
   #[cfg(not(target_os = "linux"))]
-  pub(super) fn bind_socket(&self) -> io::Result<tokio::net::UnixListener> {
+  pub(super) fn bind_socket(&self) -> io::Result<std::os::fd::OwnedFd> {
     check_owner(&self.directory)?;
     Err(io::Error::new(
       io::ErrorKind::Unsupported,
@@ -416,6 +416,14 @@ impl Parent {
     fs::fsync(&self.directory)?;
     Ok(())
   }
+}
+
+#[cfg(all(test, not(target_os = "linux")))]
+pub(super) fn bind_socket_fixture(path: &Path) -> io::Result<std::os::fd::OwnedFd> {
+  use std::os::unix::fs::PermissionsExt;
+  let listener = std::os::unix::net::UnixListener::bind(path)?;
+  std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))?;
+  Ok(listener.into())
 }
 
 #[cfg(target_os = "linux")]

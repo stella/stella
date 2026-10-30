@@ -49,3 +49,8 @@ parent. Platforms without a handle-relative socket namespace return
 `UnsupportedPinnedOperation` with `ErrorKind::Unsupported`; in particular,
 macOS broker startup fails closed instead of using path-based binding. Protocol
 fixtures still exercise real peer credentials and socket I/O on those platforms.
+
+The socket creation boundary returns an owned OS descriptor; the broker owns
+nonblocking registration and asynchronous I/O. `open_broker_pipe` opens only
+the managed Windows named-pipe namespace with identification-only security QoS.
+The shared storage module does not depend on an async network runtime.

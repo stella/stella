@@ -302,15 +302,18 @@ impl CodexManagedTokenBroker {
       return Err(std::io::Error::other("token broker path is too long"));
     }
     let listener = crate::local_store::bind_private_socket(&path)?;
-    Self::start_with_listener(source, directory, listener)
+    Self::start_with_socket(source, directory, listener)
   }
 
   #[cfg(unix)]
-  fn start_with_listener<S: TokenSource>(
+  fn start_with_socket<S: TokenSource>(
     source: Arc<S>,
     directory: OwnedDirectory,
-    listener: tokio::net::UnixListener,
+    socket: std::os::fd::OwnedFd,
   ) -> std::io::Result<Self> {
+    let listener = std::os::unix::net::UnixListener::from(socket);
+    listener.set_nonblocking(true)?;
+    let listener = tokio::net::UnixListener::from_std(listener)?;
     let path = directory.path.join("s");
     let endpoint = path
       .to_str()
@@ -356,7 +359,11 @@ impl CodexManagedTokenBroker {
     use std::os::windows::io::AsHandle;
     use tokio::net::windows::named_pipe::{NamedPipeServer, ServerOptions};
 
-    let endpoint = format!(r"\\.\pipe\stella-token-{}", uuid::Uuid::new_v4());
+    let endpoint = format!(
+      "{}{}",
+      crate::local_store::BROKER_PIPE_PREFIX,
+      uuid::Uuid::new_v4()
+    );
     // Remote clients are refused, only the current user may open the pipe,
     // and the first instance claims the name, so no other process can have
     // created it first.
@@ -624,21 +631,7 @@ fn connect(endpoint: &str) -> Option<std::os::unix::net::UnixStream> {
 
 #[cfg(windows)]
 fn connect(endpoint: &str) -> Option<std::fs::File> {
-  use std::os::windows::fs::OpenOptionsExt;
-
-  /// `SECURITY_SQOS_PRESENT | SECURITY_IDENTIFICATION`: a server answering
-  /// on this name can identify the helper but never act as it.
-  const IDENTIFY_ONLY: u32 = 0x0010_0000 | 0x0001_0000;
-
-  if !endpoint.starts_with(r"\\.\pipe\stella-token-") {
-    return None;
-  }
-  std::fs::OpenOptions::new()
-    .read(true)
-    .write(true)
-    .security_qos_flags(IDENTIFY_ONLY)
-    .open(endpoint)
-    .ok()
+  crate::local_store::open_broker_pipe(endpoint).ok()
 }
 
 #[cfg(not(any(unix, windows)))]
@@ -688,7 +681,7 @@ mod tests {
       let directory = OwnedDirectory::create().unwrap();
       let listener =
         crate::local_store::bind_socket_fixture(&directory.path.join("s")).unwrap();
-      CodexManagedTokenBroker::start_with_listener(
+      CodexManagedTokenBroker::start_with_socket(
         Arc::new(FixedSource),
         directory,
         listener,
