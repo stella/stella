@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
 
+import { treeBaseRevision } from "@stll/scripts/src/tree-base-revision";
+
 import {
   MCP_TOOL_READ_BUDGETS,
   READ_BUDGETS,
@@ -15,7 +17,6 @@ import {
 } from "@/api/tests/query-perf/registry";
 
 import {
-  ledgerMergeBase,
   parseReasonedLedger,
   runLedgerMembershipGuard,
 } from "../../../../../scripts/ledger-membership.ts";
@@ -148,7 +149,7 @@ describe("read budget declarations", () => {
         parseLedger: parseReasonedLedger,
         label: "read-budgets-unmeasured",
         remediation: "declare a read budget and measure it instead",
-        args: ["--base", ledgerMergeBase({ repoRoot, baseRef: "origin/main" })],
+        args: ["--base", treeBaseRevision({ repoRoot })],
       }),
     ).toBe(0);
   });
