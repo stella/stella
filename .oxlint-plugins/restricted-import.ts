@@ -205,7 +205,7 @@ const RESTRICTED_IMPORT_RULES = {
     {
       messageId: "requireOwner",
       message:
-        "Raw OAuth resource verifiers belong to mcp/auth.ts; use verifyOAuthToken for admitted token results.",
+        "Raw OAuth resource verifiers belong to mcp/auth.ts; use verifyOAuthToken from mcp/auth for admitted token results.",
       modules: ["@better-auth/oauth-provider/resource-client"],
       restriction: {
         type: "module",
@@ -213,6 +213,18 @@ const RESTRICTED_IMPORT_RULES = {
         dynamicImports: DYNAMIC_IMPORTS.restricted,
       },
       owners: ["apps/api/src/mcp/auth.ts"],
+    },
+    {
+      messageId: "requireAdmittedVerifier",
+      message:
+        "The raw OAuth provider verifier is private to mcp/auth.ts; import verifyOAuthToken, which couples verification with grant admission.",
+      modules: ["apps/api/src/mcp/auth"],
+      restriction: {
+        type: "exports",
+        names: new Set(["getVerifyBearerToken"]),
+        hit: EXPORT_HIT.binding,
+      },
+      owners: [],
     },
     {
       messageId: "requireJwtOwner",

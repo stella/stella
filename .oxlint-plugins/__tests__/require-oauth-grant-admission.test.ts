@@ -9,6 +9,8 @@ describe.serial(RULE, () => {
     'import * as raw from "@better-auth/oauth-provider/resource-client"; raw.oauthProviderResourceClient();',
     'const raw = await import("@better-auth/oauth-provider/resource-client"); raw.oauthProviderResourceClient();',
     'export * from "@better-auth/oauth-provider/resource-client";',
+    'import { getVerifyBearerToken } from "@/api/mcp/auth"; getVerifyBearerToken()(token, options);',
+    'import * as auth from "@/api/mcp/auth"; auth.getVerifyBearerToken();',
     'import { jwtVerify as verify } from "jose"; verify(token, key);',
     'import * as jose from "jose"; jose.jwtVerify(token, key);',
   ])("requires the admission owner: %s", async (source) => {
@@ -45,7 +47,7 @@ describe.serial(RULE, () => {
     expect(
       await lintSingleRule(
         RULE,
-        'import { verifyOAuthToken } from "@/api/lib/auth/oauth-grant-admission"; verifyOAuthToken(token, options);',
+        'import { verifyOAuthToken } from "@/api/mcp/auth"; verifyOAuthToken(token, options);',
       ),
     ).toEqual([]);
   });

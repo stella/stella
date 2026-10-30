@@ -1,5 +1,6 @@
 import { oauthProviderResourceClient } from "@better-auth/oauth-provider/resource-client";
 import { Result } from "better-result";
+import type { JWTPayload, JWTVerifyOptions } from "jose";
 
 import { ACCOUNT_EXPORT_SCOPES } from "@stll/api-contract";
 
@@ -10,12 +11,16 @@ import {
 import {
   admitMcpSession,
   classifyMcpTokenVerificationError,
-  verifyOAuthToken,
+  extractMcpSession,
 } from "@/api/lib/auth/oauth-grant-admission";
 import type { AdmittedMcpSession } from "@/api/lib/auth/oauth-grant-admission";
 import { getReviewAccountConfig } from "@/api/lib/auth/review-account";
 import { narrowReviewOrganizationScopes } from "@/api/lib/auth/review-account-policy";
 import type { ReviewAccountConfig } from "@/api/lib/auth/review-account-policy";
+import {
+  SERVICE_CLIENT_PRINCIPAL,
+  SERVICE_CLIENT_PRINCIPAL_CLAIM,
+} from "@/api/lib/db/service-client-contract";
 import { isMachineApiKeyCredential } from "@/api/lib/machine-api-key-config";
 import type { resolveMachineApiKeySession } from "@/api/mcp/api-key-auth";
 import type { McpMode } from "@/api/mcp/constants";
@@ -39,7 +44,7 @@ export type VerifyBearerToken = ReturnType<
 
 let verifyBearerToken: VerifyBearerToken | undefined;
 
-export const getVerifyBearerToken = (): VerifyBearerToken => {
+const getVerifyBearerToken = (): VerifyBearerToken => {
   verifyBearerToken ??=
     oauthProviderResourceClient().getActions().verifyBearerToken;
   return verifyBearerToken;
@@ -59,6 +64,72 @@ export {
   extractMcpSession,
   classifyMcpTokenVerificationError,
 } from "@/api/lib/auth/oauth-grant-admission";
+
+const admittedServiceToken = Symbol("admittedServiceToken");
+type AdmittedServicePayload = JWTPayload & {
+  readonly [admittedServiceToken]: true;
+};
+type VerifiedOAuthToken =
+  | { type: "user"; payload: JWTPayload; session: AdmittedMcpSession }
+  | { type: "service"; payload: AdmittedServicePayload };
+
+type OAuthVerificationOptions = {
+  jwksUrl: string;
+  verifyOptions: JWTVerifyOptions &
+    Required<Pick<JWTVerifyOptions, "audience" | "issuer">>;
+};
+
+type VerifyOAuthTokenOptions = {
+  verificationOptions: OAuthVerificationOptions;
+  /** Injected verifier for tests; production uses the private provider verifier. */
+  verifyToken?: VerifyBearerToken | undefined;
+  admissionOptions?: Parameters<typeof admitMcpSession>[1];
+};
+
+/**
+ * Signature verification and user-grant admission form one resource boundary.
+ * The raw provider verifier is private to this module, so no token can be
+ * verified without passing grant admission.
+ */
+export const verifyOAuthToken = async (
+  token: string,
+  {
+    verificationOptions,
+    verifyToken,
+    admissionOptions,
+  }: VerifyOAuthTokenOptions,
+): Promise<
+  Result<VerifiedOAuthToken, McpAuthenticationError | McpTokenVerificationError>
+> => {
+  const verify = verifyToken ?? getVerifyBearerToken();
+  const verified = await Result.tryPromise({
+    try: async () => await verify(token, verificationOptions),
+    catch: classifyMcpTokenVerificationError,
+  });
+  if (verified.isErr()) {
+    return verified;
+  }
+  const payload = verified.value;
+  if (payload[SERVICE_CLIENT_PRINCIPAL_CLAIM] === SERVICE_CLIENT_PRINCIPAL) {
+    return Result.ok({
+      type: "service",
+      payload: { ...payload, [admittedServiceToken]: true },
+    } as const satisfies VerifiedOAuthToken);
+  }
+  const extracted = extractMcpSession(payload);
+  if (extracted.isErr()) {
+    return extracted;
+  }
+  const admitted = await admitMcpSession(extracted.value, admissionOptions);
+  return admitted.map(
+    (session) =>
+      ({
+        type: "user",
+        payload,
+        session,
+      }) as const satisfies VerifiedOAuthToken,
+  );
+};
 
 /**
  * Authenticate an MCP request from its bearer credential.
@@ -88,7 +159,7 @@ export const verifyMcpAccessToken = async (
 ) =>
   await verifyOAuthToken(bearerToken, {
     verificationOptions: getMcpAccessTokenVerificationOptions(mode),
-    verifyToken: verifyToken ?? getVerifyBearerToken(),
+    verifyToken,
     admissionOptions,
   });
 
@@ -128,7 +199,7 @@ export const authenticateMcpRequest = async (
   }
   const verified = await verifyMcpAccessToken(bearerToken, {
     mode,
-    verifyToken: verifyToken ?? getVerifyBearerToken(),
+    verifyToken,
     admissionOptions,
   });
   if (verified.isErr()) {
@@ -175,7 +246,7 @@ export const authenticateAccountExportRequest = async (
       ...options,
       verifyOptions: { ...options.verifyOptions, audience: audiences },
     },
-    verifyToken: verifyToken ?? getVerifyBearerToken(),
+    verifyToken,
     admissionOptions,
   });
   if (authenticated.isErr()) {

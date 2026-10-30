@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import type { JWTPayload, JWTVerifyOptions } from "jose";
+import type { JWTPayload } from "jose";
 
 import { readOAuthGrantAdmission } from "@/api/db/root";
 import { OAUTH_GRANT_ID_CLAIM } from "@/api/lib/auth/oauth-grant-identity";
@@ -244,67 +244,4 @@ export const admitMcpSession = async (
     return admitted;
   }
   return admitted.value.map((value) => ({ ...session, credential: value }));
-};
-
-const admittedServiceToken = Symbol("admittedServiceToken");
-type AdmittedServicePayload = JWTPayload & {
-  readonly [admittedServiceToken]: true;
-};
-type VerifiedOAuthToken =
-  | { type: "user"; payload: JWTPayload; session: AdmittedMcpSession }
-  | { type: "service"; payload: AdmittedServicePayload };
-
-type OAuthVerificationOptions = {
-  jwksUrl: string;
-  verifyOptions: JWTVerifyOptions &
-    Required<Pick<JWTVerifyOptions, "audience" | "issuer">>;
-};
-
-type VerifyOAuthTokenOptions = {
-  verificationOptions: OAuthVerificationOptions;
-  verifyToken: (
-    token: string,
-    options: OAuthVerificationOptions,
-  ) => Promise<JWTPayload>;
-  admissionOptions?: AdmitMcpSessionOptions | undefined;
-};
-
-/** Signature verification and user-grant admission form one resource boundary. */
-export const verifyOAuthToken = async (
-  token: string,
-  {
-    verificationOptions,
-    verifyToken,
-    admissionOptions,
-  }: VerifyOAuthTokenOptions,
-): Promise<
-  Result<VerifiedOAuthToken, McpAuthenticationError | McpTokenVerificationError>
-> => {
-  const verified = await Result.tryPromise({
-    try: async () => await verifyToken(token, verificationOptions),
-    catch: classifyMcpTokenVerificationError,
-  });
-  if (verified.isErr()) {
-    return verified;
-  }
-  const payload = verified.value;
-  if (payload[SERVICE_CLIENT_PRINCIPAL_CLAIM] === SERVICE_CLIENT_PRINCIPAL) {
-    return Result.ok({
-      type: "service",
-      payload: { ...payload, [admittedServiceToken]: true },
-    } as const satisfies VerifiedOAuthToken);
-  }
-  const extracted = extractMcpSession(payload);
-  if (extracted.isErr()) {
-    return extracted;
-  }
-  const admitted = await admitMcpSession(extracted.value, admissionOptions);
-  return admitted.map(
-    (session) =>
-      ({
-        type: "user",
-        payload,
-        session,
-      }) as const satisfies VerifiedOAuthToken,
-  );
 };

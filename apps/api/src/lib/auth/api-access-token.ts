@@ -27,7 +27,6 @@ import {
   getAuthEndpointUrl,
   getAuthIssuerUrl,
 } from "@/api/lib/auth/auth-paths";
-import { verifyOAuthToken } from "@/api/lib/auth/oauth-grant-admission";
 import type { AdmittedOAuthCredential } from "@/api/lib/auth/oauth-grant-admission";
 import { narrowReviewOrganizationScopes } from "@/api/lib/auth/review-account-policy";
 import type { ReviewAccountConfig } from "@/api/lib/auth/review-account-policy";
@@ -36,7 +35,7 @@ import {
   SERVICE_CLIENT_PRINCIPAL_CLAIM,
 } from "@/api/lib/db/service-client-contract";
 import { getApiOAuthResourceIdentifier } from "@/api/lib/oauth-resource-policy";
-import { getVerifyBearerToken } from "@/api/mcp/auth";
+import { verifyOAuthToken } from "@/api/mcp/auth";
 import type { VerifyBearerToken } from "@/api/mcp/auth";
 import { McpAuthenticationError } from "@/api/mcp/errors";
 
@@ -319,7 +318,7 @@ export const authenticateApiAccessToken = async (
         issuer: getAuthIssuerUrl(),
       },
     },
-    verifyToken: verifyToken ?? getVerifyBearerToken(),
+    verifyToken,
     admissionOptions,
   });
   if (verified.isErr()) {
