@@ -13,6 +13,7 @@ import {
   executeCorpusSuite,
   planCorpusEngineSuites,
   runCorpusEngineSuites,
+  waitForCorpusEngineReadiness,
 } from "./run-corpus-engine-suites";
 
 const apiRoot = path.resolve(import.meta.dir, "..");
@@ -88,6 +89,14 @@ test("suite execution mounts isolated daemon-owned data and passes isolated endp
       expect(child?.environment?.["STELLA_RUN_POSTGRES_TESTS"]).toBeUndefined();
       expect(child?.environment?.["PGLITE_TEST_SNAPSHOT"]).toBeUndefined();
       expect(child?.command).toContain(`--reporter-outfile=${suite.junitPath}`);
+      const admission = commands.findIndex(({ command }) =>
+        command.some((argument) => argument.endsWith("/ingest?commit=force")),
+      );
+      const execution = commands.findIndex(({ command }) =>
+        command.includes(suite.file),
+      );
+      expect(admission).toBeGreaterThanOrEqual(0);
+      expect(admission).toBeLessThan(execution);
     }
   } finally {
     rmSync(fixture, { recursive: true, force: true });
@@ -427,4 +436,51 @@ test("later isolated preload overrides setup defaults and rejects an inactive ga
   expect(await new Response(rejected.stderr).text()).toContain(
     "Corpus engine preload requires the isolated suite runner",
   );
+});
+
+test("a healthy engine must admit a disposable write before suites start", async () => {
+  let ingests = 0;
+  let deleted = false;
+  const server = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    fetch: async (request) => {
+      const { pathname } = new URL(request.url);
+      if (pathname === "/health/readyz") {
+        return new Response("ready");
+      }
+      if (request.method === "POST" && pathname === "/api/v1/indexes") {
+        expect(await request.text()).toContain(
+          '"index_id":"corpus_suite_readiness_',
+        );
+        return Response.json({});
+      }
+      if (request.method === "POST" && pathname.endsWith("/ingest")) {
+        ingests += 1;
+        expect(await request.text()).toBe('{"probe":"ready"}\n');
+        return ingests === 1
+          ? new Response("no ingesters available", { status: 503 })
+          : Response.json({ num_docs_for_processing: 1 });
+      }
+      if (
+        request.method === "DELETE" &&
+        pathname.startsWith("/api/v1/indexes/corpus_suite_readiness_")
+      ) {
+        deleted = true;
+        return Response.json({});
+      }
+      return new Response("unexpected request", { status: 400 });
+    },
+  });
+  try {
+    await waitForCorpusEngineReadiness({
+      apiRoot,
+      endpoint: `http://127.0.0.1:${server.port}`,
+      signal: new AbortController().signal,
+    });
+    expect(ingests).toBe(2);
+    expect(deleted).toBe(true);
+  } finally {
+    await server.stop(true);
+  }
 });
