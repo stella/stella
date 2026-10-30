@@ -18,7 +18,7 @@ const fixture = () => {
           containers: Object.values(DEPLOY_WORKER_HOSTS)
             .flat()
             .filter((location) => location.address === address)
-            .map(({ container }) => container)
+            .map(({ container }): string => container)
             .toSorted(),
           environment: DEPLOY_ENV_CONTRACT.filter(
             (entry) =>
