@@ -6,6 +6,7 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
   createMigrationLockTelemetry,
+  migrationLockKey,
   migrationQueryFingerprint,
   observeMigrationLockAttempt,
 } from "./migration-lock-observation";
@@ -196,6 +197,9 @@ test("successful work resets the step's retry sequence", async () => {
       outcome: (result) => result,
     });
   }
+  expect(
+    telemetry.lastBlockers.get(migrationLockKey("online", "probe")),
+  ).toEqual([]);
   expect(records.map(({ attempt }) => attempt)).toEqual([1, 2, 1]);
   expect(records.at(-1)).toMatchObject({
     waitMs: 0,

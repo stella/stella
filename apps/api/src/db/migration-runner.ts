@@ -519,7 +519,8 @@ const SCHEMA_LANE_STEP = "schema.lane";
 const SCHEMA_PREFLIGHT_STEP = "schema.preflight";
 
 const schemaStepBlockers = (telemetry: MigrationLockTelemetry, step: string) =>
-  telemetry.lastBlockers.get(migrationLockKey("schema", step)) ?? [];
+  telemetry.lastBlockers.get(migrationLockKey("schema", step)) ??
+  panic(`Missing migration lock observation for schema step ${step}`);
 
 type MigratePendingOptions = {
   observeSchema: SchemaObserver;

@@ -143,7 +143,7 @@ export type MigrationLockEvent = {
 
 export type MigrationLockTelemetry = {
   attempts: Map<string, number>;
-  /** The most recent non-empty blocker sample per `migrationLockKey`. */
+  /** Last sampled blockers per observed step; empty until an attempt samples a blocker. */
   lastBlockers: Map<string, readonly MigrationBlocker[]>;
   retriesSpent: number;
   emit: (event: MigrationLockEvent) => void;
@@ -353,7 +353,7 @@ export const observeMigrationLockAttempt = async <T>({
   } else {
     telemetry.attempts.set(key, finalAttempt);
   }
-  if (blockers.size > 0) {
+  if (blockers.size > 0 || !telemetry.lastBlockers.has(key)) {
     telemetry.lastBlockers.set(key, [...blockers.values()]);
   }
   telemetry.emit({
