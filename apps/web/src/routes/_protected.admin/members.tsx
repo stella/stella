@@ -127,7 +127,9 @@ export const Route = createFileRoute("/_protected/admin/members")({
 });
 
 function Members() {
-  const now = useNow();
+  // Re-read the clock so an invitation that expires while the page stays
+  // open moves from Pending to Past invitations.
+  const now = useNow({ updateInterval: 60_000 });
   const t = useTranslations();
   const locale = useFormattingLocale();
   const activeOrganizationId = Route.useRouteContext({
