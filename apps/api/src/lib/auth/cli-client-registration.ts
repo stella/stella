@@ -9,6 +9,8 @@ export const CLI_CLIENT_DISPLAY_NAME = buildCliClientMetadataDocument(
   CLI_CLIENT_METADATA_PATH,
 ).client_name;
 
+export const LEGACY_CLI_CLIENT_NAME = "stella-cli";
+
 /** A released CLI registration shape, never evidence of publisher identity. */
 const isCliLoopbackRegistration = (body: Record<string, unknown>): boolean =>
   Object.entries(CLI_LOOPBACK_CLIENT_METADATA).every(
@@ -47,7 +49,9 @@ const reservedClientNameKey = (name: string): string =>
     .replace(/[\s\p{P}\p{Cf}]/gu, "");
 
 const RESERVED_STELLA_CLIENT_NAMES = new Set(
-  ["stella", CLI_CLIENT_DISPLAY_NAME, "stella-cli"].map(reservedClientNameKey),
+  ["stella", CLI_CLIENT_DISPLAY_NAME, LEGACY_CLI_CLIENT_NAME].map(
+    reservedClientNameKey,
+  ),
 );
 
 /** First-party names cannot be claimed by unrelated dynamic registrations. */
@@ -61,7 +65,8 @@ export const mayRegisterClientName = (
   return (
     typeof name !== "string" ||
     !isReservedStellaClientName(name) ||
-    (name === CLI_CLIENT_DISPLAY_NAME && isCliLoopbackRegistration(body))
+    ((name === CLI_CLIENT_DISPLAY_NAME || name === LEGACY_CLI_CLIENT_NAME) &&
+      isCliLoopbackRegistration(body))
   );
 };
 

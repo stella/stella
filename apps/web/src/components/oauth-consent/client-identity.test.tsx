@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { describe, expect, test } from "bun:test";
+import { Window } from "happy-dom";
 import { IntlProvider } from "use-intl";
 
 import {
@@ -14,6 +15,7 @@ import {
   ConsentClientVerification,
 } from "@/components/oauth-consent/client-identity";
 import { resolveConsentClientIdentity } from "@/components/oauth-consent/client-identity.logic";
+import { ConsentCard } from "@/components/oauth-consent/consent-card";
 import en from "@/i18n/langs/en.json";
 import type { OAuthConsentInfo } from "@/lib/oauth-provider";
 import { ConsentSuccess } from "@/routes/-consent-success";
@@ -54,6 +56,33 @@ const renderSuccess = (client: OAuthConsentClient) =>
   );
 
 describe("consent client identity", () => {
+  test("the CLI metadata document renders Connect stella CLI to stella", async () => {
+    const consentInfo = {
+      client: { type: "verified", brand: "stella_cli" },
+      redirectTargets: ["127.0.0.1", "localhost"],
+      clientIdHost: "stella.example",
+    } as const satisfies OAuthConsentInfo;
+    const dom = new Window();
+    try {
+      // safe-html: React renderToStaticMarkup escapes the fixed consent fixture through renderEn.
+      dom.document.body.innerHTML = renderEn(
+        <ConsentCard
+          identity={resolveConsentClientIdentity(consentInfo, FALLBACK_NAME)}
+          details={null}
+          decision={null}
+        >
+          {null}
+        </ConsentCard>,
+      );
+      expect(dom.document.querySelectorAll("h1")).toHaveLength(1);
+      expect(dom.document.querySelector("h1")?.textContent).toBe(
+        "Connect stella CLI to stella",
+      );
+    } finally {
+      await dom.happyDOM.close();
+    }
+  });
+
   test("a verified client shows its product, publisher and mark", () => {
     for (const [brand, name, publisher] of [
       ["claude", "Claude", "Anthropic"],

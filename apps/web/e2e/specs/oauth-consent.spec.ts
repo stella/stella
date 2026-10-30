@@ -184,6 +184,12 @@ test("OAuth consent skips loopback completion and keeps hosted completion", asyn
     await page.route(`${callbackUrl}**`, async (route) => {
       if (decision === "allow" && destination === "loopback") {
         // Navigation is paused here, so this still inspects the consent document.
+        expect(
+          await page.evaluate(
+            (key) => sessionStorage.getItem(key),
+            `connected-${id}`,
+          ),
+        ).toBeNull();
         await expect(
           page.getByRole("heading", {
             name: `Connected to Consent browser test ${id}`,
@@ -197,6 +203,30 @@ test("OAuth consent skips loopback completion and keeps hosted completion", asyn
     });
 
     await openConsent({ page, clientId, id, redirectUri: callbackUrl });
+    if (decision === "allow" && destination === "loopback") {
+      await page.evaluate(
+        ({ key, heading }) => {
+          sessionStorage.removeItem(key);
+          new MutationObserver(() => {
+            if (
+              [...document.querySelectorAll("h1")].some(
+                (node) => node.textContent === heading,
+              )
+            ) {
+              sessionStorage.setItem(key, "rendered");
+            }
+          }).observe(document.body, {
+            subtree: true,
+            childList: true,
+            characterData: true,
+          });
+        },
+        {
+          key: `connected-${id}`,
+          heading: `Connected to Consent browser test ${id}`,
+        },
+      );
+    }
     const callbackRequestPromise = page.waitForRequest((request) =>
       request.url().startsWith(callbackUrl),
     );
