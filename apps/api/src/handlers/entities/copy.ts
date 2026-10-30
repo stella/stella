@@ -720,7 +720,7 @@ const copyToWorkspaceHandler = async function* ({
       );
   }
 
-  // The source workspace event is emitted by the route macro. This explicit
+  // The source workspace event comes from the `realtime` config. This explicit
   // event reaches clients connected to the distinct target workspace.
   broadcastWorkspaceResourceSetUpdated(targetWorkspaceId, RESOURCE_TYPE.ENTITY);
 

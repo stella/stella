@@ -6,6 +6,7 @@ import { chatThreads } from "@/api/db/schema";
 import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -43,7 +44,11 @@ const getThreadTitle = createSafeRootHandler(
     const [existing] = yield* Result.await(
       safeDb((tx) =>
         tx
-          .select({ title: chatThreads.title })
+          .select({
+            title: chatThreads.title,
+            titleSource: chatThreads.titleSource,
+            subjectDecisionId: chatThreads.subjectDecisionId,
+          })
           .from(chatThreads)
           .where(
             and(
@@ -68,7 +73,12 @@ const getThreadTitle = createSafeRootHandler(
       );
     }
 
-    return Result.ok({ title: existing.title });
+    const projection = yield* Result.await(
+      Result.tryPromise(async () =>
+        readWithdrawnCopyProjection({ values: existing }),
+      ),
+    );
+    return Result.ok({ title: projection.thread(existing).title });
   },
 );
 

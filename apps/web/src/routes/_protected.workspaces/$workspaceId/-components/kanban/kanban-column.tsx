@@ -46,6 +46,8 @@ import {
 
 import { InlineEdit } from "@/components/inline-edit";
 import { KanbanCard } from "@/components/workspaces/kanban/kanban-card";
+import type { KanbanSelection } from "@/components/workspaces/kanban/kanban-selection";
+import type { KanbanDraggedCard } from "@/components/workspaces/kanban/kanban-selection.logic";
 import {
   useKanbanColumnDrag,
   useKanbanEntityDropTarget,
@@ -76,7 +78,9 @@ type KanbanColumnProps = {
   optionColor?: PropertyOptionColor | undefined;
   cardFields?: string[] | undefined;
   properties?: WorkspaceProperty[] | undefined;
-  onDrop: (entityId: string) => void;
+  onDrop: (cards: readonly KanbanDraggedCard[]) => void;
+  /** The board's card selection; omit on a board without one. */
+  selection?: KanbanSelection | undefined;
   onFileUpload?: ((files: File[]) => void) | undefined;
   onChangeColor?: ((color: PropertyOptionColor) => void) | undefined;
   onRenameColumn?: ((newName: string) => void) | undefined;
@@ -125,6 +129,7 @@ export const KanbanColumn = ({
   onReorderColumn,
   taskOnly,
   calculations,
+  selection,
 }: KanbanColumnProps) => {
   const t = useTranslations();
   const format = useFormatter();
@@ -304,7 +309,7 @@ export const KanbanColumn = ({
         dragHandle={
           isDraggable ? (
             <div
-              className="text-muted-foreground hover:text-foreground shrink-0 cursor-grab opacity-0 transition-opacity group-hover/column:opacity-100"
+              className="text-muted-foreground hover:text-foreground shrink-0 cursor-grab opacity-0 transition-opacity group-hover/column:opacity-100 pointer-coarse:opacity-100"
               ref={dragHandleRef}
             >
               <GripVerticalIcon className="size-3.5" />
@@ -378,6 +383,11 @@ export const KanbanColumn = ({
                   entity={entity}
                   onRename={onRenameEntity}
                   properties={properties}
+                  selection={
+                    selection
+                      ? { owner: selection, scope: entities }
+                      : undefined
+                  }
                   workspaceId={workspaceId}
                 />
               </div>
@@ -713,7 +723,7 @@ export const ColumnCalculations = ({
         />
       ))}
       {onChange && properties.length > 0 && (
-        <span className="opacity-0 transition-opacity group-hover/column:opacity-100 focus-within:opacity-100">
+        <span className="opacity-0 transition-opacity group-hover/column:opacity-100 focus-within:opacity-100 pointer-coarse:opacity-100">
           <CalculationPicker
             labels={labels}
             onChange={onChange}

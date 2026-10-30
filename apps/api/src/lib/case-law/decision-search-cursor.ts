@@ -5,40 +5,60 @@
  * relevance score and the decision date are two different orders over the same
  * decisions, so a boundary in one bounds nothing in the other: continuing a
  * relevance cursor into a date-ordered page would skip and repeat decisions
- * behind an ordinary-looking page. The order therefore travels with the key.
+ * behind an ordinary-looking page. A cursor is therefore read only by the order
+ * that issued it.
  *
- *     base64("<sortKey>:<sort>:<decisionId>")
+ *     relevance: base64("<score>:relevance:<decisionId>")
+ *     newest:    the date order's cursor (`decision-date-order.ts`), scoped to
+ *                `newest`
  *
  * REMOVAL CONDITION: drop the one-segment legacy read once no replica issuing
  * `<sortKey>:<decisionId>` can still be serving. That form predates sorting
  * entirely, so `relevance` is what its page was ordered by, soundly.
  */
 
+import { panic } from "better-result";
+
 import { isUuid } from "@stll/uuid-codec";
 
 import {
-  DEFAULT_SEARCH_SORT,
-  SEARCH_SORTS,
-  type SearchSort,
-} from "@/api/lib/legal-search/corpus-search-order";
+  type DecisionDatePosition,
+  decodeDecisionDateCursor,
+  encodeDecisionDateCursor,
+} from "@/api/lib/case-law/decision-date-order";
+import type { SearchSort } from "@/api/lib/legal-search/corpus-search-order";
 import { decodeCursor, encodeCursor } from "@/api/lib/search/cursor";
 
-export type DecisionSearchCursor = {
-  /** The ordering column's value on the last decision the page emitted. */
-  sortKey: number;
-  sort: SearchSort;
-  id: string;
+const RELEVANCE = "relevance" satisfies SearchSort;
+const NEWEST = "newest" satisfies SearchSort;
+
+export type DecisionSearchCursor =
+  | {
+      sort: typeof RELEVANCE;
+      /** The blended score of the last decision the page emitted. */
+      sortKey: number;
+      id: string;
+    }
+  | {
+      sort: typeof NEWEST;
+      position: DecisionDatePosition;
+    };
+
+export const encodeDecisionSearchCursor = (
+  cursor: DecisionSearchCursor,
+): string => {
+  switch (cursor.sort) {
+    case RELEVANCE:
+      return encodeCursor(cursor.sortKey, `${RELEVANCE}:${cursor.id}`);
+    case NEWEST:
+      return encodeDecisionDateCursor(NEWEST, cursor.position);
+    default:
+      cursor satisfies never;
+      return panic(`Unhandled search cursor: ${String(cursor)}`);
+  }
 };
 
-export const encodeDecisionSearchCursor = ({
-  id,
-  sort,
-  sortKey,
-}: DecisionSearchCursor): string => encodeCursor(sortKey, `${sort}:${id}`);
-
-export const decodeDecisionSearchCursor = (
-  cursor: string,
-): DecisionSearchCursor | null => {
+const decodeRelevanceCursor = (cursor: string): DecisionSearchCursor | null => {
   const decoded = decodeCursor(cursor);
   if (decoded === null) {
     return null;
@@ -51,14 +71,32 @@ export const decodeDecisionSearchCursor = (
   switch (segments.length) {
     // legacy: `<sortKey>:<decisionId>`.
     case 1:
-      return { id, sort: DEFAULT_SEARCH_SORT, sortKey: decoded.score };
-    case 2: {
-      const sort = SEARCH_SORTS.find((value) => value === segments.at(0));
-      return sort === undefined ? null : { id, sort, sortKey: decoded.score };
-    }
+      return { sort: RELEVANCE, sortKey: decoded.score, id };
+    case 2:
+      return segments.at(0) === RELEVANCE
+        ? { sort: RELEVANCE, sortKey: decoded.score, id }
+        : null;
     // A decision id carrying a colon is not a cursor this service issued: the
     // grammar spends every segment it defines.
     default:
       return null;
+  }
+};
+
+/** The position a cursor names in `sort`, or null for one `sort` did not issue. */
+export const decodeDecisionSearchCursor = (
+  cursor: string,
+  sort: SearchSort,
+): DecisionSearchCursor | null => {
+  switch (sort) {
+    case RELEVANCE:
+      return decodeRelevanceCursor(cursor);
+    case NEWEST: {
+      const position = decodeDecisionDateCursor(cursor, NEWEST);
+      return position === null ? null : { sort: NEWEST, position };
+    }
+    default:
+      sort satisfies never;
+      return panic(`Unhandled search sort: ${String(sort)}`);
   }
 };

@@ -318,6 +318,8 @@ const installNativeBoundary = async (
           registration: "active",
         }),
         permissions_get_snapshot: () => ({ rows: [] }),
+        // No connection status: the section stays hidden, as with local agents off.
+        chatgpt_auth_get_status: () => null,
         account_get_state: () => accountSnapshot,
         open_stella_account: () => {
           connectCount += 1;

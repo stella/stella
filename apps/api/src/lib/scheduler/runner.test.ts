@@ -35,7 +35,11 @@ import {
 } from "./runner";
 import { createCaseLawProvisionStateBackfillTask } from "./tasks/case-law-provision-state-backfill";
 import { createLegislationExpressionIdBackfill } from "./tasks/legislation-expression-id-backfill";
-import type { SchedulerTask, SchedulerTaskRegistry } from "./types";
+import type {
+  SchedulerTask,
+  SchedulerTaskContext,
+  SchedulerTaskRegistry,
+} from "./types";
 
 // leaseMs has a hard floor of three poll intervals (3 * 60_000). The runtime
 // ceiling is independent, so a tiny ceiling times a job out long before the
@@ -463,27 +467,67 @@ describe("bounded scheduler sweeps", () => {
     expect(secondJobWasUnlocked).toBe(true);
   });
 
-  test("stops at the job limit and reports that work may remain", async () => {
-    await seedJob({ id: "a.job" });
-    await seedJob({ id: "b.job" });
-    await seedJob({ id: "c.job" });
+  test("runs every due job, however many come due at once", async () => {
+    // More jobs than a sweep ever capped: a runner whose declared jobs
+    // outnumber a count cap falls behind every one of them.
+    const ids = Array.from(
+      { length: 25 },
+      (_, index) => `job.${String(index).padStart(2, "0")}`,
+    );
+    for (const id of ids) {
+      // db-await-in-loop: seeds rows one at a time so each insert stays a plain values() call
+      await seedJob({ id });
+    }
 
     const result = await runSchedulerOnce({
       db,
       leaseMs: LEASE_MS,
-      limit: 2,
       registry: noopRegistry,
       runnerId: "runner-a",
     });
 
     expect(result).toEqual({
-      acquired: 2,
+      acquired: ids.length,
+      failed: 0,
+      skipped: 0,
+      stoppedBecause: "drained",
+      succeeded: ids.length,
+    });
+  });
+
+  test("caps the reruns of a job that continues at once and reports that work may remain", async () => {
+    await seedJob({ id: "a.job", task: "test.continue-now" });
+    await seedJob({ id: "b.job" });
+    const registry: SchedulerTaskRegistry = new Map([
+      [
+        "test.continue-now",
+        ({ scheduleContinuation }: SchedulerTaskContext) => {
+          scheduleContinuation(PAST);
+        },
+      ],
+      ["test.noop", () => {}],
+    ]);
+
+    const result = await runSchedulerOnce({
+      db,
+      leaseMs: LEASE_MS,
+      registry,
+      rerunLimit: 2,
+      runnerId: "runner-a",
+    });
+
+    // The continuing job runs once plus two reruns; the other due job still
+    // runs in the same sweep instead of waiting behind it.
+    expect(result).toEqual({
+      acquired: 4,
       failed: 0,
       skipped: 0,
       stoppedBecause: "limitReached",
-      succeeded: 2,
+      succeeded: 4,
     });
-    expect((await readJob("c.job")).lockedBy).toBeNull();
+    expect((await readJob("a.job")).nextRunAt).toEqual(PAST);
+    expect((await readJob("a.job")).lockedBy).toBeNull();
+    expect((await readLatestRun("b.job")).status).toBe("success");
   });
 
   test("stops claiming at the sweep deadline", async () => {

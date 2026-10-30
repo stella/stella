@@ -1,5 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
-import { useLocale, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { DownloadIcon } from "@stll/ui/icons";
@@ -14,6 +14,7 @@ import {
   MenuTrigger,
 } from "@stll/ui/menu";
 
+import { useMessageLocale } from "@/i18n/message-locale";
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -90,7 +91,7 @@ export const InvoiceExportMenu = ({
   invoiceId,
 }: InvoiceExportMenuProps) => {
   const t = useTranslations();
-  const locale = useLocale();
+  const messageLocale = useMessageLocale();
   const analytics = useAnalytics();
   const exportFile = useMutation({
     mutationFn: async (format: InvoiceExportFormat) => {
@@ -103,7 +104,7 @@ export const InvoiceExportMenu = ({
               ? {}
               : { invoiceIds: [toSafeId<"invoice">(invoiceId)] }),
           },
-          { headers: { "Accept-Language": locale } },
+          { headers: { "Accept-Language": messageLocale } },
         );
       // The presigned URL answers as an attachment under its file name.
       const { downloadUrl } = unwrapApiResponse(response);

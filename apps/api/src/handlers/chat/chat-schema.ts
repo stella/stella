@@ -51,6 +51,7 @@ import {
   toPersistableChatMessage,
 } from "@/api/handlers/chat/chat-message-parts";
 import { validatePrivateReceipts } from "@/api/handlers/chat/chat-secret-validation";
+import { resolveRegistryToolInputRefs } from "@/api/handlers/chat/tools/registry-adapter/input-ref-hydration";
 import { CHAT_TOOL_SCOPE } from "@/api/handlers/chat/tools/tool-scope";
 import type {
   ChatMention,
@@ -69,6 +70,7 @@ import {
   type ChatToolMap,
   registeredChatTool,
 } from "@/api/lib/chat/chat-tool-types";
+import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { withModelPlaceholdersOmitted } from "@/api/lib/json-schema/null-optionals";
@@ -447,6 +449,7 @@ type ValidateMessageInput = {
     content: PersistedChatMessageContent;
     role: ChatMessageRole;
   } | null;
+  refRegistry: ChatRefRegistry;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
   tools: ChatToolMap;
@@ -568,6 +571,7 @@ const withValidatedToolPayload = ({
 export const validateMessage = async ({
   message,
   persistedMessage,
+  refRegistry,
   resume,
   safeDb,
   threadId,
@@ -578,6 +582,7 @@ export const validateMessage = async ({
     const partsResult = validateIncomingChatParts({
       message,
       persistedMessage,
+      refRegistry,
       resume,
       tools,
     });
@@ -719,11 +724,13 @@ type ValidatedIncomingChatParts = {
 const validateIncomingChatParts = ({
   message,
   persistedMessage,
+  refRegistry,
   resume,
   tools,
 }: {
   message: RawIncomingMessage;
   persistedMessage: ValidateMessageInput["persistedMessage"];
+  refRegistry: ChatRefRegistry;
   resume: AgUiResume | undefined;
   tools: ChatToolMap;
 }): Result<ValidatedIncomingChatParts, HandlerError<400>> => {
@@ -760,6 +767,7 @@ const validateIncomingChatParts = ({
     const continuationResult = validateContinuationToolCallIntegrity({
       incomingParts: validatedParts,
       persistedMessage: canonicalMessage,
+      refRegistry,
       resume,
       tools,
     });
@@ -855,8 +863,8 @@ const applyValidatedContinuationTransitions = ({
  * keeps only the adapter-normalized input and recomputes `arguments` from it,
  * while the client echoes the raw provider text, which strict tool schemas widen
  * with nulls for absent optionals. Both are the same call, so `input` is
- * compared after applying the tool schema on both sides, including its defaults
- * and placeholder rules, and the server copy is restored onto the accepted call.
+ * compared after applying the tool schema and resolving declared chat refs on
+ * both sides. The server copy is restored onto the accepted call.
  */
 type ValidatedContinuationToolCall =
   | { type: "transitioned"; call: ChatToolCallPart }
@@ -865,11 +873,13 @@ type ValidatedContinuationToolCall =
 const validateContinuationToolCallIntegrity = ({
   incomingParts,
   persistedMessage,
+  refRegistry,
   resume,
   tools,
 }: {
   incomingParts: readonly ChatPart[];
   persistedMessage: ChatMessage;
+  refRegistry: ChatRefRegistry;
   resume: AgUiResume | undefined;
   tools: ChatToolMap;
 }): Result<
@@ -897,6 +907,7 @@ const validateContinuationToolCallIntegrity = ({
     const validatedCallResult = validateContinuationToolCallTransition({
       canonicalCall,
       incomingCall,
+      refRegistry,
       tool: registeredChatTool(tools, canonicalCall.name),
     });
     if (Result.isError(validatedCallResult)) {
@@ -1067,19 +1078,35 @@ const canonicalToolCallBase = (
  * The continuation's input under the same schema that validated the stored
  * call. The browser echoes provider arguments before defaults were applied.
  * Fold placeholders before parsing, so nullable values remain values while
- * absent optional fields receive the same defaults as the stored input.
+ * absent optional fields receive the same defaults as the stored input. Resolve
+ * declared ref fields through the persistence owner so raw provider refs and
+ * stored ids name the same resources without rewriting opaque input values.
  * A call with no known schema (a tool this request does not register, or one
  * without an input schema) keeps the schema-blind fold of every `null`.
  */
-const normalizeContinuationInput = (
-  tool: ChatTool | undefined,
-  value: unknown,
-): Result<unknown, HandlerError<400>> => {
+type NormalizeContinuationInputOptions = {
+  refRegistry: ChatRefRegistry;
+  tool: ChatTool | undefined;
+  toolName: string;
+  value: unknown;
+};
+
+const normalizeContinuationInput = ({
+  refRegistry,
+  tool,
+  toolName,
+  value,
+}: NormalizeContinuationInputOptions): Result<unknown, HandlerError<400>> => {
+  const input = resolveRegistryToolInputRefs({
+    input: value,
+    refRegistry,
+    toolName,
+  });
   if (tool?.inputSchema === undefined) {
-    return Result.ok(withNullsOmitted(value));
+    return Result.ok(withNullsOmitted(input));
   }
   return validateToolPayload({
-    payload: withToolInputPlaceholdersOmitted(tool.inputSchema, value),
+    payload: withToolInputPlaceholdersOmitted(tool.inputSchema, input),
     payloadName: "input",
     schema: tool.inputSchema,
     toolName: tool.name,
@@ -1089,10 +1116,12 @@ const normalizeContinuationInput = (
 const validateContinuationToolCallTransition = ({
   canonicalCall,
   incomingCall,
+  refRegistry,
   tool,
 }: {
   canonicalCall: ChatToolCallPart;
   incomingCall: ChatToolCallPart;
+  refRegistry: ChatRefRegistry;
   tool: ChatTool | undefined;
 }): Result<ValidatedContinuationToolCall, HandlerError<400>> => {
   if (incomingCall.state === canonicalCall.state) {
@@ -1101,8 +1130,18 @@ const validateContinuationToolCallTransition = ({
       call: canonicalizeToolCall(canonicalCall),
     });
   }
-  const incomingInput = normalizeContinuationInput(tool, incomingCall.input);
-  const canonicalInput = normalizeContinuationInput(tool, canonicalCall.input);
+  const incomingInput = normalizeContinuationInput({
+    refRegistry,
+    tool,
+    toolName: canonicalCall.name,
+    value: incomingCall.input,
+  });
+  const canonicalInput = normalizeContinuationInput({
+    refRegistry,
+    tool,
+    toolName: canonicalCall.name,
+    value: canonicalCall.input,
+  });
   if (
     incomingCall.name !== canonicalCall.name ||
     Result.isError(incomingInput) ||

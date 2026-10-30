@@ -2,7 +2,9 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
+import { readTimePolicy } from "@/api/lib/billing-time";
 
+import { resolveSuggestionBillingDefault } from "./billing-default";
 import { loadTimeSuggestions, serializeSuggestion } from "./load";
 import {
   timeSuggestionDateSchema,
@@ -54,14 +56,34 @@ const listTimeSuggestions = createSafeHandler(
       date: query.date,
       timezoneId: query.timezoneId,
     });
+    const policy = yield* Result.await(
+      readTimePolicy({
+        safeDb,
+        organizationId: session.activeOrganizationId,
+      }),
+    );
+    const billingDefault = yield* resolveSuggestionBillingDefault({
+      safeDb,
+      workspaceId,
+      userId: user.id,
+      dateWorked: query.date,
+    });
+    const items = loaded.pending.map((cluster) =>
+      serializeSuggestion(
+        cluster,
+        policy.timeMinimumUnitMinutes,
+        billingDefault.billable,
+      ),
+    );
 
     return Result.ok({
       date: loaded.date,
-      activeMinutes: loaded.pending.reduce(
-        (sum, cluster) => sum + cluster.durationMinutes,
+      activeMinutes: items.reduce(
+        (sum, suggestion) => sum + suggestion.durationMinutes,
         0,
       ),
-      items: loaded.pending.map(serializeSuggestion),
+      loggedMinutes: loaded.loggedMinutes,
+      items,
     });
   },
 );

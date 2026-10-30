@@ -25,10 +25,11 @@ import { LastUsedFieldBadge } from "./last-used-sign-in";
 import { SIGN_IN_METHOD, signInMethodVariant } from "./sign-in-panel.logic";
 import type { SignInMethod } from "./sign-in-panel.logic";
 
-const passwordFormSchema = v.strictObject({
-  email: emailSchema(),
-  password: v.string(),
-});
+const passwordFormSchema = (invalidEmail: string) =>
+  v.strictObject({
+    email: emailSchema(invalidEmail),
+    password: v.string(),
+  });
 
 /** The slice of a form field a single text input binds to. */
 type TextFieldBinding = {
@@ -112,7 +113,7 @@ export const PasswordSignInForm = ({
   const invalidateSession = useInvalidateSession();
   const form = useForm(
     schemaFormOptions({
-      schema: passwordFormSchema,
+      schema: passwordFormSchema(t("validation.invalidEmail")),
       defaultValues: { email: "", password: "" },
       submitValues: "schema-output",
       onSubmit: async ({ value }) => {

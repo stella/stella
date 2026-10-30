@@ -34,7 +34,27 @@ const STREAMING_COMMITS_PER_SECOND = 45;
 /** The most components a commit may render with props equal to the last. */
 const STREAMING_UNCHANGED_PROPS_RENDERS_PER_COMMIT = 2;
 
+type ComposerControls = {
+  ComposerPlusMenu: { name: string };
+  ChatPromptImproveButton: { name: string };
+  ChatComposerActionButton: { name: string };
+};
+
+// Resolve names from the real imports after the DOM probe is installed. This
+// budget is also imported by e2e runners, so it cannot eagerly load the UI.
+const untouchedComposerControls = ({
+  ComposerPlusMenu,
+  ChatPromptImproveButton,
+  ChatComposerActionButton,
+}: ComposerControls) => [
+  ComposerPlusMenu.name,
+  ChatPromptImproveButton.name,
+  ChatComposerActionButton.name,
+];
+
 type StreamChunkBudget = {
+  /** Controls whose inputs are unchanged throughout the chunk burst. */
+  untouched: typeof untouchedComposerControls;
   /** The most commits per second while this kind streams. */
   commitsPerSecond: number;
   /**
@@ -56,6 +76,7 @@ type StreamChunkBudget = {
 
 export const STREAM_CHUNK_COMMIT_BUDGET = {
   reasoning: {
+    untouched: untouchedComposerControls,
     commitsPerSecond: STREAMING_COMMITS_PER_SECOND,
     unchangedPropsRendersPerCommit:
       STREAMING_UNCHANGED_PROPS_RENDERS_PER_COMMIT,
@@ -63,6 +84,7 @@ export const STREAM_CHUNK_COMMIT_BUDGET = {
     streams: "reasoning deltas of a thinking block",
   },
   status: {
+    untouched: untouchedComposerControls,
     commitsPerSecond: STREAMING_COMMITS_PER_SECOND,
     unchangedPropsRendersPerCommit:
       STREAMING_UNCHANGED_PROPS_RENDERS_PER_COMMIT,
@@ -70,6 +92,7 @@ export const STREAM_CHUNK_COMMIT_BUDGET = {
     streams: "step, activity, state and custom progress events",
   },
   subagent: {
+    untouched: untouchedComposerControls,
     commitsPerSecond: STREAMING_COMMITS_PER_SECOND,
     unchangedPropsRendersPerCommit:
       STREAMING_UNCHANGED_PROPS_RENDERS_PER_COMMIT,
@@ -77,6 +100,7 @@ export const STREAM_CHUNK_COMMIT_BUDGET = {
     streams: "a subagent run's own text deltas, inside its card",
   },
   text: {
+    untouched: untouchedComposerControls,
     commitsPerSecond: STREAMING_COMMITS_PER_SECOND,
     unchangedPropsRendersPerCommit:
       STREAMING_UNCHANGED_PROPS_RENDERS_PER_COMMIT,
@@ -84,6 +108,7 @@ export const STREAM_CHUNK_COMMIT_BUDGET = {
     streams: "text deltas of the answer",
   },
   "tool-input": {
+    untouched: untouchedComposerControls,
     commitsPerSecond: STREAMING_COMMITS_PER_SECOND,
     unchangedPropsRendersPerCommit:
       STREAMING_UNCHANGED_PROPS_RENDERS_PER_COMMIT,
@@ -91,6 +116,7 @@ export const STREAM_CHUNK_COMMIT_BUDGET = {
     streams: "argument deltas of one tool call",
   },
   "tool-output": {
+    untouched: untouchedComposerControls,
     commitsPerSecond: STREAMING_COMMITS_PER_SECOND,
     unchangedPropsRendersPerCommit:
       STREAMING_UNCHANGED_PROPS_RENDERS_PER_COMMIT,

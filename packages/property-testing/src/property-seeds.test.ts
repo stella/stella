@@ -1,89 +1,127 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript6";
+import { type Node, parseSync, visitorKeys } from "oxc-parser";
 
 import { PropertyTestConfigError } from "./index";
 import { parsePinnedSeeds, readPinnedSeeds, REPO_ROOT } from "./pinned-seeds";
 
 const propertyIds = (file: string, source: string): Set<string> => {
-  const parsed = ts.createSourceFile(
-    file,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-  );
+  const parsed = parseSync(file, source);
+  const errors = parsed.errors.filter((error) => {
+    const severity: string = error.severity;
+    return severity === "Error";
+  });
+  if (errors.length > 0) {
+    throw new PropertyTestConfigError(
+      `${file} does not parse: ${errors.map(({ message }) => message).join("; ")}`,
+    );
+  }
   const assertions = new Set<string>();
   const tests = new Set<string>();
-  for (const statement of parsed.statements) {
-    if (
-      !ts.isImportDeclaration(statement) ||
-      !ts.isStringLiteral(statement.moduleSpecifier) ||
-      statement.importClause?.namedBindings === undefined ||
-      !ts.isNamedImports(statement.importClause.namedBindings)
-    ) {
+  for (const statement of parsed.program.body) {
+    if (statement.type !== "ImportDeclaration") {
       continue;
     }
-    for (const binding of statement.importClause.namedBindings.elements) {
-      const name = binding.propertyName?.text ?? binding.name.text;
+    for (const binding of statement.specifiers) {
+      if (binding.type !== "ImportSpecifier") {
+        continue;
+      }
+      const name =
+        binding.imported.type === "Identifier"
+          ? binding.imported.name
+          : binding.imported.value;
       if (
-        statement.moduleSpecifier.text === "@stll/property-testing" &&
+        statement.source.value === "@stll/property-testing" &&
         name === "assertProperty"
       ) {
-        assertions.add(binding.name.text);
+        assertions.add(binding.local.name);
       }
       if (
-        statement.moduleSpecifier.text === "bun:test" &&
+        statement.source.value === "bun:test" &&
         (name === "test" || name === "it")
       ) {
-        tests.add(binding.name.text);
+        tests.add(binding.local.name);
       }
     }
   }
   const ids = new Set<string>();
-  const visit = (node: ts.Node, title?: string): void => {
-    if (ts.isCallExpression(node)) {
-      const callee = node.expression;
+  const stringValue = (node: Node): string | undefined => {
+    if (node.type === "Literal" && typeof node.value === "string") {
+      return node.value;
+    }
+    if (node.type === "TemplateLiteral" && node.expressions.length === 0) {
+      return node.quasis.at(0)?.value.cooked ?? undefined;
+    }
+    return undefined;
+  };
+  const isNode = (value: unknown): value is Node =>
+    typeof value === "object" &&
+    value !== null &&
+    "type" in value &&
+    typeof value.type === "string";
+
+  const visit = (node: Node, title?: string): void => {
+    if (node.type === "CallExpression") {
+      const callee = node.callee;
       const argument = node.arguments.at(0);
-      if (ts.isIdentifier(callee) && assertions.has(callee.text)) {
+      if (callee.type === "Identifier" && assertions.has(callee.name)) {
         if (
           argument === undefined ||
-          !ts.isStringLiteralLike(argument) ||
-          argument.text !== title
+          stringValue(argument) === undefined ||
+          stringValue(argument) !== title
         ) {
           throw new PropertyTestConfigError(
             `${file}: property id must match its enclosing test title`,
           );
         }
-        if (ids.has(argument.text)) {
+        const id = stringValue(argument);
+        if (id === undefined) {
           throw new PropertyTestConfigError(
-            `${file}::${argument.text}: duplicate property id`,
+            `${file}: property id must match its enclosing test title`,
           );
         }
-        ids.add(argument.text);
+        if (ids.has(id)) {
+          throw new PropertyTestConfigError(
+            `${file}::${id}: duplicate property id`,
+          );
+        }
+        ids.add(id);
       }
-      const testCallee = ts.isPropertyAccessExpression(callee)
-        ? callee.expression
-        : callee;
-      if (ts.isIdentifier(testCallee) && tests.has(testCallee.text)) {
+      const testCallee =
+        callee.type === "MemberExpression" && !callee.computed
+          ? callee.object
+          : callee;
+      if (testCallee.type === "Identifier" && tests.has(testCallee.name)) {
         const callback = node.arguments.at(1);
         if (
           callback !== undefined &&
-          (ts.isArrowFunction(callback) || ts.isFunctionExpression(callback))
+          (callback.type === "ArrowFunctionExpression" ||
+            callback.type === "FunctionExpression") &&
+          callback.body !== null
         ) {
           visit(
             callback.body,
-            argument !== undefined && ts.isStringLiteralLike(argument)
-              ? argument.text
-              : undefined,
+            argument === undefined ? undefined : stringValue(argument),
           );
           return;
         }
       }
     }
-    ts.forEachChild(node, (child) => visit(child, title));
+    for (const key of visitorKeys[node.type] ?? []) {
+      const child: unknown = Reflect.get(node, key);
+      if (Array.isArray(child)) {
+        for (const item of child) {
+          if (isNode(item)) {
+            visit(item, title);
+          }
+        }
+      } else if (isNode(child)) {
+        visit(child, title);
+      }
+    }
   };
-  visit(parsed);
+  visit(parsed.program);
   return ids;
 };
 

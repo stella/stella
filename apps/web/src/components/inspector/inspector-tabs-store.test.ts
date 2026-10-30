@@ -1,6 +1,14 @@
 import { QueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
-import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
 import { Temporal } from "@stll/time";
 import { stellaToast } from "@stll/ui/toast";
@@ -36,6 +44,11 @@ import {
 } from "@/lib/account/user-scoped-storage";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
+
+// Spies created in a test stay attached if it fails before restoring them.
+afterEach(() => {
+  mock.restore();
+});
 
 const localArea = () =>
   browserStorage("local") ?? panic("Test requires local browser storage");
@@ -904,6 +917,18 @@ describe("revive suggestion", () => {
     openFullscreenFileTab();
     useInspectorTabsStore.getState().closeTab("field-1");
     expect(useInspectorTabsStore.getState().reviveSuggestion).toBeNull();
+  });
+
+  test("a tab moved to the main view minimizes the pane; a plain close does not", () => {
+    openFullscreenFileTab();
+    useInspectorTabsStore.getState().setMinimized(false);
+    useInspectorTabsStore.getState().closeTab("field-1");
+    expect(useInspectorTabsStore.getState().minimized).toBe(false);
+
+    openFullscreenFileTab();
+    useInspectorTabsStore.getState().closeTab("field-1", { movedToMain: true });
+    expect(useInspectorTabsStore.getState().tabs).toHaveLength(0);
+    expect(useInspectorTabsStore.getState().minimized).toBe(true);
   });
 
   test("closing a side-peek file tab leaves no suggestion", () => {

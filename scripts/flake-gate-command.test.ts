@@ -141,7 +141,7 @@ test("the generic parser records unsupported shell shapes independently of dedic
         "script": "packages/skills/package.json:test",
       },
       {
-        "command": "bun scripts/generate-manifest.ts --check && bun scripts/generate-manifest.ts --check --fixtures && bun test src",
+        "command": "bun run generate:check && bun test src",
         "reason": "shell-syntax",
         "script": "packages/template-packs/package.json:test",
       },

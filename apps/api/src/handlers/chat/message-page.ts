@@ -21,7 +21,9 @@ import type {
   PersistedChatMessageContent,
 } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { WithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-projection";
 import { messageTurnTiming } from "@/api/lib/chat/turn-timing";
+import { readChatCopyProjection } from "@/api/lib/chat/withdrawn-copies";
 import { LIMITS } from "@/api/lib/limits";
 import {
   decodePaginationCursor,
@@ -175,7 +177,12 @@ const loadChatMessagePageOnTx = async ({
 
   return {
     activeTurnId: activeTurn?.id ?? null,
-    messages: await projectPageRowsOnTx({ rows: pageAscending, tx, userId }),
+    messages: await projectPageRowsOnTx({
+      rows: pageAscending,
+      tx,
+      userId,
+      threadId,
+    }),
     olderCursor,
     lastActivityAt,
   };
@@ -190,13 +197,38 @@ export const projectPageRowsOnTx = async ({
   rows,
   tx,
   userId,
+  threadId,
+  withdrawal,
 }: {
+  threadId: SafeId<"chatThread">;
+  withdrawal?: WithdrawnCopyProjection;
   rows: readonly ChatMessagePageRow[];
   tx: Transaction;
   userId: SafeId<"user">;
 }): Promise<ClientMessage[]> => {
-  const placeholderById = await loadPlaceholdersOnTx({ rows, tx, userId });
-  return rows.map((row) => clientMessageFromPageRow(row, placeholderById));
+  const read =
+    withdrawal === undefined
+      ? await readChatCopyProjection({
+          tx,
+          threadIds: [threadId],
+          values: rows,
+        })
+      : {
+          projection: withdrawal,
+          subjectByThread: new Map<
+            SafeId<"chatThread">,
+            SafeId<"caseLawDecision"> | null
+          >(),
+        };
+  const masked = rows.map((row) =>
+    read.projection.chat(row, read.subjectByThread.get(threadId)),
+  );
+  const placeholderById = await loadPlaceholdersOnTx({
+    rows: masked,
+    tx,
+    userId,
+  });
+  return masked.map((row) => clientMessageFromPageRow(row, placeholderById));
 };
 
 /**
@@ -256,7 +288,7 @@ export const loadClientMessages = async ({
       )
       .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id))
       .limit(messageIds.length);
-    return await projectPageRowsOnTx({ rows, tx, userId });
+    return await projectPageRowsOnTx({ rows, tx, userId, threadId });
   });
 };
 

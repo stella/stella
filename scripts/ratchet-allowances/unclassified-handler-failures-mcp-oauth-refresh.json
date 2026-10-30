@@ -1,0 +1,6 @@
+{
+  "metric": "unclassified-handler-failures",
+  "file": "apps/api/src/lib/mcp-upstream/oauth.ts",
+  "delta": 1,
+  "reason": "A token endpoint answer that does not parse breaks the endpoint's contract; it must stay an internal failure that alerts, not a retryable upstream outage, so it is deliberately left unclassified."
+}

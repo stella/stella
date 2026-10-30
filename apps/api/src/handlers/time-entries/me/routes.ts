@@ -1,5 +1,7 @@
 import updateDailyTarget from "@/api/handlers/time-entries/me/daily-target/update";
 import listMyTimeEntries from "@/api/handlers/time-entries/me/list";
+import submitMyTimeEntries from "@/api/handlers/time-entries/me/submissions/create";
+import listMySuggestionRange from "@/api/handlers/time-entries/me/suggestions/list";
 import { routes } from "@/api/http/route";
 import { featureAccessGate } from "@/api/lib/auth/feature-access/route";
 import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
@@ -12,6 +14,8 @@ export const myTimeEntriesRoute = routes(
   {
     "/": { GET: listMyTimeEntries },
     "/daily-target": { PUT: updateDailyTarget },
+    "/suggestions": { GET: listMySuggestionRange },
+    "/submissions": { POST: submitMyTimeEntries },
   },
   {
     prefix: "/v1/time-entries/me",

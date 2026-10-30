@@ -20,7 +20,8 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync, statSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript6";
+
+import { type Node, parseSource, walk } from "@stll/scripts/src/syntax-tree";
 
 const API_ROOT = path.resolve(import.meta.dir, "../..");
 const CORE_GLOB = "src/http/**/*.{ts,tsx}";
@@ -29,53 +30,56 @@ const ENV_MODULES = new Set(["src/env.ts", "src/env-base.ts"]);
 const ENV_VALIDATOR_PACKAGE = "@t3-oss/env-core";
 const ARTIFACT_TEST = "src/lib/compiled-http-validation.artifact.test.ts";
 
+/** A string literal's or substitution-free template literal's text. */
+const stringLiteralLikeText = (node: Node | undefined): string | undefined => {
+  if (node?.type === "Literal" && typeof node.value === "string") {
+    return node.value;
+  }
+  if (node?.type === "TemplateLiteral" && node.expressions.length === 0) {
+    return node.quasis.at(0)?.value.cooked ?? undefined;
+  }
+  return undefined;
+};
+
 /** Runtime module specifiers of one source file, type-only ones excluded. */
 const findRuntimeSpecifiers = (file: string, source: string): string[] => {
-  const sourceFile = ts.createSourceFile(
-    file,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-  );
   const specifiers: string[] = [];
-  const visit = (node: ts.Node): void => {
-    if (
-      ts.isImportDeclaration(node) &&
-      ts.isStringLiteralLike(node.moduleSpecifier) &&
-      node.importClause?.phaseModifier !== ts.SyntaxKind.TypeKeyword
-    ) {
-      specifiers.push(node.moduleSpecifier.text);
+  // A tree walk rather than the module record: it keeps source order and
+  // also sees `import x = require(...)` and `require(...)` calls.
+  walk(parseSource(file, source).program, (node) => {
+    if (node.type === "ImportDeclaration" && node.importKind !== "type") {
+      specifiers.push(node.source.value);
     }
     if (
-      ts.isExportDeclaration(node) &&
-      node.moduleSpecifier !== undefined &&
-      ts.isStringLiteralLike(node.moduleSpecifier) &&
-      !node.isTypeOnly
+      (node.type === "ExportNamedDeclaration" ||
+        node.type === "ExportAllDeclaration") &&
+      node.source !== null &&
+      node.exportKind !== "type"
     ) {
-      specifiers.push(node.moduleSpecifier.text);
+      specifiers.push(node.source.value);
     }
     if (
-      ts.isImportEqualsDeclaration(node) &&
-      !node.isTypeOnly &&
-      ts.isExternalModuleReference(node.moduleReference) &&
-      ts.isStringLiteralLike(node.moduleReference.expression)
+      node.type === "TSImportEqualsDeclaration" &&
+      node.importKind !== "type" &&
+      node.moduleReference.type === "TSExternalModuleReference"
     ) {
-      specifiers.push(node.moduleReference.expression.text);
+      specifiers.push(node.moduleReference.expression.value);
     }
-    if (
-      ts.isCallExpression(node) &&
-      (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
-        (ts.isIdentifier(node.expression) &&
-          node.expression.text === "require")) &&
-      node.arguments[0] !== undefined &&
-      ts.isStringLiteralLike(node.arguments[0])
+    let loaded: Node | undefined;
+    if (node.type === "ImportExpression") {
+      loaded = node.source;
+    } else if (
+      node.type === "CallExpression" &&
+      node.callee.type === "Identifier" &&
+      node.callee.name === "require"
     ) {
-      specifiers.push(node.arguments[0].text);
+      loaded = node.arguments.at(0);
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
+    const literal = stringLiteralLikeText(loaded);
+    if (literal !== undefined) {
+      specifiers.push(literal);
+    }
+  });
   return specifiers;
 };
 

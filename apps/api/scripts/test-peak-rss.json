@@ -7040,14 +7040,6 @@
         "job": "measure-3"
       }
     },
-    "src/handlers/entities/upload-rate-limit.test.ts": {
-      "peakMb": 202,
-      "baselineMb": 202,
-      "source": {
-        "runId": "40155324346",
-        "job": "measure-1"
-      }
-    },
     "src/handlers/entities/version-cursor.test.ts": {
       "peakMb": 216,
       "baselineMb": 216,
@@ -7310,14 +7302,6 @@
       "source": {
         "runId": "40155324346",
         "job": "measure-1"
-      }
-    },
-    "src/handlers/folio-collab/rate-limit.test.ts": {
-      "peakMb": 216,
-      "baselineMb": 216,
-      "source": {
-        "runId": "40155324346",
-        "job": "measure-2"
       }
     },
     "src/handlers/folio-collab/service-credentials.test.ts": {
@@ -9048,14 +9032,6 @@
         "job": "measure-2"
       }
     },
-    "src/handlers/style-sets/upload-rate-limit.test.ts": {
-      "peakMb": 218,
-      "baselineMb": 218,
-      "source": {
-        "runId": "40155324346",
-        "job": "measure-3"
-      }
-    },
     "src/handlers/synthetic/routes.test.ts": {
       "peakMb": 233,
       "baselineMb": 202,
@@ -10304,14 +10280,6 @@
         "job": "measure-3"
       }
     },
-    "src/lib/analytics/posthog-node.test.ts": {
-      "peakMb": 202,
-      "baselineMb": 202,
-      "source": {
-        "runId": "40155324346",
-        "job": "measure-1"
-      }
-    },
     "src/lib/analytics/source-map.artifact.test.ts": {
       "peakMb": 224,
       "baselineMb": 216,
@@ -10478,14 +10446,6 @@
       "source": {
         "runId": "40155324346",
         "job": "measure-1"
-      }
-    },
-    "src/lib/auth/auth-response-cookies.test.ts": {
-      "peakMb": 216,
-      "baselineMb": 216,
-      "source": {
-        "runId": "40155324346",
-        "job": "measure-2"
       }
     },
     "src/lib/auth/cimd-node-transport.test.ts": {
@@ -10710,14 +10670,6 @@
       "source": {
         "runId": "40155324346",
         "job": "measure-3"
-      }
-    },
-    "src/lib/auth/session-bearer.test.ts": {
-      "peakMb": 202,
-      "baselineMb": 202,
-      "source": {
-        "runId": "40155324346",
-        "job": "measure-1"
       }
     },
     "src/lib/auth/session-lifetime-revocation.test.ts": {
@@ -13552,22 +13504,6 @@
         "job": "measure-1"
       }
     },
-    "src/lib/elysia-bundle.artifact.test.ts": {
-      "peakMb": 231,
-      "baselineMb": 216,
-      "source": {
-        "runId": "40155324346",
-        "job": "measure-2"
-      }
-    },
-    "src/lib/elysia-optional-union-coercion.test.ts": {
-      "peakMb": 218,
-      "baselineMb": 218,
-      "source": {
-        "runId": "40155324346",
-        "job": "measure-3"
-      }
-    },
     "src/lib/email/config.test.ts": {
       "peakMb": 202,
       "baselineMb": 202,
@@ -13990,14 +13926,6 @@
       "source": {
         "runId": "40155324346",
         "job": "measure-2"
-      }
-    },
-    "src/lib/errors/elysia-error.test.ts": {
-      "peakMb": 218,
-      "baselineMb": 218,
-      "source": {
-        "runId": "40155324346",
-        "job": "measure-3"
       }
     },
     "src/lib/errors/error-tag.test.ts": {
@@ -14944,14 +14872,6 @@
         "job": "measure-1"
       }
     },
-    "src/lib/json-schema/json-schema-to-typebox.test.ts": {
-      "peakMb": 216,
-      "baselineMb": 216,
-      "source": {
-        "runId": "40155324346",
-        "job": "measure-2"
-      }
-    },
     "src/lib/json-schema/null-optionals.property.test.ts": {
       "peakMb": 218,
       "baselineMb": 218,
@@ -15030,14 +14950,6 @@
       "source": {
         "runId": "40155324346",
         "job": "measure-3"
-      }
-    },
-    "src/lib/legal-search/case-law-dated-decisions.test.ts": {
-      "peakMb": 202,
-      "baselineMb": 202,
-      "source": {
-        "runId": "40155324346",
-        "job": "measure-1"
       }
     },
     "src/lib/legal-search/case-law-index-groups.db.test.ts": {
@@ -16952,14 +16864,6 @@
         "job": "measure-3"
       }
     },
-    "src/lib/multipart-form-parser.test.ts": {
-      "peakMb": 202,
-      "baselineMb": 202,
-      "source": {
-        "runId": "40155324346",
-        "job": "measure-1"
-      }
-    },
     "src/lib/non-evicting-redis.test.ts": {
       "peakMb": 216,
       "baselineMb": 216,
@@ -16990,14 +16894,6 @@
       "source": {
         "runId": "40155324346",
         "job": "measure-2"
-      }
-    },
-    "src/lib/oauth-cli-client-document.db.test.ts": {
-      "peakMb": 1226,
-      "baselineMb": 218,
-      "source": {
-        "runId": "40155324346",
-        "job": "measure-3"
       }
     },
     "src/lib/oauth-client-id-metadata-document.db.test.ts": {
@@ -17038,6 +16934,14 @@
       "source": {
         "runId": "40155324346",
         "job": "measure-2"
+      }
+    },
+    "src/lib/oauth-native-client-documents.db.test.ts": {
+      "peakMb": 1256,
+      "baselineMb": 211,
+      "source": {
+        "runId": "39090756337",
+        "job": "measure-3"
       }
     },
     "src/lib/oauth-native-consent.db.test.ts": {
@@ -17262,14 +17166,6 @@
       "source": {
         "runId": "40155324346",
         "job": "measure-3"
-      }
-    },
-    "src/lib/observability/response-status.test.ts": {
-      "peakMb": 202,
-      "baselineMb": 202,
-      "source": {
-        "runId": "40155324346",
-        "job": "measure-1"
       }
     },
     "src/lib/observability/root-pool-window.test.ts": {
@@ -22032,14 +21928,6 @@
         "job": "measure-2"
       }
     },
-    "src/tests/query-perf/baseline-recording.test.ts": {
-      "peakMb": 218,
-      "baselineMb": 218,
-      "source": {
-        "runId": "40155324346",
-        "job": "measure-3"
-      }
-    },
     "src/tests/query-perf/deadline.test.ts": {
       "peakMb": 202,
       "baselineMb": 202,
@@ -22190,14 +22078,6 @@
       "source": {
         "runId": "40155324346",
         "job": "measure-1"
-      }
-    },
-    "src/tests/security/aggregate-mutations.test.ts": {
-      "peakMb": 823,
-      "baselineMb": 216,
-      "source": {
-        "runId": "40155324346",
-        "job": "measure-2"
       }
     },
     "src/tests/security/ai-memories-rls.test.ts": {
@@ -22672,14 +22552,6 @@
         "job": "measure-1"
       }
     },
-    "src/tests/security/token-route-validation.test.ts": {
-      "peakMb": 369,
-      "baselineMb": 216,
-      "source": {
-        "runId": "40155324346",
-        "job": "measure-2"
-      }
-    },
     "src/tests/security/upload-write-ownership.test.ts": {
       "peakMb": 218,
       "baselineMb": 218,
@@ -22702,14 +22574,6 @@
       "source": {
         "runId": "40155324346",
         "job": "measure-2"
-      }
-    },
-    "src/tests/security/write-contracts.test.ts": {
-      "peakMb": 824,
-      "baselineMb": 218,
-      "source": {
-        "runId": "40155324346",
-        "job": "measure-3"
       }
     },
     "src/tests/security/write-handler-permission-coverage.test.ts": {

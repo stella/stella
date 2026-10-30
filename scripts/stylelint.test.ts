@@ -6,8 +6,8 @@ const configFile = fileURLToPath(
   new URL("../.stylelintrc.json", import.meta.url),
 );
 
-const lintCss = async (code: string) =>
-  await stylelint.lint({ code, codeFilename: "guard.css", configFile });
+const lintCss = async (code: string, codeFilename = "guard.css") =>
+  await stylelint.lint({ code, codeFilename, configFile });
 
 describe("CSS correctness guard", () => {
   test.each([
@@ -47,6 +47,15 @@ describe("CSS correctness guard", () => {
     [
       "rule-selector-property-disallowed-list",
       "@keyframes grow { from { height: 0; } to { height: 100%; } }",
+    ],
+    // conventions-ux: touch reveals use `pointer: coarse`, never `hover: none`.
+    [
+      "media-feature-name-value-allowed-list",
+      "@media (hover: none) { .sample { opacity: 1; } }",
+    ],
+    [
+      "media-feature-name-value-allowed-list",
+      "@media (any-hover: none) { .sample { opacity: 1; } }",
     ],
     // conventions-ux: dynamic viewport units, never the largest viewport.
     ["unit-disallowed-list", ".sample { max-height: calc(100vh - 3rem); }"],
@@ -93,6 +102,48 @@ describe("CSS correctness guard", () => {
         to { opacity: 1; transform: none; }
       }
     `);
+    expect(result.errored).toBe(false);
+    expect(result.results.flatMap((file) => file.warnings)).toEqual([]);
+  });
+
+  test.each(["hyphens: auto", "-webkit-hyphens: auto"])(
+    "rejects automatic hyphenation in decision reader CSS: %s",
+    async (declaration) => {
+      const result = await lintCss(
+        `.sample { ${declaration}; }`,
+        "packages/decision-reader/src/guard.css",
+      );
+      expect(result.errored).toBe(true);
+      expect(result.results.flatMap((file) => file.warnings)).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            rule: "declaration-property-value-allowed-list",
+          }),
+        ]),
+      );
+    },
+  );
+
+  test("retains the motion guard in decision reader CSS", async () => {
+    const result = await lintCss(
+      ".sample { transition: all 150ms; }",
+      "packages/decision-reader/src/guard.css",
+    );
+    expect(result.errored).toBe(true);
+    expect(result.results.flatMap((file) => file.warnings)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          rule: "declaration-property-value-disallowed-list",
+        }),
+      ]),
+    );
+  });
+
+  test("accepts manual hyphenation in decision reader CSS", async () => {
+    const result = await lintCss(
+      ".sample { hyphens: manual; -webkit-hyphens: none; }",
+      "packages/decision-reader/src/guard.css",
+    );
     expect(result.errored).toBe(false);
     expect(result.results.flatMap((file) => file.warnings)).toEqual([]);
   });
