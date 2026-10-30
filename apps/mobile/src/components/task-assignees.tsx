@@ -23,7 +23,9 @@ type Assignee = { readonly userId: string; readonly name: string | null };
 /**
  * Who works on a task, and the matter's members to give it to: a tap on a
  * member assigns or unassigns them at once, as the web's assignee picker
- * does. The members load the first time the list opens.
+ * does. The members load the first time the list opens. A change in flight
+ * belongs to this component, not to the list, so closing and reopening the
+ * list neither drops its result nor lets a second change overlap it.
  */
 export const TaskAssignees = ({
   initial,
@@ -37,6 +39,8 @@ export const TaskAssignees = ({
   taskId: string;
 }) => {
   const t = useTranslations("tasks");
+  const { end } = useSession();
+  const changed = useChanged();
   const [assignees, setAssignees] = useState<readonly Assignee[]>(() =>
     initial.map(({ userId, user }) => ({
       userId,
@@ -46,7 +50,44 @@ export const TaskAssignees = ({
   const [members, setMembers] = useState<Promise<
     Result<MatterMember[], ApiError>
   > | null>(null);
+  const [failure, setFailure] = useState<WriteFailure | null>(null);
+  const [saving, startSaving] = useTransition();
   const names = assignees.map((assignee) => assignee.name ?? t("someone"));
+
+  const toggle = (member: MatterMember, assign: boolean) => {
+    startSaving(async () => {
+      setFailure(null);
+      const saved = await setTaskAssignee({
+        assigned: assign,
+        fetch,
+        matterId,
+        source,
+        taskId,
+        userId: member.userId,
+      });
+      if (Result.isOk(saved)) {
+        // Applied to the list as it is now, which a later change may
+        // already have moved on from.
+        setAssignees((current) =>
+          assign
+            ? [
+                ...current.filter(
+                  (assignee) => assignee.userId !== member.userId,
+                ),
+                { userId: member.userId, name: member.user?.name ?? null },
+              ]
+            : current.filter((assignee) => assignee.userId !== member.userId),
+        );
+        changed("tasks");
+        return;
+      }
+      if (saved.error._tag === "SignedOutError") {
+        end(source);
+        return;
+      }
+      setFailure(writeFailure(saved.error));
+    });
+  };
 
   return (
     <View className="gap-2">
@@ -58,6 +99,7 @@ export const TaskAssignees = ({
           </Text>
         </View>
         <Button
+          loading={saving}
           onPress={() => {
             setMembers((open) =>
               open === null
@@ -74,41 +116,36 @@ export const TaskAssignees = ({
       {members === null ? null : (
         <Suspense fallback={<ActivityIndicator />}>
           <MemberList
-            assignees={assignees}
+            assigned={new Set(assignees.map((assignee) => assignee.userId))}
             load={members}
-            matterId={matterId}
-            onChange={setAssignees}
+            onToggle={toggle}
+            saving={saving}
             source={source}
-            taskId={taskId}
           />
         </Suspense>
       )}
+      <WriteFailureNotice failure={failure} message={t("assignFailed")} />
     </View>
   );
 };
 
 const MemberList = ({
-  assignees,
+  assigned,
   load,
-  matterId,
-  onChange,
+  onToggle,
+  saving,
   source,
-  taskId,
 }: {
-  assignees: readonly Assignee[];
+  assigned: ReadonlySet<string>;
   load: Promise<Result<MatterMember[], ApiError>>;
-  matterId: string;
-  onChange: (assignees: readonly Assignee[]) => void;
+  onToggle: (member: MatterMember, assign: boolean) => void;
+  saving: boolean;
   source: AccessTokenSource;
-  taskId: string;
 }) => {
   const t = useTranslations("tasks");
   const ui = useUiColors();
   const { end } = useSession();
-  const changed = useChanged();
   const loaded = use(load);
-  const [failure, setFailure] = useState<WriteFailure | null>(null);
-  const [saving, startSaving] = useTransition();
 
   if (Result.isError(loaded)) {
     if (loaded.error._tag === "SignedOutError") {
@@ -117,39 +154,6 @@ const MemberList = ({
     }
     return <Text variant="error">{t("membersFailed")}</Text>;
   }
-
-  const assigned = new Set(assignees.map((assignee) => assignee.userId));
-  const toggle = (member: MatterMember) => {
-    const assign = !assigned.has(member.userId);
-    startSaving(async () => {
-      setFailure(null);
-      const saved = await setTaskAssignee({
-        assigned: assign,
-        fetch,
-        matterId,
-        source,
-        taskId,
-        userId: member.userId,
-      });
-      if (Result.isOk(saved)) {
-        onChange(
-          assign
-            ? [
-                ...assignees,
-                { userId: member.userId, name: member.user?.name ?? null },
-              ]
-            : assignees.filter((assignee) => assignee.userId !== member.userId),
-        );
-        changed("tasks");
-        return;
-      }
-      if (saved.error._tag === "SignedOutError") {
-        end(source);
-        return;
-      }
-      setFailure(writeFailure(saved.error));
-    });
-  };
 
   return (
     <View>
@@ -163,7 +167,7 @@ const MemberList = ({
             disabled={saving}
             key={member.userId}
             onPress={() => {
-              toggle(member);
+              onToggle(member, !isAssigned);
             }}
           >
             <Text className="flex-1" numberOfLines={1} variant="rowTitle">
@@ -173,7 +177,6 @@ const MemberList = ({
           </Pressable>
         );
       })}
-      <WriteFailureNotice failure={failure} message={t("assignFailed")} />
     </View>
   );
 };
