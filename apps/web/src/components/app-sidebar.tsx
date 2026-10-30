@@ -52,7 +52,7 @@ import {
   UsersIcon,
 } from "@stll/ui/icons";
 import { InlineRenameInput } from "@stll/ui/inline-rename";
-import { SIDE_RAIL_ICON_BUTTON_SIZE } from "@stll/ui/inspector";
+import { InspectorRailIconButton } from "@stll/ui/inspector";
 import { MatterIcon } from "@stll/ui/matter-icon";
 import {
   Menu,
@@ -65,6 +65,8 @@ import { Skeleton } from "@stll/ui/skeleton";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
+import { appSidebarSurfaceProps } from "@/components/app-sidebar-surface";
+import type { AppSidebarSurface } from "@/components/app-sidebar-surface";
 import {
   chatActivityByWorkspace,
   getMatterBillingLinks,
@@ -200,7 +202,7 @@ const SEARCH_DIALOG_STATES = {
 type SearchDialogState =
   (typeof SEARCH_DIALOG_STATES)[keyof typeof SEARCH_DIALOG_STATES];
 
-export const AppSidebar = (props: AppSidebarProps) => {
+export const AppSidebar = ({ surface }: AppSidebarProps) => {
   const t = useTranslations();
   const format = useFormatter();
   const hotkeyPlatform = useHydrationSafeHotkeyPlatform();
@@ -210,6 +212,9 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const openCreateMatter = useCreateMatterStore((s) => s.openDialog);
   const { state, toggleSidebar, isMobile, setOpenMobile } = useSidebar();
   const isCollapsed = state === "collapsed" && !isMobile;
+  const sidebarToggleLabel = isCollapsed
+    ? t("inspector.showPane")
+    : t("inspector.hidePane");
   const router = useRouter();
   // On compact layouts the sidebar is a sheet over the page, so a navigation
   // started from it would land behind it. Close it once the new location
@@ -660,20 +665,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
   }, [showNavBadges, runNavTarget]);
 
   return (
-    <Sidebar
-      {...props}
-      className={cn(
-        // Unified glass language with the chat composer tray: the same
-        // translucent veil + backdrop-blur-md instead of the solid
-        // sidebar fill so the app chrome reads as one system. The
-        // opaque-leaning fallback keeps contrast where backdrop-filter
-        // is unsupported.
-        "[&_[data-slot=sidebar-inner]]:bg-(--matter-sidebar-tint)/80 [&_[data-slot=sidebar-inner]]:backdrop-blur-md supports-[backdrop-filter]:[&_[data-slot=sidebar-inner]]:bg-(--matter-sidebar-tint)/60",
-        props.className,
-      )}
-      collapsible="icon"
-      style={props.style}
-    >
+    <Sidebar {...appSidebarSurfaceProps(surface)} collapsible="icon">
       {/* Stella logo header */}
       <SidebarHeader className="h-12 border-b p-0">
         <div
@@ -684,21 +676,20 @@ export const AppSidebar = (props: AppSidebarProps) => {
           )}
         >
           {!isCollapsed && <StellaWordmark className="h-5 w-auto" />}
-          <Button
-            className={SIDE_RAIL_ICON_BUTTON_SIZE}
-            disabled={!mounted}
-            onClick={toggleSidebar}
-            size="icon"
-            tooltip={
-              isCollapsed ? t("inspector.showPane") : t("inspector.hidePane")
+          {/* The inspector's toggle primitive, so both pane toggles share
+              one size and ink (a `Button` dims its icon to 80%). */}
+          <Tooltip
+            content={sidebarToggleLabel}
+            render={
+              <InspectorRailIconButton
+                aria-label={sidebarToggleLabel}
+                disabled={!mounted}
+                onClick={toggleSidebar}
+              />
             }
-            variant="muted"
           >
             <PanelLeftIcon className="size-4" />
-            <span className="sr-only">
-              {isCollapsed ? t("inspector.showPane") : t("inspector.hidePane")}
-            </span>
-          </Button>
+          </Tooltip>
         </div>
       </SidebarHeader>
 
@@ -1039,7 +1030,7 @@ type PendingEntityDrop = {
   entities: CopyToMatterEntity[];
 };
 
-type AppSidebarProps = React.ComponentProps<typeof Sidebar>;
+type AppSidebarProps = { surface: AppSidebarSurface };
 type MatterItemProps = {
   activeOrganizationId: string;
   userId: string;
@@ -1522,7 +1513,7 @@ export const MatterItem = ({
         ) : (
           <div
             className={cn(
-              "absolute top-1.5 flex items-center gap-0.5 opacity-0 group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 group-data-[collapsible=icon]:hidden data-[pinned]:opacity-100",
+              "absolute top-1.5 flex items-center gap-0.5 opacity-0 group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 group-data-[collapsible=icon]:hidden data-[pinned]:opacity-100 pointer-coarse:opacity-100",
               hasExpandableContent ? "end-7" : "end-1",
             )}
             data-pinned={isPinned || undefined}

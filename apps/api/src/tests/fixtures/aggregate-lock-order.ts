@@ -20,6 +20,15 @@ export const aggregateFences = () => {
   const userId = mintAuthProviderId<"user">();
   const answerId = createSafeId<"legalReaderAnswer">();
   return {
+    requestReceipt: {
+      aggregate: "requestReceipt",
+      id: {
+        id: createSafeId<"requestIdempotencyReceipt">(),
+        organizationId,
+        userId,
+      },
+      mode: "update",
+    },
     account: { aggregate: "account", id: userId, mode: "no key update" },
     accountExport: {
       aggregate: "accountExport",
@@ -76,6 +85,10 @@ export const aggregateFences = () => {
     caseLawRepublication: {
       aggregate: "caseLawRepublication",
       id: "global",
+    },
+    caseLawSitemapMonth: {
+      aggregate: "caseLawSitemapMonth",
+      id: { country: "CZE", year: "2020", month: "03" },
     },
     legislationAmendmentWork: {
       aggregate: "legislationAmendmentWork",

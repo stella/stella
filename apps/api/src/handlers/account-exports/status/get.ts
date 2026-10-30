@@ -16,7 +16,14 @@ const personalDataExportStatus = createSafeSessionHandler(
     accountAccess: ACCOUNT_ACCESS.accountControl,
     contract: "patch",
     access: "read",
-    mcp: { type: "internal", reason: "auth_plumbing" },
+    mcp: {
+      type: "capability",
+      reason: "reporting_export",
+      consumesServices: false,
+      readClass: "tenant",
+    },
+    description:
+      "Read the status of your personal data export by its returned ID. Requested or processing exports are still building; poll again later. For ready exports call account-exports.download.get. For failed or expired exports call account-exports.create to request a replacement.",
     params: accountExportParams,
   },
   async function* ({ user, params: { exportId } }) {
@@ -27,7 +34,11 @@ const personalDataExportStatus = createSafeSessionHandler(
     );
     if (row === null) {
       return Result.err(
-        new HandlerError({ status: 404, message: "Export not found." }),
+        new HandlerError({
+          status: 404,
+          message: "Export not found.",
+          hint: "Call account-exports.get for your latest export ID or account-exports.create to request one.",
+        }),
       );
     }
     return Result.ok(accountExportStatus(row));

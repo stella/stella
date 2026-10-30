@@ -1,0 +1,5 @@
+{
+  "kind": "ordinary",
+  "qualifier": "Retries jobs after verified runner loss and reconciles pull-request metadata mirrors after completed CI attempts; no publication or deployment.",
+  "reviewedDigest": "abee3f657275660918567c7d94c8fec385f794206f261c8c5e3e9d2e456495c2"
+}

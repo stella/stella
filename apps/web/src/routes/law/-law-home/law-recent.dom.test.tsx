@@ -118,14 +118,17 @@ const createSignedSession = ({
   },
 });
 
-const mount = async (locale = "en") => {
+const mount = async (
+  locale = "en",
+  initialEntries: readonly RecentEntry[] = seed,
+) => {
   const calls = {
     searches: [] as string[],
     deletes: [] as string[],
     clears: 0,
   };
   const Fixture = () => {
-    const [entries, setEntries] = useState([...seed]);
+    const [entries, setEntries] = useState([...initialEntries]);
     const [filter, setFilter] = useState<LawRecentFilter>("all");
     return (
       <LawRecentList
@@ -184,6 +187,67 @@ const click = async (name: string | RegExp) =>
   act(async () => {
     fireEvent.click(screen.getByRole("button", { name }));
   });
+
+for (const [locale, catalog] of [
+  ["en", messages],
+  ["ar", arabicMessages],
+] as const) {
+  for (const count of [0, 1, 5, 6, 50]) {
+    test(`recent history stays bounded and toggles all rows (${locale}, ${count})`, async () => {
+      const entries = Array.from({ length: count }, (_, index) => ({
+        ...seed[0],
+        id: toSafeId<"searchHistoryEntry">(`history-${index}`),
+        query: `Recent query ${index}`,
+      }));
+      await mount(locale, entries);
+      const rows = () =>
+        screen.queryAllByRole("button", { name: /^Recent query/u });
+      expect(rows()).toHaveLength(Math.min(count, 5));
+      if (count <= 5) {
+        expect(
+          screen.queryByRole("button", { name: catalog.common.showMore }),
+        ).toBeNull();
+        return;
+      }
+      const toggle = screen.getByRole("button", {
+        name: catalog.common.showMore,
+      });
+      expect(toggle.getAttribute("aria-expanded")).toBe("false");
+      const listId = toggle.getAttribute("aria-controls");
+      if (listId === null) {
+        throw new TypeError("Recent disclosure must control a list");
+      }
+      const list = toggle.ownerDocument.querySelector(`[id="${listId}"]`);
+      expect(list).not.toBeNull();
+      expect(list?.classList.contains("h-64")).toBe(true);
+      expect(list?.classList.contains("max-h-[40dvh]")).toBe(true);
+      const boundedLayout = list?.className;
+      await click(catalog.common.showMore);
+      expect(rows()).toHaveLength(count);
+      expect(
+        screen
+          .getByRole("button", { name: catalog.common.showLess })
+          .getAttribute("aria-expanded"),
+      ).toBe("true");
+      expect(
+        toggle.ownerDocument.querySelector(`[id="${listId}"]`)?.className,
+      ).toBe(boundedLayout);
+      await click(catalog.common.showLess);
+      expect(rows()).toHaveLength(5);
+      expect(
+        toggle.ownerDocument.querySelector(`[id="${listId}"]`)?.className,
+      ).toBe(boundedLayout);
+      await click(catalog.common.showMore);
+      await click(catalog.lawHome.recentSearchFilter);
+      expect(rows()).toHaveLength(5);
+      expect(
+        screen
+          .getByRole("button", { name: catalog.common.showMore })
+          .getAttribute("aria-expanded"),
+      ).toBe("false");
+    });
+  }
+}
 
 test("server recent rows render known court chips, unknown decision icons and statute identity", async () => {
   await mount();

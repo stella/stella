@@ -3,6 +3,7 @@ import { expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
+import { sha256Hex } from "@stll/sha256/bun";
 
 import {
   decodeSourceRawEnvelope,
@@ -131,10 +132,20 @@ test("listing fetching preserves stored replay results for complete and legacy f
   const fixtures = [
     {
       raw: encoder.encode(
-        encodeSourceRawEnvelope({
-          listing: listingJson,
-          document: "<html><body><span>Rozhodnutie.</span></body></html>",
-        }),
+        encodeSourceRawEnvelope(
+          {
+            listing: listingJson,
+            document: "<html><body><span>Rozhodnutie.</span></body></html>",
+          },
+          {
+            "document-file": {
+              location: "fixture-pdf",
+              sha256: sha256Hex(PDF),
+              byteLength: PDF.byteLength,
+              contentType: "application/pdf",
+            },
+          },
+        ),
       ),
       contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
       expectedType: "parsed",
@@ -155,6 +166,7 @@ test("listing fetching preserves stored replay results for complete and legacy f
   ] as const;
   for (const { raw, contentType, expectedType } of fixtures) {
     const input = {
+      readObject: async () => Result.ok(PDF),
       raw,
       contentType,
       caseNumber: identity.caseNumber,
@@ -426,8 +438,8 @@ test("completion preserves every old text part and object reference and reaches 
   const objects = {
     "document-file": {
       location: "s3:case-law/raw/test/document",
-      sha256: "a".repeat(64),
-      byteLength: 11,
+      sha256: sha256Hex(PDF),
+      byteLength: PDF.byteLength,
       contentType: "application/pdf",
     },
   };
@@ -449,6 +461,7 @@ test("completion preserves every old text part and object reference and reaches 
   expect(decodeSourceRawEnvelopeObjects(completed)).toEqual(objects);
   expect(prepared.completion.file).toBeNull();
   const replay = await skUsAdapter.reparseStoredRaw?.({
+    readObject: async () => Result.ok(PDF),
     raw: encoder.encode(completed),
     contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
     caseNumber: identity.caseNumber,
@@ -535,6 +548,7 @@ test("legacy binary bytes survive storage and the old raw object is never delete
       );
     }
     const replayed = await skUsAdapter.reparseStoredRaw?.({
+      readObject: readStoredRawFromS3,
       raw: stored,
       contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
       caseNumber: identity.caseNumber,
