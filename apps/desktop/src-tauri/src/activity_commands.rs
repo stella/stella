@@ -94,8 +94,9 @@ pub fn activity_set_recording_status(
       && manager.capture_details();
     manager.set_recording_status(status, Utc::now())
   })?;
-  if prompt {
-    caller.require_current(&app)?;
+  // Recording has started either way; the prompt only follows a caller that
+  // is still current.
+  if prompt && caller.require_current(&app).is_ok() {
     activity_details::request_permission();
   }
   Ok(())

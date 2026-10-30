@@ -225,7 +225,12 @@ const groupConfidence = (
 // `page - site` from web pages.
 const SHARED_CONTEXT = [
   { pattern: /^([^\s:]+): (.+)$/u, context: 1, own: 2 },
-  { pattern: /^(.+?) (?:·|\||-|–|—) ([^·|\-–—]+)$/u, context: 2, own: 1 },
+  // A site may contain hyphens (`my-site.com`); only a spaced hyphen separates.
+  {
+    pattern: /^(.+?) (?:·|\||-|–|—) ((?:(?! - )[^·|–—])+)$/u,
+    context: 2,
+    own: 1,
+  },
 ] as const;
 
 /** Context that several titles share says nothing about any of them, so it is
@@ -262,17 +267,25 @@ const TITLE_SEPARATORS = [" - ", " – ", " — "] as const;
 /** Browsers title a window `page - Browser - Profile`; the app icon already
  * names the browser, so the title keeps only the page. */
 export const withoutAppSuffix = (title: string, appName: string) => {
+  let cut = title.length;
   for (const separator of TITLE_SEPARATORS) {
-    const index = title.indexOf(`${separator}${appName}`);
-    const rest = title.slice(index + separator.length + appName.length);
-    if (
-      index > 0 &&
-      (rest === "" || TITLE_SEPARATORS.some((next) => rest.startsWith(next)))
+    const needle = `${separator}${appName}`;
+    for (
+      let index = title.indexOf(needle);
+      index > 0;
+      index = title.indexOf(needle, index + 1)
     ) {
-      return title.slice(0, index);
+      const rest = title.slice(index + needle.length);
+      if (
+        rest === "" ||
+        TITLE_SEPARATORS.some((next) => rest.startsWith(next))
+      ) {
+        cut = Math.min(cut, index);
+        break;
+      }
     }
   }
-  return title;
+  return title.slice(0, cut);
 };
 
 const appEvidence = (segments: readonly MatchedSegment[]): AppEvidence[] =>
@@ -282,8 +295,10 @@ const appEvidence = (segments: readonly MatchedSegment[]): AppEvidence[] =>
       if (segment.appIdentifier !== identifier) {
         continue;
       }
-      for (const detail of segment.evidence) {
-        const title = withoutAppSuffix(detail, name);
+      const titles = new Set(
+        segment.evidence.map((detail) => withoutAppSuffix(detail, name)),
+      );
+      for (const title of titles) {
         durations.set(
           title,
           (durations.get(title) ?? 0) + segment.endMs - segment.startMs,

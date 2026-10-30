@@ -250,6 +250,12 @@ describe("window title evidence", () => {
       "Notifications",
       "Smlouva - návrh",
     ]);
+    expect(
+      withoutSharedContext([
+        "Pull requests · my-site.com",
+        "Merge queue · my-site.com",
+      ]),
+    ).toEqual(["Pull requests", "Merge queue"]);
   });
 
   test("drops the browser and profile a title ends with", () => {
@@ -265,6 +271,12 @@ describe("window title evidence", () => {
     ).toEqual("Google Chrome - Wikipedia");
     expect(
       withoutAppSuffix("Notes - Google Chromebook", "Google Chrome"),
+    ).toEqual("Notes - Google Chromebook");
+    expect(
+      withoutAppSuffix(
+        "Notes - Google Chromebook - Google Chrome",
+        "Google Chrome",
+      ),
     ).toEqual("Notes - Google Chromebook");
   });
 

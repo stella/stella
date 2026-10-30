@@ -188,9 +188,13 @@ export const ActivityDayReview = ({
     group.evidence.length
       ? t("narrativeEvidence", {
           evidence: format.list(
-            group.evidence.flatMap(({ details }) =>
-              details.slice(0, EVIDENCE_DETAIL_LIMIT),
-            ),
+            [
+              ...new Set(
+                group.evidence.flatMap(({ details }) =>
+                  details.slice(0, EVIDENCE_DETAIL_LIMIT),
+                ),
+              ),
+            ],
             { type: "conjunction" },
           ),
         })
