@@ -122,7 +122,7 @@ const enrollBatch = async (
 };
 
 export const CASE_LAW_SITEMAP_PACKING_ENROLLMENT = {
-  introducedBy: "20261030010000_sitemap_language_changes",
+  introducedBy: "20261030161200_sitemap_language_changes",
   name: NAME,
   readCompletion,
   repair: async (connection) => {
