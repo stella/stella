@@ -1,0 +1,38 @@
+name: Merge group hold
+
+on:
+  pull_request:
+  merge_group:
+    types: [checks_requested]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  merge-group-hold:
+    name: merge-group-hold
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out trusted base scripts
+        if: github.event_name == 'merge_group'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 2
+        with:
+          ref: ${{ github.event.merge_group.base_sha }}
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /scripts/check-merge-group-hold.mjs
+            /scripts/merge-group-entries.mjs
+            /scripts/gh-retry.sh
+      - name: Refuse held pull requests
+        if: github.event_name == 'merge_group'
+        timeout-minutes: 2
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/check-merge-group-hold.mjs
+      - name: Pass pull request checks
+        if: github.event_name == 'pull_request'
+        run: "true"

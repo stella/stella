@@ -1666,6 +1666,26 @@ const GENERATOR_DECLARATIONS = [
     after: [],
   },
   {
+    id: "merge-group-parser",
+    outputKind: "committed",
+    outputs: [".github/workflows/cla.yml"],
+    blocks: [
+      {
+        path: ".github/workflows/cla.yml",
+        begin: "// BEGIN GENERATED merge-group parser",
+        end: "// END GENERATED merge-group parser",
+      },
+    ],
+    inputs: [
+      "scripts/merge-group-entries.mjs",
+      "scripts/sync-merge-group-parser.mjs",
+    ],
+    write: ["node", "scripts/sync-merge-group-parser.mjs"],
+    check: ["node", "scripts/sync-merge-group-parser.mjs", "--check"],
+    autofix: false,
+    after: [],
+  },
+  {
     id: "design-tokens",
     outputKind: "committed",
     outputs: ["DESIGN.md"],
