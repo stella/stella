@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 
+import type { ExplicitTransactionBudgetId } from "@/api/lib/db/read-budgets";
 import {
   MCP_TOOL_READ_BUDGETS,
   READ_BUDGETS,
@@ -19,6 +21,7 @@ import {
   parseReasonedLedger,
   runLedgerMembershipGuard,
 } from "../../../../../scripts/ledger-membership.ts";
+import { DEFAULT_LOCK_RETRY_CONFIG } from "../../db/lock-retry-ladder";
 import unmeasuredLedger from "./read-budgets-unmeasured.json";
 
 const repoRoot = path.resolve(import.meta.dir, "../../../../..");
@@ -68,6 +71,78 @@ describe("read budget declarations", () => {
           ];
     });
     expect(violations).toEqual([]);
+  });
+
+  // A statement or transaction longer than the migration lock-wait ladder
+  // would hold a lock the schema phase cannot outwait.
+  test("every statement and transaction deadline is below the migration lock-wait ladder", () => {
+    const violations = Object.entries(READ_BUDGETS).flatMap(([id, budget]) => {
+      const deadlines =
+        budget.surface === "scheduled-job" && budget.transactions === "explicit"
+          ? { transactionDeadlineMs: budget.transactionDeadlineMs }
+          : { statementDeadlineMs: budget.statementDeadlineMs };
+      return Object.entries(deadlines).flatMap(([name, ms]) =>
+        ms === undefined || ms < DEFAULT_LOCK_RETRY_CONFIG.budgetMs
+          ? []
+          : [`${id}.${name} (${String(ms)} ms) >= the ladder budget`],
+      );
+    });
+    expect(violations).toEqual([]);
+    for (const [id, budget] of Object.entries(READ_BUDGETS)) {
+      if (
+        budget.surface === "scheduled-job" &&
+        budget.transactions === "explicit"
+      ) {
+        expect(budget.transactionDeadlineMs, id).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  // A declared deadline that no job applies would be a promise nothing keeps.
+  // The census binds each explicit-transaction budget to the module that opens
+  // its transactions, in both directions.
+  test("every explicit-transaction deadline is applied by its job, and only through the shared helper", () => {
+    const srcRoot = path.resolve(import.meta.dir, "../..");
+    const owners = {
+      "scheduled.caseLaw.refreshCoverage":
+        "lib/scheduler/tasks/case-law-coverage-refresh.ts",
+      "scheduled.requests.sweepReceipts": "lib/idempotency/request-receipts.ts",
+      "scheduled.caseLaw.reportFreshness":
+        "lib/scheduler/tasks/case-law-freshness-report.ts",
+      "scheduled.caseLaw.refreshSitemapShards":
+        "lib/case-law/sitemap-shard-refresh.ts",
+    } as const satisfies Record<ExplicitTransactionBudgetId, string>;
+    const declared = Object.entries(READ_BUDGETS)
+      .filter(
+        ([, budget]) =>
+          budget.surface === "scheduled-job" &&
+          budget.transactions === "explicit",
+      )
+      .map(([id]) => id)
+      .toSorted();
+    expect(Object.keys(owners).toSorted()).toEqual(declared);
+    for (const [id, file] of Object.entries(owners)) {
+      const source = readFileSync(path.join(srcRoot, file), "utf-8");
+      const applied = new RegExp(
+        `setScheduledJobTransactionDeadline\\(\\s*\\w+,\\s*"${id.replaceAll(".", "\\.")}"`,
+        "u",
+      );
+      expect(applied.test(source), `${id} is applied in ${file}`).toBe(true);
+    }
+    const setters: string[] = [];
+    for (const file of new Bun.Glob("**/*.ts").scanSync(srcRoot)) {
+      if (/\.(?:test|postgres\.test|db\.test)\.ts$/u.test(file)) {
+        continue;
+      }
+      if (
+        /(?:set_config\s*\(\s*['"]transaction_timeout['"]|\bSET\s+(?:(?:LOCAL|SESSION)\s+)?transaction_timeout\b)/iu.test(
+          readFileSync(path.join(srcRoot, file), "utf-8"),
+        )
+      ) {
+        setters.push(file);
+      }
+    }
+    expect(setters).toEqual(["db/shared-pool-timeouts.ts"]);
   });
 
   test("every budgeted job has a measurement of its own", () => {

@@ -35,6 +35,44 @@ export type MigrationTimingRecord =
       durationMs: number;
       retriesSpent: number;
       outcome: "complete" | "deferred" | "pending" | "failed";
+    }
+  | {
+      /** Scheduled jobs paused and waited on before the schema phase. */
+      event: "migrate.scheduler_drain";
+      outcome: "drained" | "timed_out";
+      pausedCount: number;
+      /** Operator pauses replaced for the schema phase. */
+      takenOverCount: number;
+      /** Jobs still leased when the drain ended. */
+      leasedCount: number;
+      drainWaitMs: number;
+    }
+  | {
+      /** A pause renewal that failed while the work ran; the work was not aborted. */
+      event: "migrate.scheduler_renewal_failed";
+      errorName: string;
+    }
+  | {
+      /** One still-leased job while the drain waits; emitted at a bounded cadence. */
+      event: "migrate.scheduler_drain_progress";
+      jobId: string;
+      lockedBy: string | null;
+      lockedUntil: string | null;
+      drainWaitMs: number;
+    }
+  | {
+      /** Jobs resumed after the schema phase, whatever its outcome. */
+      event: "migrate.scheduler_resume";
+      outcome: "resumed" | "failed";
+      pausedCount: number;
+      takenOverCount: number;
+      resumedCount: number;
+      restoredCount: number;
+      /** Ticks that extended at least one pause while the work ran. */
+      renewalCount: number;
+      renewalFailureCount: number;
+      durationMs: number;
+      errorName?: string;
     };
 
 /** Distributes `Omit` over the union, so each record keeps its own shape. */
@@ -42,7 +80,9 @@ type WithoutMeasurements<T> = T extends unknown
   ? Omit<T, "durationMs" | "retriesSpent">
   : never;
 
-export type MigrationTimingFields = WithoutMeasurements<MigrationTimingRecord>;
+export type MigrationTimingFields = WithoutMeasurements<
+  Extract<MigrationTimingRecord, { durationMs: number; retriesSpent: number }>
+>;
 
 export type MigrationTiming = {
   clock: () => number;

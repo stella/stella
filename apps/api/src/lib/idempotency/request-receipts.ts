@@ -23,6 +23,7 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { requestIdempotencyReceipts as receipts } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import {
+  setScheduledJobTransactionDeadline,
   setSharedLockTimeout,
   setSharedStatementTimeout,
 } from "@/api/db/shared-pool-timeouts";
@@ -479,6 +480,10 @@ export const sweepExpiredRequestReceipts = async ({
   // principal's bounded set in one scoped delete; the scheduler bounds and
   // continues these rounds. Deletion locks again and rechecks eligibility.
   const prepareRetention = async (tx: Pick<Transaction, "execute">) => {
+    await setScheduledJobTransactionDeadline(
+      tx,
+      "scheduled.requests.sweepReceipts",
+    );
     await setSharedStatementTimeout(
       tx,
       Math.max(

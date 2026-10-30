@@ -16,6 +16,7 @@ import {
   caseLawSources,
 } from "@/api/db/schema";
 import {
+  setScheduledJobTransactionDeadline,
   setSharedLockTimeout,
   setSharedStatementTimeout,
 } from "@/api/db/shared-pool-timeouts";
@@ -105,7 +106,7 @@ type RefreshTransaction = Parameters<
   Parameters<RefreshDb["transaction"]>[0]
 >[0];
 
-/** Both budgets end with the transaction. */
+/** All budgets end with the transaction. */
 const setTransactionBudget = async (
   tx: RefreshTransaction,
   { lockTimeoutMs, statementTimeoutMs }: SitemapRefreshBudget,
@@ -116,6 +117,10 @@ const setTransactionBudget = async (
   ) {
     return panic("Sitemap refresh budgets must be integer milliseconds");
   }
+  await setScheduledJobTransactionDeadline(
+    tx,
+    "scheduled.caseLaw.refreshSitemapShards",
+  );
   await setSharedLockTimeout(tx, lockTimeoutMs);
   await setSharedStatementTimeout(tx, statementTimeoutMs);
 };

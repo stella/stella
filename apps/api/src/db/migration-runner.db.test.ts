@@ -21,6 +21,7 @@ import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 import migrationAliasInventory from "../lib/db/migration-alias-inventory.json";
 import { assertMigrationHistory } from "../lib/db/migration-history";
 import { isPgError, PG_ERROR } from "../lib/pg-error";
+import { DEFAULT_MAX_RUNTIME_MS } from "../lib/scheduler/timing";
 import { withGatedTestClients } from "../tests/gated-test-database";
 import {
   CORPUS_SCHEMA_LANE,
@@ -34,6 +35,12 @@ import {
   runMigrations,
   runMigrationsUntilSettled,
 } from "./migration-runner";
+import {
+  DEFAULT_SCHEDULER_DRAIN_RUNTIME,
+  SCHEDULER_DRAIN_DEADLINE_MS,
+  SchedulerDrainTimeoutError,
+} from "./migration-scheduler-drain";
+import type { SchedulerDrainRuntime } from "./migration-scheduler-drain";
 import type {
   MigrationTiming,
   MigrationTimingRecord,
@@ -292,6 +299,275 @@ const laneHolders = async (observer: SQL) => {
   );
   return row?.holders ?? Number.NaN;
 };
+
+const stripLeadingComments = (statement: string): string =>
+  statement.replace(/^(?:\s*--[^\n]*\n)+/u, "").trim();
+
+const migrationStatements = (name: string): string[] =>
+  readFileSync(nodePath.join(CORPUS_DIR, name, "migration.sql"), "utf-8")
+    .split("--> statement-breakpoint")
+    .map(stripLeadingComments)
+    .filter((statement) => statement !== "" && !statement.startsWith("SET "));
+
+/**
+ * `scheduler_jobs` as the app migrations define it: the statements that create
+ * and alter the table, taken from the migration files themselves, then both
+ * pause migrations whole (columns, attribution and unpausable-audit checks,
+ * the 72-hour bound trigger and the pause log trigger). A later migration that
+ * changes the table fails the catalogue comparison below.
+ */
+const REAL_SCHEDULER_JOBS_DEFINITION = [
+  {
+    name: "20260430131000_agenda_scheduler_infosoud",
+    only: /^(?:CREATE|ALTER) TABLE "scheduler_jobs"/u,
+  },
+  {
+    name: "20260729150000_timestamptz_everywhere",
+    only: /^ALTER TABLE "scheduler_jobs"/u,
+  },
+  { name: "20261003123100_scheduler_operator_pauses", only: /./u },
+  { name: "20261022120000_scheduler_pause_bound", only: /./u },
+] as const;
+
+const realSchedulerJobsStatements = (): string[] =>
+  REAL_SCHEDULER_JOBS_DEFINITION.flatMap(({ name, only }) => {
+    const statements = migrationStatements(name).filter((statement) =>
+      only.test(statement),
+    );
+    expect(statements.length, name).toBeGreaterThan(0);
+    return statements;
+  });
+
+const installRealSchedulerJobs = async (observer: SQL) => {
+  for (const statement of realSchedulerJobsStatements()) {
+    await observer.unsafe(statement);
+  }
+};
+
+const SCHEDULER_SEED = `INSERT INTO scheduler_jobs
+  (id, task, schedule, next_run_at, paused_by, paused_until, pause_reason) VALUES
+  ('job.reader', 'task', '{}'::jsonb, now(), NULL, NULL, NULL),
+  ('job.other', 'task', '{}'::jsonb, now(), NULL, NULL, NULL),
+  ('job.expired', 'task', '{}'::jsonb, now(), 'operator', now() - interval '1 hour', 'Elapsed maintenance'),
+  ('job.operator', 'task', '{}'::jsonb, now(), 'operator', now() + interval '2 hours', 'Incident hold reason'),
+  ('scheduler.pauseAudit.hourly', 'task', '{}'::jsonb, now(), NULL, NULL, NULL)`;
+
+/** What a database holds for `scheduler_jobs`, in catalogue terms. */
+const schedulerJobsCatalogue = async (observer: SQL) => ({
+  columns: await observer.unsafe(
+    `SELECT a.attname, format_type(a.atttypid, a.atttypmod) AS type,
+            a.attnotnull, pg_get_expr(d.adbin, d.adrelid) AS "default"
+     FROM pg_attribute a
+     LEFT JOIN pg_attrdef d ON d.adrelid = a.attrelid AND d.adnum = a.attnum
+     WHERE a.attrelid = 'scheduler_jobs'::regclass AND a.attnum > 0 AND NOT a.attisdropped
+     ORDER BY a.attname`,
+  ),
+  constraints: await observer.unsafe(
+    `SELECT conname, pg_get_constraintdef(oid) AS definition
+     FROM pg_constraint WHERE conrelid = 'scheduler_jobs'::regclass
+     ORDER BY conname`,
+  ),
+  triggers: await observer.unsafe(
+    `SELECT tgname, pg_get_triggerdef(oid) AS definition,
+            pg_get_functiondef(tgfoid) AS "function"
+     FROM pg_trigger WHERE tgrelid = 'scheduler_jobs'::regclass AND NOT tgisinternal
+     ORDER BY tgname`,
+  ),
+});
+
+const ALTER_AFTER_DRAIN = "ALTER TABLE lock_probe ADD COLUMN reissued boolean;";
+const FAILING_AFTER_ALTER = `${ALTER_AFTER_DRAIN}--> statement-breakpoint\nSELECT 1 / 0;`;
+const FAST_LOCK_WAIT_RETRY = {
+  lockTimeoutsMs: [10, 20, 30],
+  pauseBaseMs: 10,
+  pauseCapMs: 10,
+  random: () => 1,
+  budgetMs: MIGRATION_LOCK_WAIT_RETRY_BUDGET_MS,
+  now: () => performance.now(),
+  sleep: async () => {
+    await Promise.resolve();
+  },
+} as const;
+
+// Gate tests hold an advisory lock while exercising pause expiry and renewal.
+const SCHEMA_GATE_LOCK_WAIT_RETRY = {
+  ...FAST_LOCK_WAIT_RETRY,
+  lockTimeoutsMs: [30_000],
+};
+
+/** A drain whose clock moves only when it sleeps, so the deadline costs no time. */
+const virtualDrainRuntime = (
+  deadlineMs: number,
+  pollMs: number,
+): SchedulerDrainRuntime => {
+  let elapsedMs = 0;
+  return {
+    now: () => elapsedMs,
+    sleep: async (ms) => {
+      elapsedMs += ms;
+      await Promise.resolve();
+    },
+    deadlineMs,
+    pollMs,
+    repeat: () => () => undefined,
+  };
+};
+
+/**
+ * A drain clock that moves only when it sleeps. The previous release's runner
+ * releases `jobId`'s lease when the clock reaches `releaseAtMs`, as a runner
+ * that finishes at its runtime ceiling does; `null` never releases.
+ */
+const virtualRunnerRuntime = ({
+  observer,
+  jobId,
+  releaseAtMs,
+}: {
+  observer: SQL;
+  jobId: string;
+  releaseAtMs: number | null;
+}): SchedulerDrainRuntime => {
+  let elapsedMs = 0;
+  let released = false;
+  return {
+    now: () => elapsedMs,
+    sleep: async (ms) => {
+      elapsedMs += ms;
+      if (!released && releaseAtMs !== null && elapsedMs >= releaseAtMs) {
+        released = true;
+        await releaseLease(observer, jobId);
+      }
+    },
+    deadlineMs: SCHEDULER_DRAIN_DEADLINE_MS,
+    pollMs: 60_000,
+    repeat: () => () => undefined,
+  };
+};
+
+const schedulerRows = async (observer: SQL) =>
+  await observer.unsafe<
+    {
+      id: string;
+      paused_by: string | null;
+      paused_until: Date | null;
+      pause_reason: string | null;
+      paused_since: Date | null;
+      locked_by: string | null;
+      updated_at: Date;
+    }[]
+  >(
+    "SELECT id, paused_by, paused_until, pause_reason, paused_since, locked_by, updated_at FROM scheduler_jobs ORDER BY id",
+  );
+
+/** Gives a job an operator pause that ends `interval` from now. */
+const operatorPause = async ({
+  observer,
+  id,
+  by,
+  reason,
+  interval,
+}: {
+  observer: SQL;
+  id: string;
+  by: string;
+  reason: string;
+  interval: string;
+}) => {
+  await observer.unsafe(
+    "UPDATE scheduler_jobs SET paused_by = $2, pause_reason = $3, paused_until = now() + $4::interval WHERE id = $1",
+    [id, by, reason, interval],
+  );
+};
+
+/** The migration parks on the schema gate while its DDL transaction is open. */
+const waitForSchemaGateWaiter = async (observer: SQL) => {
+  await waitForExternalState({
+    description: "the schema phase waits on the test gate",
+    read: async () => {
+      const [row] = await observer.unsafe<{ waiting: number }[]>(
+        "SELECT count(*)::int AS waiting FROM pg_locks WHERE locktype = 'advisory' AND classid = 0 AND objid = $1 AND objsubid = 1 AND NOT granted AND database = (SELECT oid FROM pg_database WHERE datname = current_database())",
+        [SCHEMA_GATE_KEY],
+      );
+      return (row?.waiting ?? 0) > 0;
+    },
+  });
+};
+
+const leaseJob = async (observer: SQL, id: string) => {
+  await observer.unsafe(
+    "UPDATE scheduler_jobs SET locked_by = 'previous-release-runner', locked_until = now() + interval '30 minutes' WHERE id = $1",
+    [id],
+  );
+};
+
+const releaseLease = async (observer: SQL, id: string) => {
+  await observer.unsafe(
+    "UPDATE scheduler_jobs SET locked_by = NULL, locked_until = NULL WHERE id = $1",
+    [id],
+  );
+};
+
+const waitForPauseBy = async (observer: SQL, id: string, pausedBy: string) => {
+  await waitForExternalState({
+    description: `${id} is paused by ${pausedBy}`,
+    read: async () => {
+      const [row] = await observer.unsafe<{ by: string | null }[]>(
+        "SELECT paused_by AS by FROM scheduler_jobs WHERE id = $1 AND paused_until > now()",
+        [id],
+      );
+      return row?.by === pausedBy;
+    },
+  });
+};
+
+type AttemptedRun = { error: unknown; timings: MigrationTimingRecord[] };
+
+const attemptRun = async ({
+  openClient,
+  scratchUrl,
+  folder,
+  schedulerDrain,
+  lockWaitRetry = FAST_LOCK_WAIT_RETRY,
+}: {
+  openClient: () => SQL;
+  scratchUrl: string;
+  folder: string;
+  schedulerDrain: SchedulerDrainRuntime;
+  lockWaitRetry?: Parameters<typeof runMigrations>[0]["lockWaitRetry"];
+}): Promise<AttemptedRun> => {
+  const connection = await openClient().reserve();
+  const timings: MigrationTimingRecord[] = [];
+  try {
+    const error = await rejectionOf(
+      async () =>
+        await runMigrations({
+          connection,
+          databaseUrl: scratchUrl,
+          ebs: DISABLED_EBS,
+          migrationsFolder: folder,
+          runOnline: async () => ONLINE_COMPLETE,
+          timing: {
+            clock: () => performance.now(),
+            emit: (record) => {
+              timings.push(record);
+            },
+          },
+          lockWaitRetry,
+          schedulerDrain,
+        }),
+    );
+    return { error, timings };
+  } finally {
+    await connection.release();
+  }
+};
+
+const schedulerEvents = (timings: readonly MigrationTimingRecord[]) =>
+  timings.filter(
+    ({ event }) =>
+      event === "migrate.scheduler_drain" ||
+      event === "migrate.scheduler_resume",
+  );
 
 if (!runPostgresTests || databaseUrl === undefined) {
   describe.skip("migration runner PostgreSQL contract", () => {
@@ -1290,6 +1566,1037 @@ if (!runPostgresTests || databaseUrl === undefined) {
           );
         },
       );
+    });
+
+    describe("scheduled jobs around the schema phase", () => {
+      test("the fixture's scheduler_jobs matches the table the app migrations build", async () => {
+        await withCorpusBundle(async (corpusFolder) => {
+          await withScratch(async (real) => {
+            appliedResult(await real.run(corpusFolder));
+            await withScratch(async (fixture) => {
+              await installRealSchedulerJobs(fixture.observer);
+              expect(await schedulerJobsCatalogue(fixture.observer)).toEqual(
+                await schedulerJobsCatalogue(real.observer),
+              );
+            });
+          });
+        });
+      });
+
+      // A is applied first; B is the pending set under test.
+      const withSchedulerBundle = async (
+        pendingSql: string,
+        work: (scratch: Scratch, folder: string) => Promise<void>,
+      ) => {
+        await withBundle(
+          [{ name: A, sql: CREATE_PROBE }],
+          async (firstFolder) => {
+            await withBundle(
+              [
+                { name: A, sql: CREATE_PROBE },
+                { name: B, sql: pendingSql },
+              ],
+              async (folder) => {
+                await withScratch(async (scratch) => {
+                  // The production table, trigger and constraints; the
+                  // migrations under test are the ledger's concern only.
+                  await installRealSchedulerJobs(scratch.observer);
+                  await scratch.observer.unsafe(SCHEDULER_SEED);
+                  await scratch.observer.unsafe(CREATE_LOCK_PROBE);
+                  appliedResult(await scratch.run(firstFolder));
+                  await work(scratch, folder);
+                });
+              },
+            );
+          },
+        );
+      };
+
+      const rowOf = (
+        rows: Awaited<ReturnType<typeof schedulerRows>>,
+        id: string,
+      ) => rows.find((row) => row.id === id);
+
+      test("drains a leased reader that releases on the pause, applies the DDL, and resumes", async () => {
+        await withSchedulerBundle(
+          ALTER_AFTER_DRAIN,
+          async ({ observer, openClient, scratchUrl }, folder) => {
+            await leaseJob(observer, "job.reader");
+            const before = await schedulerRows(observer);
+            const holder = holdLockProbe(openClient());
+            await holder.held;
+            // The previous release's runner: at the pause it gives up its
+            // lock and its lease.
+            const runner = (async () => {
+              await waitForPauseBy(observer, "job.reader", "migrate");
+              await holder.release();
+              await releaseLease(observer, "job.reader");
+            })();
+            try {
+              const { error, timings } = await attemptRun({
+                openClient,
+                scratchUrl,
+                folder,
+                schedulerDrain: {
+                  ...DEFAULT_SCHEDULER_DRAIN_RUNTIME,
+                  pollMs: 10,
+                },
+              });
+              expect(error).toBeNull();
+              expect(schedulerEvents(timings)).toMatchObject([
+                {
+                  event: "migrate.scheduler_drain",
+                  outcome: "drained",
+                  pausedCount: 2,
+                  leasedCount: 0,
+                },
+                {
+                  event: "migrate.scheduler_resume",
+                  outcome: "resumed",
+                  pausedCount: 2,
+                  resumedCount: 2,
+                },
+              ]);
+            } finally {
+              await runner;
+              await holder.release();
+            }
+            expect(await lockProbeColumns(observer)).toEqual([
+              "id",
+              "reissued",
+            ]);
+            const after = await schedulerRows(observer);
+            for (const id of ["job.reader", "job.other"]) {
+              expect(rowOf(after, id)?.paused_until, id).toBeNull();
+            }
+            // Operator pauses retain their metadata, even after expiry.
+            for (const id of [
+              "job.operator",
+              "job.expired",
+              "scheduler.pauseAudit.hourly",
+            ]) {
+              expect(rowOf(after, id), id).toEqual(rowOf(before, id));
+            }
+          },
+        );
+      });
+
+      test("a job that never releases fails the drain before any migration statement and resumes the jobs", async () => {
+        await withSchedulerBundle(
+          ALTER_AFTER_DRAIN,
+          async ({ observer, openClient, scratchUrl }, folder) => {
+            await leaseJob(observer, "job.reader");
+            const ledgerBefore = await ledgerRows(observer);
+            const before = await schedulerRows(observer);
+            const { error, timings } = await attemptRun({
+              openClient,
+              scratchUrl,
+              folder,
+              schedulerDrain: virtualDrainRuntime(5000, 1000),
+            });
+            expect(SchedulerDrainTimeoutError.is(error)).toBe(true);
+            expect(error).toMatchObject({
+              waitedMs: 5000,
+              leased: [
+                { id: "job.reader", lockedBy: "previous-release-runner" },
+              ],
+            });
+            expect(schedulerEvents(timings)).toMatchObject([
+              {
+                event: "migrate.scheduler_drain",
+                outcome: "timed_out",
+                pausedCount: 2,
+                leasedCount: 1,
+                drainWaitMs: 5000,
+              },
+              {
+                event: "migrate.scheduler_resume",
+                outcome: "resumed",
+                resumedCount: 2,
+              },
+            ]);
+            // Nothing ran: the ledger and the table are as they were.
+            expect([...(await ledgerRows(observer))]).toEqual([
+              ...ledgerBefore,
+            ]);
+            expect(await lockProbeColumns(observer)).toEqual(["id"]);
+            const after = await schedulerRows(observer);
+            expect(
+              after.filter(
+                (row) =>
+                  row.paused_by === "migrate" && row.paused_until !== null,
+              ),
+            ).toEqual([]);
+            expect(rowOf(after, "job.operator")).toEqual(
+              rowOf(before, "job.operator"),
+            );
+            expect(rowOf(after, "job.reader")?.locked_by).toBe(
+              "previous-release-runner",
+            );
+          },
+        );
+      });
+
+      test("a migration that fails after the drain still resumes the jobs it paused", async () => {
+        await withSchedulerBundle(
+          FAILING_AFTER_ALTER,
+          async ({ observer, openClient, scratchUrl }, folder) => {
+            const { error, timings } = await attemptRun({
+              openClient,
+              scratchUrl,
+              folder,
+              schedulerDrain: virtualDrainRuntime(5000, 1000),
+            });
+            expect(SchedulerDrainTimeoutError.is(error)).toBe(false);
+            expect(error).toBeInstanceOf(Error);
+            expect(schedulerEvents(timings)).toMatchObject([
+              {
+                event: "migrate.scheduler_drain",
+                outcome: "drained",
+                pausedCount: 2,
+              },
+              {
+                event: "migrate.scheduler_resume",
+                outcome: "resumed",
+                resumedCount: 2,
+              },
+            ]);
+            const paused = (await schedulerRows(observer))
+              .filter(({ paused_until }) => paused_until !== null)
+              .map(({ id }) => id);
+            expect(paused).toEqual(["job.expired", "job.operator"]);
+          },
+        );
+      });
+
+      test("an operator pause made during the drain is not resumed", async () => {
+        await withSchedulerBundle(
+          ALTER_AFTER_DRAIN,
+          async ({ observer, openClient, scratchUrl }, folder) => {
+            await leaseJob(observer, "job.reader");
+            // The operator replaces the migrate pause, then the runner stops.
+            const operator = (async () => {
+              await waitForPauseBy(observer, "job.reader", "migrate");
+              await observer.unsafe(
+                "UPDATE scheduler_jobs SET paused_by = 'operator', pause_reason = 'Operator took over', paused_until = now() + interval '2 hours' WHERE id = 'job.reader'",
+              );
+              await releaseLease(observer, "job.reader");
+            })();
+            const { error } = await attemptRun({
+              openClient,
+              scratchUrl,
+              folder,
+              schedulerDrain: {
+                ...DEFAULT_SCHEDULER_DRAIN_RUNTIME,
+                pollMs: 10,
+              },
+            });
+            await operator;
+            expect(error).toBeNull();
+            const reader = rowOf(await schedulerRows(observer), "job.reader");
+            expect(reader).toMatchObject({
+              paused_by: "operator",
+              pause_reason: "Operator took over",
+            });
+            expect(reader?.paused_until).not.toBeNull();
+          },
+        );
+      });
+
+      test("an operator-paused job still holding a lease delays the migration until it releases", async () => {
+        await withSchedulerBundle(
+          ALTER_AFTER_DRAIN,
+          async ({ observer, openClient, scratchUrl }, folder) => {
+            await leaseJob(observer, "job.operator");
+            const ledgerBefore = await ledgerRows(observer);
+            const operatorBefore = rowOf(
+              await schedulerRows(observer),
+              "job.operator",
+            );
+            const holder = holdLockProbe(openClient());
+            await holder.held;
+            // The migrate pause is in place while the operator-paused job is
+            // still running: nothing may have run yet.
+            const runner = (async () => {
+              await waitForPauseBy(observer, "job.reader", "migrate");
+              expect([...(await ledgerRows(observer))]).toEqual([
+                ...ledgerBefore,
+              ]);
+              expect(await lockProbeColumns(observer)).toEqual(["id"]);
+              await holder.release();
+              await releaseLease(observer, "job.operator");
+            })();
+            try {
+              const { error } = await attemptRun({
+                openClient,
+                scratchUrl,
+                folder,
+                schedulerDrain: {
+                  ...DEFAULT_SCHEDULER_DRAIN_RUNTIME,
+                  pollMs: 10,
+                },
+              });
+              await runner;
+              expect(error).toBeNull();
+            } finally {
+              await holder.release();
+            }
+            expect(await lockProbeColumns(observer)).toEqual([
+              "id",
+              "reissued",
+            ]);
+            const operatorAfter = rowOf(
+              await schedulerRows(observer),
+              "job.operator",
+            );
+            expect(operatorAfter).toMatchObject({
+              paused_by: operatorBefore?.paused_by,
+              pause_reason: operatorBefore?.pause_reason,
+              paused_until: operatorBefore?.paused_until,
+            });
+          },
+        );
+      });
+
+      test("an operator-paused job whose lease never clears fails the drain before any statement and stays as it was", async () => {
+        await withSchedulerBundle(
+          ALTER_AFTER_DRAIN,
+          async ({ observer, openClient, scratchUrl }, folder) => {
+            await leaseJob(observer, "job.operator");
+            const ledgerBefore = await ledgerRows(observer);
+            const before = await schedulerRows(observer);
+            const { error } = await attemptRun({
+              openClient,
+              scratchUrl,
+              folder,
+              schedulerDrain: virtualDrainRuntime(5000, 1000),
+            });
+            expect(SchedulerDrainTimeoutError.is(error)).toBe(true);
+            expect(error).toMatchObject({
+              leased: [
+                { id: "job.operator", lockedBy: "previous-release-runner" },
+              ],
+            });
+            expect([...(await ledgerRows(observer))]).toEqual([
+              ...ledgerBefore,
+            ]);
+            expect(await lockProbeColumns(observer)).toEqual(["id"]);
+            const after = await schedulerRows(observer);
+            expect(rowOf(after, "job.operator")).toEqual(
+              rowOf(before, "job.operator"),
+            );
+            expect(
+              after.filter(
+                (row) =>
+                  row.paused_by === "migrate" && row.paused_until !== null,
+              ),
+            ).toEqual([]);
+          },
+        );
+      });
+
+      test("an operator pause expiring during the schema phase stays in force and is restored exactly", async () => {
+        await withSchedulerBundle(
+          `${ALTER_AFTER_DRAIN}--> statement-breakpoint\n${AWAIT_SCHEMA_GATE}`,
+          async ({ observer, openClient, scratchUrl }, folder) => {
+            await operatorPause({
+              observer,
+              id: "job.other",
+              by: "operator",
+              reason: "Short operator hold",
+              interval: "5 seconds",
+            });
+            const original = rowOf(await schedulerRows(observer), "job.other");
+            const gate = await openClient().reserve();
+            await gate.unsafe(HOLD_SCHEMA_GATE);
+            const run = attemptRun({
+              openClient,
+              scratchUrl,
+              folder,
+              lockWaitRetry: SCHEMA_GATE_LOCK_WAIT_RETRY,
+              schedulerDrain: {
+                ...DEFAULT_SCHEDULER_DRAIN_RUNTIME,
+                pollMs: 10,
+              },
+            });
+            try {
+              await waitForSchemaGateWaiter(observer);
+              // The operator's deadline passes while the DDL transaction is open.
+              await waitForExternalState({
+                description: "the operator pause's own deadline has passed",
+                read: async () => {
+                  const [row] = await observer.unsafe<{ past: boolean }[]>(
+                    "SELECT now() > $1::timestamptz AS past",
+                    [original?.paused_until],
+                  );
+                  return row?.past === true;
+                },
+              });
+              const during = rowOf(await schedulerRows(observer), "job.other");
+              expect(during?.paused_by).toBe("migrate");
+              expect((during?.paused_until?.getTime() ?? 0) > Date.now()).toBe(
+                true,
+              );
+              await gate.unsafe(RELEASE_SCHEMA_GATE);
+              const { error, timings } = await run;
+              expect(error).toBeNull();
+              expect(schedulerEvents(timings)).toMatchObject([
+                { outcome: "drained", pausedCount: 1, takenOverCount: 2 },
+                { outcome: "resumed", resumedCount: 1, restoredCount: 2 },
+              ]);
+            } finally {
+              await gate.unsafe(RELEASE_SCHEMA_GATE);
+              // swallow-ok: the run's outcome was asserted above; this only drains it
+              await run.catch(() => undefined);
+              await gate.release();
+            }
+            const after = rowOf(await schedulerRows(observer), "job.other");
+            expect(after).toMatchObject({
+              paused_by: "operator",
+              pause_reason: "Short operator hold",
+              paused_until: original?.paused_until,
+            });
+          },
+        );
+      });
+
+      test("a taken-over operator pause that is still active is restored with its original attribution", async () => {
+        await withSchedulerBundle(
+          ALTER_AFTER_DRAIN,
+          async ({ observer, openClient, scratchUrl }, folder) => {
+            await operatorPause({
+              observer,
+              id: "job.other",
+              by: "operator",
+              reason: "Ten minute hold",
+              interval: "10 minutes",
+            });
+            const original = rowOf(await schedulerRows(observer), "job.other");
+            const { error, timings } = await attemptRun({
+              openClient,
+              scratchUrl,
+              folder,
+              schedulerDrain: virtualDrainRuntime(5000, 1000),
+            });
+            expect(error).toBeNull();
+            expect(schedulerEvents(timings)).toMatchObject([
+              { takenOverCount: 2 },
+              { restoredCount: 2 },
+            ]);
+            const after = rowOf(await schedulerRows(observer), "job.other");
+            expect(after).toMatchObject({
+              paused_by: original?.paused_by,
+              pause_reason: original?.pause_reason,
+              paused_until: original?.paused_until,
+              paused_since: original?.paused_since,
+            });
+            expect(original?.paused_since).not.toBeNull();
+          },
+        );
+      });
+
+      test("an operator pause longer than the step's bound is never written", async () => {
+        await withSchedulerBundle(
+          ALTER_AFTER_DRAIN,
+          async ({ observer, openClient, scratchUrl }, folder) => {
+            const before = await schedulerRows(observer);
+            const { error, timings } = await attemptRun({
+              openClient,
+              scratchUrl,
+              folder,
+              schedulerDrain: virtualDrainRuntime(5000, 1000),
+            });
+            expect(error).toBeNull();
+            expect(schedulerEvents(timings)).toMatchObject([
+              { takenOverCount: 1 },
+              { restoredCount: 1 },
+            ]);
+            expect(
+              rowOf(await schedulerRows(observer), "job.operator"),
+            ).toEqual(rowOf(before, "job.operator"));
+          },
+        );
+      });
+
+      test("a pause written during the schema phase is not overwritten by the restore", async () => {
+        await withSchedulerBundle(
+          `${ALTER_AFTER_DRAIN}--> statement-breakpoint\n${AWAIT_SCHEMA_GATE}`,
+          async ({ observer, openClient, scratchUrl }, folder) => {
+            await operatorPause({
+              observer,
+              id: "job.other",
+              by: "operator",
+              reason: "Ten minute hold",
+              interval: "10 minutes",
+            });
+            const gate = await openClient().reserve();
+            await gate.unsafe(HOLD_SCHEMA_GATE);
+            const run = attemptRun({
+              openClient,
+              scratchUrl,
+              folder,
+              lockWaitRetry: SCHEMA_GATE_LOCK_WAIT_RETRY,
+              schedulerDrain: {
+                ...DEFAULT_SCHEDULER_DRAIN_RUNTIME,
+                pollMs: 10,
+              },
+            });
+            try {
+              await waitForSchemaGateWaiter(observer);
+              await operatorPause({
+                observer,
+                id: "job.other",
+                by: "second-operator",
+                reason: "Written during migration",
+                interval: "1 hour",
+              });
+              await gate.unsafe(RELEASE_SCHEMA_GATE);
+              const { error, timings } = await run;
+              expect(error).toBeNull();
+              expect(schedulerEvents(timings)).toMatchObject([
+                { takenOverCount: 2 },
+                { restoredCount: 1 },
+              ]);
+            } finally {
+              await gate.unsafe(RELEASE_SCHEMA_GATE);
+              // swallow-ok: the run's outcome was asserted above; this only drains it
+              await run.catch(() => undefined);
+              await gate.release();
+            }
+            expect(
+              rowOf(await schedulerRows(observer), "job.other"),
+            ).toMatchObject({
+              paused_by: "second-operator",
+              pause_reason: "Written during migration",
+            });
+          },
+        );
+      });
+
+      test("a later run drains the same jobs again after an earlier run resumed them", async () => {
+        await withSchedulerBundle(
+          ALTER_AFTER_DRAIN,
+          async ({ observer, openClient, scratchUrl }, folder) => {
+            const first = await attemptRun({
+              openClient,
+              scratchUrl,
+              folder,
+              schedulerDrain: virtualDrainRuntime(5000, 1000),
+            });
+            expect(first.error).toBeNull();
+            // The resume cleared the deadline but left the step's attribution.
+            const resumed = rowOf(await schedulerRows(observer), "job.reader");
+            expect(resumed).toMatchObject({
+              paused_by: "migrate",
+              paused_until: null,
+            });
+            const next = nodePath.join(folder, "20260929000200_runner_c");
+            mkdirSync(next);
+            writeFileSync(
+              nodePath.join(next, "migration.sql"),
+              "ALTER TABLE lock_probe ADD COLUMN second boolean;",
+            );
+            await leaseJob(observer, "job.reader");
+            const runner = (async () => {
+              await waitForPauseBy(observer, "job.reader", "migrate");
+              await releaseLease(observer, "job.reader");
+            })();
+            const second = await attemptRun({
+              openClient,
+              scratchUrl,
+              folder,
+              schedulerDrain: {
+                ...DEFAULT_SCHEDULER_DRAIN_RUNTIME,
+                pollMs: 10,
+              },
+            });
+            await runner;
+            expect(second.error).toBeNull();
+            expect(schedulerEvents(second.timings)).toMatchObject([
+              { outcome: "drained", pausedCount: 2 },
+              { outcome: "resumed", resumedCount: 2 },
+            ]);
+            expect(await lockProbeColumns(observer)).toEqual([
+              "id",
+              "reissued",
+              "second",
+            ]);
+          },
+        );
+      });
+
+      test("an expired pause left by a killed migrate task is paused again by the next run", async () => {
+        await withSchedulerBundle(
+          ALTER_AFTER_DRAIN,
+          async ({ observer, openClient, scratchUrl }, folder) => {
+            await operatorPause({
+              observer,
+              id: "job.other",
+              by: "migrate",
+              reason: "Leftover pause",
+              interval: "-1 minute",
+            });
+            await leaseJob(observer, "job.other");
+            const runner = (async () => {
+              await waitForPauseBy(observer, "job.other", "migrate");
+              await releaseLease(observer, "job.other");
+            })();
+            const { error, timings } = await attemptRun({
+              openClient,
+              scratchUrl,
+              folder,
+              schedulerDrain: {
+                ...DEFAULT_SCHEDULER_DRAIN_RUNTIME,
+                pollMs: 10,
+              },
+            });
+            await runner;
+            expect(error).toBeNull();
+            expect(schedulerEvents(timings)).toMatchObject([
+              { outcome: "drained", pausedCount: 2, takenOverCount: 1 },
+              { outcome: "resumed", resumedCount: 2 },
+            ]);
+          },
+        );
+      });
+
+      test("an active leftover migrate pause expiring during the schema phase is adopted and cleared afterwards", async () => {
+        await withSchedulerBundle(
+          `${ALTER_AFTER_DRAIN}--> statement-breakpoint\n${AWAIT_SCHEMA_GATE}`,
+          async ({ observer, openClient, scratchUrl }, folder) => {
+            await operatorPause({
+              observer,
+              id: "job.other",
+              by: "migrate",
+              reason: "Leftover pause",
+              interval: "5 seconds",
+            });
+            const leftover = rowOf(await schedulerRows(observer), "job.other");
+            const gate = await openClient().reserve();
+            await gate.unsafe(HOLD_SCHEMA_GATE);
+            const run = attemptRun({
+              openClient,
+              scratchUrl,
+              folder,
+              lockWaitRetry: SCHEMA_GATE_LOCK_WAIT_RETRY,
+              schedulerDrain: {
+                ...DEFAULT_SCHEDULER_DRAIN_RUNTIME,
+                pollMs: 10,
+              },
+            });
+            try {
+              await waitForSchemaGateWaiter(observer);
+              await waitForExternalState({
+                description: "the leftover pause's own deadline has passed",
+                read: async () => {
+                  const [row] = await observer.unsafe<{ past: boolean }[]>(
+                    "SELECT now() > $1::timestamptz AS past",
+                    [leftover?.paused_until],
+                  );
+                  return row?.past === true;
+                },
+              });
+              const during = rowOf(await schedulerRows(observer), "job.other");
+              expect(during?.paused_by).toBe("migrate");
+              expect((during?.paused_until?.getTime() ?? 0) > Date.now()).toBe(
+                true,
+              );
+              await gate.unsafe(RELEASE_SCHEMA_GATE);
+              const { error, timings } = await run;
+              expect(error).toBeNull();
+              expect(schedulerEvents(timings)).toMatchObject([
+                { outcome: "drained", pausedCount: 2, takenOverCount: 1 },
+                { outcome: "resumed", resumedCount: 2, restoredCount: 1 },
+              ]);
+            } finally {
+              await gate.unsafe(RELEASE_SCHEMA_GATE);
+              // swallow-ok: the run's outcome was asserted above; this only drains it
+              await run.catch(() => undefined);
+              await gate.release();
+            }
+            expect(
+              rowOf(await schedulerRows(observer), "job.other")?.paused_until,
+            ).toBeNull();
+          },
+        );
+      });
+
+      test("a target that changes between selection and update is still taken over before the work starts", async () => {
+        await withSchedulerBundle(
+          ALTER_AFTER_DRAIN,
+          async ({ observer, openClient, scratchUrl }, folder) => {
+            await operatorPause({
+              observer,
+              id: "job.other",
+              by: "operator",
+              reason: "Elapsed hold",
+              interval: "-1 minute",
+            });
+            // A session holds the row, so the pause statement scans it and
+            // waits to update it; the holder replaces the expired pause with
+            // a short active one, which fails the statement's recheck.
+            const replaced = Promise.withResolvers<undefined>();
+            const holder = openClient().begin(async (tx) => {
+              await tx.unsafe(
+                "SELECT 1 FROM scheduler_jobs WHERE id = 'job.other' FOR UPDATE",
+              );
+              replaced.resolve(undefined);
+              await waitForExternalState({
+                description: "the pause statement waits on the held row",
+                read: async () => {
+                  const [row] = await observer.unsafe<{ blocked: number }[]>(
+                    "SELECT count(*)::int AS blocked FROM pg_stat_activity WHERE datname = current_database() AND cardinality(pg_blocking_pids(pid)) > 0",
+                  );
+                  return (row?.blocked ?? 0) > 0;
+                },
+              });
+              await tx.unsafe(
+                "UPDATE scheduler_jobs SET paused_by = 'operator', pause_reason = 'Replaced hold', paused_until = now() + interval '10 minutes' WHERE id = 'job.other'",
+              );
+            });
+            await replaced.promise;
+            const { error, timings } = await attemptRun({
+              openClient,
+              scratchUrl,
+              folder,
+              schedulerDrain: virtualDrainRuntime(5000, 1000),
+            });
+            await holder;
+            expect(error).toBeNull();
+            expect(schedulerEvents(timings)).toMatchObject([
+              { outcome: "drained", pausedCount: 1, takenOverCount: 2 },
+              { outcome: "resumed", resumedCount: 1, restoredCount: 2 },
+            ]);
+            expect(
+              rowOf(await schedulerRows(observer), "job.other"),
+            ).toMatchObject({
+              paused_by: "operator",
+              pause_reason: "Replaced hold",
+            });
+          },
+        );
+      });
+
+      test("a running job is waited for until its runtime ceiling, then the migration runs", async () => {
+        await withSchedulerBundle(
+          ALTER_AFTER_DRAIN,
+          async ({ observer, openClient, scratchUrl }, folder) => {
+            await leaseJob(observer, "job.reader");
+            const { error, timings } = await attemptRun({
+              openClient,
+              scratchUrl,
+              folder,
+              schedulerDrain: virtualRunnerRuntime({
+                observer,
+                jobId: "job.reader",
+                releaseAtMs: DEFAULT_MAX_RUNTIME_MS,
+              }),
+            });
+            expect(error).toBeNull();
+            const drain = schedulerEvents(timings).at(0);
+            expect(drain).toMatchObject({ outcome: "drained" });
+            expect(
+              drain?.event === "migrate.scheduler_drain" && drain.drainWaitMs,
+            ).toBeGreaterThanOrEqual(DEFAULT_MAX_RUNTIME_MS);
+            const progress = timings.filter(
+              (record) => record.event === "migrate.scheduler_drain_progress",
+            );
+            expect(progress.length).toBeGreaterThan(0);
+            expect(progress.length).toBeLessThanOrEqual(
+              DEFAULT_MAX_RUNTIME_MS / 60_000 + 1,
+            );
+            expect(
+              progress.every(
+                (record) =>
+                  record.event === "migrate.scheduler_drain_progress" &&
+                  record.jobId === "job.reader" &&
+                  record.lockedBy === "previous-release-runner",
+              ),
+            ).toBe(true);
+            expect(await lockProbeColumns(observer)).toEqual([
+              "id",
+              "reissued",
+            ]);
+          },
+        );
+      });
+
+      test("a running job that outlives the drain bound fails the run before any statement", async () => {
+        await withSchedulerBundle(
+          ALTER_AFTER_DRAIN,
+          async ({ observer, openClient, scratchUrl }, folder) => {
+            await leaseJob(observer, "job.reader");
+            const ledgerBefore = await ledgerRows(observer);
+            const { error } = await attemptRun({
+              openClient,
+              scratchUrl,
+              folder,
+              schedulerDrain: virtualRunnerRuntime({
+                observer,
+                jobId: "job.reader",
+                releaseAtMs: null,
+              }),
+            });
+            expect(SchedulerDrainTimeoutError.is(error)).toBe(true);
+            expect(error).toMatchObject({
+              leased: [{ id: "job.reader" }],
+            });
+            expect(
+              error instanceof SchedulerDrainTimeoutError && error.waitedMs,
+            ).toBeGreaterThanOrEqual(SCHEDULER_DRAIN_DEADLINE_MS);
+            expect([...(await ledgerRows(observer))]).toEqual([
+              ...ledgerBefore,
+            ]);
+            expect(await lockProbeColumns(observer)).toEqual(["id"]);
+          },
+        );
+      });
+
+      test("an operator pause that replaces the step's pause during the wait is restored, still active", async () => {
+        await withSchedulerBundle(
+          ALTER_AFTER_DRAIN,
+          async ({ observer, openClient, scratchUrl }, folder) => {
+            // job.reader keeps the run waiting; job.other starts unpaused.
+            await leaseJob(observer, "job.reader");
+            let elapsedMs = 0;
+            let replaced = false;
+            const runtime: SchedulerDrainRuntime = {
+              now: () => elapsedMs,
+              sleep: async (ms) => {
+                elapsedMs += ms;
+                if (!replaced) {
+                  replaced = true;
+                  await waitForPauseBy(observer, "job.other", "migrate");
+                  await operatorPause({
+                    observer,
+                    id: "job.other",
+                    by: "operator",
+                    reason: "Replaced during wait",
+                    interval: "10 minutes",
+                  });
+                  return;
+                }
+                await releaseLease(observer, "job.reader");
+              },
+              deadlineMs: SCHEDULER_DRAIN_DEADLINE_MS,
+              pollMs: 1000,
+              repeat: () => () => undefined,
+            };
+            const { error, timings } = await attemptRun({
+              openClient,
+              scratchUrl,
+              folder,
+              schedulerDrain: runtime,
+            });
+            expect(error).toBeNull();
+            expect(schedulerEvents(timings)).toMatchObject([
+              { outcome: "drained", pausedCount: 1, takenOverCount: 2 },
+              { outcome: "resumed", resumedCount: 1, restoredCount: 2 },
+            ]);
+            const after = rowOf(await schedulerRows(observer), "job.other");
+            expect(after).toMatchObject({
+              paused_by: "operator",
+              pause_reason: "Replaced during wait",
+            });
+            expect((after?.paused_until?.getTime() ?? 0) > Date.now()).toBe(
+              true,
+            );
+          },
+        );
+      });
+
+      test("pauses are renewed while the schema work runs past the original pause", async () => {
+        await withSchedulerBundle(
+          `${ALTER_AFTER_DRAIN}--> statement-breakpoint\n${AWAIT_SCHEMA_GATE}`,
+          async ({ observer, openClient, scratchUrl }, folder) => {
+            await operatorPause({
+              observer,
+              id: "job.other",
+              by: "operator",
+              reason: "Ten minute hold",
+              interval: "10 minutes",
+            });
+            const originalOther = rowOf(
+              await schedulerRows(observer),
+              "job.other",
+            );
+            // The test owns the renewal timer: it fires only when told to.
+            let tick: (() => Promise<void>) | undefined;
+            const gate = await openClient().reserve();
+            await gate.unsafe(HOLD_SCHEMA_GATE);
+            const run = attemptRun({
+              openClient,
+              scratchUrl,
+              folder,
+              lockWaitRetry: SCHEMA_GATE_LOCK_WAIT_RETRY,
+              schedulerDrain: {
+                ...DEFAULT_SCHEDULER_DRAIN_RUNTIME,
+                pollMs: 10,
+                repeat: (callback) => {
+                  tick = callback;
+                  return () => {
+                    tick = undefined;
+                  };
+                },
+              },
+            });
+            try {
+              await waitForSchemaGateWaiter(observer);
+              // The work outlasts the pause: shorten it to what the original
+              // bound would have left, and let it lapse.
+              await observer.unsafe(
+                "UPDATE scheduler_jobs SET paused_until = now() + interval '1 second' WHERE paused_by = 'migrate'",
+              );
+              await waitForExternalState({
+                description: "the step's pauses have lapsed",
+                read: async () => {
+                  const [row] = await observer.unsafe<{ lapsed: number }[]>(
+                    "SELECT count(*)::int AS lapsed FROM scheduler_jobs WHERE paused_by = 'migrate' AND paused_until < now()",
+                  );
+                  return (row?.lapsed ?? 0) > 0;
+                },
+              });
+              await tick?.();
+              const [still] = await observer.unsafe<{ active: number }[]>(
+                "SELECT count(*)::int AS active FROM scheduler_jobs WHERE paused_by = 'migrate' AND paused_until > now() + interval '10 minutes'",
+              );
+              expect(still?.active).toBe(3);
+              await gate.unsafe(RELEASE_SCHEMA_GATE);
+              const { error, timings } = await run;
+              expect(error).toBeNull();
+              expect(schedulerEvents(timings)).toMatchObject([
+                { outcome: "drained", pausedCount: 1, takenOverCount: 2 },
+                {
+                  outcome: "resumed",
+                  renewalCount: 1,
+                  renewalFailureCount: 0,
+                  restoredCount: 2,
+                },
+              ]);
+            } finally {
+              await gate.unsafe(RELEASE_SCHEMA_GATE);
+              // swallow-ok: the run's outcome was asserted above; this only drains it
+              await run.catch(() => undefined);
+              await gate.release();
+            }
+            const rows = await schedulerRows(observer);
+            expect(rowOf(rows, "job.reader")?.paused_until).toBeNull();
+            expect(rowOf(rows, "job.other")).toMatchObject({
+              paused_by: "operator",
+              pause_reason: "Ten minute hold",
+              paused_until: originalOther?.paused_until,
+            });
+          },
+        );
+      });
+
+      test("a long operator pause that lapses during the schema work is taken over by a renewal tick and restored", async () => {
+        await withSchedulerBundle(
+          `${ALTER_AFTER_DRAIN}--> statement-breakpoint\n${AWAIT_SCHEMA_GATE}`,
+          async ({ observer, openClient, scratchUrl }, folder) => {
+            // Longer than the start floor, so the drain leaves it untouched.
+            await operatorPause({
+              observer,
+              id: "job.other",
+              by: "operator",
+              reason: "Long operator hold",
+              interval: "3 hours",
+            });
+            let shortened: ReturnType<typeof rowOf>;
+            let tick: (() => Promise<void>) | undefined;
+            const gate = await openClient().reserve();
+            await gate.unsafe(HOLD_SCHEMA_GATE);
+            const run = attemptRun({
+              openClient,
+              scratchUrl,
+              folder,
+              lockWaitRetry: SCHEMA_GATE_LOCK_WAIT_RETRY,
+              schedulerDrain: {
+                ...DEFAULT_SCHEDULER_DRAIN_RUNTIME,
+                pollMs: 10,
+                repeat: (callback) => {
+                  tick = callback;
+                  return () => {
+                    tick = undefined;
+                  };
+                },
+              },
+            });
+            try {
+              await waitForSchemaGateWaiter(observer);
+              expect(
+                rowOf(await schedulerRows(observer), "job.other")?.paused_by,
+              ).toBe("operator");
+              // The operator's pause now ends within a second.
+              await observer.unsafe(
+                "UPDATE scheduler_jobs SET paused_until = now() + interval '1 second' WHERE id = 'job.other'",
+              );
+              await waitForExternalState({
+                description: "the operator pause has lapsed",
+                read: async () => {
+                  const [row] = await observer.unsafe<{ lapsed: boolean }[]>(
+                    "SELECT paused_until < now() AS lapsed FROM scheduler_jobs WHERE id = 'job.other'",
+                  );
+                  return row?.lapsed === true;
+                },
+              });
+              shortened = rowOf(await schedulerRows(observer), "job.other");
+              await tick?.();
+              const during = rowOf(await schedulerRows(observer), "job.other");
+              expect(during?.paused_by).toBe("migrate");
+              expect(
+                (during?.paused_until?.getTime() ?? 0) >
+                  Date.now() + 10 * 60_000,
+              ).toBe(true);
+              await gate.unsafe(RELEASE_SCHEMA_GATE);
+              const { error, timings } = await run;
+              expect(error).toBeNull();
+              expect(schedulerEvents(timings)).toMatchObject([
+                { outcome: "drained", takenOverCount: 1 },
+                { outcome: "resumed", renewalCount: 1, restoredCount: 2 },
+              ]);
+            } finally {
+              await gate.unsafe(RELEASE_SCHEMA_GATE);
+              // swallow-ok: the run's outcome was asserted above; this only drains it
+              await run.catch(() => undefined);
+              await gate.release();
+            }
+            // What the operator last wrote is what comes back, exactly.
+            expect(
+              rowOf(await schedulerRows(observer), "job.other"),
+            ).toMatchObject({
+              paused_by: "operator",
+              pause_reason: "Long operator hold",
+              paused_until: shortened?.paused_until,
+            });
+          },
+        );
+      });
+
+      test("no pending schema migration pauses nothing", async () => {
+        await withSchedulerBundle(
+          ALTER_AFTER_DRAIN,
+          async ({ observer, openClient, scratchUrl }, folder) => {
+            const settled = await attemptRun({
+              openClient,
+              scratchUrl,
+              folder,
+              schedulerDrain: virtualDrainRuntime(5000, 1000),
+            });
+            expect(settled.error).toBeNull();
+            const before = await schedulerRows(observer);
+            const rerun = await attemptRun({
+              openClient,
+              scratchUrl,
+              folder,
+              schedulerDrain: virtualDrainRuntime(5000, 1000),
+            });
+            expect(rerun.error).toBeNull();
+            expect(schedulerEvents(rerun.timings)).toEqual([]);
+            expect(await schedulerRows(observer)).toEqual(before);
+          },
+        );
+      });
     });
 
     test("new receipts equal the preflight prediction in file order", async () => {

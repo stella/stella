@@ -11,6 +11,7 @@ import {
 } from "@/api/db/backfill-runtime";
 import type { Transaction } from "@/api/db/root";
 import { caseLawCoverageSummaries } from "@/api/db/schema";
+import { setScheduledJobTransactionDeadline } from "@/api/db/shared-pool-timeouts";
 import type { SafeId } from "@/api/lib/branded-types";
 import { CASE_LAW_COVERAGE_REFRESH_INTERVAL_MS } from "@/api/lib/case-law/coverage-refresh-interval";
 import { readNonRedistributableCaseLawSourceIdsQuery } from "@/api/lib/case-law/non-redistributable-sources";
@@ -101,6 +102,10 @@ export const createCaseLawCoverageRefreshTask =
           return await runtime.step(
             async ({ tx }): Promise<CoverageRefreshBatch> => {
               refreshSignal.throwIfAborted();
+              await setScheduledJobTransactionDeadline(
+                tx,
+                "scheduled.caseLaw.refreshCoverage",
+              );
               await lockCaseLawCoverageSnapshot(tx);
               const policy =
                 await readNonRedistributableCaseLawSourceIdsQuery(tx);

@@ -9,6 +9,8 @@ import {
 } from "@/api/db/shared-pool-timeout-policy";
 import { envDbTimeouts } from "@/api/env-db-timeouts";
 import { executedRows } from "@/api/lib/db/executed-rows";
+import { READ_BUDGETS } from "@/api/lib/db/read-budgets";
+import type { ExplicitTransactionBudgetId } from "@/api/lib/db/read-budgets";
 
 /** Request budgets only; background and authenticated reads retain their policy. */
 export const PUBLIC_READ_STATEMENT_TIMEOUT_MS = {
@@ -60,6 +62,32 @@ export const setSharedStatementTimeout = async (
   await tx.execute(
     sql`SELECT set_config('statement_timeout', ${`${effectiveTimeout(requestedMs)}ms`}, true)`,
   );
+};
+
+/**
+ * Ends with the transaction. PostgreSQL arms the timer when this runs inside
+ * a transaction, unless one is already armed (assign_transaction_timeout), so
+ * call it first in the transaction: the deadline then runs from its start.
+ */
+export const setTransactionDeadline = async (
+  tx: TimeoutTransaction,
+  deadlineMs: number,
+): Promise<void> => {
+  await tx.execute(
+    sql`SELECT set_config('transaction_timeout', ${`${deadlineMs}ms`}, true)`,
+  );
+};
+
+/**
+ * The one place a scheduled job's transaction takes its declared deadline, so
+ * a transaction of short statements cannot outlast a schema migration's
+ * lock-wait ladder.
+ */
+export const setScheduledJobTransactionDeadline = async (
+  tx: TimeoutTransaction,
+  budget: ExplicitTransactionBudgetId,
+): Promise<void> => {
+  await setTransactionDeadline(tx, READ_BUDGETS[budget].transactionDeadlineMs);
 };
 
 export const setSharedLockTimeout = async (
