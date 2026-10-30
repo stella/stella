@@ -747,7 +747,7 @@ test("a merge group refuses an approved job that uses a mutable action ref", () 
 
   const result = mergeGroupRun(group.root, group.base, group.head());
   expect(result.exitCode).toBe(1);
-  expect(result.stderr).toContain("someorg/action@main");
+  expect(result.stderr).toContain("invalid remote metadata reference");
 });
 
 test("a merge group refuses a decision left for a removed job", () => {
