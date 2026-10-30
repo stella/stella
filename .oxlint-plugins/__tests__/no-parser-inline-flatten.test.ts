@@ -39,3 +39,21 @@ test("parser projections delegate while inline transformations and source text s
     ),
   ).toEqual([]);
 });
+
+test("a projection's own source nodes keep their text reads", async () => {
+  expect(
+    await lintSingleRule(
+      "no-parser-inline-flatten",
+      [
+        'import type { Inline } from "@stll/legal-ast/inline";',
+        'import { flattenInlineText } from "@stll/legal-ast/inline";',
+        "const caption = (inlines: readonly Inline[], source: XmlNode): string =>",
+        "  source.text + flattenInlineText(inlines);",
+        "const cells = (inlines: Inline[], rows: XmlNode[]): string[] =>",
+        "  rows.map((row) => row.text).concat(flattenInlineText(inlines));",
+        "const leak = (inlines: Inline[], rows: XmlNode[]): string[] =>",
+        '  [...rows.map(({ text }) => text), ...inlines.map((node) => node.type === "text" ? node.text : "")];',
+      ].join("\n"),
+    ),
+  ).toEqual([8]);
+});
