@@ -75,6 +75,7 @@ import type {
   DecisionPayloadRead,
 } from "@/api/lib/case-law/decision-versioned-payload";
 import type { DoctrineTreatment } from "@/api/lib/case-law/doctrine";
+import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import { pgTimestampCursorValue } from "@/api/lib/db-pagination";
 import { errorTag } from "@/api/lib/errors/utils";
