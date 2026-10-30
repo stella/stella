@@ -354,14 +354,60 @@ describe("decision text fields", () => {
         "textFidelity"
       ],
     ).toEqual(textFidelity);
-    expect(() =>
+    for (const invalid of [
+      { status: "mismatch" },
+      {
+        status: "mismatch",
+        missingChars: -1,
+        extraChars: 0,
+        firstDifferenceAt: 0,
+      },
+      {
+        status: "mismatch",
+        missingChars: 0,
+        extraChars: -2,
+        firstDifferenceAt: 0,
+      },
+      {
+        status: "mismatch",
+        missingChars: 1,
+        extraChars: 0,
+        firstDifferenceAt: -1,
+      },
+      {
+        status: "reordered",
+        missingChars: 1,
+        extraChars: 0,
+        firstDifferenceAt: 4,
+      },
+      {
+        status: "reordered",
+        missingChars: 0,
+        extraChars: 2,
+        firstDifferenceAt: 4,
+      },
+    ]) {
+      expect(() =>
+        storeDecisionTextFields({
+          metadata: { textFidelity: invalid },
+          textFields,
+        }),
+      ).toThrow(
+        "Text fidelity must carry a status, character counts and its first difference",
+      );
+    }
+    const reordered = {
+      status: "reordered",
+      missingChars: 0,
+      extraChars: 0,
+      firstDifferenceAt: 4,
+    };
+    expect(
       storeDecisionTextFields({
-        metadata: { textFidelity: { status: "mismatch" } },
+        metadata: { textFidelity: reordered },
         textFields,
-      }),
-    ).toThrow(
-      "Text fidelity must carry a status, character counts and its first difference",
-    );
+      })["textFidelity"],
+    ).toEqual(reordered);
   });
 
   test("preserves stored text when a new parse fails", () => {

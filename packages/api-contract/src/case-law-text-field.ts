@@ -213,6 +213,13 @@ export type DecisionTextFidelity = {
   firstDifferenceAt: number;
 };
 
+const isCount = (value: unknown): value is number =>
+  typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+
+/**
+ * Counts and offsets are never negative, and a `reordered` text carries the
+ * printed characters exactly, so it misses and adds none.
+ */
 export const isDecisionTextFidelity = (
   value: unknown,
 ): value is DecisionTextFidelity =>
@@ -223,9 +230,11 @@ export const isDecisionTextFidelity = (
   "extraChars" in value &&
   "firstDifferenceAt" in value &&
   DECISION_TEXT_FIDELITY_STATUSES.some((status) => status === value.status) &&
-  Number.isSafeInteger(value.missingChars) &&
-  Number.isSafeInteger(value.extraChars) &&
-  Number.isSafeInteger(value.firstDifferenceAt);
+  isCount(value.missingChars) &&
+  isCount(value.extraChars) &&
+  isCount(value.firstDifferenceAt) &&
+  (value.status !== "reordered" ||
+    (value.missingChars === 0 && value.extraChars === 0));
 
 export const SK_COURTS_SOURCE_URL_STATUSES = [
   "published",
