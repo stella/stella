@@ -10,6 +10,18 @@ export type GuardRollout = {
 
 export const GUARD_ROLLOUTS: readonly GuardRollout[] = [
   {
+    id: "hosted-buildx-cleanup",
+    type: "changed-lines",
+    expiresAt: "2026-11-06T00:00:00.000Z",
+    check: [
+      "bun",
+      "test",
+      "./scripts/ci-service-workflows.test.ts",
+      "-t",
+      "every hosted Buildx",
+    ],
+  },
+  {
     id: "portable-path",
     rules: ["no-raw-path-relative/no-raw-path-relative"],
     type: "full",
