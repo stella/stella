@@ -18,7 +18,7 @@
  * an `afterEach`.
  */
 
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import * as cheerio from "cheerio";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
@@ -1667,13 +1667,26 @@ export const skUsFixture = (
       if (reparse === undefined) {
         return panic("the sk-us parity capture requires stored-raw replay");
       }
+      const ref = sourceBinaryRef({
+        family: RAW_SOURCE_FAMILY.CASE_LAW,
+        sourceId: SK_US_SOURCE_ID,
+        documentId: SK_US_DECISION_ID,
+        bytes: SK_US_DOCUMENT_FILE,
+        contentType: "application/pdf",
+      });
+      const objects = { "document-file": ref };
       const result = await reparse({
         raw: new TextEncoder().encode(
-          encodeSourceRawEnvelope({
-            listing: JSON.stringify(listing),
-            document: Buffer.from(content, "base64").toString("utf-8"),
-          }),
+          encodeSourceRawEnvelope(
+            {
+              listing: JSON.stringify(listing),
+              document: Buffer.from(content, "base64").toString("utf-8"),
+            },
+            objects,
+          ),
         ),
+        readObject: async (key) =>
+          Result.ok(key === ref.location ? SK_US_DOCUMENT_FILE : null),
         contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
         caseNumber: listing.mkRSAPNumberOfFile,
         sourceDocumentId: listing.documentId,
@@ -1687,7 +1700,13 @@ export const skUsFixture = (
         metadata: {},
       });
       return result.type === "parsed"
-        ? result.result
+        ? {
+            ...result.result,
+            sourceRaw: withSourceRawObjects(
+              result.result.sourceRaw ?? "",
+              objects,
+            ),
+          }
         : panic(`the sk-us capture did not parse: ${result.type}`);
     }
     const documentContent = JSON.stringify({

@@ -319,6 +319,7 @@ export const readDecisionReaderSource = defineWindowedRead(
     return {
       status: "read" as const,
       decision: {
+        extractionWarnings: decision.extractionWarnings,
         id: decision.id,
         caseNumber: decision.caseNumber,
         caseNumberType: decision.caseNumberType,

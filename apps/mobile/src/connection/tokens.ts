@@ -49,6 +49,7 @@ const requestTokens = async (
       new TokenError({
         message: `The token endpoint responded ${status}`,
         oauthError: refusal.success ? refusal.output.error : undefined,
+        status,
       }),
     );
   }
