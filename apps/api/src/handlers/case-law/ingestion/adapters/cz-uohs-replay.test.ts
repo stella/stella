@@ -20,11 +20,14 @@ import {
   czUohsSyntheticPdf,
 } from "@/api/handlers/case-law/ingestion/adapters/__fixtures__/cz-uohs.synthetic";
 import {
-  buildCzUohsDecision,
+  buildCzUohsDecision as uncheckedBuildCzUohsDecision,
   czUohsAdapter,
   parseCzUohsListing,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-uohs";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const buildCzUohsDecision = guardParser(uncheckedBuildCzUohsDecision);
 
 const originalFetch = globalThis.fetch;
 const reparse = czUohsAdapter.reparseStoredRaw ?? panic("ÚOHS replay required");
