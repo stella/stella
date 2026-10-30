@@ -101,11 +101,11 @@ export const TaskAssignees = ({
         <Button
           loading={saving}
           onPress={() => {
-            setMembers((open) =>
-              open === null
-                ? listMatterMembers({ fetch, matterId, source })
-                : null,
-            );
+            if (members !== null) {
+              setMembers(null);
+              return;
+            }
+            setMembers(listMatterMembers({ fetch, matterId, source }));
           }}
           size="sm"
           variant="outline"
