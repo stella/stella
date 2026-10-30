@@ -15,9 +15,10 @@ type PracticeJurisdictionEntry = { countryCode: string; isPrimary: boolean };
 const practiceCountriesOf = (
   jurisdictions: readonly PracticeJurisdictionEntry[],
 ): string[] =>
-  jurisdictions
-    .toSorted((left, right) => Number(right.isPrimary) - Number(left.isPrimary))
-    .map(({ countryCode }) => countryCode);
+  [
+    ...jurisdictions.filter(({ isPrimary }) => isPrimary),
+    ...jurisdictions.filter(({ isPrimary }) => !isPrimary),
+  ].map(({ countryCode }) => countryCode);
 
 const NO_JURISDICTIONS: readonly PracticeJurisdictionEntry[] = [];
 
