@@ -54,6 +54,10 @@ import {
   createTestPglite,
   withPublicLawReaderRole,
 } from "@/api/tests/pglite-test-db";
+import {
+  explainRoot,
+  scanOccurrences,
+} from "@/api/tests/query-plans/plan-walker";
 
 /** Same budget as the schema push: an embedded Postgres is not fast. */
 const DB_TEST_TIMEOUT_MS = 120_000;
@@ -878,7 +882,7 @@ const monthCountPlan = async (
 
 // timeout: the plan guard seeds and analyzes the embedded PostgreSQL backlog.
 test(
-  "pending work reads a bounded primary-key range at increasing backlog sizes",
+  "pending discovery bounds each change-log stream at increasing backlog sizes",
   async () => {
     await refreshUntilDone(refreshDb);
     try {
@@ -891,19 +895,24 @@ test(
         );
         await client.query("ANALYZE case_law_sitemap_changes");
         const query = new PgDialect().sqlToQuery(sitemapPendingMonthsSql());
-        const plan = planLines(
+        const plan = explainRoot(
           await client.query(
-            `EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF) ${query.sql}`,
+            `EXPLAIN (ANALYZE, TIMING OFF, FORMAT JSON) ${query.sql}`,
             query.params,
           ),
-        ).join("\n");
-        expect(plan).toContain(
-          "Index Scan using case_law_sitemap_changes_pkey",
         );
-        expect(plan).toMatch(/actual rows=1(?:\.0+)? loops=1/u);
-        expect(plan).not.toMatch(
-          /Aggregate|Sort|Seq Scan on case_law_sitemap_changes/u,
+        const changeScans = scanOccurrences(plan).filter(
+          ({ relation }) => relation === "case_law_sitemap_changes",
         );
+        expect(changeScans.length).toBeGreaterThan(0);
+        expect(changeScans.length).toBeLessThanOrEqual(2);
+        for (const scan of changeScans) {
+          expect(scan.nodeType).toMatch(/^Index(?: Only)? Scan$/u);
+          expect(scan.index).toBe("case_law_sitemap_changes_month_xact_key");
+          expect(scan.limitAbove).toBe(true);
+          expect(scan.limitRows).toBe(1);
+          expect(scan.filter).toBeNull();
+        }
         await db
           .delete(caseLawSitemapChanges)
           .where(eq(caseLawSitemapChanges.country, "XBG"));

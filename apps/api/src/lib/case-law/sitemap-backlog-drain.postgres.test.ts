@@ -18,6 +18,10 @@ const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const BACKLOG_ROWS = 200_000;
 const MAX_HOT_MONTH_ROWS = 40_000;
 const CHANGE_ROW_BUDGET = 1000;
+const DISCOVERY_TARGET_BUDGET = 64;
+// Exact-month ticks need at most cursor bookkeeping, one recount/publication and one retirement per discovery.
+const STATEMENTS_PER_TARGET_CEILING = 32;
+const TICK_STATEMENT_OVERHEAD = 16;
 const COUNTRY_COUNT = 3;
 const MONTH_COUNT = 24;
 const STATEMENT_HANG_GUARD_MS = 30_000;
@@ -111,6 +115,7 @@ describe.skipIf(!enabled)("sitemap backlog drain (postgres)", () => {
           "case_law_decisions",
           "case_law_sitemap_changes",
           "case_law_sitemap_drain_progress",
+          "case_law_sitemap_refresh_cursor",
           "case_law_sitemap_shards",
           "case_law_browse_facet_counts",
           "case_law_coverage_summaries",
@@ -196,11 +201,15 @@ describe.skipIf(!enabled)("sitemap backlog drain (postgres)", () => {
         const dialect = new PgDialect();
         const ticks: {
           read: number;
+          discoveries: number;
+          retirementPages: number;
           statements: number;
           elapsedMs: number;
           months: number;
         }[] = [];
         let read = 0;
+        let discoveries = 0;
+        let retirementPages = 0;
         let measurementStatements = 0;
         const retirementPlans: {
           sharedBlocks: number;
@@ -399,6 +408,7 @@ describe.skipIf(!enabled)("sitemap backlog drain (postgres)", () => {
                                 "WITH RECURSIVE candidates AS",
                               )
                             ) {
+                              retirementPages += 1;
                               const retirement = executedRows(result).at(0);
                               if (
                                 !isRecord(retirement) ||
@@ -409,12 +419,18 @@ describe.skipIf(!enabled)("sitemap backlog drain (postgres)", () => {
                               }
                               read += retirement["candidates_read"];
                             } else if (
-                              rendered.sql.includes("status FROM draining")
+                              rendered.sql.includes("change_rows_read")
                             ) {
-                              read += executedRows(result).filter(
-                                (row) =>
-                                  isRecord(row) && row["status"] === "ready",
-                              ).length;
+                              discoveries += 1;
+                              for (const row of executedRows(result)) {
+                                if (
+                                  !isRecord(row) ||
+                                  typeof row["change_rows_read"] !== "number"
+                                ) {
+                                  panic("Missing discovery read counter");
+                                }
+                                read += row["change_rows_read"];
+                              }
                             }
                             return result;
                           }
@@ -435,23 +451,26 @@ describe.skipIf(!enabled)("sitemap backlog drain (postgres)", () => {
         };
         expect(await countBacklog()).toBe(BACKLOG_ROWS);
         const maxTicks =
-          Math.ceil(
-            (BACKLOG_ROWS + 3 * COUNTRY_COUNT * MONTH_COUNT) /
-              (CHANGE_ROW_BUDGET - 1),
-          ) + 1;
+          Math.ceil(BACKLOG_ROWS / (CHANGE_ROW_BUDGET - 2)) +
+          COUNTRY_COUNT * MONTH_COUNT;
         let remaining = BACKLOG_ROWS;
         let recounts = 0;
         for (let tick = 0; tick < maxTicks && remaining > 0; tick += 1) {
           read = 0;
+          discoveries = 0;
+          retirementPages = 0;
           measurementStatements = 0;
           sent.length = 0;
           const startedAt = performance.now();
           // db-await-in-loop: consecutive bounded ticks must make durable progress through the fixture queue.
           const outcome = await refreshCaseLawSitemapShards(recordingDb, {
             changeRowBudget: CHANGE_ROW_BUDGET,
+            discoveryTargetBudget: DISCOVERY_TARGET_BUDGET,
           });
           ticks.push({
             read,
+            discoveries,
+            retirementPages,
             statements: sent.length - measurementStatements,
             elapsedMs: performance.now() - startedAt,
             months: outcome.months,
@@ -467,23 +486,35 @@ describe.skipIf(!enabled)("sitemap backlog drain (postgres)", () => {
         expect(remaining).toBe(0);
         expect(recounts).toBe(COUNTRY_COUNT * MONTH_COUNT);
         expect(ticks.length).toBeLessThanOrEqual(maxTicks);
-        expect(ticks).toHaveLength(
-          Math.ceil(BACKLOG_ROWS / (CHANGE_ROW_BUDGET - 2)),
+        expect(ticks.length).toBeGreaterThanOrEqual(
+          Math.ceil(BACKLOG_ROWS / CHANGE_ROW_BUDGET),
         );
         const first = ticks.at(0) ?? panic("Missing first tick");
         const last = ticks.at(-1) ?? panic("Missing last tick");
         const retirementTicks = ticks.filter(
-          (tick) => tick.months === 0 && tick.read === CHANGE_ROW_BUDGET,
+          (tick) =>
+            tick.months === 0 &&
+            tick.read === CHANGE_ROW_BUDGET &&
+            tick.discoveries === 1 &&
+            tick.retirementPages === 1,
         );
         expect(retirementTicks.length).toBeGreaterThan(1);
         const retirementStatements =
           retirementTicks.at(0)?.statements ??
           panic("Missing retirement measurement");
-        expect(
-          retirementTicks.every(
-            (tick) => tick.statements === retirementStatements,
-          ),
-        ).toBe(true);
+        expect(retirementTicks.at(-1)?.statements).toBe(retirementStatements);
+        for (const tick of ticks) {
+          expect(tick.discoveries).toBeLessThanOrEqual(DISCOVERY_TARGET_BUDGET);
+          expect(tick.retirementPages).toBeLessThanOrEqual(tick.discoveries);
+          expect(tick.statements).toBeLessThanOrEqual(
+            STATEMENTS_PER_TARGET_CEILING * DISCOVERY_TARGET_BUDGET +
+              TICK_STATEMENT_OVERHEAD,
+          );
+          expect(tick.statements).toBeLessThanOrEqual(
+            STATEMENTS_PER_TARGET_CEILING * tick.discoveries +
+              TICK_STATEMENT_OVERHEAD,
+          );
+        }
         expect(
           ticks.every(
             (tick) =>
@@ -497,7 +528,7 @@ describe.skipIf(!enabled)("sitemap backlog drain (postgres)", () => {
           }),
         ).toMatchObject({ type: "refreshed", months: 0 });
         const fullRetirementPlans = retirementPlans.filter(
-          (plan) => plan.rows === CHANGE_ROW_BUDGET - 1 && plan.hotMonth,
+          (plan) => plan.rows >= CHANGE_ROW_BUDGET - 2 && plan.hotMonth,
         );
         const firstRetirement =
           fullRetirementPlans.at(0) ??
@@ -554,6 +585,7 @@ describe.skipIf(!enabled)("sitemap backlog drain (postgres)", () => {
             "case_law_decisions",
             "case_law_sitemap_changes",
             "case_law_sitemap_drain_progress",
+            "case_law_sitemap_refresh_cursor",
             "case_law_sitemap_shards",
             "case_law_browse_facet_counts",
             "case_law_coverage_summaries",
@@ -588,6 +620,9 @@ describe.skipIf(!enabled)("sitemap backlog drain (postgres)", () => {
             FROM generate_series(${shape === "hot" ? 200_001 : 40_001}::int, ${shape === "hot" ? 250_000 : 90_000}::int) i`);
           const dialect = new PgDialect();
           for (const lower of [0, 1998, 4154, 7808]) {
+            await db.execute(
+              sql`DELETE FROM case_law_sitemap_refresh_cursor WHERE slot = 0`,
+            );
             await db.execute(sql`
               INSERT INTO case_law_sitemap_drain_progress (country, year, month, covered_before, retired_through, phase)
               VALUES ('XBA', '1900', '01', '8308'::xid8, ${String(lower)}::xid8, 'draining')
@@ -634,6 +669,12 @@ describe.skipIf(!enabled)("sitemap backlog drain (postgres)", () => {
             const query =
               captured.at(0) ?? panic("Missing captured retirement SQL");
             const rendered = dialect.sqlToQuery(query);
+            expect(rendered.params.slice(0, 4)).toEqual([
+              "XBA",
+              "1900",
+              "01",
+              String(lower),
+            ]);
             const candidateText = rendered.sql.replace(
               /,\s*retired AS[\s\S]*$/u,
               "SELECT * FROM candidates",

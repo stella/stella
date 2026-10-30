@@ -12,6 +12,7 @@ import {
   caseLawSitemapChanges,
   caseLawSitemapCountryGenerations,
   caseLawSitemapDrainProgress,
+  caseLawSitemapRefreshCursor,
   caseLawSitemapShardCounts,
   caseLawSitemapShards,
   caseLawSources,
@@ -32,6 +33,7 @@ import {
 } from "@/api/lib/case-law/sitemap-shard-sql";
 import {
   lockCaseLawRemovalSnapshots,
+  lockCaseLawSitemapRefreshCursor,
   tryLockCaseLawSitemapMonth,
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
@@ -61,6 +63,8 @@ export const SITEMAP_WHOLE_COUNTRY = "*";
 /** Discovery rows and retirement candidates allowed across one tick. */
 const DEFAULT_CHANGE_ROW_BUDGET = 500;
 const MAX_CHANGE_ROWS_PER_RUN = 10_000;
+const DEFAULT_DISCOVERY_TARGET_BUDGET = 64;
+const MAX_DISCOVERY_TARGETS_PER_RUN = 256;
 
 /** Both budgets in milliseconds. */
 export type SitemapRefreshBudget = {
@@ -331,6 +335,7 @@ const targetConditions = (target: SitemapMonth) =>
 
 /** A tick accounts for discovery rows and retirement candidates together. */
 type SitemapChangeBudget = { remainingRows: number };
+type SitemapDiscoveryBudget = { remainingTargets: number };
 
 type RunContext = {
   db: RefreshDb;
@@ -427,52 +432,122 @@ const expandEveryCountry = async (tx: RefreshTransaction): Promise<void> => {
   }
 };
 
-/** One index descent finds the oldest remaining target, without aggregating the log. */
-export const sitemapPendingMonthsSql = (): SQL => sql`
-  WITH draining AS MATERIALIZED (
-    SELECT country, year, month,
-      CASE WHEN phase = 'awaiting_visibility' AND covered_before >= pg_snapshot_xmin(pg_current_snapshot())
-        THEN 'waiting' ELSE 'ready' END AS status
-    FROM ${caseLawSitemapDrainProgress} LIMIT 1
+const SITEMAP_DISCOVERY_START = { country: "", year: "", month: "" };
+
+/** Each source contributes at most one indexed target, even behind a hot month. */
+export const sitemapPendingMonthsSql = (
+  after: SitemapMonth = SITEMAP_DISCOVERY_START,
+): SQL => sql`
+  WITH next_change AS MATERIALIZED (
+    SELECT country, year, month FROM ${caseLawSitemapChanges}
+    WHERE (country, year, month) > (${after.country}::text, ${after.year}::text, ${after.month}::text)
+    ORDER BY country, year, month LIMIT 1
+  ), next_progress AS MATERIALIZED (
+    SELECT country, year, month FROM ${caseLawSitemapDrainProgress}
+    WHERE (country, year, month) > (${after.country}::text, ${after.year}::text, ${after.month}::text)
+    ORDER BY country, year, month LIMIT 1
+  ), following AS MATERIALIZED (
+    SELECT country, year, month FROM next_change
+    UNION ALL SELECT country, year, month FROM next_progress
+    ORDER BY country, year, month LIMIT 1
+  ), first_change AS MATERIALIZED (
+    SELECT country, year, month FROM ${caseLawSitemapChanges}
+    WHERE NOT EXISTS (SELECT 1 FROM following)
+    ORDER BY country, year, month LIMIT 1
+  ), first_progress AS MATERIALIZED (
+    SELECT country, year, month FROM ${caseLawSitemapDrainProgress}
+    WHERE NOT EXISTS (SELECT 1 FROM following)
+    ORDER BY country, year, month LIMIT 1
+  ), wrapped AS MATERIALIZED (
+    SELECT country, year, month FROM first_change
+    UNION ALL SELECT country, year, month FROM first_progress
+    ORDER BY country, year, month LIMIT 1
   )
-  SELECT country, year, month, status FROM draining
-  UNION ALL
-  (
-    SELECT country, year, month, 'ready' AS status
-    FROM ${caseLawSitemapChanges}
-    WHERE NOT EXISTS (SELECT 1 FROM draining)
-    ORDER BY id
+  SELECT selected.country, selected.year, selected.month,
+    CASE WHEN EXISTS (
+      SELECT 1 FROM ${caseLawSitemapDrainProgress} progress
+      WHERE progress.country = selected.country AND progress.year = selected.year AND progress.month = selected.month
+        AND progress.phase = 'awaiting_visibility'
+        AND progress.covered_before >= pg_snapshot_xmin(pg_current_snapshot())
+    ) THEN 'waiting' ELSE 'ready' END AS status,
+    (SELECT count(*)::int FROM next_change) + (SELECT count(*)::int FROM first_change) AS change_rows_read
+  FROM (
+    SELECT country, year, month FROM following
+    UNION ALL SELECT country, year, month FROM wrapped
     LIMIT 1
-  )
-  LIMIT 1
+  ) selected
 `;
 
 type PendingMonth =
-  | { status: "empty" }
-  | { status: "waiting" }
-  | { status: "ready"; target: SitemapMonth };
+  | { status: "empty"; changeRowsRead: number }
+  | { status: "waiting"; target: SitemapMonth; changeRowsRead: number }
+  | { status: "ready"; target: SitemapMonth; changeRowsRead: number };
 
-const readPendingMonth = async ({
-  db,
-  budget,
-}: RunContext): Promise<PendingMonth> =>
+const readPendingMonth = async (
+  { db, budget }: RunContext,
+  cursorMode: "advance" | "observe",
+): Promise<PendingMonth> =>
   await withAggregateTransaction(db, async (tx) => {
-    await tx.execute(sql`SET TRANSACTION READ ONLY`);
     await setTransactionBudget(tx, budget);
-    const row = executedRows(await tx.execute(sitemapPendingMonthsSql())).at(0);
+    await tx
+      .insert(caseLawSitemapRefreshCursor)
+      .values({ slot: 0 })
+      .onConflictDoNothing();
+    const cursor = v.parse(
+      v.object({
+        last_country: v.string(),
+        last_year: v.string(),
+        last_month: v.string(),
+      }),
+      (await lockCaseLawSitemapRefreshCursor(tx)).at(0),
+    );
+    const row = executedRows(
+      await tx.execute(
+        sitemapPendingMonthsSql({
+          country: cursor.last_country,
+          year: cursor.last_year,
+          month: cursor.last_month,
+        }),
+      ),
+    ).at(0);
     if (row === undefined) {
-      return { status: "empty" };
+      return { status: "empty", changeRowsRead: 0 };
     }
-    const { status, ...target } = v.parse(
+    const {
+      status,
+      change_rows_read: changeRowsRead,
+      ...target
+    } = v.parse(
       v.object({
         status: v.picklist(["ready", "waiting"]),
         country: v.string(),
         year: v.string(),
         month: v.string(),
+        change_rows_read: v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(0),
+          v.maxValue(1),
+        ),
       }),
       row,
     );
-    return status === "waiting" ? { status } : { status, target };
+    // An exhausted time budget may check for completion without skipping work.
+    if (cursorMode === "advance") {
+      // Commit the next position before taking a month lock or doing a recount.
+      await tx
+        .update(caseLawSitemapRefreshCursor)
+        .set({
+          lastCountry: target.country,
+          lastYear: target.year,
+          lastMonth: target.month,
+        })
+        .where(eq(caseLawSitemapRefreshCursor.slot, 0));
+    }
+    if (status === "waiting") {
+      return { status, target, changeRowsRead };
+    }
+    return { status, target, changeRowsRead };
   });
 
 /**
@@ -705,9 +780,9 @@ type RunProgress = {
  * retire covered transactions without repeating the count. A whole-country
  * row is first expanded into one logged row per month (and an every-country row into one whole-country row per country),
  * which are then recounted like any other and drop the rows of months the
- * country no longer holds. A run resumes retirement before discovering the
- * oldest remaining log row, works a month at most once, and stops when its
- * row or time budget is spent
+ * country no longer holds. Discovery rotates durably over distinct month keys
+ * in the log and progress indexes, skipping held or visibility-stalled work.
+ * A run works a month at most once and stops when its row, target, or time budget is spent
  * (`pending`); the next run continues from the rows still logged.
  *
  * The index read refuses a snapshot it cannot serve, so an over-capacity
@@ -719,6 +794,7 @@ export const refreshCaseLawSitemapShards = async (
     poolIdleTimeoutS = envBase.DATABASE_POOL_IDLE_TIMEOUT_S,
     runBudgetMs = SITEMAP_REFRESH_RUN_BUDGET_MS,
     changeRowBudget = DEFAULT_CHANGE_ROW_BUDGET,
+    discoveryTargetBudget = DEFAULT_DISCOVERY_TARGET_BUDGET,
     clock = () => performance.now(),
     signal,
   }: {
@@ -727,6 +803,8 @@ export const refreshCaseLawSitemapShards = async (
     runBudgetMs?: number;
     /** Discovery rows plus retirement candidates, across the entire tick. */
     changeRowBudget?: number;
+    /** Target attempts, including waiting, held, and progress-only targets. */
+    discoveryTargetBudget?: number;
     /** Monotonic milliseconds; only differences are read. */
     clock?: () => number;
     signal?: AbortSignal;
@@ -739,6 +817,15 @@ export const refreshCaseLawSitemapShards = async (
   ) {
     return panic(
       `Sitemap change-row budget must be between 2 and ${MAX_CHANGE_ROWS_PER_RUN}`,
+    );
+  }
+  if (
+    !Number.isSafeInteger(discoveryTargetBudget) ||
+    discoveryTargetBudget < 1 ||
+    discoveryTargetBudget > MAX_DISCOVERY_TARGETS_PER_RUN
+  ) {
+    return panic(
+      `Sitemap discovery target budget must be between 1 and ${MAX_DISCOVERY_TARGETS_PER_RUN}`,
     );
   }
   const startedAt = clock();
@@ -755,6 +842,10 @@ export const refreshCaseLawSitemapShards = async (
     recountedCountries: new Set(),
   };
   const changeBudget: SitemapChangeBudget = { remainingRows: changeRowBudget };
+  const discoveryBudget: SitemapDiscoveryBudget = {
+    remainingTargets: discoveryTargetBudget,
+  };
+  const attempted = new Set<string>();
   const pendingOutcome = (
     retry: "immediate" | "delayed",
   ): SitemapRefreshOutcome => ({
@@ -765,20 +856,35 @@ export const refreshCaseLawSitemapShards = async (
   const advance = async (): Promise<
     "progress" | "immediate" | "delayed" | "done"
   > => {
-    if (changeBudget.remainingRows < 2) {
+    if (
+      changeBudget.remainingRows < 2 ||
+      discoveryBudget.remainingTargets === 0
+    ) {
       return "immediate";
     }
-    const pending = await readPendingMonth(run);
+    const cursorMode =
+      progress.units > 0 && clock() - startedAt >= runBudgetMs
+        ? "observe"
+        : "advance";
+    const pending = await readPendingMonth(run, cursorMode);
     if (pending.status === "empty") {
       return "done";
     }
-    if (pending.status === "waiting") {
+    const { target } = pending;
+    discoveryBudget.remainingTargets -= 1;
+    changeBudget.remainingRows -= pending.changeRowsRead;
+    if (cursorMode === "observe") {
+      return "immediate";
+    }
+    const key = monthKey(target);
+    // Seeing a target twice completes one local rotation, rather than spinning.
+    if (attempted.has(key)) {
       return "delayed";
     }
-    const { target } = pending;
-    changeBudget.remainingRows -= 1;
-    if (progress.worked.has(monthKey(target))) {
-      return "delayed";
+    attempted.add(key);
+    progress.units += 1;
+    if (pending.status === "waiting" || progress.worked.has(key)) {
+      return "progress";
     }
     if (
       target.year === SITEMAP_WHOLE_COUNTRY &&
@@ -786,31 +892,22 @@ export const refreshCaseLawSitemapShards = async (
         ? progress.recountedCountries.size > 0
         : progress.recountedCountries.has(target.country))
     ) {
-      return "delayed";
+      return "progress";
     }
     throwIfAborted(signal);
-    if (progress.units > 0 && clock() - startedAt >= runBudgetMs) {
-      return "immediate";
-    }
     const step = await drainMonth(run, target, changeBudget.remainingRows);
     switch (step.status) {
       case "waiting":
-        changeBudget.remainingRows += 1;
-        return "delayed";
       case "held":
-        return "delayed";
+        return "progress";
       case "complete":
       case "draining":
         changeBudget.remainingRows -= step.candidatesRead;
-        progress.units += 1;
         if (step.recounted) {
           progress.months += 1;
           progress.recountedCountries.add(target.country);
         }
-        if (step.status === "draining") {
-          return "immediate";
-        }
-        progress.worked.add(monthKey(target));
+        progress.worked.add(key);
         return "progress";
       default: {
         step satisfies never;

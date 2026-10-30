@@ -956,3 +956,14 @@ case_law_sitemap_drain_progress.covered_before   xid8  not null          case-la
 case_law_sitemap_drain_progress.phase            text  default,not null  case-law.ts:3904
 case_law_sitemap_drain_progress.retired_through  xid8  default,not null  case-law.ts:3905
 ```
+
+## case_law_sitemap_refresh_cursor · `caseLawSitemapRefreshCursor` · case-law.ts:3928 · rls
+
+Singleton strict-lower cursor for bounded sitemap refresh discovery.
+
+```text
+case_law_sitemap_refresh_cursor.slot          integer  default,not null  case-law.ts:3931
+case_law_sitemap_refresh_cursor.last_country  text     default,not null  case-law.ts:3932
+case_law_sitemap_refresh_cursor.last_year     text     default,not null  case-law.ts:3933
+case_law_sitemap_refresh_cursor.last_month    text     default,not null  case-law.ts:3934
+```

@@ -3923,3 +3923,24 @@ export const caseLawSitemapDrainProgress = p.pgTable(
     }),
   ],
 );
+
+/** Singleton strict-lower cursor for bounded sitemap refresh discovery. */
+export const caseLawSitemapRefreshCursor = p.pgTable(
+  "case_law_sitemap_refresh_cursor",
+  {
+    slot: p.integer().notNull().default(0),
+    lastCountry: p.text("last_country").notNull().default(""),
+    lastYear: p.text("last_year").notNull().default(""),
+    lastMonth: p.text("last_month").notNull().default(""),
+  },
+  (t) => [
+    p.primaryKey({ columns: [t.slot] }),
+    p.check("case_law_sitemap_refresh_cursor_singleton", sql`${t.slot} = 0`),
+    p.pgPolicy("case_law_sitemap_refresh_cursor_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`true`,
+      withCheck: sql`true`,
+    }),
+  ],
+);

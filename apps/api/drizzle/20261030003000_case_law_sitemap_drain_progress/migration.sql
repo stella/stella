@@ -16,3 +16,18 @@ ALTER TABLE "case_law_sitemap_drain_progress" FORCE ROW LEVEL SECURITY;--> state
 CREATE POLICY "case_law_sitemap_drain_owner_access" ON "case_law_sitemap_drain_progress"
   AS PERMISSIVE FOR ALL TO public USING (true) WITH CHECK (true);--> statement-breakpoint
 REVOKE ALL PRIVILEGES ON TABLE "case_law_sitemap_drain_progress" FROM stella;--> statement-breakpoint
+
+CREATE TABLE "case_law_sitemap_refresh_cursor" (
+  "slot" integer DEFAULT 0 NOT NULL,
+  "last_country" text DEFAULT '' NOT NULL,
+  "last_year" text DEFAULT '' NOT NULL,
+  "last_month" text DEFAULT '' NOT NULL,
+  PRIMARY KEY ("slot"),
+  CONSTRAINT "case_law_sitemap_refresh_cursor_singleton" CHECK ("slot" = 0)
+);--> statement-breakpoint
+ALTER TABLE "case_law_sitemap_refresh_cursor" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "case_law_sitemap_refresh_cursor" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
+-- stella-migration-safety: reviewed permissive-policy - table privileges restrict cursor state to the owner; no application or writer role is granted access
+CREATE POLICY "case_law_sitemap_refresh_cursor_owner_access" ON "case_law_sitemap_refresh_cursor"
+  AS PERMISSIVE FOR ALL TO public USING (true) WITH CHECK (true);--> statement-breakpoint
+REVOKE ALL PRIVILEGES ON TABLE "case_law_sitemap_refresh_cursor" FROM stella;--> statement-breakpoint

@@ -159,6 +159,7 @@ const runtimeImports = new Bun.Transpiler({ loader: "ts" });
 
 // Snapshot visibility depends on transactions across the entire cluster.
 const CLUSTER_VISIBILITY_TESTS = new Set([
+  "src/lib/case-law/sitemap-fairness-drain.postgres.test.ts",
   "src/lib/case-law/sitemap-removal-refresh.postgres.test.ts",
   "src/lib/case-law/sitemap-shard-refresh.postgres.test.ts",
   "src/lib/case-law/sitemap-backlog-drain.postgres.test.ts",
