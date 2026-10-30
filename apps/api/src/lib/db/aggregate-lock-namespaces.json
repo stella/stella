@@ -1,0 +1,23 @@
+{
+  "automatedFlowRunCap": "0x0f10cca9::integer",
+  "billingCodeCapacity": "hashtext('billing-code-capacity')",
+  "caseLawSitemapMonth": "0x0f10ccb5::integer",
+  "caseLawRepublication": "0x0f10ccae::integer",
+  "chatOwnerStoredContentEgress": "0x0f10ccb4::integer",
+  "chatStoredContentEgress": "0x0f10ccb3::integer",
+  "chatToolGrants": "hashtext('chat.tool-grants')",
+  "contactCapacity": "hashtext('contact_capacity')",
+  "definitionCap": "0x0f10ccab::integer",
+  "desktopBatch": "0x0f10ccac::integer",
+  "expenseCapacity": "hashtext('expense-capacity')",
+  "fileComparisonCapacity": "0x0f10ccb2::integer",
+  "legislationAmendmentWork": "0x0f10ccad::integer",
+  "mcpOAuthState": "0x4d43504f::integer",
+  "orgFeatureAdmission": "0x0f10ccaa::integer",
+  "organizationObjectIntent": "0x0f10ccb0::integer",
+  "personalCatalog": "hashtext(<identity>)",
+  "professionalUseAcceptance": "hashtext('professional-use')",
+  "rateTableWorkspace": "hashtext('rate-table-workspace')",
+  "readerAnnotation": "0x0f10ccaf::integer",
+  "sampleCase": "hashtext('lists.sample-case')"
+}

@@ -5,6 +5,7 @@ import { DirectionProvider } from "@base-ui/react/direction-provider";
 import { createFormatter } from "use-intl";
 
 import { parseLegalCitationHttpUrl } from "@stll/api-contract/legal-citation-links";
+import { statuteListSchemeFor } from "@stll/api-contract/statute-list-schemes";
 import { DecisionIdentity } from "@stll/decision-reader/decision-identity";
 import { BlockRenderer } from "@stll/decision-reader/document-ast-text";
 import type { TextAnchor } from "@stll/decision-reader/document-ast-text";
@@ -172,6 +173,7 @@ const McpProvisionPreview = ({
   openInStella: string;
 }) => {
   const previewUrl = preview.url;
+  const statuteLists = statuteListSchemeFor(preview.country);
   return (
     <aside className="mt-4 space-y-2" lang={preview.language} dir="ltr">
       {previewUrl !== null && (
@@ -199,6 +201,7 @@ const McpProvisionPreview = ({
           }}
           activeMatchIndex={-1}
           rangesByPieceId={{}}
+          statuteLists={statuteLists}
           variant="statute"
           anchorPresentation="embedded"
         />

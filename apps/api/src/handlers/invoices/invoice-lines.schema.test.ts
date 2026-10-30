@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
-import { tExemptionReason } from "./invoice-lines";
+import { tExemptionReason } from "@/api/lib/billing/invoice-lines";
 
 describe("invoice line exemption basis", () => {
   test("refuses a blank basis that would print as no basis at all", () => {

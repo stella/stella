@@ -18,6 +18,7 @@ import {
 } from "@stll/invoicing";
 import { formatMoneyCents } from "@stll/money";
 
+import { groupInvoiceLinesByMatter } from "../matter-groups";
 import {
   buildInvoicePaymentPayload,
   createInvoiceFormatters,
@@ -66,14 +67,21 @@ type InvoiceTemplateData = {
     rateSource: string;
     rateDate: string;
   };
-  lines: {
-    description: string;
-    quantity: string | null;
-    unitPrice: string | null;
+  groups: {
+    workspaceId: string;
+    workspaceName: string;
     net: string;
-    vatLabel: string;
     vat: string;
     total: string;
+    lines: {
+      description: string;
+      quantity: string | null;
+      unitPrice: string | null;
+      net: string;
+      vatLabel: string;
+      vat: string;
+      total: string;
+    }[];
   }[];
   totals: {
     net: string;
@@ -377,24 +385,31 @@ export const buildInvoiceTemplateData = (options: RenderInvoicePdfOptions) => {
       rateSource: l.rateSource,
       rateDate: l.rateDate,
     },
-    lines: invoice.lines.map((line) => {
-      const billed = line.quantity !== null && line.unitPrice !== null;
-      return {
-        description: line.description,
-        quantity:
-          billed && line.quantity !== null
-            ? compact([quantity(line.quantity), line.unit]).join(" ")
-            : null,
-        unitPrice:
-          billed && line.unitPrice !== null ? money(line.unitPrice) : null,
-        net: money(line.netAmount),
-        // Only the rate: the treatment is named in the VAT breakdown and the
-        // legal notes, and a long treatment label would squeeze the description.
-        vatLabel: vatRate(line.vatRateBps),
-        vat: money(line.vatAmount),
-        total: money(line.grossAmount),
-      };
-    }),
+    groups: groupInvoiceLinesByMatter(invoice.lines).map((group) => ({
+      workspaceId: group.workspaceId,
+      workspaceName: group.workspaceName,
+      net: money(group.netAmount),
+      vat: money(group.vatAmount),
+      total: money(group.grossAmount),
+      lines: group.lines.map((line) => {
+        const billed = line.quantity !== null && line.unitPrice !== null;
+        return {
+          description: line.description,
+          quantity:
+            billed && line.quantity !== null
+              ? compact([quantity(line.quantity), line.unit]).join(" ")
+              : null,
+          unitPrice:
+            billed && line.unitPrice !== null ? money(line.unitPrice) : null,
+          net: money(line.netAmount),
+          // Only the rate: the treatment is named in the VAT breakdown and the
+          // legal notes, and a long treatment label would squeeze the description.
+          vatLabel: vatRate(line.vatRateBps),
+          vat: money(line.vatAmount),
+          total: money(line.grossAmount),
+        };
+      }),
+    })),
     totals: {
       net: money(totals.netAmountMinor),
       vat: money(totals.vatAmountMinor),

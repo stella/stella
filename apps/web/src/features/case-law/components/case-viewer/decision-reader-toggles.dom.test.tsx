@@ -211,6 +211,10 @@ const filler = (from: number, to: number) =>
 
 const ast = {
   blocks: [
+    {
+      ...paragraph("publisher", "Zveřejněno v databázi soudních rozhodnutí."),
+      role: "apparatus",
+    },
     paragraph("intro", "Úvodem soud shrnuje průběh řízení."),
     paragraph("above", ABOVE_PARAGRAPH),
     ...filler(1, 8),
@@ -291,7 +295,7 @@ const provisionAnchor = ({
     spanStart: start,
     target: {
       document: {
-        country: "cz",
+        country: "CZE",
         eli: "/eli/cz/sb/2026/1",
         id: documentId,
         slug: "test-act",
@@ -603,6 +607,10 @@ describe("in-reader toggles keep the reader's place", () => {
 
   test("the reader renders every kind of toggle the assertions cover", async () => {
     await renderReaders();
+    expect(
+      readerParts("page").section.querySelector(".reader-apparatus > summary")
+        ?.textContent,
+    ).toBe(messages.caseLaw.reader.headMatter);
     const kinds = new Set(pageToggles().map(toggleKind));
     expect([...kinds].toSorted()).toEqual(["disclosure", "peek", "pressed"]);
     const pressed = pageToggles().filter(

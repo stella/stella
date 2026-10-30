@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import type { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -12,7 +13,6 @@ import {
 import type { BoundOAuthMetadata } from "@/api/lib/mcp-upstream/oauth";
 import { revokeMcpConnectionTokens } from "@/api/lib/mcp-upstream/revocation";
 import type { McpTokenRevocationDependencies } from "@/api/lib/mcp-upstream/revocation";
-import type { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const organizationId = toSafeId<"organization">("org_1");

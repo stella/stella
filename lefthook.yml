@@ -61,12 +61,13 @@ pre-commit:
       # Reads the index, so a lockfile staged in this commit is checked too.
       run: bun run check:standalone-lockfiles
 
-# Pre-push keeps only checks that finish in about a second and whose failure
-# would cost a full CI round trip. Lint, typecheck, format, i18n, and the
+# Pre-push keeps only focused checks whose failure would cost a full CI round
+# trip. Lint, format, i18n, and the
 # query-cache type check run in CI only (pre-commit already formats staged
 # files and syncs i18n); run `bun run verify` locally when you want them
-# earlier. Every push skips compiler work, including documentation-only pushes
-# and low-memory hosts. scripts/pre-push-policy.test.ts guards this boundary.
+# earlier. Typecheck runs only for touched TypeScript packages, sequentially;
+# documentation-only pushes skip compiler work. scripts/pre-push-policy.test.ts
+# guards this boundary.
 pre-push:
   parallel: false
   commands:
@@ -76,6 +77,9 @@ pre-push:
       run: bun scripts/changeset-guard.ts --base origin/main
     cli-contract:
       run: bun scripts/check-cli-contract-changeset.ts --base origin/main
+    # Checks each touched TypeScript package once, sequentially.
+    typecheck:
+      run: bun scripts/pre-push-typecheck.ts --base origin/main
     secrets:
       # The hook's stdin carries the ref updates the push would publish; the
       # scanner scopes each gitleaks run to exactly those commits.

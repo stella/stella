@@ -82,6 +82,8 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   // coverage ledger it sits beside: read by the ingestion status rollup,
   // written only by the reconciliation loop.
   "case_law_reconciliation_items",
+  // Removal retries are corpus coordination state; ingestion owns mutations.
+  "case_law_removal_reconciliation_items",
   // Where the citation-resolution walk had got to. Operational progress the
   // status rollup reads; only the resolution loop advances it.
   "case_law_citation_resolution_progress",
@@ -158,6 +160,7 @@ const POST_BOOTSTRAP_APPEND_ONLY_TABLES = new Set([
   "account_audit_logs",
   "chat_thread_names",
   "chat_message_revisions",
+  "document_review_finding_decisions",
 ]);
 
 // Audit trails the request role may only append to: INSERT, nothing else.
@@ -201,7 +204,10 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   "soft_law_document_locators",
   // Maintenance checkpoints belong to the database owner, never request roles.
   "database_backfill_states",
+  "case_law_sitemap_changes",
   "case_law_sitemap_shard_counts",
+  // Removal generations are owner/ingestion-only, beside shard staging counts.
+  "case_law_sitemap_country_generations",
   "case_law_replay_batches",
   "case_law_replay_blocked",
   "case_law_replay_daily_rows",
@@ -284,6 +290,7 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   "case_law_sitemap_shards",
   "case_law_browse_facet_counts",
   "case_law_source_arrivals",
+  "case_law_coverage_summaries",
   "legislation_facet_counts",
   "legislation_facet_refreshes",
   "statute_sitemap_shards",

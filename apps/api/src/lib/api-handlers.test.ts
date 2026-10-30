@@ -926,7 +926,9 @@ describe("request.failed severity", () => {
       return {
         response,
         failures: recordingLogger.records.filter(
-          (record) => record.message === "request.failed",
+          (record) =>
+            record.message === "request.failed" ||
+            record.message === "limiter_admission.unavailable",
         ),
         exceptions: analytics.exceptions(),
       };
@@ -991,19 +993,19 @@ describe("request.failed severity", () => {
     expect(exceptions).toEqual([]);
   });
 
-  test("an unavailable admission service remains a captured server fault", async () => {
+  test("an unavailable admission store is observed as a transient warning", async () => {
     const refusal =
-      ACTION_ADMISSION_REFUSALS[ACTION_ADMISSION_CODES.admissionUnavailable];
+      ACTION_ADMISSION_REFUSALS[ACTION_ADMISSION_CODES.storeUnavailable];
     const { response, failures, exceptions } = await runFailingHandler(
       new HandlerError({
         status: refusal.status,
-        code: ACTION_ADMISSION_CODES.admissionUnavailable,
+        code: ACTION_ADMISSION_CODES.storeUnavailable,
         message: refusal.message,
       }),
     );
     expect(response).toMatchObject({ code: 503 });
-    expect(failures.at(0)?.severityText).toBe("ERROR");
-    expect(exceptions).toHaveLength(1);
+    expect(failures.at(0)?.severityText).toBe("WARN");
+    expect(exceptions).toHaveLength(0);
   });
 
   test("grades a database failure as a server fault", async () => {
@@ -1056,7 +1058,7 @@ describe("a mapped status survives the transport wrapper", () => {
       "busy",
       "period_exhausted",
       "not_enabled",
-      "unavailable",
+      "store_unavailable",
     ] as const) {
       const refusal = new ActionAdmissionError({
         reason,

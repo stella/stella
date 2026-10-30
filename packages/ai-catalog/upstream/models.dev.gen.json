@@ -13076,12 +13076,11 @@
       },
       "google/gemma-3-4b-it": {
         "cost": {
-          "cache_read": 0.02,
-          "input": 0.04,
-          "output": 0.05
+          "input": 0.05,
+          "output": 0.1
         },
         "limit": {
-          "output": 117964
+          "output": 16384
         },
         "modalities": {
           "input": [
@@ -13427,7 +13426,7 @@
           "output": 0.225
         },
         "limit": {
-          "output": 235929
+          "output": 262144
         },
         "modalities": {
           "input": [
@@ -13606,12 +13605,11 @@
       },
       "meta-llama/llama-3.1-8b-instruct": {
         "cost": {
-          "cache_read": 0.025,
-          "input": 0.05,
-          "output": 0.08
+          "input": 0.02,
+          "output": 0.04
         },
         "limit": {
-          "output": 117964
+          "output": 16384
         },
         "modalities": {
           "input": [
@@ -14827,8 +14825,8 @@
       },
       "moonshotai/kimi-k3": {
         "cost": {
-          "cache_read": 0.19,
-          "input": 0.2,
+          "cache_read": 0.14,
+          "input": 0.15,
           "output": 20
         },
         "limit": {
@@ -15023,6 +15021,7 @@
       },
       "nousresearch/hermes-4-405b": {
         "cost": {
+          "cache_read": 0.2,
           "input": 1,
           "output": 3
         },
@@ -15046,6 +15045,7 @@
       },
       "nvidia/nemotron-3-nano-30b-a3b": {
         "cost": {
+          "cache_read": 0.012,
           "input": 0.06,
           "output": 0.24
         },
@@ -15098,40 +15098,8 @@
       },
       "nvidia/nemotron-3-super-120b-a12b": {
         "cost": {
-          "cache_read": 0.15,
-          "input": 0.3,
-          "output": 2.4
-        },
-        "limit": {
-          "output": 235929
-        },
-        "modalities": {
-          "input": [
-            "text"
-          ]
-        },
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "none",
-              "low",
-              "medium"
-            ]
-          },
-          {
-            "type": "budget_tokens"
-          }
-        ],
-        "release_date": "2026-03-11",
-        "temperature": true,
-        "tool_call": true
-      },
-      "nvidia/nemotron-3-super-120b-a12b:free": {
-        "cost": {
-          "input": 0,
-          "output": 0
+          "input": 0.08,
+          "output": 0.45
         },
         "limit": {
           "output": 235929
@@ -17925,6 +17893,31 @@
         "temperature": true,
         "tool_call": true
       },
+      "prism-ml/ternary-bonsai-2-9b": {
+        "cost": {
+          "cache_read": 0.04,
+          "input": 0.08,
+          "output": 0.13
+        },
+        "limit": {
+          "output": 65536
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ]
+        },
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          }
+        ],
+        "release_date": "2026-10-16",
+        "temperature": true,
+        "tool_call": true
+      },
       "qwen/qwen-2.5-72b-instruct": {
         "cost": {
           "input": 0.36,
@@ -18122,6 +18115,7 @@
       },
       "qwen/qwen3-30b-a3b-instruct-2507": {
         "cost": {
+          "cache_read": 0.1,
           "input": 0.1,
           "output": 0.3
         },
@@ -18610,11 +18604,11 @@
       },
       "qwen/qwen3.6-27b": {
         "cost": {
-          "input": 0.32,
-          "output": 3.2
+          "input": 0.45,
+          "output": 2.7
         },
         "limit": {
-          "output": 81920
+          "output": 65536
         },
         "modalities": {
           "input": [
@@ -18635,9 +18629,9 @@
       },
       "qwen/qwen3.6-35b-a3b": {
         "cost": {
-          "cache_read": 0.05,
+          "cache_read": 0.025,
           "input": 0.1,
-          "output": 0.95
+          "output": 0.9
         },
         "limit": {
           "output": 235929
@@ -18895,12 +18889,12 @@
       },
       "qwen/qwen3.8-27b": {
         "cost": {
-          "cache_read": 0.09,
-          "input": 0.2,
-          "output": 2.5
+          "cache_read": 0.0039,
+          "input": 0.039,
+          "output": 1.25
         },
         "limit": {
-          "output": 235929
+          "output": 65536
         },
         "modalities": {
           "input": [
@@ -20707,12 +20701,12 @@
       },
       "z-ai/glm-5.1": {
         "cost": {
-          "cache_read": 0.1794,
-          "input": 0.966,
-          "output": 3.036
+          "cache_read": 0.26,
+          "input": 1.4,
+          "output": 4.4
         },
         "limit": {
-          "output": 128000
+          "output": 131072
         },
         "modalities": {
           "input": [
@@ -20731,7 +20725,7 @@
       },
       "z-ai/glm-5.2": {
         "cost": {
-          "cache_read": 0.033,
+          "cache_read": 0.0331,
           "input": 0.0341,
           "output": 7
         },
@@ -20790,11 +20784,11 @@
       "z-ai/glm-5.3-flash": {
         "cost": {
           "cache_read": 0.03,
-          "input": 0.15,
-          "output": 0.5
+          "input": 0.0462,
+          "output": 0.0737
         },
         "limit": {
-          "output": 943717
+          "output": 131072
         },
         "modalities": {
           "input": [
@@ -21056,8 +21050,8 @@
       "~deepseek/deepseek-flash-latest": {
         "cost": {
           "cache_read": 0.015,
-          "input": 0.02,
-          "output": 0.106042
+          "input": 0.0151,
+          "output": 1.8
         },
         "limit": {
           "output": 943718
@@ -21086,8 +21080,8 @@
       },
       "~deepseek/deepseek-pro-latest": {
         "cost": {
-          "cache_read": 0.22,
-          "input": 0.2211,
+          "cache_read": 0.25,
+          "input": 0.2542,
           "output": 8
         },
         "limit": {
@@ -21234,9 +21228,9 @@
       },
       "~moonshotai/kimi-latest": {
         "cost": {
-          "cache_read": 0.19,
-          "input": 0.19,
-          "output": 8.94
+          "cache_read": 0.14,
+          "input": 0.15,
+          "output": 20
         },
         "limit": {
           "output": 943718
@@ -21578,8 +21572,8 @@
       "~z-ai/glm-flash-latest": {
         "cost": {
           "cache_read": 0.03,
-          "input": 0.0513,
-          "output": 0.0701
+          "input": 0.0462,
+          "output": 0.0737
         },
         "limit": {
           "output": 131072

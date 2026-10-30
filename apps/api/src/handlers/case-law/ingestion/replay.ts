@@ -25,7 +25,10 @@ import {
   caseLawReplayBatches,
   caseLawReplayBlocked,
 } from "@/api/db/schema";
-import { STORED_RAW_REPARSE_REJECTION } from "@/api/handlers/case-law/ingestion/adapter";
+import {
+  STORED_RAW_REPARSE_REJECTION,
+  storedRawResultReader,
+} from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   IngestionResult,
   SourceAdapter,
@@ -1529,7 +1532,11 @@ const replayOneRow = async ({
     });
   }
   const parsed = await Result.tryPromise({
-    try: async () => await capability.reparse(storedInputFor(row, raw)),
+    try: async () =>
+      await capability.reparse({
+        ...storedInputFor(row, raw),
+        readObject: storedRawResultReader(readStoredRaw),
+      }),
     catch: (cause) =>
       new ReplayStageError({
         message: "Stored replay adapter failed",

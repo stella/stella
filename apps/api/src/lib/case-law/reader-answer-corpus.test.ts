@@ -91,6 +91,7 @@ describe("private reader answer corpus excerpts", () => {
       decisionId,
       decisionDate: "2026-01-01",
       court: "Test court",
+      language: "cs",
       paragraphs: [{ paragraphId: "paragraph-0", text: "Civil liability" }],
     });
   });
@@ -552,4 +553,43 @@ describe("private reader answer corpus excerpts", () => {
     expect(result.error).toBeInstanceOf(ReaderAnswerCorpusError);
     expect(result.error.cause).toBe(failure);
   });
+});
+
+test("related decision reads fill the fixed candidate batch before waiting for payloads", async () => {
+  const origin = createSafeId<"caseLawDecision">();
+  const candidates = Array.from(
+    { length: READER_ANSWER_RELATED_LIMITS.decisions },
+    () => ({
+      decisionId: createSafeId<"caseLawDecision">(),
+      direction: "cited" as const,
+    }),
+  );
+  const firstCandidate = Promise.withResolvers<undefined>();
+  const releaseCandidates = Promise.withResolvers<undefined>();
+  let started = 0;
+  const pending = readReaderAnswerRelated(
+    {
+      decisionId: origin,
+      paragraphId: "paragraph-0",
+      direction: "cited",
+      query: "reasoning",
+    },
+    {
+      readRelatedCandidates: async () => candidates,
+      readDecision: async ({ decisionId }) => {
+        if (decisionId !== origin) {
+          started++;
+          firstCandidate.resolve(undefined);
+          await releaseCandidates.promise;
+        }
+        return source({ decisionId, texts: ["Court reasoning"] });
+      },
+    },
+  );
+  await firstCandidate.promise;
+  const activeBatch = started;
+  releaseCandidates.resolve(undefined);
+  const result = await pending;
+  expect(result.isOk()).toBe(true);
+  expect(activeBatch).toBe(READER_ANSWER_RELATED_LIMITS.decisions);
 });
