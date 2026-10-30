@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
+  BROWSER_CONTROL_PROTOCOL_VERSION,
   CHAT_DECISION_HREF_TEMPLATE,
   CHAT_DECISION_PASSAGE_HREF_PREFIX,
   CHAT_USER_HREF_TEMPLATE,
@@ -33,6 +34,7 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   ANNOTATIONS_SECTION_MAX_CHARS,
   appendAnonymizedModeHintToChatSafePrompt,
+  browserExtensionPromptLine,
   buildActiveDecisionPrompt,
   buildActiveDecisionSection,
   buildActiveDraftPrompt,
@@ -83,6 +85,15 @@ const SKILL_METADATA = [
     version: "1.0",
   },
 ] as const;
+
+test("not-paired browser state tells the model how the user connects", () => {
+  expect(
+    browserExtensionPromptLine({
+      protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+      status: "not-paired",
+    }),
+  ).toContain("press Connect current stella tab");
+});
 
 describe("reader marks in the prompt", () => {
   const mark = (index: number, quoteChars: number, bodyChars: number) =>

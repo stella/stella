@@ -22,7 +22,7 @@ import {
 } from "./browser-approval-mode";
 import {
   executeBrowserExtensionCommand,
-  getBrowserClientCapability,
+  getBrowserExtensionState,
   isBrowserExtensionBridgeMounted,
   mountBrowserExtensionBridge,
 } from "./browser-extension-bridge";
@@ -108,9 +108,10 @@ const deliver = (data: unknown) => {
 const report = (
   controllerId: string | null,
   controlledTabId: number | null = null,
+  allSitesGranted = true,
 ) => {
   deliver({
-    allSitesGranted: true,
+    allSitesGranted,
     controlledTabId,
     controllerId,
     protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
@@ -119,6 +120,37 @@ const report = (
     type: "pong",
   });
 };
+
+describe("live browser extension state", () => {
+  test("covers discovery, permission, pairing, disconnect, and late installation", () => {
+    jest.useFakeTimers();
+    unmount = mountBrowserExtensionBridge();
+
+    jest.advanceTimersByTime(1000);
+    expect(getBrowserExtensionState().status).toBe("not-installed");
+
+    report(null, null, false);
+    expect(getBrowserExtensionState().status).toBe("needs-site-access");
+
+    report(null);
+    expect(getBrowserExtensionState().status).toBe("not-paired");
+
+    report("controller-1");
+    expect(getBrowserExtensionState().status).toBe("connected");
+
+    report(null);
+    expect(getBrowserExtensionState().status).toBe("not-paired");
+
+    report("controller-2");
+    expect(getBrowserExtensionState().status).toBe("connected");
+    report(null); // A different stella tab now owns the controller.
+    expect(getBrowserExtensionState().status).toBe("not-paired");
+
+    unmount();
+    unmount = null;
+    expect(getBrowserExtensionState().status).toBe("not-installed");
+  });
+});
 
 const connect = () => {
   unmount = mountBrowserExtensionBridge();
@@ -391,14 +423,18 @@ describe("the bridge outlives every chat surface", () => {
   test("the first send of a fresh chat carries the browser client once the extension answered", () => {
     connect();
 
-    expect(sendBody().browserClient).toEqual({
+    expect(sendBody().browserExtension).toEqual({
       protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+      status: "connected",
     });
   });
 
-  test("a send without a mounted bridge omits the browser client and is detectable", () => {
+  test("a send without a mounted bridge reports the extension as not installed", () => {
     expect(isBrowserExtensionBridgeMounted()).toBe(false);
-    expect(sendBody().browserClient).toBeUndefined();
+    expect(sendBody().browserExtension).toEqual({
+      protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+      status: "not-installed",
+    });
   });
 
   test("surfaces coming and going under the frame keep the pairing", () => {
@@ -407,8 +443,8 @@ describe("the bridge outlives every chat surface", () => {
     surface();
 
     expect(isBrowserExtensionBridgeMounted()).toBe(true);
-    expect(getBrowserClientCapability()).toBeDefined();
-    expect(sendBody().browserClient).toBeDefined();
+    expect(getBrowserExtensionState()).toBeDefined();
+    expect(sendBody().browserExtension).toBeDefined();
   });
 });
 

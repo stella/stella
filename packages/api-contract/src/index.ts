@@ -48,13 +48,14 @@ export {
   BROWSER_CONTROL_TARGET_METADATA,
   BROWSER_CONTROL_TOOL_NAME,
   BROWSER_EXTENSION_MESSAGE_SOURCE,
+  BROWSER_EXTENSION_STATUS,
   parseBrowserControlCommand,
   parseBrowserControlResult,
   parseBrowserExtensionRequest,
   parseBrowserExtensionResponse,
 } from "./browser-control";
 export type {
-  BrowserClientCapability,
+  BrowserExtensionCapability,
   BrowserControlCommand,
   BrowserControlErrorCode,
   BrowserControlResult,
@@ -62,6 +63,7 @@ export type {
   BrowserControlTargetMetadata,
   BrowserExtensionRequest,
   BrowserExtensionResponse,
+  BrowserExtensionStatus,
 } from "./browser-control";
 export {
   BILLING_STATUS,

@@ -276,7 +276,7 @@ type ChatSendRequestBase = {
    * stale tab can still chat; the server offers the browser tool only when it
    * matches its own `BROWSER_CONTROL_PROTOCOL_VERSION`.
    */
-  browserClient?: { protocolVersion: number };
+  browserExtension?: { protocolVersion: number; status: string };
   contextMatterIds?: SafeId<"workspace">[];
   devModelId?: string;
   docxEditRepresentation?: "tracked-changes" | "direct";
