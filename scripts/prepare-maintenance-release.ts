@@ -520,12 +520,17 @@ export const projectReleaseDates = ({
       publishedAt ?? refreshed[tag] ?? null,
     ]),
   );
-  if (previousRelease.kind === "published") {
-    projected[previousTag] = previousRelease.publishedAt;
-  } else if (previousRelease.kind === "unpromoted") {
-    projected[previousTag] = null;
+  switch (previousRelease.kind) {
+    case "published":
+      return { ...projected, [previousTag]: previousRelease.publishedAt };
+    case "unpromoted":
+      return { ...projected, [previousTag]: null };
+    case "superseded":
+      return projected;
+    default:
+      previousRelease satisfies never;
+      return panic("Unhandled previous release");
   }
-  return projected;
 };
 
 /**
@@ -559,7 +564,7 @@ export const refreshUnpromotedReleases = async ({
     .map(([tag]) => tag.slice(1))
     .toSorted((left, right) => Bun.semver.order(right, left))
     .at(0);
-  const refreshed: Record<string, string> = {};
+  const refreshed: (readonly [string, string])[] = [];
   for (const [tag, publishedAt] of Object.entries(dates)) {
     if (publishedAt !== null || tag === previousTag) {
       continue;
@@ -578,10 +583,10 @@ export const refreshUnpromotedReleases = async ({
       );
     }
     if (outcome.value.kind === "published") {
-      refreshed[tag] = outcome.value.publishedAt;
+      refreshed.push([tag, outcome.value.publishedAt]);
     }
   }
-  return refreshed;
+  return Object.fromEntries(refreshed);
 };
 
 export const prepareMaintenanceReleaseFiles = ({
