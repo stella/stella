@@ -127,18 +127,22 @@ export const CitingDecisionItem = ({
         {citesOlderVersion && (
           <>
             <span aria-hidden="true">·</span>
+            {/* A fact about the citation, read like the facts beside it:
+                inline text whose dotted rule says there is more on hover. A
+                plain button only so a keyboard reaches the tooltip; it does
+                nothing itself, hence the plain cursor. */}
             <Tooltip>
-              {/* A fact about the citation, read like the facts beside it:
-                  inline text whose dotted rule says there is more on hover. */}
               <TooltipTrigger
                 render={
-                  <button
-                    className="text-foreground-strong-muted decoration-foreground-placeholder hover:decoration-foreground-muted focus-visible:ring-ring relative cursor-default rounded-xs underline decoration-dotted underline-offset-2 focus-visible:ring-2 focus-visible:outline-none pointer-coarse:after:absolute pointer-coarse:after:-inset-3"
-                    type="button"
+                  <Button
+                    className="group/plain cursor-default"
+                    variant="plain"
                   />
                 }
               >
-                {t("statutes.citingDecisionOlderVersion")}
+                <span className="text-foreground-strong-muted decoration-foreground-placeholder group-hover/plain:decoration-foreground-muted group-data-popup-open/plain:decoration-foreground-muted relative underline decoration-dotted underline-offset-2 pointer-coarse:after:absolute pointer-coarse:after:-inset-3">
+                  {t("statutes.citingDecisionOlderVersion")}
+                </span>
               </TooltipTrigger>
               <TooltipPopup>
                 <div className="flex flex-col gap-1">

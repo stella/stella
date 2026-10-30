@@ -5,6 +5,7 @@ import { IntlProvider } from "use-intl";
 
 import { DocxEditor } from "@stll/folio-react";
 import { getFolioMessages } from "@stll/folio-react/messages";
+import { Button } from "@stll/ui/button";
 
 // A real Word .docx (Y Combinator's post-money SAFE, published free to use) so
 // the hero opens on a genuine, richly-formatted legal document rather than a
@@ -148,17 +149,9 @@ const SamplePlaceholder = ({ onRetry, status }: SamplePlaceholderProps) => {
       style={{ color: "var(--muted-foreground)" }}
     >
       <p>The sample document could not be loaded.</p>
-      <button
-        type="button"
-        onClick={onRetry}
-        className="inline-flex min-h-11 items-center rounded-[0.625rem] px-4 font-medium"
-        style={{
-          border: "1px solid var(--border)",
-          color: "var(--foreground)",
-        }}
-      >
+      <Button onClick={onRetry} size="xl" variant="outline">
         Try again
-      </button>
+      </Button>
     </div>
   );
 };

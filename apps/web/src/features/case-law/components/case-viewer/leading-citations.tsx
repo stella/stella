@@ -287,11 +287,12 @@ const LeadingRow = ({
 
   return (
     <li className="flex flex-col" ref={rowRef}>
-      <button
+      <Button
         aria-expanded={open}
-        className="hover:bg-muted/60 -mx-1.5 flex items-start gap-1.5 rounded-md px-1.5 py-1 text-start"
+        className="-mx-2 w-auto items-start whitespace-normal"
         onClick={() => setOpen(!open)}
-        type="button"
+        size="row"
+        variant="ghost"
       >
         <DocumentIdentityBadge
           identity={decisionDocumentIdentity(row.decision)}
@@ -318,7 +319,7 @@ const LeadingRow = ({
               : `${row.decision.court} · ${decided}`}
           </span>
         </span>
-      </button>
+      </Button>
       <div className="ps-4">
         <CitedDecisionLink
           decision={row.decision}

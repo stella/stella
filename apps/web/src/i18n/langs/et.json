@@ -5341,6 +5341,7 @@
     "citingDecisionsSortCitations": "Viited sellele sättele",
     "citingDecisionsSortDate": "Lahendi kuupäev",
     "citingDecisionsYear": "Lahendi aasta",
+    "citingDecisionsYearOutOfRange": "Sisestage aasta vahemikus {min}–{max}.",
     "citingDecisionsYearPlaceholder": "Kõik aastad",
     "columns": {
       "act": "Õigusakt",

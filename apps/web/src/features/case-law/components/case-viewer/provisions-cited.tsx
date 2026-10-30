@@ -242,19 +242,21 @@ export const ProvisionsCited = ({
 
   return (
     <section className="reader-chrome border-border/60 mb-6 rounded-lg border print:hidden">
-      <button
+      <Button
         aria-expanded={open}
-        className="text-foreground-strong-muted hover:text-foreground flex w-full items-center gap-1.5 px-3 py-2 text-start text-xs font-medium"
+        className="group/plain flex w-full"
         onClick={() => setLocalOpen(!open)}
-        type="button"
+        variant="plain"
       >
-        <DirectionalIcon
-          className={cn("size-3.5 transition-transform", open && "rotate-90")}
-          flip={!open}
-          icon={ChevronRightIcon}
-        />
-        {t("caseLaw.viewer.provisionsCited")}
-      </button>
+        <span className="text-foreground-strong-muted group-hover/plain:text-foreground flex w-full items-center gap-1.5 px-3 py-2 text-xs font-medium">
+          <DirectionalIcon
+            className={cn("size-3.5 transition-transform", open && "rotate-90")}
+            flip={!open}
+            icon={ChevronRightIcon}
+          />
+          {t("caseLaw.viewer.provisionsCited")}
+        </span>
+      </Button>
       {content}
     </section>
   );

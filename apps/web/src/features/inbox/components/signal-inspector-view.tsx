@@ -243,8 +243,8 @@ const EvidenceBody = ({ evidence, signal }: EvidenceBodyProps) => {
       );
     case SIGNAL_KIND.CONTRACT_REVIEWED:
       return (
-        <dl className="flex flex-col gap-2 text-sm">
-          <Row label={t("inbox.evidence.verdict")}>
+        <DetailsGrid orientation="vertical">
+          <DetailsItem label={t("inbox.evidence.verdict")}>
             <span
               className={cn(
                 "rounded-sm px-1.5 py-0.5 text-xs font-medium",
@@ -257,15 +257,15 @@ const EvidenceBody = ({ evidence, signal }: EvidenceBodyProps) => {
             >
               {t(VERDICT_LABEL_KEY[evidence.verdict])}
             </span>
-          </Row>
-          <Row label={t("common.document")}>
+          </DetailsItem>
+          <DetailsItem label={t("common.document")}>
             <DocumentRef
               entityId={evidence.entityId}
               name={evidence.entityName}
               signal={signal}
             />
-          </Row>
-          <Row label={t("inbox.evidence.findings")}>
+          </DetailsItem>
+          <DetailsItem label={t("inbox.evidence.findings")} span="wide">
             {evidence.findings.length === 0 ? (
               <span className="text-muted-foreground">{t("common.none")}</span>
             ) : (
@@ -293,8 +293,8 @@ const EvidenceBody = ({ evidence, signal }: EvidenceBodyProps) => {
                 ))}
               </ul>
             )}
-          </Row>
-        </dl>
+          </DetailsItem>
+        </DetailsGrid>
       );
     case SIGNAL_KIND.WORK_UNACKNOWLEDGED:
       return (
@@ -365,8 +365,7 @@ const DocumentRef = ({
 
   const workspaceId = signal.workspaceId;
   return (
-    <button
-      className="text-start underline-offset-2 hover:underline"
+    <Button
       onClick={() => {
         detached(
           openEntityInInspector({
@@ -378,10 +377,10 @@ const DocumentRef = ({
           "inbox.open-evidence-entity",
         );
       }}
-      type="button"
+      size="inline"
     >
       <UserText>{name}</UserText>
-    </button>
+    </Button>
   );
 };
 
@@ -399,16 +398,6 @@ const SourceLink = ({ url }: { url: string }) =>
       {url}
     </a>
   );
-
-const Row = ({
-  label,
-  children,
-}: React.PropsWithChildren<{ label: string }>) => (
-  <div className="flex flex-col gap-0.5">
-    <dt className="text-muted-foreground text-xs">{label}</dt>
-    <dd>{children}</dd>
-  </div>
-);
 
 const EvidenceSkeleton = () => (
   <div className="flex flex-col gap-3">

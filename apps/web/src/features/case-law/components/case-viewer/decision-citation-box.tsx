@@ -160,15 +160,17 @@ export const DecisionCitationBox = ({
           </span>
         </p>
       </div>
-      <button
+      <Button
         aria-expanded={expanded}
-        className="text-foreground-strong-muted hover:text-foreground flex w-full items-center justify-center gap-1.5 px-3 py-2 text-start text-xs font-medium focus-visible:outline-2 focus-visible:outline-offset-2"
+        className="group/plain flex w-full"
         onClick={() => setExpanded(!expanded)}
-        type="button"
+        variant="plain"
       >
-        <span>{t("common.citations")}</span>
-        <span aria-hidden="true">{expanded ? "−" : "+"}</span>
-      </button>
+        <span className="text-foreground-strong-muted group-hover/plain:text-foreground flex w-full items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium">
+          <span>{t("common.citations")}</span>
+          <span aria-hidden="true">{expanded ? "−" : "+"}</span>
+        </span>
+      </Button>
       {expanded && (
         <div className="border-border/60 flex flex-col gap-4 border-t px-3 py-3">
           <DecisionCitations

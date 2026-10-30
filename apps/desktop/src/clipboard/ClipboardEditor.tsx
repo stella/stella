@@ -5,6 +5,7 @@ import {
   useCallback,
   useEffect,
   useEffectEvent,
+  useId,
   useRef,
   useState,
 } from "react";
@@ -24,6 +25,7 @@ import {
   XIcon,
 } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
+import { Label } from "@stll/ui/label";
 import {
   Select,
   SelectItem,
@@ -32,6 +34,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import { cn } from "@stll/ui/utils";
 
 import { subscribeDesktopEvent } from "../shared/desktop-events";
@@ -561,6 +564,8 @@ type ClipboardEditorProps = {
 
 const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
   const t = useTranslations("clipboard");
+  const nameFieldId = useId();
+  const groupFieldId = useId();
   const reportIdle = useEffectEvent(onIdle);
   const formatter = useFormatter();
   const editorRef = useRef<HTMLDivElement>(null);
@@ -938,28 +943,38 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
             {t("editItem")}
           </h1>
           {sourceName ? (
-            <p
-              className="text-muted-foreground flex min-w-0 items-center gap-1.5 truncate text-xs"
-              data-tauri-drag-region
-              title={sourceTitle}
-            >
-              {sourceVisual?.iconDataUrl ? (
-                <ClipboardSourceIcon
-                  iconDataUrl={sourceVisual.iconDataUrl}
-                  kind={item.sourceApp?.page ? "favicon" : "app"}
-                  size="inline"
-                />
-              ) : (
-                <span
-                  aria-hidden="true"
-                  className="bg-muted-foreground/55 size-2 shrink-0 rounded-full"
-                  style={{ backgroundColor: sourceVisual?.color ?? undefined }}
-                />
-              )}
-              <span className="truncate" dir="auto">
-                {sourceName}
-              </span>
-            </p>
+            // The source line truncates in the narrow header; the tooltip
+            // names the app and page in full.
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <p
+                    className="text-muted-foreground flex min-w-0 items-center gap-1.5 truncate text-xs"
+                    data-tauri-drag-region
+                  />
+                }
+              >
+                {sourceVisual?.iconDataUrl ? (
+                  <ClipboardSourceIcon
+                    iconDataUrl={sourceVisual.iconDataUrl}
+                    kind={item.sourceApp?.page ? "favicon" : "app"}
+                    size="inline"
+                  />
+                ) : (
+                  <span
+                    aria-hidden="true"
+                    className="bg-muted-foreground/55 size-2 shrink-0 rounded-full"
+                    style={{
+                      backgroundColor: sourceVisual?.color ?? undefined,
+                    }}
+                  />
+                )}
+                <span className="truncate" dir="auto">
+                  {sourceName}
+                </span>
+              </TooltipTrigger>
+              <TooltipPopup>{sourceTitle}</TooltipPopup>
+            </Tooltip>
           ) : null}
         </div>
         <Button
@@ -975,11 +990,14 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
       </header>
 
       <div className="flex min-h-0 flex-1 flex-col gap-3 p-5">
-        <label className="flex shrink-0 items-center gap-3">
-          <span className="text-muted-foreground shrink-0 text-xs">
-            {t("clipName")}
-          </span>
+        {/* The caption sits beside its field, in the muted small type of the
+            editor's other captions. */}
+        <div className="flex shrink-0 items-center gap-3">
+          <Label className="shrink-0 text-xs font-normal" htmlFor={nameFieldId}>
+            <span className="text-muted-foreground">{t("clipName")}</span>
+          </Label>
           <Input
+            id={nameFieldId}
             className="h-10 min-w-0 flex-1 rounded-xl"
             data-clipboard-editor-name=""
             disabled={state.save.type === "saving"}
@@ -1016,7 +1034,7 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
             })}
             value={state.name.value}
           />
-        </label>
+        </div>
         {item.type === "image" ? (
           <div className="bg-card ring-border flex min-h-0 flex-1 flex-col items-center justify-center gap-4 overflow-hidden rounded-[22px] p-5 ring-1 ring-inset">
             <div className="min-h-0 min-w-0 flex-1 self-stretch">
@@ -1079,10 +1097,13 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
         )}
 
         <div className="flex shrink-0 items-center gap-3">
-          <label className="flex min-w-0 flex-1 items-center gap-3">
-            <span className="text-muted-foreground shrink-0 text-xs">
-              {t("group")}
-            </span>
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            <Label
+              className="shrink-0 text-xs font-normal"
+              htmlFor={groupFieldId}
+            >
+              <span className="text-muted-foreground">{t("group")}</span>
+            </Label>
             <Select
               disabled={groupCreationPending}
               onValueChange={(value) => {
@@ -1105,7 +1126,10 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
               }}
               value={state.groupId ?? ""}
             >
-              <SelectTrigger className="h-10 w-44 min-w-0 rounded-xl">
+              <SelectTrigger
+                className="h-10 w-44 min-w-0 rounded-xl"
+                id={groupFieldId}
+              >
                 <SelectValue />
               </SelectTrigger>
               <SelectPopup
@@ -1138,7 +1162,7 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
                 </SelectItem>
               </SelectPopup>
             </Select>
-          </label>
+          </div>
           <Button
             disabled={groupCreationPending}
             onClick={requestClose}

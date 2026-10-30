@@ -17,6 +17,7 @@ import type { StatuteListScheme } from "@stll/legal-ast/statute-list";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { ArrowDownIcon, ArrowUpIcon, XIcon } from "@stll/ui/icons";
+import { Label } from "@stll/ui/label";
 import { LEGAL_TEXT_CLASS_NAME } from "@stll/ui/prose";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
@@ -273,8 +274,8 @@ const ActComparison = ({
   return (
     <CompareFrameLayout
       actions={
-        <label
-          className="text-muted-foreground flex items-center gap-2 text-xs"
+        <Label
+          className="text-xs font-normal sm:text-xs"
           htmlFor={showUnchangedId}
         >
           <Checkbox
@@ -288,8 +289,10 @@ const ActComparison = ({
               )
             }
           />
-          {t("statutes.compareShowUnchanged")}
-        </label>
+          <span className="text-muted-foreground">
+            {t("statutes.compareShowUnchanged")}
+          </span>
+        </Label>
       }
       frame={frame}
       title={t("statutes.compareTitle")}

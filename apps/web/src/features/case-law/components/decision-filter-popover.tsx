@@ -2,6 +2,7 @@ import { useId, useState } from "react";
 
 import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronRightIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
@@ -258,23 +259,27 @@ const CourtTierSection = ({
   const expanded = open || selectedHere;
   return (
     <div>
-      <button
+      <Button
         aria-controls={panelId}
         aria-expanded={expanded}
-        className="text-foreground-strong-muted hover:text-foreground flex min-h-11 w-full items-center gap-1 py-1 text-start text-xs font-medium"
+        className="group/plain flex w-full"
         onClick={() => setOpen(!expanded)}
-        type="button"
+        variant="plain"
       >
-        <DirectionalIcon
-          className={cn(
-            "size-3 shrink-0 transition-transform",
-            expanded && "rotate-90",
-          )}
-          flip={!expanded}
-          icon={ChevronRightIcon}
-        />
-        {t(COURT_TIER_LABEL_KEYS[tier])}
-      </button>
+        <span className="text-foreground-strong-muted group-hover/plain:text-foreground flex min-h-11 w-full items-center gap-1 py-1 text-xs font-medium">
+          <DirectionalIcon
+            className={cn(
+              "size-3 shrink-0 transition-transform",
+              expanded && "rotate-90",
+            )}
+            flip={!expanded}
+            icon={ChevronRightIcon}
+          />
+          <span className="text-xs font-medium">
+            {t(COURT_TIER_LABEL_KEYS[tier])}
+          </span>
+        </span>
+      </Button>
       <div hidden={!expanded} id={panelId}>
         <FacetOptions
           groupLabel={t(COURT_TIER_LABEL_KEYS[tier])}

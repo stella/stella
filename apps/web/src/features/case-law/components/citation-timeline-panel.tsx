@@ -277,8 +277,8 @@ const CitingDecisionRow = ({ row }: { row: LeadingCitation }) => {
       {/* The panel steps aside for the decision it sent the reader to. */}
       <PopoverClose
         render={
-          <button
-            className="hover:bg-muted/60 -mx-1.5 flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-start"
+          <Button
+            className="-mx-2 w-auto flex-1"
             onClick={() => {
               inspector.open(
                 createCaseDecisionViewTab({
@@ -292,7 +292,8 @@ const CitingDecisionRow = ({ row }: { row: LeadingCitation }) => {
                 }),
               );
             }}
-            type="button"
+            size="row"
+            variant="ghost"
           />
         }
       >

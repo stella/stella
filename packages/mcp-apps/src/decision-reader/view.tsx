@@ -63,18 +63,17 @@ const anchorsFor = (document: ReaderPager, host: ReaderController) => {
         !host.bridge.supportsTools() && anchor.url === null ? (
           children
         ) : (
-          <button
-            type="button"
-            className="underline underline-offset-2"
+          <Button
             onClick={() =>
               host.bridge.detached(
                 openDecisionAnchor(anchor, linkHost),
                 "decisionReader.openCitedDecision",
               )
             }
+            size="inline"
           >
             {children}
-          </button>
+          </Button>
         ),
     });
   }
@@ -87,18 +86,17 @@ const anchorsFor = (document: ReaderPager, host: ReaderController) => {
         !host.bridge.supportsTools() && anchor.url === null ? (
           children
         ) : (
-          <button
-            type="button"
-            className="underline underline-offset-2"
+          <Button
             onClick={() =>
               host.bridge.detached(
                 openProvisionAnchor(anchor, linkHost),
                 "decisionReader.previewCitedProvision",
               )
             }
+            size="inline"
           >
             {children}
-          </button>
+          </Button>
         ),
     });
   }

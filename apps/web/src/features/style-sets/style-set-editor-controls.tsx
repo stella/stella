@@ -5,6 +5,7 @@ import { useTranslations } from "use-intl";
 import { Checkbox } from "@stll/ui/checkbox";
 import { Field, FieldLabel } from "@stll/ui/field";
 import { Input } from "@stll/ui/input";
+import { NumberInput } from "@stll/ui/number-input";
 import {
   Select,
   SelectItem,
@@ -425,29 +426,21 @@ const NumberField = ({
   return (
     <Field>
       <FieldLabel htmlFor={id}>{resolvedLabel}</FieldLabel>
-      <div className="relative w-full">
-        <Input
-          className="pe-9 tabular-nums"
-          dir="ltr"
-          id={id}
-          max={max}
-          min={min}
-          onChange={(event) => {
-            const next = event.currentTarget.valueAsNumber;
-            if (Number.isFinite(next) && next >= min && next <= max) {
-              onChange(next);
-            } else if (event.currentTarget.value === "") {
-              onChange(min);
-            }
-          }}
-          step={resolvedStep}
-          type="number"
-          value={value}
-        />
-        <span className="text-muted-foreground pointer-events-none absolute inset-y-0 end-2 flex items-center text-xs">
-          {resolvedSuffix}
-        </span>
-      </div>
+      <NumberInput
+        id={id}
+        max={max}
+        min={min}
+        onValueChange={(next) => {
+          if (next === null) {
+            onChange(min);
+          } else if (Number.isFinite(next) && next >= min && next <= max) {
+            onChange(next);
+          }
+        }}
+        step={resolvedStep}
+        suffix={resolvedSuffix}
+        value={value}
+      />
     </Field>
   );
 };

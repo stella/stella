@@ -168,47 +168,55 @@ export const StatuteVersionMenu = ({
 
             return (
               <li className="relative" key={version.id}>
-                <button
+                <Button
                   aria-current={selected ? "true" : undefined}
-                  className={cn(
-                    "hover:bg-muted focus-visible:ring-ring grid w-full grid-cols-[auto_1fr] items-start gap-3 rounded-md px-4 text-start focus-visible:ring-2 focus-visible:outline-none",
-                    inForce ? "py-3" : "py-2",
-                    selected && "bg-muted/60",
-                    compareFrom !== null && "pe-12",
-                  )}
+                  className="group/plain flex w-full"
                   disabled={selected}
                   onClick={() => onVersionChange(version.id)}
-                  type="button"
+                  variant="plain"
                 >
-                  <span className="bg-popover relative z-10 mt-1 flex size-2 items-center justify-center">
-                    <StatuteStatusDot
-                      expression={version}
-                      status={version.status}
-                      validFrom={version.versionValidFrom}
-                    />
-                  </span>
-                  <span className="min-w-0">
-                    <span
-                      className={cn(
-                        "block text-sm tabular-nums",
-                        inForce && "font-semibold",
-                        !inForce && !selected && "text-muted-foreground",
-                      )}
-                    >
-                      {versionLabel(version)}
+                  {/* The version in force stands taller; a row with a compare
+                      action keeps its text clear of that button. The row is
+                      drawn here, so the chosen version keeps full strength
+                      while its button is disabled. */}
+                  <span
+                    className={cn(
+                      "group-hover/plain:bg-muted grid min-w-0 flex-1 grid-cols-[auto_1fr] items-start gap-3 rounded-md px-4",
+                      inForce ? "py-3" : "py-2",
+                      selected && "bg-muted/60",
+                      compareFrom !== null && "pe-12",
+                    )}
+                  >
+                    <span className="bg-popover relative z-10 mt-1 flex size-2 items-center justify-center">
+                      <StatuteStatusDot
+                        expression={version}
+                        status={version.status}
+                        validFrom={version.versionValidFrom}
+                      />
                     </span>
-                    {rowLabel === null ? null : (
+                    <span className="min-w-0">
                       <span
                         className={cn(
-                          "text-2xs mt-0.5 block font-medium tracking-wide uppercase",
-                          inForce ? "text-success" : "text-muted-foreground",
+                          "block text-sm tabular-nums",
+                          inForce && "font-semibold",
+                          !inForce && !selected && "text-muted-foreground",
                         )}
                       >
-                        {rowLabel}
+                        {versionLabel(version)}
                       </span>
-                    )}
+                      {rowLabel === null ? null : (
+                        <span
+                          className={cn(
+                            "text-2xs mt-0.5 block font-medium tracking-wide uppercase",
+                            inForce ? "text-success" : "text-muted-foreground",
+                          )}
+                        >
+                          {rowLabel}
+                        </span>
+                      )}
+                    </span>
                   </span>
-                </button>
+                </Button>
                 {/* Opening a version replaces the text; this sets it beside
                     the one on screen instead. */}
                 {compareFrom === null ? null : (

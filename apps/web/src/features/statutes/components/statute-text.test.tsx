@@ -163,7 +163,7 @@ const PROVISION_HEADINGS = new Set(["§ 47"]);
  * losing sight of the row.
  */
 const DESIGNATION_ROW =
-  /<span class="(?<size>[^"]*)">(?<designation>[^<]*)<\/span><span class="[^"]*"><button aria-label="(?<action>[^"]*)"/u;
+  /<span class="(?<size>[^"]*)">(?<designation>[^<]*)<\/span><span class="[^"]*"><span class="[^"]*"><button [^>]*?aria-label="(?<action>[^"]*)"/u;
 
 const designationRowOf = (markup: string, anchorId: string) => {
   const opening = markup.indexOf(`id="${anchorId}"`);

@@ -366,8 +366,10 @@ test("the reader draws each stored block with its claims marked on the stored wo
     ).toBe(true);
   }
   expect(
+    // The button is the control; the span inside it draws the mark and
+    // holds the words.
     marks.map((mark) =>
-      [...mark.childNodes]
+      [...(mark.firstElementChild?.childNodes ?? mark.childNodes)]
         .filter((node) => node.nodeType === Node.TEXT_NODE)
         .map((node) => node.textContent)
         .join(""),

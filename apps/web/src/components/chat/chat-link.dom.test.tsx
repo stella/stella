@@ -34,7 +34,17 @@ for (const { locale, catalogue } of locales) {
     const link = view.getByRole("link", { name: label });
     expect(link.getAttribute("target")).toBe("_blank");
     expect(link.getAttribute("rel")).toBe("noopener noreferrer");
-    expect(link.getAttribute("title")).toBe(catalogue.common.openInNewTab);
+    // The new-tab notice is a design-system tooltip on the anchor, not a
+    // native title the browser draws after its own delay.
+    expect(link.hasAttribute("title")).toBe(false);
+    expect(Object.hasOwn(link.dataset, "baseUiTooltipTrigger")).toBe(true);
+    // A screen reader still hears that the link opens a new tab: the notice
+    // is the link's description, not only a pointer tooltip.
+    expect(
+      document.querySelector(
+        `[id="${link.getAttribute("aria-describedby") ?? ""}"]`,
+      )?.textContent,
+    ).toBe(catalogue.common.openInNewTab);
     expect(link.firstElementChild?.getAttribute("aria-hidden")).toBe("true");
     expect(link.firstElementChild?.querySelector("svg")).not.toBeNull();
     expect(link.children.item(1)?.tagName).toBe("BDI");
@@ -167,7 +177,13 @@ for (const href of ["www.github.com/stella/stella", "/github.com/stella"]) {
     );
     const link = view.getByRole("link", { name: label });
     expect(link.id).toBe("source-anchor");
-    expect(link.getAttribute("title")).toBe("Source details");
+    expect(link.hasAttribute("title")).toBe(false);
+    expect(Object.hasOwn(link.dataset, "baseUiTooltipTrigger")).toBe(true);
+    expect(
+      document.querySelector(
+        `[id="${link.getAttribute("aria-describedby") ?? ""}"]`,
+      )?.textContent,
+    ).toBe("Source details");
     expect(link.getAttribute("href")).toBe(
       href.startsWith("/") ? href : `https://${href}`,
     );
