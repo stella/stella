@@ -96,7 +96,6 @@ import {
   resolveAccess,
   resolveHandlerKind,
   resolveScope,
-  reviewedInvoiceCleanupEndpoints,
   scanBinarySchemaFields,
   scanContextFidelity,
   scanFileResponseReturns,
@@ -1083,7 +1082,6 @@ const validateGeneratedFeatureDeclarations = ({
   endpoints,
   sources: sourceModules,
   dispatchRecords,
-  invoiceCleanupFiles = new Set<string>(),
 }: GeneratedFeatureDeclarationOptions): void => {
   const sources = new Map(sourceModules);
   for (const file of sources.keys()) {
@@ -1099,39 +1097,13 @@ const validateGeneratedFeatureDeclarations = ({
     registry,
     endpoints,
     sources,
-    invoiceCleanupFiles,
   });
-};
-
-const invoiceCleanupBindings = async (
-  endpoints: Awaited<ReturnType<typeof discoverSafeHandlers>>["endpoints"],
-) => {
-  const { invoiceSendCleanupRoute } =
-    await import("../src/handlers/invoices/routes");
-  const { classifyRouteGate: classifyCleanupGate } =
-    await import("../src/lib/route-gates");
-  const cleanupEndpoints = reviewedInvoiceCleanupEndpoints({
-    routes: invoiceSendCleanupRoute,
-    endpoints,
-    classify: classifyCleanupGate,
-  });
-  const invoiceCleanupFiles = new Set(cleanupEndpoints.map(({ file }) => file));
-  const cleanupDefinitions = new Set(
-    cleanupEndpoints.map(({ definition }) => definition),
-  );
-  return {
-    invoiceCleanupFiles,
-    cleanupFeature: (definition: object, feature: string | undefined) =>
-      cleanupDefinitions.has(definition) ? undefined : feature,
-  };
 };
 
 const buildCatalog = async (): Promise<BuildResult> => {
   const { endpoints, files, importErrors } = await discoverSafeHandlers();
   const errors: string[] = [];
   const featureSources = await readFeatureDeclarationSources();
-  const { invoiceCleanupFiles, cleanupFeature } =
-    await invoiceCleanupBindings(endpoints);
 
   for (const { id, message } of importErrors) {
     errors.push(`import failed: ${id}: ${message}`);
@@ -1565,10 +1537,7 @@ const buildCatalog = async (): Promise<BuildResult> => {
         permissions,
         compactedInputSchema,
         exposure: endpoint.exposure,
-        feature: cleanupFeature(
-          endpoint.definition,
-          inheritedFeature ?? DOMAIN_FEATURE[domain],
-        ),
+        feature: inheritedFeature ?? DOMAIN_FEATURE[domain],
         featureAccess: parseFeatureRequirement(
           endpoint.config["featureAccess"],
         ),
@@ -1599,7 +1568,6 @@ const buildCatalog = async (): Promise<BuildResult> => {
     endpoints,
     sources: featureSources,
     dispatchRecords,
-    invoiceCleanupFiles,
   });
 
   // Class guards over the built entries (context-fidelity, file-response,

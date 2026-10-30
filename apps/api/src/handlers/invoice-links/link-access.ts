@@ -9,8 +9,10 @@ import {
   resolveInvoiceLink,
 } from "@/api/lib/billing/invoice-links";
 import type { InvoiceLinkScope } from "@/api/lib/billing/invoice-links";
-import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { isFeatureDeployed } from "@/api/lib/feature-access/deployment";
+import { isOrganizationFeatureEnabled } from "@/api/lib/feature-access/organization";
+import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
 import { admitInvoiceLinkToken } from "@/api/lib/rate-limit/invoice-link-admission";
 import type { TokenScopedDatabase } from "@/api/lib/root-scoped-db";
 import { tokenScopedDatabase } from "@/api/lib/root-scoped-db";
@@ -47,7 +49,7 @@ export const verifyInvoiceLinkCaller =
     // A deployment without the feature answers like a dead link, before any
     // lookup.
     if (
-      !isDeploymentFeatureEnabled("FEATURE_INVOICE_LINKS") ||
+      !isFeatureDeployed(FEATURE_REGISTRY, "invoice-links") ||
       !isAvailable()
     ) {
       return Result.err(linkUnavailable());
@@ -63,7 +65,12 @@ export const verifyInvoiceLinkCaller =
           return Result.err(admitted.error);
         }
         const found = await resolveInvoiceLink(db, token);
-        return found === null
+        const enabled = isOrganizationFeatureEnabled({
+          featureId: "invoice-links",
+          // Unknown hashes run the same in-memory grant scan as live hashes.
+          organizationId: found?.organizationId ?? "",
+        });
+        return found === null || !enabled
           ? Result.err(linkUnavailable())
           : Result.ok({
               ...found,

@@ -30,8 +30,6 @@ type DeclarationOptions = {
   registry: FeatureRegistry;
   endpoints: readonly { file: string; config: Record<string, unknown> }[];
   sources: ReadonlyMap<string, string>;
-  /** Derived from the reviewed route group joined to handler discovery. */
-  invoiceCleanupFiles?: ReadonlySet<string>;
 };
 export type FeatureAccessDeclarationViolation = {
   file: string;
@@ -171,7 +169,10 @@ const drizzleConstructors = (ast: ts.SourceFile) => {
   for (const statement of ast.statements) {
     if (
       !runtimeImport(statement) ||
-      !statement.moduleSpecifier.text.startsWith("drizzle-orm/")
+      !(
+        statement.moduleSpecifier.text.startsWith("drizzle-orm/") ||
+        statement.moduleSpecifier.text === "@/api/db/sql-client"
+      )
     ) {
       continue;
     }
@@ -180,7 +181,12 @@ const drizzleConstructors = (ast: ts.SourceFile) => {
       continue;
     }
     for (const binding of bindings.elements) {
-      if ((binding.propertyName?.text ?? binding.name.text) === "drizzle") {
+      const exportedName = binding.propertyName?.text ?? binding.name.text;
+      if (
+        exportedName === "drizzle" ||
+        (exportedName === "createDatabase" &&
+          statement.moduleSpecifier.text === "@/api/db/sql-client")
+      ) {
         constructors.add(binding.name.text);
       }
     }
@@ -541,9 +547,12 @@ const isValidDispatchBoundary = (
               ts.isIdentifier(declaration.name) &&
               declaration.name.text === boundary.registry &&
               declaration.initializer !== undefined &&
-              ts.isArrayLiteralExpression(
+              (ts.isArrayLiteralExpression(
                 unwrapExpression(declaration.initializer),
-              ),
+              ) ||
+                ts.isObjectLiteralExpression(
+                  unwrapExpression(declaration.initializer),
+                )),
           ),
       );
     case "admitted": {
@@ -794,7 +803,7 @@ const collectModuleUses = (
 ): ModuleUse[] => {
   const uses: ModuleUse[] = [];
   const visit = (node: ts.Node) => {
-    if (dispatchRegistry(node)) {
+    if (ts.isTypeNode(node) || dispatchRegistry(node)) {
       return;
     }
     if (
@@ -879,7 +888,6 @@ type EndpointOptions = {
   graph: DeclarationSourceGraph;
   dispatchModules: ReturnType<typeof validateOwnership>["dispatchModules"];
   modules: ModuleFacts;
-  invoiceCleanupFiles: ReadonlySet<string>;
 };
 const inspectEndpoint = ({
   endpoint,
@@ -887,7 +895,6 @@ const inspectEndpoint = ({
   graph,
   dispatchModules,
   modules,
-  invoiceCleanupFiles,
 }: EndpointOptions) => {
   const file = endpoint.file.split("#").at(0) ?? endpoint.file;
   const declaration = parseDeclaration(endpoint.config, file, registry);
@@ -896,14 +903,7 @@ const inspectEndpoint = ({
     return violations;
   }
   const required = new Map<string, Set<Requirement>>();
-  const add = (
-    id: string,
-    type: Requirement,
-    cleanup = invoiceCleanupFiles.has(endpoint.file),
-  ) => {
-    if (id === "time-billing" && cleanup) {
-      return;
-    }
+  const add = (id: string, type: Requirement) => {
     const types = required.get(id) ?? new Set<Requirement>();
     types.add(type);
     required.set(id, types);
@@ -919,13 +919,11 @@ const inspectEndpoint = ({
   }
   const visited = new Set<string>();
   const walked = new Set<string>();
-  const walk = (module: string, throughCleanup = false) => {
-    const cleanup = throughCleanup || invoiceCleanupFiles.has(module);
-    const walkKey = `${module}:${cleanup ? "cleanup" : "ordinary"}`;
-    if (walked.has(walkKey)) {
+  const walk = (module: string) => {
+    if (walked.has(module)) {
       return;
     }
-    walked.add(walkKey);
+    walked.add(module);
     visited.add(module);
     // Descriptor registries do not invoke their handlers. Dispatch owners
     // admit the selected descriptor before invocation, not the whole caller.
@@ -939,7 +937,7 @@ const inspectEndpoint = ({
     }
     const boundary = modules.boundary(module);
     for (const [id, type] of boundary) {
-      add(id, type, cleanup);
+      add(id, type);
     }
     if (boundary.size !== 0) {
       return;
@@ -949,10 +947,10 @@ const inspectEndpoint = ({
       violations.push({ file, message });
     }
     for (const target of dependencies.targets) {
-      walk(target, cleanup);
+      walk(target);
     }
     for (const [id, type] of modules.uses(module, ast)) {
-      add(id, type, cleanup);
+      add(id, type);
     }
   };
   walk(file);
@@ -1097,7 +1095,6 @@ export const validateFeatureAccessDeclarations = ({
   registry,
   endpoints,
   sources,
-  invoiceCleanupFiles = new Set<string>(),
 }: DeclarationOptions): FeatureAccessDeclarationViolation[] => {
   const dispatch = dispatchEntryEndpoints(sources);
   const graph = new DeclarationSourceGraph(dispatch.sources, registry);
@@ -1153,7 +1150,6 @@ export const validateFeatureAccessDeclarations = ({
         graph,
         dispatchModules: ownership.dispatchModules,
         modules,
-        invoiceCleanupFiles,
       }),
     );
   }

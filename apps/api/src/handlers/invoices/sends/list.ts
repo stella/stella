@@ -100,6 +100,7 @@ const sendHistoryCursor = createTimestampIdCursorCodec({
 
 const config = {
   contract: "patch",
+  featureAccess: { featureId: "invoice-links", type: "required" },
   description:
     "List the emails an invoice was sent with, newest first with cursor pagination: recipients, time, delivery, reply-to, and whether its link is active, expired, revoked or failed, with when it was first opened. defaultRecipients are the client's email addresses, primary first; replyTo is where replies to a new send would go, or null when the reader has no verified sending address. Pass nextCursor as cursor to read older sends.",
   permissions: { invoice: ["update"] },

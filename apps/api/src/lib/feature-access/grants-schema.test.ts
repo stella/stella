@@ -191,3 +191,21 @@ for (const raw of ["not-json", "null", '{"unknown-feature":{}}']) {
     );
   });
 }
+
+test("invoice organization grants are registered while unknown ids retain count-only rejection", () => {
+  const result = v.parse(
+    createFeatureAccessGrantsEnvSchema(FEATURE_REGISTRY),
+    JSON.stringify({
+      "invoice-links": [{ type: "organization", organizationId: "org-a" }],
+      "unknown-invoice-feature": [
+        { type: "organization", organizationId: "org-a" },
+      ],
+    }),
+  );
+  expect(result).toEqual({
+    grants: {
+      "invoice-links": [{ type: "organization", organizationId: "org-a" }],
+    },
+    unknownGrantCount: 1,
+  });
+});

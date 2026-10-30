@@ -4,7 +4,6 @@ import {
   invoiceLines,
   invoicePayments,
   invoices,
-  invoiceSends,
   numberSeries,
   numberSeriesAllocations,
   numberSeriesCounters,
@@ -91,6 +90,7 @@ import {
   workspaceViewTemplates,
 } from "./files-views";
 import { flowDefinitions, flowRuns, flowRunSteps } from "./flows";
+import { invoiceSends } from "./invoice-sends";
 import {
   legalListColumns,
   legalListGenerationCandidates,

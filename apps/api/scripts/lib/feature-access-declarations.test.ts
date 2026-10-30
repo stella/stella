@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
 
 import { FEATURE_REGISTRY } from "../../src/lib/feature-access/registry";
-import { reviewedInvoiceCleanupEndpoints } from "./capability-catalog";
 import {
   assertFeatureAccessDeclarations,
   parseDeclarationSource,
@@ -63,61 +62,35 @@ const conditional = {
   },
 };
 
-test("reviewed cleanup exempts time billing on that dependency path while ordinary billing and other features retain admission", () => {
-  const cleanupFile = "apps/api/src/routes/feature/cleanup.ts";
-  const ordinaryFile = "apps/api/src/routes/ordinary.ts";
-  const config = { permissions: { invoice: ["update"] } };
-  const definition = {
-    config,
-    access: "workspace",
-    run: async () => ({}),
-  } as const;
-  const cleanup = reviewedInvoiceCleanupEndpoints({
-    routes: [{ method: "GET", path: "/cleanup", middleware: [], definition }],
-    endpoints: [{ file: cleanupFile, definition, config }],
-    classify: () => ({ kind: "other" }),
-  });
-  const invoiceCleanupFiles = new Set(cleanup.map(({ file }) => file));
-  const sources = new Map([
-    ...baseSources,
-    [
-      cleanupFile,
-      'import { run } from "../../feature/core"; export const cleanup = () => run();',
-    ],
-    [
-      ordinaryFile,
-      'import { cleanup } from "./feature/cleanup"; import { run } from "../feature/core"; export const both = () => [cleanup(), run()];',
-    ],
-  ]);
-  const endpoints = [
-    { file: cleanupFile, config },
-    { file: ordinaryFile, config: {} },
-  ];
-  const violations = validateFeatureAccessDeclarations({
-    registry: { "time-billing": registry.fixture },
-    endpoints,
-    sources,
-    invoiceCleanupFiles,
-  });
-  expect(violations.filter(({ file }) => file === cleanupFile)).toEqual([]);
-  expect(violations).toContainEqual({
-    file: ordinaryFile,
-    message: "source ownership requires featureAccess time-billing",
-  });
-  expect(
-    validateFeatureAccessDeclarations({
-      registry: { "time-billing": registry.fixture, fixture: registry.fixture },
-      endpoints: [{ file: cleanupFile, config }],
-      sources,
-      invoiceCleanupFiles,
-    }),
-  ).toContainEqual({
-    file: cleanupFile,
-    message: "source ownership requires featureAccess fixture",
-  });
-});
-
 describe("feature source declarations", () => {
+  test("the canonical database factory registers schemas without consuming their feature data", () => {
+    const owner = [
+      "apps/api/src/db/sql-client.ts",
+      "export const createDatabase = (options) => options;",
+    ] as const;
+    const registration =
+      'import { createDatabase } from "@/api/db/sql-client"; import * as schema from "../db/schema"; export const db = createDatabase({ relations: schema });';
+    expect(check(registration, {}, [owner])).toEqual([]);
+    expect(
+      check(`${registration} export const leak = schema.featureRows;`, {}, [
+        owner,
+      ]),
+    ).toMatchObject([
+      { message: "source ownership requires featureAccess fixture" },
+    ]);
+  });
+  test("type-only table vocabulary does not consume feature data", () => {
+    expect(
+      check(
+        'export type TableName = "fixture_rows"; export const run = () => true;',
+      ),
+    ).toEqual([]);
+    expect(
+      check("export const run = () => sql`SELECT * FROM fixture_rows`;"),
+    ).toMatchObject([
+      { message: "source ownership requires featureAccess fixture" },
+    ]);
+  });
   test.each(["registry", "admitted"] as const)(
     "%s dispatch boundaries preserve direct-access ownership enforcement",
     (type) => {
@@ -171,7 +144,7 @@ describe("feature source declarations", () => {
       sources.set(
         module,
         type === "registry"
-          ? "export const TOOL_SETS = {};"
+          ? "export const TOOL_SETS = 0;"
           : 'import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access"; export const run = () => true;',
       );
       expect(validate()).toContainEqual({
@@ -575,6 +548,33 @@ export const ${name} = { run: { featureId: "fixture", ${target} } };`;
       "apps/api/src/handlers/account-exports/download.ts",
       "apps/api/src/handlers/contacts/get.ts",
     ];
+    for (const action of ["create", "list", "revoke"]) {
+      const file = `apps/api/src/handlers/invoices/sends/${action}.ts`;
+      expect(
+        validateFeatureAccessDeclarations({
+          registry: FEATURE_REGISTRY,
+          endpoints: [{ file, config: {} }],
+          sources,
+        }),
+      ).toContainEqual({
+        file,
+        message: "source ownership requires featureAccess invoice-links",
+      });
+      expect(
+        validateFeatureAccessDeclarations({
+          registry: FEATURE_REGISTRY,
+          endpoints: [
+            {
+              file,
+              config: {
+                featureAccess: { type: "required", featureId: "invoice-links" },
+              },
+            },
+          ],
+          sources,
+        }),
+      ).toEqual([]);
+    }
     const featureFile = "apps/api/src/handlers/lists/verifications/create.ts";
     for (const ordinary of ordinaryHandlers) {
       expect(sources.has(ordinary)).toBe(true);

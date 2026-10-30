@@ -22,7 +22,6 @@ import {
 } from "@/api/lib/billing/invoice-pdf/document";
 import { buildInvoiceTemplateData } from "@/api/lib/billing/invoice-pdf/typst/data";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
-import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { admitInvoiceLinkToken } from "@/api/lib/rate-limit/invoice-link-admission";
 import type { TokenScopedDatabase } from "@/api/lib/root-scoped-db";
@@ -60,13 +59,9 @@ const readFailed = (cause: unknown) =>
  * and the files on offer. The first open stamps the send as viewed; every
  * open is audited on the invoice.
  */
-/** The link opens only while the deployment offers time billing. */
-const timeBillingDeployed = () =>
-  isDeploymentFeatureEnabled("FEATURE_TIME_BILLING");
-
 export const createViewInvoiceLink = ({
   db,
-  isAvailable = timeBillingDeployed,
+  isAvailable = () => true,
   buildEInvoice = buildLinkedEInvoice,
   admitToken,
 }: {

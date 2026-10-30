@@ -46,6 +46,8 @@ import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/access";
+import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import {
@@ -698,37 +700,15 @@ const InvoiceDetail = ({
         </>
       )}
 
-      {canUpdateInvoice && invoiceStatus !== "draft" && (
-        <InvoiceSendsSection
-          canSend={invoiceStatus !== "void"}
-          invoiceId={invoiceId}
-          onSendAgain={(recipients) =>
-            setSendDialog({ type: "open", recipients })
-          }
-          workspaceId={workspaceId}
-        />
-      )}
-
-      <Dialog
-        onOpenChange={(open) => {
-          if (!open) {
-            setSendDialog({ type: "closed" });
-          }
-        }}
-        open={sendDialog.type === "open"}
-      >
-        <DialogPopup className="max-w-md">
-          {sendDialog.type === "open" && invoice.invoiceNumber !== null ? (
-            <SendInvoiceForm
-              invoiceId={invoiceId}
-              invoiceNumber={invoice.invoiceNumber}
-              onClose={() => setSendDialog({ type: "closed" })}
-              recipients={sendDialog.recipients}
-              workspaceId={workspaceId}
-            />
-          ) : null}
-        </DialogPopup>
-      </Dialog>
+      <InvoiceLinkControls
+        canUpdateInvoice={canUpdateInvoice}
+        invoiceId={invoiceId}
+        invoiceNumber={invoice.invoiceNumber}
+        invoiceStatus={invoiceStatus}
+        sendDialog={sendDialog}
+        setSendDialog={setSendDialog}
+        workspaceId={workspaceId}
+      />
 
       {/* Edit dialog */}
       <Dialog onOpenChange={setEditOpen} open={editOpen}>
@@ -752,6 +732,68 @@ const InvoiceDetail = ({
 
 type SendDialogState =
   { type: "closed" } | { type: "open"; recipients: readonly string[] | null };
+
+type InvoiceLinkControlsProps = {
+  canUpdateInvoice: boolean;
+  invoiceId: string;
+  invoiceNumber: string | null;
+  invoiceStatus: InvoiceStatus;
+  sendDialog: SendDialogState;
+  setSendDialog: (state: SendDialogState) => void;
+  workspaceId: string;
+};
+
+function InvoiceLinkControls({
+  canUpdateInvoice,
+  invoiceId,
+  invoiceNumber,
+  invoiceStatus,
+  sendDialog,
+  setSendDialog,
+  workspaceId,
+}: InvoiceLinkControlsProps) {
+  const invoiceLinksEnabled = useCallerFeatureEnabled(
+    CALLER_FEATURE.invoiceLinks,
+  );
+  if (!invoiceLinksEnabled || !canUpdateInvoice) {
+    return null;
+  }
+  return (
+    <>
+      {invoiceStatus !== "draft" && (
+        <InvoiceSendsSection
+          canSend={invoiceStatus !== "void"}
+          invoiceId={invoiceId}
+          onSendAgain={(recipients) =>
+            setSendDialog({ type: "open", recipients })
+          }
+          workspaceId={workspaceId}
+        />
+      )}
+
+      <Dialog
+        onOpenChange={(open) => {
+          if (!open) {
+            setSendDialog({ type: "closed" });
+          }
+        }}
+        open={sendDialog.type === "open"}
+      >
+        <DialogPopup className="max-w-md">
+          {sendDialog.type === "open" && invoiceNumber !== null ? (
+            <SendInvoiceForm
+              invoiceId={invoiceId}
+              invoiceNumber={invoiceNumber}
+              onClose={() => setSendDialog({ type: "closed" })}
+              recipients={sendDialog.recipients}
+              workspaceId={workspaceId}
+            />
+          ) : null}
+        </DialogPopup>
+      </Dialog>
+    </>
+  );
+}
 
 const InfoCell = ({ label, value }: { label: string; value: string }) => (
   <div>
@@ -778,6 +820,9 @@ const InvoiceActions = ({
   const t = useTranslations("billing.invoices");
   const rootT = useTranslations();
   const canUpdateInvoice = usePermissions({ invoice: ["update"] });
+  const invoiceLinksEnabled = useCallerFeatureEnabled(
+    CALLER_FEATURE.invoiceLinks,
+  );
   const canDeleteInvoice = usePermissions({ invoice: ["delete"] });
 
   switch (invoiceStatus) {
@@ -816,7 +861,7 @@ const InvoiceActions = ({
     case "finalized":
       return (
         <>
-          {canUpdateInvoice && (
+          {invoiceLinksEnabled && canUpdateInvoice && (
             <Button onClick={onSend} size="sm" variant="outline">
               <SendIcon className="size-3.5" />
               {t("send")}
@@ -860,10 +905,12 @@ const InvoiceActions = ({
     case "paid":
       return canUpdateInvoice ? (
         <>
-          <Button onClick={onSend} size="sm" variant="ghost">
-            <SendIcon className="size-3.5" />
-            {t("sendByEmail")}
-          </Button>
+          {invoiceLinksEnabled && (
+            <Button onClick={onSend} size="sm" variant="ghost">
+              <SendIcon className="size-3.5" />
+              {t("sendByEmail")}
+            </Button>
+          )}
           <ConfirmAction
             description={t("confirmVoid")}
             onConfirm={() => onTransition("void")}

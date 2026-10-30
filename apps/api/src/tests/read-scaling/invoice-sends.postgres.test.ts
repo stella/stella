@@ -17,6 +17,14 @@ const testState = createTestState({ file: import.meta.path, config: env });
 
 const measureAt = async (db: GatedTestDb, size: number) => {
   const fixture = await seedInvoiceSendScaling(db, size);
+  testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
+    "invoice-links": [
+      {
+        type: "organization",
+        organizationId: fixture.context.session.activeOrganizationId,
+      },
+    ],
+  });
   try {
     const measurements = [];
     for (const scenario of invoiceSendScalingScenarios) {
@@ -33,6 +41,7 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
   () => {
     test("send handlers keep their database work and response size fixed at 10 and 200 invoices", async () => {
       testState.setConfig("FEATURE_INVOICE_LINKS", true);
+      testState.setConfig("FEATURE_TIME_BILLING", true);
       const databaseUrl =
         process.env["DATABASE_URL"] ?? panic("DATABASE_URL required");
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {

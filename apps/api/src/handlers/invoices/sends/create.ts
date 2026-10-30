@@ -49,13 +49,13 @@ import {
 } from "@/api/lib/db/aggregate-lock";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { executedRows } from "@/api/lib/db/executed-rows";
-import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import {
   isTransactionalEmailConfigured,
   sendInvoiceLinkEmail,
 } from "@/api/lib/email/email";
 import { emailAddressSchema } from "@/api/lib/email/normalized-email";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { isOrganizationFeatureEnabled } from "@/api/lib/feature-access/organization";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { readOrganizationTimeZone } from "@/api/lib/organization-time-zone";
@@ -392,14 +392,30 @@ const emailFor = (
   };
 };
 
-/** One email per recipient, so no recipient sees another's address. */
-const deliverAll = async (
-  deliver: InvoiceLinkDelivery,
-  email: Omit<InvoiceLinkMessage, "to">,
-  recipients: readonly string[],
-) => {
+type DeliverAllOptions = {
+  deliver: InvoiceLinkDelivery;
+  email: Omit<InvoiceLinkMessage, "to">;
+  recipients: readonly string[];
+  organizationId: SafeId<"organization">;
+};
+
+/** One email per recipient, checking current organization authority at delivery. */
+const deliverAll = async ({
+  deliver,
+  email,
+  recipients,
+  organizationId,
+}: DeliverAllOptions) => {
   const outcomes = await Promise.all(
     recipients.map(async (to) => {
+      if (
+        !isOrganizationFeatureEnabled({
+          featureId: "invoice-links",
+          organizationId,
+        })
+      ) {
+        return { to, delivered: false };
+      }
       const sent = await Result.tryPromise(
         async () => await deliver({ ...email, to }),
       );
@@ -579,12 +595,12 @@ const recordDelivery = async (
 
 const config = {
   contract: "patch",
+  featureAccess: { featureId: "invoice-links", type: "required" },
   description:
     "Email an issued invoice to the given addresses as a secure stella link to view and download it. Replies go to the seller email when it belongs to a verified current organization member, otherwise the sender's verified email. A finalized invoice becomes sent. Refused for drafts and void invoices. Each send makes a new link; see invoices.sends.list.",
   permissions: { invoice: ["update"] },
   // It emails people outside stella, so demo and review accounts cannot.
   accountAccess: ACCOUNT_ACCESS.accountControl,
-  featureAccess: { featureId: "time-billing", type: "required" },
   realtime: invoiceRealtimeUpdates,
   mcp: {
     type: "capability",
@@ -612,18 +628,6 @@ export const createSendInvoice = ({
       body,
       recordAuditEvent,
     }) {
-      if (!isDeploymentFeatureEnabled("FEATURE_INVOICE_LINKS")) {
-        return Result.err(
-          classifyFailure(
-            new HandlerError({
-              status: 503,
-              code: "feature_disabled",
-              message: "This feature is not enabled on this deployment",
-            }),
-            "invoice_links_disabled",
-          ),
-        );
-      }
       if (!isDeliveryConfigured()) {
         return Result.err(
           classifyFailure(
@@ -701,7 +705,12 @@ export const createSendInvoice = ({
         );
         const email = emailFor(prepared, invoiceLinkUrl(token), message);
         execution.phase = "started";
-        const failed = await deliverAll(deliver, email, body.recipients);
+        const failed = await deliverAll({
+          deliver,
+          email,
+          recipients: body.recipients,
+          organizationId: session.activeOrganizationId,
+        });
         const deliveryStatus = deliveryStatusOf(failed, body.recipients);
         const recorded = yield* Result.await(
           resultTx(

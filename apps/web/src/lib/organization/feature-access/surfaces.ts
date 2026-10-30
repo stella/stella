@@ -13,6 +13,13 @@ const LEGAL_LISTS_FEATURE = {
 
 /** Declared policies require caller decisions; explicit fallbacks use server deployment availability. */
 export const CALLER_FEATURE = {
+  invoiceLinks: {
+    id: "invoice-links",
+    requires: [],
+    undeclared: { type: "hidden" },
+    // Optional controls on a billing route; the invoice page remains available.
+    routeImports: [],
+  },
   aiMemory: {
     id: "ai-memory",
     requires: [],

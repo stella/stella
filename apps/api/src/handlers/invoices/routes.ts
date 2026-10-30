@@ -40,7 +40,6 @@ const gatedInvoicesRoute = routes(
       DELETE: deleteInvoiceLine,
     },
     "/:invoiceId/pdf": { POST: exportInvoicePdf },
-    "/:invoiceId/sends": { POST: sendInvoice },
     "/:invoiceId/payments": {
       GET: listInvoicePayments,
       POST: recordInvoicePayment,
@@ -56,16 +55,16 @@ const gatedInvoicesRoute = routes(
   },
 );
 
-/** Historical link authority remains manageable after billing access is removed. */
-export const invoiceSendCleanupRoute = routes(
+/** Link operations require the invitation decision, including its billing prerequisite. */
+export const invoiceSendsRoute = routes(
   {
-    "/:invoiceId/sends": { GET: listInvoiceSends },
+    "/:invoiceId/sends": { GET: listInvoiceSends, POST: sendInvoice },
     "/:invoiceId/sends/:sendId/revoke": { POST: revokeInvoiceSend },
   },
-  { prefix: "/invoices/:workspaceId" },
+  {
+    prefix: "/invoices/:workspaceId",
+    middleware: [featureAccessGate("invoice-links")],
+  },
 );
 
-export const invoicesRoute = mount([
-  gatedInvoicesRoute,
-  invoiceSendCleanupRoute,
-]);
+export const invoicesRoute = mount([gatedInvoicesRoute, invoiceSendsRoute]);
