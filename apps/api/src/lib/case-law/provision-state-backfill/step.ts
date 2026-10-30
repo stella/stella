@@ -6,7 +6,7 @@
 import { Result, TaggedError } from "better-result";
 
 import {
-  assertReadCommittedUnit,
+  checkReadCommittedUnit,
   READ_COMMITTED_BEGIN,
 } from "@/api/lib/db/read-committed-unit";
 
@@ -93,11 +93,20 @@ export const inBackfillTransaction = async (
     return await session.runUnit({ lockTimeout, statementTimeout }, work);
   }
   await session.execute(READ_COMMITTED_BEGIN);
+  const isolation = await checkReadCommittedUnit(
+    async (statement) => await session.query(statement),
+  );
+  if (Result.isError(isolation)) {
+    await session.execute("ROLLBACK");
+    return Result.err(
+      new ProvisionBackfillUnitError({
+        message: isolation.error.message,
+        cause: isolation.error,
+      }),
+    );
+  }
   const unit = await Result.tryPromise({
     try: async () => {
-      await assertReadCommittedUnit(
-        async (statement) => await session.query(statement),
-      );
       await session.setTransactionBudget({
         lockTimeout,
         statementTimeout,

@@ -38,7 +38,7 @@ import {
 } from "../lib/db/ebs-signal-reader";
 import { executedRows } from "../lib/db/executed-rows";
 import {
-  assertReadCommittedUnit,
+  checkReadCommittedUnit,
   READ_COMMITTED_BEGIN,
 } from "../lib/db/read-committed-unit";
 import { isPgError, PG_ERROR } from "../lib/pg-error";
@@ -877,11 +877,15 @@ export const createBackfillRuntime = (
     Pick<OnlineMigrationConnection, "execute" | "query">
   > = async (work) => {
     await connection.execute(READ_COMMITTED_BEGIN);
+    const isolation = await checkReadCommittedUnit(
+      async (statement) => await connection.query(statement),
+    );
+    if (Result.isError(isolation)) {
+      await connection.execute("ROLLBACK");
+      throw isolation.error;
+    }
     const outcome = await Result.tryPromise({
       try: async () => {
-        await assertReadCommittedUnit(
-          async (statement) => await connection.query(statement),
-        );
         const result = await work(connection);
         await connection.execute("COMMIT");
         return result;
