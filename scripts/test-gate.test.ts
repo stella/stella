@@ -700,6 +700,7 @@ context("test registration census", () => {
     },
   );
 
+  // timeout: Resolves collection across the real repository and its workflow topology.
   check(
     "reports the first package collection edge",
     () => {
@@ -747,6 +748,15 @@ context("test registration census", () => {
           scripts: fixturePackage,
         }),
       ).toBe("runner glob: test command excludes the file");
+      expect(
+        packageTestCollectionFailure({
+          candidate: "apps/desktop/src/fixture.test.ts",
+          packageDirectory: "apps/desktop",
+          scripts: {
+            test: "bun test --isolate --path-ignore-patterns '**/*.playwright.spec.ts'",
+          },
+        }),
+      ).toBeUndefined();
     },
     15_000,
   );
@@ -2528,6 +2538,22 @@ jobs:
         registry: TRUSTED_OUTPUT_PRODUCERS,
       }).findings,
     ).toEqual([]);
+    const actualTopology = analyzeGatingWorkflow(workflow).jobs;
+    expect(
+      actualTopology
+        .get("ci-tests")
+        ?.some(({ environment }) => environment["SHARD"] === "web"),
+    ).toBe(true);
+    expect(
+      actualTopology
+        .get("e2e-landing")
+        ?.some(({ command }) => command.includes("test:e2e")),
+    ).toBe(true);
+    expect(
+      actualTopology
+        .get("e2e-production-shard")
+        ?.some(({ command }) => command.includes("test:e2e")),
+    ).toBe(true);
   });
 
   check("unspecified Linux shell does not propagate pipeline failures", () => {
@@ -3680,6 +3706,7 @@ context("root test runner coverage", () => {
     ).toBeUndefined();
   });
 
+  // timeout: Reanalyzes the real workflow for each collector mutation.
   check(
     "pins the production Playwright collector to its workflow step",
     () => {
@@ -3736,7 +3763,7 @@ context("root test runner coverage", () => {
           topology: topologyFor(source),
         });
 
-      expect(failureFor(workflow)).toContain("pinned collector:");
+      expect(failureFor(workflow)).toBeUndefined();
       const completeShards = `shard: ${JSON.stringify(allE2eShards())}`;
       const unconditionalWorkflow = editJob(
         workflow.replace(
@@ -4856,3 +4883,19 @@ ${steps}
     });
   });
 });
+
+check(
+  "registration rollout enforces changed call sites while preserving suite names",
+  () => {
+    const source = [
+      'import { describe, test } from "bun:test";',
+      'describe("suite", () => {',
+      '  test.only("unchanged", () => {});',
+      '  test.only("changed", () => {});',
+      "});",
+    ].join("\n");
+    expect(
+      parseTestRegistrations("fixture.test.ts", source, (line) => line === 4),
+    ).toEqual([{ type: "only", identity: "fixture.test.ts::suite > changed" }]);
+  },
+);

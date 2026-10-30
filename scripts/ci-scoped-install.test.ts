@@ -883,6 +883,7 @@ test("landing diagnostics follow the browser configuration output directory", ()
     );
     for (const file of [
       "marketing-config.ts",
+      "marketing-paths.ts",
       "landing-marketing-config.ts",
       "devices.ts",
       "devices.gen.ts",

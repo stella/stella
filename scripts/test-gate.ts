@@ -24,6 +24,7 @@ import {
   evaluate,
   type OutputAliasDefinition,
 } from "./github-expression";
+import { guardEnforcesLine } from "./guard-rollouts";
 import { customLintTestCommand } from "./run-custom-lint-tests";
 import { unlistedTests } from "./run-unlisted-script-tests";
 import {
@@ -390,7 +391,11 @@ const readDefaultOnContexts = (): readonly DefaultOnContext[] => {
 };
 
 const trackedFiles = (): string[] =>
-  execFileSync("git", ["ls-files", "-z"], { cwd: ROOT, encoding: "utf-8" })
+  execFileSync("git", ["ls-files", "-z"], {
+    cwd: ROOT,
+    encoding: "utf-8",
+    maxBuffer: 2 ** 30,
+  })
     .split("\0")
     .filter(Boolean)
     .toSorted(compareCodeUnit);
@@ -819,7 +824,7 @@ const assignedRegistrationAlias = (
 const registrationAliases = (source: ts.SourceFile) => {
   const aliases = new Map<string, RegistrationName>();
   const declarations = new Map<string, ts.VariableDeclaration>();
-  const invalidBindings: { name: string; reason: string }[] = [];
+  const invalidBindings: { name: string; reason: string; node: ts.Node }[] = [];
   for (const registration of TEST_REGISTRATIONS) {
     aliases.set(registration, {
       type: "resolved",
@@ -906,7 +911,7 @@ const registrationAliases = (source: ts.SourceFile) => {
     }
     if (reason !== undefined) {
       aliases.set(name, { type: "unresolved", reason });
-      invalidBindings.push({ name, reason });
+      invalidBindings.push({ name, reason, node: declaration ?? source });
     }
   }
   return { aliases, invalidBindings };
@@ -980,17 +985,8 @@ const registrationReference = (node: ts.Expression): ts.Expression => {
   return reference;
 };
 
-export const parseTestRegistrations = (
-  file: string,
-  sourceText: string,
-): RegistrationFinding[] => {
-  const source = parseTypeScript(file, sourceText);
-  const { aliases, invalidBindings } = registrationAliases(source);
-
-  const constantTitles = constantStringBindings(source);
-
-  const gateAliases = serviceGateAliases(source);
-  const serviceConditions = new Map(
+const registrationServiceConditions = (source: ts.SourceFile) =>
+  new Map(
     SERVICE_GATES.map((gate) => [
       gate,
       serviceConditionEvaluator({
@@ -1001,13 +997,37 @@ export const parseTestRegistrations = (
     ]),
   );
 
-  const findings: RegistrationFinding[] = invalidBindings.map(
-    ({ name, reason }) => ({
-      type: "unresolved",
-      identity: `${file}::<registration alias ${name}>`,
-      reason,
-    }),
-  );
+export const parseTestRegistrations = (
+  file: string,
+  sourceText: string,
+  enforcesLine?: (line: number) => boolean,
+): RegistrationFinding[] => {
+  const source = parseTypeScript(file, sourceText);
+  const { aliases, invalidBindings } = registrationAliases(source);
+
+  const constantTitles = constantStringBindings(source);
+
+  const gateAliases = serviceGateAliases(source);
+  const serviceConditions = registrationServiceConditions(source);
+
+  const findings: RegistrationFinding[] = [];
+  const recordFinding = (finding: RegistrationFinding, node: ts.Node) => {
+    const line =
+      source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
+    if (enforcesLine === undefined || enforcesLine(line)) {
+      findings.push(finding);
+    }
+  };
+  for (const { name, reason, node } of invalidBindings) {
+    recordFinding(
+      {
+        type: "unresolved",
+        identity: `${file}::<registration alias ${name}>`,
+        reason,
+      },
+      node,
+    );
+  }
   const suites: string[] = [];
   const enclosingServiceGate = (
     node: ts.CallExpression,
@@ -1057,11 +1077,14 @@ export const parseTestRegistrations = (
         source,
         node,
       });
-      findings.push({
-        type: "unresolved",
-        identity,
-        reason: registration.reason,
-      });
+      recordFinding(
+        {
+          type: "unresolved",
+          identity,
+          reason: registration.reason,
+        },
+        node,
+      );
       ts.forEachChild(node, visit);
       return;
     }
@@ -1115,11 +1138,20 @@ export const parseTestRegistrations = (
         : controlledGate;
     if (title === undefined) {
       if (isOnly || isDisabled) {
-        findings.push({
-          identity: registrationIdentity({ file, title, suites, source, node }),
-          ...(managedServiceGate === undefined ? {} : { managedServiceGate }),
-          type: isOnly ? "only" : "disabled",
-        });
+        recordFinding(
+          {
+            identity: registrationIdentity({
+              file,
+              title,
+              suites,
+              source,
+              node,
+            }),
+            ...(managedServiceGate === undefined ? {} : { managedServiceGate }),
+            type: isOnly ? "only" : "disabled",
+          },
+          node,
+        );
       }
       ts.forEachChild(node, visit);
       return;
@@ -1132,10 +1164,10 @@ export const parseTestRegistrations = (
       node,
     });
     if (isOnly) {
-      findings.push({ identity, type: "only" });
+      recordFinding({ identity, type: "only" }, node);
     }
     if (isDisabled) {
-      findings.push(
+      recordFinding(
         managedServiceGate === undefined
           ? {
               identity,
@@ -1143,6 +1175,7 @@ export const parseTestRegistrations = (
               ...platformMetadata,
             }
           : { identity, managedServiceGate, type: "disabled" },
+        node,
       );
     }
 
@@ -2756,6 +2789,7 @@ const BUN_VALUE_ARGUMENTS = new Set([
 const BUN_BOOLEAN_ARGUMENTS = new Set([
   "--coverage",
   "--concurrent",
+  "--isolate",
   "--randomize",
   "--update-snapshots",
   "-u",
@@ -3301,17 +3335,24 @@ const executableMatrixLegs = ({
   if (isRecord(matrix) && !hasDynamicMatrix(job)) {
     return { type: "resolved", legs: matrixLegs(job) } as const;
   }
-  if (typeof matrix !== "string") {
+  let matrixExpression: unknown;
+  if (typeof matrix === "string") {
+    matrixExpression = matrix;
+  } else if (isRecord(matrix) && Object.keys(matrix).length === 1) {
+    matrixExpression = matrix["shard"];
+  }
+  if (typeof matrixExpression !== "string") {
     return {
       type: "unresolved",
       reason:
         "job matrix: selection is not literal or a registered shard producer",
     } as const;
   }
-  const reference =
-    /^fromJSON\(needs\.(?<job>[\w-]+)\.outputs\.(?<output>[\w-]+)\)$/u.exec(
-      conditionExpression(matrix),
-    )?.groups;
+  const matrixOutputPath = isRecord(matrix) ? "\\.shard" : "";
+  const reference = new RegExp(
+    `^fromJSON\\(needs\\.(?<job>[\\w-]+)\\.outputs\\.(?<output>[\\w-]+)\\)${matrixOutputPath}$`,
+    "u",
+  ).exec(conditionExpression(matrixExpression))?.groups;
   const jobName = reference?.["job"];
   const output = reference?.["output"];
   if (jobName === undefined || output === undefined) {
@@ -3335,24 +3376,16 @@ const executableMatrixLegs = ({
       entry.job === jobName &&
       entry.stepId === exported?.["step"] &&
       entry.outputNames.includes(exported["output"] ?? "") &&
-      entry.declaredShards !== undefined,
+      entry.declaredMatrix !== undefined,
   );
-  if (
-    producer?.declaredShards === undefined ||
-    producer.declaredShards.length === 0 ||
-    !producer.declaredShards.every((shard) =>
-      Object.hasOwn(TEST_JOB_SHARDS, shard),
-    )
-  ) {
+  const declaredMatrix = producer?.declaredMatrix;
+  if (declaredMatrix === undefined || declaredMatrix.length === 0) {
     return {
       type: "unresolved",
       reason: "job matrix: registered producer has no proven shard set",
     } as const;
   }
-  return {
-    type: "resolved",
-    legs: producer.declaredShards.map((shard) => ({ shard })),
-  } as const;
+  return { type: "resolved", legs: declaredMatrix } as const;
 };
 
 const hasDynamicMatrix = (job: Record<string, unknown>): boolean => {
@@ -3876,7 +3909,16 @@ export const referencedCollectorOutputs = (
       }
       collect(name, root?.["if"]);
       collect(name, job["if"]);
-      collect(name, workflowRecord(job["strategy"])?.["matrix"]);
+      const matrix = workflowRecord(
+        workflowRecord(job["strategy"])?.["matrix"],
+      );
+      if (matrix === undefined) {
+        collect(name, workflowRecord(job["strategy"])?.["matrix"]);
+      } else {
+        for (const expression of Object.values(matrix)) {
+          collect(name, expression);
+        }
+      }
       collect(name, step["if"]);
     }
   }
@@ -5854,12 +5896,19 @@ const pinnedScenarioFailure = ({
   if (effectiveWorkingDirectory({ root, job, step }) !== ".") {
     return `pinned collector: ${stepName} does not use the pinned repository working-directory`;
   }
-  const shards = new Set(matrixLegs(job).map((leg) => leg["shard"]));
+  const matrix = executableMatrixLegs({
+    job,
+    root: root ?? {},
+    registry: TRUSTED_OUTPUT_PRODUCERS,
+  });
+  const shards = new Set(
+    matrix.type === "resolved" ? matrix.legs.map((leg) => leg["shard"]) : [],
+  );
   if (
-    hasDynamicMatrix(job) ||
+    matrix.type === "unresolved" ||
     allE2eShards().some((shard) => !shards.has(shard))
   ) {
-    return `pinned collector: ${jobId} does not declare the complete literal shard partition`;
+    return `pinned collector: ${jobId} does not resolve to the complete proven shard partition`;
   }
   const shell = effectiveWorkflowShell({
     root,
@@ -6384,6 +6433,89 @@ const validateExecutionTopology = (errors: string[]): void => {
   }
 };
 
+type RegistrationCensusOptions = {
+  readonly files: readonly string[];
+  readonly disabledLedger: DisabledLedger;
+  readonly enforcedFiles: ReadonlySet<string>;
+  readonly enforcesLine: (file: string, line: number) => boolean;
+  readonly progress: (phase: string) => void;
+};
+
+const registrationCensusFailures = ({
+  files,
+  disabledLedger,
+  enforcedFiles,
+  enforcesLine,
+  progress,
+}: RegistrationCensusOptions): string[] => {
+  const errors: string[] = [];
+  const progressInterval = 100;
+  const managedGates = new Set(disabledLedger.managedServiceGates);
+  const actualDisabled: string[] = [];
+  const enforcedDisabled = new Set<string>();
+  for (const [index, file] of files.entries()) {
+    if (index % progressInterval === 0) {
+      progress(`registrations ${index}/${files.length}: ${file}`);
+    }
+    const source = readFileSync(path.join(ROOT, file), "utf-8");
+    const findings = parseTestRegistrations(file, source);
+    for (const finding of findings) {
+      if (
+        finding.type === "disabled" &&
+        (finding.managedServiceGate === undefined ||
+          !managedGates.has(finding.managedServiceGate))
+      ) {
+        actualDisabled.push(finding.identity);
+      }
+    }
+    if (!enforcedFiles.has(file)) {
+      continue;
+    }
+    for (const finding of parseTestRegistrations(file, source, (line) =>
+      enforcesLine(file, line),
+    )) {
+      switch (finding.type) {
+        case "only":
+          errors.push(`${finding.identity}: .only is forbidden`);
+          break;
+        case "unresolved":
+          errors.push(`${finding.identity}: ${finding.reason}`);
+          break;
+        case "disabled":
+          if (
+            finding.managedServiceGate === undefined ||
+            !managedGates.has(finding.managedServiceGate)
+          ) {
+            enforcedDisabled.add(finding.identity);
+          }
+          break;
+        default:
+          panic(`Unrecognized finding: ${String(finding satisfies never)}`);
+      }
+    }
+  }
+  progress("validate disabled-state ledger");
+  const actual = [...new Set(actualDisabled)].toSorted(compareCodeUnit);
+  const expected = disabledLedger.identities;
+  for (const identity of actual) {
+    if (!expected.includes(identity) && enforcedDisabled.has(identity)) {
+      errors.push(`${identity}: disabled state is not ledgered`);
+    }
+  }
+  for (const identity of expected) {
+    if (
+      !actual.includes(identity) &&
+      enforcedFiles.has(
+        identity.split("::").at(0) ??
+          panic(`Missing registration file: ${identity}`),
+      )
+    ) {
+      errors.push(`${identity}: stale disabled-state ledger entry`);
+    }
+  }
+  return errors;
+};
+
 const run = (): void => {
   const started = performance.now();
   const progress = (phase: string) => {
@@ -6417,6 +6549,15 @@ const run = (): void => {
   )) {
     errors.push(`scenario ledger is shrink-only: added ${file}`);
   }
+  const enforcesLine = (file: string, line: number) =>
+    guardEnforcesLine({ guard: "test-gate", file, line });
+  const enforcedFiles = new Set(
+    files.filter((file) =>
+      readFileSync(path.join(ROOT, file), "utf-8")
+        .split("\n")
+        .some((_, index) => enforcesLine(file, index + 1)),
+    ),
+  );
   const scenarios = new Map(
     nonGating.map((scenario) => [scenario.file, scenario]),
   );
@@ -6434,7 +6575,7 @@ const run = (): void => {
       progress(`collection ${index}/${files.length}: ${file}`);
     }
     const brokenEdge = firstCollectionFailure({ file, scenarios });
-    if (brokenEdge !== undefined) {
+    if (brokenEdge !== undefined && enforcedFiles.has(file)) {
       errors.push(`${file}: ${brokenEdge}`);
     }
   }
@@ -6452,51 +6593,19 @@ const run = (): void => {
       source: readFileSync(path.join(ROOT, file), "utf-8"),
       topology: repositoryTestExecutionTopology(),
     });
-    if (failure !== undefined) {
+    if (failure !== undefined && enforcedFiles.has(file)) {
       errors.push(`${entry.identity}: ${failure}`);
     }
   }
-  const managedGates = new Set(disabledLedger.managedServiceGates);
-  const actualDisabled: string[] = [];
-  for (const [index, file] of files.entries()) {
-    if (index % progressInterval === 0) {
-      progress(`registrations ${index}/${files.length}: ${file}`);
-    }
-    const source = readFileSync(path.join(ROOT, file), "utf-8");
-    for (const finding of parseTestRegistrations(file, source)) {
-      switch (finding.type) {
-        case "only":
-          errors.push(`${finding.identity}: .only is forbidden`);
-          break;
-        case "unresolved":
-          errors.push(`${finding.identity}: ${finding.reason}`);
-          break;
-        case "disabled":
-          if (
-            finding.managedServiceGate === undefined ||
-            !managedGates.has(finding.managedServiceGate)
-          ) {
-            actualDisabled.push(finding.identity);
-          }
-          break;
-        default:
-          panic(`Unrecognized finding: ${String(finding satisfies never)}`);
-      }
-    }
-  }
-  progress("validate disabled-state ledger");
-  const actual = [...new Set(actualDisabled)].toSorted(compareCodeUnit);
-  const expected = disabledLedger.identities;
-  for (const identity of actual) {
-    if (!expected.includes(identity)) {
-      errors.push(`${identity}: disabled state is not ledgered`);
-    }
-  }
-  for (const identity of expected) {
-    if (!actual.includes(identity)) {
-      errors.push(`${identity}: stale disabled-state ledger entry`);
-    }
-  }
+  errors.push(
+    ...registrationCensusFailures({
+      files,
+      disabledLedger,
+      enforcedFiles,
+      enforcesLine,
+      progress,
+    }),
+  );
   if (errors.length > 0) {
     console.error(errors.join("\n"));
     process.exitCode = 1;

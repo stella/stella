@@ -1,21 +1,8 @@
 import { defineConfig } from "@playwright/test";
-import path from "node:path";
 
-import marketingBaseConfig from "@stll/playwright-tools/marketing-config";
+import marketingConfig from "@stll/playwright-tools/landing-marketing-config";
 
-const REPO_ROOT = path.resolve(import.meta.dirname, "../../..");
-
-export default defineConfig(marketingBaseConfig, {
-  retries: 0,
+export default defineConfig(marketingConfig, {
   testDir: ".",
-  testMatch: /landing-.*\.spec\.ts$/u,
-  outputDir: path.join(REPO_ROOT, "apps/landing/test-results"),
-  projects: [
-    {
-      name: "landing",
-      use: {
-        baseURL: process.env["E2E_LANDING_URL"] ?? "http://localhost:4321",
-      },
-    },
-  ],
+  retries: 0,
 });

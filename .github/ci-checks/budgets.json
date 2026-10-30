@@ -150,6 +150,10 @@
     }
   },
   "ci-checks-rest": {
+    "Check test execution paths and disabled states": {
+      "minutes": 30,
+      "samples": 0
+    },
     "Content delivery declarations": {
       "minutes": 9,
       "samples": 18,
@@ -197,6 +201,10 @@
       "samples": 19,
       "p95Seconds": 35,
       "p99Seconds": 35
+    },
+    "Test depth repository scripts": {
+      "minutes": 30,
+      "samples": 0
     },
     "Test remaining repository scripts": {
       "minutes": 35,
@@ -640,6 +648,10 @@
       "p95Seconds": 32,
       "p99Seconds": 32
     },
+    "Test staging proof readiness": {
+      "minutes": 30,
+      "samples": 0
+    },
     "Test documentation and landing CI scope": {
       "minutes": 5,
       "samples": 19,
@@ -963,14 +975,6 @@
       "samples": 11,
       "p95Seconds": 0,
       "p99Seconds": 0
-    },
-    "Test staging proof readiness": {
-      "minutes": 30,
-      "samples": 0
-    },
-    "Test depth repository scripts": {
-      "minutes": 30,
-      "samples": 0
     }
   },
   "code-quality-web-rest": {

@@ -1,4 +1,5 @@
 import { FULL_TEST_JOB_SHARDS } from "./api-test-shard-plan";
+import { allE2eMatrix } from "./e2e-spec-shards-core";
 
 export type TrustedOutputProducer = {
   readonly workflow: string;
@@ -7,7 +8,9 @@ export type TrustedOutputProducer = {
   readonly outputNames: readonly string[];
   readonly semantics: "selection" | "content-reuse";
   readonly proofTest: string;
-  readonly declaredShards?: readonly string[];
+  readonly declaredMatrix?: readonly Readonly<
+    Record<string, string | number>
+  >[];
 };
 
 export const TRUSTED_OUTPUT_PRODUCERS = [
@@ -31,9 +34,17 @@ export const TRUSTED_OUTPUT_PRODUCERS = [
     workflow: ".github/workflows/ci.yml",
     job: "ci-plan",
     stepId: "completed-depth",
-    outputNames: ["normal_completion", "pr_depth_reused", "run_required"],
+    outputNames: ["normal_completion", "pr_depth_reused"],
     semantics: "selection",
     proofTest: "scripts/ci-completed-depth.test.ts",
+  },
+  {
+    workflow: ".github/workflows/ci.yml",
+    job: "ci-plan",
+    stepId: "suites",
+    outputNames: ["run_required"],
+    semantics: "selection",
+    proofTest: "scripts/ci-plan.test.ts",
   },
   {
     workflow: ".github/workflows/ci.yml",
@@ -90,9 +101,10 @@ export const TRUSTED_OUTPUT_PRODUCERS = [
     workflow: ".github/workflows/ci.yml",
     job: "ci-plan",
     stepId: "e2e-pr-plan",
-    outputNames: ["required"],
+    outputNames: ["matrix", "required"],
     semantics: "selection",
     proofTest: "scripts/detect-e2e-changes.test.ts",
+    declaredMatrix: allE2eMatrix().shard.map((shard) => ({ shard })),
   },
   {
     workflow: ".github/workflows/ci.yml",
@@ -101,7 +113,7 @@ export const TRUSTED_OUTPUT_PRODUCERS = [
     outputNames: ["ci_tests_matrix", "ci_tests_required"],
     semantics: "selection",
     proofTest: "scripts/ci-plan.test.ts",
-    declaredShards: FULL_TEST_JOB_SHARDS,
+    declaredMatrix: FULL_TEST_JOB_SHARDS.map((shard) => ({ shard })),
   },
   {
     workflow: ".github/workflows/ci.yml",

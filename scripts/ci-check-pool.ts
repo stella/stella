@@ -388,26 +388,6 @@ const POOL_ENV = [
 ];
 const active = new Set<number>();
 
-export const activeCheckOutput = (name: string, log: number): string => {
-  const limit = 16_384;
-  let output: string;
-  try {
-    const size = fstatSync(log).size;
-    const tail = Buffer.alloc(Math.min(size, limit));
-    const bytes = readSync(
-      log,
-      tail,
-      0,
-      tail.length,
-      Math.max(0, size - limit),
-    );
-    output = tail.toString("utf-8", 0, bytes);
-  } catch {
-    output = "Partial check output is unavailable.";
-  }
-  // An unfinished check may be exercising workflow-command fixtures.
-  return `Active check at interruption: ${name.replaceAll(/\r?\n/gu, " ")}\n${checkLogText(output, "success")}\n`;
-};
 const killGroup = (pid: number) => {
   try {
     process.kill(-pid, "SIGKILL");
@@ -614,7 +594,7 @@ export const processLauncher =
     const budget = budgetMinutes(check);
     const script = path.join(directory, `${String(index).padStart(3, "0")}.sh`);
     writeFileSync(script, check.run);
-    const log = openSync(logPath(directory, index), "w+");
+    const log = openSync(logPath(directory, index), "w");
     const inherited = Object.fromEntries(
       Object.entries(process.env).filter(([key]) => !POOL_ENV.includes(key)),
     );

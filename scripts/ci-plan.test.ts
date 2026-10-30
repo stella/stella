@@ -7266,7 +7266,8 @@ test("API planning only loads dependencies after installation and emits install-
         (producer) => producer.stepId === "api-tests",
       );
       const declaredShards =
-        declared?.declaredShards ?? panic("Missing declared API shard set");
+        declared?.declaredMatrix?.map((leg) => leg["shard"]) ??
+        panic("Missing declared API shard set");
       const emittedMatrix = v.parse(
         v.object({ shard: v.array(v.string()) }),
         JSON.parse(matrixLine?.slice("ci_tests_matrix=".length) ?? "null"),
