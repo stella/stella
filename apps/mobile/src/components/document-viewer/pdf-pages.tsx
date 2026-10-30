@@ -262,7 +262,7 @@ const PdfPage = ({
       ref={canvas}
       style={{
         background: "white",
-        boxShadow: "0 1px 3px rgb(0 0 0 / 0.18)",
+        boxShadow: "0 0 0 1px var(--border)",
         display: "block",
         filter: invert ? DARK_PAGE_FILTER : "none",
         height,
