@@ -9,6 +9,10 @@ import {
 import type { RequiredMigrationIndex } from "@/api/lib/db/migration-history";
 import { decisionDateNotBeforeFilingYearSql } from "@/api/lib/decision-date-bounds-sql";
 
+/** Filing-year replacements rebuild the indexes the catalog records, including this predicate. */
+export const CASE_LAW_FILING_YEAR_FUNCTION_SIGNATURE =
+  "public.decision_docket_filing_year(text,text)";
+
 export const CASE_LAW_COVERAGE_INDEX = {
   createSql: `CREATE INDEX CONCURRENTLY "case_law_decisions_source_decision_date_coverage_idx" ON public."case_law_decisions" USING btree ("source_id", "decision_date", "id") WHERE ${publishedCaseLawDecisionIndexPredicateSql()}`,
   definitionBody: `ON public.case_law_decisions USING btree (source_id, decision_date, id) WHERE ${publishedCaseLawDecisionIndexDefinitionPredicateSql()}`,

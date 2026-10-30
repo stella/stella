@@ -96,6 +96,18 @@ const createNativeFingerprint = async (
         contents: releaseLine(APP_VERSION),
         reasons: ["releaseLine"],
       },
+      ...(platform === "ios"
+        ? [
+            "metro.config.cjs",
+            "widgets.metro.config.cjs",
+            "scripts/build-widget-bundle.mjs",
+            "scripts/xcode-widget-bundle.sh",
+          ].map((filePath) => ({
+            type: "file" as const,
+            filePath,
+            reasons: ["widgetBundle"],
+          }))
+        : []),
       // Copied into the asset catalog at prebuild, out of the config's sight.
       {
         type: "dir",
