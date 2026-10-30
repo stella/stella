@@ -281,6 +281,35 @@ ${step}`,
   expect(digest(after, CALLEE)).not.toBe(digest(before, CALLEE));
 });
 
+test("a privileged event reaches a callee through an intermediate workflow", () => {
+  const nested = (step: string) =>
+    jobsFor({
+      ".github/workflows/caller.yml": `on: pull_request_target
+permissions: {}
+jobs:
+  call:
+    uses: ./.github/workflows/middle.yml
+`,
+      ".github/workflows/middle.yml": `on: workflow_call
+jobs:
+  call:
+    uses: ./.github/workflows/shared.yml
+`,
+      ".github/workflows/shared.yml": `on: workflow_call
+jobs:
+  check:
+    permissions: {contents: read}
+    runs-on: ubuntu-latest
+    steps:
+${step}`,
+    });
+  const before = nested("      - run: echo check\n");
+  const after = nested("      - run: echo check\n      - run: echo more\n");
+
+  expect(before.get(CALLEE)?.privileged).toBe(true);
+  expect(digest(after, CALLEE)).not.toBe(digest(before, CALLEE));
+});
+
 test("a job reading all secrets as JSON is privileged", () => {
   const jobs = jobsFor({
     ".github/workflows/caller.yml": `on: push

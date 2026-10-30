@@ -51,6 +51,25 @@ export const reachableJobDocuments = ({
   return documents;
 };
 
+/**
+ * The token grant a reusable-workflow call passes to its callee: the caller's
+ * own permissions, else its workflow's, else what the caller itself inherited,
+ * so a grant reaches every level of nested calls.
+ */
+const outgoingGrant = (
+  callerShape: Readonly<Record<string, unknown>>,
+  callerInherited: ReadonlyMap<string, unknown> | undefined,
+): unknown =>
+  callerShape["permissions"] ??
+  callerShape["workflow-permissions"] ??
+  (callerInherited?.size
+    ? Object.fromEntries(
+        [...callerInherited.entries()].toSorted(([left], [right]) =>
+          compareCodeUnit(left, right),
+        ),
+      )
+    : "read");
+
 export const deriveJobPrivileges = ({
   nodes,
   parsedDocuments,
@@ -88,6 +107,9 @@ export const deriveJobPrivileges = ({
     }
   }
 
+  // Jobs that run in the context of a privileged event, directly or through
+  // any chain of reusable-workflow calls.
+  const privilegedEventJobs = new Set<string>();
   let privilegeChanged = true;
   while (privilegeChanged) {
     privilegeChanged = false;
@@ -114,28 +136,24 @@ export const deriveJobPrivileges = ({
           if (!callee || !calleeNode || calleeNode.type !== "metadata") {
             continue;
           }
-          // A caller without its own permissions passes on what it inherited
-          // from its callers, so a grant reaches every level of nested calls.
-          const callerInherited = inheritedGrants.get(callerKey);
-          const grant =
-            caller.shape.job["permissions"] ??
-            caller.shape.job["workflow-permissions"] ??
-            (callerInherited?.size
-              ? Object.fromEntries(
-                  [...callerInherited.entries()].toSorted(([left], [right]) =>
-                    compareCodeUnit(left, right),
-                  ),
-                )
-              : "read");
+          const grant = outgoingGrant(
+            caller.shape.job,
+            inheritedGrants.get(callerKey),
+          );
           // A callee's own permissions can only narrow a token grant; under a
           // privileged event the callee runs in that context regardless.
           const privilegedEvent =
-            caller.shape.job["workflow-privileged-event"] === true;
+            caller.shape.job["workflow-privileged-event"] === true ||
+            privilegedEventJobs.has(callerKey);
           for (const [calleeJobId, calleeJob] of Object.entries(callee.jobs)) {
             if ("permissions" in calleeJob.shape.job && !privilegedEvent) {
               continue;
             }
             const calleeKey = `${calleeNode.repository}:${calleeNode.path}/${calleeJobId}`;
+            if (privilegedEvent && !privilegedEventJobs.has(calleeKey)) {
+              privilegedEventJobs.add(calleeKey);
+              privilegeChanged = true;
+            }
             const grants = inheritedGrants.get(calleeKey) ?? new Map();
             // Reusable workflows cannot call themselves, so grants settle.
             if (
