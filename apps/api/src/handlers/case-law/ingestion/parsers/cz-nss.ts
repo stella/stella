@@ -27,7 +27,7 @@
 
 import { Result } from "better-result";
 import * as cheerio from "cheerio";
-import { isComment, isText } from "domhandler";
+import { isComment, isTag, isText } from "domhandler";
 import type { AnyNode } from "domhandler";
 
 import { parseDecimalToken } from "@stll/agent-input/numeric-token";
@@ -52,6 +52,7 @@ import type {
 import { normalizeInlineLine } from "@stll/legal-ast/inline-line";
 import { normalizeUnicode } from "@stll/text-normalize";
 
+import { inlineStyleValue } from "@/api/lib/legal-search/document-builders/inline-style";
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 import {
   collapseLetterSpacing,
@@ -447,6 +448,42 @@ const paragraphLayoutOf = (style: string): PChunk["paragraphLayout"] => {
   return "unknown";
 };
 
+const TEXT_ALIGN_VALUES: ReadonlySet<string> = new Set([
+  "left",
+  "right",
+  "center",
+  "justify",
+  "start",
+  "end",
+]);
+
+/** Whether an element's own style centres it, read as the cascade reads it. */
+const styleCentres = (node: AnyNode | undefined): boolean =>
+  node !== undefined &&
+  isTag(node) &&
+  inlineStyleValue(node, (property, value) =>
+    property === "text-align" && TEXT_ALIGN_VALUES.has(value)
+      ? { value: value === "center" }
+      : undefined,
+  )?.value === true;
+
+const FONT_WEIGHT_RE = /^(?:normal|bold|bolder|lighter|\d{1,4})$/u;
+const BOLD_WEIGHT = 600;
+
+/** Whether an element's own style sets it bold, read as the cascade reads it. */
+const styleSetsBold = (node: AnyNode): boolean =>
+  isTag(node) &&
+  inlineStyleValue(node, (property, value) =>
+    property === "font-weight" && FONT_WEIGHT_RE.test(value)
+      ? {
+          value:
+            value === "bold" ||
+            value === "bolder" ||
+            Number(value) >= BOLD_WEIGHT,
+        }
+      : undefined,
+  )?.value === true;
+
 /**
  * One leaf paragraph or <div> as a chunk, its heading cues read from the
  * inline style: centring, font size, a mostly-bold run and letter spacing.
@@ -464,12 +501,12 @@ const styledBlockChunk = (
   }
 
   const boldText = visibleHtmlText(
-    $el.find("span[style*='font-weight:bold']"),
+    $el.find("span").filter((_, span) => styleSetsBold(span)),
   ).trim();
   return {
     inlines,
     plainText,
-    centered: style.includes("text-align:center"),
+    centered: styleCentres($el.get(0)),
     bold: boldText.length > 0 && boldText.length >= plainText.length * 0.7,
     letterSpacing:
       style.includes("letter-spacing") ||
@@ -655,12 +692,11 @@ const extractChunks = ($: cheerio.CheerioAPI): PChunk[] => {
         }
 
         // A centred bold item is the court's numbered section heading.
-        const itemStyle = $li.attr("style") ?? "";
         chunks.push({
           inlines,
           plainText,
-          centered: itemStyle.includes("text-align:center"),
-          bold: itemStyle.includes("font-weight:bold"),
+          centered: styleCentres(liEl),
+          bold: styleSetsBold(liEl),
           letterSpacing: false,
           fontSize: 12,
           paragraphLayout: "unknown",

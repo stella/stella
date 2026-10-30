@@ -1236,6 +1236,57 @@ test("preserves inline spacing around unknown wrappers and every heading", () =>
   }
 });
 
+describe("layout read from inline style", () => {
+  type SectionStyles = { centred: string; weight: string };
+
+  // A section set as a list item, and one the court renumbered by hand as a
+  // centred paragraph whose bold run prints its own numeral.
+  const withSections = ({ centred, weight }: SectionStyles): string =>
+    nssUnitDecisionHtml.replace(
+      "<p>[2] Krajský soud",
+      () =>
+        `<ol><li style="${centred};${weight}">Vymezení věci</li></ol><p style="${centred}"><span style="${weight}">2. Posouzení věci</span></p><p>[2] Krajský soud`,
+    );
+
+  const sectionTypes = (styles: SectionStyles) =>
+    parseNssDecisionHtml(baseInput(withSections(styles)))
+      .documentAst.blocks.filter((block) =>
+        /Vymezení věci|Posouzení věci/u.test(block.plainText),
+      )
+      .map((block) => [block.type, block.plainText]);
+
+  // Declarations are read as CSS reads them, whatever their spacing, case or
+  // order: a centred bold numbered line is a section heading however the
+  // court's editor wrote its style.
+  test.each([
+    { centred: "text-align:center", weight: "font-weight:bold" },
+    { centred: "text-align: center", weight: "font-weight: bold" },
+    { centred: "TEXT-ALIGN : Center ", weight: " Font-Weight : 700 " },
+    {
+      centred: "text-align: left; text-align: center",
+      weight: "font-weight: normal; font-weight: bold",
+    },
+    {
+      centred: "text-align: center !important; text-align: left",
+      weight: "font-weight: bold !important; font-weight: normal",
+    },
+  ])("reads section headings from style %p", (styles) => {
+    expect(sectionTypes(styles)).toEqual([
+      ["heading", "1. Vymezení věci"],
+      ["heading", "2. Posouzení věci"],
+    ]);
+  });
+
+  test("a later declaration that is not centred wins over an earlier one", () => {
+    expect(
+      sectionTypes({
+        centred: "text-align: center; text-align: left",
+        weight: "font-weight: bold",
+      }).map(([type]) => type),
+    ).toEqual(["paragraph", "paragraph"]);
+  });
+});
+
 describe("table caption retention", () => {
   test("keeps caption text once before its row in source order", () => {
     const { documentAst } = parseNssDecisionHtml(
