@@ -315,6 +315,15 @@ export const parseStableVersion = (value: string): StableVersion => {
   };
 };
 
+/**
+ * The previous release is the most recently created final tag, not the
+ * highest version: the version line restarted once (v2.9.0 predates v0.9.x),
+ * so numeric order names a release that is long superseded. Takes tag names
+ * newest first by creation date.
+ */
+export const newestFinalTag = (tagsNewestFirst: readonly string[]) =>
+  tagsNewestFirst.find((tag) => /^v[0-9]+\.[0-9]+\.[0-9]+$/u.test(tag));
+
 export const nextPatchVersion = (current: StableVersion): StableVersion => {
   const patch = current.patch + 1;
   if (!Number.isSafeInteger(patch)) {
@@ -1539,11 +1548,9 @@ const productionCutEffects = (rootDir: string): MaintenanceCutEffects => ({
       "tag",
       "--list",
       "v*",
-      "--sort=-v:refname",
+      "--sort=-creatordate",
     ]);
-    const latest = tags
-      ?.split("\n")
-      .find((tag) => /^v[0-9]+\.[0-9]+\.[0-9]+$/u.test(tag));
+    const latest = newestFinalTag(tags?.split("\n") ?? []);
     if (!latest) {
       throw new MaintenanceReleaseError("No final release tag exists");
     }

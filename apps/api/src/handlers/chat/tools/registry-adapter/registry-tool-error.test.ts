@@ -57,13 +57,17 @@ describe("registry tool error projection", () => {
         contactUrl: "https://example.test/contact",
       } as const satisfies InternalToolError;
       const projected = toRegistryChatToolError(error);
-      const permanentKind =
-        code === ACTION_ADMISSION_CODES.periodExhausted
-          ? "limit"
-          : "unavailable";
-      expect(projected.kind).toBe(
-        metadata.retryable ? "transient" : permanentKind,
-      );
+      let expectedKind: typeof projected.kind = "unavailable";
+      if (code === ACTION_ADMISSION_CODES.periodExhausted) {
+        expectedKind = "limit";
+      }
+      if (code === ACTION_ADMISSION_CODES.configurationIncomplete) {
+        expectedKind = "server-defect";
+      }
+      if (metadata.retryable) {
+        expectedKind = "transient";
+      }
+      expect(projected.kind).toBe(expectedKind);
       expect(JSON.parse(projected.message)).toEqual({
         error: {
           code,

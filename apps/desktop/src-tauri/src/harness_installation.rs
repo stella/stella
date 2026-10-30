@@ -401,6 +401,20 @@ impl HarnessInstallation {
     ))
   }
 
+  /// Removes the harness's own sign-in from its Stella-owned configuration
+  /// directory, leaving its settings and sessions in place.
+  pub fn remove_sign_in(&self, harness: ManagedHarness) -> std::io::Result<()> {
+    let dir = self.0.config_root.join(harness.id());
+    for name in sign_in_files(harness) {
+      match std::fs::remove_file(dir.join(name)) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error),
+      }
+    }
+    Ok(())
+  }
+
   /// The active release's executable, held in place until the lease drops.
   /// An incomplete active release rolls the pointer back to the previous one.
   pub fn acquire(&self, harness: ManagedHarness) -> Result<HarnessLease, HarnessError> {
@@ -433,6 +447,15 @@ impl HarnessInstallation {
       executable: installed.executable,
       config_dir,
     })
+  }
+}
+
+/// The files a harness keeps its own sign-in in, inside its configuration
+/// directory. Only Codex's ChatGPT connection is managed here so far.
+fn sign_in_files(harness: ManagedHarness) -> &'static [&'static str] {
+  match harness {
+    ManagedHarness::Codex => &["auth.json"],
+    ManagedHarness::ClaudeCode => &[],
   }
 }
 
@@ -1797,6 +1820,28 @@ mod tests {
       installation.start(ManagedHarness::Codex).err(),
       Some(HarnessError::UnsupportedPlatform)
     );
+  }
+
+  #[test]
+  fn removing_the_sign_in_keeps_the_rest_of_the_home() {
+    let dir = TempDir::new();
+    let installation = HarnessInstallation::open(
+      dir.path().join("harness"),
+      dir.path().join("harness-home"),
+      HarnessReleases {
+        codex: None,
+        claude_code: None,
+      },
+    )
+    .unwrap();
+    // Nothing to remove yet.
+    installation.remove_sign_in(ManagedHarness::Codex).unwrap();
+    let home = dir.path().join("harness-home").join("codex");
+    std::fs::create_dir_all(home.join("sessions")).unwrap();
+    std::fs::write(home.join("auth.json"), b"{}").unwrap();
+    std::fs::write(home.join("config.toml"), b"").unwrap();
+    installation.remove_sign_in(ManagedHarness::Codex).unwrap();
+    assert_eq!(entries(&home), ["config.toml", "sessions"]);
   }
 
   #[test]

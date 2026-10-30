@@ -405,14 +405,35 @@ const handlerImplementation = ({
         visited,
       });
     }
-    // The handler callback comes last: `(config, handler)`, and a token
-    // handler's `(config, verifyCaller, handler)`.
-    const callback = handler.arguments.at(-1);
     if (
       factory?.kind !== "import" ||
-      factory.module !== `${API}lib/api-handlers.ts` ||
-      callback === undefined
+      factory.module !== `${API}lib/api-handlers.ts`
     ) {
+      return undefined;
+    }
+    // Optional dependencies may follow the callback. Its position belongs to
+    // the actual constructor contract, including the token verifier parameter.
+    const contractSource = access.load(factory.module);
+    if (contractSource === undefined) {
+      return undefined;
+    }
+    const contract = trustedTopLevel({
+      name: factory.exported,
+      source: parse({ file: factory.module, source: contractSource }),
+      access,
+    });
+    if (contract?.kind !== "function") {
+      return undefined;
+    }
+    const handlerPosition = contract.node.params.findIndex(
+      (parameter) =>
+        parameter.type === "Identifier" && parameter.name === "handler",
+    );
+    const callback =
+      handlerPosition === -1
+        ? undefined
+        : handler.arguments.at(handlerPosition);
+    if (callback === undefined) {
       return undefined;
     }
     return handlerImplementation({
@@ -1275,6 +1296,54 @@ const hasWorkspaceParentBatch = (
   );
 };
 
+/** The invoice owner acquires all participating matters before its invoice row. */
+const hasInvoiceMatterAcquisition = (
+  call: CallExpression,
+  access: SourceAccess,
+) => {
+  const options = call.arguments.at(1);
+  if (
+    call.callee.type !== "Identifier" ||
+    !isTrustedImport({
+      identifier: call.callee,
+      access,
+      module: REGISTRY,
+      exported: ["lockInvoiceInStatus"],
+    }) ||
+    options?.type !== "ObjectExpression" ||
+    !options.properties.every(isPropertyAssignment) ||
+    options.properties.some((property) => property.computed)
+  ) {
+    return false;
+  }
+  const workspaceIds = options.properties.filter(
+    (field) => staticPropertyKey(field) === "workspaceId",
+  );
+  const workspaceId = workspaceIds.at(0);
+  const locks = options.properties.filter(
+    (field) => staticPropertyKey(field) === "matterLocks",
+  );
+  const lock = locks.at(0);
+  if (
+    workspaceIds.length !== 1 ||
+    workspaceId === undefined ||
+    !hasLockIds(workspaceId.value) ||
+    locks.length !== 1 ||
+    lock?.value.type !== "ObjectExpression" ||
+    lock.value.properties.length !== 1
+  ) {
+    return false;
+  }
+  const type = lock.value.properties.at(0);
+  return (
+    type !== undefined &&
+    isPropertyAssignment(type) &&
+    staticPropertyKey(type) === "type" &&
+    isStringLiteral(type.value) &&
+    type.value.value === "acquire"
+  );
+};
+
 type AwaitedAggregateOptions = {
   implementation: Exclude<HandlerImplementation, undefined>;
   access: SourceAccess;
@@ -1342,6 +1411,9 @@ const awaitedAggregateNames = ({
         names.add("workspace");
       }
       if (hasWorkspaceParentBatch(node.argument, access)) {
+        names.add("workspace");
+      }
+      if (hasInvoiceMatterAcquisition(node.argument, access)) {
         names.add("workspace");
       }
       if (

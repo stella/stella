@@ -295,7 +295,7 @@
     "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
   },
   "apps/api/src/lib/chat/openrouter-credential.test.ts": {
-    "count": 12,
+    "count": 10,
     "owner": "ai",
     "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
   },
@@ -453,11 +453,6 @@
     "count": 3,
     "owner": "guards",
     "reason": "Existing environment setup and restoration; migrate through createTestState."
-  },
-  "apps/api/src/lib/stella-openrouter-text-adapter.test.ts": {
-    "count": 2,
-    "owner": "guards",
-    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
   },
   "apps/api/src/lib/tanstack-ai-provider-wire.test.ts": {
     "count": 5,
