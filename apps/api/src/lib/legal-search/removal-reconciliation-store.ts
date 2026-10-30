@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, exists, gt, inArray, isNotNull, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { DAY_IN_MS } from "@stll/time";
@@ -7,6 +7,7 @@ import { DAY_IN_MS } from "@stll/time";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
+  caseLawDecisions,
   caseLawRemovalReconciliationItems,
   caseLawSources,
 } from "@/api/db/schema";
@@ -47,6 +48,8 @@ type SelectRemovalRetriesOptions = {
   sourceId: SafeId<"caseLawSource">;
   now: Date;
   perKindLimit: number;
+  kinds?: readonly (typeof REMOVAL_RETRY_KINDS)[number][];
+  acceptedOnly?: boolean;
 };
 
 /** Each kind uses a bounded, ordered range of the same reconciliation lane. */
@@ -55,9 +58,11 @@ export const selectDueRemovalRetries = async ({
   sourceId,
   now,
   perKindLimit,
+  kinds = REMOVAL_RETRY_KINDS,
+  acceptedOnly = false,
 }: SelectRemovalRetriesOptions): Promise<RemovalRetryItem[]> => {
   const items: RemovalRetryItem[] = [];
-  for (const kind of REMOVAL_RETRY_KINDS) {
+  for (const kind of kinds) {
     // db-await-in-loop: fixed kind ranges each have their own indexed limit.
     const rows = await scopedDb(
       async (tx) =>
@@ -73,6 +78,22 @@ export const selectDueRemovalRetries = async ({
             and(
               eq(caseLawRemovalReconciliationItems.sourceId, sourceId),
               eq(caseLawRemovalReconciliationItems.kind, kind),
+              acceptedOnly
+                ? exists(
+                    tx
+                      .select({ id: caseLawDecisions.id })
+                      .from(caseLawDecisions)
+                      .where(
+                        and(
+                          eq(
+                            caseLawDecisions.id,
+                            caseLawRemovalReconciliationItems.decisionId,
+                          ),
+                          isNotNull(caseLawDecisions.redactedAt),
+                        ),
+                      ),
+                  )
+                : undefined,
               sql`${caseLawRemovalReconciliationItems.nextAttemptAt} <= ${now.toISOString()}::timestamptz`,
             ),
           )
@@ -344,9 +365,10 @@ export const persistRemovalOutcomeTx = async (
 export const nextRemovalRetryAt = async (
   scopedDb: ScopedDb,
   sourceId: SafeId<"caseLawSource">,
+  kinds: readonly (typeof REMOVAL_RETRY_KINDS)[number][] = REMOVAL_RETRY_KINDS,
 ): Promise<Date | null> => {
   let next: Date | null = null;
-  for (const kind of REMOVAL_RETRY_KINDS) {
+  for (const kind of kinds) {
     // db-await-in-loop: one earliest due timestamp per fixed kind, no history scan.
     const row = await scopedDb(async (tx) =>
       (
@@ -372,6 +394,66 @@ export const nextRemovalRetryAt = async (
   }
   return next;
 };
+
+type DueErasureSourcesOptions = {
+  scopedDb: ScopedDb;
+  after: SafeId<"caseLawSource"> | null;
+  now: Date;
+  limit: number;
+};
+
+/** Seek sources by primary key and test each source's indexed erasure range. */
+export const selectDueErasureSources = async ({
+  scopedDb,
+  after,
+  now,
+  limit,
+}: DueErasureSourcesOptions) =>
+  await scopedDb(
+    async (tx) =>
+      await tx
+        .select({ id: caseLawSources.id })
+        .from(caseLawSources)
+        .where(
+          and(
+            after === null ? undefined : gt(caseLawSources.id, after),
+            exists(
+              tx
+                .select({ id: caseLawRemovalReconciliationItems.id })
+                .from(caseLawRemovalReconciliationItems)
+                .where(
+                  and(
+                    eq(
+                      caseLawRemovalReconciliationItems.sourceId,
+                      caseLawSources.id,
+                    ),
+                    eq(
+                      caseLawRemovalReconciliationItems.kind,
+                      REMOVAL_RETRY_KIND.ERASURE,
+                    ),
+                    exists(
+                      tx
+                        .select({ id: caseLawDecisions.id })
+                        .from(caseLawDecisions)
+                        .where(
+                          and(
+                            eq(
+                              caseLawDecisions.id,
+                              caseLawRemovalReconciliationItems.decisionId,
+                            ),
+                            isNotNull(caseLawDecisions.redactedAt),
+                          ),
+                        ),
+                    ),
+                    sql`${caseLawRemovalReconciliationItems.nextAttemptAt} <= ${now.toISOString()}::timestamptz`,
+                  ),
+                ),
+            ),
+          ),
+        )
+        .orderBy(caseLawSources.id)
+        .limit(limit),
+  );
 
 /** The store owns health reads as well as durable retry transitions. */
 export const removalReconciliationCountsQuery = (

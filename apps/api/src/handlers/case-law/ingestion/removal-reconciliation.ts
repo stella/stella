@@ -34,6 +34,7 @@ import {
 } from "@/api/lib/legal-search/removal-evidence";
 import {
   REMOVAL_PENDING_REASON,
+  REMOVAL_RETRY_KIND,
   REMOVAL_UNPROBEABLE_REASON,
   removalCheckpointSchema,
 } from "@/api/lib/legal-search/removal-reconciliation-state";
@@ -77,6 +78,7 @@ const REMOVAL_SOURCE_PROBES = {
 } as const satisfies Record<string, RemovalProbe>;
 
 type SweepOptions = {
+  mode?: "publisher-discovery" | "claimed-erasures";
   scopedDb: ScopedDb;
   sourceId: SafeId<"caseLawSource">;
   signal: AbortSignal;
@@ -314,7 +316,7 @@ type ProcessRemovalDecisionOptions = {
   scopedDb: ScopedDb;
   sourceId: SafeId<"caseLawSource">;
   decisionId: SafeId<"caseLawDecision">;
-  reader: RemovalProbe;
+  reader: RemovalProbe | undefined;
   remove: typeof removePublisherDecision;
   signal: AbortSignal;
   mode: { type: "discovery" } | { type: "retry"; item: RemovalRetryItem };
@@ -399,6 +401,20 @@ const processRemovalDecision = async ({
             type: "unprobeable",
             reason: REMOVAL_UNPROBEABLE_REASON.MISSING_IDENTITY,
           };
+        }
+        if (reader === undefined) {
+          return evidence === undefined
+            ? {
+                type: "pending",
+                operation: "probe",
+                reason: REMOVAL_PENDING_REASON.OPERATION_FAILED,
+              }
+            : {
+                type: "pending",
+                operation: "erase",
+                evidence,
+                reason: REMOVAL_PENDING_REASON.STORES_PENDING,
+              };
         }
         // A queued absence is rechecked before its first irreversible redaction.
         const observed = (
@@ -543,6 +559,7 @@ type DiscoveryOptions = Required<
   Pick<SweepOptions, "sourceId" | "signal" | "now" | "remove">
 > & {
   probe: RemovalProbe | undefined;
+  mode?: "publisher-discovery" | "claimed-erasures";
   scopedDb: ScopedDb;
   deadline: number;
   clock: () => number;
@@ -721,12 +738,16 @@ const retryPublisherRemovals = async ({
   remove,
   deadline,
   clock,
+  mode,
 }: RetryOptions): Promise<{ retried: number; pauseUntil: Date | null }> => {
   const items = await selectDueRemovalRetries({
     scopedDb,
     sourceId,
     now: now(),
     perKindLimit: REMOVAL_RETRY_PER_KIND_BUDGET,
+    kinds:
+      mode === "claimed-erasures" ? [REMOVAL_RETRY_KIND.ERASURE] : undefined,
+    acceptedOnly: mode === "claimed-erasures",
   });
   let retried = 0;
   for (const item of items) {
@@ -736,12 +757,29 @@ const retryPublisherRemovals = async ({
     signal.throwIfAborted();
     // db-await-in-loop: honor the current kill switch and source CAS before every retry.
     const source = await readSource(scopedDb, sourceId);
-    if (source === undefined || source.removalCheckpoint?.status === "paused") {
+    if (source === undefined) {
       break;
     }
-    const reader = readerForSource(source, probe);
+    const reader =
+      mode === "claimed-erasures" ||
+      source.removalCheckpoint?.status === "paused"
+        ? undefined
+        : readerForSource(source, probe);
+    const isErasure =
+      item.payload.type === "pending" && item.payload.operation === "erase";
     if (reader === undefined) {
-      break;
+      if (!isErasure) {
+        continue;
+      }
+      // A publisher pause cannot prevent accepted cleanup, or authorize a new erasure.
+      const decision = await readRemovalDecision({
+        scopedDb,
+        sourceId,
+        decisionId: item.decisionId,
+      });
+      if (decision?.redactedAt === null) {
+        continue;
+      }
     }
     // db-await-in-loop: each due item has one attempt, bounded by the lane's per-kind budget.
     const outcome = await processRemovalDecision({
@@ -838,6 +876,7 @@ export const reconcilePublisherRemovals = async ({
   clock = () => performance.now(),
   probe,
   remove = removePublisherDecision,
+  mode = "publisher-discovery",
 }: SweepOptions): Promise<Result<SweepOutcome, DatabaseError>> =>
   await Result.tryPromise({
     try: async () => {
@@ -869,15 +908,12 @@ export const reconcilePublisherRemovals = async ({
         remove,
         deadline,
         clock,
+        mode,
       };
-      const prepared = await prepareRemovalRun(context);
-      if (prepared.type !== "ready") {
-        return {
-          ...prepared,
-          retried: 0,
-          nextRetryAt: prepared.type === "paused" ? prepared.resumeAt : null,
-        };
-      }
+      const prepared =
+        mode === "claimed-erasures"
+          ? { type: "ready" as const }
+          : await prepareRemovalRun(context);
       // Due erasures have their own first phase; enumeration cannot spend its reservation.
       const first = await retryPublisherRemovals({
         ...context,
@@ -892,6 +928,26 @@ export const reconcilePublisherRemovals = async ({
           nextRetryAt: first.pauseUntil,
         };
       }
+      if (mode === "claimed-erasures") {
+        return {
+          type: "complete",
+          checked: 0,
+          retried: first.retried,
+          nextRetryAt: await nextRemovalRetryAt(scopedDb, sourceId, [
+            REMOVAL_RETRY_KIND.ERASURE,
+          ]),
+        } as const;
+      }
+      if (prepared.type !== "ready") {
+        return {
+          ...prepared,
+          retried: first.retried,
+          nextRetryAt:
+            (await nextRemovalRetryAt(scopedDb, sourceId, [
+              REMOVAL_RETRY_KIND.ERASURE,
+            ])) ?? (prepared.type === "paused" ? prepared.resumeAt : null),
+        };
+      }
       const discovered = await discoverPublisherRemovals(context);
       if (discovered.type === "paused") {
         return {
@@ -904,7 +960,12 @@ export const reconcilePublisherRemovals = async ({
         return {
           ...discovered,
           retried: first.retried,
-          nextRetryAt: discovered.type === "disabled" ? null : now(),
+          nextRetryAt:
+            discovered.type === "disabled"
+              ? await nextRemovalRetryAt(scopedDb, sourceId, [
+                  REMOVAL_RETRY_KIND.ERASURE,
+                ])
+              : now(),
         };
       }
       // Fast discovery may also settle newly queued work, within the remaining run budget.

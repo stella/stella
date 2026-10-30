@@ -39,6 +39,7 @@ import { REFRESH_CASE_LAW_COVERAGE_TASK } from "@/api/lib/scheduler/tasks/case-l
 import { RECONCILE_CASE_LAW_DECISION_IDENTIFIERS_TASK } from "@/api/lib/scheduler/tasks/case-law-decision-identifier-reconciliation";
 import { REPORT_CASE_LAW_FRESHNESS_TASK } from "@/api/lib/scheduler/tasks/case-law-freshness-report";
 import { BACKFILL_CASE_LAW_PROVISION_STATE_TASK } from "@/api/lib/scheduler/tasks/case-law-provision-state-backfill";
+import { RECONCILE_CLAIMED_ERASURES_TASK } from "@/api/lib/scheduler/tasks/case-law-publisher-removals";
 import {
   CENSUS_CASE_LAW_RAW_OBJECTS_TASK,
   RECONCILE_CASE_LAW_RAW_ROWS_TASK,
@@ -489,6 +490,16 @@ export const DECLARED_SCHEDULER_JOBS = [
     },
     task: REFRESH_CASE_LAW_SOURCE_ARRIVALS_TASK,
     reads: "unmeasured",
+  },
+  {
+    description: "Complete accepted case-law erasures",
+    id: SCHEDULER_BACKFILL_IDS.claimedErasures,
+    mode: "recurring",
+    payloadUpdate: "preserve",
+    payload: { cursor: null },
+    schedule: { type: "interval", everyMs: 60 * 1000 },
+    task: RECONCILE_CLAIMED_ERASURES_TASK,
+    reads: "load-governed",
   },
   {
     description: "Delete raw objects of erased or never-written decisions",
