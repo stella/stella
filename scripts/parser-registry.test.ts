@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -21,7 +22,6 @@ import {
 
 const root = path.resolve(import.meta.dirname, "..");
 const registryDirectory = "apps/api/src/lib/legal-search/";
-const fixturesDirectory = `${registryDirectory}__fixtures__/parser-registry/`;
 
 const entrySources = () =>
   new Map(
@@ -57,28 +57,58 @@ const record = (value: unknown): Record<string, unknown> => {
   return value;
 };
 
-test("loaded parser registry preserves the base commit's keys and values", () => {
-  const expected = {
-    ADAPTER_KEYS: {},
-    IMPORT_SOURCE_KEYS: {},
-    PARSER_VERSIONS: {},
-    SOURCE_FINGERPRINT_VERSIONS: {},
-    PARSER_VERSION_SCOPES: {},
-  } satisfies Record<(typeof names)[number], Record<string, unknown>>;
-  for (const file of readdirSync(path.join(root, fixturesDirectory))) {
-    const fixture: unknown = JSON.parse(
-      readFileSync(path.join(root, fixturesDirectory, file), "utf-8"),
-    );
-    expect(fixture).toBeObject();
-    if (typeof fixture !== "object" || fixture === null) {
-      throw new TypeError(`Invalid registry fixture: ${file}`);
+const assertRegistryInvariants = (directory: string) => {
+  const loaded = record(loadRegistry(directory));
+  const adapters = record(Reflect.get(loaded, "ADAPTER_KEYS"));
+  const imports = record(Reflect.get(loaded, "IMPORT_SOURCE_KEYS"));
+  const versions = record(Reflect.get(loaded, "PARSER_VERSIONS"));
+  const fingerprints = record(
+    Reflect.get(loaded, "SOURCE_FINGERPRINT_VERSIONS"),
+  );
+  const scopes = record(Reflect.get(loaded, "PARSER_VERSION_SCOPES"));
+  const adapterKeys = Object.values(adapters).toSorted();
+  const importKeys = Object.values(imports).toSorted();
+  const sourceKeys = [...adapterKeys, ...importKeys].toSorted();
+  const entryKeys = readdirSync(path.join(directory, PARSER_ENTRY_DIRECTORY))
+    .filter((file) => file.endsWith(".ts"))
+    .map((file) => path.basename(file, ".ts"))
+    .toSorted();
+  expect(new Set(sourceKeys).size).toBe(sourceKeys.length);
+  expect(sourceKeys).toEqual(entryKeys);
+  expect(Object.keys(versions).toSorted()).toEqual(adapterKeys);
+  expect(Object.keys(scopes).toSorted()).toEqual(adapterKeys);
+  expect(Object.keys(fingerprints).toSorted()).toEqual(sourceKeys);
+  for (const fingerprint of Object.values(fingerprints)) {
+    expect(Number.isSafeInteger(fingerprint)).toBe(true);
+    expect(fingerprint).toBeGreaterThanOrEqual(0);
+  }
+  for (const [key, version] of Object.entries(versions)) {
+    expect(Number.isSafeInteger(version)).toBe(true);
+    expect(version).toBeGreaterThan(0);
+    const scope = record(Reflect.get(scopes, key));
+    expect(scope.version).toBe(version);
+    const selector = record(scope.scope);
+    if (selector.type === "all") {
+      expect(typeof selector.reason).toBe("string");
+      if (typeof selector.reason === "string") {
+        expect(selector.reason.trim().length).toBeGreaterThan(0);
+      }
+      continue;
     }
-    for (const name of names) {
-      Object.assign(expected[name], Reflect.get(fixture, name));
+    expect(selector.type).toBe("features");
+    expect(Array.isArray(selector.features)).toBe(true);
+    if (Array.isArray(selector.features)) {
+      expect(selector.features.length).toBeGreaterThan(0);
+      for (const feature of selector.features) {
+        expect(typeof feature).toBe("string");
+      }
     }
   }
-  const loaded = loadRegistry(root);
-  expect(loaded).toEqual(expected);
+  return loaded;
+};
+
+test("every source has a unique entry and complete parser or import-only metadata", () => {
+  assertRegistryInvariants(root);
 });
 
 test("generation reads regular TypeScript entry files only", () => {
@@ -131,7 +161,7 @@ test("an empty entry directory fails with a descriptive invariant", () => {
     });
     expect(() =>
       generateParserRegistry(pathToFileURL(`${directory}/`)),
-    ).toThrow(new TypeError("No parser registry entries"));
+    ).toThrow("No parser registry entries");
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -147,6 +177,18 @@ test("renderer ignores fake exports and rejects an incomplete entry", () => {
     'const fake = "export const SOURCE_FINGERPRINT_VERSIONS = {};";',
   ].join("\n");
 
+  expect(() => renderParserRegistry(new Map([[file, source]]))).toThrow(
+    `Incomplete parser registry entry: ${file}`,
+  );
+});
+
+test("import-only entries reject parser metadata", () => {
+  const file = `${PARSER_ENTRY_DIRECTORY}import-only.ts`;
+  const source = [
+    'export const IMPORT_SOURCE_KEYS = { IMPORT_ONLY: "import-only" } as const;',
+    'export const SOURCE_FINGERPRINT_VERSIONS = { "import-only": 0 } as const;',
+    'export const PARSER_VERSIONS = { "import-only": 1 } as const;',
+  ].join("\n");
   expect(() => renderParserRegistry(new Map([[file, source]]))).toThrow(
     `Incomplete parser registry entry: ${file}`,
   );
@@ -215,7 +257,7 @@ for (const operation of ["add", "bump"] as const) {
     operation === "add"
       ? "load both additions after regenerating the index"
       : "merge cleanly with an unchanged index";
-  test(`independent parser ${operation} edits ${mergeBehavior}`, () => {
+  test(`independent parser ${operation} edits ${mergeBehavior} without fixtures`, () => {
     const directory = mkdtempSync(
       path.join(tmpdir(), "parser-registry-merge-"),
     );
@@ -234,7 +276,10 @@ for (const operation of ["add", "bump"] as const) {
       git(directory, ["init", "--initial-branch=base"]);
       git(directory, ["add", "."]);
       git(directory, ["-c", "commit.gpgsign=false", "commit", "-m", "base"]);
-      const original = record(loadRegistry(directory));
+      expect(
+        existsSync(path.join(directory, registryDirectory, "__fixtures__")),
+      ).toBe(false);
+      const original = assertRegistryInvariants(directory);
       const originalVersions = record(Reflect.get(original, "PARSER_VERSIONS"));
       const expected = structuredClone(original);
       for (const [branch, existing, added] of [
@@ -274,7 +319,19 @@ for (const operation of ["add", "bump"] as const) {
           git(directory, ["add", target]);
         }
         git(directory, ["-c", "commit.gpgsign=false", "commit", "-m", branch]);
-        const edited = record(loadRegistry(directory));
+        const changedFiles = git(directory, [
+          "diff",
+          "--name-only",
+          "base",
+          branch,
+        ])
+          .split("\n")
+          .toSorted();
+        const expectedFiles =
+          operation === "add" ? [target, PARSER_REGISTRY_OUTPUT] : [target];
+        expect(changedFiles).toEqual(expectedFiles.toSorted());
+        generateParserRegistry(pathToFileURL(`${directory}/`), "check");
+        const edited = assertRegistryInvariants(directory);
         const editedVersions = record(Reflect.get(edited, "PARSER_VERSIONS"));
         const versionKey = operation === "bump" ? existing : added;
         const expectedVersion =
@@ -317,9 +374,9 @@ for (const operation of ["add", "bump"] as const) {
         const conflicts = [
           ...merge.stdout.toString().matchAll(/CONFLICT .* in (.+)$/gmu),
         ].map((match) => match[1]);
-        expect(conflicts.every((file) => file === PARSER_REGISTRY_OUTPUT)).toBe(
-          true,
-        );
+        const expectedConflicts =
+          merge.exitCode === 0 ? [] : [PARSER_REGISTRY_OUTPUT];
+        expect(conflicts).toEqual(expectedConflicts);
       }
       git(directory, ["read-tree", "--reset", "-u", tree]);
       if (operation === "add") {
@@ -328,7 +385,8 @@ for (const operation of ["add", "bump"] as const) {
       }
       git(directory, ["diff", "--check"]);
       git(directory, ["write-tree"]);
-      expect(record(loadRegistry(directory))).toEqual(expected);
+      generateParserRegistry(pathToFileURL(`${directory}/`), "check");
+      expect(assertRegistryInvariants(directory)).toEqual(expected);
       if (operation === "add") {
         const mergedKeys = record(
           Reflect.get(record(loadRegistry(directory)), "ADAPTER_KEYS"),

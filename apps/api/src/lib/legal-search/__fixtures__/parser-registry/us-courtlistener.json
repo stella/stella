@@ -1,8 +1,0 @@
-{
-  "IMPORT_SOURCE_KEYS": {
-    "COURTLISTENER": "us-courtlistener"
-  },
-  "SOURCE_FINGERPRINT_VERSIONS": {
-    "us-courtlistener": 0
-  }
-}
