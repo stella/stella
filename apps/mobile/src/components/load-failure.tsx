@@ -3,10 +3,11 @@ import { useTransition } from "react";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
-import { EmptyCard } from "@/components/empty-state-screen";
-import { RetryButton } from "@/components/retry-button";
 import { Button } from "@stll/ui/button";
 import { Text } from "@stll/ui/text";
+
+import { EmptyCard } from "@/components/empty-state-screen";
+import { RetryButton } from "@/components/retry-button";
 import { useSession } from "@/connection/session-provider";
 import { needsConsent } from "@/state/api-request";
 import type { ApiError } from "@/state/api-request";

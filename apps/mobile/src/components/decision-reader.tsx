@@ -5,11 +5,12 @@ import { Stack } from "expo-router";
 import { FlatList, Linking, Share, View } from "react-native";
 import { useFormatter, useTranslations } from "use-intl";
 
-import { screenStyles } from "@/components/empty-state-screen";
-import { LoadFailedCard } from "@/components/load-failure";
 import { Button } from "@stll/ui/button";
 import { Text } from "@stll/ui/text";
 import type { TextVariant } from "@stll/ui/text";
+
+import { screenStyles } from "@/components/empty-state-screen";
+import { LoadFailedCard } from "@/components/load-failure";
 import { barGlyph } from "@/components/ui/bar-glyph";
 import type { Load } from "@/state/api-request";
 import type { Decision } from "@/state/case-law";

@@ -4,8 +4,9 @@ import { Result } from "better-result";
 import { FlatList, Pressable, RefreshControl, SectionList } from "react-native";
 import { useLocale, useTranslations } from "use-intl";
 
-import { EmptyCard, emptyListProps } from "@/components/empty-state-screen";
 import { Text } from "@stll/ui/text";
+
+import { EmptyCard, emptyListProps } from "@/components/empty-state-screen";
 import { useHeaderSearch } from "@/components/header-search";
 import { LoadFailedCard } from "@/components/load-failure";
 import { MatterRow } from "@/components/matter-row";
