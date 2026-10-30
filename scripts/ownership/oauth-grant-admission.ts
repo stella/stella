@@ -6,7 +6,7 @@ export default {
   capability: "OAuth user-grant admission",
   owner: ["apps/api/src/db/root.ts"],
   summary:
-    "The connection owner reads one user, organization and client grant's revocation and registration. The admission owner verifies resource tokens and constructs opaque admitted credentials; consumers receive no owner database handle.",
+    "The connection owner reads one user, organization and client grant's revocation and registration. The admission owner decides OAuth grant admission (revocation by grant id or issue time) for verified tokens and constructs opaque admitted credentials; verification lives in mcp/auth.ts. Consumers receive no owner database handle.",
   enforcement: {
     kind: "import",
     specifiers: ["@/api/db/root"],
@@ -14,8 +14,7 @@ export default {
     allowed: [
       {
         path: "apps/api/src/lib/auth/oauth-grant-admission.ts",
-        reason:
-          "Combines signature verification with grant admission for every OAuth resource.",
+        reason: "Decides grant admission for tokens verified in mcp/auth.ts.",
       },
     ],
   },

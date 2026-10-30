@@ -237,7 +237,6 @@ const RESTRICTED_IMPORT_RULES = {
         hit: EXPORT_HIT.binding,
       },
       owners: [
-        "apps/api/src/lib/auth/oauth-grant-admission.ts",
         "apps/api/src/agent-auth/id-jag.ts",
         "apps/api/src/lib/agent-auth-idjag.ts",
         "apps/api/src/lib/business-registries/desktop/proof.ts",
