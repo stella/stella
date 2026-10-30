@@ -11,12 +11,13 @@ import {
   timeEntries,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
+import recordInvoicePayment from "@/api/handlers/invoices/payments/create";
 import transitionInvoice from "@/api/handlers/invoices/transition";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
-import { recordInvoicePayment } from "@/api/lib/billing/invoice-payments";
 import { toNumberPatternScopeKey } from "@/api/lib/billing/number-pattern";
 import type { SafeId } from "@/api/lib/branded-types";
+import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -129,8 +130,6 @@ test("Slovak seeded documents pass actual finalize, send and partial-payment ope
       .insert(invoiceLines)
       .values({ ...line, organizationId: ids.orgA, workspaceId: ids.wsA1 });
   }
-  const recordAuditEvent: TransitionContext["recordAuditEvent"] =
-    async () => {};
   const context = (
     invoiceId: TransitionContext["params"]["invoiceId"],
     action: TransitionContext["body"]["action"],
@@ -168,27 +167,18 @@ test("Slovak seeded documents pass actual finalize, send and partial-payment ope
     }
     const sent = await transitionInvoice.handler(context(invoice.id, "send"));
     expect(sent).toEqual({ id: invoice.id });
-    const payment = await testDb.transaction(async (tx) =>
-      recordInvoicePayment(
-        tx,
-        {
-          invoiceId: invoice.id,
-          workspaceId: ids.wsA1,
-          organizationId: ids.orgA,
-          userId: ids.userA1,
-          now,
-          recordAuditEvent,
-        },
-        {
-          amount: fixture.payment.amount,
-          paidOn: fixture.payment.paidOn,
-          method: fixture.payment.method,
-          reference: fixture.payment.reference,
-          note: null,
-        },
-      ),
-    );
-    expect(payment.isOk()).toBe(true);
+    const payment = await recordInvoicePayment.handler({
+      ...context(invoice.id, "send"),
+      route: "/v1/invoices/:workspaceId/:invoiceId/payments",
+      body: {
+        amount: fixture.payment.amount,
+        paidOn: fixture.payment.paidOn,
+        method: fixture.payment.method,
+        reference: fixture.payment.reference,
+        note: null,
+      },
+    });
+    expect(payment).toMatchObject({ amount: fixture.payment.amount });
     const paidInvoice = await testDb.query.invoices.findFirst({
       where: { id: { eq: invoice.id } },
     });
@@ -280,7 +270,9 @@ test("Slovak persistence converges when the seed is replayed", async () => {
   if (
     submitted === undefined ||
     untouched === undefined ||
-    originalIssued === undefined
+    originalIssued === undefined ||
+    originalIssued.invoiceNumber === null ||
+    originalIssued.finalizedAt === null
   ) {
     return panic(
       "Slovak replay fixture requires submitted time, untouched draft time and an issued invoice",
@@ -373,7 +365,7 @@ test("Slovak persistence converges when the seed is replayed", async () => {
   expect(issued?.organizationId).toBe(fixture.organizationId);
   expect(issued?.netAmount).toBe(draft.netAmount);
   expect(issued?.totalAmount).toBe(draft.totalAmount);
-  expect(issued?.vatAmount).toBe(0);
+  expect(issued?.vatAmount).toBe(cents(0));
   const storedLines = await testDb.query.invoiceLines.findMany({
     where: { invoiceId: { eq: draft.id } },
   });

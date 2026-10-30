@@ -25,13 +25,13 @@ export const SLOVAK_SEED_ORG_ID = toSafeId<"organization">(
 );
 export const SLOVAK_SEED_PEOPLE = [
   {
-    id: "seed-sk-zofia",
+    id: toSafeId<"user">("seed-sk-zofia"),
     name: "Žofia Vymyslená",
     email: "zofia@slovak-firm.example.test",
     role: "member",
   },
   {
-    id: "seed-sk-lubomir",
+    id: toSafeId<"user">("seed-sk-lubomir"),
     name: "Ľubomír Vymyslený",
     email: "lubomir@slovak-firm.example.test",
     role: "owner",
@@ -287,11 +287,9 @@ export const buildSlovakFirmSeed = (now: Date) => {
       } satisfies typeof timeEntries.$inferInsert;
     },
   );
-  const invoiceRows: (typeof invoices.$inferInsert)[] = [];
-  const lines: (typeof invoiceLines.$inferInsert)[] = [];
-  for (const entry of time) {
+  const documents = time.flatMap((entry) => {
     if (entry.invoiceId === null) {
-      continue;
+      return [];
     }
     const issued = entry.invoiceId === issuedId;
     const client = clients[issued ? 0 : 1] ?? panic("Missing invoice client");
@@ -320,8 +318,9 @@ export const buildSlovakFirmSeed = (now: Date) => {
     if (priced.isErr()) {
       panic(priced.error.message);
     }
-    const line = priced.value.lines[0] ?? panic("Missing priced invoice line");
-    invoiceRows.push({
+    const line =
+      priced.value.lines.at(0) ?? panic("Missing priced invoice line");
+    const invoice = {
       id: entry.invoiceId,
       organizationId,
       workspaceId: entry.workspaceId,
@@ -346,11 +345,11 @@ export const buildSlovakFirmSeed = (now: Date) => {
       finalizedAt: issued ? new Date(`${day(-4)}T12:00:00Z`) : null,
       sentAt: issued ? new Date(`${day(-4)}T12:05:00Z`) : null,
       paidAt: null,
-      netAmount: priced.value.totals.netAmountMinor,
-      vatAmount: priced.value.totals.vatAmountMinor,
-      totalAmount: priced.value.totals.grossAmountMinor,
-    });
-    lines.push({
+      netAmount: cents(priced.value.totals.netAmountMinor),
+      vatAmount: cents(priced.value.totals.vatAmountMinor),
+      totalAmount: cents(priced.value.totals.grossAmountMinor),
+    } satisfies typeof invoices.$inferInsert;
+    const invoiceLine = {
       id: seedId<"invoiceLine">(`sk-line-${issued ? "issued" : "draft"}`),
       organizationId,
       workspaceId: entry.workspaceId,
@@ -372,8 +371,11 @@ export const buildSlovakFirmSeed = (now: Date) => {
       recordedUnit: "h",
       recordedUnitPrice: entry.rateAtEntry,
       recordedNetAmount: netAmount,
-    });
-  }
+    } satisfies typeof invoiceLines.$inferInsert;
+    return [{ invoice, invoiceLine }];
+  });
+  const invoiceRows = documents.map(({ invoice }) => invoice);
+  const lines = documents.map(({ invoiceLine }) => invoiceLine);
   const arrangements = matters.map(
     (matter, index) =>
       ({

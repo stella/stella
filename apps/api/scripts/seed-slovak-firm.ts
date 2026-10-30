@@ -1,5 +1,6 @@
 import { panic } from "better-result";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
+import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 
 import { VAT_RATE_PRESETS } from "@stll/invoicing";
 
@@ -76,8 +77,13 @@ type PersistSlovakFirmSeedOptions = {
   primaryUserId: string;
 };
 
+type SlovakSeedDatabase = Pick<
+  PgAsyncDatabase<PgQueryResultHKT>,
+  "select" | "insert" | "update" | "execute"
+>;
+
 export const persistSlovakFirmSeed = async (
-  tx: Transaction,
+  tx: SlovakSeedDatabase,
   { fixture, primaryUserId }: PersistSlovakFirmSeedOptions,
 ) => {
   const { organizationId } = fixture;
@@ -167,7 +173,7 @@ export const persistSlovakFirmSeed = async (
 };
 
 const persistSlovakBillingRecords = async (
-  tx: Transaction,
+  tx: SlovakSeedDatabase,
   fixture: ReturnType<typeof buildSlovakFirmSeed>,
 ) => {
   const { organizationId } = fixture;
@@ -196,13 +202,21 @@ const persistSlovakBillingRecords = async (
   for (const invoice of fixture.invoiceRows) {
     await tx.insert(invoices).values(invoice).onConflictDoNothing();
     const persistedInvoice =
-      (await tx.query.invoices.findFirst({
-        where: {
-          id: { eq: invoice.id },
-          organizationId: { eq: organizationId },
-        },
-        columns: { invoiceNumber: true, finalizedAt: true },
-      })) ?? panic("Missing persisted Slovak seed invoice");
+      (
+        await tx
+          .select({
+            invoiceNumber: invoices.invoiceNumber,
+            finalizedAt: invoices.finalizedAt,
+          })
+          .from(invoices)
+          .where(
+            and(
+              eq(invoices.id, invoice.id),
+              eq(invoices.organizationId, organizationId),
+            ),
+          )
+          .limit(1)
+      ).at(0) ?? panic("Missing persisted Slovak seed invoice");
     if (persistedInvoice.invoiceNumber && persistedInvoice.finalizedAt) {
       await tx
         .insert(numberSeriesAllocations)

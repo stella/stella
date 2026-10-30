@@ -20,6 +20,7 @@ import {
   decideInvoiceVat,
   isWellFormedEuVatId,
 } from "@/api/lib/billing/invoice-prefill.logic";
+import { cents } from "@/api/lib/money";
 
 import {
   buildSlovakFirmSeed,
@@ -238,9 +239,9 @@ describe("Slovak firm rehearsal seed", () => {
       expect(invoice.sellerProfileId).toBe(seed.seller.id);
       expect(invoice.buyerName).toBe(client.displayName);
       if (invoice.status === "sent") {
-        expect(invoice.netAmount).toBe(19_871);
-        expect(invoice.vatAmount).toBe(4570);
-        expect(invoice.totalAmount).toBe(24_441);
+        expect(invoice.netAmount).toBe(cents(19_871));
+        expect(invoice.vatAmount).toBe(cents(4570));
+        expect(invoice.totalAmount).toBe(cents(24_441));
         expect(invoice.invoiceNumber).toMatch(/^SK-\d{4}-0001$/u);
         expect(invoice.finalizedAt).toBeInstanceOf(Date);
         expect(invoice.sentAt).toBeInstanceOf(Date);
