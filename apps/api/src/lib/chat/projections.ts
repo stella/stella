@@ -41,6 +41,7 @@ import {
   SANCTIONS_COMPANY_REGISTRIES,
 } from "@/api/lib/business-registries/sanctions-check-vocabulary";
 import type { CITATION_TREATMENTS } from "@/api/lib/case-law/citation-vocabulary";
+import { CASE_LAW_COVERAGE_FRESHNESS } from "@/api/lib/case-law/coverage-freshness";
 import {
   DECISION_READ_ABSENCE_STATUSES,
   DECISION_READ_STATUS,
@@ -1262,6 +1263,8 @@ export const LIST_INVOICES_LIST_PROJECTION = v.strictObject({
       dueDate: v.nullable(v.string()),
       currency: v.string(),
       totalAmount: v.number(),
+      paidAmount: v.number(),
+      outstandingAmount: v.number(),
     }),
   ),
   // Opaque `[createdAt, id]` cursor, not UUID-formatted.
@@ -1288,6 +1291,8 @@ export const LIST_INVOICES_DETAIL_PROJECTION = v.strictObject({
     dueDate: v.nullable(v.string()),
     currency: v.string(),
     totalAmount: v.number(),
+    paidAmount: v.number(),
+    outstandingAmount: v.number(),
     notes: v.nullable(contentText()),
     sellerProfileId: v.nullable(passthroughId()),
     buyerName: v.nullable(v.string()),
@@ -1447,6 +1452,11 @@ const decisionIdentifiersProjection = v.optional(
 const CASE_LAW_COVERAGE_COUNTRIES_PROJECTION = projectionBranch(
   v.strictObject({
     asOf: v.string(),
+    // refresh_pending: the figures are the last permitted answer, not a fresh one.
+    freshness: v.strictObject({
+      status: v.picklist(Object.values(CASE_LAW_COVERAGE_FRESHNESS)),
+      ageSeconds: v.number(),
+    }),
     countries: v.array(
       v.strictObject({
         country: v.string(),

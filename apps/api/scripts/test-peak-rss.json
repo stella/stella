@@ -10672,14 +10672,6 @@
         "job": "measure-3"
       }
     },
-    "src/lib/auth/session-bearer.test.ts": {
-      "peakMb": 202,
-      "baselineMb": 202,
-      "source": {
-        "runId": "40155324346",
-        "job": "measure-1"
-      }
-    },
     "src/lib/auth/session-lifetime-revocation.test.ts": {
       "peakMb": 216,
       "baselineMb": 216,

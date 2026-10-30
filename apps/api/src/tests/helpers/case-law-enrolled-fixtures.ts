@@ -134,6 +134,7 @@ import {
   skUsAdapter,
 } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
 import { fetchUkFclDecision } from "@/api/handlers/case-law/ingestion/adapters/uk-fcl";
+import type { ParserParityIdentity } from "@/api/handlers/case-law/ingestion/parsers/parity-manifest";
 import { planUnreadItems } from "@/api/handlers/case-law/ingestion/pipeline/unread-items";
 import { UNAVAILABLE_CYCLES_BEFORE_MARKING } from "@/api/lib/errors/read-outcome";
 import { readGzipJson } from "@/api/lib/gzip-json";
@@ -418,7 +419,9 @@ const CZ_NSS_DETAIL_PAGE = `<html><body>${CZ_NSS_FIXTURE_FIELD_IDS.map(
       fieldId,
       CZ_NSS_FIXTURE_VALUES[fieldId] ?? CZ_NSS_PLACEHOLDER_VALUE,
     ),
-).join("")}</body></html>`;
+).join(
+  "",
+)}<table><tbody><tr><td class="det-textval" data-field-id="ecli">ECLI:CZ:NSS:2016:5.As.140.2014.53</td><td class="det-textval" data-field-id="datumvydanirozhodnuti">26.05.2016</td></tr></tbody></table></body></html>`;
 
 const CZ_NSS_DOCUMENT_PAGE = `<html><body>
   <p>ČESKÁ REPUBLIKA</p>
@@ -429,12 +432,14 @@ const CZ_NSS_DOCUMENT_PAGE = `<html><body>
   zamítá.</p>
 </body></html>`;
 
-export const czNssFixture = (): EnrolledAdapterFixture => ({
+export const czNssFixture = (
+  detailHtml = CZ_NSS_DETAIL_PAGE,
+): EnrolledAdapterFixture => ({
   buildDecision: async () => {
     globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
       const url = input instanceof Request ? input.url : String(input);
       const body = url.includes("/DokumentDetail/Index/")
-        ? CZ_NSS_DETAIL_PAGE
+        ? detailHtml
         : CZ_NSS_DOCUMENT_PAGE;
       return await Promise.resolve(
         new Response(body, {
@@ -1614,7 +1619,10 @@ const SK_US_DECISION_ID = "sk-us-inventory-fixture-decision";
  * closes it, through the same derivation, so the guards read the envelope a
  * stored row holds rather than one this helper invented.
  */
-export const skUsFixture = (documentUrl?: URL): EnrolledAdapterFixture => ({
+export const skUsFixture = (
+  documentUrl?: URL,
+  identity?: ParserParityIdentity,
+): EnrolledAdapterFixture => ({
   buildDecision: async () => {
     if (documentUrl !== undefined) {
       const payload = await readGzipJson(documentUrl);
@@ -1624,10 +1632,17 @@ export const skUsFixture = (documentUrl?: URL): EnrolledAdapterFixture => ({
       }
       const listing = {
         ...SK_US_LISTING_ROW,
-        documentId: "695d557a-08eb-41d2-8cea-2b895f9860e7",
-        mkRSAPNumberOfFile: "III. ÚS 265/2026",
-        mkDateOfDecision: "04/23/2026 00:00:00",
-        mkECLI: null,
+        documentId:
+          identity?.documentId ?? "695d557a-08eb-41d2-8cea-2b895f9860e7",
+        mkRSAPNumberOfFile: identity?.caseNumber ?? "III. ÚS 265/2026",
+        mkDateOfDecision:
+          identity === undefined
+            ? "04/23/2026 00:00:00"
+            : identity.decisionDate.replace(
+                /^(\d{4})-(\d{2})-(\d{2})$/u,
+                "$2/$3/$1 00:00:00",
+              ),
+        mkECLI: identity?.ecli ?? null,
         mkFormOfDecision: "Uznesenie",
       };
       const reparse = skUsAdapter.reparseStoredRaw;
@@ -1646,8 +1661,8 @@ export const skUsFixture = (documentUrl?: URL): EnrolledAdapterFixture => ({
         sourceDocumentId: listing.documentId,
         language: "sk",
         court: "Ústavný súd SR",
-        ecli: null,
-        decisionDate: "2026-04-23",
+        ecli: listing.mkECLI,
+        decisionDate: identity?.decisionDate ?? "2026-04-23",
         decisionType: listing.mkFormOfDecision,
         sourceUrl: `https://www.ustavnysud.sk/docDownload/${listing.documentId}`,
         documentUrl: `https://www.ustavnysud.sk/docDownload/${listing.documentId}`,

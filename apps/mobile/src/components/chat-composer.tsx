@@ -1,13 +1,24 @@
 import { useState } from "react";
 
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, View } from "react-native";
 import { useTranslations } from "use-intl";
 
-import { useAppColors } from "@/theme";
+import {
+  COMPOSER_BOX_CLASS,
+  COMPOSER_COMPACT_ROW_CLASS,
+  COMPOSER_COMPACT_TEXT_CELL_CLASS,
+  COMPOSER_SEND_BUTTON_CLASS,
+} from "@stll/ui/composer-tokens";
+
+import { TextInput } from "@/components/ui/text";
+import { ArrowUpIcon, PlusIcon, SquareIcon } from "@/icons.gen";
+import { useUiColors } from "@/theme";
 
 /**
- * The message box under a thread. It grows with what is typed up to a few
- * lines, then scrolls. While an answer is arriving its button stops the
+ * The message box under a thread: the web's compact composer, from the same
+ * tokens (`@stll/ui/composer-tokens`): the rounded box, the (+) control, the
+ * one-line text cell that grows, and the round send button. It grows with
+ * what is typed up to a few lines, then scrolls. While an answer is arriving its button stops the
  * answer instead of sending; it can stop once the server has named the turn.
  */
 export const ChatComposer = ({
@@ -22,7 +33,7 @@ export const ChatComposer = ({
   onSend: (text: string, onRefused: () => void) => boolean;
   onStop: () => void;
 }) => {
-  const colors = useAppColors();
+  const ui = useUiColors();
   const t = useTranslations("chat");
   const [draft, setDraft] = useState("");
   const message = draft.trim();
@@ -40,100 +51,59 @@ export const ChatComposer = ({
     }
   };
 
+  const canSend = message !== "";
+  // A one-line text cell is 42pt tall; the 28pt round controls sit centred
+  // on it, as the web's do on its one-line row.
+  const control = "mb-[7px]";
+
   return (
-    <View
-      style={[
-        styles.bar,
-        { backgroundColor: colors.card, borderTopColor: colors.border },
-      ]}
-    >
-      <TextInput
-        accessibilityLabel={t("composerPlaceholder")}
-        multiline
-        onChangeText={setDraft}
-        placeholder={t("composerPlaceholder")}
-        placeholderTextColor={colors.muted}
-        style={[
-          styles.input,
-          {
-            backgroundColor: colors.background,
-            borderColor: colors.border,
-            color: colors.text,
-          },
-        ]}
-        value={draft}
-      />
-      {busy ? (
-        <Pressable
-          accessibilityLabel={t("stop")}
-          accessibilityRole="button"
-          accessibilityState={{ disabled: !canStop }}
-          disabled={!canStop}
-          onPress={onStop}
-          style={[
-            styles.button,
-            { backgroundColor: canStop ? colors.text : colors.border },
-          ]}
-        >
-          <View style={[styles.stopMark, { backgroundColor: colors.card }]} />
-        </Pressable>
-      ) : (
-        <Pressable
-          accessibilityLabel={t("send")}
-          accessibilityRole="button"
-          accessibilityState={{ disabled: message === "" }}
-          disabled={message === ""}
-          onPress={send}
-          style={[
-            styles.button,
-            {
-              backgroundColor: message === "" ? colors.border : colors.accent,
-            },
-          ]}
-        >
-          <Text style={[styles.sendMark, { color: colors.onAccent }]}>↑</Text>
-        </Pressable>
-      )}
+    <View className="bg-background px-3 pt-1 pb-2">
+      <View className={`${COMPOSER_BOX_CLASS} border-border`}>
+        <View className={`flex-row ${COMPOSER_COMPACT_ROW_CLASS}`}>
+          <Pressable
+            accessibilityLabel={t("composerMenu")}
+            accessibilityRole="button"
+            className={`border-border bg-secondary size-7 items-center justify-center rounded-full border ${control}`}
+          >
+            <PlusIcon color={ui.secondaryForeground} size={16} />
+          </Pressable>
+          <View className={`flex-1 ${COMPOSER_COMPACT_TEXT_CELL_CLASS}`}>
+            <TextInput
+              accessibilityLabel={t("composerPlaceholder")}
+              multiline
+              onChangeText={setDraft}
+              placeholder={t("composerPlaceholder")}
+              value={draft}
+              variant="composer"
+            />
+          </View>
+          {busy ? (
+            <Pressable
+              accessibilityLabel={t("stop")}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !canStop }}
+              className={`items-center justify-center ${COMPOSER_SEND_BUTTON_CLASS} ${control}`}
+              disabled={!canStop}
+              onPress={onStop}
+              style={{ opacity: canStop ? 1 : 0.64 }}
+            >
+              <SquareIcon color={ui.background} size={14} />
+            </Pressable>
+          ) : (
+            <Pressable
+              accessibilityLabel={t("send")}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !canSend }}
+              className={`items-center justify-center ${COMPOSER_SEND_BUTTON_CLASS} ${control}`}
+              disabled={!canSend}
+              onPress={send}
+              style={{ opacity: canSend ? 1 : 0.64 }}
+            >
+              <ArrowUpIcon color={ui.background} size={14} />
+            </Pressable>
+          )}
+        </View>
+      </View>
     </View>
   );
 };
-
-const styles = StyleSheet.create({
-  bar: {
-    alignItems: "flex-end",
-    borderTopWidth: StyleSheet.hairlineWidth,
-    flexDirection: "row",
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  button: {
-    alignItems: "center",
-    borderRadius: 18,
-    height: 36,
-    justifyContent: "center",
-    width: 36,
-  },
-  input: {
-    borderRadius: 18,
-    borderWidth: StyleSheet.hairlineWidth,
-    flex: 1,
-    fontSize: 16,
-    lineHeight: 21,
-    maxHeight: 132,
-    minHeight: 36,
-    paddingBottom: 8,
-    paddingHorizontal: 14,
-    paddingTop: 8,
-  },
-  sendMark: {
-    fontSize: 20,
-    fontWeight: "700",
-    lineHeight: 22,
-  },
-  stopMark: {
-    borderRadius: 2,
-    height: 12,
-    width: 12,
-  },
-});

@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
-import type { RequiredMigrationIndex } from "@/api/lib/db/migration-history";
+import type { IntroducedMigrationIndex } from "@/api/lib/db/migration-history";
 import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-content-hash";
 import { pendingDeferredDocumentSql } from "@/api/lib/legal-search/sk-document-pending-sql";
 
@@ -20,15 +20,17 @@ const DOCUMENT_OUTSTANDING_DEFINITION_PREDICATE = `((redacted_at IS NULL) AND (f
 export const DOCUMENT_OUTSTANDING_INDEX = {
   createSql: `CREATE INDEX CONCURRENTLY "case_law_decisions_document_outstanding_idx" ON public."case_law_decisions" USING btree ("source_id", "id") WHERE ${DOCUMENT_OUTSTANDING_PREDICATE_SQL}`,
   definitionBody: `ON public.case_law_decisions USING btree (source_id, id) WHERE ${DOCUMENT_OUTSTANDING_DEFINITION_PREDICATE}`,
+  introducedBy: "20261003123400_validate_hosted_closed_period",
   isUnique: false,
   name: "case_law_decisions_document_outstanding_idx",
   tableName: "case_law_decisions",
-} as const satisfies RequiredMigrationIndex & { createSql: string };
+} as const satisfies IntroducedMigrationIndex & { createSql: string };
 
 export const DOCUMENT_OUTSTANDING_DATE_INDEX = {
   createSql: `CREATE INDEX CONCURRENTLY "case_law_decisions_document_outstanding_date_idx" ON public."case_law_decisions" USING btree ("source_id", "decision_date" DESC NULLS LAST, "id") WHERE ${DOCUMENT_OUTSTANDING_PREDICATE_SQL}`,
   definitionBody: `ON public.case_law_decisions USING btree (source_id, decision_date DESC NULLS LAST, id) WHERE ${DOCUMENT_OUTSTANDING_DEFINITION_PREDICATE}`,
+  introducedBy: "20261003124500_public_law_reader_passage_counts",
   isUnique: false,
   name: "case_law_decisions_document_outstanding_date_idx",
   tableName: "case_law_decisions",
-} as const satisfies RequiredMigrationIndex & { createSql: string };
+} as const satisfies IntroducedMigrationIndex & { createSql: string };

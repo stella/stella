@@ -142,6 +142,7 @@ const expression = (value: boolean | string | undefined, waived: boolean) => {
     needs: { resolve: { outputs: { corpus_search_waived: String(waived) } } },
     steps: {
       "smoke-deps": { conclusion: "success" },
+      "proof-readiness": { outputs: { status: "ready" } },
       "corpus-preflight": { outcome: "failure", conclusion: "success" },
     },
   });
@@ -167,6 +168,12 @@ const assertScope = (candidate = workflow) => {
         expect(step.if).toContain("github.token != ''");
         expect(step.if).not.toContain("corpus_search_waived");
         expect(step["continue-on-error"]).toBe(true);
+        continue;
+      }
+      if (step.id === "proof-readiness") {
+        expect(jobName).toBe("promote-staging");
+        expect(step["continue-on-error"]).toBe(true);
+        expect(step.run).toContain("staging-proof-readiness-cli.ts");
         continue;
       }
       if (step.id === "corpus-preflight") {
@@ -229,6 +236,8 @@ const record = (overrides: Record<string, string> = {}, candidate = workflow) =>
       WAIVE_REASON:
         "Backend verification deferred; evidence=artifacts/corpus-check.log",
       JOB_STATUS: "success",
+      PROOF_READINESS: "ready",
+      PROOF_ENVIRONMENT: "ready",
       ...overrides,
     },
   );

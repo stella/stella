@@ -299,7 +299,7 @@
     "moreOptions": "Weitere Optionen",
     "moreItemActions": "Weitere Aktionen für Element {number}",
     "noResults": "Keine passenden Inhalte",
-    "noResultsDescription": "Möchten Sie stattdessen in den Registern nach „{query}“ suchen?",
+    "noResultsSearchRegistries": "In Registern nach „{query}“ suchen",
     "noGroup": "Keine Gruppe",
     "newGroupOption": "Neue Gruppe…",
     "copyItem": "Eintrag {number} kopieren",
@@ -368,7 +368,8 @@
     "welcomeShortcutDescription": "Drücken Sie {shortcut}, um den Verlauf zu durchsuchen und einen Eintrag auszuwählen.",
     "welcomeShortcutTitle": "Überall öffnen.",
     "welcomeStart": "Mit dem Kopieren beginnen",
-    "welcomeTitle": "Ihre neue Zwischenablage"
+    "welcomeTitle": "Ihre neue Zwischenablage",
+    "registryIdentifierSearchHint": "Geben Sie {identifiers} ein."
   },
   "activity": {
     "title": "Aktivität",

@@ -103,6 +103,10 @@
       "types": "./src/paragraph-range.ts",
       "import": "./src/paragraph-range.ts"
     },
+    "./closed-quotation-paragraphs": {
+      "types": "./src/closed-quotation-paragraphs.ts",
+      "import": "./src/closed-quotation-paragraphs.ts"
+    },
     "./court-paragraph-numbers": {
       "types": "./src/court-paragraph-numbers.ts",
       "import": "./src/court-paragraph-numbers.ts"
@@ -142,6 +146,10 @@
     "./source-contents": {
       "types": "./src/source-contents.ts",
       "import": "./src/source-contents.ts"
+    },
+    "./spot-place": {
+      "types": "./src/spot-place.ts",
+      "import": "./src/spot-place.ts"
     },
     "./statute-ast": {
       "types": "./src/statute-ast.ts",

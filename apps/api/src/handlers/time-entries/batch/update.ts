@@ -21,6 +21,7 @@ import {
 } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
+import { lockUnbillableRateCandidates } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
@@ -381,26 +382,15 @@ const batchUpdate = createSafeHandler(
             if (runningError) {
               return { type: "policy" as const, error: runningError, rows: [] };
             }
-            const candidates = await tx
-              .select({
-                currency: timeEntries.currency,
-                dateWorked: timeEntries.dateWorked,
-                narrative: timeEntries.narrative,
-                timezoneId: timeEntries.timezoneId,
-                id: timeEntries.id,
-                rateAtEntry: timeEntries.rateAtEntry,
-                userId: timeEntries.userId,
-              })
-              .from(timeEntries)
-              .where(
-                and(
-                  condition,
-                  eq(timeEntries.billable, false),
-                  ne(timeEntries.status, BILLING_STATUS.BILLED),
-                  ne(timeEntries.status, BILLING_STATUS.WRITTEN_OFF),
-                ),
-              )
-              .for("update");
+            const candidates = await lockUnbillableRateCandidates(
+              tx,
+              and(
+                condition,
+                eq(timeEntries.billable, false),
+                ne(timeEntries.status, BILLING_STATUS.BILLED),
+                ne(timeEntries.status, BILLING_STATUS.WRITTEN_OFF),
+              ),
+            );
             const violation = getBatchPolicyViolation({
               candidates,
               policy,
@@ -416,6 +406,7 @@ const batchUpdate = createSafeHandler(
                 ? [
                     {
                       dateWorked: row.dateWorked,
+                      activityCode: row.activityCode,
                       userId: brandPersistedUserId(row.userId),
                     },
                   ]
@@ -432,6 +423,7 @@ const batchUpdate = createSafeHandler(
                 !resolvedRates.has(
                   rateLookupKey({
                     dateWorked: row.dateWorked,
+                    activityCode: row.activityCode,
                     userId: brandPersistedUserId(row.userId),
                   }),
                 ),
@@ -454,6 +446,7 @@ const batchUpdate = createSafeHandler(
                 ? resolvedRates.get(
                     rateLookupKey({
                       dateWorked: row.dateWorked,
+                      activityCode: row.activityCode,
                       userId: brandPersistedUserId(row.userId),
                     }),
                   )

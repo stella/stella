@@ -30,6 +30,7 @@ import {
 } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { resolveEffectiveChatModelSelection } from "@/api/lib/chat-model-selection";
+import { readChatCopyProjection } from "@/api/lib/chat/withdrawn-copies";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
@@ -100,7 +101,7 @@ export const createProposeMessageSpanEdit = ({
       promptCachingEnabled,
     }) {
       if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
-        return Result.err(storedAIConfigUnreadableError(undefined));
+        return Result.err(storedAIConfigUnreadableError());
       }
 
       const organizationId = session.activeOrganizationId;
@@ -122,7 +123,17 @@ export const createProposeMessageSpanEdit = ({
           new HandlerError({ status: 404, message: "Chat message not found" }),
         );
       }
-      const prepared = prepareSpanRewrite({ loaded, body });
+      const { projection } = yield* Result.await(
+        safeDb(
+          async (tx) =>
+            await readChatCopyProjection({
+              tx,
+              threadIds: [threadId],
+              values: loaded,
+            }),
+        ),
+      );
+      const prepared = prepareSpanRewrite({ loaded, body, projection });
       if (Result.isError(prepared)) {
         return Result.err(prepared.error);
       }
