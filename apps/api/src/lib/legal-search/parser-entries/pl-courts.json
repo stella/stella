@@ -2,10 +2,10 @@
   "type": "parser",
   "name": "PL_COURTS",
   "key": "pl-courts",
-  "parserVersion": 18,
+  "parserVersion": 20,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",
-    "reason": "Re-read printed title order and opening, operative and signature roles from stored source; roles and block ordering have no independent feature storage."
+    "reason": "A clerk's closing mark printed after the decision is read as a publisher note rather than head matter; paragraph roles have no feature storage of their own."
   }
 }
