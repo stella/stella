@@ -334,12 +334,10 @@ export const createNetworkCollector = (
       session.on(
         "Network.loadingFailed",
         ({ requestId, errorText, canceled }) => {
-          byRequestId
-            .get(requestId)
-            ?.responseSize.fail({
-              errorText,
-              ...(canceled === undefined ? {} : { canceled }),
-            });
+          byRequestId.get(requestId)?.responseSize.fail({
+            errorText,
+            ...(canceled === undefined ? {} : { canceled }),
+          });
           if (byRequestId.has(requestId)) {
             markActivity();
           }
