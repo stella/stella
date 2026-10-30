@@ -14,10 +14,14 @@ import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
+import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
 import type {
   GatedTestClientScope,
   GatedTestDb,
 } from "@/api/tests/gated-test-database";
+
+import { coverageIndexBuildSql } from "./coverage-indexes";
 
 /**
  * The corpus profile: public corpus tables seeded in the shape production
@@ -37,6 +41,10 @@ import type {
  *   table written over months.
  */
 const CORPUS_SCENARIO_ROWS = 60_000;
+const COMPLETION_SOURCE_ID = toSafeId<"caseLawSource">(
+  "01990000-00c2-7000-8000-000000000001",
+);
+const COMPLETION_ROWS = 100_000;
 
 export type CaseLawScenarioGeneration =
   "case_law_v5" | "case_law_v6" | "case_law_v7" | "case_law_v8" | "case_law_v9";
@@ -350,6 +358,65 @@ export const serveCaseLaw = async (
   });
 };
 
+/**
+ * Served sources with the facet counts the browse pages keep per source: one
+ * country, their courts and their decision years. Court counts grow from a
+ * small specialised court to a large court system, so the facet table holds
+ * thousands of rows and a source's facets are read the way they are served.
+ */
+const FACET_SOURCE_KEYS = [
+  ADAPTER_KEYS.CZ_NS,
+  ADAPTER_KEYS.CZ_NSS,
+  ADAPTER_KEYS.CZ_US,
+  ADAPTER_KEYS.SK_COURTS,
+  ADAPTER_KEYS.PL_COURTS,
+  ADAPTER_KEYS.HU_BHGY,
+] as const;
+const FACET_COURTS_BASE = 50;
+const FACET_COURTS_STEP = 150;
+const FACET_COURT_HEAVY_SOURCE_BUCKETS = 3000;
+const FACET_FIRST_YEAR = 1900;
+const FACET_YEARS = 131;
+const COVERAGE_DECISION_FIRST_YEAR = 1956;
+const COVERAGE_DECISION_YEARS = 70;
+
+const FACET_SOURCES = FACET_SOURCE_KEYS.map((adapterKey, index) => ({
+  adapterKey,
+  index,
+  sourceId: `01990000-00c2-7000-8000-${(index + 1).toString(16).padStart(12, "0")}`,
+  country: `XF${String.fromCodePoint(65 + index)}`,
+  courts:
+    index === FACET_SOURCE_KEYS.length - 1
+      ? FACET_COURT_HEAVY_SOURCE_BUCKETS
+      : FACET_COURTS_BASE + FACET_COURTS_STEP * index,
+}));
+
+const seedBrowseFacetCounts = async (database: GatedTestDb) => {
+  for (const {
+    adapterKey,
+    index,
+    sourceId,
+    country,
+    courts,
+  } of FACET_SOURCES) {
+    // db-await-in-loop: six fixed sources, each with its own facet rows.
+    await database.execute(sql`INSERT INTO case_law_sources (id, adapter_key, name, enabled)
+      VALUES (${sourceId}::uuid, ${adapterKey}, ${`Facet fixture ${String(index + 1)}`}, false)
+      ON CONFLICT (id) DO NOTHING`);
+    // db-await-in-loop: the source's facets follow the source row they reference.
+    await database.execute(sql`INSERT INTO case_law_browse_facet_counts
+      (kind, country, source_id, value, total)
+      SELECT 'country', ${country}, ${sourceId}::uuid, ${country}, 1000
+      UNION ALL
+      SELECT 'court', ${country}, ${sourceId}::uuid, 'Facet court ' || n, 1 + n % 97
+      FROM generate_series(1, ${courts}) n
+      UNION ALL
+      SELECT 'year', ${country}, ${sourceId}::uuid, (${FACET_FIRST_YEAR - 1}::integer + n)::text, 1 + n % 41
+      FROM generate_series(1, ${FACET_YEARS}) n
+      ON CONFLICT DO NOTHING`);
+  }
+};
+
 export const seedCorpusReadBudgets = async (database: GatedTestDb) => {
   await database.insert(corpusIndexGenerations).values([
     ...SCENARIO_GENERATIONS.map(({ generation }) => ({
@@ -382,6 +449,24 @@ export const seedCorpusReadBudgets = async (database: GatedTestDb) => {
       });
     }
   }
+  await database.execute(sql`INSERT INTO case_law_sources (id, adapter_key, name, enabled)
+    VALUES (${COMPLETION_SOURCE_ID}, 'query-perf-completion', 'Completion query fixture', false)`);
+  for (const chunk of chunks(COMPLETION_ROWS)) {
+    await withoutTriggers(database, async (tx) => {
+      await tx.execute(sql`INSERT INTO case_law_decisions
+        (id, source_id, case_number, country, court, language, parser_version, source_hash)
+        SELECT md5(${COMPLETION_SOURCE_ID}::text || '-' || n::text)::uuid,
+          ${COMPLETION_SOURCE_ID}, 'completion-' || n::text, 'EUR', 'fixture', 'en', 2, 'finished'
+        FROM generate_series(${chunk.first}, ${chunk.last}) AS n`);
+    });
+  }
+  await database.execute(sql`INSERT INTO eu_completion_receipts
+    (id, source_id, decision_id, mode, parser_version, status, completion_source_hash, completed_at)
+    SELECT 'finished-' || id::text, source_id, id, 'dry-run', 2, 'dry-run', source_hash, now()
+    FROM case_law_decisions WHERE source_id = ${COMPLETION_SOURCE_ID}`);
+  await database.execute(sql`INSERT INTO case_law_index_jobs (id, decision_id, operation, status)
+    SELECT md5('withdrawal-' || id::text)::uuid, id, 'withdraw', 'succeeded'
+    FROM case_law_decisions WHERE source_id = ${COMPLETION_SOURCE_ID}`);
   await database.execute(sql`INSERT INTO legislation_sources (id, adapter_key, name)
     VALUES (${LEGISLATION_SOURCE_ID}, 'read-budget-fixture', 'Read budget fixture')`);
   for (const chunk of chunks(
@@ -393,12 +478,18 @@ export const seedCorpusReadBudgets = async (database: GatedTestDb) => {
     });
   }
   await rebuildIndexes();
+  await seedBrowseFacetCounts(database);
   for (const table of [
+    "case_law_sources",
+    "case_law_browse_facet_counts",
     "corpus_index_generations",
     "corpus_index_projection_states",
     "corpus_index_projection_intents",
     "legislation_sources",
     "legislation_documents",
+    "case_law_decisions",
+    "eu_completion_receipts",
+    "case_law_index_jobs",
   ]) {
     // db-await-in-loop: one VACUUM per seeded table; VACUUM cannot share a statement.
     await database.execute(sql.raw(`VACUUM (ANALYZE) ${table}`));
@@ -413,7 +504,7 @@ export const seedCorpusReadBudgets = async (database: GatedTestDb) => {
       `01990000-00a2-7000-8000-${(work * LEGISLATION_VERSIONS_PER_WORK).toString(16).padStart(12, "0")}`,
     ),
   );
-  return { candidateIds };
+  return { candidateIds, completionSourceId: COMPLETION_SOURCE_ID };
 };
 
 export type CorpusReadBudgetSeed = Awaited<
@@ -426,6 +517,9 @@ type SeedSitemapReadBudgetOptions = {
   openClient: GatedTestClientScope["openClient"];
 };
 
+/** The sitemap fixture's source; any registered adapter serves, its rows are synthetic. */
+const SITEMAP_FIXTURE_ADAPTER_KEY = ADAPTER_KEYS.CZ_REGIONAL;
+
 /** One available dirty month beside a growing backlog held by another run. */
 export const seedSitemapReadBudget = async ({
   database,
@@ -436,8 +530,10 @@ export const seedSitemapReadBudget = async ({
     SCENARIO_GENERATIONS.find(({ generation }) => generation === serving) ??
     panic(`Unknown sitemap scenario ${serving}`);
   const sourceId = "01990000-00c0-7000-8000-000000000001";
+  // A registered adapter key: the coverage refresh reads every source through
+  // the adapter registry, and an unregistered key is reported as an error.
   await database.execute(sql`INSERT INTO case_law_sources (id, adapter_key, name, enabled)
-    VALUES (${sourceId}::uuid, 'query-perf-sitemap', 'Sitemap fixture', false)
+    VALUES (${sourceId}::uuid, ${SITEMAP_FIXTURE_ADAPTER_KEY}, 'Sitemap fixture', false)
     ON CONFLICT (id) DO NOTHING`);
   await database.execute(
     sql`DELETE FROM case_law_decisions WHERE source_id = ${sourceId}::uuid`,
@@ -452,6 +548,16 @@ export const seedSitemapReadBudget = async ({
         'Fixture court', 'xx', i::text, NULL, DATE '2024-01-01'
       FROM generate_series(${first}, ${last}) i`);
   }
+  // A source carries court facet counts, as every served source does; the
+  // coverage read without them is measured in its own profile (coverage.test.ts).
+  await database.execute(
+    sql`DELETE FROM case_law_browse_facet_counts WHERE source_id = ${sourceId}::uuid`,
+  );
+  await database.execute(sql`INSERT INTO case_law_browse_facet_counts
+    (kind, country, source_id, value, total)
+    SELECT 'court', country, source_id, court, count(*)::integer
+    FROM case_law_decisions WHERE source_id = ${sourceId}::uuid
+    GROUP BY country, source_id, court`);
   // Existing shards represent the unrelated, previously refreshed months.
   await database.execute(sql`DELETE FROM case_law_sitemap_shards`);
   await database.execute(sql`INSERT INTO case_law_sitemap_shards
@@ -470,6 +576,7 @@ export const seedSitemapReadBudget = async ({
     SELECT 'XQN', '2024', '01', (2000000 + i)::text::xid8
     FROM generate_series(1, ${scenario.rows}) i`);
   await database.execute(sql`VACUUM (ANALYZE) case_law_decisions`);
+  await database.execute(sql`VACUUM (ANALYZE) case_law_browse_facet_counts`);
   await database.execute(sql`VACUUM (ANALYZE) case_law_sitemap_shards`);
   await database.execute(sql`VACUUM (ANALYZE) case_law_sitemap_changes`);
   const acquired = Promise.withResolvers<undefined>();
@@ -493,5 +600,151 @@ export const seedSitemapReadBudget = async ({
   return async () => {
     release.resolve(undefined);
     await holding;
+  };
+};
+
+/**
+ * The rows the coverage refresh writes: its summary, its backfill checkpoint
+ * and its audit runs. Table names are code constants.
+ */
+const COVERAGE_REFRESH_STATE = [
+  { table: "case_law_coverage_summaries", where: sql`true` },
+  {
+    table: "database_backfill_states",
+    where: sql`name = ${SCHEDULER_BACKFILL_IDS.coverage}`,
+  },
+  {
+    table: "system_audit_runs",
+    where: sql`actor = 'system:case-law-coverage-refresh'`,
+  },
+] as const;
+
+/** Every row the coverage refresh owns, exactly as stored, per table. */
+export const readCoverageRefreshState = async (database: GatedTestDb) => {
+  const state: Record<string, string> = {};
+  for (const { table, where } of COVERAGE_REFRESH_STATE) {
+    // db-await-in-loop: three fixed tables, read one at a time on one connection.
+    const row = executedRows(
+      await database.execute(sql`SELECT coalesce(
+          jsonb_agg(to_jsonb(stored) ORDER BY to_jsonb(stored)::text),
+          '[]'::jsonb
+        )::text AS rows
+        FROM ${sql.raw(table)} AS stored WHERE ${where}`),
+    ).at(0);
+    const rows =
+      typeof row === "object" && row !== null && "rows" in row
+        ? row.rows
+        : undefined;
+    state[table] =
+      typeof rows === "string" ? rows : panic(`Unreadable ${table} state`);
+  }
+  return state;
+};
+
+/** The refresh ran its computation: its summary row is stored. */
+export const coverageRefreshWroteSummary = async (database: GatedTestDb) =>
+  (await readCoverageRefreshState(database))["case_law_coverage_summaries"] !==
+  "[]";
+
+const replaceCoverageRefreshState = async (
+  database: GatedTestDb,
+  state: Readonly<Record<string, string>>,
+) => {
+  for (const { table, where } of COVERAGE_REFRESH_STATE) {
+    // db-await-in-loop: three fixed tables, replaced one at a time on one connection.
+    await database.execute(sql`DELETE FROM ${sql.raw(table)} WHERE ${where}`);
+    // db-await-in-loop: the table's stored rows go back right after its delete.
+    await database.execute(sql`INSERT INTO ${sql.raw(table)}
+      SELECT * FROM jsonb_populate_recordset(
+        NULL::${sql.raw(table)},
+        ${state[table] ?? panic(`No ${table} state to restore`)}::text::jsonb
+      )`);
+  }
+};
+
+const COVERAGE_DECISION_ID_PREFIX = "01990000-00c3-7000-8000-";
+
+/**
+ * The served sources' published decisions at the scenario's size, spread over
+ * their facet courts and years, with the online coverage indexes production
+ * builds on them. Ids are positional, so moving between sizes writes only the
+ * difference.
+ */
+const seedCoverageDecisions = async ({
+  database,
+  served: { serving },
+}: SeedSitemapReadBudgetOptions) => {
+  const { rows } =
+    SCENARIO_GENERATIONS.find(({ generation }) => generation === serving) ??
+    panic(`Unknown coverage scenario ${serving}`);
+  for (const build of coverageIndexBuildSql("public")) {
+    // db-await-in-loop: four fixed index builds, one statement each.
+    await database.execute(sql.raw(build));
+  }
+  const sources = sql.join(
+    FACET_SOURCES.map(({ sourceId }) => sql`${sourceId}::uuid`),
+    sql`, `,
+  );
+  const slots = sql.join(
+    FACET_SOURCES.map(
+      ({ index, sourceId, country, courts }) =>
+        sql`(${index}::integer, ${sourceId}::uuid, ${country}::text, ${courts}::integer)`,
+    ),
+    sql`, `,
+  );
+  await database.execute(sql`DELETE FROM case_law_decisions
+    WHERE source_id IN (${sources})
+      AND id > (${COVERAGE_DECISION_ID_PREFIX} || lpad(to_hex(${rows}::integer), 12, '0'))::uuid`);
+  for (const { first, last } of chunks(rows)) {
+    // db-await-in-loop: bounded seed chunks keep each statement inside the fixture's statement timeout.
+    await database.execute(sql`INSERT INTO case_law_decisions
+      (id, source_id, country, court, language, case_number, docket_family_key,
+        decision_date, created_at, updated_at)
+      SELECT (${COVERAGE_DECISION_ID_PREFIX} || lpad(to_hex(i), 12, '0'))::uuid,
+        slot.source_id, slot.country,
+        'Facet court ' || (1 + (i / ${FACET_SOURCES.length}::integer) % slot.courts),
+        'xx', 'fixture/' || i::text, NULL,
+        make_date(
+          ${COVERAGE_DECISION_FIRST_YEAR}::integer + (i / ${FACET_SOURCES.length}::integer) % ${COVERAGE_DECISION_YEARS}::integer,
+          1 + i % 12, 1 + i % 28),
+        TIMESTAMPTZ '2024-01-01 00:00:00+00', TIMESTAMPTZ '2024-01-01 00:00:00+00'
+      FROM generate_series(${first}::integer, ${last}::integer) i
+      JOIN (VALUES ${slots}) AS slot (slot_number, source_id, country, courts)
+        ON slot.slot_number = i % ${FACET_SOURCES.length}::integer
+      ON CONFLICT (id) DO NOTHING`);
+    // db-await-in-loop: projection rows use the same bounded chunks as their decisions.
+    await database.execute(sql`INSERT INTO case_law_search_documents
+      (decision_id, language, regconfig, searchable_text, tsv)
+      SELECT decision.id, 'xx', 'simple', '', to_tsvector('simple', '')
+      FROM case_law_decisions decision
+      WHERE decision.id BETWEEN
+          (${COVERAGE_DECISION_ID_PREFIX} || lpad(to_hex(${first}::integer), 12, '0'))::uuid
+        AND (${COVERAGE_DECISION_ID_PREFIX} || lpad(to_hex(${last}::integer), 12, '0'))::uuid
+      ON CONFLICT (decision_id) DO NOTHING`);
+  }
+  await database.execute(sql`VACUUM (ANALYZE) case_law_decisions`);
+  await database.execute(sql`VACUUM (ANALYZE) case_law_search_documents`);
+};
+
+/**
+ * The coverage refresh commits its writes, as the measure-in-place adapter
+ * requires. The served sources hold their decisions at the scenario's size, as
+ * in production. Each measured run starts without refresh state, so every run
+ * takes the same path, and the refresh state is put back exactly as found.
+ */
+export const prepareCoverageRefreshMeasurement = async (
+  options: SeedSitemapReadBudgetOptions,
+) => {
+  const { database } = options;
+  await seedCoverageDecisions(options);
+  const found = await readCoverageRefreshState(database);
+  await replaceCoverageRefreshState(
+    database,
+    Object.fromEntries(
+      COVERAGE_REFRESH_STATE.map(({ table }) => [table, "[]"]),
+    ),
+  );
+  return async () => {
+    await replaceCoverageRefreshState(database, found);
   };
 };

@@ -44,7 +44,7 @@ import {
 } from "drizzle-orm";
 
 import { sanitizeErrorForOutput } from "@stll/errors";
-import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
+import type { Block } from "@stll/legal-ast/document-ast";
 import {
   DOCUMENT_FETCH_OUTCOME,
   type DocumentFetchOutcome,
@@ -63,10 +63,6 @@ import {
 import { corpusStorageMode } from "@/api/env-base";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
-import {
-  absentDecisionTextFields,
-  TEXT_ABSENCE_REASON,
-} from "@/api/lib/case-law/decision-text";
 import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
 import type { CorpusStorageMode } from "@/api/lib/corpus-storage-mode";
 import { executedRows } from "@/api/lib/db/executed-rows";
@@ -114,27 +110,25 @@ import {
   recordDocumentStageError,
   withDocumentStageObserver,
 } from "@/api/lib/legal-search/document-stage-observation";
-import type { EmptyAst } from "@/api/lib/legal-search/document-types";
 import {
   ADAPTER_KEYS,
   PARSER_VERSIONS,
 } from "@/api/lib/legal-search/ingestion-constants";
-import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
-import {
-  isUnreadablePdfError,
-  parseSkDecisionPdf,
-} from "@/api/lib/legal-search/parsers/sk-courts";
+import { isUnreadablePdfError } from "@/api/lib/legal-search/parsers/sk-courts";
 import {
   openRawSourceWriteWindow,
   type RawSourceWriteWindow,
 } from "@/api/lib/legal-search/raw-source-storage";
-import { segmentDecision } from "@/api/lib/legal-search/segment-decision";
 import { restrictSkCourtDocumentUrl } from "@/api/lib/legal-search/sk-court-document-url";
 import { SkDocumentNonPdfError } from "@/api/lib/legal-search/sk-document-fetch-diagnostics";
 import {
   documentFetchParked,
   MAX_DOCUMENT_FETCH_ATTEMPTS,
 } from "@/api/lib/legal-search/sk-document-parking-sql";
+import {
+  type BackfilledDocument,
+  parsePendingDocument,
+} from "@/api/lib/legal-search/sk-document-parser";
 import {
   pendingDeferredDocumentSql,
   storesNoCorpusDocumentSql,
@@ -156,6 +150,11 @@ import { logger } from "@/api/lib/observability/logger";
 import { pgErrorFields } from "@/api/lib/pg-error";
 import { isRecord } from "@/api/lib/type-guards";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
+
+export {
+  parsePendingDocument,
+  type BackfilledDocument,
+} from "@/api/lib/legal-search/sk-document-parser";
 
 /** A decision awaiting its document. */
 export type PendingDocument = {
@@ -457,60 +456,6 @@ const publisherStatusPdf = (status: number): PdfFetchResult => {
     cursor: null,
     httpStatus: status,
   });
-};
-
-export type BackfilledDocument = {
-  fulltext: string;
-  documentAst: DocumentAst | EmptyAst;
-  sections: ReturnType<typeof segmentDecision>;
-};
-
-/**
- * Parse one decision's PDF into the same shape ingestion would have
- * produced. Runs the bytes through `sanitizeResult` so a backfilled
- * row is byte-for-byte what the pipeline would have written, rather
- * than a second normalization that drifts from it.
- */
-export const parsePendingDocument = async (
-  pending: PendingDocument,
-  pdfBytes: Uint8Array,
-): Promise<BackfilledDocument | undefined> => {
-  const parsed = await parseSkDecisionPdf({
-    pdfBytes,
-    caseNumber: pending.caseNumber,
-    ecli: pending.ecli ?? undefined,
-    court: pending.court,
-    decisionDate: pending.decisionDate ?? undefined,
-    decisionType: pending.decisionType ?? undefined,
-  });
-
-  if (parsed.documentAst.blocks.length === 0 || parsed.fulltext === "") {
-    return undefined;
-  }
-
-  const sanitized = sanitizeResult({
-    caseNumber: pending.caseNumber,
-    court: pending.court,
-    country: "SVK",
-    language: "sk",
-    metadata: {},
-    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-    rawHash: "",
-    fulltext: parsed.fulltext,
-    documentAst: parsed.documentAst,
-  });
-
-  const fulltext = sanitized.fulltext ?? "";
-  // Text remains readable even when the reader rejects its structure.
-  if (fulltext === "") {
-    return undefined;
-  }
-
-  return {
-    fulltext,
-    documentAst: sanitized.documentAst,
-    sections: segmentDecision(fulltext),
-  };
 };
 
 /**

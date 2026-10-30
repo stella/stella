@@ -7,11 +7,7 @@ import {
   INVOICE_SENT_AT_BACKFILL,
 } from "@/api/lib/billing/invoice-payment-backfill";
 import { CASE_LAW_COURT_DATE_PUBLISHED_INDEX } from "@/api/lib/case-law/court-date-index";
-import {
-  CASE_LAW_COVERAGE_COURT_INDEX,
-  CASE_LAW_COVERAGE_FILING_DATE_INDEX,
-  CASE_LAW_COVERAGE_INDEX,
-} from "@/api/lib/case-law/coverage-index";
+import { CASE_LAW_COVERAGE_INDEXES } from "@/api/lib/case-law/coverage-index";
 import {
   publishedCaseLawDecisionIndexDefinitionPredicateSql,
   publishedCaseLawDecisionIndexPredicateSql,
@@ -41,6 +37,10 @@ import {
   BILLING_ACTIVITY_HOUR_CAP_CONSTRAINT_VALIDATIONS,
   BILLING_ACTIVITY_HOUR_CAP_CONSTRAINTS,
 } from "./billing-activity-hour-cap-constraint-validation";
+import {
+  CASE_LAW_IDENTIFIER_RETRY_CONSTRAINT_VALIDATION,
+  CASE_LAW_IDENTIFIER_RETRY_CONSTRAINTS,
+} from "./case-law-identifier-retry-constraint-validation";
 import {
   CASE_LAW_PARSE_PENDING_INDEX,
   CASE_LAW_PARSED_SOURCE_CONSTRAINT,
@@ -77,6 +77,7 @@ import {
   EMAIL_UNDELIVERABLE_CONSTRAINTS,
 } from "./email-undeliverable-constraint-validation";
 import { ENTITY_FEATURE_GATE_REPAIR } from "./entity-feature-gate-repair";
+import { FUNCTION_DEPENDENT_INDEX_REINDEXES } from "./function-dependent-index-reindex";
 import {
   INVOICE_LANGUAGE_CONSTRAINT_VALIDATIONS,
   INVOICE_LANGUAGE_CONSTRAINTS,
@@ -354,9 +355,7 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     name: `${tableName}_content_v3_pending_idx`,
     tableName,
   })),
-  CASE_LAW_COVERAGE_INDEX,
-  CASE_LAW_COVERAGE_FILING_DATE_INDEX,
-  CASE_LAW_COVERAGE_COURT_INDEX,
+  ...CASE_LAW_COVERAGE_INDEXES,
   // Reviewed doctrine per cited decision: few rows carry a finding.
   {
     createSql: `CREATE INDEX CONCURRENTLY "case_law_citations_doctrine_cited_idx" ON public."case_law_citations" USING btree ("cited_decision_id") WHERE "doctrinal_treatment" IN ('distinguishes', 'limits')`,
@@ -938,6 +937,7 @@ export const ONLINE_VALIDATED_INDEX_NAMES: ReadonlySet<string> = new Set([
  * skips the ones already complete, and validates their completion.
  */
 export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
+  ...FUNCTION_DEPENDENT_INDEX_REINDEXES,
   CHAT_RUN_TEXT_BOUNDARIES,
   ACCOUNT_AUDIT_CONSTRAINT_VALIDATION,
   CLIENT_INVOICE_TENANT_KEY,
@@ -945,6 +945,7 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
   ...CLIENT_INVOICE_CONSTRAINT_VALIDATIONS,
   ...MATTER_TIME_EXPENSE_RETENTION_VALIDATIONS,
   CASE_LAW_PARSED_SOURCE_VALIDATION,
+  CASE_LAW_IDENTIFIER_RETRY_CONSTRAINT_VALIDATION,
   ...AGENT_SKILL_BINDING_CONSTRAINT_VALIDATIONS,
   CHAT_CONTENT_V3_REPAIR,
   DECISION_DATE_CEILING_REPAIR,
@@ -978,6 +979,7 @@ export const ONLINE_CONSTRAINT_VALIDATIONS: readonly OnlineConstraintValidation[
     ...CLIENT_INVOICE_CONSTRAINTS,
     ...MATTER_TIME_EXPENSE_RETENTION_CONSTRAINTS,
     CASE_LAW_PARSED_SOURCE_CONSTRAINT,
+    ...CASE_LAW_IDENTIFIER_RETRY_CONSTRAINTS,
     ...AGENT_SKILL_BINDING_CONSTRAINTS,
     ...CHAT_CONTENT_V3_CONSTRAINTS,
     ...DECISION_DATE_CEILING_CONSTRAINTS,

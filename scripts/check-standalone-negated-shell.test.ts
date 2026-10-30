@@ -575,6 +575,7 @@ test("pipefail fails a pipeline whose reader exits before its writer", () => {
 test("rejects pipes into readers that can exit early", () => {
   for (const pipeline of [
     "producer | grep -q x",
+    "producer | grep '-q'",
     "producer | grep -Fqx x",
     "producer | grep -m1 x",
     "producer | grep -m 1 x",
@@ -599,6 +600,29 @@ test("rejects pipes into readers that can exit early", () => {
     ).toEqual([{ file: "scripts/planted.sh", line: 1, source: pipeline }]);
   }
 });
+
+const quotedReaderPipelines = [
+  { command: "grep", option: "-q" },
+  { command: "egrep", option: "-q" },
+  { command: "fgrep", option: "-q" },
+  { command: "rg", option: "--quiet" },
+  { command: "head", option: "-n1" },
+].flatMap(({ command, option }) =>
+  ["'", '"'].flatMap((quote) => [
+    `producer | ${quote}${command}${quote} ${option} pattern`,
+    `producer | ${command} ${quote}${option}${quote} pattern`,
+    `producer | ${quote}${command}${quote} ${quote}${option}${quote} pattern`,
+  ]),
+);
+
+test.each(quotedReaderPipelines)(
+  "literal reader words retain their option semantics when quoted: %s",
+  (pipeline) => {
+    expect(earlyExit("scripts/quoted-reader.sh", pipeline).violations).toEqual([
+      { file: "scripts/quoted-reader.sh", line: 1, source: pipeline },
+    ]);
+  },
+);
 
 test("rejects the pipelines this guard replaced", () => {
   const manifestCheck = `if ! printf '%s' "$comment" | tr '\\t' '\\n' | grep -qxF "version:\${APP_VERSION}"; then
@@ -680,7 +704,9 @@ test("accepts readers that see the whole input", () => {
     "producer | grep -v x | sort",
     "producer | grep -e -q x",
     "producer | grep -- -q",
-    "producer | grep '-q'",
+    "producer | grep -- '-q'",
+    "producer | grep -e '-q'",
+    "producer | 'grep' '-e' '-q'",
     "lookup || grep -q x file",
     "producer | tail -n 1",
     "printf '%s\\n' 'a | head -n 1'",
