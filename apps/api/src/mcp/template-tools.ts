@@ -995,15 +995,17 @@ const handleListTemplatesTool: TypedMcpToolHandler<
     return await describeTemplateDetail({ templateId, context });
   }
 
-  let boundary: ReturnType<typeof decodeTemplateListCursor> | undefined;
+  let boundary:
+    NonNullable<ReturnType<typeof decodeTemplateListCursor>> | undefined;
   if (requestedCursor !== undefined) {
-    boundary = decodeTemplateListCursor(requestedCursor);
-    if (boundary === null) {
+    const decoded = decodeTemplateListCursor(requestedCursor);
+    if (decoded === null) {
       return invalidCursorResult({
         cursor: requestedCursor,
         tool: "list_templates",
       });
     }
+    boundary = decoded;
   }
 
   const limit = routed.output.limit ?? LIMITS.templatesCount;
