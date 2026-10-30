@@ -122,9 +122,6 @@
       "pl-courts-page.json.gz[12]": {
         "sentence-cut": 1
       },
-      "pl-courts-page.json.gz[14]": {
-        "sentence-cut": 1
-      },
       "pl-courts-page.json.gz[15]": {
         "sentence-cut": 2
       },
@@ -134,11 +131,11 @@
       },
       "pl-courts-page.json.gz[19]": {
         "page-number-block": 1,
-        "sentence-cut": 2
+        "sentence-cut": 1
       },
       "pl-courts-page.json.gz[20]": {
         "page-number-block": 1,
-        "sentence-cut": 3
+        "sentence-cut": 2
       },
       "pl-courts-page.json.gz[21]": {
         "page-number-block": 1
@@ -151,7 +148,7 @@
       },
       "pl-courts-page.json.gz[27]": {
         "page-number-block": 1,
-        "sentence-cut": 2
+        "sentence-cut": 1
       },
       "pl-courts-page.json.gz[28]": {
         "sentence-cut": 1
@@ -162,7 +159,7 @@
       },
       "pl-courts-page.json.gz[30]": {
         "page-number-block": 1,
-        "sentence-cut": 2
+        "sentence-cut": 1
       },
       "pl-courts-page.json.gz[32]": {
         "page-number-block": 1,
@@ -172,8 +169,7 @@
         "page-number-block": 1
       },
       "pl-courts-page.json.gz[36]": {
-        "page-number-block": 1,
-        "sentence-cut": 1
+        "page-number-block": 1
       },
       "pl-courts-page.json.gz[37]": {
         "page-number-block": 1,
@@ -201,7 +197,7 @@
       },
       "pl-courts-page.json.gz[44]": {
         "page-number-block": 1,
-        "sentence-cut": 2
+        "sentence-cut": 1
       },
       "pl-courts-page.json.gz[45]": {
         "page-number-block": 1,
@@ -211,15 +207,14 @@
         "sentence-cut": 1
       },
       "pl-courts-page.json.gz[47]": {
-        "page-number-block": 1,
-        "sentence-cut": 1
+        "page-number-block": 1
       },
       "pl-courts-page.json.gz[48]": {
         "page-number-block": 1
       },
       "pl-courts-page.json.gz[49]": {
         "page-number-block": 1,
-        "sentence-cut": 2
+        "sentence-cut": 1
       },
       "pl-courts-page.json.gz[51]": {
         "page-number-block": 1,
@@ -241,7 +236,7 @@
       },
       "pl-courts-page.json.gz[63]": {
         "page-number-block": 1,
-        "sentence-cut": 2
+        "sentence-cut": 1
       },
       "pl-courts-page.json.gz[65]": {
         "page-number-block": 1,
@@ -347,7 +342,7 @@
         "sentence-cut": 1
       },
       "pl-courts-dump-day.json.gz:3": {
-        "sentence-cut": 2
+        "sentence-cut": 1
       },
       "pl-courts-dump-day.json.gz:4": {
         "sentence-cut": 5
@@ -392,6 +387,12 @@
         "sentence-cut": 1
       },
       "pl-courts-dump-day.json.gz:38": {
+        "sentence-cut": 1
+      },
+      "pl-courts-dump-day.json.gz:40": {
+        "sentence-cut": 1
+      },
+      "pl-courts-dump-day.json.gz:41": {
         "sentence-cut": 1
       },
       "pl-courts-dump-day.json.gz:50": {
@@ -595,7 +596,7 @@
         "page-number-block": 2
       },
       "pl-kis-listing-06-wis.json:0": {
-        "sentence-cut": 2
+        "sentence-cut": 3
       },
       "pl-kis-listing-09-wis-uch.json:0": {
         "sentence-cut": 2
@@ -625,9 +626,6 @@
         "sentence-cut": 66,
         "stray-leading-number": 24,
         "page-number-block": 13
-      },
-      "pl-uokik-ruling-iii-sk-17-09.pdf": {
-        "sentence-cut": 1
       },
       "pl-uokik-view-2011.json.gz:200": {
         "sentence-cut": 66,

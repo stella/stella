@@ -17,13 +17,13 @@ import {
 import type { StructureFidelityRule } from "@/api/lib/legal-search/parsers/structure-fidelity";
 import { isRecord } from "@/api/lib/type-guards";
 
-import { collectParserOutputs } from "../../../../../scripts/parser-output-fixtures";
+import { collectParserOutputs } from "../../../../../scripts/parser-output-fixtures.ts";
 
 /**
  * Text stored without a readable AST: the parser emitted none, or the reader
  * schema rejected the one it emitted and only the text was kept.
  */
-export const AST_MISSING_FINDING = "ast-missing";
+const AST_MISSING_FINDING = "ast-missing";
 
 export type StructureFidelityFindingKind =
   StructureFidelityRule | typeof AST_MISSING_FINDING;
