@@ -35,6 +35,8 @@ await runScriptWithErrorOutput(async () => {
   const migrationsFolder = nodePath.resolve(import.meta.dir, "../../drizzle");
   const connection = await client.reserve();
   try {
+    // Table admission requires lease-aware scheduler workers. The first
+    // cutover drains older workers before applying application migrations.
     const result = await runMigrationsUntilSettled({
       connection,
       databaseUrl: url,

@@ -25,6 +25,8 @@ import {
 // committed source: no network, secrets, clock, randomness, or untracked
 // machine state. Each entry names what was checked.
 const PURE_AUTOFIX = {
+  // Parses committed migration SQL and hashes its bytes; no database or clock.
+  "migration-lock-manifest": "scripts/generate-migration-lock-manifest.ts",
   // Reads canonical source-entry JSON; Git staging never changes the literal maps.
   "parser-registry": "scripts/generate-parser-registry.ts",
   "withdrawn-decision-labels":

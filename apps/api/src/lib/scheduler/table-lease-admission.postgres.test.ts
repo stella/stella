@@ -13,7 +13,9 @@ import {
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
 import { acquireMigrationTableLeases } from "../../db/table-lease-queue";
+import { DECLARED_SCHEDULER_JOBS, tablesForSchedulerTask } from "./jobs";
 import { DEFAULT_LEASE_MS } from "./lease-timing";
+import { REGISTERED_SCHEDULER_TASK_NAMES } from "./registry";
 import { acquireNextDueJob, runSchedulerOnce } from "./runner";
 import type { SchedulerTask } from "./types";
 
@@ -23,6 +25,31 @@ const requestedTable = getTableName(caseLawDecisions);
 const unrelatedTable = getTableName(legislationWorks);
 
 describe.skipIf(!enabled)("scheduler table lease admission (postgres)", () => {
+  test("every scheduler declaration names a migrated public table", async () => {
+    if (!databaseUrl) {
+      throw new TypeError("DATABASE_URL is required");
+    }
+    const declared = [
+      ...new Set([
+        ...DECLARED_SCHEDULER_JOBS.flatMap(({ tables }) => [
+          ...tables.reads,
+          ...tables.writes,
+        ]),
+        ...REGISTERED_SCHEDULER_TASK_NAMES.flatMap((task) =>
+          tablesForSchedulerTask(task),
+        ),
+      ]),
+    ];
+    expect(declared.length).toBeGreaterThan(0);
+    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      const tables = await openClient().sql.unsafe<{ name: string }[]>(
+        "SELECT relation.relname AS name FROM pg_class relation JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace WHERE namespace.nspname = 'public' AND relation.relkind IN ('r', 'p')",
+      );
+      const existing = new Set(tables.map(({ name }) => name));
+      expect(declared.filter((name) => !existing.has(name))).toEqual([]);
+    });
+  });
+
   test("a queued migration drains its older execution while unrelated due work runs", async () => {
     if (!databaseUrl) {
       throw new TypeError("DATABASE_URL is required");

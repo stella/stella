@@ -18,6 +18,7 @@ import { waitForExternalState } from "@stll/property-testing/external-state";
 
 import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
+import { generateMigrationLockManifest } from "../../../../scripts/generate-migration-lock-manifest";
 import migrationAliasInventory from "../lib/db/migration-alias-inventory.json";
 import { assertMigrationHistory } from "../lib/db/migration-history";
 import { isPgError, PG_ERROR } from "../lib/pg-error";
@@ -27,6 +28,7 @@ import {
   CORPUS_SCHEMA_LANE_TRY_SHARED_XACT_SQL,
   isCorpusSchemaLaneGranted,
 } from "./corpus-schema-lane";
+import { MIGRATION_LOCK_MANIFEST_FILE } from "./migration-lock-manifest";
 import {
   MIGRATION_LOCK_WAIT_FAILURE,
   MIGRATION_LOCK_WAIT_RETRY_BUDGET_MS,
@@ -84,6 +86,17 @@ const withBundle = async <T>(
       mkdirSync(migrationDir);
       writeFileSync(nodePath.join(migrationDir, "migration.sql"), file.sql);
     }
+    writeFileSync(
+      nodePath.join(folder, MIGRATION_LOCK_MANIFEST_FILE),
+      JSON.stringify(
+        generateMigrationLockManifest(
+          files.map(({ name, sql }) => ({
+            file: `apps/api/drizzle/${name}/migration.sql`,
+            source: sql,
+          })),
+        ),
+      ),
+    );
     return await work(folder);
   } finally {
     rmSync(folder, { recursive: true, force: true });
@@ -96,6 +109,7 @@ const withCorpusBundle = async (work: (folder: string) => Promise<void>) => {
   );
   const roleCreation = /CREATE ROLE ([a-z_][a-z0-9_]*) NOLOGIN;/gu;
   let guardedRoleCreations = 0;
+  const sources: { file: string; source: string }[] = [];
   try {
     for (const name of readdirSync(CORPUS_DIR)) {
       const source = nodePath.join(CORPUS_DIR, name, "migration.sql");
@@ -117,7 +131,15 @@ const withCorpusBundle = async (work: (folder: string) => Promise<void>) => {
       const target = nodePath.join(folder, name);
       mkdirSync(target);
       writeFileSync(nodePath.join(target, "migration.sql"), testSql);
+      sources.push({
+        file: `apps/api/drizzle/${name}/migration.sql`,
+        source: testSql,
+      });
     }
+    writeFileSync(
+      nodePath.join(folder, MIGRATION_LOCK_MANIFEST_FILE),
+      JSON.stringify(generateMigrationLockManifest(sources)),
+    );
     expect(guardedRoleCreations).toBe(7);
     await work(folder);
   } finally {

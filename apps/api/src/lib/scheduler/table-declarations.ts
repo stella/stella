@@ -1,16 +1,15 @@
 import { panic } from "better-result";
 
-import { allSchemaTableNames } from "@/api/lib/account-export/schema-census";
-import type { SchemaTableName } from "@/api/lib/account-export/schema-census";
+import { SCHEMA_TABLE_NAMES } from "../../db/schema-table-names.gen";
 
-export type SchedulerTableName = SchemaTableName;
+export type SchedulerTableName = (typeof SCHEMA_TABLE_NAMES)[number];
 
 export type SchedulerTableAccess = {
   reads: readonly SchedulerTableName[];
   writes: readonly SchedulerTableName[];
 };
 
-export const allSchedulerTableNames = allSchemaTableNames;
+export const allSchedulerTableNames = () => SCHEMA_TABLE_NAMES;
 
 type TableDeclarationCandidate = {
   id: string;
@@ -21,7 +20,7 @@ type TableDeclarationCandidate = {
 export const assertSchedulerTableDeclarations = (
   jobs: readonly TableDeclarationCandidate[],
 ): void => {
-  const names = allSchemaTableNames();
+  const names = SCHEMA_TABLE_NAMES;
   for (const { id, tables } of jobs) {
     if (
       tables === undefined ||

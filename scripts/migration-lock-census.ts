@@ -790,6 +790,25 @@ export const migrationLockPairs = (sources: readonly MigrationSource[]) => {
     );
 };
 
+/** Relation projection of the same classified forms used by migrationLockPairs. */
+export const migrationRelationLocks = (sources: readonly MigrationSource[]) =>
+  sources.map(({ file, source }) => {
+    const census = censusSql(source);
+    if (census.errors.length > 0) {
+      return panic(`${file}: ${census.errors.join("; ")}`);
+    }
+    return {
+      migration: migrationFolder(file),
+      locks: census.forms.flatMap(({ lockMode, lockTargets }) =>
+        lockMode === "NO EXISTING RELATION"
+          ? []
+          : (lockTargets.length > 0 ? lockTargets : [undefined]).map(
+              (target) => ({ mode: lockMode, target }),
+            ),
+      ),
+    };
+  });
+
 type CheckMigrationLocksOptions = {
   sources: readonly MigrationSource[];
   baseline: readonly LockBaselineEntry[];
