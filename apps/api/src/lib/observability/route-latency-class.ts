@@ -664,6 +664,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "POST /v1/number-series": "crud",
   "POST /v1/number-series/:numberSeriesId/archive": "crud",
   "POST /v1/number-series/:numberSeriesId/default": "crud",
+  "POST /v1/organizations/slug": "crud",
   "POST /v1/organization-settings": "crud",
   "POST /v1/organization-settings/ai-config": "crud",
   "POST /v1/organization-settings/ai-config/defaults-preview": "crud",

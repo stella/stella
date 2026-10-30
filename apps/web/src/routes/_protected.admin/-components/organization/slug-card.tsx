@@ -21,6 +21,7 @@ import { Frame, FramePanel } from "@stll/ui/frame";
 import { Input } from "@stll/ui/input";
 
 import { api } from "@/lib/api";
+import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { APIError, unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 
@@ -43,11 +44,14 @@ export const OrganizationSlugCard = ({
   const [mode, setMode] = useState<"explicit" | "opaque">("explicit");
   const mutation = useMutation({
     mutationFn: async () =>
-      unwrapApiResponse(
-        await api.organizations.slug.post(
-          mode === "opaque"
-            ? { type: "opaque" }
-            : { type: "explicit", slug: value },
+      await invokeCapability("organizations.slug.update", async (request) =>
+        unwrapApiResponse(
+          await api.organizations.slug.post(
+            mode === "opaque"
+              ? { type: "opaque" }
+              : { type: "explicit", slug: value },
+            request,
+          ),
         ),
       ),
     onError: (error) => {
@@ -104,6 +108,11 @@ export const OrganizationSlugCard = ({
             </DialogDescription>
           </DialogHeader>
           <Form
+            dirty={mode === "opaque" || value !== slug}
+            onDiscard={() => {
+              setValue(slug);
+              setMode("explicit");
+            }}
             onSubmit={(event) => {
               event.preventDefault();
               if (!mutation.isPending) {

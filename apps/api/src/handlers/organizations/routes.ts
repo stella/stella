@@ -1,10 +1,13 @@
-import { organizationSlugBudget } from "@/api/handlers/organizations/slug/rate-limit";
 import updateSlug from "@/api/handlers/organizations/slug/update";
-import { routes } from "@/api/http/route";
+import { mount, routes } from "@/api/http/route";
+import { organizationSlugBudget } from "@/api/lib/rate-limit/organization-slug";
 
-export const organizationsRoute = routes(
-  {
-    "/slug": { POST: updateSlug },
-  },
-  { prefix: "/organizations", middleware: [organizationSlugBudget] },
+export const organizationsRoute = mount(
+  [
+    routes(
+      { "/slug": { POST: updateSlug } },
+      { middleware: [organizationSlugBudget] },
+    ),
+  ],
+  { prefix: "/organizations" },
 );

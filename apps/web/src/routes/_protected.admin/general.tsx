@@ -49,6 +49,11 @@ function OrganizationGeneralPage() {
   );
   const canChangeOrganization = usePermissions({ organization: ["update"] });
   const isOwner = usePermissions({ organization: ["delete"] });
+  const refreshOrganization = async () => {
+    await router.options.context.queryClient.invalidateQueries({
+      queryKey: organizationKeys.root,
+    });
+  };
   // The danger zone awaits this inside its mutation, so a failure reaches the
   // mutation's error handling rather than floating.
   const leaveOrganization = async () => {
@@ -63,11 +68,7 @@ function OrganizationGeneralPage() {
       <OrganizationSlugCard
         slug={organization.slug}
         canChange={canChangeOrganization}
-        onSuccess={async () => {
-          await router.options.context.queryClient.invalidateQueries({
-            queryKey: organizationKeys.root,
-          });
-        }}
+        onSuccess={refreshOrganization}
       />
       <Frame>
         <FramePanel>

@@ -12,8 +12,8 @@ import { rootDb } from "@/api/db/root";
 import { auditLogs } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { organizationsRoute } from "@/api/handlers/organizations/routes";
-import { ORGANIZATION_SLUG_RATE_LIMIT } from "@/api/handlers/organizations/slug/rate-limit";
 import { getAuth } from "@/api/lib/auth";
+import { ORGANIZATION_SLUG_RATE_LIMIT } from "@/api/lib/rate-limit/organization-slug";
 import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 import { signInHuman } from "@/api/tests/helpers/human-session";
 import type { HumanBrowser } from "@/api/tests/helpers/human-session";
@@ -118,6 +118,72 @@ describe.skipIf(!runPostgresTests)(
         );
       });
     }
+
+    test("an organization A member cannot change organization B's slug", async () => {
+      const first = await createOrganization();
+      const second = await createOrganization();
+      const browser = await addMember({
+        owner: first.owner,
+        organizationId: first.org.id,
+        role: "member",
+      });
+      const beforeAudit = await rootDb
+        .select()
+        .from(auditLogs)
+        .where(eq(auditLogs.organizationId, second.org.id));
+      const selectOtherOrganization = await getAuth().api.setActiveOrganization(
+        {
+          body: { organizationId: second.org.id },
+          headers: browser.headers(),
+          asResponse: true,
+        },
+      );
+      expect(selectOtherOrganization.status).toBe(403);
+      const slug = `isolated-${Bun.randomUUIDv7()}`;
+      const response = await server.fetch(
+        new Request("http://localhost/organizations/slug", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            cookie: browser.cookieHeader(),
+          },
+          body: JSON.stringify({
+            type: "explicit",
+            slug,
+            organizationId: second.org.id,
+          }),
+        }),
+      );
+      expect(response.status).toBe(422);
+      expect(
+        (await updateSlug(browser, { type: "explicit", slug })).status,
+      ).toBe(403);
+      for (const { org } of [first, second]) {
+        expect(
+          await rootDb
+            .select({ slug: organization.slug })
+            .from(organization)
+            .where(eq(organization.id, org.id)),
+        ).toEqual([{ slug: org.slug }]);
+      }
+      expect(
+        await rootDb
+          .select()
+          .from(auditLogs)
+          .where(eq(auditLogs.organizationId, second.org.id)),
+      ).toEqual(beforeAudit);
+      const permitted = await updateSlug(second.owner, {
+        type: "explicit",
+        slug,
+      });
+      expect(permitted.status, await permitted.clone().text()).toBe(200);
+      expect(
+        await rootDb
+          .select({ slug: organization.slug })
+          .from(organization)
+          .where(eq(organization.id, second.org.id)),
+      ).toEqual([{ slug }]);
+    });
 
     test("members cannot rename their organization", async () => {
       const { owner, org } = await createOrganization();

@@ -19,7 +19,6 @@ import {
   createFeedbackIntakeGuards,
   type FeedbackIntakeGuards,
 } from "@/api/handlers/feedback/intake-guards";
-import { ORGANIZATION_SLUG_RATE_LIMIT } from "@/api/handlers/organizations/slug/rate-limit";
 import {
   consumeSkillSourceRateLimit,
   type SkillSourceRateLimitResult,
@@ -28,6 +27,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { MCP_RATE_LIMITS } from "@/api/lib/rate-limit/budget-config";
 import { recordBudgetRejection } from "@/api/lib/rate-limit/budget-observability";
+import { ORGANIZATION_SLUG_RATE_LIMIT } from "@/api/lib/rate-limit/organization-slug";
 
 /** Counter bucket, distinct from the feedback intake's per-IP/per-org buckets. */
 const INVOKE_CAPABILITY_BUCKET = "mcp:invoke_capability";

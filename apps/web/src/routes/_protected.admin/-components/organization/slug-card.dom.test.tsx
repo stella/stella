@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { CAPABILITY_REQUEST_HEADER } from "@stll/api-contract/capability-request";
+
 import arMessages from "@/i18n/langs/ar.json" with { type: "json" };
 import messages from "@/i18n/langs/en.json" with { type: "json" };
 import { unregisterDomEnvironment } from "@/test-dom-environment";
@@ -51,13 +53,15 @@ const mount = (locale: "en" | "ar" = "en", canChange = true) => {
 };
 
 const requestsWithResponse = (respond: () => Promise<Response>) => {
-  const requests: { path: string; body: unknown }[] = [];
+  const requests: { path: string; body: unknown; capability: string | null }[] =
+    [];
   globalThis.fetch = Object.assign(
     async (input: RequestInfo | URL, init?: RequestInit) => {
       const request = new Request(input, init);
       requests.push({
         path: new URL(request.url).pathname,
         body: await request.json(),
+        capability: request.headers.get(CAPABILITY_REQUEST_HEADER),
       });
       return await respond();
     },
@@ -99,6 +103,7 @@ test("an explicit slug is submitted and closes the dialog after success", async 
   expect(requests).toEqual([
     {
       path: "/v1/organizations/slug",
+      capability: "organizations.slug.update",
       body: { type: "explicit", slug: "new-firm" },
     },
   ]);
@@ -124,7 +129,11 @@ test("the Arabic opaque option sends no explicit slug", async () => {
   );
   await waitFor(() => expect(completed()).toBe(1));
   expect(requests).toEqual([
-    { path: "/v1/organizations/slug", body: { type: "opaque" } },
+    {
+      path: "/v1/organizations/slug",
+      body: { type: "opaque" },
+      capability: "organizations.slug.update",
+    },
   ]);
 });
 

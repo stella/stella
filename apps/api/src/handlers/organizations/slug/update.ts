@@ -3,11 +3,12 @@ import * as v from "valibot";
 
 import { ORGANIZATION_SLUG_RULES } from "@stll/auth-model";
 
-import { consumeOrganizationSlugRateLimit } from "@/api/handlers/organizations/slug/rate-limit";
+import { changeOrganizationSlug } from "@/api/db/root";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { changeOrganizationSlug } from "@/api/lib/db/organization-slug";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { consumeOrganizationSlugRateLimit } from "@/api/lib/rate-limit/organization-slug";
 
 const BASE32_ALPHABET = "abcdefghijklmnopqrstuvwxyz234567";
 const OPAQUE_SUFFIX_LENGTH = 10;
@@ -41,7 +42,7 @@ const config = {
   ]),
 } satisfies HandlerConfig;
 
-export default createSafeRootHandler(
+const updateOrganizationSlug = createSafeRootHandler(
   config,
   async function* ({ body, session, user, memberRole, recordAuditEvent }) {
     if (session.credentialType === "agent_run") {
@@ -77,3 +78,10 @@ export default createSafeRootHandler(
     return Result.ok(updated);
   },
 );
+
+declareAggregateMutation(updateOrganizationSlug, {
+  type: "aggregate",
+  aggregates: ["organization"],
+});
+
+export default updateOrganizationSlug;
