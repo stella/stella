@@ -17,6 +17,7 @@ import {
   ADVISORY_LOCK_MODES,
   AggregateLockBusy,
   AggregateLockUpgradeRefused,
+  createAggregateSavepointDatabase,
   withAggregateLock,
   withAggregateSavepoint,
   withAggregateTransaction,
@@ -270,3 +271,35 @@ test.each(["commit", "rollback"] as const)(
     }
   },
 );
+
+test("transaction-owning operations retain their parent's aggregate history through a savepoint database", async () => {
+  const { tx, statements } = recorder();
+  const fixture = aggregateFences();
+  const database = createAggregateSavepointDatabase(tx);
+  expect(
+    await withAggregateTransaction(database, async (child) => {
+      await withAggregateLock({
+        ...fixture.orgFeatureAdmission,
+        tx: child,
+        mode: "shared",
+      });
+      return "complete";
+    }),
+  ).toBe("complete");
+  expect(
+    await rejectionOf(
+      withAggregateLock({
+        ...fixture.orgFeatureAdmission,
+        tx,
+        mode: "exclusive",
+        wait: "nowait",
+      }),
+    ),
+  ).toBeInstanceOf(AggregateLockUpgradeRefused);
+  expect(statements).toHaveLength(1);
+  expect(
+    await rejectionOf(withAggregateTransaction(tx, async () => "unused")),
+  ).toMatchObject({
+    message: "Use the aggregate savepoint owner for nested transactions",
+  });
+});

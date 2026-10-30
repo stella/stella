@@ -591,8 +591,10 @@ const runReplayTickWithOptions = async (
   return report;
 };
 
-export const runEnabledReplayTick = async (signal: AbortSignal) =>
-  await runReplayTickWithOptions(signal, {});
+export const runEnabledReplayTick = async (
+  signal: AbortSignal,
+  enrolment: Readonly<Record<AdapterKey, ReplayEnrolment>> = REPLAY_ENROLMENT,
+) => await runReplayTickWithOptions(signal, { enrolment });
 
 /** Refuse fixture access before loading any database or storage runtime. */
 export const getReplayTickFixtureRunner = () => {
@@ -691,11 +693,11 @@ const parseReplayTickCommand = (args: readonly string[]) => {
 type RunReplayTickScriptOptions = {
   args?: readonly string[];
   environment?: ReturnType<typeof readReplayTickEnvironment>;
-  policies?: readonly ReplayEnrolment[];
   enrolment?: Readonly<Record<AdapterKey, ReplayEnrolment>>;
   resetDryRun?: (options: ResetReplayDryRunOptions) => Promise<boolean>;
   runEnabled?: (
     signal: AbortSignal,
+    enrolment: Readonly<Record<AdapterKey, ReplayEnrolment>>,
   ) => Promise<BackgroundReplayTickReport | null>;
   log?: (record: unknown) => void;
   timeoutSignal?: (timeoutMs: number) => AbortSignal;
@@ -704,7 +706,6 @@ type RunReplayTickScriptOptions = {
 export const runReplayTickScript = async ({
   args = process.argv.slice(2),
   environment = readReplayTickEnvironment(),
-  policies = Object.values(REPLAY_ENROLMENT),
   enrolment = REPLAY_ENROLMENT,
   resetDryRun = resetReplayDryRun,
   runEnabled = runEnabledReplayTick,
@@ -723,7 +724,7 @@ export const runReplayTickScript = async ({
       !environment.CASE_LAW_REPLAY_ENABLED ||
       environment.CASE_LAW_REPLAY_KILL_SWITCH ||
       (command.type === "tick" &&
-        policies.every((policy) => policy.mode === "off")) ||
+        Object.values(enrolment).every((policy) => policy.mode === "off")) ||
       (command.type === "reset-dry-run" &&
         environment.CASE_LAW_REPLAY_DISABLED_SOURCES.split(",").some(
           (key) => key.trim() === command.adapterKey,
@@ -750,7 +751,7 @@ export const runReplayTickScript = async ({
       });
       return 0;
     }
-    const report = await runEnabled(signal);
+    const report = await runEnabled(signal, enrolment);
     signal.throwIfAborted();
     return report?.status === "failed" ? 1 : 0;
   });

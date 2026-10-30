@@ -23,6 +23,7 @@
     "Tauri counterpart autofix tests": ["@stll/desktop", "scripts/**"],
     "Lockfile release-age guard": ["**"],
     "Restore generated sources": ["**"],
+    "Download generated sources": ["**"],
     "API test timeout guard": [
       "apps/api/**/*.test.ts",
       "scripts/api-test-timeout-guard.ts",
@@ -220,7 +221,8 @@
       "packages/cli/src/capability-catalog-data.ts",
       "scripts/ci-generated-sources.test.ts",
       "scripts/**",
-      "@stll/sha256"
+      "@stll/sha256",
+      "@stll/test-state"
     ],
     "Windows dry-run receipt contract": [
       ".github/workflows/ci.yml",
@@ -505,7 +507,8 @@
       "@stll/web",
       "scripts/**",
       "docs/changelog/**",
-      "@stll/sha256"
+      "@stll/sha256",
+      "@stll/test-state"
     ],
     "Test release queue history guard": [
       "scripts/check-release-queue-history*",
@@ -705,7 +708,8 @@
       "@stll/redis-config",
       "@stll/concurrency",
       "@stll/fetch",
-      "@stll/docx-utils"
+      "@stll/docx-utils",
+      "@stll/locales"
     ],
     "Test projection-totality classification": [
       "@stll/api",
@@ -724,6 +728,7 @@
       "@stll/invoicing",
       "@stll/legal-ast",
       "@stll/legal-atlas",
+      "@stll/locales",
       "@stll/money",
       "@stll/permissions",
       "@stll/portable-path",
@@ -759,12 +764,15 @@
     "Record static check receipts": ["**"],
     "Prepare environment": ["**"],
     "Restore generated sources": ["**"],
+    "Download generated sources": ["**"],
     "Compute affected flag": ["**"],
     "Format": ["**"],
     "Test unsignalled skip detection": ["**"],
     "Select measured ratchet base from the target branch": ["**"],
     "Ratchet guard": ["**"],
     "Ratchet scanner invariants": ["**"],
+    "Web raw JSON API census self-test": ["@stll/web", "scripts/**"],
+    "Web raw JSON API census": ["@stll/web", "scripts/**"],
     "Test subject reachability census": ["**"],
     "Deployment feature guard": ["**"],
     "Processed-field backlog guard": ["@stll/api"],
@@ -779,6 +787,7 @@
     "SHA-256 migration ledger": ["**"],
     "Custom lint rule coverage": ["**"],
     "Custom lint test timeout policy": ["**"],
+    "Guard rollout scope tests": ["**"],
     "Dated waiver lifecycle guards": ["**"],
     "Documentation source policy rule": ["**"],
     "Instruction references": ["**"],
@@ -797,6 +806,7 @@
   },
   "code-quality-web-rest": {
     "Restore generated sources": ["**"],
+    "Download generated sources": ["**"],
     "Prepare environment": ["**"],
     "Install the docs MCP server": ["**"],
     "Typecheck coverage": ["**"],
@@ -810,6 +820,7 @@
     "Aggregate ownership": ["**"],
     "Split-button census": ["**"],
     "Database awaits in loops": ["**"],
+    "Online unique index dependency guard": ["**"],
     "API timeout mutation guard": ["**"],
     "Result consumption (rest)": ["**"]
   }

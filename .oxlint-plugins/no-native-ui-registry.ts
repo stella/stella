@@ -117,9 +117,16 @@ export const NO_NATIVE_UI_REGISTRY = {
     roles: ["button"],
     inputTypes: ["button", "image", "reset", "submit"],
   }),
-  calendar: owned(
+  "calendar-primitives": owned(
     DATE_INPUT_RULE,
     "the native date pickers are reported there",
+  ),
+  "resource-calendar": owned(
+    DATE_INPUT_RULE,
+    "the native date pickers are reported there",
+  ),
+  "resource-calendar.logic": notComponent(
+    "resource calendar placement helpers",
   ),
   checkbox: native("Checkbox from @stll/ui/checkbox", {
     roles: ["checkbox"],
@@ -277,6 +284,7 @@ export const NO_NATIVE_UI_REGISTRY = {
     OVERFLOW_RULE,
     "raw overflow scrolling is reported there",
   ),
+  "scroll-edge-fade": notComponent("scroll edge mask helpers"),
   "scroll-to-top": noNative(
     "a floating Button bound to a scroll container; its markup is the button rule's",
   ),
@@ -341,6 +349,10 @@ export const NO_NATIVE_UI_REGISTRY = {
   tabs: native("Tabs from @stll/ui/tabs", {
     roles: ["tablist", "tab", "tabpanel"],
   }),
+  text: noNative(
+    "text in one of the design system's roles; a <span> or <p> is ordinary " +
+      "markup on the web",
+  ),
   "text-mark": owned(
     "no-ad-hoc-text-mark/no-ad-hoc-text-mark",
     "raw <mark> and hand-styled marks are reported there",

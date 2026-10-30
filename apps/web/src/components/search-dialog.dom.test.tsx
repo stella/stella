@@ -80,40 +80,42 @@ const folderHit = {
   mimeType: null,
 } as const satisfies GlobalSearchHit;
 
+const citationDecision = {
+  decisionId: "00000000-0000-4000-8000-000000000049",
+  caseNumber: "22 As 40/2025",
+  caseNumberType: "case-number",
+  slug: "22-as-40-2025",
+  ecli: "ECLI:CZ:NSS:2026:22.AS.40.2025.49",
+  identifiers: [{ type: "case-number", value: "22 As 40/2025 - 49" }],
+  court: "Nejvyšší správní soud",
+  courtAbbreviation: "NSS",
+  courtTier: "supreme",
+  country: "CZE",
+  language: "cs",
+  languageAlternates: [],
+  decisionDate: "2026-01-29",
+  decisionType: "judgment",
+  sourceUrl: null,
+  headnote: {
+    type: TEXT_FIELD_TYPE.ABSENT,
+    reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+  },
+  keywords: null,
+  textWithheldReason: null,
+  textAvailability: "available",
+  headline: null,
+  anchorId: null,
+  citationCount: 0,
+  citationAuthority: 0,
+  matchingPassages: 1,
+  match: "all_terms",
+  createdAt: "2026-01-29T00:00:00.000Z",
+} satisfies PublicLawData<
+  typeof api.case.decisions.search.post
+>["hits"][number];
+
 const citationResponse = {
-  hits: [
-    {
-      decisionId: "00000000-0000-4000-8000-000000000049",
-      caseNumber: "22 As 40/2025",
-      caseNumberType: "case-number",
-      slug: "22-as-40-2025",
-      ecli: "ECLI:CZ:NSS:2026:22.AS.40.2025.49",
-      identifiers: [{ type: "case-number", value: "22 As 40/2025 - 49" }],
-      court: "Nejvyšší správní soud",
-      courtAbbreviation: "NSS",
-      courtTier: "supreme",
-      country: "CZE",
-      language: "cs",
-      languageAlternates: [],
-      decisionDate: "2026-01-29",
-      decisionType: "judgment",
-      sourceUrl: null,
-      headnote: {
-        type: TEXT_FIELD_TYPE.ABSENT,
-        reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
-      },
-      keywords: null,
-      textWithheldReason: null,
-      textAvailability: "available",
-      headline: null,
-      anchorId: null,
-      citationCount: 0,
-      citationAuthority: 0,
-      matchingPassages: 1,
-      match: "all_terms",
-      createdAt: "2026-01-29T00:00:00.000Z",
-    },
-  ],
+  hits: [citationDecision],
   facets: null,
   nextCursor: null,
   paginationOutcome: SEARCH_PAGINATION_COMPLETE,
@@ -127,12 +129,36 @@ const citationResponse = {
 const searchRequestBodies: unknown[] = [];
 let searchHits: readonly GlobalSearchHit[] = [hit];
 let searchResponseGate: Promise<void> | null = null;
+let citationHits = citationResponse.hits;
+const supplementalResource = resourceRef({
+  type: RESOURCE_TYPE.CASE_LAW_DECISION,
+  id: toSafeId<"caseLawDecision">("00000000-0000-4000-8000-000000000050"),
+});
+const supplementalHit = {
+  id: "case-law:00000000-0000-4000-8000-000000000050",
+  type: "case-law",
+  resource: supplementalResource,
+  resourceName: toResourceName(supplementalResource),
+  decisionId: supplementalResource.id,
+  title: "Supplemental decision",
+  caseNumber: "C-1/24",
+  identifiers: [{ type: "case-number", value: "C-1/24" }],
+  court: "Court of Justice",
+  courtAbbreviation: null,
+  country: "EU",
+  language: "en",
+  languageAlternates: [],
+  slug: "c-1-24",
+  decisionDate: null,
+  headline: null,
+  updatedAt: "2026-10-22T00:00:00.000Z",
+} as const satisfies GlobalSearchHit;
 globalThis.fetch = Object.assign(
   async (input: string | URL | Request, init?: RequestInit) => {
     const request = new Request(input, init);
     const url = new URL(request.url);
     if (url.pathname.endsWith("/case/decisions/search")) {
-      return Response.json(citationResponse);
+      return Response.json({ ...citationResponse, hits: citationHits });
     }
     if (url.pathname.endsWith("/law/statutes")) {
       return Response.json({
@@ -142,10 +168,11 @@ globalThis.fetch = Object.assign(
       } satisfies PublicLawData<typeof api.law.statutes.get>);
     }
     if (url.pathname.endsWith("/search")) {
-      searchRequestBodies.push(await request.json());
+      const body = await request.json();
+      searchRequestBodies.push(body);
       await searchResponseGate;
       return Response.json({
-        hits: searchHits,
+        hits: body.types?.includes("case-law") ? [supplementalHit] : searchHits,
         nextCursor: null,
         totalCount: 1,
         facets: { editor: [], mimeType: [], type: [], workspace: [] },
@@ -198,6 +225,7 @@ afterEach(() => {
   searchRequestBodies.length = 0;
   searchHits = [hit];
   searchResponseGate = null;
+  citationHits = citationResponse.hits;
   assignUserStorage(undefined);
   useDevStore.setState({ publicLawPreview: false });
 });
@@ -314,7 +342,7 @@ test("a resolved citation is the first keyboard result above matter hits", async
     await citationRouter.load();
     return citationRouter;
   });
-  const input = await typeQuery("22 As 40/2025", "22 As 40/2025 - 49");
+  const input = await typeQuery("22 As 40/2025 - 49", "22 As 40/2025 - 49");
   expect(searchRequestBodies).toContainEqual(
     expect.objectContaining({ query: '"22 As 40/2025 - 49"' }),
   );
@@ -358,7 +386,7 @@ test("a resolved citation is the first keyboard result above matter hits", async
 test("citation expansion can be collapsed and ordinary keywords keep their search behavior", async () => {
   useDevStore.setState({ publicLawPreview: true });
   await mount();
-  await typeQuery("22 As 40/2025", "22 As 40/2025");
+  await typeQuery("22 As 40/2025 - 49", "22 As 40/2025");
   const caseLaw = testing.screen.getByRole("button", {
     name: messages.common.caseLaw,
   });
@@ -377,7 +405,7 @@ test("citation expansion can be collapsed and ordinary keywords keep their searc
   await typeQuery(hit.title, "agreement");
   expect(caseLaw.getAttribute("aria-expanded")).toBe("true");
 
-  await typeQuery("22 As 40/2025", "22 As 40/2025 - 49");
+  await typeQuery("22 As 40/2025 - 49", "22 As 40/2025 - 49");
   expect(caseLaw.getAttribute("aria-expanded")).toBe("true");
 });
 
@@ -387,7 +415,7 @@ test("a citation never displays stale loose keyword hits while its phrase search
   await typeQuery();
   const gate = Promise.withResolvers<undefined>();
   searchResponseGate = gate.promise;
-  await typeQuery("22 As 40/2025", "22 As 40/2025 - 49");
+  await typeQuery("22 As 40/2025 - 49", "22 As 40/2025 - 49");
   expect(
     testing.screen
       .getAllByRole("option")
@@ -452,7 +480,7 @@ test("Case law scope searches only case law and drops matter recents and actions
   expect(testing.screen.queryByText(messages.search.emptyState)).toBeNull();
   expect(testing.screen.queryByText(messages.common.actions)).toBeNull();
 
-  await typeQuery();
+  await typeQuery(supplementalHit.title);
   expect(searchRequestBodies.at(-1)).toMatchObject({ types: ["case-law"] });
 });
 
@@ -518,5 +546,58 @@ test("a folder result reveals the folder in the tree on screen, not the first tr
       pathname: appRouter.state.location.pathname,
       search: appRouter.state.location.search,
     }).toEqual(EXPECTED_OTHER_TREE_REVEAL),
+  );
+});
+
+test("a bare docket shows the sheet identifier of every matching decision", async () => {
+  useDevStore.setState({ publicLawPreview: true });
+  const first = citationDecision;
+  citationHits = [
+    first,
+    {
+      ...first,
+      decisionId: "00000000-0000-4000-8000-000000000050",
+      identifiers: [{ type: "case-number", value: "22 As 40/2025 - 50" }],
+    },
+  ];
+  await mount();
+  await typeQuery(hit.title, "22 As 40/2025");
+  await testing.waitFor(() => {
+    const rows = testing.screen.getAllByRole("option");
+    expect(
+      rows.some((row) => row.textContent.includes("22 As 40/2025 - 49")),
+    ).toBe(true);
+    expect(
+      rows.some((row) => row.textContent.includes("22 As 40/2025 - 50")),
+    ).toBe(true);
+  });
+});
+
+test("highlighting a citation clears the selected supplemental case-law preview", async () => {
+  const first = citationDecision;
+  citationHits = [
+    first,
+    {
+      ...first,
+      decisionId: "00000000-0000-4000-8000-000000000051",
+      identifiers: [{ type: "case-number", value: "22 As 40/2025 - 51" }],
+    },
+  ];
+  useDevStore.setState({ publicLawPreview: true });
+  await mount();
+  const input = await typeQuery(hit.title, "22 As 40/2025 - 49");
+  const supplemental = await testing.screen.findByRole("button", {
+    name: supplementalHit.title,
+  });
+  await testing.act(async () => {
+    testing.fireEvent.click(supplemental);
+  });
+  expect(supplemental.getAttribute("aria-pressed")).toBe("true");
+  await testing.act(async () => {
+    input.focus();
+    testing.fireEvent.keyDown(input, { key: "ArrowDown", code: "ArrowDown" });
+  });
+  await testing.waitFor(() =>
+    expect(supplemental.getAttribute("aria-pressed")).toBe("false"),
   );
 });

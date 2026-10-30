@@ -57,6 +57,10 @@ import { cn } from "@stll/ui/utils";
 
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import { CompanyRegistryPreview } from "@/components/company-registry-preview";
+import {
+  isLegalCitationSearch,
+  legalCitationSearchOptions,
+} from "@/components/legal-citation-search";
 import { RenderStormRegion } from "@/components/render-storm-canary";
 import { SavedSearches } from "@/components/saved-searches";
 import {
@@ -144,10 +148,6 @@ import { useChatUserContext } from "@/features/chat/hooks/use-chat-user-context"
 import { startNewThreadCommandHandoff } from "@/features/chat/lib/start-new-thread-command-handoff";
 import { invalidateGroupedChatThreads } from "@/features/chat/queries";
 import { useCommandActions } from "@/features/command-palette/hooks/use-command-actions";
-import {
-  isLegalCitationSearch,
-  legalCitationSearchOptions,
-} from "@/features/search/legal-citation-search";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -1939,6 +1939,13 @@ export const SearchDialog = ({
                 }
                 const highlightedHit = commandHits.at(eventDetails.index);
                 if (highlightedHit?.type === "legal-citation") {
+                  if (eventDetails.reason !== "none") {
+                    setSupplementalPreview((preview) =>
+                      preview.type === "internal"
+                        ? preview
+                        : { type: "internal" },
+                    );
+                  }
                   debouncedSetHighlightedHitId.cancel();
                   setHighlightedHitId(highlightedHit.id);
                   if (eventDetails.reason === "keyboard" && resultsElement) {

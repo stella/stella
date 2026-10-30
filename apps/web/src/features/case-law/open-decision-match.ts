@@ -188,7 +188,13 @@ export const readDecisionMatch = async ({
     return null;
   }
 
-  return resolveDecisionIdentity(intent, firstPage.decisions);
+  return resolveDecisionIdentity(
+    intent,
+    firstPage.decisions.map((decision) => ({
+      ...decision,
+      identifiers: "identifiers" in decision ? decision.identifiers : undefined,
+    })),
+  );
 };
 
 /**

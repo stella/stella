@@ -10,6 +10,7 @@ import {
   listIncomingDecisionCitations,
   listOutgoingDecisionCitations,
 } from "@/api/lib/case-law/decision-citations";
+import { decisionWorkOf } from "@/api/lib/case-law/decision-work";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import { defineWindowedRead } from "@/api/lib/files/windowed-read-surface";
 
@@ -27,6 +28,7 @@ export class ReaderAnswerCorpusError extends TaggedError(
 type ReaderAnswerParagraph = { paragraphId: string; text: string };
 export type ReaderAnswerDecision = {
   decisionId: SafeId<"caseLawDecision">;
+  language: string;
   paragraphs: ReaderAnswerParagraph[];
   decisionDate: string | null;
   court: string | null;
@@ -49,13 +51,15 @@ const readRelatedDecisionCandidates = async (
     caseLawDb,
     "search",
     { kind: "id", id: decisionId },
-    async ({ tx, id, countries }) => {
+    async (subject) => {
+      const { tx, countries } = subject;
+      const work = await decisionWorkOf(subject);
       const [outgoing, incoming] = await Promise.all([
         direction === "citing"
           ? null
           : listOutgoingDecisionCitations({
               tx,
-              decisionId: id,
+              work,
               cursor: undefined,
               countries,
             }),
@@ -63,7 +67,7 @@ const readRelatedDecisionCandidates = async (
           ? null
           : listIncomingDecisionCitations({
               tx,
-              decisionId: id,
+              work,
               cursor: undefined,
               countries,
             }),
@@ -110,7 +114,10 @@ const readRelatedDecisionCandidates = async (
           outgoingCandidates.at(index),
           incomingCandidates.at(index),
         ]) {
-          if (candidate === undefined || candidate.decisionId === id) {
+          if (
+            candidate === undefined ||
+            work.manifestationIds.includes(candidate.decisionId)
+          ) {
             continue;
           }
           const key = JSON.stringify([
@@ -159,6 +166,7 @@ export const readReaderAnswerDecision = async (
       }
       return {
         decisionId: read.decision.id,
+        language: read.decision.language,
         court: read.decision.court,
         decisionDate: read.decision.decisionDate,
         // Exactly the pieces the reader shows, headings and table cells

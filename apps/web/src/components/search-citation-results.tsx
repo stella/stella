@@ -5,6 +5,7 @@ import { useTranslations } from "use-intl";
 
 import { createCaseLawDecisionRouteParams } from "@stll/api-contract/case-law-decision-route";
 import { createStatuteRouteParams } from "@stll/api-contract/statute-route";
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import { Button } from "@stll/ui/button";
 import { CommandItem } from "@stll/ui/command";
 import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
@@ -12,9 +13,9 @@ import { LandingItemText } from "@stll/ui/landing";
 import { MenuSection } from "@stll/ui/menu-section";
 import { Skeleton } from "@stll/ui/skeleton";
 
+import type { readLegalCitationSearch } from "@/components/legal-citation-search";
 import { preferredDecisionTarget } from "@/features/case-law/decision-cell-target.logic";
 import { PUBLIC_DECISION_MATCH } from "@/features/case-law/public-decision-match";
-import type { readLegalCitationSearch } from "@/features/search/legal-citation-search";
 import { detached } from "@/lib/detached";
 
 type CitationSearchResult = Awaited<ReturnType<typeof readLegalCitationSearch>>;
@@ -27,7 +28,10 @@ export const citationCommandHits = (
       return result.items.map((decision) => ({
         type: "legal-citation" as const,
         id: `citation-decision:${decision.id}`,
-        title: decision.caseNumber,
+        title:
+          decision.identifiers?.find(
+            ({ type }) => type === DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+          )?.value ?? decision.caseNumber,
         match: {
           type: "decision" as const,
           decision,
@@ -108,6 +112,36 @@ export const citationCommandRoute = (
   }
 };
 
+/** The identity a citation hit leads with, for either kind of document. */
+const CitationHitIcon = ({ hit }: { hit: CitationCommandHit }) => {
+  const { match } = hit;
+  switch (match.type) {
+    case "decision":
+      return (
+        <DocumentIdentityBadge
+          identity={{
+            kind: "decision",
+            courtAbbreviation: match.decision.courtAbbreviation,
+            courtTier: match.decision.courtTier,
+          }}
+        />
+      );
+    case "statute":
+      return (
+        <DocumentIdentityBadge
+          identity={{
+            kind: "statute",
+            number: match.intent.number,
+            year: match.intent.year,
+          }}
+        />
+      );
+    default:
+      match satisfies never;
+      return panic("Unknown citation hit kind");
+  }
+};
+
 export const SearchCitationResults = ({
   hits,
   onOpen,
@@ -159,25 +193,7 @@ export const SearchCitationResults = ({
               value={hit}
             >
               <LandingItemText
-                icon={
-                  hit.match.type === "decision" ? (
-                    <DocumentIdentityBadge
-                      identity={{
-                        kind: "decision",
-                        courtAbbreviation: hit.match.decision.courtAbbreviation,
-                        courtTier: hit.match.decision.courtTier,
-                      }}
-                    />
-                  ) : (
-                    <DocumentIdentityBadge
-                      identity={{
-                        kind: "statute",
-                        number: hit.match.intent.number,
-                        year: hit.match.intent.year,
-                      }}
-                    />
-                  )
-                }
+                icon={<CitationHitIcon hit={hit} />}
                 title={hit.title}
                 meta={
                   hit.match.type === "decision"

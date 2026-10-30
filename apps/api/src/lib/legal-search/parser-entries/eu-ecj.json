@@ -1,0 +1,11 @@
+{
+  "type": "parser",
+  "name": "EU_ECJ",
+  "key": "eu-ecj",
+  "parserVersion": 19,
+  "sourceFingerprintVersion": 0,
+  "scope": {
+    "type": "all",
+    "reason": "Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters."
+  }
+}

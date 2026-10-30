@@ -31,6 +31,7 @@ const source = ({ decisionId, texts }: FixtureOptions) =>
       country: "CZE",
       decisionDate: "2026-01-01",
       ecli: null,
+      extractionWarnings: [],
       language: "cs",
       languageAlternates: [],
       slug: null,
@@ -91,6 +92,7 @@ describe("private reader answer corpus excerpts", () => {
       decisionId,
       decisionDate: "2026-01-01",
       court: "Test court",
+      language: "cs",
       paragraphs: [{ paragraphId: "paragraph-0", text: "Civil liability" }],
     });
   });
