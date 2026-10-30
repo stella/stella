@@ -18,7 +18,7 @@ const {
   RouterProvider,
 } = await import("@tanstack/react-router");
 const { useTranslations } = await import("use-intl");
-const { useLocale } = await import("./formatting-context");
+const { useFormattingLocale } = await import("./formatting-context");
 const {
   applyClientDocumentLocale,
   initializeRenderedLocale,
@@ -195,7 +195,7 @@ test("formatting preferences propagate only through the peer channel", async () 
       openChannel: hub.open,
     });
   const FormattingControls = ({ tab }: { tab: string }) => {
-    const locale = useLocale();
+    const locale = useFormattingLocale();
     const { setPrefs } = usePresentationPrefs();
     return (
       <>
