@@ -27,12 +27,12 @@ type UpdateStructureFidelityBaselineOptions = {
 export const updateStructureFidelityBaseline = async ({
   repositoryRoot = fileURLToPath(new URL("../../../", import.meta.url)),
   collectCensus = collectStructureFidelityCensus,
-  baseRevision = process.env["BASE_SHA"],
+  baseRevision,
 }: UpdateStructureFidelityBaselineOptions = {}) => {
   const { census } = await collectCensus();
   assertStructureFidelityBaselineHistory({
     repositoryRoot,
-    baseRevision,
+    ...(baseRevision === undefined ? {} : { baseRevision }),
     findings: census,
   });
   await Bun.write(
