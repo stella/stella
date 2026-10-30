@@ -37,6 +37,15 @@ const router = createRouter({
   },
 });
 
+const ORGANIZATION_SETTINGS_BREADCRUMBS = [
+  { type: "label", labelKey: "common.settings", to: "/settings" },
+  {
+    type: "label",
+    labelKey: "common.organization",
+    to: "/settings/organization",
+  },
+] as const;
+
 test.each([
   {
     pathname: "/contacts/contact-id",
@@ -88,13 +97,13 @@ test.each([
     ],
   },
   {
-    pathname: "/admin/members",
+    pathname: "/settings/organization/members",
     decisions: [
-      { type: "label", labelKey: "common.organization", to: "/admin" },
+      ...ORGANIZATION_SETTINGS_BREADCRUMBS,
       {
         type: "label",
         labelKey: "common.members",
-        to: "/admin/members",
+        to: "/settings/organization/members",
       },
     ],
   },

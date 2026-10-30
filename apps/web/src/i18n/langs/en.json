@@ -31,7 +31,6 @@
     "organizationId": "Organization ID",
     "organizationLeft": "You have left the organization.",
     "planAndUsage": "Plan and usage",
-    "title": "Organization admin",
     "toolsDescription": "Enable or disable native tools for everyone in this organization."
   },
   "agentClaim": {

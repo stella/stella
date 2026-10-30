@@ -31,7 +31,6 @@
     "organizationId": "Szervezetazonosító",
     "organizationLeft": "Kilépett a szervezetből.",
     "planAndUsage": "Csomag és használat",
-    "title": "Szervezet adminisztrációja",
     "toolsDescription": "Engedélyezze vagy tiltsa le a beépített eszközöket a szervezet minden tagja számára."
   },
   "agentClaim": {

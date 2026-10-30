@@ -1,5 +1,5 @@
 {
-  "route": "/admin/general",
+  "route": "/settings/organization/general",
   "reason": "Organization admin renders inside the app frame, which loads its shared chat, notification, timer and organization-settings data. The sidebar's Time link reads the approval queue's bounded count of submitted time waiting for the signed-in person (one request, limit 1).",
   "budget": {
     "depth": 5,
