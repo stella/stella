@@ -204,11 +204,13 @@ if (!databaseUrl || !runPostgresTests) {
             return outcome.type === "refreshed"
               ? {
                   ...outcome,
-                  decision: {
+                  decision: toPlainTextIngestionResult({
                     ...outcome.decision,
                     caseNumber: stored.caseNumber,
                     sourceDocumentId: stored.sourceDocumentId ?? undefined,
-                  },
+                  }).unwrap(
+                    "Fixture refreshed values are plain publisher text",
+                  ),
                 }
               : outcome;
           },
