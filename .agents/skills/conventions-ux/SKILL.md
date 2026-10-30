@@ -152,6 +152,14 @@ through Folio gains one it does not have.
 
 ## Interactions & Animations
 
+- **Right-click means the object's own actions.** An object the user
+  can act on (a matter, document, message, row, card, sidebar item,
+  tab) hands `EntityActions` (`@stll/ui/entity-actions`) one action
+  list; its "…" button (`EntityActionsButton`) and its right-click
+  menu both render that list. Shift + right-click, editable text,
+  links and selected text keep the native menu, and the desktop app
+  shows no browser menu elsewhere. `no-raw-context-menu` rejects a
+  hand-written `onContextMenu` or `contextmenu` listener.
 - **Never use `transition: all`.** Always specify exact properties
   (e.g., `transition: opacity 150ms, transform 150ms`). `all`
   triggers unnecessary repaints and can animate properties you

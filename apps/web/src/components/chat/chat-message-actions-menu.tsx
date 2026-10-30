@@ -4,23 +4,13 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/button";
 import {
-  DownloadIcon,
-  EllipsisIcon,
-  GitBranchIcon,
-  PanelRightIcon,
-} from "@stll/ui/icons";
+  type EntityAction,
+  EntityActions,
+  EntityActionsButton,
+} from "@stll/ui/entity-actions";
+import { DownloadIcon, GitBranchIcon, PanelRightIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@stll/ui/menu";
 
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import type { CreateDocumentDraft } from "@/components/chat/create-document-draft.logic";
@@ -158,64 +148,47 @@ export const ChatMessageActionsMenu = ({
       })
     : null;
 
+  // One list for the message's "…" button and its right-click menu.
+  const forkActions: EntityAction[] = canFork
+    ? FORK_DESTINATIONS.map((destination) => {
+        const forking = fork.isPending && fork.variables === destination;
+        const Icon = FORK_DESTINATION_ICONS[destination];
+        return {
+          disabled: fork.isPending,
+          icon: forking ? (
+            <Loader label={t("chat.forkingThread")} size="sm" />
+          ) : (
+            <Icon aria-hidden="true" />
+          ),
+          label: forking
+            ? t("chat.forkingThread")
+            : t(FORK_DESTINATION_LABELS[destination]),
+          onClick: () => {
+            fork.mutate(destination);
+          },
+        };
+      })
+    : [];
+  const actions: EntityAction[] = canExport
+    ? [
+        ...forkActions,
+        {
+          icon: <DownloadIcon aria-hidden="true" />,
+          label: t("common.export.title"),
+          onClick: () => setExportOpen(true),
+        },
+      ]
+    : forkActions;
+
   return (
     <>
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          ref={triggerRef}
-          render={
-            <Button
-              aria-label={t("common.actions")}
-              className="size-6"
-              size="icon-xs"
-              variant="muted"
-            >
-              <EllipsisIcon aria-hidden="true" className="size-3.5" />
-            </Button>
-          }
-        />
-        <DropdownMenuContent align="start" className="min-w-56" side="top">
-          {timestamp !== null && (
-            <>
-              <DropdownMenuGroup>
-                <DropdownMenuLabel className="font-normal">
-                  {timestamp}
-                </DropdownMenuLabel>
-              </DropdownMenuGroup>
-              <DropdownMenuSeparator />
-            </>
-          )}
-          {canFork &&
-            FORK_DESTINATIONS.map((destination) => {
-              const forking = fork.isPending && fork.variables === destination;
-              const Icon = FORK_DESTINATION_ICONS[destination];
-              return (
-                <DropdownMenuItem
-                  disabled={fork.isPending}
-                  key={destination}
-                  onClick={() => {
-                    fork.mutate(destination);
-                  }}
-                >
-                  {forking ? (
-                    <Loader label={t("chat.forkingThread")} size="sm" />
-                  ) : (
-                    <Icon aria-hidden="true" />
-                  )}
-                  {forking
-                    ? t("chat.forkingThread")
-                    : t(FORK_DESTINATION_LABELS[destination])}
-                </DropdownMenuItem>
-              );
-            })}
-          {canExport && (
-            <DropdownMenuItem onClick={() => setExportOpen(true)}>
-              <DownloadIcon aria-hidden="true" />
-              {t("common.export.title")}
-            </DropdownMenuItem>
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <EntityActions
+        actions={actions}
+        heading={timestamp ?? undefined}
+        label={t("common.actions")}
+      >
+        <EntityActionsButton align="start" ref={triggerRef} side="top" />
+      </EntityActions>
       <SidePanelChatNote status={sidePanelChat.status} />
       <SidePanelChatAnnouncer status={sidePanelChat.status} />
       {canExport && (

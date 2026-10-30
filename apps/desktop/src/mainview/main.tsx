@@ -22,6 +22,7 @@ import {
 import type { DesktopMessages } from "../i18n";
 import { installAccountActivity } from "../shared/account-activity";
 import { subscribeDesktopEvent } from "../shared/desktop-events";
+import { installNativeContextMenuPolicy } from "../shared/native-context-menu";
 import { useSystemTheme } from "../shared/use-system-theme";
 import {
   describeError,
@@ -195,6 +196,9 @@ const removeAccountActivity = installAccountActivity({
   },
 });
 
+// Every window renders from this entry: none shows the webview's browser menu.
+const removeNativeContextMenuPolicy = installNativeContextMenuPolicy(document);
+
 const existingRoot: unknown = Reflect.get(rootElement, REACT_ROOT_KEY);
 const reactRoot = isReactRoot(existingRoot)
   ? existingRoot
@@ -231,5 +235,6 @@ if (import.meta.hot) {
   import.meta.hot.dispose(() => {
     removeAccountActivity();
     removeDesktopErrorTelemetry();
+    removeNativeContextMenuPolicy();
   });
 }
