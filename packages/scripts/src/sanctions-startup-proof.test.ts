@@ -53,31 +53,50 @@ test("polls started before searching and rejects a warming list", async () => {
 });
 
 test("bounds a stalled request by the remaining proof deadline", async () => {
-  const startedAt = Date.now();
-  const failure = await proofFailure(
+  let instant = 0;
+  const controller = new AbortController();
+  const entered = Promise.withResolvers<undefined>();
+  let abortedWith: unknown;
+  const budgets: number[] = [];
+  const pending = proofFailure(
     proveSanctionsStartup({
       baseUrl: "https://api.example.test",
       transport: async (_request, init) =>
         await new Promise<Response>((_resolve, reject) => {
           init?.signal?.addEventListener("abort", () => {
+            abortedWith = init.signal?.reason;
             reject(new Error("request aborted by proof deadline"));
           });
+          entered.resolve(undefined);
         }),
+      now: () => instant,
+      deadlineSignal: (durationMs) => {
+        budgets.push(durationMs);
+        return controller.signal;
+      },
       pollIntervalMs: 1,
       pollTimeoutMs: 10,
     }),
   );
 
-  expect(Date.now() - startedAt).toBeLessThan(1000);
-  expect(failure).toBe(
+  await entered.promise;
+  expect(budgets).toEqual([10]);
+  instant = 10;
+  const deadline = new DOMException("Proof deadline reached", "TimeoutError");
+  controller.abort(deadline);
+  expect(await pending).toBe(
     "The API did not report started before the proof timeout",
   );
+  expect(abortedWith).toBe(deadline);
 });
 
 test("bounds a search body that never completes, even when the transport ignores the signal", async () => {
-  const startedAt = Date.now();
-  let cancelled = false;
-  const failure = await proofFailure(
+  let instant = 0;
+  let cancelledWith: unknown;
+  const controller = new AbortController();
+  const readingBody = Promise.withResolvers<undefined>();
+  const budgets: number[] = [];
+  const pending = proofFailure(
     proveSanctionsStartup({
       baseUrl: "https://api.example.test",
       transport: searchAnswering(
@@ -86,23 +105,35 @@ test("bounds a search body that never completes, even when the transport ignores
             start(stream) {
               stream.enqueue(new TextEncoder().encode('{"lists":['));
             },
-            cancel() {
-              cancelled = true;
+            pull() {
+              readingBody.resolve(undefined);
+            },
+            cancel(reason) {
+              cancelledWith = reason;
             },
           }),
           { headers: { "content-type": "application/json" } },
         ),
       ),
+      now: () => instant,
+      deadlineSignal: (durationMs) => {
+        budgets.push(durationMs);
+        return controller.signal;
+      },
       pollIntervalMs: 1,
       pollTimeoutMs: 50,
     }),
   );
 
-  expect(Date.now() - startedAt).toBeLessThan(1000);
-  expect(failure).toBe(
+  await readingBody.promise;
+  expect(budgets).toEqual([50, 50]);
+  instant = 50;
+  const deadline = new DOMException("Proof deadline reached", "TimeoutError");
+  controller.abort(deadline);
+  expect(await pending).toBe(
     "Sanctions search response did not arrive as JSON before the proof timeout",
   );
-  expect(cancelled).toBe(true);
+  expect(cancelledWith).toBe(deadline);
 });
 
 test("retries refused connections until the deadline", async () => {

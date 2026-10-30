@@ -904,18 +904,8 @@
     "owner": "property-testing",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "packages/scripts/src/dev-process-groups.test.ts": {
-    "count": 1,
-    "owner": "scripts",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "packages/scripts/src/generation-lock.test.ts": {
-    "count": 1,
-    "owner": "scripts",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "packages/scripts/src/process-memory.test.ts": {
-    "count": 3,
+    "count": 2,
     "owner": "scripts",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -935,7 +925,7 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "packages/scripts/src/windows-process-ownership.test.ts": {
-    "count": 2,
+    "count": 1,
     "owner": "scripts",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },

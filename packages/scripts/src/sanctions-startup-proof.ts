@@ -48,6 +48,7 @@ export const proveSanctionsStartup = async ({
   transport,
   sleep = Bun.sleep,
   now = () => performance.now(),
+  deadlineSignal = (durationMs) => AbortSignal.timeout(durationMs),
   pollIntervalMs = POLL_INTERVAL_MS,
   pollTimeoutMs = POLL_TIMEOUT_MS,
 }: {
@@ -56,6 +57,8 @@ export const proveSanctionsStartup = async ({
   transport?: Fetcher;
   sleep?: (durationMs: number) => Promise<unknown>;
   now?: () => number;
+  /** Creates cancellation for the remaining proof budget. */
+  deadlineSignal?: (durationMs: number) => AbortSignal;
   pollIntervalMs?: number;
   pollTimeoutMs?: number;
 }): Promise<Result<void, SanctionsStartupProofError>> => {
@@ -72,7 +75,7 @@ export const proveSanctionsStartup = async ({
       try: async () =>
         await request(url, {
           ...init,
-          signal: AbortSignal.timeout(Math.max(1, remaining())),
+          signal: deadlineSignal(Math.max(1, remaining())),
           timeout: { type: "idle", ms: pollTimeoutMs },
         }),
       catch: (cause) => cause,

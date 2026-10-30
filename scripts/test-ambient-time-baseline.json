@@ -2129,16 +2129,6 @@
     "owner": "sanctions",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "packages/scripts/src/dev-process-groups.test.ts": {
-    "count": 2,
-    "owner": "scripts",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "packages/scripts/src/generation-lock.test.ts": {
-    "count": 2,
-    "owner": "scripts",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "packages/scripts/src/process-stderr.test.ts": {
     "count": 2,
     "owner": "scripts",
