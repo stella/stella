@@ -1,7 +1,6 @@
 {
   "tray": {
     "activeEdits": "{count, plural, one {1 aktiivne muudatus} other {{count} aktiivset muudatust}}",
-    "clipboard": "Lõikelaua ajalugu",
     "activity": "Tegevus",
     "activityRecording": "Tegevus: Salvestamine · täna {hours} h",
     "activityPaused": "Tegevus: Peatatud · täna {hours} h",

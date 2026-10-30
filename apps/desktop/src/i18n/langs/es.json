@@ -1,7 +1,6 @@
 {
   "tray": {
     "activeEdits": "{count, plural, one {1 edición activa} other {{count} ediciones activas}}",
-    "clipboard": "Historial del portapapeles",
     "activity": "Actividad",
     "activityRecording": "Actividad: Registrando · {hours} h hoy",
     "activityPaused": "Actividad: En pausa · {hours} h hoy",

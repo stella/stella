@@ -1,7 +1,6 @@
 {
   "tray": {
     "activeEdits": "{count, plural, one {1 active edit} other {{count} active edits}}",
-    "clipboard": "Clipboard history",
     "activity": "Activity",
     "activityRecording": "Activity: Recording · {hours} h today",
     "activityPaused": "Activity: Paused · {hours} h today",

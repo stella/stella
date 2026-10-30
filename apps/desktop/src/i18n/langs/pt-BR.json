@@ -1,7 +1,6 @@
 {
   "tray": {
     "activeEdits": "{count, plural, one {{count} edição ativa} other {{count} edições ativas}}",
-    "clipboard": "Histórico da área de transferência",
     "activity": "Atividade",
     "activityRecording": "Atividade: Registrando · {hours} h hoje",
     "activityPaused": "Atividade: Pausada · {hours} h hoje",

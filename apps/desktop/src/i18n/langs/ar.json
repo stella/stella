@@ -1,7 +1,6 @@
 {
   "tray": {
     "activeEdits": "{count, plural, zero {لا تحريرات نشطة} one {تحرير نشط واحد} two {تحريران نشطان} few {{count} تحريرات نشطة} many {{count} تحريراً نشطاً} other {{count} تحرير نشط}}",
-    "clipboard": "سجل الحافظة",
     "activity": "النشاط",
     "activityRecording": "النشاط: جارٍ التسجيل · {hours} س اليوم",
     "activityPaused": "النشاط: متوقف مؤقتًا · {hours} س اليوم",
