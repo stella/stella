@@ -1,14 +1,14 @@
 import { panic } from "better-result";
 import { SaxesParser } from "saxes";
 
-export type SchemaChild = {
+type SchemaChild = {
   name: string;
   namespace: string;
   minOccurs: number;
   maxOccurs: number | "unbounded";
 };
 
-export type RequestSchema = {
+type RequestSchema = {
   namespace: string;
   root: string;
   children: SchemaChild[];
@@ -16,12 +16,18 @@ export type RequestSchema = {
 
 type Sequence = { owner: string; children: SchemaChild[] };
 
-const occurrence = (value: string | undefined, fallback: number): number => {
-  if (value === undefined) {
-    return fallback;
-  }
-  return Number(value);
-};
+// The vendored schemas bound their elements with 0, 1 or unbounded; any other
+// bound means the schema changed and the reader must learn it explicitly.
+const OCCURRENCE_BOUNDS = new Map([
+  ["0", 0],
+  ["1", 1],
+]);
+
+const occurrence = (value: string | undefined, fallback: number): number =>
+  value === undefined
+    ? fallback
+    : (OCCURRENCE_BOUNDS.get(value) ??
+      panic(`Unsupported schema occurrence bound: ${value}`));
 
 const maximumOccurrence = (value: string | undefined): number | "unbounded" =>
   value === "unbounded" ? "unbounded" : occurrence(value, 1);
@@ -122,13 +128,13 @@ export const readRequestSchema = (
   return { namespace: schema.namespace, root: requestElement, children };
 };
 
-export type RequestElement = {
+type RequestElement = {
   name: string;
   namespace: string;
   text: string;
 };
 
-export type SoapBody = {
+type SoapBody = {
   root: RequestElement;
   children: RequestElement[];
 };
