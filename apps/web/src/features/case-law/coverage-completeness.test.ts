@@ -75,7 +75,7 @@ describe("a completeness percentage never overstates the corpus", () => {
     ).toBe(70);
   });
 
-  test("property: any known missing decision keeps the figure off 100", () => {
+  test("any known missing decision keeps the figure off 100", () => {
     assertProperty(
       "any known missing decision keeps the figure off 100",
       fc.property(

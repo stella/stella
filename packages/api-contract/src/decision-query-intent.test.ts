@@ -245,10 +245,7 @@ const hit = (caseNumber: string, ecli: string | null = null) => ({
 describe("the hits that are the named decision", () => {
   test("the Court of Justice's short ECLI names the decision its full ECLI names", () => {
     for (const entry of ["EU:C:2013:791", "eu:c:2013:791", " EU:C:2013:791 "]) {
-      const intent = parseDecisionQuery(entry);
-      if (intent.type !== "identifier") {
-        return panic(`Short ECLI read as ${intent.type}`);
-      }
+      const intent = identityOf(entry);
       expect(intent.kind).toBe("ecli");
       expect(
         exactDecisionMatches(intent, [

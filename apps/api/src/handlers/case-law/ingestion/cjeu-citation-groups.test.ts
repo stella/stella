@@ -132,7 +132,7 @@ describe("ranges", () => {
     ]);
   });
 
-  test("property: a range reads exactly the cases from its first end to its last", () => {
+  test("a range reads exactly the cases from its first end to its last", () => {
     assertProperty(
       "a range reads exactly the cases from its first end to its last",
       fc.property(
