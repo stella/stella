@@ -129,7 +129,7 @@ type EntitySectionKey = "documents" | "tasks";
  * One row of a section. A document or folder sits `depth` folders below the
  * matter's top level; a folder says whether it is open.
  */
-export type EntityTreeRow =
+type EntityTreeRow =
   | {
       readonly type: "folder";
       readonly entity: MatterEntity;
