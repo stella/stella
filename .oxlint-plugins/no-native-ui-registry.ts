@@ -200,6 +200,9 @@ export const NO_NATIVE_UI_REGISTRY = {
     "no-direct-lucide-import/no-direct-lucide-import",
     "glyphs come from @stll/ui/icons, never the icon library directly",
   ),
+  "identity-text": noNative(
+    "a clipped name that discloses its full text in a tooltip",
+  ),
   "inline-drop-indicator": noNative("a drag-and-drop insertion marker"),
   "inline-rename": owned(
     "no-ad-hoc-inline-rename/no-ad-hoc-inline-rename",

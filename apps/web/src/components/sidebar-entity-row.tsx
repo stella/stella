@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useTranslations } from "use-intl";
 
 import { ENTITY_NAME_MAX_LENGTH } from "@stll/api-contract";
+import { Button } from "@stll/ui/button";
 import { PenLineIcon, Trash2Icon } from "@stll/ui/icons";
 import { InlineRenameInput } from "@stll/ui/inline-rename";
 import { MenuItem } from "@stll/ui/menu";
@@ -101,7 +102,7 @@ export const SidebarEntityRow = ({
         </div>
       ) : (
         <MatterActivityRow>
-          <button
+          <Button
             data-entity-id={entityId}
             data-entity-kind={entityKind}
             onClick={containedEventHandler(onOpen)}
@@ -117,10 +118,11 @@ export const SidebarEntityRow = ({
             })}
             onKeyDown={canRename || canDelete ? menu.onKeyDown : undefined}
             ref={returnFocus}
-            type="button"
+            size="sm"
+            variant="ghost"
           >
             {children}
-          </button>
+          </Button>
         </MatterActivityRow>
       )}
       {menu.element}
