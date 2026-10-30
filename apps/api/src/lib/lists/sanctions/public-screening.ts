@@ -190,8 +190,8 @@ const createEditionReads = ({
 /**
  * Loads editions into the matcher one at a time in the background, apart from
  * request deadlines: a slow edition finishes and each loaded one stays loaded.
- * Screening answers `warming` for the whole pass rather than lease the worker
- * that holds the indexes.
+ * Loaded lists keep screening during database reads; requests answer `warming`
+ * while an indexing lease holds the matcher.
  */
 const createEditionWarmer = ({
   pool,
@@ -207,8 +207,7 @@ const createEditionWarmer = ({
     reportFailure({ stage: "public-warmup", reason: "operation", error });
   });
   const readEdition = createEditionReads({ loadEntries, clock });
-  // The read runs outside any lease; the pass (`pass` below) keeps requests
-  // off the matcher meanwhile.
+  // Database reads run outside matcher leases so loaded lists keep screening.
   const warm = async (
     db: SanctionsReadDb,
     source: SanctionsSource,
