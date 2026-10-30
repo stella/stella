@@ -121,6 +121,7 @@ import { createUserFileThumbnailKey } from "@/api/lib/file-key";
 import { retireFolioCollabSnapshot } from "@/api/lib/files/folio-collab-snapshot-retirement";
 import { createFileKey } from "@/api/lib/files/utils";
 import { FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE } from "@/api/lib/folio-collab-mime";
+import { outsideRetainedMatters } from "@/api/lib/legal-holds/retained-matters";
 import { LIMITS } from "@/api/lib/limits";
 import {
   clearMemberAssignments,
@@ -800,15 +801,6 @@ type RetainedMatterContentOptions = {
   currentUserId: string;
   retainedWorkspaceIds: readonly SafeId<"workspace">[];
 };
-
-// SQL NULL is outside every matter; do not let NOT IN turn it into unknown.
-const outsideRetainedMatters = (
-  column: AnyPgColumn,
-  retainedWorkspaceIds: readonly SafeId<"workspace">[],
-) =>
-  retainedWorkspaceIds.length === 0
-    ? sql`true`
-    : or(isNull(column), notInArray(column, [...retainedWorkspaceIds]));
 
 const erasableChatThreads = (
   retainedWorkspaceIds: readonly SafeId<"workspace">[],

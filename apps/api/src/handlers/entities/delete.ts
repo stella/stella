@@ -331,7 +331,9 @@ export const deleteEntitiesHandler = async function* ({
     }),
   );
   if (txOutcome.status === "rejected") {
-    return Result.err(txOutcome.error);
+    return Result.err(
+      new HandlerError({ status: 409, message: txOutcome.error.message }),
+    );
   }
   const deletedEntities = txOutcome.entities;
   // Accelerate only a bounded prefix. The requests are already committed and

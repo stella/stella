@@ -18,6 +18,7 @@ import { lockThreadStoredContentTransitionOnTx } from "@/api/lib/chat/thread-sto
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { handoffCommittedEntityDeletionCleanupBatch } from "@/api/lib/entity-deletion-cleanup-handoff";
 import { enqueueEntityDeletionCleanup } from "@/api/lib/entity-deletion-cleanup-queue";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createUserFileThumbnailKey } from "@/api/lib/file-key";
 import { requireNoHold } from "@/api/lib/legal-holds/holds";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
@@ -88,7 +89,9 @@ const deleteThread = createSafeRootHandler(
           target: { type: "thread", threadId: params.threadId },
         });
         if (hold.isErr()) {
-          return hold;
+          return Result.err(
+            new HandlerError({ status: 409, message: hold.error.message }),
+          );
         }
         await lockThreadStoredContentTransitionOnTx(tx, params.threadId);
 

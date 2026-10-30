@@ -47,6 +47,7 @@ import {
   filterUnreferencedFieldFileRefs,
 } from "@/api/lib/files/field-file-refs";
 import { deleteS3Objects } from "@/api/lib/files/utils";
+import { LegalHoldActiveError } from "@/api/lib/legal-holds/errors";
 import { requireNoHold } from "@/api/lib/legal-holds/holds";
 import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
@@ -582,7 +583,7 @@ const copyToWorkspaceHandler = async function* ({
         target: { type: "entities", entityIds: sourceEntityIds },
       });
       if (hold.isErr()) {
-        return hold;
+        return Result.err(hold.error);
       }
     }
     const copyResult = await copyEntities({
@@ -649,6 +650,11 @@ const copyToWorkspaceHandler = async function* ({
     .andThen((copyResult) => copyResult);
   if (Result.isError(copied)) {
     await rollbackS3Copies(copiedS3Keys, dependencies.deleteCopiedObjects);
+    if (LegalHoldActiveError.is(copied.error)) {
+      return Result.err(
+        new HandlerError({ status: 409, message: copied.error.message }),
+      );
+    }
     return Result.err(copied.error);
   }
 

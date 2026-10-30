@@ -151,7 +151,7 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
             organizationId,
             userId,
           );
-          const placed = await scopedDb(
+          const placedResult = await scopedDb(
             async (tx) =>
               await placeLegalHold({
                 tx,
@@ -162,11 +162,10 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
                 recordAuditEvent,
               }),
           );
-          expect(Result.isOk(placed)).toBe(true);
-          if (Result.isError(placed) || !placed.value) {
+          if (placedResult.isErr()) {
             throw new TypeError("Expected placed hold");
           }
-          const holdId = placed.value.id;
+          const holdId = placedResult.value.id;
           const refused = await Result.tryPromise(
             async () =>
               await scopedDb(
@@ -328,7 +327,7 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
                 recordAuditEvent,
               }),
           );
-          if (itemHold.isErr() || !itemHold.value) {
+          if (itemHold.isErr()) {
             throw new TypeError("Expected item hold");
           }
           expect(

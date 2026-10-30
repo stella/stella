@@ -225,6 +225,7 @@ export const ACTIVITY_TARGET_SOURCE_BY_RESOURCE_TYPE = {
   usage_provider_event: null,
   view: null,
   pdf_signing_session: null,
+  legal_hold: null,
   view_template: null,
 } as const satisfies Record<AuditResourceType, ActivityTargetSource | null>;
 

@@ -58,6 +58,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
+import { outsideRetainedMatters } from "@/api/lib/legal-holds/retained-matters";
 import { LIMITS } from "@/api/lib/limits";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import {
@@ -3391,10 +3392,12 @@ export const lockLegalHoldOrganizations = async ({
     .where(predicate);
   const locked = await withAggregateParentBatch({
     tx,
-    organizationIds: rows.map(({ id }) => id),
+    organizationIds: rows.map(({ id }) => brandPersistedOrganizationId(id)),
     mode: "update",
   });
-  return rows.filter(({ id }) => locked.organizationIds.has(id));
+  return rows.filter(({ id }) =>
+    locked.organizationIds.has(brandPersistedOrganizationId(id)),
+  );
 };
 
 /** In-flight upload cancellation keeps content belonging to held matters. */
@@ -3421,12 +3424,10 @@ export const lockAccountDeletionPendingUploads = async ({
     .where(
       and(
         eq(pendingUploads.userId, currentUserId),
-        retainedWorkspaceIds.length === 0
-          ? undefined
-          : sql`${pendingUploads.workspaceId} NOT IN (${sql.join(
-              retainedWorkspaceIds.map((id) => sql`${id}`),
-              sql`, `,
-            )})`,
+        outsideRetainedMatters(
+          pendingUploads.workspaceId,
+          retainedWorkspaceIds,
+        ),
         sql`${pendingUploads.status} <> 'finalized'`,
       ),
     )

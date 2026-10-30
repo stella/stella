@@ -5176,15 +5176,18 @@ export async function seed(organizationId?: string, userId?: string) {
       ),
     ];
     const allSeedWorkspaceIds = (
-      await db
-        .select({ id: workspaces.id })
-        .from(workspaces)
-        .where(
-          and(
-            eq(workspaces.organizationId, ORG_ID),
-            inArray(workspaces.id, candidateSeedWorkspaceIds),
-          ),
-        )
+      await clearSeedDataTransaction(
+        async (tx) =>
+          await tx
+            .select({ id: workspaces.id })
+            .from(workspaces)
+            .where(
+              and(
+                eq(workspaces.organizationId, ORG_ID),
+                inArray(workspaces.id, candidateSeedWorkspaceIds),
+              ),
+            ),
+      )
     ).map(({ id }) => id);
     const seedReferences = [...seedWorkspaces, ...MORE_WORKSPACES].map(
       (workspace) => workspace.reference,

@@ -256,7 +256,7 @@ export const deleteUploadedChatFiles = async ({
       target: { type: "thread", threadId },
     });
     if (hold.isErr()) {
-      return hold;
+      return Result.err(hold.error);
     }
     const requestId = createSafeId<"entityDeletionCleanupRequest">();
     // audit: skip; outbox keys share the audited attachment erasure transaction.

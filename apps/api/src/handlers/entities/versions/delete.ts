@@ -459,7 +459,12 @@ export const deleteEntityVersionHandler = async function* ({
 
   if (!txOutcome.ok) {
     if ("error" in txOutcome) {
-      return Result.err(txOutcome.error);
+      return Result.err(
+        new HandlerError({
+          status: txOutcome.status,
+          message: txOutcome.message,
+        }),
+      );
     }
     return Result.err(
       new HandlerError({

@@ -41,7 +41,9 @@ export const deleteWorkspaceHandler = async function* (
   const outcome = await executeAuthorizedWorkspaceDeletion(props);
   if (Result.isError(outcome)) {
     if (LegalHoldActiveError.is(outcome.error)) {
-      return Result.err(outcome.error);
+      return Result.err(
+        new HandlerError({ status: 409, message: outcome.error.message }),
+      );
     }
     if (outcome.error instanceof WorkspaceBillingHistoryError) {
       return Result.err(

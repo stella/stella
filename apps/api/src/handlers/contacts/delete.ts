@@ -149,7 +149,12 @@ export const deleteContactHandler = async function* ({
 
   if (!txResult.value.ok) {
     if ("error" in txResult.value) {
-      return Result.err(txResult.value.error);
+      return Result.err(
+        new HandlerError({
+          status: txResult.value.status,
+          message: txResult.value.message,
+        }),
+      );
     }
     return yield* Result.err(
       new HandlerError({

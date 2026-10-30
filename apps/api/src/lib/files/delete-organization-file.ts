@@ -12,6 +12,7 @@ import { OrganizationFileUsageError } from "@/api/lib/files/organization-file-us
 import type { LegalHoldActiveError } from "@/api/lib/legal-holds/errors";
 import { requireNoHold } from "@/api/lib/legal-holds/holds";
 import { deleteS3ObjectWithSignal } from "@/api/lib/s3";
+import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 
 type DeleteOrganizationFileOptions = {
   fileUsageDb?: Pick<MaintenanceDb, "transaction">;
@@ -163,11 +164,11 @@ const deleteUnheldObjectChunk = async ({
           for (const organizationId of organizationIds) {
             const hold = await requireNoHold({
               tx,
-              organizationId,
+              organizationId: brandPersistedOrganizationId(organizationId),
               target: { type: "files", objectKeys: keys },
             });
             if (hold.isErr()) {
-              return hold;
+              return Result.err(hold.error);
             }
           }
           return Result.ok(

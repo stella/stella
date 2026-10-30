@@ -327,6 +327,7 @@ describe("legal hold deletion path census", () => {
     ).toHaveLength(1);
   });
 
+  // timeout: the census parses every production module in the API and worker trees.
   test("every production deletion module checks holds or names its guarded boundary", async () => {
     const uncovered: string[] = [];
     const exercisedExceptions = new Set<string>();
@@ -353,5 +354,5 @@ describe("legal hold deletion path census", () => {
     for (const reason of EXCEPTIONS.values()) {
       expect(reason.trim().length).toBeGreaterThan(30);
     }
-  });
+  }, 15_000);
 });
