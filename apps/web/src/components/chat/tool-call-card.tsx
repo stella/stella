@@ -111,7 +111,7 @@ const getStringInputValue = ({
   if (input === undefined || input === null || typeof input !== "object") {
     return undefined;
   }
-  if (!(key in input)) {
+  if (!Object.hasOwn(input, key)) {
     return undefined;
   }
   const descriptor = Object.getOwnPropertyDescriptor(input, key);
@@ -643,7 +643,7 @@ const ToolCallCardComponent = ({
           <button
             aria-label={t("chat.toolCall.toggleDetails")}
             className={cn(
-              "text-muted-foreground hover:text-foreground focus-visible:ring-ring/50 flex size-11 shrink-0 items-center justify-center rounded opacity-0 transition-opacity duration-150 group-hover/tool-step:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:outline-none",
+              "text-muted-foreground hover:text-foreground focus-visible:ring-ring/50 flex size-11 shrink-0 items-center justify-center rounded opacity-0 transition-opacity duration-150 group-hover/tool-step:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:outline-none pointer-coarse:opacity-100",
               expanded && "opacity-100",
             )}
             onClick={() => {

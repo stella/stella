@@ -38,6 +38,7 @@ import {
   type CorpusSearchOrder,
   RELEVANCE_ORDER,
 } from "@/api/lib/legal-search/corpus-search-order";
+import { runWithPublicReadStatementTimeout } from "@/api/lib/legal-search/public-read-timeout-context";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   ACTION_COST_CALL_KIND,
@@ -2137,6 +2138,61 @@ test.each(["search", "scoredSearch", "aggregate", "scopedAggregate"] as const)(
     expect(transportSignal.aborted).toBe(false);
     const reason = new DOMException("Client cancelled search", "AbortError");
     controller.abort(reason);
+    expect(transportSignal.aborted).toBe(true);
+    expect(transportSignal.reason).toBe(reason);
+    const result = await request;
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.cause).toBe(reason);
+    }
+  },
+);
+
+test.each(["search", "scoredSearch"] as const)(
+  "%s cancels its HTTP request when the public-read lease aborts",
+  async (operation) => {
+    const requestController = new AbortController();
+    const leaseController = new AbortController();
+    const entered = Promise.withResolvers<AbortSignal>();
+    const stub = async (
+      _input: Parameters<typeof fetch>[0],
+      init?: Parameters<typeof fetch>[1],
+    ): Promise<Response> => {
+      const signal = init?.signal ?? panic("Search requires an abort signal");
+      entered.resolve(signal);
+      return await new Promise<Response>((_resolve, reject) => {
+        signal.addEventListener("abort", () => reject(abortReason(signal)), {
+          once: true,
+        });
+      });
+    };
+    globalThis.fetch = Object.assign(stub, {
+      preconnect: originalFetch.preconnect,
+    });
+    const client = getCorpusIndexClient("q09");
+    const input = {
+      observer: "unobserved" as const,
+      indexId: "case_law_v8_cs_sk",
+      query: "text:smlouva",
+      signal: requestController.signal,
+    };
+    const request = runWithPublicReadStatementTimeout(
+      { budgetMs: 30_000, signal: leaseController.signal },
+      async () =>
+        operation === "search"
+          ? await client.search({ ...input, maxHits: 1 })
+          : await client.scoredSearch({
+              ...input,
+              from: 0,
+              size: 1,
+              fields: ["document_id"],
+              requiredFields: ["document_id"],
+            }),
+    );
+    const transportSignal = await entered.promise;
+    expect(transportSignal.aborted).toBe(false);
+    const reason = new DOMException("Public-read lease lost", "AbortError");
+    leaseController.abort(reason);
     expect(transportSignal.aborted).toBe(true);
     expect(transportSignal.reason).toBe(reason);
     const result = await request;

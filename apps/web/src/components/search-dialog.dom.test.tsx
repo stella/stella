@@ -5,10 +5,20 @@ import type { AnyRouter } from "@tanstack/react-router";
 import { afterAll, afterEach, expect, jest, test } from "bun:test";
 
 import { RESOURCE_TYPE, resourceRef, toResourceName } from "@stll/api-contract";
+import {
+  TEXT_ABSENCE_REASON,
+  TEXT_FIELD_TYPE,
+} from "@stll/api-contract/case-law-text-field";
 import { DOCUMENT_OCR_AVAILABILITY } from "@stll/api-contract/document-ocr-availability";
+import {
+  SEARCH_PAGE_REACH,
+  SEARCH_PAGINATION_COMPLETE,
+} from "@stll/api-contract/search";
 import { restoreRealTimers } from "@stll/property-testing/fake-timers";
 
+import type { api } from "@/lib/api";
 import type { GlobalSearchHit } from "@/lib/api-contract";
+import type { PublicLawData } from "@/lib/public-law-api";
 import { toSafeId } from "@/lib/safe-id";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
@@ -70,16 +80,90 @@ const folderHit = {
   mimeType: null,
 } as const satisfies GlobalSearchHit;
 
+const citationDecision = {
+  decisionId: "00000000-0000-4000-8000-000000000049",
+  caseNumber: "22 As 40/2025",
+  caseNumberType: "case-number",
+  slug: "22-as-40-2025",
+  ecli: "ECLI:CZ:NSS:2026:22.AS.40.2025.49",
+  identifiers: [{ type: "case-number", value: "22 As 40/2025 - 49" }],
+  court: "Nejvyšší správní soud",
+  courtAbbreviation: "NSS",
+  courtTier: "supreme",
+  country: "CZE",
+  language: "cs",
+  languageAlternates: [],
+  decisionDate: "2026-01-29",
+  decisionType: "judgment",
+  sourceUrl: null,
+  headnote: {
+    type: TEXT_FIELD_TYPE.ABSENT,
+    reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+  },
+  keywords: null,
+  textWithheldReason: null,
+  textAvailability: "available",
+  headline: null,
+  anchorId: null,
+  citationCount: 0,
+  citationAuthority: 0,
+  matchingPassages: 1,
+  match: "all_terms",
+  createdAt: "2026-01-29T00:00:00.000Z",
+} satisfies PublicLawData<
+  typeof api.case.decisions.search.post
+>["hits"][number];
+
+const citationResponse = {
+  hits: [citationDecision],
+  facets: null,
+  nextCursor: null,
+  paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+  pageReach: SEARCH_PAGE_REACH.REACHED,
+  total: { type: "exact", count: 1 },
+  relaxedHitCount: 0,
+  queryUsed: "22 As 40/2025 - 49",
+  warnings: [],
+} satisfies PublicLawData<typeof api.case.decisions.search.post>;
+
 const searchRequestBodies: unknown[] = [];
 let searchHits: readonly GlobalSearchHit[] = [hit];
+let citationHits = citationResponse.hits;
+const supplementalResource = resourceRef({
+  type: RESOURCE_TYPE.CASE_LAW_DECISION,
+  id: toSafeId<"caseLawDecision">("00000000-0000-4000-8000-000000000050"),
+});
+const supplementalHit = {
+  id: "case-law:00000000-0000-4000-8000-000000000050",
+  type: "case-law",
+  resource: supplementalResource,
+  resourceName: toResourceName(supplementalResource),
+  decisionId: supplementalResource.id,
+  title: "Supplemental decision",
+  caseNumber: "C-1/24",
+  identifiers: [{ type: "case-number", value: "C-1/24" }],
+  court: "Court of Justice",
+  courtAbbreviation: null,
+  country: "EU",
+  language: "en",
+  languageAlternates: [],
+  slug: "c-1-24",
+  decisionDate: null,
+  headline: null,
+  updatedAt: "2026-10-22T00:00:00.000Z",
+} as const satisfies GlobalSearchHit;
 globalThis.fetch = Object.assign(
   async (input: string | URL | Request, init?: RequestInit) => {
     const request = new Request(input, init);
     const url = new URL(request.url);
+    if (url.pathname.endsWith("/case/decisions/search")) {
+      return Response.json({ ...citationResponse, hits: citationHits });
+    }
     if (url.pathname.endsWith("/search")) {
-      searchRequestBodies.push(await request.json());
+      const body = await request.json();
+      searchRequestBodies.push(body);
       return Response.json({
-        hits: searchHits,
+        hits: body.types?.includes("case-law") ? [supplementalHit] : searchHits,
         nextCursor: null,
         totalCount: 1,
         facets: { editor: [], mimeType: [], type: [], workspace: [] },
@@ -131,6 +215,7 @@ afterEach(() => {
   clients.length = 0;
   searchRequestBodies.length = 0;
   searchHits = [hit];
+  citationHits = citationResponse.hits;
   assignUserStorage(undefined);
   useDevStore.setState({ publicLawPreview: false });
 });
@@ -198,7 +283,10 @@ const mount = async (
   return appRouter;
 };
 
-const typeQuery = async (expectedTitle: string = hit.title) => {
+const typeQuery = async (
+  expectedTitle: string = hit.title,
+  value = "engagement",
+) => {
   const input = testing.screen.getByRole("combobox", {
     name: messages.common.search,
   });
@@ -207,7 +295,7 @@ const typeQuery = async (expectedTitle: string = hit.title) => {
   }
   jest.useFakeTimers();
   await testing.act(async () => {
-    testing.fireEvent.input(input, { target: { value: "engagement" } });
+    testing.fireEvent.input(input, { target: { value } });
     jest.advanceTimersByTime(301);
     restoreRealTimers();
   });
@@ -225,6 +313,56 @@ test("actions stay on the blank screen and never sit above results", async () =>
 
   await typeQuery();
   expect(testing.screen.queryByText(messages.common.actions)).toBeNull();
+});
+
+test("a resolved citation is the first keyboard result above matter hits", async () => {
+  useDevStore.setState({ publicLawPreview: true });
+  const appRouter = await mount(async () => {
+    const root = router.createRootRoute({ component: SearchDialogHarness });
+    const decision = router.createRoute({
+      getParentRoute: () => root,
+      path: "/law/$country/cases/$court/$slug",
+      component: () => null,
+    });
+    const citationRouter = router.createRouter({
+      routeTree: root.addChildren([decision]),
+      history: router.createMemoryHistory({ initialEntries: ["/"] }),
+      isServer: false,
+    });
+    await citationRouter.load();
+    return citationRouter;
+  });
+  const input = await typeQuery("22 As 40/2025 - 49", "22 As 40/2025 - 49");
+  const options = testing.screen.getAllByRole("option");
+  expect(options.at(0)?.textContent).toContain("22 As 40/2025");
+  expect(options.some((option) => option.textContent.includes(hit.title))).toBe(
+    true,
+  );
+  await testing.act(async () => {
+    testing.fireEvent.keyDown(input, { key: "Home", code: "Home" });
+    testing.fireEvent.keyDown(input, { key: "ArrowDown", code: "ArrowDown" });
+  });
+  const highlightedId = input.getAttribute("aria-activedescendant");
+  expect(
+    highlightedId &&
+      document.querySelector(`[id="${highlightedId}"]`)?.textContent,
+  ).toContain(hit.title);
+  await testing.act(async () => {
+    testing.fireEvent.keyDown(input, { key: "ArrowUp", code: "ArrowUp" });
+  });
+  const citationId = input.getAttribute("aria-activedescendant");
+  expect(
+    citationId && document.querySelector(`[id="${citationId}"]`)?.textContent,
+  ).toContain("22 As 40/2025");
+  await testing.act(async () => {
+    testing.fireEvent.keyDown(input, { key: "Enter", code: "Enter" });
+  });
+  await testing.waitFor(() => {
+    expect(appRouter.state.location.pathname).toBe(
+      "/law/cze/cases/nejvyssi-spravni-soud/22-as-40-2025",
+    );
+  });
+  expect(testing.screen.getByTestId("dialog-state").textContent).toBe("closed");
 });
 
 test("Case law scope searches only case law and drops matter recents and actions", async () => {
@@ -249,7 +387,7 @@ test("Case law scope searches only case law and drops matter recents and actions
   expect(testing.screen.queryByText(messages.search.emptyState)).toBeNull();
   expect(testing.screen.queryByText(messages.common.actions)).toBeNull();
 
-  await typeQuery();
+  await typeQuery(supplementalHit.title);
   expect(searchRequestBodies.at(-1)).toMatchObject({ types: ["case-law"] });
 });
 
@@ -315,5 +453,63 @@ test("a folder result reveals the folder in the tree on screen, not the first tr
       pathname: appRouter.state.location.pathname,
       search: appRouter.state.location.search,
     }).toEqual(EXPECTED_OTHER_TREE_REVEAL),
+  );
+});
+
+test("a bare docket shows the sheet identifier of every matching decision", async () => {
+  useDevStore.setState({ publicLawPreview: true });
+  const first = citationDecision;
+  citationHits = [
+    first,
+    {
+      ...first,
+      decisionId: "00000000-0000-4000-8000-000000000050",
+      identifiers: [{ type: "case-number", value: "22 As 40/2025 - 50" }],
+    },
+  ];
+  await mount();
+  await typeQuery(hit.title, "22 As 40/2025");
+  await testing.waitFor(() => {
+    const rows = testing.screen.getAllByRole("option");
+    expect(
+      rows.some((row) => row.textContent.includes("22 As 40/2025 - 49")),
+    ).toBe(true);
+    expect(
+      rows.some((row) => row.textContent.includes("22 As 40/2025 - 50")),
+    ).toBe(true);
+  });
+});
+
+test("highlighting a citation clears the selected supplemental case-law preview", async () => {
+  const first = citationDecision;
+  citationHits = [
+    first,
+    {
+      ...first,
+      decisionId: "00000000-0000-4000-8000-000000000051",
+      identifiers: [{ type: "case-number", value: "22 As 40/2025 - 51" }],
+    },
+  ];
+  useDevStore.setState({ publicLawPreview: true });
+  await mount();
+  const input = await typeQuery(hit.title, "22 As 40/2025 - 49");
+  await testing.act(async () => {
+    testing.fireEvent.click(
+      testing.screen.getByRole("button", { name: messages.common.caseLaw }),
+    );
+  });
+  const supplemental = await testing.screen.findByRole("button", {
+    name: supplementalHit.title,
+  });
+  await testing.act(async () => {
+    testing.fireEvent.click(supplemental);
+  });
+  expect(supplemental.getAttribute("aria-pressed")).toBe("true");
+  await testing.act(async () => {
+    input.focus();
+    testing.fireEvent.keyDown(input, { key: "ArrowDown", code: "ArrowDown" });
+  });
+  await testing.waitFor(() =>
+    expect(supplemental.getAttribute("aria-pressed")).toBe("false"),
   );
 });

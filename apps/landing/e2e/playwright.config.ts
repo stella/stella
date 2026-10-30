@@ -1,3 +1,8 @@
-import { marketingConfig } from "@stll/playwright-tools/marketing-config";
+import { defineConfig } from "@playwright/test";
 
-export default marketingConfig({ testDir: ".", project: "landing" });
+import marketingConfig from "@stll/playwright-tools/landing-marketing-config";
+
+export default defineConfig(marketingConfig, {
+  testDir: ".",
+  retries: 0,
+});

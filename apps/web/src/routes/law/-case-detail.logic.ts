@@ -63,6 +63,7 @@ const optionalPublicDecisionSearchQuerySchema = v.optional(
 );
 
 export const publicDecisionSearchSchema = routeSearchSchema({
+  caseFileCursor: v.optional(v.string()),
   // A stale or hand-edited value drops the note rather than failing the page.
   match: v.fallback(
     v.optional(v.picklist(Object.values(PUBLIC_DECISION_MATCH))),
@@ -409,7 +410,7 @@ export const loadPublicCaseLawDecisionRoute = async ({
         async () =>
           await ensureRouteQueryData(
             queryClient,
-            decisionOptions(extractId(routeDecisionId)),
+            decisionOptions(extractId(routeDecisionId), search.caseFileCursor),
           ),
       ),
       routeCountry,
@@ -431,9 +432,14 @@ export const loadPublicCaseLawDecisionRoute = async ({
           queryClient,
           decisionBySlugOptions(
             params.language === undefined || normalizedRouteLanguage === null
-              ? { country: routeCountry, slug: params.slug }
+              ? {
+                  country: routeCountry,
+                  slug: params.slug,
+                  caseFileCursor: search.caseFileCursor,
+                }
               : {
                   country: routeCountry,
+                  caseFileCursor: search.caseFileCursor,
                   language: normalizedRouteLanguage,
                   slug: params.slug,
                 },

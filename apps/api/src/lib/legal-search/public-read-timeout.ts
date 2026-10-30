@@ -25,12 +25,14 @@ export const runPublicReadRequest = <T>(
     return fn();
   }
   return runWithPublicReadStatementTimeout(
-    (
-      PUBLIC_READ_STATEMENT_TIMEOUT_MS satisfies Record<
-        PublicCorpusClass,
-        number
-      >
-    )[routeClass],
+    {
+      budgetMs: (
+        PUBLIC_READ_STATEMENT_TIMEOUT_MS satisfies Record<
+          PublicCorpusClass,
+          number
+        >
+      )[routeClass],
+    },
     fn,
   );
 };

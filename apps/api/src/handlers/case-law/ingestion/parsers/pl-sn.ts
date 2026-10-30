@@ -1,6 +1,8 @@
-// parser-output-unchanged: [pl-kis] the Supreme Court page reading, positioned word spaces included, is opt-in; the default reading is byte-identical, pinned by a recorded-output digest test.
-// parser-output-unchanged: [pl-uokik] the Supreme Court page reading, positioned word spaces included, is opt-in; the default reading is byte-identical, pinned by a recorded-output digest test.
-// parser-output-unchanged: [cz-uohs] reads through extractPlPdfSeparatedContent, which the Supreme Court page reading, positioned word spaces included, never reaches.
+// parser-output-unchanged: the PDF text-layer read moved unchanged into libpdf-utils.ts (readPdfTextPages): the same load, pages and extraction.
+// parser-output-unchanged: [pl-sn] the paragraph helpers moved unchanged to pl-printed-lines.ts; positioned spaces and superscript placement stay as on main.
+// parser-output-unchanged: [pl-kis] extracting paragraph helpers leaves the default PDF reader unchanged; it calls readPage without the positioned block metadata those helpers require.
+// parser-output-unchanged: [pl-uokik] extracting paragraph helpers leaves the default PDF reader unchanged; it calls readPage without the positioned block metadata those helpers require.
+// parser-output-unchanged: [cz-uohs] the helper extraction does not affect extractPlPdfSeparatedContent, which reads through readPagesWithFootnotes and never calls readPage.
 /**
  * Polish Supreme Court (Sąd Najwyższy) document reader.
  *
@@ -18,7 +20,6 @@
  * parser, and this is not a second one.
  */
 
-import { PDF } from "@libpdf/core";
 import { panic } from "better-result";
 
 // parser-output-unchanged: imports the document AST from its package owner
@@ -27,18 +28,27 @@ import { collapseSpacedLetters } from "@stll/text-normalize";
 
 import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 import {
-  buildBoldRanges,
+  INDENT_THRESHOLD_PT,
+  opensBlockParagraph,
+} from "@/api/handlers/case-law/ingestion/parsers/pl-printed-lines";
+import {
+  buildFontStyleRanges,
   normalizeSpanText,
+  readPdfTextPages,
 } from "@/api/lib/legal-search/parsers/libpdf-utils";
-import type { PdfSpan } from "@/api/lib/legal-search/parsers/libpdf-utils";
+import type {
+  PdfSpan,
+  PdfTextPage,
+} from "@/api/lib/legal-search/parsers/libpdf-utils";
 
 /** Publisher recorded on the AST, so a stored document names where it came from. */
 const PL_SN_SOURCE_SYSTEM = "sn.pl";
 
-/** A run of characters sharing one font weight. */
+/** A run of characters sharing font emphasis. */
 export type PlSnRun = {
   text: string;
   bold: boolean;
+  italic?: true | undefined;
   footnoteReference?: string | undefined;
   /** Set raised in small type: an article's or a unit's index (`394¹`). */
   superscript?: true | undefined;
@@ -76,15 +86,6 @@ const SOFT_HYPHEN_END = /\p{L}-$/u;
  * ("Administracyjnego-" + "Ośrodka").
  */
 const RESUMES_A_BROKEN_WORD = /^\p{Ll}/u;
-
-/**
- * How far past the body margin a first line has to sit to read as an indent.
- *
- * The observed step is a full tab (72pt body, 108pt indent). Half of that is
- * comfortably above the sub-point jitter the extractor reports for lines that
- * begin at the same margin, and comfortably below a real indent.
- */
-const INDENT_THRESHOLD_PT = 18;
 
 const HTML_ESCAPES: Readonly<Record<string, string>> = {
   "&": "&amp;",
@@ -293,10 +294,18 @@ export const withoutRaisedReferenceMarkers = (
  * would miss it once the spacing is gone.
  */
 const runsOfLine = (line: ExtractedLine): PlSnRun[] => {
-  const ranges = buildBoldRanges([...line.spans], line.text);
+  const ranges = buildFontStyleRanges(line.spans, line.text);
   const runs = ranges.flatMap((range) => {
     const text = collapseSpacedLetters(line.text.slice(range.start, range.end));
-    return text.length === 0 ? [] : [{ text, bold: range.bold }];
+    return text.length === 0
+      ? []
+      : [
+          {
+            text,
+            bold: range.bold,
+            ...(range.italic ? { italic: true as const } : {}),
+          },
+        ];
   });
   return line.superscripts === undefined
     ? runs
@@ -326,16 +335,21 @@ const withSuperscripts = (
   const pending = marks.toSorted((left, right) => left.after - right.after);
   const out: PlSnRun[] = [];
   let printed = 0;
-  const setDue = (bold: boolean): void => {
+  const setDue = (run: PlSnRun | undefined): void => {
     while (pending.length > 0 && (pending.at(0)?.after ?? 0) <= printed) {
       const mark = pending.shift();
       if (mark !== undefined) {
-        out.push({ text: mark.text, bold, superscript: true });
+        out.push({
+          text: mark.text,
+          bold: run?.bold ?? false,
+          ...(run?.italic === undefined ? {} : { italic: run.italic }),
+          superscript: true,
+        });
       }
     }
   };
   for (const run of runs) {
-    setDue(run.bold);
+    setDue(run);
     let start = 0;
     let end = 0;
     for (const character of run.text) {
@@ -346,7 +360,7 @@ const withSuperscripts = (
       printed += 1;
       if ((pending.at(0)?.after ?? Number.POSITIVE_INFINITY) <= printed) {
         out.push({ ...run, text: run.text.slice(start, end) });
-        setDue(run.bold);
+        setDue(run);
         start = end;
       }
     }
@@ -354,7 +368,7 @@ const withSuperscripts = (
       out.push({ ...run, text: run.text.slice(start) });
     }
   }
-  setDue(runs.at(-1)?.bold ?? false);
+  setDue(runs.at(-1));
   return out;
 };
 
@@ -411,89 +425,6 @@ const rightEdgeOf = (lines: readonly ExtractedLine[]): number | undefined => {
     }
   }
   return edge;
-};
-
-/** A list point's own number or bullet: `2.`, `IV.`, `a)`, `–`. */
-const LIST_MARKER = /^(?:(?:\d{1,3}|[IVXLC]{1,6}|\p{Ll})[.)]|[-–•])\s/u;
-
-/** A point numbered in a way no wrapped sentence starts: `2.`, `2)`, `a)`. */
-const NUMBERED_POINT = /^(?:\d{1,3}[.)]|\p{Ll}\))\s/u;
-
-/** A line ending on a unit a number follows: `art.`, `ust.`, `pkt`, `§`, `nr`. */
-const TAKES_A_NUMBER =
-  /(?:(?:^|\s)(?:art|ust|pkt|lit|poz|nr|zd|par|rozdz|tom|str|s|k)\.?|§)$/iu;
-
-/** A line ending a sentence or a list point, closing quotes included. */
-const ENDS_SENTENCE = /[.;:!?…]["”')\]]*$/u;
-/** A capital, or an opening bracket or quote: also how a clerk's mark (`[SOP]`) starts. */
-const STARTS_SENTENCE = /^[\p{Lu}[(„"]/u;
-
-/**
- * Whether the line above ended only because `line`'s first word no longer
- * fit on it. A line that stopped short of that ended its paragraph.
- *
- * A short first word fits almost any gap, so a line that ended a sentence
- * before a capital or a list point is taken as the paragraph's end: two
- * paragraphs merged would hide the structure, where a missed continuation
- * only leaves the line break the reading had before.
- */
-const ranOutOfRoom = (
-  previous: ExtractedLine,
-  line: ExtractedLine,
-  rightEdge: number,
-): boolean => {
-  const opening = line.text.trimStart();
-  if (
-    previous.right === undefined ||
-    line.right === undefined ||
-    (ENDS_SENTENCE.test(previous.text.trimEnd()) &&
-      (STARTS_SENTENCE.test(opening) || LIST_MARKER.test(opening)))
-  ) {
-    return false;
-  }
-  const firstWord = opening.split(/\s/u, 1).at(0) ?? "";
-  const characterWidth = (line.right - line.x) / Math.max(1, line.text.length);
-  return rightEdge - previous.right < (firstWord.length + 1) * characterWidth;
-};
-
-/**
- * Whether `line` opens a paragraph, where the indent alone misreads blocks
- * and lists.
- *
- * An indented line carries on the full line above it when it sits no
- * deeper than that line, or when that line is a list point's first line
- * set with a hanging indent. A short line above ended its paragraph, which
- * is what keeps two one-line points of an operative part apart. A list
- * point opens a paragraph wherever it starts, though nothing indents it.
- */
-const opensBlockParagraph = (
-  previous: ExtractedLine | undefined,
-  line: ExtractedLine,
-  indented: boolean,
-  rightEdge: number,
-): boolean => {
-  if (previous === undefined || previous.text.length === 0) {
-    return indented;
-  }
-  // A numbered point opens its own paragraph however full the line above
-  // ran, unless that line ended on a word the number belongs to (`art.`).
-  // Dashes, initials (`C. B.`) and abbreviations (`w. z`) wrap inside
-  // sentences, so only the full-line test reads those.
-  if (
-    NUMBERED_POINT.test(line.text.trimStart()) &&
-    !TAKES_A_NUMBER.test(previous.text.trimEnd())
-  ) {
-    return true;
-  }
-  const full = ranOutOfRoom(previous, line, rightEdge);
-  if (!indented) {
-    return !full && LIST_MARKER.test(line.text.trimStart());
-  }
-  return !(
-    full &&
-    (line.x - previous.x < INDENT_THRESHOLD_PT ||
-      LIST_MARKER.test(previous.text.trimStart()))
-  );
 };
 
 /** Read one page's lines, keeping blanks and the indent decision. */
@@ -752,12 +683,14 @@ export const assemblePlSnParagraphs = (
   // lands in, and the lines handed in are the caller's to keep.
   const copyRun = ({
     bold,
+    italic,
     text,
     footnoteReference,
     superscript,
   }: PlSnRun): PlSnRun => ({
     bold,
     text,
+    ...(italic === undefined ? {} : { italic }),
     ...(footnoteReference === undefined ? {} : { footnoteReference }),
     ...(superscript === undefined ? {} : { superscript }),
   });
@@ -791,6 +724,7 @@ export const assemblePlSnParagraphs = (
     const separator = brokenWord ? "" : " ";
     if (
       previous.bold === head.bold &&
+      previous.italic === head.italic &&
       previous.footnoteReference === undefined &&
       head.footnoteReference === undefined &&
       previous.superscript === undefined &&
@@ -798,11 +732,15 @@ export const assemblePlSnParagraphs = (
     ) {
       previous.text += separator + head.text;
     } else if (head.superscript === undefined) {
-      current.push({ text: separator + head.text, bold: head.bold });
+      current.push({ ...copyRun(head), text: separator + head.text });
     } else {
       // The line break's space stays on the baseline, out of the index.
       if (separator.length > 0) {
-        current.push({ text: separator, bold: head.bold });
+        current.push({
+          text: separator,
+          bold: head.bold,
+          ...(head.italic === undefined ? {} : { italic: head.italic }),
+        });
       }
       current.push(copyRun(head));
     }
@@ -826,20 +764,19 @@ export const plSnParagraphsToHtml = (
     .map(
       (runs) =>
         `<p>${runs
-          .map(({ bold, superscript, text }) => {
+          .map(({ bold, italic, superscript, text }) => {
             const raised =
               superscript === true
                 ? `<sup>${escapeHtml(text)}</sup>`
                 : escapeHtml(text);
-            return bold ? `<b>${raised}</b>` : raised;
+            const emphasized = italic === true ? `<i>${raised}</i>` : raised;
+            return bold ? `<b>${emphasized}</b>` : emphasized;
           })
           .join("")}</p>`,
     )
     .join("");
 
-type PdfTextLine = ReturnType<
-  ReturnType<PDF["getPages"]>[number]["extractText"]
->["lines"][number];
+type PdfTextLine = PdfTextPage["lines"][number];
 
 const extractedLineOf = (
   line: PdfTextLine,
@@ -1172,8 +1109,7 @@ export const extractPlSnLines = async (
   paragraphStart: PlPdfParagraphStart = PL_PDF_PARAGRAPH_START.INDENT,
   options: ExtractPlSnLinesOptions = {},
 ): Promise<PlSnLine[]> => {
-  const pdf = await PDF.load(pdfBytes);
-  const textPages = pdf.getPages().map((page) => page.extractText());
+  const textPages = await readPdfTextPages(pdfBytes);
   const { supremeCourt } = options;
   if (supremeCourt === undefined) {
     return textPages.flatMap(({ lines }) =>
@@ -1250,14 +1186,8 @@ export type PlPdfSeparatedContent = {
 export const extractPlPdfSeparatedContent = async (
   pdfBytes: Uint8Array,
   paragraphStart: PlPdfParagraphStart,
-): Promise<PlPdfSeparatedContent> => {
-  const pdf = await PDF.load(pdfBytes);
-  const pages = pdf.getPages().map((page) => {
-    const { height, lines } = page.extractText();
-    return { height, lines };
-  });
-  return readPagesWithFootnotes(pages, paragraphStart);
-};
+): Promise<PlPdfSeparatedContent> =>
+  readPagesWithFootnotes(await readPdfTextPages(pdfBytes), paragraphStart);
 
 type ParsePlSnDecisionInput = {
   pdfBytes: Uint8Array;

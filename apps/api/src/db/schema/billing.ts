@@ -2,6 +2,8 @@ import {
   INVOICE_LANGUAGES,
   INVOICE_LINE_INPUT_LIMITS,
   INVOICE_LINE_SOURCES,
+  INVOICE_PAYMENT_INPUT_LIMITS,
+  INVOICE_PAYMENT_METHODS,
   INVOICE_STATUS,
   INVOICE_STATUSES,
   type InvoiceStatus,
@@ -10,6 +12,7 @@ import {
   TIME_ENTRY_ACTIVITY_GROUPS,
   TIME_ENTRY_SUGGESTION_STATUSES,
 } from "@stll/api-contract";
+import { BILLING_CODE_MAX_LENGTH } from "@stll/api-contract/billing";
 import {
   DESKTOP_TIME_ENTRY_BATCH_STATUSES,
   type DesktopTimeEntryBatchResponse,
@@ -21,8 +24,10 @@ import { ORGANIZATION_MANAGEMENT_ROLES } from "@stll/permissions";
 
 import { entityFeaturePolicies } from "@/api/db/entity-feature-policies";
 import {
+  completeInvoiceVisibilityPolicy,
   invoiceLineOwnerReadPolicy,
-  invoiceLineVisibilityPolicy,
+  invoicePaymentNoDeletePolicy,
+  invoicePaymentOwnerBackfillPolicies,
   invoicePolicies,
   timeEntryPolicies,
 } from "@/api/db/rls";
@@ -187,8 +192,10 @@ export const timeEntries = p.pgTable(
       .text("source", { enum: TIME_ENTRY_SOURCES })
       .notNull()
       .default("manual"),
-    taskCode: p.varchar("task_code", { length: 20 }),
-    activityCode: p.varchar("activity_code", { length: 20 }),
+    taskCode: p.varchar("task_code", { length: BILLING_CODE_MAX_LENGTH }),
+    activityCode: p.varchar("activity_code", {
+      length: BILLING_CODE_MAX_LENGTH,
+    }),
     invoiceId: safeUuid<"invoice">("invoice_id").references(() => invoices.id, {
       onDelete: "set null",
     }),
@@ -619,7 +626,7 @@ export const billingCodes = p.pgTable(
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
     type: p.text("type", { enum: BILLING_CODE_TYPES }).notNull(),
-    code: p.varchar({ length: 20 }).notNull(),
+    code: p.varchar({ length: BILLING_CODE_MAX_LENGTH }).notNull(),
     label: p.varchar({ length: 256 }).notNull(),
     active: p.boolean().notNull().default(true),
     sortOrder: p.integer("sort_order").notNull().default(0),
@@ -875,6 +882,11 @@ export const rateEntries = p.pgTable(
       .text("user_id")
       .references(() => user.id, { onDelete: "cascade" }),
     role: p.text("role", { enum: ORGANIZATION_ROLE_NAMES }),
+    // Optional activity qualifier; user and role targets remain mutually exclusive.
+    activityCodeId: safeUuid<"billingCode">("activity_code_id").references(
+      () => billingCodes.id,
+      { onDelete: "no action" },
+    ),
     hourlyRate: centsColumn("hourly_rate").notNull(),
     effectiveFrom: p.date("effective_from").notNull(),
     effectiveTo: p.date("effective_to"),
@@ -1047,6 +1059,9 @@ export const invoices = p.pgTable(
     // SAFETY: literal zero is a valid minor-unit integer default.
     totalAmount: centsColumn("total_amount").notNull().default(unsafeCents(0)),
     notes: p.text(),
+    // When the invoice was marked sent. Kept once set, so a paid invoice
+    // whose payments are voided returns to sent rather than finalized.
+    sentAt: timestamptz("sent_at"),
     paidAt: timestamptz("paid_at"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
@@ -1219,7 +1234,7 @@ export const invoiceLines = p.pgTable(
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
-    invoiceLineVisibilityPolicy(table),
+    completeInvoiceVisibilityPolicy("invoice_lines", table),
     invoiceLineOwnerReadPolicy(),
     p.check(
       "invoice_lines_recorded_snapshot_check",
@@ -1286,6 +1301,108 @@ export const invoiceLines = p.pgTable(
     ),
     ...reviewResetOwnerPolicies("invoice_lines"),
     ...wsOrganizationPolicies("invoice_lines", { columns: table }),
+  ],
+);
+
+export const INVOICE_PAYMENT_ORIGIN = {
+  LEGACY: "legacy",
+  RECORDED: "recorded",
+} as const;
+
+const INVOICE_PAYMENT_ORIGINS = [
+  INVOICE_PAYMENT_ORIGIN.LEGACY,
+  ...Object.values(INVOICE_PAYMENT_ORIGIN).filter(
+    (origin) => origin !== INVOICE_PAYMENT_ORIGIN.LEGACY,
+  ),
+] as const;
+
+const INVOICE_PAYMENT_ORIGIN_SQL_VALUES = INVOICE_PAYMENT_ORIGINS.map(
+  (origin) => sql.raw(`'${origin}'`),
+);
+
+const INVOICE_PAYMENT_METHOD_SQL_VALUES = INVOICE_PAYMENT_METHODS.map(
+  (method) => sql.raw(`'${method}'`),
+);
+
+/**
+ * One payment a client made towards an issued invoice, in the invoice's
+ * currency. On a credit note it records the refund paid out. The invoice is
+ * paid once its non-voided payments reach its total; `lib/billing/invoice-payments`
+ * owns that rule and every write.
+ *
+ * A payment is never deleted: a mistaken one is voided (`voidedAt`), and the
+ * row stays as the record of what was entered and reversed. It hangs off the
+ * invoice, which outlives its matters, so payments survive matter deletion;
+ * only the organization's own deletion removes them. Actor ids are kept as
+ * plain text so they outlive the account that recorded or voided the payment.
+ *
+ * The invoice's tenant key (`invoices_id_org_unique`) is installed by the
+ * online phase, after schema migrations, so the invoice reference is the
+ * primary key. Row security pairs the tenants: a payment is written only with
+ * the caller's organization and only for an invoice the caller can see, and a
+ * visible invoice is always the caller's organization's.
+ */
+export const invoicePayments = p.pgTable(
+  "invoice_payments",
+  {
+    id: pUuid<"invoicePayment">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    // Payments exist only on issued invoices, which the application never
+    // deletes; the cascade serves the deliberate removals (organization
+    // deletion, the review reset's billing stage, test cleanup).
+    invoiceId: safeUuid<"invoice">("invoice_id")
+      .notNull()
+      .references(() => invoices.id, { onDelete: "cascade" }),
+    amount: centsColumn("amount").notNull(),
+    paidOn: p.date("paid_on").notNull(),
+    method: p.text("method", { enum: INVOICE_PAYMENT_METHODS }).notNull(),
+    // Server-set provenance distinguishes a repaired settlement from a payment entered through the payment owner.
+    origin: p.text("origin", { enum: INVOICE_PAYMENT_ORIGINS }).notNull(),
+    reference: p.varchar("reference", {
+      length: INVOICE_PAYMENT_INPUT_LIMITS.referenceMaxChars,
+    }),
+    note: p.varchar("note", {
+      length: INVOICE_PAYMENT_INPUT_LIMITS.noteMaxChars,
+    }),
+    // Null only on a settlement recorded for an invoice marked paid before
+    // payment records existed (`lib/billing/invoice-payment-backfill`): nobody entered it.
+    recordedBy: p.text("recorded_by").$type<SafeId<"user">>(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    voidedAt: timestamptz("voided_at"),
+    voidedBy: p.text("voided_by").$type<SafeId<"user">>(),
+  },
+  (table) => [
+    p.index("invoice_payments_invoice_idx").on(table.invoiceId),
+    p.index("invoice_payments_organization_idx").on(table.organizationId),
+    p.check("invoice_payments_amount_check", sql`${table.amount} > 0`),
+    p.check(
+      "invoice_payments_method_check",
+      sql`${table.method} in (${sql.join(INVOICE_PAYMENT_METHOD_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "invoice_payments_origin_check",
+      sql`${table.origin} in (${sql.join(INVOICE_PAYMENT_ORIGIN_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "invoice_payments_void_check",
+      sql`(${table.voidedAt} IS NULL) = (${table.voidedBy} IS NULL)`,
+    ),
+    completeInvoiceVisibilityPolicy("invoice_payments", table),
+    p.pgPolicy("invoice_payments_recorded_insert", {
+      as: "restrictive",
+      for: "insert",
+      to: stella,
+      withCheck: sql`${table.origin} = ${sql.raw(`'${INVOICE_PAYMENT_ORIGIN.RECORDED}'`)} AND ${table.recordedBy} IS NOT NULL`,
+    }),
+    invoicePaymentNoDeletePolicy(),
+    ...invoicePaymentOwnerBackfillPolicies(
+      table,
+      sql.raw(`'${INVOICE_PAYMENT_ORIGIN.LEGACY}'`),
+    ),
+    ...reviewResetOwnerPolicies("invoice_payments"),
+    ...orgPolicies(),
   ],
 );
 

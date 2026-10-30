@@ -53,7 +53,7 @@ impl ManagedPolicy {
       .copied()
       .filter(|feature| match feature {
         DesktopFeature::ActivityTimeline => self.activity_disabled,
-        DesktopFeature::TimeBilling => false,
+        DesktopFeature::LocalAgents => false,
       })
       .collect()
   }

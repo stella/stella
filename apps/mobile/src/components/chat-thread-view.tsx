@@ -6,14 +6,15 @@ import {
   FlatList,
   RefreshControl,
   StyleSheet,
-  Text,
   View,
 } from "react-native";
 import { useTranslations } from "use-intl";
 
+import { Text } from "@stll/ui/text";
+
 import { ChatComposer } from "@/components/chat-composer";
 import { ChatMessage } from "@/components/chat-message";
-import { EmptyCard } from "@/components/empty-state-screen";
+import { EmptyCard, screenStyles } from "@/components/empty-state-screen";
 import { PagingFooter, RetryButton } from "@/components/retry-button";
 import type { PagingState } from "@/components/retry-button";
 import { useChatTurn } from "@/components/use-chat-turn";
@@ -229,12 +230,16 @@ const ThreadMessages = ({
         keyExtractor={(entry) => entry.id}
         keyboardDismissMode="interactive"
         keyboardShouldPersistTaps="handled"
+        // An inverted list flips its empty component with its rows, so the
+        // card is flipped back to read the right way up.
         ListEmptyComponent={
           live === null ? (
-            <EmptyCard
-              description={t("threadEmptyDescription")}
-              title={t("threadTitle")}
-            />
+            <View style={styles.upright}>
+              <EmptyCard
+                description={t("threadEmptyDescription")}
+                title={t("threadTitle")}
+              />
+            </View>
           ) : undefined
         }
         // Inverted, the footer sits above the oldest message.
@@ -269,12 +274,14 @@ const ThreadMessages = ({
           {t("sendFailed")}
         </Text>
       ) : null}
-      <ChatComposer
-        busy={turn.busy}
-        canStop={turn.canStop}
-        onSend={turn.send}
-        onStop={turn.stop}
-      />
+      <View style={screenStyles.readable}>
+        <ChatComposer
+          busy={turn.busy}
+          canStop={turn.canStop}
+          onSend={turn.send}
+          onStop={turn.stop}
+        />
+      </View>
     </View>
   );
 };
@@ -318,6 +325,7 @@ const LiveTurnView = ({ turn }: { turn: LiveTurn }) => {
 
 const styles = StyleSheet.create({
   content: {
+    ...screenStyles.readable,
     flexGrow: 1,
     gap: 16,
     padding: 16,
@@ -336,6 +344,10 @@ const styles = StyleSheet.create({
   padded: {
     flex: 1,
     padding: 20,
+  },
+  upright: {
+    flex: 1,
+    transform: [{ scaleY: -1 }],
   },
   working: {
     alignItems: "center",
