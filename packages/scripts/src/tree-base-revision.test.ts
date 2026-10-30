@@ -7,7 +7,9 @@ import { treeBaseRevision } from "./tree-base-revision";
 const withRepository = (
   verify: (root: string, git: (...args: string[]) => string) => void,
 ) => {
-  const root = mkdtempSync(path.join(import.meta.dir, ".tree-base-"));
+  const root = mkdtempSync(
+    path.resolve(import.meta.dir, "../../..", ".tree-base-"),
+  );
   const git = (...args: string[]) => {
     const result = Bun.spawnSync(["git", ...args], {
       cwd: root,

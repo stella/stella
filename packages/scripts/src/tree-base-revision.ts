@@ -22,7 +22,7 @@ export const treeBaseRevision = ({
       ([key, value]) => !key.startsWith("GIT_") && value !== undefined,
     ),
   );
-  const readGit = (args: string[]) => {
+  const readGit = (args: [string, ...string[]]) => {
     const result = Bun.spawnSync(["git", ...args], {
       cwd: repoRoot,
       env: gitEnv,
@@ -31,7 +31,7 @@ export const treeBaseRevision = ({
     });
     if (childExitStatus(result) !== 0) {
       return panic(
-        `Tree comparison base unavailable: git ${args.at(0)} failed (${args.join(" ")}): ${result.stderr.toString().trim()}`,
+        `Tree comparison base unavailable: git ${args[0]} failed (${args.join(" ")}): ${result.stderr.toString().trim()}`,
       );
     }
     return result.stdout.toString().trim();
