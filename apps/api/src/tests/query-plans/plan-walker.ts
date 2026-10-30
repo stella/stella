@@ -14,6 +14,8 @@ export type IndexedAccessPath = {
   recheckCondition: string | null;
   actualLoops: number | null;
   actualRows: number | null;
+  /** The scan node that reads the relation, for per-occurrence accounting. */
+  node: PlanNode;
 };
 
 type IndexedAccessPathOptions = {
@@ -143,6 +145,7 @@ export const indexedAccessPaths = (
         recheckCondition: null,
         actualLoops: numberField(node, "Actual Loops"),
         actualRows: numberField(node, "Actual Rows"),
+        node,
       };
     } else if (nodeRelation === relation && nodeType === "Bitmap Heap Scan") {
       const indexes = attachedDescendants(node).filter(
@@ -163,6 +166,7 @@ export const indexedAccessPaths = (
           recheckCondition: field(node, "Recheck Cond"),
           actualLoops: numberField(node, "Actual Loops"),
           actualRows: numberField(node, "Actual Rows"),
+          node,
         };
       }
     }

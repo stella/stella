@@ -76,6 +76,31 @@ test(INDEXED_PATH_PROPERTY_ID, () => {
   );
 });
 
+test("an index-only filter returns only the covering scan of an index scanned twice", () => {
+  const covering = {
+    "Node Type": "Index Only Scan",
+    "Relation Name": "links",
+    "Index Name": "links_subtree_idx",
+    "Heap Fetches": 0,
+  };
+  const heapReading = {
+    "Node Type": "Index Scan",
+    "Relation Name": "links",
+    "Index Name": "links_subtree_idx",
+  };
+  const root = { "Node Type": "Append", Plans: [covering, heapReading] };
+
+  expect(
+    indexedAccessPaths(root, "links", { accessKind: "index-only" }).map(
+      ({ node }) => node,
+    ),
+  ).toEqual([covering]);
+  expect(indexedAccessPaths(root, "links").map(({ node }) => node)).toEqual([
+    covering,
+    heapReading,
+  ]);
+});
+
 test("keeps repeated relation scans distinct by structural position", () => {
   const root = explainRoot([
     {

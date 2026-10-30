@@ -195,11 +195,12 @@ const pageReads = (root: PlanNode): PageReads => {
     subtreeRanges: 0,
   };
   // These ranges prove the subtree index covers the read; heap fetches below
-  // verify that the covering path remains physically heap-free.
-  const coveringIndexes = new Set(
+  // verify that the covering path remains physically heap-free. Classified
+  // per scan: another scan of the same index may still read the heap.
+  const coveringScans = new Set(
     indexedAccessPaths(root, "case_law_provision_citations", {
       accessKind: "index-only",
-    }).flatMap(({ indexNames }) => indexNames),
+    }).map(({ node }) => node),
   );
   for (const node of planNodes(root)) {
     const nodeType = node["Node Type"];
@@ -217,8 +218,7 @@ const pageReads = (root: PlanNode): PageReads => {
     if (relation !== "case_law_provision_citations") {
       continue;
     }
-    const indexName = node["Index Name"];
-    if (typeof indexName === "string" && coveringIndexes.has(indexName)) {
+    if (coveringScans.has(node)) {
       reads.subtreeRanges += 1;
       reads.subtreeHeapFetches += numberField(node, "Heap Fetches");
     } else {
