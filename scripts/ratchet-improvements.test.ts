@@ -4,6 +4,7 @@ import { expect, test } from "bun:test";
 import {
   assessMeasurements,
   checkMetricDeadlines,
+  metricDeadlineMode,
   RATCHET_METRICS,
   type RatchetMetric,
 } from "./ratchet";
@@ -30,6 +31,7 @@ test("raw transaction ceilings tighten as the supplied clock advances", () => {
     raw.datedCeilings ?? panic("Raw transaction deadlines are missing");
   const check = (count: number, now: Date) =>
     checkMetricDeadlines({
+      mode: "main",
       current: {
         [raw.id]: snapshot(
           count === 0 ? {} : { "apps/api/src/legacy.ts": count },
@@ -37,7 +39,7 @@ test("raw transaction ceilings tighten as the supplied clock advances", () => {
       },
       metrics: [raw],
       now,
-    });
+    }).errors;
   expect(check(257, new Date("2026-10-30T00:00:00.000Z"))).toEqual([]);
   for (const ceiling of ceilings) {
     const now = new Date(ceiling.effectiveAt);
@@ -58,10 +60,11 @@ test("meeting a dated total does not permit per-file transaction debt growth", (
   const current = { [raw.id]: snapshot({ "apps/api/src/new.ts": 100 }) };
   expect(
     checkMetricDeadlines({
+      mode: "main",
       current,
       metrics: [raw],
       now: new Date("2026-11-27T00:00:00.000Z"),
-    }),
+    }).errors,
   ).toEqual([]);
   expect(
     assessMeasurements({ current, baseline, metrics: [raw] }).allowed,
@@ -71,6 +74,7 @@ test("meeting a dated total does not permit per-file transaction debt growth", (
 test("dated ceilings reject an invalid or weakening schedule", () => {
   const check = (datedCeilings: NonNullable<RatchetMetric["datedCeilings"]>) =>
     checkMetricDeadlines({
+      mode: "main",
       current: { fixture: snapshot({}) },
       metrics: [{ ...metric, datedCeilings }],
       now: new Date("2026-10-30T00:00:00.000Z"),
@@ -94,11 +98,90 @@ test("dated ceilings reject an invalid or weakening schedule", () => {
   }
   expect(() =>
     checkMetricDeadlines({
+      mode: "main",
       current: { fixture: snapshot({}) },
       metrics: [metric],
       now: new Date(Number.NaN),
     }),
   ).toThrow("Ratchet deadline clock must be a valid instant");
+});
+
+test("only main push and schedule events use the standing deadline gate", () => {
+  for (const event of [
+    { eventName: undefined, ref: undefined, expected: "change" },
+    { eventName: "pull_request", ref: "refs/heads/main", expected: "change" },
+    {
+      eventName: "merge_group",
+      ref: "refs/heads/gh-readonly-queue/main/pr-1",
+      expected: "change",
+    },
+    { eventName: "push", ref: "refs/heads/feature", expected: "change" },
+    { eventName: "push", ref: "refs/heads/main", expected: "main" },
+    { eventName: "schedule", ref: undefined, expected: "main" },
+  ]) {
+    expect(metricDeadlineMode(event)).toBe(event.expected);
+  }
+});
+
+test("unrelated changes warn about overdue debt and its next checkpoint", () => {
+  const raw =
+    RATCHET_METRICS.find(({ id }) => id === "raw-api-transaction-boundaries") ??
+    panic("Raw transaction metric is missing");
+  const current = { [raw.id]: snapshot({ "apps/api/src/legacy.ts": 257 }) };
+  const check = (now: Date) =>
+    checkMetricDeadlines({
+      mode: "change",
+      current,
+      baseline: current,
+      changedFiles: new Set(["apps/web/src/appearance.ts"]),
+      metrics: [raw],
+      now,
+    });
+  const result = check(new Date("2026-11-14T00:00:00.000Z"));
+  expect(result.errors).toEqual([]);
+  expect(result.warnings).toEqual([
+    expect.stringContaining("257 exceeds dated ceiling 200"),
+  ]);
+  expect(result.warnings.at(0)).toContain(
+    "next deadline 2026-11-27T00:00:00.000Z (maximum 100)",
+  );
+  expect(check(new Date("2026-12-12T00:00:00.000Z")).warnings.at(0)).toContain(
+    "next deadline none",
+  );
+});
+
+test("changes above a ceiling fail on raw growth or touching a base or head raw-site file", () => {
+  const raw =
+    RATCHET_METRICS.find(({ id }) => id === "raw-api-transaction-boundaries") ??
+    panic("Raw transaction metric is missing");
+  const legacy = "apps/api/src/legacy.ts";
+  const remaining = "apps/api/src/remaining.ts";
+  const baseline = { [raw.id]: snapshot({ [legacy]: 1, [remaining]: 256 }) };
+  for (const change of [
+    {
+      snapshot: snapshot({ [legacy]: 1, [remaining]: 257 }),
+      changedFiles: new Set<string>(),
+    },
+    {
+      snapshot: snapshot({ [legacy]: 1, [remaining]: 256 }),
+      changedFiles: new Set([legacy]),
+    },
+    {
+      snapshot: snapshot({ [remaining]: 256 }),
+      changedFiles: new Set([legacy]),
+    },
+  ]) {
+    const result = checkMetricDeadlines({
+      mode: "change",
+      current: { [raw.id]: change.snapshot },
+      baseline,
+      changedFiles: change.changedFiles,
+      metrics: [raw],
+      now: new Date("2026-11-14T00:00:00.000Z"),
+    });
+    expect(result.errors).toHaveLength(1);
+    expect(result.warnings).toEqual([]);
+  }
 });
 
 test("per-file ceilings reject relocated violations even when totals decrease", () => {
