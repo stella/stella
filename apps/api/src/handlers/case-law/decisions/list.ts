@@ -49,6 +49,7 @@ import {
 import { publicDecisionRowColumns } from "@/api/lib/case-law/decision-row-columns";
 import { readDecisionHeadnote } from "@/api/lib/case-law/decision-text";
 import { decisionTypeFilterSql } from "@/api/lib/case-law/decision-type-filter-sql";
+import { classifiedDecisionTypeKind } from "@/api/lib/case-law/decision-type-kind";
 import { readCaseLawFilterScope } from "@/api/lib/case-law/filter-country-scope";
 import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
 import { loadPublicCourtWeights } from "@/api/lib/case-law/public-case-law-config";
@@ -489,6 +490,7 @@ export const listDecisionsHandler = async (
         ),
         decisionDate: decision.decisionDate,
         decisionType: decision.decisionType,
+        decisionTypeKind: classifiedDecisionTypeKind(decision.decisionType),
         sourceUrl: decision.sourceUrl,
         headnote: readDecisionHeadnote({
           headnote: decision.headnote,

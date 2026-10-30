@@ -395,6 +395,7 @@ export const decisionsPageOptions = ({
             languageAlternates: h.languageAlternates,
             decisionDate: h.decisionDate,
             decisionType: h.decisionType,
+            decisionTypeKind: h.decisionTypeKind,
             sourceUrl: h.sourceUrl,
             headnote: h.headnote,
             headline: h.headline,
