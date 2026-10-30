@@ -4,16 +4,24 @@
  * The migrate task runs the new release's code while the previous release's
  * scheduler keeps running. A scheduled job inside a long read transaction
  * holds a lock that refuses the schema phase's `ACCESS EXCLUSIVE` DDL, and the
- * lock-wait ladder cannot outlast it. The scheduler already honours
- * `scheduler_jobs.paused_until`: it skips a leased run that has not started
- * and stops a running one at its next heartbeat. This module uses that pause
- * to drain the jobs before the pending schema migrations and to resume them
- * afterwards.
+ * lock-wait ladder cannot outlast it. The scheduler honours
+ * `scheduler_jobs.paused_until`: a paused job cannot start again, and a
+ * running one notices the pause only at its next heartbeat and releases its
+ * lease only when its task settles, which the scheduler bounds with its
+ * runtime ceiling. This module pauses the jobs before the pending schema
+ * migrations, waits for the running ones to finish naturally (up to that
+ * ceiling plus a margin), and resumes them afterwards.
  *
  * No job-to-table map exists, and a hand-listed subset would drift, so every
- * job is paused except those an operator already paused (left untouched) and
- * the pause audit (the database forbids pausing it). The pause carries a
- * deadline, so a migrate task that dies leaves no job paused for long.
+ * job is paused except the pause audit (the database forbids pausing it).
+ * The invariant before the migrations run: every other job stays paused for
+ * at least the work floor, whoever paused it. Pauses of other actors that end
+ * sooner are taken over and restored exactly; pauses that last are untouched.
+ * The step's pause carries a deadline, so a migrate task that dies leaves no
+ * job paused for long.
+ *
+ * Scope: this covers scheduler jobs only. Application request reads are not
+ * drained; they still rely on the lock-wait ladder.
  *
  * Relative imports only: `migrate.ts` ships as a loose file.
  */
@@ -23,6 +31,12 @@ import type { ReservedSQL } from "bun";
 
 import { declareFingerprintFields } from "@stll/errors";
 
+import {
+  DEFAULT_LEASE_MS,
+  DEFAULT_MAX_RUNTIME_MS,
+  defaultHeartbeatIntervalMs,
+} from "../lib/scheduler/timing";
+import { DEFAULT_LOCK_RETRY_CONFIG } from "./lock-retry-ladder";
 import type { MigrationTiming } from "./migration-timing";
 
 /**
@@ -33,21 +47,39 @@ import type { MigrationTiming } from "./migration-timing";
 export const SCHEDULER_DRAIN_ACTOR = "migrate";
 /** The one job the database refuses to pause. */
 export const UNPAUSABLE_SCHEDULER_JOB_ID = "scheduler.pauseAudit.hourly";
-/** A pause outlives a dead migrate task by at most this long. */
-export const SCHEDULER_DRAIN_PAUSE_BOUND_MS = 30 * 60_000;
+/** Slack for clock skew and a sweep that began just before the pause. */
+const SCHEDULER_DRAIN_MARGIN_MS = 5 * 60_000;
+/** The DDL itself, once the lock is won; the schema phase is short. */
+const SCHEDULER_DRAIN_DDL_ALLOWANCE_MS = 15 * 60_000;
 /**
- * Every pausable job stays paused at least this long when the schema phase
- * starts, whoever paused it. It exceeds the drain deadline plus the lock-wait
- * ladder, and sits below the bound so the step's own pause stays above it.
+ * How long running jobs get to finish. A run that began before the pause lasts
+ * at most the runtime ceiling (it notices the pause at a heartbeat, every
+ * `defaultHeartbeatIntervalMs(lease)`, and unwinds sooner); the margin covers
+ * the rest.
  */
-export const SCHEDULER_DRAIN_PAUSE_FLOOR_MS = 15 * 60_000;
+export const SCHEDULER_DRAIN_DEADLINE_MS =
+  Math.max(
+    DEFAULT_MAX_RUNTIME_MS,
+    defaultHeartbeatIntervalMs(DEFAULT_LEASE_MS),
+  ) + SCHEDULER_DRAIN_MARGIN_MS;
+/** What the work needs once the drain ends: the lock-wait ladder, the DDL, a margin. */
+export const SCHEDULER_DRAIN_WORK_FLOOR_MS =
+  DEFAULT_LOCK_RETRY_CONFIG.budgetMs +
+  SCHEDULER_DRAIN_DDL_ALLOWANCE_MS +
+  SCHEDULER_DRAIN_MARGIN_MS;
+/** What a pause needs when the drain starts: the whole wait, then the work. */
+export const SCHEDULER_DRAIN_START_FLOOR_MS =
+  SCHEDULER_DRAIN_DEADLINE_MS + SCHEDULER_DRAIN_WORK_FLOOR_MS;
 /**
- * How long running jobs get to notice the pause. The scheduler checks it at
- * each heartbeat, a few seconds to minutes apart; a run that ignores it for
- * longer is one the promote should not cut under.
+ * The step's own pause, written above the start floor so it is not eligible
+ * again while the scans that follow its write run. A dead migrate task leaves
+ * a pause that lapses within this long (the database caps pauses at 72 h).
  */
-export const SCHEDULER_DRAIN_DEADLINE_MS = 5 * 60_000;
-export const SCHEDULER_DRAIN_POLL_MS = 1000;
+export const SCHEDULER_DRAIN_PAUSE_BOUND_MS =
+  SCHEDULER_DRAIN_START_FLOOR_MS + SCHEDULER_DRAIN_MARGIN_MS;
+export const SCHEDULER_DRAIN_POLL_MS = 5000;
+/** One progress event per still-leased job at most this often. */
+export const SCHEDULER_DRAIN_PROGRESS_MS = 60_000;
 
 const PAUSE_REASON = "Schema migration phase draining scheduled jobs";
 const RESUME_REASON = "Schema migration phase finished";
@@ -140,10 +172,13 @@ const eligibleSql = (floor: string, audit: string) =>
          AND (paused_until IS NULL
               OR paused_until < now() + ${floor}::integer * interval '1 millisecond')`;
 
-const readEligible = async (connection: ReservedSQL): Promise<string[]> => {
+const readEligible = async (
+  connection: ReservedSQL,
+  floorMs: number,
+): Promise<string[]> => {
   const rows = await connection.unsafe<{ id: string }[]>(
     `SELECT id FROM scheduler_jobs WHERE ${eligibleSql("$1", "$2")} ORDER BY id`,
-    [SCHEDULER_DRAIN_PAUSE_FLOOR_MS, UNPAUSABLE_SCHEDULER_JOB_ID],
+    [floorMs, UNPAUSABLE_SCHEDULER_JOB_ID],
   );
   return rows.map(({ id }) => id);
 };
@@ -157,7 +192,10 @@ const readEligible = async (connection: ReservedSQL): Promise<string[]> => {
  * active pause replaces another. A row changed after the scan fails the
  * write's compare-and-set and is left for the next pass.
  */
-const pauseOnce = async (connection: ReservedSQL): Promise<PauseOutcome> => {
+const pauseOnce = async (
+  connection: ReservedSQL,
+  floorMs: number,
+): Promise<PauseOutcome> => {
   const rows = await connection.unsafe<
     {
       id: string;
@@ -193,7 +231,7 @@ const pauseOnce = async (connection: ReservedSQL): Promise<PauseOutcome> => {
       SCHEDULER_DRAIN_PAUSE_BOUND_MS,
       SCHEDULER_DRAIN_ACTOR,
       PAUSE_REASON,
-      SCHEDULER_DRAIN_PAUSE_FLOOR_MS,
+      floorMs,
       UNPAUSABLE_SCHEDULER_JOB_ID,
     ],
   );
@@ -222,24 +260,31 @@ const pauseOnce = async (connection: ReservedSQL): Promise<PauseOutcome> => {
 const MAX_PAUSE_PASSES = 5;
 
 /**
- * Repeats the pause until a fresh scan finds no eligible job: a pass that
- * wrote nothing proves nothing, since compare-and-set losers are retried.
+ * Repeats the pause until a fresh scan finds no job paused for less than
+ * `floorMs`: a pass that wrote nothing proves nothing, since compare-and-set
+ * losers are retried. Progress accumulates in `total`, so a failure part-way
+ * still leaves the caller the list of what to undo.
  */
-const pauseJobs = async (connection: ReservedSQL): Promise<PauseOutcome> => {
-  const total: PauseOutcome = { pausedIds: [], takenOver: [] };
+const pauseJobs = async (
+  connection: ReservedSQL,
+  floorMs: number,
+  total: PauseOutcome,
+): Promise<number> => {
+  let written = 0;
   for (let pass = 0; ; pass += 1) {
-    const eligible = await readEligible(connection);
+    const eligible = await readEligible(connection, floorMs);
     if (eligible.length === 0) {
-      return total;
+      return written;
     }
     if (pass === MAX_PAUSE_PASSES) {
       return panic(
         `Scheduler jobs kept changing; the drain could not pause: ${eligible.join(", ")}`,
       );
     }
-    const outcome = await pauseOnce(connection);
+    const outcome = await pauseOnce(connection, floorMs);
     total.pausedIds.push(...outcome.pausedIds);
     total.takenOver.push(...outcome.takenOver);
+    written += outcome.pausedIds.length + outcome.takenOver.length;
   }
 };
 
@@ -357,11 +402,11 @@ const resumeAndReport = async (
 };
 
 /**
- * Pauses the scheduled jobs, taking over operator pauses that would end within
- * the pause bound (and leaving longer ones untouched), waits until no pausable job
- * holds a live lease (operator-paused ones included), runs
- * `work`, and undoes only its own writes whether `work` returned or
- * threw. A job still leased at the deadline fails the run before `work` starts.
+ * Pauses every pausable job for the whole wait plus the work, waits until none
+ * holds a live lease (jobs paused by others included), re-asserts the pause
+ * floor for the work itself, runs `work`, and undoes only its own writes
+ * whether `work` returned or threw. A job still leased at the deadline fails
+ * the run before `work` starts.
  */
 export const withDrainedScheduler = async <T>(
   options: SchedulerDrainOptions,
@@ -372,36 +417,59 @@ export const withDrainedScheduler = async <T>(
     return await work();
   }
   const startedAt = runtime.now();
-  const paused = await pauseJobs(connection);
+  const waitedMs = () => Math.max(0, Math.round(runtime.now() - startedAt));
+  const paused: PauseOutcome = { pausedIds: [], takenOver: [] };
 
   try {
-    let leased = await readLeased(connection);
-    while (leased.length > 0) {
-      const waitedMs = Math.max(0, Math.round(runtime.now() - startedAt));
-      if (waitedMs >= runtime.deadlineMs) {
+    // The first pass must outlast the wait; later passes need only the work
+    // floor, and catch a pause an operator cleared or shortened meanwhile.
+    let floorMs = SCHEDULER_DRAIN_START_FLOOR_MS;
+    let lastProgressAt = Number.NEGATIVE_INFINITY;
+    for (;;) {
+      const written = await pauseJobs(connection, floorMs, paused);
+      floorMs = SCHEDULER_DRAIN_WORK_FLOOR_MS;
+      const leased = await readLeased(connection);
+      if (leased.length === 0 && written === 0) {
+        break;
+      }
+      if (leased.length === 0) {
+        continue;
+      }
+      if (waitedMs() >= runtime.deadlineMs) {
         timing.emit({
           event: "migrate.scheduler_drain",
           outcome: "timed_out",
           pausedCount: paused.pausedIds.length,
           takenOverCount: paused.takenOver.length,
           leasedCount: leased.length,
-          drainWaitMs: waitedMs,
+          drainWaitMs: waitedMs(),
         });
         throw new SchedulerDrainTimeoutError({
-          message: `Scheduled jobs still leased after ${String(waitedMs)} ms; no migration ran: ${leased
+          message: `Scheduled jobs still leased after ${String(waitedMs())} ms; no migration ran: ${leased
             .map(
               ({ id, lockedBy, lockedUntil }) =>
                 `${id} (locked_by ${lockedBy ?? "null"}, locked_until ${lockedUntil?.toISOString() ?? "null"})`,
             )
             .join(", ")}`,
           leased,
-          waitedMs,
+          waitedMs: waitedMs(),
         });
       }
+      if (runtime.now() - lastProgressAt >= SCHEDULER_DRAIN_PROGRESS_MS) {
+        lastProgressAt = runtime.now();
+        for (const { id, lockedBy, lockedUntil } of leased) {
+          timing.emit({
+            event: "migrate.scheduler_drain_progress",
+            jobId: id,
+            lockedBy,
+            lockedUntil: lockedUntil?.toISOString() ?? null,
+            drainWaitMs: waitedMs(),
+          });
+        }
+      }
       await runtime.sleep(
-        Math.min(runtime.pollMs, runtime.deadlineMs - waitedMs),
+        Math.min(runtime.pollMs, runtime.deadlineMs - waitedMs()),
       );
-      leased = await readLeased(connection);
     }
     timing.emit({
       event: "migrate.scheduler_drain",
@@ -409,7 +477,7 @@ export const withDrainedScheduler = async <T>(
       pausedCount: paused.pausedIds.length,
       takenOverCount: paused.takenOver.length,
       leasedCount: 0,
-      drainWaitMs: Math.max(0, Math.round(runtime.now() - startedAt)),
+      drainWaitMs: waitedMs(),
     });
     return await work();
   } finally {

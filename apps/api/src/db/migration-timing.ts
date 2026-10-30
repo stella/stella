@@ -48,6 +48,14 @@ export type MigrationTimingRecord =
       drainWaitMs: number;
     }
   | {
+      /** One still-leased job while the drain waits; emitted at a bounded cadence. */
+      event: "migrate.scheduler_drain_progress";
+      jobId: string;
+      lockedBy: string | null;
+      lockedUntil: string | null;
+      drainWaitMs: number;
+    }
+  | {
       /** Jobs resumed after the schema phase, whatever its outcome. */
       event: "migrate.scheduler_resume";
       outcome: "resumed" | "failed";

@@ -29,30 +29,25 @@ import { withExceptionScope } from "@/api/lib/observability/exception-scope";
 import { logger } from "@/api/lib/observability/logger";
 import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import { computeNextRunAt } from "@/api/lib/scheduler/schedule";
+import {
+  DEFAULT_LEASE_MS,
+  DEFAULT_MAX_RUNTIME_MS,
+  DEFAULT_POLL_INTERVAL_MS,
+  defaultHeartbeatIntervalMs,
+  MIN_LEASE_MS,
+} from "@/api/lib/scheduler/timing";
 import type {
   SchedulerDb,
   SchedulerJob,
   SchedulerTaskRegistry,
 } from "@/api/lib/scheduler/types";
 
-const DEFAULT_POLL_INTERVAL_MS = 60_000;
-const DEFAULT_LEASE_MS = 30 * 60_000;
 // A sweep runs every job that is due, once; this caps only the extra runs of
 // jobs that asked for an immediate continuation within the same sweep. Nine
 // keeps a single continuing job at the ten runs per sweep it always had, so
 // batch work (retention deletes, backfills) is paced exactly as before.
 const DEFAULT_RERUN_LIMIT = 9;
 const DEFAULT_SWEEP_DURATION_MS = 55_000;
-const MIN_LEASE_MS = 3 * DEFAULT_POLL_INTERVAL_MS;
-
-// Hard upper bound on how long a single task may run. The lease heartbeat
-// renews `lockedUntil` indefinitely, so without this ceiling a task that never
-// resolves would block the sequential runner AND keep the lease fresh forever,
-// defeating the self-heal the lease exists for. Set to one lease period: a job
-// that has not finished within a full lease is treated as hung. A JS promise
-// cannot be force-cancelled, so on expiry the ceiling aborts the task's signal
-// (cooperative tasks unwind), stops the heartbeat, and releases the job.
-const DEFAULT_MAX_RUNTIME_MS = DEFAULT_LEASE_MS;
 
 // The scheduler owns the postgres-role `rootDb`. Threaded explicitly so the
 // claim, lease, and completion paths are exercisable against a real
@@ -408,9 +403,6 @@ const dueJobPredicate = (runnableTasks: string[], eligibilityTime: SQL) =>
 
 const leaseExpiry = (leaseMs: number) =>
   sql`now() + ${leaseMs}::integer * interval '1 millisecond'`;
-
-const defaultHeartbeatIntervalMs = (leaseMs: number): number =>
-  Math.max(DEFAULT_POLL_INTERVAL_MS, Math.floor(leaseMs / 3));
 
 type LeaseHeartbeat = {
   stop: () => void;

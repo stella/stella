@@ -21,6 +21,7 @@ import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 import migrationAliasInventory from "../lib/db/migration-alias-inventory.json";
 import { assertMigrationHistory } from "../lib/db/migration-history";
 import { isPgError, PG_ERROR } from "../lib/pg-error";
+import { DEFAULT_MAX_RUNTIME_MS } from "../lib/scheduler/timing";
 import { withGatedTestClients } from "../tests/gated-test-database";
 import {
   CORPUS_SCHEMA_LANE,
@@ -36,6 +37,7 @@ import {
 } from "./migration-runner";
 import {
   DEFAULT_SCHEDULER_DRAIN_RUNTIME,
+  SCHEDULER_DRAIN_DEADLINE_MS,
   SchedulerDrainTimeoutError,
 } from "./migration-scheduler-drain";
 import type { SchedulerDrainRuntime } from "./migration-scheduler-drain";
@@ -401,6 +403,36 @@ const virtualDrainRuntime = (
     },
     deadlineMs,
     pollMs,
+  };
+};
+
+/**
+ * A drain clock that moves only when it sleeps. The previous release's runner
+ * releases `jobId`'s lease when the clock reaches `releaseAtMs`, as a runner
+ * that finishes at its runtime ceiling does; `null` never releases.
+ */
+const virtualRunnerRuntime = ({
+  observer,
+  jobId,
+  releaseAtMs,
+}: {
+  observer: SQL;
+  jobId: string;
+  releaseAtMs: number | null;
+}): SchedulerDrainRuntime => {
+  let elapsedMs = 0;
+  let released = false;
+  return {
+    now: () => elapsedMs,
+    sleep: async (ms) => {
+      elapsedMs += ms;
+      if (!released && releaseAtMs !== null && elapsedMs >= releaseAtMs) {
+        released = true;
+        await releaseLease(observer, jobId);
+      }
+    },
+    deadlineMs: SCHEDULER_DRAIN_DEADLINE_MS,
+    pollMs: 60_000,
   };
 };
 
@@ -2217,6 +2249,81 @@ if (!runPostgresTests || databaseUrl === undefined) {
               paused_by: "operator",
               pause_reason: "Replaced hold",
             });
+          },
+        );
+      });
+
+      test("a running job is waited for until its runtime ceiling, then the migration runs", async () => {
+        await withSchedulerBundle(
+          ALTER_AFTER_DRAIN,
+          async ({ observer, openClient, scratchUrl }, folder) => {
+            await leaseJob(observer, "job.reader");
+            const { error, timings } = await attemptRun({
+              openClient,
+              scratchUrl,
+              folder,
+              schedulerDrain: virtualRunnerRuntime({
+                observer,
+                jobId: "job.reader",
+                releaseAtMs: DEFAULT_MAX_RUNTIME_MS,
+              }),
+            });
+            expect(error).toBeNull();
+            const drain = schedulerEvents(timings).at(0);
+            expect(drain).toMatchObject({ outcome: "drained" });
+            expect(
+              drain?.event === "migrate.scheduler_drain" && drain.drainWaitMs,
+            ).toBeGreaterThanOrEqual(DEFAULT_MAX_RUNTIME_MS);
+            const progress = timings.filter(
+              (record) => record.event === "migrate.scheduler_drain_progress",
+            );
+            expect(progress.length).toBeGreaterThan(0);
+            expect(progress.length).toBeLessThanOrEqual(
+              DEFAULT_MAX_RUNTIME_MS / 60_000 + 1,
+            );
+            expect(
+              progress.every(
+                (record) =>
+                  record.event === "migrate.scheduler_drain_progress" &&
+                  record.jobId === "job.reader" &&
+                  record.lockedBy === "previous-release-runner",
+              ),
+            ).toBe(true);
+            expect(await lockProbeColumns(observer)).toEqual([
+              "id",
+              "reissued",
+            ]);
+          },
+        );
+      });
+
+      test("a running job that outlives the drain bound fails the run before any statement", async () => {
+        await withSchedulerBundle(
+          ALTER_AFTER_DRAIN,
+          async ({ observer, openClient, scratchUrl }, folder) => {
+            await leaseJob(observer, "job.reader");
+            const ledgerBefore = await ledgerRows(observer);
+            const { error } = await attemptRun({
+              openClient,
+              scratchUrl,
+              folder,
+              schedulerDrain: virtualRunnerRuntime({
+                observer,
+                jobId: "job.reader",
+                releaseAtMs: null,
+              }),
+            });
+            expect(SchedulerDrainTimeoutError.is(error)).toBe(true);
+            expect(error).toMatchObject({
+              leased: [{ id: "job.reader" }],
+            });
+            expect(
+              error instanceof SchedulerDrainTimeoutError && error.waitedMs,
+            ).toBeGreaterThanOrEqual(SCHEDULER_DRAIN_DEADLINE_MS);
+            expect([...(await ledgerRows(observer))]).toEqual([
+              ...ledgerBefore,
+            ]);
+            expect(await lockProbeColumns(observer)).toEqual(["id"]);
           },
         );
       });
