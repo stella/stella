@@ -1120,12 +1120,8 @@ describe("public law sitemap", () => {
     expect(navSource).toContain("getWorkspacePrimaryNavItems");
     expect(navSource).toContain('if (item.id === "caseLaw")');
     expect(navSource).toContain("return includePublicLaw");
-    expect(appSidebarSource).toContain("usePublicLawPreviewEnabled");
-    // The server-rendered shell must use the isomorphic host/env gate;
-    // the browser-only preview hook would mismatch hydration there.
-    expect(publicShellSource).toContain("isPublicLawSsrRouteEnabled");
-    expect(publicShellSource).not.toContain("isPublicLawRouteEnabled");
-    expect(publicShellSource).not.toContain("usePublicLawPreviewEnabled");
+    expect(appSidebarSource).toContain("isPublicLawEnabled");
+    expect(publicShellSource).toContain("isPublicLawEnabled");
   });
 
   test("direct case-law callers are filtered by the shared dark-launch helper", async () => {
@@ -1145,15 +1141,14 @@ describe("public law sitemap", () => {
       readSource("apps/web/src/components/search-dialog.tsx"),
     ]);
 
-    expect(chatLinkGateSource).toContain("isPublicLawPreviewEnabled");
+    expect(chatLinkGateSource).toContain("isPublicLawEnabled");
     expect(chatOpenSource).toContain("openPublicLawLink");
     expect(chatStatuteOpenSource).toContain("openPublicLawLink");
     expect(chatOpenSource).toContain("defaultCaseLawCountryForLocale");
-    expect(chatMentionSource).toContain("usePublicLawPreviewEnabled");
+    expect(chatMentionSource).toContain("isPublicLawEnabled");
     expect(chatMentionSource).toContain("defaultCaseLawCountryForLocale");
     expect(chatMentionSource).toContain("country !== null");
-    expect(searchSource).toContain("isPublicLawPreviewEnabled");
-    expect(searchSource).toContain("usePublicLawPreviewEnabled");
+    expect(searchSource).toContain("isPublicLawEnabled");
   });
 
   test("start client orders i18n around hydration per path kind", async () => {
