@@ -41,6 +41,13 @@ const localEnv = () => ({
   MERGE_GROUP_BASE_SHA: undefined,
   GITHUB_EVENT_NAME: undefined,
   GITHUB_EVENT_PATH: undefined,
+  GITHUB_WORKSPACE: undefined,
+});
+
+/** The environment of a CI step whose checkout is `root`. */
+const workflowEnv = (root: string) => ({
+  ...localEnv(),
+  GITHUB_WORKSPACE: root,
 });
 
 type AdvancedMain = { fork: string; payloadBase: string; tip: string };
@@ -163,7 +170,7 @@ test("a merge group without an override compares against its payload base, not t
     expect(git("merge-base", "origin/main", "HEAD")).toBe(fork);
     expect(new Set([fork, payloadBase, tip]).size).toBe(3);
     const env = {
-      ...localEnv(),
+      ...workflowEnv(repoRoot),
       GITHUB_EVENT_NAME: "merge_group",
       GITHUB_EVENT_PATH: writeEvent(repoRoot, {
         merge_group: { base_sha: payloadBase, head_sha: "b".repeat(40) },
@@ -192,10 +199,10 @@ test("a merge group without an override compares against its payload base, not t
   });
 });
 
-test("an event base the inspected tree does not contain falls back to the merge base", () => {
+test("in the workflow checkout, an event base that is missing or not an ancestor fails", () => {
   withRepository((repoRoot, git) => {
-    const { fork, tip } = advanceMainPastPayloadBase(repoRoot, git);
-    // A fixture repository inherits a CI step's event, whose base it lacks.
+    const { tip } = advanceMainPastPayloadBase(repoRoot, git);
+    // A shallow checkout lacks the base; a wrong one does not descend from it.
     const absent = "d".repeat(40);
     const gitStatus = (...args: string[]) =>
       Bun.spawnSync(["git", ...args], {
@@ -209,23 +216,46 @@ test("an event base the inspected tree does not contain falls back to the merge 
     for (const base of [absent, tip]) {
       for (const env of [
         {
-          ...localEnv(),
+          ...workflowEnv(repoRoot),
           GITHUB_EVENT_NAME: "merge_group",
           GITHUB_EVENT_PATH: writeEvent(repoRoot, {
             merge_group: { base_sha: base },
           }),
         },
         {
-          ...localEnv(),
+          ...workflowEnv(repoRoot),
           GITHUB_EVENT_NAME: "pull_request",
           GITHUB_EVENT_PATH: writeEvent(repoRoot, {
             pull_request: { base: { sha: base } },
           }),
         },
-        { ...localEnv(), MERGE_GROUP_BASE_SHA: base },
+        { ...workflowEnv(repoRoot), MERGE_GROUP_BASE_SHA: base },
       ]) {
-        expect(treeBaseRevision({ repoRoot, env })).toBe(fork);
+        expect(() => treeBaseRevision({ repoRoot, env })).toThrow(
+          "Tree comparison base unavailable",
+        );
       }
+    }
+  });
+});
+
+test("another repository ignores the workflow's event inputs", () => {
+  withRepository((repoRoot, git) => {
+    const { fork } = advanceMainPastPayloadBase(repoRoot, git);
+    // A fixture a CI step builds inherits the step's event, not its history.
+    const inherited = {
+      GITHUB_EVENT_NAME: "merge_group",
+      GITHUB_EVENT_PATH: path.join(repoRoot, "absent.json"),
+      MERGE_GROUP_BASE_SHA: "d".repeat(40),
+    };
+    for (const env of [
+      {
+        ...workflowEnv(path.resolve(import.meta.dir, "../../..")),
+        ...inherited,
+      },
+      { ...localEnv(), ...inherited },
+    ]) {
+      expect(treeBaseRevision({ repoRoot, env })).toBe(fork);
     }
   });
 });
@@ -237,7 +267,7 @@ test("a pull request compares against its payload base", () => {
       treeBaseRevision({
         repoRoot,
         env: {
-          ...localEnv(),
+          ...workflowEnv(repoRoot),
           GITHUB_EVENT_NAME: "pull_request",
           // The workflow exports an empty group base outside merge groups.
           MERGE_GROUP_BASE_SHA: "",
@@ -258,7 +288,7 @@ test("events without a base use the merge base without reading a payload", () =>
         treeBaseRevision({
           repoRoot,
           env: {
-            ...localEnv(),
+            ...workflowEnv(repoRoot),
             GITHUB_EVENT_NAME: event,
             GITHUB_EVENT_PATH: path.join(repoRoot, "absent.json"),
           },
@@ -289,7 +319,7 @@ test("a base event without a readable base fails instead of using the merge base
         treeBaseRevision({
           repoRoot,
           env: {
-            ...localEnv(),
+            ...workflowEnv(repoRoot),
             GITHUB_EVENT_NAME: name,
             GITHUB_EVENT_PATH: eventPath,
           },

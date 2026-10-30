@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { readFileSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 
 import { childExitStatus } from "./child-exit-status";
 
@@ -69,18 +69,38 @@ type TreeBaseRevisionOptions = {
   env?: NodeJS.ProcessEnv;
 };
 
-/** `git merge-base --is-ancestor` exits 1 for a commit that is not an ancestor. */
-const NOT_ANCESTOR_STATUS = 1;
-/** `git rev-parse --verify --quiet` exits 1 for a commit this repository lacks. */
-const MISSING_COMMIT_STATUS = 1;
+const realPath = (label: string, target: string) => {
+  const resolved = Result.try(() => realpathSync(target));
+  if (resolved.isErr()) {
+    return panic(
+      `${UNAVAILABLE}: ${label} ${target} does not resolve`,
+      resolved.error,
+    );
+  }
+  return resolved.value;
+};
+
+/**
+ * CI event inputs describe only the workflow's own checkout. A repository a
+ * step builds for itself (a fixture) inherits that environment without the
+ * event's history, so the event never applies to it.
+ */
+const isWorkflowCheckout = (repoRoot: string, env: NodeJS.ProcessEnv) => {
+  const workspace = env["GITHUB_WORKSPACE"];
+  if (!workspace) {
+    return false;
+  }
+  return (
+    realPath("repository", repoRoot) === realPath("GITHUB_WORKSPACE", workspace)
+  );
+};
 
 /**
  * The base this tree is compared against, in order: an explicit base or
  * RATCHET_BASE_REF, the CI event's base, then the merge base with
- * origin/main. The event base describes the checked-out tree, so it applies
- * only when no other head is named, and only when that tree contains it: a
- * repository a CI step builds for itself (a fixture) inherits the event
- * environment without the event's history.
+ * origin/main. The event base applies only to the workflow's checkout with no
+ * other head named, and there it must be an ancestor of HEAD: a shallow or
+ * wrong checkout fails instead of comparing against another commit.
  */
 export const treeBaseRevision = ({
   repoRoot,
@@ -94,68 +114,41 @@ export const treeBaseRevision = ({
       ([key, value]) => !key.startsWith("GIT_") && value !== undefined,
     ),
   );
-  const runGit = (args: [string, ...string[]]) => {
+  const readGit = (args: [string, ...string[]]) => {
     const result = Bun.spawnSync(["git", ...args], {
       cwd: repoRoot,
       env: gitEnv,
       stdout: "pipe",
       stderr: "pipe",
     });
-    return {
-      status: childExitStatus(result),
-      stdout: result.stdout.toString().trim(),
-      stderr: result.stderr.toString().trim(),
-    };
-  };
-  const readGit = (args: [string, ...string[]]) => {
-    const { status, stdout, stderr } = runGit(args);
-    if (status !== 0) {
+    if (childExitStatus(result) !== 0) {
       return panic(
-        `${UNAVAILABLE}: git ${args[0]} failed (${args.join(" ")}): ${stderr}`,
+        `${UNAVAILABLE}: git ${args[0]} failed (${args.join(" ")}): ${result.stderr.toString().trim()}`,
       );
     }
-    return stdout;
+    return result.stdout.toString().trim();
   };
-  const inspectedEventBase = (): string | undefined => {
+  const checkoutEventBase = (): string | undefined => {
     const eventBase = eventBaseRevision(env);
     if (eventBase === undefined) {
       return undefined;
     }
-    const commit = runGit([
+    const commit = readGit([
       "rev-parse",
       "--verify",
-      "--quiet",
       "--end-of-options",
       `${eventBase}^{commit}`,
     ]);
-    if (commit.status === MISSING_COMMIT_STATUS) {
-      return undefined;
-    }
-    if (commit.status !== 0) {
-      return panic(
-        `${UNAVAILABLE}: git rev-parse ${eventBase} failed: ${commit.stderr}`,
-      );
-    }
-    const ancestry = runGit([
-      "merge-base",
-      "--is-ancestor",
-      commit.stdout,
-      "HEAD",
-    ]);
-    if (ancestry.status === NOT_ANCESTOR_STATUS) {
-      return undefined;
-    }
-    if (ancestry.status !== 0) {
-      return panic(
-        `${UNAVAILABLE}: git merge-base --is-ancestor ${commit.stdout} HEAD failed: ${ancestry.stderr}`,
-      );
-    }
-    return commit.stdout;
+    // Exits non-zero, and so panics, when the base is not an ancestor.
+    readGit(["merge-base", "--is-ancestor", commit, "HEAD"]);
+    return commit;
   };
   const revision =
     baseRef ??
     env["RATCHET_BASE_REF"] ??
-    (headRef === undefined ? inspectedEventBase() : undefined) ??
+    (headRef === undefined && isWorkflowCheckout(repoRoot, env)
+      ? checkoutEventBase()
+      : undefined) ??
     readGit(["merge-base", "origin/main", headRef ?? "HEAD"]);
   return readGit([
     "rev-parse",
