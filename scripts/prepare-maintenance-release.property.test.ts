@@ -1468,12 +1468,29 @@ describe("release cut readiness", () => {
   });
 
   const MARKETING_JOB = "suites / marketing-screenshots / check";
-  const heavyFailure = (jobs: unknown[]) => ({
+  const heavyRun = (overrides: Record<string, unknown> = {}) => ({
+    id: 11,
+    html_url: `${RUN_PREFIX}11`,
+    repository: { full_name: "stella/stella" },
+    path: ".github/workflows/main-heavy.yml",
+    head_branch: "main",
+    event: "push",
+    display_title: `Main heavy suites ${CUT_SHA}`,
+    head_sha: CUT_SHA,
+    status: "completed",
+    conclusion: "failure",
+    ...overrides,
+  });
+  const heavyFailure = (
+    jobs: unknown[],
+    run: Record<string, unknown> = heavyRun(),
+  ) => ({
     [STATUSES_PATH]: [
       commitStatus("main/heavy", "failure", 11),
       PR_DEPTH_GREEN,
     ],
     [jobsPath(11)]: { jobs },
+    "/actions/runs/11": run,
   });
   const rollups = [
     job("suites / ci-result", "failure"),
@@ -1521,6 +1538,36 @@ describe("release cut readiness", () => {
     expect(await cutRefusal(heavyFailure(jobs))).toContain(
       "main/heavy: failure",
     );
+  });
+
+  test.each([
+    ["a different workflow", { path: ".github/workflows/ci.yml" }],
+    ["a different head_sha", { head_sha: "e".repeat(40) }],
+    ["a different title commit", { display_title: "Main heavy suites x" }],
+    ["a run that is not completed", { status: "in_progress" }],
+    ["a cancelled run", { conclusion: "cancelled" }],
+    ["a successful run", { conclusion: "success" }],
+    ["another repository", { repository: { full_name: "other/stella" } }],
+  ])(
+    "refuses an advisory-only status linking to %s",
+    async (_label, overrides) => {
+      const message = await cutRefusal(
+        heavyFailure(
+          [job(MARKETING_JOB, "failure"), ...rollups],
+          heavyRun(overrides),
+        ),
+      );
+      expect(message).toContain("main/heavy: failure");
+    },
+  );
+
+  test("an unreadable run is a refusal", async () => {
+    const responses = heavyFailure([job(MARKETING_JOB, "failure"), ...rollups]);
+    const message = await cutRefusal({
+      ...responses,
+      "/actions/runs/11": new Error("HTTP 502"),
+    });
+    expect(message).toContain("main/heavy: failure");
   });
 
   test("an error status is never advisory", async () => {

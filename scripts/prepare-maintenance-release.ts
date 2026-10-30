@@ -1062,8 +1062,50 @@ const STATUS_STATES: Record<string, ReleaseCutGate["state"]> = {
   success: "success",
 };
 
+const HEAVY_RUN_EVENTS = new Set(["push", "workflow_dispatch", "schedule"]);
+
+/**
+ * Mirrors the shell gate's provenance check on a failed main/heavy run: the
+ * linked run is this repository's main-heavy.yml on main for the cut commit,
+ * and it completed with conclusion failure. Unreadable or mismatched is false.
+ */
+const failedHeavyRunMatches = async (
+  runUrl: string | null,
+  sha: string,
+  readJson: GitHubJsonReader,
+): Promise<boolean> => {
+  const runId = runIdFromUrl(runUrl);
+  if (runId === null) {
+    return false;
+  }
+  const runResult = await Result.tryPromise(async () =>
+    readJson(`/actions/runs/${runId}`),
+  );
+  if (Result.isError(runResult) || !isRecord(runResult.value)) {
+    return false;
+  }
+  const linked = runResult.value;
+  const repository = linked["repository"];
+  const event = linked["event"];
+  return (
+    String(linked["id"]) === runId &&
+    linked["html_url"] === runUrl &&
+    isRecord(repository) &&
+    repository["full_name"] === "stella/stella" &&
+    linked["path"] === ".github/workflows/main-heavy.yml" &&
+    linked["head_branch"] === "main" &&
+    typeof event === "string" &&
+    HEAVY_RUN_EVENTS.has(event) &&
+    linked["display_title"] === `Main heavy suites ${sha}` &&
+    (event === "workflow_dispatch" || linked["head_sha"] === sha) &&
+    linked["status"] === "completed" &&
+    linked["conclusion"] === "failure"
+  );
+};
+
 const gateFromStatus = async (
   spec: ReleaseCutGateSpec,
+  sha: string,
   status: Record<string, unknown>,
   readJson: GitHubJsonReader,
 ): Promise<ReleaseCutGate> => {
@@ -1099,7 +1141,8 @@ const gateFromStatus = async (
     spec.context === "main/heavy" &&
     login === TRUSTED_STATUS_CREATOR &&
     status["state"] === "failure" &&
-    read.kind === "jobs"
+    read.kind === "jobs" &&
+    (await failedHeavyRunMatches(runUrl, sha, readJson))
   ) {
     const verdict = heavyVerdict(read.jobs);
     if (verdict.advisoryOnly) {
@@ -1207,7 +1250,7 @@ export const readReleaseCutGates = async (
       (entry) => isRecord(entry) && entry["context"] === spec.context,
     );
     if (isRecord(status)) {
-      return gateFromStatus(spec, status, readJson);
+      return gateFromStatus(spec, sha, status, readJson);
     }
     if (spec.scheduledRunFallback) {
       return gateFromScheduledRun(spec, sha, readJson);
