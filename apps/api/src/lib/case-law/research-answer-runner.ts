@@ -78,6 +78,7 @@ import {
 import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-source";
 import {
   parsePersistedCorpusAst,
+  readCorpusForRecovery,
   readCorpusPayloadOrFallback,
 } from "@/api/lib/legal-search/corpus-storage";
 import { LIMITS } from "@/api/lib/limits";
@@ -720,20 +721,27 @@ const readStoredPayload = async <T>({
   read: (key: string) => Promise<T>;
   fallback: () => T | null;
 }): Promise<T | null> => {
-  if (key === null || decision.contentHash === null) {
-    return fallback();
-  }
   const stored = await Result.tryPromise(
     async () =>
-      await readCorpusPayloadOrFallback({
+      await readCorpusForRecovery({
         documentId: decision.id,
-        key,
-        step,
-        read: async () => await read(key),
-        fallback: async () => await Promise.resolve(fallback()),
+        read: async () => {
+          if (key === null || decision.contentHash === null) {
+            return fallback();
+          }
+          return await readCorpusPayloadOrFallback({
+            documentId: decision.id,
+            key,
+            step,
+            read: async () => await read(key),
+            fallback: async () => await Promise.resolve(fallback()),
+          });
+        },
       }),
   );
-  return Result.isOk(stored) ? stored.value : null;
+  return Result.isOk(stored)
+    ? stored.value.match({ ok: (payload) => payload, err: () => null })
+    : null;
 };
 
 const readDecisionBlocks = async (
