@@ -352,6 +352,47 @@ export const serveCaseLaw = async (
   });
 };
 
+/**
+ * Served sources with the facet counts the browse pages keep per source: one
+ * country, their courts and their decision years. Court counts grow from a
+ * small specialised court to a large court system, so the facet table holds
+ * thousands of rows and a source's facets are read the way they are served.
+ */
+const FACET_SOURCE_KEYS = [
+  ADAPTER_KEYS.CZ_NS,
+  ADAPTER_KEYS.CZ_NSS,
+  ADAPTER_KEYS.CZ_US,
+  ADAPTER_KEYS.SK_COURTS,
+  ADAPTER_KEYS.PL_COURTS,
+  ADAPTER_KEYS.HU_BHGY,
+] as const;
+const FACET_COURTS_BASE = 50;
+const FACET_COURTS_STEP = 150;
+const FACET_YEARS = 70;
+
+const seedBrowseFacetCounts = async (database: GatedTestDb) => {
+  for (const [index, adapterKey] of FACET_SOURCE_KEYS.entries()) {
+    const sourceId = `01990000-00c2-7000-8000-${(index + 1).toString(16).padStart(12, "0")}`;
+    const country = `XF${String.fromCodePoint(65 + index)}`;
+    const courts = FACET_COURTS_BASE + FACET_COURTS_STEP * index;
+    // db-await-in-loop: six fixed sources, each with its own facet rows.
+    await database.execute(sql`INSERT INTO case_law_sources (id, adapter_key, name, enabled)
+      VALUES (${sourceId}::uuid, ${adapterKey}, ${`Facet fixture ${String(index + 1)}`}, false)
+      ON CONFLICT (id) DO NOTHING`);
+    // db-await-in-loop: the source's facets follow the source row they reference.
+    await database.execute(sql`INSERT INTO case_law_browse_facet_counts
+      (kind, country, source_id, value, total)
+      SELECT 'country', ${country}, ${sourceId}::uuid, ${country}, 1000
+      UNION ALL
+      SELECT 'court', ${country}, ${sourceId}::uuid, 'Facet court ' || n, 1 + n % 97
+      FROM generate_series(1, ${courts}) n
+      UNION ALL
+      SELECT 'year', ${country}, ${sourceId}::uuid, (1955 + n)::text, 1 + n % 41
+      FROM generate_series(1, ${FACET_YEARS}) n
+      ON CONFLICT DO NOTHING`);
+  }
+};
+
 export const seedCorpusReadBudgets = async (database: GatedTestDb) => {
   await database.insert(corpusIndexGenerations).values([
     ...SCENARIO_GENERATIONS.map(({ generation }) => ({
@@ -395,7 +436,10 @@ export const seedCorpusReadBudgets = async (database: GatedTestDb) => {
     });
   }
   await rebuildIndexes();
+  await seedBrowseFacetCounts(database);
   for (const table of [
+    "case_law_sources",
+    "case_law_browse_facet_counts",
     "corpus_index_generations",
     "corpus_index_projection_states",
     "corpus_index_projection_intents",
