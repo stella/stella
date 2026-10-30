@@ -7443,7 +7443,9 @@ jobs:
               elif .basis == "evaluated" then
                 (if .verdict == "success" and (.required | length) > 0 and all(.required[]; .conclusion == "success")
                   then "evaluated-success" else "evaluated-failure" end)
-              elif .basis == "pass_through" and .pass_through_reason == "reused" and (.reused_from_run_id | type) == "number"
+              elif .basis == "pass_through" and .verdict == "success"
+                and (.pass_through_reason == "reused" or .pass_through_reason == "metadata" or .pass_through_reason == "enqueued")
+                and (.reused_from_run_id | type) == "number"
                 then "reused \(.reused_from_run_id)"
               elif .basis == "pass_through" then "pass-through \(.pass_through_reason // "unknown")"
               else "invalid basis" end'
@@ -7618,7 +7620,10 @@ jobs:
           fi
           if [[ "$QUEUE_VALIDATION" == true && "$EVENT" == pull_request && "$PR_ACTION" == enqueued ]] &&
             jq -e 'all(.[]; .result == "success" or .result == "skipped")' <<< "$NEEDS" >/dev/null; then
-            echo "Queued tree validation belongs to merge_group."
+            # Keep a direct reference to the evaluated record: repeated queue
+            # entries must not bury the head's proof behind pass-through runs.
+            mirror_metadata_code_run || exit $?
+            echo "Queued tree validation belongs to merge_group; head evidence comes from run $reused_from_run_id."
             pass_through_reason=enqueued
             exit 0
           fi

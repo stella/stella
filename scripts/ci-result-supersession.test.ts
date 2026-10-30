@@ -416,6 +416,93 @@ test("a metadata run mirrors a code run's evaluated success", () => {
   });
 });
 
+const enqueue = (fixtures: Fixtures) =>
+  runOutcome(
+    {
+      PR_ACTION: "enqueued",
+      QUEUE_VALIDATION: "true",
+      RUN_REQUIRED: "false",
+      NEEDS: JSON.stringify(
+        Object.fromEntries([
+          ...needs.map((job) => [job, { result: "skipped" }]),
+          ["ci-plan", { result: "success" }],
+        ]),
+      ),
+    },
+    fixtures,
+  );
+
+test("queue entries retain a direct reference to the evaluated head beyond recent pass-through runs", () => {
+  const run = enqueue(
+    mirrorFixtures([
+      ...[99, 98, 97, 96, 95].map((id) => ({
+        id,
+        record: record(id, {
+          basis: "pass_through",
+          pass_through_reason: "enqueued",
+          required: [],
+        }),
+      })),
+      { id: 90, record: record(90) },
+    ]),
+  );
+  expect(run.exitCode, run.log).toBe(0);
+  expect(run.record).toMatchObject({
+    basis: "pass_through",
+    pass_through_reason: "enqueued",
+    reused_from_run_id: 90,
+    verdict: "success",
+  });
+});
+
+test("every evidence-bearing pass-through resolves directly to the evaluated run", () => {
+  for (const reason of ["metadata", "enqueued", "reused"]) {
+    const fixtures = mirrorFixtures(
+      [
+        {
+          id: 91,
+          record: record(91, {
+            basis: "pass_through",
+            pass_through_reason: reason,
+            reused_from_run_id: 80,
+            required: [],
+          }),
+        },
+      ],
+      { "record:80": record(80), ...codeRunJobs(80, 1) },
+    );
+    for (const carrier of [enqueue, mirror]) {
+      const run = carrier(fixtures);
+      expect(run.exitCode, `${reason}: ${run.log}`).toBe(0);
+      expect(run.record?.reused_from_run_id, reason).toBe(80);
+    }
+  }
+});
+
+test("queue entries cannot certify absent, stale or unevaluated evidence", () => {
+  for (const source of [
+    [],
+    [{ id: 90, record: record(90, { head_sha: "c".repeat(40) }) }],
+    [{ id: 90, record: record(90), attempt: 2 }],
+    [{ id: 90, record: superseded(90) }],
+    [
+      {
+        id: 90,
+        record: record(90, {
+          basis: "pass_through",
+          pass_through_reason: "draft",
+          required: [],
+        }),
+      },
+    ],
+    [{ id: 90, record: record(90, { verdict: "failure" }) }],
+  ]) {
+    const run = enqueue(mirrorFixtures(source));
+    expect(run.exitCode, run.log).not.toBe(0);
+    expect(run.record?.verdict).toBe("failure");
+  }
+});
+
 test("a metadata run never waits on a newer run of its head", () => {
   // A newer metadata run waits on this run's concurrency group, listing no
   // job yet: waiting on it would deadlock until the deadline.
