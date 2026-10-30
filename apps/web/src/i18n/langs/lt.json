@@ -814,8 +814,10 @@
       "deleteRateTable": "Ištrinti įkainių lentelę",
       "editRateTable": "Redaguoti įkainių lentelę",
       "effectiveFrom": "Galioja nuo",
+      "effectiveRateRequired": "Šiai bylai, asmeniui ir datai nenustatytas galiojantis įkainis. Pridėkite įkainį arba registruokite laiką kaip neapmokestinamą.",
       "effectiveTo": "Galioja iki",
       "hourlyRate": "Valandinis įkainis",
+      "logNonBillable": "Registruoti kaip neapmokestinamą",
       "noRateEntries": "Įkainių įrašų dar nėra",
       "noRateFound": "Įkainis nesukonfigūruotas",
       "noRateTables": "Įkainių lentelių dar nėra",
@@ -1090,7 +1092,9 @@
     },
     "emptyState": "Sprendimų nerasta. Sukonfigūruokite šaltinį ir paleiskite sinchronizavimą, kad importuotumėte teismų praktiką.",
     "filters": {
-      "remove": "Pašalinti filtrą {filter}"
+      "countryMismatch": "Pašalinti filtrai, kurie netaikomi pasirinktai šaliai ({country}): {filters}.",
+      "remove": "Pašalinti filtrą {filter}",
+      "showInCountry": "Rodyti {filter} šalyje {country}"
     },
     "languages": {
       "count": "{count, plural, one {# kalba} few {# kalbos} many {# kalbos} other {# kalbų}}",
@@ -1346,6 +1350,7 @@
       "toastTitle": "Pilnas rodinys dar negalimas"
     },
     "activity": {
+      "newerVersion": "Šis turinys rodomas naujesnėje versijoje.",
       "review": "Peržiūros atnaujinimas"
     },
     "aiPrompt": "DI pranešimo laukas",
@@ -5016,7 +5021,6 @@
       "beta": "Beta funkcijos",
       "betaAvt": "AVT dokumentų tikrinimas",
       "betaAvtDescription": "Tikrinti bylos dokumentus teiginys po teiginio pagal sąrašo faktus",
-      "betaCaseLawDescription": "Rodyti viešą teismų praktikos paiešką ir skaityklę šoninėje juostoje",
       "betaDescription": "Išbandykite funkcijas, kurios dar kuriamos",
       "betaInbox": "Gautieji ir pranešimai",
       "betaInboxDescription": "Rodyti gautuosius ir pranešimų varpelį",
@@ -5052,6 +5056,8 @@
       "desktopCardConnectedTitle": "stella desktop susieta",
       "desktopCardMissingDetail": "Įdiekite ją arba prijunkite, jei ji jau įdiegta šiame kompiuteryje.",
       "desktopCardMissingTitle": "stella desktop dar nesusieta",
+      "desktopCardOpeningDetail": "Šis kompiuteris susiejamas su <bdi>{identity}</bdi> serveryje {host}. Jei naršyklė paklaus, leiskite jai atidaryti stella desktop.",
+      "desktopCardOpeningTitle": "Atidaroma stella desktop...",
       "desktopCardOutdatedDetail": "Versija {version} susieta su <bdi>{identity}</bdi>. Įdiekite naujausią versiją, kad dokumentai ir veikla toliau veiktų.",
       "desktopCardOutdatedTitle": "stella desktop reikia atnaujinti",
       "desktopClipboardDescription": "Atidarykite, ieškokite, tvarkykite ir pakartotinai naudokite tekstą, nukopijuotą iš bet kurios programos.",
@@ -5071,6 +5077,7 @@
       "desktopInstallOpenStep": "Vieną kartą atidarykite „stella desktop“. Iškarpinė pasirodys iškart ir liks pasiekiama macOS meniu juostoje arba Windows sistemos dėkle.",
       "desktopInstallTitle": "Įdiegti ir atidaryti",
       "desktopInstallWindowsStep": "Paleiskite diegimo programą ir vykdykite nurodymus.",
+      "desktopOpenApp": "Atidaryti stella desktop",
       "desktopPrivacyDescription": "Iškarpinės istorija užšifruojama ir saugoma šiame įrenginyje.",
       "desktopPrivacyTitle": "Privatu pagal numatytuosius nustatymus",
       "desktopSelfHostDescription": "Patikėkite šį stella URL pasirašytoje desktop programoje, kad šios instaliacijos dokumentai galėtų būti atidaromi lokaliai.",
@@ -6524,6 +6531,14 @@
           "started": "Pradėjo dokumento peržiūrą:"
         },
         "empty": "Šioje byloje veiklos dar nėra.",
+        "fields": {
+          "dueDate": "terminas",
+          "parentFolder": "pirminis aplankas",
+          "priority": "prioritetas",
+          "property": "savybė",
+          "schedule": "tvarkaraštis",
+          "sortOrder": "eilės tvarka"
+        },
         "filterLabel": "Filtruoti veiklą",
         "filters": {
           "all": "Visa veikla",
@@ -6573,6 +6588,7 @@
           "translation": "vertimas"
         },
         "title": "Veikla",
+        "updatedFields": "Atnaujinta: {fields}",
         "views": {
           "list": "Sąrašo rodinys",
           "timeline": "Laiko juostos rodinys"

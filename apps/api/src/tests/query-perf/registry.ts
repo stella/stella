@@ -8,6 +8,8 @@ import type {
   ScheduledJobReadBudgetId,
 } from "@/api/lib/db/read-budgets";
 import type { LegislationReadTransaction } from "@/api/lib/legislation-public-read-db";
+import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
+import { REFRESH_CASE_LAW_COVERAGE_TASK } from "@/api/lib/scheduler/tasks/case-law-coverage-refresh";
 import { REPORT_CASE_LAW_FRESHNESS_TASK } from "@/api/lib/scheduler/tasks/case-law-freshness-report";
 import { REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK } from "@/api/lib/scheduler/tasks/case-law-sitemap-shard-refresh";
 import { SWEEP_REQUEST_RECEIPTS_TASK } from "@/api/lib/scheduler/tasks/request-receipt-retention";
@@ -18,9 +20,12 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import type { CorpusReadBudgetSeed, ServedCaseLaw } from "./corpus-seed";
 import {
   CASE_LAW_SCENARIOS,
+  coverageRefreshWroteSummary,
   LEGISLATION_CANDIDATE_COUNT,
   LEGISLATION_GENERATION,
+  prepareCoverageRefreshMeasurement,
   seedSitemapReadBudget,
+  sitemapRefreshRetiredChanges,
 } from "./corpus-seed";
 import { QUERY_PERF_OWNER_DEADLINES } from "./owner-deadlines";
 import type { RequestReceiptScenario } from "./request-receipt-seed";
@@ -99,6 +104,12 @@ export type ScheduledJobScenario =
 
 type ScheduledJobMeasurement = {
   prepare?: typeof seedSitemapReadBudget;
+  /**
+   * Whether the run did the job's work, read before `prepare` restores the
+   * fixture. A governed job the load governor held issues only its bookkeeping,
+   * and its statements would pass a budget without measuring the work.
+   */
+  executed?: (database: GatedTestDb) => Promise<boolean>;
   task: string;
   scenarios: readonly {
     size: ScheduledJobScenario;
@@ -117,9 +128,21 @@ type ScheduledJobMeasurement = {
 export const SCHEDULED_JOB_MEASUREMENTS: Readonly<
   Record<string, ScheduledJobMeasurement>
 > = {
+  [SCHEDULER_BACKFILL_IDS.coverage]: {
+    task: REFRESH_CASE_LAW_COVERAGE_TASK,
+    prepare: prepareCoverageRefreshMeasurement,
+    executed: coverageRefreshWroteSummary,
+    scenarios: [
+      {
+        size: { type: "case-law", served: CASE_LAW_SCENARIOS.quiet.size },
+        double: { type: "case-law", served: CASE_LAW_SCENARIOS.quiet.double },
+      },
+    ],
+  },
   "caseLaw.refreshSitemapShards.hourly": {
     task: REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK,
     prepare: seedSitemapReadBudget,
+    executed: sitemapRefreshRetiredChanges,
     scenarios: [
       { size: { type: "case-law", served: CASE_LAW_SCENARIOS.quiet.size } },
     ],
@@ -146,7 +169,10 @@ export const SCHEDULED_JOB_MEASUREMENTS: Readonly<
 type DeclaredJobReads = {
   id: string;
   task: string;
-  reads: { budget: ScheduledJobReadBudgetId } | "load-governed" | "unmeasured";
+  reads:
+    | { budget: ScheduledJobReadBudgetId; governance?: "load-governed" }
+    | "load-governed"
+    | "unmeasured";
 };
 
 /**
@@ -184,6 +210,7 @@ export const scheduledJobMeasurementViolations = (
 
 /** Which profile measures each budget; every budget has exactly one. */
 export const READ_BUDGET_PROFILES = {
+  "scheduled.caseLaw.refreshCoverage": "corpus",
   "statement.caseLaw.globalSearchHits": "case-law",
   "scheduled.caseLaw.refreshSitemapShards": "corpus",
   "scheduled.caseLaw.reportFreshness": "corpus",

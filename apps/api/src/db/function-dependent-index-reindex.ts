@@ -193,6 +193,6 @@ export const FUNCTION_DEPENDENT_INDEX_REINDEXES: readonly ReturnType<
 >[] = [
   createFunctionDependentIndexReindex({
     functionSignature: CASE_LAW_FILING_YEAR_FUNCTION_SIGNATURE,
-    replacementRevision: "20261030092416_decision_docket_filing_year_bra",
+    replacementRevision: "20261030224124_decision_docket_filing_year_bra",
   }),
 ];
