@@ -477,21 +477,15 @@ export const seedCorpusReadBudgets = async (database: GatedTestDb) => {
   for (const chunk of chunks(REPLAY_ROWS)) {
     // db-await-in-loop: bounded seed chunks keep each statement inside the fixture's statement timeout.
     await withoutTriggers(database, async (tx) => {
-      // Triggers are off, so the row stores the state its trigger would
-      // derive, through the same function.
       await tx.execute(sql`INSERT INTO case_law_decisions
         (id, source_id, case_number, country, court, language, parser_version,
           source_hash, source_hash_version, source_raw_s3_key,
-          parsed_source_hash, parsed_source_hash_version, parsed_source_raw_s3_key,
-          parsed_input_state)
+          parsed_source_hash, parsed_source_hash_version, parsed_source_raw_s3_key)
         SELECT md5(${REPLAY_SOURCE_ID}::text || '-' || n::text)::uuid,
           ${REPLAY_SOURCE_ID}, 'replay-' || n::text, 'POL', 'fixture', 'pl',
-          ${REPLAY_PARSER_VERSION}, input.hash, 1, input.raw_key,
-          input.hash, 1, input.raw_key,
-          case_law_parsed_input_state(input.hash, 1, input.raw_key, input.hash, 1, input.raw_key)
-        FROM generate_series(${chunk.first}, ${chunk.last}) AS n,
-          LATERAL (SELECT 'stored-' || n::text AS hash,
-            'case-law/raw/replay-' || n::text AS raw_key) AS input`);
+          ${REPLAY_PARSER_VERSION}, 'stored-' || n::text, 1, 'case-law/raw/replay-' || n::text,
+          'stored-' || n::text, 1, 'case-law/raw/replay-' || n::text
+        FROM generate_series(${chunk.first}, ${chunk.last}) AS n`);
     });
   }
   await database.execute(sql`INSERT INTO eu_completion_receipts
