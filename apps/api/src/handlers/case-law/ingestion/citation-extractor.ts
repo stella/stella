@@ -2048,21 +2048,24 @@ const applyCjeuCitationGroups = ({
 }): void => {
   const caseNumberType = DECISION_IDENTIFIER_TYPES.CASE_NUMBER;
   const pins = new Map<string, CjeuGroupPin>();
-  for (const section of sections) {
-    const { groups } = readCjeuCitationGroups(section.text, language);
-    for (const { members, ecli } of groups) {
-      for (const { caseNumber, span } of members) {
-        const dedupKey = `${caseNumberType}:${normalizeDecisionIdentifierValue(caseNumberType, caseNumber)}`;
-        if (!byKey.has(dedupKey)) {
-          byKey.set(
-            dedupKey,
-            cjeuMemberCitation({ section, caseNumber, span }),
-          );
-        }
-        if (ecli !== null) {
-          recordCjeuGroupPin({ pins, dedupKey, ecli: ecli.text });
-        }
-      }
+  const members = sections.flatMap((section) =>
+    readCjeuCitationGroups(section.text, language).groups.flatMap(
+      ({ members: groupMembers, ecli }) =>
+        groupMembers.map(({ caseNumber, span }) => ({
+          section,
+          caseNumber,
+          span,
+          ecli,
+        })),
+    ),
+  );
+  for (const { section, caseNumber, span, ecli } of members) {
+    const dedupKey = `${caseNumberType}:${normalizeDecisionIdentifierValue(caseNumberType, caseNumber)}`;
+    if (!byKey.has(dedupKey)) {
+      byKey.set(dedupKey, cjeuMemberCitation({ section, caseNumber, span }));
+    }
+    if (ecli !== null) {
+      recordCjeuGroupPin({ pins, dedupKey, ecli: ecli.text });
     }
   }
   for (const [dedupKey, pin] of pins) {
