@@ -24,14 +24,12 @@ import type { seedEntityReadScaling } from "@/api/tests/read-scaling/entity-fixt
 const seedCreationHistory = async (size: number) => {
   const userId = mintAuthProviderId<"user">();
   const email = `${userId}@example.test`;
-  await rootDb
-    .insert(user)
-    .values({
-      id: userId,
-      email,
-      name: "Creation scaling fixture",
-      emailVerified: true,
-    });
+  await rootDb.insert(user).values({
+    id: userId,
+    email,
+    name: "Creation scaling fixture",
+    emailVerified: true,
+  });
   await rootDb.insert(organizationCreationRequests).values(
     Array.from({ length: size }, (_, index) => ({
       userId,
