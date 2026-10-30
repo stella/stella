@@ -78,11 +78,16 @@ import {
   INVOICE_SENDS_PER_ORGANIZATION_PER_DAY,
   resolveInvoiceLink,
 } from "@/api/lib/billing/invoice-links";
+import {
+  invoicePaymentAmounts,
+  paidAmountOf,
+} from "@/api/lib/billing/invoice-payments";
 import type { InvoicePdfRenderer } from "@/api/lib/billing/invoice-pdf/document";
 import {
   invoiceDocumentRenderOptions,
   loadInvoiceDocument,
 } from "@/api/lib/billing/invoice-pdf/document";
+import { assertInvoicePaymentRequest } from "@/api/lib/billing/invoice-pdf/payment.test-helpers";
 import { createInvoiceFormatters } from "@/api/lib/billing/invoice-pdf/render-helpers";
 import { qrSvg } from "@/api/lib/billing/invoice-pdf/typst/data";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -3167,6 +3172,60 @@ describe("opening an invoice link", () => {
 });
 
 describe("invoice payment requests", () => {
+  test.each([60_000, 100_000])(
+    "PDF download requests only the balance after %s paid",
+    async (paidAmount) => {
+      const invoiceId = await seedInvoice({ status: INVOICE_STATUS.SENT });
+      await addPayment(invoiceId, { amount: paidAmount, paidOn: "2026-10-02" });
+      if (paidAmount === 100_000) {
+        await testDb
+          .update(invoices)
+          .set({
+            status: INVOICE_STATUS.PAID,
+            paidAt: new Date("2026-10-02T10:00:00Z"),
+          })
+          .where(eq(invoices.id, invoiceId));
+      }
+      const { token } = await createStandaloneLink(invoiceId);
+      let renders = 0;
+      const target = serveForTest(
+        createHttpApp({
+          routes: linkRoutes({
+            budget: budgetOf(1000),
+            renderInvoice: async ({ invoice }) => {
+              renders += 1;
+              assertInvoicePaymentRequest({
+                invoice,
+                grossAmountMinor: 100_000,
+                outstandingAmount: 100_000 - paidAmount,
+              });
+              return Result.ok({
+                status: "rendered" as const,
+                pdf: PDF_BYTES,
+                compileMs: 1,
+                peakRssBytes: 1,
+              });
+            },
+          }),
+          middleware: [errorBoundary],
+        }),
+      );
+      try {
+        const downloaded = await post(target, "download", {
+          token,
+          file: "pdf",
+        });
+        expect(downloaded.status).toBe(200);
+        expect(new Uint8Array(await downloaded.arrayBuffer())).toEqual(
+          PDF_BYTES,
+        );
+        expect(renders).toBe(1);
+      } finally {
+        target.stop();
+      }
+    },
+  );
+
   test("email and public payment details/QR use the authenticated outstanding balance and restore it after voiding", async () => {
     const invoiceId = await seedInvoice({ status: INVOICE_STATUS.SENT });
     await addPayment(invoiceId, { amount: 60_000, paidOn: "2026-10-02" });
@@ -3321,10 +3380,17 @@ describe("public invoice document descriptions", () => {
     if (linked === null || authenticated === null) {
       panic("Expected both authorized legacy invoice documents");
     }
-    const publicLines = invoiceDocumentRenderOptions(linked.document).invoice
-      .lines;
-    const authenticatedLines =
-      invoiceDocumentRenderOptions(authenticated).invoice.lines;
+    const publicLines = invoiceDocumentRenderOptions(
+      linked.document,
+      linked.outstandingAmount,
+    ).invoice.lines;
+    const authenticatedLines = invoiceDocumentRenderOptions(
+      authenticated,
+      invoicePaymentAmounts({
+        totalAmount: authenticated.invoice.totalAmount,
+        paidAmount: paidAmountOf(authenticated.invoice.payments),
+      }).outstandingAmount,
+    ).invoice.lines;
     expect(authenticatedLines.map(({ description }) => description)).toContain(
       "Legacy invoice work",
     );

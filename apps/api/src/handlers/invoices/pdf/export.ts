@@ -8,6 +8,10 @@ import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
 import { ownerSyntheticSessionAuthorityReader } from "@/api/lib/auth";
 import {
+  invoicePaymentAmounts,
+  paidAmountOf,
+} from "@/api/lib/billing/invoice-payments";
+import {
   invoiceDocumentError,
   invoicePdfFileName,
   loadInvoiceDocument,
@@ -80,7 +84,14 @@ export const createInvoicePdfExport = (
         return Result.err(unavailable);
       }
       const body = yield* Result.await(
-        renderInvoiceDocumentPdf(loaded, renderInvoice),
+        renderInvoiceDocumentPdf({
+          loaded,
+          paymentAmountMinor: invoicePaymentAmounts({
+            totalAmount: loaded.invoice.totalAmount,
+            paidAmount: paidAmountOf(loaded.invoice.payments),
+          }).outstandingAmount,
+          renderInvoice,
+        }),
       );
       const fileName = invoicePdfFileName(loaded.invoice);
       const key = `exports/${session.activeOrganizationId}/${workspaceId}/invoices/${loaded.invoice.id}/${Bun.randomUUIDv7()}.pdf`;

@@ -51,7 +51,11 @@ export const prepareLinkedInvoiceFile = async ({
   }
   const workspaceId = document.invoice.workspaceId;
   if (file === "pdf") {
-    const pdf = await renderInvoiceDocumentPdf(document, renderInvoice);
+    const pdf = await renderInvoiceDocumentPdf({
+      loaded: document,
+      paymentAmountMinor: linked.outstandingAmount,
+      renderInvoice,
+    });
     return pdf.map((body) => ({
       body,
       contentType: PDF_MIME_TYPE,

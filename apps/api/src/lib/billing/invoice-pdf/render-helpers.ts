@@ -24,8 +24,8 @@ import type { CentsAmount } from "@stll/money";
 import { parsePlainDate } from "@stll/time";
 
 export type RenderInvoicePdfOptions = {
-  /** A payment request may use the remaining balance while the document retains its original totals. */
-  paymentAmountMinor?: CentsAmount;
+  /** Remaining balance for payment fields and QR; zero suppresses the payment block. */
+  paymentAmountMinor: CentsAmount;
   invoice: {
     status: InvoiceStatus;
     documentType: InvoiceDocumentType;
@@ -91,8 +91,7 @@ export type RenderInvoicePdfOptions = {
 export const buildInvoicePaymentPayload = ({
   invoice,
   seller,
-  totals,
-  paymentAmountMinor = totals.grossAmountMinor,
+  paymentAmountMinor,
 }: RenderInvoicePdfOptions): InvoicingResult<
   | (CzechQrPaymentResult & { errorCorrection: "M"; scheme: "spayd" })
   | (PayBySquareResult & { errorCorrection: "M"; scheme: "pay_by_square" })

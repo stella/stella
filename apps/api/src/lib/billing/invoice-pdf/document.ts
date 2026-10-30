@@ -1,12 +1,13 @@
 import { panic, Result } from "better-result";
 
 import { classifyFailure } from "@stll/errors";
+import type { CentsAmount } from "@stll/money";
 
 import type { Transaction } from "@/api/db/root";
 import { INVOICE_STATUS } from "@/api/db/schema";
 import {
+  INVOICE_DETAIL_RELATIONS,
   INVOICE_DOCUMENT_COLUMNS,
-  INVOICE_DOCUMENT_RELATIONS,
   INVOICE_SELLER_COLUMNS,
 } from "@/api/lib/billing/invoice-detail";
 import { readInvoiceDocumentLines } from "@/api/lib/billing/invoice-lines";
@@ -46,7 +47,7 @@ export const loadInvoiceDocument = async (
       organizationId: { eq: organizationId },
     },
     columns: INVOICE_DOCUMENT_COLUMNS,
-    with: INVOICE_DOCUMENT_RELATIONS,
+    with: INVOICE_DETAIL_RELATIONS,
   });
   if (!invoice) {
     return null;
@@ -91,7 +92,10 @@ type LoadedInvoiceDocument = NonNullable<
 
 /** A document needs billed source amounts, not internal time-entry state or identity. */
 export type InvoiceDocumentSource = Omit<LoadedInvoiceDocument, "invoice"> & {
-  invoice: Omit<LoadedInvoiceDocument["invoice"], "timeEntries" | "expenses"> &
+  invoice: Omit<
+    LoadedInvoiceDocument["invoice"],
+    "timeEntries" | "expenses" | "payments"
+  > &
     Pick<
       Parameters<typeof readInvoiceDocumentLines>[0],
       "timeEntries" | "expenses"
@@ -125,10 +129,12 @@ export const invoiceDocumentError = (
 /** The render input for a loaded invoice, with its lines and totals. */
 export const invoiceDocumentRenderOptions = (
   loaded: InvoiceDocumentSource,
+  paymentAmountMinor: CentsAmount,
 ): RenderInvoicePdfOptions => {
   const amounts = readInvoiceDocumentLines(loaded.invoice);
   return {
     ...loaded,
+    paymentAmountMinor,
     invoice: {
       ...loaded.invoice,
       lines: amounts.lines.map((line, index) => {
@@ -216,17 +222,27 @@ const invoiceRenderRejection = ({
 
 export type InvoicePdfRenderer = typeof renderInvoiceWithTypst;
 
-/** Lays a loaded invoice out as its PDF bytes. */
-export const renderInvoiceDocumentPdf = async (
-  loaded: InvoiceDocumentSource,
-  renderInvoice: InvoicePdfRenderer = renderInvoiceWithTypst,
-): Promise<Result<Uint8Array, HandlerError>> => {
+type RenderInvoiceDocumentPdfOptions = {
+  loaded: InvoiceDocumentSource;
+  /** Required remaining balance from the caller's payment snapshot; zero means settled. */
+  paymentAmountMinor: CentsAmount;
+  renderInvoice?: InvoicePdfRenderer;
+};
+
+/** Lays a loaded invoice out as its PDF bytes without changing document totals. */
+export const renderInvoiceDocumentPdf = async ({
+  loaded,
+  paymentAmountMinor,
+  renderInvoice = renderInvoiceWithTypst,
+}: RenderInvoiceDocumentPdfOptions): Promise<
+  Result<Uint8Array, HandlerError>
+> => {
   const outcome = await Result.tryPromise({
     try: async () =>
       await renderInvoice({
         session: invoiceTypstSession,
         createdAt: new Date(),
-        invoice: invoiceDocumentRenderOptions(loaded),
+        invoice: invoiceDocumentRenderOptions(loaded, paymentAmountMinor),
       }),
     catch: invoiceRenderError,
   });

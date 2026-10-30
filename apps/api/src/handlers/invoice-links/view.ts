@@ -115,10 +115,9 @@ const openLinkedInvoice = async (
   if (unavailable !== null) {
     return Result.err(unavailable);
   }
-  const data = buildInvoiceTemplateData({
-    ...invoiceDocumentRenderOptions(document),
-    paymentAmountMinor: linked.outstandingAmount,
-  });
+  const data = buildInvoiceTemplateData(
+    invoiceDocumentRenderOptions(document, linked.outstandingAmount),
+  );
   if (data.isErr()) {
     return Result.err(
       new HandlerError({ status: 409, message: data.error.message }),

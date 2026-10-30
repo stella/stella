@@ -22,6 +22,7 @@ const line = (index: number) =>
 
 export const invoiceFixture = (lineCount: number) =>
   ({
+    paymentAmountMinor: cents(756_250 * lineCount),
     invoice: {
       status: "finalized",
       documentType: "invoice",
