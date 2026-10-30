@@ -423,7 +423,7 @@ describe("stella mobile client document", () => {
     );
     expect(await details.json()).toMatchObject({
       clientIdHost: "stella-api.example.com",
-      client: { type: "verified", brand: "stella" },
+      client: { type: "verified", brand: "stella_ios" },
     });
   });
 
