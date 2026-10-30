@@ -203,6 +203,55 @@ const withMigratedDatabase = async (
 };
 
 describePostgres("database role privilege census", () => {
+  // timeout: verifies the catalog after applying every migration in an isolated cluster.
+  test("pins every live security definer function to trusted schemas", async () => {
+    await withMigratedDatabase(async (database) => {
+      const functions = await database.unsafe<
+        { signature: string; search_path: string | null }[]
+      >(`
+        SELECT procedure.oid::regprocedure::text AS signature,
+          (SELECT setting FROM pg_catalog.unnest(procedure.proconfig) setting
+           WHERE setting LIKE 'search_path=%') AS search_path
+        FROM pg_catalog.pg_proc procedure
+        WHERE procedure.prosecdef
+        ORDER BY signature
+      `);
+      expect(functions.length).toBeGreaterThan(0);
+      expect(
+        functions.filter(
+          ({ search_path }) =>
+            search_path !== "search_path=pg_catalog, pg_temp",
+        ),
+      ).toEqual([]);
+      expect(
+        await database.unsafe(`
+        SELECT public.case_law_provision_extraction_in_scope('ZZP', 'xtrusted') AS in_scope,
+          public.ensure_case_law_provision_extraction_state('{}'::uuid[], 'seed') AS written,
+          public.run_case_law_provision_scope_transition_page('ZZP', 'xtrusted', 1) AS advanced
+      `),
+      ).toEqual([{ in_scope: false, written: 0, advanced: false }]);
+      expect(
+        await database.unsafe(`
+        SELECT availability FROM public.read_case_law_provision_pending('ZZP', 'xtrusted', '{}'::text[])
+      `),
+      ).toEqual([{ availability: "scope_inactive" }]);
+      await database.unsafe(`
+        INSERT INTO public.case_law_sources (id, adapter_key, name)
+        VALUES ('00000000-0000-4000-8000-000000000001', 'trusted-path-fixture', 'Test source');
+        INSERT INTO public.case_law_decisions
+          (id, source_id, country, language, court, case_number, decision_date, metadata)
+        VALUES ('00000000-0000-4000-8000-000000000002', '00000000-0000-4000-8000-000000000001',
+          'ZZP', 'xtrusted', 'Court', '1', '2020-03-01', '{}'::jsonb);
+      `);
+      expect(
+        await database.unsafe(`
+        SELECT status FROM public.case_law_provision_extraction_scopes
+        WHERE country = 'ZZP' AND language = 'xtrusted'
+      `),
+      ).toEqual([{ status: "retired" }]);
+    });
+  }, 120_000);
+
   // timeout: initializing PostgreSQL and applying the complete migration chain is the behavior under test.
   test("matches every migrated role and effective privilege", async () => {
     const expected = JSON.parse(readFileSync(censusPath, "utf-8"));
