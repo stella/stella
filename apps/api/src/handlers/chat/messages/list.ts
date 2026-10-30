@@ -36,6 +36,7 @@ import { resolveChatCompactionBudget } from "@/api/lib/chat/compaction-budget";
 import { readChatCopyProjection } from "@/api/lib/chat/withdrawn-copies";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { projectThreadArtefactProvenance } from "@/api/lib/generated-artefact-provenance";
 import { getDisabledNativeToolSlugsFromSettingsRow } from "@/api/lib/mcp-connectors/catalog-metadata";
 import type { ManagedModelTier } from "@/api/lib/usage/managed-model-tier";
 import { readManagedModelTierOnTx } from "@/api/lib/usage/organization-access-state";
@@ -329,7 +330,7 @@ const getMessages = createSafeRootHandler(
                 id: true,
                 title: true,
                 titleSource: true,
-                generationProvenance: true,
+                ...projectThreadArtefactProvenance(true),
                 subjectDecisionId: true,
                 workspaceId: true,
               },

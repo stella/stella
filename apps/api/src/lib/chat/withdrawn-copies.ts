@@ -10,6 +10,7 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import { decisionReferencesIn } from "@/api/lib/case-law/withdrawn-copy-projection";
 import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
+import { projectThreadArtefactProvenance } from "@/api/lib/generated-artefact-provenance";
 import { LIMITS } from "@/api/lib/limits";
 import { getRequestContext } from "@/api/lib/observability/request-context";
 
@@ -41,7 +42,9 @@ const loadChatCopyProjection = async ({
             id: chatThreads.id,
             title: chatThreads.title,
             titleSource: chatThreads.titleSource,
-            generationProvenance: chatThreads.generationProvenance,
+            ...projectThreadArtefactProvenance(
+              chatThreads.generationProvenance,
+            ),
             subjectDecisionId: chatThreads.subjectDecisionId,
             parent: sql`(select jsonb_build_object('subjectDecisionId', parent.subject_decision_id, 'title', parent.title, 'titleSource', parent.title_source, 'generationProvenance', parent.generation_provenance) from chat_threads parent where parent.id = ${chatThreads.parentThreadId} limit 1)`,
             // These windows cover the send/list readers. A separately paged older

@@ -1,5 +1,6 @@
 import type { SafeDb } from "@/api/db/safe-db";
 import type { SafeId } from "@/api/lib/branded-types";
+import { projectThreadArtefactProvenance } from "@/api/lib/generated-artefact-provenance";
 
 import { readChatCopyProjection } from "./withdrawn-copies";
 
@@ -23,7 +24,7 @@ export const readChatExportSource = async ({
       columns: {
         title: true,
         titleSource: true,
-        generationProvenance: true,
+        ...projectThreadArtefactProvenance(true),
         subjectDecisionId: true,
         workspaceId: true,
       },

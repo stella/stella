@@ -6,6 +6,7 @@ import { GLOBAL_SEARCH_RANK_WORK_LIMIT_CODE } from "@stll/api-contract/search";
 import type { Transaction } from "@/api/db/root";
 import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { projectThreadArtefactProvenance } from "@/api/lib/generated-artefact-provenance";
 import { LIMITS } from "@/api/lib/limits";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
@@ -105,7 +106,7 @@ export const projectChatSearchCandidates = async ({
       title: row["title"],
       titleSource: row["title_source"],
       subjectDecisionId: subject?.toLowerCase() ?? null,
-      generationProvenance: row["generation_provenance"],
+      ...projectThreadArtefactProvenance(row["generation_provenance"]),
       source_messages: row["source_messages"],
     });
     const title = titleMarker === null ? String(row["title"]) : "";
@@ -176,7 +177,7 @@ export const projectChatSearchCandidates = async ({
       title: row["title"],
       titleSource: row["title_source"],
       subjectDecisionId: subject?.toLowerCase() ?? null,
-      generationProvenance: row["generation_provenance"],
+      ...projectThreadArtefactProvenance(row["generation_provenance"]),
       source_messages: row["source_messages"],
     });
     return [

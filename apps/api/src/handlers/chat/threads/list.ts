@@ -40,6 +40,7 @@ import {
 } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
+import { projectThreadArtefactProvenance } from "@/api/lib/generated-artefact-provenance";
 import { LIMITS } from "@/api/lib/limits";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -155,7 +156,7 @@ const THREAD_LIST_PROJECTION = {
   subjectDecisionId: chatThreads.subjectDecisionId,
   title: chatThreads.title,
   titleSource: chatThreads.titleSource,
-  generationProvenance: chatThreads.generationProvenance,
+  ...projectThreadArtefactProvenance(chatThreads.generationProvenance),
   updatedAt: chatThreads.updatedAt,
   usedAnonymization: chatThreads.usedAnonymization,
   updatedAtCursor:
