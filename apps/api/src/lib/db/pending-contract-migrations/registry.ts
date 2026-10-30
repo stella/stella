@@ -25,6 +25,11 @@ export const PENDING_CONTRACT_MIGRATIONS_DIR = import.meta.dir;
 
 export const PENDING_CONTRACT_MIGRATIONS = [
   {
+    name: "20261029141600_case_law_coverage_summary_v1_contract",
+    expiresAt: "2026-11-12",
+    relations: ["case_law_coverage_summaries"],
+  },
+  {
     name: "20261028061200_mcp_oauth_current_state_contract",
     expiresAt: "2026-11-03",
     relations: ["mcp_oauth_state"],
