@@ -1789,12 +1789,6 @@
   },
   {
     "file": "apps/api/src/handlers/time-entries/batch/update.ts",
-    "fingerprint": "769cd47a24aa1bb073c1ae60cbe62c534a1c5e7a0cb14a667c59228afb3609ac",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/time-entries/batch/update.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/handlers/time-entries/batch/update.ts",
     "fingerprint": "79b524ca823812018b5fb66c7f9c92ce2b38bd5703a8c07b07c5a9d213d7ef91",
     "count": 1,
     "reason": "builder-for in apps/api/src/handlers/time-entries/batch/update.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
@@ -2136,18 +2130,6 @@
     "reason": "builder-for in apps/api/src/lib/billing-time.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
-    "file": "apps/api/src/lib/billing/arrangements.ts",
-    "fingerprint": "86e86b48a33efe2319b7ef02a9159bace150fbfb4216c448d54196c201af76a1",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/billing/arrangements.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/billing/arrangements.ts",
-    "fingerprint": "e2b4b6e3a17c005240702eb246339afa1581b4a4798e2528cc69a78844feed15",
-    "count": 1,
-    "reason": "pg_advisory_xact_lock( in apps/api/src/lib/billing/arrangements.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
     "file": "apps/api/src/lib/billing/daily-target.ts",
     "fingerprint": "4af434620b1716a0c9040d0b6cd5bb4dd1018ec181048361a750b109426def7d",
     "count": 1,
@@ -2296,12 +2278,6 @@
     "fingerprint": "fa1b61694b38b60135ea957b158e6bdf28cfc59dea8c24e49d5b47abe832aec1",
     "count": 1,
     "reason": "for no key update in apps/api/src/lib/case-law/provision-state-backfill/backfill.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/case-law/sitemap-shard-refresh.ts",
-    "fingerprint": "9cd561de2d5bc69f52ae21a7ff7b29673e412ece73f584b19a09bbcd9688e923",
-    "count": 1,
-    "reason": "lock table in apps/api/src/lib/case-law/sitemap-shard-refresh.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
     "file": "apps/api/src/lib/cell-lock.ts",

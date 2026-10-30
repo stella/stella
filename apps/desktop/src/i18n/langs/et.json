@@ -299,7 +299,7 @@
     "moreOptions": "Rohkem valikuid",
     "moreItemActions": "Veel toiminguid kirjega {number}",
     "noResults": "Sobivaid lõikeid pole",
-    "noResultsDescription": "Kas soovite otsida „{query}” hoopis registritest?",
+    "noResultsSearchRegistries": "Otsi „{query}” registritest",
     "noGroup": "Rühmata",
     "newGroupOption": "Uus rühm…",
     "copyItem": "Kopeeri kirje {number}",
@@ -368,7 +368,8 @@
     "welcomeShortcutDescription": "Vajuta {shortcut}, et sirvida ajalugu ja valida lõige.",
     "welcomeShortcutTitle": "Ava see kõikjal.",
     "welcomeStart": "Alusta kopeerimist",
-    "welcomeTitle": "Sinu uus lõikelaud"
+    "welcomeTitle": "Sinu uus lõikelaud",
+    "registryIdentifierSearchHint": "Sisestage {identifiers}."
   },
   "activity": {
     "title": "Tegevus",

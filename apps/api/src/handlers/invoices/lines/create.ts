@@ -190,6 +190,7 @@ const readInvoiceLineDraft = async (
 const createInvoiceLine = createSafeHandler(
   {
     contract: "patch",
+    idempotency: { type: "replay" },
     description:
       "Add one line to a draft invoice and recompute its totals. The source " +
       "is a manual line (description, decimal quantity, optional unit, unit " +

@@ -270,15 +270,13 @@ const providerRun = (
     structuredOutput: () =>
       panic("Suggested prompts never request structured output"),
   };
-  // SAFETY: `adapter` is a real `AnyTextAdapter` the engine drives as it
-  // drives a provider; the other fields are bookkeeping this test never reads.
   return {
     adapter,
     keySource: "instance",
     modelId: "suggestions-fixture",
     modelOptions: {},
     provider: "openai",
-  } as ResolvedTanStackTextModel;
+  };
 };
 
 const generateFrom = async (model: ResolvedTanStackTextModel) =>
@@ -325,6 +323,7 @@ test("suggested prompts usage refusal calls no model and persists nothing", asyn
   const userId = toSafeId<"user">("user_prompts_refused");
   const threadId = toSafeId<"chatThread">("thread_prompts_refused");
   let entitlementReads = 0;
+  let sourceReads = 0;
   let threadReads = 0;
   let messageReads = 0;
   const persist = mock(() =>
@@ -361,6 +360,10 @@ test("suggested prompts usage refusal calls no model and persists nothing", asyn
     select: (fields: Record<string, unknown>) => {
       if ("usedAnonymization" in fields) {
         return createSelectQueryMock([{ usedAnonymization: false }]);
+      }
+      if ("subjectDecisionId" in fields) {
+        sourceReads += 1;
+        return createSelectQueryMock([]);
       }
       entitlementReads += 1;
       return createSelectQueryMock([]);
@@ -406,6 +409,7 @@ test("suggested prompts usage refusal calls no model and persists nothing", asyn
       },
     });
     expect(entitlementReads).toBe(1);
+    expect(sourceReads).toBe(1);
     expect(threadReads).toBe(1);
     expect(messageReads).toBe(2);
     expect(generator).not.toHaveBeenCalled();

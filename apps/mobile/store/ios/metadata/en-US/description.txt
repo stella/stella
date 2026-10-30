@@ -1,0 +1,27 @@
+stella is the open-source legal workspace for matters, documents, review and AI-assisted legal work. The app brings your firm's stella to your iPhone and iPad.
+
+ASK STELLA
+Chat with stella about a matter or about the law. Answers draw on your matter's documents and on case law, and every conversation stays in its matter.
+
+YOUR MATTERS
+Browse your matters by client, open their documents and items, and add a task or a scan from wherever you are.
+
+SCAN PAPER INTO A MATTER
+Point the camera at a letter or a filing. stella straightens the pages, saves them as a PDF and files it in the matter you choose.
+
+TASKS
+See what is due today, this week and later, add a task to a matter, and mark it done.
+
+TIME TRACKING
+Start a timer as you begin, pause it for a call, and save it as a time entry when you are done. A running timer stays on your Lock Screen and in the Dynamic Island.
+
+CASE LAW
+Read decisions in a reader made for long legal texts.
+
+MADE FOR IPAD
+On iPad, your list and what you opened sit side by side. With a keyboard, ⌘K opens a command palette, and shortcuts move between tabs.
+
+PRIVATE BY DESIGN
+stella keeps no analytics and tracks no one. Notifications say only that something happened, never a client's or a matter's name.
+
+stella requires an account with a stella workspace. Sign in with your work email, Apple, Google or Microsoft.

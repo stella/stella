@@ -299,7 +299,7 @@
     "moreOptions": "Plus d’options",
     "moreItemActions": "Plus d’actions pour l’élément {number}",
     "noResults": "Aucun extrait correspondant",
-    "noResultsDescription": "Voulez-vous plutôt rechercher « {query} » dans les registres ?",
+    "noResultsSearchRegistries": "Rechercher « {query} » dans les registres",
     "noGroup": "Aucun groupe",
     "newGroupOption": "Nouveau groupe…",
     "copyItem": "Copier l’élément {number}",
@@ -368,7 +368,8 @@
     "welcomeShortcutDescription": "Appuyez sur {shortcut} pour parcourir l’historique et choisir un extrait.",
     "welcomeShortcutTitle": "Ouvrez-le partout.",
     "welcomeStart": "Commencer à copier",
-    "welcomeTitle": "Découvrez votre presse-papiers"
+    "welcomeTitle": "Découvrez votre presse-papiers",
+    "registryIdentifierSearchHint": "Saisissez {identifiers}."
   },
   "activity": {
     "title": "Activité",

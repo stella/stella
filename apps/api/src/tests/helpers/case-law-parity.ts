@@ -70,7 +70,7 @@ export const parserParityOutput = async (
     panic(`Unknown parity adapter ${entry.adapterKey}`);
   const fixtureFactory = PARITY_FIXTURES[entry.adapterKey];
   const decision = await buildCaseLawFixture(
-    fixtureFactory(new URL(entry.fixture, INGESTION_ROOT)),
+    fixtureFactory(new URL(entry.fixture, INGESTION_ROOT), entry.identity),
   );
   const reparse = adapter.reparseStoredRaw;
   if (reparse === undefined || decision.sourceRaw === undefined) {

@@ -65,6 +65,12 @@ const root = path.resolve(import.meta.dir, "..");
 const workflow: unknown = Bun.YAML.parse(
   readFileSync(path.join(root, ".github/workflows/ci.yml"), "utf-8"),
 );
+const queueAdmissionWorkflow: unknown = Bun.YAML.parse(
+  readFileSync(
+    path.join(root, ".github/workflows/queue-admission.yml"),
+    "utf-8",
+  ),
+);
 
 const check = (name: string, extra: Partial<PoolCheck> = {}): PoolCheck => ({
   name,
@@ -946,6 +952,56 @@ test("every job that runs the pool declares a timeout the pool's deadline fits u
   ).toThrow(
     ".github/workflows/ci.yml: job missing-job must declare a literal timeout-minutes above 3",
   );
+});
+
+test("queue admission binds migration identity to the requested head and current main", () => {
+  const dollar = String.fromCodePoint(36);
+  const headInput = `${dollar}{{ inputs.head }}`;
+  expect(queueAdmissionWorkflow).toMatchObject({
+    "run-name": `Queue admission #${dollar}{{ inputs.pr }} @${headInput}`,
+    on: {
+      workflow_dispatch: {
+        inputs: { head: { required: true, type: "string" } },
+      },
+    },
+  });
+
+  const steps = workflowJobSteps(queueAdmissionWorkflow, "admission");
+  const identityIndex = steps.findIndex((step) => step["id"] === "merge");
+  const installIndex = steps.findIndex((step) => step["id"] === "install");
+  const migrationIndex = steps.findIndex(
+    (step) => step["id"] === "migration_identity",
+  );
+  expect(identityIndex).toBe(1);
+  expect(steps[identityIndex]?.["env"]).toMatchObject({
+    EXPECTED_HEAD: headInput,
+  });
+  expect(steps[identityIndex]?.["run"]).toContain(
+    '[[ ! "$EXPECTED_HEAD" =~ ^[0-9a-f]{40}$ ]]',
+  );
+  expect(steps[identityIndex]?.["run"]).toContain(
+    '[[ "$head" != "$EXPECTED_HEAD" ]]',
+  );
+  expect(migrationIndex).toBe(installIndex + 1);
+  expect(steps[migrationIndex]).not.toHaveProperty("continue-on-error");
+  expect(steps[migrationIndex]?.["run"]).toContain(
+    "git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main",
+  );
+  expect(steps[migrationIndex]?.["run"]).toContain(
+    "bun scripts/check-migration-order.ts origin/main",
+  );
+
+  const result = steps.find(
+    (step) => step["name"] === "Write admission result",
+  );
+  expect(result?.["env"]).toMatchObject({
+    MIGRATION_IDENTITY: `${dollar}{{ steps.migration_identity.outcome }}`,
+  });
+  expect(result?.["run"]).toContain("migration_identity: .MIGRATION_IDENTITY");
+  const enforce = steps.find(
+    (step) => step["name"] === "Enforce admission result",
+  );
+  expect(enforce?.["run"]).toContain('all(.checks[]; . == "success")');
 });
 
 test("the job starts when the runner's worker process for it does", () => {

@@ -1,7 +1,10 @@
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { describe, expect, test } from "bun:test";
+import { generateKeyPairSync } from "node:crypto";
 import * as v from "valibot";
+
+import { AUTH_SOCIAL_PROVIDER_IDS } from "@stll/auth-model";
 
 import {
   createSocialProvider,
@@ -80,20 +83,32 @@ describe("auth session paths", () => {
   });
 
   test("configures every social provider for authorization redirects", () => {
-    const socialProviders = Object.values(
-      createSocialProviders({
-        googleClientId: "google-client-id",
-        googleClientSecret: "google-client-secret",
-        microsoftClientId: "microsoft-client-id",
-        microsoftClientSecret: "microsoft-client-secret",
-        microsoftTenantId: "common",
-      }),
-    );
+    const configured = createSocialProviders({
+      googleClientId: "google-client-id",
+      googleClientSecret: "google-client-secret",
+      microsoftClientId: "microsoft-client-id",
+      microsoftClientSecret: "microsoft-client-secret",
+      microsoftTenantId: "common",
+      apple: {
+        type: "enabled",
+        clientId: "app.example.web",
+        teamId: "TEAM123456",
+        keyId: "KEY1234567",
+        privateKey: generateKeyPairSync("ec", { namedCurve: "prime256v1" })
+          .privateKey,
+      },
+    });
 
-    expect(socialProviders.length).toBeGreaterThan(0);
-    for (const provider of socialProviders) {
+    expect(Object.keys(configured).toSorted()).toEqual(
+      [...AUTH_SOCIAL_PROVIDER_IDS].toSorted(),
+    );
+    for (const provider of Object.values(configured)) {
       expect(provider.disableIdTokenSignIn).toBe(true);
     }
+    // Apple's secret is minted on read; a copied value would expire.
+    expect(
+      Object.getOwnPropertyDescriptor(configured.apple, "clientSecret")?.get,
+    ).toBeFunction();
   });
 
   test("social sign-in uses provider authorization redirects", async () => {

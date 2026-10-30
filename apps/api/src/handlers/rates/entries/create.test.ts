@@ -205,4 +205,25 @@ describe("effective-dated rate selectors", () => {
       ),
     ).toBe(0);
   });
+  test("invalid activity selection returns a typed refusal without leaving a rate entry", async () => {
+    await clearEntries();
+    const activityCodeId = toSafeId<"billingCode">(Bun.randomUUIDv7());
+    expect(await create({ ...window, activityCodeId })).toMatchObject({
+      code: 400,
+      response: { message: "Activity code not found in this matter" },
+    });
+    expect(
+      await testDb.$count(
+        rateEntries,
+        eq(rateEntries.rateTableId, rateTableId),
+      ),
+    ).toBe(0);
+    expect(await create(window)).toHaveProperty("id");
+    expect(
+      await testDb.$count(
+        rateEntries,
+        eq(rateEntries.rateTableId, rateTableId),
+      ),
+    ).toBe(1);
+  });
 });
