@@ -409,6 +409,8 @@ export const TAGGED_FAILURE_REASON = {
   ServiceClientOperatorError: "tagged_failure",
   ServiceClientUnavailableError: "tagged_failure",
   SesInboundError: "tagged_failure",
+  SharedPostgresDockerError: "tagged_failure",
+  SharedTestPostgresError: "tagged_failure",
   SkCollectionIssueError: "tagged_failure",
   SkillFileError: "tagged_failure",
   SkillRequiredToolsError: "tagged_failure",
