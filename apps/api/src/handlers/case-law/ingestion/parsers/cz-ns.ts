@@ -661,8 +661,13 @@ const SECTION_HEADING_RE =
 
 const RULING_ITEM_RE = /^(?:[IVXLCDM]+\.)\s+/u;
 
+// The state and the formula a decision opens with are the court's words, not
+// its title, however they are set: both callers share the exclusion.
 const isDecisionTitle = (plainText: string): boolean => {
   const trimmed = plainText.trim();
+  if (isCzechOpeningFormula(trimmed)) {
+    return false;
+  }
   if (DECISION_TITLE_RE.test(trimmed)) {
     return true;
   }
@@ -1110,7 +1115,11 @@ const classifyBlocks = (
 
     // A numeral and its title, set on two lines of one centred block,
     // are one heading.
-    const labelled = centered ? labelledHeading(plainText) : null;
+    // Spacing inside a line is the editor's; the break between the numeral
+    // and the title is the pattern's.
+    const labelled = centered
+      ? labelledHeading(plainText.replace(/[^\S\n]+/gu, " "))
+      : null;
     if (labelled !== null) {
       // However the court spaced the break, the heading keeps its inlines.
       const joined = rewriteInlineWhitespace(

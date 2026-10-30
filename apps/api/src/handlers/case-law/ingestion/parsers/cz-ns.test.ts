@@ -667,6 +667,33 @@ describe("labelled section headings", () => {
   );
 });
 
+test("a linked title keeps its link when the court doubled a space in it", () => {
+  const { documentAst } = parseNsDecisionHtml(
+    baseInput(
+      `<html><body><table id="box-table-a"><tr><td>Soud:</td><td>NS</td></tr></table><p align="center"><b>II.</b><br><a href="https://example.test/posouzeni">Posouzení  věci</a></p><p>Text odůvodnění.</p></body></html>`,
+    ),
+  );
+  const heading = documentAst.blocks.find(
+    (block) => block.plainText === "II. Posouzení věci",
+  );
+  expect(heading?.type).toBe("heading");
+  expect(JSON.stringify(heading)).toContain(
+    '"href":"https://example.test/posouzeni"',
+  );
+});
+
+test("a centred letter-spaced state line is an opening formula, not a title", () => {
+  const { documentAst } = parseNsDecisionHtml(
+    baseInput(
+      `<html><body><table id="box-table-a"><tr><td>Soud:</td><td>NS</td></tr></table><p align="center">21 Cdo 4994/2007</p><p align="center">Č E S K Á   R E P U B L I K A</p><p align="center">ROZSUDEK</p><p>Nejvyšší soud rozhodl takto:</p></body></html>`,
+    ),
+  );
+  const state = documentAst.blocks.find(
+    (block) => block.plainText.replaceAll(" ", "") === "ČESKÁREPUBLIKA",
+  );
+  expect(state).toMatchObject({ type: "paragraph", role: "intro" });
+});
+
 describe("source table text retention", () => {
   test("preserves breaks in unknown, additional and recognized metadata cells", () => {
     for (const separator of [
