@@ -2084,8 +2084,6 @@
     "clearFilters": "Tühjenda filtrid",
     "clearSearch": "Tühjenda otsing",
     "close": "Sulge",
-    "closeAll": "Sulge kõik",
-    "closeOthers": "Sulge teised",
     "columns": "Veerud",
     "comfortable": "Avar",
     "comingSoon": "Tulemas peagi",
@@ -3674,6 +3672,9 @@
       "unsupportedVisualContent": "See fail sisaldab pilte või vektorgraafikat, mida ei saa tundliku teksti suhtes kontrollida. Eksport pole saadaval.",
       "workspaceTermsHeading": "Tööruumi terminid ({count})"
     },
+    "closeAllTabs": "Sulge {count, plural, one {# vaheleht} other {kõik # vahelehte}}",
+    "closeOtherTabs": "Sulge {count, plural, one {# teine vaheleht} other {# teist vahelehte}}",
+    "closeTab": "Sulge <bdi>{name}</bdi>",
     "conversionRefusal": {
       "legacyFormat": "See on pärandvormingus {format}-fail. Teisendamiseks salvesta see uuesti vormingus {replacementExtension}.",
       "unsupportedEncoding": "See dokument kasutab toetamata kodeeringut {encoding}, mistõttu ei saa seda teisendada.",
