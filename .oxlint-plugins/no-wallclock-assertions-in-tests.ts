@@ -157,6 +157,7 @@ const rule = createTestDeterminismRule({
         const comparison = unwrapExpression(node.arguments.at(0));
         return (
           comparison?.type === "BinaryExpression" &&
+          typeof comparison.operator === "string" &&
           COMPARISONS.has(comparison.operator) &&
           [comparison.left, comparison.right].some(
             (operand) => timing(operand) === "elapsed",
