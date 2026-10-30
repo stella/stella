@@ -1,0 +1,1 @@
+{"access":"read","consumesServices":false,"destructive":false,"handlerKind":"workspace","id":"matters.members.list","inputSchema":{},"mcp":{"by":"list_matters","type":"covered"},"permissions":{"workspace":["read"]},"readClass":"tenant","scope":"stella:read","transport":{"type":"json"}}
