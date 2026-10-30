@@ -285,10 +285,22 @@ export const AnnotationToolbar = ({
           reportSelectedSpans(NO_SELECTED_SPANS);
           return;
         }
-        // A fresh selection must not inherit the previous one's open menu.
-        setCopyOpen(false);
         const range = selection.getRangeAt(0);
         const spans = selectionAnchorsFrom(selection, root);
+        // The bar acts on a passage of the document: words selected in the
+        // reader's own chrome (a notice, a note, a label) touch none of its
+        // anchored blocks, and quoting them with the document's citation
+        // would be wrong. A text with no anchored blocks at all keeps the bar.
+        if (
+          spans.length === 0 &&
+          root.querySelector("[data-anchor]") !== null
+        ) {
+          setSelected(null);
+          reportSelectedSpans(NO_SELECTED_SPANS);
+          return;
+        }
+        // A fresh selection must not inherit the previous one's open menu.
+        setCopyOpen(false);
         // Reported before the bar's geometry: words scrolled out of view are
         // still selected, though the bar has nowhere to float.
         reportSelectedSpans(spans);

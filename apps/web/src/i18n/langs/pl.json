@@ -2083,8 +2083,6 @@
     "clearFilters": "Wyczyść filtry",
     "clearSearch": "Wyczyść wyszukiwanie",
     "close": "Zamknij",
-    "closeAll": "Zamknij wszystko",
-    "closeOthers": "Zamknij pozostałe",
     "columns": "Kolumny",
     "comfortable": "Komfortowy",
     "comingSoon": "Wkrótce",
@@ -2870,6 +2868,8 @@
       "forbidden": "Nie masz uprawnień do wykonania tej czynności.",
       "hostedCheckoutOpen": "Dla tej organizacji jest już otwarta płatność. Dokończ ją albo rozpocznij nową po jej wygaśnięciu.",
       "hostedSubscriptionLive": "Ta organizacja ma już subskrypcję. Zmień ją w sekcji „Zarządzaj użyciem hostowanym”.",
+      "idempotencyInProgress": "To żądanie jest nadal przetwarzane. Poczekaj chwilę i spróbuj ponownie.",
+      "idempotencyKeyReused": "Dane zmieniły się od poprzedniej próby. Zresetuj formularz i spróbuj ponownie.",
       "internalServerError": "Coś poszło nie tak. Spróbuj ponownie.",
       "legalSourceEntityLimitReached": "Ta sprawa osiągnęła limit elementów, dlatego nie można było utworzyć dokumentu.",
       "legalSourceFilePropertyMissing": "W tej sprawie brakuje właściwości pliku, dlatego nie można było utworzyć dokumentu.",
@@ -3671,6 +3671,9 @@
       "unsupportedVisualContent": "Ten plik zawiera obrazy lub grafikę wektorową, których nie można sprawdzić pod kątem wrażliwego tekstu. Eksport jest niedostępny.",
       "workspaceTermsHeading": "Terminy obszaru roboczego ({count})"
     },
+    "closeAllTabs": "Zamknij {count, plural, one {# kartę} few {wszystkie # karty} many {wszystkie # kart} other {wszystkie # karty}}",
+    "closeOtherTabs": "Zamknij {count, plural, one {# inną kartę} few {# inne karty} many {# innych kart} other {# innej karty}}",
+    "closeTab": "Zamknij <bdi>{name}</bdi>",
     "conversionRefusal": {
       "legacyFormat": "To jest plik {format} w starszym formacie. Zapisz go ponownie jako {replacementExtension}, aby go przekonwertować.",
       "unsupportedEncoding": "Ten dokument używa nieobsługiwanego kodowania {encoding}, dlatego nie można go przekonwertować.",
