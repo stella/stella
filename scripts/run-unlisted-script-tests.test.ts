@@ -521,9 +521,177 @@ describe("directory scan coverage", () => {
     }
   };
 
+  test("file probes use the same changed working directory as scans", () => {
+    withTrackedFixture(({ root, tracked }) => {
+      const trace = [
+        '1 execve("/bin/sh", ["sh"], 0x0) = 0',
+        '1 chdir("data") = 0',
+        '1 access("a.txt", F_OK) = 0',
+      ].join("\n");
+      const options = { trace, closure: new Set<string>(), tracked, root };
+      expect(undeclaredTracedFiles({ ...options, declared: [] })).toEqual([
+        "data/a.txt",
+      ]);
+      expect(
+        undeclaredTracedFiles({ ...options, declared: ["data/a.txt"] }),
+      ).toEqual([]);
+    });
+  });
+
+  type ForkSyscall = {
+    [
+      Key in keyof typeof SCRIPT_TEST_TRACE_SYSCALLS
+    ]: (typeof SCRIPT_TEST_TRACE_SYSCALLS)[Key] extends {
+      type: "process";
+      operation: "fork";
+    }
+      ? Key
+      : never;
+  }[keyof typeof SCRIPT_TEST_TRACE_SYSCALLS];
+  const forkCalls = {
+    fork: "fork()",
+    vfork: "vfork()",
+    clone: "clone(child_stack=NULL, flags=SIGCHLD)",
+    clone3: "clone3({flags=0}, 88)",
+  } as const satisfies Record<ForkSyscall, string>;
+
+  for (const [name, forkCall] of Object.entries(forkCalls)) {
+    test(`${name} inherits cwd without applying its later changes to the parent`, () => {
+      withTrackedFixture(({ root, tracked }) => {
+        const trace = [
+          '1 execve("/bin/sh", ["sh"], 0x0) = 0',
+          '1 chdir("data") = 0',
+          `1 ${forkCall} = 2`,
+          '2 chdir("..") = 0',
+          '1 access("a.txt", F_OK) = 0',
+          '2 access("data/a.txt", F_OK) = 0',
+        ].join("\n");
+        expect(
+          undeclaredTracedFiles({
+            trace,
+            root,
+            tracked,
+            closure: new Set(),
+            declared: [],
+          }),
+        ).toEqual(["data/a.txt"]);
+      });
+    });
+  }
+
+  test("CLONE_FS threads share the cwd used by probes and command scans", () => {
+    withTrackedFixture(({ root, tracked }) => {
+      const trace = [
+        '1 execve("/bin/sh", ["sh"], 0x0) = 0',
+        "1 clone(child_stack=NULL, flags=CLONE_FS|CLONE_VM) = 2",
+        '2 chdir("data") = 0',
+        '1 access("a.txt", F_OK) = 0',
+        '1 execve("/usr/bin/ls", ["ls", "."], 0x0) = 0',
+      ].join("\n");
+      expect(
+        undeclaredTracedFiles({
+          trace,
+          root,
+          tracked,
+          closure: new Set(),
+          declared: [],
+        }),
+      ).toEqual(["data/a.txt"]);
+      expect(
+        uncoveredScans({
+          trace,
+          root,
+          tracked,
+          scanLog: "",
+          declared: ["data/**"],
+        }),
+      ).toEqual([]);
+    });
+  });
+
+  test("descriptor directory changes update both probes and command scans", () => {
+    withTrackedFixture(({ root, tracked }) => {
+      const trace = [
+        '1 execve("/bin/sh", ["sh"], 0x0) = 0',
+        `1 fchdir(5<${root}/data>) = 0`,
+        '1 access("a.txt", F_OK) = 0',
+        '1 execve("/usr/bin/ls", ["ls", "."], 0x0) = 0',
+      ].join("\n");
+      expect(
+        undeclaredTracedFiles({
+          trace,
+          root,
+          tracked,
+          closure: new Set(),
+          declared: [],
+        }),
+      ).toEqual(["data/a.txt"]);
+      expect(
+        uncoveredScans({
+          trace,
+          root,
+          tracked,
+          scanLog: "",
+          declared: ["data/**"],
+        }),
+      ).toEqual([]);
+    });
+  });
+
+  test("an unknown process cwd rejects a relative probe even with complete declarations", () => {
+    withTrackedFixture(({ root, tracked }) => {
+      const trace = [
+        '1 execve("/bin/sh", ["sh"], 0x0) = 0',
+        '2 access("data/a.txt", F_OK) = 0',
+      ].join("\n");
+      expect(() =>
+        undeclaredTracedFiles({
+          trace,
+          root,
+          tracked,
+          closure: new Set(),
+          declared: ["**"],
+        }),
+      ).toThrow("cannot resolve the working directory of a file probe");
+    });
+  });
+
+  test("later annotations resolve an earlier relative probe against its original cwd", () => {
+    withTrackedFixture(({ root, tracked }) => {
+      const trace = [
+        '1 execve("/bin/sh", ["sh"], 0x0) = 0',
+        '2 chdir("data") = 0',
+        '2 access("a.txt", F_OK) = 0',
+        `2 openat(AT_FDCWD<${root}/data>, ".", O_RDONLY) = 3`,
+      ].join("\n");
+      expect(
+        undeclaredTracedFiles({
+          trace,
+          root,
+          tracked,
+          closure: new Set(),
+          declared: [],
+        }),
+      ).toEqual(["data/a.txt"]);
+    });
+  });
+
+  test("scan log records require an absolute directory", () => {
+    withTrackedFixture(({ root, tracked }) => {
+      expect(() =>
+        uncoveredScans({
+          scanLog: JSON.stringify({ directory: "data" }),
+          root,
+          tracked,
+          declared: ["**"],
+        }),
+      ).toThrow("cannot resolve the working directory of a scan log record");
+    });
+  });
+
   test("a directory scan requires one structural recursive declaration", () => {
     withTrackedFixture(({ root, tracked }) => {
-      const scanLog = `${JSON.stringify({ directory: "data" })}\n`;
+      const scanLog = `${JSON.stringify({ directory: path.join(root, "data") })}\n`;
       for (const declared of [
         "data/*",
         "data/*.txt",
@@ -532,7 +700,7 @@ describe("directory scan coverage", () => {
       ]) {
         expect(
           uncoveredScans({ scanLog, declared: [declared], tracked, root }),
-        ).toEqual([{ directory: "data" }]);
+        ).toEqual([{ directory: path.join(root, "data") }]);
       }
       for (const declared of ["data/**", "**"]) {
         expect(
@@ -545,7 +713,7 @@ describe("directory scan coverage", () => {
   test("empty directories use the same structural coverage rule", () => {
     withTrackedFixture(({ root }) => {
       mkdirSync(path.join(root, "empty"));
-      const scanLog = `${JSON.stringify({ directory: "empty" })}\n`;
+      const scanLog = `${JSON.stringify({ directory: path.join(root, "empty") })}\n`;
       expect(
         uncoveredScans({
           scanLog,
@@ -553,7 +721,7 @@ describe("directory scan coverage", () => {
           tracked: new Set(),
           root,
         }),
-      ).toEqual([{ directory: "empty" }]);
+      ).toEqual([{ directory: path.join(root, "empty") }]);
       expect(
         uncoveredScans({
           scanLog,
@@ -567,7 +735,7 @@ describe("directory scan coverage", () => {
 
   test("an ancestor recursive declaration covers a nested scan", () => {
     withTrackedFixture(({ root, tracked }) => {
-      const scanLog = `${JSON.stringify({ directory: "parent/data" })}\n`;
+      const scanLog = `${JSON.stringify({ directory: path.join(root, "parent/data") })}\n`;
       expect(
         uncoveredScans({ scanLog, declared: ["parent/**"], tracked, root }),
       ).toEqual([]);
@@ -859,9 +1027,10 @@ describe("directory scan coverage", () => {
   test("a late cwd annotation preserves the directory of the Git invocation", () => {
     withTrackedFixture(({ root, tracked }) => {
       const trace = [
-        '1 execve("/usr/bin/git", ["git", "-C", "parent", "ls-files", "--", "data"], 0x0) = 0',
-        '1 chdir("parent") = 0',
-        `1 openat(AT_FDCWD<${root}/parent>, ".", O_RDONLY) = 3`,
+        '1 execve("/bin/sh", ["sh"], 0x0) = 0',
+        '2 execve("/usr/bin/git", ["git", "-C", "parent", "ls-files", "--", "data"], 0x0) = 0',
+        '2 chdir("parent") = 0',
+        `2 openat(AT_FDCWD<${root}/parent>, ".", O_RDONLY) = 3`,
       ].join("\n");
       const options = { scanLog: "", trace, tracked, root };
       expect(

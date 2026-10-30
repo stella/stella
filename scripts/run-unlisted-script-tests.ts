@@ -397,7 +397,9 @@ const TRACE_STRING_LIMIT = 65_535;
 type TraceSyscall =
   | { type: "file"; argument: number }
   | { type: "descriptor" | "directory"; argument: number }
-  | { type: "process" };
+  | { type: "execution"; argument: number; argv: number }
+  | { type: "process"; operation: "fork" }
+  | { type: "process"; operation: "chdir" | "fchdir"; argument: number };
 
 export const SCRIPT_TEST_TRACE_SYSCALLS = {
   open: { type: "file", argument: 0 },
@@ -419,16 +421,16 @@ export const SCRIPT_TEST_TRACE_SYSCALLS = {
   lgetxattr: { type: "file", argument: 0 },
   listxattr: { type: "file", argument: 0 },
   llistxattr: { type: "file", argument: 0 },
-  execve: { type: "file", argument: 0 },
-  execveat: { type: "file", argument: 1 },
+  execve: { type: "execution", argument: 0, argv: 1 },
+  execveat: { type: "execution", argument: 1, argv: 2 },
   getdents: { type: "directory", argument: 0 },
   getdents64: { type: "directory", argument: 0 },
-  clone: { type: "process" },
-  clone3: { type: "process" },
-  fork: { type: "process" },
-  vfork: { type: "process" },
-  chdir: { type: "process" },
-  fchdir: { type: "process" },
+  clone: { type: "process", operation: "fork" },
+  clone3: { type: "process", operation: "fork" },
+  fork: { type: "process", operation: "fork" },
+  vfork: { type: "process", operation: "fork" },
+  chdir: { type: "process", operation: "chdir", argument: 0 },
+  fchdir: { type: "process", operation: "fchdir", argument: 0 },
 } as const satisfies Record<string, TraceSyscall>;
 
 export const SCRIPT_TEST_TRACE_FILTER = `trace=${Object.keys(SCRIPT_TEST_TRACE_SYSCALLS).join(",")}`;
@@ -478,7 +480,7 @@ const syscallArguments = (source: string): string[] => {
       start = index + 1;
     }
   }
-  panic(`Incomplete syscall arguments: ${source}`);
+  return panic(`Incomplete syscall arguments: ${source}`);
 };
 
 const traceCall = (line: string) => {
@@ -564,28 +566,22 @@ export const undeclaredTracedFiles = ({
   closure,
   declared,
   tracked,
+  root = REPO_ROOT,
 }: {
   readonly trace: string;
   readonly closure: ReadonlySet<string>;
   readonly declared: readonly string[];
   readonly tracked: ReadonlySet<string>;
+  readonly root?: string;
 }): string[] => {
   const globs = declared.map((pattern) => new Bun.Glob(pattern));
   const opened = new Set<string>();
-  for (const line of joinedTraceRecords(trace)) {
-    assertWholeRecord(line);
-    const call = traceCall(line);
-    if (
-      call === undefined ||
-      call.syscall.type === "process" ||
-      call.syscall.type === "directory"
-    ) {
+  for (const { line, call, cwd } of traceContexts({ trace, root })) {
+    if (call.syscall.type === "process" || call.syscall.type === "directory") {
       continue;
     }
     const argument = call.args.at(call.syscall.argument) ?? "";
-    const match = /^"((?:\\.|[^"])*)"$/u.exec(argument);
-    const quotedPath =
-      match === null ? undefined : decodeTraceString(match.at(1) ?? "");
+    const quotedPath = quotedArgument(argument);
     const openedPath =
       call.syscall.type === "descriptor"
         ? descriptorPath(argument)
@@ -593,11 +589,19 @@ export const undeclaredTracedFiles = ({
     if (openedPath === undefined) {
       continue;
     }
-    const directory = pathDirectoryAnnotation(line);
-    const absolute = path.isAbsolute(openedPath)
-      ? path.normalize(openedPath)
-      : path.resolve(directory ?? REPO_ROOT, openedPath);
-    const relative = repoRelativePath(REPO_ROOT, absolute);
+    if (call.syscall.type === "descriptor" && !path.isAbsolute(openedPath)) {
+      continue;
+    }
+    const directory =
+      call.syscall.type !== "descriptor" && call.syscall.argument > 0
+        ? descriptorPath(call.args.at(0) ?? "")
+        : undefined;
+    const absolute = resolveTracePath({
+      value: openedPath,
+      cwd: directory === undefined ? cwd : workingDirectory(directory),
+      context: `cannot resolve the working directory of a file probe: ${line}`,
+    });
+    const relative = repoRelativePath(root, absolute);
     if (
       relative.startsWith("../") ||
       relative.startsWith("node_modules/") ||
@@ -621,7 +625,6 @@ export const undeclaredTracedFiles = ({
 type ScanRecord = {
   readonly directory: string;
   readonly pattern?: string;
-  readonly command?: string;
   /** Seen only as a directory listing in the trace, from any caller. */
   readonly listing?: true;
 };
@@ -676,80 +679,196 @@ const scanCovered = ({
 const tracePid = (line: string): string | undefined =>
   /^\s*(\d+)\s/u.exec(line)?.[1];
 
-const updateWorkingDirectory = (
-  line: string,
-  pid: string,
-  workingDirectories: Map<string, string>,
-): string | undefined => {
-  const annotatedDirectory = /\bAT_FDCWD<([^>]+)>/u.exec(line)?.[1];
-  if (annotatedDirectory !== undefined) {
-    workingDirectories.set(pid, decodeTraceString(annotatedDirectory));
-  }
-  const changedDirectory = /\bchdir\("((?:\\.|[^"\\])*)"\)\s+=\s+0/u.exec(
-    line,
-  )?.[1];
-  if (changedDirectory !== undefined) {
-    const directory = decodeTraceString(changedDirectory);
-    const cwd = workingDirectories.get(pid);
-    if (cwd !== undefined || path.isAbsolute(directory)) {
-      workingDirectories.set(pid, path.resolve(cwd ?? directory, directory));
-    }
-    return directory;
-  }
-  const changedFdDirectory = /\bfchdir\(\d+<([^>]+)>\)\s+=\s+0/u.exec(
-    line,
-  )?.[1];
-  if (changedFdDirectory === undefined) {
-    return undefined;
-  }
-  const directory = decodeTraceString(changedFdDirectory);
-  workingDirectories.set(pid, directory);
-  return directory;
+type WorkingDirectory = {
+  anchor: {
+    state: { type: "unknown" } | { type: "known"; directory: string };
+  };
+  changes: readonly string[];
 };
 
-// With -yy, strace annotates the directory descriptor that a relative path
-// argument resolves against: `openat(AT_FDCWD</repo>, "file", …)`.
-const pathDirectoryAnnotation = (line: string): string | undefined => {
-  const beforePath = line.slice(0, line.indexOf('"'));
-  const open = beforePath.indexOf("<");
-  const close = beforePath.indexOf(">", open);
-  if (open === -1 || close === -1) {
-    return undefined;
+const workingDirectory = (directory: string | undefined): WorkingDirectory => ({
+  anchor: {
+    state:
+      directory === undefined
+        ? { type: "unknown" }
+        : { type: "known", directory },
+  },
+  changes: [],
+});
+
+const changeWorkingDirectory = (
+  cwd: WorkingDirectory,
+  change: string,
+): WorkingDirectory =>
+  path.isAbsolute(change)
+    ? workingDirectory(change)
+    : { anchor: cwd.anchor, changes: cwd.changes.concat(change) };
+
+// Later annotations can resolve earlier records through their shared anchor;
+// each directory change creates an immutable location relative to that anchor.
+const observeWorkingDirectory = (cwd: WorkingDirectory, observed: string) => {
+  if (cwd.anchor.state.type === "known") {
+    return;
   }
-  const descriptor = beforePath.slice(0, open);
-  const last = descriptor.at(-1);
-  return descriptor.endsWith("AT_FDCWD") ||
-    (last !== undefined && last >= "0" && last <= "9")
-    ? // strace escapes the annotation like any other traced string.
-      decodeTraceString(beforePath.slice(open + 1, close))
-    : undefined;
+  const segments = path
+    .join(...cwd.changes)
+    .split(path.sep)
+    .filter((part) => part !== "" && part !== ".");
+  if (segments.includes("..")) {
+    return;
+  }
+  let original = observed;
+  for (const segment of segments.toReversed()) {
+    if (path.basename(original) !== segment) {
+      return;
+    }
+    original = path.dirname(original);
+  }
+  cwd.anchor.state = { type: "known", directory: original };
+};
+
+type ResolveTracePathOptions = {
+  value: string;
+  cwd: WorkingDirectory;
+  context: string;
+};
+
+const resolveTracePath = ({ value, cwd, context }: ResolveTracePathOptions) => {
+  if (path.isAbsolute(value)) {
+    return path.normalize(value);
+  }
+  switch (cwd.anchor.state.type) {
+    case "known":
+      return path.resolve(cwd.anchor.state.directory, ...cwd.changes, value);
+    case "unknown":
+      return panic(context);
+    default: {
+      cwd.anchor.state satisfies never;
+      return panic("Unhandled working-directory state");
+    }
+  }
+};
+
+const quotedArgument = (argument: string) => {
+  const match = /^"((?:\\.|[^"])*)"$/u.exec(argument);
+  return match === null ? undefined : decodeTraceString(match.at(1) ?? "");
+};
+
+type TraceContext = {
+  line: string;
+  call: NonNullable<ReturnType<typeof traceCall>>;
+  cwd: WorkingDirectory;
+};
+
+type TraceContextsOptions = {
+  trace: string;
+  root: string;
+};
+
+const traceContexts = ({
+  trace,
+  root,
+}: TraceContextsOptions): TraceContext[] => {
+  const records = joinedTraceRecords(trace);
+  const rootPid = tracePid(records.at(0) ?? "");
+  const owners = new Map<string, { cwd: WorkingDirectory }>();
+  const contexts: TraceContext[] = [];
+  for (const line of records) {
+    assertWholeRecord(line);
+    const pid = tracePid(line);
+    const call = traceCall(line);
+    if (pid === undefined || call === undefined) {
+      continue;
+    }
+    let owner = owners.get(pid);
+    if (owner === undefined) {
+      owner = {
+        cwd: workingDirectory(
+          pid === rootPid && call.syscall.type === "execution"
+            ? root
+            : undefined,
+        ),
+      };
+      owners.set(pid, owner);
+    }
+    const descriptor = call.args.at(0) ?? "";
+    const observed = descriptor.startsWith("AT_FDCWD<")
+      ? descriptorPath(descriptor)
+      : undefined;
+    if (observed !== undefined) {
+      observeWorkingDirectory(owner.cwd, observed);
+      owner.cwd = workingDirectory(observed);
+    }
+    if (call.syscall.type !== "process") {
+      contexts.push({ line, call, cwd: owner.cwd });
+      continue;
+    }
+    switch (call.syscall.operation) {
+      case "fork": {
+        const child = /\)\s+=\s+([1-9]\d*)\b/u.exec(line)?.at(1);
+        if (child !== undefined) {
+          owners.set(
+            child,
+            line.includes("CLONE_FS") ? owner : { cwd: owner.cwd },
+          );
+        }
+        break;
+      }
+      case "chdir": {
+        if (/\)\s+=\s+0\b/u.test(line)) {
+          const target =
+            quotedArgument(call.args.at(call.syscall.argument) ?? "") ??
+            panic("Successful chdir is missing its path");
+          owner.cwd = changeWorkingDirectory(owner.cwd, target);
+        }
+        break;
+      }
+      case "fchdir": {
+        if (/\)\s+=\s+0\b/u.test(line)) {
+          owner.cwd = workingDirectory(
+            descriptorPath(call.args.at(call.syscall.argument) ?? ""),
+          );
+        }
+        break;
+      }
+      default: {
+        call.syscall satisfies never;
+        return panic("Unhandled process trace operation");
+      }
+    }
+  }
+  return contexts;
 };
 
 const joinedTraceRecords = (trace: string): string[] => {
   const records: string[] = [];
-  const unfinished = new Map<string, string>();
+  const unfinished = new Map<string, { source: string; index: number }>();
   for (const line of trace.split("\n")) {
     const pid = tracePid(line);
     if (pid === undefined) {
       continue;
     }
     if (line.includes("<unfinished ...>")) {
-      unfinished.set(
-        pid,
-        line.slice(0, line.lastIndexOf("<unfinished ...>")).trimEnd(),
-      );
+      unfinished.set(pid, {
+        source: line.slice(0, line.lastIndexOf("<unfinished ...>")).trimEnd(),
+        index: records.length,
+      });
+      records.push("");
       continue;
     }
     const resumed = /^\s*\d+\s+<\.\.\.\s+\S+\s+resumed>(.*)$/u.exec(line);
     if (resumed !== null) {
       const start = unfinished.get(pid);
       if (start !== undefined) {
-        records.push(`${start}${resumed[1] ?? ""}`);
+        records[start.index] = `${start.source}${resumed[1] ?? ""}`;
         unfinished.delete(pid);
       }
       continue;
     }
     records.push(line);
+  }
+  if (unfinished.size > 0) {
+    panic("Incomplete syscall trace contains an unfinished call");
   }
   return records;
 };
@@ -792,19 +911,6 @@ export const gitInvocation = (args: readonly string[]) => {
   };
 };
 
-/**
- * The directory a `getdents` call lists. Every directory listing, whatever
- * API or child process makes it, reads its entries through this call, and
- * -yy names the directory behind the descriptor.
- */
-const listedDirectory = (line: string): string | undefined => {
-  const call = traceCall(line);
-  if (call?.syscall.type !== "directory") {
-    return undefined;
-  }
-  return descriptorPath(call.args.at(call.syscall.argument) ?? "");
-};
-
 /** The directories a scanning command lists, or undefined for any other. */
 const commandOperands = (
   executable: string,
@@ -840,120 +946,66 @@ const commandOperands = (
   return undefined;
 };
 
-type PendingScanRecord = {
-  scan: ScanRecord;
-  cwdChanges: string[];
+type CommandScansOptions = {
+  trace: string;
+  root: string;
+  testFile: string | undefined;
 };
 
-const invocationDirectory = (current: string, changes: readonly string[]) => {
-  let directory = current;
-  const relativeChange = path.join(...changes);
-  const segments = relativeChange
-    .split(path.sep)
-    .filter((part) => part !== "" && part !== ".");
-  if (
-    changes.some((change) => path.isAbsolute(change)) ||
-    segments.includes("..")
-  ) {
-    panic(
-      "Cannot resolve an invocation working directory across an unanchored directory change",
-    );
-  }
-  for (const segment of segments.toReversed()) {
-    if (path.basename(directory) !== segment) {
-      panic(
-        "Cannot resolve an invocation working directory from its later annotation",
-      );
-    }
-    directory = path.dirname(directory);
-  }
-  return directory;
-};
-
-const commandScans = (trace: string): ScanRecord[] => {
+const commandScans = ({
+  trace,
+  root,
+  testFile,
+}: CommandScansOptions): ScanRecord[] => {
   const scans: ScanRecord[] = [];
-  const workingDirectories = new Map<string, string>();
-  const pending = new Map<string, PendingScanRecord[]>();
-  for (const line of joinedTraceRecords(trace)) {
-    const pid = tracePid(line);
-    if (pid === undefined) {
-      continue;
-    }
-    const previousCwd = workingDirectories.get(pid);
-    const workingDirectoryChanged = updateWorkingDirectory(
-      line,
-      pid,
-      workingDirectories,
-    );
-    if (previousCwd === undefined && workingDirectoryChanged !== undefined) {
-      for (const record of pending.get(pid) ?? []) {
-        record.cwdChanges.push(workingDirectoryChanged);
+  for (const { line, call, cwd } of traceContexts({ trace, root })) {
+    if (call.syscall.type === "directory") {
+      const directory = descriptorPath(
+        call.args.at(call.syscall.argument) ?? "",
+      );
+      if (directory === undefined) {
+        if (/\)\s+=\s+-1\b/u.test(line)) {
+          continue;
+        }
+        panic("Directory listing is missing its descriptor path");
       }
-    }
-    const annotatedCwd = workingDirectories.get(pid);
-    if (annotatedCwd !== undefined) {
-      for (const record of pending.get(pid) ?? []) {
-        const originalCwd = path.isAbsolute(record.scan.directory)
-          ? annotatedCwd
-          : invocationDirectory(annotatedCwd, record.cwdChanges);
-        scans.push({
-          directory: path.resolve(originalCwd, record.scan.directory),
-        });
-      }
-      pending.delete(pid);
-    }
-    if (workingDirectoryChanged !== undefined) {
+      scans.push({
+        directory: resolveTracePath({
+          value: directory,
+          cwd,
+          context:
+            "cannot resolve the working directory of a directory listing",
+        }),
+        listing: true,
+      });
       continue;
     }
-    assertWholeRecord(line);
-    const listed = listedDirectory(line);
-    if (listed !== undefined) {
-      scans.push({ directory: listed, listing: true });
+    if (call.syscall.type !== "execution") {
       continue;
     }
-    const call = /execve\([^,]+, \[((?:.|\n)*?)\],/u.exec(line)?.[1];
-    if (call === undefined) {
-      continue;
-    }
-    const args = [...call.matchAll(/"((?:\\.|[^"\\])*)"/gu)].map((match) =>
-      decodeTraceString(match[1] ?? ""),
+    const argv = call.args.at(call.syscall.argv) ?? "";
+    const args = [...argv.matchAll(/"((?:\\.|[^"\\])*)"/gu)].map((match) =>
+      decodeTraceString(match.at(1) ?? ""),
     );
-    const executable = path.basename(args[0] ?? "");
+    const executable = path.basename(args.at(0) ?? "");
     const git = executable === "git" ? gitInvocation(args) : undefined;
-    const traced = workingDirectories.get(pid);
-    const cwd =
-      git === undefined || traced === undefined
-        ? traced
-        : path.resolve(traced, git.directory);
+    const invocationCwd =
+      git === undefined ? cwd : changeWorkingDirectory(cwd, git.directory);
     const operands = commandOperands(executable, args, git);
     if (operands === undefined) {
       continue;
     }
     for (const operand of operands.length === 0 ? ["."] : operands) {
-      // An untraced working directory resolves later; `git -C` still applies.
-      const directory =
-        git !== undefined && traced === undefined && !path.isAbsolute(operand)
-          ? path.join(git.directory, operand)
-          : operand;
-      const record = {
-        directory: cwd === undefined ? directory : path.resolve(cwd, directory),
-        ...(cwd === undefined ? { command: executable } : {}),
-      };
-      if (cwd === undefined) {
-        const records = pending.get(pid) ?? [];
-        records.push({ scan: record, cwdChanges: [] });
-        pending.set(pid, records);
-      } else {
-        scans.push(record);
-      }
+      scans.push({
+        directory: resolveTracePath({
+          value: operand,
+          cwd: invocationCwd,
+          context: `${testFile ?? "script test"}: cannot resolve the working directory of a scan by ${executable}`,
+        }),
+      });
     }
   }
-  return [
-    ...scans,
-    ...[...pending.values()].flatMap((records) =>
-      records.map(({ scan: pendingScan }) => pendingScan),
-    ),
-  ];
+  return scans;
 };
 
 export const uncoveredScans = ({
@@ -986,26 +1038,23 @@ export const uncoveredScans = ({
     ) {
       panic(`Invalid script test scan record: ${line}`);
     }
+    const directory = resolveTracePath({
+      value: parsed.directory,
+      cwd: workingDirectory(undefined),
+      context: "cannot resolve the working directory of a scan log record",
+    });
     if ("pattern" in parsed && typeof parsed.pattern === "string") {
       return {
-        directory: parsed.directory,
+        directory,
         pattern: parsed.pattern,
       };
     }
     return {
-      directory: parsed.directory,
+      directory,
     };
   };
   const records = scanLog.split("\n").filter(Boolean).map(parseRecord);
-  const commandRecords = commandScans(trace);
-  const unresolvedCommand = commandRecords.find(
-    (record) => record.command !== undefined,
-  )?.command;
-  if (unresolvedCommand !== undefined) {
-    panic(
-      `${testFile ?? "script test"}: cannot resolve the working directory of a scan by ${unresolvedCommand}`,
-    );
-  }
+  const commandRecords = commandScans({ trace, root, testFile });
   // A syscall trace cannot attribute a listing to the module resolver or
   // test code, so either requires structural coverage of the directory.
   return [...records, ...commandRecords].filter(
