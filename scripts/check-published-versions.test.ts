@@ -1031,7 +1031,7 @@ describe("release CLI output contract", () => {
       exit: 2,
       stdout: "",
       stderr:
-        "::error::npm-publish-lag: pass exactly one of --ref, --previous-release-of or --promoted-release-below\n",
+        "::error::npm-publish-lag: pass exactly one of --ref or --previous-release-of\n",
     });
     expect(
       await runLagCli({

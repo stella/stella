@@ -358,17 +358,6 @@ describe("promoted reference release resolution", () => {
     );
   });
 
-  test("the cut path resolves the newest promoted final below the cut version", () => {
-    const manifest = manifestOf({ "v0.9.70": T, "v0.9.71": null });
-    const runGit = stubGit({ manifest, versions: {} });
-    expect(
-      resolveRef(parseArgs(["--promoted-release-below", "0.9.72"]), runGit),
-    ).toBe("v0.9.70");
-    expect(() => parseArgs(["--promoted-release-below", "latest"])).toThrow(
-      /X\.Y\.Z/u,
-    );
-  });
-
   test("explicit ref semantics do not read VERSION, the manifest or tags", () => {
     expect(
       resolveRef(parseArgs(["--ref", "named-ref"]), () => {
@@ -381,9 +370,6 @@ describe("promoted reference release resolution", () => {
 describe("parseArgs", () => {
   test("needs exactly one ref source", () => {
     expect(() => parseArgs([])).toThrow(/exactly one/u);
-    expect(() =>
-      parseArgs(["--promoted-release-below", "1.2.3", "--ref", "HEAD"]),
-    ).toThrow(/exactly one/u);
     expect(() =>
       parseArgs(["--ref", "HEAD", "--previous-release-of", "HEAD"]),
     ).toThrow(/exactly one/u);
@@ -406,7 +392,6 @@ describe("parseArgs", () => {
       intervalSeconds: 30,
       packages: ["cli", "ui"],
       previousReleaseOf: undefined,
-      promotedReleaseBelow: undefined,
       ref: "abc",
     });
   });

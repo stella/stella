@@ -27,9 +27,11 @@ import {
   parseMaintenanceReleaseOptions,
   parseStableVersion,
   prepareMaintenanceReleaseFiles,
+  projectReleaseDates,
   readPendingChangesets,
   readPreviousRelease,
   refreshMaintenanceReleaseFiles,
+  refreshUnpromotedReleases,
   resolveGitHubToken,
   withFileRollback,
 } from "./prepare-maintenance-release";
@@ -847,7 +849,7 @@ describe("maintenance release preparation", () => {
     );
   });
 
-  test("keeps a previous tag already recorded as never promoted", () => {
+  test("a previous tag recorded as never promoted takes the date GitHub now gives it", () => {
     const root = mkdtempSync(nodePath.join(tmpdir(), "stella-release-"));
     roots.push(root);
     releaseFixture(root, `${JSON.stringify({ "v1.2.3": null }, null, 2)}\n`);
@@ -860,7 +862,66 @@ describe("maintenance release preparation", () => {
       ).trim(),
       rootDir: root,
     });
-    expect(readReleaseDates(root)).toEqual({ "v1.2.3": null });
+    expect(readReleaseDates(root)).toEqual({ "v1.2.3": PUBLISHED.publishedAt });
+  });
+
+  test("an unpromoted record GitHub now dates is refreshed, one still unpublished stays null", async () => {
+    const dates = {
+      "v1.2.0": "2026-01-01T00:00:00Z",
+      "v1.2.1": null,
+      "v1.2.2": null,
+      "v1.2.3": null,
+    };
+    const asked: string[] = [];
+    const refreshed = await refreshUnpromotedReleases({
+      dates,
+      previousTag: "v1.2.3",
+      readRelease: async (tag) => {
+        asked.push(tag);
+        return tag === "v1.2.2" ? PUBLISHED : UNPROMOTED;
+      },
+    });
+    // The previous final is read by the cut itself, never twice.
+    expect(asked).toEqual(["v1.2.1", "v1.2.2"]);
+    expect(refreshed).toEqual({ "v1.2.2": PUBLISHED.publishedAt });
+    expect(
+      projectReleaseDates({
+        dates,
+        previousRelease: UNPROMOTED,
+        previousTag: "v1.2.3",
+        refreshed,
+      }),
+    ).toEqual({
+      "v1.2.0": "2026-01-01T00:00:00Z",
+      "v1.2.1": null,
+      "v1.2.2": PUBLISHED.publishedAt,
+      "v1.2.3": null,
+    });
+  });
+
+  test("a failed lookup stops the cut unless the tag is older than the newest promoted release", async () => {
+    const dates = { "v1.2.0": "2026-01-01T00:00:00Z", "v1.1.0": null };
+    const failing = async (): Promise<typeof UNPROMOTED> => {
+      throw new MaintenanceReleaseError("GitHub is unreachable");
+    };
+    expect(
+      await refreshUnpromotedReleases({
+        dates,
+        previousTag: "v1.2.3",
+        readRelease: failing,
+      }),
+    ).toEqual({});
+    let rejected: unknown = null;
+    try {
+      await refreshUnpromotedReleases({
+        dates: { ...dates, "v1.2.1": null },
+        previousTag: "v1.2.3",
+        readRelease: failing,
+      });
+    } catch (error) {
+      rejected = error;
+    }
+    expect(rejected).toBeInstanceOf(MaintenanceReleaseError);
   });
 
   test("reads the publication date of a published release", async () => {
