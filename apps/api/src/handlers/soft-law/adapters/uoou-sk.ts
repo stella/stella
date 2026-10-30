@@ -21,7 +21,8 @@ import {
   type SoftLawSourceAdapter,
 } from "@/api/lib/legal-search/soft-law-types";
 
-import { listingOnlyCoverage } from "./listing-only";
+import { listingOnlyCoverage, selectorSourceFields } from "./listing-only";
+import { publisherUrl as sharedPublisherUrl } from "./publisher-url";
 
 const ORIGIN = "https://dataprotection.gov.sk";
 const INDEX_URL = `${ORIGIN}/sk/urad/o-nas/vyrocne-spravy/`;
@@ -45,20 +46,7 @@ const invalidItem = (message: string) =>
   Result.err(new SoftLawItemError({ message, tag: "invalid_document" }));
 const compact = (value: string) => value.replace(/\s+/gu, " ").trim();
 const publisherUrl = (value: string, base = ORIGIN) =>
-  Result.gen(function* () {
-    const parsed = Result.try(() => new URL(value, base));
-    if (
-      parsed.isErr() ||
-      parsed.value.origin !== ORIGIN ||
-      parsed.value.username ||
-      parsed.value.password ||
-      parsed.value.hash ||
-      /%2f|%5c|\\/iu.test(parsed.value.pathname)
-    ) {
-      return yield* invalid("Invalid ÚOOÚ SR publisher locator");
-    }
-    return Result.ok(parsed.value.href);
-  });
+  sharedPublisherUrl({ value, base, origin: ORIGIN, publisher: "ÚOOÚ SR" });
 
 type UoouSkReport = { title: string; url: string };
 type UoouSkListing = {
@@ -333,15 +321,10 @@ export const uoouSkAdapter = {
   ...listingOnlyCoverage(
     "The publisher serves one undated, unpaginated annual-report index and no count endpoint.",
   ),
-  sourceFields: {
-    status: "declared",
+  sourceFields: selectorSourceFields({
     fields: SOURCE_FIELD_DISPOSITIONS,
-    listSourceFields: (parts) => {
-      const $ = load(parts["index"] ?? "");
-      return SOURCE_FIELDS.filter(
-        (field) => $(FIELD_SELECTORS[field]).length > 0,
-      );
-    },
-  },
+    selectors: FIELD_SELECTORS,
+    part: "index",
+  }),
   sourceSurfaces: { surfaces: SOURCE_SURFACE_DISPOSITIONS },
 } as const satisfies SoftLawSourceAdapter;

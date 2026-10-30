@@ -24,7 +24,8 @@ import {
   type SoftLawSourceAdapter,
 } from "@/api/lib/legal-search/soft-law-types";
 
-import { listingOnlyCoverage } from "./listing-only";
+import { listingOnlyCoverage, selectorSourceFields } from "./listing-only";
+import { publisherUrl as sharedPublisherUrl } from "./publisher-url";
 
 const ORIGIN = "https://www.bfdi.bund.de";
 const HTML_TYPES = ["text/html", "application/xhtml+xml"] as const;
@@ -65,20 +66,7 @@ const invalid = (message: string) =>
   Result.err(new SoftLawIngestionError({ message }));
 const compact = (value: string) => value.replace(/\s+/gu, " ").trim();
 const publisherUrl = (value: string, base = ORIGIN) =>
-  Result.gen(function* () {
-    const parsed = Result.try(() => new URL(value, base));
-    if (
-      parsed.isErr() ||
-      parsed.value.origin !== ORIGIN ||
-      parsed.value.username ||
-      parsed.value.password ||
-      parsed.value.hash ||
-      /%2f|%5c|\\/iu.test(parsed.value.pathname)
-    ) {
-      return yield* invalid("Invalid BfDI publisher locator");
-    }
-    return Result.ok(parsed.value.href);
-  });
+  sharedPublisherUrl({ value, base, origin: ORIGIN, publisher: "BfDI" });
 
 export const parseBfdiListing = (html: string, url: string) =>
   Result.gen(function* () {
@@ -403,16 +391,11 @@ const BFDI_DEFINITION = {
   ...listingOnlyCoverage(
     "Topical publication pages provide no exhaustive count or date-slice interface.",
   ),
-  sourceFields: {
-    status: "declared",
+  sourceFields: selectorSourceFields({
     fields: SOURCE_FIELD_DISPOSITIONS,
-    listSourceFields: (parts) => {
-      const $ = load(parts["detail"] ?? "");
-      return Object.entries(FIELD_SELECTORS)
-        .filter(([, selector]) => $(selector).length > 0)
-        .map(([field]) => field);
-    },
-  },
+    selectors: FIELD_SELECTORS,
+    part: "detail",
+  }),
   sourceSurfaces: { surfaces: SOURCE_SURFACE_DISPOSITIONS },
 } as const satisfies Omit<SoftLawSourceAdapter, "discover" | "fetchDocument">;
 
