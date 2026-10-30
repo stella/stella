@@ -876,6 +876,418 @@ describe("desktop proof replay ownership", () => {
   }, 60_000);
 });
 
+test("generated artefact provenance census stays within its transition list", async () => {
+  const { checkArtefactProvenance } =
+    await import("./generated-artefact-provenance");
+  expect(checkArtefactProvenance({ root: repoRoot })).toEqual([]);
+});
+
+test("generated artefact provenance detector rejects new raw calls and writes", async () => {
+  const { artefactProvenanceGuardSelfTest, inspectArtefactGenerators } =
+    await import("./generated-artefact-provenance");
+  expect(artefactProvenanceGuardSelfTest()).toBe(true);
+  expect(
+    inspectArtefactGenerators({
+      file: "apps/api/src/unregistered.ts",
+      source:
+        'import { collectTanStackTextRun } from "@/api/lib/tanstack-ai-generate"; collectTanStackTextRun({});',
+    }),
+  ).toMatchObject({ modelImport: true, legacyCalls: 1 });
+});
+
+test("generated artefact provenance counts every dynamic-import invocation", async () => {
+  const { inspectArtefactGenerators, assessArtefactGenerator } =
+    await import("./generated-artefact-provenance");
+  const file = "apps/api/src/handlers/chat/generate-thread-title.ts";
+  const module = '"@/api/lib/tanstack-ai-generate"';
+  for (const source of [
+    `const m = await import(${module}); m.collectTanStackTextRun({}); m.collectTanStackTextRun({});`,
+    `const m = await import(${module}); const copy = m; const run = copy.collectTanStackTextRun; run({}); run({});`,
+    `const pending = import(${module}); pending.then(m => { m.collectTanStackTextRun({}); m.collectTanStackTextRun({}); });`,
+    `const { collectTanStackTextRun: run } = await import(${module}); run({}); run({});`,
+    `import(${module}).then(m => { m.collectTanStackTextRun({}); m.collectTanStackTextRun({}); });`,
+    `import(${module}).then(({ collectTanStackTextRun: run }) => { run({}); run({}); });`,
+  ]) {
+    const scanned = inspectArtefactGenerators({ file, source });
+    expect(scanned).toMatchObject({
+      modelImport: true,
+      legacyCalls: 2,
+      escapes: [],
+    });
+    expect(
+      assessArtefactGenerator({ file, scanned, ledger: { [file]: 1 } }),
+    ).toContain(
+      `${file}: raw generation count 2; migrate through generateArtefact and shrink the transition list`,
+    );
+  }
+});
+
+test("generated artefact provenance resolves model receivers through expression wrappers", async () => {
+  const { inspectArtefactGenerators, assessArtefactGenerator } =
+    await import("./generated-artefact-provenance");
+  const file = "apps/api/src/handlers/chat/generate-thread-title.ts";
+  const module = '"@/api/lib/tanstack-ai-generate"';
+  for (const { prefix, receiver } of [
+    { prefix: "export {};", receiver: `await import(${module})` },
+    { prefix: `import * as m from ${module};`, receiver: "m" },
+  ]) {
+    for (const expression of [
+      receiver,
+      `(${receiver})`,
+      `(${receiver}) as M`,
+      `(${receiver}) satisfies M`,
+      `(${receiver})!`,
+      `await (${receiver})`,
+    ]) {
+      for (const use of [
+        `(${expression}).collectTanStackTextRun({});`,
+        `(${expression})["collectTanStackTextRun"]({});`,
+        `const alias = (${expression}); alias.collectTanStackTextRun({});`,
+        `const { collectTanStackTextRun: fn } = (${expression}); fn({});`,
+      ]) {
+        const source = `${prefix} ${use}`;
+        const scanned = inspectArtefactGenerators({ file, source });
+        expect(scanned, source).toMatchObject({
+          modelImport: true,
+          legacyCalls: 1,
+          escapes: [],
+        });
+        expect(
+          assessArtefactGenerator({ file, scanned, ledger: {} }),
+          source,
+        ).toContain(
+          `${file}: raw generation count 1; migrate through generateArtefact and shrink the transition list`,
+        );
+      }
+    }
+  }
+});
+
+test("generated artefact provenance counts assignment aliases against the transition allowance", async () => {
+  const { inspectArtefactGenerators, assessArtefactGenerator } =
+    await import("./generated-artefact-provenance");
+  const file = "apps/api/src/handlers/chat/generate-thread-title.ts";
+  const imported =
+    'import { collectTanStackTextRun as raw } from "@/api/lib/tanstack-ai-generate";';
+  for (const alias of [
+    "let run; run = raw; run({});",
+    "let run; let next; next = run; run = raw; next({});",
+    "let run; run = (raw); run({});",
+  ]) {
+    const source = `${imported} raw({}); ${alias}`;
+    const scanned = inspectArtefactGenerators({ file, source });
+    expect(scanned, source).toMatchObject({ legacyCalls: 2, escapes: [] });
+    expect(
+      assessArtefactGenerator({ file, scanned, ledger: { [file]: 1 } }),
+      source,
+    ).toEqual([
+      `${file}: raw generation count 2; migrate through generateArtefact and shrink the transition list`,
+    ]);
+  }
+});
+
+test("generated artefact provenance rejects operation references that escape the census", async () => {
+  const { inspectArtefactGenerators, assessArtefactGenerator } =
+    await import("./generated-artefact-provenance");
+  const file = "apps/api/src/handlers/chat/generate-thread-title.ts";
+  const imported =
+    'import { collectTanStackTextRun as raw } from "@/api/lib/tanstack-ai-generate";';
+  for (const use of [
+    "consume(raw);",
+    "const holder = { run: raw };",
+    "const holder = { raw };",
+    "function expose() { return raw; }",
+    "const holder = [raw];",
+    "const holder = { ...raw };",
+    "export { raw };",
+    "export default raw;",
+    "export const exposed = raw;",
+    "const expose = () => raw;",
+    "raw.bind(null);",
+    "raw.call(null, {});",
+    "holder.run = raw;",
+    'holder["run"] = raw;',
+    "let run; run = raw; consume(run);",
+    "const run = raw; const holder = { run };",
+  ]) {
+    const source = `${imported}\n${use}`;
+    const scanned = inspectArtefactGenerators({ file, source });
+    expect(
+      assessArtefactGenerator({ file, scanned, ledger: {} }),
+      source,
+    ).toContain(
+      `${file}:2: model operation reference escapes the provenance census`,
+    );
+  }
+});
+
+test("generated artefact provenance follows namespace assignment aliases and ignores type-only references", async () => {
+  const { inspectArtefactGenerators, assessArtefactGenerator } =
+    await import("./generated-artefact-provenance");
+  const file = "apps/api/src/handlers/chat/generate-thread-title.ts";
+  const module = '"@/api/lib/tanstack-ai-generate"';
+  for (const source of [
+    `let m; m = await import(${module}); m.collectTanStackTextRun({});`,
+    `let m; m = await import(${module}); const { collectTanStackTextRun: run } = m; run({});`,
+    `import * as m from ${module}; let copy; copy = m; copy.collectTanStackTextRun({});`,
+    `import { collectTanStackTextRun as raw } from ${module}; type Run = typeof raw; raw({});`,
+    `import * as m from ${module}; type Module = typeof m; m.collectTanStackTextRun({});`,
+  ]) {
+    const scanned = inspectArtefactGenerators({ file, source });
+    expect(scanned, source).toMatchObject({
+      modelImport: true,
+      legacyCalls: 1,
+      escapes: [],
+    });
+    expect(
+      assessArtefactGenerator({ file, scanned, ledger: { [file]: 1 } }),
+      source,
+    ).toEqual([]);
+  }
+});
+
+test("generated artefact provenance rejects module reexports and unresolved computed bindings", async () => {
+  const { inspectArtefactGenerators, assessArtefactGenerator } =
+    await import("./generated-artefact-provenance");
+  const file = "apps/api/src/handlers/chat/generate-thread-title.ts";
+  const module = '"@/api/lib/tanstack-ai-generate"';
+  for (const source of [
+    `export {};\nexport { collectTanStackTextRun } from ${module};`,
+    `export {};\nexport * from ${module};`,
+    `export {};\nconst { [key]: run } = await import(${module}); run({});`,
+  ]) {
+    expect(
+      assessArtefactGenerator({
+        file,
+        scanned: inspectArtefactGenerators({ file, source }),
+        ledger: {},
+      }),
+      source,
+    ).toContain(
+      `${file}:2: model operation reference escapes the provenance census`,
+    );
+  }
+});
+
+test("generated artefact provenance reserves every object property for its exact owner", async () => {
+  const { inspectArtefactGenerators, assessArtefactGenerator } =
+    await import("./generated-artefact-provenance");
+  const owner = "apps/api/src/lib/ai-generation/provenance.ts";
+  const sibling = "apps/api/src/lib/ai-generation/provenance-reader.ts";
+  for (const property of [
+    "const row = { generationProvenance: value };",
+    "const generationProvenance = value; const row = { generationProvenance };",
+    'const row = { ["generationProvenance"]: value };',
+    "const row = { generationProvenance: table.generationProvenance };",
+    "const row = [{ nested: { generationProvenance: value } }];",
+    'import { projectThreadArtefactProvenance } from "@/api/lib/ai-generation/provenance"; projectThreadArtefactProvenance({ generationProvenance: value });',
+  ]) {
+    const source = `export {};\n${property}`;
+    expect(
+      assessArtefactGenerator({
+        file: sibling,
+        scanned: inspectArtefactGenerators({ file: sibling, source }),
+        ledger: {},
+      }),
+      source,
+    ).toEqual([`${sibling}:2: provenance writes belong to the artefact owner`]);
+    expect(
+      assessArtefactGenerator({
+        file: owner,
+        scanned: inspectArtefactGenerators({ file: owner, source }),
+        ledger: {},
+      }),
+      source,
+    ).toEqual([]);
+  }
+});
+
+test("generated artefact provenance declares exactly its module and table property owners", async () => {
+  const { PROVENANCE_PROPERTY_OWNERS } =
+    await import("./generated-artefact-provenance");
+  expect(PROVENANCE_PROPERTY_OWNERS).toEqual([
+    {
+      type: "module",
+      file: "apps/api/src/lib/ai-generation/provenance.ts",
+      reason: expect.stringMatching(/\S/u),
+    },
+    {
+      type: "table-definition",
+      file: "apps/api/src/db/schema/chat.ts",
+      table: "chat_threads",
+      binding: "chatThreads",
+      reason: expect.stringMatching(/\S/u),
+    },
+  ]);
+});
+
+test("generated artefact provenance permits only the direct chatThreads schema property", async () => {
+  const { inspectArtefactGenerators, assessArtefactGenerator } =
+    await import("./generated-artefact-provenance");
+  const file = "apps/api/src/db/schema/chat.ts";
+  const definition =
+    'export const chatThreads = pgTable("chat_threads", { generationProvenance: jsonb("generation_provenance") });';
+  expect(
+    assessArtefactGenerator({
+      file,
+      scanned: inspectArtefactGenerators({ file, source: definition }),
+      ledger: {},
+    }),
+  ).toEqual([]);
+  for (const source of [
+    `${definition}\nconst extra = { generationProvenance: value };`,
+    'export {};\nfunction local() { const chatThreads = pgTable("chat_threads", { generationProvenance: value }); }',
+    'export {};\nexport const chatThreads = pgTable("other_table", { generationProvenance: value });',
+    'export {};\nexport const other = pgTable("chat_threads", { generationProvenance: value });',
+    'export {};\nexport const chatThreads = pgTable("chat_threads", { nested: { generationProvenance: value } });',
+  ]) {
+    expect(
+      assessArtefactGenerator({
+        file,
+        scanned: inspectArtefactGenerators({ file, source }),
+        ledger: {},
+      }),
+      source,
+    ).toEqual([`${file}:2: provenance writes belong to the artefact owner`]);
+  }
+});
+
+test("generated artefact provenance enumerates value export names and ignores type exports", async () => {
+  const { exportedModelOperations } =
+    await import("./generated-artefact-provenance");
+  const file = "apps/api/src/lib/tanstack-ai-generate.ts";
+  for (const source of [
+    "const invoke = () => {}; export { invoke as generateAliased };",
+    'export { invoke as generateAliased } from "./provider";',
+    'export { type Definition as generateTypeOnly, invoke as generateAliased } from "./provider";',
+    'export type { Definition as generateTypeOnly } from "./provider"; const invoke = () => {}; export { invoke as generateAliased };',
+  ]) {
+    expect(exportedModelOperations({ file, source }), source).toEqual([
+      "generateAliased",
+    ]);
+  }
+});
+
+test("generated artefact provenance conservatively counts local bindings with tracked names", async () => {
+  const { inspectArtefactGenerators, assessArtefactGenerator } =
+    await import("./generated-artefact-provenance");
+  const file = "apps/api/src/handlers/chat/generate-thread-title.ts";
+  const imported =
+    'import { collectTanStackTextRun as raw } from "@/api/lib/tanstack-ai-generate";';
+  for (const use of [
+    "function invoke(raw) { raw({}); }",
+    "const invoke = (raw) => raw({});",
+    "{ const raw = unrelated; raw({}); }",
+    "try {} catch (raw) { raw({}); }",
+    "const run = raw; function invoke(run) { run({}); }",
+    "const run = raw; { const run = unrelated; run({}); }",
+  ]) {
+    const source = `${imported}\n${use}`;
+    const scanned = inspectArtefactGenerators({ file, source });
+    expect(scanned, source).toMatchObject({ legacyCalls: 1, escapes: [] });
+    expect(
+      assessArtefactGenerator({ file, scanned, ledger: { [file]: 1 } }),
+      source,
+    ).toEqual([]);
+  }
+});
+
+test("generated artefact provenance conservatively counts matching members without receiver dataflow", async () => {
+  const { inspectArtefactGenerators, assessArtefactGenerator } =
+    await import("./generated-artefact-provenance");
+  const file = "apps/api/src/handlers/chat/generate-thread-title.ts";
+  const source =
+    'import { collectTanStackTextRun as raw } from "@/api/lib/tanstack-ai-generate"; const unrelated = { raw: () => {} }; unrelated.raw({});';
+  const scanned = inspectArtefactGenerators({ file, source });
+  expect(scanned).toMatchObject({ legacyCalls: 1, escapes: [] });
+  expect(assessArtefactGenerator({ file, scanned, ledger: {} })).toEqual([
+    `${file}: raw generation count 1; migrate through generateArtefact and shrink the transition list`,
+  ]);
+});
+
+test("generated artefact provenance rejects new consumers and transition growth in a real diff", async () => {
+  const { checkArtefactProvenance } =
+    await import("./generated-artefact-provenance");
+  const { MODEL_OPERATION_BOUNDARIES } =
+    await import("../apps/api/src/lib/ai-generation/model-operation-registry");
+  const { default: operations } =
+    await import("./ownership/model-operation-callers");
+  withDirectory((root) => {
+    const write = (file: string, source: string) => {
+      mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+      writeFileSync(path.join(root, file), source);
+    };
+    const ledger = "scripts/generated-artefact-provenance-transition.json";
+    write(ledger, "{}");
+    const facade = "apps/api/src/lib/tanstack-ai-generate.ts";
+    write(
+      facade,
+      MODEL_OPERATION_BOUNDARIES.facade
+        .map((name) => `export const ${name} = () => {};`)
+        .join("\n"),
+    );
+    write(
+      "apps/api/src/lib/chat/tanstack-chat-runtime.ts",
+      MODEL_OPERATION_BOUNDARIES.runtime
+        .map((name) => `export const ${name} = () => {};`)
+        .join("\n"),
+    );
+    run(root, ["git", "init", "--quiet"]);
+    run(root, ["git", "add", "."]);
+    run(root, [
+      "git",
+      "-c",
+      "user.name=Fixture",
+      "-c",
+      "user.email=fixture@example.test",
+      "commit",
+      "-qm",
+      "base",
+    ]);
+    const check = () => checkArtefactProvenance({ root, base: "HEAD" });
+    expect(check()).toEqual([]);
+    const unknown = "apps/api/src/unregistered.ts";
+    write(
+      unknown,
+      'import { generateArtefact } from "@/api/lib/ai-generation/provenance"; generateArtefact({ generator: "example", sources: { decisionIds: [], inputs: [] }, generate: () => "text" });',
+    );
+    expect(
+      check().some((error) => error.includes("unregistered model generator")),
+    ).toBe(true);
+    rmSync(path.join(root, unknown));
+    const known = operations.owner[0];
+    write(
+      known,
+      'import { collectTanStackTextRun } from "@/api/lib/tanstack-ai-generate"; collectTanStackTextRun({});',
+    );
+    expect(
+      check().some((error) => error.includes("raw generation count 1")),
+    ).toBe(true);
+    write(ledger, JSON.stringify({ [known]: 1 }));
+    expect(check().some((error) => error.includes("may only shrink"))).toBe(
+      true,
+    );
+    rmSync(path.join(root, known));
+    write(ledger, "{}");
+    write(unknown, "db.update(table).set({ generationProvenance: {} });");
+    expect(
+      check().some((error) =>
+        error.includes("writes belong to the artefact owner"),
+      ),
+    ).toBe(true);
+    rmSync(path.join(root, unknown));
+    write(
+      facade,
+      `${readFileSync(path.join(root, facade), "utf-8")}\nexport const generateUnregistered = () => {};\n`,
+    );
+    expect(
+      check().some((error) =>
+        error.includes("registry does not match generation exports"),
+      ),
+    ).toBe(true);
+  });
+});
+
 describe("MCP OAuth channel literal ownership", () => {
   test("allows channel literals in the owner and rejects them in unrelated web files", async () => {
     const door = OWNERSHIP.find(({ id }) => id === "mcp-oauth-channel");

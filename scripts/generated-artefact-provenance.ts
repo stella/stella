@@ -1,0 +1,1002 @@
+import { panic } from "better-result";
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
+import ts from "typescript6";
+
+import {
+  MODEL_OPERATION_BOUNDARIES,
+  MODEL_OPERATION_NAMES,
+} from "../apps/api/src/lib/ai-generation/model-operation-registry.ts";
+import MODEL_OPERATIONS from "./ownership/model-operation-callers.ts";
+
+const ROOT = path.resolve(import.meta.dirname, "..");
+const LEDGER = "scripts/generated-artefact-provenance-transition.json";
+const MODEL_MODULES = new Set([
+  "apps/api/src/lib/tanstack-ai-generate",
+  "apps/api/src/lib/chat/tanstack-chat-runtime",
+]);
+const PROVENANCE_MODULE = "apps/api/src/lib/ai-generation/provenance";
+const SCAN_TOKENS = [
+  ...[...MODEL_MODULES, PROVENANCE_MODULE].map((module) =>
+    path.posix.basename(module),
+  ),
+  "generationProvenance",
+  "\\",
+];
+type ProvenancePropertyOwner =
+  | { type: "module"; file: string; reason: string }
+  | {
+      type: "table-definition";
+      file: string;
+      table: string;
+      binding: string;
+      reason: string;
+    };
+export const PROVENANCE_PROPERTY_OWNERS = [
+  {
+    type: "module",
+    file: `${PROVENANCE_MODULE}.ts`,
+    reason:
+      "The provenance owner constructs persisted values and their read projections.",
+  },
+  {
+    type: "table-definition",
+    file: "apps/api/src/db/schema/chat.ts",
+    table: "chat_threads",
+    binding: "chatThreads",
+    reason:
+      "Drizzle declares the provenance column in its canonical table schema.",
+  },
+] as const satisfies readonly ProvenancePropertyOwner[];
+
+const names = new Set<string>(MODEL_OPERATION_NAMES);
+const registered = new Set<string>(MODEL_OPERATIONS.owner);
+const implementations = new Set(
+  [...MODEL_MODULES, PROVENANCE_MODULE].map((name) => `${name}.ts`),
+);
+
+const modulePath = (file: string, specifier: string) =>
+  (specifier.startsWith("@/api/")
+    ? specifier.replace("@/api/", "apps/api/src/")
+    : path.posix.normalize(path.posix.join(path.posix.dirname(file), specifier))
+  ).replace(/\.(?:ts|js)$/u, "");
+
+type ScanOptions = { file: string; source: string };
+/** Count calls, including aliases/injected defaults, rather than grandfathering a file. */
+const bindingContains = (binding: ts.BindingName, name: string): boolean => {
+  if (ts.isIdentifier(binding)) {
+    return binding.text === name;
+  }
+  return binding.elements.some(
+    (element) =>
+      ts.isBindingElement(element) && bindingContains(element.name, name),
+  );
+};
+const shadowed = (node: ts.Node, name: string) => {
+  for (let scope = node.parent; !ts.isSourceFile(scope); scope = scope.parent) {
+    if (
+      (ts.isArrowFunction(scope) ||
+        ts.isFunctionExpression(scope) ||
+        ts.isFunctionDeclaration(scope) ||
+        ts.isMethodDeclaration(scope)) &&
+      scope.parameters.some((parameter) =>
+        bindingContains(parameter.name, name),
+      )
+    ) {
+      return true;
+    }
+    if (ts.isFunctionExpression(scope) && scope.name?.text === name) {
+      return true;
+    }
+    if (
+      ts.isBlock(scope) &&
+      scope.statements.some(
+        (statement) =>
+          (ts.isFunctionDeclaration(statement) &&
+            statement.name?.text === name) ||
+          (ts.isVariableStatement(statement) &&
+            statement.declarationList.declarations.some((declaration) =>
+              bindingContains(declaration.name, name),
+            )),
+      )
+    ) {
+      return true;
+    }
+  }
+  return false;
+};
+type WrappedOptions = {
+  node: ts.Node;
+  wrappers: ReadonlySet<string>;
+  wrapperNamespaces: ReadonlySet<string>;
+};
+const wrapped = ({ node, wrappers, wrapperNamespaces }: WrappedOptions) => {
+  for (
+    let callback = node.parent;
+    !ts.isSourceFile(callback);
+    callback = callback.parent
+  ) {
+    let property: ts.ObjectLiteralElementLike;
+    if (ts.isMethodDeclaration(callback)) {
+      property = callback;
+    } else if (
+      (ts.isArrowFunction(callback) || ts.isFunctionExpression(callback)) &&
+      ts.isPropertyAssignment(callback.parent)
+    ) {
+      property = callback.parent;
+    } else {
+      continue;
+    }
+    if (
+      !(ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)) ||
+      property.name.text !== "generate" ||
+      !ts.isObjectLiteralExpression(property.parent)
+    ) {
+      continue;
+    }
+    const call = property.parent.parent;
+    if (
+      !ts.isCallExpression(call) ||
+      !call.arguments.includes(property.parent)
+    ) {
+      continue;
+    }
+    const callee = call.expression;
+    if (
+      ts.isIdentifier(callee) &&
+      wrappers.has(callee.text) &&
+      !shadowed(call, callee.text)
+    ) {
+      return true;
+    }
+    if (
+      ts.isPropertyAccessExpression(callee) &&
+      ts.isIdentifier(callee.expression) &&
+      wrapperNamespaces.has(callee.expression.text) &&
+      callee.name.text === "generateArtefact" &&
+      !shadowed(call, callee.expression.text)
+    ) {
+      return true;
+    }
+  }
+  return false;
+};
+
+type ModelBindings = {
+  file: string;
+  bindings: ReadonlySet<string>;
+  namespaces: ReadonlySet<string>;
+};
+type ModelReferenceKind = "module" | "operation" | "continuation";
+type ModelReference = ReadonlySet<ModelReferenceKind>;
+const combineModelReferences = (
+  references: readonly ModelReference[],
+): ModelReference => new Set(references.flatMap((reference) => [...reference]));
+const memberOf = (expression: ts.Expression) => {
+  if (ts.isPropertyAccessExpression(expression)) {
+    return { receiver: expression.expression, name: expression.name.text };
+  }
+  if (ts.isElementAccessExpression(expression)) {
+    return {
+      receiver: expression.expression,
+      name: ts.isStringLiteral(expression.argumentExpression)
+        ? expression.argumentExpression.text
+        : undefined,
+    };
+  }
+  return undefined;
+};
+/** Resolve module receivers and operation values through the same expression graph. */
+const modelReference = ({ file, bindings, namespaces }: ModelBindings) => {
+  const resolve = (expression: ts.Expression): ModelReference => {
+    if (ts.isIdentifier(expression)) {
+      const kinds = new Set<ModelReferenceKind>();
+      if (namespaces.has(expression.text)) {
+        kinds.add("module");
+      }
+      if (bindings.has(expression.text)) {
+        kinds.add("operation");
+      }
+      return kinds;
+    }
+    if (
+      ts.isParenthesizedExpression(expression) ||
+      ts.isAwaitExpression(expression) ||
+      ts.isAsExpression(expression) ||
+      ts.isSatisfiesExpression(expression) ||
+      ts.isNonNullExpression(expression) ||
+      ts.isTypeAssertionExpression(expression)
+    ) {
+      return resolve(expression.expression);
+    }
+    if (ts.isConditionalExpression(expression)) {
+      return combineModelReferences([
+        resolve(expression.whenTrue),
+        resolve(expression.whenFalse),
+      ]);
+    }
+    if (ts.isBinaryExpression(expression)) {
+      return combineModelReferences([
+        resolve(expression.left),
+        resolve(expression.right),
+      ]);
+    }
+    const member = memberOf(expression);
+    if (member !== undefined) {
+      const kinds = new Set<ModelReferenceKind>();
+      const receiver = resolve(member.receiver);
+      if (receiver.has("module")) {
+        if (member.name === "then") {
+          kinds.add("continuation");
+        } else if (member.name === undefined || names.has(member.name)) {
+          kinds.add("operation");
+        }
+      }
+      if (member.name !== undefined && bindings.has(member.name)) {
+        kinds.add("operation");
+      }
+      return kinds;
+    }
+    if (
+      ts.isCallExpression(expression) &&
+      expression.expression.kind === ts.SyntaxKind.ImportKeyword
+    ) {
+      const specifier = expression.arguments.at(0);
+      if (
+        specifier !== undefined &&
+        ts.isStringLiteral(specifier) &&
+        MODEL_MODULES.has(modulePath(file, specifier.text))
+      ) {
+        return new Set(["module"]);
+      }
+    }
+    return new Set();
+  };
+  return resolve;
+};
+type ImportedBindingOptions = {
+  node: ts.Node;
+  resolve: ReturnType<typeof modelReference>;
+};
+const importedModelBinding = ({ node, resolve }: ImportedBindingOptions) => {
+  if (
+    ts.isVariableDeclaration(node) &&
+    node.initializer !== undefined &&
+    resolve(node.initializer).has("module")
+  ) {
+    return node.name;
+  }
+  if (!ts.isParameter(node)) {
+    return undefined;
+  }
+  const callback = node.parent;
+  const call = callback.parent;
+  if (
+    !(ts.isArrowFunction(callback) || ts.isFunctionExpression(callback)) ||
+    callback.parameters.at(0) !== node ||
+    !ts.isCallExpression(call) ||
+    call.arguments.at(0) !== callback
+  ) {
+    return undefined;
+  }
+  return resolve(call.expression).has("continuation") ? node.name : undefined;
+};
+type BindModuleOptions = {
+  binding: ts.BindingName;
+  bindings: Set<string>;
+  namespaces: Set<string>;
+};
+const bindModelModule = ({
+  binding,
+  bindings,
+  namespaces,
+}: BindModuleOptions) => {
+  if (ts.isIdentifier(binding)) {
+    const changed = !namespaces.has(binding.text);
+    namespaces.add(binding.text);
+    return changed;
+  }
+  let changed = false;
+  for (const element of binding.elements) {
+    if (!ts.isBindingElement(element) || !ts.isIdentifier(element.name)) {
+      continue;
+    }
+    const property = element.propertyName ?? element.name;
+    if (
+      (ts.isIdentifier(property) || ts.isStringLiteral(property)) &&
+      names.has(property.text)
+    ) {
+      changed ||= !bindings.has(element.name.text);
+      bindings.add(element.name.text);
+    }
+  }
+  return changed;
+};
+
+const isAliasDeclaration = (
+  node: ts.Node,
+): node is
+  ts.VariableDeclaration | ts.ParameterDeclaration | ts.BindingElement =>
+  ts.isVariableDeclaration(node) ||
+  ts.isParameter(node) ||
+  ts.isBindingElement(node);
+
+const followedModuleBinding = (binding: ts.BindingName): boolean => {
+  if (ts.isIdentifier(binding)) {
+    return true;
+  }
+  return (
+    ts.isObjectBindingPattern(binding) &&
+    binding.elements.every(
+      (element) =>
+        !element.dotDotDotToken &&
+        ts.isIdentifier(element.name) &&
+        (element.propertyName === undefined ||
+          ts.isIdentifier(element.propertyName) ||
+          ts.isStringLiteral(element.propertyName)),
+    )
+  );
+};
+
+const isExportedAlias = (node: ts.Node): boolean =>
+  ts.isVariableDeclaration(node) &&
+  ts.isVariableDeclarationList(node.parent) &&
+  ts.isVariableStatement(node.parent.parent) &&
+  (node.parent.parent.modifiers?.some(
+    (modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword,
+  ) ??
+    false);
+
+/** Every forwarded value must terminate in a counted call or a tracked alias. */
+const accountedModelReference = (
+  node: ts.Expression,
+  resolve: ReturnType<typeof modelReference>,
+): boolean => {
+  const parent = node.parent;
+  if (
+    ts.isBinaryExpression(node) &&
+    node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+    ts.isIdentifier(node.left) &&
+    ts.isExpressionStatement(parent)
+  ) {
+    return true;
+  }
+  if (
+    ts.isParenthesizedExpression(parent) ||
+    ts.isAwaitExpression(parent) ||
+    ts.isAsExpression(parent) ||
+    ts.isSatisfiesExpression(parent) ||
+    ts.isNonNullExpression(parent) ||
+    ts.isTypeAssertionExpression(parent)
+  ) {
+    return parent.expression === node;
+  }
+  if (ts.isConditionalExpression(parent)) {
+    return parent.whenTrue === node || parent.whenFalse === node;
+  }
+  if (ts.isBinaryExpression(parent)) {
+    if (parent.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+      return (
+        ts.isIdentifier(parent.left) &&
+        (resolve(parent.right).has("operation") ||
+          resolve(parent.right).has("module"))
+      );
+    }
+    return (
+      parent.operatorToken.kind < ts.SyntaxKind.FirstAssignment ||
+      parent.operatorToken.kind > ts.SyntaxKind.LastAssignment
+    );
+  }
+  if (ts.isCallExpression(parent) && parent.expression === node) {
+    return resolve(node).has("operation") || resolve(node).has("continuation");
+  }
+  if (
+    (ts.isPropertyAccessExpression(parent) ||
+      ts.isElementAccessExpression(parent)) &&
+    parent.expression === node
+  ) {
+    return resolve(node).has("module");
+  }
+  if (isAliasDeclaration(parent) && parent.initializer === node) {
+    return (
+      !isExportedAlias(parent) &&
+      ((resolve(node).has("operation") && ts.isIdentifier(parent.name)) ||
+        (resolve(node).has("module") && followedModuleBinding(parent.name)))
+    );
+  }
+  return false;
+};
+
+const isBindingName = (node: ts.Expression): boolean => {
+  const parent = node.parent;
+  return (
+    (isAliasDeclaration(parent) && parent.name === node) ||
+    (ts.isBindingElement(parent) && parent.propertyName === node) ||
+    ((ts.isPropertyAccessExpression(parent) ||
+      ts.isPropertyAssignment(parent)) &&
+      parent.name === node) ||
+    ((ts.isFunctionDeclaration(parent) ||
+      ts.isFunctionExpression(parent) ||
+      ts.isMethodDeclaration(parent)) &&
+      parent.name === node) ||
+    (ts.isBinaryExpression(parent) &&
+      parent.left === node &&
+      parent.operatorToken.kind === ts.SyntaxKind.EqualsToken)
+  );
+};
+
+type OwnsProvenancePropertyOptions = {
+  file: string;
+  node: ts.PropertyAssignment | ts.ShorthandPropertyAssignment;
+};
+const ownsProvenanceProperty = ({
+  file,
+  node,
+}: OwnsProvenancePropertyOptions): boolean =>
+  PROVENANCE_PROPERTY_OWNERS.some((owner) => {
+    if (owner.file !== file) {
+      return false;
+    }
+    switch (owner.type) {
+      case "module":
+        return true;
+      case "table-definition": {
+        const object = node.parent;
+        const call = object.parent;
+        if (
+          !ts.isObjectLiteralExpression(object) ||
+          !ts.isCallExpression(call) ||
+          call.arguments.at(1) !== object
+        ) {
+          return false;
+        }
+        const table = call.arguments.at(0);
+        const callee = call.expression;
+        const declaration = call.parent;
+        if (
+          !ts.isVariableDeclaration(declaration) ||
+          !ts.isVariableDeclarationList(declaration.parent) ||
+          !ts.isVariableStatement(declaration.parent.parent) ||
+          !ts.isSourceFile(declaration.parent.parent.parent) ||
+          !declaration.parent.parent.modifiers?.some(
+            (modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword,
+          )
+        ) {
+          return false;
+        }
+        return (
+          table !== undefined &&
+          ts.isStringLiteral(table) &&
+          table.text === owner.table &&
+          ((ts.isIdentifier(callee) && callee.text === "pgTable") ||
+            (ts.isPropertyAccessExpression(callee) &&
+              callee.name.text === "pgTable")) &&
+          ts.isIdentifier(declaration.name) &&
+          declaration.name.text === owner.binding &&
+          declaration.initializer === call
+        );
+      }
+      default:
+        owner satisfies never;
+        return panic("Unknown provenance property owner");
+    }
+  });
+
+export const inspectArtefactGenerators = ({ file, source }: ScanOptions) => {
+  // Escaped strings still take the AST path; unrelated modules need no parse.
+  if (!SCAN_TOKENS.some((token) => source.includes(token))) {
+    return { modelImport: false, legacyCalls: 0, writes: [], escapes: [] };
+  }
+  const tree = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
+  const bindings = new Set<string>();
+  const namespaces = new Set<string>();
+  const wrappers = new Set<string>();
+  const wrapperNamespaces = new Set<string>();
+  let modelImport = false;
+  const visit = (node: ts.Node, action: (node: ts.Node) => void) => {
+    action(node);
+    ts.forEachChild(node, (child) => visit(child, action));
+  };
+  visit(tree, (node) => {
+    if (
+      !ts.isImportDeclaration(node) ||
+      !ts.isStringLiteral(node.moduleSpecifier)
+    ) {
+      return;
+    }
+    if (node.importClause?.phaseModifier === ts.SyntaxKind.TypeKeyword) {
+      return;
+    }
+    const module = modulePath(file, node.moduleSpecifier.text);
+    const imported = node.importClause?.namedBindings;
+    if (imported === undefined) {
+      return;
+    }
+    const model = MODEL_MODULES.has(module);
+    const provenance = module === PROVENANCE_MODULE;
+    if (ts.isNamespaceImport(imported)) {
+      if (model) {
+        namespaces.add(imported.name.text);
+        modelImport = true;
+      }
+      if (provenance) {
+        wrapperNamespaces.add(imported.name.text);
+      }
+      return;
+    }
+    for (const item of imported.elements) {
+      if (item.isTypeOnly) {
+        continue;
+      }
+      const name = item.propertyName?.text ?? item.name.text;
+      if (model && names.has(name)) {
+        bindings.add(item.name.text);
+        modelImport = true;
+      }
+      if (provenance && name === "generateArtefact") {
+        wrappers.add(item.name.text);
+        modelImport = true;
+      }
+    }
+  });
+  const resolve = modelReference({ file, bindings, namespaces });
+  // Resolve aliases to a fixed point, including a chain declared before its source.
+  let changed = true;
+  const resolveAlias = (node: ts.Node) => {
+    const imported = importedModelBinding({ node, resolve });
+    if (imported !== undefined) {
+      changed =
+        bindModelModule({ binding: imported, bindings, namespaces }) || changed;
+    }
+    let alias: { name: string; value: ts.Expression } | undefined;
+    if (
+      isAliasDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.initializer !== undefined
+    ) {
+      alias = { name: node.name.text, value: node.initializer };
+    } else if (
+      ts.isBinaryExpression(node) &&
+      node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+      ts.isIdentifier(node.left)
+    ) {
+      alias = { name: node.left.text, value: node.right };
+    }
+    if (alias === undefined) {
+      return;
+    }
+    const kinds = resolve(alias.value);
+    if (kinds.has("operation") && !bindings.has(alias.name)) {
+      bindings.add(alias.name);
+      changed = true;
+    }
+    if (kinds.has("module") && !namespaces.has(alias.name)) {
+      namespaces.add(alias.name);
+      changed = true;
+    }
+  };
+  while (changed) {
+    changed = false;
+    visit(tree, resolveAlias);
+  }
+  let legacyCalls = 0;
+  const writes: number[] = [];
+  visit(tree, (node) => {
+    if (ts.isCallExpression(node) && resolve(node).has("module")) {
+      modelImport = true;
+    }
+    if (
+      ts.isCallExpression(node) &&
+      resolve(node.expression).has("operation") &&
+      !wrapped({ node, wrappers, wrapperNamespaces })
+    ) {
+      legacyCalls++;
+    }
+    if (
+      (!ts.isPropertyAssignment(node) &&
+        !ts.isShorthandPropertyAssignment(node)) ||
+      !ts.isObjectLiteralExpression(node.parent)
+    ) {
+      return;
+    }
+    let key = "";
+    if (ts.isIdentifier(node.name) || ts.isStringLiteral(node.name)) {
+      key = node.name.text;
+    } else if (
+      ts.isComputedPropertyName(node.name) &&
+      ts.isStringLiteralLike(node.name.expression)
+    ) {
+      key = node.name.expression.text;
+    }
+    if (
+      key === "generationProvenance" &&
+      !ownsProvenanceProperty({ file, node })
+    ) {
+      writes.push(tree.getLineAndCharacterOfPosition(node.getStart()).line + 1);
+    }
+  });
+  const escapes = new Set<number>();
+  const inspectReferences = (node: ts.Node) => {
+    if (
+      ts.isImportDeclaration(node) ||
+      ts.isTypeNode(node) ||
+      (ts.isExportDeclaration(node) && node.isTypeOnly) ||
+      (ts.isExportSpecifier(node) && node.isTypeOnly)
+    ) {
+      return;
+    }
+    if (
+      ts.isExportDeclaration(node) &&
+      node.moduleSpecifier !== undefined &&
+      ts.isStringLiteral(node.moduleSpecifier) &&
+      MODEL_MODULES.has(modulePath(file, node.moduleSpecifier.text))
+    ) {
+      modelImport = true;
+      escapes.add(tree.getLineAndCharacterOfPosition(node.getStart()).line + 1);
+    }
+    if (ts.isExpression(node) && !isBindingName(node)) {
+      const kinds = resolve(node);
+      if (
+        (kinds.has("operation") ||
+          kinds.has("module") ||
+          kinds.has("continuation")) &&
+        !accountedModelReference(node, resolve)
+      ) {
+        escapes.add(
+          tree.getLineAndCharacterOfPosition(node.getStart()).line + 1,
+        );
+      }
+    }
+    ts.forEachChild(node, inspectReferences);
+  };
+  inspectReferences(tree);
+  return { modelImport, legacyCalls, writes, escapes: [...escapes] };
+};
+
+/** Generation dispatch exports follow the existing collect/generate/stream API. */
+export const exportedModelOperations = ({
+  file,
+  source,
+}: ScanOptions): string[] => {
+  const tree = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
+  const result: string[] = [];
+  for (const statement of tree.statements) {
+    if (ts.isExportDeclaration(statement)) {
+      if (
+        !statement.isTypeOnly &&
+        statement.exportClause !== undefined &&
+        ts.isNamedExports(statement.exportClause)
+      ) {
+        for (const element of statement.exportClause.elements) {
+          if (!element.isTypeOnly) {
+            result.push(element.name.text);
+          }
+        }
+      }
+      continue;
+    }
+    if (
+      !ts.canHaveModifiers(statement) ||
+      !ts
+        .getModifiers(statement)
+        ?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword)
+    ) {
+      continue;
+    }
+    if (ts.isFunctionDeclaration(statement) && statement.name !== undefined) {
+      result.push(statement.name.text);
+    }
+    if (ts.isVariableStatement(statement)) {
+      for (const declaration of statement.declarationList.declarations) {
+        if (ts.isIdentifier(declaration.name)) {
+          result.push(declaration.name.text);
+        }
+      }
+    }
+  }
+  return result
+    .filter((name) => /^(?:collect|generate|stream)/u.test(name))
+    .toSorted();
+};
+
+type Ledger = Record<string, number>;
+type AssessOptions = {
+  file: string;
+  scanned: ReturnType<typeof inspectArtefactGenerators>;
+  ledger: Ledger;
+};
+export const assessArtefactGenerator = ({
+  file,
+  scanned,
+  ledger,
+}: AssessOptions): string[] => {
+  const errors: string[] = [];
+  if (scanned.modelImport && !registered.has(file)) {
+    errors.push(`${file}: unregistered model generator`);
+  }
+  if (scanned.legacyCalls !== (ledger[file] ?? 0)) {
+    errors.push(
+      `${file}: raw generation count ${scanned.legacyCalls}; migrate through generateArtefact and shrink the transition list`,
+    );
+  }
+  for (const line of scanned.escapes) {
+    errors.push(
+      `${file}:${line}: model operation reference escapes the provenance census`,
+    );
+  }
+  for (const line of scanned.writes) {
+    errors.push(
+      `${file}:${line}: provenance writes belong to the artefact owner`,
+    );
+  }
+  return errors;
+};
+const parseLedger = (text: string): Ledger => {
+  const input: unknown = JSON.parse(text);
+  if (typeof input !== "object" || input === null || Array.isArray(input)) {
+    return panic("Invalid provenance transition list");
+  }
+  return Object.fromEntries(
+    Object.entries(input).map(([key, value]) => {
+      if (
+        typeof value !== "number" ||
+        !Number.isSafeInteger(value) ||
+        value <= 0
+      ) {
+        return panic("Invalid provenance transition count");
+      }
+      return [key, value] as const;
+    }),
+  );
+};
+const baseSources = (
+  root: string,
+  revision: string,
+  files: readonly string[],
+) => {
+  const result = Bun.spawnSync(["git", "cat-file", "--batch"], {
+    cwd: root,
+    stdin: Buffer.from(files.map((file) => `${revision}:${file}\n`).join("")),
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if (result.exitCode !== 0) {
+    return panic("Cannot read provenance transition base blobs");
+  }
+  const sources = new Map<string, string>();
+  let offset = 0;
+  for (const file of files) {
+    const lineEnd = result.stdout.indexOf(10, offset);
+    if (lineEnd < offset) {
+      return panic("Incomplete provenance transition blob header");
+    }
+    const header = result.stdout.subarray(offset, lineEnd).toString();
+    offset = lineEnd + 1;
+    if (header === `${revision}:${file} missing`) {
+      continue;
+    }
+    const match = /^[a-f0-9]+ blob ([0-9]+)$/u.exec(header);
+    const sizeText = match?.at(1);
+    if (sizeText === undefined) {
+      return panic("Unexpected provenance transition blob response");
+    }
+    const size = Number(sizeText);
+    if (
+      !Number.isSafeInteger(size) ||
+      size < 0 ||
+      result.stdout[offset + size] !== 10
+    ) {
+      return panic("Invalid provenance transition blob length");
+    }
+    sources.set(file, result.stdout.subarray(offset, offset + size).toString());
+    offset += size + 1;
+  }
+  return sources;
+};
+type CheckOptions = { root?: string; base?: string };
+export const checkArtefactProvenance = ({
+  root = ROOT,
+  base = "origin/main",
+}: CheckOptions = {}) => {
+  const ledger = parseLedger(readFileSync(path.join(root, LEDGER), "utf-8"));
+  const baseResult = Bun.spawnSync(["git", "merge-base", "HEAD", base], {
+    cwd: root,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if (baseResult.exitCode !== 0) {
+    return panic("Cannot establish provenance transition base");
+  }
+  const revision = baseResult.stdout.toString().trim();
+  const previousSources = baseSources(root, revision, [
+    LEDGER,
+    ...Object.keys(ledger),
+  ]);
+  const previous = previousSources.get(LEDGER);
+  const baseLedger = previous === undefined ? undefined : parseLedger(previous);
+  const errors: string[] = [];
+  const changed = Bun.spawnSync(
+    [
+      "git",
+      "diff",
+      "--name-only",
+      "--diff-filter=ACMR",
+      "-z",
+      revision,
+      "--",
+      "apps/api/src",
+    ],
+    { cwd: root, stdout: "pipe", stderr: "pipe" },
+  );
+  const untracked = Bun.spawnSync(
+    [
+      "git",
+      "ls-files",
+      "--others",
+      "--exclude-standard",
+      "-z",
+      "--",
+      "apps/api/src",
+    ],
+    { cwd: root, stdout: "pipe", stderr: "pipe" },
+  );
+  if (changed.exitCode !== 0 || untracked.exitCode !== 0) {
+    return panic("Cannot discover changed provenance consumers");
+  }
+  const files = new Set([
+    ...registered,
+    ...changed.stdout.toString().split("\0"),
+    ...untracked.stdout.toString().split("\0"),
+  ]);
+  for (const file of files) {
+    if (
+      !/\.[cm]?tsx?$/u.test(file) ||
+      file.includes("/tests/") ||
+      /\.(?:test|fixture)\.[cm]?tsx?$/u.test(file) ||
+      implementations.has(file) ||
+      !existsSync(path.join(root, file))
+    ) {
+      continue;
+    }
+    const scanned = inspectArtefactGenerators({
+      file,
+      source: readFileSync(path.join(root, file), "utf-8"),
+    });
+    errors.push(...assessArtefactGenerator({ file, scanned, ledger }));
+  }
+  for (const [module, boundary] of Object.entries(MODEL_OPERATION_BOUNDARIES)) {
+    const file =
+      module === "facade"
+        ? "apps/api/src/lib/tanstack-ai-generate.ts"
+        : "apps/api/src/lib/chat/tanstack-chat-runtime.ts";
+    const exported = exportedModelOperations({
+      file,
+      source: readFileSync(path.join(root, file), "utf-8"),
+    });
+    if (JSON.stringify(exported) !== JSON.stringify([...boundary].toSorted())) {
+      errors.push(
+        `${file}: model-operation boundary registry does not match generation exports`,
+      );
+    }
+  }
+  for (const [file, count] of Object.entries(ledger)) {
+    if (!registered.has(file) || !existsSync(path.join(root, file))) {
+      errors.push(`${file}: transition entry is not a registered generator`);
+    }
+    const oldSource =
+      baseLedger === undefined ? previousSources.get(file) : undefined;
+    const maximum =
+      baseLedger?.[file] ??
+      (oldSource === undefined
+        ? 0
+        : inspectArtefactGenerators({ file, source: oldSource }).legacyCalls);
+    if (count > maximum) {
+      errors.push(`${file}: provenance transition list may only shrink`);
+    }
+  }
+  return errors;
+};
+
+export const artefactProvenanceGuardSelfTest = () => {
+  const file = "apps/api/src/example.ts";
+  const source =
+    'import { generateTanStackTextForTask as raw } from "@/api/lib/tanstack-ai-generate";';
+  const cases = [
+    { code: `${source} raw({});`, count: 1 },
+    { code: `${source} const alias = raw; alias({}); alias({});`, count: 2 },
+    {
+      code: `${source} const make = ({ generate = raw }) => generate({});`,
+      count: 1,
+    },
+    {
+      code: `${source} function f(generate = raw) { return generate({}); }`,
+      count: 1,
+    },
+    {
+      code: 'import * as m from "@/api/lib/tanstack-ai-generate"; m["collectTanStackTextRun"]({});',
+      count: 1,
+    },
+    {
+      code: `${source} import { generateArtefact as wrap } from "@/api/lib/ai-generation/provenance"; wrap({ generate: () => raw({}) });`,
+      count: 0,
+    },
+    {
+      code: `${source} function generateArtefact(f) { return f(); } generateArtefact(() => raw({}));`,
+      count: 1,
+    },
+  ];
+  cases.push(
+    {
+      code: `${source} import { generateArtefact as wrap } from "@/api/lib/ai-generation/provenance"; wrap({ sources: raw({}), generate: () => "text" });`,
+      count: 1,
+    },
+    {
+      code: `${source} import { generateArtefact as wrap } from "@/api/lib/ai-generation/provenance"; function f(wrap) { return wrap({ generate: () => raw({}) }); }`,
+      count: 1,
+    },
+    {
+      code: `${source} import { generateArtefact as wrap } from "@/api/lib/ai-generation/provenance"; function f() { const wrap = (o) => o.generate(); return wrap({ generate: () => raw({}) }); }`,
+      count: 1,
+    },
+    {
+      code: `${source} import { generateArtefact as wrap } from "@/api/lib/ai-generation/provenance"; wrap({ generate() { return raw({}); } });`,
+      count: 0,
+    },
+    {
+      code: 'import * as m from "@/api/lib/tanstack-ai-generate"; const { generateTanStackTextForTask: run } = m; run({});',
+      count: 1,
+    },
+    {
+      code: 'import * as m from "@/api/lib/tanstack-ai-generate"; m[name]({});',
+      count: 1,
+    },
+    {
+      code: `${source} const alias = (true ? raw : raw) satisfies Function; alias({});`,
+      count: 1,
+    },
+    {
+      code: 'const m = await import("@/api/lib/tanstack-ai-generate"); m.generateTanStackTextForTask({});',
+      count: 1,
+    },
+  );
+  for (const item of cases) {
+    if (
+      inspectArtefactGenerators({ file, source: item.code }).legacyCalls !==
+      item.count
+    ) {
+      return false;
+    }
+  }
+  const unregistered = assessArtefactGenerator({
+    file,
+    ledger: {},
+    scanned: inspectArtefactGenerators({ file, source: `${source} raw({});` }),
+  });
+  return (
+    unregistered.some((error) =>
+      error.includes("unregistered model generator"),
+    ) &&
+    inspectArtefactGenerators({
+      file,
+      source: 'db.update(t).set({ ["generationProvenance"]: {} })',
+    }).writes.length === 1
+  );
+};
+
+if (import.meta.main) {
+  if (process.argv.includes("--self-test")) {
+    if (!artefactProvenanceGuardSelfTest()) {
+      process.exit(1);
+    }
+    console.log("generated artefact provenance detector: PASS");
+  } else {
+    const errors = checkArtefactProvenance();
+    for (const error of errors) {
+      console.error(error);
+    }
+    if (errors.length > 0) {
+      process.exit(1);
+    }
+    console.log("generated artefact provenance census: PASS");
+  }
+}

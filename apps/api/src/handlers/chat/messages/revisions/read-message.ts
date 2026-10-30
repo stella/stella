@@ -5,6 +5,7 @@ import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
 import { hasChatWorkspaceAccess } from "@/api/handlers/chat/chat-scope";
 import type { ChatWorkspaceAccess } from "@/api/handlers/chat/chat-scope";
 import { ACTIVE_CHAT_TURN_STATUSES } from "@/api/handlers/chat/chat-turn-state";
+import { projectThreadArtefactProvenance } from "@/api/lib/ai-generation/provenance";
 import type { SafeId } from "@/api/lib/branded-types";
 import { readThreadStoredContentSendModeOnTx } from "@/api/lib/chat/thread-stored-content-send-mode";
 import type {
@@ -88,6 +89,7 @@ export const readEditableMessageOnTx = async ({
       activeSkill: row.thread.activeSkill,
       title: row.thread.title,
       titleSource: row.thread.titleSource,
+      ...projectThreadArtefactProvenance(row.thread),
       rollbackToken: row.thread.rollbackToken,
       contextMatterIds: row.thread.contextMatterIds,
       dataWorkspaceIds: row.thread.dataWorkspaceIds,

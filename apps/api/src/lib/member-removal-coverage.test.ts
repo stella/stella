@@ -84,6 +84,8 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "chat_thread_compactions.summary",
   "chat_thread_names.target",
   "chat_threads.active_skill",
+  // Generator identifiers and corpus decision IDs contain no member identifiers.
+  "chat_threads.generation_provenance",
   "clause_variants.body",
   "clause_versions.body",
   "clauses.body",

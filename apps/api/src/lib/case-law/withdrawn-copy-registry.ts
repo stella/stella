@@ -229,6 +229,7 @@ const WITHDRAWN_COPY_REGISTRY = {
       "organizationId",
       "activeSkill",
       "titleSource",
+      "generationProvenance",
       "rollbackToken",
       "contextMatterIds",
       "dataWorkspaceIds",

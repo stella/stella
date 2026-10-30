@@ -1,0 +1,4 @@
+{
+  "add-column": "Nullable JSONB without a default adds metadata without a row rewrite or backfill, under 5s lock_timeout and 30s statement_timeout.",
+  "add-constraint": "The NOT VALID provenance check scans no retained rows; installation is catalog-only under 5s lock_timeout and 30s statement_timeout."
+}

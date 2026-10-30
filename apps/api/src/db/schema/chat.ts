@@ -13,6 +13,7 @@ import {
   CHAT_TURN_INTERACTION_TYPES,
   CHAT_TURN_INTERRUPTION_REASONS,
 } from "@/api/handlers/chat/chat-turn-state";
+import type { StoredArtefactProvenance } from "@/api/lib/ai-generation/provenance";
 import type { ChatRunReferenceState } from "@/api/lib/chat/run-log-reference-state";
 import {
   CHAT_THREAD_NAME_KIND,
@@ -131,6 +132,10 @@ export const chatThreads = p.pgTable(
         NonNullable<ChatSendRequest["activeSkill"]>
       >(),
     title: p.varchar({ length: CHAT_THREAD_TITLE_MAX_LENGTH }).notNull(),
+    /** Per-value generated or authored origin; null and missing slots are legacy. */
+    generationProvenance: p
+      .jsonb("generation_provenance")
+      .$type<StoredArtefactProvenance>(),
     // Provenance of `title`; gates whether background AI titling may replace it.
     // See ChatTitleSource in ./common. New threads start "default"; a rename
     // stamps "user"; the generator only replaces "default" and stamps "ai".
@@ -324,6 +329,22 @@ export const chatThreads = p.pgTable(
         table.id,
       )
       .where(sql`${table.compactionScheduledAt} IS NOT NULL`),
+    p.check(
+      "chat_threads_generation_provenance_valid",
+      sql`${table.generationProvenance} IS NULL OR ${table.generationProvenance} = 'null'::jsonb OR coalesce(
+  jsonb_typeof(${table.generationProvenance}) = 'object'
+  AND ${table.generationProvenance} - ARRAY['version', 'slots']::text[] = '{}'::jsonb
+  AND ${table.generationProvenance}->'version' = '1'::jsonb
+  AND jsonb_typeof(${table.generationProvenance}->'slots') = 'object'
+  AND NOT jsonb_path_exists(${table.generationProvenance}, '$.slots.keyvalue() ? (@.key == "")')
+  AND NOT jsonb_path_exists(${table.generationProvenance}, 'strict $.slots.* ? (@.type() != "object")', '{}'::jsonb, true)
+  AND NOT jsonb_path_exists(${table.generationProvenance}, '$.slots.* ? (@.type() != "object" || !exists(@.type) || @.type.type() != "string" || (@.type != "authored" && @.type != "generated"))')
+  AND NOT jsonb_path_exists(${table.generationProvenance}, '$.slots.* ? (@.type == "authored").keyvalue() ? (@.key != "type")')
+  AND NOT jsonb_path_exists(${table.generationProvenance}, '$.slots.* ? (@.type == "generated").keyvalue() ? (@.key != "type" && @.key != "generator" && @.key != "decisionIds" && @.key != "coverage")')
+  AND NOT jsonb_path_exists(${table.generationProvenance}, '$.slots.* ? (@.type == "generated" && (!exists(@.generator) || @.generator.type() != "string" || @.generator == "" || !exists(@.decisionIds) || @.decisionIds.type() != "array" || @.decisionIds.size() > 1024 || !exists(@.coverage) || @.coverage.type() != "string" || (@.coverage != "complete" && @.coverage != "legacy-input")))')
+  AND NOT jsonb_path_exists(${table.generationProvenance}, 'strict $.slots.* ? (@.type == "generated").decisionIds[*] ? (@.type() != "string" || !(@ like_regex "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"))', '{}'::jsonb, true),
+  false)`,
+    ),
     p.check(
       "chat_threads_reasoning_effort_selection_check",
       sql`${table.chatReasoningEffort} IS NULL OR (${table.chatModel} IS NOT NULL AND ${table.chatReasoningEffort} IN (${sql.join(REASONING_EFFORT_SQL_VALUES, sql`, `)}))`,
