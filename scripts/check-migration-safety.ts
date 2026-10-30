@@ -1195,6 +1195,7 @@ const INDEX_BUILD_HINT_PATTERN =
 // cursor loops and batch-looking DML cannot hide a data backfill in a DO block
 // or stored function.
 const ROW_LOOP_PATTERN = /\bLOOP\b/iu;
+const TRIGGER_ROUTINE_PREFIX_PATTERN = /\bRETURNS\s+trigger\b/iu;
 const RELATION_ACCESS_PATTERN =
   /\b(?:FROM|JOIN|UPDATE|INSERT\s+INTO|DELETE\s+FROM|MERGE\s+INTO)\b/iu;
 
@@ -1211,7 +1212,11 @@ const surfaceQuotedBody = ({
   const deferred = !DO_BLOCK_DOLLAR_QUOTE_PREFIX_PATTERN.test(prefix);
   const bodyStatements = parseStatements(body);
   const maskedBody = bodyStatements.map(({ text }) => text).join("\n");
+  // A trigger routine cannot be called; it runs only when its trigger fires on
+  // a write, and pre-deploy writes are refused on their own. Its loops are
+  // per-write work, not a migration step over existing rows.
   const rowLoop =
+    !(deferred && TRIGGER_ROUTINE_PREFIX_PATTERN.test(prefix)) &&
     ROW_LOOP_PATTERN.test(maskedBody) &&
     RELATION_ACCESS_PATTERN.test(maskedBody);
   const literalFragments = bodyStatements.flatMap(({ literals }) =>

@@ -5,10 +5,12 @@ CREATE OR REPLACE FUNCTION public.entity_feature_gate_graph() RETURNS jsonb LANG
 --> statement-breakpoint
 GRANT CREATE ON SCHEMA public TO stella_entity_gate;
 --> statement-breakpoint
+-- stella-migration-safety: reviewed grant-privileges - the migrator is already a member of the gate role; this only allows SET ROLE around the generated gate statements and withdraws it after them, as the gate migration does
 GRANT stella_entity_gate TO CURRENT_USER WITH SET TRUE;
 --> statement-breakpoint
 SET LOCAL ROLE stella_entity_gate;
 --> statement-breakpoint
+-- stella-migration-safety: reviewed security-definer - a gate routine generated from the schema's gate graph, replaced in place as its owner, the gate role, which is neither superuser nor BYPASSRLS; search_path is pinned to pg_catalog
 CREATE OR REPLACE FUNCTION public.entity_feature_gate_propagate()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER
 SET search_path = pg_catalog SET row_security = on
@@ -813,6 +815,7 @@ $function$;
 --> statement-breakpoint
 RESET ROLE;
 --> statement-breakpoint
+-- stella-migration-safety: reviewed grant-privileges - the migrator is already a member of the gate role; this only allows SET ROLE around the generated gate statements and withdraws it after them, as the gate migration does
 GRANT stella_entity_gate TO CURRENT_USER WITH SET FALSE;
 --> statement-breakpoint
 REVOKE CREATE ON SCHEMA public FROM stella_entity_gate;
@@ -825,6 +828,7 @@ CREATE POLICY "workspace_entity_feature" ON "public"."legal_list_item_source_dec
 --> statement-breakpoint
 CREATE POLICY "entity_feature_gate_maintenance" ON "public"."legal_list_item_source_decisions" AS PERMISSIVE FOR ALL TO "stella_entity_gate" USING (true) WITH CHECK (true);
 --> statement-breakpoint
+-- stella-migration-safety: reviewed grant-privileges - the migrator is already a member of the gate role; this only allows SET ROLE around the generated gate statements and withdraws it after them, as the gate migration does
 GRANT stella_entity_gate TO CURRENT_USER WITH SET TRUE;
 --> statement-breakpoint
 SET LOCAL ROLE stella_entity_gate;
@@ -833,6 +837,7 @@ GRANT EXECUTE ON FUNCTION public.entity_feature_gate_write(), public.entity_feat
 --> statement-breakpoint
 RESET ROLE;
 --> statement-breakpoint
+-- stella-migration-safety: reviewed grant-privileges - the migrator is already a member of the gate role; this only allows SET ROLE around the generated gate statements and withdraws it after them, as the gate migration does
 GRANT stella_entity_gate TO CURRENT_USER WITH SET FALSE;
 --> statement-breakpoint
 CREATE TRIGGER entity_feature_gate_write BEFORE INSERT OR UPDATE ON public."legal_list_item_source_decisions" FOR EACH ROW EXECUTE FUNCTION public.entity_feature_gate_write();
@@ -847,6 +852,7 @@ CREATE TRIGGER entity_feature_gate_update AFTER UPDATE ON public."legal_list_ite
 --> statement-breakpoint
 CREATE TRIGGER entity_feature_gate_delete AFTER DELETE ON public."legal_list_item_sources" REFERENCING OLD TABLE AS entity_feature_old_rows FOR EACH STATEMENT EXECUTE FUNCTION public.entity_feature_gate_propagate();
 --> statement-breakpoint
+-- stella-migration-safety: reviewed grant-privileges - the migrator is already a member of the gate role; this only allows SET ROLE around the generated gate statements and withdraws it after them, as the gate migration does
 GRANT stella_entity_gate TO CURRENT_USER WITH SET TRUE;
 --> statement-breakpoint
 SET LOCAL ROLE stella_entity_gate;
@@ -855,4 +861,5 @@ REVOKE EXECUTE ON FUNCTION public.entity_feature_gate_write(), public.entity_fea
 --> statement-breakpoint
 RESET ROLE;
 --> statement-breakpoint
+-- stella-migration-safety: reviewed grant-privileges - the migrator is already a member of the gate role; this only allows SET ROLE around the generated gate statements and withdraws it after them, as the gate migration does
 GRANT stella_entity_gate TO CURRENT_USER WITH SET FALSE;
