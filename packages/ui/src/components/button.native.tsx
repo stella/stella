@@ -136,6 +136,7 @@ export const Button = ({
     : BUTTON_VARIANT_TOKENS[variant ?? "default"];
   const press = PRESS[variant ?? "default"];
   const inactive = disabled || loading;
+  const dimmed = plain ? "" : "opacity-64";
   const selected =
     selectedProp === true || accessibilityState?.selected === true;
   const label = [
@@ -157,7 +158,7 @@ export const Button = ({
         plain ? "" : "flex-row",
         tokens.surface,
         shape.box,
-        inactive ? (plain ? "" : "opacity-64") : press.pressed,
+        inactive ? dimmed : press.pressed,
         selected ? press.selected : "",
         className ?? "",
       ]
