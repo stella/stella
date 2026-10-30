@@ -45,6 +45,7 @@ import { useFormatter } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
+import { loadRouteResource } from "@/lib/errors/route-resource";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
@@ -79,10 +80,14 @@ export const Route = createFileRoute(
   loader: async ({ context, params }) => {
     // Prime the invoice query the detail view suspends on so the fetch starts
     // during navigation instead of after the component mounts and suspends.
-    await ensureRouteQueryData(
-      context.queryClient,
-      invoiceByIdOptions(params.workspaceId, params.invoiceId),
-    );
+    await loadRouteResource({
+      ids: [params.workspaceId, params.invoiceId],
+      load: async () =>
+        await ensureRouteQueryData(
+          context.queryClient,
+          invoiceByIdOptions(params.workspaceId, params.invoiceId),
+        ),
+    });
   },
   remountDeps: ({ params }) => [params.workspaceId, params.invoiceId],
 });

@@ -20,6 +20,7 @@ import { AppProviders } from "@/app-providers";
 import { ApiVersionMismatchProvider } from "@/components/api-version-mismatch-refresh";
 import {
   DefaultErrorComponent,
+  DefaultNotFoundComponent,
   DefaultPendingComponent,
 } from "@/components/route-components";
 import { RouteProviderScopeBoundary } from "@/components/route-provider-scope/route-provider-scope";
@@ -103,7 +104,26 @@ export const Route = createRootRouteWithContext<{
     }),
   pendingComponent: () => <DefaultPendingComponent className="h-dvh" />,
   errorComponent: RootErrorComponent,
+  notFoundComponent: RootNotFoundComponent,
 });
+
+function RootNotFoundComponent() {
+  const appContext = Route.useRouteContext({
+    select: (context) => ({
+      analyticsValue: context.analyticsValue,
+      queryClient: context.queryClient,
+    }),
+  });
+
+  return (
+    <AppProviders
+      analyticsValue={appContext.analyticsValue}
+      queryClient={appContext.queryClient}
+    >
+      <DefaultNotFoundComponent />
+    </AppProviders>
+  );
+}
 
 function RootErrorComponent(props: ErrorComponentProps) {
   const appContext = Route.useRouteContext({

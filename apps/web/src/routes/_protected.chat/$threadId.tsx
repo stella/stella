@@ -7,6 +7,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { roleOptions } from "@/lib/auth-queries";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
+import { loadRouteResource } from "@/lib/errors/route-resource";
 import { mcpConnectorsOptions, skillsOptions } from "@/lib/knowledge/queries";
 import { hasOrganizationManagementAccess } from "@/lib/organization/role-assignment.logic";
 import { pageTitle } from "@/lib/page-title";
@@ -90,13 +91,15 @@ export const Route = createFileRoute("/_protected/chat/$threadId")({
     // awaited refetch would replace the seed with the server's (possibly
     // empty) set before the page's matter picker ever saw it. The loader
     // only fills a cold cache.
-    if (
-      context.queryClient.getQueryData(threadQueryOptions.queryKey) !==
-      undefined
-    ) {
-      return;
-    }
-    await ensureRouteQueryData(context.queryClient, threadQueryOptions);
+    // A thread that is not saved yet is a valid draft: /chat/new and
+    // "Build with AI" navigate to fresh ids before the first message.
+    // Only malformed or inaccessible ids become not-found.
+    await loadRouteResource({
+      ids: [params.threadId],
+      load: async () =>
+        context.queryClient.getQueryData(threadQueryOptions.queryKey) ??
+        (await ensureRouteQueryData(context.queryClient, threadQueryOptions)),
+    });
   },
   staticData: {
     presentation: routePresentation({ type: "entity", entity: "chat" }),
