@@ -127,7 +127,10 @@ describe("eu-ecj retention projection", () => {
       if (!hasUsableAst(ast)) {
         throw new Error("the adapter stored the stripped-text fallback");
       }
-      const projection = await euEcjRetention.project(decision.sourceRaw ?? "");
+      const projection = await euEcjRetention.project(
+        decision.sourceRaw ?? "",
+        { sourceRawObjects: decision.sourceRawObjects ?? {} },
+      );
       if (projection.type !== "source") {
         throw new Error(`expected a source projection, got ${projection.type}`);
       }
@@ -155,6 +158,7 @@ describe("eu-ecj retention projection", () => {
     );
     const projection = await euEcjRetention.project(
       encodeSourceRawEnvelope({ document: page ?? "" }),
+      { sourceRawObjects: {} },
     );
 
     if (projection.type !== "source" || typeof projection.source === "string") {
@@ -177,7 +181,9 @@ describe("eu-ecj retention projection", () => {
 
   test("an envelope without the manifestation is not one this source wrote", async () => {
     expect(
-      await euEcjRetention.project(encodeSourceRawEnvelope({ listing: "{}" })),
+      await euEcjRetention.project(encodeSourceRawEnvelope({ listing: "{}" }), {
+        sourceRawObjects: {},
+      }),
     ).toEqual({ type: "unreadable", reason: "missing-text-part" });
   });
 });

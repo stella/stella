@@ -62,7 +62,7 @@ const build = (recorded: RecordedRow): IngestionResult => {
 
 const project = async (sourceRaw: string) =>
   plNsaRetention.type === "checked"
-    ? await plNsaRetention.project(sourceRaw)
+    ? await plNsaRetention.project(sourceRaw, { sourceRawObjects: {} })
     : panic("pl-nsa is a checked source");
 
 const rows = await recordedRows();

@@ -15,11 +15,7 @@
 // parser-output-unchanged: [pl-uokik] @stll/time now resolves to the published 0.4.1 release with the same exports as the removed workspace copy.
 import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
 // parser-output-unchanged: imports the document AST from its package owner
-import type {
-  DocumentAst,
-  Inline,
-  ParagraphBlock,
-} from "@stll/legal-ast/document-ast";
+import type { DocumentAst, Inline } from "@stll/legal-ast/document-ast";
 import { parsePlainDate } from "@stll/time";
 
 import { PL_NCOURT_COURT_NAMES } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt-courts";
@@ -32,12 +28,34 @@ import {
 } from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
 import type {
   PlPdfSeparatedContent,
+  PlSnFootnoteReference,
   PlSnLine,
   PlSnRun,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
 
 /** Publisher recorded on the AST, so a stored document names where it came from. */
 const PL_UOKIK_SOURCE_SYSTEM = "decyzje.uokik.gov.pl";
+
+const qualifyFileFootnotes = (line: PlSnLine, file: number): PlSnLine => {
+  if (line.type === "blank" || file === 0) {
+    return line;
+  }
+  const qualify = (reference: PlSnFootnoteReference) => ({
+    ...reference,
+    noteId: `${reference.noteId}-file-${String(file + 1)}`,
+  });
+  return {
+    ...line,
+    runs: line.runs.map((run) =>
+      run.footnoteReference === undefined
+        ? run
+        : { ...run, footnoteReference: qualify(run.footnoteReference) },
+    ),
+    ...(line.footnote === undefined
+      ? {}
+      : { footnote: qualify(line.footnote) }),
+  };
+};
 
 export type ParsePlUokikDocumentInput = {
   /** Every decision file the record attaches, in the order it lists them. */
@@ -77,19 +95,9 @@ const plUokikDocumentContent = async (
       pdf,
       PL_PDF_PARAGRAPH_START.INDENT_OR_OUTDENT,
     );
-    body.push(...content.body);
+    body.push(...content.body.map((line) => qualifyFileFootnotes(line, file)));
     notes.push(
-      ...content.notes.map((line) =>
-        line.type === "text" && line.footnote !== undefined && file > 0
-          ? {
-              ...line,
-              footnote: {
-                ...line.footnote,
-                noteId: `${line.footnote.noteId}-file-${String(file + 1)}`,
-              },
-            }
-          : line,
-      ),
+      ...content.notes.map((line) => qualifyFileFootnotes(line, file)),
     );
   }
   return { body, notes };
@@ -101,21 +109,27 @@ export const plUokikDocumentLines = async (
 ): Promise<PlSnLine[]> => (await plUokikDocumentContent(pdfs)).body;
 
 const inlinesOfRuns = (runs: readonly PlSnRun[]): Inline[] =>
-  runs.map(({ bold, superscript, text }): Inline => {
-    const plain: Inline = { type: "text", text };
-    const raised: Inline =
-      superscript === true ? { type: "superscript", children: [plain] } : plain;
-    return bold ? { type: "bold", children: [raised] } : raised;
+  runs.map(({ bold, italic, superscript, text, footnoteReference }): Inline => {
+    let inline: Inline = { type: "text", text };
+    if (superscript === true) {
+      inline = { type: "superscript", children: [inline] };
+    }
+    if (italic === true) {
+      inline = { type: "italic", children: [inline] };
+    }
+    if (bold) {
+      inline = { type: "bold", children: [inline] };
+    }
+    return footnoteReference === undefined
+      ? inline
+      : {
+          type: "link",
+          href: `#${encodeURIComponent(footnoteReference.noteId)}`,
+          children: [inline],
+        };
   });
 
-/**
- * One paragraph block per footnote, in the order the notes are printed. The
- * note's number is its label, not the first word of its text.
- */
-const noteBlocksOf = (
-  notes: readonly PlSnLine[],
-  firstBlock: number,
-): ParagraphBlock[] => {
+const noteGroupsOf = (notes: readonly PlSnLine[]) => {
   const grouped = new Map<
     string,
     { label: string; noteId: string; lines: PlSnLine[] }
@@ -131,32 +145,37 @@ const noteBlocksOf = (
     group.lines.push(line);
     grouped.set(line.footnote.noteId, group);
   }
-  return [...grouped.values()]
-    .flatMap(({ label, noteId, lines }) => {
-      const runs = assemblePlSnParagraphs(lines).flat();
-      const plainText = runs
-        .map(({ text }) => text)
-        .join("")
-        .replace(/\s+/gu, " ")
-        .trim();
-      return plainText.length === 0
-        ? []
-        : [
-            {
-              id: "",
-              anchorId: noteId,
-              type: "paragraph" as const,
-              note: { type: "footnote" as const, label, noteId },
-              inlines: inlinesOfRuns(runs),
-              plainText,
-            },
-          ];
-    })
-    .map((block, index) => ({
-      ...block,
-      id: `b${String(firstBlock + index)}`,
-    }));
+  return [...grouped.values()];
 };
+
+const noteTextOf = (lines: readonly PlSnLine[]): string =>
+  assemblePlSnParagraphs(lines)
+    .flat()
+    .map(({ text }) => text)
+    .join("")
+    .replace(/\s+/gu, " ")
+    .trim();
+
+/**
+ * One paragraph block per footnote, in the order the notes are printed. The
+ * note's number is its label, not the first word of its text.
+ */
+const noteBlocksOf = (notes: readonly PlSnLine[]) =>
+  noteGroupsOf(notes).flatMap(({ label, noteId, lines }) => {
+    const runs = assemblePlSnParagraphs(lines).flat();
+    const plainText = noteTextOf(lines);
+    return plainText.length === 0
+      ? []
+      : [
+          {
+            anchorId: noteId,
+            type: "paragraph" as const,
+            note: { type: "footnote" as const, label, noteId },
+            inlines: inlinesOfRuns(runs),
+            plainText,
+          },
+        ];
+  });
 
 /**
  * The decision's document, or null where its files hold no text layer: a
@@ -170,6 +189,7 @@ export const parsePlUokikDocument = async (
   if (paragraphs.length === 0) {
     return null;
   }
+  const noteBlocks = noteBlocksOf(notes);
   const parsed = parsePlDecisionContent({
     caseNumber: input.caseNumber,
     // Poland issues no ECLI, and an authority's decision carries none.
@@ -181,24 +201,30 @@ export const parsePlUokikDocument = async (
     documentUrl: input.documentUrl ?? "",
     content: plSnParagraphsToHtml(paragraphs),
     superscripts: true,
+    footnoteIds: noteBlocks.map(({ note }) => note.noteId),
     keywords: input.keywords,
     statutes: [],
     documentId: input.documentId,
     sourceSystem: PL_UOKIK_SOURCE_SYSTEM,
   });
-  const noteBlocks = noteBlocksOf(notes, parsed.documentAst.blocks.length + 1);
-  return noteBlocks.length === 0
-    ? parsed
-    : {
-        documentAst: {
-          ...parsed.documentAst,
-          blocks: [...parsed.documentAst.blocks, ...noteBlocks],
-        },
-        fulltext: [
-          parsed.fulltext,
-          ...noteBlocks.map(({ plainText }) => plainText),
-        ].join("\n\n"),
-      };
+  const attachedNotes = noteBlocks.map((block, index) => ({
+    ...block,
+    id: `b${String(parsed.documentAst.blocks.length + index + 1)}`,
+  }));
+  const output =
+    noteBlocks.length === 0
+      ? parsed
+      : {
+          documentAst: {
+            ...parsed.documentAst,
+            blocks: [...parsed.documentAst.blocks, ...attachedNotes],
+          },
+          fulltext: [
+            parsed.fulltext,
+            ...noteBlocks.map(({ plainText }) => plainText),
+          ].join("\n\n"),
+        };
+  return output;
 };
 
 // ── Court rulings the register attaches ──────────────────

@@ -34,7 +34,7 @@ import {
   type PointMarkers,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-printed-lines";
 import {
-  buildBoldRanges,
+  buildFontStyleRanges,
   normalizeSpanText,
 } from "@/api/lib/legal-search/parsers/libpdf-utils";
 import type { PdfSpan } from "@/api/lib/legal-search/parsers/libpdf-utils";
@@ -42,11 +42,22 @@ import type { PdfSpan } from "@/api/lib/legal-search/parsers/libpdf-utils";
 /** Publisher recorded on the AST, so a stored document names where it came from. */
 const PL_SN_SOURCE_SYSTEM = "sn.pl";
 
-/** A run of characters sharing one font weight. */
+export type PlSnFootnoteReference = {
+  readonly label: string;
+  readonly noteId: string;
+};
+
+const footnoteReferenceOf = (label: string): PlSnFootnoteReference => ({
+  label,
+  noteId: `footnote-${label}`,
+});
+
+/** A run of characters sharing font emphasis. */
 export type PlSnRun = {
   text: string;
   bold: boolean;
-  footnoteReference?: string | undefined;
+  italic?: true | undefined;
+  footnoteReference?: PlSnFootnoteReference | undefined;
   /** Set raised in small type: an article's or a unit's index (`394¹`). */
   superscript?: true | undefined;
 };
@@ -63,8 +74,7 @@ export type PlSnLine =
       readonly type: "text";
       readonly runs: readonly PlSnRun[];
       readonly indented: boolean;
-      readonly footnote?:
-        { readonly label: string; readonly noteId: string } | undefined;
+      readonly footnote?: PlSnFootnoteReference | undefined;
     }
   | { readonly type: "blank" };
 
@@ -166,6 +176,7 @@ type ExtractedLine = {
 type LineMark =
   | {
       readonly type: "superscript";
+      readonly footnoteReference?: PlSnFootnoteReference | undefined;
       readonly after: number;
       readonly text: string;
     }
@@ -320,20 +331,39 @@ export const withoutRaisedReferenceMarkers = (
  * would miss it once the spacing is gone.
  */
 const runsOfLine = (line: ExtractedLine): PlSnRun[] => {
-  const ranges = buildBoldRanges([...line.spans], line.text);
+  const ranges = buildFontStyleRanges(line.spans, line.text);
   const runs = ranges.flatMap((range) => {
     const text = collapseSpacedLetters(line.text.slice(range.start, range.end));
-    return text.length === 0 ? [] : [{ text, bold: range.bold }];
+    return text.length === 0
+      ? []
+      : [
+          {
+            text,
+            bold: range.bold,
+            ...(range.italic ? { italic: true as const } : {}),
+          },
+        ];
   });
   return line.marks === undefined ? runs : withMarks(runs, line.marks);
 };
 
-const runOfMark = (mark: LineMark, bold: boolean): PlSnRun => {
+const runOfMark = (mark: LineMark, run: PlSnRun | undefined): PlSnRun => {
+  const style = {
+    bold: run?.bold ?? false,
+    ...(run?.italic === undefined ? {} : { italic: run.italic }),
+  };
   switch (mark.type) {
     case "superscript":
-      return { text: mark.text, bold, superscript: true };
+      return {
+        text: mark.text,
+        ...style,
+        superscript: true,
+        ...(mark.footnoteReference === undefined
+          ? {}
+          : { footnoteReference: mark.footnoteReference }),
+      };
     case "on-line":
-      return { text: mark.spaced ? ` ${mark.text}` : mark.text, bold };
+      return { text: mark.spaced ? ` ${mark.text}` : mark.text, ...style };
     default: {
       mark satisfies never;
       return panic(`Unhandled line mark: ${JSON.stringify(mark)}`);
@@ -364,16 +394,16 @@ const withMarks = (
   const pending = marks.toSorted((left, right) => left.after - right.after);
   const out: PlSnRun[] = [];
   let printed = 0;
-  const setDue = (bold: boolean): void => {
+  const setDue = (run: PlSnRun | undefined): void => {
     while (pending.length > 0 && (pending.at(0)?.after ?? 0) <= printed) {
       const mark = pending.shift();
       if (mark !== undefined) {
-        out.push(runOfMark(mark, bold));
+        out.push(runOfMark(mark, run));
       }
     }
   };
   for (const run of runs) {
-    setDue(run.bold);
+    setDue(run);
     let start = 0;
     let end = 0;
     for (const character of run.text) {
@@ -384,7 +414,7 @@ const withMarks = (
       printed += 1;
       if ((pending.at(0)?.after ?? Number.POSITIVE_INFINITY) <= printed) {
         out.push({ ...run, text: run.text.slice(start, end) });
-        setDue(run.bold);
+        setDue(run);
         start = end;
       }
     }
@@ -392,7 +422,7 @@ const withMarks = (
       out.push({ ...run, text: run.text.slice(start) });
     }
   }
-  setDue(runs.at(-1)?.bold ?? false);
+  setDue(runs.at(-1));
   return out;
 };
 
@@ -587,7 +617,7 @@ const runsWithReferences = (
     runs.push({
       text: span.text.trim(),
       bold: false,
-      footnoteReference: span.text.trim(),
+      footnoteReference: footnoteReferenceOf(span.text.trim()),
     });
     spans = [];
     start = cursor;
@@ -676,7 +706,7 @@ const readPagesWithFootnotes = (
       ) {
         const label = text.trim();
         if (labels.has(label)) {
-          currentNote = { label, noteId: `footnote-${label}` };
+          currentNote = footnoteReferenceOf(label);
         } else if (currentNote !== undefined) {
           notes.push({
             type: "text",
@@ -704,7 +734,7 @@ const readPagesWithFootnotes = (
               ...markers.map((label) => ({
                 text: label,
                 bold: false,
-                footnoteReference: label,
+                footnoteReference: footnoteReferenceOf(label),
               })),
             );
           }
@@ -774,12 +804,14 @@ export const assemblePlSnParagraphs = (
   // lands in, and the lines handed in are the caller's to keep.
   const copyRun = ({
     bold,
+    italic,
     text,
     footnoteReference,
     superscript,
   }: PlSnRun): PlSnRun => ({
     bold,
     text,
+    ...(italic === undefined ? {} : { italic }),
     ...(footnoteReference === undefined ? {} : { footnoteReference }),
     ...(superscript === undefined ? {} : { superscript }),
   });
@@ -813,6 +845,7 @@ export const assemblePlSnParagraphs = (
     const separator = brokenWord ? "" : " ";
     if (
       previous.bold === head.bold &&
+      previous.italic === head.italic &&
       previous.footnoteReference === undefined &&
       head.footnoteReference === undefined &&
       previous.superscript === undefined &&
@@ -820,11 +853,15 @@ export const assemblePlSnParagraphs = (
     ) {
       previous.text += separator + head.text;
     } else if (head.superscript === undefined) {
-      current.push({ text: separator + head.text, bold: head.bold });
+      current.push({ ...copyRun(head), text: separator + head.text });
     } else {
       // The line break's space stays on the baseline, out of the index.
       if (separator.length > 0) {
-        current.push({ text: separator, bold: head.bold });
+        current.push({
+          text: separator,
+          bold: head.bold,
+          ...(head.italic === undefined ? {} : { italic: head.italic }),
+        });
       }
       current.push(copyRun(head));
     }
@@ -848,12 +885,16 @@ export const plSnParagraphsToHtml = (
     .map(
       (runs) =>
         `<p>${runs
-          .map(({ bold, superscript, text }) => {
+          .map(({ bold, italic, superscript, text, footnoteReference }) => {
             const raised =
               superscript === true
                 ? `<sup>${escapeHtml(text)}</sup>`
                 : escapeHtml(text);
-            return bold ? `<b>${raised}</b>` : raised;
+            const emphasized = italic === true ? `<i>${raised}</i>` : raised;
+            const styled = bold ? `<b>${emphasized}</b>` : emphasized;
+            return footnoteReference === undefined
+              ? styled
+              : `<a href="#${encodeURIComponent(footnoteReference.noteId)}">${styled}</a>`;
           })
           .join("")}</p>`,
     )
@@ -1495,10 +1536,15 @@ const withoutRepeatedFurniture = (
   const inEdgeZone = (line: PdfTextLine, height: number): boolean =>
     line.bbox.y < height * EDGE_ZONE_RATIO ||
     line.bbox.y > height * (1 - EDGE_ZONE_RATIO);
-  // A contact footer may append this page's number. Other printed numbers
-  // distinguish the text, including amounts and the address's own digits.
+  // An explicitly labelled page count or a contact footer may append this
+  // page's number. Other digits distinguish amounts and the address itself.
   const keyOf = (line: PdfTextLine, page: number): string => {
     const text = normalizeSpanText(line.text).replace(/\s+/gu, " ").trim();
+    const labeledPage = /\b(?:page|strona) (?<number>\d{1,6})$/iu.exec(text)
+      ?.groups?.["number"];
+    if (labeledPage === String(page + 1)) {
+      return text.slice(0, -labeledPage.length).trim();
+    }
     const contact =
       text.includes("@") || text.includes("www.") || text.includes("://");
     const suffix = ` ${String(page + 1)}`;
@@ -1719,13 +1765,14 @@ const EXPONENT_UNIT = /(?:^|[^\p{L}])(?:mm|cm|dm|m|km|ha)$/u;
  */
 const noteReferencesOf = (
   line: ExtractedLine,
-): { text: string; plain: boolean }[] =>
+): { text: string; mark: SuperscriptMark; plain: boolean }[] =>
   line.marks === undefined
     ? []
-    : line.marks.flatMap(({ after, text, type }) => {
-        if (type !== "superscript") {
+    : line.marks.flatMap((mark) => {
+        if (mark.type !== "superscript") {
           return [];
         }
+        const { after, text } = mark;
         let printed = 0;
         let end = 0;
         for (const character of line.text) {
@@ -1741,6 +1788,7 @@ const noteReferencesOf = (
         return [
           {
             text,
+            mark,
             plain: !/\d$/u.test(before) && !EXPONENT_UNIT.test(before),
           },
         ];
@@ -1801,15 +1849,17 @@ const pageNotesOf = (
     if (label <= last || referred.length === 0) {
       return undefined;
     }
-    if (referred.some(({ plain }) => plain)) {
-      return opening;
-    }
     const setAsNotes =
       openedOnPage ||
       (before.labelSize !== undefined &&
         opening.labelSize !== undefined &&
         Math.abs(opening.labelSize - before.labelSize) <= SAME_NOTE_TYPE_PT);
-    return label === last + 1 && setAsNotes ? opening : undefined;
+    const qualified = referred.filter(
+      ({ plain }) => plain || (label === last + 1 && setAsNotes),
+    );
+    return qualified.length === 0
+      ? undefined
+      : { ...opening, references: qualified };
   };
   // Lines above the first note open none, so any numbered one in the same
   // column is a row the candidate continues.
@@ -1831,6 +1881,7 @@ const pageNotesOf = (
     return { body: lines, notes: [] };
   }
   const notes: (NoteOpening & { lines: ExtractedLine[] })[] = [];
+  const referenceTargets = new Map<LineMark, PlSnFootnoteReference>();
   for (const line of lines.slice(first)) {
     const opening = referencedOpening(line);
     if (opening !== undefined) {
@@ -1841,12 +1892,28 @@ const pageNotesOf = (
         "A footnote label is an unsigned integer of at most three digits",
       );
       openedOnPage = true;
+      for (const { mark } of opening.references) {
+        referenceTargets.set(mark, footnoteReferenceOf(opening.label));
+      }
       notes.push({ ...opening, lines: [] });
     } else if (line.text.length > 0) {
       notes.at(-1)?.lines.push(line);
     }
   }
-  return { body: lines.slice(0, first), notes };
+  const body = lines.slice(0, first).map((line) =>
+    line.marks === undefined
+      ? line
+      : {
+          ...line,
+          marks: line.marks.map((mark) => {
+            const target = referenceTargets.get(mark);
+            return target === undefined || mark.type !== "superscript"
+              ? mark
+              : { ...mark, footnoteReference: target };
+          }),
+        },
+  );
+  return { body, notes };
 };
 
 /** What the notes read before a page state about the next one. */
@@ -1922,10 +1989,7 @@ const readSetPages = ({
           ),
           labelSize: note.labelSize ?? read.labelSize,
         };
-        const footnote = {
-          label: note.label,
-          noteId: `footnote-${note.label}`,
-        };
+        const footnote = footnoteReferenceOf(note.label);
         notes.push(
           { type: "text", runs: note.runs, indented: true, footnote },
           ...note.lines.map((line): PlSnLine => ({
@@ -2030,11 +2094,14 @@ type ParsePlSnDecisionOutput = {
 export const parsePlSnDecisionPdf = async (
   input: ParsePlSnDecisionInput,
 ): Promise<ParsePlSnDecisionOutput> => {
-  const paragraphs = assemblePlSnParagraphs(
-    await extractPlSnLines(input.pdfBytes, PL_PDF_PARAGRAPH_START.INDENT, {
+  const lines = await extractPlSnLines(
+    input.pdfBytes,
+    PL_PDF_PARAGRAPH_START.INDENT,
+    {
       supremeCourt: { docket: input.caseNumber },
-    }),
+    },
   );
+  const paragraphs = assemblePlSnParagraphs(lines);
   return parsePlDecisionContent({
     caseNumber: input.caseNumber,
     // Poland issues no ECLI, so no Polish decision carries one.
@@ -2046,6 +2113,11 @@ export const parsePlSnDecisionPdf = async (
     documentUrl: input.documentUrl,
     content: plSnParagraphsToHtml(paragraphs),
     superscripts: true,
+    footnoteIds: lines.flatMap((line) =>
+      line.type === "text" && line.footnote !== undefined
+        ? [line.footnote.noteId]
+        : [],
+    ),
     // sn.pl indexes neither, so there is nothing to carry onto the AST.
     keywords: [],
     statutes: [],

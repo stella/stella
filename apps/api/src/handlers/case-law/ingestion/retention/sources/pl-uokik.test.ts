@@ -1,8 +1,8 @@
 /**
  * The pl-uokik projection against decisions the adapter builds from the
  * register's captured rows, pages and decision file. The register serves the
- * text only as a PDF stored beside the envelope, so no stored envelope holds
- * text the oracle could measure a document against.
+ * text as PDFs stored beside the envelope. The projection reads those original
+ * bytes independently of the parsed document.
  */
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
@@ -20,8 +20,10 @@ import {
   RETENTION_PROJECTION_FAILURE,
   RETENTION_TEXT_ABSENCE,
 } from "@/api/handlers/case-law/ingestion/retention/retention-policy";
+import { PDF_PROJECTION_MAX_BYTES } from "@/api/handlers/case-law/ingestion/retention/sources/pdf-text";
 import { plUokikRetention } from "@/api/handlers/case-law/ingestion/retention/sources/pl-uokik";
 import { readGzipJson } from "@/api/lib/gzip-json";
+import { encodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
 import { isRecord } from "@/api/lib/type-guards";
 
 const FIXTURES = new URL("../../adapters/__fixtures__/", import.meta.url);
@@ -63,11 +65,12 @@ const projectionOf = async (decision: IngestionResult) => {
   }
   return await plUokikRetention.project(
     decision.sourceRaw ?? panic("the decision stored no source raw"),
+    { sourceRawObjects: decision.sourceRawObjects ?? {} },
   );
 };
 
 describe("pl-uokik retention projection", () => {
-  test("a decision read from its PDF states that its text is a separate document", async () => {
+  test("a decision read from its PDF is checked against the original file", async () => {
     const page = await pageOf(WITH_RULINGS);
     const name =
       parsePlUokikDetail(page)?.fields.find(({ label }) => label === "Decyzja")
@@ -89,13 +92,15 @@ describe("pl-uokik retention projection", () => {
     // The document the pipeline would check exists, so the answer below is
     // what the check reports for it.
     expect(hasUsableAst(decision.documentAst)).toBe(true);
-    expect(await projectionOf(decision)).toEqual({
-      type: "no-text",
-      reason: RETENTION_TEXT_ABSENCE.SEPARATE_DOCUMENT,
-    });
+    const projection = await projectionOf(decision);
+    expect(projection.type).toBe("source");
+    if (projection.type !== "source" || typeof projection.source === "string") {
+      return expect.unreachable("The stored PDF has readable text");
+    }
+    expect(projection.source.paragraphs.join(" ")).toContain("nałożenia");
   });
 
-  test("a decision filed without a file answers the same", async () => {
+  test("a decision filed without a file has no sidecar to project", async () => {
     const entry = await entryOf(FILELESS);
     const built = await assemblePlUokikDecision({
       entry,
@@ -113,9 +118,48 @@ describe("pl-uokik retention projection", () => {
     if (plUokikRetention.type !== "checked") {
       panic("pl-uokik is declared checked");
     }
-    expect(await plUokikRetention.project("%PDF-1.4")).toEqual({
+    expect(
+      await plUokikRetention.project("%PDF-1.4", { sourceRawObjects: {} }),
+    ).toEqual({
       type: "unreadable",
       reason: RETENTION_PROJECTION_FAILURE.UNREADABLE_ENVELOPE,
     });
+  });
+});
+
+test("an attachment that is not a readable PDF is unverifiable", async () => {
+  if (plUokikRetention.type !== "checked") {
+    return expect.unreachable();
+  }
+  expect(
+    await plUokikRetention.project(encodeSourceRawEnvelope({ listing: "{}" }), {
+      sourceRawObjects: {
+        document: {
+          bytes: new TextEncoder().encode("not a PDF"),
+          contentType: "application/pdf",
+        },
+      },
+    }),
+  ).toEqual({
+    type: "unreadable",
+    reason: RETENTION_PROJECTION_FAILURE.UNREADABLE_DOCUMENT,
+  });
+});
+
+test("all attachments share the PDF projection byte budget", async () => {
+  if (plUokikRetention.type !== "checked") {
+    return expect.unreachable();
+  }
+  const bytes = new Uint8Array(Math.floor(PDF_PROJECTION_MAX_BYTES / 2) + 1);
+  expect(
+    await plUokikRetention.project(encodeSourceRawEnvelope({ listing: "{}" }), {
+      sourceRawObjects: {
+        first: { bytes, contentType: "application/pdf" },
+        second: { bytes, contentType: "application/pdf" },
+      },
+    }),
+  ).toEqual({
+    type: "no-text",
+    reason: RETENTION_TEXT_ABSENCE.OVER_CHECK_BUDGET,
   });
 });

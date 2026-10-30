@@ -125,11 +125,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.CZ_NSS]: {
-    version: 24,
+    version: 26,
     scope: {
       type: "all",
       reason:
-        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
+        "Re-read legacy, suffixed and Unicode Adobe Glyph List names from stored PDF bytes; extraction has no separate feature storage.",
     },
   },
   [ADAPTER_KEYS.CZ_US]: {
@@ -141,11 +141,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.SK_COURTS]: {
-    version: 20,
+    version: 21,
     scope: {
       type: "all",
       reason:
-        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
+        "Re-read legacy, suffixed and Unicode Adobe Glyph List names from stored PDF bytes; extraction has no separate feature storage.",
     },
   },
   [ADAPTER_KEYS.SK_US]: {
@@ -157,27 +157,27 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_COURTS]: {
-    version: 17,
+    version: 18,
     scope: {
       type: "all",
       reason:
-        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
+        "Re-read printed title order and opening, operative and signature roles from stored source; roles and block ordering have no independent feature storage.",
     },
   },
   [ADAPTER_KEYS.PL_SN]: {
-    version: 11,
+    version: 12,
     scope: {
       type: "all",
       reason:
-        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage. Read publisher page furniture and preserve document numbers and footnote targets from stored PDF text; these values have no separate feature storage.",
+        "Read publisher page furniture and preserve document numbers and footnote targets from stored PDF text alongside printed roles, title order, bold and italic emphasis; these values have no separate feature storage.",
     },
   },
   [ADAPTER_KEYS.PL_KIO]: {
-    version: 11,
+    version: 12,
     scope: {
       type: "all",
       reason:
-        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
+        "Re-read printed title order and opening, operative and signature roles from stored source; roles and block ordering have no independent feature storage.",
     },
   },
   [ADAPTER_KEYS.PL_TK]: {
@@ -197,11 +197,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_NCOURT]: {
-    version: 16,
+    version: 19,
     scope: {
       type: "all",
       reason:
-        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
+        "Re-read printed title order and opening, operative and signature roles from stored source; roles and block ordering have no independent feature storage.",
     },
   },
   [ADAPTER_KEYS.AT_COURTS]: {
@@ -325,11 +325,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_KIS]: {
-    version: 11,
+    version: 13,
     scope: {
       type: "all",
       reason:
-        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
+        "Re-read legacy, suffixed and Unicode Adobe Glyph List names from stored PDF bytes; extraction has no separate feature storage.",
     },
   },
   [ADAPTER_KEYS.PL_UODO]: {
@@ -341,19 +341,19 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_UOKIK]: {
-    version: 13,
+    version: 14,
     scope: {
       type: "all",
       reason:
-        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage. Read publisher page furniture and preserve document numbers and footnote targets from stored PDF text; these values have no separate feature storage.",
+        "Read publisher page furniture and preserve document numbers and footnote targets from stored PDF text alongside printed roles, title order, bold and italic emphasis; these values have no separate feature storage.",
     },
   },
   [ADAPTER_KEYS.CZ_UOHS]: {
-    version: 5,
+    version: 7,
     scope: {
       type: "all",
       reason:
-        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
+        "Re-read legacy, suffixed and Unicode Adobe Glyph List names from stored PDF bytes; extraction has no separate feature storage.",
     },
   },
 } as const satisfies ParserVersionScopes<

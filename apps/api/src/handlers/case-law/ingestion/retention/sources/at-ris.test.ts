@@ -81,7 +81,9 @@ const expectRetained = async (decision: IngestionResult) => {
   expect(hasUsableAst(ast)).toBe(true);
   const projection =
     atRisRetention.type === "checked"
-      ? await atRisRetention.project(decision.sourceRaw ?? "")
+      ? await atRisRetention.project(decision.sourceRaw ?? "", {
+          sourceRawObjects: decision.sourceRawObjects ?? {},
+        })
       : undefined;
   if (projection?.type !== "source") {
     throw new Error(
@@ -128,7 +130,9 @@ describe("RIS retention projection", () => {
     );
     const projection =
       atRisRetention.type === "checked"
-        ? await atRisRetention.project(decision.sourceRaw ?? "")
+        ? await atRisRetention.project(decision.sourceRaw ?? "", {
+            sourceRawObjects: decision.sourceRawObjects ?? {},
+          })
         : undefined;
     if (projection?.type !== "source") {
       throw new Error("the recorded decision projects publisher text");
@@ -154,6 +158,7 @@ describe("RIS retention projection", () => {
       atRisRetention.type === "checked"
         ? await atRisRetention.project(
             encodeSourceRawEnvelope({ listing: "{}", "document-xml": xml }),
+            { sourceRawObjects: {} },
           )
         : undefined;
     if (
@@ -179,12 +184,16 @@ describe("RIS retention projection", () => {
     if (atRisRetention.type !== "checked") {
       throw new Error("RIS decisions are checked");
     }
-    expect(await atRisRetention.project("not an envelope")).toEqual({
+    expect(
+      await atRisRetention.project("not an envelope", { sourceRawObjects: {} }),
+    ).toEqual({
       type: "unreadable",
       reason: "unreadable-envelope",
     });
     expect(
-      await atRisRetention.project(encodeSourceRawEnvelope({ listing: "{}" })),
+      await atRisRetention.project(encodeSourceRawEnvelope({ listing: "{}" }), {
+        sourceRawObjects: {},
+      }),
     ).toEqual({ type: "no-text", reason: "not-published" });
     expect(
       await atRisRetention.project(
@@ -192,6 +201,7 @@ describe("RIS retention projection", () => {
           listing: "{}",
           "document-xml": "<risdok><metadaten/></risdok>",
         }),
+        { sourceRawObjects: {} },
       ),
     ).toEqual({ type: "unreadable", reason: "missing-text-part" });
   });

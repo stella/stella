@@ -19,12 +19,14 @@ const toolsListBody = JSON.stringify({
 
 describe("fetchToolsListRaw authenticated omission evidence", () => {
   test("returns effective scopes and the exact omitted tools attested per reason", async () => {
+    const replayHeaders: (string | null)[] = [];
     const authorizationHeaders: (string | null)[] = [];
     let initializeVersion: string | undefined;
     const methods: string[] = [];
     const server = Bun.serve({
       port: 0,
       fetch: async (request) => {
+        replayHeaders.push(request.headers.get("Idempotency-Key"));
         if (request.method === "GET") {
           return new Response(null, { status: 405 });
         }
@@ -90,6 +92,8 @@ describe("fetchToolsListRaw authenticated omission evidence", () => {
         );
         expect(initializeVersion).toBe(CLI_VERSION);
       }
+      expect(replayHeaders.length).toBeGreaterThan(0);
+      expect(replayHeaders.every((header) => header === null)).toBe(true);
     } finally {
       void server.stop(true);
     }
@@ -243,9 +247,11 @@ describe("resources/read content policy", () => {
 
 describe("tools/call timeout policy", () => {
   test("a tool-specific finite deadline can exceed the generic deadline", async () => {
+    const replayHeaders: (string | null)[] = [];
     const server = Bun.serve({
       port: 0,
       fetch: async (request) => {
+        replayHeaders.push(request.headers.get("Idempotency-Key"));
         if (request.method === "GET") {
           return new Response(null, { status: 405 });
         }
@@ -276,6 +282,8 @@ describe("tools/call timeout policy", () => {
       expect(Result.isOk(await callTool({ ...input, timeoutMs: 100 }))).toBe(
         true,
       );
+      expect(replayHeaders.length).toBeGreaterThan(0);
+      expect(replayHeaders.every((header) => header === null)).toBe(true);
     } finally {
       void server.stop(true);
     }
@@ -284,6 +292,7 @@ describe("tools/call timeout policy", () => {
 
 describe("metadata operation timeout policy", () => {
   test("forwards a caller deadline to tool and resource SDK operations", async () => {
+    const replayHeaders: (string | null)[] = [];
     const delayedResponseMs = 150;
     const shortTimeoutMs = 50;
     const longTimeoutMs = 500;
@@ -291,6 +300,7 @@ describe("metadata operation timeout policy", () => {
     const server = Bun.serve({
       port: 0,
       fetch: async (request) => {
+        replayHeaders.push(request.headers.get("Idempotency-Key"));
         if (request.method === "GET") {
           return new Response(null, { status: 405 });
         }
@@ -373,6 +383,8 @@ describe("metadata operation timeout policy", () => {
         ),
       ).toBe(true);
       expect(targetMethods.slice(methodCount)).toContain("resources/read");
+      expect(replayHeaders.length).toBeGreaterThan(0);
+      expect(replayHeaders.every((header) => header === null)).toBe(true);
     } finally {
       void server.stop(true);
     }

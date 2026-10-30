@@ -82,6 +82,7 @@ describe("hu-bhgy retention projection", () => {
       }
       const projection = await huBhgyRetention.project(
         built.decision.sourceRaw ?? "",
+        { sourceRawObjects: built.decision.sourceRawObjects ?? {} },
       );
       if (projection.type !== "source") {
         throw new Error(`expected a source projection, got ${projection.type}`);
@@ -106,7 +107,10 @@ describe("hu-bhgy retention projection", () => {
 
   test("a listing stored without its file has no publisher text", async () => {
     expect(
-      await huBhgyRetention.project(encodeSourceRawEnvelope({ listing: "{}" })),
+      await huBhgyRetention.project(
+        encodeSourceRawEnvelope({ listing: "{}" }),
+        { sourceRawObjects: {} },
+      ),
     ).toEqual({ type: "no-text", reason: "not-published" });
   });
 
@@ -116,7 +120,9 @@ describe("hu-bhgy retention projection", () => {
       document: Buffer.from("PK\u0003\u0004 truncated").toString("base64"),
     });
 
-    expect(await huBhgyRetention.project(raw)).toEqual({
+    expect(
+      await huBhgyRetention.project(raw, { sourceRawObjects: {} }),
+    ).toEqual({
       type: "unreadable",
       reason: "unreadable-document",
     });

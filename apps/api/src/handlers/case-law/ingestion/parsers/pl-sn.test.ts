@@ -650,3 +650,54 @@ describe("reading word spaces set by position alone", () => {
     expect(lines).toEqual(["foo bar baz"]);
   });
 });
+
+test("inline emphasis survives wrapped lines and nested superscripts in one paragraph", () => {
+  const paragraphs = assemblePlSnParagraphs([
+    { type: "text", indented: true, runs: [{ text: "The rule", bold: false }] },
+    {
+      type: "text",
+      indented: false,
+      runs: [{ text: "in dubio", bold: false, italic: true }],
+    },
+    {
+      type: "text",
+      indented: false,
+      runs: [{ text: "contra proferentem", bold: false, italic: true }],
+    },
+    {
+      type: "text",
+      indented: false,
+      runs: [
+        { text: "in article 109", bold: true, italic: true },
+        { text: "7", bold: true, italic: true, superscript: true },
+        { text: ".", bold: false },
+      ],
+    },
+  ]);
+  expect(paragraphs).toHaveLength(1);
+  expect(plSnParagraphsToHtml(paragraphs)).toBe(
+    "<p>The rule<i> in dubio contra proferentem</i><b><i> in article 109</i></b><b><i><sup>7</sup></i></b>.</p>",
+  );
+});
+
+test("a baseline reference at a wrapped line keeps its exact footnote target", () => {
+  const reference = { label: "1", noteId: 'footnote-custom "1"' };
+  const paragraphs = assemblePlSnParagraphs([
+    { type: "text", indented: true, runs: [{ text: "Claim", bold: false }] },
+    {
+      type: "text",
+      indented: false,
+      runs: [
+        { text: "1", bold: true, italic: true, footnoteReference: reference },
+        { text: " continues.", bold: false },
+      ],
+    },
+  ]);
+  expect(
+    paragraphs.flat().find((run) => run.footnoteReference !== undefined)
+      ?.footnoteReference,
+  ).toEqual(reference);
+  expect(plSnParagraphsToHtml(paragraphs)).toContain(
+    `<a href="#${encodeURIComponent(reference.noteId)}"><b><i> 1</i></b></a>`,
+  );
+});

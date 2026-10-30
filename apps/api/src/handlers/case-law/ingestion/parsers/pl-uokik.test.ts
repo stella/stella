@@ -9,7 +9,7 @@
  */
 
 import { PDF } from "@libpdf/core";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 
 import type { Block, Inline } from "@stll/legal-ast/document-ast";
 
@@ -25,10 +25,20 @@ import {
   readPlUokikRulingHeader,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-uokik";
 import type { ParsePlUokikDocumentInput } from "@/api/handlers/case-law/ingestion/parsers/pl-uokik";
+import { checkDecisionRetention } from "@/api/handlers/case-law/ingestion/retention/retention-check";
+import { plUokikRetention } from "@/api/handlers/case-law/ingestion/retention/sources/pl-uokik";
 import {
+  absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
+} from "@/api/lib/case-law/decision-text";
+import {
+  AST_STRUCTURE_DEGRADED,
   buildValidationHtml,
   validateAst,
 } from "@/api/lib/legal-search/parsers/validate-ast";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import { encodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
+import { logger } from "@/api/lib/observability/logger";
 
 /** A 2011 decision whose embedded fonts name no weight. */
 const DOK_9_2011 = new URL(
@@ -84,12 +94,11 @@ const inputOf = (pdfs: Uint8Array[]): ParsePlUokikDocumentInput => ({
 
 /**
  * The lines the reader drops on purpose, named one by one: the Gdańsk
- * delegation's footer, page numbers, and the numbers that open footnotes or
- * stand raised over a line (kept as a note's label and as superscripts).
- * Anything else the text layer prints has to reach the document.
+ * delegation's footer. Page numbers additionally need their own page's
+ * number in the centered footer position. All other numeric text remains
+ * in the oracle, including separately extracted raised spans.
  */
 const DROPPED_ON_PURPOSE: readonly RegExp[] = [
-  /^[\d\s]+$/u,
   /^Strona \d+ z \d+$/u,
   /^Urząd Ochrony Konkurencji i Konsumentów(?: tel\..*)?$/u,
   /^tel\.(?:\s?\+?\d|58)/u,
@@ -109,9 +118,18 @@ const printedLines = async (pdfs: Uint8Array[]): Promise<string[]> => {
   const lines: string[] = [];
   for (const bytes of pdfs) {
     const pdf = await PDF.load(bytes);
-    for (const page of pdf.getPages()) {
-      for (const { text } of page.extractText().lines) {
+    for (const [index, page] of pdf.getPages().entries()) {
+      const extracted = page.extractText();
+      for (const { text, bbox } of extracted.lines) {
         const line = text.replace(/\s+/gu, " ").trim();
+        const pageNumber =
+          line === String(index + 1) &&
+          bbox.y < extracted.height * 0.08 &&
+          Math.abs(bbox.x + bbox.width / 2 - extracted.width / 2) <
+            extracted.width * 0.1;
+        if (pageNumber) {
+          continue;
+        }
         if (
           line.length > 0 &&
           !DROPPED_ON_PURPOSE.some((pattern) => pattern.test(line))
@@ -126,6 +144,14 @@ const printedLines = async (pdfs: Uint8Array[]): Promise<string[]> => {
     .replaceAll(/(\p{L})-\n(\p{Ll})/gu, "$1$2")
     .split("\n");
 };
+
+const footnoteHrefs = (inlines: readonly Inline[]): string[] =>
+  inlines.flatMap((inline) => [
+    ...(inline.type === "link" && inline.href.startsWith("#footnote-")
+      ? [inline.href]
+      : []),
+    ...("children" in inline ? footnoteHrefs(inline.children) : []),
+  ]);
 
 const hasBold = (inlines: readonly Inline[]): boolean =>
   inlines.some(
@@ -226,9 +252,12 @@ describe("a UOKiK decision PDF", () => {
     const parsed = await parsePlUokikDocument(
       inputOf([await bytesOf(DOK_9_2011)]),
     );
-    const [first] = parsed?.documentAst.blocks ?? [];
-    expect(first?.type).toBe("heading");
-    expect(first?.plainText).toBe("DECYZJA");
+    const blocks = parsed?.documentAst.blocks ?? [];
+    const titleIndex = blocks.findIndex(
+      (block) => block.type === "heading" && block.role === "decision-title",
+    );
+    expect(blocks.at(titleIndex)?.plainText).toBe("DECYZJA nr DOK-9/2011");
+    expect(titleIndex).toBeGreaterThan(0);
   });
 
   test("records the register as the document's source", async () => {
@@ -363,6 +392,9 @@ describe("a UOKiK decision read as the office sets its pages", () => {
       true,
     );
     const body = bodyOf(blocks);
+    expect(
+      new Set(body.flatMap((block) => footnoteHrefs(inlinesOf(block)))),
+    ).toEqual(new Set(notes.map(({ label }) => `#footnote-${label}`)));
     // Neither a note's text nor its reference's number opens a body paragraph.
     expect(
       body.filter(({ plainText }) => /^\d{1,2} \p{L}/u.test(plainText)),
@@ -888,4 +920,100 @@ test("a merged footer keeps its repeated address pieces and current page number 
   expect(text).not.toContain("Office address 30");
   expect(text).not.toContain("office@example.test");
   expect(text).toContain(BODY_LINES[0]);
+});
+
+test("each attachment's references resolve to its own footnotes", async () => {
+  const bytes = await bytesOf(RGD_9_2026);
+  const parsed = await parsePlUokikDocument(inputOf([bytes, bytes]));
+  if (parsed === null) {
+    return expect.unreachable("Both attachments have text");
+  }
+  const blocks = parsed.documentAst.blocks;
+  const targets = blocks.flatMap((block) =>
+    block.type === "paragraph" && block.note !== undefined
+      ? [`#${block.note.noteId}`]
+      : [],
+  );
+  const links = blocks.flatMap((block) => footnoteHrefs(inlinesOf(block)));
+  expect(targets).toHaveLength(22);
+  expect(new Set(links)).toEqual(new Set(targets));
+  expect(links).toContain("#footnote-1-file-2");
+});
+
+test("the raw numeric oracle keeps a year and a raised thousands group", async () => {
+  const bytes = await builtPdf([
+    [
+      { text: "2024", x: 72, y: 700, size: 12 },
+      { text: "Fine 10", x: 72, y: 650, size: 12 },
+      { text: "000", x: 118, y: 653, size: 7 },
+      { text: " PLN", x: 130, y: 650, size: 12 },
+      { text: "1", x: 300, y: 30, size: 8 },
+    ],
+  ]);
+  const source = await printedLines([bytes]);
+  expect(source).toContain("2024");
+  expect(source.join(" ")).toContain("000");
+  expect(source).not.toContain("1");
+});
+
+test("pipeline validation includes appended tiny footnotes", async () => {
+  const bytes = await builtPdf([
+    [
+      ...["D.", "E.", "F.", "G."].flatMap((text, index) => [
+        {
+          text: "A claim needing a source",
+          x: 72,
+          y: 700 - index * 20,
+          size: 12,
+        },
+        { text: String(index + 1), x: 215, y: 705 - index * 20, size: 7 },
+        { text: String(index + 1), x: 72, y: 125 - index * 15, size: 7 },
+        { text, x: 76, y: 120 - index * 15, size: 9 },
+      ]),
+    ],
+  ]);
+  const report = spyOn(logger, "warn");
+  try {
+    const parsed = await parsePlUokikDocument(inputOf([bytes]));
+    expect(
+      parsed?.documentAst.blocks.some(
+        (block) =>
+          block.type === "paragraph" &&
+          block.note?.noteId === "footnote-1" &&
+          block.plainText === "D.",
+      ),
+    ).toBe(true);
+    expect(report).not.toHaveBeenCalled();
+    if (parsed === null) {
+      return expect.unreachable("The PDF has a readable body");
+    }
+    await checkDecisionRetention({
+      adapterKey: "pl-uokik",
+      policy: plUokikRetention,
+      result: plainTextIngestionResult({
+        caseNumber: "DOK-9/2011",
+        court: "Prezes UOKiK",
+        country: "POL",
+        language: "pl",
+        metadata: {},
+        textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+        rawHash: "fixture",
+        documentAst: parsed.documentAst,
+        fulltext: parsed.fulltext,
+        sourceRaw: encodeSourceRawEnvelope({ listing: "{}" }),
+        sourceRawObjects: {
+          document: { bytes, contentType: "application/pdf" },
+        },
+      }),
+    });
+    expect(report).toHaveBeenCalledWith(
+      AST_STRUCTURE_DEGRADED,
+      expect.objectContaining({
+        parser: "pl-uokik",
+        codes: expect.stringContaining("TOO_MANY_TINY_BLOCKS"),
+      }),
+    );
+  } finally {
+    report.mockRestore();
+  }
 });

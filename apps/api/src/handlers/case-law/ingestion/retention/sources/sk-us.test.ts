@@ -107,7 +107,9 @@ describe("sk-us retention projection", () => {
       if (!hasUsableAst(ast)) {
         throw new Error("the recording built no document");
       }
-      const projection = await skUsRetention.project(decision.sourceRaw ?? "");
+      const projection = await skUsRetention.project(decision.sourceRaw ?? "", {
+        sourceRawObjects: decision.sourceRawObjects ?? {},
+      });
       if (projection.type !== "source") {
         throw new Error(`expected a source projection, got ${projection.type}`);
       }
@@ -132,14 +134,18 @@ describe("sk-us retention projection", () => {
   test("a listing the service served no rendering for has no publisher text", async () => {
     const raw = encodeSourceRawEnvelope({ listing: "{}" });
 
-    expect(await skUsRetention.project(raw)).toEqual({
+    expect(await skUsRetention.project(raw, { sourceRawObjects: {} })).toEqual({
       type: "no-text",
       reason: "not-published",
     });
   });
 
   test("a payload that is not the envelope is unreadable", async () => {
-    expect(await skUsRetention.project('{"documentId":"x"}')).toEqual({
+    expect(
+      await skUsRetention.project('{"documentId":"x"}', {
+        sourceRawObjects: {},
+      }),
+    ).toEqual({
       type: "unreadable",
       reason: "unreadable-envelope",
     });
