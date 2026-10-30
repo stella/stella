@@ -34,7 +34,10 @@ import {
   resetFailureObservationsForTesting,
 } from "@/api/lib/observability/failure-shadow";
 import type { LogRecord } from "@/api/lib/observability/logger";
-import { openRequestContext } from "@/api/lib/observability/request-context";
+import {
+  enrichRequestContext,
+  openRequestContext,
+} from "@/api/lib/observability/request-context";
 import {
   errorBoundary,
   requestCompletion,
@@ -60,9 +63,16 @@ const config = {
   cache: { kind: "none" },
 } satisfies PublicHandlerConfig;
 
-const requestScope: Middleware = async (_ctx, inner) =>
+const CAPTURE_DISTINCT_ID = "user_capture_probe";
+const CAPTURE_ORGANIZATION_ID = "org_capture_probe";
+
+const requestScope: Middleware = async (ctx, inner) =>
   await runWithRequestScope(async () => {
-    openRequestContext();
+    openRequestContext(undefined, ctx.request);
+    enrichRequestContext({
+      posthogDistinctId: CAPTURE_DISTINCT_ID,
+      organizationId: CAPTURE_ORGANIZATION_ID,
+    });
     return await inner();
   });
 
@@ -246,5 +256,22 @@ describe("a server error answer", () => {
     );
     expect(JSON.stringify(cause)).not.toContain("sk-live-super-secret");
     expect(JSON.stringify(cause)).not.toContain("lawyer@example.com");
+  });
+
+  test("captures a 5xx cause with the request's capture context", async () => {
+    const response = await handlerServer.fetch(
+      "http://localhost/v1/signals/sensitive",
+    );
+    expect(response.status).toBe(503);
+
+    const captured = analytics.exceptions();
+    expect(captured).toHaveLength(1);
+    expect(captured.at(0)?.distinctId).toBe(CAPTURE_DISTINCT_ID);
+    expect(captured.at(0)?.groups).toEqual({
+      organization: CAPTURE_ORGANIZATION_ID,
+    });
+    expect(captured.at(0)?.properties["organization_id"]).toBe(
+      CAPTURE_ORGANIZATION_ID,
+    );
   });
 });
