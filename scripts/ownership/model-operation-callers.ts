@@ -1,7 +1,7 @@
 import {
   MODEL_OPERATION_BOUNDARIES,
   MODEL_OPERATION_MODULES,
-} from "../../apps/api/src/lib/model-operation-registry.ts";
+} from "../../apps/api/src/lib/ai-generation/model-operation-registry.ts";
 import type { OwnershipEntry } from "../ownership-types.ts";
 
 export default {

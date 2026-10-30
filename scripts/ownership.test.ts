@@ -1072,15 +1072,15 @@ test("generated artefact provenance rejects module reexports and unresolved comp
 test("generated artefact provenance reserves every object property for its exact owner", async () => {
   const { inspectArtefactGenerators, assessArtefactGenerator } =
     await import("./generated-artefact-provenance");
-  const owner = "apps/api/src/lib/generated-artefact-provenance.ts";
-  const sibling = "apps/api/src/lib/generated-artefact-provenance-reader.ts";
+  const owner = "apps/api/src/lib/ai-generation/provenance.ts";
+  const sibling = "apps/api/src/lib/ai-generation/provenance-reader.ts";
   for (const property of [
     "const row = { generationProvenance: value };",
     "const generationProvenance = value; const row = { generationProvenance };",
     'const row = { ["generationProvenance"]: value };',
     "const row = { generationProvenance: table.generationProvenance };",
     "const row = [{ nested: { generationProvenance: value } }];",
-    'import { projectThreadArtefactProvenance } from "@/api/lib/generated-artefact-provenance"; projectThreadArtefactProvenance({ generationProvenance: value });',
+    'import { projectThreadArtefactProvenance } from "@/api/lib/ai-generation/provenance"; projectThreadArtefactProvenance({ generationProvenance: value });',
   ]) {
     const source = `export {};\n${property}`;
     expect(
@@ -1108,7 +1108,7 @@ test("generated artefact provenance declares exactly its module and table proper
   expect(PROVENANCE_PROPERTY_OWNERS).toEqual([
     {
       type: "module",
-      file: "apps/api/src/lib/generated-artefact-provenance.ts",
+      file: "apps/api/src/lib/ai-generation/provenance.ts",
       reason: expect.stringMatching(/\S/u),
     },
     {
@@ -1209,7 +1209,7 @@ test("generated artefact provenance rejects new consumers and transition growth 
   const { checkArtefactProvenance } =
     await import("./generated-artefact-provenance");
   const { MODEL_OPERATION_BOUNDARIES } =
-    await import("../apps/api/src/lib/model-operation-registry");
+    await import("../apps/api/src/lib/ai-generation/model-operation-registry");
   const { default: operations } =
     await import("./ownership/model-operation-callers");
   withDirectory((root) => {
@@ -1249,7 +1249,7 @@ test("generated artefact provenance rejects new consumers and transition growth 
     const unknown = "apps/api/src/unregistered.ts";
     write(
       unknown,
-      'import { generateArtefact } from "@/api/lib/generated-artefact-provenance"; generateArtefact({ generator: "example", sources: { decisionIds: [], inputs: [] }, generate: () => "text" });',
+      'import { generateArtefact } from "@/api/lib/ai-generation/provenance"; generateArtefact({ generator: "example", sources: { decisionIds: [], inputs: [] }, generate: () => "text" });',
     );
     expect(
       check().some((error) => error.includes("unregistered model generator")),

@@ -317,7 +317,7 @@ export const executeFlowStep = async (
           workspaceIds: [run.workspaceId],
         }),
         signal,
-        dispatchText: (options) => generateTextForTask(options),
+        dispatchText: async (options) => await generateTextForTask(options),
         loadAIConfig,
       });
       await completeStepAndAdvance({

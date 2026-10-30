@@ -33,7 +33,7 @@ import {
   readArtefactOrigin,
   readArtefactText,
   writeThreadArtefactTitle,
-} from "./generated-artefact-provenance";
+} from "./provenance";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 describe.skipIf(!enabled)("generated artefact storage (postgres)", () => {

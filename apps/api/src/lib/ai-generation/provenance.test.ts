@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import { toSafeId } from "@/api/lib/branded-types";
 import { WithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-projection";
 
-import type { ArtefactOrigin } from "./generated-artefact-provenance";
+import type { ArtefactOrigin } from "./provenance";
 import {
   authorArtefact,
   generateArtefact,
@@ -11,7 +11,7 @@ import {
   projectThreadArtefactProvenance,
   readArtefactOrigin,
   readArtefactText,
-} from "./generated-artefact-provenance";
+} from "./provenance";
 
 const first = toSafeId<"caseLawDecision">(
   "abcdef01-0000-4000-8000-000000000001",
@@ -145,7 +145,7 @@ test.each(["direct", "inherited"])(
   "%s source overflow returns a tagged error before dispatch",
   async (input) => {
     const { ARTEFACT_SOURCE_DECISION_LIMIT, ArtefactSourceLimitError } =
-      await import("./generated-artefact-provenance");
+      await import("./provenance");
     let dispatched = false;
     const decisionIds = Array.from(
       { length: ARTEFACT_SOURCE_DECISION_LIMIT + 1 },
@@ -185,7 +185,7 @@ test.each(["direct", "inherited"])(
 
 test("an ignored tool source overflow prevents publishing an artefact", async () => {
   const { ARTEFACT_SOURCE_DECISION_LIMIT, ArtefactSourceLimitError } =
-    await import("./generated-artefact-provenance");
+    await import("./provenance");
   const decisionIds = Array.from(
     { length: ARTEFACT_SOURCE_DECISION_LIMIT },
     (_, index) =>

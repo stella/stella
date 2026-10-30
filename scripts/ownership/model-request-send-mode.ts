@@ -1,4 +1,4 @@
-import { MODEL_OPERATION_NAMES } from "../../apps/api/src/lib/model-operation-registry.ts";
+import { MODEL_OPERATION_NAMES } from "../../apps/api/src/lib/ai-generation/model-operation-registry.ts";
 import type { OwnershipEntry } from "../ownership-types.ts";
 // Model requests whose content never comes from a chat thread: documents,
 // matters, templates, playbooks and public corpora, requested outside chat.

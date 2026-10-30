@@ -6,7 +6,7 @@ import ts from "typescript6";
 import {
   MODEL_OPERATION_BOUNDARIES,
   MODEL_OPERATION_NAMES,
-} from "../apps/api/src/lib/model-operation-registry.ts";
+} from "../apps/api/src/lib/ai-generation/model-operation-registry.ts";
 import MODEL_OPERATIONS from "./ownership/model-operation-callers.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -15,7 +15,14 @@ const MODEL_MODULES = new Set([
   "apps/api/src/lib/tanstack-ai-generate",
   "apps/api/src/lib/chat/tanstack-chat-runtime",
 ]);
-const PROVENANCE_MODULE = "apps/api/src/lib/generated-artefact-provenance";
+const PROVENANCE_MODULE = "apps/api/src/lib/ai-generation/provenance";
+const SCAN_TOKENS = [
+  ...[...MODEL_MODULES, PROVENANCE_MODULE].map((module) =>
+    path.posix.basename(module),
+  ),
+  "generationProvenance",
+  "\\",
+];
 type ProvenancePropertyOwner =
   | { type: "module"; file: string; reason: string }
   | {
@@ -477,11 +484,7 @@ const ownsProvenanceProperty = ({
 
 export const inspectArtefactGenerators = ({ file, source }: ScanOptions) => {
   // Escaped strings still take the AST path; unrelated modules need no parse.
-  if (
-    !["tanstack", "generationProvenance", "generated-artefact", "\\"].some(
-      (token) => source.includes(token),
-    )
-  ) {
+  if (!SCAN_TOKENS.some((token) => source.includes(token))) {
     return { modelImport: false, legacyCalls: 0, writes: [], escapes: [] };
   }
   const tree = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
@@ -914,7 +917,7 @@ export const artefactProvenanceGuardSelfTest = () => {
       count: 1,
     },
     {
-      code: `${source} import { generateArtefact as wrap } from "@/api/lib/generated-artefact-provenance"; wrap({ generate: () => raw({}) });`,
+      code: `${source} import { generateArtefact as wrap } from "@/api/lib/ai-generation/provenance"; wrap({ generate: () => raw({}) });`,
       count: 0,
     },
     {
@@ -924,19 +927,19 @@ export const artefactProvenanceGuardSelfTest = () => {
   ];
   cases.push(
     {
-      code: `${source} import { generateArtefact as wrap } from "@/api/lib/generated-artefact-provenance"; wrap({ sources: raw({}), generate: () => "text" });`,
+      code: `${source} import { generateArtefact as wrap } from "@/api/lib/ai-generation/provenance"; wrap({ sources: raw({}), generate: () => "text" });`,
       count: 1,
     },
     {
-      code: `${source} import { generateArtefact as wrap } from "@/api/lib/generated-artefact-provenance"; function f(wrap) { return wrap({ generate: () => raw({}) }); }`,
+      code: `${source} import { generateArtefact as wrap } from "@/api/lib/ai-generation/provenance"; function f(wrap) { return wrap({ generate: () => raw({}) }); }`,
       count: 1,
     },
     {
-      code: `${source} import { generateArtefact as wrap } from "@/api/lib/generated-artefact-provenance"; function f() { const wrap = (o) => o.generate(); return wrap({ generate: () => raw({}) }); }`,
+      code: `${source} import { generateArtefact as wrap } from "@/api/lib/ai-generation/provenance"; function f() { const wrap = (o) => o.generate(); return wrap({ generate: () => raw({}) }); }`,
       count: 1,
     },
     {
-      code: `${source} import { generateArtefact as wrap } from "@/api/lib/generated-artefact-provenance"; wrap({ generate() { return raw({}); } });`,
+      code: `${source} import { generateArtefact as wrap } from "@/api/lib/ai-generation/provenance"; wrap({ generate() { return raw({}); } });`,
       count: 0,
     },
     {
