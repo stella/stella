@@ -25,7 +25,15 @@ public class DocumentFilesModule: Module {
     Name("DocumentFiles")
 
     OnCreate {
-      try? FileManager.default.removeItem(at: Self.root)
+      guard FileManager.default.fileExists(atPath: Self.root.path) else {
+        return
+      }
+      do {
+        try FileManager.default.removeItem(at: Self.root)
+      } catch {
+        // Nothing waits on this; the next launch tries again.
+        log.warn("Opened documents were not cleared: \(error.localizedDescription)")
+      }
     }
 
     AsyncFunction("download") { (url: URL, fileName: String, promise: Promise) in
@@ -100,7 +108,12 @@ public class DocumentFilesModule: Module {
       guard Self.isOpened(uri) else {
         return
       }
-      try? FileManager.default.removeItem(at: uri.deletingLastPathComponent())
+      do {
+        try FileManager.default.removeItem(at: uri.deletingLastPathComponent())
+      } catch {
+        // The next launch clears it with the rest.
+        log.warn("An opened document was not removed: \(error.localizedDescription)")
+      }
     }
   }
 
