@@ -1515,7 +1515,7 @@ export const installPgliteSharepointPolicyFence = async (
   const statements = readMigrationStatements(
     nodePath.join(
       DRIZZLE_DIR,
-      "20261030042702_sharepoint_calendar_capability",
+      "20261030090109_sharepoint_calendar_capability",
       "migration.sql",
     ),
   ).filter((statement) => {
