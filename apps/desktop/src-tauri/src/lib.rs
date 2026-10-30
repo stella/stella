@@ -260,9 +260,6 @@ pub fn run() {
                 tray::refresh(&app, &snapshot);
               });
             }
-            feature_gate::DesktopFeature::TimeBilling => {
-              activity::emit_changed(app);
-            }
             feature_gate::DesktopFeature::LocalAgents => {
               harness_commands::apply_feature_gate(app, enabled);
               chatgpt_auth_commands::apply_feature_gate(app, enabled);
