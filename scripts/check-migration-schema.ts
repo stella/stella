@@ -44,7 +44,11 @@ const canonicalJson = (value: unknown): string => {
       .map(([key, item]) => `${JSON.stringify(key)}:${canonicalJson(item)}`)
       .join(",")}}`;
   }
-  return JSON.stringify(value) ?? "null";
+  // JSON drops undefined object values; keep the key so presence still counts.
+  if (value === undefined) {
+    return "null";
+  }
+  return JSON.stringify(value);
 };
 
 const generateSchemaSnapshot = async (root: string) => {
