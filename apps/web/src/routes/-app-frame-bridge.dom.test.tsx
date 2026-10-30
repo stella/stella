@@ -7,6 +7,14 @@ import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 
+// The bridge reports a live extension only in a desktop Chromium browser, and
+// happy-dom presents none, so this file presents one explicitly: it tests the
+// bridge across navigation, not the test environment's browser.
+Object.defineProperty(navigator, "userAgentData", {
+  configurable: true,
+  value: { brands: [{ brand: "Chromium" }], mobile: false },
+});
+
 const testing = await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
@@ -19,6 +27,7 @@ const { BROWSER_CONTROL_PROTOCOL_VERSION, BROWSER_EXTENSION_MESSAGE_SOURCE } =
   await import("@stll/api-contract/browser-control");
 
 afterAll(async () => {
+  Reflect.deleteProperty(navigator, "userAgentData");
   testing.cleanup();
   await testing.act(async () => {
     await sleep(50);
