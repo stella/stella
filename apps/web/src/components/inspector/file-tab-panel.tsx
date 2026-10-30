@@ -27,6 +27,7 @@ import {
   EmailViewerWithAI,
 } from "@/components/inspector/email-html-viewer";
 import type { EmailChatMode } from "@/components/inspector/email-html-viewer.logic";
+import type { DownloadRendition } from "@/components/inspector/file-download-service.logic";
 import { TabFacetBar } from "@/components/inspector/file-facets";
 import type { Facet } from "@/components/inspector/file-facets";
 import { FileTabFacetContent } from "@/components/inspector/file-tab-facet-content";
@@ -133,23 +134,30 @@ const pulseChatInputForReview = (facet: Facet, entityId: string): void => {
 const getFileTabEditorState = ({
   canUpdateEntity,
   desktopEditFileType,
+  downloadRenditions,
   editingDocxTabId,
   entityData,
   filePropertyId,
   isNativeDocxDisplay,
+  isOfficeDisplay,
   isPdfDisplay,
+  readsDocumentInInspector,
   tab,
 }: {
   canUpdateEntity: boolean;
   desktopEditFileType: ReturnType<typeof getDesktopEditFileType>;
+  downloadRenditions: readonly DownloadRendition[];
   editingDocxTabId: string | null;
   entityData:
     { fields: { id: string; propertyId?: string | undefined }[] } | undefined;
   filePropertyId: string | undefined;
   isNativeDocxDisplay: boolean;
+  isOfficeDisplay: boolean;
   isPdfDisplay: boolean;
+  readsDocumentInInspector: boolean;
   tab: FileTabPanelProps["tab"];
 }) => {
+  const isMetadataLaneExpanded = (tab.metadataLane ?? "closed") === "expanded";
   const isEditingNativeDocx =
     isNativeDocxDisplay &&
     editingDocxTabId === tab.id &&
@@ -165,25 +173,37 @@ const getFileTabEditorState = ({
     entityData?.fields.some(
       (field) => field.id === tab.id && field.propertyId === filePropertyId,
     ) === true;
+  const desktopEditTarget =
+    canUpdateEntity &&
+    desktopEditFileType !== null &&
+    filePropertyId !== undefined &&
+    isCurrentFileField
+      ? { fileType: desktopEditFileType, propertyId: filePropertyId }
+      : null;
   return {
-    desktopEditTarget:
-      canUpdateEntity &&
-      desktopEditFileType !== null &&
-      filePropertyId !== undefined &&
-      isCurrentFileField
-        ? { fileType: desktopEditFileType, propertyId: filePropertyId }
-        : null,
+    desktopEditTarget,
     isCollaboratingNativeDocx,
     isEditingNativeDocx,
-    isMetadataLaneExpanded: (tab.metadataLane ?? "closed") === "expanded",
-    pdfSignTarget: resolvePdfSignTarget({
-      canUpdateEntity,
-      entityId: tab.entityId,
-      file: isPdfDisplay
-        ? { fieldId: tab.id, mimeType: PDF_MIME, propertyId: filePropertyId }
-        : null,
-      isCurrentVersion: isCurrentFileField,
-      workspaceId: tab.workspaceId,
+    isMetadataLaneExpanded,
+    sharedHeaderActions: fileTabHeaderActions({
+      desktopEditTarget,
+      downloadRenditions,
+      // Full view means the route renders this same file in the main view,
+      // whose toolbar carries download and sign, except for Office files
+      // (their viewer has no toolbar) and the swapped arrangement (the main
+      // view shows the review).
+      mainViewHasFileActions:
+        isMetadataLaneExpanded && !readsDocumentInInspector && !isOfficeDisplay,
+      pdfSignTarget: resolvePdfSignTarget({
+        canUpdateEntity,
+        entityId: tab.entityId,
+        file: isPdfDisplay
+          ? { fieldId: tab.id, mimeType: PDF_MIME, propertyId: filePropertyId }
+          : null,
+        isCurrentVersion: isCurrentFileField,
+        workspaceId: tab.workspaceId,
+      }),
+      tab,
     }),
   };
 };
@@ -351,15 +371,18 @@ export const FileTabPanel = ({
     isCollaboratingNativeDocx,
     isEditingNativeDocx,
     isMetadataLaneExpanded,
-    pdfSignTarget,
+    sharedHeaderActions,
   } = getFileTabEditorState({
     canUpdateEntity,
     desktopEditFileType,
+    downloadRenditions: entity.downloadRenditions,
     editingDocxTabId,
     entityData: entity.query.data,
     filePropertyId,
     isNativeDocxDisplay,
+    isOfficeDisplay,
     isPdfDisplay,
+    readsDocumentInInspector,
     tab,
   });
 
@@ -399,13 +422,6 @@ export const FileTabPanel = ({
     setEditingTabId,
     setEditValue,
     startRename,
-    tab,
-  });
-
-  const sharedHeaderActions = fileTabHeaderActions({
-    desktopEditTarget,
-    downloadRenditions: entity.downloadRenditions,
-    pdfSignTarget,
     tab,
   });
 

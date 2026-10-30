@@ -906,7 +906,11 @@ const renderBlocksWithHoldingZone = ({
   const groups: Group[] = [];
 
   for (const block of blocks) {
-    const info = sectionMap?.get(block.anchorId) ?? null;
+    // Analysis may classify each caption line separately. Its section borders
+    // must not split one consecutive run into several disclosure controls.
+    const info = apparatusIds.has(block.id)
+      ? null
+      : (sectionMap?.get(block.anchorId) ?? null);
     const cssVar = info?.cssVar ?? null;
     const headingId = info?.headingId ?? null;
     const lastGroup = groups.at(-1);
