@@ -4,7 +4,7 @@ import * as v from "valibot";
 import { parseDecimalToken } from "@stll/agent-input/numeric-token";
 import { DECISION_MODEL_CATALOG } from "@stll/ai-catalog";
 import { sleep as ownerSleep } from "@stll/concurrency/sleep";
-import { readBodyWithIdleDeadline } from "@stll/fetch";
+import { BodyByteLimitError, readBodyWithIdleDeadline } from "@stll/fetch";
 
 import {
   bindAnswer,
@@ -346,6 +346,7 @@ export const createOpenAIDecisionsClient = ({
         try: async () =>
           await readBodyWithIdleDeadline(sent.value, {
             idleMs: timeoutMs,
+            maxBytes: MAX_RESPONSE_BYTES,
             signal: abortSignal,
           }),
         catch: (cause) =>
@@ -356,18 +357,17 @@ export const createOpenAIDecisionsClient = ({
           }),
       });
       if (Result.isError(bytes)) {
+        if (bytes.error.cause instanceof BodyByteLimitError) {
+          return Result.err(
+            new SystemOneError({
+              kind: "invalid_response",
+              message: "OpenAI decision response exceeds the local body limit",
+            }),
+          );
+        }
         return Result.err(bytes.error);
       }
-      const bodyBytes =
-        bytes.value.byteLength > MAX_RESPONSE_BYTES ? null : bytes.value;
-      if (bodyBytes === null) {
-        return Result.err(
-          new SystemOneError({
-            kind: "invalid_response",
-            message: "OpenAI decision response exceeds the local body limit",
-          }),
-        );
-      }
+      const bodyBytes = bytes.value;
       const json = Result.try({
         try: (): unknown => JSON.parse(new TextDecoder().decode(bodyBytes)),
         catch: (cause) => {

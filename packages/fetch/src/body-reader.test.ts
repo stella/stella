@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, jest, test } from "bun:test";
 
-import { iterateBodyWithIdleDeadline, readBodyWithIdleDeadline } from "./index";
+import {
+  BodyByteLimitError,
+  iterateBodyWithIdleDeadline,
+  readBodyWithIdleDeadline,
+} from "./index";
 import { raceAbort } from "./race-abort";
 
 const flush = async () => {
@@ -154,6 +158,79 @@ describe("idle-bounded response body reads", () => {
     const failure = await result;
     expect(failure).toMatchObject({ name: "TimeoutError" });
     expect(cancelledWith).toBe(failure);
+    expect(jest.getTimerCount()).toBe(0);
+  });
+
+  test("a body over its byte limit is cancelled before another chunk is buffered", async () => {
+    let stream: ReadableStreamDefaultController<Uint8Array> | undefined;
+    let cancelledWith: unknown;
+    const response = new Response(
+      new ReadableStream<Uint8Array>({
+        start(controller) {
+          stream = controller;
+        },
+        cancel(reason) {
+          cancelledWith = reason;
+        },
+      }),
+    );
+    const result = readBodyWithIdleDeadline(response, {
+      idleMs: 1000,
+      maxBytes: 3,
+    }).catch((error: unknown) => error);
+
+    stream?.enqueue(Uint8Array.of(1, 2));
+    stream?.enqueue(Uint8Array.of(3, 4));
+    await flush();
+
+    const failure = await result;
+    expect(failure).toBeInstanceOf(BodyByteLimitError);
+    expect(failure).toMatchObject({ limit: 3 });
+    await flush();
+    expect(cancelledWith).toBe(failure);
+  });
+
+  test("a never-settling cancellation cannot delay an idle timeout", async () => {
+    jest.useFakeTimers();
+    let cancelledWith: unknown;
+    const response = new Response(
+      new ReadableStream<Uint8Array>({
+        async cancel(reason) {
+          cancelledWith = reason;
+          await new Promise<void>(() => {});
+        },
+      }),
+    );
+    const result = readBodyWithIdleDeadline(response, { idleMs: 10 }).catch(
+      (error: unknown) => error,
+    );
+
+    jest.advanceTimersByTime(10);
+    await flush();
+
+    const failure = await result;
+    expect(failure).toMatchObject({ name: "TimeoutError" });
+    expect(cancelledWith).toBe(failure);
+    expect(jest.getTimerCount()).toBe(0);
+  });
+
+  test("a rejected cancellation does not replace the timeout reason", async () => {
+    jest.useFakeTimers();
+    const response = new Response(
+      new ReadableStream<Uint8Array>({
+        async cancel() {
+          await Promise.reject(new Error("cancel failed"));
+        },
+      }),
+    );
+    const result = readBodyWithIdleDeadline(response, { idleMs: 10 }).catch(
+      (error: unknown) => error,
+    );
+
+    jest.advanceTimersByTime(10);
+    await flush();
+
+    expect(await result).toMatchObject({ name: "TimeoutError" });
     expect(jest.getTimerCount()).toBe(0);
   });
 
