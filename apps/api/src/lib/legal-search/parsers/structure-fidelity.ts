@@ -113,7 +113,7 @@ const TABLE_MIN_FIGURES = 3;
  * stays at half and is prose.
  */
 const TABLE_FIGURE_SHARE = 0.5;
-const TRAILING_PUNCTUATION_RE = /[,;.)]+$/u;
+const TRAILING_PUNCTUATION_RE = /[,;.)]$/u;
 
 /**
  * A printed table row, not prose: it carries no sentence a page could cut,
