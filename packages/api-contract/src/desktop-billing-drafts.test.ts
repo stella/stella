@@ -21,6 +21,7 @@ import {
   desktopBillingDraftSettingsRequestSchema,
   desktopBillingDraftSettingsResponseSchema,
 } from "./desktop-billing-drafts";
+import { DESKTOP_TIME_ENTRY_CODE_MAX_LENGTH } from "./desktop-time-entries";
 import { keepUnicodePatternSource } from "./json-schema-regex";
 import { UUID_RUNTIME_ONLY_ACTIONS } from "./uuid";
 
@@ -146,11 +147,15 @@ test("billing draft responses emit finite direct JSON schemas for native respons
 
 test("billing drafting settings accept only personal consent and bounded preferences", () => {
   for (const patch of [
-    { consent: "granted" },
-    { consent: "revoked" },
-    { preference: "Use concise Czech narratives" },
-    { preference: null },
-    { consent: "granted", preference: "Client-friendly wording" },
+    { revision: null, consent: "granted" },
+    { revision: null, consent: "revoked" },
+    { revision: null, preference: "Use concise Czech narratives" },
+    { revision: null, preference: null },
+    {
+      revision: null,
+      consent: "granted",
+      preference: "Client-friendly wording",
+    },
   ] satisfies DesktopBillingDraftSettingsRequest[]) {
     expect(v.parse(desktopBillingDraftSettingsRequestSchema, patch)).toEqual(
       patch,
@@ -158,12 +163,15 @@ test("billing drafting settings accept only personal consent and bounded prefere
   }
   for (const patch of [
     {},
-    { consent: "pending" },
+    { revision: null, consent: "pending" },
     { organizationMode: "enabled" },
-    { consent: "granted", userId: "another-user" },
-    { preference: "" },
-    { preference: "x".repeat(DESKTOP_BILLING_DRAFT_LIMITS.steerLength + 1) },
-    { preference: "text\u0000text" },
+    { revision: null, consent: "granted", userId: "another-user" },
+    { revision: null, preference: "" },
+    {
+      revision: null,
+      preference: "x".repeat(DESKTOP_BILLING_DRAFT_LIMITS.steerLength + 1),
+    },
+    { revision: null, preference: "text\u0000text" },
   ]) {
     expect(
       v.safeParse(desktopBillingDraftSettingsRequestSchema, patch).success,
@@ -171,7 +179,13 @@ test("billing drafting settings accept only personal consent and bounded prefere
   }
   for (const organizationMode of ["enabled", "disabled"] as const) {
     for (const consent of ["granted", "revoked"] as const) {
-      const settings = { organizationMode, consent, preference: null };
+      const settings = {
+        scopeKey: "test",
+        revision: null,
+        organizationMode,
+        consent,
+        preference: null,
+      };
       expect(
         v.parse(desktopBillingDraftSettingsResponseSchema, settings),
       ).toEqual(settings);
@@ -242,9 +256,19 @@ test("selected entry inputs and guideline citations have finite validated bounds
   ).toBe(false);
   expect(
     v.safeParse(desktopBillingDraftRequestSchema, {
+      entries: [entry, { ...entry, matterId: entry.matterId.toUpperCase() }],
+    }).success,
+  ).toBe(false);
+  expect(
+    v.safeParse(desktopBillingDraftRequestSchema, {
+      entries: [entry, { ...entry, entryId: "entry_2" }],
+    }).success,
+  ).toBe(true);
+  expect(
+    v.safeParse(desktopBillingDraftRequestSchema, {
       entries: Array.from(
         { length: DESKTOP_BILLING_DRAFT_LIMITS.entries + 1 },
-        () => entry,
+        (_, index) => ({ ...entry, entryId: `entry_${index + 1}` }),
       ),
     }).success,
   ).toBe(false);
@@ -411,8 +435,8 @@ test("draft operations carry reviewable payloads and classification branches rem
 test("draft guideline counts and billing codes remain within persistence bounds", () => {
   const classification = {
     type: "ledes",
-    taskCode: "L".repeat(DESKTOP_BILLING_DRAFT_LIMITS.codeLength),
-    activityCode: "A".repeat(DESKTOP_BILLING_DRAFT_LIMITS.codeLength),
+    taskCode: "L".repeat(DESKTOP_TIME_ENTRY_CODE_MAX_LENGTH),
+    activityCode: "A".repeat(DESKTOP_TIME_ENTRY_CODE_MAX_LENGTH),
   } as const;
   const drafts = response.drafts.map((draft) => ({ ...draft, classification }));
   const checkedGuidelines = Array.from(
@@ -561,5 +585,74 @@ test("model grammar preserves shape while canonical validation enforces every re
     expect(v.safeParse(desktopBillingDraftResponseSchema, value).success).toBe(
       false,
     );
+  }
+});
+
+test("desktop billing response boundaries validate through Standard Schema", async () => {
+  for (const { schema, valid, invalid } of [
+    {
+      schema: desktopBillingDraftSettingsResponseSchema,
+      valid: [
+        {
+          scopeKey: "test",
+          revision: null,
+          organizationMode: "enabled",
+          consent: "granted",
+          preference: null,
+        },
+        {
+          scopeKey: "test",
+          revision: null,
+          organizationMode: "disabled",
+          consent: "revoked",
+          preference: "Concise",
+        },
+      ],
+      invalid: [
+        { consent: "granted", preference: null },
+        {
+          scopeKey: "test",
+          revision: null,
+          organizationMode: "enabled",
+          consent: "unknown",
+          preference: null,
+        },
+        {
+          scopeKey: "test",
+          revision: null,
+          organizationMode: "enabled",
+          consent: "granted",
+          preference: null,
+          extra: true,
+        },
+      ],
+    },
+    {
+      schema: desktopBillingDraftReviewSchema,
+      valid: [{ result: response, earlierEntries: [] }],
+      invalid: [
+        { earlierEntries: [] },
+        { result: response, earlierEntries: [], extra: true },
+        {
+          result: {
+            ...response,
+            drafts: response.drafts.map((draft) => ({
+              ...draft,
+              classification: { type: "unknown" },
+            })),
+          },
+          earlierEntries: [],
+        },
+      ],
+    },
+  ]) {
+    for (const value of valid) {
+      const parsed = await schema["~standard"].validate(value);
+      expect(parsed.issues).toBeUndefined();
+      expect(parsed).toMatchObject({ value });
+    }
+    for (const value of invalid) {
+      expect((await schema["~standard"].validate(value)).issues).toBeDefined();
+    }
   }
 });

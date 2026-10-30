@@ -1,24 +1,31 @@
 import { panic, Result } from "better-result";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, gte, sql } from "drizzle-orm";
 
 import type { DesktopBillingDraftRequest } from "@stll/api-contract/desktop-billing-drafts";
 import { DESKTOP_BILLING_DRAFT_LIMITS } from "@stll/api-contract/desktop-billing-drafts";
 import { Temporal } from "@stll/time";
 
+import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
+  auditLogs,
   billingDraftUserSettings,
-  contacts,
   organizationSettings,
+  timeEntries,
+  workspaces,
 } from "@/api/db/schema";
+import { setSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import {
   extractBillingGuidelineSections,
   loadBillingGuidelines,
 } from "@/api/lib/billing/billing-guidelines";
 import type { SafeId } from "@/api/lib/branded-types";
+import { READ_BUDGETS } from "@/api/lib/db/read-budgets";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { brandValidatedWorkspaceId } from "@/api/lib/safe-id-boundaries";
+
+import { loadMatterLedes } from "./matter-classification";
 
 export const BILLING_DRAFT_CONTEXT_LIMITS = {
   historyDays: 90,
@@ -27,6 +34,80 @@ export const BILLING_DRAFT_CONTEXT_LIMITS = {
   promptCharacters: 100_000,
   timeoutMs: 60_000,
 } as const;
+
+export const billingDraftCandidateWindowStart = () =>
+  new Date(
+    Temporal.Now.instant().subtract({
+      hours: BILLING_DRAFT_CONTEXT_LIMITS.historyDays * 24,
+    }).epochMilliseconds,
+  );
+
+type BillingDraftCandidateStatementOptions = {
+  tx: Pick<Transaction, "select">;
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+  windowStart: Date;
+};
+
+export const billingDraftCandidateMattersStatement = ({
+  tx,
+  organizationId,
+  userId,
+  windowStart,
+}: BillingDraftCandidateStatementOptions) => {
+  const activitySince = sql`${windowStart.toISOString()}::timestamptz`;
+  // Aggregate only the caller's work; firm activity must never select names for this prompt.
+  const ownActivity = tx
+    .select({
+      matterId: timeEntries.workspaceId,
+      at: sql<string>`max(${timeEntries.createdAt})`.as("at"),
+    })
+    .from(timeEntries)
+    .where(
+      and(
+        eq(timeEntries.organizationId, organizationId),
+        eq(timeEntries.userId, userId),
+        gte(timeEntries.createdAt, activitySince),
+      ),
+    )
+    .groupBy(timeEntries.workspaceId)
+    .unionAll(
+      tx
+        .select({
+          matterId: auditLogs.workspaceId,
+          at: sql<string>`max(${auditLogs.createdAt})`.as("at"),
+        })
+        .from(auditLogs)
+        .where(
+          and(
+            eq(auditLogs.organizationId, organizationId),
+            gte(auditLogs.createdAt, activitySince),
+            eq(auditLogs.performerType, "user"),
+            sql`coalesce(${auditLogs.performerId}, ${auditLogs.userId}) = ${userId}`,
+          ),
+        )
+        .groupBy(auditLogs.workspaceId),
+    )
+    .as("own_activity");
+  return tx
+    .select({
+      id: workspaces.id,
+      name: workspaces.name,
+      clientId: workspaces.clientId,
+      billingNarrativeLanguage: workspaces.billingNarrativeLanguage,
+    })
+    .from(workspaces)
+    .innerJoin(ownActivity, eq(ownActivity.matterId, workspaces.id))
+    .where(
+      and(
+        eq(workspaces.organizationId, organizationId),
+        eq(workspaces.status, "active"),
+      ),
+    )
+    .groupBy(workspaces.id)
+    .orderBy(desc(sql`max(${ownActivity.at})`), workspaces.id)
+    .limit(BILLING_DRAFT_CONTEXT_LIMITS.candidateMatters);
+};
 
 type LoadBillingDraftContextOptions = {
   safeDb: SafeDb;
@@ -37,13 +118,14 @@ type LoadBillingDraftContextOptions = {
 
 type LoadBillingDraftMattersOptions = Pick<
   LoadBillingDraftContextOptions,
-  "safeDb" | "organizationId"
+  "safeDb" | "organizationId" | "userId"
 > & { matterIds: SafeId<"workspace">[] };
 
 const loadBillingDraftMatters = async ({
   safeDb,
   organizationId,
   matterIds,
+  userId,
 }: LoadBillingDraftMattersOptions) =>
   await Result.gen(async function* () {
     const selected = yield* Result.await(
@@ -73,68 +155,46 @@ const loadBillingDraftMatters = async ({
       );
     }
     const candidates = yield* Result.await(
-      safeDb((tx) =>
-        tx.query.workspaces.findMany({
-          where: {
-            organizationId: { eq: organizationId },
-            status: { eq: "active" },
-          },
-          columns: {
-            id: true,
-            name: true,
-            clientId: true,
-            billingNarrativeLanguage: true,
-          },
-          orderBy: { lastActivityAt: "desc", id: "asc" },
-          limit: BILLING_DRAFT_CONTEXT_LIMITS.candidateMatters,
-        }),
-      ),
+      safeDb(async (tx) => {
+        await setSharedStatementTimeout(
+          tx,
+          READ_BUDGETS["statement.billingDrafts.candidateMatters"]
+            .statementDeadlineMs,
+        );
+        return await billingDraftCandidateMattersStatement({
+          tx,
+          organizationId,
+          userId,
+          windowStart: billingDraftCandidateWindowStart(),
+        });
+      }),
     );
     const matterRows = Array.from(
       new Map(
         [...selected, ...candidates].map((row) => [row.id, row]),
       ).values(),
     );
-    const allClientIds = Array.from(
-      new Set(
-        matterRows.flatMap(({ clientId }) => (clientId ? [clientId] : [])),
+    const ledesByMatter = yield* Result.await(
+      safeDb(
+        async (tx) =>
+          await loadMatterLedes(tx, { organizationId, matters: matterRows }),
       ),
     );
-    const formats =
-      allClientIds.length === 0
-        ? []
-        : yield* Result.await(
-            safeDb((tx) =>
-              tx
-                .select({ id: contacts.id, format: contacts.timeBillingFormat })
-                .from(contacts)
-                .where(
-                  and(
-                    eq(contacts.organizationId, organizationId),
-                    inArray(contacts.id, allClientIds),
-                  ),
-                )
-                .limit(allClientIds.length),
-            ),
-          );
-    const formatsById = new Map(formats.map(({ id, format }) => [id, format]));
     const matters = matterRows.map(
-      ({ id, name, clientId, billingNarrativeLanguage }) => {
-        const format =
-          clientId === null ? "categories" : formatsById.get(clientId);
-        if (format === undefined) {
-          return panic("Matter billing client is inaccessible");
-        }
-        return {
-          matterId: id,
-          name,
-          clientId,
-          narrativeLanguage: billingNarrativeLanguage,
-          ledesEnabled: format === "ledes",
-        };
-      },
+      ({ id, name, clientId, billingNarrativeLanguage }) => ({
+        matterId: id,
+        name,
+        clientId,
+        narrativeLanguage: billingNarrativeLanguage,
+        ledesEnabled:
+          ledesByMatter.get(id) ?? panic("Billing draft matter disappeared"),
+      }),
     );
-    return Result.ok({ selected, matters });
+    return Result.ok({
+      selected,
+      matters,
+      moveTargetMatterIds: candidates.map(({ id }) => id),
+    });
   });
 
 export const loadBillingDraftContext = async ({
@@ -190,11 +250,12 @@ export const loadBillingDraftContext = async ({
       );
     }
     const validatedMatterIds = matterIds.filter((id) => id !== null);
-    const { selected, matters } = yield* Result.await(
+    const { selected, matters, moveTargetMatterIds } = yield* Result.await(
       loadBillingDraftMatters({
         safeDb,
         organizationId,
         matterIds: validatedMatterIds,
+        userId,
       }),
     );
     const clientIds = Array.from(
@@ -278,6 +339,7 @@ export const loadBillingDraftContext = async ({
     const aiSettings = yield* loadedAISettings;
     return Result.ok({
       matters,
+      moveTargetMatterIds,
       earlierEntries: earlierEntries.map((entry) => ({
         id: entry.id,
         dateWorked: entry.dateWorked,

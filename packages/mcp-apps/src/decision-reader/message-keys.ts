@@ -19,6 +19,7 @@ export const READER_MESSAGE_KEYS = {
   "statutes.showCitedPartOnly": "statutes.showCitedPartOnly",
   "statutes.showFullProvision": "statutes.showFullProvision",
   "aiDisclosure.caseLaw": "aiDisclosure.caseLaw",
+  "aiDisclosure.billingDrafts": "aiDisclosure.billingDrafts",
 } as const satisfies Record<ReaderMessageKey, ReaderMessageKey>;
 
 export const READER_TEMPLATE_KEYS = [

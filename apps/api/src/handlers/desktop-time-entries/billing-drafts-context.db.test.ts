@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -14,28 +15,43 @@ import * as v from "valibot";
 import { desktopBillingDraftRequestSchema } from "@stll/api-contract/desktop-billing-drafts";
 import { Temporal } from "@stll/time";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import { safeDbFromScoped } from "@/api/db/safe-db";
+import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   agentSkillResources,
   agentSkills,
+  auditLogs,
   billingDraftUserSettings,
   billingGuidelineFiles,
   contacts,
   organizationSettings,
   timeEntries,
+  workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
-import { createSafeDb } from "@/api/db/scoped";
+import { createMembershipScopedDb, createSafeDb } from "@/api/db/scoped";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  createAuditRecorder,
+} from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
+import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
 import { cents } from "@/api/lib/money";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { measureDesktopBillingDraftCandidateMatters } from "@/api/tests/read-scaling/desktop-billing-drafts";
 import {
   createTestIds,
   setupRlsTestData,
 } from "@/api/tests/security/rls-helpers";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 
-import { loadBillingDraftContext } from "./billing-drafts-context";
+import { writeBillingDraftUserSettings } from "./billing-draft-settings";
+import {
+  billingDraftCandidateMattersStatement,
+  billingDraftCandidateWindowStart,
+  loadBillingDraftContext,
+} from "./billing-drafts-context";
 
 const today = Temporal.PlainDate.from("2026-10-09");
 const ids = createTestIds();
@@ -224,6 +240,7 @@ beforeAll(async () => {
     rows.map(({ date, ...row }) => ({
       ...row,
       dateWorked: date.toString(),
+      createdAt: new Date(`${date.toString()}T12:00:00Z`),
       timezoneId: "Europe/Prague",
       durationMinutes: 30,
       billedMinutes: 30,
@@ -574,4 +591,315 @@ test("missing firm guidance refuses drafting even when selected client guidance 
       "A firm billing guideline file is required",
     );
   }
+});
+
+test("candidate matter names require the caller's own work and current access", async () => {
+  const colleagueMatter = createSafeId<"workspace">();
+  const ownActivityMatter = createSafeId<"workspace">();
+  await db.insert(workspaces).values([
+    {
+      id: colleagueMatter,
+      organizationId: ids.orgA,
+      name: "Colleague matter",
+      reference: "COLLEAGUE",
+      status: "active",
+    },
+    {
+      id: ownActivityMatter,
+      organizationId: ids.orgA,
+      name: "Own activity matter",
+      reference: "OWN",
+      status: "active",
+    },
+  ]);
+  await db.insert(timeEntries).values({
+    id: createSafeId<"timeEntry">(),
+    organizationId: ids.orgA,
+    userId: ids.userA2,
+    workspaceId: colleagueMatter,
+    dateWorked: today.toString(),
+    timezoneId: "UTC",
+    durationMinutes: 30,
+    billedMinutes: 30,
+    rateAtEntry: cents(100),
+    currency: "CZK",
+    narrative: "Colleague work",
+  });
+  const activityDb = asTestRaw<SafeDb>(
+    createSafeDb(db, [ownActivityMatter], ids.orgA, ids.userA1),
+  );
+  (
+    await activityDb(
+      async (tx) =>
+        await createAuditRecorder({
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+          workspaceId: ownActivityMatter,
+          request: new Request("https://api.example.test/activity"),
+          server: null,
+        })(tx, {
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE,
+          resourceId: ownActivityMatter,
+        }),
+    )
+  ).unwrap();
+  const allowed = [ids.wsA1, ids.wsA2, colleagueMatter, ownActivityMatter];
+  const context = (await load(ids.wsA1, allowed)).unwrap();
+  expect(context.matters.map(({ matterId }) => matterId)).not.toContain(
+    colleagueMatter,
+  );
+  expect(context.moveTargetMatterIds).not.toContain(colleagueMatter);
+  expect(context.moveTargetMatterIds).toContain(ownActivityMatter);
+  expect(context.moveTargetMatterIds.at(0)).toBe(ownActivityMatter);
+  const restricted = (await load(ids.wsA1, [ids.wsA1])).unwrap();
+  expect(restricted.matters.map(({ matterId }) => matterId)).toEqual([
+    ids.wsA1,
+  ]);
+  expect(restricted.moveTargetMatterIds).toEqual([ids.wsA1]);
+});
+
+test("consent CAS refuses a delayed grant and replays after withdrawal, including first-write races", async () => {
+  const safeDb = asTestRaw<SafeDb>(
+    createSafeDb(db, [ids.wsA1], ids.orgA, ids.userA1),
+  );
+  const initial =
+    (
+      await db
+        .select({
+          revision: timestampCasToken(billingDraftUserSettings.updatedAt),
+        })
+        .from(billingDraftUserSettings)
+        .where(
+          and(
+            eq(billingDraftUserSettings.organizationId, ids.orgA),
+            eq(billingDraftUserSettings.userId, ids.userA1),
+          ),
+        )
+        .limit(1)
+    ).at(0) ?? panic("Missing personal settings");
+  const save = async (body: {
+    consent: "granted" | "revoked";
+    revision: string | null;
+  }) =>
+    (
+      await safeDb(
+        async (tx) =>
+          await writeBillingDraftUserSettings({
+            tx,
+            organizationId: ids.orgA,
+            userId: ids.userA1,
+            body,
+            recordAuditEvent: createAuditRecorder({
+              organizationId: ids.orgA,
+              userId: ids.userA1,
+              workspaceId: null,
+              request: new Request("https://api.example.test/settings"),
+              server: null,
+            }),
+          }),
+      )
+    ).unwrap();
+  const withdrawn = await save({
+    consent: "revoked",
+    revision: initial.revision,
+  });
+  expect(withdrawn?.consentAt).toBeNull();
+  expect(
+    await save({ consent: "granted", revision: initial.revision }),
+  ).toBeUndefined();
+  expect(
+    await save({ consent: "revoked", revision: initial.revision }),
+  ).toBeUndefined();
+  expect(await save({ consent: "granted", revision: null })).toBeUndefined();
+  await db
+    .delete(billingDraftUserSettings)
+    .where(
+      and(
+        eq(billingDraftUserSettings.organizationId, ids.orgA),
+        eq(billingDraftUserSettings.userId, ids.userA1),
+      ),
+    );
+  const firstWithdrawal = await save({ consent: "revoked", revision: null });
+  expect(firstWithdrawal?.consentAt).toBeNull();
+  expect(firstWithdrawal?.revision).toBeString();
+  expect(await save({ consent: "granted", revision: null })).toBeUndefined();
+  const context = await load();
+  expect(context.isErr()).toBe(true);
+  expect(context.isErr() && context.error.message).toContain(
+    "personal consent",
+  );
+});
+
+test("recent matter context keeps its statement count and response bytes bounded at N and 10N", async () => {
+  const matterIds = Array.from({ length: 200 }, () =>
+    createSafeId<"workspace">(),
+  );
+  await db.insert(workspaces).values(
+    matterIds.map((id) => ({
+      id,
+      organizationId: ids.orgA,
+      name: "Recent matter",
+      reference: id,
+      status: "active" as const,
+    })),
+  );
+  await db.insert(timeEntries).values(
+    matterIds.map((workspaceId) => ({
+      id: createSafeId<"timeEntry">(),
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+      workspaceId,
+      dateWorked: "2026-10-20",
+      timezoneId: "UTC",
+      durationMinutes: 30,
+      billedMinutes: 30,
+      rateAtEntry: cents(100),
+      currency: "CZK",
+      narrative: "Own recent work",
+    })),
+  );
+  const measure = async (count: number) =>
+    await measureDesktopBillingDraftCandidateMatters({
+      safeDb: asTestRaw<SafeDb>(
+        createSafeDb(
+          db,
+          [ids.wsA1, ...matterIds.slice(0, count)],
+          ids.orgA,
+          ids.userA1,
+        ),
+      ),
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    });
+  const small = await measure(20);
+  const large = await measure(200);
+  console.info(
+    JSON.stringify({ event: "billing_candidate_scaling", small, large }),
+  );
+  expect(small.statements).toBeGreaterThan(0);
+  expect(small.rows).toBe(20);
+  expect(large).toEqual(small);
+});
+
+test("revoking matter membership removes previously active move targets through live RLS", async () => {
+  const scopedDb = createMembershipScopedDb(db, {
+    organizationId: ids.orgA,
+    userId: ids.userA1,
+    serverValidatedWorkspaceIds: [],
+  });
+  const loadCurrent = async () =>
+    await loadBillingDraftContext({
+      safeDb: safeDbFromScoped(asTestRaw<ScopedDb>(scopedDb)),
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+      body: v.parse(desktopBillingDraftRequestSchema, {
+        entries: [
+          {
+            entryId: "selected",
+            matterId: ids.wsA1,
+            date: today.toString(),
+            timezone: "UTC",
+            durationMinutes: 30,
+            appNames: ["Editor"],
+          },
+        ],
+      }),
+    });
+  expect((await loadCurrent()).unwrap().moveTargetMatterIds).toContain(
+    ids.wsA2,
+  );
+  await db
+    .delete(workspaceMembers)
+    .where(eq(workspaceMembers.id, ids.memberA1wsA2));
+  try {
+    const context = (await loadCurrent()).unwrap();
+    expect(context.matters.map(({ matterId }) => matterId)).not.toContain(
+      ids.wsA2,
+    );
+    expect(context.moveTargetMatterIds).not.toContain(ids.wsA2);
+  } finally {
+    await db.insert(workspaceMembers).values({
+      id: ids.memberA1wsA2,
+      workspaceId: ids.wsA2,
+      userId: ids.userA1,
+    });
+  }
+});
+
+test("both candidate activity sources exclude records older than the 90-day window", async () => {
+  const expired = createSafeId<"workspace">();
+  await db.insert(workspaces).values({
+    id: expired,
+    organizationId: ids.orgA,
+    name: "Expired work",
+    reference: expired,
+    status: "active",
+  });
+  const cutoff = billingDraftCandidateWindowStart();
+  await db.insert(timeEntries).values({
+    id: createSafeId<"timeEntry">(),
+    organizationId: ids.orgA,
+    userId: ids.userA1,
+    workspaceId: expired,
+    createdAt: new Date(cutoff.getTime() - 1),
+    dateWorked: today.toString(),
+    timezoneId: "UTC",
+    durationMinutes: 30,
+    billedMinutes: 30,
+    rateAtEntry: cents(100),
+    currency: "CZK",
+    narrative: "Historical work",
+  });
+  const safeDb = asTestRaw<SafeDb>(
+    createSafeDb(db, [ids.wsA1, expired], ids.orgA, ids.userA1),
+  );
+  (
+    await safeDb(
+      async (tx) =>
+        await createAuditRecorder({
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+          workspaceId: expired,
+          request: new Request("https://api.example.test/activity"),
+          server: null,
+        })(tx, {
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE,
+          resourceId: expired,
+        }),
+    )
+  ).unwrap();
+  await db
+    .update(auditLogs)
+    .set({ createdAt: new Date(cutoff.getTime() - 1) })
+    .where(eq(auditLogs.workspaceId, expired));
+  const rows = (
+    await safeDb(
+      async (tx) =>
+        await billingDraftCandidateMattersStatement({
+          tx,
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+          windowStart: cutoff,
+        }),
+    )
+  ).unwrap();
+  expect(rows.map(({ id }) => id)).not.toContain(expired);
+  await db
+    .update(auditLogs)
+    .set({ createdAt: cutoff })
+    .where(eq(auditLogs.workspaceId, expired));
+  const boundary = (
+    await safeDb(
+      async (tx) =>
+        await billingDraftCandidateMattersStatement({
+          tx,
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+          windowStart: cutoff,
+        }),
+    )
+  ).unwrap();
+  expect(boundary.map(({ id }) => id)).toContain(expired);
 });

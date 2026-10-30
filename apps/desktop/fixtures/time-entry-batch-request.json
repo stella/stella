@@ -1,0 +1,48 @@
+{
+  "date": "2026-10-24",
+  "idempotencyKey": "00000000-0000-4000-8000-0000000000aa",
+  "items": [
+    {
+      "entry": {
+        "matterId": "00000000-0000-4000-8000-000000000001",
+        "dateWorked": "2026-10-24",
+        "timezoneId": "Europe/Prague",
+        "durationMinutes": 60,
+        "narrative": "Reviewed lease break clause",
+        "billable": true,
+        "classification": {
+          "type": "ledes",
+          "taskCode": "L120",
+          "activityCode": "A104"
+        }
+      },
+      "ranges": [{ "start": "2026-10-24T07:00:00Z", "end": "2026-10-24T08:00:00Z" }]
+    },
+    {
+      "entry": {
+        "matterId": "00000000-0000-4000-8000-000000000002",
+        "dateWorked": "2026-10-24",
+        "timezoneId": "Europe/Prague",
+        "durationMinutes": 30,
+        "narrative": "Internal planning",
+        "billable": false,
+        "classification": {
+          "type": "activity_group",
+          "activityGroup": "internal"
+        }
+      },
+      "ranges": [{ "start": "2026-10-24T09:00:00Z", "end": "2026-10-24T09:30:00Z" }]
+    },
+    {
+      "entry": {
+        "matterId": "00000000-0000-4000-8000-000000000001",
+        "dateWorked": "2026-10-24",
+        "timezoneId": "Europe/Prague",
+        "durationMinutes": 6,
+        "narrative": "Call with client",
+        "billable": true
+      },
+      "ranges": [{ "start": "2026-10-24T10:00:00Z", "end": "2026-10-24T10:06:00Z" }]
+    }
+  ]
+}

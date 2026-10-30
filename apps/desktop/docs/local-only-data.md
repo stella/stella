@@ -189,3 +189,24 @@ write retains the same batch key for another retry.
 The data-driven guards include the confirmation command owner in the activity
 window's capability and caller checks, and forbid the submission network owner
 from importing any local-only feature's data, including aliased imports.
+
+## AI billing drafts
+
+When the organization enables AI billing drafts and the user consents, the
+review can ask the server to draft narratives and classifications. A request
+carries, for each selected entry only, its matter, date, time zone, rounded
+duration and app names, plus the document names and window titles the review
+already shows, and those only when the user records window titles. Timestamps,
+segments, the timeline, unselected or left-out time, exclusions and the
+clipboard never leave the device.
+
+`billing_draft_commands` holds the activity caller proof and linked-account
+binding; `billing_draft_submit` accepts only that account and a request type
+that refuses unknown fields. The server keeps no drafting session: a steering
+request sends the previous result back for revalidation. Consent and the
+personal drafting preference are stored on the server and revocable from
+activity settings.
+
+Drafts are suggestions. Nothing changes until the user accepts it, and entries
+are still created only through the confirmed batch above, which may now carry
+the accepted LEDES task and activity codes.

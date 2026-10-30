@@ -4,6 +4,8 @@
  * analyzer, so adding a table cannot silently make a sequential scan legal.
  */
 export const QUERY_PERF_TABLE_SIZES = {
+  audit_logs: "large",
+  time_entries: "large",
   // The court registry: patterns per country, read whole into the weight cache.
   case_law_court_weights: "small",
   case_law_sources: "small",

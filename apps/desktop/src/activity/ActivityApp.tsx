@@ -46,8 +46,6 @@ import { subscribeDesktopEvent } from "../shared/desktop-events";
 import {
   DESKTOP_TELEMETRY_ERROR_CODES,
   DESKTOP_TELEMETRY_OPERATIONS,
-  DESKTOP_TELEMETRY_WINDOWS,
-  reportDesktopError,
 } from "../telemetry/desktop-telemetry";
 import {
   appTotals,
@@ -57,6 +55,7 @@ import {
   timedSegments,
 } from "./activity-logic";
 import type { TimedSegment } from "./activity-logic";
+import { reportActivityError } from "./activity-telemetry";
 import {
   ACTIVITY_CHANGED_EVENT,
   ACTIVITY_RETENTIONS,
@@ -68,6 +67,11 @@ import type {
   ActivityDetailsAccess,
   ActivityRetention,
 } from "./activity-types";
+import {
+  BillingDraftSettingsSection,
+  useBillingDraftSettings,
+} from "./ActivityBillingDrafts";
+import type { BillingDraftSettingsControl } from "./ActivityBillingDrafts";
 import { ActivityDayReview, ActivityMatterHeading } from "./ActivityDayReview";
 import type { ActivityReviewStatus } from "./ActivityDayReview";
 import { ActivitySourceIcon } from "./ActivitySourceIcon";
@@ -117,20 +121,6 @@ const RETENTION_LABEL_KEYS = {
   quarter: "retentionQuarter",
   week: "retentionWeek",
 } as const satisfies Record<ActivityRetention, string>;
-
-const reportActivityError = (
-  operation: (typeof DESKTOP_TELEMETRY_OPERATIONS)[
-    "activityRead" | "activitySubscribe" | "activityUpdate"],
-  code: (typeof DESKTOP_TELEMETRY_ERROR_CODES)[
-    "eventSubscriptionFailed" | "invalidResponse" | "invokeFailed"],
-) => {
-  // Fixed codes only: nothing about what was recorded leaves the window.
-  reportDesktopError({
-    code,
-    operation,
-    window: DESKTOP_TELEMETRY_WINDOWS.activity,
-  });
-};
 
 const ActivityShell = ({ children }: React.PropsWithChildren) => (
   <main className="bg-background text-foreground min-h-dvh">
@@ -596,6 +586,7 @@ type DayContentProps = {
   snapshot: ActivityDaySnapshot;
   reviewVisible: boolean;
   onReviewStatusChange: (status: ActivityReviewStatus) => void;
+  billingDrafts: BillingDraftSettingsControl;
 };
 
 const DayContent = ({
@@ -604,6 +595,7 @@ const DayContent = ({
   snapshot,
   reviewVisible,
   onReviewStatusChange,
+  billingDrafts,
 }: DayContentProps) => {
   const t = useTranslations("activity");
   if (snapshot.unreadable && !reviewVisible) {
@@ -628,6 +620,7 @@ const DayContent = ({
       onReviewStatusChange={onReviewStatusChange}
       header={header}
       snapshot={snapshot}
+      billingDrafts={billingDrafts}
       onCopy={(text, onSettled) =>
         onCommand(
           "activity_copy_text",
@@ -841,6 +834,7 @@ const OtherAccountHistory = ({
 };
 
 type ActivitySettingsProps = {
+  billingDrafts: BillingDraftSettingsControl;
   onCommand: RunCommand;
   onDeleteAll: () => void;
   onDeleteDay: () => void;
@@ -850,6 +844,7 @@ type ActivitySettingsProps = {
 };
 
 const ActivitySettings = ({
+  billingDrafts,
   onCommand,
   onDeleteAll,
   onDeleteDay,
@@ -863,6 +858,7 @@ const ActivitySettings = ({
       <h3 className="text-sm font-semibold">{t("settings")}</h3>
       <DetectCallsControl onCommand={onCommand} snapshot={snapshot} />
       <CaptureDetailsControl onCommand={onCommand} snapshot={snapshot} />
+      <BillingDraftSettingsSection control={billingDrafts} />
       {snapshot.appNameOnlyApps.length > 0 ? (
         <div className="flex flex-col gap-2">
           <span className="text-sm">{t("appNameOnlyApps")}</span>
@@ -1267,6 +1263,9 @@ const ActivityApp = () => {
   }, []);
   const reviewUnresolved = REVIEW_PENDING[reviewStatus];
   const view = useActivityDay(date, setError);
+  const billingDrafts = useBillingDraftSettings(
+    view.type === "ready" && view.snapshot.timeBillingEnabled,
+  );
   const errorRead = t("errorRead");
 
   const runCommand = (
@@ -1506,6 +1505,7 @@ const ActivityApp = () => {
         }
         onCommand={runCommand}
         snapshot={snapshot}
+        billingDrafts={billingDrafts}
       />
       <details>
         <summary className="text-muted-foreground cursor-pointer text-sm">
@@ -1522,6 +1522,7 @@ const ActivityApp = () => {
           sourceAppVisuals={snapshot.sourceAppVisuals}
         />
         <ActivitySettings
+          billingDrafts={billingDrafts}
           deletionDisabled={deletionDisabled}
           recoveryEraseStatus={
             snapshot.deletionStatus === "unreadable" &&

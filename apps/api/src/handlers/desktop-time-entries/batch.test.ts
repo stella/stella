@@ -1,17 +1,22 @@
 import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
 import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 import * as v from "valibot";
 
 import {
   DESKTOP_ACTIVITY_REVIEW_LIMIT,
   DESKTOP_TIME_ENTRY_BATCH_STATUSES,
+  type DesktopTimeEntryBatch,
   desktopTimeEntryBatchResponseSchema,
 } from "@stll/api-contract/desktop-time-entries";
+import { sha256Hex } from "@stll/sha256/bun";
 import { createTestState } from "@stll/test-state";
 
+import type { Transaction } from "@/api/db/root";
 import {
   auditLogs,
+  contacts,
   desktopTimeEntryBatches,
   timeEntries,
 } from "@/api/db/schema";
@@ -44,6 +49,7 @@ import { createDesktopTimeEntryBatchStatusEndpoint } from "./batch-status";
 
 const testState = createTestState({ file: import.meta.path, config: env });
 const MATTER = "00000000-0000-4000-8000-00000000abcd";
+const CLIENT = "00000000-0000-4000-8000-00000000c11e";
 const BODY = {
   idempotencyKey: "review",
   entries: [
@@ -63,6 +69,9 @@ const serve = (table: RouteTable) =>
   );
 
 const receiptSchema = v.object({
+  organizationId: v.string(),
+  userId: v.string(),
+  idempotencyKey: v.string(),
   requestFingerprint: v.nullable(v.string()),
   status: v.picklist(DESKTOP_TIME_ENTRY_BATCH_STATUSES),
   result: v.nullable(desktopTimeEntryBatchResponseSchema),
@@ -103,9 +112,48 @@ test("batch fingerprint follows reviewed field values rather than JSON key order
   );
 });
 
+test("an entry without a classification keeps the fingerprint it had before the field", () => {
+  const entry = BODY.entries.at(0) ?? panic("Missing fixture entry");
+  expect(desktopBatchFingerprint(BODY)).toBe(
+    sha256Hex(
+      JSON.stringify([
+        {
+          matterId: entry.matterId,
+          dateWorked: entry.dateWorked,
+          timezoneId: entry.timezoneId,
+          durationMinutes: entry.durationMinutes,
+          narrative: entry.narrative,
+          billable: entry.billable,
+        },
+      ]),
+    ),
+  );
+  const classified = (taskCode: string) => ({
+    ...BODY,
+    entries: [
+      {
+        ...entry,
+        classification: {
+          type: "ledes" as const,
+          activityCode: "A103",
+          taskCode,
+        },
+      },
+    ],
+  });
+  expect(desktopBatchFingerprint(classified("L120"))).not.toBe(
+    desktopBatchFingerprint(BODY),
+  );
+  expect(desktopBatchFingerprint(classified("L120"))).not.toBe(
+    desktopBatchFingerprint(classified("L110")),
+  );
+});
+
 const createBatchHarness = (existingEntries = 0) => {
-  let receipt: v.InferOutput<typeof receiptSchema> | undefined;
+  const receipts = new Map<string, v.InferOutput<typeof receiptSchema>>();
   let missingMatter = false;
+  // The matter's client billing format; null is a matter without a client.
+  let clientFormat: "ledes" | "categories" | null = null;
   let rateReads = 0;
   const writes: unknown[] = [];
   // Every insert in arrival order, so a test can place audit rows relative
@@ -116,7 +164,15 @@ const createBatchHarness = (existingEntries = 0) => {
       execute: async (statement: SQL) => aggregateExecutionRows(statement),
       query: {
         workspaces: {
-          findMany: async () => (missingMatter ? [] : [{ id: MATTER }]),
+          findMany: async () =>
+            missingMatter
+              ? []
+              : [
+                  {
+                    id: MATTER,
+                    clientId: clientFormat === null ? null : CLIENT,
+                  },
+                ],
           findFirst: async () => ({ leadUserId: null }),
         },
         organizationSettings: { findFirst: async () => DEFAULT_TIME_POLICY },
@@ -127,7 +183,31 @@ const createBatchHarness = (existingEntries = 0) => {
           },
         },
       },
-      select: () => createSelectQueryMock(receipt ? [receipt] : []),
+      select: (_selection?: Parameters<Transaction["select"]>[0]) => ({
+        from: (
+          table: Parameters<ReturnType<Transaction["select"]>["from"]>[0],
+        ) => {
+          if (table === desktopTimeEntryBatches) {
+            return {
+              where: (condition: SQL) => {
+                const { params } = new PgDialect().sqlToQuery(condition);
+                const receipt = receipts.get(JSON.stringify(params));
+                return createSelectQueryMock(receipt ? [receipt] : [])
+                  .from()
+                  .where();
+              },
+            };
+          }
+          if (table === contacts) {
+            return createSelectQueryMock(
+              clientFormat === null
+                ? []
+                : [{ id: CLIENT, format: clientFormat }],
+            ).from();
+          }
+          return panic("Unexpected batch fixture select table");
+        },
+      }),
       $count: async () => existingEntries,
       insert: (table: unknown) => ({
         values: (row: unknown) => {
@@ -141,7 +221,15 @@ const createBatchHarness = (existingEntries = 0) => {
           }
           if (table === desktopTimeEntryBatches) {
             inserts.push("receipt");
-            receipt = v.parse(receiptSchema, row);
+            const receipt = v.parse(receiptSchema, row);
+            receipts.set(
+              JSON.stringify([
+                receipt.organizationId,
+                receipt.userId,
+                receipt.idempotencyKey,
+              ]),
+              receipt,
+            );
           }
           if (table === timeEntries) {
             writes.push(row);
@@ -214,7 +302,7 @@ const createBatchHarness = (existingEntries = 0) => {
         body: JSON.stringify({ idempotencyKey: BODY.idempotencyKey }),
       }),
     );
-  const send = async (body: typeof BODY) =>
+  const send = async (body: DesktopTimeEntryBatch) =>
     await server.fetch(
       new Request("http://localhost/batch", {
         method: "PUT",
@@ -240,6 +328,9 @@ const createBatchHarness = (existingEntries = 0) => {
     rateReads: () => rateReads,
     revokeMatter: () => {
       missingMatter = true;
+    },
+    billClientIn: (format: "ledes" | "categories" | null) => {
+      clientFormat = format;
     },
     [Symbol.asyncDispose]: server.stop,
   };
@@ -449,4 +540,86 @@ test("missing bulk rates reject billable entries without individual rate reads o
   expect(response.status).toBe(400);
   expect(writes).toHaveLength(0);
   expect(rateReads()).toBe(1);
+});
+
+test("LEDES classification persists as codes; matter entries refuse the internal group", async () => {
+  const { send, writes, billClientIn } = createBatchHarness();
+  billClientIn("ledes");
+  const entry = BODY.entries.at(0) ?? panic("Missing fixture entry");
+  const ledes = await send({
+    idempotencyKey: "classified",
+    entries: [
+      {
+        ...entry,
+        classification: {
+          type: "ledes",
+          taskCode: "L120",
+          activityCode: "A103",
+        },
+      },
+    ],
+  });
+  expect(ledes.status).toBe(200);
+  expect(writes.at(0)).toMatchObject({
+    taskCode: "L120",
+    activityCode: "A103",
+  });
+  const internal = await send({
+    idempotencyKey: "internal",
+    entries: [
+      {
+        ...entry,
+        classification: { type: "activity_group", activityGroup: "internal" },
+      },
+    ],
+  });
+  expect(internal.status).toBe(400);
+  expect(writes).toHaveLength(1);
+});
+
+test("LEDES codes are refused unless the matter's client bills in LEDES", async () => {
+  await using harness = createBatchHarness();
+  const { send, writes, billClientIn } = harness;
+  const entry = BODY.entries.at(0) ?? panic("Missing fixture entry");
+  const coded = (idempotencyKey: string) => ({
+    idempotencyKey,
+    entries: [
+      {
+        ...entry,
+        classification: {
+          type: "ledes" as const,
+          taskCode: "L120",
+          activityCode: "A103",
+        },
+      },
+    ],
+  });
+  for (const format of [null, "categories"] as const) {
+    billClientIn(format);
+    expect((await send(coded(`coded-${String(format)}`))).status).toBe(400);
+  }
+  billClientIn("ledes");
+  const grouped = await send({
+    idempotencyKey: "grouped-ledes",
+    entries: [
+      {
+        ...entry,
+        classification: { type: "activity_group", activityGroup: "client" },
+      },
+    ],
+  });
+  expect(grouped.status).toBe(400);
+  expect(writes).toHaveLength(0);
+  billClientIn("categories");
+  const accepted = await send({
+    idempotencyKey: "grouped-categories",
+    entries: [
+      {
+        ...entry,
+        classification: { type: "activity_group", activityGroup: "client" },
+      },
+    ],
+  });
+  expect(accepted.status).toBe(200);
+  expect(writes).toHaveLength(1);
 });

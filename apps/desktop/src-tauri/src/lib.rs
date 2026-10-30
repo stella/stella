@@ -9,6 +9,8 @@ mod activity_window;
 mod app_lifecycle;
 mod app_window;
 mod autostart;
+mod billing_draft_commands;
+mod billing_draft_submit;
 mod bridge;
 mod chatgpt_auth;
 mod chatgpt_auth_commands;

@@ -77,6 +77,7 @@ const body = createDesktopBillingDraftRequest({
   },
 });
 const context = {
+  moveTargetMatterIds: [MATTER_ID],
   matters: [
     {
       matterId: MATTER_ID,
@@ -636,6 +637,7 @@ test("move proposals use the authorized target's canonical name", async () => {
   const { response, calls } = await exercise({
     draftContext: {
       ...context,
+      moveTargetMatterIds: [...context.moveTargetMatterIds, targetId],
       matters: [
         ...context.matters,
         {
@@ -764,6 +766,7 @@ test("billing reference mapping preserves every colliding text field", () => {
         steer: text,
         previousResult: output,
         personalPreference: text,
+        moveTargetMatterIds: context.moveTargetMatterIds,
         matters: context.matters.map((matter) => ({ ...matter, name: text })),
         earlierEntries: context.earlierEntries.map((entry) => ({
           ...entry,
@@ -833,6 +836,7 @@ test("billing reference mapping preserves every colliding text field", () => {
       expect(modelPrompt).toMatchObject({
         steer: text,
         personalPreference: text,
+        moveTargetMatterIds: context.moveTargetMatterIds.map(refs.alias),
         activityGroups: ["client"],
         matters: [{ name: text, narrativeLanguage: "cs" }],
         earlierEntries: [

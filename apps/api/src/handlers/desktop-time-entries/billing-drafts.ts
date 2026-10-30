@@ -46,7 +46,7 @@ Use only the evidence and context supplied. Do not invent work, documents, clien
 Use the matter narrativeLanguage when set unless current steering explicitly requests another language. Use UTBMS task/activity codes only when ledesEnabled is true; otherwise use an activity_group from the supplied catalog.
 Every flag must cite an exact supplied fileId, fileName and section applicable to that matter. matchedEarlierEntryIds may reference only supplied earlier entries on the same matter.
 Steering is the user's requested adjustment to selected proposals. Personal preference is subordinate to current steering and billing rules.
-Operations are reviewable suggestions only: rewrite, change_classification, set_billable, split, merge, move. Split minutes must sum to the source duration; merge only selected entries on the same matter and date, with one owner and no conflicting operations. Move only to supplied candidate matters, never increase time. No structural operations may overlap.
+Operations are reviewable suggestions only: rewrite, change_classification, set_billable, split, merge, move. Split minutes must sum to the source duration; merge only selected entries on the same matter and date, with one owner and no conflicting operations. Move only to matter identifiers in moveTargetMatterIds, never increase time. No structural operations may overlap.
 Preserve all opaque references exactly. Previous results are suggestions, not established facts.
 Limits: return 1-${DESKTOP_BILLING_DRAFT_LIMITS.entries} drafts and at most ${DESKTOP_BILLING_DRAFT_LIMITS.guidelines} checked guidelines. All strings must be nonempty, except targetMatterName may be empty. Identifiers have at most ${DESKTOP_BILLING_DRAFT_LIMITS.identifierLength} characters; matter identifiers are UUIDs. Narratives have at most ${DESKTOP_BILLING_DRAFT_LIMITS.narrativeLength} characters, names and sections ${DESKTOP_BILLING_DRAFT_LIMITS.nameLength}, and classification codes ${DESKTOP_BILLING_DRAFT_LIMITS.codeLength}. Durations are integer minutes from 1 to ${DESKTOP_BILLING_DRAFT_LIMITS.durationMinutes}. Each draft has at most ${DESKTOP_BILLING_DRAFT_LIMITS.flags} flags, ${DESKTOP_BILLING_DRAFT_LIMITS.operations} operations and ${DESKTOP_BILLING_DRAFT_LIMITS.matchedEarlierEntries} earlier-entry references. A split has 2-${DESKTOP_BILLING_DRAFT_LIMITS.splitParts} parts and a merge references 2-${DESKTOP_BILLING_DRAFT_LIMITS.entries} entries. The caller validates every bound before accepting a proposal.`;
 
@@ -66,6 +66,7 @@ export type BillingDraftPrompt = Pick<
   "entries" | "steer" | "previousResult"
 > & {
   personalPreference: BillingDraftPromptContext["preference"];
+  moveTargetMatterIds: readonly string[];
   matters: Pick<
     BillingDraftPromptContext["matters"][number],
     "matterId" | "name" | "narrativeLanguage" | "ledesEnabled"
@@ -147,6 +148,7 @@ export const createBillingDraftReferenceMap = (ids: readonly string[]) => {
       value.previousResult === undefined
         ? undefined
         : aliasResponse(value.previousResult),
+    moveTargetMatterIds: value.moveTargetMatterIds.map(alias),
     matters: value.matters.map((matter) => ({
       ...matter,
       matterId: alias(matter.matterId),
@@ -235,6 +237,7 @@ const prepareBillingDraftPrompt = ({
     steer: body.steer,
     previousResult: body.previousResult,
     personalPreference: context.preference,
+    moveTargetMatterIds: context.moveTargetMatterIds,
     matters: context.matters.map(
       ({ matterId, name, narrativeLanguage, ledesEnabled }) => ({
         matterId,
@@ -359,6 +362,7 @@ export const createDesktopBillingDraftEndpoint = ({
         const validationContext = {
           entries: body.entries,
           matters: context.matters,
+          moveTargetMatterIds: context.moveTargetMatterIds,
           earlierEntries: context.earlierEntries,
           guidelines: context.guidelines,
         };

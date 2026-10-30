@@ -94,6 +94,7 @@
     "selectedRun": "Palaist AI kolonnas {count, plural, zero {# rindai} one {# rindai} other {# rindām}}"
   },
   "aiDisclosure": {
+    "billingDrafts": "AI norēķinu melnraksti ir ieteikumi, ko stella ģenerē no atlasītajiem ierakstiem, jūsu iepriekšējiem lietas ierakstiem un norēķinu noteikumiem. Pirms izveides pārskatiet katru ierakstu.",
     "caseLaw": "AI veidotos tiesu nolēmumu kopsavilkumus, piezīmes un analīzes ģenerē stella; tiesas tos nav apstiprinājušas, un tie neatspoguļo pašu tiesu argumentāciju. Tie ir palīglīdzekļi juridiskās jomas speciālistiem, un noteicošais avots joprojām ir nolēmuma teksts."
   },
   "appearance": {

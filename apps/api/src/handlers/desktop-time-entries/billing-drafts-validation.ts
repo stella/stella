@@ -1,13 +1,14 @@
 import { panic, Result, TaggedError } from "better-result";
 
-import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import type {
   DesktopBillingDraft,
-  DesktopBillingDraftClassification,
   DesktopBillingDraftOperation,
   DesktopBillingDraftRequest,
   DesktopBillingDraftResponse,
 } from "@stll/api-contract/desktop-billing-drafts";
+import type { DesktopTimeEntryClassification } from "@stll/api-contract/desktop-time-entries";
+
+import { matterClassificationAllowed } from "./matter-classification";
 
 const OPERATION_EFFECT = {
   rewrite: "scalar",
@@ -27,6 +28,7 @@ class BillingDraftValidationError extends TaggedError(
 
 export type BillingDraftValidationContext = {
   entries: DesktopBillingDraftRequest["entries"];
+  moveTargetMatterIds: readonly string[];
   matters: readonly { matterId: string; ledesEnabled: boolean }[];
   earlierEntries: readonly {
     id: string;
@@ -55,10 +57,11 @@ type ValidateBillingDraftOperationsOptions = {
     string,
     BillingDraftValidationContext["matters"][number]
   >;
+  moveTargetMatterIds: readonly string[];
   consumed: Map<string, string>;
   operationOwners: ReadonlySet<string>;
   validClassification: (
-    classification: DesktopBillingDraftClassification,
+    classification: DesktopTimeEntryClassification,
     matterId: string,
   ) => boolean;
 };
@@ -69,6 +72,7 @@ const validateOperations = ({
   entries,
   matters,
   consumed,
+  moveTargetMatterIds,
   operationOwners,
   validClassification,
 }: ValidateBillingDraftOperationsOptions) => {
@@ -154,6 +158,7 @@ const validateOperations = ({
       }
       case "move":
         if (
+          !moveTargetMatterIds.includes(operation.targetMatterId) ||
           !matters.has(operation.targetMatterId) ||
           operation.targetMatterId === entry.matterId
         ) {
@@ -204,28 +209,14 @@ export const validateBillingDraftResult = (
     context.guidelines.map((file) => [file.fileId, file]),
   );
   const validClassification = (
-    classification: DesktopBillingDraftClassification,
+    classification: DesktopTimeEntryClassification,
     matterId: string,
   ) => {
     const matter = matters.get(matterId);
-    if (!matter) {
-      return false;
-    }
-    switch (classification.type) {
-      case "ledes":
-        return matter.ledesEnabled;
-      case "activity_group":
-        // Internal entries require a null matter; every draft in this slice is matter-backed.
-        return (
-          !matter.ledesEnabled &&
-          classification.activityGroup === TIME_ENTRY_ACTIVITY_GROUP.CLIENT
-        );
-      default:
-        return panic(
-          "Unknown billing classification",
-          classification satisfies never,
-        );
-    }
+    return (
+      matter !== undefined &&
+      matterClassificationAllowed(classification, matter.ledesEnabled)
+    );
   };
 
   if (entries.size !== context.entries.length) {
@@ -316,6 +307,7 @@ export const validateBillingDraftResult = (
       entries,
       matters,
       consumed,
+      moveTargetMatterIds: context.moveTargetMatterIds,
       operationOwners,
       validClassification,
     });

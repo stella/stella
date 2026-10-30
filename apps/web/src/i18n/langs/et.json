@@ -94,6 +94,7 @@
     "selectedRun": "Käivita tehisintellekti veerud {count, plural, one {# real} other {# real}}"
   },
   "aiDisclosure": {
+    "billingDrafts": "AI arveldusmustandid on soovitused, mille stella koostab valitud kannete, sinu varasemate toimikukannete ja arveldusjuhiste põhjal. Vaata iga kanne enne loomist üle.",
     "caseLaw": "Kohtulahendite AI-kokkuvõtted, -märkmed ja -analüüsid koostab stella; kohtud ei ole neid heaks kiitnud ja need ei kajasta kohtute endi arutluskäiku. Need on abivahendid õigusala spetsialistidele ning määravaks allikaks jääb lahendi tekst."
   },
   "appearance": {

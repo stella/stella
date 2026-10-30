@@ -1,8 +1,11 @@
 import * as v from "valibot";
 
 import { apiDateSchema } from "./api-date";
-import { TIME_ENTRY_ACTIVITY_GROUPS } from "./billing";
-import { DESKTOP_TIME_ENTRY_NARRATIVE_MAX_LENGTH } from "./desktop-time-entries";
+import {
+  createDesktopTimeEntryClassificationSchema,
+  DESKTOP_TIME_ENTRY_CODE_MAX_LENGTH,
+  DESKTOP_TIME_ENTRY_NARRATIVE_MAX_LENGTH,
+} from "./desktop-time-entries";
 import { uuidSchema } from "./uuid";
 
 export const DESKTOP_BILLING_DRAFT_LIMITS = {
@@ -19,7 +22,7 @@ export const DESKTOP_BILLING_DRAFT_LIMITS = {
   evidenceItems: 20,
   nameLength: 512,
   guidelines: 20,
-  codeLength: 20,
+  codeLength: DESKTOP_TIME_ENTRY_CODE_MAX_LENGTH,
   matchedEarlierEntries: 20,
 } as const;
 
@@ -89,14 +92,6 @@ const createBillingDraftResponseSchemas = (profile: "canonical" | "model") => {
   const name = profile === "canonical" ? nameSchema : v.string();
   const narrative = profile === "canonical" ? narrativeSchema : v.string();
   const duration = profile === "canonical" ? durationSchema : v.number();
-  const codeSchema =
-    profile === "canonical"
-      ? v.pipe(
-          v.string(),
-          v.minLength(1),
-          v.maxLength(DESKTOP_BILLING_DRAFT_LIMITS.codeLength),
-        )
-      : v.string();
   const targetMatterNameSchema =
     profile === "canonical"
       ? v.pipe(v.string(), v.maxLength(DESKTOP_BILLING_DRAFT_LIMITS.nameLength))
@@ -113,17 +108,8 @@ const createBillingDraftResponseSchemas = (profile: "canonical" | "model") => {
     }
     return v.pipe(v.array(schema), v.minLength(min), v.maxLength(max));
   };
-  const desktopBillingDraftClassificationSchema = v.union([
-    v.strictObject({
-      type: v.literal("ledes"),
-      taskCode: codeSchema,
-      activityCode: codeSchema,
-    }),
-    v.strictObject({
-      type: v.literal("activity_group"),
-      activityGroup: v.picklist(TIME_ENTRY_ACTIVITY_GROUPS),
-    }),
-  ]);
+  const desktopBillingDraftClassificationSchema =
+    createDesktopTimeEntryClassificationSchema(profile);
 
   const desktopBillingDraftRuleRefSchema = v.strictObject({
     fileId: identifier,
@@ -206,7 +192,6 @@ const createBillingDraftResponseSchemas = (profile: "canonical" | "model") => {
   });
 
   return {
-    desktopBillingDraftClassificationSchema,
     desktopBillingDraftRuleRefSchema,
     desktopBillingDraftFlagSchema,
     desktopBillingDraftOperationSchema,
@@ -216,7 +201,6 @@ const createBillingDraftResponseSchemas = (profile: "canonical" | "model") => {
 };
 
 export const {
-  desktopBillingDraftClassificationSchema,
   desktopBillingDraftRuleRefSchema,
   desktopBillingDraftFlagSchema,
   desktopBillingDraftOperationSchema,
@@ -276,8 +260,13 @@ export const desktopBillingDraftRequestSchema = v.pipe(
   ),
 );
 
+const billingDraftSettingsRevisionSchema = v.nullable(
+  v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
+);
+
 export const desktopBillingDraftSettingsRequestSchema = v.pipe(
   v.strictObject({
+    revision: billingDraftSettingsRevisionSchema,
     consent: v.optional(v.picklist(["granted", "revoked"])),
     preference: v.optional(v.nullable(steeringTextSchema)),
   }),
@@ -289,6 +278,8 @@ export const desktopBillingDraftSettingsRequestSchema = v.pipe(
 );
 
 export const desktopBillingDraftSettingsResponseSchema = v.strictObject({
+  scopeKey: v.pipe(v.string(), v.minLength(1), v.maxLength(1024)),
+  revision: billingDraftSettingsRevisionSchema,
   organizationMode: v.picklist(["enabled", "disabled"]),
   consent: v.picklist(["granted", "revoked"]),
   preference: v.nullable(
@@ -314,9 +305,6 @@ export type DesktopBillingDraft = v.InferOutput<
 >;
 export type DesktopBillingDraftOperation = v.InferOutput<
   typeof desktopBillingDraftOperationSchema
->;
-export type DesktopBillingDraftClassification = v.InferOutput<
-  typeof desktopBillingDraftClassificationSchema
 >;
 export type DesktopBillingDraftSettingsRequest = v.InferOutput<
   typeof desktopBillingDraftSettingsRequestSchema

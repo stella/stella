@@ -6,9 +6,11 @@ import {
   type DesktopTimeEntryBatch,
   desktopTimeEntryBatchResponseSchema,
   desktopTimeEntryBatchSchema,
+  type DesktopTimeEntryClassification,
 } from "@stll/api-contract/desktop-time-entries";
 import { sha256Hex } from "@stll/sha256/bun";
 
+import type { Transaction } from "@/api/db/root";
 import {
   abortableTx,
   abortTransaction,
@@ -36,6 +38,7 @@ import {
   lockTimeEntryCapacity,
   prepareTimeEntryInsert,
 } from "@/api/lib/billing/time-entry-insert";
+import type { SafeId } from "@/api/lib/branded-types";
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
@@ -43,8 +46,38 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 
 import { authorizeDesktopTimeEntries } from "./authorize";
+import {
+  type ClassifiedMatter,
+  loadMatterLedes,
+  matterClassificationAllowed,
+} from "./matter-classification";
+
+const canonicalClassification = (
+  classification: DesktopTimeEntryClassification,
+) => {
+  switch (classification.type) {
+    case "ledes":
+      return {
+        type: classification.type,
+        taskCode: classification.taskCode,
+        activityCode: classification.activityCode,
+      };
+    case "activity_group":
+      return {
+        type: classification.type,
+        activityGroup: classification.activityGroup,
+      };
+    default:
+      return panic(
+        "Unknown time entry classification",
+        classification satisfies never,
+      );
+  }
+};
 
 // Object construction makes fingerprints independent of JSON property order.
+// An entry without a classification hashes as before the field existed, so a
+// pending retry keeps its fingerprint.
 export const desktopBatchFingerprint = ({ entries }: DesktopTimeEntryBatch) =>
   sha256Hex(
     JSON.stringify(
@@ -56,6 +89,7 @@ export const desktopBatchFingerprint = ({ entries }: DesktopTimeEntryBatch) =>
           durationMinutes,
           narrative,
           billable,
+          classification,
         }) => ({
           matterId: matterId.toLowerCase(),
           dateWorked,
@@ -63,10 +97,97 @@ export const desktopBatchFingerprint = ({ entries }: DesktopTimeEntryBatch) =>
           durationMinutes,
           narrative,
           billable,
+          ...(classification
+            ? { classification: canonicalClassification(classification) }
+            : {}),
         }),
       ),
     ),
   );
+
+/** Matter entries bill to the client, so only LEDES codes add to the entry. */
+const classificationCodes = (
+  classification: DesktopTimeEntryClassification | undefined,
+) => {
+  if (classification?.type !== "ledes") {
+    return {};
+  }
+  return {
+    taskCode: classification.taskCode,
+    activityCode: classification.activityCode,
+  };
+};
+
+/** Lower-cased matter ids with the accepted codes as entry fields. */
+const normalizedBatchEntries = ({ entries }: DesktopTimeEntryBatch) =>
+  entries.map(({ matterId, classification, ...entry }) => ({
+    ...entry,
+    ...classificationCodes(classification),
+    matterId: matterId.toLowerCase(),
+  }));
+
+type LoadBatchMattersOptions = {
+  organizationId: SafeId<"organization">;
+  entries: readonly { matterId: string }[];
+};
+
+/** The batch's active matters, or null when any is missing or inactive. */
+const loadBatchMatters = async (
+  tx: Transaction,
+  { organizationId, entries }: LoadBatchMattersOptions,
+) => {
+  const requestedMatterIds = [
+    ...new Set(entries.map(({ matterId }) => matterId)),
+  ];
+  const matters = await tx.query.workspaces.findMany({
+    where: {
+      RAW: (table) =>
+        sql`${table.id} IN (${sql.join(
+          requestedMatterIds.map((id) => sql`${id}`),
+          sql`, `,
+        )})`,
+      organizationId: { eq: organizationId },
+      status: { eq: "active" },
+    },
+    columns: { id: true, clientId: true },
+    limit: requestedMatterIds.length,
+  });
+  return matters.length === requestedMatterIds.length ? matters : null;
+};
+
+type CheckBatchClassificationsOptions = {
+  organizationId: SafeId<"organization">;
+  matters: readonly ClassifiedMatter[];
+  entries: DesktopTimeEntryBatch["entries"];
+};
+
+/** Read in the transaction, so codes follow the client's billing format as it
+ * stands when the entries are created. */
+const checkBatchClassifications = async (
+  tx: Transaction,
+  { organizationId, matters, entries }: CheckBatchClassificationsOptions,
+) => {
+  const ledesByMatter = await loadMatterLedes(tx, { organizationId, matters });
+  if (
+    entries.some(
+      ({ matterId, classification }) =>
+        classification !== undefined &&
+        !matterClassificationAllowed(
+          classification,
+          ledesByMatter.get(matterId.toLowerCase()) ??
+            panic("Authorized batch matter disappeared"),
+        ),
+    )
+  ) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Classification does not match the matter's billing format",
+      }),
+    );
+  }
+  return Result.ok();
+};
 
 const responseSchemas = safePublicHandlerResponseSchemasWithStatusText(
   desktopTimeEntryBatchResponseSchema,
@@ -96,11 +217,8 @@ export const createDesktopTimeEntryBatchEndpoint = (
           }),
         );
       }
+      const normalizedEntries = normalizedBatchEntries(body);
       const fingerprint = desktopBatchFingerprint(body);
-      const normalizedEntries = body.entries.map(({ matterId, ...entry }) => ({
-        ...entry,
-        matterId: matterId.toLowerCase(),
-      }));
       const response = yield* Result.await(
         abortableTx(account.safeDb, async (tx) => {
           // The ledger lock and all writes share one transaction, including audits.
@@ -132,23 +250,11 @@ export const createDesktopTimeEntryBatchEndpoint = (
               new HandlerError({ status: 409, message: "Batch was cancelled" }),
             );
           }
-          const requestedMatterIds = [
-            ...new Set(normalizedEntries.map(({ matterId }) => matterId)),
-          ];
-          const matters = await tx.query.workspaces.findMany({
-            where: {
-              RAW: (table) =>
-                sql`${table.id} IN (${sql.join(
-                  requestedMatterIds.map((id) => sql`${id}`),
-                  sql`, `,
-                )})`,
-              organizationId: { eq: account.organizationId },
-              status: { eq: "active" },
-            },
-            columns: { id: true },
-            limit: requestedMatterIds.length,
+          const matters = await loadBatchMatters(tx, {
+            organizationId: account.organizationId,
+            entries: normalizedEntries,
           });
-          if (matters.length !== requestedMatterIds.length) {
+          if (matters === null) {
             return abortTransaction(
               new HandlerError({ status: 404, message: "Matter not found" }),
             );
@@ -169,6 +275,14 @@ export const createDesktopTimeEntryBatchEndpoint = (
             return (
               receipt.result ?? panic("Committed batch receipt has no result")
             );
+          }
+          const classified = await checkBatchClassifications(tx, {
+            organizationId: account.organizationId,
+            matters,
+            entries: body.entries,
+          });
+          if (classified.isErr()) {
+            return abortTransaction(classified.error);
           }
           const safeDb = safeDbFromScoped(async (run) => await run(tx));
           const rates = await resolveWorkspaceRatesInTransaction({

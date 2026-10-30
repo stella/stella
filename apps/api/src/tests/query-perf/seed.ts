@@ -3,6 +3,10 @@ import { type SQL, sql } from "drizzle-orm";
 import { WORKSPACE_ACCESS_MODE } from "@/api/db/rls";
 import type { TransactionOf, WorkspaceScope } from "@/api/db/scoped";
 import { resolveScopedFeatureIds } from "@/api/db/scoped-feature-access";
+import {
+  billingDraftCandidateMattersStatement,
+  billingDraftCandidateWindowStart,
+} from "@/api/handlers/desktop-time-entries/billing-drafts-context";
 import { toSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import type { SearchQuery } from "@/api/lib/search/types";
@@ -101,6 +105,26 @@ const seedPlaceholderQueryPerf = async (
         (${backgroundWorkspaceId}, ${organizationId}, 'Query perf background matter', 'query-perf-background')`);
     await tx.execute(sql`INSERT INTO workspace_members (id, workspace_id, user_id)
       VALUES ('01990000-0003-7000-8000-000000000001', ${workspaceId}, ${userId})`);
+    // Fixed-size authorization metadata keeps tenant plans from depending on tiny-table sequential scans.
+    await tx.execute(sql`INSERT INTO "user" (id, name, email)
+      SELECT 'queryperfdecoyuser' || n, 'Decoy member', 'query-perf-decoy-' || n || '@example.test'
+      FROM generate_series(1, 3000) series(n)`);
+    await tx.execute(sql`INSERT INTO member (id, organization_id, user_id, role, created_at)
+      SELECT 'queryperfdecoymember' || n, ${organizationId}, 'queryperfdecoyuser' || n, 'member', now()
+      FROM generate_series(1, 3000) series(n)`);
+    await tx.execute(sql`INSERT INTO workspaces (id, organization_id, name, reference)
+      SELECT ('01990000-0030-7000-8000-' || lpad(n::text, 12, '0'))::uuid,
+        ${organizationId}, 'Decoy matter', 'query-perf-decoy-' || n
+      FROM generate_series(1, 3000) series(n)`);
+    await tx.execute(sql`INSERT INTO workspace_members (id, workspace_id, user_id)
+      SELECT ('01990000-0031-7000-8000-' || lpad(n::text, 12, '0'))::uuid,
+        ('01990000-0030-7000-8000-' || lpad(n::text, 12, '0'))::uuid, 'queryperfdecoyuser' || n
+      FROM generate_series(1, 3000) series(n)`);
+    await tx.execute(sql`INSERT INTO time_entries
+      (id, organization_id, workspace_id, user_id, date_worked, timezone_id,
+       duration_minutes, billed_minutes, rate_at_entry, currency, narrative, created_at)
+      VALUES ('01990000-0040-7000-8000-000000000000'::uuid, ${organizationId}, ${workspaceId}, ${userId},
+        CURRENT_DATE, 'UTC', 30, 30, 100, 'EUR', 'Recent own work', now())`);
     for (let first = 1; first <= documentCount; first += SEED_CHUNK_ROWS) {
       const last = Math.min(first + SEED_CHUNK_ROWS - 1, documentCount);
       // db-await-in-loop: bounded chunks keep each seed statement well inside the connection's statement timeout.
@@ -111,6 +135,22 @@ const seedPlaceholderQueryPerf = async (
         queryText,
         seededWorkspace,
       });
+      // db-await-in-loop: bounded fixture chunks seed historical records independently of the fixed recent window.
+      await tx.execute(sql`INSERT INTO time_entries
+        (id, organization_id, workspace_id, user_id, date_worked, timezone_id,
+         duration_minutes, billed_minutes, rate_at_entry, currency, narrative, created_at)
+        SELECT ('01990000-0040-7000-8000-' || lpad(n::text, 12, '0'))::uuid,
+          ${organizationId}, ${workspaceId}, 'queryperfdecoyuser1', CURRENT_DATE - 365,
+          'UTC', 30, 30, 100, 'EUR', 'Historical colleague work', now() - interval '365 days'
+        FROM generate_series(${first}::integer, ${last}::integer) series(n)`);
+      // audit: skip - isolated query-perf fixture seeds historical audit volume, not a product mutation.
+      // db-await-in-loop: bounded chunks keep historical audit seeding below the fixture statement timeout.
+      await tx.execute(sql`INSERT INTO audit_logs
+        (id, organization_id, workspace_id, user_id, performer_type, action, resource_type, resource_id, metadata, created_at)
+        SELECT ('01990000-0041-7000-8000-' || lpad(n::text, 12, '0'))::uuid,
+          ${organizationId}, ${workspaceId}, CASE WHEN n % 2 = 0 THEN ${userId} ELSE 'queryperfdecoyuser1' END,
+          'user', 'update', 'workspace', ${workspaceId}, jsonb_build_object('fixture', repeat('x', 512)), now() - interval '365 days'
+        FROM generate_series(${first}::integer, ${last}::integer) series(n)`);
     }
   });
   await database.execute(sql`VACUUM (ANALYZE) entities`);
@@ -118,6 +158,9 @@ const seedPlaceholderQueryPerf = async (
   await database.execute(sql`VACUUM (ANALYZE) search_documents`);
   await database.execute(sql`VACUUM (ANALYZE) workspaces`);
   await database.execute(sql`VACUUM (ANALYZE) workspace_members`);
+  await database.execute(sql`VACUUM (ANALYZE) member`);
+  await database.execute(sql`VACUUM (ANALYZE) audit_logs`);
+  await database.execute(sql`VACUUM (ANALYZE) time_entries`);
   return {
     organizationId,
     userId,
@@ -134,6 +177,18 @@ export const seedQueryPerf = async (
   const { organizationId, userId, bigWorkspaceId, query, searchMatchCount } =
     await seedPlaceholderQueryPerf(database, profileId);
   return {
+    billingDraftCandidates: billingDraftCandidateMattersStatement({
+      tx: database,
+      organizationId,
+      userId,
+      windowStart: billingDraftCandidateWindowStart(),
+    }),
+    billingDraftUnboundedCandidates: billingDraftCandidateMattersStatement({
+      tx: database,
+      organizationId,
+      userId,
+      windowStart: new Date(0),
+    }),
     searchMatchCount,
     context: {
       organizationId,

@@ -3,6 +3,7 @@ import { expect } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 
 import { member, organization, user } from "@/api/db/auth-schema";
+import type { SafeDb } from "@/api/db/safe-db";
 import {
   billingDraftUserSettings,
   featureEnrolments,
@@ -12,8 +13,13 @@ import { desktopDeviceProofReplays } from "@/api/db/schema/desktop-device-proof-
 import { createMembershipScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { env } from "@/api/env";
 import { createDesktopBillingDraftSettingsReadEndpoint } from "@/api/handlers/desktop-time-entries/billing-draft-settings";
+import {
+  billingDraftCandidateMattersStatement,
+  billingDraftCandidateWindowStart,
+} from "@/api/handlers/desktop-time-entries/billing-drafts-context";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { HttpStatusResponse } from "@/api/http/status";
+import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
   desktopProofRequestUrl,
@@ -173,7 +179,10 @@ export const measureDesktopBillingDraftSettings = async (
       if (response instanceof HttpStatusResponse) {
         return panic("Desktop settings scaling requires a successful response");
       }
-      expect(response).toEqual({
+      const { revision, ...settings } = response;
+      expect(revision).toBeString();
+      expect(settings).toEqual({
+        scopeKey: JSON.stringify([organizationId, userId]),
         organizationMode: "enabled",
         consent: "granted",
         preference: "Keep the target narrative concise",
@@ -217,3 +226,35 @@ export const measureDesktopBillingDraftSettings = async (
       .where(eq(organization.id, otherOrganizationId));
   }
 };
+
+type CandidateMatterMeasurementOptions = {
+  safeDb: SafeDb;
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+};
+
+/** Measure the exact statement the drafting handler and query-perf registry execute. */
+export const measureDesktopBillingDraftCandidateMatters = async ({
+  safeDb,
+  organizationId,
+  userId,
+}: CandidateMatterMeasurementOptions) =>
+  await runWithMeasuredQueryCounter(async (counter) => {
+    const rows = (
+      await safeDb(
+        async (tx) =>
+          await billingDraftCandidateMattersStatement({
+            tx,
+            organizationId,
+            userId,
+            windowStart: billingDraftCandidateWindowStart(),
+          }),
+      )
+    ).unwrap();
+    return {
+      statements: counter.count,
+      transactionRoundTrips: counter.transactions,
+      responseBytes: Buffer.byteLength(JSON.stringify(rows)),
+      rows: rows.length,
+    };
+  });

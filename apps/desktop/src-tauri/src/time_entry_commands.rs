@@ -33,14 +33,14 @@ fn uncertain<E: std::fmt::Display>(cause: E) -> SubmitError {
 pub(crate) static BATCH_CONFIRMATION: tokio::sync::Mutex<()> =
   tokio::sync::Mutex::const_new(());
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ConfirmedBatchItem {
   entry: ConfirmedTimeEntry,
   ranges: Vec<ActivityRange>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ConfirmedBatchRequest {
   date: String,
@@ -88,7 +88,7 @@ fn validate_confirmation(
   Ok(())
 }
 
-fn require_account(
+pub(crate) fn require_account(
   caller: &ActivityCaller,
   gates: &FeatureGates,
   account: &LinkedAccount,
@@ -120,7 +120,7 @@ fn require_local_discard(
   Ok(())
 }
 
-async fn linked_account(
+pub(crate) async fn linked_account(
   caller: &ActivityCaller,
   gates: &FeatureGates,
   state: &AccountState,
@@ -299,6 +299,29 @@ mod tests {
     }
   }
 
+  /// The webview builds this request; the shared fixture keeps both sides of
+  /// the invoke boundary on the same field names.
+  #[test]
+  fn confirmed_batch_fixture_round_trips() {
+    let expected: serde_json::Value = serde_json::from_str(include_str!(
+      "../../fixtures/time-entry-batch-request.json"
+    ))
+    .unwrap();
+    let request: ConfirmedBatchRequest =
+      serde_json::from_value(expected.clone()).unwrap();
+    assert_eq!(serde_json::to_value(&request).unwrap(), expected);
+    let ConfirmedBatchRequest {
+      date,
+      idempotency_key,
+      items,
+    } = request;
+    let batch = ConfirmedBatch {
+      idempotency_key,
+      entries: items.into_iter().map(|item| item.entry).collect(),
+    };
+    assert_eq!(validate_confirmation(&batch, &date), Ok(()));
+  }
+
   #[test]
   fn oversized_confirmation_is_rejected_before_reservation() {
     let date = "2026-10-09";
@@ -312,6 +335,7 @@ mod tests {
           duration_minutes: 6,
           narrative: "Reviewed agreement".into(),
           billable: false,
+          classification: None,
         })
         .collect(),
     };

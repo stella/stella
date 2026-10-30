@@ -1,0 +1,607 @@
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
+import type { ReactNode } from "react";
+
+import { panic, Result } from "better-result";
+import { useTranslations } from "use-intl";
+
+import {
+  DESKTOP_BILLING_DRAFT_LIMITS,
+  desktopBillingDraftReviewSchema,
+} from "@stll/api-contract/desktop-billing-drafts";
+import type {
+  DesktopBillingDraftRequest,
+  DesktopBillingDraftReview,
+} from "@stll/api-contract/desktop-billing-drafts";
+import type { DesktopTimeEntryMatterCandidate } from "@stll/api-contract/desktop-time-entries";
+import { Temporal } from "@stll/time";
+import { useLatest } from "@stll/ui/use-latest";
+
+import {
+  DESKTOP_TELEMETRY_ERROR_CODES,
+  DESKTOP_TELEMETRY_OPERATIONS,
+} from "../telemetry/desktop-telemetry";
+import { reportActivityError } from "./activity-telemetry";
+import type { ActivityDaySnapshot } from "./activity-types";
+import {
+  BillingDraftConsentDialog,
+  BillingDraftEntryReview,
+  BillingDraftGuidelines,
+  BillingDraftShimmer,
+  BillingDraftSteerBar,
+  BillingDraftStructureRecovery,
+} from "./ActivityBillingDrafts";
+import type { BillingDraftSettingsControl } from "./ActivityBillingDrafts";
+import {
+  absorbedGroupIds,
+  captureReviewSources,
+  draftRequestEntries,
+  draftsByGroup,
+  draftStructure,
+  previousDraftResult,
+  resolveStructure,
+} from "./billing-draft-logic";
+import type { DraftableGroup, DraftResult } from "./billing-draft-logic";
+import type { BillingDraftConsent } from "./billing-draft-transport";
+import { canAcceptStructure, ReviewState } from "./billing-review-state";
+import type {
+  EntryEdit,
+  ReviewAction,
+  ReviewEvent,
+} from "./billing-review-state";
+
+type DraftingStatus =
+  { type: "idle" } | { type: "drafting"; groupIds: readonly string[] };
+type ConsentPrompt = "closed" | "open" | "saving";
+type EarlierEntry = DesktopBillingDraftReview["earlierEntries"][number];
+type CheckedGuideline =
+  DesktopBillingDraftReview["result"]["checkedGuidelines"][number];
+
+export type DraftStatus = "draft" | "drafting" | "drafted" | "tooMany";
+
+export type ReviewBarDrafts = {
+  status: DraftStatus;
+  undoable: boolean;
+  onDraft: () => void;
+  onUndoAll: () => void;
+};
+
+type DraftStatusOptions = {
+  busy: boolean;
+  undrafted: number;
+  selected: number;
+};
+
+const draftStatus = ({
+  busy,
+  undrafted,
+  selected,
+}: DraftStatusOptions): DraftStatus => {
+  if (busy) {
+    return "drafting";
+  }
+  if (selected > 0 && undrafted === 0) {
+    return "drafted";
+  }
+  return undrafted > DESKTOP_BILLING_DRAFT_LIMITS.entries ? "tooMany" : "draft";
+};
+
+type DraftOffersOptions = {
+  groups: readonly DraftableGroup[];
+  sentEdits: ReadonlyMap<string, EntryEdit>;
+  review: DesktopBillingDraftReview;
+};
+
+const draftOffers = ({ groups, sentEdits, review }: DraftOffersOptions) => {
+  const sentGroupIds = groups.map(({ id }) => id);
+  const results = draftsByGroup({ groupIds: sentGroupIds, review });
+  return groups.map((group) => {
+    const initial =
+      sentEdits.get(group.id) ?? panic("Draft lost its starting revision");
+    const draft = results.get(group.id) ?? panic("Draft missing for group");
+    const result: DraftResult = { draft, sources: groups };
+    return {
+      groupId: group.id,
+      initial,
+      expectedRevision: initial.revision,
+      result,
+    };
+  });
+};
+
+const useDraftReviewResults = (dispatch: (action: ReviewEvent) => void) => {
+  const [earlierEntries, setEarlierEntries] = useState<
+    ReadonlyMap<string, EarlierEntry>
+  >(new Map());
+  const [guidelines, setGuidelines] = useState<readonly CheckedGuideline[]>([]);
+  const applyReview = ({
+    review,
+    groups,
+    steer,
+    sentEdits,
+  }: {
+    review: DesktopBillingDraftReview;
+    sentEdits: ReadonlyMap<string, EntryEdit>;
+    groups: readonly DraftableGroup[];
+    steer: string | null;
+  }) => {
+    setEarlierEntries((current) => {
+      const next = new Map(current);
+      for (const entry of review.earlierEntries) {
+        next.set(entry.id, entry);
+      }
+      return next;
+    });
+    setGuidelines((current) => {
+      const next = new Map(current.map((file) => [file.fileId, file]));
+      for (const file of review.result.checkedGuidelines) {
+        next.set(file.fileId, file);
+      }
+      return [...next.values()];
+    });
+    dispatch({
+      type: "offer-results",
+      mode: steer === null ? "initial" : "steer",
+      offers: draftOffers({ groups, sentEdits, review }),
+    });
+  };
+
+  return {
+    earlierEntries,
+    guidelines,
+    applyReview,
+    clearGuidelines: () => setGuidelines([]),
+  };
+};
+
+type DraftConsentOptions = {
+  billingDrafts: BillingDraftSettingsControl;
+  onDraft: () => void;
+  onSaved: (saved: boolean) => void;
+};
+
+const useDraftConsent = ({
+  billingDrafts,
+  onDraft,
+  onSaved,
+}: DraftConsentOptions) => {
+  const [consentPrompt, setConsentPrompt] = useState<ConsentPrompt>("closed");
+  const consentIntent = useRef<symbol | null>(null);
+  const closeConsent = () => {
+    consentIntent.current = null;
+    setConsentPrompt("closed");
+  };
+
+  const allowDrafting = () => {
+    const intent = Symbol("drafting consent");
+    consentIntent.current = intent;
+    setConsentPrompt("saving");
+    void billingDrafts.setConsent("granted").then((granted) => {
+      if (consentIntent.current === intent) {
+        closeConsent();
+        if (granted) {
+          onDraft();
+        }
+      }
+      onSaved(granted);
+      return undefined;
+    });
+  };
+
+  return {
+    open: () => setConsentPrompt("open"),
+    dialog: (
+      <BillingDraftConsentDialog
+        open={consentPrompt !== "closed"}
+        pending={consentPrompt === "saving"}
+        onAllow={allowDrafting}
+        onClose={closeConsent}
+      />
+    ),
+  };
+};
+
+type DraftRequestOptions = {
+  request: DesktopBillingDraftRequest;
+  groupIds: readonly string[];
+  onReview: (review: DesktopBillingDraftReview) => void;
+};
+const useDraftRequestLifecycle = (
+  consent: BillingDraftConsent,
+  onError: (message: string | null) => void,
+) => {
+  const t = useTranslations("activity");
+  const [drafting, setDrafting] = useState<DraftingStatus>({ type: "idle" });
+  const [refining, setRefining] = useState<string | null>(null);
+  const draftRequest = useRef(0);
+  const consentStatus = useSyncExternalStore(
+    consent.subscribe,
+    consent.getSnapshot,
+  );
+  const cancelDrafting = useCallback(() => {
+    draftRequest.current += 1;
+    setDrafting({ type: "idle" });
+    setRefining(null);
+  }, []);
+  useEffect(() => {
+    const unsubscribe = consent.subscribe(cancelDrafting);
+    return () => {
+      unsubscribe();
+      draftRequest.current += 1;
+    };
+  }, [consent, cancelDrafting]);
+  const busy = drafting.type === "drafting";
+
+  const send = ({
+    request: payload,
+    groupIds,
+    onReview,
+  }: DraftRequestOptions) => {
+    if (consent.getSnapshot() !== "granted") {
+      return;
+    }
+    const request = ++draftRequest.current;
+    onError(null);
+    setDrafting({ type: "drafting", groupIds });
+    void consent.request(payload).then(async (outcome) => {
+      switch (outcome.type) {
+        case "blocked":
+        case "discarded":
+          if (request === draftRequest.current) {
+            setDrafting({ type: "idle" });
+          }
+          return undefined;
+        case "completed":
+          break;
+        default:
+          return panic("Unknown drafting outcome", outcome satisfies never);
+      }
+      const { response } = outcome;
+      if (request !== draftRequest.current) {
+        return undefined;
+      }
+      if (Result.isError(response)) {
+        setDrafting({ type: "idle" });
+        reportActivityError(
+          DESKTOP_TELEMETRY_OPERATIONS.activityUpdate,
+          DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+        );
+        onError(t(response.error));
+        return undefined;
+      }
+      const parsed = await desktopBillingDraftReviewSchema[
+        "~standard"
+      ].validate(response.value);
+      if (request !== draftRequest.current) {
+        return undefined;
+      }
+      setDrafting({ type: "idle" });
+      if (parsed.issues !== undefined) {
+        reportActivityError(
+          DESKTOP_TELEMETRY_OPERATIONS.activityUpdate,
+          DESKTOP_TELEMETRY_ERROR_CODES.invalidResponse,
+        );
+        onError(t("aiDraftFailed"));
+        return undefined;
+      }
+      onReview(parsed.value);
+      setRefining(null);
+      return undefined;
+    });
+  };
+  return {
+    drafting,
+    refining,
+    setRefining,
+    consentStatus,
+    busy,
+    cancelDrafting,
+    send,
+  };
+};
+
+type BillingDraftSessionOptions = {
+  snapshot: ActivityDaySnapshot;
+  billingDrafts: BillingDraftSettingsControl;
+  eligible: readonly DraftableGroup[];
+  selected: readonly DraftableGroup[];
+  matters: readonly DesktopTimeEntryMatterCandidate[];
+  editable: boolean;
+  editFor: (group: DraftableGroup) => EntryEdit;
+  dispatch: (action: ReviewEvent) => void;
+  onError: (message: string | null) => void;
+};
+
+/**
+ * AI drafting for one day review: what was drafted for which group, the
+ * request in flight, and every way back to the recorded text. Edits stay owned
+ * by the review; this session only proposes and applies changes to them.
+ */
+export const useBillingDraftSession = ({
+  snapshot,
+  billingDrafts,
+  eligible,
+  selected,
+  matters,
+  editable,
+  editFor,
+  dispatch,
+  onError,
+}: BillingDraftSessionOptions) => {
+  const t = useTranslations("activity");
+  const { earlierEntries, guidelines, applyReview, clearGuidelines } =
+    useDraftReviewResults(dispatch);
+  const {
+    drafting,
+    refining,
+    setRefining,
+    consentStatus,
+    busy,
+    cancelDrafting,
+    send,
+  } = useDraftRequestLifecycle(billingDrafts.consent, onError);
+  const drafts = new Map(
+    eligible.flatMap((group) => {
+      const draft = editFor(group).draft;
+      return draft === null ? [] : [[group.id, draft] as const];
+    }),
+  );
+  const absorbed = absorbedGroupIds(
+    eligible.map((group) => ({ group, content: editFor(group).content })),
+  );
+  const canDraft = (group: DraftableGroup) =>
+    editFor(group).content.type === "single" && !absorbed.has(group.id);
+  const undrafted = selected.filter((group) => {
+    const content = editFor(group).content;
+    return (
+      canDraft(group) &&
+      (!drafts.has(group.id) ||
+        (content.type === "single" && content.notice === "sourceChanged"))
+    );
+  });
+  const steerable = selected.filter(
+    (group) => drafts.get(group.id)?.using === "draft" && canDraft(group),
+  );
+  const steeringLimitMessage =
+    steerable.length > DESKTOP_BILLING_DRAFT_LIMITS.entries
+      ? t("aiSteerSelectionLimit", {
+          count: DESKTOP_BILLING_DRAFT_LIMITS.entries,
+        })
+      : null;
+
+  const currentDraftState = useLatest({
+    undrafted,
+    steerable,
+    busy,
+    drafts,
+    editFor,
+    snapshot,
+  });
+
+  const requestDrafts = ({
+    groupId,
+    steer,
+  }: {
+    groupId: string | null;
+    steer: string | null;
+  }) => {
+    if (billingDrafts.consent.getSnapshot() !== "granted") {
+      return;
+    }
+    const current = currentDraftState.current;
+    const selection = steer === null ? current.undrafted : current.steerable;
+    const groups = captureReviewSources(
+      selection.filter((group) => groupId === null || group.id === groupId),
+    );
+    if (groups.length === 0 || current.busy) {
+      return;
+    }
+    if (groups.length > DESKTOP_BILLING_DRAFT_LIMITS.entries) {
+      onError(
+        steer === null
+          ? t("aiDraftLimit", { limit: DESKTOP_BILLING_DRAFT_LIMITS.entries })
+          : t("aiSteerSelectionLimit", {
+              count: DESKTOP_BILLING_DRAFT_LIMITS.entries,
+            }),
+      );
+      return;
+    }
+    const previous = groups.map((group) => current.drafts.get(group.id));
+    const previousResult =
+      steer !== null && previous.every((state) => state !== undefined)
+        ? previousDraftResult(
+            groups.map((group, index) => ({
+              groupId: group.id,
+              result:
+                previous.at(index)?.result ??
+                panic("Steered group lost its draft"),
+            })),
+          )
+        : null;
+    const sentEdits = new Map(
+      groups.map((group) => [group.id, current.editFor(group)]),
+    );
+    send({
+      request: {
+        entries: draftRequestEntries({
+          groups,
+          date: current.snapshot.date,
+          timezone: Temporal.Now.timeZoneId(),
+          captureDetails: current.snapshot.captureDetails,
+        }),
+        ...(steer === null ? {} : { steer }),
+        ...(previousResult === null ? {} : { previousResult }),
+      },
+      groupIds: groups.map(({ id }) => id),
+      onReview: (review) => applyReview({ review, groups, steer, sentEdits }),
+    });
+  };
+
+  const settingsFailed = (saved: boolean) => {
+    if (!saved) {
+      onError(t("aiSettingsFailed"));
+    }
+  };
+
+  const consent = useDraftConsent({
+    billingDrafts,
+    onDraft: () => requestDrafts({ groupId: null, steer: null }),
+    onSaved: settingsFailed,
+  });
+
+  const startDrafting = () => {
+    if (billingDrafts.settings.type !== "ready") {
+      return;
+    }
+    if (billingDrafts.consent.getSnapshot() !== "granted") {
+      consent.open();
+      return;
+    }
+    requestDrafts({ groupId: null, steer: null });
+  };
+
+  const steerAll = (steer: string, remember: boolean) => {
+    if (billingDrafts.consent.getSnapshot() !== "granted") {
+      return;
+    }
+    if (steeringLimitMessage !== null) {
+      onError(steeringLimitMessage);
+      return;
+    }
+    if (remember) {
+      void billingDrafts.setPreference(steer).then(settingsFailed);
+    }
+    requestDrafts({
+      groupId: null,
+      steer,
+    });
+  };
+
+  const undoAll = () => {
+    cancelDrafting();
+    dispatch({ type: "undo-all" });
+    clearGuidelines();
+  };
+
+  const draftReview = (group: DraftableGroup): ReactNode => {
+    if (drafting.type === "drafting" && drafting.groupIds.includes(group.id)) {
+      return <BillingDraftShimmer />;
+    }
+    const state = drafts.get(group.id);
+    const edit = editFor(group);
+    const target = { groupId: group.id, initial: edit };
+    if (state === undefined || edit.content.type === "blocked") {
+      if (edit.content.type === "single") {
+        return null;
+      }
+      return (
+        <BillingDraftStructureRecovery
+          content={edit.content}
+          disabled={!editable || busy}
+          onRecover={({ type }) => dispatch({ type, ...target })}
+        />
+      );
+    }
+    const structure = draftStructure(state.result.draft);
+    const proposedStructure = structure
+      ? resolveStructure({
+          structure,
+          groupIds: state.result.sources.map(({ id }) => id),
+          candidates: matters,
+        })
+      : null;
+    const acceptance =
+      proposedStructure === null
+        ? null
+        : ({
+            type: "accept-structure",
+            ...target,
+            proposal: proposedStructure,
+            groups: eligible.map((entry) => ({
+              group: entry,
+              initial: editFor(entry),
+            })),
+          } as const satisfies ReviewAction);
+    const applicable =
+      acceptance !== null &&
+      canAcceptStructure(
+        new ReviewState(eligible.map((entry) => [entry.id, editFor(entry)])),
+        acceptance,
+      );
+    return (
+      <BillingDraftEntryReview
+        state={state}
+        content={edit.content}
+        proposedStructure={applicable ? proposedStructure : null}
+        earlierEntries={earlierEntries}
+        editable={editable}
+        busy={busy}
+        refining={refining === group.id}
+        draftingConsent={consentStatus}
+        onUseOriginal={() => dispatch({ type: "use-original", ...target })}
+        onUseDraft={() => dispatch({ type: "use-draft", ...target })}
+        onAcceptProposal={() => dispatch({ type: "apply-proposal", ...target })}
+        onDismissProposal={() =>
+          dispatch({ type: "dismiss-proposal", ...target })
+        }
+        onApplyStructure={() => {
+          if (acceptance !== null) {
+            dispatch(acceptance);
+          }
+        }}
+        onUndoStructure={() => dispatch({ type: "undo-structure", ...target })}
+        onRefine={() => setRefining(group.id)}
+        onCancelRefine={() => setRefining(null)}
+        onSteer={(steer) => requestDrafts({ groupId: group.id, steer })}
+      />
+    );
+  };
+
+  const offered =
+    snapshot.timeBillingEnabled && billingDrafts.settings.type === "ready";
+  const steering =
+    consentStatus === "granted" &&
+    billingDrafts.settings.type === "ready" &&
+    eligible.some(
+      (group) => drafts.get(group.id)?.using === "draft" && canDraft(group),
+    );
+  const preference =
+    billingDrafts.settings.type === "ready"
+      ? billingDrafts.settings.preference
+      : null;
+
+  return {
+    busy,
+    bar: offered
+      ? {
+          status: draftStatus({
+            busy,
+            undrafted: undrafted.length,
+            selected: selected.length,
+          }),
+          undoable: drafts.size > 0,
+          onDraft: startDrafting,
+          onUndoAll: undoAll,
+        }
+      : null,
+    draftReview,
+    steerBar: steering ? (
+      <BillingDraftSteerBar
+        disabled={!editable || busy}
+        limitMessage={steeringLimitMessage}
+        preference={preference}
+        onSteer={steerAll}
+        onForgetPreference={() => {
+          void billingDrafts.setPreference(null).then(settingsFailed);
+        }}
+      />
+    ) : null,
+    guidelines: <BillingDraftGuidelines files={guidelines} />,
+    consentDialog: consent.dialog,
+  };
+};

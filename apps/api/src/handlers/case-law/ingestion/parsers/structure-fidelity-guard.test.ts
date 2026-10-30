@@ -1,4 +1,4 @@
-import { afterAll, expect, test } from "bun:test";
+import { expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
 import * as v from "valibot";
 
@@ -70,11 +70,6 @@ const BASELINE_PATH =
   "apps/api/src/handlers/case-law/ingestion/parsers/structure-fidelity-baseline.json";
 const UPDATE_COMMAND =
   "bun apps/api/scripts/update-structure-fidelity-baseline.ts";
-
-const originalFetch = globalThis.fetch;
-afterAll(() => {
-  globalThis.fetch = originalFetch;
-});
 
 // Replaying every adapter's fixtures is the expensive step; both tests read
 // the one census.
