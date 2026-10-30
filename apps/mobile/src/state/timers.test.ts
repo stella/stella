@@ -15,6 +15,7 @@ const SESSION: StoredSession = {
   tokenEndpoint: "https://stella.example.com/api/auth/oauth2/token",
   resource: "https://stella.example.com/v1",
   refreshToken: "refresh-1",
+  userId: "user-1",
 };
 
 const TIMER: Timer = {

@@ -9,7 +9,7 @@ import { useChanged, useRevision } from "@/components/changes";
 import { EmptyCard, screenStyles } from "@/components/empty-state-screen";
 import { RetryButton } from "@/components/retry-button";
 import { TimerCard } from "@/components/timer-card";
-import { useGlyphImage } from "@/components/ui/use-glyph-image";
+import { barGlyph } from "@/components/ui/bar-glyph";
 import { useNow } from "@/components/use-now";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
@@ -35,28 +35,20 @@ const TimersScreen = () => {
   const revision = useRevision("timers");
   const t = useTranslations("timers");
   const router = useRouter();
-  const plusGlyph = useGlyphImage("plus");
 
   return (
     <>
-      <Stack.Screen
-        options={{
-          title: t("title"),
-          unstable_headerRightItems: () =>
-            plusGlyph === null
-              ? []
-              : [
-                  {
-                    icon: { source: plusGlyph, type: "image" },
-                    label: t("startTimer"),
-                    onPress: () => {
-                      router.push("/timers/new");
-                    },
-                    type: "button",
-                  },
-                ],
-        }}
-      />
+      <Stack.Screen options={{ title: t("title") }} />
+      <Stack.Toolbar placement="right">
+        <Stack.Toolbar.Button
+          onPress={() => {
+            router.push("/timers/new");
+          }}
+        >
+          {barGlyph("plus")}
+          <Stack.Toolbar.Label>{t("startTimer")}</Stack.Toolbar.Label>
+        </Stack.Toolbar.Button>
+      </Stack.Toolbar>
       {state.status === "signed-in" ? (
         <TimersLoader key={revision} source={state.source} />
       ) : null}

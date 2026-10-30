@@ -1,7 +1,16 @@
 import { panic } from "better-result";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript6";
+
+import {
+  type Expression,
+  type ModuleExportName,
+  type ObjectProperty,
+  type ParsedSource,
+  parseSource,
+  type SpreadElement,
+  walk,
+} from "@stll/scripts/src/syntax-tree";
 
 import { canonicalModuleId } from "../../../../.oxlint-plugins/module-id.ts";
 import { VERIFICATION_MODEL_TASK } from "../../src/lib/lists/verification/model-call";
@@ -29,9 +38,12 @@ const CHECKER_MODULE = "apps/api/src/lib/api-handlers";
 type ResolveCheckerExportOptions = {
   moduleId: string;
   exportedName: string;
-  sources: Map<string, ts.SourceFile | undefined>;
+  sources: Map<string, ParsedSource | undefined>;
   visited?: Set<string>;
 };
+
+const moduleExportName = (name: ModuleExportName) =>
+  name.type === "Literal" ? name.value : name.name;
 
 const resolveCheckerExport = ({
   moduleId,
@@ -55,12 +67,7 @@ const resolveCheckerExport = ({
     sources.set(
       moduleFile,
       existsSync(absoluteModuleFile)
-        ? ts.createSourceFile(
-            moduleFile,
-            readFileSync(absoluteModuleFile, "utf-8"),
-            ts.ScriptTarget.Latest,
-            true,
-          )
+        ? parseSource(moduleFile, readFileSync(absoluteModuleFile, "utf-8"))
         : undefined,
     );
   }
@@ -68,23 +75,20 @@ const resolveCheckerExport = ({
   if (source === undefined) {
     return undefined;
   }
-  for (const statement of source.statements) {
+  for (const statement of source.program.body) {
     if (
-      !ts.isExportDeclaration(statement) ||
-      !statement.exportClause ||
-      !ts.isNamedExports(statement.exportClause) ||
-      !statement.moduleSpecifier ||
-      !ts.isStringLiteral(statement.moduleSpecifier)
+      statement.type !== "ExportNamedDeclaration" ||
+      statement.source === null
     ) {
       continue;
     }
-    for (const element of statement.exportClause.elements) {
-      if (element.name.text !== exportedName) {
+    for (const element of statement.specifiers) {
+      if (moduleExportName(element.exported) !== exportedName) {
         continue;
       }
       return resolveCheckerExport({
-        moduleId: canonicalModuleId(statement.moduleSpecifier.text, moduleFile),
-        exportedName: element.propertyName?.text ?? element.name.text,
+        moduleId: canonicalModuleId(statement.source.value, moduleFile),
+        exportedName: moduleExportName(element.local),
         sources,
         visited,
       });
@@ -93,30 +97,46 @@ const resolveCheckerExport = ({
   return undefined;
 };
 
-const readMeteringValue = (node: ts.Expression): unknown => {
-  if (ts.isStringLiteral(node)) {
-    return node.text;
+// A `name: value` entry; shorthand, method, accessor and spread entries are not.
+const isPropertyAssignment = (
+  property: ObjectProperty | SpreadElement,
+): property is ObjectProperty =>
+  property.type === "Property" &&
+  property.kind === "init" &&
+  !property.method &&
+  !property.shorthand;
+
+const propertyNameText = (text: string, property: ObjectProperty) => {
+  const name = text.slice(property.key.start, property.key.end);
+  return property.computed ? `[${name}]` : name;
+};
+
+const readMeteringValue = (text: string, node: Expression): unknown => {
+  if (node.type === "Literal" && typeof node.value === "string") {
+    return node.value;
   }
-  if (ts.isConditionalExpression(node)) {
-    return readMeteringValue(node.whenTrue);
+  if (node.type === "ConditionalExpression") {
+    return readMeteringValue(text, node.consequent);
   }
-  if (ts.isObjectLiteralExpression(node)) {
+  if (node.type === "ObjectExpression") {
     return Object.fromEntries(
       node.properties.map((property) => {
-        if (!ts.isPropertyAssignment(property)) {
-          panic("Admission census requires explicit metering fields");
+        if (!isPropertyAssignment(property)) {
+          return panic("Admission census requires explicit metering fields");
         }
         return [
-          property.name.getText(),
-          readMeteringValue(property.initializer),
+          propertyNameText(text, property),
+          readMeteringValue(text, property.value),
         ];
       }),
     );
   }
-  if (ts.isIdentifier(node) && node.text === "VERIFICATION_MODEL_TASK") {
+  if (node.type === "Identifier" && node.name === "VERIFICATION_MODEL_TASK") {
     return VERIFICATION_MODEL_TASK;
   }
-  return panic(`Admission census cannot resolve ${node.getText()}`);
+  return panic(
+    `Admission census cannot resolve ${text.slice(node.start, node.end)}`,
+  );
 };
 
 type EnumerateConditionalOperationsOptions = { file: string; text: string };
@@ -128,7 +148,7 @@ export const enumerateConditionalOperations = ({
   enumerateWithSources({ file, text, sources: new Map() });
 
 type EnumerateWithSourcesOptions = EnumerateConditionalOperationsOptions & {
-  sources: Map<string, ts.SourceFile | undefined>;
+  sources: Map<string, ParsedSource | undefined>;
 };
 
 const enumerateWithSources = ({
@@ -137,95 +157,89 @@ const enumerateWithSources = ({
   sources,
 }: EnumerateWithSourcesOptions): ConditionalOperation[] => {
   const operations: ConditionalOperation[] = [];
-  const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
+  const source = parseSource(file, text);
   const aliases = new Map<string, ConditionalOperation["checker"]>();
   const namespaces = new Map<string, string>();
-  for (const statement of source.statements) {
-    if (
-      !ts.isImportDeclaration(statement) ||
-      !ts.isStringLiteral(statement.moduleSpecifier)
-    ) {
+  for (const statement of source.program.body) {
+    if (statement.type !== "ImportDeclaration") {
       continue;
     }
-    const moduleId = canonicalModuleId(statement.moduleSpecifier.text, file);
-    const bindings = statement.importClause?.namedBindings;
-    if (bindings && ts.isNamespaceImport(bindings)) {
-      namespaces.set(bindings.name.text, moduleId);
-    }
-    if (bindings && ts.isNamedImports(bindings)) {
-      for (const imported of bindings.elements) {
+    const moduleId = canonicalModuleId(statement.source.value, file);
+    for (const binding of statement.specifiers) {
+      if (binding.type === "ImportNamespaceSpecifier") {
+        namespaces.set(binding.local.name, moduleId);
+      }
+      if (binding.type === "ImportSpecifier") {
         const checker = resolveCheckerExport({
           moduleId,
-          exportedName: imported.propertyName?.text ?? imported.name.text,
+          exportedName: moduleExportName(binding.imported),
           sources,
         });
         if (checker) {
-          aliases.set(imported.name.text, checker);
+          aliases.set(binding.local.name, checker);
         }
       }
     }
   }
   // Handler factories retain the real checker as an injectable default.
-  const discoverDefaults = (node: ts.Node) => {
+  walk(source.program, (node, ancestors) => {
+    const parent = ancestors.at(-1);
     if (
-      ts.isBindingElement(node) &&
-      ts.isIdentifier(node.name) &&
-      node.initializer !== undefined &&
-      ts.isIdentifier(node.initializer)
+      node.type === "AssignmentPattern" &&
+      // A destructured binding's default, not a parameter's.
+      (parent?.type === "ArrayPattern" ||
+        (parent?.type === "Property" &&
+          ancestors.at(-2)?.type === "ObjectPattern")) &&
+      node.left.type === "Identifier" &&
+      node.right.type === "Identifier"
     ) {
-      const checker = aliases.get(node.initializer.text);
+      const checker = aliases.get(node.right.name);
       if (checker !== undefined) {
-        aliases.set(node.name.text, checker);
+        aliases.set(node.left.name, checker);
       }
     }
-    ts.forEachChild(node, discoverDefaults);
-  };
-  discoverDefaults(source);
-  const visit = (node: ts.Node) => {
-    if (ts.isCallExpression(node)) {
-      const expression = node.expression;
-      let checker: ConditionalOperation["checker"] | undefined;
-      if (ts.isIdentifier(expression)) {
-        checker = aliases.get(expression.text);
-      } else if (
-        ts.isPropertyAccessExpression(expression) &&
-        ts.isIdentifier(expression.expression) &&
-        namespaces.has(expression.expression.text)
-      ) {
-        checker = resolveCheckerExport({
-          moduleId:
-            namespaces.get(expression.expression.text) ??
-            panic("Missing namespace"),
-          exportedName: expression.name.text,
-          sources,
-        });
-      }
-      if (checker) {
-        const input = node.arguments.at(0);
-        if (!input || !ts.isObjectLiteralExpression(input)) {
-          panic(`Admission census requires an explicit input at ${file}`);
-        }
-        const metering = input.properties.find(
-          (property) =>
-            ts.isPropertyAssignment(property) &&
-            property.name.getText() === "metering",
-        );
-        if (!metering || !ts.isPropertyAssignment(metering)) {
-          panic(`Admission census lacks metering at ${file}`);
-        }
-        operations.push({
-          file,
-          line:
-            source.getLineAndCharacterOfPosition(node.getStart(source)).line +
-            1,
-          checker,
-          metering: readMeteringValue(metering.initializer),
-        });
-      }
+  });
+  walk(source.program, (node) => {
+    if (node.type !== "CallExpression") {
+      return;
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(source);
+    const expression = node.callee;
+    let checker: ConditionalOperation["checker"] | undefined;
+    if (expression.type === "Identifier") {
+      checker = aliases.get(expression.name);
+    } else if (
+      expression.type === "MemberExpression" &&
+      !expression.computed &&
+      expression.object.type === "Identifier" &&
+      expression.property.type === "Identifier" &&
+      namespaces.has(expression.object.name)
+    ) {
+      checker = resolveCheckerExport({
+        moduleId:
+          namespaces.get(expression.object.name) ?? panic("Missing namespace"),
+        exportedName: expression.property.name,
+        sources,
+      });
+    }
+    if (checker) {
+      const input = node.arguments.at(0);
+      if (input?.type !== "ObjectExpression") {
+        panic(`Admission census requires an explicit input at ${file}`);
+      }
+      const metering = input.properties
+        .filter(isPropertyAssignment)
+        .find((property) => propertyNameText(text, property) === "metering");
+      if (!metering) {
+        panic(`Admission census lacks metering at ${file}`);
+      }
+      operations.push({
+        file,
+        line: source.locate(node.start).line,
+        checker,
+        metering: readMeteringValue(text, metering.value),
+      });
+    }
+  });
   return operations;
 };
 
@@ -235,7 +249,7 @@ export const discoverConditionalOperations = async (): Promise<
   const operations: ConditionalOperation[] = [];
   // Imported modules recur across symbols and owners. Cache only their parsed
   // syntax for this census; resolution and operation collection still run anew.
-  const sources = new Map<string, ts.SourceFile | undefined>();
+  const sources = new Map<string, ParsedSource | undefined>();
   for await (const file of new Bun.Glob("apps/api/src/**/*.ts").scan({
     cwd: REPO_ROOT,
   })) {

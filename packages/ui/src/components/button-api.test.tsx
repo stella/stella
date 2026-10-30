@@ -219,3 +219,13 @@ describe("Button consolidated additions", () => {
     expect(markup).toContain("text-muted-foreground");
   });
 });
+
+describe("Button plain positioning", () => {
+  test("is the containing block for anything it overlays", () => {
+    const classes = classesOf(
+      renderToStaticMarkup(<Button variant="plain">Card</Button>),
+    );
+
+    expect(classes).toContain("relative");
+  });
+});
