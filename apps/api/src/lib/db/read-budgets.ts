@@ -61,7 +61,7 @@ export const READ_BUDGETS = {
     surface: "statement",
     pages: 512,
     reason:
-      "One joined live population scan reads at most 16,384 unfolded deltas in append order. At both 180,020 and 360,020 decisions, the measured statement reads 255 shared pages with that full backlog. The 512-page budget leaves 257 pages for wider court values, production-height indexes and source policy while rejecting corpus-dependent reads. The bounded overlay serves courts, year bounds and pending text together.",
+      "One joined live population scan includes the complete 16,384-delta window and its same-snapshot freshness marker. At both 180,020 and 360,020 decisions, the measured statement reads 435 shared pages, including the unvacuumed queue used by the production freshness function. The 512-page budget leaves 77 pages of fixture headroom while rejecting corpus-dependent reads. The bounded overlay serves courts, year bounds and pending text together; overflow serves only the folded snapshot.",
   },
   "statement.caseLaw.euCompletionPage": {
     surface: "statement",
