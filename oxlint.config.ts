@@ -1527,6 +1527,8 @@ const config = defineConfig({
       "error",
     "no-direct-legislation-revision-write/no-direct-legislation-revision-write":
       "error",
+    "no-direct-decision-identifier-column-write/no-direct-decision-identifier-column-write":
+      "error",
     "no-unvalidated-clause-write/no-unvalidated-clause-write": "error",
     "no-direct-template-version-write/no-direct-template-version-write":
       "error",
@@ -1964,6 +1966,7 @@ const config = defineConfig({
     "./.oxlint-plugins/fill-diagnostics.ts",
     "./.oxlint-plugins/no-direct-folio-snapshot-retirement.ts",
     "./.oxlint-plugins/no-direct-legislation-revision-write.ts",
+    "./.oxlint-plugins/no-direct-decision-identifier-column-write.ts",
     "./.oxlint-plugins/no-unvalidated-clause-write.ts",
     "./.oxlint-plugins/no-direct-template-version-write.ts",
     "./.oxlint-plugins/no-direct-entity-insert.ts",
@@ -2010,6 +2013,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-shared-checkout-mutation.ts",
     "./.oxlint-plugins/no-centered-scroll-column.ts",
     "./.oxlint-plugins/no-raw-overflow-scroll.ts",
+    "./.oxlint-plugins/no-hover-only-reveal.ts",
     "./.oxlint-plugins/no-imported-class-constant.ts",
     "./.oxlint-plugins/no-static-devtools-import.ts",
     "./.oxlint-plugins/no-static-catalogue-route-import.ts",
@@ -3035,8 +3039,12 @@ const config = defineConfig({
     {
       // Hermes, the mobile app's JavaScript engine, has no `Array#toSorted`,
       // `Array#toReversed` or `Array#toSpliced`; app code sorts or reverses a
-      // fresh array instead (apps/mobile/src/architecture.test.ts).
-      files: ["apps/mobile/src/**/*.{ts,tsx}"],
+      // fresh array instead (apps/mobile/src/architecture.test.ts and
+      // packages/transcript/src/portability.test.ts).
+      files: [
+        "apps/mobile/src/**/*.{ts,tsx}",
+        "packages/transcript/src/**/*.ts",
+      ],
       rules: {
         "unicorn/no-array-sort": "off",
         "unicorn/no-array-reverse": "off",
@@ -6739,6 +6747,22 @@ const config = defineConfig({
       ],
       rules: {
         "no-raw-overflow-scroll/no-raw-overflow-scroll": "error",
+      },
+    },
+    {
+      // Touch screens have no hover, so a control that is transparent until
+      // hovered never appears on a phone or tablet. Whatever hides until
+      // hover says what coarse pointers see instead.
+      files: [
+        "apps/web/src/**/*.tsx",
+        "apps/desktop/src/**/*.tsx",
+        "packages/ui/src/**/*.tsx",
+        "packages/workspace-ui/src/**/*.tsx",
+        ".oxlint-plugins/__fixtures__/no-hover-only-reveal.fixture.tsx",
+      ],
+      excludeFiles: ["**/*.{test,spec}.tsx", "**/__tests__/**"],
+      rules: {
+        "no-hover-only-reveal/no-hover-only-reveal": "error",
       },
     },
     {
