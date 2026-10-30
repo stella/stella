@@ -46,17 +46,12 @@ import {
   DownloadIcon,
   EllipsisVerticalIcon,
   PlusIcon,
-  SearchIcon,
   UploadIcon,
   UserIcon,
 } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupInput,
-} from "@stll/ui/input-group";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
+import { SearchField } from "@stll/ui/search-field";
 import { Skeleton } from "@stll/ui/skeleton";
 import {
   Table,
@@ -86,16 +81,16 @@ import { contactsKeys, contactsOptions } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { pageTitle } from "@/lib/page-title";
+import { queryView } from "@/lib/query-view.logic";
 import type { QueryView } from "@/lib/query-view.logic";
 import { ensureRouteInfiniteQueryData } from "@/lib/react-query";
-import { toSafeId } from "@/lib/safe-id";
 import { schemaFormOptions, toFormErrors } from "@/lib/schema";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { downloadFile } from "@/lib/utils";
-import { createUuid } from "@/lib/uuid";
+import { routePresentation } from "@/routes/-route-presentation";
 import { PersonDetailsFields } from "@/routes/_protected.contacts/-components/person-details-fields";
 import {
   birthDateDraft,
@@ -115,6 +110,7 @@ type ContactFilter = "all" | ContactType;
 const EMPTY_CONTACTS: ContactItem[] = [];
 
 export const Route = createFileRoute("/_protected/contacts/")({
+  staticData: { presentation: routePresentation({ type: "inherit" }) },
   loader: async ({ context }) => {
     await ensureRouteInfiniteQueryData(
       context.queryClient,
@@ -156,7 +152,7 @@ function ContactsPage() {
     }),
   );
   const { fetchNextPage, hasNextPage, isFetchingNextPage } = contactsQuery;
-  const view = useQueryView(contactsQuery, {
+  const view = queryView(contactsQuery, {
     isEmpty: (data) => data.pages.every((page) => page.items.length === 0),
   });
   const items = (() => {
@@ -209,20 +205,17 @@ function ContactsPage() {
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
       <ResponsiveActionToolbar>
         <ResponsiveActionToolbarItem slot="primary">
-          <InputGroup className="min-h-11 sm:min-h-0 sm:max-w-sm">
-            <InputGroupInput
-              onChange={(e) => {
-                const val = e.target.value;
-                setSearchQuery(val);
-                updateSearch(val);
-              }}
-              placeholder={t("contacts.search")}
-              value={searchQuery}
-            />
-            <InputGroupAddon>
-              <SearchIcon />
-            </InputGroupAddon>
-          </InputGroup>
+          <SearchField
+            aria-label={t("contacts.search")}
+            clearLabel={t("common.clearSearch")}
+            groupClassName="sm:max-w-sm"
+            onValueChange={(value) => {
+              setSearchQuery(value);
+              updateSearch(value);
+            }}
+            placeholder={t("contacts.search")}
+            value={searchQuery}
+          />
         </ResponsiveActionToolbarItem>
         <ResponsiveActionToolbarItem slot="secondary">
           <div className="flex flex-wrap gap-1">
@@ -604,7 +597,7 @@ const ContactRowActions = ({ contact }: { contact: ContactItem }) => {
 
   const handleDeleteOpen = () => {
     if (contact.clientMatterCount > 0) {
-      notifyUserError(undefined, deleteBlockedDescription);
+      notifyUserProblem(deleteBlockedDescription);
       return;
     }
 
@@ -618,7 +611,7 @@ const ContactRowActions = ({ contact }: { contact: ContactItem }) => {
           content={t("common.actions")}
           render={
             <MenuTrigger
-              className="opacity-0! transition-opacity group-hover:opacity-100!"
+              className="opacity-0! transition-opacity group-hover:opacity-100! pointer-coarse:opacity-100!"
               render={<Button size="icon-xs" variant="ghost" />}
             />
           }
@@ -722,12 +715,15 @@ const ContactsToolbarPlaceholder = () => {
   return (
     <ResponsiveActionToolbar>
       <ResponsiveActionToolbarItem slot="primary">
-        <InputGroup className="min-h-11 sm:min-h-0 sm:max-w-sm">
-          <InputGroupInput disabled placeholder={t("contacts.search")} />
-          <InputGroupAddon>
-            <SearchIcon />
-          </InputGroupAddon>
-        </InputGroup>
+        <SearchField
+          aria-label={t("contacts.search")}
+          clearLabel={t("common.clearSearch")}
+          disabled
+          groupClassName="sm:max-w-sm"
+          onValueChange={() => undefined}
+          placeholder={t("contacts.search")}
+          value=""
+        />
       </ResponsiveActionToolbarItem>
       <ResponsiveActionToolbarItem slot="secondary">
         <div className="flex flex-wrap gap-1">
@@ -901,7 +897,7 @@ const CreateContactDialog = ({
   const extraction = useProcuracaoExtraction();
   const schema = createContactSchema(t("common.required"));
   const mcpCatalogQuery = useQuery(mcpConnectorsOptions(activeOrganizationId));
-  const mcpCatalogView = useQueryView(mcpCatalogQuery);
+  const mcpCatalogView = queryView(mcpCatalogQuery);
   useQueryViewError(mcpCatalogView, "CreateContactDialog:query");
   const mcpCatalog =
     mcpCatalogView.type === "items" && mcpCatalogView.refetchError === undefined
@@ -924,7 +920,7 @@ const CreateContactDialog = ({
           (birthDate.year || birthDate.month || birthDate.day) &&
           !dateOfBirth
         ) {
-          notifyUserError(undefined, t("contacts.invalidDateOfBirth"));
+          notifyUserProblem(t("contacts.invalidDateOfBirth"));
           return;
         }
         const firstName =
@@ -941,7 +937,6 @@ const CreateContactDialog = ({
             : undefined;
 
         await createContact.mutateAsync({
-          id: toSafeId<"contact">(createUuid()),
           type: value.type,
           displayName: value.displayName,
           ...(firstName && { firstName }),
@@ -985,7 +980,7 @@ const CreateContactDialog = ({
     const ico = normalizeIcoInput(form.state.values.registrationNumber);
 
     if (ico.length !== 8) {
-      notifyUserError(undefined, t("contacts.create.invalidIco"));
+      notifyUserProblem(t("contacts.create.invalidIco"));
       return;
     }
 
@@ -999,7 +994,7 @@ const CreateContactDialog = ({
       const hit = data.type === "lookup" ? data.hit : null;
 
       if (!hit) {
-        notifyUserError(undefined, t("contacts.create.aresNotFound"));
+        notifyUserProblem(t("contacts.create.aresNotFound"));
         return;
       }
 
@@ -1292,12 +1287,19 @@ const CreateContactDialog = ({
               <form.Field name="displayName">
                 {(field) => (
                   <Field name={field.name}>
-                    <FieldLabel>{t("contacts.create.contactName")}</FieldLabel>
+                    <FieldLabel>{t("common.displayName")}</FieldLabel>
                     <Input
                       onBlur={field.handleBlur}
                       onChange={(e) => field.handleChange(e.target.value)}
                       value={field.state.value}
                     />
+                    <p className="text-muted-foreground text-xs">
+                      {t(
+                        contactType === "person"
+                          ? "contacts.create.displayNamePersonHint"
+                          : "contacts.create.displayNameOrganizationHint",
+                      )}
+                    </p>
                     <FieldError />
                   </Field>
                 )}

@@ -127,7 +127,7 @@ import {
 type ActivityPanelProps = { workspaceId: string };
 
 /** The matter whose activity is shown; file thumbnails are served per matter. */
-const ActivityWorkspaceContext = createContext<string | null>(null);
+export const ActivityWorkspaceContext = createContext<string | null>(null);
 
 type ActivityDay = [ActivityGroup, ...ActivityGroup[]];
 type ActivityViewMode = "timeline" | "list";
@@ -1369,7 +1369,7 @@ const ActivityList = ({
   );
 };
 
-const ActivityDetailsSheet = ({
+export const ActivityDetailsSheet = ({
   group,
   onOpenChange,
   workspaceId,
@@ -1442,13 +1442,6 @@ const ActivityDetailsSheet = ({
                               MEDIUM_DATE_SHORT_TIME_FORMAT,
                             )}
                           </time>
-                          <span aria-hidden="true"> · </span>
-                          {t(
-                            "workspaces.overview.activity.details.eventId",
-                          )}:{" "}
-                          <BidiText as="span" className="break-all">
-                            {batchItem.id}
-                          </BidiText>
                         </span>
                       </span>
                     </>
@@ -1514,10 +1507,6 @@ const ActivityDetailsSheet = ({
           },
         ]
       : []),
-    {
-      label: t("workspaces.overview.activity.details.eventId"),
-      value: <BidiText as="span">{item.id}</BidiText>,
-    },
   ];
 
   return (

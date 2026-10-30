@@ -125,13 +125,13 @@ function permissionControl({
       );
     case "notDetermined":
       return (
-        <Button onClick={onRequest} size="sm" variant="outline">
+        <Button onClick={onRequest} variant="outline">
           {labels.allow}
         </Button>
       );
     case "denied":
       return (
-        <Button onClick={onOpenSettings} size="sm" variant="outline">
+        <Button onClick={onOpenSettings} variant="outline">
           {labels.openSettings}
         </Button>
       );

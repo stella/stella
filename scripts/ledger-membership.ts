@@ -69,33 +69,30 @@ const compareLedgerMembership = ({
   if (resolved.exitCode !== 0) {
     return { type: "unresolved-base" };
   }
-  // A commit the base already contains adds nothing to the base's ledger: a
-  // later shrink on the base is not growth here. Its own ledger is the base,
-  // so only edits on top of it count.
-  const contained =
-    Bun.spawnSync(
-      [
-        "git",
-        "merge-base",
-        "--is-ancestor",
-        "HEAD",
-        resolved.stdout.toString().trim(),
-      ],
-      { cwd: repoRoot, env: ledgerGitEnv(), stderr: "pipe" },
-    ).exitCode === 0;
-  const commit = contained ? "HEAD" : resolved.stdout.toString().trim();
-  const base = readBaseLedger({
-    baseRef: commit,
-    ledgerRel,
-    repoRoot,
-    parseLedger,
+  const tip = resolved.stdout.toString().trim();
+  // A branch answers only for what it adds on top of its fork point: an entry
+  // the base removed after the fork is the base's shrink, not growth here; the
+  // merge group contains the base, so it checks the merged ledger against the
+  // tip. The tip still counts, so an entry the base itself added since is
+  // never reported against the branch. A commit the base contains is its own
+  // fork point, so only edits on top of it count. Unrelated history panics.
+  const commits = [
+    ...new Set([ledgerMergeBase({ repoRoot, baseRef: tip }), tip]),
+  ];
+  const known = commits.flatMap((commit) => {
+    const entries = readBaseLedger({
+      baseRef: commit,
+      ledgerRel,
+      repoRoot,
+      parseLedger,
+    });
+    return entries === null
+      ? []
+      : [normalizeBaseEntries?.(entries, commit) ?? entries];
   });
   return {
     type: "compared",
-    added: addedEntries(
-      current,
-      base === null ? null : (normalizeBaseEntries?.(base, commit) ?? base),
-    ),
+    added: addedEntries(current, known.length === 0 ? null : known.flat()),
   };
 };
 
@@ -183,6 +180,12 @@ type RunLedgerMembershipGuardOptions = {
   args?: readonly string[];
   log?: (message: string) => void;
   error?: (message: string) => void;
+  reviewedEntryAdmission?:
+    | {
+        type: "reasoned";
+        entries: readonly { id: string; reason: string }[];
+      }
+    | undefined;
 };
 
 export const runLedgerMembershipGuard = ({
@@ -195,6 +198,7 @@ export const runLedgerMembershipGuard = ({
   args = process.argv.slice(2),
   log = console.log,
   error = console.error,
+  reviewedEntryAdmission,
 }: RunLedgerMembershipGuardOptions): number => {
   if (args[0] === "--self-test") {
     return selfTestLedgerMembership(`check-${label}-ledger`);
@@ -225,16 +229,32 @@ export const runLedgerMembershipGuard = ({
     return 2;
   }
   const { added } = comparison;
-  if (added.length === 0) {
+  const reviewedById = new Map(
+    reviewedEntryAdmission?.entries.map(({ id, reason }) => [id, reason]),
+  );
+  const admitted: { id: string; reason: string }[] = [];
+  const refused: string[] = [];
+  for (const id of added) {
+    const reason = reviewedById.get(id);
+    if (reason === undefined || reason.trim().length === 0) {
+      refused.push(id);
+      continue;
+    }
+    admitted.push({ id, reason });
+  }
+  for (const { id, reason } of admitted) {
+    log(`reviewed entry admitted: ${id} (${reason})`);
+  }
+  if (refused.length === 0) {
     log(
-      `${label} ledger: OK. ${current.length} entries, none new vs ${baseRef}.`,
+      `${label} ledger: OK. ${current.length} entries, ${admitted.length === 0 ? "none new" : `${admitted.length} reviewed`} vs ${baseRef}.`,
     );
     return 0;
   }
   error(
-    `${label} ledger: ${added.length} entries are not in ${baseRef}. The ledger only shrinks; ${remediation}:`,
+    `${label} ledger: ${refused.length} entries are not in ${baseRef}. The ledger only shrinks; ${remediation}:`,
   );
-  for (const entry of added) {
+  for (const entry of refused) {
     error(`  ${entry}`);
   }
   return 1;

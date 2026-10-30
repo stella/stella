@@ -18,9 +18,9 @@ import type {
   OrgAIConfig,
   OrgAIModelSelection,
 } from "@/api/lib/ai-config";
-import { decryptAIConfig } from "@/api/lib/ai-config-crypto";
+import { decryptAIConfig as decryptAIConfigResult } from "@/api/lib/ai-config-crypto";
+import * as outbound from "@/api/lib/auth/authorized-outbound-fetch";
 import { toSafeId } from "@/api/lib/branded-types";
-import * as outbound from "@/api/lib/safe-outbound-fetch";
 import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import {
   createTestHandlerContext,
@@ -29,6 +29,10 @@ import {
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import updateAIConfig from "./update-ai-config";
+
+const decryptAIConfig = async (
+  ...args: Parameters<typeof decryptAIConfigResult>
+) => (await decryptAIConfigResult(...args)).unwrap();
 
 type UpdateContext = Parameters<typeof updateAIConfig.handler>[0];
 

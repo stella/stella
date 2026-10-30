@@ -107,7 +107,6 @@ export const ShortcutSetting = () => {
                 setNotice({ type: "none" });
                 setRecording(true);
               }}
-              size="sm"
               variant="outline"
             >
               {t("change")}
@@ -152,7 +151,6 @@ export const ShortcutSetting = () => {
             onClick={() => {
               void reset();
             }}
-            size="sm"
             variant="ghost"
           >
             {t("reset", { shortcut: label(snapshot.defaultKeys) })}

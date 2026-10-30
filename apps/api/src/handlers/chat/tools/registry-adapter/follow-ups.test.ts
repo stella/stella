@@ -1,8 +1,13 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { operators } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
+import { cents } from "@stll/money";
 
+import type { Transaction } from "@/api/db/root";
+import { BILLING_STATUS, invoices } from "@/api/db/schema";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
@@ -14,6 +19,7 @@ import {
 } from "@/api/lib/safe-id-boundaries";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
+import { invoiceDetailRowFixture } from "@/api/tests/helpers/invoice-tool-fixtures";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
@@ -185,87 +191,104 @@ describe("follow-up (a): detail-mode workspace resolution from the fetched row",
     expect(analytics.exceptions()).toEqual([]);
   });
 
-  test("list_invoices by invoice_id alone resolves nested line-item entity refs", async () => {
-    const refRegistry = createChatRefRegistry();
-    const tx = {
-      query: {
-        invoices: {
-          findFirst: async () => ({
-            id: INV_UUID,
-            workspaceId: WS_UUID,
-            invoiceNumber: "INV-1",
-            documentType: "invoice",
-            originalInvoiceId: null,
-            reference: "REF-1",
-            status: "draft",
-            invoiceDate: "2026-01-01",
-            dueDate: "2026-02-01",
-            currency: "EUR",
-            totalAmount: 1000,
-            // Totals written before invoice lines: the read derives them.
-            netAmount: null,
-            vatAmount: null,
-            notes: null,
-            taxableSupplyDate: null,
-            sellerProfileId: null,
-            buyerName: null,
-            buyerRegistrationId: null,
-            buyerVatId: null,
-            buyerAddressLine1: null,
-            buyerAddressLine2: null,
-            buyerCity: null,
-            buyerPostalCode: null,
-            buyerCountry: null,
-            paidAt: null,
-            createdAt: new Date("2026-01-01T00:00:00.000Z"),
-            updatedAt: new Date("2026-01-01T00:00:00.000Z"),
-            lines: [],
-            timeEntries: [
-              {
-                id: TE_UUID,
-                workItemId: ENTITY_UUID,
-                workItemReference: { type: "available", id: ENTITY_UUID },
-                dateWorked: "2026-01-01",
-                billedMinutes: 60,
-                rateAtEntry: 100,
-                currency: "EUR",
-                narrative: "work",
-                narrativeLanguage: null,
-                invoiceNarrative: null,
-                noCharge: false,
-                status: "invoiced",
-                workItem: { id: ENTITY_UUID, name: "Deed" },
-              },
-            ],
-            expenses: [],
-          }),
+  test.each(["derived", "explicit"] as const)(
+    "list_invoices detail resolves scoped predicates and nested refs (%s matter)",
+    async (matterSource) => {
+      const refRegistry = createChatRefRegistry();
+      const predicates: ReturnType<PgDialect["sqlToQuery"]>[] = [];
+      const dialect = new PgDialect();
+      const tx = {
+        query: {
+          invoices: {
+            findFirst: async (
+              options?: Parameters<
+                Transaction["query"]["invoices"]["findFirst"]
+              >[0],
+            ) => {
+              const predicate = options?.where?.RAW;
+              if (typeof predicate !== "function") {
+                return panic(
+                  "Invoice detail query omitted its scope predicate",
+                );
+              }
+              predicates.push(
+                dialect.sqlToQuery(predicate(invoices, operators)),
+              );
+              return invoiceDetailRowFixture({
+                id: toSafeId<"invoice">(INV_UUID),
+                workspaceId: toSafeId<"workspace">(WS_UUID),
+                invoiceNumber: "INV-1",
+                reference: "REF-1",
+                dueDate: "2026-02-01",
+                totalAmount: cents(1000),
+                timeEntries: [
+                  {
+                    id: toSafeId<"timeEntry">(TE_UUID),
+                    workspaceId: toSafeId<"workspace">(WS_UUID),
+                    workItemId: toSafeId<"entity">(ENTITY_UUID),
+                    workItemReference: {
+                      type: "available",
+                      id: toSafeId<"entity">(ENTITY_UUID),
+                    },
+                    dateWorked: "2026-01-01",
+                    billedMinutes: 60,
+                    rateAtEntry: cents(100),
+                    currency: "EUR",
+                    narrative: "work",
+                    invoiceNarrative: null,
+                    noCharge: false,
+                    status: BILLING_STATUS.BILLED,
+                    invoiceAttachment: "charged",
+                    workItem: {
+                      id: toSafeId<"entity">(ENTITY_UUID),
+                      name: "Deed",
+                    },
+                  },
+                ],
+              });
+            },
+          },
         },
-      },
-    };
+      };
 
-    const result = await runRegistryReadTool({
-      args: { invoice_id: INV_UUID },
-      context: buildContext(tx),
-      refRegistry,
-      toolName: "list_invoices",
-    });
+      const result = await runRegistryReadTool({
+        args: {
+          invoice_id: INV_UUID,
+          ...(matterSource === "explicit"
+            ? {
+                matter_id: refRegistry.toMatterRef(
+                  toSafeId<"workspace">(WS_UUID),
+                ),
+              }
+            : {}),
+        },
+        context: buildContext(tx),
+        refRegistry,
+        toolName: "list_invoices",
+      });
 
-    expect(Result.isError(result)).toBe(false);
-    const payload = result.unwrap();
-    expect(payload).toMatchObject({
-      invoice: {
-        workspaceId: "mat_1",
-        timeEntries: [{ entityId: "ent_1", entity: { id: "ent_1" } }],
-      },
-    });
-    const serialized = JSON.stringify(payload);
-    // The entity/workspace tenant UUIDs are fully replaced by refs.
-    expect(serialized).not.toContain(ENTITY_UUID);
-    expect(serialized).not.toContain(WS_UUID);
-    // Invoice/line-item handles stay (declared passthrough), so some UUIDs
-    // legitimately remain in the payload.
-    expect(containsRawUuid(payload)).toBe(true);
-    expect(serialized).toContain(INV_UUID);
-    expect(analytics.exceptions()).toEqual([]);
-  });
+      expect(predicates).toHaveLength(2);
+      for (const predicate of predicates) {
+        expect(predicate.sql).toContain("invoice_lines");
+        expect(predicate.params).toContain(WS_UUID);
+      }
+      expect(Result.isError(result)).toBe(false);
+      const payload = result.unwrap();
+      expect(payload).toMatchObject({
+        invoice: {
+          workspaceId: "mat_1",
+          timeEntries: [{ entityId: "ent_1", entity: { id: "ent_1" } }],
+        },
+      });
+      const serialized = JSON.stringify(payload);
+      // The entity/workspace tenant UUIDs are fully replaced by refs.
+      expect(serialized).not.toContain(ENTITY_UUID);
+      expect(serialized).not.toContain(WS_UUID);
+      // Invoice/line-item handles stay (declared passthrough), so some UUIDs
+      // legitimately remain in the payload.
+      expect(containsRawUuid(payload)).toBe(true);
+      expect(serialized).toContain(INV_UUID);
+      expect(analytics.exceptions()).toEqual([]);
+    },
+  );
 });

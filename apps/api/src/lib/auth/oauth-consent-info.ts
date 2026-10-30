@@ -4,9 +4,14 @@ import type { BetterAuthPlugin } from "better-auth";
 import { sessionMiddleware } from "better-auth/api";
 import * as v from "valibot";
 
-import type { VerifiedOAuthClientBrand } from "@stll/api-contract";
+import type {
+  McpOAuthScope,
+  OAuthConsentClient,
+  VerifiedOAuthClientBrand,
+} from "@stll/api-contract";
 
 import { CACHE_CONTROL_HEADER, PRIVATE_CACHE_CONTROL } from "@/api/http/cache";
+import type { OAUTH_REGISTRATION_SCOPE_POLICY } from "@/api/lib/db/oauth-scope-policy";
 
 type HttpsUrl = `https://${string}`;
 
@@ -84,31 +89,52 @@ const VERIFIED_THIRD_PARTY_REDIRECTS: readonly VerifiedClientUrl[] = [
   },
 ];
 
+type VerifiedClientId = VerifiedClientUrl & {
+  /**
+   * The most a client identified by this document may be granted: "elevated"
+   * keeps the scopes self-registered clients never get, "open" withholds them
+   * as for a registered client.
+   */
+  readonly scopePolicy: (typeof OAUTH_REGISTRATION_SCOPE_POLICY)[McpOAuthScope];
+};
+
 /** Client ID Metadata Document URLs of widely used third-party clients. */
-const VERIFIED_THIRD_PARTY_CLIENT_IDS: readonly VerifiedClientUrl[] = [
+const VERIFIED_THIRD_PARTY_CLIENT_IDS: readonly VerifiedClientId[] = [
+  // Claude on the web, desktop and mobile: the document Anthropic hosts for
+  // the hosted apps, whose only redirect is the hosted callback above. It may
+  // be granted what Claude is granted when it registers that callback.
+  {
+    exact: "https://claude.ai/oauth/mcp-oauth-client-metadata",
+    source: CLAUDE_DOCS,
+    brand: "claude",
+    scopePolicy: "open",
+  },
   // Claude Code (loopback redirects, attested by this document).
   {
     exact: "https://claude.ai/oauth/claude-code-client-metadata",
     source: CLAUDE_DOCS,
     brand: "claude_code",
+    scopePolicy: "elevated",
   },
   {
     exact: "https://chatgpt.com/oauth/client.json",
     source: CHATGPT_DOCS,
     brand: "chatgpt",
+    scopePolicy: "elevated",
   },
   // Codex CLI (loopback redirects, attested by this document).
   {
     exact: "https://chatgpt.com/oauth/codex/client.json",
     source: CODEX_DOCS,
     brand: "codex",
+    scopePolicy: "elevated",
   },
 ];
 
-const findVerifiedUrl = (
+const findVerifiedUrl = <Entry extends VerifiedClientUrl>(
   url: URL,
-  entries: readonly VerifiedClientUrl[],
-): VerifiedClientUrl | undefined => {
+  entries: readonly Entry[],
+): Entry | undefined => {
   if (
     url.protocol !== "https:" ||
     url.username !== "" ||
@@ -150,19 +176,22 @@ export const getVerifiedOAuthOrigins = (configuredUrls: readonly string[]) =>
   });
 
 /**
- * Whether a client identified by a client metadata document is a known one:
- * its document lives under Stella's own origins or at a documented location.
+ * Whether a client identified by a client metadata document may hold elevated
+ * scopes: its document lives under Stella's own origins, or at a documented
+ * location whose entry allows them.
  */
-export const isVerifiedClientMetadataDocument = (
+export const mayMetadataDocumentClientHoldElevatedScopes = (
   clientId: string,
   verifiedOrigins: readonly string[],
 ): boolean => {
   const url = URL.parse(clientId);
+  if (!url || url.username !== "" || url.password !== "") {
+    return false;
+  }
   return (
-    url?.username === "" &&
-    url.password === "" &&
-    (verifiedOrigins.includes(url.origin) ||
-      findVerifiedUrl(url, VERIFIED_THIRD_PARTY_CLIENT_IDS) !== undefined)
+    verifiedOrigins.includes(url.origin) ||
+    findVerifiedUrl(url, VERIFIED_THIRD_PARTY_CLIENT_IDS)?.scopePolicy ===
+      "elevated"
   );
 };
 
@@ -193,10 +222,37 @@ const brandOfLocation = (
   return entry.brand ?? "unbranded";
 };
 
-type OAuthConsentClient = Pick<
+type RegisteredConsentClient = Pick<
   SchemaClient,
   "clientId" | "name" | "redirectUris" | "clientDiscoveryId"
 >;
+
+type LocationEvidence = ReturnType<typeof brandOfLocation>;
+
+/**
+ * Verified only when every location is, and branded only when they all name
+ * the same product. The registered name travels only with an unbranded
+ * client, as its own claim.
+ */
+const consentClient = (
+  evidence: readonly LocationEvidence[],
+  claimedName: string | null,
+): OAuthConsentClient => {
+  const brands = new Set(evidence);
+  if (brands.size === 0 || brands.has(null)) {
+    return { type: "unverified", name: claimedName };
+  }
+  const [onlyBrand] = brands;
+  if (
+    brands.size === 1 &&
+    onlyBrand !== undefined &&
+    onlyBrand !== null &&
+    onlyBrand !== "unbranded"
+  ) {
+    return { type: "verified", brand: onlyBrand };
+  }
+  return { type: "verified_unbranded", name: claimedName };
+};
 
 /**
  * Where a redirect sends the authorization code, as the consent screen shows
@@ -212,12 +268,10 @@ const redirectTarget = (url: URL): string =>
 /**
  * What the consent screen may claim about a client. A client identified by a
  * metadata document is verified by where that document lives; any other client
- * by every one of its redirect URIs. `verifiedBrand` names the product only
- * when that evidence points at a single one; the registered `client_name` is
- * shown as the client's own claim and never selects a brand.
+ * by every one of its redirect URIs. The registered name never selects a brand.
  */
 export const getOAuthConsentInfo = (
-  client: OAuthConsentClient,
+  client: RegisteredConsentClient,
   verifiedOrigins: readonly string[],
 ) => {
   const redirects = client.redirectUris
@@ -237,12 +291,8 @@ export const getOAuthConsentInfo = (
     : redirects.map((url) =>
         brandOfLocation(url, VERIFIED_THIRD_PARTY_REDIRECTS, verifiedOrigins),
       );
-  const unverified =
-    evidence.length === 0 || evidence.some((brand) => brand === null);
-  const brands = new Set(evidence);
-  const [onlyBrand] = brands;
   return {
-    client_name: client.name ?? null,
+    client: consentClient(evidence, client.name || null),
     redirectTargets: [
       ...new Set(
         redirects.flatMap((url) => {
@@ -252,15 +302,6 @@ export const getOAuthConsentInfo = (
       ),
     ],
     clientIdHost: clientUrl?.host ?? null,
-    unverified,
-    verifiedBrand:
-      !unverified &&
-      brands.size === 1 &&
-      onlyBrand !== undefined &&
-      onlyBrand !== null &&
-      onlyBrand !== "unbranded"
-        ? onlyBrand
-        : null,
   };
 };
 

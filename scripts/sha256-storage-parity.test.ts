@@ -8,10 +8,10 @@ import { createSha256 } from "@stll/sha256/bun";
 import { createSha256 as createLegacyNodeHash } from "@stll/sha256/node";
 
 import { hashSwallowedItemTokens } from "../.oxlint-plugins/no-swallowed-item-error";
-import { findDuplicateRasterAssets } from "./check-duplicate-raster-assets";
 import { watchedPathsHashAtHead } from "./check-marketing-recordings";
 import { hashBytes } from "./check-migration-order";
 import { checkMigrationIndexBuilds } from "./check-migration-safety";
+import { findDuplicateRasterAssets } from "./check-public-assets";
 import { usCourtPartitionOf } from "./generate-us-courts";
 import { hashGeneratedSource } from "./generated-source-hash";
 import {

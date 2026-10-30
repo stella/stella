@@ -18,21 +18,44 @@ import {
   readBaseline,
   runDependencyAuditCli,
   runReleaseCheck as executeReleaseAudit,
+  writeBaseline,
 } from "./dependency-audit";
 import {
   expiringAcceptances,
   lapsedAcceptances,
+  patchedAcceptanceWindows,
 } from "./dependency-audit-acceptance";
 
 const testState = createTestState({ file: import.meta.path, config: {} });
 const advisory = { id: "GHSA-aaaa-bbbb-cccc", vulnerableVersions: "<=1.4.0" };
-const latest = (version: string | undefined) => () => version;
+const releases = (version: string | undefined) => () =>
+  version === undefined
+    ? undefined
+    : [{ version, installableSince: "2026-10-01T00:00:00.000Z" }];
 const currentAdvisory: Advisory = {
   ...advisory,
   severity: "high",
   package: "pkg",
   title: "test advisory",
 };
+
+test("newer patched releases preserve the first installable patch deadline", () => {
+  const patchReleases = [
+    { version: "1.4.1", installableSince: "2026-10-01T00:00:00.000Z" },
+    { version: "1.4.2", installableSince: "2026-10-03T00:00:00.000Z" },
+  ];
+  const options = {
+    accepted: [{ id: advisory.id, package: "pkg", untilPatched: true }],
+    current: [advisory],
+    releasesForPackage: () => patchReleases,
+    today: "2026-10-03",
+    now: new Date("2026-10-03T01:00:00Z"),
+  };
+  expect(lapsedAcceptances(options)).toHaveLength(1);
+  expect(patchedAcceptanceWindows(options).at(0)?.lapsesAt).toBe(
+    "2026-10-02T00:00:00.000Z",
+  );
+});
 const auditBaseline = (expiresOn?: string): Baseline => ({
   note: "test",
   auditLevel: "high",
@@ -54,6 +77,12 @@ const runCheck = async (
   accepted: Baseline,
   today: string,
   warningFormat: "github" | "plain" = "plain",
+  releasesForPackage = async () => [
+    {
+      version: "1.4.0",
+      installableSince: "2026-10-01T00:00:00.000Z",
+    },
+  ],
 ) => {
   const output: { info: string[]; warn: string[] } = { info: [], warn: [] };
   const info = spyOn(console, "info").mockImplementation((message) => {
@@ -68,6 +97,7 @@ const runCheck = async (
       baseline: accepted,
       now: () => new Date(`${today}T00:00:00Z`),
       warningFormat,
+      releasesForPackage,
     });
     return { ...output, status };
   } finally {
@@ -100,7 +130,12 @@ const runReleaseCheck = async (
   try {
     const status = await checkRelease(advisories, previousAdvisories, {
       baseline,
-      latestVersion: async () => "1.4.0",
+      releasesForPackage: async () => [
+        {
+          version: "1.4.0",
+          installableSince: "2026-10-01T00:00:00.000Z",
+        },
+      ],
       now: () => new Date(`${today}T00:00:00Z`),
       warningFormat: "plain",
     });
@@ -297,6 +332,27 @@ describe("audit acceptance expiry", () => {
     );
   });
 
+  test("an installable patch reports its grace window before lapse", async () => {
+    const baseline = auditBaseline("2026-11-01");
+    baseline.accepted[0]!.untilPatched = true;
+    const result = await runCheck(
+      [currentAdvisory],
+      baseline,
+      "2026-10-02",
+      "plain",
+      async () => [
+        {
+          version: "1.4.1",
+          installableSince: "2026-10-02T00:00:00.000Z",
+        },
+      ],
+    );
+    expect(result.status).toBe(0);
+    expect(result.info).toContain(
+      `${advisory.id} for pkg: patch installable since 2026-10-02T00:00:00.000Z, lapses at 2026-10-03T00:00:00.000Z`,
+    );
+  });
+
   test("a new advisory is reported and fails", async () => {
     const newBaseline = { ...auditBaseline(), accepted: [] };
     const newResult = await runCheck(
@@ -353,13 +409,62 @@ describe("audit acceptance expiry", () => {
     expect(result.info.some((line) => line.endsWith("LAPSED"))).toBe(true);
   });
 
+  test("routine checks warn after date expiry while owner changes refuse it", async () => {
+    const baseline = auditBaseline("2026-10-01");
+    const options = { baseline, now: () => new Date("2026-10-02T00:00:00Z") };
+    expect(
+      await check([currentAdvisory], { ...options, enforceDateExpiry: false }),
+    ).toBe(0);
+    expect(
+      await check([currentAdvisory], { ...options, enforceDateExpiry: true }),
+    ).toBe(2);
+    expect(
+      expiringAcceptances({
+        accepted: baseline.accepted,
+        current: [currentAdvisory],
+        today: "2026-10-02",
+      }),
+    ).toHaveLength(1);
+  });
+
+  test("routine checks still fail on invalid expiry and untilPatched terms", async () => {
+    const options = {
+      now: () => new Date("2026-10-02T00:00:00Z"),
+      enforceDateExpiry: false,
+    };
+    expect(
+      await check([currentAdvisory], {
+        ...options,
+        baseline: auditBaseline("not-a-date"),
+      }),
+    ).toBe(2);
+    const baseline = auditBaseline("2026-10-01");
+    baseline.accepted = baseline.accepted.map((entry) => ({
+      ...entry,
+      untilPatched: true,
+    }));
+    expect(
+      await check([currentAdvisory], {
+        ...options,
+        baseline,
+        releasesForPackage: async () => [
+          {
+            version: "1.4.1",
+            installableSince: "2026-10-01T00:00:00.000Z",
+          },
+        ],
+      }),
+    ).toBe(2);
+  });
+
   test("an acceptance without terms never lapses", () => {
     expect(
       lapsedAcceptances({
         accepted: [{ id: advisory.id, package: "pkg" }],
         current: [advisory],
         today: "2099-01-01",
-        latestVersion: latest(undefined),
+        now: new Date("2099-01-01T00:00:00Z"),
+        releasesForPackage: releases(undefined),
       }),
     ).toEqual([]);
   });
@@ -374,7 +479,8 @@ describe("audit acceptance expiry", () => {
           accepted,
           current: [advisory],
           today,
-          latestVersion: latest("1.4.0"),
+          now: new Date(`${today}T00:00:00Z`),
+          releasesForPackage: releases("1.4.0"),
         }),
       ).toEqual([]);
     }
@@ -383,7 +489,8 @@ describe("audit acceptance expiry", () => {
         accepted,
         current: [advisory],
         today: "2026-11-02",
-        latestVersion: latest("1.4.0"),
+        now: new Date("2026-11-02T00:00:00Z"),
+        releasesForPackage: releases("1.4.0"),
       }).map(({ reason }) => reason),
     ).toEqual(["the acceptance expired on 2026-11-01"]);
   });
@@ -395,7 +502,8 @@ describe("audit acceptance expiry", () => {
           accepted: [{ id: advisory.id, package: "pkg", expiresOn }],
           current: [advisory],
           today: "2026-10-02",
-          latestVersion: latest("1.4.0"),
+          now: new Date("2026-10-02T00:00:00Z"),
+          releasesForPackage: releases("1.4.0"),
         }),
         expiresOn,
       ).toHaveLength(1);
@@ -407,7 +515,8 @@ describe("audit acceptance expiry", () => {
         ],
         current: [advisory],
         today: "2026-10-02",
-        latestVersion: latest("1.4.0"),
+        now: new Date("2026-10-02T00:00:00Z"),
+        releasesForPackage: releases("1.4.0"),
       }),
     ).toEqual([]);
   });
@@ -419,30 +528,33 @@ describe("audit acceptance expiry", () => {
           accepted: [{ id: advisory.id, package: "pkg", untilPatched }],
           current: [advisory],
           today: "2026-10-02",
-          latestVersion: latest("1.4.0"),
+          now: new Date("2026-10-02T00:00:00Z"),
+          releasesForPackage: releases("1.4.0"),
         }).map(({ reason }) => reason),
       ).toEqual(["untilPatched must be true or false"]);
     }
   });
 
-  test("untilPatched lapses once the latest release is outside the vulnerable range", () => {
+  test("untilPatched lapses once an installable release is outside the vulnerable range", () => {
     const accepted = [{ id: advisory.id, package: "pkg", untilPatched: true }];
     expect(
       lapsedAcceptances({
         accepted,
         current: [advisory],
         today: "2026-10-02",
-        latestVersion: latest("1.4.0"),
+        now: new Date("2026-10-02T00:00:00Z"),
+        releasesForPackage: releases("1.4.0"),
       }),
     ).toEqual([]);
     const lapsed = lapsedAcceptances({
       accepted,
       current: [advisory],
       today: "2026-10-02",
-      latestVersion: latest("1.4.1"),
+      now: new Date("2026-10-02T00:00:01Z"),
+      releasesForPackage: releases("1.4.1"),
     });
     expect(lapsed).toHaveLength(1);
-    expect(lapsed[0]?.reason).toContain("a patched release exists");
+    expect(lapsed[0]?.reason).toContain("has been installable since");
   });
 
   test("untilPatched fails closed when the lookup or the range is missing", () => {
@@ -452,7 +564,8 @@ describe("audit acceptance expiry", () => {
         accepted,
         current: [advisory],
         today: "2026-10-02",
-        latestVersion: latest(undefined),
+        now: new Date("2026-10-02T00:00:00Z"),
+        releasesForPackage: releases(undefined),
       }),
     ).toHaveLength(1);
     expect(
@@ -460,7 +573,8 @@ describe("audit acceptance expiry", () => {
         accepted,
         current: [{ id: advisory.id, vulnerableVersions: "" }],
         today: "2026-10-02",
-        latestVersion: latest("1.4.0"),
+        now: new Date("2026-10-02T00:00:00Z"),
+        releasesForPackage: releases("1.4.0"),
       }),
     ).toHaveLength(1);
   });
@@ -478,7 +592,8 @@ describe("audit acceptance expiry", () => {
           accepted: [{ id: advisory.id, package: "pkg", ...terms }],
           current: [],
           today: "2026-10-02",
-          latestVersion: latest(undefined),
+          now: new Date("2026-10-02T00:00:00Z"),
+          releasesForPackage: releases(undefined),
         }),
       ).toEqual([]);
     }
@@ -737,7 +852,7 @@ describe("advisory service retries", () => {
 
 describe("CLI exit codes", () => {
   test.each([
-    { error: new BaselineError("invalid baseline"), status: 2 },
+    { error: new BaselineError("invalid baseline"), status: 3 },
     { error: new AuditCommandError("audit failed"), status: 3 },
     { error: new Error("unexpected failure"), status: 4 },
   ])("maps $error.name to exit $status", async ({ error, status }) => {
@@ -778,4 +893,35 @@ describe("acceptance identity", () => {
     const accepted = await runCheck([currentAdvisory], baseline, "2026-10-02");
     expect(accepted.status).toBe(0);
   });
+});
+
+test("baseline regeneration preserves scoped terms for each advisory identity", async () => {
+  const temporary = mkdtempSync(path.join(tmpdir(), "dependency-audit-"));
+  const baselinePath = path.join(temporary, "baseline.json");
+  const baseline = auditBaseline("2026-11-01");
+  baseline.accepted = ["first", "second"].map((name) => ({
+    id: currentAdvisory.id,
+    severity: currentAdvisory.severity,
+    title: currentAdvisory.title,
+    package: name,
+    owner: name,
+    reason: `Reviewed ${name}`,
+    expiresOn: "2026-11-01",
+    affectedPaths: [`parent/${name}`],
+  }));
+  try {
+    await Bun.write(baselinePath, JSON.stringify(baseline));
+    await writeBaseline(
+      baseline.accepted.map((entry) => ({
+        ...entry,
+        vulnerableVersions: "<=1.4.0",
+      })),
+      baselinePath,
+    );
+    expect((await readBaseline(baselinePath)).accepted).toEqual(
+      baseline.accepted,
+    );
+  } finally {
+    rmSync(temporary, { force: true, recursive: true });
+  }
 });

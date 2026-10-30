@@ -10,6 +10,7 @@ import {
   SendIcon,
   XIcon,
 } from "@stll/ui/icons";
+import { ScrollArea } from "@stll/ui/scroll-area";
 import { cn } from "@stll/ui/utils";
 
 import { PermissionsSection } from "../mainview/PermissionsSection";
@@ -53,106 +54,112 @@ export const ActivityExplainer = ({ permissions }: ActivityExplainerProps) => {
   const askForDetails = DESKTOP_PLATFORM === "mac" && permissions.length > 0;
 
   return (
-    <div className="flex min-h-0 flex-col gap-4">
-      <ol
-        className="grid grid-cols-[1fr_auto_1fr_auto_1fr] items-stretch gap-2"
-        data-activity-story=""
-      >
-        <StoryStage
-          caption={
-            DESKTOP_PLATFORM === "mac"
-              ? t("activityStoryRecordMac")
-              : t("activityStoryRecordPc")
-          }
-          icon={<LockKeyholeIcon className="size-3" />}
-          title={t("activityStoryRecordTitle")}
+    // Longer translations scroll here, inside the window, rather than
+    // squeezing a block below its own text.
+    <ScrollArea axis="vertical">
+      <div className="flex flex-col gap-4">
+        <ol
+          className="grid grid-cols-[1fr_auto_1fr_auto_1fr] items-stretch gap-2"
+          data-activity-story=""
         >
-          <div className="flex h-3 w-full gap-0.5 overflow-hidden rounded-full">
-            {STORY_APPS.map(({ color, share }) => (
+          <StoryStage
+            caption={
+              DESKTOP_PLATFORM === "mac"
+                ? t("activityStoryRecordMac")
+                : t("activityStoryRecordPc")
+            }
+            icon={<LockKeyholeIcon className="size-3" />}
+            title={t("activityStoryRecordTitle")}
+          >
+            <div className="flex h-3 w-full gap-0.5 overflow-hidden rounded-full">
+              {STORY_APPS.map(({ color, share }) => (
+                <span
+                  className="h-full rounded-sm"
+                  data-activity-story-bar=""
+                  key={color}
+                  style={{ backgroundColor: color, flexGrow: share }}
+                />
+              ))}
+            </div>
+          </StoryStage>
+          <StoryArrow />
+          <StoryStage
+            caption={t("activityStoryReviewCaption")}
+            icon={<CheckIcon className="size-3" />}
+            title={t("activityStoryReviewTitle")}
+          >
+            <div
+              className="bg-background flex items-center gap-1.5 rounded-lg border px-2 py-1.5"
+              data-activity-story-matter=""
+            >
               <span
-                className="h-full rounded-sm"
-                data-activity-story-bar=""
-                key={color}
-                style={{ backgroundColor: color, flexGrow: share }}
+                aria-hidden="true"
+                className="size-2 shrink-0 rounded-full"
+                style={{ backgroundColor: STORY_MATTER_COLOR }}
               />
-            ))}
-          </div>
-        </StoryStage>
-        <StoryArrow />
-        <StoryStage
-          caption={t("activityStoryReviewCaption")}
-          icon={<CheckIcon className="size-3" />}
-          title={t("activityStoryReviewTitle")}
-        >
-          <div
-            className="bg-background flex items-center gap-1.5 rounded-lg border px-2 py-1.5"
-            data-activity-story-matter=""
-          >
-            <span
-              aria-hidden="true"
-              className="size-2 shrink-0 rounded-full"
-              style={{ backgroundColor: STORY_MATTER_COLOR }}
-            />
-            <span className="truncate text-xs font-medium">
-              {activity("welcomePreviewMatter")}
-            </span>
-          </div>
-        </StoryStage>
-        <StoryArrow />
-        <StoryStage
-          caption={activity("batchPrivacy")}
-          icon={<SendIcon className="size-3" />}
-          title={t("activityStorySendTitle")}
-        >
-          <div
-            className="bg-background flex flex-col gap-1 rounded-lg border px-2 py-1.5"
-            data-activity-story-entry=""
-          >
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-2xs bg-muted text-muted-foreground rounded-full px-1.5 py-px font-medium">
-                {t("activityStoryDraft")}
-              </span>
-              <span className="text-xs font-semibold tabular-nums">
-                {activity("hours", {
-                  hours: format.number(STORY_HOURS, {
-                    maximumFractionDigits: 1,
-                    minimumFractionDigits: 1,
-                  }),
-                })}
+              <span className="truncate text-xs font-medium">
+                {activity("welcomePreviewMatter")}
               </span>
             </div>
-            <span className="bg-muted h-1.5 w-4/5 rounded-full" />
-            <span className="bg-muted h-1.5 w-3/5 rounded-full" />
-          </div>
-        </StoryStage>
-      </ol>
+          </StoryStage>
+          <StoryArrow />
+          <StoryStage
+            caption={activity("batchPrivacy")}
+            icon={<SendIcon className="size-3" />}
+            title={t("activityStorySendTitle")}
+          >
+            <div
+              className="bg-background flex flex-col gap-1 rounded-lg border px-2 py-1.5"
+              data-activity-story-entry=""
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-2xs bg-muted text-muted-foreground rounded-full px-1.5 py-px font-medium">
+                  {t("activityStoryDraft")}
+                </span>
+                <span className="text-xs font-semibold tabular-nums">
+                  {activity("hours", {
+                    hours: format.number(STORY_HOURS, {
+                      maximumFractionDigits: 1,
+                      minimumFractionDigits: 1,
+                    }),
+                  })}
+                </span>
+              </div>
+              <span className="bg-muted h-1.5 w-4/5 rounded-full" />
+              <span className="bg-muted h-1.5 w-3/5 rounded-full" />
+            </div>
+          </StoryStage>
+        </ol>
 
-      <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
-        <p className="text-foreground font-medium">
-          {t("activityRecordsTitle")}
-        </p>
-        <p className="text-foreground font-medium">{t("activityNeverTitle")}</p>
-        {CLAIM_ROWS.map(({ never, recorded }) => (
-          <Fragment key={recorded}>
-            <Claim kind="recorded" text={t(recorded)} />
-            <Claim kind="never" text={t(never)} />
-          </Fragment>
-        ))}
-      </div>
-
-      {askForDetails ? (
-        <div className="bg-card overflow-hidden rounded-xl border">
-          <PermissionsSection
-            only={permissions}
-            window={DESKTOP_TELEMETRY_WINDOWS.onboarding}
-          />
+        <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
+          <p className="text-foreground font-medium">
+            {t("activityRecordsTitle")}
+          </p>
+          <p className="text-foreground font-medium">
+            {t("activityNeverTitle")}
+          </p>
+          {CLAIM_ROWS.map(({ never, recorded }) => (
+            <Fragment key={recorded}>
+              <Claim kind="recorded" text={t(recorded)} />
+              <Claim kind="never" text={t(never)} />
+            </Fragment>
+          ))}
         </div>
-      ) : null}
 
-      <p className="text-muted-foreground text-xs leading-relaxed text-pretty">
-        {t("activityConsentNote")}
-      </p>
-    </div>
+        {askForDetails ? (
+          <div className="bg-card rounded-xl border">
+            <PermissionsSection
+              only={permissions}
+              window={DESKTOP_TELEMETRY_WINDOWS.onboarding}
+            />
+          </div>
+        ) : null}
+
+        <p className="text-muted-foreground text-xs leading-relaxed text-pretty">
+          {t("activityConsentNote")}
+        </p>
+      </div>
+    </ScrollArea>
   );
 };
 

@@ -9,6 +9,7 @@ import { useDebounce } from "use-debounce";
 import { useTranslations } from "use-intl";
 
 import { CHAT_SKILL_CONTEXT_NEED } from "@stll/api-contract";
+import { filterBySearchQuery } from "@stll/text-normalize/search-query-matcher";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { COMPOSER_CONTROL_BUTTON_SIZE } from "@stll/ui/composer";
@@ -124,9 +125,9 @@ import {
   slashItemSkillId,
 } from "@/lib/prompts/chat-skill-availability.logic";
 import { useComposerSkillAvailability } from "@/lib/prompts/use-chat-unavailable-skills";
+import { queryView } from "@/lib/query-view.logic";
 import type { ReservedChatCommandContext } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView } from "@/lib/use-query-view";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import { useEntitiesOptions } from "@/lib/workspaces/queries/entities";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
@@ -294,6 +295,7 @@ export const ComposerPlusMenu = ({
                 triggerClassName,
               )}
               size={COMPOSER_CONTROL_BUTTON_SIZE}
+              tooltip={t("chat.composerMenu.open")}
               type="button"
               variant="secondary"
             />
@@ -692,7 +694,7 @@ export const ComposerSkillsMenu = ({
     organizationId: activeOrganizationId,
     userId,
   });
-  const skillsView = useQueryView(skillsQuery, {
+  const skillsView = queryView(skillsQuery, {
     isEmpty: (data) =>
       data.pages.every(
         (page) => page.builtIn.length === 0 && page.installed.length === 0,
@@ -726,7 +728,7 @@ export const ComposerSkillsMenu = ({
     [reservedCommands, shortcutRows, data?.pages, unavailableSkillIds],
   );
 
-  const query = search.trim().toLowerCase();
+  const query = search.trim();
   useExternalSyncEffect(() => {
     if (
       skillsQuery.isError ||
@@ -749,9 +751,11 @@ export const ComposerSkillsMenu = ({
     skillsQuery.isError,
   ]);
 
-  const filteredItems = query
-    ? items.filter((item) => itemName(item).toLowerCase().includes(query))
-    : items;
+  const filteredItems = filterBySearchQuery({
+    items,
+    query,
+    fields: (item) => [itemName(item)],
+  });
 
   const handleSelect = (item: SlashItem) => {
     if (!editor || editor.isDestroyed) {
@@ -983,7 +987,7 @@ const useContextMentionSearch = ({
     staleTime: 0,
     refetchOnWindowFocus: false,
   });
-  const view = useQueryView(mentionQuery, {
+  const view = queryView(mentionQuery, {
     isEmpty: (data) => data.items.length === 0 && data.failures.length === 0,
   });
   return {
@@ -1033,7 +1037,7 @@ export const ComposerContextMenu = ({
     }),
     enabled,
   });
-  const mattersView = useQueryView(mattersQuery, {
+  const mattersView = queryView(mattersQuery, {
     isEmpty: (data) => data.workspaces.length === 0,
   });
   const matters: ContextMatter[] =
@@ -1045,10 +1049,12 @@ export const ComposerContextMenu = ({
     threadRef,
   });
 
-  const query = search.trim().toLowerCase();
-  const filteredMatters = query
-    ? matters.filter((matter) => matter.name.toLowerCase().includes(query))
-    : matters;
+  const query = search.trim();
+  const filteredMatters = filterBySearchQuery({
+    items: matters,
+    query,
+    fields: ({ name }) => [name],
+  });
 
   const handleOpenChange = (nextOpen: boolean) => {
     if (host.kind === "shortcut") {
@@ -1471,10 +1477,10 @@ export const ComposerMcpSubmenu = ({
     ...mcpConnectionsOptions(activeOrganizationId, userId),
     enabled,
   });
-  const connectorsView = useQueryView(connectorsQuery, {
+  const connectorsView = queryView(connectorsQuery, {
     isEmpty: (data) => data.connectors.length === 0,
   });
-  const connectionsView = useQueryView(connectionsQuery, {
+  const connectionsView = queryView(connectionsQuery, {
     isEmpty: (data) => data.connections.length === 0,
   });
   const connectorsData =
@@ -1495,13 +1501,12 @@ export const ComposerMcpSubmenu = ({
     return map;
   }, [connectionsData]);
 
-  const query = search.trim().toLowerCase();
   const connectors = connectorsData ? connectorsData.connectors : [];
-  const rows = query
-    ? connectors.filter((connector) =>
-        connector.displayName.toLowerCase().includes(query),
-      )
-    : connectors;
+  const rows = filterBySearchQuery({
+    items: connectors,
+    query: search,
+    fields: ({ displayName }) => [displayName],
+  });
 
   const openMcpSettings = () => {
     detached(
