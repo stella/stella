@@ -1,0 +1,11 @@
+{
+  "type": "parser",
+  "name": "CZ_US",
+  "key": "cz-us",
+  "parserVersion": 34,
+  "sourceFingerprintVersion": 0,
+  "scope": {
+    "type": "all",
+    "reason": "the plenary ruling roles, the formula lines, the takto lead-in and the record card's affected constitutional and other provisions are read one listed act per value, so the stored provision lists are recomputed from the stored card; paragraph text, ruling roles, separate-opinion headings, letter-spaced words and paragraph numbers are recomputed from the stored page, and none of them has feature storage of its own"
+  }
+}
