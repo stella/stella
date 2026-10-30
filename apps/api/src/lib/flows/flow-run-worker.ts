@@ -52,10 +52,11 @@ import {
 import {
   enqueueFlowStep,
   FLOW_RUN_QUEUE_NAME,
-  persistFlowStepClaim,
   type FlowStepJobData,
+  persistFlowStepClaim,
 } from "@/api/lib/flows/flow-run-queue";
 import type { NotificationFanOutDb } from "@/api/lib/notifications";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import { BACKGROUND_ACTION_KIND } from "@/api/lib/rate-limit/action-kinds";
@@ -294,10 +295,13 @@ export const initFlowRunWorker = ({ db }: BullMqWorkerContext) => {
       database: db,
       claimedStartedAt: job.data.claimedStartedAt,
     }).catch((finalizeError: unknown) => {
-      captureError(finalizeError, {
-        runId: job.data.runId,
-        stepIndex: String(job.data.stepIndex),
-      });
+      captureError(
+        finalizeError,
+        handlerErrorContext("flows.initFlowRunWorker.finalizeError", {
+          runId: job.data.runId,
+          stepIndex: String(job.data.stepIndex),
+        }),
+      );
     });
   });
 
@@ -319,7 +323,7 @@ export const initFlowRunWorker = ({ db }: BullMqWorkerContext) => {
   // without one because a restart is proof that this process's in-flight
   // jobs are gone: waiting out the window would idle every run it just lost.
   reconcileOrphanedFlowRuns({}, { database: db }).catch((error: unknown) => {
-    captureError(error);
+    captureError(error, handlerErrorContext("flows.initFlowRunWorker"));
     logger.error("flow.reconcile_failed", errorSystemFields(error));
   });
 
@@ -371,8 +375,7 @@ const reconcilePendingFlowCompletionNotices = async (
   { database }: ReconcileOrphanedFlowRunsDependencies,
 ): Promise<void> => {
   let cursor:
-    | { workspaceId: SafeId<"workspace">; id: SafeId<"flowRun"> }
-    | undefined;
+    { workspaceId: SafeId<"workspace">; id: SafeId<"flowRun"> } | undefined;
   const actorUserId = sql`CASE
     WHEN ${flowRuns.triggerSource}->>'type' = 'manual'
       THEN ${flowRuns.triggerSource}->>'userId'

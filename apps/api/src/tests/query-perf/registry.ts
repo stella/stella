@@ -1,12 +1,277 @@
-import { buildDocumentSearchQueries } from "@/api/lib/search/pg-fts-search-query";
+import { panic } from "better-result";
+import type { SQLWrapper } from "drizzle-orm";
 
+import type { TransactionOf } from "@/api/db/scoped";
+import { legislationCandidateRowsStatement } from "@/api/handlers/legislation/search";
+import type {
+  ReadBudgetId,
+  ScheduledJobReadBudgetId,
+} from "@/api/lib/db/read-budgets";
+import type { LegislationReadTransaction } from "@/api/lib/legislation-public-read-db";
+import { REPORT_CASE_LAW_FRESHNESS_TASK } from "@/api/lib/scheduler/tasks/case-law-freshness-report";
+import { REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK } from "@/api/lib/scheduler/tasks/case-law-sitemap-shard-refresh";
+import { RECOVERY_SCAN_IDENTITIES } from "@/api/lib/scheduler/tasks/recovery-scan-identity";
+import { SWEEP_REQUEST_RECEIPTS_TASK } from "@/api/lib/scheduler/tasks/request-receipt-retention";
+import { buildDocumentSearchQueries } from "@/api/lib/search/pg-fts-search-query";
+import type { GatedTestDb } from "@/api/tests/gated-test-database";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+import type { CorpusReadBudgetSeed, ServedCaseLaw } from "./corpus-seed";
+import {
+  CASE_LAW_SCENARIOS,
+  LEGISLATION_CANDIDATE_COUNT,
+  LEGISLATION_GENERATION,
+  seedSitemapReadBudget,
+} from "./corpus-seed";
+import { QUERY_PERF_OWNER_DEADLINES } from "./owner-deadlines";
+import type { RequestReceiptScenario } from "./request-receipt-seed";
 import type { seedQueryPerf } from "./seed";
 
+/** Tenant statements, measured as `stella` under row security per profile. */
 export const queryPerfRegistry = (
   seed: Awaited<ReturnType<typeof seedQueryPerf>>,
-) => ({
-  "document-search": {
-    query: buildDocumentSearchQueries(seed.searchInput).hitsQuery,
-    expectedRows: Math.min(seed.searchMatchCount, seed.searchInput.limit + 1),
-  },
+) =>
+  [
+    {
+      budgetId: "statement.documents.searchHits",
+      query: buildDocumentSearchQueries(seed.searchInput).hitsQuery,
+      expectedRows: Math.min(seed.searchMatchCount, seed.searchInput.limit + 1),
+      ownerDeadlineMs:
+        QUERY_PERF_OWNER_DEADLINES["statement.documents.searchHits"],
+    },
+  ] as const satisfies readonly {
+    budgetId: ReadBudgetId;
+    query: SQLWrapper;
+    expectedRows: number;
+    ownerDeadlineMs: number | undefined;
+  }[];
+
+/** Public corpus statements, measured on the corpus profile as its owner. */
+export const corpusStatementRegistry = (seed: CorpusReadBudgetSeed) =>
+  [
+    {
+      budgetId: "statement.legislation.candidateRows",
+      build: (tx: TransactionOf<GatedTestDb>) =>
+        // The fixture's transaction supplies the select surface the reader uses.
+        legislationCandidateRowsStatement(
+          asTestRaw<LegislationReadTransaction>(tx),
+          {
+            ids: seed.candidateIds,
+            generation: LEGISLATION_GENERATION,
+            body: { query: "smlouva", jurisdiction: "CZE" },
+          },
+        ),
+      expectedRows: LEGISLATION_CANDIDATE_COUNT,
+      ownerDeadlineMs:
+        QUERY_PERF_OWNER_DEADLINES["statement.legislation.candidateRows"],
+    },
+  ] as const satisfies readonly {
+    budgetId: ReadBudgetId;
+    build: (tx: TransactionOf<GatedTestDb>) => SQLWrapper;
+    expectedRows: number;
+    ownerDeadlineMs: number | undefined;
+  }[];
+
+type CaseLawScenario = { type: "case-law"; served: ServedCaseLaw };
+export type ScheduledJobScenario = CaseLawScenario | RequestReceiptScenario;
+
+type CaseLawScheduledJobMeasurement = {
+  type: "case-law";
+  prepare?: typeof seedSitemapReadBudget;
+  task: string;
+  scenarios: readonly {
+    size: CaseLawScenario;
+    double?: CaseLawScenario;
+  }[];
+};
+
+type RequestReceiptScheduledJobMeasurement = {
+  type: "request-receipts";
+  task: string;
+  scenarios: readonly {
+    size: RequestReceiptScenario;
+    double?: RequestReceiptScenario;
+  }[];
+};
+
+type RecoveryScheduledJobMeasurement = {
+  type: "recovery";
+  task: string;
+  scenarios: readonly Omit<RecoveryScenario, "rows">[];
+};
+
+type ScheduledJobMeasurement =
+  | CaseLawScheduledJobMeasurement
+  | RequestReceiptScheduledJobMeasurement
+  | RecoveryScheduledJobMeasurement;
+
+export type RecoveryJob = keyof typeof RECOVERY_SCAN_IDENTITIES;
+export const RECOVERY_COHORTS = [
+  "quiet",
+  "pending",
+  "grant-repair",
+  "ungranted",
+] as const;
+export type RecoveryCohort = (typeof RECOVERY_COHORTS)[number];
+export const RECOVERY_COHORT_SETUP = {
+  quiet: { enrolled: true, initialStatus: "pending" },
+  pending: { enrolled: false, initialStatus: "pending" },
+  "grant-repair": { enrolled: true, initialStatus: "awaiting_grant" },
+  ungranted: { enrolled: false, initialStatus: "awaiting_grant" },
+} as const satisfies Record<
+  RecoveryCohort,
+  { enrolled: boolean; initialStatus: "pending" | "awaiting_grant" }
+>;
+export type RecoveryScenario = {
+  type: "recovery";
+  job: RecoveryJob;
+  cohort: RecoveryCohort;
+  rows: number;
+};
+
+export const RECOVERY_READ_SIZES = [60_000, 120_000] as const;
+
+type RecoveryJobId = (typeof RECOVERY_SCAN_IDENTITIES)[RecoveryJob]["jobId"];
+
+const recoveryMeasurement = (
+  job: RecoveryJob,
+): RecoveryScheduledJobMeasurement => ({
+  type: "recovery",
+  task: RECOVERY_SCAN_IDENTITIES[job].task,
+  scenarios: RECOVERY_COHORTS.map((cohort) => ({
+    type: "recovery",
+    job,
+    cohort,
+  })),
 });
+
+const recoveryScheduledJobMeasurements = {
+  [RECOVERY_SCAN_IDENTITIES.upload.jobId]: recoveryMeasurement("upload"),
+  [RECOVERY_SCAN_IDENTITIES.scout.jobId]: recoveryMeasurement("scout"),
+} satisfies Record<RecoveryJobId, RecoveryScheduledJobMeasurement>;
+
+/**
+ * Every budgeted job is keyed by its registered ID and carries its task.
+ * Measurement kind selects the corpus owner that runs its scenarios.
+ */
+export const SCHEDULED_JOB_MEASUREMENTS: Readonly<
+  Record<string, ScheduledJobMeasurement>
+> = {
+  "caseLaw.refreshSitemapShards.hourly": {
+    type: "case-law",
+    task: REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK,
+    prepare: seedSitemapReadBudget,
+    scenarios: [
+      {
+        size: {
+          type: "case-law",
+          served: CASE_LAW_SCENARIOS.quiet.size,
+        },
+      },
+    ],
+  },
+  "requests.sweepReceipts.hourly": {
+    type: "request-receipts",
+    task: SWEEP_REQUEST_RECEIPTS_TASK,
+    scenarios: (["expired", "quiet", "mixed"] as const).map((cohort) => ({
+      size: { type: "request-receipts", rows: 60_000, cohort },
+      double: { type: "request-receipts", rows: 120_000, cohort },
+    })),
+  },
+  "caseLaw.reportFreshness.fiveMinute": {
+    type: "case-law",
+    // Imported, not spelled: the gate's CI scope follows this module's imports.
+    task: REPORT_CASE_LAW_FRESHNESS_TASK,
+    scenarios: Object.values(CASE_LAW_SCENARIOS).map((scenario) => ({
+      size: { type: "case-law", served: scenario.size },
+      ...("double" in scenario
+        ? { double: { type: "case-law" as const, served: scenario.double } }
+        : {}),
+    })),
+  },
+  ...recoveryScheduledJobMeasurements,
+};
+
+export type RecoveryMeasurementRun = {
+  jobId: string;
+  task: string;
+  scenario: RecoveryScenario;
+};
+
+export const recoveryMeasurementRuns = (): RecoveryMeasurementRun[] =>
+  Object.entries(SCHEDULED_JOB_MEASUREMENTS).flatMap(([jobId, measurement]) => {
+    switch (measurement.type) {
+      case "case-law":
+      case "request-receipts":
+        return [];
+      case "recovery":
+        return measurement.scenarios.flatMap((scenario) =>
+          RECOVERY_READ_SIZES.map((rows) => ({
+            jobId,
+            task: measurement.task,
+            scenario: { ...scenario, rows } satisfies RecoveryScenario,
+          })),
+        );
+      default: {
+        const unexpected: never = measurement;
+        return panic(
+          `Unknown scheduled measurement kind ${String(unexpected)}`,
+        );
+      }
+    }
+  });
+
+type DeclaredJobReads = {
+  id: string;
+  task: string;
+  reads: { budget: ScheduledJobReadBudgetId } | "load-governed" | "unmeasured";
+};
+
+/**
+ * Every job that declares a read budget has a measurement of its own, for its
+ * own task, and every measurement belongs to such a job.
+ */
+export const scheduledJobMeasurementViolations = (
+  jobs: readonly DeclaredJobReads[],
+  measurements: Readonly<Record<string, ScheduledJobMeasurement>>,
+): string[] => {
+  const budgeted = jobs.filter(
+    (job): job is DeclaredJobReads & { reads: { budget: string } } =>
+      typeof job.reads === "object",
+  );
+  const declared = new Set(budgeted.map(({ id }) => id));
+  return [
+    ...budgeted.flatMap((job) => {
+      const measurement = measurements[job.id];
+      if (measurement === undefined) {
+        return [
+          `${job.id} declares ${job.reads.budget} but has no measurement keyed by its id`,
+        ];
+      }
+      return measurement.task === job.task
+        ? []
+        : [
+            `${job.id} runs ${job.task}, but its measurement runs ${measurement.task}`,
+          ];
+    }),
+    ...Object.keys(measurements)
+      .filter((id) => !declared.has(id))
+      .map((id) => `${id} is measured but declares no read budget`),
+  ];
+};
+
+/** Which profile measures each budget; every budget has exactly one. */
+export const READ_BUDGET_PROFILES = {
+  "statement.caseLaw.globalSearchHits": "case-law",
+  "scheduled.caseLaw.refreshSitemapShards": "corpus",
+  "scheduled.caseLaw.reportFreshness": "corpus",
+  "scheduled.flows.recoverUploadTriggers": "corpus",
+  "scheduled.signals.recoverScoutEmission": "corpus",
+  "scheduled.requests.sweepReceipts": "corpus",
+  "statement.caseLaw.coverageSources": "coverage",
+  "statement.legislation.candidateRows": "corpus",
+  "statement.documents.searchHits": "tenant",
+} as const satisfies Record<
+  ReadBudgetId,
+  "corpus" | "tenant" | "case-law" | "coverage"
+>;

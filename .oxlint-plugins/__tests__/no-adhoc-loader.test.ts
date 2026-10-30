@@ -43,21 +43,30 @@ test("accepts canonical status, decorative, region and skeleton indicators", asy
 });
 
 test("shared button and toast owners cannot introduce alternative loaders", async () => {
-  for (const sourcePath of [
-    "packages/ui/src/components/button.tsx",
-    "packages/ui/src/components/toast.tsx",
-  ]) {
-    expect(
-      await lintSingleRule(
-        "no-adhoc-loader",
-        "const view = <LoaderCircleIcon />;",
-        {
-          cwd: "scratch",
-          sourcePath,
-        },
-      ),
-    ).toEqual([1]);
-  }
+  const results = await Promise.all(
+    [
+      "packages/ui/src/components/button.tsx",
+      "packages/ui/src/components/toast.tsx",
+    ].map(async (lintCase, index) => {
+      const sourcePath = lintCase;
+
+      return {
+        label: `case ${index + 1}: ${JSON.stringify(lintCase)}`,
+        result: await lintSingleRule(
+          "no-adhoc-loader",
+          "const view = <LoaderCircleIcon />;",
+          {
+            cwd: "scratch",
+            sourcePath,
+          },
+        ),
+        expected: [1],
+      };
+    }),
+  );
+  expect(results.map(({ label, result }) => ({ label, result }))).toEqual(
+    results.map(({ label, expected }) => ({ label, result: expected })),
+  );
 });
 
 test("rejects spinner icons compound names and hand rolled progress", async () => {
@@ -88,4 +97,21 @@ test("accepts shared loading primitives and unrelated animation text", async () 
       { sourcePath: "apps/web/src/components/example.tsx" },
     ),
   ).toEqual([]);
+});
+
+test("only the loader module draws the spinner", async () => {
+  const spinner =
+    'const view = <LoaderCircleIcon className="size-full animate-spin" />;';
+  expect(
+    await lintSingleRule("no-adhoc-loader", spinner, {
+      cwd: "scratch",
+      sourcePath: "packages/ui/src/components/loader.tsx",
+    }),
+  ).toEqual([]);
+  expect(
+    await lintSingleRule("no-adhoc-loader", spinner, {
+      cwd: "scratch",
+      sourcePath: "packages/ui/src/components/loader-variant.tsx",
+    }),
+  ).toEqual([1, 1]);
 });

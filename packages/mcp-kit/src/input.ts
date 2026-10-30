@@ -10,8 +10,8 @@
 import { panic } from "better-result";
 
 import {
-  normalizeAgentInput,
   type AgentInputPlaceholderPolicy,
+  normalizeAgentInput,
 } from "@stll/agent-input";
 
 import type { McpJsonSchema, ToolAccess, ToolInputIssue } from "./types";

@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import type { Static } from "elysia";
+import type * as v from "valibot";
 
 import {
   LEGISLATION_SEARCH_MATCH_TYPES,
@@ -11,20 +11,19 @@ import type { searchLegislationSuccessResponseSchema } from "@/api/handlers/legi
 import { CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
 import { LIMITS } from "@/api/lib/limits";
 import {
-  truncateTextBytes,
-  truncateHeadlineBytes,
   nullableText,
+  truncateHeadlineBytes,
+  truncateTextBytes,
 } from "@/api/lib/search/response-text-bounds";
 
 // The response projection owns display truncation; corpus storage retains the
 // official text. Applying it after retrieval keeps both backends identical.
-type LegislationSearchHit = Static<
+type LegislationSearchHit = v.InferOutput<
   typeof searchLegislationSuccessResponseSchema
 >["items"][number];
 type TextField = {
   [Key in keyof LegislationSearchHit]: LegislationSearchHit[Key] extends
-    | string
-    | null
+    string | null
     ? Key
     : never;
 }[keyof LegislationSearchHit];

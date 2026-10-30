@@ -1,4 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import * as v from "valibot";
 
 import {
   assessPublishLag,
@@ -8,11 +12,13 @@ import {
   newestStableTag,
   parseArgs,
   readPublishablePackages,
-  renderLagTable,
   type RegistryFetcher,
   type RegistryView,
+  renderLagTable,
+  resolveRef,
 } from "./check-npm-publish-lag";
-import { ALL_PACKAGE_ORDER } from "./publish-packages";
+import { readNpmReleaseGraph } from "./generate-npm-release-jobs";
+import { ALL_PACKAGE_ORDER, npmReleaseJobId } from "./publish-packages";
 
 const cli = { directory: "cli", name: "@stll/cli", version: "3.8.6" };
 const found = (
@@ -205,7 +211,7 @@ describe("readPublishablePackages", () => {
       ["ui", manifestFor("ui", { private: true })],
     ]);
     const packages = readPublishablePackages({
-      only: ["cli", "ui", "time"],
+      only: ["cli", "ui", "chat"],
       readManifest: (directory) => manifests.get(directory),
     });
     expect(packages.map((pkg) => pkg.directory)).toEqual(["cli"]);
@@ -259,6 +265,94 @@ describe("newestStableTag", () => {
       newestStableTag(["v3.9.0-rc.1", "@stll/ui@0.42.1", "v3.8.6", "v3.8.5"]),
     ).toBe("v3.8.6");
     expect(newestStableTag(["v1.0.0-beta.1", ""])).toBeUndefined();
+    expect(newestStableTag(["v1.2.9", "v1.2.10", "v1.2.3"])).toBe("v1.2.10");
+    expect(
+      newestStableTag(["v1.2.10", "v1.2.9", "v1.2.11-rc.1"], "1.2.10"),
+    ).toBe("v1.2.9");
+  });
+});
+
+describe("previous final release resolution", () => {
+  type RunGit = NonNullable<Parameters<typeof resolveRef>[1]>;
+  const withHistory = (check: (runGit: RunGit) => void) => {
+    const directory = mkdtempSync(
+      path.join(tmpdir(), "stella-npm-previous-final-"),
+    );
+    const runGit = (command: readonly string[]) => {
+      const result = Bun.spawnSync([...command], { cwd: directory });
+      return {
+        ok: result.exitCode === 0,
+        stdout: result.stdout.toString(),
+        stderr: result.stderr.toString(),
+      };
+    };
+    const git = (...args: string[]) => {
+      const result = runGit(["git", ...args]);
+      expect(result.ok, result.stderr).toBe(true);
+      return result.stdout.trim();
+    };
+    try {
+      git("init", "-q", "--initial-branch=main");
+      git("config", "user.name", "Fixture");
+      git("config", "user.email", "fixture@example.invalid");
+      git("config", "commit.gpgsign", "false");
+      git("config", "tag.gpgsign", "false");
+      writeFileSync(path.join(directory, "VERSION"), "1.2.2\n");
+      git("add", "VERSION");
+      git("commit", "-qm", "initial final");
+      git("tag", "v1.2.2");
+      git("switch", "-qc", "release/sibling");
+      writeFileSync(path.join(directory, "VERSION"), "1.2.3\n");
+      git("commit", "-qam", "sibling final");
+      git("tag", "v1.2.3");
+      git("switch", "-q", "main");
+      writeFileSync(path.join(directory, "VERSION"), "1.2.4\n");
+      git("commit", "-qam", "candidate");
+      git("tag", "v1.2.4-rc.7");
+      expect(
+        runGit(["git", "merge-base", "--is-ancestor", "v1.2.3", "HEAD"]).ok,
+      ).toBe(false);
+      check(runGit);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  };
+
+  test("selects the newest lower final even when it is on a sibling release branch", () => {
+    withHistory((runGit) => {
+      expect(
+        resolveRef(parseArgs(["--previous-release-of", "HEAD"]), runGit),
+      ).toBe("v1.2.3");
+    });
+  });
+
+  test("the candidate's own final tag and newer finals never count as previous", () => {
+    withHistory((runGit) => {
+      expect(runGit(["git", "tag", "v1.2.4"]).ok).toBe(true);
+      expect(runGit(["git", "tag", "v9.0.0"]).ok).toBe(true);
+      expect(
+        resolveRef(parseArgs(["--previous-release-of", "HEAD"]), runGit),
+      ).toBe("v1.2.3");
+    });
+  });
+
+  test("reads VERSION from the provided ref rather than the current checkout", () => {
+    withHistory((runGit) => {
+      expect(
+        resolveRef(
+          parseArgs(["--previous-release-of", "release/sibling"]),
+          runGit,
+        ),
+      ).toBe("v1.2.2");
+    });
+  });
+
+  test("explicit ref semantics do not read VERSION or search tags", () => {
+    expect(
+      resolveRef(parseArgs(["--ref", "named-ref"]), () => {
+        throw new TypeError("explicit ref must not execute a command");
+      }),
+    ).toBe("named-ref");
   });
 });
 
@@ -314,7 +408,52 @@ describe("release workflows run the guard", () => {
   test("publish-npm.yml checks npm after publishing", async () => {
     const text = await workflow("publish-npm.yml");
     expect(text).toContain("bun scripts/check-npm-publish-lag.ts");
-    expect(text).toContain("needs: [release-trigger, pack, release]");
+    const { jobs } = v.parse(
+      v.looseObject({
+        jobs: v.record(
+          v.string(),
+          v.looseObject({
+            needs: v.optional(v.union([v.string(), v.array(v.string())])),
+          }),
+        ),
+      }),
+      Bun.YAML.parse(text),
+    );
+    const graph = readNpmReleaseGraph({
+      readManifest: (directory) =>
+        readFileSync(
+          path.join(
+            import.meta.dirname,
+            "..",
+            "packages",
+            directory,
+            "package.json",
+          ),
+          "utf-8",
+        ),
+    });
+    const needs = (id: string) => {
+      const job =
+        jobs[id] ?? expect.unreachable(`Missing publishing job: ${id}`);
+      return typeof job.needs === "string" ? [job.needs] : (job.needs ?? []);
+    };
+    for (const { directory, dependencies } of graph) {
+      expect(needs(npmReleaseJobId(directory))).toEqual([
+        "release-trigger",
+        "pack",
+        ...dependencies.map(npmReleaseJobId),
+      ]);
+    }
+    expect(needs("release-summary")).toEqual([
+      "release-trigger",
+      "pack",
+      ...graph.map(({ directory }) => npmReleaseJobId(directory)),
+    ]);
+    expect(needs("verify-npm")).toEqual([
+      "release-trigger",
+      "pack",
+      "release-summary",
+    ]);
   });
 
   test("release-tag.yml refuses a tag while the previous release lags", async () => {

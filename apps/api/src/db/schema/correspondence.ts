@@ -9,8 +9,8 @@ import {
   CORRESPONDENCE_SENDER_KINDS,
   CORRESPONDENCE_SENDER_SCOPES,
   CORRESPONDENCE_SOURCES,
-  type CorrespondenceAddress,
   type CorrespondenceActorDisplay,
+  type CorrespondenceAddress,
   type CorrespondenceOriginalSignature,
 } from "@stll/api-contract/correspondence";
 
@@ -18,10 +18,13 @@ import {
   entityFeatureGateChecks,
   entityFeatureGateColumns,
 } from "../entity-feature-gate-columns";
+import { MEMBER_REMOVAL_SETTING } from "../member-removal-settings";
 import {
+  registeredReviewResetPolicies,
   REVIEW_RESET_ORGANIZATION_SETTING,
   reviewResetOwnerPolicies,
 } from "../review-reset-policies";
+import { CORRESPONDENCE_OFFBOARDING_ROLE_NAME } from "../role-names";
 import {
   jsonb,
   organization,
@@ -200,12 +203,27 @@ export const correspondence = p.pgTable.withRLS(
       "correspondence_auth_check",
       sql`${table.spf} in (${valuesSql(CORRESPONDENCE_AUTH_RESULTS)}) and ${table.dkim} in (${valuesSql(CORRESPONDENCE_AUTH_RESULTS)}) and ${table.dmarc} in (${valuesSql(CORRESPONDENCE_AUTH_RESULTS)})`,
     ),
+    p.pgPolicy("correspondence_member_offboarding_select", {
+      for: "select",
+      to: CORRESPONDENCE_OFFBOARDING_ROLE_NAME,
+      using: sql`${table.organizationId} = nullif(current_setting('app.organization_id', true), '')
+        AND (${table.assigneeId} = nullif(current_setting(${sql.raw(`'${MEMBER_REMOVAL_SETTING.userId}'`)}, true), '')
+          OR (${table.assigneeId} IS NULL AND ${table.id} = ANY(coalesce(nullif(current_setting(${sql.raw(`'${CORRESPONDENCE_OFFBOARDING_SETTING.recordIds}'`)}, true), '')::uuid[], '{}'))))`,
+    }),
+    p.pgPolicy("correspondence_member_offboarding_update", {
+      for: "update",
+      to: CORRESPONDENCE_OFFBOARDING_ROLE_NAME,
+      using: sql`${table.organizationId} = nullif(current_setting('app.organization_id', true), '')
+        AND ${table.assigneeId} = nullif(current_setting(${sql.raw(`'${MEMBER_REMOVAL_SETTING.userId}'`)}, true), '')`,
+      withCheck: sql`${table.organizationId} = nullif(current_setting('app.organization_id', true), '')
+        AND ${table.assigneeId} IS NULL`,
+    }),
     p.pgPolicy("correspondence_owner_offboarding_select", {
       for: "select",
       to: "public",
       // UPDATE also checks SELECT visibility of the cleared row. Admit only
       // the current bounded batch, never all unassigned correspondence.
-      using: sql`${currentUserOwnsCorrespondence} and (${offboardingAssigneeCheck} or (${table.assigneeId} is null and ${table.id} = any(nullif(current_setting(${sql.raw(`'${CORRESPONDENCE_OFFBOARDING_SETTING.recordIds}'`)}, true), '')::uuid[]))) and ${offboardingScopeCheck}`,
+      using: sql`${currentUserOwnsCorrespondence} and (${offboardingAssigneeCheck} or (${table.assigneeId} is null and ${table.id} = any(nullif(current_setting(${sql.raw(`'${sql.raw(`'${CORRESPONDENCE_OFFBOARDING_SETTING.recordIds}'`)}'`)}, true), '')::uuid[]))) and ${offboardingScopeCheck}`,
     }),
     p.pgPolicy("correspondence_owner_offboarding_update", {
       for: "update",
@@ -219,6 +237,8 @@ export const correspondence = p.pgTable.withRLS(
         [table.sourceEntityId, { target: "entities", kind: "owned-content" }],
       ]),
     }),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -314,6 +334,8 @@ export const correspondenceFilers = p.pgTable.withRLS(
         ],
       ]),
     }),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -386,6 +408,8 @@ export const correspondenceAttachments = p.pgTable.withRLS(
         ],
       ]),
     }),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -427,6 +451,8 @@ export const matterInboundAddresses = p.pgTable.withRLS(
       .index("matter_inbound_addresses_ws_created_idx")
       .on(table.workspaceId, table.createdAt.desc()),
     ...wsOrganizationPolicies("matter_inbound_addresses", { columns: table }),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -515,6 +541,8 @@ export const correspondenceAllowedSenders = p.pgTable.withRLS(
       using: sql`(current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.correspondence_allowed_senders'::regclass) AND organization_id = nullif(current_setting('app.correspondence_review_reset_organization_id', true), ''))`,
     }),
     ...orgPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -551,9 +579,12 @@ export const correspondenceAllowedSenderMatters = p.pgTable.withRLS(
     p
       .index("correspondence_allowed_sender_matters_ws_sender_idx")
       .on(table.workspaceId, table.allowedSenderId),
+    ...reviewResetOwnerPolicies("correspondence_allowed_sender_matters"),
     ...wsOrganizationPolicies("correspondence_allowed_sender_matters", {
       columns: table,
     }),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -582,6 +613,9 @@ export const correspondenceDropLogs = p.pgTable.withRLS(
       "correspondence_drop_logs_reason_check",
       sql`${table.reason} in (${valuesSql(CORRESPONDENCE_DROP_REASONS)})`,
     ),
+    ...reviewResetOwnerPolicies("correspondence_drop_logs"),
     ...wsOrganizationPolicies("correspondence_drop_logs", { columns: table }),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );

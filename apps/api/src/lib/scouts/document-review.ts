@@ -242,7 +242,7 @@ export const maybeEmitDocumentReviewSignal = async (
       const recorded = await mutateRecoveryReceipt({
         type: "create-review",
         tx: scopedTx,
-        table: pendingScoutEmissions,
+        scope: scope.value,
         rows: [
           {
             organizationId: scope.value.organizationId,
@@ -263,7 +263,7 @@ export const maybeEmitDocumentReviewSignal = async (
       await mutateRecoveryReceipt({
         type: "dequeue-scout",
         tx: scopedTx,
-        table: pendingScoutEmissions,
+        scope: scope.value,
         where: sql`${and(
           eq(pendingScoutEmissions.organizationId, source.organizationId),
           eq(pendingScoutEmissions.sourceKind, "document-review"),

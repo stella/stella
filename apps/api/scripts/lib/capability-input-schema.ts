@@ -1,8 +1,9 @@
-import { KindGuard } from "@sinclair/typebox";
 import { panic } from "better-result";
+import type { GenericSchema } from "valibot";
 
+import { isValibotSchema } from "../../src/lib/json-schema/valibot-to-json-schema";
 import { isRecord } from "../../src/lib/type-guards";
-import { advertisedSchema } from "../../src/mcp/advertised-schema";
+import { advertisedSchemas } from "../../src/mcp/advertised-schema";
 import type { AdvertisedSchemas } from "../../src/mcp/advertised-schema";
 import { withPublicFieldNames } from "../../src/mcp/public-field-names";
 import type { CapabilityInputSchema } from "./capability-catalog";
@@ -27,63 +28,51 @@ const hasSchemaProjection = (
 ): value is ConditionalSchemaRequirement =>
   isRecord(value) && typeof value["projectInputSchema"] === "function";
 
-const canonicalSchemaPart = (value: unknown) => {
+/** A route input slot: a valibot schema, or absent. */
+const inputPart = (value: unknown): GenericSchema | undefined => {
   if (value === undefined) {
     return undefined;
   }
-  if (!KindGuard.IsSchema(value)) {
-    return panic("Conditional feature access requires TypeBox input schemas");
-  }
-  return value;
+  return isValibotSchema(value)
+    ? value
+    : panic("Capability input schemas must be valibot schemas");
 };
 
-const staticInputSchemas = (config: Record<string, unknown>) => {
+/** Render the full declared contract once; apply conditional access during live discovery. */
+const staticInputSchemas = (
+  config: Record<string, unknown>,
+): AdvertisedSchemas => {
+  const schemas = advertisedSchemas({
+    body: inputPart(config["body"]),
+    params: inputPart(config["params"]),
+    query: inputPart(config["query"]),
+  });
   const requirement = config["featureAccess"];
   if (parseFeatureRequirement(requirement)?.type !== "conditional") {
-    return {
-      body: config["body"],
-      params: config["params"],
-      query: config["query"],
-    };
+    return schemas;
   }
   if (!hasSchemaProjection(requirement)) {
     return panic(
       "Conditional feature access requires an input schema projection",
     );
   }
-  return {
-    body: canonicalSchemaPart(config["body"]),
-    params: canonicalSchemaPart(config["params"]),
-    query: canonicalSchemaPart(config["query"]),
-  };
+  return schemas;
 };
 
-/**
- * The catalog retains every declared conditional input for admitted callers.
- * Live discovery applies the owner projection for the current caller.
- * Coercion unions are flattened to their scalar; a part that is not a
- * TypeBox schema is left as the handler declared it.
- */
-const advertisedPart = (part: unknown): unknown =>
-  KindGuard.IsSchema(part) ? advertisedSchema(part) : part;
-
-// The config's `body`/`params`/`query` are TypeBox schemas: plain JSON Schema
-// objects at runtime plus non-enumerable symbol metadata. The final
-// `JSON.stringify` of the whole catalog drops those symbols, leaving clean JSON
-// Schema on disk, so the raw schema value can go straight into the entry.
+/** The catalog keeps every conditional input; live discovery projects the caller's available branches. */
 export const buildInputSchema = (
   config: Record<string, unknown>,
 ): CapabilityInputSchema => {
   const schemas = staticInputSchemas(config);
   const inputSchema: CapabilityInputSchema = {};
   if (schemas.body !== undefined) {
-    inputSchema.body = withPublicFieldNames(advertisedPart(schemas.body));
+    inputSchema.body = withPublicFieldNames(schemas.body);
   }
   if (schemas.params !== undefined) {
-    inputSchema.params = withPublicFieldNames(advertisedPart(schemas.params));
+    inputSchema.params = withPublicFieldNames(schemas.params);
   }
   if (schemas.query !== undefined) {
-    inputSchema.query = withPublicFieldNames(advertisedPart(schemas.query));
+    inputSchema.query = withPublicFieldNames(schemas.query);
   }
   return inputSchema;
 };

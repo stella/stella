@@ -5,8 +5,8 @@ import { LANGUAGES } from "@stll/locales";
 
 import {
   PROVISION_EXTRACTION_ADMISSION,
-  PROVISION_EXTRACTION_ADMISSION_SCOPES,
   PROVISION_EXTRACTION_ADMISSION_REVISION,
+  PROVISION_EXTRACTION_ADMISSION_SCOPES,
 } from "./provision-extraction-admission";
 
 describe("provision extraction admission", () => {

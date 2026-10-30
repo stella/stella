@@ -380,6 +380,7 @@ export const suggestColumnPrompt = async ({
         orgAIConfig,
         managedAIResidency,
         organizationId,
+        userId,
         admission,
         tenantWorkspaceIds: scope.tenantWorkspaceIds,
         analytics: aiAnalytics,
@@ -402,10 +403,8 @@ export const suggestColumnPrompt = async ({
             }),
           },
         ],
-        abortSignal: AbortSignal.any([
-          abortSignal,
-          AbortSignal.timeout(SUGGEST_TIMEOUT_MS),
-        ]),
+        abortSignal,
+        deadlineMs: SUGGEST_TIMEOUT_MS,
       }),
     catch: (error) => {
       aiAnalytics.captureError(error);
@@ -425,7 +424,11 @@ export const suggestColumnPrompt = async ({
   const prompt = sanitizeSuggestion(generateResult.value);
   if (prompt.length === 0) {
     return Result.err(
-      new HandlerError({ status: 502, message: "Empty suggestion" }),
+      new HandlerError({
+        status: 502,
+        code: "internal_error",
+        message: "Empty suggestion",
+      }),
     );
   }
 

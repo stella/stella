@@ -4,99 +4,100 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## mcp_connectors · `mcpConnectors` · mcp.ts:30 · rls
+## mcp_connectors · `mcpConnectors` · mcp.ts:31 · rls
 
 ```text
-mcp_connectors.id                                pUuid               pk,not null       mcp.ts:33
-mcp_connectors.slug                              varchar             not null          mcp.ts:34
-mcp_connectors.organization_id                   safeOrganizationId  fk,null           mcp.ts:35
-mcp_connectors.display_name                      varchar             not null          mcp.ts:39
-mcp_connectors.description                       text                not null          mcp.ts:40
-mcp_connectors.url                               text                not null          mcp.ts:41
-mcp_connectors.auth_type                         text                not null          mcp.ts:42
-mcp_connectors.is_curated                        boolean             default,not null  mcp.ts:46
-mcp_connectors.oauth_requested_scopes            text                array,null        mcp.ts:47
-mcp_connectors.allowed_tools                     text                array,null        mcp.ts:48
-mcp_connectors.documentation_url                 text                null              mcp.ts:49
-mcp_connectors.token_help_url                    text                null              mcp.ts:50
-mcp_connectors.icon_url                          text                null              mcp.ts:51
-mcp_connectors.oauth_issuer                      text                null              mcp.ts:55  OAuth authorization-server issuer, captured at create time for oauth2 connectors.
-mcp_connectors.oauth_confirmed_endpoint_origins  jsonb               null              mcp.ts:56
-mcp_connectors.created_at                        timestamptz         default,not null  mcp.ts:59
-mcp_connectors.updated_at                        timestamptz         default,not null  mcp.ts:60
+mcp_connectors.id                                pUuid               pk,not null       mcp.ts:34
+mcp_connectors.slug                              varchar             not null          mcp.ts:35
+mcp_connectors.organization_id                   safeOrganizationId  fk,null           mcp.ts:36
+mcp_connectors.display_name                      varchar             not null          mcp.ts:40
+mcp_connectors.description                       text                not null          mcp.ts:41
+mcp_connectors.url                               text                not null          mcp.ts:42
+mcp_connectors.auth_type                         text                not null          mcp.ts:43
+mcp_connectors.is_curated                        boolean             default,not null  mcp.ts:47
+mcp_connectors.oauth_requested_scopes            text                array,null        mcp.ts:48
+mcp_connectors.allowed_tools                     text                array,null        mcp.ts:49
+mcp_connectors.documentation_url                 text                null              mcp.ts:50
+mcp_connectors.token_help_url                    text                null              mcp.ts:51
+mcp_connectors.icon_url                          text                null              mcp.ts:52
+mcp_connectors.oauth_issuer                      text                null              mcp.ts:56  OAuth authorization-server issuer, captured at create time for oauth2 connectors.
+mcp_connectors.oauth_confirmed_endpoint_origins  jsonb               null              mcp.ts:57
+mcp_connectors.created_at                        timestamptz         default,not null  mcp.ts:60
+mcp_connectors.updated_at                        timestamptz         default,not null  mcp.ts:61
 ```
 
-## mcp_oauth_clients · `mcpOAuthClients` · mcp.ts:81 · rls
+## mcp_oauth_clients · `mcpOAuthClients` · mcp.ts:82 · rls
 
 ```text
-mcp_oauth_clients.id                        pUuid               pk,not null       mcp.ts:84
-mcp_oauth_clients.organization_id           safeOrganizationId  fk,not null       mcp.ts:85
-mcp_oauth_clients.connector_id              safeUuid            fk,not null       mcp.ts:88
-mcp_oauth_clients.authorization_server_url  text                not null          mcp.ts:91
-mcp_oauth_clients.client_id                 text                not null          mcp.ts:92
-mcp_oauth_clients.client_secret_encrypted   bytea               null              mcp.ts:93
-mcp_oauth_clients.client_secret_iv          bytea               null              mcp.ts:94
-mcp_oauth_clients.registration_response     jsonb               not null          mcp.ts:95
-mcp_oauth_clients.created_at                timestamptz         default,not null  mcp.ts:98
-mcp_oauth_clients.updated_at                timestamptz         default,not null  mcp.ts:99
+mcp_oauth_clients.id                        pUuid               pk,not null       mcp.ts:85
+mcp_oauth_clients.organization_id           safeOrganizationId  fk,not null       mcp.ts:86
+mcp_oauth_clients.connector_id              safeUuid            fk,not null       mcp.ts:89
+mcp_oauth_clients.authorization_server_url  text                not null          mcp.ts:92
+mcp_oauth_clients.client_id                 text                not null          mcp.ts:93
+mcp_oauth_clients.client_secret_encrypted   bytea               null              mcp.ts:94
+mcp_oauth_clients.client_secret_iv          bytea               null              mcp.ts:95
+mcp_oauth_clients.registration_response     jsonb               not null          mcp.ts:96
+mcp_oauth_clients.created_at                timestamptz         default,not null  mcp.ts:99
+mcp_oauth_clients.updated_at                timestamptz         default,not null  mcp.ts:100
 ```
 
-## mcp_connector_authorization_reviews · `mcpConnectorAuthorizationReviews` · mcp.ts:125 · rls
+## mcp_connector_authorization_reviews · `mcpConnectorAuthorizationReviews` · mcp.ts:126 · rls
 
 ```text
-mcp_connector_authorization_reviews.organization_id            safeOrganizationId  not null          mcp.ts:128
-mcp_connector_authorization_reviews.connector_id               safeUuid            not null          mcp.ts:129
-mcp_connector_authorization_reviews.observed_issuer            text                null              mcp.ts:130
-mcp_connector_authorization_reviews.approved_issuer            text                null              mcp.ts:131
-mcp_connector_authorization_reviews.observed_endpoint_origins  jsonb               default,not null  mcp.ts:132
-mcp_connector_authorization_reviews.approved_endpoint_origins  jsonb               null              mcp.ts:136
-mcp_connector_authorization_reviews.status                     text                default,not null  mcp.ts:139
-mcp_connector_authorization_reviews.updated_at                 timestamptz         default,not null  mcp.ts:143
+mcp_connector_authorization_reviews.organization_id            safeOrganizationId  fk,not null       mcp.ts:129
+mcp_connector_authorization_reviews.connector_id               safeUuid            fk,not null       mcp.ts:130
+mcp_connector_authorization_reviews.observed_issuer            text                null              mcp.ts:131
+mcp_connector_authorization_reviews.approved_issuer            text                null              mcp.ts:132
+mcp_connector_authorization_reviews.observed_endpoint_origins  jsonb               default,not null  mcp.ts:133
+mcp_connector_authorization_reviews.approved_endpoint_origins  jsonb               null              mcp.ts:137
+mcp_connector_authorization_reviews.status                     text                default,not null  mcp.ts:140
+mcp_connector_authorization_reviews.updated_at                 timestamptz         default,not null  mcp.ts:144
 ```
 
-## mcp_user_connections · `mcpUserConnections` · mcp.ts:203 · rls
+## mcp_user_connections · `mcpUserConnections` · mcp.ts:204 · rls
 
 ```text
-mcp_user_connections.id                         pUuid               pk,not null       mcp.ts:206
-mcp_user_connections.organization_id            safeOrganizationId  fk,not null       mcp.ts:207
-mcp_user_connections.connector_id               safeUuid            fk,not null       mcp.ts:210
-mcp_user_connections.user_id                    text                fk,not null       mcp.ts:213
-mcp_user_connections.response_disposition       text                default,not null  mcp.ts:217
-mcp_user_connections.response_target_url        text                null              mcp.ts:221
-mcp_user_connections.access_token_encrypted     bytea               null              mcp.ts:222
-mcp_user_connections.access_token_iv            bytea               null              mcp.ts:223
-mcp_user_connections.refresh_token_encrypted    bytea               null              mcp.ts:224
-mcp_user_connections.refresh_token_iv           bytea               null              mcp.ts:225
-mcp_user_connections.static_token_encrypted     bytea               null              mcp.ts:226
-mcp_user_connections.static_token_iv            bytea               null              mcp.ts:227
-mcp_user_connections.token_type                 varchar             null              mcp.ts:228
-mcp_user_connections.scope                      text                null              mcp.ts:229
-mcp_user_connections.resource_url               text                null              mcp.ts:230
-mcp_user_connections.authorization_server_url   text                null              mcp.ts:231
-mcp_user_connections.refresh_lease_expires_at   timestamptz         null              mcp.ts:232
-mcp_user_connections.refresh_retry_after        timestamptz         null              mcp.ts:233
-mcp_user_connections.expires_at                 timestamptz         null              mcp.ts:234
-mcp_user_connections.cached_tools               jsonb               null              mcp.ts:235
-mcp_user_connections.cached_tools_refreshed_at  timestamptz         null              mcp.ts:238
-mcp_user_connections.server_version             text                null              mcp.ts:242  Metadata the server reports during the MCP `initialize` handshake, captured with this user's credentials.
-mcp_user_connections.instructions               text                null              mcp.ts:243
-mcp_user_connections.status                     text                not null          mcp.ts:244
-mcp_user_connections.enabled                    boolean             default,not null  mcp.ts:248
-mcp_user_connections.last_used_at               timestamptz         null              mcp.ts:249
-mcp_user_connections.created_at                 timestamptz         default,not null  mcp.ts:250
-mcp_user_connections.updated_at                 timestamptz         default,not null  mcp.ts:251
+mcp_user_connections.id                         pUuid               pk,not null       mcp.ts:207
+mcp_user_connections.organization_id            safeOrganizationId  fk,not null       mcp.ts:208
+mcp_user_connections.connector_id               safeUuid            fk,not null       mcp.ts:211
+mcp_user_connections.user_id                    text                fk,not null       mcp.ts:214
+mcp_user_connections.response_disposition       text                default,not null  mcp.ts:218
+mcp_user_connections.response_target_url        text                null              mcp.ts:222
+mcp_user_connections.access_token_encrypted     bytea               null              mcp.ts:223
+mcp_user_connections.access_token_iv            bytea               null              mcp.ts:224
+mcp_user_connections.refresh_token_encrypted    bytea               null              mcp.ts:225
+mcp_user_connections.refresh_token_iv           bytea               null              mcp.ts:226
+mcp_user_connections.static_token_encrypted     bytea               null              mcp.ts:227
+mcp_user_connections.static_token_iv            bytea               null              mcp.ts:228
+mcp_user_connections.token_type                 varchar             null              mcp.ts:229
+mcp_user_connections.scope                      text                null              mcp.ts:230
+mcp_user_connections.resource_url               text                null              mcp.ts:231
+mcp_user_connections.authorization_server_url   text                null              mcp.ts:232
+mcp_user_connections.refresh_lease_expires_at   timestamptz         null              mcp.ts:233
+mcp_user_connections.refresh_retry_after        timestamptz         null              mcp.ts:234
+mcp_user_connections.expires_at                 timestamptz         null              mcp.ts:235
+mcp_user_connections.cached_tools               jsonb               null              mcp.ts:236
+mcp_user_connections.cached_tools_refreshed_at  timestamptz         null              mcp.ts:239
+mcp_user_connections.server_version             text                null              mcp.ts:243  Metadata the server reports during the MCP `initialize` handshake, captured with this user's credentials.
+mcp_user_connections.instructions               text                null              mcp.ts:244
+mcp_user_connections.status                     text                not null          mcp.ts:245
+mcp_user_connections.enabled                    boolean             default,not null  mcp.ts:249
+mcp_user_connections.last_used_at               timestamptz         null              mcp.ts:250
+mcp_user_connections.created_at                 timestamptz         default,not null  mcp.ts:251
+mcp_user_connections.updated_at                 timestamptz         default,not null  mcp.ts:252
 ```
 
-## mcp_oauth_state · `mcpOAuthState` · mcp.ts:286 · rls
+## mcp_oauth_state · `mcpOAuthState` · mcp.ts:287 · rls
 
 ```text
-mcp_oauth_state.state                     varchar             pk,not null       mcp.ts:289
-mcp_oauth_state.organization_id           safeOrganizationId  fk,not null       mcp.ts:290
-mcp_oauth_state.connector_id              safeUuid            fk,not null       mcp.ts:293
-mcp_oauth_state.user_id                   text                fk,not null       mcp.ts:296
-mcp_oauth_state.code_verifier             text                not null          mcp.ts:300
-mcp_oauth_state.redirect_uri              text                not null          mcp.ts:301
-mcp_oauth_state.resource_url              text                not null          mcp.ts:302
-mcp_oauth_state.authorization_server_url  text                not null          mcp.ts:303
-mcp_oauth_state.created_at                timestamptz         default,not null  mcp.ts:304
+mcp_oauth_state.state                           varchar             pk,not null       mcp.ts:290
+mcp_oauth_state.organization_id                 safeOrganizationId  fk,not null       mcp.ts:291
+mcp_oauth_state.connector_id                    safeUuid            fk,not null       mcp.ts:294
+mcp_oauth_state.user_id                         text                fk,not null       mcp.ts:297
+mcp_oauth_state.code_verifier                   text                not null          mcp.ts:301
+mcp_oauth_state.redirect_uri                    text                not null          mcp.ts:302
+mcp_oauth_state.resource_url                    text                not null          mcp.ts:303
+mcp_oauth_state.authorization_server_url        text                not null          mcp.ts:304
+mcp_oauth_state.authorization_response_binding  jsonb               null              mcp.ts:305
+mcp_oauth_state.created_at                      timestamptz         default,not null  mcp.ts:308
 ```

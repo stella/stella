@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { and, eq, isNull } from "drizzle-orm";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 
 import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -9,19 +9,20 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { insertEntityVersion } from "@/api/lib/entity-versions/insert-entity-version";
 import {
   buildVersionStamp,
   nextEntityVersionNumber,
 } from "@/api/lib/entity-versions/version-utils";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { processExtraction } from "@/api/lib/search/process-extraction";
 
 const paramsSchema = workspaceParams({
-  entityId: tSafeId("entity"),
-  versionId: tSafeId("entityVersion"),
+  entityId: resourceIdSchema("entity"),
+  versionId: resourceIdSchema("entityVersion"),
 });
 
 const config = {
@@ -235,10 +236,13 @@ export default createSafeHandler(
     // metadata-only index for entities without an extractable file) so the
     // search freshness fence does not hide the restored entity indefinitely.
     await processExtraction(params.entityId).catch((error: unknown) =>
-      captureError(error, {
-        entityId: params.entityId,
-        versionId: nextVersionId,
-      }),
+      captureError(
+        error,
+        handlerErrorContext("versions.capture", {
+          entityId: params.entityId,
+          versionId: nextVersionId,
+        }),
+      ),
     );
 
     broadcastWorkspaceResourceUpdated(

@@ -1,27 +1,37 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import * as v from "valibot";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
+import { proveOrgScope, withOrgScope } from "@/api/db/org-scope";
+import type { OrgScopedTransaction } from "@/api/db/org-scope";
 import type { Transaction } from "@/api/db/root";
 import {
   featureEnrolments,
   flowDefinitions,
   schedulerJobs,
+  systemAuditRuns,
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { runGlobalSystemWork } from "@/api/lib/db/global-system-work";
 import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
 import {
   repairFlowScheduleTriggers,
   syncFlowScheduleTriggerInTransaction,
 } from "@/api/lib/flows/sync-flow-schedule-trigger";
+import { getPgErrorCode } from "@/api/lib/pg-error";
 import {
   FLOW_RUN_TASK,
   flowScheduleJobId,
-  flowRunPayloadSchema,
+} from "@/api/lib/scheduler/flow-schedule-identity";
+import {
   flowRunPayloadMatchesSql,
+  flowRunPayloadSchema,
 } from "@/api/lib/scheduler/tasks/flow-run";
+import { upsertSchedulerJob } from "@/api/lib/scheduler/upsert-job";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { flowReviewGateFixture } from "@/api/tests/helpers/flow-review-gate";
 
@@ -36,6 +46,180 @@ if (!databaseUrl || !enabled) {
   });
 } else {
   describe("flow schedule reconciliation (postgres)", () => {
+    test("scoped flow jobs use only their live organization and orphan cleanup uses its global door", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db } = openClient();
+        const a = await flowReviewGateFixture(db, { intermediate: false });
+        const b = await flowReviewGateFixture(db, { intermediate: false });
+        const definitionAId = createSafeId<"flowDefinition">();
+        const definitionBId = createSafeId<"flowDefinition">();
+        const orphanId = createSafeId<"flowDefinition">();
+        const ownJobId = flowScheduleJobId(definitionAId);
+        const orphanJobId = flowScheduleJobId(orphanId);
+        const inScope = async (
+          work: (
+            tx: Transaction,
+            scoped: OrgScopedTransaction,
+          ) => Promise<void>,
+        ) => {
+          await db.transaction(async (tx) => {
+            const proof = await proveOrgScope(tx, {
+              table: "flowDefinitions",
+              where: eq(flowDefinitions.id, definitionAId),
+            });
+            if (proof.isErr()) {
+              return panic("Missing flow scope fixture");
+            }
+            await withOrgScope({
+              tx,
+              scope: proof.value,
+              actor: { type: "system" },
+              fn: work,
+            });
+          });
+        };
+        const refuse = async (work: (tx: Transaction) => Promise<void>) => {
+          const result = await Result.tryPromise(
+            async () => await inScope(work),
+          );
+          expect(result.isErr()).toBe(true);
+          if (result.isErr()) {
+            expect(getPgErrorCode(result.error)).toBe("42501");
+          }
+        };
+        try {
+          await db.insert(flowDefinitions).values([
+            {
+              id: definitionAId,
+              organizationId: a.organizationId,
+              name: "Scheduled flow",
+              steps: [],
+              trigger: { type: "manual" },
+              createdByUserId: a.userId,
+            },
+            {
+              id: definitionBId,
+              organizationId: b.organizationId,
+              name: "Other scheduled flow",
+              steps: [],
+              trigger: { type: "manual" },
+              createdByUserId: b.userId,
+            },
+          ]);
+          await inScope(async (tx, scoped) => {
+            expect(
+              await tx
+                .select({ id: flowDefinitions.id })
+                .from(flowDefinitions)
+                .where(eq(flowDefinitions.id, definitionAId)),
+            ).toEqual([{ id: definitionAId }]);
+            await upsertSchedulerJob({
+              ownership: "organization",
+              definition: {
+                id: ownJobId,
+                task: FLOW_RUN_TASK,
+                description: "Scheduled flow",
+                schedule: { type: "interval", everyMs: 60_000 },
+                payload: { definitionId: definitionAId },
+              },
+              db: scoped,
+            });
+          });
+          expect(
+            await db.$count(schedulerJobs, eq(schedulerJobs.id, ownJobId)),
+          ).toBe(1);
+          const recorded = await db
+            .select({
+              counts: systemAuditRuns.counts,
+              subject: systemAuditRuns.subject,
+            })
+            .from(systemAuditRuns)
+            .where(
+              eq(systemAuditRuns.actor, "system:flow-schedule-orphan-cleanup"),
+            );
+          expect(recorded).toHaveLength(1);
+          expect(recorded.at(0)?.counts).toEqual({ schedulerJobs: 1 });
+          expect(recorded.at(0)?.subject).not.toBe(orphanId);
+          await refuse(async (tx) => {
+            await tx.execute(sql`INSERT INTO scheduler_jobs (id, task, schedule, payload, next_run_at)
+              VALUES (${flowScheduleJobId(definitionBId)}, ${FLOW_RUN_TASK},
+                '{"type":"interval","everyMs":60000}'::jsonb,
+                ${JSON.stringify({ definitionId: definitionBId })}::text::jsonb, now())`);
+          });
+          await refuse(async (tx) => {
+            await tx.execute(sql`INSERT INTO scheduler_jobs (id, task, schedule, payload, next_run_at)
+              VALUES (${`other.${definitionAId}`}, 'other',
+                '{"type":"interval","everyMs":60000}'::jsonb,
+                ${JSON.stringify({ definitionId: definitionAId })}::text::jsonb, now())`);
+          });
+          await refuse(async (tx) => {
+            await tx.execute(sql`INSERT INTO scheduler_jobs (id, task, schedule, payload, next_run_at)
+              VALUES (${flowScheduleJobId(definitionBId)}, ${FLOW_RUN_TASK},
+                '{"type":"interval","everyMs":60000}'::jsonb,
+                ${JSON.stringify({ definitionId: definitionAId })}::text::jsonb, now())`);
+          });
+          await refuse(async (tx) => {
+            await tx
+              .update(schedulerJobs)
+              .set({ payload: { definitionId: definitionBId } })
+              .where(eq(schedulerJobs.id, ownJobId));
+          });
+          await refuse(async (tx) => {
+            await tx.execute(sql`INSERT INTO scheduler_jobs (id, task, schedule, payload, next_run_at)
+              VALUES (${flowScheduleJobId(orphanId)}, ${FLOW_RUN_TASK},
+                '{"type":"interval","everyMs":60000}'::jsonb,
+                ${JSON.stringify({ definitionId: orphanId })}::text::jsonb, now())`);
+          });
+          const orphanPayload = { definitionId: orphanId };
+          await db.insert(schedulerJobs).values({
+            id: orphanJobId,
+            task: FLOW_RUN_TASK,
+            schedule: { type: "interval", everyMs: 60_000 },
+            payload: orphanPayload,
+            nextRunAt: new Date(),
+          });
+          await inScope(async (tx) => {
+            await tx
+              .delete(schedulerJobs)
+              .where(eq(schedulerJobs.id, orphanJobId));
+          });
+          expect(
+            await db.$count(schedulerJobs, eq(schedulerJobs.id, orphanJobId)),
+          ).toBe(1);
+          expect(
+            await rejectionOf(
+              inScope(async (tx) => {
+                await runGlobalSystemWork(tx, {
+                  type: "flow-schedule-orphan-page",
+                  originals: [{ id: orphanJobId, payload: orphanPayload }],
+                });
+              }),
+            ),
+          ).toMatchObject({
+            message: "Global system work requires its owner context",
+          });
+          await db.transaction(async (tx) => {
+            await runGlobalSystemWork(tx, {
+              type: "flow-schedule-orphan-page",
+              originals: [{ id: orphanJobId, payload: orphanPayload }],
+            });
+          });
+          expect(
+            await db.$count(schedulerJobs, eq(schedulerJobs.id, orphanJobId)),
+          ).toBe(0);
+          expect(
+            await db.$count(schedulerJobs, eq(schedulerJobs.id, ownJobId)),
+          ).toBe(1);
+        } finally {
+          await db
+            .delete(schedulerJobs)
+            .where(inArray(schedulerJobs.id, [ownJobId, orphanJobId]));
+          await a.cleanup();
+          await b.cleanup();
+        }
+      });
+    });
+
     test("repair ignores clean manual definitions and spends transactions only on schedule drift", async () => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const { db } = openClient();

@@ -1,11 +1,10 @@
 import { panic } from "better-result";
-import { and, eq } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
 import { isUuid } from "@stll/uuid-codec";
 
-import { schedulerJobs } from "@/api/db/schema";
 import { getCaseLawIngestionDb } from "@/api/lib/case-law-ingestion-db";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import {
   censusCaseLawRawObjectsPage,
   RAW_CENSUS_MODE,
@@ -20,7 +19,8 @@ import {
   brandPersistedCaseLawDecisionId,
   brandPersistedCaseLawSourceId,
 } from "@/api/lib/safe-id-boundaries";
-import type { SchedulerJob, SchedulerTask } from "@/api/lib/scheduler/types";
+import type { SchedulerTask } from "@/api/lib/scheduler/types";
+import { writePlatformSchedulerTaskState } from "@/api/lib/scheduler/upsert-job";
 import { recordSystemAudit } from "@/api/lib/system-audit/record";
 
 /**
@@ -42,15 +42,6 @@ const SWEEP_LIMIT = 20;
 const ROW_PAGE_LIMIT = 200;
 const CENSUS_PAGE_KEYS = 1000;
 const CONTINUATION_DELAY_MS = 1000;
-
-const leaseFence = (job: SchedulerJob) =>
-  and(
-    eq(schedulerJobs.id, job.id),
-    eq(
-      schedulerJobs.lockedBy,
-      job.lockedBy ?? panic("Raw storage pass requires a scheduler lease"),
-    ),
-  );
 
 /** Delete the raw prefixes owed a sweep: erased decisions, lost writes. */
 export const reconcileCaseLawRawSweepsTask: SchedulerTask = async ({
@@ -118,11 +109,15 @@ export const reconcileCaseLawRawRowsTask: SchedulerTask = async ({
   // Checkpoint last, and only as far as every row before it is settled. The
   // audit row commits with the checkpoint: a cursor never passes a page whose
   // changes went unrecorded.
-  await db.transaction(async (tx) => {
-    await tx
-      .update(schedulerJobs)
-      .set({ payload: { cursor: page.resumeAfter } })
-      .where(leaseFence(job));
+  await withAggregateTransaction(db, async (tx) => {
+    await writePlatformSchedulerTaskState({
+      db: tx,
+      jobId: job.id,
+      leaseToken:
+        job.lockedBy ?? panic("Raw storage pass requires a scheduler lease"),
+      state: { type: "checkpoint", payload: { cursor: page.resumeAfter } },
+      task: RECONCILE_CASE_LAW_RAW_ROWS_TASK,
+    });
     await recordSystemAudit(tx, "system:case-law-raw-storage", {
       subject: runId,
       counts: {
@@ -201,10 +196,14 @@ export const censusCaseLawRawObjectsTask: SchedulerTask = async ({
     signal,
   });
   // The audit row commits with the checkpoint, as in the row pass.
-  await db.transaction(async (tx) => {
-    await tx
-      .update(schedulerJobs)
-      .set({
+  await withAggregateTransaction(db, async (tx) => {
+    await writePlatformSchedulerTaskState({
+      db: tx,
+      jobId: job.id,
+      leaseToken:
+        job.lockedBy ?? panic("Raw storage pass requires a scheduler lease"),
+      state: {
+        type: "checkpoint",
         payload:
           page.next === null
             ? null
@@ -212,8 +211,9 @@ export const censusCaseLawRawObjectsTask: SchedulerTask = async ({
                 sourceId: page.next.sourceId,
                 startAfter: page.next.startAfter,
               },
-      })
-      .where(leaseFence(job));
+      },
+      task: CENSUS_CASE_LAW_RAW_OBJECTS_TASK,
+    });
     await recordSystemAudit(tx, "system:case-law-raw-storage", {
       subject: runId,
       counts: {

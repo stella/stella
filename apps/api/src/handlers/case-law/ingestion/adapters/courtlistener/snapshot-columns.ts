@@ -1,3 +1,4 @@
+// parser-output-unchanged: [us-courtlistener] canonical ID helpers and OpinionRow moved to parser modules; output is identical.
 /**
  * The CourtListener bulk CSV columns of the pinned 2026-06-30 snapshot, one
  * map per table in header order, each column with what becomes of it.
@@ -9,11 +10,18 @@
  * decision row does not carry it.
  */
 
+import { compareCanonicalIds } from "@/api/handlers/case-law/ingestion/parsers/courtlistener/canonical-id-order";
+import type { OpinionRow } from "@/api/handlers/case-law/ingestion/parsers/courtlistener/opinion-row";
 import {
   excludedSourceField,
   type SourceFieldDisposition,
 } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
+
+export {
+  compareBytewise,
+  compareCanonicalIds,
+} from "@/api/handlers/case-law/ingestion/parsers/courtlistener/canonical-id-order";
 
 type ResultKey =
   | "identifiers"
@@ -278,14 +286,16 @@ const columnsOf = <TFields extends object>(fields: TFields) =>
 export const CLUSTER_COLUMNS = columnsOf(CLUSTER_FIELDS);
 export const DOCKET_COLUMNS = columnsOf(DOCKET_FIELDS);
 export const COURT_COLUMNS = columnsOf(COURT_FIELDS);
-export const OPINION_COLUMNS = columnsOf(OPINION_FIELDS);
+export const OPINION_COLUMNS = columnsOf(
+  OPINION_FIELDS,
+) satisfies readonly (keyof OpinionRow)[];
 export const CITATION_COLUMNS = columnsOf(CITATION_FIELDS);
 export const PERSON_COLUMNS = columnsOf(PERSON_FIELDS);
 
 /** One CSV row: every pinned column, as the decoder produced its text. */
 export type CsvRow<TColumn extends string> = Readonly<Record<TColumn, string>>;
 
-export type OpinionRow = CsvRow<(typeof OPINION_COLUMNS)[number]>;
+export type { OpinionRow } from "@/api/handlers/case-law/ingestion/parsers/courtlistener/opinion-row";
 export type CitationRow = CsvRow<(typeof CITATION_COLUMNS)[number]>;
 export type PersonRow = CsvRow<(typeof PERSON_COLUMNS)[number]>;
 
@@ -327,20 +337,6 @@ export const isCanonicalId = (value: string): boolean =>
   value.length <= MAX_ID.length &&
   /^[1-9][0-9]*$/u.test(value) &&
   compareCanonicalIds(value, MAX_ID) <= 0;
-
-/** UTF-16 code-unit order, independent of locale. */
-export const compareBytewise = (left: string, right: string): number => {
-  if (left === right) {
-    return 0;
-  }
-  return left < right ? -1 : 1;
-};
-
-/** Numeric order of canonical IDs without `Number`, which loses past 2^53. */
-export const compareCanonicalIds = (left: string, right: string): number =>
-  left.length === right.length
-    ? compareBytewise(left, right)
-    : left.length - right.length;
 
 /** A boolean column holds `t` or `f`; anything else reads as `null`. */
 export const readCsvBoolean = (value: string): boolean | null => {

@@ -5,7 +5,7 @@ import type { UnavailableWorkspaceView } from "@stll/api-contract";
 
 import type { ViewLayout, WorkspaceView } from "@/lib/types";
 
-// `viewsKeys` pulls in the Eden client, which reads the API URL at import time.
+// `viewsKeys` pulls in the API client, which reads the API URL at import time.
 beforeAll(() => {
   process.env["VITE_API_URL"] ??= "https://api.example.test";
 });

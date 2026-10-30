@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "e650c1e861828dd00eec44c9f83dd40b59be3951dcc0bd7bb5bf4931a528bf4a",
+  "sourceUrl": "https://apiorzeczenia.wroclaw.sa.gov.pl/ncourt-api/judgements?signature=VIII+U+2067%2F16&court=15251000&sort=signature-asc",
+  "capturedAt": "2026-10-25T20:38:30.000Z",
+  "note": "one signature at one court: the listed row of a recorded document"
+}

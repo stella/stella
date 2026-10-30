@@ -25,22 +25,22 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { generateInboundAddressToken } from "@/api/lib/email/inbound/address";
 import { createInboundMailPersistence } from "@/api/lib/email/inbound/persistence";
 import {
-  createSesS3ObjectReader,
   createSesS3ObjectDeleter,
+  createSesS3ObjectReader,
   receiveAndDeleteSesInboundMail,
   SesInboundError,
 } from "@/api/lib/email/inbound/ses";
 import { drainInboundMailQueue } from "@/api/lib/email/inbound/sqs";
 import { logger } from "@/api/lib/observability/logger";
 import {
-  openGatedTestDatabase,
   type GatedTestDb,
+  openGatedTestDatabase,
 } from "@/api/tests/gated-test-database";
 import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
-import { startFakeS3, type FakeS3 } from "@/api/tests/helpers/fake-s3";
+import { type FakeS3, startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { createFakeSqsQueue } from "@/api/tests/helpers/fake-sqs";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -54,7 +54,7 @@ const inboundDomain = "inbound.example.test";
 const organizationId = mintAuthProviderId<"organization">();
 const memberId = mintAuthProviderId<"user">();
 const workspaceId = createSafeId<"workspace">();
-const token = generateInboundAddressToken();
+const token = generateInboundAddressToken({ userId: null });
 
 const message = (from: string, messageId: string) =>
   new TextEncoder().encode(
@@ -66,12 +66,14 @@ type NotificationOptions = {
   deliveryId: string;
   from?: string;
   authentication?: SesStatus;
+  scan?: SesStatus;
 };
 
 const notification = ({
   deliveryId,
   from = "member@example.test",
   authentication = "PASS",
+  scan = "PASS",
 }: NotificationOptions) =>
   JSON.stringify({
     Type: "Notification",
@@ -95,7 +97,7 @@ const notification = ({
         spfVerdict: { status: authentication },
         dkimVerdict: { status: authentication },
         dmarcVerdict: { status: authentication },
-        virusVerdict: { status: "PASS" },
+        virusVerdict: { status: scan },
       },
     }),
   });
@@ -122,7 +124,15 @@ const drops = async () =>
         .where(eq(correspondenceDropLogs.organizationId, organizationId)),
   );
 
-const drainHarness = () => {
+type DrainHarnessOptions = {
+  beforeDelete?: () => Promise<void>;
+  abortCommit?: () => boolean;
+};
+
+const drainHarness = ({
+  beforeDelete,
+  abortCommit,
+}: DrainHarnessOptions = {}) => {
   const queue = createFakeSqsQueue();
   const objectClient = new S3Client({
     region: "eu-west-1",
@@ -137,7 +147,16 @@ const drainHarness = () => {
     bucket,
   });
   const persist = createInboundMailPersistence({
-    database: db,
+    database: {
+      transaction: async (work) =>
+        await db.transaction(async (tx) => {
+          const outcome = await work(tx);
+          if (abortCommit?.()) {
+            return tx.rollback();
+          }
+          return outcome;
+        }),
+    },
     scopedDbForMatter: (scope) =>
       createScopedDb(
         markRlsDatabase(db),
@@ -171,7 +190,10 @@ const drainHarness = () => {
                 )
               : await objects(options),
           persist,
-          deleteObject,
+          deleteObject: async (options) => {
+            await beforeDelete?.();
+            await deleteObject(options);
+          },
         }),
     });
   return { queue, drain };
@@ -295,6 +317,82 @@ if (!databaseUrl || !runPostgresTests) {
             reason === "message_too_large" || reason === "unauthorized_sender",
         ).toSorted(),
       );
+    });
+
+    test.each([
+      ["PASS", "filed"],
+      ["FAIL", "dropped"],
+      ["GRAY", "dropped"],
+      ["PROCESSING_FAILED", "retry"],
+    ] as const)("virus verdict %s settles as %s", async (scan, outcome) => {
+      const deliveryId = `scan-${scan}`;
+      let deleted = false;
+      const { queue, drain } = drainHarness({
+        beforeDelete: async () => {
+          // A separate transaction must see the committed tenant record while
+          // the raw object and unacknowledged queue delivery still exist.
+          expect(queue.remaining()).toHaveLength(1);
+          expect(s3.objects.has(`${bucket}/${keyPrefix}${deliveryId}`)).toBe(
+            true,
+          );
+          if (outcome === "dropped") {
+            expect(await drops()).toMatchObject([
+              {
+                workspaceId,
+                organizationId,
+                reason: "attachment_rejected",
+                senderAddress: "member@example.test",
+              },
+            ]);
+          } else {
+            expect(await records()).toHaveLength(1);
+          }
+          deleted = true;
+        },
+      });
+      s3.put(
+        bucket,
+        `${keyPrefix}${deliveryId}`,
+        message("member@example.test", deliveryId),
+      );
+      queue.enqueue(notification({ deliveryId, scan }));
+      const result = (await drain()).unwrap();
+      expect(result).toMatchObject({
+        filed: outcome === "filed" ? 1 : 0,
+        dropped: outcome === "dropped" ? 1 : 0,
+        retry: outcome === "retry" ? 1 : 0,
+      });
+      expect(deleted).toBe(outcome !== "retry");
+      expect(queue.remaining()).toHaveLength(outcome === "retry" ? 1 : 0);
+      expect(s3.objects.has(`${bucket}/${keyPrefix}${deliveryId}`)).toBe(
+        outcome === "retry",
+      );
+      expect(await records()).toHaveLength(outcome === "filed" ? 1 : 0);
+      expect(await drops()).toHaveLength(outcome === "dropped" ? 1 : 0);
+    });
+
+    test("an inconclusive scan retries until its drop transaction commits", async () => {
+      let abortCommit = true;
+      const { queue, drain } = drainHarness({ abortCommit: () => abortCommit });
+      const deliveryId = "gray-commit-failed";
+      s3.put(
+        bucket,
+        `${keyPrefix}${deliveryId}`,
+        message("member@example.test", deliveryId),
+      );
+      queue.enqueue(notification({ deliveryId, scan: "GRAY" }));
+      expect((await drain()).unwrap()).toMatchObject({ retry: 1, dropped: 0 });
+      expect(await drops()).toHaveLength(0);
+      expect(await records()).toHaveLength(0);
+      expect(s3.objects.has(`${bucket}/${keyPrefix}${deliveryId}`)).toBe(true);
+      expect(queue.remaining()).toHaveLength(1);
+      abortCommit = false;
+      queue.expireLeases();
+      expect((await drain()).unwrap()).toMatchObject({ retry: 0, dropped: 1 });
+      expect(await drops()).toHaveLength(1);
+      expect(await records()).toHaveLength(0);
+      expect(s3.objects.has(`${bucket}/${keyPrefix}${deliveryId}`)).toBe(false);
+      expect(queue.remaining()).toEqual([]);
     });
 
     test("retryable failures stay on the queue without a record or drop", async () => {

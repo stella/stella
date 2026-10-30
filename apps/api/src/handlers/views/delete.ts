@@ -2,9 +2,9 @@ import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import {
-  resourceRef,
-  RESOURCE_TYPE,
   RESOURCE_DELETION_OWNERSHIP,
+  RESOURCE_TYPE,
+  resourceRef,
 } from "@stll/api-contract";
 
 import { workspaceViews } from "@/api/db/schema";
@@ -16,7 +16,7 @@ import {
   avtViewAccessStatus,
   isAvtLayoutVisible,
 } from "@/api/lib/auth/feature-access/view-eligibility";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { broadcastWorkspaceResourceDeleted } from "@/api/lib/resource-realtime";
 import { isRequiredViewLayout } from "@/api/lib/views";
@@ -37,7 +37,7 @@ const config = {
     reason: "workspace_schema",
     consumesServices: false,
   },
-  params: workspaceParams({ viewId: tSafeId("workspaceView") }),
+  params: workspaceParams({ viewId: resourceIdSchema("workspaceView") }),
 } satisfies WorkspaceHandlerConfig;
 
 const deleteView = createSafeHandler(

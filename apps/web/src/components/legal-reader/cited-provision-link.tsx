@@ -18,8 +18,8 @@ import type { CitedProvisionTarget } from "@stll/decision-reader/reader-types";
 import { cn } from "@stll/ui/utils";
 
 import {
-  citedProvisionClick,
   CITED_PROVISION_CLICK,
+  citedProvisionClick,
 } from "@/components/legal-reader/cited-provision-link.logic";
 import {
   keepReadingPosition,
@@ -32,11 +32,7 @@ import {
   provisionPreviewOptions,
 } from "@/lib/statutes/provision-preview";
 import { createStatuteLinkTarget } from "@/lib/statutes/statute-route";
-import {
-  useQueryView,
-  useQueryViewError,
-  useQueryViewErrors,
-} from "@/lib/use-query-view";
+import { useQueryViewError, useQueryViewErrors } from "@/lib/use-query-view";
 
 const citationPreviewOptions = ({ document, payload }: CitedProvisionTarget) =>
   provisionPreviewOptions({
@@ -68,7 +64,7 @@ const useCitedWordings = ({
     })),
   });
   const views = reads.map((read) => queryView(read));
-  useQueryViewErrors(views);
+  useQueryViewErrors(views, "useCitedWordings:query");
   return citations.map((target, index) => {
     if (target.preview !== null) {
       return { target, wording: target.preview };
@@ -104,8 +100,8 @@ const useFullProvision = ({ enabled, first }: FullProvisionArgs) => {
     }),
     enabled,
   });
-  const view = useQueryView(read);
-  useQueryViewError(view);
+  const view = queryView(read);
+  useQueryViewError(view, "useFullProvision:query");
   return {
     full: {
       isPending: read.isFetching || view.type === "pending",
@@ -124,8 +120,10 @@ type FullProvisionState = keyof typeof FULL_PROVISION;
  */
 export const CitedProvisionExpansion = ({
   citations,
+  placement = "inline",
 }: {
   citations: readonly CitedProvisionTarget[];
+  placement?: "gutter" | "inline";
 }) => {
   const [shown, setShown] = useState<FullProvisionState>(FULL_PROVISION.cited);
   const first = citations.at(0) ?? panic("A provision card without citations");
@@ -161,6 +159,7 @@ export const CitedProvisionExpansion = ({
       citations={citations}
       full={full}
       onToggleFull={onToggleFull}
+      placement={placement}
       showsFull={shown === FULL_PROVISION.full}
       wordings={wordings}
     />

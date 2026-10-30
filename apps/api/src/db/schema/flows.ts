@@ -3,8 +3,8 @@ import { sql } from "drizzle-orm";
 import { entityFeaturePolicies } from "@/api/db/entity-feature-policies";
 import { systemScopePolicies } from "@/api/db/system-scope-policies";
 import {
-  FLOW_RUN_STATUSES,
   FLOW_RUN_RECOVERY_STATES,
+  FLOW_RUN_STATUSES,
   FLOW_RUN_STEP_STATUSES,
   FLOW_UPLOAD_TRIGGER_INTENT_STATUSES,
   FLOW_UPLOAD_TRIGGER_SKIP_REASONS,
@@ -23,19 +23,20 @@ import {
   entityFeatureGateColumns,
   entityFeatureWorkspaceGateColumns,
 } from "../entity-feature-gate-columns";
+import { registeredReviewResetPolicies } from "../review-reset-policies";
 import {
   jsonb,
-  orgPolicies,
-  organizationOptionalWorkspacePolicies,
   organization,
+  organizationOptionalWorkspacePolicies,
+  orgPolicies,
   p,
   pUuid,
   safeOrganizationId,
   safeUuid,
   safeWorkspaceId,
+  timestamptz,
   user,
   wsPolicies,
-  timestamptz,
 } from "./common";
 import { workspaces } from "./contacts";
 import { entities } from "./entities";
@@ -83,6 +84,8 @@ export const flowDefinitions = p.pgTable(
       .on(table.organizationId, table.createdAt),
     p.unique("flow_definitions_id_org_unq").on(table.id, table.organizationId),
     ...orgPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 

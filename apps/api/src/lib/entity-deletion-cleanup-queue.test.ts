@@ -1,7 +1,7 @@
-import { Result, type Result as BetterResult } from "better-result";
+import { type Result as BetterResult, Result } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
-import { toSafeId, type SafeId } from "@/api/lib/branded-types";
+import { type SafeId, toSafeId } from "@/api/lib/branded-types";
 import { ENTITY_DELETION_EFFECT_KIND } from "@/api/lib/entity-deletion-effect-store";
 import type { EntityDeletionEffectClaim } from "@/api/lib/entity-deletion-effect-store";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
@@ -118,7 +118,7 @@ describe("entity deletion cleanup queue", () => {
     expect(rejection).toBeInstanceOf(TimeoutError);
     expect(rejection).toMatchObject({
       label: "entity-deletion-cleanup.storage-delete",
-      timeoutMs: 5,
+      timeoutMs: 5, // timeout under test
     });
     expect(failChunk).toHaveBeenCalledWith(claim, rejection);
   });
@@ -180,7 +180,7 @@ describe("entity deletion cleanup queue", () => {
           throw new TimeoutError({
             label: "entity-deletion-cleanup.queue.get-job",
             message: "queue timed out",
-            timeoutMs: 5,
+            timeoutMs: 5, // timeout under test
           });
         }
       },

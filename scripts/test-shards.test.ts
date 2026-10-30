@@ -100,12 +100,17 @@ test("the ci-tests matrix runs exactly the declared jobs", () => {
       },
     },
   });
-  const declared = planCiApiTests({
+  const plan = planCiApiTests({
     event: "merge_group",
     scopeUnknown: false,
     testJobs: FULL_TEST_JOB_SHARDS,
     select: allApiTests,
-  }).matrix.shard;
+  });
+  expect(plan.type).toBe("run");
+  if (plan.type !== "run") {
+    throw new TypeError("Expected full API test plan to run");
+  }
+  const declared = [...plan.matrix.shard];
   expect(Object.keys(TEST_JOB_SHARDS)).toEqual(declared);
   expect(declared).toEqual(FULL_TEST_JOB_SHARDS);
 });
@@ -260,8 +265,8 @@ test("an in-scope API leg rejects help, empty or another shard's output", () => 
   for (const output of [
     "",
     "Usage: bun run [flags] <script>",
-    "API test shard 1/3: 0/10 files",
-    "API test shard 2/3: 5/10 files",
+    "API test shard 1/6: 0/10 files",
+    "API test shard 2/6: 5/10 files",
   ]) {
     expect(() =>
       assertApiShardExecuted({ shard: "api-1", taskIds, output }),
@@ -270,7 +275,7 @@ test("an in-scope API leg rejects help, empty or another shard's output", () => 
   assertApiShardExecuted({
     shard: "api-1",
     taskIds,
-    output: "@stll/api:test: API test shard 1/3: 5/10 files",
+    output: "@stll/api:test: API test shard 1/6: 5/10 files",
   });
   assertApiShardExecuted({ shard: "api-1", taskIds: [], output: "" });
   assertApiShardExecuted({ shard: "rest", taskIds, output: "" });
@@ -285,10 +290,8 @@ test("dynamic API shard counts certify the selected partition and allow zero API
     taskIds: ["@stll/scripts#test"],
     output: "",
   });
-  for (const count of [1, 2, 3]) {
-    for (const [index, shard] of (
-      ["api-1", "api-2", "api-3"] as const
-    ).entries()) {
+  for (const count of [1, 2, 3, 4, 5, 6]) {
+    for (const [index, shard] of API_TEST_SHARD_IDS.entries()) {
       if (index >= count) {
         expect(() => apiShardValue(shard, count)).toThrow(
           "outside the planned shard count",

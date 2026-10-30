@@ -4,42 +4,43 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## legal_reader_answers · `legalReaderAnswers` · reader-answers.ts:33 · rls
+## legal_reader_answers · `legalReaderAnswers` · reader-answers.ts:66 · rls
 
 Corpus IDs deliberately have no FK: the public corpus can live separately.
 
 ```text
-legal_reader_answers.id               pUuid               pk,not null       reader-answers.ts:36
-legal_reader_answers.organization_id  safeOrganizationId  fk,not null       reader-answers.ts:37
-legal_reader_answers.user_id          text                fk,not null       reader-answers.ts:40
-legal_reader_answers.decision_id      safeUuid            not null          reader-answers.ts:44
-legal_reader_answers.kind             text                not null          reader-answers.ts:45
-legal_reader_answers.visibility       text                default,not null  reader-answers.ts:46
-legal_reader_answers.paragraph_id     varchar             not null          reader-answers.ts:50
-legal_reader_answers.quote            text                not null          reader-answers.ts:51
-legal_reader_answers.start_offset     integer             not null          reader-answers.ts:52
-legal_reader_answers.end_offset       integer             not null          reader-answers.ts:53
-legal_reader_answers.created_at       timestamptz         default,not null  reader-answers.ts:54
-legal_reader_answers.updated_at       timestamptz         default,not null  reader-answers.ts:55
-legal_reader_answers.deleted_at       timestamptz         null              reader-answers.ts:56
+legal_reader_answers.id                  pUuid               pk,not null       reader-answers.ts:69
+legal_reader_answers.organization_id     safeOrganizationId  fk,not null       reader-answers.ts:70
+legal_reader_answers.user_id             text                fk,not null       reader-answers.ts:73
+legal_reader_answers.decision_id         safeUuid            not null          reader-answers.ts:77
+legal_reader_answers.kind                text                not null          reader-answers.ts:78
+legal_reader_answers.visibility          text                default,not null  reader-answers.ts:79
+legal_reader_answers.paragraph_id        varchar             not null          reader-answers.ts:83
+legal_reader_answers.quote               text                not null          reader-answers.ts:84
+legal_reader_answers.start_offset        integer             not null          reader-answers.ts:85
+legal_reader_answers.end_offset          integer             not null          reader-answers.ts:86
+legal_reader_answers.continuation_spans  jsonb               default,not null  reader-answers.ts:88  The selection's spans after the first, one per further paragraph in reading order.
+legal_reader_answers.created_at          timestamptz         default,not null  reader-answers.ts:92
+legal_reader_answers.updated_at          timestamptz         default,not null  reader-answers.ts:93
+legal_reader_answers.deleted_at          timestamptz         null              reader-answers.ts:94
 ```
 
-## legal_reader_answer_messages · `legalReaderAnswerMessages` · reader-answers.ts:95 · rls
+## legal_reader_answer_messages · `legalReaderAnswerMessages` · reader-answers.ts:135 · rls
 
 Message access follows the parent's current author and sharing scope.
 
 ```text
-legal_reader_answer_messages.id                      pUuid        pk,not null       reader-answers.ts:98
-legal_reader_answer_messages.answer_id               safeUuid     not null          reader-answers.ts:99
-legal_reader_answer_messages.sequence                integer      not null          reader-answers.ts:101  Stable conversational order assigned while the parent answer is locked.
-legal_reader_answer_messages.role                    text         not null          reader-answers.ts:102
-legal_reader_answer_messages.content                 text         not null          reader-answers.ts:103
-legal_reader_answer_messages.citations               jsonb        default,not null  reader-answers.ts:104
-legal_reader_answer_messages.model                   text         null              reader-answers.ts:108
-legal_reader_answer_messages.usage                   jsonb        null              reader-answers.ts:109
-legal_reader_answer_messages.status                  text         not null          reader-answers.ts:110
-legal_reader_answer_messages.error_code              text         null              reader-answers.ts:114  Stable failure code preserved when the reader reloads a message.
-legal_reader_answer_messages.invalid_citation_count  integer      default,not null  reader-answers.ts:116  Number of generated citations withheld by validation.
-legal_reader_answer_messages.created_at              timestamptz  default,not null  reader-answers.ts:120
-legal_reader_answer_messages.updated_at              timestamptz  default,not null  reader-answers.ts:121
+legal_reader_answer_messages.id                      pUuid                  pk,not null       reader-answers.ts:138
+legal_reader_answer_messages.answer_id               safeUuid               fk,not null       reader-answers.ts:139
+legal_reader_answer_messages.sequence                integer                not null          reader-answers.ts:141  Stable conversational order assigned while the parent answer is locked.
+legal_reader_answer_messages.role                    text                   not null          reader-answers.ts:142
+legal_reader_answer_messages.content                 text                   not null          reader-answers.ts:143
+legal_reader_answer_messages.citations               jsonb                  default,not null  reader-answers.ts:144
+legal_reader_answer_messages.model                   text                   null              reader-answers.ts:148
+legal_reader_answer_messages.usage                   jsonb                  null              reader-answers.ts:149
+legal_reader_answer_messages.status                  text                   not null          reader-answers.ts:150
+legal_reader_answer_messages.error_code              readerAnswerErrorCode  null              reader-answers.ts:154  Stable failure code preserved when the reader reloads a message.
+legal_reader_answer_messages.invalid_citation_count  integer                default,not null  reader-answers.ts:156  Number of generated citations withheld by validation.
+legal_reader_answer_messages.created_at              timestamptz            default,not null  reader-answers.ts:160
+legal_reader_answer_messages.updated_at              timestamptz            default,not null  reader-answers.ts:161
 ```

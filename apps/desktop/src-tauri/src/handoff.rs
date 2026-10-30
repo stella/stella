@@ -245,7 +245,8 @@ async fn recover(
         tracing::warn!(%error, "required handoff update check failed")
       }
       crate::updater::CheckOutcome::Deferred { .. }
-      | crate::updater::CheckOutcome::UpToDate => {}
+      | crate::updater::CheckOutcome::UpToDate
+      | crate::updater::CheckOutcome::Disabled => {}
     }
   }
   let accepted = host.confirm(&failure).await?;
@@ -582,6 +583,7 @@ impl AccountOffer {
     }
     let outcome = host.open(prepared).map_err(Failure::Terminal)?;
     current.recovery = AccountRecovery::AwaitingAccount;
+    drop(parked);
     Ok(OfferConnection::Started(outcome))
   }
 
@@ -593,22 +595,26 @@ impl AccountOffer {
     let mut parked = PARKED
       .lock()
       .unwrap_or_else(std::sync::PoisonError::into_inner);
-    match parked.as_ref() {
+    let resumable = match parked.as_ref() {
       Some(current)
         if current.token.as_str() == self.token.as_str()
           && current.api_base_url == self.api_base_url =>
       {
         if now >= current.expires {
-          parked.take();
-          return Resumable::Expired;
+          Resumable::Expired
+        } else if current.recovery == AccountRecovery::AwaitingAccount {
+          Resumable::Nothing
+        } else {
+          Resumable::Ready(current.clone())
         }
-        if current.recovery == AccountRecovery::AwaitingAccount {
-          return Resumable::Nothing;
-        }
-        Resumable::Ready(current.clone())
       }
       _ => Resumable::Nothing,
+    };
+    if matches!(resumable, Resumable::Expired) {
+      parked.take();
     }
+    drop(parked);
+    resumable
   }
 }
 
@@ -680,16 +686,13 @@ fn park_until(
 
 /// Drops the parked handoff only for the same token and API origin.
 pub(crate) fn unpark(token: &str, api_base_url: &str) -> bool {
-  let mut parked = PARKED
+  PARKED
     .lock()
-    .unwrap_or_else(std::sync::PoisonError::into_inner);
-  if parked.as_ref().is_some_and(|parked| {
-    parked.token.as_str() == token && parked.api_base_url == api_base_url
-  }) {
-    *parked = None;
-    return true;
-  }
-  false
+    .unwrap_or_else(std::sync::PoisonError::into_inner)
+    .take_if(|parked| {
+      parked.token.as_str() == token && parked.api_base_url == api_base_url
+    })
+    .is_some()
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -732,11 +735,11 @@ fn take_parked() -> Resumable {
 
 #[cfg(test)]
 fn take_parked_at(now: std::time::Instant) -> Resumable {
-  match PARKED
+  let parked = PARKED
     .lock()
     .unwrap_or_else(std::sync::PoisonError::into_inner)
-    .take()
-  {
+    .take();
+  match parked {
     None => Resumable::Nothing,
     Some(parked) if now >= parked.expires => Resumable::Expired,
     Some(parked) => Resumable::Ready(parked),
@@ -760,13 +763,15 @@ pub(crate) async fn take_parked_for_account(api_base_url: &str) -> ResumeAfterLi
       parked.take().expect("the parked handoff was checked above"),
     );
   }
-  match current.recovery {
+  let outcome = match current.recovery {
     AccountRecovery::OfferRequired => ResumeAfterLink::Nothing,
     AccountRecovery::AwaitingAccount => {
       current.recovery = AccountRecovery::OfferRequired;
       ResumeAfterLink::NeedsOffer(current.clone())
     }
-  }
+  };
+  drop(parked);
+  outcome
 }
 
 #[cfg(test)]
@@ -1743,6 +1748,7 @@ mod tests {
           store.link_fixture(live_b.clone()).await.unwrap_err(),
           "Disconnect the current desktop account before connecting another"
         );
+        drop(store);
       }
       let mismatch = AccountMismatch {
         linked_server: server_a.clone(),
@@ -1799,6 +1805,7 @@ mod tests {
           store.link_fixture(live_b).await.unwrap(),
           crate::account::LinkOutcome::Linked
         );
+        drop(store);
       }
       let resumed = match take_parked_for_account(&origin).await {
         ResumeAfterLink::Ready(parked) => parked,

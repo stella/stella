@@ -213,6 +213,19 @@ describe("filterCitingDecisions", () => {
     expect(filterCitingDecisions(rows, "Ústavní")).toEqual(rows);
   });
 
+  test("letters without a decomposition fold like the rest of the app", () => {
+    const rows = [
+      {
+        caseNumber: "II AKa 12/20",
+        court: "Sąd Apelacyjny w Łodzi",
+        sentenceText: "",
+      },
+    ];
+
+    expect(stripDiacritics("Łodzi")).toBe("Łodzi");
+    expect(filterCitingDecisions(rows, "LODZI")).toEqual(rows);
+  });
+
   test("the cited sentence and the case number are searched too", () => {
     expect(filterCitingDecisions(decisions, "3819")).toEqual([
       supremeCourtDecision,

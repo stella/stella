@@ -53,6 +53,21 @@ describe("push-scoped autofix plan", () => {
     expect(plan.needed).toBe(true);
   });
 
+  test("a push with no fixable, generated, or prunable file needs no job", () => {
+    const plan = planAutofix({
+      pullRequestFiles: ["assets/logo.png"],
+      pushFiles: ["assets/logo.png"],
+    });
+
+    expect(plan).toEqual({
+      generators: [],
+      scoped: [],
+      refix: false,
+      prune: false,
+      needed: false,
+    });
+  });
+
   test("a push that changes nothing the pull request owns needs no job", () => {
     const plan = planAutofix({
       pullRequestFiles: [DOC],
@@ -70,7 +85,7 @@ describe("push-scoped autofix plan", () => {
 
   test.each([
     "oxlint.config.ts",
-    ".oxfmtrc.json",
+    "bunfig.toml",
     ".oxlint-plugins/rules/example.ts",
     "apps/api/tsconfig.json",
     "bun.lock",

@@ -1,7 +1,6 @@
 import { panic, Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/bun-sql";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
@@ -11,6 +10,7 @@ import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { flowRuns, flowRunSteps } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
+import { createDatabase } from "@/api/db/sql-client";
 import { env } from "@/api/env";
 import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
 import {
@@ -256,7 +256,7 @@ if (!databaseUrl || !enabled) {
             const target = phase === "start" || phase === "fail" ? 1 : 2;
             let stepReads = 0;
             const phaseReadRequested = Promise.withResolvers<undefined>();
-            const workerDb = drizzle({
+            const workerDb = createDatabase({
               client: workerClient.sql,
               relations: databaseRelations,
               logger: {

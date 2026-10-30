@@ -1,7 +1,7 @@
-import { Value } from "@sinclair/typebox/value";
 import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { inArray } from "drizzle-orm";
+import * as v from "valibot";
 
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 
@@ -18,9 +18,11 @@ import {
   toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
 import type { ChatMention } from "@/api/handlers/chat/types";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { WithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-projection";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createUserFileKey } from "@/api/lib/files/utils";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -119,7 +121,7 @@ const insertUpload = async ({
     s3Key: createUserFileKey({
       fileId,
       mimeType: PDF_MIME_TYPE,
-      userId: ids.userA1,
+      organizationId: ids.orgA,
     }),
     sha256Hex: "b".repeat(64),
     sizeBytes: 12,
@@ -214,6 +216,7 @@ const listThreads = async (
       memberRole: sessionMemberRole("owner"),
       query: { limit: 100, ...(search === undefined ? {} : { search }) },
       request: new Request("http://localhost/v1/chat/threads"),
+      route: "/v1/chat/threads" satisfies ApiRoutePath,
       safeDb: scopedTo(workspaceIds),
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userA1 },
@@ -524,6 +527,7 @@ describe("chat thread list matter filter", () => {
           ...(cursor === undefined ? {} : { cursor }),
         },
         request: new Request("http://localhost/v1/chat/threads"),
+        route: "/v1/chat/threads" satisfies ApiRoutePath,
         safeDb: scopedTo(workspaceIds),
         session: { activeOrganizationId: ids.orgA },
         user: { id: ids.userA1 },
@@ -657,10 +661,8 @@ describe("chat thread list matter filter", () => {
 
   test("rejects a matter id that is not a safe identifier at the query boundary", () => {
     const querySchema = getThreads.config.query;
-    expect(Value.Check(querySchema, { workspaceId: ids.wsA1 })).toBe(true);
-    expect(Value.Check(querySchema, { workspaceId: "not-a-matter-id" })).toBe(
-      false,
-    );
+    expect(v.is(querySchema, { workspaceId: ids.wsA1 })).toBe(true);
+    expect(v.is(querySchema, { workspaceId: "not-a-matter-id" })).toBe(false);
   });
 });
 
@@ -731,6 +733,8 @@ describe("chat thread list decision badges", () => {
     });
     const plainThreadId = await seedThread({ title: "Plain chat" });
     const failingBadges = createGetThreads({
+      readCopies: async () =>
+        new WithdrawnCopyProjection([], "Withdrawn by publisher"),
       readDecisionBadges: async () =>
         Result.err(
           new HandlerError({ status: 500, message: "corpus unavailable" }),

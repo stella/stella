@@ -1,5 +1,4 @@
 import { Result } from "better-result";
-import { t } from "elysia";
 import * as v from "valibot";
 
 import { tableChartRequestSchema } from "@stll/api-contract/table-chart";
@@ -7,6 +6,8 @@ import { tableChartRequestSchema } from "@stll/api-contract/table-chart";
 import type { TableChartDecisionCaller } from "@/api/handlers/chat/table-chart-plan";
 import { planTableChart } from "@/api/handlers/chat/table-chart-plan";
 import { resolveCaching } from "@/api/lib/ai-config";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
   ACCOUNT_ACCESS,
@@ -26,7 +27,7 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "assistant_chat" },
   // Validate privately: framework errors must not echo table contents.
-  body: t.Unknown(),
+  body: v.unknown(),
 } satisfies HandlerConfig;
 
 type CreateTableChartOptions = { decide: TableChartDecisionCaller };
@@ -35,6 +36,7 @@ export const createTableChart = ({ decide }: CreateTableChartOptions) =>
   createSafeRootHandler(
     config,
     async function* ({
+      orgAIConfigStatus,
       actionSignal,
       body,
       orgAIConfig,
@@ -46,6 +48,10 @@ export const createTableChart = ({ decide }: CreateTableChartOptions) =>
       session,
       user,
     }) {
+      if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+        return Result.err(storedAIConfigUnreadableError());
+      }
+
       const table = v.safeParse(tableChartRequestSchema, body);
       if (!table.success) {
         return yield* Result.err(
@@ -76,6 +82,7 @@ export const createTableChart = ({ decide }: CreateTableChartOptions) =>
             usageMetering: { ...usageMetering, callId: Bun.randomUUIDv7() },
             generation: {
               dataClass: "customer",
+              userId: user.id,
               orgAIConfig,
               managedAIResidency,
               organizationId: session.activeOrganizationId,
@@ -107,7 +114,7 @@ export const createTableChart = ({ decide }: CreateTableChartOptions) =>
   );
 
 const tableChart = createTableChart({ decide: decideMany });
-declareAggregateMutation(tableChart.handler, {
+declareAggregateMutation(tableChart, {
   type: "independent",
   reason:
     "Plans a client-supplied table; decision logging and usage metering are owned by their append-only services, with no chat aggregate mutation.",

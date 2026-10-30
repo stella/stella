@@ -1,4 +1,5 @@
 import { panic, Result } from "better-result";
+import type { SQL } from "drizzle-orm";
 import { and, eq, gt, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import * as v from "valibot";
 
@@ -17,30 +18,32 @@ import type { Transaction } from "@/api/db/root";
 import { abortTransaction } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
+  chatToolGrants,
+  contacts,
   desktopEditHandoffs,
-  entities,
-  pdfSigningSessions,
-  timeEntries,
   desktopEditSessions,
   desktopPresence,
-  flowRuns,
+  entities,
   flowDefinitions,
+  flowRuns,
   flowRunSteps,
-  mcpUserConnections,
-  sharepointConnections,
-  sharepointOAuthState,
+  folioCollabRoomTokens,
   mcpOAuthState,
-  contacts,
+  mcpUserConnections,
+  pdfSigningSessions,
   searchHistoryEntries,
   searchHistoryOwners,
   searchHistoryTombstones,
+  sharepointConnections,
+  sharepointOAuthState,
   taskAssignees,
+  timeEntries,
+  WORK_OBLIGATION_EVENT_TYPE,
+  WORK_OBLIGATION_STATUS,
+  workObligationEvents,
+  workObligations,
   workspaceMembers,
   workspaces,
-  workObligations,
-  workObligationEvents,
-  WORK_OBLIGATION_STATUS,
-  WORK_OBLIGATION_EVENT_TYPE,
 } from "@/api/db/schema";
 import { ACTIVE_TASK_REASSIGNMENT_STATUSES } from "@/api/lib/account-deletion-reassignment";
 import {
@@ -50,15 +53,22 @@ import {
   recordAuditGroups,
 } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
-import { removeOrganizationMemberWithAuthArtifacts } from "@/api/lib/auth-artifacts";
+import { revokeOrganizationMemberAuthArtifacts } from "@/api/lib/auth-artifacts";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  lockChatOwnerStoredContentTransitionOnTx,
+  tryLockAccountChatOwnerStoredContentTransitionsOnTx,
+} from "@/api/lib/chat/thread-stored-content-egress";
 import { lockOpenSigningPage } from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
-import { FLOW_RUN_TRANSITIONS_V1 } from "@/api/lib/db/flow-run-transition-spec";
+import {
+  FLOW_RUN_STEP_TRANSITIONS_V1,
+  FLOW_RUN_TRANSITIONS_V1,
+} from "@/api/lib/db/flow-run-transition-spec";
 import { readCursorPage } from "@/api/lib/db/read-bounded";
-import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transitionBatch } from "@/api/lib/db/transitions";
+import { DESKTOP_EDIT_SESSION_TRANSITIONS } from "@/api/lib/desktop-edit-session-transitions";
 import { clearOrganizationCorrespondenceAssignments } from "@/api/lib/email/correspondence/offboarding";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { tryLockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
@@ -66,13 +76,29 @@ import {
   FLOWS_FEATURE_ID,
   SIGNALS_FEATURE_ID,
 } from "@/api/lib/feature-access/registry";
+import { PDF_SIGNING_SESSION_TRANSITIONS } from "@/api/lib/files/pdf-signing/transition-spec";
 import { MAX_FLOW_STEPS } from "@/api/lib/flows/flow-types";
+import { clearMemberRequestReceipts as clearOwnedMemberRequestReceipts } from "@/api/lib/idempotency/request-receipts";
 import { LIMITS } from "@/api/lib/limits";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 import { enqueueContactSearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import { lockTaskAssignmentMembers } from "@/api/lib/tasks/assignment-membership";
 import { closeRemovedMemberActiveTimer } from "@/api/lib/time-entry-offboarding";
+import { WORK_OBLIGATION_TRANSITIONS } from "@/api/lib/work-obligations/transition-spec";
+
+const MEMBER_REMOVAL_ACTOR: unique symbol = Symbol("stella.memberRemovalActor");
+
+export type MemberRemovalActor = {
+  userId: SafeId<"user">;
+  memberId: string;
+  readonly [MEMBER_REMOVAL_ACTOR]: true;
+} & (
+  | { type: "member-removal" }
+  | { type: "member-exchange-offboarding" }
+  | { type: "correspondence-offboarding" }
+  | { type: "folio-collab-token-offboarding" }
+);
 
 type AssignmentScope =
   | { type: "workspace"; workspaceId: SafeId<"workspace"> }
@@ -364,7 +390,7 @@ const clearMemberObligationOwners = async ({
               fn: async (scopedTx) => {
                 const transitioned = await transitionBatch({
                   tx: scopedTx,
-                  spec: TRANSITIONS.workObligations,
+                  spec: WORK_OBLIGATION_TRANSITIONS,
                   ids: [ownedRow.entityId],
                   options: {
                     from: [
@@ -995,7 +1021,7 @@ const cancelMemberSigningSessions = async ({
               const bufferAudit = bufferAuditEvents(auditEvents);
               const changed = await transitionBatch({
                 tx: scopedTx,
-                spec: TRANSITIONS.pdfSigningSessions,
+                spec: PDF_SIGNING_SESSION_TRANSITIONS,
                 ids: [session.id],
                 options: {
                   from: ["open"],
@@ -1364,10 +1390,53 @@ type MemberCleanupWorkspaceOptions = {
   workspacesPerOrganization?: number;
 };
 
+type ReadMemberCleanupWorkspacesOptions = Pick<
+  MemberCleanupWorkspaceOptions,
+  "tx" | "organizationId"
+> & { affectedWorkspaceIds: SQL; workspacesPerOrganization: number };
+
+const readMemberCleanupWorkspaces = async ({
+  tx,
+  organizationId,
+  affectedWorkspaceIds,
+  workspacesPerOrganization,
+}: ReadMemberCleanupWorkspacesOptions): Promise<SafeId<"workspace">[]> => {
+  const affectedWorkspaces = inArray(workspaces.id, affectedWorkspaceIds);
+  const organizationCount = organizationId
+    ? 1
+    : await tx.$count(
+        organization,
+        inArray(
+          organization.id,
+          tx
+            .selectDistinct({ id: workspaces.organizationId })
+            .from(workspaces)
+            .where(affectedWorkspaces),
+        ),
+      );
+  const bound = workspacesPerOrganization * Math.max(organizationCount, 1);
+  const rows = await tx
+    .select({ id: workspaces.id })
+    .from(workspaces)
+    .where(affectedWorkspaces)
+    .orderBy(workspaces.id)
+    .limit(bound + 1);
+  const ids = new Set(rows.map(({ id }) => id));
+  if (ids.size > bound) {
+    abortTransaction(
+      new HandlerError({
+        status: 400,
+        message: "Workspaces limit reached",
+      }),
+    );
+  }
+  return [...ids].toSorted();
+};
+
 /**
  * Every matter in which removal changes a row of this user: memberships,
  * assignments, owned obligations, lead, pending approvals, runs they started
- * or authored, and their open exchanges. Removal locks exactly these matters,
+ * or authored, and their retained credential exchanges. Removal locks exactly these matters,
  * so unrelated matters of the organization keep accepting writes.
  */
 const selectMemberCleanupWorkspaceIds = async ({
@@ -1390,12 +1459,12 @@ const selectMemberCleanupWorkspaceIds = async ({
       | typeof flowRuns.workspaceId
       | typeof desktopEditSessions.workspaceId
       | typeof desktopEditHandoffs.workspaceId
-      | typeof pdfSigningSessions.workspaceId,
+      | typeof pdfSigningSessions.workspaceId
+      | typeof folioCollabRoomTokens.workspaceId,
   ) =>
     organizationWorkspaces
       ? inArray(column, organizationWorkspaces)
       : undefined;
-  const now = new Date();
   const sources = [
     () =>
       tx
@@ -1500,6 +1569,17 @@ const selectMemberCleanupWorkspaceIds = async ({
         ),
     () =>
       tx
+        .selectDistinct({ id: folioCollabRoomTokens.workspaceId })
+        .from(folioCollabRoomTokens)
+        .where(
+          and(
+            eq(folioCollabRoomTokens.userId, userId),
+            isNull(folioCollabRoomTokens.sourceSessionId),
+            inOrganization(folioCollabRoomTokens.workspaceId),
+          ),
+        ),
+    () =>
+      tx
         .selectDistinct({ id: desktopEditSessions.workspaceId })
         .from(desktopEditSessions)
         .where(
@@ -1519,7 +1599,6 @@ const selectMemberCleanupWorkspaceIds = async ({
         .where(
           and(
             eq(desktopEditHandoffs.createdBy, userId),
-            sql`${desktopEditHandoffs.expiresAt} > ${now}`,
             inOrganization(desktopEditHandoffs.workspaceId),
           ),
         ),
@@ -1530,7 +1609,6 @@ const selectMemberCleanupWorkspaceIds = async ({
         .where(
           and(
             eq(pdfSigningSessions.createdBy, userId),
-            eq(pdfSigningSessions.status, "open"),
             inOrganization(pdfSigningSessions.workspaceId),
           ),
         ),
@@ -1543,36 +1621,12 @@ const selectMemberCleanupWorkspaceIds = async ({
     sources.map((source) => source().getSQL()),
     sql` UNION `,
   )})`;
-  const affectedWorkspaces = inArray(workspaces.id, affectedWorkspaceIds);
-  const organizationCount = organizationId
-    ? 1
-    : await tx.$count(
-        organization,
-        inArray(
-          organization.id,
-          tx
-            .selectDistinct({ id: workspaces.organizationId })
-            .from(workspaces)
-            .where(affectedWorkspaces),
-        ),
-      );
-  const bound = workspacesPerOrganization * Math.max(organizationCount, 1);
-  const rows = await tx
-    .select({ id: workspaces.id })
-    .from(workspaces)
-    .where(affectedWorkspaces)
-    .orderBy(workspaces.id)
-    .limit(bound + 1);
-  const ids = new Set(rows.map(({ id }) => id));
-  if (ids.size > bound) {
-    abortTransaction(
-      new HandlerError({
-        status: 400,
-        message: "Workspaces limit reached",
-      }),
-    );
-  }
-  return [...ids].toSorted();
+  return await readMemberCleanupWorkspaces({
+    tx,
+    organizationId,
+    affectedWorkspaceIds,
+    workspacesPerOrganization,
+  });
 };
 
 /**
@@ -1592,6 +1646,12 @@ export const tryLockAccountMemberCleanup = async ({
   userId,
   workspacesPerOrganization = LIMITS.workspacesCount,
 }: AccountMemberCleanupOptions): Promise<void> => {
+  if (
+    (await tryLockAccountChatOwnerStoredContentTransitionsOnTx(tx, userId)) ===
+    "busy"
+  ) {
+    abortTransaction(removalBusy());
+  }
   await tx
     .select({ id: member.id })
     .from(member)
@@ -1721,7 +1781,7 @@ const cancelScopedMemberFlowRunBatch = async ({
               );
               const changedSteps = await transitionBatch({
                 tx: auditTx,
-                spec: TRANSITIONS.flowRunSteps,
+                spec: FLOW_RUN_STEP_TRANSITIONS_V1,
                 ids: ownedSteps
                   .filter(({ runId }) => changedIds.has(runId))
                   .map(({ id }) => id),
@@ -1962,6 +2022,7 @@ const lockOrganizationCleanupWorkspaces = async ({
       .limit(current.length * (reassignTo ? 2 : 1))
       .for("update");
   }
+  return current.map(({ id }) => id);
 };
 
 type CancelMemberDesktopSessionsOptions = Pick<
@@ -2033,7 +2094,7 @@ const cancelMemberDesktopSessions = async ({
           fn: async (scopedTx) =>
             await transitionBatch({
               tx: scopedTx,
-              spec: TRANSITIONS.desktopEditSessions,
+              spec: DESKTOP_EDIT_SESSION_TRANSITIONS,
               ids: [session.id],
               options: {
                 from: ["open"],
@@ -2313,6 +2374,26 @@ const clearRemovedMemberOrganizationState = async ({
   userId,
   recordAuditEvent,
 }: ProvenMemberCleanupOptions) => {
+  const chatToolGrantsCount = await withOrgScope({
+    tx,
+    scope,
+    actor: { type: "actor", userId },
+    fn: async (scopedTx) =>
+      removedMemberCount(
+        await scopedTx.execute(
+          sql`WITH removed AS (${scopedTx
+            .delete(chatToolGrants)
+            .where(
+              and(
+                eq(chatToolGrants.organizationId, scope.organizationId),
+                eq(chatToolGrants.userId, userId),
+              ),
+            )
+            .returning({ changed: sql`1` })
+            .getSQL()}) SELECT count(*)::integer AS count FROM removed`,
+        ),
+      ),
+  });
   const counts = await withOrgScope({
     tx,
     scope,
@@ -2451,6 +2532,7 @@ const clearRemovedMemberOrganizationState = async ({
         ),
       );
       return {
+        chatToolGrants: chatToolGrantsCount,
         searchHistoryTombstones: searchHistoryTombstonesCount,
         searchHistoryOwners: searchHistoryOwnersCount,
         searchHistoryEntries: searchHistoryEntriesCount,
@@ -2479,6 +2561,115 @@ const clearRemovedMemberOrganizationState = async ({
   });
 };
 
+type ClearRemovedMemberMatterCredentialsOptions = {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+  workspaceIds: readonly SafeId<"workspace">[];
+  userId: SafeId<"user">;
+  memberId: string;
+  recordAuditEvent: AuditRecorder;
+};
+
+const clearRemovedMemberMatterCredentials = async ({
+  tx,
+  organizationId,
+  workspaceIds,
+  userId,
+  memberId,
+  recordAuditEvent,
+}: ClearRemovedMemberMatterCredentialsOptions) => {
+  const auditEvents: Parameters<AuditRecorder>[1][] = [];
+  const recordCredentialAuditEvent = bufferAuditEvents(auditEvents);
+
+  if (workspaceIds.length > 0) {
+    const tokenScope = await proveMattersOrgScope(tx, workspaceIds);
+    if (
+      tokenScope.isErr() ||
+      assertCallerOrg(tokenScope.value, organizationId).isErr()
+    ) {
+      abortTransaction(removalBusy());
+    }
+    await withOrgScope({
+      tx,
+      scope: tokenScope.value,
+      actor: {
+        type: "folio-collab-token-offboarding",
+        userId,
+        memberId,
+        [MEMBER_REMOVAL_ACTOR]: true,
+      },
+      fn: async (scopedTx) => {
+        const deleted = executedRows(
+          await scopedTx.execute(
+            sql`DELETE FROM public.folio_collab_room_tokens RETURNING id`,
+          ),
+        );
+        if (deleted.length > 0) {
+          await recordCredentialAuditEvent(scopedTx, {
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
+            resourceId: organizationId,
+            metadata: {
+              change: "member-credentials-cleared",
+              userId,
+              kind: "collaboration",
+              deleted: deleted.length,
+            },
+          });
+        }
+      },
+    });
+  }
+  if (workspaceIds.length > 0) {
+    const exchangeScope = await proveMattersOrgScope(tx, workspaceIds);
+    if (
+      exchangeScope.isErr() ||
+      assertCallerOrg(exchangeScope.value, organizationId).isErr()
+    ) {
+      abortTransaction(removalBusy());
+    }
+    await withOrgScope({
+      tx,
+      scope: exchangeScope.value,
+      actor: {
+        type: "member-exchange-offboarding",
+        userId,
+        memberId,
+        [MEMBER_REMOVAL_ACTOR]: true,
+      },
+      fn: async (scopedTx) => {
+        const handoffs = executedRows(
+          await scopedTx.execute(
+            sql`DELETE FROM public.desktop_edit_handoffs RETURNING id`,
+          ),
+        ).length;
+        const signing = executedRows(
+          await scopedTx.execute(
+            sql`DELETE FROM public.pdf_signing_sessions RETURNING id`,
+          ),
+        ).length;
+        if (handoffs + signing > 0) {
+          await recordCredentialAuditEvent(scopedTx, {
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
+            resourceId: organizationId,
+            metadata: {
+              change: "member-credentials-cleared",
+              userId,
+              kind: "exchange",
+              handoffs,
+              signing,
+            },
+          });
+        }
+      },
+    });
+  }
+  for (const events of auditEvents) {
+    await recordAuditEvent(tx, events);
+  }
+};
+
 /**
  * Better Auth's permission/owner checks precede this transactional operation.
  * The membership row, its credentials and every assignment leave in the
@@ -2494,6 +2685,10 @@ export const removeOrganizationMemberInTransaction = async (
     reassignTo,
   }: Omit<RemoveOrganizationMemberOptions, "tx">,
 ): Promise<void> => {
+  await lockChatOwnerStoredContentTransitionOnTx(tx, {
+    organizationId,
+    userId,
+  });
   const source = (
     await tx
       .select({ organizationId: member.organizationId })
@@ -2514,12 +2709,13 @@ export const removeOrganizationMemberInTransaction = async (
     source.organizationId,
   );
   await tryLockMemberFeatureAdmission(tx, sourceOrganizationId);
+  let lockedWorkspaceIds: SafeId<"workspace">[] = [];
   const timerClose = await closeRemovedMemberActiveTimer({
     organizationId,
     tx,
     userId,
     lockWorkspaces: async (transaction) => {
-      await lockOrganizationCleanupWorkspaces({
+      lockedWorkspaceIds = await lockOrganizationCleanupWorkspaces({
         tx: transaction,
         organizationId: sourceOrganizationId,
         userId,
@@ -2586,6 +2782,14 @@ export const removeOrganizationMemberInTransaction = async (
     actorUserId,
     reassignTo,
   });
+  const receiptCleanup = await clearOwnedMemberRequestReceipts({
+    tx,
+    scope: membershipProof.value,
+    userId,
+  });
+  if (receiptCleanup.type === "busy") {
+    abortTransaction(removalBusy());
+  }
   const recordAuditEvent = createBackgroundAuditRecorder({
     organizationId,
     workspaceId: null,
@@ -2630,12 +2834,42 @@ export const removeOrganizationMemberInTransaction = async (
     tx,
     organizationId,
     userId,
+    runAssignmentWork: async (fn) =>
+      await withOrgScope({
+        tx,
+        scope: membershipProof.value,
+        actor: {
+          type: "correspondence-offboarding",
+          userId,
+          memberId,
+          [MEMBER_REMOVAL_ACTOR]: true,
+        },
+        fn,
+      }),
   });
-  await removeOrganizationMemberWithAuthArtifacts(tx, {
-    memberId,
-    organizationId,
+  await clearRemovedMemberMatterCredentials({
+    tx,
+    organizationId: sourceOrganizationId,
+    workspaceIds: lockedWorkspaceIds,
     userId,
+    memberId,
+    recordAuditEvent,
   });
+  await withOrgScope({
+    tx,
+    scope: membershipProof.value,
+    actor: {
+      type: "member-removal",
+      userId,
+      memberId,
+      [MEMBER_REMOVAL_ACTOR]: true,
+    },
+    fn: async (scopedTx) => {
+      // RLS selects the locked member; DELETE needs no column read privilege.
+      await scopedTx.execute(sql`DELETE FROM public.member`);
+    },
+  });
+  await revokeOrganizationMemberAuthArtifacts(tx, { organizationId, userId });
   await recordAuditEvent(tx, {
     action: AUDIT_ACTION.UPDATE,
     resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,

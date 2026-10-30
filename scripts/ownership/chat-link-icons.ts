@@ -10,8 +10,13 @@ export default {
   enforcement: {
     kind: "import",
     specifiers: ["@/api/handlers/chat/link-icons/origin"],
-    names: ["createLinkIconOrigin"],
+    names: ["createExactIconOrigin", "createLinkIconOrigin"],
     allowed: [
+      {
+        path: "apps/api/src/handlers/chat/link-icons/get-exact.ts",
+        reason:
+          "Authenticated request boundary supplying issued outbound authority.",
+      },
       {
         path: "apps/api/src/handlers/chat/link-icons/get.ts",
         reason:

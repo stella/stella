@@ -1,25 +1,26 @@
-import { Type } from "@sinclair/typebox";
 import { expect, test } from "bun:test";
+import * as v from "valibot";
+
+import { numberFromString } from "@stll/api-contract/http-input";
 
 import { expandSchemaDefs } from "../../../../packages/cli/src/expand-schema-defs";
+import { toRouteJsonSchema } from "../../src/lib/json-schema/valibot-to-json-schema";
 import type { AdvertisedSchemas } from "../../src/mcp/advertised-schema";
 import { buildInputSchema } from "./capability-input-schema";
 import { compactSchemaDefs } from "./compact-schema-defs";
 
-const tableLayout = Type.Object({ type: Type.Literal("table") });
-const verificationLayout = Type.Object({ type: Type.Literal("avt") });
-const body = Type.Object({
-  workspaceId: Type.String(),
-  layout: Type.Union([tableLayout, verificationLayout]),
+const tableLayout = v.object({ type: v.literal("table") });
+const verificationLayout = v.object({ type: v.literal("avt") });
+const body = v.object({
+  workspaceId: v.string(),
+  layout: v.union([tableLayout, verificationLayout]),
 });
 
 test("static conditional schemas retain all inputs before public naming and compaction", () => {
   const inputSchema = buildInputSchema({
     body,
-    params: Type.Object({ workspaceId: Type.String() }),
-    query: Type.Object({
-      pageSize: Type.Union([Type.String({ format: "numeric" }), Type.Number()]),
-    }),
+    params: v.object({ workspaceId: v.string() }),
+    query: v.object({ pageSize: numberFromString(v.number()) }),
     featureAccess: {
       type: "conditional",
       featureId: "list-verification",
@@ -34,9 +35,11 @@ test("static conditional schemas retain all inputs before public naming and comp
   expect(serialized).toContain('"table"');
   expect(serialized).toContain('"avt"');
   expect(serialized).toContain('"pageSize"');
-  expect(serialized).not.toContain('"numeric"');
-  expect(JSON.stringify(body)).toContain('"avt"');
-  expect(JSON.stringify(body)).toContain('"workspaceId"');
+  // The wire string is shown as the number it carries, not as its pattern.
+  expect(JSON.stringify(inputSchema.query)).toContain('"number"');
+  expect(serialized).not.toContain('"pattern"');
+  expect(JSON.stringify(toRouteJsonSchema(body))).toContain('"avt"');
+  expect(JSON.stringify(toRouteJsonSchema(body))).toContain('"workspaceId"');
   const compacted = compactSchemaDefs(inputSchema);
   expect(compacted.status).toBe("compacted");
   if (compacted.status === "compacted") {
@@ -69,15 +72,17 @@ test("a conditional declaration without its owner projection refuses static expo
   ).toThrow("Conditional feature access requires an input schema projection");
 });
 
-test("conditional export refuses an invalid canonical schema instead of dropping its fields", () => {
-  expect(() =>
-    buildInputSchema({
-      body: { invalid: true },
-      featureAccess: {
-        type: "conditional",
-        featureId: "list-verification",
-        projectInputSchema: (schemas: AdvertisedSchemas) => schemas,
-      },
-    }),
-  ).toThrow("Conditional feature access requires TypeBox input schemas");
+test("export refuses an input part that is not a schema instead of dropping its fields", () => {
+  for (const featureAccess of [
+    undefined,
+    {
+      type: "conditional",
+      featureId: "list-verification",
+      projectInputSchema: (schemas: AdvertisedSchemas) => schemas,
+    },
+  ]) {
+    expect(() =>
+      buildInputSchema({ body: { invalid: true }, featureAccess }),
+    ).toThrow("Capability input schemas must be valibot schemas");
+  }
 });

@@ -2,6 +2,8 @@ import { Result, TaggedError } from "better-result";
 import { deepEquals } from "bun";
 import { eq, sql } from "drizzle-orm";
 
+import { declareFingerprintFields } from "@stll/errors";
+
 import {
   assertCallerOrg,
   combineOrgScopes,
@@ -54,7 +56,11 @@ export class FlowRunStartError extends TaggedError("FlowRunStartError")<{
     | "admission-refused"
     | "enqueue-failed";
   cause?: unknown;
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 export type StartFlowRunOptions = {
   safeDb: SafeDb;

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
-import { resourceRef, RESOURCE_TYPE, toResourceName } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef, toResourceName } from "@stll/api-contract";
 
 import {
   createSearchSummaryChatThread,
@@ -15,6 +15,11 @@ import {
   rootDbSelectMock,
 } from "@/api/tests/helpers/mock-root-db";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+
+beforeEach(() => {
+  noopAuditRecorder.mockClear();
+  upsertSearchDocumentMock.mockClear();
+});
 
 process.env["REDIS_URL"] ??= "redis://localhost:6379";
 process.env["EMAIL_PROVIDER"] ??= "smtp";

@@ -1,7 +1,11 @@
 import { and, asc, eq, gt, sql } from "drizzle-orm";
 import * as v from "valibot";
 
-import { assertCallerOrg, proveOrgScope } from "@/api/db/org-scope";
+import {
+  assertCallerOrg,
+  proveOrgScope,
+  withOrgScope,
+} from "@/api/db/org-scope";
 import type { Transaction } from "@/api/db/root";
 import { flowDefinitions, schedulerJobs } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -9,6 +13,7 @@ import {
   withAggregateRowQuery,
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
+import { runGlobalSystemWork } from "@/api/lib/db/global-system-work";
 import { readCursorPage } from "@/api/lib/db/read-bounded";
 import { writeSchedulerBookkeeping } from "@/api/lib/db/recovery-bookkeeping/scheduler";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
@@ -30,8 +35,10 @@ import {
   FLOW_RUN_TASK,
   flowScheduleJobId,
   flowScheduleJobIdSql,
-  flowRunPayloadSchema,
+} from "@/api/lib/scheduler/flow-schedule-identity";
+import {
   flowRunPayloadMatchesSql,
+  flowRunPayloadSchema,
 } from "@/api/lib/scheduler/tasks/flow-run";
 import {
   schedulerSchedulesEqual,
@@ -84,27 +91,6 @@ export const syncFlowScheduleTriggerInTransaction = async ({
   if (scope.isErr() || assertCallerOrg(scope.value, organizationId).isErr()) {
     return;
   }
-  const jobId = flowScheduleJobId(definitionId);
-  if (definition.trigger.type !== "schedule") {
-    await writeSchedulerBookkeeping({
-      type: "delete-source",
-      db: tx,
-      table: schedulerJobs,
-      jobId,
-    });
-    return;
-  }
-  const existing = (
-    await tx
-      .select({
-        schedule: schedulerJobs.schedule,
-        task: schedulerJobs.task,
-        payload: schedulerJobs.payload,
-      })
-      .from(schedulerJobs)
-      .where(eq(schedulerJobs.id, jobId))
-      .limit(1)
-  ).at(0);
   const enabled =
     definition.enabled &&
     (await isBackgroundFeatureEnabled({
@@ -113,28 +99,62 @@ export const syncFlowScheduleTriggerInTransaction = async ({
       userId: definition.createdByUserId,
       featureId: "flows",
     }));
-  if (!enabled && existing === undefined) {
-    return;
-  }
-  const schedule = flowScheduleToSchedulerSchedule(definition.trigger.schedule);
-  const existingPayload = v.safeParse(flowRunPayloadSchema, existing?.payload);
-  const unchanged =
-    existing?.task === FLOW_RUN_TASK &&
-    existingPayload.success &&
-    existingPayload.output.definitionId === definitionId &&
-    schedulerSchedulesEqual(existing.schedule, schedule);
-  await upsertSchedulerJob(
-    {
-      id: jobId,
-      task: FLOW_RUN_TASK,
-      description: `Scheduled flow run for definition ${definitionId}`,
-      schedule,
-      enabled,
-      payload: { definitionId },
-      payloadUpdate: unchanged ? "preserve" : "replace",
-    },
+  await withOrgScope({
     tx,
-  );
+    scope: scope.value,
+    actor: { type: "system" },
+    fn: async (scopedTx, scoped) => {
+      const jobId = flowScheduleJobId(definitionId);
+      if (definition.trigger.type !== "schedule") {
+        await writeSchedulerBookkeeping({
+          type: "delete-source",
+          db: scoped,
+          table: schedulerJobs,
+          jobId,
+        });
+        return;
+      }
+      const existing = (
+        await scopedTx
+          .select({
+            schedule: schedulerJobs.schedule,
+            task: schedulerJobs.task,
+            payload: schedulerJobs.payload,
+          })
+          .from(schedulerJobs)
+          .where(eq(schedulerJobs.id, jobId))
+          .limit(1)
+      ).at(0);
+      if (!enabled && existing === undefined) {
+        return;
+      }
+      const schedule = flowScheduleToSchedulerSchedule(
+        definition.trigger.schedule,
+      );
+      const existingPayload = v.safeParse(
+        flowRunPayloadSchema,
+        existing?.payload,
+      );
+      const unchanged =
+        existing?.task === FLOW_RUN_TASK &&
+        existingPayload.success &&
+        existingPayload.output.definitionId === definitionId &&
+        schedulerSchedulesEqual(existing.schedule, schedule);
+      await upsertSchedulerJob({
+        ownership: "organization",
+        definition: {
+          id: jobId,
+          task: FLOW_RUN_TASK,
+          description: `Scheduled flow run for definition ${definitionId}`,
+          schedule,
+          enabled,
+          payload: { definitionId },
+          payloadUpdate: unchanged ? "preserve" : "replace",
+        },
+        db: scoped,
+      });
+    },
+  });
 };
 
 type RepairFlowScheduleTriggersOptions = {
@@ -206,12 +226,8 @@ const repairOrphanedFlowScheduleJobs = async ({
     if (originals.length > 0 && !signal?.aborted) {
       // db-await-in-loop: one exact-source orphan cleanup transaction per page.
       await withAggregateTransaction(database, async (tx) => {
-        await writeSchedulerBookkeeping({
-          type: "delete-orphans",
-          db: tx,
-          table: schedulerJobs,
-          definitions: flowDefinitions,
-          task: FLOW_RUN_TASK,
+        await runGlobalSystemWork(tx, {
+          type: "flow-schedule-orphan-page",
           originals,
         });
       });

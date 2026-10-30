@@ -104,6 +104,11 @@ const DATABASE_PROCESS_ASSUMPTIONS = {
     pools: DATABASE_POOL_DEFAULTS,
     publicPool: "shared",
   },
+  postgresTestRunner: {
+    maxReplicas: 1,
+    pools: DATABASE_POOL_DEFAULTS,
+    publicPool: "shared",
+  },
 } as const satisfies Record<string, ProcessAssumption>;
 
 type ProcessName = keyof typeof DATABASE_PROCESS_ASSUMPTIONS;
@@ -145,8 +150,15 @@ const DATABASE_POOLS = [
   },
   {
     file: "src/lib/public-law-read-db.ts",
-    constructor: 1,
+    constructor: 2,
     maximum: { type: "configured", key: "PUBLIC_LAW_DATABASE_POOL_MAX" },
+    processes: SHARED_POOL_PROCESSES,
+    admission: "pooled",
+  },
+  {
+    file: "src/lib/public-law-read-db.ts",
+    constructor: 1,
+    maximum: { type: "fixed", value: 1 },
     processes: SHARED_POOL_PROCESSES,
     admission: "pooled",
   },
@@ -222,7 +234,7 @@ const DATABASE_POOLS = [
     admission: "pooled",
   },
   {
-    file: "src/scripts/better-auth-migration-audit.ts",
+    file: "src/scripts/better-auth-migration-audit-command.ts",
     constructor: 1,
     maximum: { type: "fixed", value: 1 },
     processes: ["authAudit"],
@@ -233,6 +245,13 @@ const DATABASE_POOLS = [
     constructor: 1,
     maximum: { type: "fixed", value: 1 },
     processes: ["rehearsal"],
+    admission: "pooled",
+  },
+  {
+    file: "scripts/run-postgres-tests.ts",
+    constructor: 1,
+    maximum: { type: "fixed", value: 1 },
+    processes: ["postgresTestRunner"],
     admission: "pooled",
   },
   {

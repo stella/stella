@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { sha256HexToBase64 } from "@stll/sha256";
 import { Temporal } from "@stll/time";
@@ -17,11 +17,16 @@ import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename
 import { PRESIGN_URL_EXPIRY_SECONDS } from "@/api/lib/uploads/runtime";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
-const bodySchema = t.Object({
-  name: t.String({ minLength: 1, maxLength: 255 }),
-  mimeType: t.String({ maxLength: 255 }),
-  size: t.Integer({ minimum: 1, maximum: FILE_SIZE_LIMIT_BYTES.document }),
-  sha256Hex: t.RegExp(/^[0-9a-f]{64}$/u),
+const bodySchema = v.object({
+  name: v.pipe(v.string(), v.minLength(1), v.maxLength(255)),
+  mimeType: v.pipe(v.string(), v.maxLength(255)),
+  size: v.pipe(
+    v.number(),
+    v.integer(),
+    v.minValue(1),
+    v.maxValue(FILE_SIZE_LIMIT_BYTES.document),
+  ),
+  sha256Hex: v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/u)),
 });
 
 const config = {
@@ -59,6 +64,7 @@ const presignProcuracao = createSafeRootHandler(
         PRESIGN_URL_EXPIRY_SECONDS * 1000,
     );
     const presign = await presignUploadUrl({
+      userId: user.id,
       key,
       expiresIn: PRESIGN_URL_EXPIRY_SECONDS,
       contentType: mimeType,

@@ -134,3 +134,234 @@ describe.serial("no-unscoped-user-query hoisted projections", () => {
     ).not.toEqual([]);
   });
 });
+
+describe.serial("no-unscoped-user-query schema metadata", () => {
+  const options = {
+    plugin: "security-guards",
+    sourcePath: "apps/api/src/db/schema/receipt.ts",
+    cwd: "scratch" as const,
+  };
+  test("allows foreign-key callbacks while retaining row-query checks", async () => {
+    const source = `import { user } from "@/api/db/auth-schema";
+export const table = pgTable("receipt", { userId: text("user_id").references(() => user.id) });`;
+    expect(
+      await lintSingleRule("no-unscoped-user-query", source, options),
+    ).toEqual([]);
+    expect(
+      await lintSingleRule(
+        "no-unscoped-user-query",
+        `${source}\nexport const rows = db.select().from(user);`,
+        options,
+      ),
+    ).toEqual([3]);
+  });
+  test("checks row reads and returned columns inside block callbacks", async () => {
+    const source = `import { user } from "@/api/db/auth-schema";
+export const table = pgTable("receipt", {
+  userId: text("user_id").references(() => {
+    db.select().from(user);
+    return user.id;
+  }),
+});`;
+    expect(
+      await lintSingleRule("no-unscoped-user-query", source, options),
+    ).toEqual([4, 5]);
+  });
+  test("checks a block callback that only returns a column", async () => {
+    const source = `import { user } from "@/api/db/auth-schema";
+export const table = pgTable("receipt", {
+  userId: text("user_id").references(() => {
+    return user.id;
+  }),
+});`;
+    expect(
+      await lintSingleRule("no-unscoped-user-query", source, options),
+    ).toEqual([4]);
+  });
+  test("checks concise callbacks outside the first references argument", async () => {
+    const source = `import { user } from "@/api/db/auth-schema";
+export const table = pgTable("receipt", { userId: text("user_id").references(options, () => user.id) });`;
+    expect(
+      await lintSingleRule("no-unscoped-user-query", source, options),
+    ).toEqual([2]);
+  });
+});
+
+describe.serial("no-unscoped-user-query Drizzle aliases", () => {
+  const options = {
+    plugin: "security-guards",
+    sourcePath: "apps/api/src/handlers/workspaces/member-previews/list.ts",
+    cwd: "scratch" as const,
+  };
+  const lintAliasSource = async (source: string) =>
+    await lintSingleRule("no-unscoped-user-query", source, options);
+
+  test("does not treat alias construction and column metadata as a row read", async () => {
+    const source = `import { user as account } from "@/api/db/auth-schema";
+import { alias as tableAlias } from "drizzle-orm/pg-core";
+const accountAlias = tableAlias(account, "account_alias");
+export const accountIdColumn = accountAlias.id;`;
+    expect(await lintAliasSource(source)).toEqual([]);
+  });
+
+  test("accepts a user alias read joined through organization membership", async () => {
+    const source = `import { user as account, member } from "@/api/db/auth-schema";
+import { alias as tableAlias } from "drizzle-orm/pg-core";
+import { and, eq } from "drizzle-orm";
+const admittedAccount = tableAlias(account, "admitted_account");
+export const read = db.select({ email: admittedAccount.email })
+  .from(member)
+  .innerJoin(admittedAccount, and(
+    eq(admittedAccount.id, member.userId),
+    eq(member.organizationId, organizationId)
+  ));`;
+    expect(await lintAliasSource(source)).toEqual([]);
+  });
+
+  test("reports a native user alias read without the membership join", async () => {
+    const source = `import { user as account } from "@/api/db/auth-schema";
+import { alias as tableAlias } from "drizzle-orm/pg-core";
+const admittedAccount = tableAlias(account, "admitted_account");
+export const read = db.select().from(admittedAccount);`;
+    expect(await lintAliasSource(source)).toEqual([4]);
+  });
+
+  test("reports an aliased user column in a query with a raw FROM source", async () => {
+    const source = `import { user as account } from "@/api/db/auth-schema";
+import { alias as tableAlias } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+const admittedAccount = tableAlias(account, "admitted_account");
+export const read = db.select({ email: admittedAccount.email })
+  .from(sql.raw('public."user" AS admitted_account'));`;
+    expect(await lintAliasSource(source)).toEqual([5]);
+  });
+
+  test("follows a stable projection into a raw FROM query", async () => {
+    const source = `import { user as account } from "@/api/db/auth-schema";
+import { alias as tableAlias } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+const admittedAccount = tableAlias(account, "admitted_account");
+const projection = { email: admittedAccount.email };
+export const read = db.select(projection)
+  .from(sql.raw('public."user" AS admitted_account'));`;
+    expect(await lintAliasSource(source)).toEqual([6]);
+  });
+
+  test("checks every query consuming a hoisted alias projection", async () => {
+    const source = `import { user as account, member } from "@/api/db/auth-schema";
+import { alias as tableAlias } from "drizzle-orm/pg-core";
+import { and, eq, sql } from "drizzle-orm";
+const admittedAccount = tableAlias(account, "admitted_account");
+const projection = { email: admittedAccount.email };
+export const scoped = db.select(projection)
+  .from(member)
+  .innerJoin(admittedAccount, and(
+    eq(admittedAccount.id, member.userId),
+    eq(member.organizationId, organizationId)
+  ));
+export const unscoped = db.select(projection).from(sql.raw('public."user" AS admitted_account'));`;
+    expect(await lintAliasSource(source)).toEqual([12]);
+  });
+
+  test("keeps a projected alias column without a query as metadata", async () => {
+    const source = `import { user as account } from "@/api/db/auth-schema";
+import { alias as tableAlias } from "drizzle-orm/pg-core";
+const admittedAccount = tableAlias(account, "admitted_account");
+export const projection = { email: admittedAccount.email };`;
+    expect(await lintAliasSource(source)).toEqual([]);
+  });
+
+  test("reports aliased user columns in a raw SQL row query", async () => {
+    const source = `import { user as account } from "@/api/db/auth-schema";
+import { alias as tableAlias } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+const admittedAccount = tableAlias(account, "admitted_account");
+export const read = db.execute(sql\`SELECT \${admittedAccount.email} FROM public."user" AS admitted_account\`);`;
+    expect(await lintAliasSource(source)).toEqual([5]);
+  });
+
+  test("follows a query receiver through a stable local into an unscoped read", async () => {
+    const source = `import { user as account } from "@/api/db/auth-schema";
+import { alias as tableAlias } from "drizzle-orm/pg-core";
+import { eq, sql } from "drizzle-orm";
+const admittedAccount = tableAlias(account, "admitted_account");
+const query = db.select().from(sql.raw('public."user" AS admitted_account'));
+export const read = query.where(eq(admittedAccount.email, email));`;
+    expect(await lintAliasSource(source)).toEqual([6]);
+  });
+
+  test("treats an opaque column reader as a possible user row read", async () => {
+    const source = `import { user as account } from "@/api/db/auth-schema";
+import { alias as tableAlias } from "drizzle-orm/pg-core";
+const admittedAccount = tableAlias(account, "admitted_account");
+export const read = readColumn(admittedAccount.email);`;
+    expect(await lintAliasSource(source)).toEqual([4]);
+  });
+
+  test("does not require an organization predicate for a member-only alias read", async () => {
+    const source = `import { member as membership } from "@/api/db/auth-schema";
+import { alias as tableAlias } from "drizzle-orm/pg-core";
+const membershipAlias = tableAlias(membership, "membership_alias");
+export const read = db.select({ userId: membershipAlias.userId })
+  .from(membershipAlias);`;
+    expect(await lintAliasSource(source)).toEqual([]);
+  });
+
+  test("does not accept another table aliased as member as membership proof", async () => {
+    const source = `import { user as account } from "@/api/db/auth-schema";
+import { featureEnrolments } from "@/api/db/schema";
+import { alias as tableAlias } from "drizzle-orm/pg-core";
+import { and, eq } from "drizzle-orm";
+const falseMember = tableAlias(featureEnrolments, "member");
+export const read = db.select({ email: account.email })
+  .from(account)
+  .innerJoin(falseMember, and(
+    eq(account.id, falseMember.userId),
+    eq(falseMember.organizationId, organizationId)
+  ));`;
+    expect(await lintAliasSource(source)).not.toEqual([]);
+  });
+
+  test("does not identify another table as user because of its SQL alias", async () => {
+    const source = `import { member } from "@/api/db/auth-schema";
+import { alias as tableAlias } from "drizzle-orm/pg-core";
+const user = tableAlias(member, "user");
+export const read = db.select().from(user);`;
+    expect(await lintAliasSource(source)).toEqual([]);
+  });
+
+  test("does not trust an alias function imported from another module", async () => {
+    const source = `import { user as account } from "@/api/db/auth-schema";
+import { alias as tableAlias } from "./local-table-helper";
+const accountAlias = tableAlias(account, "account_alias");
+export const read = db.select().from(accountAlias);`;
+    expect(await lintAliasSource(source)).not.toEqual([]);
+  });
+
+  test("does not trust a shadowed local alias factory", async () => {
+    const source = `import { user as account } from "@/api/db/auth-schema";
+const tableAlias = (table: unknown, name: string) => ({ table, name });
+const accountAlias = tableAlias(account, "account_alias");
+export const read = db.select().from(accountAlias);`;
+    expect(await lintAliasSource(source)).not.toEqual([]);
+  });
+
+  test("does not trust an imported alias shadowed by a function parameter", async () => {
+    const source = `import { user as account } from "@/api/db/auth-schema";
+import { alias } from "drizzle-orm/pg-core";
+const makeRead = (alias: (table: unknown, name: string) => unknown) => {
+  const accountAlias = alias(account, "account_alias");
+  return db.select().from(accountAlias);
+};
+export const read = makeRead((table) => table);`;
+    expect(await lintAliasSource(source)).not.toEqual([]);
+  });
+
+  test("does not trust a nonliteral alias name", async () => {
+    const source = `import { user as account } from "@/api/db/auth-schema";
+import { alias as tableAlias } from "drizzle-orm/pg-core";
+const accountAlias = tableAlias(account, aliasName);
+export const read = db.select().from(accountAlias);`;
+    expect(await lintAliasSource(source)).not.toEqual([]);
+  });
+});

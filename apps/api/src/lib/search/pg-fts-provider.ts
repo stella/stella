@@ -3,8 +3,8 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { encodeCursor } from "@/api/lib/search/cursor";
 import { escapeAndHighlight } from "@/api/lib/search/highlight";
 import {
-  buildDocumentSearchQueries,
   buildContentSearchQueries,
+  buildDocumentSearchQueries,
 } from "@/api/lib/search/pg-fts-search-query";
 import { parseEntityKind } from "@/api/lib/search/types";
 import type {

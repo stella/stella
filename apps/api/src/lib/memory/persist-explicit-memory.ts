@@ -10,10 +10,24 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import type { SafeId } from "@/api/lib/branded-types";
-import { ChatToolError, HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  lockMemberAccessRow,
+  lockWorkspaceLifecycle,
+} from "@/api/lib/db/aggregate-lock";
+import { hasCurrentActiveWorkspaceMemberPermission } from "@/api/lib/db/member-authority";
+import { abortTransaction } from "@/api/lib/db/transaction-abort";
+import {
+  ChatToolError,
+  ConcurrentModificationError,
+  HandlerError,
+} from "@/api/lib/errors/tagged-errors";
+import { isMemberRole } from "@/api/lib/member-roles";
 import { createMemoryDedupIdentity } from "@/api/lib/memory/memory-dedup";
 import type { MemoryDedupScope } from "@/api/lib/memory/memory-dedup";
-import { hasMemberPermission } from "@/api/lib/permission-authorization";
+import {
+  hasCurrentMemberPermission,
+  hasMemberPermission,
+} from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 
 /**
@@ -142,14 +156,15 @@ const MEMORY_WRITE_REFUSAL_MESSAGES = {
   "kind-requires-workspace": "Kind is only allowed on workspace-scoped memory",
 } as const satisfies Record<MemoryWriteRefusalCode, string>;
 
+const memoryWriteRefusal = (code: MemoryWriteRefusalCode, kind: AiMemoryKind) =>
+  new MemoryWriteRefusedError({
+    code,
+    kind,
+    message: MEMORY_WRITE_REFUSAL_MESSAGES[code],
+  });
+
 const refuse = (code: MemoryWriteRefusalCode, kind: AiMemoryKind) =>
-  Result.err(
-    new MemoryWriteRefusedError({
-      code,
-      kind,
-      message: MEMORY_WRITE_REFUSAL_MESSAGES[code],
-    }),
-  );
+  Result.err(memoryWriteRefusal(code, kind));
 
 /**
  * Checks run in the order the REST create route has always reported them:
@@ -267,44 +282,88 @@ type PersistExplicitMemoryOptions = {
   tx: Transaction;
 };
 
-export type PersistExplicitMemoryResult = {
-  id: SafeId<"aiMemory">;
-  type: "created" | "existing" | "reactivated";
+export type PersistExplicitMemoryResult =
+  | {
+      id: SafeId<"aiMemory">;
+      type: "created" | "existing" | "reactivated";
+    }
+  | {
+      error: MemoryWriteRefusedError;
+      type: "authority_unavailable";
+    };
+
+type HoldCurrentMemoryWriteAuthorityOptions = {
+  organizationId: SafeId<"organization">;
+  permissions: PermissionInput;
+  scope: AiMemoryScope;
+  tx: Transaction;
+  userId: SafeId<"user">;
+  workspaceId: SafeId<"workspace"> | null;
 };
 
-/**
- * Insert an explicit user/tool memory under the database's exact-dedup
- * constraint. Active duplicates are idempotent. An explicit duplicate of an
- * inactive row reactivates it; background extraction deliberately does not use
- * this helper, so dismissed suggestions remain tombstones.
- */
-export const persistExplicitMemory = async ({
-  memory,
-  metadataOnConflict,
-  recordAuditEvent,
-  scope: { target },
+/** Hold the live member and matter authority needed by one explicit write. */
+export const holdCurrentMemoryWriteAuthority = async ({
+  organizationId,
+  permissions,
+  scope,
   tx,
-}: PersistExplicitMemoryOptions): Promise<PersistExplicitMemoryResult> => {
-  const identity = createMemoryDedupIdentity({
-    ...target,
-    content: memory.content,
-    sourceDataWorkspaceIds: memory.sourceDataWorkspaceIds,
+  userId,
+  workspaceId,
+}: HoldCurrentMemoryWriteAuthorityOptions): Promise<boolean> => {
+  if (scope === "workspace") {
+    if (workspaceId === null) {
+      return false;
+    }
+    // Archive and deletion take this fence before changing the workspace.
+    // Holding it through the access proof and memory write prevents a cached
+    // request authorization from surviving a committed lifecycle transition.
+    await lockWorkspaceLifecycle(tx, workspaceId);
+    return await hasCurrentActiveWorkspaceMemberPermission({
+      db: tx,
+      organizationId,
+      permissions,
+      userId,
+      workspaceId,
+    });
+  }
+  const member = await lockMemberAccessRow({
+    tx,
+    organizationId,
+    userId,
+    mode: "share",
   });
-  const values = {
-    organizationId: target.organizationId,
-    scope: target.scope,
-    userId: target.userId,
-    workspaceId: target.workspaceId,
-    kind: target.kind,
-    content: memory.content,
-    dedupKey: identity.dedupKey,
-    language: memory.language,
-    sourceDataWorkspaceIds: identity.sourceDataWorkspaceIds,
-    source: memory.source,
-    status: "active",
-    pinned: memory.pinned,
-    createdBy: target.createdBy,
-  } satisfies typeof aiMemories.$inferInsert;
+  return (
+    member !== undefined &&
+    isMemberRole(member.role) &&
+    hasCurrentMemberPermission(member.role, permissions)
+  );
+};
+
+const MEMORY_DEDUP_MAX_ATTEMPTS = 3;
+
+type InsertOrLockMemoryOptions = {
+  tx: Transaction;
+  values: typeof aiMemories.$inferInsert;
+  attempt?: number;
+  recordAuditEvent: AuditRecorder;
+};
+
+type InsertOrLockMemoryResult =
+  | { type: "inserted"; id: SafeId<"aiMemory"> }
+  | {
+      type: "existing";
+      memory: Pick<
+        typeof aiMemories.$inferSelect,
+        "id" | "language" | "pinned" | "status"
+      >;
+    };
+
+const insertOrLockMemory = async ({
+  tx,
+  values,
+  recordAuditEvent,
+  attempt = 1,
+}: InsertOrLockMemoryOptions): Promise<InsertOrLockMemoryResult> => {
   const [inserted] = await tx
     .insert(aiMemories)
     .values(values)
@@ -326,9 +385,8 @@ export const persistExplicitMemory = async ({
         },
       },
     });
-    return { id: inserted.id, type: "created" };
+    return { type: "inserted", id: inserted.id };
   }
-
   const [existing] = await tx
     .select({
       id: aiMemories.id,
@@ -345,9 +403,82 @@ export const persistExplicitMemory = async ({
     )
     .limit(1)
     .for("update");
-  if (!existing) {
-    panic("Memory dedup conflict row disappeared");
+
+  if (existing) {
+    return { type: "existing", memory: existing };
   }
+  if (attempt >= MEMORY_DEDUP_MAX_ATTEMPTS) {
+    return abortTransaction(
+      new ConcurrentModificationError({
+        message: "Memory changed repeatedly while saving; retry the request",
+      }),
+    );
+  }
+  // A confirmed deletion can remove the conflict between INSERT and SELECT.
+  return await insertOrLockMemory({
+    tx,
+    values,
+    recordAuditEvent,
+    attempt: attempt + 1,
+  });
+};
+
+/**
+ * Insert an explicit user/tool memory under the database's exact-dedup
+ * constraint. Active duplicates are idempotent. An explicit duplicate of an
+ * inactive row reactivates it; background extraction deliberately does not use
+ * this helper, so dismissed suggestions remain tombstones.
+ */
+export const persistExplicitMemory = async ({
+  memory,
+  metadataOnConflict,
+  recordAuditEvent,
+  scope: { target },
+  tx,
+}: PersistExplicitMemoryOptions): Promise<PersistExplicitMemoryResult> => {
+  if (
+    !(await holdCurrentMemoryWriteAuthority({
+      organizationId: target.organizationId,
+      permissions: MEMORY_WRITE_PERMISSIONS[target.scope],
+      scope: target.scope,
+      tx,
+      userId: target.createdBy,
+      workspaceId: target.workspaceId,
+    }))
+  ) {
+    return {
+      error: memoryWriteRefusal(
+        target.scope === "workspace" ? "workspace-not-active" : "forbidden",
+        target.kind,
+      ),
+      type: "authority_unavailable",
+    };
+  }
+  const identity = createMemoryDedupIdentity({
+    ...target,
+    content: memory.content,
+    sourceDataWorkspaceIds: memory.sourceDataWorkspaceIds,
+  });
+  const values = {
+    organizationId: target.organizationId,
+    scope: target.scope,
+    userId: target.userId,
+    workspaceId: target.workspaceId,
+    kind: target.kind,
+    content: memory.content,
+    dedupKey: identity.dedupKey,
+    language: memory.language,
+    sourceDataWorkspaceIds: identity.sourceDataWorkspaceIds,
+    source: memory.source,
+    status: "active",
+    pinned: memory.pinned,
+    createdBy: target.createdBy,
+  } satisfies typeof aiMemories.$inferInsert;
+  const locked = await insertOrLockMemory({ tx, values, recordAuditEvent });
+  if (locked.type === "inserted") {
+    return { id: locked.id, type: "created" };
+  }
+  const existing = locked.memory;
   const nextLanguage =
     metadataOnConflict?.language !== undefined &&
     metadataOnConflict.language !== existing.language

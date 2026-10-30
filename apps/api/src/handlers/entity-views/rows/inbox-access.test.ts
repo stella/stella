@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { SIGNAL_INBOX_FEATURE_ACCESS } from "@/api/handlers/entity-views/rows/inbox-view";
 import type { FeatureResourceContext } from "@/api/lib/auth/feature-access/requirements";
+import { advertisedSchemas } from "@/api/mcp/advertised-schema";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import {
   createTestHandlerContext,
@@ -27,20 +28,22 @@ describe("conditional Inbox signal access", () => {
     });
   }
   test("ungranted discovery omits Inbox input while retaining ordinary windows", () => {
-    const schemas = {
-      body: t.Object({
-        inboxView: t.Optional(t.String()),
-        limit: t.Optional(t.Number()),
-        scope: t.Object({ type: t.Literal("organization") }),
+    const schemas = advertisedSchemas({
+      body: v.object({
+        inboxView: v.optional(v.string()),
+        limit: v.optional(v.number()),
+        scope: v.object({ type: v.literal("organization") }),
       }),
-      params: undefined,
-      query: undefined,
-    };
-    const projected = SIGNAL_INBOX_FEATURE_ACCESS.projectInputSchema(schemas);
-    expect(projected.body?.["properties"]).toEqual({
-      limit: schemas.body.properties.limit,
-      scope: schemas.body.properties.scope,
     });
-    expect(schemas.body.properties).toHaveProperty("inboxView");
+    const projected = SIGNAL_INBOX_FEATURE_ACCESS.projectInputSchema(schemas);
+    const properties = schemas.body?.properties;
+    expect(projected.body?.properties).toEqual(
+      Object.fromEntries(
+        Object.entries(properties ?? {}).filter(
+          ([property]) => property !== "inboxView",
+        ),
+      ),
+    );
+    expect(properties).toHaveProperty("inboxView");
   });
 });

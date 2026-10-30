@@ -131,7 +131,7 @@ type BuildAnonymizationDetectionKeyOptions = {
 };
 
 /**
- * Cache key for the detection heartbeat. Exclusions are part of
+ * Cache key for entity detection. Exclusions are part of
  * the key because marking an entity as a false positive must rerun
  * detection against the same text with the new allowlist. Accepts
  * any iterable (set or already-deduped array) and sorts it so the
@@ -157,7 +157,7 @@ export type AnonymizationDetectionDecision =
   | { action: "run" };
 
 /**
- * Decides what the detection heartbeat should do for the current
+ * Decides what entity detection should do for the current
  * doc text and allowlist:
  * - `skip`: a request is still in flight, do nothing.
  * - `markRan`: empty doc, release the placeholder without running.

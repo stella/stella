@@ -2,32 +2,29 @@ import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { getColumns, getTableName, sql } from "drizzle-orm";
 
-import { agentDelegation, agentRegistration } from "@/api/db/agent-auth-schema";
+import { sha256Hex } from "@stll/sha256/bun";
+
+import { apikey, member } from "@/api/db/auth-schema";
 import {
-  apikey,
-  member,
-  oauthAccessToken,
-  oauthConsent,
-  oauthRefreshToken,
-  session,
-} from "@/api/db/auth-schema";
-import {
+  bufferObjectCleanupIntents,
   desktopEditHandoffs,
   desktopEditSessions,
   entities,
   entityVersions,
-  properties,
-  bufferObjectCleanupIntents,
-  folioCollabRoomTokens,
   mcpOAuthState,
   mcpUserConnections,
+  mcpWebHandoff,
   pdfSigningSessions,
+  properties,
   sharepointConnections,
   sharepointOAuthState,
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
-import { removeOrganizationMemberWithAuthArtifacts } from "@/api/lib/auth-artifacts";
+import {
+  memberCredentialRevocationTables,
+  revokeOrganizationMemberAuthArtifacts,
+} from "@/api/lib/auth-artifacts";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
   authorizeDesktopEditSessionWithDb,
@@ -41,32 +38,18 @@ import { matterAccessFunctionStatements } from "@/api/tests/helpers/matter-acces
 type Transaction = Parameters<Parameters<GatedTestDb["transaction"]>[0]>[0];
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
-const credentialTables = [
-  mcpUserConnections,
-  mcpOAuthState,
-  sharepointConnections,
-  sharepointOAuthState,
-  desktopEditHandoffs,
-  pdfSigningSessions,
-  folioCollabRoomTokens,
-];
+const registeredCredentialTables = Object.values(
+  memberCredentialRevocationTables,
+);
 const tables = [
-  ...credentialTables,
+  ...registeredCredentialTables,
   entities,
   entityVersions,
   properties,
   bufferObjectCleanupIntents,
-  desktopEditSessions,
   workspaces,
   workspaceMembers,
   member,
-  oauthAccessToken,
-  oauthRefreshToken,
-  oauthConsent,
-  session,
-  agentRegistration,
-  agentDelegation,
-  apikey,
 ];
 
 const snapshot = async (tx: Transaction) => ({
@@ -83,6 +66,7 @@ const snapshot = async (tx: Transaction) => ({
     .from(mcpUserConnections)
     .orderBy(mcpUserConnections.id),
   mcpStates: await tx.select().from(mcpOAuthState).orderBy(mcpOAuthState.state),
+  webHandoffs: await tx.select().from(mcpWebHandoff).orderBy(mcpWebHandoff.id),
   sharepointConnections: await tx
     .select()
     .from(sharepointConnections)
@@ -99,10 +83,6 @@ const snapshot = async (tx: Transaction) => ({
     .select()
     .from(pdfSigningSessions)
     .orderBy(pdfSigningSessions.id),
-  rooms: await tx
-    .select()
-    .from(folioCollabRoomTokens)
-    .orderBy(folioCollabRoomTokens.id),
   desktops: await tx
     .select()
     .from(desktopEditSessions)
@@ -115,7 +95,7 @@ if (!databaseUrl || !enabled) {
   });
 } else {
   describe("organization member auth artifacts (postgres)", () => {
-    test("commits scoped credential cleanup and preserves desktop checkpoints", async () => {
+    test("revokes scoped credentials while leaving membership owned by the canonical remover", async () => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const { db } = openClient();
         const schema = `member_artifacts_${Bun.randomUUIDv7().replaceAll("-", "")}`;
@@ -137,6 +117,13 @@ if (!databaseUrl || !enabled) {
               );
             }
           }
+          const fixtureRelations = await db
+            .select({ tableName: sql<string>`table_name` })
+            .from(sql`information_schema.tables`)
+            .where(sql`table_schema = ${schema} AND table_type = 'BASE TABLE'`);
+          expect(
+            fixtureRelations.map(({ tableName }) => tableName).toSorted(),
+          ).toEqual(tables.map((table) => getTableName(table)).toSorted());
           for (const statement of matterAccessFunctionStatements(schema, [])) {
             await db.execute(sql.raw(statement));
           }
@@ -261,6 +248,17 @@ if (!databaseUrl || !enabled) {
                 resourceUrl: "https://example.test",
                 authorizationServerUrl: "https://example.test",
               });
+              await tx.insert(mcpWebHandoff).values({
+                id: Bun.randomUUIDv7(),
+                codeHash: sha256Hex(Bun.randomUUIDv7()),
+                userId: scope.userId,
+                organizationId: scope.organizationId,
+                oauthClientId: "handoff-client",
+                consentId: "handoff-consent",
+                allowedPaths: ["/matters/example"],
+                kind: "click",
+                expiresAt: future,
+              });
               await tx.insert(sharepointConnections).values({
                 id: createSafeId<"sharepointConnection">(),
                 organizationId: scope.organizationId,
@@ -298,16 +296,6 @@ if (!databaseUrl || !enabled) {
                 ),
                 handoffExpiresAt: future,
                 tokenExpiresAt: future,
-              });
-              await tx.insert(folioCollabRoomTokens).values({
-                id: createSafeId<"folioCollabRoomToken">(),
-                workspaceId: scope.workspaceId,
-                roomId: createSafeId<"folioCollabRoom">(),
-                userId: scope.userId,
-                tokenHash: hashDesktopEditSessionToken(Bun.randomUUIDv7()),
-                generation: 0,
-                permissions: { canEdit: true },
-                expiresAt: future,
               });
               await tx.insert(desktopEditSessions).values({
                 id: scope.sessionId,
@@ -358,8 +346,7 @@ if (!databaseUrl || !enabled) {
           const interrupted = await Result.tryPromise({
             try: async () =>
               await transaction(async (tx) => {
-                await removeOrganizationMemberWithAuthArtifacts(tx, {
-                  memberId: target.memberId,
+                await revokeOrganizationMemberAuthArtifacts(tx, {
                   organizationId,
                   userId,
                 });
@@ -383,19 +370,16 @@ if (!databaseUrl || !enabled) {
             await tx.execute(sql`DROP TRIGGER reject_cleanup ON ${apikey}`);
           });
           await transaction(async (tx) => {
-            await removeOrganizationMemberWithAuthArtifacts(tx, {
-              memberId: target.memberId,
+            await revokeOrganizationMemberAuthArtifacts(tx, {
               organizationId,
               userId,
             });
           });
           const after = await transaction(snapshot);
           expect(after.members.some((row) => row.id === target.memberId)).toBe(
-            false,
+            true,
           );
-          expect(after.members).toEqual(
-            before.members.filter((row) => row.id !== target.memberId),
-          );
+          expect(after.members).toEqual(before.members);
           expect(before.entities).toHaveLength(cases.length);
           expect(before.versions).toHaveLength(cases.length * 2);
           expect(before.properties).toHaveLength(cases.length);
@@ -404,77 +388,21 @@ if (!databaseUrl || !enabled) {
           expect(after.versions).toEqual(before.versions);
           expect(after.properties).toEqual(before.properties);
           expect(after.cleanupIntents).toEqual(before.cleanupIntents);
-          expect(after.mcpConnections).toEqual(
-            before.mcpConnections.filter(
+          expect(after.webHandoffs).toEqual(
+            before.webHandoffs.filter(
               (row) =>
                 row.organizationId !== organizationId || row.userId !== userId,
             ),
           );
-          expect(after.mcpStates).toEqual(
-            before.mcpStates.filter(
-              (row) =>
-                row.organizationId !== organizationId || row.userId !== userId,
-            ),
-          );
+          expect(after.mcpConnections).toEqual(before.mcpConnections);
+          expect(after.mcpStates).toEqual(before.mcpStates);
           expect(after.sharepointConnections).toEqual(
-            before.sharepointConnections.filter(
-              (row) =>
-                row.organizationId !== organizationId || row.userId !== userId,
-            ),
+            before.sharepointConnections,
           );
-          expect(after.sharepointStates).toEqual(
-            before.sharepointStates.filter(
-              (row) =>
-                row.organizationId !== organizationId || row.userId !== userId,
-            ),
-          );
-          expect(after.handoffs).toEqual(
-            before.handoffs.filter(
-              (row) =>
-                row.workspaceId !== workspaceId || row.createdBy !== userId,
-            ),
-          );
-          expect(after.signing).toEqual(
-            before.signing.filter(
-              (row) =>
-                row.workspaceId !== workspaceId || row.createdBy !== userId,
-            ),
-          );
-          expect(after.rooms).toEqual(
-            before.rooms.filter(
-              (row) => row.workspaceId !== workspaceId || row.userId !== userId,
-            ),
-          );
-          expect(after.desktops).toHaveLength(before.desktops.length);
-          for (const row of before.desktops) {
-            const current = after.desktops.find(
-              (candidate) => candidate.id === row.id,
-            );
-            expect(current).toBeDefined();
-            if (!current) {
-              panic("Missing desktop fixture");
-            }
-            if (row.id !== target.sessionId) {
-              expect(current).toEqual(row);
-              continue;
-            }
-            expect(current.status).toBe("expired");
-            expect(current.closedAt).toBeInstanceOf(Date);
-            if (current.closedAt === null) {
-              panic("Missing desktop close time");
-            }
-            expect(current.tokenExpiresAt).toEqual(current.closedAt);
-            expect(current.tokenExpiresAt.getTime()).toBeLessThan(
-              future.getTime(),
-            );
-            expect({
-              ...current,
-              status: row.status,
-              closedAt: row.closedAt,
-              tokenExpiresAt: row.tokenExpiresAt,
-              updatedAt: row.updatedAt,
-            }).toEqual(row);
-          }
+          expect(after.sharepointStates).toEqual(before.sharepointStates);
+          expect(after.handoffs).toEqual(before.handoffs);
+          expect(after.signing).toEqual(before.signing);
+          expect(after.desktops).toEqual(before.desktops);
           expect(
             await transaction(
               async (tx) =>
@@ -488,7 +416,7 @@ if (!databaseUrl || !enabled) {
                   )
                 ).status,
             ),
-          ).toBe("missing");
+          ).toBe("authorized");
           for (const scope of cases.slice(1)) {
             expect(
               await transaction(
@@ -506,8 +434,7 @@ if (!databaseUrl || !enabled) {
             ).toBe("authorized");
           }
           await transaction(async (tx) => {
-            await removeOrganizationMemberWithAuthArtifacts(tx, {
-              memberId: target.memberId,
+            await revokeOrganizationMemberAuthArtifacts(tx, {
               organizationId,
               userId,
             });

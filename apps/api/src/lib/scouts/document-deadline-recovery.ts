@@ -23,7 +23,6 @@ import {
   timestampMatchesCasToken,
 } from "@/api/lib/db/timestamp-cas";
 import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
-import { defineScopedTransitions } from "@/api/lib/db/transitions";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { enqueueDocumentDeadlineScout } from "@/api/lib/document-processing-enqueue";
 import {
@@ -45,40 +44,6 @@ const DEADLINE_SCOUT_DISPATCH_FAILURE = failureSink({
 
 const DEADLINE_SCOUT_LEASE_TIMEOUT_MS = 5 * 60 * 1000;
 const DEADLINE_SCOUT_DISPATCH_CONCURRENCY = 4;
-
-// Recovery owns lease retirement and recoverable admission parking.
-export const DEADLINE_DISPATCH_RECOVERY = defineScopedTransitions({
-  table: documentProcessingRuns,
-  key: "id",
-  scope: [],
-  stateColumn: "deadlineScoutStatus",
-  edges: {
-    not_requested: [],
-    pending: ["awaiting_grant", "running"],
-    awaiting_grant: ["pending"],
-    running: ["pending", "awaiting_grant", "succeeded", "failed", "cancelled"],
-    succeeded: [],
-    failed: [],
-    cancelled: [],
-  },
-  initial: [],
-});
-
-const DEADLINE_CENSUS_RECOVERY = defineScopedTransitions({
-  table: scoutRuns,
-  key: "id",
-  scope: [],
-  stateColumn: "status",
-  edges: {
-    running: ["failed"],
-    succeeded: [],
-    failed: [],
-  },
-  initial: [],
-});
-
-export type DeadlineDispatchRecoverySpec = typeof DEADLINE_DISPATCH_RECOVERY;
-export type DeadlineCensusRecoverySpec = typeof DEADLINE_CENSUS_RECOVERY;
 
 const deadlineMatterAdmission = (userId?: SafeId<"user">) =>
   backgroundFeatureActorExists({
@@ -145,12 +110,10 @@ export const resumeDocumentDeadlineScoutsAfterGrant = async ({
         tx,
         scope: proof,
         actor: { type: "system" },
-        fn: async (scopedTx) =>
+        fn: async (_scopedTx, grantScope) =>
           await transitionRecoveryGrantState({
             type: "deadline",
-            tx: scopedTx,
-            table: documentProcessingRuns,
-            spec: DEADLINE_DISPATCH_RECOVERY,
+            tx: grantScope,
             where: sql`${and(
               eq(documentProcessingRuns.id, row.id),
               eq(documentProcessingRuns.organizationId, proof.organizationId),
@@ -169,15 +132,13 @@ export const resumeDocumentDeadlineScoutsAfterGrant = async ({
 };
 
 export type DeadlineScoutClaimSettlement =
-  | { status: "settled" }
-  | { status: "stale_claim" };
+  { status: "settled" } | { status: "stale_claim" };
 
 type PauseDocumentDeadlineScoutOptions = {
   database: Pick<Transaction, "select"> & AnyDrizzle<Transaction>;
   sourceRunId: SafeId<"documentProcessingRun">;
 } & (
-  | { from: "pending" }
-  | { from: "running"; claimedAtToken: TimestampCasToken }
+  { from: "pending" } | { from: "running"; claimedAtToken: TimestampCasToken }
 );
 
 /** The same lock as grant insertion closes check-then-park and regrant ordering races. */
@@ -224,7 +185,10 @@ export const pauseDocumentDeadlineScoutAfterGrantLoss = async ({
       tx,
       scope: proof,
       actor: { type: "system" },
-      fn: async (scopedTx): Promise<DeadlineScoutClaimSettlement> => {
+      fn: async (
+        _scopedTx,
+        grantScope,
+      ): Promise<DeadlineScoutClaimSettlement> => {
         const metadata = {
           deadlineScoutClaimedAt: null,
           deadlineScoutErrorCode: "feature_not_granted",
@@ -233,9 +197,7 @@ export const pauseDocumentDeadlineScoutAfterGrantLoss = async ({
         const parked = isDeploymentFeatureEnabled("FEATURE_SIGNALS")
           ? await transitionRecoveryGrantState({
               type: "deadline",
-              tx: scopedTx,
-              table: documentProcessingRuns,
-              spec: DEADLINE_DISPATCH_RECOVERY,
+              tx: grantScope,
               where: sql`${and(eq(documentProcessingRuns.id, sourceRunId), eq(documentProcessingRuns.organizationId, proof.organizationId), claim.from === "running" ? timestampMatchesCasToken(documentProcessingRuns.deadlineScoutClaimedAt, claim.claimedAtToken) : undefined, not(deadlineMatterAdmission()))}`,
               options: {
                 from: [claim.from],
@@ -255,9 +217,7 @@ export const pauseDocumentDeadlineScoutAfterGrantLoss = async ({
         // A grant that committed before the lock keeps the rejected observation retryable under a new actor.
         const retried = await transitionRecoveryGrantState({
           type: "deadline",
-          tx: scopedTx,
-          table: documentProcessingRuns,
-          spec: DEADLINE_DISPATCH_RECOVERY,
+          tx: grantScope,
           where: sql`${and(eq(documentProcessingRuns.id, sourceRunId), eq(documentProcessingRuns.organizationId, proof.organizationId), timestampMatchesCasToken(documentProcessingRuns.deadlineScoutClaimedAt, claim.claimedAtToken))}`,
           options: { from: ["running"], to: "pending", set: metadata },
           log: { event: "scout.document_deadlines.admission_retry" },
@@ -363,12 +323,10 @@ const reconcileDeadlineAdmission = async ({
               tx,
               scope: proof,
               actor: { type: "system" },
-              fn: async (scopedTx) =>
+              fn: async (_scopedTx, grantScope) =>
                 await transitionRecoveryGrantState({
                   type: "deadline",
-                  tx: scopedTx,
-                  table: documentProcessingRuns,
-                  spec: DEADLINE_DISPATCH_RECOVERY,
+                  tx: grantScope,
                   where: sql`${and(
                     eq(documentProcessingRuns.id, id),
                     eq(
@@ -485,8 +443,7 @@ const retireExpiredDeadlineDispatches = async ({
             await mutateRecoveryClaim({
               type: "deadline-expiry",
               tx: scopedTx,
-              table: documentProcessingRuns,
-              spec: DEADLINE_DISPATCH_RECOVERY,
+              scope: proof,
               where: sql`${and(
                 eq(documentProcessingRuns.id, row.id),
                 eq(documentProcessingRuns.organizationId, proof.organizationId),
@@ -589,8 +546,7 @@ export const recoverDocumentDeadlineScoutDispatches = async ({
             await mutateRecoveryClaim({
               type: "scout-expiry",
               tx: scopedTx,
-              table: scoutRuns,
-              spec: DEADLINE_CENSUS_RECOVERY,
+              scope: proof,
               where: sql`${and(
                 eq(scoutRuns.id, row.id),
                 eq(scoutRuns.organizationId, proof.organizationId),

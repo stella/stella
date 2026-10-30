@@ -5,9 +5,10 @@ import { chunk } from "@stll/concurrency/chunk";
 
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import {
   DEFAULT_ENTITY_WINDOW_SIZE,
   entitiesKeys,
@@ -46,7 +47,7 @@ export const transferEligibilityOptions = ({
         limit: TRANSFER_ELIGIBILITY_CONCURRENCY,
         operation: async (batch) => {
           const body = { entityIds: batch.map((id) => toSafeId<"entity">(id)) };
-          return unwrapEden(await request(body, options));
+          return unwrapApiResponse(await request(body, options));
         },
       });
       return { transfers: results.flatMap(({ transfers }) => transfers) };
@@ -75,8 +76,8 @@ export const useTransferEligibility = ({
     }),
     enabled: enabled && entityIds.length > 0,
   });
-  const view = useQueryView(query);
-  useQueryViewError(view);
+  const view = queryView(query);
+  useQueryViewError(view, "useTransferEligibility:query");
   return (
     enabled &&
     !query.isFetching &&

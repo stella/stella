@@ -4,17 +4,17 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## entity_views · `entityViews` · entity-views.ts:15 · rls
+## entity_views · `entityViews` · entity-views.ts:16 · rls
 
 Organization-wide, user-owned saved layouts for cross-matter surfaces.
 
 ```text
-entity_views.id               pUuid               pk,not null       entity-views.ts:18
-entity_views.organization_id  safeOrganizationId  fk,not null       entity-views.ts:19
-entity_views.user_id          text                fk,not null       entity-views.ts:22
-entity_views.name             varchar             not null          entity-views.ts:26
-entity_views.layout           jsonb               not null          entity-views.ts:27
-entity_views.position         integer             not null          entity-views.ts:28
-entity_views.created_at       timestamptz         default,not null  entity-views.ts:29
-entity_views.updated_at       timestamptz         default,not null  entity-views.ts:30
+entity_views.id               pUuid               pk,not null       entity-views.ts:19
+entity_views.organization_id  safeOrganizationId  fk,not null       entity-views.ts:20
+entity_views.user_id          text                fk,not null       entity-views.ts:23
+entity_views.name             varchar             not null          entity-views.ts:27
+entity_views.layout           jsonb               not null          entity-views.ts:28
+entity_views.position         integer             not null          entity-views.ts:29
+entity_views.created_at       timestamptz         default,not null  entity-views.ts:30
+entity_views.updated_at       timestamptz         default,not null  entity-views.ts:31
 ```

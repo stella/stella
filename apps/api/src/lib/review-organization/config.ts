@@ -1,7 +1,11 @@
+import { Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
-import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  emailAddressSchema,
+  normalizeEmail,
+} from "@/api/lib/email/normalized-email";
 import {
   AUTH_PROVIDER_ID_PATTERN,
   brandPersistedOrganizationId,
@@ -21,7 +25,6 @@ export type ReviewOrganizationConfig = {
   demoEmail: string | null;
 };
 
-const emailSchema = v.pipe(v.string(), v.trim(), v.toLowerCase(), v.email());
 const organizationIdSchema = v.pipe(
   v.string(),
   v.regex(AUTH_PROVIDER_ID_PATTERN),
@@ -43,7 +46,7 @@ export const reviewOrganizationConfigFrom = (
   source: ConfigSource,
 ): ReviewOrganizationConfig | null => {
   const email = v.safeParse(
-    emailSchema,
+    emailAddressSchema,
     optionalString(source, "APP_REVIEW_ACCOUNT_EMAIL"),
   );
   const organizationId = v.safeParse(
@@ -58,13 +61,24 @@ export const reviewOrganizationConfigFrom = (
     email: email.output,
     organizationId: brandPersistedOrganizationId(organizationId.output),
     demoOrganizationId: optionalString(source, "DEMO_ACCOUNT_ORGANIZATION_ID"),
-    demoEmail: demoEmail === null ? null : demoEmail.trim().toLowerCase(),
+    demoEmail: demoEmail === null ? null : normalizeEmail(demoEmail),
   };
 };
 
-/** The deployment's review identity, or null when it is not configured. */
-export const readReviewOrganizationConfig =
-  (): ReviewOrganizationConfig | null =>
-    // The environment module is read by key so this stays valid whichever
-    // keys the deployment declares; undeclared keys read as absent.
-    reviewOrganizationConfigFrom(env);
+export class ReviewOrganizationConfigurationMissing extends TaggedError(
+  "ReviewOrganizationConfigurationMissing",
+)<{ message: string }> {}
+
+/** Migration registration requires a valid configured identity. */
+export const requireReviewOrganizationConfig = (source: ConfigSource) => {
+  const config = reviewOrganizationConfigFrom(source);
+  if (config === null) {
+    return Result.err(
+      new ReviewOrganizationConfigurationMissing({
+        message:
+          "APP_REVIEW_ACCOUNT_EMAIL and APP_REVIEW_ORGANIZATION_ID must identify the review organization",
+      }),
+    );
+  }
+  return Result.ok(config);
+};

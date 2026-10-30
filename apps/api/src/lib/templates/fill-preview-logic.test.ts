@@ -13,11 +13,12 @@ import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 import {
-  createSelectQueryMock,
   createScopedDbMock,
+  createSelectQueryMock,
 } from "@/api/tests/scoped-db-mock";
 
 import { fillPreviewLogic } from "./fill-preview-logic";
+import { buildTemplateS3Key } from "./storage-keys";
 
 /**
  * The document with each field's configuration authored into the marker that
@@ -85,7 +86,7 @@ const makeDocx = async (documentXml: string): Promise<ScannedFile> => {
 const organizationId = toSafeId<"organization">("org_1");
 const userId = toSafeId<"user">("user_1");
 const templateId = toSafeId<"template">("tmpl_1");
-const s3Key = "fake-key-fill-preview-test";
+const s3Key = buildTemplateS3Key(organizationId, templateId);
 
 const requiredFieldManifest: TemplateManifest = {
   version: 1,

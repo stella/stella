@@ -7,14 +7,14 @@ import { workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
-  flowDefinitionInputSchema,
   type FlowDefinitionInput,
+  flowDefinitionInputSchema,
   type FlowTrigger,
 } from "@/api/lib/flows/flow-types";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
 
 /**
- * Authoritative gate for a flow-definition write: parse the (TypeBox-validated)
+ * Authoritative gate for a flow-definition write: parse the (route-validated)
  * body through the shared valibot schema for normalization + the deep
  * invariants, then verify any trigger-referenced workspace belongs to the
  * caller's organization. The workspace check runs through the org-scoped

@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 
 import { DESKTOP_HANDOFF_LIFETIME_SECONDS } from "@stll/api-contract/desktop-handoff";
-import { Temporal, DAY_IN_MS } from "@stll/time";
+import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import { member, user } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
@@ -18,6 +18,8 @@ import {
 import { canWriteWorkspaceEntities } from "@/api/lib/entities/workspace-entity-write-access";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
+import { requireSessionCredentialIssuer } from "@/api/lib/synthetic-principal/credential-policy";
+import type { CredentialPrincipal } from "@/api/lib/synthetic-principal/credential-policy";
 import { memberReachesMatterSql } from "@/api/lib/workspaces/authorized-workspace-ids";
 
 type AuthorizedDesktopEditSession = {
@@ -61,7 +63,12 @@ export const SESSION_TOKEN_TTL_MS = DAY_IN_MS;
 export const computeTokenExpiresAt = () =>
   new Date(Temporal.Now.instant().epochMilliseconds + SESSION_TOKEN_TTL_MS);
 
-export const createDesktopEditSessionToken = createOpaqueToken;
+export const createDesktopEditSessionToken = (
+  principal: CredentialPrincipal,
+) => {
+  requireSessionCredentialIssuer("desktopEdit", principal);
+  return createOpaqueToken();
+};
 
 export const hashDesktopEditSessionToken = hashOpaqueToken;
 
@@ -113,7 +120,12 @@ export const computeDesktopEditHandoffExpiresAt = () =>
     Temporal.Now.instant().epochMilliseconds + DESKTOP_EDIT_HANDOFF_TTL_MS,
   );
 
-export const createDesktopEditHandoffToken = createDesktopEditSessionToken;
+export const createDesktopEditHandoffToken = (
+  principal: CredentialPrincipal,
+) => {
+  requireSessionCredentialIssuer("desktopHandoff", principal);
+  return createOpaqueToken();
+};
 
 export const hashDesktopEditHandoffToken = hashDesktopEditSessionToken;
 

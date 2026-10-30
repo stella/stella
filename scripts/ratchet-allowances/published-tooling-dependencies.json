@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 8,
+  "reason": "@stll/time and @stll/test-kit come from the published releases instead of the workspace copies."
+}

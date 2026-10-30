@@ -589,6 +589,62 @@ export const FEATURE_REGISTRY = defineFeatureRegistry({
       ]),
     ).toHaveLength(1);
   });
+  test("canonical database factories derive registration from their declaration and keep runtime uses owned", async () => {
+    const owner = "apps/api/src/db/sql-client.ts";
+    const ownerSource = await Bun.file(
+      new URL("../../src/db/sql-client.ts", import.meta.url),
+    ).text();
+    const relations = "apps/api/src/db/database-relations.ts";
+    const helper = "apps/api/src/helpers/db.ts";
+    const endpoint = 'import { db } from "../helpers/db";';
+    const imports =
+      'import { createDatabase as connect } from "@/api/db/sql-client"; import { databaseRelations } from "../db/database-relations";';
+    const registration = `${imports} export const db = connect({ client, relations: databaseRelations });`;
+    const additional = [
+      [owner, ownerSource],
+      [
+        "apps/api/src/lib/db-query-counter.ts",
+        "export const instrumentQueryOrigins = (database) => database;",
+      ],
+      [
+        relations,
+        'import { featureRows } from "./schema/feature"; export const databaseRelations = { featureRows };',
+      ],
+    ] as const;
+    expect(
+      check(
+        'import { databaseRelations } from "../db/database-relations";',
+        {},
+        additional,
+      ),
+    ).toHaveLength(1);
+    expect(
+      check(endpoint, {}, [...additional, [helper, registration]]),
+    ).toEqual([]);
+    for (const source of [
+      `${registration} export const read = () => databaseRelations.featureRows;`,
+      `${imports} export const db = (connect) => connect({ relations: databaseRelations });`,
+      'import { createDatabase as connect } from "../helpers/fake-db"; import { databaseRelations } from "../db/database-relations"; export const db = connect({ relations: databaseRelations });',
+    ]) {
+      expect(
+        check(endpoint, {}, [
+          ...additional,
+          [
+            "apps/api/src/helpers/fake-db.ts",
+            "export const createDatabase = (config) => config;",
+          ],
+          [helper, source],
+        ]),
+      ).toHaveLength(1);
+    }
+    expect(
+      check(endpoint, {}, [
+        ...additional,
+        [owner, "export const createDatabase = (config) => config;"],
+        [helper, registration],
+      ]),
+    ).toHaveLength(1);
+  });
   test("generic aggregate locking attributes table ownership to the selected resource", () => {
     const engine = "apps/api/src/lib/db/aggregate-lock.ts";
     const source = `
@@ -829,9 +885,14 @@ export const FEATURE_REGISTRY = defineFeatureRegistry({
         await Bun.file(`${apiDirectory}${file}`).text(),
       );
     }
-    const ordinary = "apps/api/src/handlers/contacts/get.ts";
+    const ordinaryHandlers = [
+      "apps/api/src/handlers/account-exports/download.ts",
+      "apps/api/src/handlers/contacts/get.ts",
+    ];
     const featureFile = "apps/api/src/handlers/lists/verifications/create.ts";
-    expect(sources.has(ordinary)).toBe(true);
+    for (const ordinary of ordinaryHandlers) {
+      expect(sources.has(ordinary)).toBe(true);
+    }
     expect(sources.has(featureFile)).toBe(true);
     const additional = "apps/api/src/handlers/lists/fixture/list.ts";
     sources.set(additional, "export const list = () => true;");
@@ -849,14 +910,16 @@ export const FEATURE_REGISTRY = defineFeatureRegistry({
     const violations = validateFeatureAccessDeclarations({
       registry: FEATURE_REGISTRY,
       endpoints: [
-        { file: ordinary, config: {} },
+        ...ordinaryHandlers.map((file) => ({ file, config: {} })),
         { file: featureFile, config: {} },
       ],
       sources,
     });
-    expect(
-      violations.filter((violation) => violation.file === ordinary),
-    ).toEqual([]);
+    for (const ordinary of ordinaryHandlers) {
+      expect(
+        violations.filter((violation) => violation.file === ordinary),
+      ).toEqual([]);
+    }
     expect(
       violations.some(
         (violation) =>

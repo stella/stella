@@ -76,7 +76,9 @@ type ProvisionCitation = { id: string; target: CitedProvisionTarget };
  * distinct part of it the paragraph cites, in citation order. `id` is the
  * first citation's, stable while the paragraph is.
  */
-type ProvisionCardCitations = {
+export type ProvisionCardCitations = {
+  /** Every citation the card stands for, repeats included, in text order. */
+  citationIds: string[];
   citations: CitedProvisionTarget[];
   id: string;
   provision: ProvisionInVersionKey;
@@ -99,9 +101,10 @@ export const provisionCardsOf = (
       isSameProvisionInVersion(candidate.provision, provision),
     );
     if (card === undefined) {
-      cards.push({ citations: [target], id, provision });
+      cards.push({ citationIds: [id], citations: [target], id, provision });
       continue;
     }
+    card.citationIds.push(id);
     if (
       card.citations.some((cited) => citedAnchor(cited) === citedAnchor(target))
     ) {
@@ -167,6 +170,52 @@ export type ProvisionCardPassage =
       /** Distinct labels of quoted citations with no wording or no text blocks. */
       unavailable: string[];
     };
+
+/** How a run of quoted wording relates to the paragraph's citations. */
+export const PROVISION_WORDING_EMPHASIS = {
+  /** Wording the paragraph cites, set off from the context around it. */
+  cited: "cited",
+  /** Wording drawn without emphasis: context, or a quote that is all cited. */
+  plain: "plain",
+} as const;
+
+type ProvisionWordingEmphasis =
+  (typeof PROVISION_WORDING_EMPHASIS)[keyof typeof PROVISION_WORDING_EMPHASIS];
+
+export type ProvisionWordingRun = {
+  blocks: ProvisionWordingBlock[];
+  emphasis: ProvisionWordingEmphasis;
+};
+
+/**
+ * The quoted wording as consecutive runs, each set as one unit: a cited
+ * paragraph and the letters under it are one quotation, never a stack of
+ * separately marked items. A mark only means something beside wording that
+ * is not cited, so a passage quoting nothing but cited wording is one plain
+ * run, and the card around it is the quotation's only frame.
+ */
+export const provisionWordingRuns = (
+  blocks: readonly ProvisionWordingBlock[],
+  cited: ReadonlySet<string>,
+): ProvisionWordingRun[] => {
+  const marks =
+    blocks.some((block) => cited.has(block.id)) &&
+    blocks.some((block) => !cited.has(block.id));
+  const runs: ProvisionWordingRun[] = [];
+  for (const block of blocks) {
+    const emphasis =
+      marks && cited.has(block.id)
+        ? PROVISION_WORDING_EMPHASIS.cited
+        : PROVISION_WORDING_EMPHASIS.plain;
+    const last = runs.at(-1);
+    if (last?.emphasis === emphasis) {
+      last.blocks.push(block);
+      continue;
+    }
+    runs.push({ blocks: [block], emphasis });
+  }
+  return runs;
+};
 
 /** What the host's full-provision read answered. */
 export type FullProvisionRead = {

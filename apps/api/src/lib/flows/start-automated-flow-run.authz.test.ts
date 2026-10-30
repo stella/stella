@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 /**
  * Authorization gate for automated flow runs: an automated run (schedule /
@@ -14,10 +15,10 @@ import { eq } from "drizzle-orm";
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
   entities,
-  flowUploadTriggerIntents,
   featureEnrolments,
   flowDefinitions,
   flowRuns,
+  flowUploadTriggerIntents,
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
@@ -30,6 +31,7 @@ import { isBackgroundFeatureEnabled } from "@/api/lib/feature-access/background"
 import { insertAutomatedFlowRunWithinCap } from "@/api/lib/flows/automated-run-cap";
 import type { FlowStep, FlowTrigger } from "@/api/lib/flows/flow-types";
 import { startAutomatedFlowRun } from "@/api/lib/flows/start-automated-flow-run";
+import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { withOrgScopedFixture } from "@/api/tests/helpers/org-scoped-fixture";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -227,5 +229,138 @@ describe("startAutomatedFlowRun authorization gate", () => {
 
     expect(await runsForWorkspace(unauthorizedWorkspaceId)).toHaveLength(0);
     expect(enqueuedSteps).toHaveLength(enqueuedBefore);
+  });
+
+  type DeadlineFailureStage = Exclude<
+    keyof Parameters<typeof startAutomatedFlowRun>[1],
+    "statementTimeoutMs" | "enqueueStep"
+  >;
+  const deadlineFailureStages = {
+    featureEnabled: "featureEnabled",
+    findDefinition: "findDefinition",
+    resolveAuthorization: "resolveAuthorization",
+    insertWithinCap: "insertWithinCap",
+    kickoff: "kickoff",
+  } as const satisfies Record<DeadlineFailureStage, DeadlineFailureStage>;
+  const deadlineInput = {
+    definitionId,
+    organizationId,
+    workspaceId: authorizedWorkspaceId,
+    createdByUserId: authorId,
+    triggerSource: { type: "file-upload", entityId },
+    inputEntityIds: [entityId],
+    logContext: { definitionId, workspaceId: authorizedWorkspaceId },
+  } satisfies Parameters<typeof startAutomatedFlowRun>[0];
+  const successfulDeadlineDependencies = (
+    statementTimeoutMs?: number,
+  ): Parameters<typeof startAutomatedFlowRun>[1] => ({
+    ...(statementTimeoutMs !== undefined && { statementTimeoutMs }),
+    findDefinition: async () => ({
+      id: definitionId,
+      name: "Deadline test flow",
+      steps: [AI_STEP],
+      enabled: true,
+      trigger: WILDCARD_UPLOAD_TRIGGER,
+    }),
+    featureEnabled: async () => true,
+    resolveAuthorization: async () => ({
+      memberId: "deadline-test-member",
+      email: "deadline-test@example.test",
+      role: "member",
+      workspace: { id: authorizedWorkspaceId, status: "active" },
+      emailVerified: true,
+      userDeleted: false,
+      enrolledFeatureIds: ["flows"],
+      professionalUse: { status: "required" },
+    }),
+    insertWithinCap: async () => ({ outcome: "started" }),
+    enqueueStep: async () => undefined,
+    kickoff: async ({ run }) =>
+      await run(new AbortController().signal, async () => undefined),
+  });
+  const failAtDeadlineStage = (
+    dependencies: Parameters<typeof startAutomatedFlowRun>[1],
+    stage: DeadlineFailureStage,
+    failure: unknown,
+  ): Parameters<typeof startAutomatedFlowRun>[1] => {
+    const reject = async (): Promise<never> => {
+      throw failure;
+    };
+    switch (stage) {
+      case "featureEnabled":
+        return { ...dependencies, featureEnabled: reject };
+      case "findDefinition":
+        return { ...dependencies, findDefinition: reject };
+      case "resolveAuthorization":
+        return { ...dependencies, resolveAuthorization: reject };
+      case "insertWithinCap":
+        return { ...dependencies, insertWithinCap: reject };
+      case "kickoff":
+        return { ...dependencies, kickoff: reject };
+      default: {
+        const unexpected: never = stage;
+        return panic(`Unknown deadline failure stage ${String(unexpected)}`);
+      }
+    }
+  };
+
+  test("configured deadlines propagate PostgreSQL cancellation through every boundary", async () => {
+    const cancellation = new Error("wrapped transaction failure", {
+      cause: Object.assign(new Error("statement timeout"), {
+        code: PG_ERROR.QUERY_CANCELED,
+      }),
+    });
+    for (const stage of Object.values(deadlineFailureStages)) {
+      const outcome = await startAutomatedFlowRun(
+        deadlineInput,
+        failAtDeadlineStage(
+          successfulDeadlineDependencies(5000),
+          stage,
+          cancellation,
+        ),
+      ).then(
+        () => undefined,
+        (error: unknown) => error,
+      );
+      expect(getPgErrorCode(outcome), stage).toBe(PG_ERROR.QUERY_CANCELED);
+    }
+  });
+
+  test("without a deadline, PostgreSQL cancellation remains a retry outcome", async () => {
+    const cancellation = new Error("wrapped transaction failure", {
+      cause: Object.assign(new Error("statement timeout"), {
+        code: PG_ERROR.QUERY_CANCELED,
+      }),
+    });
+    for (const stage of Object.values(deadlineFailureStages)) {
+      expect(
+        await startAutomatedFlowRun(
+          deadlineInput,
+          failAtDeadlineStage(
+            successfulDeadlineDependencies(),
+            stage,
+            cancellation,
+          ),
+        ),
+        stage,
+      ).toEqual({ status: "retry" });
+    }
+  });
+
+  test("configured deadlines keep other failures as retry outcomes", async () => {
+    const ordinaryFailure = new Error("ordinary dependency failure");
+    for (const stage of Object.values(deadlineFailureStages)) {
+      expect(
+        await startAutomatedFlowRun(
+          deadlineInput,
+          failAtDeadlineStage(
+            successfulDeadlineDependencies(5000),
+            stage,
+            ordinaryFailure,
+          ),
+        ),
+        stage,
+      ).toEqual({ status: "retry" });
+    }
   });
 });

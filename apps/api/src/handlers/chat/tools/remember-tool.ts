@@ -7,9 +7,14 @@ import { AI_MEMORY_KINDS } from "@/api/db/schema";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
+import { resolveFeatureAccess } from "@/api/lib/auth/feature-access/context";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ChatDurableRefText } from "@/api/lib/chat/ref-registry";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
+import {
+  AI_MEMORY_FEATURE_ID,
+  REMEMBER_TOOL_NAME,
+} from "@/api/lib/feature-access/registry";
 import { sanitizeMemoryContent } from "@/api/lib/memory/memory-content-safety";
 import {
   memoryWriteRefusalChatToolError,
@@ -19,7 +24,7 @@ import {
 import type { MemoryWriteScopeRequest } from "@/api/lib/memory/persist-explicit-memory";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 
-export const REMEMBER_TOOL_NAME = "remember";
+export { REMEMBER_TOOL_NAME } from "@/api/lib/feature-access/registry";
 
 const rememberToolInputSchema = v.strictObject({
   content: v.pipe(
@@ -61,6 +66,12 @@ type CreateRememberToolProps = {
   // handlers; the audit row commits in the same transaction as the
   // insert.
   recordAuditEvent: AuditRecorder;
+  /**
+   * The transactional memory write, which proves the member's live authority
+   * before inserting. Tests that cover the tool's own scope decisions replace
+   * it; the write itself is covered by its Postgres tests.
+   */
+  persistMemory?: typeof persistExplicitMemory;
   safeDb: SafeDb;
   // Resolve immediately before persistence so matter/entity refs registered by
   // tools or subagents earlier in the same streaming turn are included. User-
@@ -76,8 +87,7 @@ type CreateRememberToolProps = {
   workspaceId: SafeId<"workspace"> | null;
   /** The turn's statuses of the member's accessible matters. */
   workspaceStatusById:
-    | ReadonlyMap<string, AccessibleWorkspace["status"]>
-    | undefined;
+    ReadonlyMap<string, AccessibleWorkspace["status"]> | undefined;
 };
 
 type MemoryWriteScopeRequestOptions = Pick<
@@ -114,6 +124,7 @@ export const createRememberTool = ({
   authority,
   organizationId,
   recordAuditEvent,
+  persistMemory = persistExplicitMemory,
   safeDb,
   resolveSourceDataWorkspaceIds,
   toDurableRefText,
@@ -180,10 +191,36 @@ export const createRememberTool = ({
         return Result.err(sanitizedContentResult.error);
       }
 
+      const decision = await safeDb(async (tx) =>
+        resolveFeatureAccess({
+          tx,
+          organizationId,
+          userId,
+          featureId: AI_MEMORY_FEATURE_ID,
+        }),
+      );
+      if (Result.isError(decision)) {
+        return Result.err(
+          new ChatToolError({
+            kind: "server-defect",
+            message: "Failed to check memory access.",
+            cause: decision.error,
+          }),
+        );
+      }
+      if (decision.value.status !== "enabled") {
+        return Result.err(
+          new ChatToolError({
+            kind: "unavailable",
+            message: "Memory is unavailable for this account.",
+          }),
+        );
+      }
+
       const sourceDataWorkspaceIds = resolveSourceDataWorkspaceIds();
       const insertResult = await safeDb(
         async (tx) =>
-          await persistExplicitMemory({
+          await persistMemory({
             tx,
             recordAuditEvent,
             scope: authorizedScope.value,
@@ -204,6 +241,11 @@ export const createRememberTool = ({
             message: "Failed to save memory.",
             cause: insertResult.error,
           }),
+        );
+      }
+      if (insertResult.value.type === "authority_unavailable") {
+        return Result.err(
+          memoryWriteRefusalChatToolError(insertResult.value.error),
         );
       }
       return Result.ok({ status: "saved" } as const);

@@ -2,10 +2,10 @@ import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import {
   lstatSync,
-  readlinkSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readlinkSync,
   realpathSync,
   rmSync,
   symlinkSync,
@@ -20,13 +20,13 @@ import { ciGeneratedFiles } from "./generated-file-inventory";
 import {
   generatedFileHash,
   generatedInputIdentity,
+  hasPreparedGeneratedSources,
+  preparedGeneratedFile,
+  preparedManifestPath,
   requireUnchangedGeneratedInputs,
+  restorePreparedGeneratedSources,
   validatePreparedManifest,
   verifyPreparedGeneratedFiles,
-  restorePreparedGeneratedSources,
-  preparedManifestPath,
-  preparedGeneratedFile,
-  hasPreparedGeneratedSources,
 } from "./prepared-generated-sources";
 
 const fixture = () => {
@@ -39,7 +39,7 @@ const fixture = () => {
     writeFileSync(destination, bytes);
   };
   write(
-    "node_modules/typescript/package.json",
+    "node_modules/typescript6/package.json",
     JSON.stringify({ version: "test-compiler" }),
   );
   write("input.ts", "export const input = 1;\n");
@@ -82,6 +82,15 @@ const fixture = () => {
   };
   return { root, write, manifest };
 };
+
+test("the identity names the TypeScript 6 compiler the generators run on", () => {
+  const { root, manifest } = fixture();
+  try {
+    expect(manifest.compilerVersion).toBe("test-compiler");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 test("every prepared output has required identity and byte coverage", () => {
   const { root, manifest, write } = fixture();

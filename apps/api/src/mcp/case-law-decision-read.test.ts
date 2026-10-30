@@ -16,8 +16,8 @@ import { locateDecisionBlocks } from "@/api/mcp/case-law-decision-outline";
 import {
   citationSummaryOutput,
   compactDecisionMetadata,
-  decisionTextAllowances,
   decisionParagraphs,
+  decisionTextAllowances,
   decisionTextVersion,
   pageOfOffset,
   paragraphsMatching,

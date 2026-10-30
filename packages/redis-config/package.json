@@ -15,11 +15,11 @@
     "test": "bun test src",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/redis-config",
-    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/redis-config",
-    "format": "bun ../../scripts/run-oxfmt.ts ."
+    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/redis-config"
   },
   "dependencies": {
-    "@stll/time": "workspace:*",
+    "@stll/errors": "workspace:*",
+    "@stll/time": "0.4.1",
     "better-result": "catalog:",
     "valibot": "catalog:"
   },

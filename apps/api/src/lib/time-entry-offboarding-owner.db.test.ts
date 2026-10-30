@@ -5,8 +5,8 @@ import { eq, sql } from "drizzle-orm";
 import { WORKSPACE_ACCESS_MODE } from "@/api/db/rls";
 import {
   auditLogs,
-  billingArrangements,
   BILLING_ARRANGEMENT_MODES,
+  billingArrangements,
   timeTimers,
 } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
@@ -218,11 +218,10 @@ describe.skipIf(!enabled)(
             expect(swept.get("billing_arrangements")).toBe(2);
           });
           const census = openClient().sql;
-          expect(
-            await census.unsafe<{ id: string }[]>(
-              `SELECT id FROM ${schema}.system_audit_runs`,
-            ),
-          ).toEqual([]);
+          const auditRuns = await census.unsafe<{ id: string }[]>(
+            `SELECT id FROM ${schema}.system_audit_runs`,
+          );
+          expect([...auditRuns]).toEqual([]);
           const remaining = await census.unsafe<{ count: number }[]>(
             `SELECT count(*)::int AS count FROM ${schema}.billing_arrangements`,
           );

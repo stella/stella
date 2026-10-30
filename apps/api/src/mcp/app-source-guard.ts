@@ -1,7 +1,8 @@
 import { load } from "cheerio";
 import { isText } from "domhandler";
 import path from "node:path";
-import ts from "typescript";
+
+import { type Node, parseSource, walk } from "@stll/scripts/src/syntax-tree";
 
 // Runtime SDK imports and the call primitive stay at these explicit boundaries.
 const SDK_OWNERS: ReadonlySet<string> = new Set([
@@ -45,29 +46,75 @@ export const inspectAppHtmlSources = (
   return issues;
 };
 
-const importSpecifier = (node: ts.Node) => {
-  if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
-    return node.moduleSpecifier;
-  }
-  if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument)) {
-    return node.argument.literal;
+const stringLiteralText = (node: Node | null | undefined) =>
+  node?.type === "Literal" && typeof node.value === "string"
+    ? node.value
+    : undefined;
+
+const importSpecifier = (node: Node) => {
+  if (
+    node.type === "ImportDeclaration" ||
+    node.type === "ExportNamedDeclaration" ||
+    node.type === "ExportAllDeclaration" ||
+    node.type === "TSImportType" ||
+    node.type === "ImportExpression"
+  ) {
+    return stringLiteralText(node.source);
   }
   if (
-    ts.isCallExpression(node) &&
-    (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
-      (ts.isIdentifier(node.expression) && node.expression.text === "require"))
+    node.type === "CallExpression" &&
+    node.callee.type === "Identifier" &&
+    node.callee.name === "require"
   ) {
-    return node.arguments.at(0);
+    return stringLiteralText(node.arguments.at(0));
   }
   return undefined;
 };
 
-const importsServerModule = (node: ts.Node, file: string) => {
-  const imported = importSpecifier(node);
-  if (imported === undefined || !ts.isStringLiteral(imported)) {
+// `{ callServerTool }`, `{ callServerTool: call }`, `{ ...callServerTool }`
+// and `[callServerTool]` bindings. Destructuring assignments assign to
+// expressions and bind nothing.
+const bindsCallServerTool = (node: Node, ancestors: readonly Node[]) => {
+  const parent = ancestors.at(-1);
+  let bound: Node | undefined;
+  if (parent?.type === "ObjectPattern") {
+    if (node.type === "Property") {
+      bound = node.computed ? undefined : node.key;
+    } else if (node.type === "RestElement") {
+      bound = node.argument;
+    }
+  } else if (parent?.type === "ArrayPattern") {
+    if (node.type === "AssignmentPattern") {
+      bound = node.left;
+    } else if (node.type === "RestElement") {
+      bound = node.argument;
+    } else {
+      bound = node;
+    }
+  }
+  if (bound?.type !== "Identifier" || bound.name !== "callServerTool") {
     return false;
   }
-  const target = imported.text;
+  const owner = ancestors.findLast(
+    (ancestor) =>
+      ancestor.type !== "ObjectPattern" &&
+      ancestor.type !== "ArrayPattern" &&
+      ancestor.type !== "Property" &&
+      ancestor.type !== "AssignmentPattern" &&
+      ancestor.type !== "RestElement",
+  );
+  return (
+    owner?.type !== "AssignmentExpression" &&
+    owner?.type !== "ForOfStatement" &&
+    owner?.type !== "ForInStatement"
+  );
+};
+
+const importsServerModule = (node: Node, file: string) => {
+  const target = importSpecifier(node);
+  if (target === undefined) {
+    return false;
+  }
   if (
     target.startsWith("@/api/") ||
     target === "@stll/api" ||
@@ -97,68 +144,37 @@ export const inspectAppSources = (
     ) {
       continue;
     }
-    const source = ts.createSourceFile(
-      file,
-      text,
-      ts.ScriptTarget.Latest,
-      true,
-      file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-    );
-    const visit = (node: ts.Node): void => {
+    walk(parseSource(file, text).program, (node, ancestors) => {
       if (importsServerModule(node, file)) {
         issues.push(`Server modules must stay outside browser apps: ${file}`);
       }
       if (SDK_OWNERS.has(file)) {
-        ts.forEachChild(node, visit);
         return;
       }
+      const isSdkModule =
+        importSpecifier(node)?.startsWith("@modelcontextprotocol/") === true;
       if (
-        ts.isImportDeclaration(node) &&
-        ts.isStringLiteral(node.moduleSpecifier) &&
-        node.moduleSpecifier.text.startsWith("@modelcontextprotocol/") &&
-        node.importClause?.phaseModifier !== ts.SyntaxKind.TypeKeyword
+        isSdkModule &&
+        (node.type === "ImportExpression" ||
+          node.type === "CallExpression" ||
+          (node.type === "ImportDeclaration" && node.importKind !== "type") ||
+          ((node.type === "ExportNamedDeclaration" ||
+            node.type === "ExportAllDeclaration") &&
+            node.exportKind !== "type"))
       ) {
         issues.push(`App SDK import requires the shared bridge: ${file}`);
       }
       if (
-        ts.isExportDeclaration(node) &&
-        !node.isTypeOnly &&
-        node.moduleSpecifier !== undefined &&
-        ts.isStringLiteral(node.moduleSpecifier) &&
-        node.moduleSpecifier.text.startsWith("@modelcontextprotocol/")
-      ) {
-        issues.push(`App SDK import requires the shared bridge: ${file}`);
-      }
-      if (
-        ts.isCallExpression(node) &&
-        (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
-          (ts.isIdentifier(node.expression) &&
-            node.expression.text === "require"))
-      ) {
-        const module = node.arguments.at(0);
-        if (
-          module !== undefined &&
-          ts.isStringLiteral(module) &&
-          module.text.startsWith("@modelcontextprotocol/")
-        ) {
-          issues.push(`App SDK import requires the shared bridge: ${file}`);
-        }
-      }
-      if (
-        (ts.isPropertyAccessExpression(node) &&
-          node.name.text === "callServerTool") ||
-        (ts.isElementAccessExpression(node) &&
-          ts.isStringLiteral(node.argumentExpression) &&
-          node.argumentExpression.text === "callServerTool") ||
-        (ts.isBindingElement(node) &&
-          (node.propertyName?.getText(source) ?? node.name.getText(source)) ===
-            "callServerTool")
+        (node.type === "MemberExpression" &&
+          (node.computed
+            ? stringLiteralText(node.property) === "callServerTool"
+            : node.property.type === "Identifier" &&
+              node.property.name === "callServerTool")) ||
+        bindsCallServerTool(node, ancestors)
       ) {
         issues.push(`App calls require the shared bridge: ${file}`);
       }
-      ts.forEachChild(node, visit);
-    };
-    visit(source);
+    });
   }
   return issues;
 };

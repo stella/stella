@@ -14,9 +14,9 @@ import { CORPUS_INDEX_RANKING_MODES } from "@/api/lib/legal-search/corpus-rankin
 import {
   CORPUS_CURSOR_GROUP_TOKEN_CHARS,
   CORPUS_READ_TARGET_IDENTITY_LENGTH,
+  type CorpusSearchCursor,
   decodeCorpusSearchCursor,
   encodeCorpusSearchCursor,
-  type CorpusSearchCursor,
 } from "@/api/lib/legal-search/corpus-search-cursor";
 import { SEARCH_SORTS } from "@/api/lib/legal-search/corpus-search-order";
 import { CORPUS_INDEX_GENERATION_MAX_LENGTH } from "@/api/lib/legal-search/index-naming";
@@ -144,6 +144,7 @@ const cursorFixtures: Readonly<Record<string, string>> = {
   "law.fetch.nextCursor": offsetCursor,
   "advanced.list_matters.nextCursor": idCursor,
   "advanced.search_across_matters.nextCursor": encodeGlobalSearchCursor({
+    tier: 2,
     score: SCORE,
     id: `case-law:${UUID}`,
     seen: GLOBAL_SEARCH_RESULT_LIMIT - 1,

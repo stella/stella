@@ -16,8 +16,8 @@ import {
   getRecentFilePreviewHit,
 } from "@/components/search-dialog.logic";
 import {
-  KIND_TRANSLATION_KEYS,
   EMPTY_SEARCH_PREVIEW_LOCATOR_CANDIDATES,
+  KIND_TRANSLATION_KEYS,
   SEARCH_PREVIEW_COLUMN_CLASS_NAME,
   SEARCH_PREVIEW_CONTENT_CLASS_NAME,
 } from "@/components/search-dialog.shared";

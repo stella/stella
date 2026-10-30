@@ -4,7 +4,9 @@ import { Script } from "node:vm";
 import * as v from "valibot";
 
 import { PILOT_ALWAYS, pilotFastJobs } from "./ci-pr-pilot-plan";
+import { renderResultInputs } from "./ci-result-inputs";
 import { evaluate } from "./github-expression";
+import { heavyProofJobs } from "./main-heavy-plan";
 
 const schema = v.object({
   jobs: v.record(
@@ -189,7 +191,12 @@ test("nonexistent calendar dates cannot certify fast coverage", async () => {
   }
 });
 
-const conditionContext = (profile: string, event: string, depth: string) => {
+const conditionContext = (
+  profile: string,
+  event: string,
+  depth: string,
+  { armed = false }: { armed?: boolean } = {},
+) => {
   const values: Record<string, string | boolean | string[]> = {
     "github.event_name": event,
     "github.event.action": "synchronize",
@@ -206,6 +213,12 @@ const conditionContext = (profile: string, event: string, depth: string) => {
     "needs.ci-plan.outputs.suite_depth": depth,
     "needs.ci-plan.outputs.queue_depth": "full",
     "needs.ci-plan.outputs.trusted": "true",
+    "needs.ci-plan.outputs.e2e_production_required": "true",
+    // A pull request runs the queue-only suites only once armed; a merge
+    // group here has no armed proof.
+    "needs.ci-plan.outputs.heavy_proof": String(
+      event !== "pull_request" || armed,
+    ),
   };
   for (const name of Object.keys(workflow.jobs)) {
     values[`needs.${name}.result`] = "success";
@@ -230,6 +243,9 @@ const conditionContext = (profile: string, event: string, depth: string) => {
   };
 };
 
+// Suites a pull request runs only once armed (the heavy_proof gate).
+const queueOnly = new Set(heavyProofJobs(workflow));
+
 const DECLARED_NORMAL_PLAN_CHANGES = new Set([
   "e2e-production-shard",
   "web-build",
@@ -242,9 +258,9 @@ const DECLARED_EVERY_DEPTH_CHANGES = new Set(["e2e-landing"]);
 // Jobs that became parts of one shared job: the part's steps, under the
 // shared job's condition, keep the job's former plan.
 const FOLDED_PARTS = new Map([
-  ["parser-version-guard", "ci-quick-checks"],
-  ["ci-checks-docs", "ci-quick-checks"],
-  ["dated-waiver-expiry", "ci-quick-checks"],
+  ["parser-version-guard", "pr-heavy-gate"],
+  ["ci-checks-docs", "pr-heavy-gate"],
+  ["dated-waiver-expiry", "pr-heavy-gate"],
 ]);
 const partSelected = (
   name: string,
@@ -258,14 +274,19 @@ const partSelected = (
     ...context,
     values: { ...context.values, "steps.install.outcome": "success" },
   };
-  const parts = (workflow.jobs[host]?.steps ?? []).filter((step) =>
+  const hosts = [host, "ci-quick-checks"];
+  const selectedHost = hosts.find(
+    (candidate) =>
+      evaluate(workflow.jobs[candidate]?.if ?? "true", installed) === true,
+  );
+  if (selectedHost === undefined) {
+    return false;
+  }
+  const parts = (workflow.jobs[selectedHost]?.steps ?? []).filter((step) =>
     step.name.startsWith(`${name}: `),
   );
   expect(parts.length, name).toBeGreaterThan(0);
-  return (
-    evaluate(workflow.jobs[host]?.if ?? "true", installed) === true &&
-    parts.every((step) => evaluate(step.if ?? "true", installed) === true)
-  );
+  return parts.every((step) => evaluate(step.if ?? "true", installed) === true);
 };
 
 test("off and unset preserve today's job plan across every event and depth", async () => {
@@ -277,9 +298,9 @@ test("off and unset preserve today's job plan across every event and depth", asy
         ),
         "postgres-service-suites",
         "generated-sources",
+        "ci-quick-checks",
         "code-quality-api-cancel",
         "code-quality-web-rest-cancel",
-
         "pr-heavy-gate",
       ]),
     ].toSorted(),
@@ -308,7 +329,20 @@ test("off and unset preserve today's job plan across every event and depth", asy
         const { outputs } = await decide({ variable, event, action });
         expect(outputs.get("coverage_profile")).toBe("normal-v1");
         for (const depth of ["fast", "full"]) {
-          const context = conditionContext("normal-v1", event, depth);
+          // The normal PR plan is the armed run's plan; an unarmed push
+          // leaves out exactly the queue-only suites.
+          const context = conditionContext("normal-v1", event, depth, {
+            armed: true,
+          });
+          if (event === "pull_request") {
+            const unarmed = conditionContext("normal-v1", event, depth);
+            for (const name of queueOnly) {
+              expect(
+                evaluate(workflow.jobs[name]?.if ?? "true", unarmed),
+                name,
+              ).toBe(false);
+            }
+          }
           for (const [name, job] of Object.entries(original.jobs)) {
             if (DECLARED_EVERY_DEPTH_CHANGES.has(name)) {
               const actual = evaluate(
@@ -317,7 +351,7 @@ test("off and unset preserve today's job plan across every event and depth", asy
               );
               const baseline = evaluate(
                 job.if ?? "true",
-                conditionContext("normal-v1", event, "full"),
+                conditionContext("normal-v1", event, "full", { armed: true }),
               );
               expect(actual, name).toBe(
                 event === "pull_request" ? true : baseline,
@@ -335,9 +369,15 @@ test("off and unset preserve today's job plan across every event and depth", asy
               );
               continue;
             }
-            expect(partSelected(name, context), name).toEqual(
-              evaluate(job.if ?? "true", context),
-            );
+            const planned = evaluate(job.if ?? "true", context);
+            // Arming adds the queue-only suites to the normal PR plan.
+            if (event === "pull_request" && queueOnly.has(name)) {
+              if (planned === true) {
+                expect(partSelected(name, context), name).toBe(true);
+              }
+              continue;
+            }
+            expect(partSelected(name, context), name).toEqual(planned);
           }
         }
       }
@@ -354,7 +394,9 @@ test("off and unset preserve today's job plan across every event and depth", asy
 test("Postgres PR execution follows explicit opt-in in either pilot profile", () => {
   for (const profile of ["normal-v1", "pilot-fast-v1"]) {
     for (const selection of ["", "off", "on"]) {
-      const context = conditionContext(profile, "pull_request", "fast");
+      const context = conditionContext(profile, "pull_request", "fast", {
+        armed: true,
+      });
       context.values["vars.CI_POSTGRES_PR_SELECTION"] = selection;
       context.values["needs.ci-plan.outputs.postgres_service_suites_required"] =
         String(selection === "on");
@@ -369,7 +411,9 @@ test("Postgres PR execution follows explicit opt-in in either pilot profile", ()
 });
 
 test("corpus-only PRs start only corpus service steps", () => {
-  const context = conditionContext("normal-v1", "pull_request", "fast");
+  const context = conditionContext("normal-v1", "pull_request", "fast", {
+    armed: true,
+  });
   for (const key of Object.keys(context.values)) {
     if (key.endsWith("_required")) {
       context.values[key] = "false";
@@ -408,8 +452,8 @@ test("docs-only PRs retain Markdown checks in every pilot coverage profile", () 
       .map(([name]) => name);
     expect(scheduled).toEqual([...PILOT_ALWAYS]);
     // The Markdown checks are a part of the always-run quick checks.
-    const docs = (workflow.jobs["ci-quick-checks"]?.steps ?? []).filter(
-      (step) => step.name.startsWith("ci-checks-docs: "),
+    const docs = (workflow.jobs["pr-heavy-gate"]?.steps ?? []).filter((step) =>
+      step.name.startsWith("ci-checks-docs: "),
     );
     expect(docs).toHaveLength(1);
     for (const step of docs) {
@@ -498,6 +542,11 @@ test("pilot pushes execute only the fast allowlist and its generated-input prere
     if (!allowed.includes(name)) {
       expect(evaluate(job.if ?? "true", context), name).toBe(false);
     }
+    // A pilot push is unarmed: the queue-only suites wait for arming.
+    if (queueOnly.has(name)) {
+      expect(evaluate(job.if ?? "true", context), name).toBe(false);
+      continue;
+    }
     if (
       allowed.includes(name) &&
       !name.endsWith("-cancel") &&
@@ -524,8 +573,13 @@ test("ready and auto-merge arm select exactly the normal PR plan", async () => {
     const { outputs } = await decide({ action });
     expect(outputs.get("coverage_profile")).toBe("normal-v1");
   }
-  const full = conditionContext("normal-v1", "pull_request", "fast");
-  const reference = conditionContext("normal-v1", "pull_request", "fast");
+  // Arming runs the queue-only suites with the normal PR plan.
+  const full = conditionContext("normal-v1", "pull_request", "fast", {
+    armed: true,
+  });
+  const reference = conditionContext("normal-v1", "pull_request", "fast", {
+    armed: true,
+  });
   for (const [name, job] of Object.entries(original.jobs)) {
     if (evaluate(job.if ?? "true", reference) === true) {
       expect(evaluate(workflow.jobs[name]?.if ?? "true", full), name).toBe(
@@ -608,24 +662,32 @@ test("pilot-fast aggregation requires its planned jobs and accepts deferred skip
     ]),
   );
   const aggregate = (needs: typeof successful) =>
-    Bun.spawnSync(["bash", "-c", run], {
-      env: {
-        ...process.env,
-        ...aggregation.env,
-        COVERAGE_PROFILE: "pilot-fast-v1",
-        PILOT_FAST_JOBS: JSON.stringify(selected),
-        NEEDS: JSON.stringify(needs),
-        PLAN: JSON.stringify(plan),
-        PLAN_RESULT: "success",
-        TRUSTED: "true",
-        EVENT: "pull_request",
-        SUITE_DEPTH: "fast",
-        QUEUE_DEPTH: "full",
-        QUEUE_VALIDATION: "false",
-        HEAVY_ONLY: "false",
-        RUN_REQUIRED: "true",
+    Bun.spawnSync(
+      [
+        "bash",
+        "-c",
+        renderResultInputs(run, {
+          needs: JSON.stringify(needs),
+          plan: JSON.stringify(plan),
+        }),
+      ],
+      {
+        env: {
+          ...process.env,
+          ...aggregation.env,
+          COVERAGE_PROFILE: "pilot-fast-v1",
+          PILOT_FAST_JOBS: JSON.stringify(selected),
+          PLAN_RESULT: "success",
+          TRUSTED: "true",
+          EVENT: "pull_request",
+          SUITE_DEPTH: "fast",
+          QUEUE_DEPTH: "full",
+          QUEUE_VALIDATION: "false",
+          HEAVY_ONLY: "false",
+          RUN_REQUIRED: "true",
+        },
       },
-    });
+    );
   // ci-result remains in the profile but is absent from its own dependency map.
   expect(successful).not.toHaveProperty("ci-result");
   const passed = aggregate(successful);

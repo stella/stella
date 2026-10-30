@@ -1,5 +1,6 @@
 import { render } from "@react-email/render";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
+import * as v from "valibot";
 
 import type { FeedbackReportInput } from "@stll/api-contract/feedback";
 import * as BetterAuthOTP from "@stll/transactional/emails/better-auth-otp";
@@ -15,7 +16,16 @@ import type { ReportExportEmailStatus } from "@stll/transactional/emails/report-
 import { subject as reportExportStatusSubject } from "@stll/transactional/emails/report-export-status-subject";
 
 import { env } from "@/api/env";
+import {
+  emailAddressSchema,
+  normalizeEmail,
+} from "@/api/lib/email/normalized-email";
+import { readRecipientRefusal } from "@/api/lib/email/recipient-deliverability";
 import type { SupportedLang } from "@/api/lib/locale";
+import { failureSink } from "@/api/lib/observability/failure";
+import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { isSyntheticPrincipal } from "@/api/lib/synthetic-principal/constants";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
 import { isEmailTransportConfigComplete } from "./config";
@@ -79,10 +89,55 @@ const resolveTransport = (): EmailTransport => {
   }
 };
 
+// A failed lookup sends anyway; it is observed, never fatal to the send.
+const deliverabilityUnread = failureSink({
+  event: "email.send.deliverability_unread",
+  expected: [],
+});
+
+/**
+ * Whether the provider has refused this recipient's account address, so a
+ * send would only be dropped. A failed read sends anyway: the provider still
+ * refuses what it must, and a sign-in code must not wait on this lookup.
+ */
+const isRefusedRecipient = async (to: string): Promise<boolean> => {
+  const address = v.safeParse(emailAddressSchema, to);
+  if (!address.success) {
+    return false;
+  }
+  const refusal = await Result.tryPromise(
+    async () => await readRecipientRefusal(normalizeEmail(address.output)),
+  );
+  if (refusal.isErr()) {
+    observeFailure(refusal.error, { sink: deliverabilityUnread });
+    return false;
+  }
+  if (refusal.value === undefined) {
+    return false;
+  }
+  logger.info("email.send.skipped_undeliverable", {
+    "user.id": refusal.value.userId,
+    "delivery.refusal_reason": refusal.value.reason,
+  });
+  return true;
+};
+
 let cachedTransport: EmailTransport | undefined;
+let deliveryTransport: EmailTransport | undefined;
 
 const getTransport = (): EmailTransport => {
-  cachedTransport ??= resolveTransport();
+  cachedTransport ??= {
+    send: async (message) => {
+      if (isSyntheticPrincipal({ email: message.to })) {
+        return;
+      }
+      if (await isRefusedRecipient(message.to)) {
+        return;
+      }
+      deliveryTransport ??= resolveTransport();
+      await deliveryTransport.send(message);
+    },
+  };
   return cachedTransport;
 };
 

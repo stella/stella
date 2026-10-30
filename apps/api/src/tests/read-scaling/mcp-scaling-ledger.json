@@ -1,0 +1,306 @@
+{
+  "unmeasuredReads": [
+    {
+      "id": "case_law_coverage",
+      "reason": "Requires a case_law_coverage fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "check_counterparty",
+      "reason": "Requires a check_counterparty fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "describe_capability",
+      "reason": "Requires a describe_capability fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "fetch",
+      "reason": "Requires a fetch fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "get_usage",
+      "reason": "Requires a get_usage fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "list_audit_log",
+      "reason": "Requires a list_audit_log fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "list_capabilities",
+      "reason": "Requires a list_capabilities fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "list_clauses",
+      "reason": "Requires a list_clauses fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "list_contacts",
+      "reason": "Requires a list_contacts fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "list_invoices",
+      "reason": "Requires a list_invoices fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "list_matters",
+      "reason": "Requires a list_matters fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "list_playbooks",
+      "reason": "Requires a list_playbooks fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "list_properties",
+      "reason": "Requires a list_properties fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "list_reader_annotations",
+      "reason": "Requires a list_reader_annotations fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "list_tasks",
+      "reason": "Requires a list_tasks fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "list_templates",
+      "reason": "Requires a list_templates fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "list_time_entries",
+      "reason": "Requires a list_time_entries fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "lookup_business_registry",
+      "reason": "Requires a lookup_business_registry fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "open_case_law_decision",
+      "reason": "Requires a open_case_law_decision fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "prepare_feedback",
+      "reason": "Requires a prepare_feedback fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "preview_cited_provision",
+      "reason": "Requires a preview_cited_provision fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "preview_template_conditions",
+      "reason": "Requires a preview_template_conditions fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "read_capability",
+      "reason": "Requires a read_capability fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "read_case_law_citations",
+      "reason": "Requires a read_case_law_citations fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "read_case_law_decision",
+      "reason": "Requires a read_case_law_decision fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "read_case_law_decision_blocks",
+      "reason": "Requires a read_case_law_decision_blocks fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "read_contact",
+      "reason": "Requires a read_contact fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "read_content_across_matters",
+      "reason": "Requires a read_content_across_matters fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "read_document",
+      "reason": "Requires a read_document fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "read_provision_history",
+      "reason": "Requires a read_provision_history fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "read_statute",
+      "reason": "Requires a read_statute fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "read_statute_provisions",
+      "reason": "Requires a read_statute_provisions fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "resolve_case_law_decision",
+      "reason": "Requires a resolve_case_law_decision fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "resolve_law_citation",
+      "reason": "Requires a resolve_law_citation fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "resolve_rate",
+      "reason": "Requires a resolve_rate fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "search",
+      "reason": "Requires a search fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "search_across_matters",
+      "reason": "Requires a search_across_matters fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "search_boe_legislation",
+      "reason": "Requires a search_boe_legislation fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "search_case_law",
+      "reason": "Requires a search_case_law fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "search_legislation",
+      "reason": "Requires a search_legislation fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    }
+  ],
+  "pendingWriteHarness": [
+    {
+      "id": "add_matter_member",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "compare_documents",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "configure_template_fields",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "create_reader_annotation",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "create_template",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "delete_clause",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "delete_contact",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "delete_document",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "delete_matter",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "delete_reader_annotation",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "delete_task",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "delete_time_entry",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "fill_template",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "link_matter_contact",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "open_document_version_upload",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "open_file_comparison",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "prepare_file_comparison",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "prepare_file_comparison_from_links",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "remove_matter_member",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "run_playbook",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "save_clause",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "save_contact",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "save_document",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "save_filled_template",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "save_matter",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "save_playbook",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "save_task",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "save_time_entry",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "set_field_value",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "set_practice_jurisdictions",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "submit_feedback",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "update_organization_settings",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "update_reader_annotation",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "upload_document_version",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "write_capability",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    }
+  ]
+}

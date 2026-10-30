@@ -1,5 +1,7 @@
 import { defineConfig } from "tsdown";
 
+import { resolvePackageBinary } from "../../scripts/resolve-package-binary.ts";
+
 export default defineConfig({
   // One output module per source module: the package.json export map names
   // each of them, and a consumer's bundler drops the ones it never imports.
@@ -12,7 +14,13 @@ export default defineConfig({
   unbundle: true,
   format: ["esm"],
   platform: "neutral",
-  dts: true,
+  // Many exports rely on inferred types, so tsrs emits the declarations.
+  dts: {
+    generator: "tsgo",
+    tsgo: {
+      path: resolvePackageBinary(import.meta.url, "tsrs"),
+    },
+  },
   outDir: "dist",
   clean: true,
   // The theme is shipped as source CSS, not compiled utilities: the consumer

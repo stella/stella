@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 
 import {
   classifyProp,
-  type PropSchema,
   generateRouteMap,
+  type PropSchema,
   RouteGenerationError,
 } from "./generate-route-map.js";
 import { generatedToolAnnotations as TOOL_ANNOTATIONS } from "./generated/tool-annotations.js";
@@ -79,6 +79,16 @@ const leafEntries = (
   walk(node, []);
   return entries;
 };
+
+test("capability list exposes free-text search", () => {
+  const tree = generateRouteMap(snapshotListings, TOOL_ANNOTATIONS);
+  const list = findLeaf(tree, ["capability", "list"]);
+
+  expect(flagFor(list ?? errorSpec(), "--query")).toMatchObject({
+    kind: "string",
+    required: false,
+  });
+});
 
 const flagFor = (spec: LeafCommandSpec, flag: string): FlagSpec | undefined =>
   spec.flags.find((f) => f.flag === flag);
@@ -317,6 +327,227 @@ describe("generateRouteMap: discriminator split (S2)", () => {
 });
 
 describe("generateRouteMap: flag mapping (S3)", () => {
+  test.each([true, false])(
+    "enum validation ignores a custom own every result: %s",
+    (answer) => {
+      const calls: string[] = [];
+      const values = Object.assign(["ready"], {
+        every: () => {
+          calls.push("own every");
+          return answer;
+        },
+      });
+      const classified = classifyProp("status", {
+        type: "string",
+        enum: values,
+      });
+      expect(calls).toEqual([]);
+      expect(classified).toEqual({
+        kind: "flag",
+        spec: {
+          flag: "--status",
+          prop: "status",
+          kind: "enum",
+          enum: ["ready"],
+          repeatable: false,
+        },
+      });
+      if (classified.kind !== "flag" || classified.spec.kind !== "enum") {
+        expect.unreachable("Expected an enum classification");
+      }
+      expect(classified.spec.enum).not.toBe(values);
+    },
+  );
+
+  test("a custom every cannot admit non-string enum entries", () => {
+    const calls: string[] = [];
+    const values = Object.assign([123], {
+      every: () => {
+        calls.push("own every");
+        return true;
+      },
+    });
+    expect(() =>
+      classifyProp("status", { type: "string", enum: values }),
+    ).toThrow(RouteGenerationError);
+    expect(calls).toEqual([]);
+  });
+
+  test("validated enum output copies the actual indexed read before a getter changes", () => {
+    const reads: string[] = [];
+    const values = ["ready", 123];
+    values.length = 1;
+    Object.defineProperty(values, "0", {
+      get: () => {
+        reads.push("read");
+        return reads.length === 1 ? "ready" : 123;
+      },
+    });
+    const classified = classifyProp("status", { type: "string", enum: values });
+    expect(classified).toEqual({
+      kind: "flag",
+      spec: {
+        flag: "--status",
+        prop: "status",
+        kind: "enum",
+        enum: ["ready"],
+        repeatable: false,
+      },
+    });
+    if (classified.kind !== "flag" || classified.spec.kind !== "enum") {
+      expect.unreachable("Expected an enum classification");
+    }
+    expect(classified.spec.enum).not.toBe(values);
+    expect(values.at(0)).toBe(123);
+    expect(classified.spec.enum).toEqual(["ready"]);
+  });
+
+  test("proxy indexed reads produce a stable validated string copy", () => {
+    const reads: string[] = [];
+    const values = new Proxy(["ready"], {
+      get: (target, key, receiver) => {
+        if (key === "0") {
+          reads.push("read");
+          return reads.length === 1 ? "ready" : 123;
+        }
+        return Reflect.get(target, key, receiver);
+      },
+    });
+    const classified = classifyProp("status", { type: "string", enum: values });
+    expect(classified).toEqual({
+      kind: "flag",
+      spec: {
+        flag: "--status",
+        prop: "status",
+        kind: "enum",
+        enum: ["ready"],
+        repeatable: false,
+      },
+    });
+    if (classified.kind !== "flag" || classified.spec.kind !== "enum") {
+      expect.unreachable("Expected an enum classification");
+    }
+    expect(classified.spec.enum).not.toBe(values);
+    expect(typeof values.at(0)).toBe("number");
+    expect(classified.spec.enum).toEqual(["ready"]);
+  });
+
+  test("invalid proxy entries surface the typed route generation error", () => {
+    const values = new Proxy(["ready"], {
+      get: (target, key, receiver) =>
+        key === "0" ? 123 : Reflect.get(target, key, receiver),
+    });
+    expect(() =>
+      classifyProp("status", { type: "string", enum: values }),
+    ).toThrow(RouteGenerationError);
+  });
+
+  test.each([null, "ready", [123], ["ready", false]])(
+    "invalid declared enum data fails with its typed error: %j",
+    (values) => {
+      expect(() =>
+        classifyProp("status", { type: "string", enum: values }),
+      ).toThrow(RouteGenerationError);
+    },
+  );
+
+  test("a custom iterator cannot substitute unchecked enum entries", () => {
+    const calls: string[] = [];
+    const values = ["ready"];
+    function* unchecked() {
+      calls.push("own iterator");
+      yield 123;
+    }
+    Object.defineProperty(values, Symbol.iterator, { value: unchecked });
+    const classified = classifyProp("status", { type: "string", enum: values });
+    expect(classified).toEqual({
+      kind: "flag",
+      spec: {
+        flag: "--status",
+        prop: "status",
+        kind: "enum",
+        enum: ["ready"],
+        repeatable: false,
+      },
+    });
+    if (classified.kind !== "flag" || classified.spec.kind !== "enum") {
+      expect.unreachable("Expected an enum classification");
+    }
+    expect(calls).toEqual([]);
+    expect([...classified.spec.enum]).toEqual(["ready"]);
+    expect(classified.spec.enum).not.toBe(values);
+  });
+
+  test("a changing literal-union getter cannot admit a non-string enum value", () => {
+    const reads: string[] = [];
+    const changing = {
+      get const() {
+        reads.push("read");
+        return reads.length === 1 ? "ready" : 123;
+      },
+    };
+    expect(() =>
+      classifyProp("status", {
+        type: "string",
+        anyOf: [changing, { const: "done" }],
+      }),
+    ).toThrow(RouteGenerationError);
+    expect(reads).toEqual(["read", "read"]);
+  });
+
+  test("literal-union validation preserves first-seen string deduplication", () => {
+    expect(
+      classifyProp("status", {
+        type: "string",
+        anyOf: [{ const: "ready" }, { const: "done" }, { const: "ready" }],
+      }),
+    ).toEqual({
+      kind: "flag",
+      spec: {
+        flag: "--status",
+        prop: "status",
+        kind: "enum",
+        enum: ["ready", "done"],
+        repeatable: false,
+      },
+    });
+  });
+
+  test("validated literal-union strings remain stable after their getter changes", () => {
+    const reads: string[] = [];
+    const changing = {
+      get const() {
+        reads.push("read");
+        if (reads.length === 1) {
+          return "checked";
+        }
+        if (reads.length === 2) {
+          return "copied";
+        }
+        return 123;
+      },
+    };
+    const classified = classifyProp("status", {
+      type: "string",
+      anyOf: [changing, { const: "done" }],
+    });
+    expect(classified).toEqual({
+      kind: "flag",
+      spec: {
+        flag: "--status",
+        prop: "status",
+        kind: "enum",
+        enum: ["copied", "done"],
+        repeatable: false,
+      },
+    });
+    if (classified.kind !== "flag" || classified.spec.kind !== "enum") {
+      expect.unreachable("Expected an enum classification");
+    }
+    expect(changing.const).toBe(123);
+    expect(classified.spec.enum).toEqual(["copied", "done"]);
+  });
+
   test("finite string literal unions produce enum flags", () => {
     const schema = {
       anyOf: [
@@ -332,6 +563,22 @@ describe("generateRouteMap: flag mapping (S3)", () => {
         prop: "kind",
         kind: "enum",
         enum: ["search", "decision", "statute"],
+        repeatable: false,
+      },
+    });
+  });
+
+  test("string literal unions without a stated type produce enum flags", () => {
+    const schema = {
+      anyOf: [{ const: "draft" }, { const: "approved" }],
+    } as const satisfies PropSchema;
+    expect(classifyProp("status", schema)).toEqual({
+      kind: "flag",
+      spec: {
+        flag: "--status",
+        prop: "status",
+        kind: "enum",
+        enum: ["draft", "approved"],
         repeatable: false,
       },
     });

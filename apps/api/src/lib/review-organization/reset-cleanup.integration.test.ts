@@ -1,11 +1,4 @@
-import {
-  afterAll,
-  beforeAll,
-  describe,
-  expect,
-  setDefaultTimeout,
-  test,
-} from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray, TransactionRollbackError } from "drizzle-orm";
 
 import {
@@ -20,9 +13,11 @@ import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import {
   flowDefinitions,
-  scoutRuns,
-  SIGNAL_EVENT_TYPE,
+  reviewResetOrganizations,
   SCOUT_RUN_STATUS,
+  scoutRuns,
+  sellerProfiles,
+  SIGNAL_EVENT_TYPE,
   signalEvents,
   signals,
   systemAuditRuns,
@@ -43,8 +38,6 @@ import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
-
-setDefaultTimeout(120_000);
 
 let testDb: TestDatabase;
 const organizationIds: SafeId<"organization">[] = [];
@@ -97,6 +90,13 @@ afterAll(async () => {
     }
     if (organizationIds.length > 0) {
       await testDb
+        .delete(reviewResetOrganizations)
+        .where(
+          inArray(reviewResetOrganizations.organizationId, organizationIds),
+        );
+    }
+    if (organizationIds.length > 0) {
+      await testDb
         .delete(organization)
         .where(inArray(organization.id, organizationIds));
     }
@@ -119,6 +119,13 @@ const seedOrganization = async () => {
     name: "Reset cleanup fixture",
     slug: `reset-cleanup-${organizationId}`,
     createdAt: new Date(),
+  });
+  await testDb.insert(reviewResetOrganizations).values({ organizationId });
+  await testDb.insert(sellerProfiles).values({
+    id: createSafeId<"sellerProfile">(),
+    organizationId,
+    legalName: "Reset fixture seller",
+    defaultCurrency: "EUR",
   });
   await testDb.insert(flowDefinitions).values(
     Array.from({ length: SEEDED_COUNTS.flow_definitions }, () => ({
@@ -300,6 +307,13 @@ describe("feature reset cleanup audit transactions", () => {
       expect(removed.has(table)).toBe(false);
     }
     expect(await featureCounts(organizationId)).toEqual(EMPTY_COUNTS);
+    expect(removed.get("seller_profiles")).toBe(1);
+    expect(
+      await testDb.$count(
+        sellerProfiles,
+        eq(sellerProfiles.organizationId, organizationId),
+      ),
+    ).toBe(0);
     const recorded = await auditRows(subject);
     expect(recorded).toHaveLength(EXPECTED_AUDITS.length);
     expect(recorded).toEqual(expect.arrayContaining(EXPECTED_AUDITS));

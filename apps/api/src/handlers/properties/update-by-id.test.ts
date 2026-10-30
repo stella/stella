@@ -1,17 +1,33 @@
 import { describe, expect, test } from "bun:test";
 
 import type { PropertyContent, PropertyTool } from "@/api/db/schema-validators";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { auditEventChanges } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { DOCUMENT_TYPE_CLASSIFIER_ROLE } from "@/api/lib/properties/create-schema";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+import { createScopedDbMock as createBaseScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import updateProperty from "./update";
 
 type UpdatePropertyCtx = Parameters<typeof updateProperty.handler>[0];
+
+const fileProperty = {
+  id: toSafeId<"property">("file_fixture"),
+  name: "Documents",
+  content: { version: 1 as const, type: "file" as const },
+  tool: { version: 1 as const, type: "manual-input" as const },
+  role: null,
+  dependencies: [],
+};
+
+const createScopedDbMock = (tx: Parameters<typeof createBaseScopedDbMock>[0]) =>
+  createBaseScopedDbMock({
+    insert: () => ({ values: async () => undefined }),
+    ...(typeof tx === "object" && tx !== null ? tx : {}),
+  });
 
 const createContext = ({
   body,
@@ -27,10 +43,11 @@ const createContext = ({
   asTestRaw<UpdatePropertyCtx>({
     body,
     request: new Request(
-      "https://example.test/v1/properties/workspace_test/property_test",
+      "https://example.test/v1/properties/workspace_test/property/property_test",
       { method: "POST" },
     ),
-    route: "/v1/properties/:workspaceId/:propertyId",
+    route:
+      "/v1/properties/:workspaceId/property/:propertyId" satisfies ApiRoutePath,
     safeDb,
     scopedDb,
     params: { propertyId: toSafeId<"property">("property_test") },
@@ -218,6 +235,66 @@ describe("updateProperty", () => {
     });
   });
 
+  test("keeps an unchanged AI column fresh after resolving its implicit input", async () => {
+    const fileId = fileProperty.id;
+    const content = { version: 1, type: "text" } satisfies PropertyContent;
+    const storedTool = {
+      version: 1,
+      type: "ai-model",
+      prompt: "Summarize\n",
+    } satisfies PropertyTool;
+    const oldDependencies = [{ dependsOnPropertyId: fileId, condition: null }];
+    let updatePatch: unknown;
+    const { safeDb, scopedDb } = createScopedDbMock({
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            for: async () => [
+              {
+                id: toSafeId<"property">("property_test"),
+                name: "Summary",
+                content,
+                tool: storedTool,
+                role: null,
+                status: "fresh",
+                playbookSourceId: null,
+              },
+            ],
+          }),
+        }),
+      }),
+      query: {
+        propertyDependencies: { findMany: async () => oldDependencies },
+        properties: {
+          findMany: async () => [fileProperty],
+        },
+      },
+      update: () => ({
+        set: (patch: unknown) => {
+          updatePatch = patch;
+          return { where: async () => undefined };
+        },
+      }),
+      delete: () => ({ where: async () => undefined }),
+      insert: () => ({ values: async () => undefined }),
+    });
+
+    expect(
+      await updateProperty.handler(
+        createContext({
+          safeDb,
+          scopedDb,
+          body: {
+            name: "Summary",
+            content,
+            tool: { ...storedTool, prompt: "Summarize", dependencies: [] },
+          },
+        }),
+      ),
+    ).toEqual({});
+    expect(updatePatch).toMatchObject({ status: "fresh" });
+  });
+
   test("rejects updates that would create a second document type classifier", async () => {
     let updateCalled = false;
     const { safeDb, scopedDb } = createScopedDbMock({
@@ -242,6 +319,7 @@ describe("updateProperty", () => {
         propertyDependencies: { findMany: async () => [] },
         properties: {
           findMany: async () => [
+            fileProperty,
             {
               id: toSafeId<"property">("property_test"),
               name: "Document Type",
@@ -335,6 +413,7 @@ describe("updateProperty", () => {
         propertyDependencies: { findMany: async () => [] },
         properties: {
           findMany: async () => [
+            fileProperty,
             {
               id: toSafeId<"property">("property_test"),
               name: "Type de document",
@@ -411,6 +490,7 @@ describe("updateProperty", () => {
         propertyDependencies: { findMany: async () => [] },
         properties: {
           findMany: async () => [
+            fileProperty,
             {
               id: toSafeId<"property">("property_test"),
               name: "Document Type",
@@ -485,6 +565,7 @@ describe("updateProperty", () => {
         propertyDependencies: { findMany: async () => [] },
         properties: {
           findMany: async () => [
+            fileProperty,
             {
               id: toSafeId<"property">("property_legacy"),
               name: "Document Type",
@@ -567,6 +648,7 @@ describe("updateProperty", () => {
         propertyDependencies: { findMany: async () => [] },
         properties: {
           findMany: async () => [
+            fileProperty,
             {
               id: toSafeId<"property">("property_legacy"),
               name: "Document Type",
@@ -643,6 +725,7 @@ describe("updateProperty", () => {
         propertyDependencies: { findMany: async () => [] },
         properties: {
           findMany: async () => [
+            fileProperty,
             {
               id: toSafeId<"property">("property_test"),
               name: "Type de document",

@@ -9,19 +9,19 @@ import {
 
 import { RegistryError } from "../shared/errors.js";
 import {
-  expectRegistryResponses,
-  registryString,
-  registryExtras,
-  forEachRegistryMutation,
-  expectRegistryOutcome,
   expectNullableString,
+  expectRegistryOutcome,
+  expectRegistryResponses,
+  forEachRegistryMutation,
+  registryExtras,
+  registryString,
 } from "../shared/property-test-helpers.test.js";
 import { lookupByIco, searchByName } from "./client.js";
 import {
+  entityUrl,
   parseAddress,
   parseEntity,
   parseSearchHit,
-  entityUrl,
 } from "./parse.js";
 import type { RpoRawAddress, RpoRawEntity } from "./types.js";
 

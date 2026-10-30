@@ -136,6 +136,7 @@ const defaultDeriveAskGenerate: DeriveAskGenerate = async (input) => {
 
   try {
     return await generateTanStackObjectForTask({
+      userId: admission.userId,
       dataClass: "customer",
       task: DERIVE_ASK_TASK,
       orgAIConfig,
@@ -154,7 +155,7 @@ const defaultDeriveAskGenerate: DeriveAskGenerate = async (input) => {
       serviceTier: "standard",
       system,
       prompt,
-      abortSignal: AbortSignal.timeout(DERIVE_ASK_TIMEOUT_MS),
+      deadlineMs: DERIVE_ASK_TIMEOUT_MS,
       outputSchema: deriveAskSchema,
     });
   } catch (error) {
@@ -170,9 +171,9 @@ export type DeriveAutoAsksDeps = {
   admitModelAction: ModelActionAdmitter;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
-  managedAIResidency: ManagedAIResidency;
+  managedAIResidency: ManagedAIResidency | null;
   orgAIConfigStatus: OrgAIConfigStatus;
-  promptCachingEnabled: boolean;
+  promptCachingEnabled: boolean | null;
   // Test seam; defaults to the real structured-output call.
   generate?: DeriveAskGenerate;
 };
@@ -191,7 +192,10 @@ const needsDerivation = (
 
 type DeriveOneOptions = {
   admission: ModelDispatchAdmission;
-  deps: DeriveAutoAsksDeps;
+  deps: DeriveAutoAsksDeps & {
+    managedAIResidency: ManagedAIResidency;
+    promptCachingEnabled: boolean;
+  };
   generate: DeriveAskGenerate;
   position: TierStandardPosition;
   rulesHash: string;
@@ -279,7 +283,11 @@ export const deriveAutoAsks = async (
   // be metered there. Make no call instead, and persist as a failed derivation
   // does (`derived` absent, dropping any stale value), so the save is kept and
   // the next one derives once the config is usable.
-  if (deps.orgAIConfigStatus !== ORG_AI_CONFIG_STATUS.ok) {
+  if (
+    deps.orgAIConfigStatus !== ORG_AI_CONFIG_STATUS.ok ||
+    deps.managedAIResidency === null ||
+    deps.promptCachingEnabled === null
+  ) {
     logger.warn("Playbook auto-ASK derivation skipped: AI config unusable", {
       organization_id: deps.organizationId,
       feature: "playbook.derive-ask",
@@ -291,6 +299,11 @@ export const deriveAutoAsks = async (
     return { version: 3, items };
   }
 
+  const readyDeps = {
+    ...deps,
+    managedAIResidency: deps.managedAIResidency,
+    promptCachingEnabled: deps.promptCachingEnabled,
+  };
   const admitted = await deps.admitModelAction(async ({ admission }) => {
     for (const chunk of chunkItems(pending, DERIVE_ASK_CONCURRENCY)) {
       const derived = await Promise.all(
@@ -298,7 +311,7 @@ export const deriveAutoAsks = async (
           index,
           position: await deriveOne({
             admission,
-            deps,
+            deps: readyDeps,
             generate,
             position,
             rulesHash: hash,

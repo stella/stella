@@ -10,7 +10,6 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { flowOwnedEntityVisibilitySql } from "@/api/lib/flows/visibility";
 import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
 import { includes } from "@/api/lib/type-guards";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import type { InternalToolErrorResult } from "@/api/mcp/tool-types";
 import {
@@ -18,6 +17,7 @@ import {
   errorResult,
   notFoundResult,
 } from "@/api/mcp/tool-utils";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 
 /** Kinds surfaced by list_documents; tasks/messages/links are other tools. */
 export const LISTABLE_ENTITY_KINDS = ["document", "folder"] as const;
@@ -53,7 +53,7 @@ export const resolveEntityWorkspace = async ({
   context,
   entityId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   entityId: SafeId<"entity">;
 }): Promise<ResolvedDocumentEntity> => {
   if (context.accessibleWorkspaceIds.length === 0) {
@@ -119,7 +119,7 @@ export const resolveDocumentWriteTarget = async ({
   context,
   entityId: rawEntityId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   entityId: string;
 }): Promise<DocumentWriteTarget> => {
   if (!hasEffectiveAuthority(context, { entity: ["update"] })) {

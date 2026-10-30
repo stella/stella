@@ -1,18 +1,26 @@
 import { panic, Result } from "better-result";
 
 import type {
+  BuiltRealtimeEvent,
   DesktopEditSessionRealtimeEvent,
   OrganizationRealtimeEvent,
   UserRealtimeEvent,
   WorkspaceRealtimeEvent,
-  BuiltRealtimeEvent,
 } from "@stll/api-contract";
 import { SSE_HEARTBEAT_FRAME } from "@stll/api-contract/sse-heartbeat";
 
+import {
+  CACHE_CONTROL_HEADER,
+  SSE_CACHE_CONTROL,
+  SSE_MEDIA_TYPE,
+} from "@/api/http/cache";
+import { detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
 import { LIMITS } from "@/api/lib/limits";
+import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { createRedisClient } from "@/api/lib/redis-client";
 import {
   brandPersistedDesktopEditSessionId,
@@ -21,21 +29,13 @@ import {
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
 import {
-  CACHE_CONTROL_HEADER,
-  SSE_CACHE_CONTROL,
-  SSE_MEDIA_TYPE,
-} from "@/api/lib/security-headers";
-import {
+  defaultSseBroadcastPublisher,
   INSTANCE_ID,
   parseRedisPayload,
-  publishOrganizationEvent,
-  publishSessionEvent,
-  publishUserAccessRevoked,
-  publishUserEvent,
-  publishWorkspaceAccessRevoked,
-  publishWorkspaceEvent,
   REDIS_CHANNEL,
+  type SseBroadcastPublisher,
 } from "@/api/lib/sse-broadcast";
+import { requireSessionCredentialIssuer } from "@/api/lib/synthetic-principal/credential-policy";
 
 /** Keep-alive interval in milliseconds (20 seconds). */
 const KEEP_ALIVE_INTERVAL_MS = 20_000;
@@ -43,28 +43,31 @@ const KEEP_ALIVE_INTERVAL_MS = 20_000;
 type SSEConnection = {
   controller: ReadableStreamDefaultController;
   organizationId: SafeId<"organization">;
+  sessionId: string;
   userId: SafeId<"user">;
 };
 
 type WorkspaceConnectionAuthorizationLookup = {
-  userIds: readonly SafeId<"user">[];
+  connections: readonly Pick<
+    SSEConnection,
+    "organizationId" | "sessionId" | "userId"
+  >[];
   workspaceId: SafeId<"workspace">;
+  event: WorkspaceRealtimeEvent;
+};
+
+type WorkspaceEventDelivery =
+  { type: "deliver"; event: WorkspaceRealtimeEvent } | { type: "hidden" };
+
+type WorkspaceConnectionAuthorization = {
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+  delivery: WorkspaceEventDelivery;
 };
 
 type WorkspaceConnectionAuthorizer = (
   lookup: WorkspaceConnectionAuthorizationLookup,
-) => Promise<ReadonlySet<SafeId<"user">>>;
-
-type WorkspaceEventDeliveryAuthorizer = (lookup: {
-  organizationId: SafeId<"organization">;
-  workspaceId: SafeId<"workspace">;
-  userIds: readonly SafeId<"user">[];
-  event: WorkspaceRealtimeEvent;
-  deliver: (
-    userIds: ReadonlySet<SafeId<"user">>,
-    event: WorkspaceRealtimeEvent,
-  ) => void;
-}) => Promise<void>;
+) => Promise<ReadonlyMap<string, WorkspaceConnectionAuthorization>>;
 
 /**
  * Whether one user still holds an active membership in the organization their
@@ -74,15 +77,14 @@ type WorkspaceEventDeliveryAuthorizer = (lookup: {
  */
 type UserConnectionAuthorizer = (lookup: {
   organizationId: SafeId<"organization">;
+  sessionIds: readonly string[];
   userId: SafeId<"user">;
-}) => Promise<boolean>;
+}) => Promise<ReadonlySet<string>>;
 
 /** Workspace ID → connected SSE streams on THIS instance. */
 const connections = new Map<SafeId<"workspace">, Set<SSEConnection>>();
 const workspaceDeliveryTails = new Map<SafeId<"workspace">, Promise<void>>();
 let authorizeWorkspaceConnections: WorkspaceConnectionAuthorizer | null = null;
-let authorizeWorkspaceEventDelivery: WorkspaceEventDeliveryAuthorizer | null =
-  null;
 
 /**
  * One user-channel stream. It carries the organization it was opened for so a
@@ -93,6 +95,7 @@ let authorizeWorkspaceEventDelivery: WorkspaceEventDeliveryAuthorizer | null =
 type UserSSEConnection = {
   controller: ReadableStreamDefaultController;
   organizationId: SafeId<"organization">;
+  sessionId: string;
 };
 
 /** User ID → that user's connected streams on THIS instance. */
@@ -158,6 +161,127 @@ export const isEventStreamResponse = (response: Response): boolean =>
     ?.trim()
     .toLowerCase() === SSE_MEDIA_TYPE;
 
+// ── Stream bindings ─────────────────────────────────────
+//
+// An event stream outlives the request that authorized it, so its credential
+// can end while it still delivers: a session signed out elsewhere, revoked
+// from the account page, or expired. Every event stream is served bound to
+// the credential that opened it, and a sweep ends each one whose credential
+// no longer holds, exactly as if its client had disconnected. The sweep reads
+// the credential's live state, never a cached copy, so a stream never
+// outlives its credential by more than one interval
+// (`LIMITS.sseCredentialRecheckMs`), on any path a credential can end.
+
+const SESSION_LIVENESS_READ_FAILURE_SINK = failureSink({
+  event: "sse.session_liveness_read_failed",
+  expected: [],
+});
+const CREDENTIAL_REVALIDATION_FAILURE_SINK = failureSink({
+  event: "sse.credential_revalidation_failed",
+  expected: [],
+});
+const BOUND_STREAM_CANCEL_FAILURE_SINK = failureSink({
+  event: "sse.bound_stream_cancel_failed",
+  expected: [],
+});
+
+/** What authorized an event stream. */
+export type SseStreamBinding =
+  /** A session: the stream ends once the session is gone or expired. */
+  | { kind: "session"; sessionId: string; userId: SafeId<"user"> }
+  /**
+   * Any other credential. `revalidate` repeats the credential's own check and
+   * resolves `false` once it no longer holds; a rejection means the check
+   * could not run, and the stream waits for the next sweep.
+   */
+  | { kind: "credential"; revalidate: () => Promise<boolean> };
+
+type SseSessionBinding = Extract<SseStreamBinding, { kind: "session" }>;
+
+/**
+ * The binding for a member handler's stream: the browser session that asked,
+ * or the credential an app's access token carries in its place. Stream
+ * handlers are MCP-internal, so a caller without either (MCP) never reaches
+ * one; arriving here without one is a wiring error.
+ */
+export const memberSessionStreamBinding = ({
+  session,
+  user,
+}: {
+  session: { readonly id: string | null; readonly stream?: SseStreamBinding };
+  user: { readonly id: SafeId<"user"> };
+}): SseStreamBinding => {
+  if (session.stream !== undefined) {
+    return session.stream;
+  }
+  return session.id === null
+    ? panic("An event stream opened for a caller without a browser session")
+    : { kind: "session", sessionId: session.id, userId: user.id };
+};
+
+/** The ids among `sessions` whose session exists, belongs to that user and
+ *  has not expired. */
+export type SseSessionLivenessReader = (
+  sessions: readonly Omit<SseSessionBinding, "kind">[],
+) => Promise<ReadonlySet<string>>;
+
+type BoundStream = { binding: SseStreamBinding; end: () => void };
+
+/** Every event stream open on THIS instance, with what authorized it. */
+const boundStreams = new Set<BoundStream>();
+
+/**
+ * End every bound stream whose credential no longer holds. All sessions are
+ * read in one call, whatever the number of streams; a read or a
+ * revalidation that fails ends nothing, and the next sweep asks again.
+ */
+export const sweepBoundStreams = async (
+  readLiveSessions: SseSessionLivenessReader,
+): Promise<void> => {
+  const streams = [...boundStreams];
+  const sessions = new Map<string, Omit<SseSessionBinding, "kind">>();
+  for (const { binding } of streams) {
+    if (binding.kind === "session") {
+      sessions.set(binding.sessionId, {
+        sessionId: binding.sessionId,
+        userId: binding.userId,
+      });
+    }
+  }
+  const live =
+    sessions.size === 0
+      ? Result.ok(new Set<string>())
+      : await Result.tryPromise(
+          async () => await readLiveSessions([...sessions.values()]),
+        );
+  if (Result.isError(live)) {
+    observeFailure(live.error, { sink: SESSION_LIVENESS_READ_FAILURE_SINK });
+  }
+  await Promise.all(
+    streams.map(async ({ binding, end }) => {
+      if (binding.kind === "session") {
+        if (Result.isOk(live) && !live.value.has(binding.sessionId)) {
+          end();
+        }
+        return;
+      }
+      const held = await Result.tryPromise(binding.revalidate);
+      if (Result.isError(held)) {
+        observeFailure(held.error, {
+          sink: CREDENTIAL_REVALIDATION_FAILURE_SINK,
+        });
+        return;
+      }
+      if (!held.value) {
+        end();
+      }
+    }),
+  );
+};
+
+/** The reason a bound stream's producer is cancelled with. */
+const CREDENTIAL_ENDED = "The credential that opened this stream has ended.";
+
 type HeartbeatState = "closed" | "open";
 
 /**
@@ -170,10 +294,12 @@ const takeStreamReaderOwnership = <T>(body: ReadableStream<T>) =>
 
 const withHeartbeatFrames = (
   source: ReadableStream<Uint8Array>,
+  binding: SseStreamBinding,
 ): ReadableStream<Uint8Array> => {
   const reader = takeStreamReaderOwnership(source);
   let state: HeartbeatState = "open";
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let bound: BoundStream | undefined;
 
   const disarm = (): void => {
     if (timer !== undefined) {
@@ -184,6 +310,9 @@ const withHeartbeatFrames = (
   const closeHeartbeat = (): void => {
     state = "closed";
     disarm();
+    if (bound !== undefined) {
+      boundStreams.delete(bound);
+    }
   };
   // Armed from the last byte written, not on a fixed schedule: a stream that is
   // producing already keeps the connection busy and must not be padded.
@@ -204,6 +333,23 @@ const withHeartbeatFrames = (
   return new ReadableStream<Uint8Array>({
     start: (controller) => {
       arm(controller);
+      // Ending for the credential is the client leaving: the producer is
+      // cancelled as on a disconnect (the chat viewer detaches, the turn runs
+      // on), and the reader sees the stream end.
+      bound = {
+        binding,
+        end: () => {
+          if (state === "closed") {
+            return;
+          }
+          closeHeartbeat();
+          closeControllerQuietly(controller);
+          reader.cancel(CREDENTIAL_ENDED).catch((error: unknown) => {
+            observeFailure(error, { sink: BOUND_STREAM_CANCEL_FAILURE_SINK });
+          });
+        },
+      };
+      boundStreams.add(bound);
     },
     pull: async (controller) => {
       const result = await Result.tryPromise({
@@ -242,8 +388,11 @@ const withHeartbeatFrames = (
  * headers as well as the heartbeat, so an event stream cannot be served with a
  * cacheable or buffered one.
  */
-export const sseResponse = (body: ReadableStream<Uint8Array>): Response =>
-  new Response(withHeartbeatFrames(body), { headers: SSE_HEADERS });
+export const sseResponse = (
+  body: ReadableStream<Uint8Array>,
+  binding: SseStreamBinding,
+): Response =>
+  new Response(withHeartbeatFrames(body, binding), { headers: SSE_HEADERS });
 
 /**
  * Add the heartbeat to an event-stream `Response` built elsewhere: the chat
@@ -251,10 +400,13 @@ export const sseResponse = (body: ReadableStream<Uint8Array>): Response =>
  * and the MCP transport, which owns its own body. Status, status text, and
  * headers carry over untouched.
  */
-export const withSseHeartbeat = (response: Response): Response => {
+export const withSseHeartbeat = (
+  response: Response,
+  binding: SseStreamBinding,
+): Response => {
   const body =
     response.body ?? panic("Event-stream response was built without a body");
-  return new Response(withHeartbeatFrames(body), {
+  return new Response(withHeartbeatFrames(body, binding), {
     headers: response.headers,
     status: response.status,
     statusText: response.statusText,
@@ -307,6 +459,7 @@ const enqueueOrDrop = <TConnection extends StreamConnection>({
  */
 type SubscribeOptions = {
   organizationId: SafeId<"organization">;
+  sessionId: string;
   signal: AbortSignal;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace">;
@@ -314,10 +467,12 @@ type SubscribeOptions = {
 
 export const subscribe = ({
   organizationId,
+  sessionId,
   signal,
   userId,
   workspaceId,
 }: SubscribeOptions): ReadableStream<Uint8Array> => {
+  requireSessionCredentialIssuer("realtime", { userId, organizationId });
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
       // The request signal can already be aborted here: the async auth
@@ -333,7 +488,12 @@ export const subscribe = ({
         return;
       }
 
-      const conn: SSEConnection = { controller, organizationId, userId };
+      const conn: SSEConnection = {
+        controller,
+        organizationId,
+        sessionId,
+        userId,
+      };
 
       let set = connections.get(workspaceId);
       if (!set) {
@@ -359,6 +519,7 @@ export const subscribe = ({
 
 type SubscribeUserOptions = {
   organizationId: SafeId<"organization">;
+  sessionId: string;
   signal: AbortSignal;
   userId: SafeId<"user">;
 };
@@ -370,9 +531,11 @@ type SubscribeUserOptions = {
  */
 export const subscribeUser = ({
   organizationId,
+  sessionId,
   signal,
   userId,
 }: SubscribeUserOptions): ReadableStream<Uint8Array> => {
+  requireSessionCredentialIssuer("realtime", { userId, organizationId });
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
       // Same hazard as `subscribe`: the async auth macro awaits before this
@@ -383,7 +546,11 @@ export const subscribeUser = ({
         return;
       }
 
-      const conn: UserSSEConnection = { controller, organizationId };
+      const conn: UserSSEConnection = {
+        controller,
+        organizationId,
+        sessionId,
+      };
 
       let set = userConnections.get(userId);
       if (!set) {
@@ -484,11 +651,16 @@ const broadcastLocal = async (
     return;
   }
 
-  const userIds = [...new Set(targets.map((connection) => connection.userId))];
+  const boundConnections = targets.map((connection) => ({
+    organizationId: connection.organizationId,
+    sessionId: connection.sessionId,
+    userId: connection.userId,
+  }));
   // The raw failure is what the log names, so it is carried through
   // unwrapped; wrapping it would rename `error.type` in the sink.
   const reauthorized = await Result.tryPromise({
-    try: async () => await authorizer({ userIds, workspaceId }),
+    try: async () =>
+      await authorizer({ connections: boundConnections, workspaceId, event }),
     catch: (cause) => cause,
   });
   if (Result.isError(reauthorized)) {
@@ -503,51 +675,39 @@ const broadcastLocal = async (
     });
     return;
   }
-  const authorizedUserIds = reauthorized.value;
-
-  const recipients = new Map<SafeId<"organization">, Set<SafeId<"user">>>();
+  const authorizations = reauthorized.value;
+  const chunks = new Map<WorkspaceRealtimeEvent, Uint8Array>();
   for (const conn of targets) {
     if (!set.has(conn)) {
       continue;
     }
-    if (!authorizedUserIds.has(conn.userId)) {
+    const authorization = authorizations.get(conn.sessionId);
+    if (
+      authorization === undefined ||
+      authorization.organizationId !== conn.organizationId ||
+      authorization.userId !== conn.userId
+    ) {
       closeConnection(set, conn);
       continue;
     }
-    const users = recipients.get(conn.organizationId);
-    if (users) {
-      users.add(conn.userId);
-    } else {
-      recipients.set(conn.organizationId, new Set([conn.userId]));
+    const { delivery } = authorization;
+    switch (delivery.type) {
+      case "hidden":
+        continue;
+      case "deliver": {
+        let chunk = chunks.get(delivery.event);
+        if (chunk === undefined) {
+          chunk = formatSSE(delivery.event);
+          chunks.set(delivery.event, chunk);
+        }
+        enqueueOrDrop({ chunk, connection: conn, set });
+        break;
+      }
+      default:
+        delivery satisfies never;
+        panic("Workspace event delivery requires a disposition");
     }
   }
-
-  const deliveryAuthorizer =
-    authorizeWorkspaceEventDelivery ??
-    panic("Workspace SSE event authorizer is missing");
-  await Promise.all(
-    [...recipients].map(
-      async ([organizationId, users]) =>
-        await deliveryAuthorizer({
-          organizationId,
-          workspaceId,
-          userIds: [...users],
-          event,
-          deliver: (admittedUserIds, authorizedEvent) => {
-            const chunk = formatSSE(authorizedEvent);
-            for (const conn of targets) {
-              if (
-                set.has(conn) &&
-                conn.organizationId === organizationId &&
-                admittedUserIds.has(conn.userId)
-              ) {
-                enqueueOrDrop({ chunk, connection: conn, set });
-              }
-            }
-          },
-        }),
-    ),
-  );
 
   if (set.size === 0 && connections.get(workspaceId) === set) {
     connections.delete(workspaceId);
@@ -595,7 +755,12 @@ const broadcastLocalToUser = async (
   }
 
   const reauthorized = await Result.tryPromise({
-    try: async () => await authorizer({ organizationId, userId }),
+    try: async () =>
+      await authorizer({
+        organizationId,
+        sessionIds: targets.map((connection) => connection.sessionId),
+        userId,
+      }),
     catch: (cause) => cause,
   });
   if (Result.isError(reauthorized)) {
@@ -606,14 +771,14 @@ const broadcastLocalToUser = async (
     return;
   }
 
-  if (!reauthorized.value) {
-    closeTargets();
-    return;
-  }
-
   const chunk = formatSSE(event);
   for (const conn of targets) {
     if (!set.has(conn)) {
+      continue;
+    }
+    if (!reauthorized.value.has(conn.sessionId)) {
+      set.delete(conn);
+      closeControllerQuietly(conn.controller);
       continue;
     }
     enqueueOrDrop({ chunk, connection: conn, set });
@@ -818,15 +983,15 @@ export const revokeWorkspaceSseAccess = async (
   userId: SafeId<"user">,
 ): Promise<void> => {
   closeLocalWorkspaceUserConnections(workspaceId, userId);
-  const publishAccessRevoked =
-    activeLifecycle?.publishAccessRevoked ?? publishWorkspaceAccessRevoked;
-  await publishAccessRevoked(workspaceId, userId, {
-    originInstanceId: INSTANCE_ID,
-  }).catch((error: unknown) => {
-    logger.error("sse.access_revocation_publish_failed", {
-      "error.type": errorTag(error),
+  await activePublisher()
+    .publishWorkspaceAccessRevoked(workspaceId, userId, {
+      originInstanceId: INSTANCE_ID,
+    })
+    .catch((error: unknown) => {
+      logger.error("sse.access_revocation_publish_failed", {
+        "error.type": errorTag(error),
+      });
     });
-  });
 };
 
 /**
@@ -840,13 +1005,15 @@ export const revokeUserSseAccess = async (
   organizationId: SafeId<"organization">,
 ): Promise<void> => {
   closeLocalUserConnections(userId, organizationId);
-  await publishUserAccessRevoked(userId, organizationId, {
-    originInstanceId: INSTANCE_ID,
-  }).catch((error: unknown) => {
-    logger.error("sse.user_access_revocation_publish_failed", {
-      "error.type": errorTag(error),
+  await activePublisher()
+    .publishUserAccessRevoked(userId, organizationId, {
+      originInstanceId: INSTANCE_ID,
+    })
+    .catch((error: unknown) => {
+      logger.error("sse.user_access_revocation_publish_failed", {
+        "error.type": errorTag(error),
+      });
     });
-  });
 };
 
 /**
@@ -867,19 +1034,21 @@ export const broadcastToUser = (
     );
   }
 
-  publishUserEvent(userId, organizationId, event, {
-    originInstanceId: INSTANCE_ID,
-    deliveredInline: deliveredLocally,
-  }).catch((error: unknown) => {
-    logger.warn("sse.redis_publish_failed", {
-      "error.type": errorTag(error),
+  activePublisher()
+    .publishUserEvent(userId, organizationId, event, {
+      originInstanceId: INSTANCE_ID,
+      deliveredInline: deliveredLocally,
+    })
+    .catch((error: unknown) => {
+      logger.warn("sse.redis_publish_failed", {
+        "error.type": errorTag(error),
+      });
+      if (!deliveredLocally) {
+        queueUserDelivery(userId, async () =>
+          broadcastLocalToUser(userId, organizationId, event),
+        );
+      }
     });
-    if (!deliveredLocally) {
-      queueUserDelivery(userId, async () =>
-        broadcastLocalToUser(userId, organizationId, event),
-      );
-    }
-  });
 };
 
 /**
@@ -893,7 +1062,8 @@ export const broadcast = (
   {
     publishWorkspace: publishWorkspaceOverride,
   }: {
-    publishWorkspace?: typeof publishWorkspaceEvent | undefined;
+    publishWorkspace?:
+      SseBroadcastPublisher["publishWorkspaceEvent"] | undefined;
   } = {},
 ): void => {
   const event = builtEvent.toJSON();
@@ -917,9 +1087,7 @@ export const broadcast = (
   }
 
   const publishWorkspace =
-    publishWorkspaceOverride ??
-    activeLifecycle?.publishWorkspace ??
-    publishWorkspaceEvent;
+    publishWorkspaceOverride ?? activePublisher().publishWorkspaceEvent;
   publishWorkspace(workspaceId, builtEvent, {
     originInstanceId: INSTANCE_ID,
     deliveredInline: deliveredLocally,
@@ -947,17 +1115,19 @@ export const broadcastToOrganization = (
     broadcastLocalToOrganization(organizationId, event);
   }
 
-  publishOrganizationEvent(organizationId, event, {
-    originInstanceId: INSTANCE_ID,
-    deliveredInline: deliveredLocally,
-  }).catch((error: unknown) => {
-    logger.warn("sse.redis_publish_failed", {
-      "error.type": errorTag(error),
+  activePublisher()
+    .publishOrganizationEvent(organizationId, event, {
+      originInstanceId: INSTANCE_ID,
+      deliveredInline: deliveredLocally,
+    })
+    .catch((error: unknown) => {
+      logger.warn("sse.redis_publish_failed", {
+        "error.type": errorTag(error),
+      });
+      if (!deliveredLocally) {
+        broadcastLocalToOrganization(organizationId, event);
+      }
     });
-    if (!deliveredLocally) {
-      broadcastLocalToOrganization(organizationId, event);
-    }
-  });
 };
 
 // ── Desktop-edit session events ─────────────────────────
@@ -995,13 +1165,15 @@ export const broadcastSessionEvent = (
 ): void => {
   sessionDeliveryHandler?.(sessionId, event);
 
-  publishSessionEvent(sessionId, event, {
-    originInstanceId: INSTANCE_ID,
-  }).catch((error: unknown) => {
-    logger.warn("sse.redis_publish_failed", {
-      "error.type": errorTag(error),
+  activePublisher()
+    .publishSessionEvent(sessionId, event, {
+      originInstanceId: INSTANCE_ID,
+    })
+    .catch((error: unknown) => {
+      logger.warn("sse.redis_publish_failed", {
+        "error.type": errorTag(error),
+      });
     });
-  });
 };
 
 // ── Keep-alive heartbeat ────────────────────────────────
@@ -1049,7 +1221,7 @@ const closeLocalConnections = (): void => {
 // Importing this module must have no side effects: route-level realtime
 // producers pull it into many processes, so an eager Redis connection or timer
 // would fire for every process that imports the route tree, including the
-// exact-mirror schema guard and the test runner. `startSse`/`stopSse` make
+// route-table guards and the test runner. `startSse`/`stopSse` make
 // the keep-alive timer and the cross-instance Redis subscriber an explicit
 // lifecycle that only the server's boot/shutdown path drives, mirroring the
 // BullMQ `init*Worker` / `.close()` pairs in server.ts.
@@ -1073,22 +1245,24 @@ type CreateSseRedisClient = () => SseRedisClient;
  * close every connection on that channel's first event).
  */
 export type SseConnectionAuthorizers = {
+  /** Live session state for the bound-stream sweep. */
+  sessions: SseSessionLivenessReader;
   user: UserConnectionAuthorizer;
   workspace: WorkspaceConnectionAuthorizer;
-  workspaceEvent: WorkspaceEventDeliveryAuthorizer;
 };
 
 type StartSseDependencies = {
   createClient?: CreateSseRedisClient | undefined;
-  publishAccessRevoked?: typeof publishWorkspaceAccessRevoked | undefined;
-  publishWorkspace?: typeof publishWorkspaceEvent | undefined;
+  publisher?: SseBroadcastPublisher | undefined;
 };
 
 type SseLifecycle = {
   createClient: CreateSseRedisClient;
+  /** Runs `sweepBoundStreams` every `LIMITS.sseCredentialRecheckMs`. */
+  credentialSweepTimer: ReturnType<typeof setInterval>;
   keepAliveTimer: ReturnType<typeof setInterval>;
-  publishAccessRevoked: typeof publishWorkspaceAccessRevoked;
-  publishWorkspace: typeof publishWorkspaceEvent;
+  /** Every scope's cross-instance publish goes through this one publisher. */
+  publisher: SseBroadcastPublisher;
   subscriber: SseRedisClient | null;
   /**
    * Whether `subscriber` currently holds a live SUBSCRIBE on its present
@@ -1119,6 +1293,13 @@ type SseLifecycle = {
 };
 
 let activeLifecycle: SseLifecycle | null = null;
+
+/**
+ * The publisher the running lifecycle was started with, or the process-wide
+ * one before `startSse` (see the ordering note on `startSse`).
+ */
+const activePublisher = (): SseBroadcastPublisher =>
+  activeLifecycle?.publisher ?? defaultSseBroadcastPublisher;
 
 /**
  * Whether this instance currently has a live, subscribed Redis subscriber. Used
@@ -1358,26 +1539,44 @@ export const startSse = (
   dependencies: StartSseDependencies = {},
 ): void => {
   authorizeWorkspaceConnections = authorizers.workspace;
-  authorizeWorkspaceEventDelivery = authorizers.workspaceEvent;
   authorizeUserConnection = authorizers.user;
   if (activeLifecycle) {
     return;
   }
 
+  // Sweeps never overlap: a slow liveness read skips the next tick instead of
+  // stacking reads behind it.
+  let sweeping = false;
+  const sweepCredentials = (): void => {
+    if (sweeping) {
+      return;
+    }
+    sweeping = true;
+    detached(
+      sweepBoundStreams(authorizers.sessions).finally(() => {
+        sweeping = false;
+      }),
+      "sse.credential-sweep",
+    );
+  };
+
   const lifecycle: SseLifecycle = {
     createClient:
       dependencies.createClient ??
       (() => createRedisClient({ storeClass: "cache" })),
+    credentialSweepTimer: setInterval(
+      sweepCredentials,
+      LIMITS.sseCredentialRecheckMs,
+    ),
     keepAliveTimer: setInterval(sendKeepAlive, KEEP_ALIVE_INTERVAL_MS),
-    publishAccessRevoked:
-      dependencies.publishAccessRevoked ?? publishWorkspaceAccessRevoked,
-    publishWorkspace: dependencies.publishWorkspace ?? publishWorkspaceEvent,
+    publisher: dependencies.publisher ?? defaultSseBroadcastPublisher,
     subscriber: null,
     subscriptionLive: false,
     attachTimer: null,
     generation: 0,
   };
   lifecycle.keepAliveTimer.unref();
+  lifecycle.credentialSweepTimer.unref();
   activeLifecycle = lifecycle;
 
   // First attempt runs immediately; only retries are timer-scheduled.
@@ -1403,6 +1602,7 @@ export const stopSse = (): void => {
   activeLifecycle = null;
 
   clearInterval(lifecycle.keepAliveTimer);
+  clearInterval(lifecycle.credentialSweepTimer);
 
   if (lifecycle.attachTimer) {
     clearTimeout(lifecycle.attachTimer);

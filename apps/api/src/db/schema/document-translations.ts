@@ -20,6 +20,7 @@ import {
   entityFeatureGateColumns,
   entityFeatureWorkspaceGateColumns,
 } from "../entity-feature-gate-columns";
+import { registeredReviewResetPolicies } from "../review-reset-policies";
 import {
   jsonb,
   organization,
@@ -166,6 +167,8 @@ export const documentTranslationRuns = p.pgTable(
       ]),
     }),
     p.index("document_translation_runs_ef_entity_id_idx").on(table.entityId),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -236,5 +239,7 @@ export const documentTranslationUnits = p.pgTable(
         ],
       ]),
     }),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );

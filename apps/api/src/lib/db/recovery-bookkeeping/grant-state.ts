@@ -1,22 +1,17 @@
 import { panic } from "better-result";
-import { sql, type SQL } from "drizzle-orm";
+import { type SQL, sql } from "drizzle-orm";
 
 import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
 
-import type { ScopedTransaction } from "@/api/db/safe-db";
-import type {
-  documentProcessingRuns,
-  flowUploadTriggerIntents,
-  pendingScoutEmissions,
-} from "@/api/db/schema";
+import type { OrgScopedTransaction } from "@/api/db/org-scope";
+import { documentProcessingRuns } from "@/api/db/schema";
+import { DEADLINE_DISPATCH_RECOVERY } from "@/api/lib/db/recovery-bookkeeping/claims";
 import { transitionScopedCount } from "@/api/lib/db/transitions";
 import type { FlowUploadTriggerSkipReason } from "@/api/lib/flows/flow-types";
-import type { UPLOAD_TRIGGER_TRANSITIONS } from "@/api/lib/flows/upload-trigger-transitions";
+import { UPLOAD_TRIGGER_TRANSITIONS } from "@/api/lib/flows/upload-trigger-transitions";
 import { logger } from "@/api/lib/observability/logger";
-import type { DeadlineDispatchRecoverySpec } from "@/api/lib/scouts/document-deadline-recovery";
-import type { SCOUT_EMISSION_TRANSITIONS } from "@/api/lib/signals/scout-emission-transitions";
+import { SCOUT_EMISSION_TRANSITIONS } from "@/api/lib/signals/scout-emission-transitions";
 
-type GrantDb = Pick<ScopedTransaction, "execute" | "rollback">;
 type UploadMove =
   | { from: readonly ["pending", ..."pending"[]]; to: "awaiting_grant" }
   | {
@@ -60,9 +55,7 @@ type DeadlineMove =
 type GrantOperation =
   | {
       type: "upload";
-      tx: GrantDb;
-      table: typeof flowUploadTriggerIntents;
-      spec: typeof UPLOAD_TRIGGER_TRANSITIONS;
+      tx: OrgScopedTransaction;
       where: SQL;
       options: UploadMove;
       log: {
@@ -76,9 +69,7 @@ type GrantOperation =
     }
   | {
       type: "scout";
-      tx: GrantDb;
-      table: typeof pendingScoutEmissions;
-      spec: typeof SCOUT_EMISSION_TRANSITIONS;
+      tx: OrgScopedTransaction;
       where: SQL;
       options: ScoutMove;
       log: {
@@ -90,9 +81,7 @@ type GrantOperation =
     }
   | {
       type: "deadline";
-      tx: GrantDb;
-      table: typeof documentProcessingRuns;
-      spec: DeadlineDispatchRecoverySpec;
+      tx: OrgScopedTransaction;
       where: SQL;
       options: DeadlineMove;
       attemptRefund?: 0 | 1;
@@ -109,15 +98,13 @@ type GrantOperation =
 export const transitionRecoveryGrantState = async (
   op: GrantOperation,
 ): Promise<number> => {
+  const tx = op.tx.tx;
   // audit: skip — recoverable feature-admission parking and replay change only durable source bookkeeping, not feature effects. Pure recovery bookkeeping; no user/customer data or auth/permission change.
-  if (op.table !== op.spec.table) {
-    return panic("Recovery grant table and lifecycle disagree");
-  }
   switch (op.type) {
     case "upload":
       return await transitionScopedCount({
-        tx: op.tx,
-        spec: op.spec,
+        tx,
+        spec: UPLOAD_TRIGGER_TRANSITIONS,
         where: op.where,
         options: op.options,
         recordTransitionAuditEvent: (_tx, count) =>
@@ -128,8 +115,8 @@ export const transitionRecoveryGrantState = async (
       });
     case "scout":
       return await transitionScopedCount({
-        tx: op.tx,
-        spec: op.spec,
+        tx,
+        spec: SCOUT_EMISSION_TRANSITIONS,
         where: op.where,
         options: op.options,
         recordTransitionAuditEvent: (_tx, count) =>
@@ -137,8 +124,8 @@ export const transitionRecoveryGrantState = async (
       });
     case "deadline":
       return await transitionScopedCount({
-        tx: op.tx,
-        spec: op.spec,
+        tx,
+        spec: DEADLINE_DISPATCH_RECOVERY,
         where: op.where,
         options: {
           ...op.options,
@@ -148,7 +135,7 @@ export const transitionRecoveryGrantState = async (
               ? {
                   // Regrant removes admission parking while the budget deadline remains binding.
                   deadlineScoutErrorCode: sql`CASE
-                    WHEN ${op.table.deadlineScoutSkippedUntil} IS NOT NULL
+                    WHEN ${documentProcessingRuns.deadlineScoutSkippedUntil} IS NOT NULL
                     THEN ${ACTION_ADMISSION_CODES.periodExhausted}
                     ELSE ${op.options.set.deadlineScoutErrorCode}
                   END`,
@@ -157,7 +144,7 @@ export const transitionRecoveryGrantState = async (
             ...(op.attemptRefund === undefined
               ? {}
               : {
-                  deadlineScoutAttemptCount: sql`GREATEST(${op.table.deadlineScoutAttemptCount} - ${op.attemptRefund}, 0)`,
+                  deadlineScoutAttemptCount: sql`GREATEST(${documentProcessingRuns.deadlineScoutAttemptCount} - ${op.attemptRefund}, 0)`,
                 }),
           },
         },

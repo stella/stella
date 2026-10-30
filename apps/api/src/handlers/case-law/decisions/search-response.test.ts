@@ -1,7 +1,6 @@
-import { Value } from "@sinclair/typebox/value";
 import { expect, test } from "bun:test";
-import type { Static } from "elysia";
 import fc from "fast-check";
+import * as v from "valibot";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { DECISION_TYPE_KIND_OTHER } from "@stll/api-contract/case-law-decision-types";
@@ -19,7 +18,9 @@ import { responseByteBound } from "@/api/lib/search/response-byte-bound";
 import { projectCaseLawSearchResponse } from "./search-response";
 import { searchDecisionsSuccessResponseSchema } from "./search-schema";
 
-type SearchResponse = Static<typeof searchDecisionsSuccessResponseSchema>;
+type SearchResponse = v.InferOutput<
+  typeof searchDecisionsSuccessResponseSchema
+>;
 const responseWithText = (text: string): SearchResponse => {
   const bucket = { value: text, label: text, count: Number.MAX_SAFE_INTEGER };
   const hit = {
@@ -63,7 +64,9 @@ const responseWithText = (text: string): SearchResponse => {
     anchorId: text,
     citationCount: Number.MAX_VALUE,
     citationAuthority: -Number.MAX_VALUE,
+    textAvailability: "available",
     matchingPassages: Number.MAX_SAFE_INTEGER,
+    match: "all_terms",
     createdAt: text,
   } as const satisfies SearchResponse["hits"][number];
   return {
@@ -86,6 +89,7 @@ const responseWithText = (text: string): SearchResponse => {
       language: [bucket],
     },
     total: SEARCH_TOTAL_NOT_COUNTED,
+    relaxedHitCount: 0,
     nextCursor: text,
     paginationOutcome: SEARCH_PAGINATION_COMPLETE,
     pageReach: SEARCH_PAGE_REACH.REACHED,
@@ -114,9 +118,7 @@ test("case-law search envelopes bound Unicode and every nested collection", () =
       (parts) => {
         const text = parts.join("").repeat(20_000);
         const response = projectCaseLawSearchResponse(responseWithText(text));
-        expect(
-          Value.Check(searchDecisionsSuccessResponseSchema, response),
-        ).toBe(true);
+        expect(v.is(searchDecisionsSuccessResponseSchema, response)).toBe(true);
         expect(Buffer.byteLength(JSON.stringify(response))).toBeLessThanOrEqual(
           responseByteBound(searchDecisionsSuccessResponseSchema),
         );
@@ -159,9 +161,7 @@ test("case-law search caps a complete page envelope before serialization", () =>
     text: "😀".repeat(LIMITS.caseLawHeadnoteMaxChars),
     truncated: true,
   });
-  expect(Value.Check(searchDecisionsSuccessResponseSchema, response)).toBe(
-    true,
-  );
+  expect(v.is(searchDecisionsSuccessResponseSchema, response)).toBe(true);
   expect(Buffer.byteLength(JSON.stringify(response))).toBeLessThanOrEqual(
     responseByteBound(searchDecisionsSuccessResponseSchema),
   );
@@ -209,9 +209,7 @@ test.each([false, true])(
       },
     });
     expect(response.facets?.courtYear).toEqual(courtYear);
-    expect(Value.Check(searchDecisionsSuccessResponseSchema, response)).toBe(
-      true,
-    );
+    expect(v.is(searchDecisionsSuccessResponseSchema, response)).toBe(true);
   },
 );
 

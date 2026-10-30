@@ -1,7 +1,6 @@
 import { panic } from "better-result";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
 import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
-import type { MaybePromise } from "elysia";
 
 import type {
   EntityFeatureOwner,
@@ -32,6 +31,8 @@ import type {
   AuditAction,
   AuditResourceType,
 } from "../audit-log.constants";
+
+type MaybePromise<T> = T | Promise<T>;
 
 export { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "../audit-log.constants";
 export type { AuditAction, AuditResourceType } from "../audit-log.constants";
@@ -85,6 +86,7 @@ const metadataEntityId = (event: AuditEvent): string | null => {
 
 /** Every audit kind declares whether it has an owning entity or feature. */
 const AUDIT_OWNER_BY_RESOURCE_TYPE = {
+  mcp_web_handoff: sharedOwner,
   service_oauth_client: sharedOwner,
   legal_resolve: sharedOwner,
   audit_log: sharedOwner,
@@ -101,6 +103,8 @@ const AUDIT_OWNER_BY_RESOURCE_TYPE = {
   chat_file: sharedOwner,
   chat_message: sharedOwner,
   chat_thread: sharedOwner,
+  chat_tool_execution: sharedOwner,
+  chat_tool_grant: sharedOwner,
   clause: sharedOwner,
   clause_category: sharedOwner,
   clause_template_link: sharedOwner,
@@ -108,6 +112,7 @@ const AUDIT_OWNER_BY_RESOURCE_TYPE = {
   contact: sharedOwner,
   contact_directory: sharedOwner,
   correspondence: sharedOwner,
+  document_annotation: { type: "entity", resolve: metadataEntityId },
   document_type: sharedOwner,
   usage_allocation: sharedOwner,
   usage_entitlement: sharedOwner,
@@ -134,7 +139,9 @@ const AUDIT_OWNER_BY_RESOURCE_TYPE = {
   legal_list_generation: sharedOwner,
   legal_list_item: sharedOwner,
   legal_list_verification: sharedOwner,
+  mcp_connection: sharedOwner,
   mcp_gateway_tool: sharedOwner,
+  organization_access_state: sharedOwner,
   organization_settings: sharedOwner,
   pdf_signing_session: sharedOwner,
   playbook: sharedOwner,
@@ -403,8 +410,7 @@ const workspaceActivityCategory = (event: AuditEvent): AuditActivityCategory =>
     : "matter";
 
 type AuditActivityCategoryResolver =
-  | AuditActivityCategory
-  | ((event: AuditEvent) => AuditActivityCategory);
+  AuditActivityCategory | ((event: AuditEvent) => AuditActivityCategory);
 
 const AUDIT_ACTIVITY_CATEGORY_BY_RESOURCE_TYPE = {
   service_oauth_client: "team",
@@ -439,12 +445,15 @@ const AUDIT_ACTIVITY_CATEGORY_BY_RESOURCE_TYPE = {
   chat_file: "other",
   chat_message: "other",
   chat_thread: "other",
+  chat_tool_execution: "other",
+  chat_tool_grant: "other",
   clause: "other",
   clause_category: "other",
   clause_template_link: "other",
   clause_variant: "other",
   contact: "other",
   contact_directory: "other",
+  document_annotation: "documents",
   document_type: "other",
   file_comparison: "documents",
   usage_allocation: "other",
@@ -464,7 +473,10 @@ const AUDIT_ACTIVITY_CATEGORY_BY_RESOURCE_TYPE = {
   legal_list: "other",
   legal_list_generation: "other",
   legal_list_item: "other",
+  mcp_connection: "other",
   mcp_gateway_tool: "other",
+  mcp_web_handoff: "other",
+  organization_access_state: "other",
   organization_settings: "other",
   property: "other",
   rate_entry: "other",

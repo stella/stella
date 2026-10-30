@@ -131,7 +131,7 @@ const admitLinkedFlowAccess = async (
 
 type EntityTransferAccessOptions = {
   workspaceId: SafeId<"workspace">;
-  entityId: SafeId<"entity">;
+  entityIds: readonly SafeId<"entity">[];
   userId: SafeId<"user">;
   /**
    * `write` evaluates the grant for a transfer that keeps its source;
@@ -143,8 +143,8 @@ type EntityTransferAccessOptions = {
 
 type ReadEntityTransferEligibilityOptions = Omit<
   EntityTransferAccessOptions,
-  "entityId" | "access"
-> & { entityIds: readonly SafeId<"entity">[] };
+  "access"
+>;
 
 const transferEligibilityRows = v.array(
   v.object({ entityId: v.string(), eligible: v.boolean() }),
@@ -224,7 +224,7 @@ export const readEntityTransferEligibility = async (
  */
 const entityTransferIsEligible = async (
   tx: Transaction,
-  { workspaceId, entityId, userId, access }: EntityTransferAccessOptions,
+  { workspaceId, entityIds, userId, access }: EntityTransferAccessOptions,
 ): Promise<boolean> => {
   if (access !== "read") {
     const workspace = await tx.query.workspaces.findFirst({
@@ -247,10 +247,13 @@ const entityTransferIsEligible = async (
   }
   const rows = await readEntityTransferEligibility(tx, {
     workspaceId,
-    entityIds: [entityId],
+    entityIds,
     userId,
   });
-  return rows.at(0)?.eligible === true;
+  return (
+    rows.length === new Set(entityIds).size &&
+    rows.every(({ eligible }) => eligible)
+  );
 };
 
 export const admitEntityTransferAccess = async (

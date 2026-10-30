@@ -1,14 +1,14 @@
 import { panic, Result } from "better-result";
 import { eq, lt } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { Temporal } from "@stll/time";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
+  MCP_RESPONSE_DISPOSITION,
   mcpOAuthState,
   mcpUserConnections,
-  MCP_RESPONSE_DISPOSITION,
 } from "@/api/db/schema";
 import { env } from "@/api/env";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -31,28 +31,35 @@ import {
   encryptMcpSecret,
 } from "@/api/lib/mcp-upstream/crypto";
 import {
-  MCP_OAUTH_BINDING_FAILURE_CODE,
-  discoverOAuthMetadataForApproval,
   bindDiscoveredMetadata,
-  getOAuthEndpointOrigins,
-  validateApprovedOAuthIssuer,
+  discoverOAuthMetadataForApproval,
   exchangeAuthorizationCode,
+  getOAuthEndpointOrigins,
+  MCP_OAUTH_BINDING_FAILURE_CODE,
+  observeAuthorizationResponseBinding,
   tokenExpiresAt,
+  validateApprovedOAuthIssuer,
 } from "@/api/lib/mcp-upstream/oauth";
 import type {
   ApprovedMcpIssuerBinding,
+  AuthorizationResponseBinding,
+  AuthorizationResponseBindingVerdict,
   BoundOAuthMetadata,
   TokenResponse,
 } from "@/api/lib/mcp-upstream/oauth";
 import { mcpResourceMatchesConnector } from "@/api/lib/mcp-upstream/url-safety";
+import { logger } from "@/api/lib/observability/logger";
+import { requireRequestExceptionScope } from "@/api/lib/observability/request-context";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 const STATE_TTL_MS = 10 * 60 * 1000;
+const oauthStateCutoff = () =>
+  new Date(Temporal.Now.instant().epochMilliseconds - STATE_TTL_MS);
 
-const requestQuery = t.Object({
-  code: t.Optional(t.String()),
-  state: t.Optional(t.String()),
-  iss: t.Optional(t.String({ maxLength: 2048 })),
+const requestQuery = v.object({
+  code: v.optional(v.string()),
+  state: v.optional(v.string()),
+  iss: v.optional(v.pipe(v.string(), v.maxLength(2048))),
 });
 
 const config = {
@@ -64,8 +71,7 @@ const config = {
 } satisfies HandlerConfig;
 
 type CallbackRedirectInput =
-  | { status: "connected"; slug: string }
-  | { status: "error"; reason: string };
+  { status: "connected"; slug: string } | { status: "error"; reason: string };
 
 // The popup lands on a SPA route that does the postMessage + close.
 // Returning HTML with an inline <script> from api.stll.app is blocked
@@ -92,6 +98,47 @@ const redirect = (input: CallbackRedirectInput) =>
     status: 302,
     headers: { Location: buildCallbackRedirectUrl(env.FRONTEND_URL, input) },
   });
+
+type OAuthCallbackFailureRedirectOptions = {
+  error: unknown;
+  organizationId: SafeId<"organization">;
+  request: Request;
+};
+
+const redirectForOAuthCallbackFailure = ({
+  error,
+  organizationId,
+  request,
+}: OAuthCallbackFailureRedirectOptions) =>
+  redirect({
+    status: "error",
+    reason: oauthCallbackFailureReason(error, {
+      scope: requireRequestExceptionScope(request),
+      operation: "mcp_oauth_callback",
+      organizationId,
+      request,
+    }),
+  });
+
+const logAuthorizationResponseBindingObservation = ({
+  binding,
+  connectorId,
+  verdict,
+}: {
+  binding: AuthorizationResponseBinding;
+  connectorId: SafeId<"mcpConnector">;
+  verdict: AuthorizationResponseBindingVerdict;
+}) => {
+  logger.info("mcp.oauth.binding_observed", {
+    connectorId,
+    issuerHost: URL.parse(binding.expectedIssuer)?.hostname ?? null,
+    registrationMode: binding.registrationMode,
+    issSupportedAdvertised: binding.issSupportedAdvertised,
+    issPresent: verdict.issPresent,
+    issMatches: verdict.issMatches,
+    wouldRefuse: verdict.type === "would_refuse",
+  });
+};
 
 type ValidatePendingOAuthMetadataOptions = {
   connectorUrl: string;
@@ -166,6 +213,7 @@ const validatePendingOAuthMetadata = async ({
     return Result.err(
       new HandlerError({
         status: 502,
+        code: "internal_error",
         message:
           "MCP authorization server metadata does not match the selected issuer",
       }),
@@ -368,7 +416,13 @@ const saveOAuthConnection = async ({
 
   // The safeDb transaction is the only boundary; a failure rolls back every write.
   return await safeDb(async (tx) => {
-    await tx.delete(mcpOAuthState).where(eq(mcpOAuthState.state, state));
+    const consumed = await tx
+      .delete(mcpOAuthState)
+      .where(eq(mcpOAuthState.state, state))
+      .returning({ state: mcpOAuthState.state });
+    if (consumed.length !== 1) {
+      return { type: "superseded" as const };
+    }
     await tx
       .delete(mcpOAuthState)
       .where(
@@ -427,19 +481,22 @@ const saveOAuthConnection = async ({
         },
       })
       .returning({ id: mcpUserConnections.id });
-    await recordAuditEvent(tx, {
-      action: AUDIT_ACTION.UPDATE,
-      resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
-      resourceId: pending.connectorId,
-      workspaceId: null,
-      metadata: {
-        connectorId: pending.connectorId,
-        connectorSlug,
-        connectionUserId: userId,
-        operation: "mcp_oauth_connect",
-      },
-    });
-    return rows;
+    const row = rows.at(0);
+    if (row) {
+      await recordAuditEvent(tx, {
+        action: AUDIT_ACTION.CREATE,
+        resourceType: AUDIT_RESOURCE_TYPE.MCP_CONNECTION,
+        resourceId: row.id,
+        workspaceId: null,
+        metadata: {
+          connectorId: pending.connectorId,
+          connectorSlug,
+          connectionUserId: userId,
+          credential: "oauth",
+        },
+      });
+    }
+    return { type: "saved" as const, rows };
   });
 };
 
@@ -465,22 +522,17 @@ export const createMcpOAuthCallbackHandler = (
         const code = input.code;
         const state = input.state;
 
-        const cutoff = new Date(
-          Temporal.Now.instant().epochMilliseconds - STATE_TTL_MS,
-        );
+        const cutoff = oauthStateCutoff();
 
         // A DB failure here is a Result.err, not a thrown exception: `yield*` on
         // an Err closes this generator via `.return()`, which skips `catch`
         // below (only `finally` would run). Await and branch explicitly instead
         // of `yield*` so every failure — DB or thrown — still redirects.
         const redirectForFailure = (error: unknown) =>
-          redirect({
-            status: "error",
-            reason: oauthCallbackFailureReason(error, {
-              operation: "mcp_oauth_callback",
-              organizationId: session.activeOrganizationId,
-              request,
-            }),
+          redirectForOAuthCallbackFailure({
+            error,
+            organizationId: session.activeOrganizationId,
+            request,
           });
 
         try {
@@ -588,15 +640,34 @@ export const createMcpOAuthCallbackHandler = (
                 })
               : null;
 
-          const token = await exchangeAuthorizationCode({
-            metadata: authorization.metadata,
-            permit,
-            responseIssuer: input.iss,
-            clientId: client.clientId,
-            clientSecret,
-            code,
-            codeVerifier: row.codeVerifier,
-            redirectUri: row.redirectUri,
+          const legacyBinding = {
+            type: "unbound",
+            expectedIssuer: row.authorizationServerUrl,
+            reason: "state_without_binding",
+            registrationMode: "unknown",
+            issSupportedAdvertised: false,
+          } satisfies AuthorizationResponseBinding;
+          const binding = row.authorizationResponseBinding ?? legacyBinding;
+          const token = await observeAuthorizationResponseBinding({
+            binding,
+            response: { issuer: input.iss },
+            observe: (verdict) =>
+              logAuthorizationResponseBindingObservation({
+                binding,
+                connectorId: row.connectorId,
+                verdict,
+              }),
+            exchange: async () =>
+              exchangeAuthorizationCode({
+                metadata: authorization.metadata,
+                permit,
+                responseIssuer: input.iss,
+                clientId: client.clientId,
+                clientSecret,
+                code,
+                codeVerifier: row.codeVerifier,
+                redirectUri: row.redirectUri,
+              }),
           });
 
           if (Result.isError(token)) {
@@ -618,8 +689,13 @@ export const createMcpOAuthCallbackHandler = (
             return Result.ok(redirectForFailure(savedResult.error));
           }
           const saved = savedResult.value;
+          if (saved.type === "superseded") {
+            return Result.ok(
+              redirect({ status: "error", reason: "expired-state" }),
+            );
+          }
 
-          const connection = saved.at(0);
+          const connection = saved.rows.at(0);
           if (connection) {
             await refreshCachedMcpToolsForConnection({
               connectionId: connection.id,

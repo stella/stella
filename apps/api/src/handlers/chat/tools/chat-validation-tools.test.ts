@@ -36,6 +36,7 @@ import {
 } from "@/api/handlers/chat/tools/web-search-tools";
 import type { ChatPart } from "@/api/handlers/chat/types";
 import { createVisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
+import { UNBOUND } from "@/api/lib/agent-skills/binding";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
@@ -47,6 +48,7 @@ import {
   decideFeatureAccess,
 } from "@/api/lib/feature-access/policy";
 import {
+  AI_MEMORY_FEATURE_ID,
   FEATURE_REGISTRY,
   GENERATED_VIEWS_FEATURE_ID,
 } from "@/api/lib/feature-access/registry";
@@ -96,6 +98,7 @@ const urlFetcher: UrlFetcher = {
 };
 
 const editableActiveSkillContext: ActiveChatSkillContext = {
+  binding: UNBOUND,
   body: "# Instructions\nUse the checklist.",
   description: "Review closing files.",
   displayName: "Closing Review",
@@ -194,6 +197,31 @@ const buildRunScenarios = (): RunToolsProps[] => {
                         editApplyMode,
                         memberRole,
                         memoryEnabled,
+                        featureAccessSnapshot: createFeatureAccessSnapshot({
+                          organizationId,
+                          userId,
+                          decisions: new Map([
+                            [
+                              AI_MEMORY_FEATURE_ID,
+                              decideFeatureAccess({
+                                registry: FEATURE_REGISTRY,
+                                featureId: AI_MEMORY_FEATURE_ID,
+                                organizationId,
+                                userId,
+                                membership: true,
+                                user: {
+                                  email: "member@example.test",
+                                  emailVerified: true,
+                                },
+                                grants: {
+                                  [AI_MEMORY_FEATURE_ID]: [
+                                    { type: "organization", organizationId },
+                                  ],
+                                },
+                              }),
+                            ],
+                          ]),
+                        }),
                         organizationId,
                         orgAIConfig: null,
                         managedAIResidency: "eu" as const,
@@ -503,6 +531,7 @@ test("pending feature-bound write approvals use current caller access for valida
         },
       ],
       safeDb: unusedSafeDb,
+      refRegistry: createChatRefRegistry(),
       threadId,
       tools: validationTools,
       userId: callerId,

@@ -8,10 +8,13 @@ import {
   inArray,
   isNull,
   lte,
+  notInArray,
   or,
   sql,
 } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
+
+import { TASK_CLOSED_STATUSES } from "@stll/api-contract/entity-options";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { entities, workspaces } from "@/api/db/schema";
@@ -36,6 +39,7 @@ import {
   taskAssigneeCondition,
 } from "@/api/lib/tasks/assigned";
 import type { TaskAssigneeFilter } from "@/api/lib/tasks/assigned";
+import { workTask } from "@/api/lib/tasks/work-task";
 
 /** Keyset position: the last row's due date (null sorts last) and id. */
 type TaskListCursor = {
@@ -92,6 +96,7 @@ const TASK_LIST_ENTITY_SELECTION = {
 // detail mode and `tasks.get` return the full task.
 const UNPROJECTED_TASK_LIST_COLUMNS = [
   "entityFeatureGate", // RLS state is internal to the gate.
+  "featureOwner", // Retained feature ownership is internal to visibility checks.
   // Tenant scope: the row names its matter through the joined workspace.
   "workspaceId",
   // Always "task" here, fixed by the query.
@@ -151,6 +156,8 @@ true satisfies UnexpectedProjectedTaskListColumn extends never ? true : never;
 
 type ListTasksPageQuery = {
   status?: string | undefined;
+  /** Keep only tasks not yet done or cancelled; a task with no status is open. */
+  openOnly?: boolean | undefined;
   assignee?: TaskAssigneeFilter | undefined;
   dateFrom?: string | undefined;
   dateTo?: string | undefined;
@@ -172,7 +179,8 @@ type ListTasksPageOptions = {
 };
 
 /**
- * The MCP `list_tasks` query, for one matter or all of them. Access sits in the SQL itself: the workspace
+ * The task-list query behind MCP `list_tasks` and `GET /v1/tasks`, for one
+ * matter or all of them. Access sits in the SQL itself: the workspace
  * allowlist, the organization predicate on the joined matter, and the RLS
  * policies `safeDb` runs under, so a matter outside the caller's membership
  * or organization cannot contribute a row even if it reached the allowlist.
@@ -218,11 +226,17 @@ export const listTasksPage = async ({
       .where(
         and(
           inArray(entities.workspaceId, [...workspaceIds]),
-          eq(entities.kind, "task"),
+          workTask(entities),
           reviewVisibility,
           query.status === undefined
             ? undefined
             : eq(entities.status, query.status),
+          query.openOnly === true
+            ? or(
+                isNull(entities.status),
+                notInArray(entities.status, [...TASK_CLOSED_STATUSES]),
+              )
+            : undefined,
           query.dateFrom === undefined
             ? undefined
             : gte(entities.dueDate, query.dateFrom),

@@ -15,12 +15,7 @@ export type ProvisionUnit = "article" | "section";
 
 /** Named subdivisions, i.e. everything the catalog has a word for. */
 export type ProvisionPartKey =
-  | "article"
-  | "letter"
-  | "openEnded"
-  | "point"
-  | "sentence"
-  | "subsection";
+  "article" | "letter" | "openEnded" | "point" | "sentence" | "subsection";
 
 export type ProvisionReference = {
   letter: string | null;
@@ -49,7 +44,9 @@ export const provisionReferenceSchema = v.object({
   letter: v.nullable(designatorSchema),
   openEnded: v.boolean(),
   point: v.nullable(designatorSchema),
-  section: v.pipe(v.number(), v.integer(), v.minValue(1)),
+  // Zero is a number a code can use (`28 C.F.R. § 0.85`); each grammar's
+  // normalizer holds its own lower bound.
+  section: v.pipe(v.number(), v.integer(), v.minValue(0)),
   sectionSuffix: v.nullable(designatorSchema),
   sentence: v.nullable(designatorSchema),
   subsection: v.nullable(designatorSchema),

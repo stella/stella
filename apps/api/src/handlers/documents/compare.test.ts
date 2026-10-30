@@ -2,10 +2,10 @@ import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 
 import {
-  createDocx,
-  createEmptyDocument,
   type CompareDocxError,
   type CompareResult,
+  createDocx,
+  createEmptyDocument,
 } from "@stll/folio-core";
 import { FolioDocxReviewer, parseDocx } from "@stll/folio-core/server";
 
@@ -13,6 +13,7 @@ import {
   createDocumentCompareHandler,
   mapCompareDocxError,
 } from "@/api/handlers/documents/compare";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -21,6 +22,7 @@ import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { compareScannedDocx } from "@/api/lib/file-scan/document-parsers";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import type { SyntheticSessionAuthorityReader } from "@/api/lib/synthetic-principal/session-authority";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -226,7 +228,7 @@ const createHarness = ({
         throw new TimeoutError({
           message: "timed out",
           label: options.label,
-          timeoutMs: 1,
+          timeoutMs: 1, // timeout under test
         });
       }
       return await operation(new AbortController().signal);
@@ -238,7 +240,7 @@ const createHarness = ({
         throw new TimeoutError({
           message: "delivery failed",
           label: "download",
-          timeoutMs: 1,
+          timeoutMs: 1, // timeout under test
         });
       }
       return {
@@ -271,7 +273,12 @@ const createHarness = ({
     resolveDocxEditAuthorName: async () => "Ada Lovelace",
     withTimeout: withTimeoutMock,
   });
-  const definition = createDocumentCompareHandler(dependencies);
+  const readSessionAuthority: SyntheticSessionAuthorityReader = async () =>
+    null;
+  const definition = createDocumentCompareHandler(
+    dependencies,
+    readSessionAuthority,
+  );
   type Ctx = Parameters<typeof definition.handler>[0];
   const auditedEvents: unknown[] = [];
   const auditRecorder = mock(async (_tx: unknown, event: unknown) => {
@@ -280,6 +287,9 @@ const createHarness = ({
   const context = asTestRaw<Ctx>({
     body: {
       filePropertyId: propertyId,
+      // Parsed bodies carry the schema defaults.
+      mode: "strict",
+      granularity: "word",
       selection: {
         type: previous ? "previous" : "versions",
         ...(previous
@@ -295,10 +305,12 @@ const createHarness = ({
     },
     params: { workspaceId, documentId },
     request: new Request("http://localhost/documents/compare"),
-    route: "/documents/:workspaceId/document/:documentId/compare",
+    route:
+      "/v1/documents/:workspaceId/document/:documentId/compare" satisfies ApiRoutePath,
     safeDb,
     scopedDb,
-    session: { activeOrganizationId: organizationId },
+    // A credential without a browser session, such as an agent's.
+    session: { activeOrganizationId: organizationId, id: null },
     workspaceId,
     user: { id: userId },
     recordAuditEvent: asTestRaw<AuditRecorder>(auditRecorder),
@@ -323,6 +335,7 @@ const createHarness = ({
     deliverTemporaryRedlineMock,
     readEntityVersionFileMock,
     readFileHandlerMock,
+    readSessionAuthority,
     withTimeoutMock,
   };
 };
@@ -592,13 +605,22 @@ describe("documents.compare", () => {
     });
     expect(harness.createEntityVersionFromBufferMock).toHaveBeenCalledTimes(1);
     expect(harness.readFileHandlerMock).toHaveBeenCalledWith({
+      readSessionAuthority: expect.any(Function),
       scopedDb: harness.context.scopedDb,
       fieldId,
       organizationId,
       workspaceId,
       purpose: "download",
       recordAuditEvent: harness.auditRecorder,
+      source: {
+        kind: "background",
+        reason: "requested with a credential that has no browser session",
+      },
+      userId: harness.context.user.id,
     });
+    expect(
+      harness.readFileHandlerMock.mock.calls.at(0)?.[0].readSessionAuthority,
+    ).toBe(harness.readSessionAuthority);
   });
 
   test("previews a comparison without writing a document version", async () => {
@@ -660,6 +682,7 @@ describe("documents.compare", () => {
     ).toMatchObject({
       fileName: "Agreement v2 redline.docx",
       organizationId,
+      readSessionAuthority: expect.any(Function),
       scopedDb: harness.context.scopedDb,
       userId,
     });

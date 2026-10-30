@@ -5,8 +5,8 @@ import { DECISION_UNDECIDED_REASONS } from "@stll/api-contract/ai-decision-provi
 import { propertyConfig } from "@stll/property-testing";
 
 import {
-  clauseDirectiveWarningSchema,
   type ClauseDirectiveWarning,
+  clauseDirectiveWarningSchema,
 } from "@/api/lib/clauses/clause-directives";
 import type { ResolvedAiCondition } from "@/api/lib/docx/resolve-ai-conditions";
 import type { AiFieldError } from "@/api/lib/docx/resolve-ai-fields";

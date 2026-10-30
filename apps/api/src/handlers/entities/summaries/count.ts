@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, count, eq, sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { entities } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
@@ -17,7 +17,7 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "covered", by: "list_documents" },
   access: "read",
-  query: t.Object({}),
+  query: v.object({}),
 } satisfies WorkspaceHandlerConfig;
 
 /** Total entity count for the workspace; companion to `entities.summaries.list`. */

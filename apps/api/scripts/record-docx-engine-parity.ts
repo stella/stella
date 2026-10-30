@@ -27,6 +27,7 @@ const ref = process.argv[2] ?? "origin/main";
 const enginePath = "apps/api/src/lib/docx";
 const repository = fileURLToPath(new URL("../../../", import.meta.url));
 const revision = execFileSync("git", ["rev-parse", ref], {
+  maxBuffer: 2 ** 30,
   cwd: repository,
   encoding: "utf-8",
 }).trim();
@@ -36,15 +37,14 @@ const temporary = await mkdtemp(
 try {
   const archive = `${temporary}/engine.tar`;
   execFileSync("git", ["archive", "--output", archive, revision, enginePath], {
+    maxBuffer: 2 ** 30,
     cwd: repository,
   });
-  execFileSync("tar", [
-    "-xf",
-    archive,
-    "--strip-components=5",
-    "-C",
-    temporary,
-  ]);
+  execFileSync(
+    "tar",
+    ["-xf", archive, "--strip-components=5", "-C", temporary],
+    { maxBuffer: 2 ** 30 },
+  );
   const loaded = await loadLocalModule({
     root: temporary,
     modulePath: "patch-template.ts",

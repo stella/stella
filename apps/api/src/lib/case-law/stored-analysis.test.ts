@@ -72,7 +72,7 @@ describe("storedAnalysisState", () => {
     );
     expect(
       storedAnalysisState({ stored, fingerprint: CURRENT, now: NOW }),
-    ).toEqual({ kind: "generating" });
+    ).toEqual({ kind: "generating", partialTree: [] });
   });
 
   test("a sentinel that outlived its run is nothing", () => {

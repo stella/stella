@@ -1,16 +1,18 @@
 import { panic } from "better-result";
 import { eq } from "drizzle-orm";
 
+import type { OrgScopeActor } from "@/api/db/org-scope";
 import { proveOrgScope, withOrgScope } from "@/api/db/org-scope";
 import type { Transaction } from "@/api/db/root";
 import { workspaces } from "@/api/db/schema";
-import type { AnyDrizzle, TransactionOf } from "@/api/db/scoped";
+import type { AnyDrizzle } from "@/api/db/scoped";
 import type { SafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 type OrgScopedFixtureTransactionOptions<T> = {
   tx: Transaction;
   workspaceId: SafeId<"workspace">;
+  actor?: Extract<OrgScopeActor, { type: "system" | "actor" }>;
   fn: (tx: Transaction) => Promise<T>;
 };
 
@@ -18,6 +20,7 @@ type OrgScopedFixtureTransactionOptions<T> = {
 export const withOrgScopedFixtureTransaction = async <T>({
   tx,
   workspaceId,
+  actor = { type: "system" },
   fn,
 }: OrgScopedFixtureTransactionOptions<T>): Promise<T> => {
   const scope = await proveOrgScope(tx, {
@@ -30,29 +33,31 @@ export const withOrgScopedFixtureTransaction = async <T>({
   return await withOrgScope({
     tx,
     scope: scope.value,
-    actor: { type: "system" },
+    actor,
     fn,
   });
 };
 
-type OrgScopedFixtureOptions<Database extends AnyDrizzle, T> = {
-  database: Database;
+type OrgScopedFixtureOptions<T> = {
+  database: AnyDrizzle;
   workspaceId: SafeId<"workspace">;
-  fn: (tx: TransactionOf<Database>) => Promise<T>;
+  actor?: Extract<OrgScopeActor, { type: "system" | "actor" }>;
+  fn: (tx: Transaction) => Promise<T>;
 };
 
 /** Bun SQL and PGlite lend the same role/settings contract to fixture callbacks. */
-export const withOrgScopedFixture = async <Database extends AnyDrizzle, T>({
+export const withOrgScopedFixture = async <T>({
   database,
   workspaceId,
+  actor = { type: "system" },
   fn,
-}: OrgScopedFixtureOptions<Database, T>): Promise<T> =>
+}: OrgScopedFixtureOptions<T>): Promise<T> =>
   await database.transaction(
     async (tx) =>
       await withOrgScopedFixtureTransaction({
         tx: asTestRaw<Transaction>(tx),
         workspaceId,
-        fn: async (scopedTx) =>
-          await fn(asTestRaw<TransactionOf<Database>>(scopedTx)),
+        actor,
+        fn,
       }),
   );

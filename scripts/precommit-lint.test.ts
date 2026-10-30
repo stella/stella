@@ -1,24 +1,11 @@
-import {
-  afterAll,
-  beforeAll,
-  describe,
-  expect,
-  setDefaultTimeout,
-  test,
-} from "bun:test";
-import {
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
-  RECEIVER_TYPED_AUTOFIX_RULES,
   lintCommand,
+  RECEIVER_TYPED_AUTOFIX_RULES,
   runPrecommitLint,
 } from "./precommit-lint";
 
@@ -27,8 +14,11 @@ import {
 setDefaultTimeout(60_000);
 
 const ROOT = path.resolve(import.meta.dir, "..");
-// Inside the repository so oxlint.config.ts applies exactly as in the hook.
-const DIR = path.join("scripts", `__precommit_lint_${process.pid}__`);
+// Outside the checkout: repository checks that walk the tree run beside this
+// test, and a fixture directory appearing and vanishing under them races
+// them. The hook still runs from ROOT with oxlint.config.ts; the config
+// control below proves the listed rules reach files here.
+const DIRECTORY = mkdtempSync(path.join(tmpdir(), "precommit-lint-fixtures-"));
 
 // One fixture per rule whose autofix assumes a receiver type. Each is valid
 // code the fix would break or change.
@@ -76,22 +66,18 @@ const RECEIVER_FIXTURES: Record<
 };
 
 const fixturePath = (name: string) =>
-  path.join(DIR, `${name.replaceAll("/", "__")}.ts`);
+  path.join(DIRECTORY, `${name.replaceAll("/", "__")}.ts`);
 
 const writeFixture = (name: string, body: string): string => {
   const file = fixturePath(name);
-  writeFileSync(path.join(ROOT, file), `${body}\n`);
+  writeFileSync(file, `${body}\n`);
   return file;
 };
 
-const read = (file: string) => readFileSync(path.join(ROOT, file), "utf-8");
-
-beforeAll(() => {
-  mkdirSync(path.join(ROOT, DIR), { recursive: true });
-});
+const read = (file: string) => readFileSync(file, "utf-8");
 
 afterAll(() => {
-  rmSync(path.join(ROOT, DIR), { recursive: true, force: true });
+  rmSync(DIRECTORY, { recursive: true, force: true });
 });
 
 describe("pre-commit lint", () => {
@@ -150,6 +136,29 @@ describe("pre-commit lint", () => {
     expect(files.map(read)).toEqual(before);
   });
 
+  test("the repository config, without the hook's -A flags, rewrites every fixture", () => {
+    // Proves the config reaches the fixture directory; otherwise the
+    // untouched-code test above would pass without exercising the -A flags.
+    const fixtures = Object.entries(RECEIVER_FIXTURES).map(([rule, body]) => ({
+      rule,
+      body,
+      file: writeFixture(`config-${rule}`, body),
+    }));
+    const command = lintCommand(fixtures.map(({ file }) => file));
+    const configOnly = command.filter(
+      (part, index) => part !== "-A" && command[index - 1] !== "-A",
+    );
+    Bun.spawnSync(configOnly, {
+      cwd: ROOT,
+      stdout: "ignore",
+      stderr: "ignore",
+    });
+    for (const { rule, body, file } of fixtures) {
+      expect(read(file), rule).not.toBe(`${body}\n`);
+    }
+  });
+
+  // Measured p95: 12.6 s; this must spawn oxlint separately for every listed rule.
   test("each listed rule, run alone, rewrites its fixture", () => {
     // Guards the list itself: a renamed rule or one that no longer autofixes
     // would make its entry dead weight, and a fixture another rule rewrites
@@ -162,7 +171,7 @@ describe("pre-commit lint", () => {
       );
       expect(read(file), rule).not.toBe(`${body}\n`);
     }
-  });
+  }, 30_000);
 
   test("the hook command turns off every listed rule and still fixes", () => {
     const command = lintCommand(["a.ts"]);
@@ -179,7 +188,7 @@ describe("pre-commit lint", () => {
       RECEIVER_FIXTURES["unicorn/prefer-regexp-test"],
     );
     runPrecommitLint([file], { cwd: ROOT });
-    const loaded: unknown = await import(path.join(ROOT, file));
+    const loaded: unknown = await import(file);
     const matches =
       typeof loaded === "object" && loaded !== null && "matches" in loaded
         ? loaded.matches
@@ -192,8 +201,8 @@ describe("pre-commit lint", () => {
   });
 
   test("a would-be autofix fails the hook, prints it and leaves the file as staged", () => {
-    // lefthook stages the files of every stage_fixed step when the hook ends,
-    // whatever order the steps ran in, so only an unmodified file is safe.
+    // A file left modified would reach the commit through any later
+    // `git add`, so only an unmodified file is safe.
     const body = "export const now = (): number => new Date().getTime();";
     const file = writeFixture("safe-fix", body);
     const result = runPrecommitLint([file], { cwd: ROOT });
@@ -231,7 +240,7 @@ describe("pre-commit lint", () => {
   });
 
   test("a staged deletion is not reported as changed", () => {
-    const missing = path.join(DIR, "deleted.ts");
+    const missing = path.join(DIRECTORY, "deleted.ts");
     expect(runPrecommitLint([missing], { cwd: ROOT }).changed).toEqual([]);
   });
 
@@ -245,12 +254,21 @@ describe("pre-commit lint", () => {
     const commands = isRecord(preCommit) ? preCommit["commands"] : undefined;
     expect(isRecord(commands)).toBe(true);
     const { lint, ...others } = isRecord(commands) ? commands : {};
+    // scripts/precommit-paths.test.ts proves which paths the owner prints.
     expect(isRecord(lint) ? lint["run"] : undefined).toBe(
-      "bun scripts/precommit-lint.ts {staged_files}",
+      "bun scripts/precommit-lint.ts {files}",
     );
-    // lefthook hides unstaged changes only while a stage_fixed command runs;
-    // lint must see what the commit records, and it never leaves a change.
-    expect(isRecord(lint) ? lint["stage_fixed"] : undefined).toBe(true);
+    expect(isRecord(lint) ? lint["files"] : undefined).toBe(
+      "bun scripts/precommit-paths.ts",
+    );
+    // lefthook hides the unstaged part of partially staged files during every
+    // pre-commit, so lint sees what the commit records. Each step stages its own writes; stage_fixed
+    // would `git add` every matched file after the step, edits or not.
+    for (const command of [lint, ...Object.values(others)]) {
+      expect(isRecord(command) ? command["stage_fixed"] : undefined).toBe(
+        undefined,
+      );
+    }
     for (const command of Object.values(others)) {
       expect(isRecord(command) ? String(command["run"]) : "").not.toContain(
         "oxlint",

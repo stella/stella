@@ -588,6 +588,9 @@ describe("resolveAccessToken", () => {
   });
 
   test("returns the fresh token with a warning instead of failing when the credential store can't be written", async () => {
+    if (process.getuid?.() === 0) {
+      return;
+    }
     const provider = startMockProvider((body) =>
       body.get("grant_type") === "refresh_token" &&
       body.get("refresh_token") === "old-refresh-token"

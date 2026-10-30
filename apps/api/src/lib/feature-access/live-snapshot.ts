@@ -4,7 +4,7 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { member, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import { featureEnrolments } from "@/api/db/schema";
-import { envFeatureAccess } from "@/api/env-feature-access";
+import { readFeatureAccessGrants } from "@/api/env-feature-access";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { FeatureAccessGrants } from "@/api/lib/feature-access/grants-schema";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
@@ -34,7 +34,7 @@ export const resolveFeatureAccessSnapshot = async ({
   organizationId,
   userId,
   registry = FEATURE_REGISTRY,
-  grants = envFeatureAccess.API_FEATURE_ACCESS_GRANTS,
+  grants = readFeatureAccessGrants().grants,
 }: ResolveFeatureAccessSnapshotOptions): Promise<FeatureAccessSnapshot> => {
   const { candidates, enrolmentFeatureIds } = featureAccessReadPlan({
     organizationId,

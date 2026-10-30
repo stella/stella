@@ -8,9 +8,14 @@
 //   4. require-secure-document-response — direct raw document Response
 //      construction outside the typed security boundary
 
-import { eslintCompatPlugin, type Variable } from "@oxlint/plugins";
+import {
+  type Context,
+  eslintCompatPlugin,
+  type Variable,
+} from "@oxlint/plugins";
 
 import {
+  type AstNode,
   canonicalModuleId,
   everyNode,
   getImportedName,
@@ -18,9 +23,9 @@ import {
   invokedCallee,
   isAstNode,
   isCallTo,
+  isFileIn,
   isIdentifier,
   isIdentifierReference,
-  isFileIn,
   isStringLiteral,
   memberPropertyName,
   repoRelativeFilename,
@@ -28,7 +33,6 @@ import {
   resolveVariable,
   stableInitializer,
   unwrapExpression,
-  type AstNode,
 } from "./utils.ts";
 
 // ── Rule 1: no-raw-filename-write ──────────────────────────────
@@ -404,6 +408,224 @@ const hasAttachmentDisposition = (node): boolean => {
 
 const FILE_HANDLER_DIRECTORY = "apps/api/src/handlers/files/";
 
+type AuthSchemaTable = {
+  exportName: string;
+  source: "direct" | "drizzle-alias";
+};
+
+const createUserTableReferences = (context: Context) => {
+  const authSchemaExport = (node: AstNode): string | null => {
+    const resolved = resolveImport(context, node);
+    return resolved?.moduleId === AUTH_SCHEMA_MODULE ? resolved.imported : null;
+  };
+
+  const nativeTableAliasArgument = (node: AstNode): AstNode | null => {
+    if (
+      node.type !== "CallExpression" ||
+      (node.optional !== undefined && node.optional !== false) ||
+      !Array.isArray(node.arguments) ||
+      node.arguments.length !== 2
+    ) {
+      return null;
+    }
+    const alias = resolveImport(context, node.callee);
+    const table = node.arguments.at(0);
+    const aliasName = node.arguments.at(1);
+    if (
+      alias?.moduleId !== "drizzle-orm/pg-core" ||
+      alias.imported !== "alias" ||
+      !isAstNode(table) ||
+      !isStringLiteral(aliasName)
+    ) {
+      return null;
+    }
+    return table;
+  };
+
+  const authSchemaTable = (
+    node: AstNode,
+    seen = new Set<Variable>(),
+  ): AuthSchemaTable | null => {
+    const imported = authSchemaExport(node);
+    if (imported !== null) {
+      return { exportName: imported, source: "direct" };
+    }
+    if (isIdentifierReference(node)) {
+      const variable = resolveVariable(context, node);
+      if (variable === null || seen.has(variable)) {
+        return null;
+      }
+      const initializer = stableInitializer(variable);
+      if (initializer !== null) {
+        const aliases = new Set(seen);
+        aliases.add(variable);
+        return authSchemaTable(initializer, aliases);
+      }
+    }
+    const table = nativeTableAliasArgument(node);
+    if (table === null) {
+      return null;
+    }
+    const underlying = authSchemaTable(table, seen);
+    return underlying === null
+      ? null
+      : { exportName: underlying.exportName, source: "drizzle-alias" };
+  };
+
+  const userReadConsumerChains = (
+    chain: AstNode,
+    seen = new Set<Variable>(),
+  ): AstNode[] => {
+    if (
+      everyNode(chain).some(
+        (node) =>
+          node.type === "CallExpression" ||
+          node.type === "TaggedTemplateExpression",
+      )
+    ) {
+      return [chain];
+    }
+    const holder = chain.parent;
+    if (
+      !isAstNode(holder) ||
+      holder.type !== "VariableDeclarator" ||
+      holder.init !== chain ||
+      !isIdentifierReference(holder.id)
+    ) {
+      return [];
+    }
+    const variable = resolveVariable(context, holder.id);
+    if (
+      variable === null ||
+      seen.has(variable) ||
+      stableInitializer(variable) !== chain
+    ) {
+      return [chain];
+    }
+    const readers = variable.references.filter((reference) => !reference.init);
+    const next = new Set(seen);
+    next.add(variable);
+    const consumers: AstNode[] = [];
+    for (const reader of readers) {
+      if (
+        !isAstNode(reader.identifier) ||
+        isInTypePosition(reader.identifier)
+      ) {
+        continue;
+      }
+      consumers.push(
+        ...userReadConsumerChains(queryChainRoot(reader.identifier), next),
+      );
+    }
+    return consumers;
+  };
+
+  const isStableNativeTableAliasConstruction = (node: AstNode): boolean => {
+    let current: AstNode = node;
+    let foundAlias = false;
+    while (
+      isAstNode(current.parent) &&
+      nativeTableAliasArgument(current.parent) === current
+    ) {
+      current = current.parent;
+      foundAlias = true;
+    }
+    if (!foundAlias) {
+      return false;
+    }
+    const holder = current.parent;
+    if (
+      !isAstNode(holder) ||
+      holder.type !== "VariableDeclarator" ||
+      holder.init !== current ||
+      !isIdentifierReference(holder.id)
+    ) {
+      return false;
+    }
+    const variable = resolveVariable(context, holder.id);
+    return variable !== null && stableInitializer(variable) === current;
+  };
+
+  const aliasedTableColumnConsumers = (node: AstNode): AstNode[] | null => {
+    let table: AstNode | null = null;
+    if (node.type === "MemberExpression" && isAstNode(node.object)) {
+      table = node.object;
+    } else if (
+      isIdentifierReference(node) &&
+      isAstNode(node.parent) &&
+      node.parent.type === "MemberExpression" &&
+      node.parent.object === node
+    ) {
+      table = node;
+    }
+    if (table === null || authSchemaExport(table) !== null) {
+      return null;
+    }
+    const resolvedTable = authSchemaTable(table);
+    if (
+      resolvedTable?.source !== "drizzle-alias" ||
+      resolvedTable.exportName !== USER_TABLE_EXPORT
+    ) {
+      return null;
+    }
+    return userReadConsumerChains(queryChainRoot(node));
+  };
+  return {
+    authSchemaTable,
+    isStableNativeTableAliasConstruction,
+    aliasedTableColumnConsumers,
+  };
+};
+
+const isSchemaMetadata = (context: Context, node: AstNode): boolean => {
+  const parent = node.parent;
+  if (isAstNode(parent) && parent.type === "CallExpression") {
+    const callee = unwrapExpression(parent.callee);
+    const binding = callee === null ? null : resolveImport(context, callee);
+    if (
+      binding !== null &&
+      ((binding.moduleId === "drizzle-orm/pg-core" &&
+        binding.imported === "getTableConfig") ||
+        (binding.moduleId === "drizzle-orm" &&
+          ["getTableName", "getColumns"].includes(binding.imported)))
+    ) {
+      return true;
+    }
+  }
+  // A column-only FK callback describes a schema; it cannot perform a
+  // read. Calls inside the callback still pass through query checks.
+  if (
+    isAstNode(parent) &&
+    parent.type === "MemberExpression" &&
+    parent.object === node
+  ) {
+    const callback = parent.parent;
+    if (
+      isAstNode(callback) &&
+      callback.type === "ArrowFunctionExpression" &&
+      callback.body === parent
+    ) {
+      const declaration = callback.parent;
+      // Only the first argument is the column callback.
+      if (
+        isAstNode(declaration) &&
+        declaration.type === "CallExpression" &&
+        Array.isArray(declaration.arguments) &&
+        declaration.arguments.at(0) === callback
+      ) {
+        const callee = unwrapExpression(declaration.callee);
+        if (
+          callee?.type === "MemberExpression" &&
+          memberPropertyName(callee) === "references"
+        ) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+};
+
 export default eslintCompatPlugin({
   meta: { name: "security-guards" },
   rules: {
@@ -746,15 +968,13 @@ export default eslintCompatPlugin({
         ],
       },
       createOnce(context) {
+        const {
+          authSchemaTable,
+          isStableNativeTableAliasConstruction,
+          aliasedTableColumnConsumers,
+        } = createUserTableReferences(context);
         const reportedChains = new Set<AstNode>();
         let importsAuthSchema = false;
-
-        const authSchemaExport = (node: AstNode): string | null => {
-          const resolved = resolveImport(context, node);
-          return resolved?.moduleId === AUTH_SCHEMA_MODULE
-            ? resolved.imported
-            : null;
-        };
 
         // The membership predicates a query chain carries, including those of
         // local constants it reads: a membership subquery built in the
@@ -785,7 +1005,7 @@ export default eslintCompatPlugin({
             if (
               (property === "userId" || property === "organizationId") &&
               isAstNode(node.object) &&
-              authSchemaExport(node.object) === MEMBER_TABLE_EXPORT
+              authSchemaTable(node.object)?.exportName === MEMBER_TABLE_EXPORT
             ) {
               scoped.add(property);
             }
@@ -837,62 +1057,31 @@ export default eslintCompatPlugin({
           );
         };
 
-        const isSchemaMetadata = (node: AstNode): boolean => {
-          const parent = node.parent;
-          if (isAstNode(parent) && parent.type === "CallExpression") {
-            const callee = unwrapExpression(parent.callee);
-            const binding =
-              callee === null ? null : resolveImport(context, callee);
-            if (
-              binding !== null &&
-              ((binding.moduleId === "drizzle-orm/pg-core" &&
-                binding.imported === "getTableConfig") ||
-                (binding.moduleId === "drizzle-orm" &&
-                  ["getTableName", "getColumns"].includes(binding.imported)))
-            ) {
-              return true;
-            }
-          }
-          // A column-only FK callback describes a schema; it cannot perform a
-          // read. Calls inside the callback still pass through query checks.
-          if (
-            isAstNode(parent) &&
-            parent.type === "MemberExpression" &&
-            parent.object === node
-          ) {
-            const callback = parent.parent;
-            if (
-              isAstNode(callback) &&
-              callback.type === "ArrowFunctionExpression" &&
-              callback.body === parent
-            ) {
-              const declaration = callback.parent;
-              if (
-                isAstNode(declaration) &&
-                declaration.type === "CallExpression"
-              ) {
-                const callee = unwrapExpression(declaration.callee);
-                if (
-                  callee?.type === "MemberExpression" &&
-                  memberPropertyName(callee) === "references"
-                ) {
-                  return true;
-                }
-              }
-            }
-          }
-          return false;
-        };
-
         const checkTableReference = (node: unknown): void => {
+          if (!isAstNode(node) || isInTypePosition(node)) {
+            return;
+          }
+          const aliasConsumers = aliasedTableColumnConsumers(node);
+          if (aliasConsumers !== null) {
+            for (const chain of aliasConsumers) {
+              if (
+                reportedChains.has(chain) ||
+                isScopedChain(chain, new Set())
+              ) {
+                continue;
+              }
+              reportedChains.add(chain);
+              context.report({ node: chain, messageId: "unscopedUserQuery" });
+            }
+            return;
+          }
           if (
-            !isAstNode(node) ||
-            isInTypePosition(node) ||
-            authSchemaExport(node) !== USER_TABLE_EXPORT
+            authSchemaTable(node)?.exportName !== USER_TABLE_EXPORT ||
+            isStableNativeTableAliasConstruction(node)
           ) {
             return;
           }
-          if (isSchemaMetadata(node)) {
+          if (isSchemaMetadata(context, node)) {
             return;
           }
           const chain = queryChainRoot(node);

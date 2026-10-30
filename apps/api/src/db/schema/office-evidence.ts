@@ -3,8 +3,8 @@ import { sql } from "drizzle-orm";
 import {
   OFFICE_EVIDENCE_FORMATS,
   OFFICE_EVIDENCE_LIMITS,
-  OFFICE_EVIDENCE_STATUSES,
   OFFICE_EVIDENCE_STATUS,
+  OFFICE_EVIDENCE_STATUSES,
   OFFICE_EVIDENCE_UNAVAILABLE_CODES,
 } from "@/api/lib/files/office-evidence-domain";
 
@@ -13,6 +13,7 @@ import {
   entityFeatureGateColumns,
   entityFeatureWorkspaceGateColumns,
 } from "../entity-feature-gate-columns";
+import { registeredReviewResetPolicies } from "../review-reset-policies";
 import {
   bytea,
   organization,
@@ -177,5 +178,7 @@ export const officeFileEvidence = p.pgTable(
         [table.fieldId, { target: "fields", kind: "owned-content" }],
       ]),
     }),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );

@@ -39,6 +39,8 @@ import * as v from "valibot";
 
 import { printError } from "@stll/errors";
 
+import { isMcpToolVisibleTo } from "@/api/mcp/tool-visibility";
+
 const BASELINE_REL = "apps/api/mcp-surface-baseline.json";
 const BASELINE_PATH = path.resolve(
   import.meta.dir,
@@ -295,12 +297,22 @@ const loadMcpRegistry = async () => {
 };
 
 /** Every audience's rows, measured from the canonical static registry. */
-export const measureMcpSurfaces = async (): Promise<SurfaceRows> => {
+export const measureMcpSurfaces = async (
+  visibility: "host" | "model" = "host",
+): Promise<SurfaceRows> => {
   const registry = await loadMcpRegistry();
   const rows: SurfaceRows = { instructions: {}, tools: {} };
 
   for (const mode of registry.modes) {
-    const tools = registry.toMcpTools(registry.listDefinitions(mode), { mode });
+    const tools = registry.toMcpTools(
+      registry
+        .listDefinitions(mode)
+        .filter(
+          (definition) =>
+            visibility === "host" || isMcpToolVisibleTo(definition, "model"),
+        ),
+      { mode },
+    );
     rows.instructions[mode] = registry.instructions[mode].length;
     for (const tool of tools) {
       const audiences = rows.tools[tool.name] ?? {};
@@ -317,12 +329,12 @@ export const measureMcpSurfaces = async (): Promise<SurfaceRows> => {
         payloadUtf8Bytes: Buffer.byteLength(JSON.stringify(tool), "utf-8"),
       };
     }
-    // The derived wire size must be the served one, byte for byte.
+    // The derived wire size must match the selected projection byte for byte.
     const served = Buffer.byteLength(JSON.stringify(tools), "utf-8");
     const derived = deriveSurface(rows, mode).payloadUtf8Bytes;
     if (derived !== served) {
       return panic(
-        `The ${mode} wire size derived from per-tool rows (${derived}) differs from the served tools/list (${served})`,
+        `The ${mode} wire size derived from per-tool rows (${derived}) differs from the selected tools/list projection (${served})`,
       );
     }
   }
@@ -445,8 +457,7 @@ export const toBaselineText = (rows: SurfaceRows): string => {
 };
 
 type BaselineParse =
-  | { ok: true; rows: SurfaceRows }
-  | { ok: false; error: string };
+  { ok: true; rows: SurfaceRows } | { ok: false; error: string };
 
 const firstDifferentLine = (actual: string, expected: string): string => {
   const actualLines = actual.split("\n");

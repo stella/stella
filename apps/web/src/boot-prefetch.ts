@@ -1,4 +1,3 @@
-import { AUTH_SESSION_STARTUP_HEADER } from "@stll/auth-model";
 import { Temporal } from "@stll/time";
 /**
  * Boot-time auth prefetch.
@@ -127,18 +126,27 @@ export const resolveRequestMethod = (
 /** Structural fetch subset so the unit test can pass a plain function
  *  without casting to the full (Bun-extended) fetch type. */
 type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
-type ReportPrefetchError = (error: unknown) => Promise<void>;
+type ReportPrefetchError = (
+  error: unknown,
+  path: BootPrefetchPath,
+) => Promise<void>;
 
-const reportPrefetchError: ReportPrefetchError = async (error) => {
+const reportPrefetchError: ReportPrefetchError = async (error, path) => {
   const { getAnalytics } = await import("@/lib/analytics/provider");
-  getAnalytics().captureError(error);
+  getAnalytics().captureError(error, {
+    fingerprintKey: "reportPrefetchError:failure",
+    scope: {
+      type: "request",
+      method: "GET",
+      routeTemplate: `/api/auth${path}`,
+    },
+  });
 };
 
 type StartBootPrefetchOptions = {
   fetchImpl?: FetchLike;
   now?: () => number;
   reportError?: ReportPrefetchError;
-  wasDiscarded?: boolean;
 };
 
 /** Fired once by `boot-prefetch-entry.ts`. Evaluating this module has no
@@ -148,9 +156,6 @@ export const startBootPrefetch = ({
   fetchImpl = fetch,
   now = () => Temporal.Now.instant().epochMilliseconds,
   reportError = reportPrefetchError,
-  wasDiscarded = typeof document !== "undefined" &&
-    "wasDiscarded" in document &&
-    document.wasDiscarded === true,
 }: StartBootPrefetchOptions = {}): void => {
   // A second boot attempt supersedes, cancels, and invalidates every response
   // from the first one. This also keeps test and bfcache re-entry behavior
@@ -165,12 +170,15 @@ export const startBootPrefetch = ({
   // analytics graph never rides in this deliberately tiny boot chunk; it
   // only loads on the failure path. Reporting stays best-effort: a telemetry
   // failure must never prevent the normal bounded auth request fallback.
-  const reportAndDrop = async (error: unknown): Promise<null> => {
+  const reportAndDrop = async (
+    error: unknown,
+    path: BootPrefetchPath,
+  ): Promise<null> => {
     if (controller.signal.aborted) {
       return null;
     }
     try {
-      await reportError(error);
+      await reportError(error, path);
     } catch {
       // The reporting path itself failed; the auth client must still perform
       // its normal fallback request instead of inheriting telemetry failure.
@@ -188,11 +196,10 @@ export const startBootPrefetch = ({
       credentials: "include",
       headers: {
         accept: "application/json",
-        ...(!wasDiscarded ? { [AUTH_SESSION_STARTUP_HEADER]: "1" } : {}),
       },
       signal: requestSignal(),
     },
-  ).catch(reportAndDrop);
+  ).catch(async (error: unknown) => await reportAndDrop(error, "/get-session"));
   slots["/get-session"] = {
     controller,
     generation,
@@ -236,6 +243,9 @@ export const startBootPrefetch = ({
           signal: requestSignal(),
         });
       })
-      .catch(reportAndDrop),
+      .catch(
+        async (error: unknown) =>
+          await reportAndDrop(error, "/organization/get-active-member-role"),
+      ),
   };
 };

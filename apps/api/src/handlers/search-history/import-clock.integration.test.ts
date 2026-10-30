@@ -9,7 +9,8 @@ import {
   test,
 } from "bun:test";
 import { and, eq } from "drizzle-orm";
-import { ElysiaCustomStatusResponse } from "elysia/error";
+
+import { waitForExternalState } from "@stll/property-testing/external-state";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
@@ -19,6 +20,7 @@ import {
   searchHistoryTombstones,
 } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
+import { HttpStatusResponse } from "@/api/http/status";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
@@ -117,7 +119,7 @@ const acquireClock = async (fixture: HistoryFixture) => {
       identity(fixture),
     ),
   );
-  if (result instanceof ElysiaCustomStatusResponse) {
+  if (result instanceof HttpStatusResponse) {
     return panic(
       `Expected import clock success, received status ${result.code}`,
     );
@@ -125,17 +127,17 @@ const acquireClock = async (fixture: HistoryFixture) => {
   return result;
 };
 
-const acquireClockAfter = async (fixture: HistoryFixture, cutoff: Date) => {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
-    const clock = await acquireClock(fixture);
-    if (Date.parse(clock.issuedAt) > cutoff.getTime()) {
-      return clock;
-    }
-    // Both clocks must differ despite the issued clock's millisecond rounding.
-    await Bun.sleep(1);
-  }
-  return panic("Expected an import clock strictly after the database cutoff");
-};
+// Both clocks must differ despite the issued clock's millisecond rounding,
+// so this reads the database clock until it has moved past the cutoff.
+const acquireClockAfter = async (fixture: HistoryFixture, cutoff: Date) =>
+  await waitForExternalState({
+    description: "an import clock strictly after the database cutoff",
+    intervalMs: 1,
+    read: async () => {
+      const clock = await acquireClock(fixture);
+      return Date.parse(clock.issuedAt) > cutoff.getTime() && clock;
+    },
+  });
 
 const readHistory = async (fixture: HistoryFixture) => {
   const result = await list.handler(
@@ -143,7 +145,7 @@ const readHistory = async (fixture: HistoryFixture) => {
       ...identity(fixture),
     }),
   );
-  if (result instanceof ElysiaCustomStatusResponse) {
+  if (result instanceof HttpStatusResponse) {
     return panic(`Expected history success, received status ${result.code}`);
   }
   return result;
@@ -153,10 +155,10 @@ const recordQuery = async (fixture: HistoryFixture, query: string) => {
   const result = await record.handler(
     createTestHandlerContext<Parameters<typeof record.handler>[0]>({
       ...identity(fixture),
-      body: { kind: "search", query },
+      body: { kind: "search", query, country: "CZE" },
     }),
   );
-  if (result instanceof ElysiaCustomStatusResponse) {
+  if (result instanceof HttpStatusResponse) {
     return panic(`Expected record success, received status ${result.code}`);
   }
   return result;
@@ -582,8 +584,8 @@ describe("search history import clock integration", () => {
           },
         }),
       );
-      expect(response).toBeInstanceOf(ElysiaCustomStatusResponse);
-      if (response instanceof ElysiaCustomStatusResponse) {
+      expect(response).toBeInstanceOf(HttpStatusResponse);
+      if (response instanceof HttpStatusResponse) {
         expect(response.code).toBe(400);
       }
       await expectNoImportWrites(fixture);
@@ -617,8 +619,8 @@ describe("search history import clock integration", () => {
             },
           ),
         );
-        expect(response).toBeInstanceOf(ElysiaCustomStatusResponse);
-        if (response instanceof ElysiaCustomStatusResponse) {
+        expect(response).toBeInstanceOf(HttpStatusResponse);
+        if (response instanceof HttpStatusResponse) {
           expect(response.code).toBe(400);
         }
         await expectNoImportWrites(fixture);
@@ -644,8 +646,8 @@ describe("search history import clock integration", () => {
           },
         }),
       );
-      expect(response).toBeInstanceOf(ElysiaCustomStatusResponse);
-      if (response instanceof ElysiaCustomStatusResponse) {
+      expect(response).toBeInstanceOf(HttpStatusResponse);
+      if (response instanceof HttpStatusResponse) {
         expect(response.code).toBe(400);
       }
       await expectNoImportWrites(fixture);

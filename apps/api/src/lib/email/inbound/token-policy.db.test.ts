@@ -22,9 +22,9 @@ const workspaceB1 = createSafeId<"workspace">();
 const addressA1 = createSafeId<"matterInboundAddress">();
 const addressA2 = createSafeId<"matterInboundAddress">();
 const addressB1 = createSafeId<"matterInboundAddress">();
-const tokenA1 = generateInboundAddressToken();
-const tokenA2 = generateInboundAddressToken();
-const tokenB1 = generateInboundAddressToken();
+const tokenA1 = generateInboundAddressToken({ userId: null });
+const tokenA2 = generateInboundAddressToken({ userId: null });
+const tokenB1 = generateInboundAddressToken({ userId: null });
 const ownerRole = `inbound_token_owner_${Bun.randomUUIDv7().replaceAll("-", "")}`;
 
 let db: TestDatabase;
@@ -67,7 +67,7 @@ const ownerWrite = async (operation: "insert" | "update" | "delete") =>
           id: createSafeId<"matterInboundAddress">(),
           organizationId: organizationA,
           workspaceId: workspaceA1,
-          token: generateInboundAddressToken(),
+          token: generateInboundAddressToken({ userId: null }),
           revokedAt: new Date(),
         });
         return 1;

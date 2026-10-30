@@ -1,4 +1,3 @@
-import { KindGuard } from "@sinclair/typebox";
 import { panic } from "better-result";
 import { and, eq, inArray, isNull, notInArray, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
@@ -12,9 +11,10 @@ import type { FeatureAccessRequirement } from "@/api/lib/auth/feature-access/req
 import type { SafeId } from "@/api/lib/branded-types";
 import type { EntityQueryScope } from "@/api/lib/entities/query-scope";
 import { signalListConditions } from "@/api/lib/signals/read";
+import { workTask } from "@/api/lib/tasks/work-task";
 import { isRecord } from "@/api/lib/type-guards";
 
-const isTask = eq(entities.kind, "task");
+const isTask = workTask(entities);
 const isClosedTask =
   and(isTask, inArray(entities.status, [...TASK_CLOSED_STATUSES])) ??
   panic("Closed-task predicate compiled to nothing");
@@ -85,7 +85,10 @@ export const SIGNAL_INBOX_FEATURE_ACCESS = {
   decision: "when-used",
   usesFeature: ({ body }) => isRecord(body) && body["inboxView"] !== undefined,
   projectInputSchema: (schemas) => {
-    if (schemas.body === undefined || !KindGuard.IsObject(schemas.body)) {
+    if (
+      schemas.body?.type !== "object" ||
+      schemas.body.properties === undefined
+    ) {
       return schemas;
     }
     const { inboxView: _hidden, ...properties } = schemas.body.properties;

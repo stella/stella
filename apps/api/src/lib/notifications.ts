@@ -17,6 +17,7 @@ import type { Transaction } from "@/api/db/root";
 import { entities, notifications, workspaceMembers } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { normalizeEmail } from "@/api/lib/email/normalized-email";
 import { activityFeatureOwnerVisibilitySql } from "@/api/lib/flows/visibility";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
@@ -200,14 +201,17 @@ const insertNotifications = async (
             switch (owner) {
               case "shared":
               case "flows":
-                return { ...row, featureOwner: owner };
+                return {
+                  ...row,
+                  featureOwner: owner,
+                } satisfies typeof notifications.$inferInsert;
               case "entity":
                 return {
                   ...row,
                   featureOwner:
                     entityOwners.get(`${row.workspaceId}:${row.entityId}`) ??
                     "unknown",
-                };
+                } satisfies typeof notifications.$inferInsert;
               default:
                 owner satisfies never;
                 return panic("Notification ownership requires a disposition");
@@ -397,10 +401,10 @@ export const resolveMentionTargets = async (
 
   // Stored addresses are whatever the identity provider recorded, and a
   // reader types the address they see. Match both the verbatim mention and its
-  // lower-case form rather than folding the column, which would turn the
+  // normalized form rather than folding the column, which would turn the
   // unique email index into a sequential scan of every account.
   const candidates = [
-    ...new Set(mentioned.flatMap((email) => [email, email.toLowerCase()])),
+    ...new Set(mentioned.flatMap((email) => [email, normalizeEmail(email)])),
   ];
 
   const members = await tx

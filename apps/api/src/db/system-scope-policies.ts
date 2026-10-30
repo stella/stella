@@ -1,10 +1,12 @@
 import { panic } from "better-result";
 import { getColumnTable, getTableName, is, sql } from "drizzle-orm";
-import type { SQL } from "drizzle-orm";
-import { PgTable, pgPolicy } from "drizzle-orm/pg-core";
+import type { SQL, SQLWrapper } from "drizzle-orm";
+import { pgPolicy, PgTable } from "drizzle-orm/pg-core";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 
 import { stellaSystem } from "@/api/db/rls";
+
+import { WORKSPACE_SEARCH_ACTIVITY_ROLE_NAME } from "./role-names";
 
 /**
  * System permissions remain bounded by the row organization and explicit matter set.
@@ -76,3 +78,56 @@ export const systemUserReadPolicies = () => [
     using: sql`EXISTS (SELECT 1 FROM public.member scope_member WHERE scope_member.user_id = "user".id AND scope_member.organization_id = nullif(current_setting('app.organization_id', true), ''))`,
   }),
 ];
+
+type ActivityScopeColumns = {
+  organizationId: SQLWrapper;
+  workspaceId: SQLWrapper;
+};
+
+const activityScope = ({ organizationId, workspaceId }: ActivityScopeColumns) =>
+  sql`${organizationId} = nullif(current_setting('app.organization_id', true), '')
+    AND ${workspaceId} = ANY(coalesce(nullif(current_setting('app.workspace_ids', true), ''), '{}')::uuid[])`;
+
+export const workspaceActivitySourcePolicies = (
+  columns: ActivityScopeColumns,
+) => [
+  pgPolicy("workspace_search_activity_select", {
+    for: "select",
+    to: WORKSPACE_SEARCH_ACTIVITY_ROLE_NAME,
+    using: activityScope(columns),
+  }),
+];
+
+type ActivityProjectionColumns = ActivityScopeColumns & {
+  updatedAt: SQLWrapper;
+};
+
+export const workspaceActivityProjectionPolicies = (
+  columns: ActivityProjectionColumns,
+) => {
+  const scope = activityScope(columns);
+  const sourceValue = sql`${scope} AND ${columns.updatedAt} = (
+    SELECT source.last_activity_at FROM public.workspaces source
+    WHERE source.id = ${columns.workspaceId} AND source.organization_id = ${columns.organizationId}
+  )`;
+  return [
+    pgPolicy("workspace_search_activity_select", {
+      for: "select",
+      to: WORKSPACE_SEARCH_ACTIVITY_ROLE_NAME,
+      using: scope,
+    }),
+    pgPolicy("workspace_search_activity_update", {
+      for: "update",
+      to: WORKSPACE_SEARCH_ACTIVITY_ROLE_NAME,
+      using: scope,
+      withCheck: sourceValue,
+    }),
+    pgPolicy("workspace_search_activity_scope", {
+      as: "restrictive",
+      for: "all",
+      to: WORKSPACE_SEARCH_ACTIVITY_ROLE_NAME,
+      using: scope,
+      withCheck: sourceValue,
+    }),
+  ];
+};

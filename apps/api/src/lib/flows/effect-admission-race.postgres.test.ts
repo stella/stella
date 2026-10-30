@@ -7,8 +7,8 @@ import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   featureEnrolments,
   flowDefinitions,
-  flowRunSteps,
   flowRuns,
+  flowRunSteps,
   notifications,
   schedulerJobs,
   workspaceMembers,
@@ -17,8 +17,8 @@ import { authorizeHandlerRunSize } from "@/api/lib/api-handlers";
 import { createSafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import {
-  timestampCasToken,
   type TimestampCasToken,
+  timestampCasToken,
 } from "@/api/lib/db/timestamp-cas";
 import { FlowStepError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
@@ -27,8 +27,8 @@ import {
   failFlowRunFromWorker,
 } from "@/api/lib/flows/flow-executor";
 import {
-  persistFlowStepClaim,
   type FlowStepJobData,
+  persistFlowStepClaim,
 } from "@/api/lib/flows/flow-run-queue";
 import { resumeFlowStepsAfterGrant } from "@/api/lib/flows/flow-run-worker";
 import { FLOW_STEP_LEASE_MS } from "@/api/lib/flows/flow-types";
@@ -43,7 +43,7 @@ import {
 import {
   FLOW_RUN_TASK,
   flowScheduleJobId,
-} from "@/api/lib/scheduler/tasks/flow-run";
+} from "@/api/lib/scheduler/flow-schedule-identity";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { flowReviewGateFixture } from "@/api/tests/helpers/flow-review-gate";

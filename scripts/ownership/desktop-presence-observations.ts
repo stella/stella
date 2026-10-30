@@ -25,6 +25,11 @@ export default {
         path: "apps/api/src/lib/member-offboarding/member-assignment-offboarding-owner.ts",
         reason: "Clears observations during organization membership removal.",
       },
+      {
+        path: "apps/api/src/db/entity-feature-gate-repair.ts",
+        reason:
+          "Full-schema policy introspection: renders the entity feature policies the online cutover installs; reads no rows.",
+      },
     ],
   },
 } as const satisfies OwnershipEntry;

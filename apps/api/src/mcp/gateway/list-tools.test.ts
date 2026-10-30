@@ -3,9 +3,11 @@ import { describe, expect, test } from "bun:test";
 
 import type { Transaction } from "@/api/db/root";
 import type { CachedMcpToolDefinition } from "@/api/db/schema";
+import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
+import type { BusinessRegistrySlug } from "@/api/lib/business-registries/dispatch";
+import { readPresent } from "@/api/lib/errors/read-outcome";
 import type { LoadedMcpConnection } from "@/api/lib/mcp-upstream/connections";
-import type { McpRequestContext } from "@/api/mcp/context";
 import type { ExternalGatewayDependencies } from "@/api/mcp/gateway/external-tools";
 import {
   getGatewayMcpToolDefinition,
@@ -15,19 +17,25 @@ import {
 import { DOCUMENTS_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 import type { McpToolDefinition } from "@/api/mcp/tool-types";
 import { handleMcpToolCall } from "@/api/mcp/tools";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 
-// Only `enabledRegistrySlugs` and `memberRole` drive static visibility here.
+// Only the registry loader and `memberRole` drive static visibility here.
 // `scopes: ["stella:read"]` grants the read-scoped lookup tool while
 // withholding stella:external_mcps / stella:skills, so the dynamic gateway
 // loaders never run and no DB is touched.
 const contextWith = (
-  enabledRegistrySlugs: readonly string[] | undefined,
-  memberRole: McpRequestContext["memberRole"] = "owner",
-): McpRequestContext =>
-  asTestRaw<McpRequestContext>({
-    enabledRegistrySlugs,
+  enabledRegistrySlugs: readonly BusinessRegistrySlug[] | undefined,
+  memberRole: AuthorizedMcpRequestContext["memberRole"] = "owner",
+): AuthorizedMcpRequestContext =>
+  asTestRaw<AuthorizedMcpRequestContext>({
+    ...(enabledRegistrySlugs === undefined
+      ? {}
+      : {
+          loadEnabledRegistrySlugs: async () =>
+            await Promise.resolve(readPresent(enabledRegistrySlugs)),
+        }),
     grantedScopes: [],
     memberRole,
     // Billing tools are gated by enrolment; this caller is enrolled so role
@@ -67,10 +75,30 @@ const hasLookupTool = (definitions: readonly McpToolDefinition[]): boolean =>
     (definition) => definition.name === "lookup_business_registry",
   );
 
+const tenantlessSkillContext = (): AuthorizedMcpRequestContext => {
+  const builder = {
+    from: () => builder,
+    where: () => builder,
+    orderBy: () => builder,
+    limit: async () => [],
+  };
+  const safeDb: AuthorizedMcpRequestContext["safeDb"] = async (run) =>
+    Result.ok(await run(asTestRaw<Transaction>({ select: () => builder })));
+  return asTestRaw<AuthorizedMcpRequestContext>({
+    grantedScopes: ["stella:skills", "stella:knowledge_write"],
+    memberRole: "owner",
+    organizationId: toSafeId<"organization">("org_no_skills"),
+    recordAuditEvent: asTestRaw<AuditRecorder>(async () => undefined),
+    safeDb,
+    userId: toSafeId<"user">("user_no_skills"),
+  });
+};
+
 const definitionWithSchema = (
   inputSchema: McpToolDefinition["inputSchema"],
 ): McpToolDefinition => ({
   access: "read",
+  permissions: { type: "open-read", reason: "reads only fixture data" },
   readClass: "tenant",
   annotations: {
     title: "Test tool",
@@ -110,6 +138,7 @@ const externalConnection = {
   userConnectionId: toSafeId<"mcpUserConnection">("connection_1"),
 } satisfies LoadedMcpConnection;
 const externalGatewayDependencies = {
+  consumeMcpGatewayRateLimit: async () => true,
   loadActiveMcpConnectionsForUser: async () => [externalConnection],
   proxyMcpToolCall: async () => ({ content: [] }),
   refreshCachedMcpToolsForConnection: async () => undefined,
@@ -117,7 +146,7 @@ const externalGatewayDependencies = {
 
 const contextWithExternalServer = (
   grantedScopes: readonly string[],
-): McpRequestContext => {
+): AuthorizedMcpRequestContext => {
   const builder = {
     from: () => builder,
     innerJoin: () => builder,
@@ -134,11 +163,11 @@ const contextWithExternalServer = (
       },
     ],
   };
-  const safeDb: McpRequestContext["safeDb"] = async (callback) =>
+  const safeDb: AuthorizedMcpRequestContext["safeDb"] = async (callback) =>
     Result.ok(
       await callback(asTestRaw<Transaction>({ select: () => builder })),
     );
-  return asTestRaw<McpRequestContext>({
+  return asTestRaw<AuthorizedMcpRequestContext>({
     ...contextWith(undefined),
     grantedScopes: [...grantedScopes],
     safeDb,
@@ -237,11 +266,11 @@ describe("skill gateway mode boundary", () => {
           },
         ],
       };
-      const safeDb: McpRequestContext["safeDb"] = async (callback) =>
+      const safeDb: AuthorizedMcpRequestContext["safeDb"] = async (callback) =>
         Result.ok(
           await callback(asTestRaw<Transaction>({ select: () => builder })),
         );
-      const context = asTestRaw<McpRequestContext>({
+      const context = asTestRaw<AuthorizedMcpRequestContext>({
         ...contextWith(undefined),
         userId: "user_test",
         grantedScopes: ["stella:skills"],
@@ -298,6 +327,34 @@ describe("listGatewayMcpToolDefinitions business-registry narrowing", () => {
     expect(registryEnum).toContain("vies");
   });
 
+  test("loads the reachable registries only for a projection that offers the registry tool", async () => {
+    let loads = 0;
+    const context = asTestRaw<AuthorizedMcpRequestContext>({
+      ...contextWith(undefined),
+      loadEnabledRegistrySlugs: async () => {
+        loads += 1;
+        return await Promise.resolve(readPresent(["orsr"]));
+      },
+    });
+
+    // No scope grants the registry tool, and the anonymized projection never
+    // narrows: neither reads the organization's registries.
+    await listGatewayMcpToolDefinitions({
+      context,
+      mode: "default",
+      scopes: [],
+    });
+    await listGatewayMcpToolDefinitions({ context, mode: "anonymized" });
+    expect(loads).toBe(0);
+
+    await listGatewayMcpToolDefinitions({
+      context,
+      mode: "default",
+      scopes: ["stella:read"],
+    });
+    expect(loads).toBe(1);
+  });
+
   test("never narrows the tenant-neutral anonymized projection", async () => {
     // The anonymized tools/list must stay tenant-neutral: even when the context
     // resolved a subset, the anonymized schema keeps the full enum so it cannot
@@ -329,6 +386,20 @@ describe("listGatewayMcpToolDefinitions restricted surfaces", () => {
 
     expect(definitions.map(({ name }) => name)).toEqual(
       DOCUMENTS_MCP_TOOL_DEFINITIONS.map(({ name }) => name),
+    );
+  });
+});
+
+describe("listGatewayMcpToolDefinitions skill guidance", () => {
+  test("does not expose shipped skills as tools", async () => {
+    const definitions = await listGatewayMcpToolDefinitions({
+      context: tenantlessSkillContext(),
+      mode: "default",
+      scopes: ["stella:skills", "stella:knowledge_write"],
+    });
+
+    expect(definitions.some(({ name }) => name.startsWith("skill__"))).toBe(
+      false,
     );
   });
 });

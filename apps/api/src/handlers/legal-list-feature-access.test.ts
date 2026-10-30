@@ -13,9 +13,9 @@ import {
 import { isRecord } from "@/api/lib/type-guards";
 import { CAPABILITY_DISPATCH } from "@/api/mcp/generated/capability-dispatch";
 import {
+  createTestHandlerContext,
   NO_AUDIT,
   NO_DB,
-  createTestHandlerContext,
 } from "@/api/tests/helpers/handler-context";
 
 for (const grants of [

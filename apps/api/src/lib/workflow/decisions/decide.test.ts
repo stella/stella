@@ -311,6 +311,7 @@ test("the real generation runtime receives sanitized state and the canonical dec
     generation: {
       task: "classify",
       dataClass: "customer",
+      userId: null,
       orgAIConfig: null,
       managedAIResidency: "eu",
       organizationId,
@@ -371,6 +372,7 @@ test("a generative runtime deadline stays a typed undecided result without cance
     generation: {
       task: "classify",
       dataClass: "customer",
+      userId: null,
       orgAIConfig: null,
       managedAIResidency: "eu",
       organizationId,
@@ -511,6 +513,7 @@ test("choice generation sends a closed probability schema through the real runti
     generation: {
       task: "classify",
       dataClass: "customer",
+      userId: null,
       orgAIConfig: null,
       managedAIResidency: "eu",
       organizationId,
@@ -545,6 +548,7 @@ test("the generation deadline bounds a stalled resolver without aborting the cal
     generation: {
       task: "classify",
       dataClass: "customer",
+      userId: null,
       orgAIConfig: null,
       managedAIResidency: "eu",
       organizationId,
@@ -637,6 +641,7 @@ test.each(["success", "failed-middle", "stalled-middle"])(
       generation: {
         task: "classify",
         dataClass: "customer",
+        userId: null,
         orgAIConfig: null,
         managedAIResidency: "eu",
         organizationId,
@@ -1078,7 +1083,7 @@ describe("a failed call", () => {
       orgAIConfig: null,
       state,
       questions: { signed: signedQuestion },
-      timeoutMs: 1,
+      timeoutMs: 1, // timeout under test
       client: decisionModel(fetcher),
     });
 
@@ -1207,6 +1212,7 @@ test("a question that cannot fit the provider budget fails without dispatching",
     generation: {
       task: "classify",
       dataClass: "customer",
+      userId: null,
       orgAIConfig: null,
       managedAIResidency: "eu",
       organizationId,
@@ -1228,8 +1234,77 @@ test("a question that cannot fit the provider budget fails without dispatching",
   expect(result).toEqual({
     state: "undecided",
     source: "generative",
-    model: null,
+    model: "claude-sonnet-5",
     reason: "failed",
     confidence: null,
+  });
+});
+
+test("a question over the provider budget fails alone while the others are asked", async () => {
+  const organizationId = toSafeId<"organization">("org-decision-partial-fit");
+  const requestedIds: string[][] = [];
+  const adapter = {
+    ...createScriptedTextAdapter([]),
+    structuredOutput: async ({ outputSchema }) => {
+      const ids = [
+        ...new Set(JSON.stringify(outputSchema).match(/question-\w+/gu)),
+      ];
+      requestedIds.push(ids);
+      const output = {
+        answers: ids.map((id) => ({
+          id,
+          answer: { type: "noul", noul: 1 },
+          evidence: null,
+        })),
+      };
+      return await Promise.resolve({
+        data: output,
+        rawText: JSON.stringify(output),
+      });
+    },
+  } satisfies AnyTextAdapter;
+  const { decisions } = await decideMany({
+    id: "test.provider-budget-partial-fit",
+    dataClass: "customer",
+    orgAIConfig: null,
+    state,
+    questions: {
+      "question-signed": signedQuestion,
+      "question-oversized": choice("Which clause applies?", {
+        ["clause".repeat(STRUCTURED_OUTPUT_BUDGETS.anthropic.maxSchemaBytes)]:
+          "The signed clause",
+      }),
+    },
+    client: null,
+    generation: {
+      task: "classify",
+      dataClass: "customer",
+      userId: null,
+      orgAIConfig: null,
+      managedAIResidency: "eu",
+      organizationId,
+      admission: testModelAdmission(organizationId),
+      tenantWorkspaceIds: [],
+      serviceTier: "standard",
+      caching: { enabled: false, reason: "org-disabled" },
+      prompt: "Read the contract.",
+      resolveTextModel: () => ({
+        adapter,
+        keySource: "byok",
+        modelId: "claude-sonnet-5",
+        provider: "anthropic",
+        modelOptions: {},
+      }),
+    },
+  });
+  expect(requestedIds).toEqual([["question-signed"]]);
+  expect(decisions["question-signed"]).toMatchObject({
+    state: "decided",
+    source: "generative",
+  });
+  expect(decisions["question-oversized"]).toMatchObject({
+    state: "undecided",
+    source: "generative",
+    reason: "failed",
   });
 });

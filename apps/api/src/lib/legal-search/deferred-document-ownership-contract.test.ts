@@ -2,7 +2,15 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import ts from "typescript";
+
+import {
+  type ModuleExportName,
+  type Node,
+  type ParamPattern,
+  parseSource,
+  type VariableDeclarator,
+  walk,
+} from "@stll/scripts/src/syntax-tree";
 
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { DEFERRED_DOCUMENT_WRITER_CAPABILITIES } from "@/api/lib/legal-search/deferred-document-writer-contract";
@@ -20,28 +28,35 @@ const acquisitionNames = new Set([
   "withDeferredDocumentSourceOwnership",
 ]);
 
-const parse = (source: string, file = writerPath) =>
-  ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
+const moduleExportName = (name: ModuleExportName) =>
+  name.type === "Identifier" ? name.name : name.value;
 
-const hasExport = (node: ts.Node) =>
-  ts.canHaveModifiers(node) &&
-  ts
-    .getModifiers(node)
-    ?.some(({ kind }) => kind === ts.SyntaxKind.ExportKeyword);
+/** A parameter's type annotation, `T` in `(options: T) => …`. */
+const parameterType = (parameter: ParamPattern) => {
+  const pattern =
+    parameter.type === "TSParameterProperty" ? parameter.parameter : parameter;
+  const annotated =
+    pattern.type === "AssignmentPattern" ? pattern.left : pattern;
+  return annotated.typeAnnotation?.typeAnnotation;
+};
 
-const callsAcquisition = (node: ts.Node): boolean => {
-  if (
-    ts.isCallExpression(node) &&
-    ts.isIdentifier(node.expression) &&
-    acquisitionNames.has(node.expression.text)
-  ) {
-    return true;
-  }
-  return ts.forEachChild(node, callsAcquisition) === true;
+const callsAcquisition = (root: Node): boolean => {
+  let found = false;
+  walk(root, (node) => {
+    if (found) {
+      return "skip-children";
+    }
+    found =
+      node.type === "CallExpression" &&
+      node.callee.type === "Identifier" &&
+      acquisitionNames.has(node.callee.name);
+    return undefined;
+  });
+  return found;
 };
 
 const writerProblems = (source: string): string[] => {
-  const tree = parse(source);
+  const { program, sourceText } = parseSource(writerPath, source);
   const problems: string[] = [];
   const publicOperations = new Set([
     "fetchDecisionDocument",
@@ -50,65 +65,76 @@ const writerProblems = (source: string): string[] => {
     "markDocumentUnavailable",
     "parkDocumentFetch",
   ]);
-  const declarations = new Map<string, ts.VariableDeclaration>();
-  for (const statement of tree.statements) {
+  const declarations = new Map<string, VariableDeclarator>();
+  for (const statement of program.body) {
+    const exported =
+      statement.type === "ExportNamedDeclaration" ||
+      statement.type === "ExportDefaultDeclaration";
+    const declared = exported ? statement.declaration : statement;
     if (
-      ts.isFunctionDeclaration(statement) &&
-      statement.name?.text.endsWith("Owned")
+      (declared?.type === "FunctionDeclaration" ||
+        declared?.type === "TSDeclareFunction") &&
+      declared.id?.name.endsWith("Owned") === true
     ) {
       problems.push(
-        `${statement.name.text}: raw operation must use the owned arrow function contract`,
+        `${declared.id.name}: raw operation must use the owned arrow function contract`,
       );
     }
-    if (!ts.isVariableStatement(statement)) {
+    if (declared?.type !== "VariableDeclaration") {
       continue;
     }
-    for (const declaration of statement.declarationList.declarations) {
-      if (!ts.isIdentifier(declaration.name)) {
+    for (const declaration of declared.declarations) {
+      if (declaration.id.type !== "Identifier") {
         continue;
       }
-      const name = declaration.name.text;
+      const { name } = declaration.id;
       declarations.set(name, declaration);
       if (!name.endsWith("Owned")) {
         continue;
       }
       publicOperations.add(name.slice(0, -"Owned".length));
-      if (hasExport(statement)) {
+      if (exported) {
         problems.push(`${name}: raw operation is exported`);
       }
       if (
-        declaration.initializer === undefined ||
-        !ts.isArrowFunction(declaration.initializer) ||
-        !declaration.initializer.parameters.some((parameter) =>
-          parameter.type?.getText(tree).includes("DeferredDocumentSourceFence"),
-        )
+        declaration.init?.type !== "ArrowFunctionExpression" ||
+        !declaration.init.params.some((parameter) => {
+          const type = parameterType(parameter);
+          return (
+            type !== undefined &&
+            sourceText
+              .slice(type.start, type.end)
+              .includes("DeferredDocumentSourceFence")
+          );
+        })
       ) {
         problems.push(`${name}: raw operation requires a source fence`);
       }
     }
   }
   for (const name of publicOperations) {
-    const declaration = declarations.get(name);
+    const initializer = declarations.get(name)?.init;
     if (
-      declaration?.initializer === undefined ||
-      !callsAcquisition(declaration.initializer)
+      initializer === undefined ||
+      initializer === null ||
+      !callsAcquisition(initializer)
     ) {
       problems.push(`${name}: public operation must acquire ownership`);
     }
   }
-  for (const statement of tree.statements) {
-    if (!ts.isExportDeclaration(statement)) {
+  for (const statement of program.body) {
+    if (statement.type === "ExportAllDeclaration") {
+      if (statement.exported === null) {
+        problems.push("writer must not re-export raw modules");
+      }
       continue;
     }
-    if (statement.exportClause === undefined) {
-      problems.push("writer must not re-export raw modules");
+    if (statement.type !== "ExportNamedDeclaration") {
       continue;
     }
-    if (ts.isNamedExports(statement.exportClause)) {
-      for (const element of statement.exportClause.elements) {
-        if ((element.propertyName ?? element.name).text.endsWith("Owned")) {
-          problems.push("writer must not re-export raw operations");
-        }
+    for (const element of statement.specifiers) {
+      if (moduleExportName(element.local).endsWith("Owned")) {
+        problems.push("writer must not re-export raw operations");
       }
     }
   }
@@ -116,28 +142,25 @@ const writerProblems = (source: string): string[] => {
 };
 
 const callerProblems = (source: string, file: string): string[] => {
-  const tree = parse(source, file);
+  const { program } = parseSource(file, source);
   const problems: string[] = [];
-  for (const statement of tree.statements) {
-    if (
-      !ts.isImportDeclaration(statement) ||
-      !ts.isStringLiteral(statement.moduleSpecifier)
-    ) {
+  for (const statement of program.body) {
+    if (statement.type !== "ImportDeclaration") {
       continue;
     }
-    const module = canonicalModuleId(statement.moduleSpecifier.text, file);
+    const module = canonicalModuleId(statement.source.value, file);
     if (module === ownershipModule && file !== writerPath) {
       problems.push(`${file}: ownership constructor belongs to the writer`);
     }
     if (module !== writerModule) {
       continue;
     }
-    const bindings = statement.importClause?.namedBindings;
-    if (bindings !== undefined && ts.isNamedImports(bindings)) {
-      for (const binding of bindings.elements) {
-        if ((binding.propertyName ?? binding.name).text.endsWith("Owned")) {
-          problems.push(`${file}: raw operation import`);
-        }
+    for (const binding of statement.specifiers) {
+      if (
+        binding.type === "ImportSpecifier" &&
+        moduleExportName(binding.imported).endsWith("Owned")
+      ) {
+        problems.push(`${file}: raw operation import`);
       }
     }
   }

@@ -865,6 +865,22 @@ describe("writeDocumentProperties", () => {
 
     expect(result).toEqual({ status: "unreadable" });
   });
+
+  it("refuses an incomplete property element", async () => {
+    const coreXml =
+      '<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>unfinished</cp:coreProperties>';
+    const result = await writeDocumentProperties({
+      bytes: await zipOf({
+        "docProps/core.xml": coreXml,
+        "docProps/app.xml": APP_XML,
+        "word/document.xml": "<w:document/>",
+      }),
+      mimeType: DOCX_MIME_TYPE,
+      values: { title: "Updated" },
+    });
+
+    expect(result).toEqual({ status: "unreadable" });
+  });
 });
 
 describe("document property failure reporting", () => {

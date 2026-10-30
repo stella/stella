@@ -7,6 +7,7 @@ import {
   entityFeatureGateColumns,
   entityFeatureWorkspaceGateColumns,
 } from "../entity-feature-gate-columns";
+import { memberExchangeOffboardingPolicies } from "../member-exchange-policies";
 import {
   jsonb,
   p,
@@ -184,6 +185,7 @@ export const pdfSigningSessions = p.pgTable(
   },
   (table) => [
     ...systemScopePolicies(table),
+    ...memberExchangeOffboardingPolicies(table),
     ...entityFeatureGateChecks(table),
     p.index("pdf_signing_sessions_workspace_id_idx").on(table.workspaceId),
     p.index("pdf_signing_sessions_entity_id_idx").on(table.entityId),

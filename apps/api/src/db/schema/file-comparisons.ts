@@ -1,3 +1,4 @@
+import { registeredReviewResetPolicies } from "../review-reset-policies";
 import {
   organization,
   p,
@@ -111,5 +112,7 @@ export const fileComparisonUploads = p.pgTable(
       sql`(${table.kind} = 'input') = (${table.declaredSha256} IS NOT NULL)`,
     ),
     ...userOrganizationPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );

@@ -37,6 +37,14 @@ type InspectAppManifestArgs = {
   directories: readonly string[];
 };
 
+const cannotCallPresentationWrite = (
+  appType: string,
+  tool: McpToolDefinition,
+) =>
+  appType === "presentation" &&
+  tool.access === "write" &&
+  isMcpToolVisibleTo(tool, "model");
+
 export const inspectAppManifest = ({
   apps,
   tools,
@@ -81,8 +89,10 @@ export const inspectAppManifest = ({
         if (!isMcpToolVisibleTo(tool, "app")) {
           issues.push(`App calls require app-visible tools: ${name}`);
         }
-        if (app.type === "presentation" && tool.access !== "read") {
-          issues.push(`Presentation apps require read-only tools: ${name}`);
+        if (cannotCallPresentationWrite(app.type, tool)) {
+          issues.push(
+            `Presentation apps cannot call model-visible write tools: ${name}`,
+          );
         }
       }
     }

@@ -1,12 +1,12 @@
 import {
-  resourceDeletedRealtimeEvent,
-  resourceSetUpdatedRealtimeEvent,
-  resourceUpdatedRealtimeEvent,
-  resourcesChangedRealtimeEvent,
   type ResourceChangeInput,
+  resourceDeletedRealtimeEvent,
   type ResourceDeletion,
   type ResourceRef,
+  resourcesChangedRealtimeEvent,
+  resourceSetUpdatedRealtimeEvent,
   type ResourceType,
+  resourceUpdatedRealtimeEvent,
 } from "@stll/api-contract";
 
 import type { SafeId } from "@/api/lib/branded-types";

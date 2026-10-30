@@ -22,7 +22,7 @@ import { isBackgroundFeatureEnabled } from "@/api/lib/feature-access/background"
 import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
 import { resumeFlowsAfterGrant } from "@/api/lib/flows/grant-recovery";
 import { removeOrganizationMemberInTransaction } from "@/api/lib/member-offboarding/member-assignment-offboarding-owner";
-import { flowScheduleJobId } from "@/api/lib/scheduler/tasks/flow-run";
+import { flowScheduleJobId } from "@/api/lib/scheduler/flow-schedule-identity";
 import { resumeSignalsAfterGrant } from "@/api/lib/signals/grant-recovery";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";

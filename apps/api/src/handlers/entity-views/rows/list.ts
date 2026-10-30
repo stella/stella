@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
+import { API_CALENDAR_DATE_CHECK } from "@stll/api-contract/api-date";
 import {
   ENTITY_VIEW_ROW_KIND,
   ENTITY_VIEW_WORK_RISK,
@@ -14,7 +15,7 @@ import {
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import {
   buildKanbanGroupCondition,
@@ -55,28 +56,35 @@ const config = {
   featureAccess: SIGNAL_INBOX_FEATURE_ACCESS,
   mcp: { type: "covered", by: "read_content_across_matters" },
   access: "read",
-  body: t.Object({
-    ...entityQueryWindowBodySchema.properties,
-    scope: t.Union([
-      t.Object({ type: t.Literal("organization") }),
-      t.Object({ type: t.Literal("matter"), matterId: tSafeId("workspace") }),
-    ]),
-    inboxView: t.Optional(signalViewSchema),
-    asOf: t.Optional(
-      t.String({
-        format: "date",
-        description:
-          "The caller's calendar day (YYYY-MM-DD) for work risk; defaults to the organization's day in its time zone",
+  body: v.object({
+    ...entityQueryWindowBodySchema.entries,
+    scope: v.union([
+      v.object({ type: v.literal("organization") }),
+      v.object({
+        type: v.literal("matter"),
+        matterId: resourceIdSchema("workspace"),
       }),
+    ]),
+    inboxView: v.optional(signalViewSchema),
+    asOf: v.optional(
+      v.pipe(
+        v.string(),
+        v.isoDate(),
+        API_CALENDAR_DATE_CHECK,
+        v.description(
+          "The caller's calendar day (YYYY-MM-DD) for work risk; defaults to the organization's day in its time zone",
+        ),
+      ),
     ),
-    group: t.Optional(
-      t.Object({
+    group: v.optional(
+      v.object({
         groupByPropertyId: tGroupByPropertyId,
-        groupValue: t.Nullable(t.String({ maxLength: 1000 })),
-        optionValues: t.Optional(
-          t.Array(t.String({ maxLength: 1000 }), {
-            maxItems: LIMITS.propertiesCount,
-          }),
+        groupValue: v.nullable(v.pipe(v.string(), v.maxLength(1000))),
+        optionValues: v.optional(
+          v.pipe(
+            v.array(v.pipe(v.string(), v.maxLength(1000))),
+            v.maxLength(LIMITS.propertiesCount),
+          ),
         ),
       }),
     ),
@@ -162,6 +170,7 @@ const listRows = createSafeRootHandler(
           };
     const result = yield* Result.await(
       queryEntities({
+        textMode: "preview",
         safeDb,
         scope,
         currentUserId: user.id,
@@ -172,7 +181,7 @@ const listRows = createSafeRootHandler(
         find: body.find,
         cursor: cursorResult.value,
         limit: limit + 1,
-        fieldMode: body.fieldMode ?? "full",
+        fieldMode: body.fieldMode ?? "visible",
         fieldIds: arrayOrEmpty(body.fieldIds),
         excludedKinds: arrayOrEmpty(body.excludedKinds),
         previewableForAi: body.previewableForAi ?? false,

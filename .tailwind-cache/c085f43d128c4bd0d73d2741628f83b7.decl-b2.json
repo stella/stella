@@ -1,0 +1,1 @@
+{"border-destructive/50":{"valid":true,"declarations":[["","border-color","color-mix(in oklab, var(--destructive) 50%, transparent)"]],"values":{"color-mix(in oklab, var(--destructive) 50%, transparent)":{"p":["--destructive"],"f":[],"u":false}}}}

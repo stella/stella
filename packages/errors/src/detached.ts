@@ -1,9 +1,13 @@
+// parser-output-unchanged: requires symbolic rejection labels in types; detached promise handling and parser results are unchanged.
 // Fire-and-forget work, shared by the API and web apps. Both route a detached
 // rejection to their own error-capture channel; that channel is the only part
 // that differs, so it is injected and the helper itself lives here once.
 
 /** Receives a detached rejection with the call site's label. */
-export type DetachedRejectionSink = (error: unknown, context: string) => void;
+export type DetachedRejectionSink = (
+  error: unknown,
+  context: `${string}.${string}`,
+) => void;
 
 /**
  * Build an app's `detached(operation, context)`: run a promise as
@@ -16,7 +20,7 @@ export type DetachedRejectionSink = (error: unknown, context: string) => void;
  */
 export const createDetached =
   (onRejection: DetachedRejectionSink) =>
-  (operation: unknown, context: string): void => {
+  (operation: unknown, context: `${string}.${string}`): void => {
     Promise.resolve(operation).catch((error: unknown) => {
       onRejection(error, context);
     });

@@ -8,24 +8,24 @@ import {
 } from "@stll/property-testing";
 
 import {
-  registryString,
-  registryExtras,
+  expectNullableString,
   expectRegistryOutcome,
   expectRegistryResponses,
   forEachRegistryMutation,
-  expectNullableString,
+  registryExtras,
+  registryString,
 } from "../shared/property-test-helpers.test.js";
 import { lookupFullRecordByIco, searchByName } from "./client.js";
 import {
-  parseExtract,
-  parseSearchHit,
-  parseHistory,
   parseDocument,
+  parseExtract,
+  parseHistory,
   parseRelatedHit,
+  parseSearchHit,
 } from "./parse.js";
 import type {
-  OrsrRawExtractResponse,
   OrsrRawDocument,
+  OrsrRawExtractResponse,
   OrsrRawRelatedHit,
 } from "./types.js";
 

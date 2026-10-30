@@ -1,9 +1,10 @@
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
+
+import { numberFromString } from "@stll/api-contract/http-input";
 
 import {
-  tPaginationCursor,
-  tSafeId,
+  paginationCursorSchema,
+  resourceIdSchema,
   workspaceParams,
 } from "@/api/lib/custom-schema";
 import {
@@ -19,94 +20,115 @@ import {
 import type { FLOW_RUN_STATUSES } from "@/api/lib/flows/flow-types";
 import { LIMITS } from "@/api/lib/limits";
 
-// The HTTP contract for a flow definition (Eden-typed shape + first-pass
-// validation). The handler additionally parses the body through the shared
-// valibot `flowDefinitionInputSchema` to normalize (trim) and enforce the
-// deeper invariants in one authoritative place.
+// The HTTP contract for a flow definition (the API client's typed shape +
+// first-pass validation). The handler additionally parses the body through
+// the shared valibot `flowDefinitionInputSchema` to normalize (trim) and
+// enforce the deeper invariants in one authoritative place.
 //
 // The two layers describe the same body, so every scalar bound here comes from
 // the constants `flow-types.ts` exports rather than a literal restated per
-// layer; only the shapes TypeBox and valibot express differently are written
+// layer; only the shapes the two layers express differently are written
 // twice.
 
-const tStepName = t.String({
-  minLength: 1,
-  maxLength: FLOW_STEP_NAME_MAX_CHARS,
-});
+const tStepName = v.pipe(
+  v.string(),
+  v.minLength(1),
+  v.maxLength(FLOW_STEP_NAME_MAX_CHARS),
+);
 
-const tFlowStep = t.Union([
-  t.Object({
-    kind: t.Literal("ai"),
+const tFlowStep = v.union([
+  v.object({
+    kind: v.literal("ai"),
     name: tStepName,
-    prompt: t.String({
-      minLength: 1,
-      maxLength: FLOW_STEP_INSTRUCTION_CHAR_CAP,
-    }),
-    includeDocuments: t.Boolean(),
+    prompt: v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(FLOW_STEP_INSTRUCTION_CHAR_CAP),
+    ),
+    includeDocuments: v.boolean(),
   }),
-  t.Object({
-    kind: t.Literal("review-gate"),
+  v.object({
+    kind: v.literal("review-gate"),
     name: tStepName,
-    instructions: t.String({ maxLength: FLOW_STEP_INSTRUCTION_CHAR_CAP }),
+    instructions: v.pipe(
+      v.string(),
+      v.maxLength(FLOW_STEP_INSTRUCTION_CHAR_CAP),
+    ),
   }),
-  t.Object({
-    kind: t.Literal("create-document"),
+  v.object({
+    kind: v.literal("create-document"),
     name: tStepName,
-    documentTitle: t.String({
-      minLength: 1,
-      maxLength: FLOW_STEP_DOCUMENT_TITLE_MAX_CHARS,
-    }),
+    documentTitle: v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(FLOW_STEP_DOCUMENT_TITLE_MAX_CHARS),
+    ),
   }),
 ]);
 
-const tFlowSchedule = t.Object({
-  // `t.Union(arr.map(t.Literal))` builds the union from a general array, whose
-  // static type Eden cannot reconstruct — it collapses to `never` on the client
-  // body type. Use `t.UnionEnum([...const])` like the required `decision` field
-  // below so the frontend sees `"daily" | "weekly" | "monthly"`.
-  frequency: t.UnionEnum([...FLOW_SCHEDULE_FREQUENCIES]),
-  hourUtc: t.Integer({ minimum: 0, maximum: 23 }),
-  dayOfWeek: t.Optional(t.Integer({ minimum: 0, maximum: 6 })),
-  dayOfMonth: t.Optional(t.Integer({ minimum: 1, maximum: 28 })),
+const tFlowSchedule = v.object({
+  frequency: v.picklist([...FLOW_SCHEDULE_FREQUENCIES]),
+  hourUtc: v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(23)),
+  dayOfWeek: v.optional(
+    v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(6)),
+  ),
+  dayOfMonth: v.optional(
+    v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(28)),
+  ),
 });
 
-const tFlowTrigger = t.Union([
-  t.Object({ type: t.Literal("manual") }),
-  t.Object({
-    type: t.Literal("schedule"),
-    workspaceId: tSafeId("workspace"),
+const tFlowTrigger = v.union([
+  v.object({ type: v.literal("manual") }),
+  v.object({
+    type: v.literal("schedule"),
+    workspaceId: resourceIdSchema("workspace"),
     schedule: tFlowSchedule,
   }),
-  t.Object({
-    type: t.Literal("file-upload"),
-    workspaceIds: t.Union([t.Array(tSafeId("workspace")), t.Null()]),
-    fileExtensions: t.Union([
-      t.Array(t.String({ minLength: 1, maxLength: 32 })),
-      t.Null(),
+  v.object({
+    type: v.literal("file-upload"),
+    workspaceIds: v.union([v.array(resourceIdSchema("workspace")), v.null()]),
+    fileExtensions: v.union([
+      v.array(v.pipe(v.string(), v.minLength(1), v.maxLength(32))),
+      v.null(),
     ]),
   }),
 ]);
 
-export const flowDefinitionBodySchema = t.Object({
-  name: t.String({ minLength: 1, maxLength: FLOW_DEFINITION_NAME_MAX_CHARS }),
-  description: t.Union([
-    t.String({ maxLength: FLOW_DEFINITION_DESCRIPTION_MAX_CHARS }),
-    t.Null(),
-  ]),
-  steps: t.Array(tFlowStep, { minItems: 1, maxItems: MAX_FLOW_STEPS }),
-  trigger: tFlowTrigger,
-  enabled: t.Boolean(),
-});
-
-export const flowDefinitionParamsSchema = t.Object({
-  flowId: tSafeId("flowDefinition"),
-});
-
-export const listFlowDefinitionsQuerySchema = t.Object({
-  limit: t.Optional(
-    t.Integer({ minimum: 1, maximum: LIMITS.flowDefinitionsPageSizeMax }),
+export const flowDefinitionBodySchema = v.object({
+  name: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(FLOW_DEFINITION_NAME_MAX_CHARS),
   ),
-  cursor: t.Optional(tPaginationCursor()),
+  description: v.union([
+    v.pipe(v.string(), v.maxLength(FLOW_DEFINITION_DESCRIPTION_MAX_CHARS)),
+    v.null(),
+  ]),
+  steps: v.pipe(
+    v.array(tFlowStep),
+    v.minLength(1),
+    v.maxLength(MAX_FLOW_STEPS),
+  ),
+  trigger: tFlowTrigger,
+  enabled: v.boolean(),
+});
+
+export const flowDefinitionParamsSchema = v.object({
+  flowId: resourceIdSchema("flowDefinition"),
+});
+
+export const listFlowDefinitionsQuerySchema = v.object({
+  limit: v.exactOptional(
+    numberFromString(
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(1),
+        v.maxValue(LIMITS.flowDefinitionsPageSizeMax),
+      ),
+    ),
+  ),
+  cursor: v.exactOptional(paginationCursorSchema()),
 });
 
 // -- Runs (workspace-scoped) --
@@ -114,22 +136,29 @@ export const listFlowDefinitionsQuerySchema = t.Object({
 export const flowRunsWorkspaceParamsSchema = workspaceParams({});
 
 export const flowRunParamsSchema = workspaceParams({
-  runId: tSafeId("flowRun"),
+  runId: resourceIdSchema("flowRun"),
 });
 
-export const listFlowRunsQuerySchema = t.Object({
-  limit: t.Optional(
-    t.Integer({ minimum: 1, maximum: LIMITS.flowRunsPageSizeMax }),
+export const listFlowRunsQuerySchema = v.object({
+  limit: v.exactOptional(
+    numberFromString(
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(1),
+        v.maxValue(LIMITS.flowRunsPageSizeMax),
+      ),
+    ),
   ),
-  cursor: t.Optional(tPaginationCursor()),
-  status: t.Optional(
-    t.Union([
-      t.Literal("pending"),
-      t.Literal("running"),
-      t.Literal("awaiting_review"),
-      t.Literal("completed"),
-      t.Literal("failed"),
-      t.Literal("cancelled"),
+  cursor: v.exactOptional(paginationCursorSchema()),
+  status: v.exactOptional(
+    v.picklist([
+      "pending",
+      "running",
+      "awaiting_review",
+      "completed",
+      "failed",
+      "cancelled",
     ]),
   ),
 });
@@ -138,7 +167,7 @@ export const listFlowRunsQuerySchema = t.Object({
 // to compile here.
 type FlowRunStatusValue = (typeof FLOW_RUN_STATUSES)[number];
 type FlowRunStatusQueryValue = NonNullable<
-  Static<typeof listFlowRunsQuerySchema>["status"]
+  v.InferOutput<typeof listFlowRunsQuerySchema>["status"]
 >;
 type MissingFlowRunStatusQueryValue = Exclude<
   FlowRunStatusValue,
@@ -152,22 +181,16 @@ type UnexpectedFlowRunStatusQueryValue = Exclude<
 true satisfies MissingFlowRunStatusQueryValue extends never ? true : never;
 true satisfies UnexpectedFlowRunStatusQueryValue extends never ? true : never;
 
-export const startFlowRunBodySchema = t.Object({
-  definitionId: tSafeId("flowDefinition"),
-  inputEntityIds: t.Array(tSafeId("entity"), {
-    maxItems: LIMITS.flowRunInputEntitiesMax,
-  }),
-  /**
-   * Restated size estimate from a prior 428 `usage_confirmation_required`
-   * answer; the run starts only when it covers the current estimate.
-   */
-  confirmedUnits: t.Optional(t.Integer({ minimum: 0 })),
+export const startFlowRunBodySchema = v.object({
+  definitionId: resourceIdSchema("flowDefinition"),
+  inputEntityIds: v.pipe(
+    v.array(resourceIdSchema("entity")),
+    v.maxLength(LIMITS.flowRunInputEntitiesMax),
+  ),
+  confirmedUnits: v.optional(v.pipe(v.number(), v.integer(), v.minValue(0))),
 });
 
-export const reviewFlowRunBodySchema = t.Object({
-  // Required enum fields use t.UnionEnum (matches invoices/transition.ts):
-  // the mapped-literal t.Union form collapses to `never` on the Eden client.
-  // The optional-UnionEnum coercion gotcha does not apply to required fields.
-  decision: t.UnionEnum([...FLOW_REVIEW_DECISIONS]),
-  note: t.Optional(t.Union([t.String({ maxLength: 2000 }), t.Null()])),
+export const reviewFlowRunBodySchema = v.object({
+  decision: v.picklist([...FLOW_REVIEW_DECISIONS]),
+  note: v.optional(v.union([v.pipe(v.string(), v.maxLength(2000)), v.null()])),
 });

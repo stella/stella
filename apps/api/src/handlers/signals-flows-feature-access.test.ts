@@ -2,7 +2,6 @@ import type { CallToolResult } from "@modelcontextprotocol/server";
 import { panic } from "better-result";
 import { Glob } from "bun";
 import { describe, expect, test } from "bun:test";
-import { Elysia, t } from "elysia";
 import * as v from "valibot";
 
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
@@ -13,31 +12,38 @@ import { env } from "@/api/env";
 import { flowsRoute } from "@/api/handlers/flows/routes";
 import { flowRunsRoute } from "@/api/handlers/flows/run-route";
 import { signalsRoute } from "@/api/handlers/signals/routes";
+import { createHttpApp } from "@/api/http/app";
+import { routes } from "@/api/http/route";
 import type { ValidateAuthValue } from "@/api/lib/auth";
 import { featureAccessGate } from "@/api/lib/auth/feature-access/route";
+import { createSafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
+import { defineEndpoint } from "@/api/lib/endpoints";
 import {
   createFeatureAccessSnapshot,
   decideFeatureAccess,
 } from "@/api/lib/feature-access/policy";
 import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   featureOmittedCapabilityIds,
   parseCatalog,
 } from "@/api/mcp/capability-tools";
 import { MCP_ALL_RESOURCE_SCOPES } from "@/api/mcp/constants";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { handleMcpToolCall } from "@/api/mcp/tools";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
+import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import {
   createTestHandlerContext,
   NO_AUDIT,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 import { createTestState } from "@/api/tests/helpers/test-state";
-import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 const FEATURES = [
   {
@@ -55,15 +61,28 @@ const FEATURES = [
     capabilityCount: 10,
   },
 ] as const;
-const ORGANIZATION_ID = "org_test";
-const USER_ID = "user_test";
-const PATH_ID = "00000000-0000-4000-8000-000000000001";
+const ORGANIZATION_ID = mintAuthProviderId<"organization">();
+const USER_ID = mintAuthProviderId<"user">();
+const PATH_ID = createSafeId<"workspace">();
 
-const contextFor = (featureId: "signals" | "flows", enrolled: boolean) =>
-  asTestRaw<McpRequestContext>({
+const contextFor = (featureId: "signals" | "flows", enrolled: boolean) => {
+  const { safeDb, scopedDb } = createScopedDbMock({});
+  const accessibleWorkspaces = [{ id: PATH_ID, status: "active" as const }];
+  const accessibleWorkspaceIds = accessibleWorkspaces.map(({ id }) => id);
+  return authorizedMcpContextForTest({
+    safeDb,
+    scopedDb,
     userId: USER_ID,
     organizationId: ORGANIZATION_ID,
-    accessibleWorkspaceIds: [PATH_ID],
+    accessibleWorkspaceIds,
+    accessibleWorkspaceIdSet: new Set(accessibleWorkspaceIds),
+    accessibleWorkspaceStatusById: new Map(
+      accessibleWorkspaces.map(({ id, status }) => [id, status]),
+    ),
+    accessibleWorkspaces,
+    userEmail: "member@example.test",
+    recordAuditEvent: async () =>
+      panic("Feature-access fixture must not record an audit event"),
     grantedScopes: MCP_ALL_RESOURCE_SCOPES,
     memberRole: "owner",
     featureAccessSnapshot: createFeatureAccessSnapshot({
@@ -96,6 +115,7 @@ const contextFor = (featureId: "signals" | "flows", enrolled: boolean) =>
       ]),
     }),
   });
+};
 
 const testState = createTestState({ file: import.meta.path, config: env });
 
@@ -141,14 +161,12 @@ for (const feature of FEATURES) {
             continue;
           }
           const source = await Bun.file(`${absolute}/${filename}`).text();
-          if (/export const \w+ = new Elysia/u.test(source)) {
+          if (/export const \w+ = routes\(/u.test(source)) {
             expect(source).toContain(
-              `isDeploymentFeatureEnabled("${feature.flag}")`,
+              `deploymentFeatureGate("${feature.flag}")`,
             );
-            expect(source).toContain(
-              `.use(featureAccessGate("${feature.id}"))`,
-            );
-            const name = /export const (\w+) = new Elysia/u.exec(source)?.at(1);
+            expect(source).toContain(`featureAccessGate("${feature.id}")`);
+            const name = /export const (\w+) = routes\(/u.exec(source)?.at(1);
             expect(name).toBeDefined();
             if (name !== undefined) {
               routeNames.push(name);
@@ -183,9 +201,7 @@ for (const feature of FEATURES) {
         Object.keys(feature.routes).toSorted(),
       );
       expect(handlerCount).toBe(feature.handlerCount);
-      expect(
-        Object.values(feature.routes).flatMap((route) => route.routes).length,
-      ).toBe(handlerCount);
+      expect(Object.values(feature.routes).flat().length).toBe(handlerCount);
       expect(capabilityIds.length).toBe(feature.capabilityCount);
       await withDeployment(feature.flag, true, async () => {
         const omitted = await featureOmittedCapabilityIds(
@@ -200,8 +216,11 @@ for (const feature of FEATURES) {
       for (const enabled of [false, true]) {
         await withDeployment(feature.flag, enabled, async () => {
           for (const route of Object.values(feature.routes)) {
-            for (const { method, path } of route.routes) {
-              const response = await route.handle(
+            await using server = serveForTest(
+              createHttpApp({ routes: route, middleware: [errorBoundary] }),
+            );
+            for (const { method, path } of route) {
+              const response = await server.fetch(
                 new Request(
                   `http://localhost${String(path).replaceAll(/:[A-Za-z]+/gu, () => "malformed-id")}`,
                   { method },
@@ -224,35 +243,46 @@ for (const feature of FEATURES) {
           await withDeployment(feature.flag, enabled, async () => {
             let executions = 0;
             const context = contextFor(feature.id, enrolled);
-            const route = new Elysia()
-              .use(
-                deploymentFeatureGate(() =>
-                  isDeploymentFeatureEnabled(feature.flag),
-                ),
-              )
-              .use(
-                featureAccessGate(feature.id, {
-                  resolveAuth: async () => ({
-                    ok: true,
-                    value: createTestHandlerContext<ValidateAuthValue>({
-                      audit: NO_AUDIT,
-                      safeDb: NO_DB,
-                      scopedDb: NO_DB,
-                      featureAccessSnapshot: context.featureAccessSnapshot,
+            const route = routes(
+              {
+                "/": {
+                  POST: defineEndpoint.public(
+                    { body: v.object({ required: v.string() }) },
+                    () => {
+                      executions += 1;
+                      return "served";
+                    },
+                  ),
+                },
+              },
+              {
+                middleware: [
+                  deploymentFeatureGate(feature.flag, {
+                    isEnabled: () => isDeploymentFeatureEnabled(feature.flag),
+                  }),
+                  featureAccessGate(feature.id, {
+                    resolveAuth: async () => ({
+                      ok: true,
+                      value: createTestHandlerContext<ValidateAuthValue>({
+                        audit: NO_AUDIT,
+                        safeDb: NO_DB,
+                        scopedDb: NO_DB,
+                        user: { id: context.userId },
+                        session: {
+                          activeOrganizationId: context.organizationId,
+                        },
+                        featureAccessSnapshot: context.featureAccessSnapshot,
+                      }),
                     }),
                   }),
-                }),
-              )
-              .post(
-                "/",
-                () => {
-                  executions += 1;
-                  return "served";
-                },
-                { body: t.Object({ required: t.String() }) },
-              );
+                ],
+              },
+            );
+            await using server = serveForTest(
+              createHttpApp({ routes: route, middleware: [errorBoundary] }),
+            );
             for (const body of ["{}", '{"required":"valid"}']) {
-              const response = await route.handle(
+              const response = await server.fetch(
                 new Request("http://localhost/", {
                   method: "POST",
                   headers: { "content-type": "application/json" },

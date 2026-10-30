@@ -26,8 +26,8 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import {
-  readInstallPolicy,
   type InstallPolicy,
+  readInstallPolicy,
 } from "./check-stll-quarantine-excludes";
 
 const SCRIPT_PATH = "scripts/check-standalone-lockfiles.ts";

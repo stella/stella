@@ -54,6 +54,7 @@ export const summarizeVersionDiff = async ({
     managedAIResidency,
     organizationId,
     admission,
+    userId: admission.userId,
     // Shared by root-scoped and workspace-scoped callers; no workspace id is
     // threaded through this helper's options.
     tenantWorkspaceIds: [],
@@ -67,7 +68,7 @@ export const summarizeVersionDiff = async ({
     prompt: `Diff between the previous and the new version ("+ " added, "- " removed, "@@" unchanged lines elided):\n\n${diffText}`,
     outputSchema: changeSummarySchema,
     serviceTier: "standard",
-    abortSignal: AbortSignal.timeout(SUMMARY_TIMEOUT_MS),
+    deadlineMs: SUMMARY_TIMEOUT_MS,
   });
 
   return summary;

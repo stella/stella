@@ -4,103 +4,103 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## clause_categories · `clauseCategories` · clauses.ts:22 · rls
+## clause_categories · `clauseCategories` · clauses.ts:23 · rls
 
 ```text
-clause_categories.id               pUuid               pk,not null       clauses.ts:25
-clause_categories.organization_id  safeOrganizationId  fk,not null       clauses.ts:26
-clause_categories.parent_id        safeUuid            fk,null           clauses.ts:29
-clause_categories.name             varchar             not null          clauses.ts:35
-clause_categories.description      text                null              clauses.ts:36
-clause_categories.sort_order       integer             default,not null  clauses.ts:37
-clause_categories.created_at       timestamptz         default,not null  clauses.ts:38
-clause_categories.updated_at       timestamptz         default,not null  clauses.ts:39
+clause_categories.id               pUuid               pk,not null       clauses.ts:26
+clause_categories.organization_id  safeOrganizationId  fk,not null       clauses.ts:27
+clause_categories.parent_id        safeUuid            fk,null           clauses.ts:30
+clause_categories.name             varchar             not null          clauses.ts:36
+clause_categories.description      text                null              clauses.ts:37
+clause_categories.sort_order       integer             default,not null  clauses.ts:38
+clause_categories.created_at       timestamptz         default,not null  clauses.ts:39
+clause_categories.updated_at       timestamptz         default,not null  clauses.ts:40
 ```
 
-## clauses · `clauses` · clauses.ts:50 · rls
+## clauses · `clauses` · clauses.ts:53 · rls
 
 ```text
-clauses.id               pUuid               pk,not null       clauses.ts:53
-clauses.organization_id  safeOrganizationId  fk,not null       clauses.ts:54
-clauses.category_id      safeUuid            fk,null           clauses.ts:57
-clauses.title            varchar             not null          clauses.ts:63
-clauses.description      text                null              clauses.ts:64
-clauses.usage_notes      text                null              clauses.ts:65
-clauses.language         varchar             null              clauses.ts:66
-clauses.body             jsonb               not null          clauses.ts:67
-clauses.metadata         jsonb               null              clauses.ts:68
-clauses.search_vector    tsvector            null              clauses.ts:69
-clauses.current_version  integer             default,not null  clauses.ts:70
-clauses.created_by       text                fk,not null       clauses.ts:71
-clauses.created_at       timestamptz         default,not null  clauses.ts:75
-clauses.updated_at       timestamptz         default,not null  clauses.ts:76
+clauses.id               pUuid               pk,not null       clauses.ts:56
+clauses.organization_id  safeOrganizationId  fk,not null       clauses.ts:57
+clauses.category_id      safeUuid            fk,null           clauses.ts:60
+clauses.title            varchar             not null          clauses.ts:66
+clauses.description      text                null              clauses.ts:67
+clauses.usage_notes      text                null              clauses.ts:68
+clauses.language         varchar             null              clauses.ts:69
+clauses.body             jsonb               not null          clauses.ts:70
+clauses.metadata         jsonb               null              clauses.ts:71
+clauses.search_vector    tsvector            null              clauses.ts:72
+clauses.current_version  integer             default,not null  clauses.ts:73
+clauses.created_by       text                fk,not null       clauses.ts:74
+clauses.created_at       timestamptz         default,not null  clauses.ts:78
+clauses.updated_at       timestamptz         default,not null  clauses.ts:79
 ```
 
-## clause_variants · `clauseVariants` · clauses.ts:92 · rls
+## clause_variants · `clauseVariants` · clauses.ts:97 · rls
 
 ```text
-clause_variants.id               pUuid               pk,not null       clauses.ts:95
-clause_variants.organization_id  safeOrganizationId  not null          clauses.ts:96
-clause_variants.clause_id        safeUuid            not null          clauses.ts:97
-clause_variants.label            varchar             not null          clauses.ts:98
-clause_variants.body             jsonb               not null          clauses.ts:99
-clause_variants.sort_order       integer             default,not null  clauses.ts:100
-clause_variants.created_at       timestamptz         default,not null  clauses.ts:101
-clause_variants.updated_at       timestamptz         default,not null  clauses.ts:102
+clause_variants.id               pUuid               pk,not null       clauses.ts:100
+clause_variants.organization_id  safeOrganizationId  fk,not null       clauses.ts:101
+clause_variants.clause_id        safeUuid            fk,not null       clauses.ts:102
+clause_variants.label            varchar             not null          clauses.ts:103
+clause_variants.body             jsonb               not null          clauses.ts:104
+clause_variants.sort_order       integer             default,not null  clauses.ts:105
+clause_variants.created_at       timestamptz         default,not null  clauses.ts:106
+clause_variants.updated_at       timestamptz         default,not null  clauses.ts:107
 ```
 
-## clause_versions · `clauseVersions` · clauses.ts:117 · rls
+## clause_versions · `clauseVersions` · clauses.ts:124 · rls
 
 ```text
-clause_versions.id               pUuid               pk,not null       clauses.ts:120
-clause_versions.organization_id  safeOrganizationId  not null          clauses.ts:121
-clause_versions.clause_id        safeUuid            not null          clauses.ts:122
-clause_versions.version          integer             not null          clauses.ts:123
-clause_versions.body             jsonb               not null          clauses.ts:124
-clause_versions.created_at       timestamptz         default,not null  clauses.ts:125
+clause_versions.id               pUuid               pk,not null       clauses.ts:127
+clause_versions.organization_id  safeOrganizationId  fk,not null       clauses.ts:128
+clause_versions.clause_id        safeUuid            fk,not null       clauses.ts:129
+clause_versions.version          integer             not null          clauses.ts:130
+clause_versions.body             jsonb               not null          clauses.ts:131
+clause_versions.created_at       timestamptz         default,not null  clauses.ts:132
 ```
 
-## template_recipes · `templateRecipes` · clauses.ts:147 · rls
+## template_recipes · `templateRecipes` · clauses.ts:156 · rls
 
 Saved structural-block recipes: a named, org-wide snapshot of pre-configured template fields (optionally wrapped in a `{% for %}` loop) that can be inserted in…
 
 ```text
-template_recipes.id               pUuid               pk,not null       clauses.ts:150
-template_recipes.organization_id  safeOrganizationId  fk,not null       clauses.ts:151
-template_recipes.name             varchar             not null          clauses.ts:154
-template_recipes.description      text                null              clauses.ts:155
-template_recipes.definition       jsonb               not null          clauses.ts:156
-template_recipes.created_by       text                fk,not null       clauses.ts:157
-template_recipes.created_at       timestamptz         default,not null  clauses.ts:161
-template_recipes.updated_at       timestamptz         default,not null  clauses.ts:162
+template_recipes.id               pUuid               pk,not null       clauses.ts:159
+template_recipes.organization_id  safeOrganizationId  fk,not null       clauses.ts:160
+template_recipes.name             varchar             not null          clauses.ts:163
+template_recipes.description      text                null              clauses.ts:164
+template_recipes.definition       jsonb               not null          clauses.ts:165
+template_recipes.created_by       text                fk,not null       clauses.ts:166
+template_recipes.created_at       timestamptz         default,not null  clauses.ts:170
+template_recipes.updated_at       timestamptz         default,not null  clauses.ts:171
 ```
 
-## template_clauses · `templateClauses` · clauses.ts:173 · rls
+## template_clauses · `templateClauses` · clauses.ts:184 · rls
 
 ```text
-template_clauses.id                    pUuid               pk,not null       clauses.ts:176
-template_clauses.organization_id       safeOrganizationId  not null          clauses.ts:177
-template_clauses.template_id           safeUuid            not null          clauses.ts:178
-template_clauses.clause_id             safeUuid            fk,null           clauses.ts:179
-template_clauses.clause_variant_id     safeUuid            fk,null           clauses.ts:182
-template_clauses.clause_variant_label  varchar             null              clauses.ts:191  Label snapshot taken at link time.
-template_clauses.clause_version_id     safeUuid            fk,null           clauses.ts:192
-template_clauses.slot_name             varchar             null              clauses.ts:198
-template_clauses.sort_order            integer             default,not null  clauses.ts:199
-template_clauses.inserted_at           timestamptz         default,not null  clauses.ts:200
+template_clauses.id                    pUuid               pk,not null       clauses.ts:187
+template_clauses.organization_id       safeOrganizationId  fk,not null       clauses.ts:188
+template_clauses.template_id           safeUuid            fk,not null       clauses.ts:189
+template_clauses.clause_id             safeUuid            fk,null           clauses.ts:190
+template_clauses.clause_variant_id     safeUuid            fk,null           clauses.ts:193
+template_clauses.clause_variant_label  varchar             null              clauses.ts:202  Label snapshot taken at link time.
+template_clauses.clause_version_id     safeUuid            fk,null           clauses.ts:203
+template_clauses.slot_name             varchar             null              clauses.ts:209
+template_clauses.sort_order            integer             default,not null  clauses.ts:210
+template_clauses.inserted_at           timestamptz         default,not null  clauses.ts:211
 ```
 
-## template_fills · `templateFills` · clauses.ts:227 · rls
+## template_fills · `templateFills` · clauses.ts:240 · rls
 
 ```text
-template_fills.id                pUuid               pk,not null       clauses.ts:230
-template_fills.organization_id   safeOrganizationId  fk,not null       clauses.ts:231
-template_fills.template_id       safeUuid            fk,null           clauses.ts:234
-template_fills.user_id           text                fk,not null       clauses.ts:238
-template_fills.format            text                not null          clauses.ts:242
-template_fills.status            text                not null          clauses.ts:243
-template_fills.unmatched_count   integer             default,not null  clauses.ts:244
-template_fills.unused_count      integer             default,not null  clauses.ts:245
-template_fills.structure_errors  jsonb               null              clauses.ts:246
-template_fills.created_at        timestamptz         default,not null  clauses.ts:249
+template_fills.id                pUuid               pk,not null       clauses.ts:243
+template_fills.organization_id   safeOrganizationId  fk,not null       clauses.ts:244
+template_fills.template_id       safeUuid            fk,null           clauses.ts:247
+template_fills.user_id           text                fk,not null       clauses.ts:251
+template_fills.format            text                not null          clauses.ts:255
+template_fills.status            text                not null          clauses.ts:256
+template_fills.unmatched_count   integer             default,not null  clauses.ts:257
+template_fills.unused_count      integer             default,not null  clauses.ts:258
+template_fills.structure_errors  jsonb               null              clauses.ts:259
+template_fills.created_at        timestamptz         default,not null  clauses.ts:262
 ```

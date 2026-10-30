@@ -1,10 +1,10 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, isNotNull, isNull } from "drizzle-orm";
 
 import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 
 import type { Transaction } from "@/api/db/root";
-import { caseLawDecisionSupplements, caseLawDecisions } from "@/api/db/schema";
+import { caseLawDecisions, caseLawDecisionSupplements } from "@/api/db/schema";
 import type {
   DecisionSupplement,
   IngestionResult,
@@ -48,6 +48,7 @@ import {
   RAW_SOURCE_FAMILY,
 } from "@/api/lib/legal-search/raw-source-storage";
 import type { RawSourceWriteWindow } from "@/api/lib/legal-search/raw-source-storage";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 
 /** One supplement's placement: its options and what they resolve to. */
@@ -228,7 +229,13 @@ const supplementRawWriteFailed = (
       "error.detail": wrappedErrorDetail(error),
     }),
   );
-  captureError(error, { sourceId, step: "processSupplement.raw" });
+  captureError(
+    error,
+    handlerErrorContext("pipeline.supplementRawWriteFailed", {
+      sourceId,
+      step: "processSupplement.raw",
+    }),
+  );
   return {
     status: PROCESS_DECISION_STATUS.RETRYABLE,
     reason: PROCESS_DECISION_RETRY_REASON.SOURCE_RAW_WRITE,

@@ -1,10 +1,13 @@
 import { panic } from "better-result";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
 import * as v from "valibot";
 
-import { schedulerJobs } from "@/api/db/schema";
+import { proveOrgScope, withOrgScope } from "@/api/db/org-scope";
+import { flowDefinitions, schedulerJobs } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { runGlobalSystemWork } from "@/api/lib/db/global-system-work";
 import { writeSchedulerBookkeeping } from "@/api/lib/db/recovery-bookkeeping/scheduler";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { isBackgroundFeatureEnabled } from "@/api/lib/feature-access/background";
@@ -22,27 +25,9 @@ import {
 import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import type {
   SchedulerDb,
-  SchedulerTask,
   SchedulerJob,
+  SchedulerTask,
 } from "@/api/lib/scheduler/types";
-
-/**
- * Scheduler task backing a definition's `schedule` trigger. One
- * `scheduler_jobs` row per schedule-triggered definition (see
- * `syncFlowScheduleTriggerInTransaction`) fires this daily at the trigger's UTC hour; the
- * task gates weekly / monthly frequencies to the day of the slot that was due, revalidates the
- * definition + target workspace, then defers to `startAutomatedFlowRun` (actor
- * guarantee + daily cap + run start).
- */
-export const FLOW_RUN_TASK = "flow.run" as const;
-
-/** Deterministic scheduler-job id so one definition owns at most one row. */
-const FLOW_SCHEDULE_JOB_PREFIX = `${FLOW_RUN_TASK}.`;
-export const flowScheduleJobId = (definitionId: string): string =>
-  `${FLOW_SCHEDULE_JOB_PREFIX}${definitionId}`;
-
-export const flowScheduleJobIdSql = (definitionId: SQLWrapper) =>
-  sql`${FLOW_SCHEDULE_JOB_PREFIX} || (${definitionId})::text`;
 
 const retainedSlotFields = {
   pendingDueAt: v.optional(v.pipe(v.string(), v.isoTimestamp())),
@@ -120,16 +105,32 @@ const persistScheduleSlot = async ({
           pendingClaimedAt: settlement.dueSlot.claimedAtDate().toISOString(),
         }
       : { definitionId };
-  const changed = await writeSchedulerBookkeeping({
-    type: "checkpoint-slot",
-    db,
-    table: schedulerJobs,
-    ...originalScheduleClaim(job),
-    payload,
+  return await withAggregateTransaction(db, async (tx) => {
+    const proof = await proveOrgScope(tx, {
+      table: "flowDefinitions",
+      where: eq(flowDefinitions.id, definitionId),
+    });
+    if (proof.isErr()) {
+      return { status: "stale" } as const;
+    }
+    return await withOrgScope({
+      tx,
+      scope: proof.value,
+      actor: { type: "system" },
+      fn: async (_scopedTx, scoped) => {
+        const changed = await writeSchedulerBookkeeping({
+          type: "checkpoint-slot",
+          db: scoped,
+          table: schedulerJobs,
+          ...originalScheduleClaim(job),
+          payload,
+        });
+        return changed.length === 0
+          ? ({ status: "stale" } as const)
+          : ({ status: "persisted" } as const);
+      },
+    });
   });
-  return changed.length === 0
-    ? ({ status: "stale" } as const)
-    : ({ status: "persisted" } as const);
 };
 
 /**
@@ -164,11 +165,12 @@ export const createScheduledFlowTask =
     if (!definition) {
       // Definition deleted without a sync (e.g. cascade from org deletion): drop
       // the orphaned scheduler row so it stops firing.
-      await writeSchedulerBookkeeping({
-        type: "delete-claimed-orphan",
-        db,
-        table: schedulerJobs,
-        ...originalScheduleClaim(job),
+      const claim = originalScheduleClaim(job);
+      await runGlobalSystemWork(db, {
+        type: "flow-schedule-orphan-claim",
+        definitionId,
+        jobId: claim.jobId,
+        lockedBy: claim.lockedBy,
       });
       logger.info("flow.schedule_definition_missing", { definitionId });
       return;

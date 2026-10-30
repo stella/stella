@@ -24,8 +24,8 @@ import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import {
   advanceCorpusIngestionCheckpoint,

@@ -41,6 +41,7 @@ export type EditableField =
   | "notes"
   | "registrationNumber"
   | "taxId"
+  | "vatId"
   | "defaultHourlyRate"
   | "currency"
   | "paymentTermDays";

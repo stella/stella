@@ -1,5 +1,7 @@
 import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 
+import { waitForExternalState } from "@stll/property-testing/external-state";
+
 import {
   openTypstSession,
   TYPST_RENDER_LIMITS,
@@ -43,11 +45,12 @@ afterAll(async () => {
   await Promise.all(sessions.map(async (opened) => opened.close()));
 });
 
-// Bounded wait for an exit the test caused; the per-test timeout backs it.
+// Waits for renderer processes the test stopped to exit.
 const untilExited = async (opened: TypstSession, exited: number) => {
-  while (opened.renderers().exited < exited) {
-    await Bun.sleep(10);
-  }
+  await waitForExternalState({
+    description: `${String(exited)} renderer processes exit`,
+    read: () => opened.renderers().exited >= exited,
+  });
 };
 
 const pdfHeader = (bytes: Uint8Array) =>
@@ -83,7 +86,7 @@ describe("sandboxed Typst rendering of an untrusted template", () => {
   });
 
   test("kills a render that runs past the time limit", async () => {
-    const bounded = session({ timeoutMs: 2000 });
+    const bounded = session({ timeoutMs: 2000 }); // timeout under test
     const outcome = await bounded.render(request(ENDLESS));
     expect(outcome).toMatchObject({ status: "rejected", reason: "timeout" });
     // The outcome is returned only after the renderer process exited, so

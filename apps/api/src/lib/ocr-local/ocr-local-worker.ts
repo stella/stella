@@ -23,10 +23,10 @@ import * as ort from "onnxruntime-node";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import {
-  OCR_LOCAL_MODEL_FILES,
-  OCR_MAX_PAGES,
   type DocumentOcrLine,
   type DocumentOcrPage,
+  OCR_LOCAL_MODEL_FILES,
+  OCR_MAX_PAGES,
 } from "@/api/lib/document-processing-contract";
 import { buildOcrPage } from "@/api/lib/document-processing-ocr-result";
 import { openPdfiumDocument } from "@/api/lib/files/pdfium";

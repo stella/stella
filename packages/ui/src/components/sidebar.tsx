@@ -8,7 +8,7 @@ import { cva } from "class-variance-authority";
 import type { VariantProps } from "class-variance-authority";
 
 import { useIsMobile } from "../hooks/use-mobile";
-import { PanelLeftIcon } from "../icons";
+import { PanelLeftIcon, PanelRightIcon } from "../icons";
 import { Slot } from "../lib/slot";
 import { cn } from "../lib/utils";
 import { Button } from "./button";
@@ -31,8 +31,8 @@ import {
 import type { SidebarLayout } from "./sidebar.logic";
 import { Skeleton } from "./skeleton";
 import {
-  TooltipPopup,
   Tooltip as TooltipRoot,
+  TooltipPopup,
   TooltipTrigger,
 } from "./tooltip";
 
@@ -208,6 +208,7 @@ const Sidebar = ({
   mobileTitle = DEFAULT_MOBILE_TITLE,
   mobileDescription = DEFAULT_MOBILE_DESCRIPTION,
   className,
+  style,
   children,
   ...props
 }: React.ComponentProps<"div"> & {
@@ -240,6 +241,7 @@ const Sidebar = ({
           className,
         )}
         data-slot="sidebar"
+        style={style}
         {...props}
       >
         {children}
@@ -250,22 +252,32 @@ const Sidebar = ({
   if (isMobile) {
     const mobileStyle: SidebarStyle = {
       "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
+      ...style,
     };
     return (
-      <Sheet onOpenChange={setOpenMobile} open={openMobile} {...props}>
+      <Sheet onOpenChange={setOpenMobile} open={openMobile}>
         <SheetPopup
-          className="bg-sidebar text-sidebar-foreground w-(--sidebar-width) [&>button]:hidden"
+          className={cn(
+            "bg-sidebar text-sidebar-foreground w-(--sidebar-width) [&>button]:hidden",
+            className,
+          )}
           data-mobile="true"
           data-sidebar="sidebar"
           data-slot="sidebar"
           side={side === "left" ? "inline-start" : "inline-end"}
           style={mobileStyle}
+          {...props}
         >
           <SheetHeader className="sr-only">
             <SheetTitle>{mobileTitle}</SheetTitle>
             <SheetDescription>{mobileDescription}</SheetDescription>
           </SheetHeader>
-          <div className="flex h-full w-full flex-col">{children}</div>
+          <div
+            className="flex h-full w-full flex-col"
+            data-slot="sidebar-inner"
+          >
+            {children}
+          </div>
         </SheetPopup>
       </Sheet>
     );
@@ -319,6 +331,7 @@ const Sidebar = ({
           className,
         )}
         data-slot="sidebar-container"
+        style={style}
         {...props}
       >
         <div
@@ -333,35 +346,69 @@ const Sidebar = ({
   );
 };
 
-const SidebarTrigger = ({
-  className,
-  onClick,
-  label = DEFAULT_TOGGLE_LABEL,
+type PanelTriggerSide = "left" | "right";
+
+const PANEL_TRIGGER_ICONS = {
+  left: PanelLeftIcon,
+  right: PanelRightIcon,
+} as const satisfies Record<PanelTriggerSide, typeof PanelLeftIcon>;
+
+/**
+ * Toolbar toggle for a panel docked at one edge. `SidebarTrigger` is the
+ * `"left"` one; a host panel docked at the opposite edge (an inspector)
+ * renders the `"right"` one, so the two buttons stay mirror images instead
+ * of two hand-kept copies of the same chrome. `side` is logical, like
+ * `Sidebar`'s.
+ */
+const PanelTrigger = ({
+  side,
+  label,
   "aria-label": ariaLabel,
   ...props
-}: React.ComponentProps<typeof Button> & {
+}: Omit<React.ComponentProps<typeof Button>, "children"> & {
+  side: PanelTriggerSide;
+  /** Accessible name for the trigger. */
+  label: string;
+}) => {
+  const Icon = PANEL_TRIGGER_ICONS[side];
+
+  return (
+    <Button
+      aria-label={ariaLabel ?? label}
+      data-slot="panel-trigger"
+      size="icon"
+      variant="ghost"
+      {...props}
+      className={cn("size-7", props.className)}
+    >
+      <Icon />
+      <span className="sr-only">{label}</span>
+    </Button>
+  );
+};
+
+const SidebarTrigger = ({
+  onClick,
+  label = DEFAULT_TOGGLE_LABEL,
+  ...props
+}: Omit<React.ComponentProps<typeof PanelTrigger>, "label" | "side"> & {
   /** Accessible name for the trigger. Override to localize. */
   label?: string;
 }) => {
   const { toggleSidebar } = useSidebar();
 
   return (
-    <Button
-      aria-label={ariaLabel ?? label}
-      className={cn("size-7", className)}
+    <PanelTrigger
       data-sidebar="trigger"
       data-slot="sidebar-trigger"
+      label={label}
       onClick={(event) => {
         onClick?.(event);
         toggleSidebar();
       }}
-      size="icon"
-      variant="ghost"
       {...props}
-    >
-      <PanelLeftIcon />
-      <span className="sr-only">{label}</span>
-    </Button>
+      side="left"
+    />
   );
 };
 
@@ -701,7 +748,7 @@ const SidebarMenuAction = ({
         "peer-data-[size=lg]/menu-button:top-2.5",
         "group-data-[collapsible=icon]:hidden",
         showOnHover &&
-          "peer-data-[active=true]/menu-button:text-sidebar-accent-foreground group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 data-[state=open]:opacity-100 md:opacity-0",
+          "peer-data-[active=true]/menu-button:text-sidebar-accent-foreground group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 data-[state=open]:opacity-100 md:opacity-0 pointer-coarse:opacity-100",
         className,
       )}
       data-sidebar="menu-action"
@@ -826,6 +873,7 @@ const SidebarMenuSubButton = ({
 };
 
 export {
+  PanelTrigger,
   Sidebar,
   SidebarContent,
   SidebarFooter,

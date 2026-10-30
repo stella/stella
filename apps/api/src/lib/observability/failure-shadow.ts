@@ -1,7 +1,7 @@
 /**
  * Shadow grading: the owner's grade, attached to the failure records the
- * existing sinks already emit, without changing what they emit or at which
- * severity.
+ * existing sinks already emit. Log severity remains pinned, while capture
+ * follows the grade so anticipated outcomes never become exceptions.
  *
  * Every site that observes a failure today decided its own channel (capture,
  * a WARN, an ERROR, or both). Before any of those decisions moves to the
@@ -242,11 +242,10 @@ type ShadowObservation = {
 };
 
 const recordRequestObservation = (
-  request: Request,
   sink: FailureSink,
   grading: FailureGrading,
 ): void => {
-  recordRequestFailure(request, {
+  recordRequestFailure({
     grade: grading.grade,
     reason: grading.reason,
     sink: sink.event,
@@ -286,7 +285,7 @@ export const observeShadow = ({
       identity: releaseFailureIdentity(evidence),
     });
     if (request !== undefined) {
-      recordRequestObservation(request, sink, grading);
+      recordRequestObservation(sink, grading);
     }
     return grading;
   });

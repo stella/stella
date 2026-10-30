@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 
 import type { OperatorActivitySummary } from "@/api/lib/db/operator-activity/read";
 
@@ -236,7 +236,7 @@ const scanSource = (filename: string, source: string): SourceScan => {
           continue;
         }
         const table = TABLES.find((candidate) =>
-          tableLocals.get(candidate)?.has(span.expression.text),
+          tableLocals.get(candidate)?.has(span.expression.getText(file)),
         );
         if (!table) {
           continue;
@@ -454,7 +454,7 @@ describe("feature-owned retained activity readers", () => {
         "src/handlers/notifications/list.ts",
         "src/handlers/notifications/read-all.ts",
         "src/handlers/notifications/read-model.ts",
-        "src/handlers/notifications/read.ts",
+        "src/handlers/notifications/read-state/update.ts",
         "src/lib/notifications.ts",
       ]),
     );

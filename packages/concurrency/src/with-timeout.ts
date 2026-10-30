@@ -1,4 +1,4 @@
-// parser-output-unchanged: moving the unchanged TimeoutError and withTimeout implementation preserves behavior.
+// parser-output-unchanged: an injectable deadline timer defaults to setTimeout, so no parser output changes.
 import { TaggedError } from "better-result";
 
 /** Timeout waiting for an asynchronous operation or external resource. */
@@ -9,10 +9,25 @@ export class TimeoutError extends TaggedError("TimeoutError")<{
   cause?: unknown;
 }> {}
 
+/**
+ * Starts the deadline timer and returns its cancel function. Tests inject one
+ * to fire the deadline at a chosen point instead of racing the wall clock.
+ */
+export type WithTimeoutScheduler = (
+  callback: () => void,
+  delayMs: number,
+) => () => void;
+
+const defaultScheduleTimeout: WithTimeoutScheduler = (callback, delayMs) => {
+  const timer = setTimeout(callback, delayMs);
+  return () => clearTimeout(timer);
+};
+
 type WithTimeoutOptions = {
   label: string;
   signal?: AbortSignal | undefined;
   timeoutMs: number;
+  scheduleTimeout?: WithTimeoutScheduler | undefined;
 };
 
 /**
@@ -29,19 +44,24 @@ type WithTimeoutOptions = {
  */
 export const withTimeout = async <T>(
   operation: (signal: AbortSignal) => Promise<T>,
-  { label, signal, timeoutMs }: WithTimeoutOptions,
+  {
+    label,
+    signal,
+    timeoutMs,
+    scheduleTimeout = defaultScheduleTimeout,
+  }: WithTimeoutOptions,
 ): Promise<T> => {
   signal?.throwIfAborted();
   const operationController = new AbortController();
   const op = Promise.resolve().then(
     async () => await operation(operationController.signal),
   );
-  let timer: ReturnType<typeof setTimeout> | undefined;
+  let cancelTimer: () => void = () => undefined;
   const deadlines: Promise<never>[] = [];
   if (timeoutMs > 0) {
     deadlines.push(
       new Promise<never>((_resolve, reject) => {
-        timer = setTimeout(() => {
+        cancelTimer = scheduleTimeout(() => {
           const error = new TimeoutError({
             message: `${label} exceeded ${timeoutMs}ms`,
             label,
@@ -80,7 +100,7 @@ export const withTimeout = async <T>(
   try {
     return await Promise.race([op, ...deadlines]);
   } finally {
-    clearTimeout(timer);
+    cancelTimer();
     if (signal !== undefined && abort !== undefined) {
       signal.removeEventListener("abort", abort);
     }

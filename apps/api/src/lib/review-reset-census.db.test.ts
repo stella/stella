@@ -7,13 +7,34 @@ import {
   REVIEW_RESET_CLEARED_TABLES,
   REVIEW_RESET_SWEEP,
 } from "@/api/lib/review-organization/reset-census";
-import { sweepReviewOrganization } from "@/api/lib/review-organization/reset-scope";
+import {
+  clearReviewOrganizationBilling,
+  REVIEW_RESET_BILLING_TABLES,
+  sweepReviewOrganization,
+} from "@/api/lib/review-organization/reset-scope";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const identifier = (name: string) => `"${name.replaceAll('"', '""')}"`;
+
+// Every table the reset deletes by name: billing records, then the sweep.
+const RESET_TABLES: readonly string[] = [
+  ...REVIEW_RESET_BILLING_TABLES,
+  ...REVIEW_RESET_CLEARED_TABLES,
+];
+
+const OWNER_ERASURE_TABLES = [
+  "billing_arrangements",
+  "correspondence_allowed_sender_matters",
+  "correspondence_drop_logs",
+  "number_series",
+  "number_series_allocations",
+  "number_series_counters",
+  "seller_profiles",
+  "vat_rates",
+] as const;
 
 describe.skipIf(!enabled)("review reset policy census", () => {
   test("clears every table for former users across matters without feature enrolment", async () => {
@@ -59,10 +80,20 @@ describe.skipIf(!enabled)("review reset policy census", () => {
           ARRAY(SELECT CASE WHEN role = 0 THEN 'PUBLIC' ELSE pg_get_userbyid(role) END FROM unnest(p.polroles) role) AS roles,
           pg_get_expr(p.polqual, p.polrelid) AS using, pg_get_expr(p.polwithcheck, p.polrelid) AS check
         FROM pg_policy p JOIN pg_class c ON c.oid = p.polrelid JOIN pg_namespace n ON n.oid = c.relnamespace
-        WHERE n.nspname = 'public' AND c.relname = ANY(${`{${REVIEW_RESET_CLEARED_TABLES.join(",")}}`})`;
+        WHERE n.nspname = 'public' AND c.relname = ANY(${`{${RESET_TABLES.join(",")}}`})`;
+      expect(
+        policies
+          .filter(
+            (policy) =>
+              OWNER_ERASURE_TABLES.some((table) => table === policy.table) &&
+              policy.name === "review_reset_owner_delete",
+          )
+          .map(({ table }) => table)
+          .toSorted(),
+      ).toEqual([...OWNER_ERASURE_TABLES].toSorted());
       const columns = await client<{ table: string; name: string }[]>`
         SELECT table_name AS table, column_name AS name FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = ANY(${`{${REVIEW_RESET_CLEARED_TABLES.join(",")}}`})`;
+        WHERE table_schema = 'public' AND table_name = ANY(${`{${[...RESET_TABLES, "workspaces"].join(",")}}`})`;
       const systemPrivileges = await client<
         { table: string; privilege: string }[]
       >`
@@ -72,9 +103,9 @@ describe.skipIf(!enabled)("review reset policy census", () => {
         CROSS JOIN LATERAL aclexplode(relation.relacl) grants
         JOIN pg_roles grantee ON grantee.oid = grants.grantee
         WHERE namespace.nspname = 'public' AND grantee.rolname = 'stella_system'
-          AND relation.relname = ANY(${`{${REVIEW_RESET_CLEARED_TABLES.join(",")}}`})`;
+          AND relation.relname = ANY(${`{${RESET_TABLES.join(",")}}`})`;
       const rowIds = new Map(
-        REVIEW_RESET_CLEARED_TABLES.map((table) => [
+        RESET_TABLES.map((table) => [
           table,
           new Map(
             workspaceIds.map((workspaceId) => [
@@ -106,16 +137,23 @@ describe.skipIf(!enabled)("review reset policy census", () => {
       try {
         await client.unsafe(`CREATE TABLE system_audit_runs (LIKE public.system_audit_runs INCLUDING ALL);
           ALTER TABLE system_audit_runs OWNER TO ${owner};
-          CREATE TABLE workspaces (id uuid, organization_id text);
+          CREATE TABLE workspaces (LIKE public.workspaces);
           CREATE TABLE member (organization_id text, user_id text, role text);
           GRANT SELECT ON workspaces, member TO stella;
           CREATE TABLE user_files (id uuid, thread_id uuid);
           ALTER TABLE workspaces OWNER TO ${owner}; ALTER TABLE member OWNER TO ${owner}; ALTER TABLE user_files OWNER TO ${owner}`);
+        for (const { name } of columns.filter(
+          ({ table }) => table === "workspaces",
+        )) {
+          await client.unsafe(
+            `ALTER TABLE workspaces ALTER COLUMN ${identifier(name)} DROP NOT NULL`,
+          );
+        }
         await client`INSERT INTO member VALUES (${organizationId}, ${reviewerId}, 'owner')`;
         for (const workspaceId of workspaceIds) {
-          await client`INSERT INTO workspaces VALUES (${workspaceId}, ${organizationId})`;
+          await client`INSERT INTO workspaces (id, organization_id) VALUES (${workspaceId}, ${organizationId})`;
         }
-        for (const name of REVIEW_RESET_CLEARED_TABLES) {
+        for (const name of RESET_TABLES) {
           const table = identifier(name);
           await client.unsafe(
             `CREATE TABLE ${table} (LIKE public.${table}); ALTER TABLE ${table} OWNER TO ${owner}; GRANT SELECT, INSERT, UPDATE, DELETE ON ${table} TO stella`,
@@ -225,6 +263,11 @@ describe.skipIf(!enabled)("review reset policy census", () => {
           await tx.execute(
             sql`SELECT set_config('role', ${owner}, true), set_config('app.enabled_features', '[]', true)`,
           );
+          const billing = await clearReviewOrganizationBilling(
+            tx,
+            organizationId,
+          );
+          expect([...billing.keys()]).toEqual([...REVIEW_RESET_BILLING_TABLES]);
           const removed = await sweepReviewOrganization({
             tx,
             organizationId,
@@ -238,7 +281,7 @@ describe.skipIf(!enabled)("review reset policy census", () => {
               ([, auditor]) => auditor === "generic",
             ).map(([name]) => name),
           );
-          return removed;
+          return new Map([...billing, ...removed]);
         });
         const audits = await census.unsafe<
           { actor: string; counts: Record<string, number> }[]
@@ -268,16 +311,19 @@ describe.skipIf(!enabled)("review reset policy census", () => {
           ]),
         );
         // A different connection, outside the scoped owner, counts every row.
-        for (const name of REVIEW_RESET_CLEARED_TABLES) {
+        for (const name of RESET_TABLES) {
           const rows = await census.unsafe<{ organization_id: string }[]>(
             `SELECT organization_id FROM ${schema}.${identifier(name)}`,
           );
-          expect(rows, name).toEqual([]);
+          expect([...rows], name).toEqual([]);
           const auditor = REVIEW_RESET_SWEEP.find(
             ([table]) => table === name,
           )?.[1];
           expect(swept.get(name), name).toBe(
-            auditor === "generic" ? 2 : undefined,
+            auditor === "generic" ||
+              REVIEW_RESET_BILLING_TABLES.some((table) => table === name)
+              ? 2
+              : undefined,
           );
         }
       } finally {

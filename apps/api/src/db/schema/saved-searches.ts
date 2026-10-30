@@ -1,5 +1,6 @@
 import type { SavedSearchCriteria } from "@/api/lib/saved-searches";
 
+import { registeredReviewResetPolicies } from "../review-reset-policies";
 import {
   organization,
   p,
@@ -7,8 +8,8 @@ import {
   safeOrganizationId,
   savedSearchPolicies,
   sql,
-  user,
   timestamptz,
+  user,
 } from "./common";
 
 export const savedSearches = p.pgTable(
@@ -39,5 +40,7 @@ export const savedSearches = p.pgTable(
       sql`(jsonb_typeof(${table.criteria}) = 'object' AND ${table.criteria}->'version' = '1'::jsonb) IS TRUE`,
     ),
     ...savedSearchPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );

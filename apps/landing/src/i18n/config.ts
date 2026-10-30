@@ -10,10 +10,10 @@
 import { panic } from "better-result";
 
 import {
-  UI_LOCALES,
   displayLanguageName,
   getUiLocaleDirection,
   type TextDirection,
+  UI_LOCALES,
   type UiLocale,
 } from "@stll/locales";
 

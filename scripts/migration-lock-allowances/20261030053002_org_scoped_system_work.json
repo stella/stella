@@ -1,0 +1,4 @@
+{
+  "row-level-security": "new table, nothing else holds it",
+  "create-policy": "new table, nothing else holds it"
+}

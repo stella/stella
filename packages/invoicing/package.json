@@ -7,7 +7,9 @@
   "type": "module",
   "sideEffects": false,
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./pay-by-square": "./src/pay-by-square.ts",
+    "./ksef": "./src/ksef/client.ts"
   },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",
@@ -15,18 +17,24 @@
     "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts')",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/invoicing",
-    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/invoicing",
-    "format": "bun ../../scripts/run-oxfmt.ts ."
+    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/invoicing"
   },
   "dependencies": {
+    "@stll/agent-input": "workspace:*",
+    "@stll/api-contract": "workspace:*",
     "@stll/money": "workspace:*",
+    "@stll/sha256": "workspace:*",
     "@stll/text-normalize": "workspace:*",
-    "better-result": "catalog:"
+    "better-result": "catalog:",
+    "lzma1": "catalog:",
+    "valibot": "catalog:"
   },
   "devDependencies": {
     "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "bun-types": "catalog:",
-    "fast-check": "catalog:"
+    "bysquare": "4.1.0",
+    "fast-check": "catalog:",
+    "xmllint-wasm": "catalog:"
   }
 }

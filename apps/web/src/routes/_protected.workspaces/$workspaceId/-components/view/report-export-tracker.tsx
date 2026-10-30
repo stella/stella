@@ -7,15 +7,18 @@ import { useShallow } from "zustand/shallow";
 import { stellaToast } from "@stll/ui/toast";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { APIError } from "@/lib/errors/api";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import {
   reportExportDetailOptions,
   reportExportsKeys,
 } from "@/lib/workspaces/queries/report-exports";
 import { resolveReportExportDestinationQuery } from "@/lib/workspaces/resolve-report-export-destination-query";
+import { useCurrentWorkspaceView } from "@/lib/workspaces/use-workspace-view-params";
+import { resolveWorkspaceViewParams } from "@/lib/workspaces/view-params.logic";
 
 import { downloadReportExport } from "./report-export-actions";
 import {
@@ -36,6 +39,12 @@ export const ReportExportTracker = ({
   const t = useTranslations();
   const analytics = useAnalytics();
   const navigate = useNavigate();
+  const currentView = useCurrentWorkspaceView();
+  // The toast is raised when the export settles and clicked later, so it
+  // reads the view on screen at the click.
+  const viewParamsAtClick = useLatestCallback((targetWorkspaceId: string) =>
+    resolveWorkspaceViewParams(targetWorkspaceId, currentView),
+  );
   const queryClient = useQueryClient();
   const requestedBy = useRouteContext({
     from: "/_protected",
@@ -80,10 +89,15 @@ export const ReportExportTracker = ({
       .invalidateQueries({
         queryKey: reportExportsKeys.all(settledExport.workspaceId),
       })
-      .catch((error: unknown) => analytics.captureError(error));
+      .catch((error: unknown) =>
+        analytics.captureError(error, {
+          fingerprintKey: "ReportExportTracker:failure",
+          scope: { type: "handler", handlerId: "ReportExportTracker:failure" },
+        }),
+      );
 
     if (settledDetail === undefined) {
-      notifyUserError(undefined, t("workspaces.views.reportExport.failed"), {
+      notifyUserProblem(t("workspaces.views.reportExport.failed"), {
         toastId,
         description: t("common.unexpectedError"),
       });
@@ -91,7 +105,7 @@ export const ReportExportTracker = ({
     }
 
     if (settledDetail.status === "failed") {
-      notifyUserError(undefined, t("workspaces.views.reportExport.failed"), {
+      notifyUserProblem(t("workspaces.views.reportExport.failed"), {
         toastId,
         description: settledDetail.error ?? t("common.unexpectedError"),
       });
@@ -112,7 +126,13 @@ export const ReportExportTracker = ({
           });
         });
         if (Result.isError(result)) {
-          analytics.captureError(result.error);
+          analytics.captureError(result.error, {
+            fingerprintKey: "ReportExportTracker.handleDownload:failure",
+            scope: {
+              type: "handler",
+              handlerId: "ReportExportTracker.handleDownload:failure",
+            },
+          });
           notifyUserError(
             result.error,
             t("workspaces.views.reportExport.failed"),
@@ -127,7 +147,13 @@ export const ReportExportTracker = ({
           label: t("common.download"),
           onClick: () => {
             handleDownload().catch((error: unknown) =>
-              analytics.captureError(error),
+              analytics.captureError(error, {
+                fingerprintKey: "ReportExportTracker.onClick:failure",
+                scope: {
+                  type: "handler",
+                  handlerId: "ReportExportTracker.onClick:failure",
+                },
+              }),
             );
           },
         },
@@ -145,7 +171,15 @@ export const ReportExportTracker = ({
         .invalidateQueries({
           queryKey: entitiesKeys.all(settledExport.workspaceId),
         })
-        .catch((error: unknown) => analytics.captureError(error));
+        .catch((error: unknown) =>
+          analytics.captureError(error, {
+            fingerprintKey: "ReportExportTracker:failure-2",
+            scope: {
+              type: "handler",
+              handlerId: "ReportExportTracker:failure-2",
+            },
+          }),
+        );
       const handleOpen = async () => {
         const result = await Result.tryPromise(async () => {
           const destination = await resolveReportExportDestinationQuery({
@@ -159,10 +193,7 @@ export const ReportExportTracker = ({
           }
           await navigate({
             to: "/workspaces/$workspaceId/$viewId/document",
-            params: {
-              workspaceId: settledExport.workspaceId,
-              viewId: "all",
-            },
+            params: viewParamsAtClick(settledExport.workspaceId),
             search: {
               entity: destination.entityId,
               field: destination.fieldId,
@@ -172,7 +203,13 @@ export const ReportExportTracker = ({
         });
         if (Result.isError(result) || result.value === null) {
           if (Result.isError(result)) {
-            analytics.captureError(result.error);
+            analytics.captureError(result.error, {
+              fingerprintKey: "ReportExportTracker.handleOpen:failure",
+              scope: {
+                type: "handler",
+                handlerId: "ReportExportTracker.handleOpen:failure",
+              },
+            });
           }
           notifyUserError(
             Result.isError(result) ? result.error : undefined,
@@ -187,7 +224,13 @@ export const ReportExportTracker = ({
           label: t("workspaces.views.reportExport.openReport"),
           onClick: () => {
             handleOpen().catch((error: unknown) =>
-              analytics.captureError(error),
+              analytics.captureError(error, {
+                fingerprintKey: "ReportExportTracker.onClick:failure-2",
+                scope: {
+                  type: "handler",
+                  handlerId: "ReportExportTracker.onClick:failure-2",
+                },
+              }),
             );
           },
         },
@@ -200,7 +243,7 @@ export const ReportExportTracker = ({
       return;
     }
 
-    notifyUserError(undefined, t("workspaces.views.reportExport.failed"), {
+    notifyUserProblem(t("workspaces.views.reportExport.failed"), {
       toastId,
       description: t("common.unexpectedError"),
     });
@@ -213,6 +256,7 @@ export const ReportExportTracker = ({
     settledDetail,
     settledExport,
     settledIndex,
+    viewParamsAtClick,
   ]);
 
   return null;

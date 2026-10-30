@@ -1,24 +1,23 @@
 import { Result } from "better-result";
 
+import type { GuidanceKind } from "@stll/legal-ast/document-kind";
+
 import {
-  type SoftLawAuthority,
-  type SoftLawMetadata,
-  type SOFT_LAW_KINDS,
-  SoftLawItemError,
   isTextlessExtraction,
+  type SoftLawAuthority,
   type SoftLawDocumentInput,
+  SoftLawItemError,
+  type SoftLawMetadata,
 } from "./soft-law-types";
 
 type KindDisposition =
-  | { type: "eligible" }
-  | { type: "excluded"; reason: string };
+  { type: "eligible" } | { type: "excluded"; reason: string };
 type AuthorityPolicy = {
   expression: "optional" | "required";
   referenceStyle: "literal" | "wp_number";
   identitySeries:
-    | { type: "none" }
-    | { type: "source-kind"; values: readonly string[] };
-  kinds: Record<(typeof SOFT_LAW_KINDS)[number], KindDisposition>;
+    { type: "none" } | { type: "source-kind"; values: readonly string[] };
+  kinds: Record<GuidanceKind, KindDisposition>;
 };
 
 const eligible = { type: "eligible" } as const;
@@ -26,6 +25,24 @@ const excluded = {
   type: "excluded",
   reason: "Outside the authority's admitted guidance collection",
 } as const;
+
+const pendingPolicy = {
+  expression: "required",
+  referenceStyle: "literal",
+  identitySeries: { type: "none" },
+  kinds: {
+    methodology: excluded,
+    recommendation: excluded,
+    opinion: excluded,
+    faq: excluded,
+    guideline: excluded,
+    position: excluded,
+    statement: excluded,
+    inspection_report: excluded,
+    annual_report: excluded,
+    other: excluded,
+  },
+} as const satisfies AuthorityPolicy;
 
 export const SOFT_LAW_AUTHORITY_POLICIES = {
   "cz-uoou": {
@@ -90,9 +107,81 @@ export const SOFT_LAW_AUTHORITY_POLICIES = {
       other: excluded,
     },
   },
+  "at-dsb": pendingPolicy,
+  "be-apd": pendingPolicy,
+  "bg-cpdp": pendingPolicy,
+  "hr-azop": pendingPolicy,
+  "cy-dpa": pendingPolicy,
+  "dk-datatilsynet": pendingPolicy,
+  "ee-aki": pendingPolicy,
+  "fi-ombudsman": pendingPolicy,
+  "fr-cnil": pendingPolicy,
+  "de-bfdi": {
+    expression: "required",
+    referenceStyle: "literal",
+    identitySeries: { type: "none" },
+    kinds: {
+      methodology: excluded,
+      recommendation: eligible,
+      opinion: excluded,
+      faq: excluded,
+      guideline: excluded,
+      position: excluded,
+      statement: excluded,
+      inspection_report: excluded,
+      annual_report: excluded,
+      other: excluded,
+    },
+  },
+  "el-hdpa": pendingPolicy,
+  "hu-naih": pendingPolicy,
+  "is-personuvernd": pendingPolicy,
+  "ie-dpc": pendingPolicy,
+  "it-garante": pendingPolicy,
+  "lv-dvi": pendingPolicy,
+  "li-dss": pendingPolicy,
+  "lt-vdai": pendingPolicy,
+  "lu-cnpd": pendingPolicy,
+  "mt-idpc": pendingPolicy,
+  "nl-ap": pendingPolicy,
+  "no-datatilsynet": pendingPolicy,
+  "pl-uodo": pendingPolicy,
+  "pt-cnpd": pendingPolicy,
+  "ro-anspdcp": pendingPolicy,
+  "sk-uoou": pendingPolicy,
+  "si-ip": pendingPolicy,
+  "es-aepd": pendingPolicy,
+  "se-imy": pendingPolicy,
+  "eu-edps": pendingPolicy,
+  "de-dsk": pendingPolicy,
+  "de-bw": pendingPolicy,
+  "de-by-baylfd": pendingPolicy,
+  "de-by-baylda": pendingPolicy,
+  "de-be": pendingPolicy,
+  "de-bb": pendingPolicy,
+  "de-hb": pendingPolicy,
+  "de-hh": pendingPolicy,
+  "de-he": pendingPolicy,
+  "de-mv": pendingPolicy,
+  "de-ni": pendingPolicy,
+  "de-nw": pendingPolicy,
+  "de-rp": pendingPolicy,
+  "de-sl": pendingPolicy,
+  "de-sn": pendingPolicy,
+  "de-st": pendingPolicy,
+  "de-sh": pendingPolicy,
+  "de-th": pendingPolicy,
+  "es-apdcat": pendingPolicy,
+  "es-avpd": pendingPolicy,
+  "es-ctpd": pendingPolicy,
+  "at-pdk": pendingPolicy,
+  "be-vtc": pendingPolicy,
+  "be-coc": pendingPolicy,
+  "be-comitei": pendingPolicy,
+  "be-comitep": pendingPolicy,
 } as const satisfies Record<SoftLawAuthority, AuthorityPolicy>;
 
-/** The persistence boundary refuses incomplete EU expressions, including replayed receipts. */
+/** The persistence boundary refuses incomplete authority expressions, including replayed receipts. */
 export const validateSoftLawAuthorityMetadata = (
   authority: SoftLawAuthority,
   metadata: SoftLawMetadata,
@@ -123,7 +212,7 @@ export const validateSoftLawAuthorityMetadata = (
     return Result.err(
       new SoftLawItemError({
         message:
-          "EU soft law requires language, revision and lifecycle metadata",
+          "This authority requires language, revision and lifecycle metadata",
         tag: "invalid_document",
       }),
     );

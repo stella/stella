@@ -4,8 +4,8 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import {
   DECISION_TEXT_ABSENCE_METADATA_KEY,
-  DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY,
   DECISION_TEXT_ABSENCE_SCHEMA_VERSION,
+  DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY,
   DECISION_TEXT_FIELD,
   TEXT_ABSENCE_REASONS,
 } from "@stll/api-contract/case-law-text-field";
@@ -55,12 +55,12 @@ import { wrappedErrorDetail } from "@/api/handlers/case-law/ingestion/pipeline/o
 import { createSafeId } from "@/api/lib/branded-types";
 import { CITATION_STORAGE_WIDTHS } from "@/api/lib/case-law/citation-storage-bounds";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
   absentTextField,
   presentTextField,
   readDecisionTextMetadata,
   splitStoredDecisionTextMetadata,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { CASE_LAW_SEARCH_CANDIDATE_ROW_MAX_BYTES } from "@/api/lib/case-law/search-candidate-row-bound-sql";
 import { canonicalDecisionDate } from "@/api/lib/dates";
@@ -79,13 +79,16 @@ import {
   fitsDecisionSearchCandidateRow,
   markListingOnly,
   observedDocketOf,
-  sanitizeResult,
   partialObservationFromMetadata,
+  sanitizeResult,
   storedCaseNumberOf,
 } from "@/api/lib/legal-search/ingestion-normalization";
 import type { ObservedDocket } from "@/api/lib/legal-search/ingestion-normalization";
 import { defineSourceAdapter } from "@/api/lib/legal-search/ingestion-types";
-import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
+import type {
+  DecisionJudgeInput,
+  RawIngestionResult,
+} from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -844,7 +847,7 @@ describe("runIngestionPipeline — database timeouts", () => {
         throw new TimeoutError({
           message: "decision write exceeded deadline",
           label: "ingestion-db-transaction",
-          timeoutMs: 10,
+          timeoutMs: 10, // timeout under test
         });
       }
 
@@ -1822,7 +1825,7 @@ describe("processDecision — corpus storage off", () => {
 describe("processDecision — the decision's judges", () => {
   type ReplacedJudges = {
     decisionId: string;
-    judges: readonly { role: string; nameAsPrinted: string }[];
+    judges: readonly DecisionJudgeInput[];
     /** Whether the write happened inside the transaction that wrote the row. */
     inTransaction: boolean;
   };

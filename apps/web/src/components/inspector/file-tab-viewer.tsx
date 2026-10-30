@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, memo, Suspense, useCallback, useMemo } from "react";
 
 import { useTranslations } from "use-intl";
 
@@ -14,7 +14,10 @@ import {
   EMAIL_CHAT_MODE,
 } from "@/components/inspector/email-html-viewer.logic";
 import type { FileTabDisplayState } from "@/components/inspector/file-tab-panel.logic";
-import { InspectorPdfErrorFallback } from "@/components/inspector/inspector-pdf-error-fallback";
+import {
+  ConversionRefusalFallback,
+  InspectorPdfErrorFallback,
+} from "@/components/inspector/inspector-pdf-error-fallback";
 import { InspectorRestoreHold } from "@/components/inspector/inspector-restore-hold";
 import type { FileTab } from "@/components/inspector/inspector-tabs-store";
 import { MarkdownFileViewer } from "@/components/inspector/markdown-file-viewer";
@@ -87,7 +90,7 @@ type FileTabViewerProps = {
  * The file itself, in the viewer its format needs, under the AI source bar
  * when the tab carries a justification.
  */
-export const FileTabViewer = ({
+const FileTabViewerComponent = ({
   canUpdateEntity,
   closeAll,
   desktopEditTarget,
@@ -118,11 +121,46 @@ export const FileTabViewer = ({
   tab,
 }: FileTabViewerProps) => {
   const t = useTranslations();
-  const pdfColorControl = getPeekPDFColorControl({
-    colorMode: pdfColorMode,
-    mimeType: tab.mimeType,
-    onColorModeChange: onPdfColorModeChange,
-  });
+  const pdfColorControl = useMemo(
+    () =>
+      getPeekPDFColorControl({
+        colorMode: pdfColorMode,
+        mimeType: tab.mimeType,
+        onColorModeChange: onPdfColorModeChange,
+      }),
+    [onPdfColorModeChange, pdfColorMode, tab.mimeType],
+  );
+  const officeResetKeys = useMemo(() => [tab.id], [tab.id]);
+  const officeSuspenseFallback = useMemo(
+    () => (
+      <div className="text-muted-foreground flex min-h-0 flex-1 items-center justify-center text-sm">
+        {t("common.loading")}
+      </div>
+    ),
+    [t],
+  );
+  const docxDocument = useMemo(
+    () => ({
+      entityId: tab.entityId,
+      fileFieldId: tab.id,
+      propertyId: entity.filePropertyId ?? "",
+      workspaceId: tab.workspaceId,
+    }),
+    [entity.filePropertyId, tab.entityId, tab.id, tab.workspaceId],
+  );
+  const docxFallback = useMemo(() => <PeekSuspenseFallback />, []);
+  const handlePdfWheelZoom = useCallback(
+    (deltaY: number) => handleWheelZoom(tab.id, deltaY),
+    [handleWheelZoom, tab.id],
+  );
+  const handleReset = useCallback(
+    () => handleResetZoom(tab.id),
+    [handleResetZoom, tab.id],
+  );
+  const handleZoomDirection = useCallback(
+    (direction: "in" | "out") => handleZoom(tab.id, direction),
+    [handleZoom, tab.id],
+  );
 
   const fileViewer = (() => {
     if (isEmailDisplay) {
@@ -173,12 +211,8 @@ export const FileTabViewer = ({
         <QuerySuspenseBoundary
           area="office-file-viewer"
           errorFallback={viewerErrorFallback}
-          resetKeys={[tab.id]}
-          suspenseFallback={
-            <div className="text-muted-foreground flex min-h-0 flex-1 items-center justify-center text-sm">
-              {t("common.loading")}
-            </div>
-          }
+          resetKeys={officeResetKeys}
+          suspenseFallback={officeSuspenseFallback}
         >
           <OfficeFileViewer
             desktopEditTarget={desktopEditTarget}
@@ -217,13 +251,8 @@ export const FileTabViewer = ({
           <DocxEditorSlot
             bindings={docxEditor.bindings}
             canUnlock={canUpdateEntity}
-            document={{
-              entityId: tab.entityId,
-              fileFieldId: tab.id,
-              propertyId: entity.filePropertyId,
-              workspaceId: tab.workspaceId,
-            }}
-            fallback={<PeekSuspenseFallback />}
+            document={docxDocument}
+            fallback={docxFallback}
             initialScrollTop={docxInitialScrollTop}
             isEditing={isEditingNativeDocx}
             scaleOffset={scaleOffset}
@@ -232,8 +261,12 @@ export const FileTabViewer = ({
         </>
       );
     }
+    if (entity.conversionRefusal !== undefined) {
+      return <ConversionRefusalFallback refusal={entity.conversionRefusal} />;
+    }
     return (
       <PeekPdfViewer
+        pdfPageSource="portfolio"
         activePropertyId={entity.filePropertyId ?? ""}
         entityId={tab.entityId}
         errorFallback={viewerErrorFallback}
@@ -244,7 +277,7 @@ export const FileTabViewer = ({
         onDocxScrollTopChange={docxEditor.handleScrollTopChange}
         onError={onViewerError}
         onPeekNavigate={closeAll}
-        onWheelZoom={(deltaY) => handleWheelZoom(tab.id, deltaY)}
+        onWheelZoom={handlePdfWheelZoom}
         scaleOffset={scaleOffset}
         viewId={peekPdfViewId}
         workspaceId={tab.workspaceId}
@@ -284,8 +317,8 @@ export const FileTabViewer = ({
           {isZoomOverlayVisible ? (
             <ViewerOverlayBar>
               <PeekPdfControls
-                onReset={() => handleResetZoom(tab.id)}
-                onZoom={(direction) => handleZoom(tab.id, direction)}
+                onReset={handleReset}
+                onZoom={handleZoomDirection}
                 pdfColorControl={pdfColorControl}
                 scaleOffset={scaleOffset}
               />
@@ -296,3 +329,5 @@ export const FileTabViewer = ({
     </div>
   );
 };
+
+export const FileTabViewer = memo(FileTabViewerComponent);

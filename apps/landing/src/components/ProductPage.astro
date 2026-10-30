@@ -6,6 +6,7 @@ import ProductMediaFrame from "./ProductMediaFrame.astro";
 import McpProofSection from "./McpProofSection.astro";
 import LandingFooter from "./LandingFooter.astro";
 import SetupSnippet from "./SetupSnippet.astro";
+import Prose from "./Prose.astro";
 import { resolveProductLink } from "../data/products/links";
 import type { AnyProduct } from "../data/products/types";
 import { defaultLocale, isLocale, locales } from "../i18n/config";
@@ -148,13 +149,13 @@ const faqJsonLd = {
             >
               {title}
             </h1>
-            <p
+            <Prose
               data-reveal
               style="--reveal-delay: 160ms; color: var(--muted-foreground)"
               class="mx-auto mt-5 max-w-2xl text-lg leading-[1.7]"
             >
               {summary}
-            </p>
+            </Prose>
           </div>
           <div
             data-reveal
@@ -186,12 +187,12 @@ const faqJsonLd = {
             <h2 class="mt-2 font-display text-xl font-medium tracking-tight">
               {copy.quickAnswer.question}
             </h2>
-            <p
+            <Prose
               class="mt-3 text-base leading-[1.8]"
               style="color: var(--muted-foreground)"
             >
               {copy.quickAnswer.answer}
-            </p>
+            </Prose>
           </div>
         </div>
       </section>
@@ -247,23 +248,17 @@ const faqJsonLd = {
                     ]}
                     style={`--reveal-delay: ${index * 60}ms; border-color: var(--border)`}
                   >
-                    <span
-                      class="font-mono text-xs font-medium tabular-nums"
-                      style="color: color-mix(in srgb, var(--primary) 75%, transparent)"
-                    >
-                      {String(index + 1).padStart(2, "0")}
-                    </span>
                     <h3
                       class:list={[
                         "font-display font-medium tracking-tight",
                         isLead
-                          ? "mt-4 max-w-xl text-2xl sm:text-3xl"
-                          : "mt-3 text-lg",
+                          ? "max-w-xl text-2xl sm:text-3xl"
+                          : "text-lg",
                       ]}
                     >
                       {cap.title}
                     </h3>
-                    <p
+                    <Prose
                       class:list={[
                         "leading-[1.8]",
                         isLead
@@ -273,7 +268,7 @@ const faqJsonLd = {
                       style="color: var(--muted-foreground)"
                     >
                       {cap.body}
-                    </p>
+                    </Prose>
                   </div>
                 );
               })
@@ -300,11 +295,10 @@ const faqJsonLd = {
               <div
                 data-reveal
               >
-                <span class="font-mono text-xs" style="color: var(--muted-foreground)">{String(index + 1).padStart(2, "0")}</span>
                 <h2 class="font-display text-2xl font-medium tracking-tight sm:text-3xl">
                   {section.heading}
                 </h2>
-                <ul class="mt-5 space-y-3">
+                <ul class="mt-5 max-w-[80ch] space-y-3">
                   {section.bullets.map((bullet) => (
                     <li
                       class="flex items-start gap-2.5 text-sm leading-[1.7]"
@@ -346,12 +340,12 @@ const faqJsonLd = {
               <h2 class="font-display text-2xl font-medium tracking-tight sm:text-3xl">
                 {setup.heading}
               </h2>
-              <p
+              <Prose
                 class="mt-4 text-sm leading-[1.7]"
                 style="color: var(--muted-foreground)"
               >
                 {setup.intro}
-              </p>
+              </Prose>
               <SetupSnippet
                 class="mt-4"
                 copiedLabel={copiedLabel}
@@ -365,12 +359,12 @@ const faqJsonLd = {
                     <h3 class="font-display text-base font-medium">
                       {client.name}
                     </h3>
-                    <p
+                    <Prose
                       class="mt-1.5 text-sm leading-[1.7]"
                       style="color: var(--muted-foreground)"
                     >
                       {client.body}
-                    </p>
+                    </Prose>
                     {client.snippet && (
                       <SetupSnippet
                         class="mt-3"
@@ -383,12 +377,12 @@ const faqJsonLd = {
                   </div>
                 ))}
                 <div>
-                  <p
+                  <Prose
                     class="text-sm leading-[1.7]"
                     style="color: var(--muted-foreground)"
                   >
                     {setup.outro}
-                  </p>
+                  </Prose>
                   <SetupSnippet
                     class="mt-3"
                     copiedLabel={copiedLabel}
@@ -428,12 +422,12 @@ const faqJsonLd = {
                       +
                     </span>
                   </summary>
-                  <p
+                  <Prose
                     class="pb-5 text-sm leading-[1.8]"
                     style="color: var(--muted-foreground)"
                   >
                     {faq.answer}
-                  </p>
+                  </Prose>
                 </details>
               ))
             }

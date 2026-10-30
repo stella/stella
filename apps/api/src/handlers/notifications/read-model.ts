@@ -1,6 +1,6 @@
 import { and, eq, isNull } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import type {
   NotificationEntityType,
@@ -11,7 +11,7 @@ import type {
 import type { SafeDb } from "@/api/db/safe-db";
 import { notifications } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import type {
   UnbackedProjectionKeys,
@@ -35,8 +35,8 @@ const UNPROJECTED_NOTIFICATION_COLUMNS = [
   "featureOwner",
 ] as const satisfies readonly (keyof NotificationRow)[];
 
-export const notificationParamsSchema = t.Object({
-  notificationId: tSafeId("notification"),
+export const notificationParamsSchema = v.object({
+  notificationId: resourceIdSchema("notification"),
 });
 
 export const notificationCursor = createTimestampIdCursorCodec({

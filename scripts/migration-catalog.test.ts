@@ -7,11 +7,56 @@ import {
   compareCatalogs,
   digestColumnNames,
   ledgerPairs,
+  queryRows,
   rowsByKey,
   seedFootprint,
+  snapshotCatalog,
 } from "./migration-catalog";
 
 describe("migration catalog", () => {
+  test("query rows convert bigints at every nesting level without changing other values", async () => {
+    const rows = await queryRows(
+      {
+        unsafe: async () => [
+          {
+            bigint: 9_223_372_036_854_775_807n,
+            number: 42,
+            boolean: true,
+            string: "value",
+            null: null,
+            array: [1n, 2, false, "nested", null, [3n]],
+          },
+        ],
+      },
+      "SELECT fixture",
+    );
+
+    expect(rows).toEqual([
+      {
+        bigint: "9223372036854775807",
+        number: 42,
+        boolean: true,
+        string: "value",
+        null: null,
+        array: ["1", 2, false, "nested", null, ["3"]],
+      },
+    ]);
+    expect(JSON.stringify(rows)).toBe(
+      '[{"bigint":"9223372036854775807","number":42,"boolean":true,"string":"value","null":null,"array":["1",2,false,"nested",null,["3"]]}]',
+    );
+  });
+
+  test("a snapshot remains JSON serializable when a catalog query returns bigint", async () => {
+    const snapshot = await snapshotCatalog({
+      unsafe: async (query) =>
+        query.includes("FROM pg_namespace")
+          ? [{ name: "public", value: 9_223_372_036_854_775_807n }]
+          : [],
+    });
+
+    expect(JSON.stringify(snapshot)).toContain('"value":"9223372036854775807"');
+  });
+
   test("column attnum order is not a difference", () => {
     const id = { schema: "public", table: "items", name: "id", type: "uuid" };
     const name = {

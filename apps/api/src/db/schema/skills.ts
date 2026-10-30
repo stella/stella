@@ -1,18 +1,21 @@
+import { registeredReviewResetPolicies } from "../review-reset-policies";
 import {
   agentSkillChildPolicies,
   agentSkillPolicies,
-  agentSkillRevisionPolicies,
   agentSkillResourcePolicies,
+  agentSkillRevisionPolicies,
   jsonb,
   organization,
   p,
   pUuid,
   safeOrganizationId,
   safeUuid,
+  safeWorkspaceId,
   sql,
-  user,
   timestamptz,
+  user,
 } from "./common";
+import { contacts, workspaces } from "./contacts";
 import {
   AGENT_SKILL_INVOCATIONS,
   AGENT_SKILL_ORIGINS,
@@ -53,6 +56,12 @@ export const agentSkills = p.pgTable(
       .text("invocation", { enum: AGENT_SKILL_INVOCATIONS })
       .notNull()
       .default("auto"),
+    // A skill bound to one matter, or to one client (every matter whose
+    // `client_id` it is), is readable and usable only there; at most one is
+    // set. `agentSkillPolicies` enforces the reach, and
+    // `lib/agent-skills/binding.ts` decides where a model may use it.
+    boundWorkspaceId: safeWorkspaceId("bound_workspace_id"),
+    boundClientId: safeUuid<"contact">("bound_client_id"),
     // Optional slash-command handle. When set, the skill surfaces in
     // the chat slash menu. Uniqueness is enforced by partial indexes
     // below: team commands are unique per org, private commands are
@@ -81,6 +90,33 @@ export const agentSkills = p.pgTable(
       "agent_skills_invocation_check",
       sql`${table.invocation} IN (${sqlValueList(AGENT_SKILL_INVOCATIONS)})`,
     ),
+    p.check(
+      "agent_skills_single_binding_check",
+      sql`num_nonnulls(${table.boundWorkspaceId}, ${table.boundClientId}) <= 1`,
+    ),
+    // Composite references keep a binding inside the skill's organization.
+    p
+      .foreignKey({
+        columns: [table.boundWorkspaceId, table.organizationId],
+        foreignColumns: [workspaces.id, workspaces.organizationId],
+        name: "agent_skills_bound_workspace_fk",
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        columns: [table.organizationId, table.boundClientId],
+        foreignColumns: [contacts.organizationId, contacts.id],
+        name: "agent_skills_bound_client_fk",
+      })
+      .onDelete("cascade"),
+    p
+      .index("agent_skills_bound_workspace_idx")
+      .on(table.boundWorkspaceId)
+      .where(sql`bound_workspace_id IS NOT NULL`),
+    p
+      .index("agent_skills_bound_client_idx")
+      .on(table.boundClientId)
+      .where(sql`bound_client_id IS NOT NULL`),
     p
       .uniqueIndex("agent_skills_org_team_slug_uidx")
       .on(table.organizationId, table.slug)
@@ -107,6 +143,8 @@ export const agentSkills = p.pgTable(
       .on(table.organizationId, table.command)
       .where(sql`command IS NOT NULL`),
     ...agentSkillPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -134,6 +172,8 @@ export const agentSkillResources = p.pgTable(
       .index("agent_skill_resources_org_skill_idx")
       .on(table.organizationId, table.skillId),
     ...agentSkillResourcePolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -172,6 +212,8 @@ export const agentSkillRevisions = p.pgTable(
       .index("agent_skill_revisions_org_skill_idx")
       .on(table.organizationId, table.skillId),
     ...agentSkillRevisionPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -272,6 +314,8 @@ export const agentSkillProposals = p.pgTable(
       })
       .onDelete("set null"),
     ...agentSkillChildPolicies("agent_skill_proposals", "agent_skill_proposal"),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -325,6 +369,8 @@ export const agentSkillComments = p.pgTable(
     p.index("agent_skill_comments_revision_idx").on(table.revisionId),
     p.index("agent_skill_comments_proposal_idx").on(table.proposalId),
     ...agentSkillChildPolicies("agent_skill_comments", "agent_skill_comment"),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 

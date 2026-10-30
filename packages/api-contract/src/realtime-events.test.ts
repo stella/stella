@@ -1,6 +1,7 @@
 import { describe, expect, expectTypeOf, test } from "bun:test";
 
 import {
+  flowRunUpdateRealtimeEvent,
   MAX_RESOURCE_CHANGES_PER_EVENT,
   newNotificationRealtimeEvent,
   parseDesktopEditSessionRealtimeEvent,
@@ -10,16 +11,15 @@ import {
   REALTIME_EVENT_TYPE,
   type RESOURCE_CHANGE_TYPE,
   RESOURCE_DELETION_OWNERSHIP,
-  resourceDeletedRealtimeEvent,
   resourceDeletedChange,
-  flowRunUpdateRealtimeEvent,
+  resourceDeletedRealtimeEvent,
+  resourcesChangedRealtimeEvent,
   resourceSetUpdatedRealtimeEvent,
   resourceUpdatedChange,
   resourceUpdatedRealtimeEvent,
-  resourcesChangedRealtimeEvent,
   type WorkspaceRealtimeEvent,
 } from "./realtime-events";
-import { resourceRef, RESOURCE_TYPE } from "./resource-ref";
+import { RESOURCE_TYPE, resourceRef } from "./resource-ref";
 import { toSafeId } from "./safe-id";
 
 const ENTITY_RESOURCE = resourceRef({

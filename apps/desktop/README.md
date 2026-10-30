@@ -116,6 +116,10 @@ export STELLA_DESKTOP_RELEASE_BASE_URL="https://downloads.stll.app/desktop/prod"
 bun run --cwd apps/desktop build
 ```
 
+Organizations can turn off in-app updates and the activity timeline, and
+pre-approve their self-hosted server, through a configuration profile or
+Group Policy: see [Managed deployment](docs/managed-deployment.md).
+
 ### Notes
 
 - The bridge runs on `127.0.0.1:45901` and serves status reads with a native connection proof

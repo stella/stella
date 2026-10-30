@@ -1,6 +1,6 @@
 import {
-  SIGNAL_KINDS,
   SIGNAL_KIND_ORIGIN,
+  SIGNAL_KINDS,
   SIGNAL_ORIGINS,
   SIGNAL_SEVERITIES,
   SIGNAL_STATUSES,
@@ -14,6 +14,7 @@ import type {
 
 import { systemScopePolicies } from "@/api/db/system-scope-policies";
 
+import { registeredReviewResetPolicies } from "../review-reset-policies";
 import {
   jsonb,
   organization,
@@ -65,8 +66,7 @@ export type SignalAcceptedResult =
     }
   | {
       suggestionKind:
-        | typeof SUGGESTION_KIND.ASSIGN
-        | typeof SUGGESTION_KIND.OPEN_CHAT;
+        typeof SUGGESTION_KIND.ASSIGN | typeof SUGGESTION_KIND.OPEN_CHAT;
       result: { type: "none" };
     };
 
@@ -223,6 +223,8 @@ export const signals = p.pgTable(
       )`,
     ),
     ...organizationOptionalWorkspacePolicies("signals"),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -295,6 +297,8 @@ export const signalEvents = p.pgTable(
         to: stella,
         using: sql`false`,
       }),
+
+      ...registeredReviewResetPolicies(table.organizationId),
     ];
   },
 );
@@ -333,6 +337,8 @@ export const scoutRuns = p.pgTable(
       sql`${table.status} in (${sql.join(SCOUT_RUN_STATUS_SQL_VALUES, sql`, `)})`,
     ),
     ...orgPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 

@@ -7,6 +7,7 @@ use tauri_plugin_opener::OpenerExt;
 use crate::account::LinkedAccount;
 use crate::account::{self, AccountState};
 use crate::http_client::{DesktopHttpClient, HttpClientOptions};
+use crate::logging::{json_cause_logged, request_cause_logged, with_cause_logged};
 
 const MAX_RESPONSE_BYTES: usize = 512 * 1024;
 const MAX_COPY_BYTES: usize = 32_768;
@@ -21,7 +22,7 @@ fn registry_client() -> Result<&'static DesktopHttpClient, String> {
     redirect: reqwest::redirect::Policy::none(),
     timeout: Some(REQUEST_TIMEOUT),
   })
-  .map_err(|_| "Registry search is unavailable")?;
+  .map_err(request_cause_logged("Registry search is unavailable"))?;
   Ok(CLIENT.get_or_init(|| client))
 }
 
@@ -33,11 +34,11 @@ fn company_format_url(
   if registry.is_empty() || registry.len() > 64 || id.is_empty() || id.len() > 64 {
     return Err("Invalid company format request".into());
   }
-  let mut url =
-    reqwest::Url::parse(web_origin).map_err(|_| "Invalid stella web origin")?;
+  let mut url = reqwest::Url::parse(web_origin)
+    .map_err(with_cause_logged("Invalid stella web origin"))?;
   url
     .path_segments_mut()
-    .map_err(|_| "Invalid stella web origin")?
+    .map_err(|()| "Invalid stella web origin")?
     .extend(["knowledge", "company-formats", registry, id]);
   Ok(url.into())
 }
@@ -64,7 +65,7 @@ pub fn registry_copy(
     return Err("Registry result is too large to copy".into());
   }
   crate::clipboard::write_text_and_html(text, html)
-    .map_err(|_| "Could not copy registry result")?;
+    .map_err(with_cause_logged("Could not copy registry result"))?;
   crate::clipboard_window::hide(&window)
 }
 
@@ -118,7 +119,7 @@ async fn request_path(
   )?
   .send()
   .await
-  .map_err(|_| "Registry search is unavailable")?;
+  .map_err(request_cause_logged("Registry search is unavailable"))?;
   let unauthorized = response.status() == reqwest::StatusCode::UNAUTHORIZED;
   if response.status() == reqwest::StatusCode::FORBIDDEN {
     tracing::warn!(target: crate::logging::TRAIL_TARGET, event = "registry.forbidden", status = 403_u16);
@@ -134,15 +135,15 @@ async fn request_path(
   while let Some(chunk) = response
     .chunk()
     .await
-    .map_err(|_| "Registry response failed")?
+    .map_err(request_cause_logged("Registry response failed"))?
   {
     if bytes.len() + chunk.len() > MAX_RESPONSE_BYTES {
       return Err("Registry response is too large".into());
     }
     bytes.extend_from_slice(&chunk);
   }
-  let value: serde_json::Value =
-    serde_json::from_slice(&bytes).map_err(|_| "Registry response is invalid")?;
+  let value: serde_json::Value = serde_json::from_slice(&bytes)
+    .map_err(json_cause_logged("Registry response is invalid"))?;
   if unauthorized {
     return match value.get("code").and_then(serde_json::Value::as_str) {
       Some(
@@ -181,7 +182,9 @@ pub async fn registry_open_company_format(
   app
     .opener()
     .open_url(url, None::<&str>)
-    .map_err(|_| "Could not open company specification formats")?;
+    .map_err(with_cause_logged(
+      "Could not open company specification formats",
+    ))?;
   crate::clipboard_window::hide(&window)
 }
 
@@ -222,9 +225,9 @@ pub async fn registry_get_state(
     .get("defaultRegistryId")
     .filter(|value| value.is_null() || value.is_string())
     .ok_or("Invalid registry configuration")?;
-  Ok(
-    serde_json::json!({"status":"connected", "accountLabel":saved.account.email, "expiresAt":saved.credential.expires_at, "registries":registries, "defaultRegistryId":default_registry_id}),
-  )
+  let connected = serde_json::json!({"status":"connected", "accountLabel":saved.account.email, "expiresAt":saved.credential.expires_at, "registries":registries, "defaultRegistryId":default_registry_id});
+  drop(saved);
+  Ok(connected)
 }
 
 /// Only a decoded credential refusal ends the link; proof and role refusals keep it.
@@ -367,6 +370,7 @@ mod tests {
       not_connected(),
       "the native request must reach API authentication rather than fail in transit"
     );
+    drop(saved);
   }
 
   #[tokio::test]
@@ -423,6 +427,7 @@ mod tests {
         body
       );
     }
+    drop(saved);
     server.abort();
   }
 

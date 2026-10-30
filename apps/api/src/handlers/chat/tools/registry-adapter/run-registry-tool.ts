@@ -11,7 +11,7 @@ import { isRecord } from "@/api/lib/type-guards";
 import { BILLING_TOOL_HANDLERS } from "@/api/mcp/billing-tools";
 import { CAPABILITY_TOOL_HANDLERS } from "@/api/mcp/capability-tools";
 import { COMPAT_TOOL_HANDLERS } from "@/api/mcp/compat-tools";
-import type { McpRequestContext } from "@/api/mcp/context";
+import type { McpRequestResources } from "@/api/mcp/context";
 import { DECISION_READER_TOOL_SET } from "@/api/mcp/decision-reader-tools";
 import { DOCUMENT_TOOL_HANDLERS } from "@/api/mcp/document-tools";
 import { finalizeToolEgress } from "@/api/mcp/egress";
@@ -44,6 +44,8 @@ import type {
   TypedHandlerDataByName,
 } from "@/api/mcp/tool-types";
 import { validationErrorResult } from "@/api/mcp/tool-utils";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
+import { authorizeMcpToolContext } from "@/api/mcp/write-tool-authority";
 
 import type {
   ChatProjectableToolName,
@@ -178,7 +180,7 @@ export type RegistryReadToolOutputContract = AssertTrue<
 export type RunRegistryReadToolProps = {
   toolName: RegistryReadToolName;
   args: Record<string, unknown>;
-  context: McpRequestContext;
+  context: McpRequestResources;
   refRegistry: ChatRefRegistry;
   /**
    * Eval seam: answers the tool in place of its registry handler. Everything
@@ -217,7 +219,7 @@ const runInjectedHandler = async ({
   handler,
 }: {
   args: Record<string, unknown>;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   toolName: RegistryReadToolName;
   handler: McpToolHandler;
 }): Promise<McpToolResponse> => {
@@ -343,21 +345,37 @@ export const runRegistryReadTool = async ({
   if (Result.isError(scoped)) {
     return Result.err(scoped.error);
   }
+  const authorization = authorizeMcpToolContext({
+    context,
+    dataAccess: context,
+    definition: staticDefinition,
+    input: scoped.value,
+    toolName,
+  });
+  if (!authorization.authorized) {
+    return Result.err(
+      new ChatToolError({
+        kind: "unavailable",
+        message: authorization.refusal.message,
+      }),
+    );
+  }
+  const authorizedContext = authorization.context;
 
   const response =
     handler === undefined
       ? await REGISTRY_READ_TOOL_HANDLERS[toolName]({
           args: scoped.value,
-          context,
+          context: authorizedContext,
         })
       : await runInjectedHandler({
           args: scoped.value,
-          context,
+          context: authorizedContext,
           toolName,
           handler,
         });
   const finished = await finalizeToolEgress({
-    context,
+    context: authorizedContext,
     mode: "default",
     response,
   });

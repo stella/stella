@@ -7,10 +7,10 @@ import {
   memberPropertyName,
   resolveImportedExpressionForEnforcement,
   resolveVariable,
+  type ScopeContext,
   stableInitializer,
   staticStringValue,
   unwrapExpression,
-  type ScopeContext,
 } from "./utils.ts";
 
 const DOCKER_EXECUTABLE = /(?:^|[/\\])docker(?:\.exe)?$/u;

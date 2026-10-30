@@ -2,14 +2,17 @@
 // so they launch no browser and need no dev server or storageState.
 import { describe, expect, test } from "bun:test";
 
+import { NETWORK_DEPTH_METHOD as SCOPE_NETWORK_DEPTH_METHOD } from "../../../../scripts/network-baseline-scope";
 import {
-  NETWORK_DEPTH_METHOD,
-  type NetworkBaseline,
-  type RouteNetworkMetrics,
+  countDuplicateGets,
   diffNetworkBaseline,
   mergeNetworkBaseline,
+  NETWORK_DEPTH_METHOD,
+  type NetworkBaseline,
   normalizeApiPath,
   responseSizeAllowance,
+  type RouteNetworkMetrics,
+  summarizeCapture,
   waitForQuietPeriod,
 } from "../helpers/network";
 
@@ -33,6 +36,59 @@ describe("normalizeApiPath", () => {
 
   test("matches uppercase hex", () => {
     expect(normalizeApiPath(`/v1/files/${UUID_UPPER}`)).toBe("/v1/files/:id");
+  });
+});
+
+describe("duplicate resource reads", () => {
+  const request = (url: string, startedAt: number, method = "GET") => ({
+    method,
+    url: `http://localhost:3001${url}`,
+    startedAt,
+  });
+
+  test("counts every excess GET in the inclusive two-second window", () => {
+    expect(
+      countDuplicateGets([
+        request("/v1/chat/threads?limit=20", 0),
+        request("/v1/chat/threads?limit=20", 2000),
+        request("/v1/chat/threads?limit=20", 2001),
+        request("/v1/chat/threads?limit=20", 4002),
+      ]),
+    ).toEqual({ "GET /v1/chat/threads?limit=20": 2 });
+  });
+
+  test("normalizes query ordering while keeping resources and query values distinct", () => {
+    expect(
+      countDuplicateGets([
+        request(`/v1/tasks/${UUID}?limit=10&cursor=a`, 0),
+        request(`/v1/tasks/${UUID}?cursor=a&limit=10`, 10),
+        request(`/v1/tasks/${UUID_UPPER}?cursor=a&limit=10`, 20),
+        request(`/v1/tasks/${UUID}?cursor=b&limit=10`, 30),
+        request(`/v1/tasks/${UUID}?cursor=a&limit=20`, 40),
+      ]),
+    ).toEqual({ [`GET /v1/tasks/${UUID}?cursor=a&limit=10`]: 1 });
+  });
+
+  test("capture summaries retain exact duplicate diagnostics", () => {
+    const duplicateGetCounts = countDuplicateGets([
+      request("/v1/organization-settings/ai-availability", 0),
+      request("/v1/organization-settings/ai-availability", 100),
+    ]);
+    expect(
+      summarizeCapture({ requests: [], depthChain: [], duplicateGetCounts })
+        .duplicateGetCounts,
+    ).toEqual({ "GET /v1/organization-settings/ai-availability": 1 });
+  });
+
+  test("does not count writes or reads outside the window", () => {
+    expect(
+      countDuplicateGets([
+        request("/v1/tasks", 0, "POST"),
+        request("/v1/tasks", 1, "POST"),
+        request("/v1/tasks", 2),
+        request("/v1/tasks", 2003),
+      ]),
+    ).toEqual({});
   });
 });
 
@@ -186,6 +242,31 @@ describe("diffNetworkBaseline", () => {
       ).toBe(false);
     },
   );
+
+  test("duplicate GETs fail even when endpoint repeat budgets permit them", () => {
+    const key = "GET /v1/contacts";
+    const { problems } = diffNetworkBaseline(
+      {
+        "/contacts": {
+          depth: 2,
+          depthMethod: NETWORK_DEPTH_METHOD,
+          requests: [key],
+          requestCounts: { [key]: 2 },
+        },
+      },
+      new Map([
+        [
+          "/contacts",
+          {
+            ...metrics([key], 2, {}, { [key]: 2 }),
+            duplicateGetCounts: { [key]: 1 },
+          },
+        ],
+      ]),
+    );
+    expect(problems).toHaveLength(1);
+    expect(problems.at(0)).toContain("Duplicate API GET on /contacts");
+  });
 
   test("a new route is a problem", () => {
     const { problems } = diffNetworkBaseline(
@@ -520,6 +601,11 @@ describe("diffNetworkBaseline", () => {
   });
 });
 
+test("declarations use the depth method the route smoke measures", () => {
+  // The baseline scope script runs install-free, so it keeps its own copy.
+  expect(SCOPE_NETWORK_DEPTH_METHOD).toBe(NETWORK_DEPTH_METHOD);
+});
+
 describe("mergeNetworkBaseline", () => {
   test("no existing baseline yields a snapshot", () => {
     const merged = mergeNetworkBaseline(
@@ -560,6 +646,28 @@ describe("mergeNetworkBaseline", () => {
       });
     },
   );
+
+  test("a lower timing sample never tightens a declared depth", () => {
+    // A declaration is stamped with the current method when it is applied.
+    const declared: NetworkBaseline = {
+      "/views": {
+        depth: 9,
+        depthMethod: NETWORK_DEPTH_METHOD,
+        requests: ["GET /v1/views/:id"],
+      },
+    };
+    const recorded = mergeNetworkBaseline(
+      declared,
+      new Map([["/views", metrics(["GET /v1/views/:id"], 6)]]),
+    );
+    expect(recorded["/views"]?.depth).toBe(9);
+    // A later, ordinary sample within the declared budget still passes.
+    const { problems } = diffNetworkBaseline(
+      recorded,
+      new Map([["/views", metrics(["GET /v1/views/:id"], 7)]]),
+    );
+    expect(problems).toEqual([]);
+  });
 
   test("requests accumulate as a union and depth takes the max", () => {
     const existing: NetworkBaseline = {

@@ -131,18 +131,22 @@ describe.serial("no-direct-pdf-save", () => {
       .filter((file) => readFileSync(file, "utf-8").includes("@libpdf/core"));
     expect(modules.length).toBeGreaterThan(0);
 
-    const reports: Record<string, number[]> = {};
-    for (const file of modules) {
-      const relative = repoRelativePath(root, file);
-      const lines = await lintSingleRule(
-        "no-direct-pdf-save",
-        readFileSync(file, "utf-8"),
-        { sourcePath: relative },
-      );
-      if (lines.length > 0) {
-        reports[relative] = lines;
-      }
-    }
-    expect(reports).toEqual({});
+    const results = await Promise.all(
+      modules.map(async (file) => {
+        const relative = repoRelativePath(root, file);
+        const lines = await lintSingleRule(
+          "no-direct-pdf-save",
+          readFileSync(file, "utf-8"),
+          { sourcePath: relative },
+        );
+        return { label: relative, result: lines };
+      }),
+    );
+    expect(results).toEqual(
+      modules.map((file) => ({
+        label: repoRelativePath(root, file),
+        result: [],
+      })),
+    );
   });
 });

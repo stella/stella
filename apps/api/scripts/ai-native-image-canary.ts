@@ -164,7 +164,7 @@ const nativeImageMessages = (
         type: "image",
         source: {
           type: "data",
-          value: Buffer.from(bytes).toString("base64"),
+          value: Buffer.from(bytes).toBase64(),
           mimeType,
         },
       },
@@ -200,6 +200,7 @@ export const probeNativeImage = async ({
     rotatedModelId: modelId,
   });
   const model = await resolveTanStackTextModel({
+    userId: null,
     dataClass: "public_corpus",
     task: "chat",
     orgAIConfig,
@@ -212,6 +213,7 @@ export const probeNativeImage = async ({
     });
   }
   const output = await generateTanStackObjectForTask({
+    userId: null,
     dataClass: "public_corpus",
     task: "chat",
     orgAIConfig,

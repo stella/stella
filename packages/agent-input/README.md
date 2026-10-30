@@ -8,7 +8,14 @@ One reader per value kind that reaches a tool input, a template marker, or a
 fill value. Each reads the spellings that carry a single meaning (`4 000`,
 `1. 10. 2026`, `ano`, `cs_CZ`, `Česko`) and returns the one ask-for-a-fix shape
 when a spelling carries two (`01/02/2026`, a bare `1,234`, a bare `cs`), so no
-call site grows its own parser or its own wording.
+call site grows its own parser or its own wording. Closed enum near-miss
+suggestions count Unicode scalar values, so astral characters such as emoji
+count as one edit.
+
+Browser bundles can import the pure readers directly from `@stll/agent-input/country`,
+`@stll/agent-input/date-value`, `@stll/agent-input/locale`, and
+`@stll/agent-input/string-list` without pulling in the enum reader's native
+fuzzy-search dependency.
 
 `normalizeCountry` reads ISO 3166-1 alpha-3 and alpha-2 codes and the country's
 name in each language the corpus serves, and returns both canonical spellings so
@@ -75,3 +82,17 @@ their own contracts. Ordinary strings are never normalized heuristically.
 ## License
 
 Apache-2.0
+
+## Machine numeric tokens
+
+`@stll/agent-input/numeric-token` reads protocol counters and numeric strings that
+must consume the entire input. `parseIntegerToken` accepts ASCII digits and an
+optional leading minus, and requires a safe integer. `parseDecimalToken` uses
+`-?[0-9]+(\.[0-9]+)?` and requires a finite value. Neither trims whitespace nor
+accepts plus signs, exponents, hexadecimal, grouping or incomplete fractions.
+Both return `Result<number, InvalidNumericTokenError>` and accept optional
+`sign: "unsigned"`, `min` and `max` bounds. Unsigned mode also rejects `-0`.
+
+Callers choose their invalid-input policy explicitly. Human-authored localized
+values continue through `normalizeNumber`; this strict subpath does not replace
+its intentional normalization rules.

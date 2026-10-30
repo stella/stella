@@ -1,25 +1,25 @@
 import { Result } from "better-result";
-import { readFileSync } from "node:fs";
 import * as v from "valibot";
 
-import { CLASSIFICATIONS } from "./classification-values";
-import {
-  createGitProvider,
-  resolveGitHead,
-  SOURCE_CONFIG,
-} from "./git-provider";
+import { compareCodeUnit } from "../../packages/collation/src/collation";
+import { CLASSIFICATIONS, sha256 } from "./classification-values";
+import { createGitProvider, resolveGitHead } from "./git-provider";
+import type { SOURCE_CONFIG } from "./git-provider";
 import {
   METADATA_ORIGIN,
   metadataReferenceIdentity,
   parseRemoteReference,
+  recordMetadataMount,
+  resolveLocalMetadataPath,
   sameMetadataOrigin,
   verifyRemoteReference,
 } from "./references";
 import type { MetadataOrigin, MetadataReferenceKind } from "./references";
 import { AdmissionError, parseDocument } from "./yaml";
+import type { ParsedDocument } from "./yaml";
 
-export const REFRESH_COMMAND =
-  "bun scripts/check-ci-job-classification.ts --write";
+const REVIEW_INSTRUCTION =
+  "review the matching file in .github/ci-job-classification-decisions/";
 
 const TEXT = v.pipe(
   v.string(),
@@ -80,13 +80,13 @@ const safePath = (path: string) => {
     reject("unsafe metadata path");
   }
 };
-const githubExpression = (value: string) => `\${{ ${value} }}`;
 type ReferenceOptions = {
   callerRepository: string;
   callerOrigin: MetadataOrigin;
   target: PublicMetadata["nodes"][number];
   reference: string;
   kind: MetadataReferenceKind;
+  inheritedMount: string | null;
   relocatedActions: Record<
     string,
     { repository: string | null; ref: string | null; path: string }[]
@@ -99,6 +99,7 @@ const verifyReference = ({
   reference,
   kind,
   relocatedActions,
+  inheritedMount,
 }: ReferenceOptions) => {
   if (
     kind === "reusable-workflow" &&
@@ -106,6 +107,7 @@ const verifyReference = ({
   ) {
     reject("reusable workflow requires callee job metadata");
   }
+  let targetMount: string | null = null;
   if (target.type === "metadata") {
     const local = reference.startsWith("./") || reference.startsWith("$/");
     if (!local) {
@@ -116,29 +118,22 @@ const verifyReference = ({
         kind,
       });
     } else {
-      const localPath = reference.slice(2);
-      const relocations = relocatedActions[reference] ?? [];
+      const selected = resolveLocalMetadataPath({
+        reference,
+        kind,
+        relocations: relocatedActions[reference] ?? [],
+        inheritedMount,
+      });
+      targetMount = selected.mount;
       const exactPath =
         kind === "reusable-workflow"
-          ? target.path === localPath
-          : target.path === `${localPath}/action.yml` ||
-            target.path === `${localPath}/action.yaml`;
-      const relocatedPath = relocations.some(
-        (relocation) =>
-          (relocation.repository === null ||
-            relocation.repository === githubExpression("github.repository") ||
-            relocation.repository ===
-              githubExpression("job.workflow_repository")) &&
-          (relocation.ref === null ||
-            relocation.ref === githubExpression("github.workflow_sha") ||
-            relocation.ref === githubExpression("job.workflow_sha")) &&
-          (target.path === `${relocation.path}/action.yml` ||
-            target.path === `${relocation.path}/action.yaml`),
-      );
+          ? target.path === selected.path
+          : target.path === `${selected.path}/action.yml` ||
+            target.path === `${selected.path}/action.yaml`;
       if (
         target.repository !== callerRepository ||
         !sameMetadataOrigin({ caller: callerOrigin, target: target.origin }) ||
-        (!exactPath && !relocatedPath)
+        !exactPath
       ) {
         reject("local metadata path, repository or origin mismatch");
       }
@@ -169,6 +164,25 @@ const verifyReference = ({
       }
     }
   }
+  return targetMount;
+};
+
+const verifyWorkflowInventory = (
+  metadata: PublicMetadata,
+  reader: MetadataReader,
+) => {
+  const observed = reader.workflows().toSorted();
+  unique(observed, "observed workflow");
+  if (
+    JSON.stringify(observed) !==
+    JSON.stringify(
+      metadata.workflows.map((workflow) => workflow.path).toSorted(),
+    )
+  ) {
+    reject(
+      `Unclassified workflows: ${observed.filter((path) => !metadata.workflows.some((workflow) => workflow.path === path)).join(", ")}. Classify their jobs, then ${REVIEW_INSTRUCTION}`,
+    );
+  }
 };
 
 export type MetadataOptions = { manifest: unknown; reader: MetadataReader };
@@ -184,34 +198,36 @@ export const verifyPublicMetadata = ({ manifest, reader }: MetadataOptions) =>
         metadata.workflows.map((workflow) => workflow.path),
         "workflow declaration",
       );
-      const observed = reader.workflows().toSorted();
-      unique(observed, "observed workflow");
-      if (
-        JSON.stringify(observed) !==
-        JSON.stringify(
-          metadata.workflows.map((workflow) => workflow.path).toSorted(),
-        )
-      ) {
-        reject(
-          `Unclassified workflows: ${observed.filter((path) => !metadata.workflows.some((workflow) => workflow.path === path)).join(", ")}. Classify their jobs, then run ${REFRESH_COMMAND}`,
-        );
-      }
+      verifyWorkflowInventory(metadata, reader);
       const nodes = new Map(metadata.nodes.map((node) => [node.id, node]));
       const visited = new Set<string>();
+      const mounts = new Map<string, string>();
       const active = new Set<string>();
       const classifications = { ordinary: 0, support: 0, priority: 0 };
+      const parsedDocuments = new Map<string, ParsedDocument>();
       let jobCount = 0;
       let documentCount = 0;
-      const visit = (id: string): void => {
+      const visit = (id: string, mount: string | null = null): void => {
         if (active.has(id)) {
           reject("metadata dependency cycle");
-        }
-        if (visited.has(id)) {
-          return;
         }
         const node = nodes.get(id);
         if (!node) {
           reject(`missing metadata dependency: ${id}`);
+        }
+        if (node.type === "metadata") {
+          const definition = parsedDocuments.get(id);
+          if (definition) {
+            recordMetadataMount({
+              mounts,
+              identity: id,
+              mount,
+              document: definition,
+            });
+          }
+        }
+        if (visited.has(id)) {
+          return;
         }
         active.add(id);
         if (node.type === "metadata") {
@@ -221,6 +237,13 @@ export const verifyPublicMetadata = ({ manifest, reader }: MetadataOptions) =>
           if (parsed.isErr()) {
             throw parsed.error;
           }
+          parsedDocuments.set(id, parsed.value);
+          recordMetadataMount({
+            mounts,
+            identity: id,
+            mount,
+            document: parsed.value,
+          });
           unique(
             node.jobs.map((job) => job.id),
             "callee job classification",
@@ -234,25 +257,12 @@ export const verifyPublicMetadata = ({ manifest, reader }: MetadataOptions) =>
                 parsed.value.jobs,
               )
                 .filter((job) => !node.jobs.some((entry) => entry.id === job))
-                .join(", ")}. Classify new jobs, then run ${REFRESH_COMMAND}`,
-            );
-          }
-          const changedJobs = node.jobs.filter(
-            (job) => parsed.value.jobs[job.id]?.digest !== job.digest,
-          );
-          if (changedJobs.length) {
-            reject(
-              `Classification-relevant shape changed: ${changedJobs.map((job) => `${node.path}/${job.id}`).join(", ")}. Re-review kind and qualifier, then run ${REFRESH_COMMAND}`,
+                .join(", ")}. Classify new jobs, then ${REVIEW_INSTRUCTION}`,
             );
           }
           for (const job of node.jobs) {
             classifications[job.kind] += 1;
             jobCount += 1;
-          }
-          if (parsed.value.digest !== node.digest) {
-            reject(
-              `Classification-relevant metadata changed: ${node.path} (jobs: ${node.jobs.map((job) => job.id).join(", ")}). Re-review classifications, then run ${REFRESH_COMMAND}`,
-            );
           }
           const references = new Set(Object.keys(parsed.value.dependencies));
           if (
@@ -269,15 +279,16 @@ export const verifyPublicMetadata = ({ manifest, reader }: MetadataOptions) =>
             if (!targetId || !target) {
               reject(`undeclared metadata edge: ${id}/${reference}`);
             }
-            verifyReference({
+            const targetMount = verifyReference({
               callerRepository: node.repository,
               callerOrigin: node.origin,
               target,
               reference,
               kind,
               relocatedActions: parsed.value.relocatedActions,
+              inheritedMount: mount,
             });
-            visit(targetId);
+            visit(targetId, targetMount);
           }
           documentCount += 1;
         }
@@ -298,6 +309,68 @@ export const verifyPublicMetadata = ({ manifest, reader }: MetadataOptions) =>
       }
       if (visited.size !== nodes.size) {
         reject("unreachable metadata declaration");
+      }
+      const documentDigests = new Map<string, string>();
+      const documentDigest = (id: string): string => {
+        const cached = documentDigests.get(id);
+        if (cached) {
+          return cached;
+        }
+        const node = nodes.get(id);
+        const parsed = parsedDocuments.get(id);
+        if (!node || node.type !== "metadata" || !parsed) {
+          return id;
+        }
+        const dependencies = Object.fromEntries(
+          Object.entries(node.edges)
+            .filter(([, target]) => nodes.get(target)?.type === "metadata")
+            .toSorted(([left], [right]) => compareCodeUnit(left, right))
+            .map(([reference, target]) => [reference, documentDigest(target)]),
+        );
+        const digest = Object.keys(dependencies).length
+          ? sha256(JSON.stringify({ digest: parsed.digest, dependencies }))
+          : parsed.digest;
+        documentDigests.set(id, digest);
+        return digest;
+      };
+      for (const node of nodes.values()) {
+        if (node.type !== "metadata") {
+          continue;
+        }
+        const parsed = parsedDocuments.get(node.id);
+        if (!parsed) {
+          reject("parsed metadata missing");
+        }
+        const changedJobs = node.jobs.filter((job) => {
+          const definition = parsed.jobs[job.id];
+          if (!definition) {
+            return true;
+          }
+          const dependencies = Object.fromEntries(
+            Object.keys(definition.dependencies)
+              .toSorted(compareCodeUnit)
+              .flatMap((reference) => {
+                const target = node.edges[reference];
+                return target && nodes.get(target)?.type === "metadata"
+                  ? [[reference, documentDigest(target)]]
+                  : [];
+              }),
+          );
+          const digests = [definition.digest, definition.privilegedDigest].map(
+            (definitionDigest) =>
+              Object.keys(dependencies).length
+                ? sha256(
+                    JSON.stringify({ digest: definitionDigest, dependencies }),
+                  )
+                : definitionDigest,
+          );
+          return !digests.includes(job.digest);
+        });
+        if (changedJobs.length) {
+          reject(
+            `Classification-relevant shape changed: ${changedJobs.map((job) => `${node.path}/${job.id}`).join(", ")}. Re-review kind and qualifier, then ${REVIEW_INSTRUCTION}`,
+          );
+        }
       }
       return {
         workflowCount: metadata.workflows.length,
@@ -334,41 +407,3 @@ export const createCandidateMetadataReader = (
     read: provider.read,
   };
 };
-if (import.meta.main) {
-  try {
-    const [repository, manifestPath, configPath, ...extra] =
-      process.argv.slice(2);
-    if (!repository || !manifestPath || !configPath || extra.length) {
-      reject(
-        "usage: bun public-metadata.ts ROOT_REPOSITORY MANIFEST PUBLIC_GIT_SOURCES",
-      );
-    }
-    const manifest = v.parse(
-      PUBLIC_METADATA,
-      JSON.parse(readFileSync(manifestPath, "utf-8")),
-    );
-    if (manifest.repository !== repository) {
-      reject("candidate repository identity mismatch");
-    }
-    const result = verifyPublicMetadata({
-      manifest,
-      reader: createCandidateMetadataReader(
-        v.parse(SOURCE_CONFIG, JSON.parse(readFileSync(configPath, "utf-8"))),
-        repository,
-      ),
-    });
-    if (result.isErr()) {
-      process.stderr.write(`${result.error.message}\n`);
-      process.exitCode = 1;
-    } else {
-      process.stdout.write(
-        `${JSON.stringify({ mode: "public-metadata", ...result.value })}\n`,
-      );
-    }
-  } catch (error) {
-    process.stderr.write(
-      `${error instanceof Error ? error.message : "metadata census failed"}\n`,
-    );
-    process.exitCode = 1;
-  }
-}

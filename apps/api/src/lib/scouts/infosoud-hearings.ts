@@ -97,7 +97,7 @@ export const emitInfoSoudHearingSignals = async ({
       const recorded = await mutateRecoveryReceipt({
         type: "create-hearing",
         tx: scopedTx,
-        table: pendingScoutEmissions,
+        scope,
         rows: inserted.map(({ entityId }) => ({
           organizationId: scope.organizationId,
           workspaceId,
@@ -168,7 +168,7 @@ export const emitInfoSoudHearingSignals = async ({
       await mutateRecoveryReceipt({
         type: "dequeue-scout",
         tx: scopedTx,
-        table: pendingScoutEmissions,
+        scope,
         where: sql`${and(
           eq(pendingScoutEmissions.organizationId, organizationId),
           eq(pendingScoutEmissions.sourceKind, "infosoud-hearing"),

@@ -10,6 +10,7 @@ import {
   proveOrgScope,
   withOrgScope,
 } from "@/api/db/org-scope";
+import type { OrgScope, OrgScopedTransaction } from "@/api/db/org-scope";
 import type { rootDb, Transaction } from "@/api/db/root";
 import {
   flowDefinitions,
@@ -19,11 +20,12 @@ import {
   schedulerJobs,
   workspaces,
 } from "@/api/db/schema";
+import { setSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  withAggregateTransaction,
-  withAggregateRowQuery,
   withAggregateLock,
+  withAggregateRowQuery,
+  withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
 import { mutateRecoveryClaim } from "@/api/lib/db/recovery-bookkeeping/claims";
 import { transitionRecoveryGrantState } from "@/api/lib/db/recovery-bookkeeping/grant-state";
@@ -45,7 +47,6 @@ import type {
 } from "@/api/lib/flows/flow-types";
 import { buildFlowRunRows } from "@/api/lib/flows/start-flow-run";
 import type { FlowRunRows } from "@/api/lib/flows/start-flow-run";
-import { UPLOAD_TRIGGER_TRANSITIONS } from "@/api/lib/flows/upload-trigger-transitions";
 import { snapshotOperationInput } from "@/api/lib/proofs/checked-transaction";
 import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
 
@@ -103,9 +104,9 @@ export type InsertAutomatedFlowRunWithinCapInput = {
   /** Pre-built run + step rows (see `buildFlowRunRows`). */
   rows: FlowRunRows;
   expectedScheduleTrigger?:
-    | Extract<FlowTrigger, { type: "schedule" }>
-    | undefined;
+    Extract<FlowTrigger, { type: "schedule" }> | undefined;
   now?: Date;
+  statementTimeoutMs?: number;
   reservePeriod?: () => Promise<void>;
   uploadTriggerClaimToken?: TimestampCasToken | undefined;
   schedulerClaim?:
@@ -134,6 +135,7 @@ export type InsertAutomatedFlowRunWithinCapResult =
 
 type RevalidateUploadIntentOptions = {
   tx: Transaction;
+  grantScope: OrgScopedTransaction;
   definitionId: SafeId<"flowDefinition">;
   definition: typeof flowDefinitions.$inferSelect | undefined;
   entityId: SafeId<"entity">;
@@ -148,6 +150,7 @@ type RevalidatedUploadIntent =
 /** The caller holds the definition row until either the skip or run commits. */
 const revalidateUploadIntent = async ({
   tx,
+  grantScope,
   definitionId,
   definition,
   entityId,
@@ -208,9 +211,7 @@ const revalidateUploadIntent = async ({
   if (reason !== undefined) {
     await transitionRecoveryGrantState({
       type: "upload",
-      tx,
-      table: flowUploadTriggerIntents,
-      spec: UPLOAD_TRIGGER_TRANSITIONS,
+      tx: grantScope,
       where: sql`${and(eq(flowUploadTriggerIntents.organizationId, definition.organizationId), eq(flowUploadTriggerIntents.workspaceId, rows.run.workspaceId), eq(flowUploadTriggerIntents.definitionId, definitionId), eq(flowUploadTriggerIntents.entityId, entityId), eq(flowUploadTriggerIntents.status, "pending"), timestampMatchesCasToken(flowUploadTriggerIntents.retryAt, receipt.retryAtToken))}`,
       options: {
         from: ["pending"],
@@ -236,6 +237,7 @@ const revalidateUploadIntent = async ({
 
 type DeferCappedUploadIntentOptions = {
   tx: Transaction;
+  scope: OrgScope;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   definitionId: SafeId<"flowDefinition">;
@@ -246,6 +248,7 @@ type DeferCappedUploadIntentOptions = {
 
 const deferCappedUploadIntent = async ({
   tx,
+  scope,
   organizationId,
   workspaceId,
   definitionId,
@@ -256,7 +259,7 @@ const deferCappedUploadIntent = async ({
   await mutateRecoveryClaim({
     type: "upload-defer",
     tx,
-    table: flowUploadTriggerIntents,
+    scope,
     retryAt: new Date(startOfUtcDay(now).getTime() + DAY_IN_MS),
     where: sql`${and(
       eq(flowUploadTriggerIntents.organizationId, organizationId),
@@ -386,10 +389,14 @@ export const insertAutomatedFlowRunWithinCap = async (
     uploadTriggerClaimToken,
     schedulerClaim,
     now = new Date(),
+    statementTimeoutMs,
     reservePeriod,
     database,
   } = snapshotOperationInput(input);
   return await withAggregateTransaction(database, async (tx) => {
+    if (statementTimeoutMs !== undefined) {
+      await setSharedStatementTimeout(tx, statementTimeoutMs);
+    }
     // Admission precedes resource locks; the existing cap -> definition order stays intact.
     await lockFeatureRecoveryAdmission({
       tx,
@@ -501,9 +508,10 @@ export const insertAutomatedFlowRunWithinCap = async (
         tx,
         scope: scope.value,
         actor: { type: "system" },
-        fn: async (scopedTx) =>
+        fn: async (scopedTx, grantScope) =>
           await revalidateUploadIntent({
             tx: scopedTx,
+            grantScope,
             definitionId,
             definition: currentDefinition,
             entityId,
@@ -548,6 +556,7 @@ export const insertAutomatedFlowRunWithinCap = async (
           fn: async (scopedTx) =>
             await deferCappedUploadIntent({
               tx: scopedTx,
+              scope: scope.value,
               organizationId,
               workspaceId: rows.run.workspaceId,
               definitionId,

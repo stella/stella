@@ -6,7 +6,7 @@ import type {
   WorkIdentifier,
 } from "@stll/legal-atlas/provision-citation-profile";
 import { provisionCitationProfileFor } from "@stll/legal-atlas/provision-citation-profiles";
-import { normalizeUnicode, foldToAscii } from "@stll/text-normalize";
+import { foldToAscii, normalizeUnicode } from "@stll/text-normalize";
 
 import {
   decisionTypeFilter,
@@ -78,8 +78,7 @@ const findPhraseEnd = (text: string, from: number, closers: string): number => {
  * change what the reader asked to match adjacently.
  */
 export type CorpusQueryToken =
-  | { type: "phrase"; value: string }
-  | { type: "term"; value: string };
+  { type: "phrase"; value: string } | { type: "term"; value: string };
 
 /**
  * Split free user text into phrase and term tokens. The single splitter over
@@ -1073,6 +1072,8 @@ export type CaseLawCorpusQueryOptions = {
   keywordFields?: readonly string[] | undefined;
   functionWords?: ReadonlySet<string> | null | undefined;
   legalAlternatives?: CorpusTermExpander | null | undefined;
+  /** "any" ranks partial matches by coverage; absent keeps the strict query. */
+  match?: "all" | "any" | undefined;
 };
 
 /**
@@ -1095,6 +1096,7 @@ export const caseLawCorpusQuery = ({
   functionWords,
   legalAlternatives,
   legacyStemming,
+  match,
 }: CaseLawCorpusQueryOptions): string | null => {
   // An empty id set admits nothing: the page is empty without asking.
   if (filters.decisionIds?.length === 0) {
@@ -1110,6 +1112,7 @@ export const caseLawCorpusQuery = ({
     functionWords,
     legalAlternatives,
     legacyStemming,
+    match,
   });
   if (freeText === null) {
     return null;

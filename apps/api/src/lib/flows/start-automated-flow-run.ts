@@ -9,6 +9,7 @@ import {
 } from "@/api/db/org-scope";
 import type { rootDb } from "@/api/db/root";
 import { flowDefinitions } from "@/api/db/schema";
+import { setSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
 import { captureError } from "@/api/lib/analytics/capture";
 import { resolveMemberAuthorization } from "@/api/lib/auth";
 import type { ResolveCredentialMemberAuthorization } from "@/api/lib/auth/member-authorization";
@@ -31,9 +32,11 @@ import type {
   FlowUploadTriggerSkipReason,
 } from "@/api/lib/flows/flow-types";
 import { buildFlowRunRows } from "@/api/lib/flows/start-flow-run";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import { snapshotOperationInput } from "@/api/lib/proofs/checked-transaction";
 import { QUEUED_ACTION_KIND } from "@/api/lib/rate-limit/action-kinds";
 import { runQueuedKickoff } from "@/api/lib/rate-limit/queued-action-admission";
@@ -47,9 +50,9 @@ const AUTOMATED_RUN_START_FAILURE = failureSink({
 /**
  * Shared tail for both automated triggers (schedule + file-upload): guarantee
  * an actor, then insert the run under the daily spend cap atomically and
- * enqueue its first step. Fire-and-forget by design — it never throws and never
- * surfaces to the upload / scheduler caller; every skip or failure is captured
- * through the structured logger.
+ * enqueue its first step. Ordinary failures are captured and returned as retry;
+ * callers that configure a statement deadline receive its PostgreSQL timeout
+ * cancellation so the scheduler can report a typed retryable failure.
  *
  * Actor guarantee: an automated run is credited to the definition's author
  * (`createdByUserId`). If the author was deleted (`null`), the run is skipped
@@ -85,6 +88,7 @@ type FindFlowDefinitionArgs = {
 };
 
 type StartAutomatedFlowRunDependencies = {
+  statementTimeoutMs?: number;
   findDefinition: (args: FindFlowDefinitionArgs) => Promise<
     | {
         enabled: boolean;
@@ -112,57 +116,85 @@ type StartAutomatedFlowRunDependencies = {
  * owner connection: the scheduler's for a schedule tick, the upload trigger's
  * for a file upload.
  */
+type AutomatedFlowRunDependencyOptions = {
+  statementTimeoutMs?: number;
+};
+
 export const automatedFlowRunDependencies = (
   database: Pick<typeof rootDb, "query" | "select" | "transaction">,
-): StartAutomatedFlowRunDependencies => ({
-  findDefinition: async ({
-    definitionId,
-    organizationId,
-  }: FindFlowDefinitionArgs) =>
-    await withAggregateTransaction(database, async (tx) => {
-      const scope = await proveOrgScope(tx, {
-        table: "flowDefinitions",
-        where: eq(flowDefinitions.id, definitionId),
-      });
-      if (
-        Result.isError(scope) ||
-        Result.isError(assertCallerOrg(scope.value, organizationId))
-      ) {
-        return undefined;
-      }
-      return await withOrgScope({
-        tx,
-        scope: scope.value,
-        actor: { type: "system" },
-        fn: async (scopedTx) =>
-          await scopedTx.query.flowDefinitions.findFirst({
-            where: {
-              id: { eq: definitionId },
-              organizationId: { eq: organizationId },
-            },
-            columns: {
-              id: true,
-              name: true,
-              steps: true,
-              enabled: true,
-              trigger: true,
-            },
+  { statementTimeoutMs }: AutomatedFlowRunDependencyOptions = {},
+): StartAutomatedFlowRunDependencies => {
+  const withStatementDeadline = async <T>(
+    run: (db: Pick<typeof rootDb, "select">) => Promise<T>,
+  ): Promise<T> => {
+    if (statementTimeoutMs === undefined) {
+      return await run(database);
+    }
+    return await withAggregateTransaction(database, async (tx) => {
+      await setSharedStatementTimeout(tx, statementTimeoutMs);
+      return await run(tx);
+    });
+  };
+
+  return {
+    ...(statementTimeoutMs !== undefined && { statementTimeoutMs }),
+    findDefinition: async ({
+      definitionId,
+      organizationId,
+    }: FindFlowDefinitionArgs) =>
+      await withAggregateTransaction(database, async (tx) => {
+        if (statementTimeoutMs !== undefined) {
+          await setSharedStatementTimeout(tx, statementTimeoutMs);
+        }
+        const scope = await proveOrgScope(tx, {
+          table: "flowDefinitions",
+          where: eq(flowDefinitions.id, definitionId),
+        });
+        if (
+          Result.isError(scope) ||
+          Result.isError(assertCallerOrg(scope.value, organizationId))
+        ) {
+          return undefined;
+        }
+        return await withOrgScope({
+          tx,
+          scope: scope.value,
+          actor: { type: "system" },
+          fn: async (scopedTx) =>
+            await scopedTx.query.flowDefinitions.findFirst({
+              where: {
+                id: { eq: definitionId },
+                organizationId: { eq: organizationId },
+              },
+              columns: {
+                id: true,
+                name: true,
+                steps: true,
+                enabled: true,
+                trigger: true,
+              },
+            }),
+        });
+      }),
+    featureEnabled: async (principal) =>
+      await withStatementDeadline(
+        async (tx) =>
+          await isBackgroundFeatureEnabled({
+            tx,
+            organizationId: principal.organizationId,
+            userId: principal.userId,
+            featureId: "flows",
           }),
-      });
-    }),
-  featureEnabled: async (principal) =>
-    await isBackgroundFeatureEnabled({
-      tx: database,
-      organizationId: principal.organizationId,
-      userId: principal.userId,
-      featureId: "flows",
-    }),
-  resolveAuthorization: async (lookup) =>
-    await resolveMemberAuthorization(lookup, database),
-  insertWithinCap: async (input) =>
-    await insertAutomatedFlowRunWithinCap({ ...input, database }),
-  enqueueStep: enqueueFlowStep,
-});
+      ),
+    resolveAuthorization: async (lookup) =>
+      await withStatementDeadline(
+        async (tx) => await resolveMemberAuthorization(lookup, tx),
+      ),
+    insertWithinCap: async (input) =>
+      await insertAutomatedFlowRunWithinCap({ ...input, database }),
+    enqueueStep: enqueueFlowStep,
+  };
+};
 
 export type StartAutomatedFlowRunOutcome =
   | { status: "stale" }
@@ -214,6 +246,84 @@ const classifyAutomatedInsertion = (
   }
 };
 
+const propagateStatementTimeout = (
+  cause: unknown,
+  statementTimeoutMs: number | undefined,
+): void => {
+  if (
+    statementTimeoutMs !== undefined &&
+    isPgError(cause, PG_ERROR.QUERY_CANCELED)
+  ) {
+    throw cause;
+  }
+};
+
+type EnqueueAutomatedRunOptions = {
+  enqueueStep: StartAutomatedFlowRunDependencies["enqueueStep"];
+  runId: SafeId<"flowRun">;
+  enqueueDelayMs: number | undefined;
+  logContext: StartAutomatedFlowRunArgs["logContext"];
+  triggerType: StartAutomatedFlowRunArgs["triggerSource"]["type"];
+};
+
+const enqueueAutomatedRun = async ({
+  enqueueStep,
+  runId,
+  enqueueDelayMs,
+  logContext,
+  triggerType,
+}: EnqueueAutomatedRunOptions): Promise<void> => {
+  // Enqueue after the rows commit. A failure here leaves the run `pending`; the
+  // durable reconciler re-enqueues its current step without duplicating runs.
+  const enqueued = await Result.tryPromise({
+    try: async () =>
+      await enqueueStep({
+        runId,
+        stepIndex: 0,
+        ...(enqueueDelayMs !== undefined && { delayMs: enqueueDelayMs }),
+      }),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(enqueued)) {
+    captureError(
+      enqueued.error,
+      handlerErrorContext("flows.createAndEnqueue.enqueued_error", logContext),
+    );
+    logger.error("flow.automated_run_start_failed", {
+      ...logContext,
+      "error.type": errorTag(enqueued.error),
+    });
+    return;
+  }
+
+  logger.info("flow.automated_run_started", {
+    ...logContext,
+    runId,
+    triggerType,
+  });
+};
+
+type AutomatedStartFailure = {
+  cause: unknown;
+  event: string;
+  logContext: StartAutomatedFlowRunArgs["logContext"];
+  statementTimeoutMs: number | undefined;
+};
+
+const reportAutomatedStartFailure = ({
+  cause,
+  event,
+  logContext,
+  statementTimeoutMs,
+}: AutomatedStartFailure): void => {
+  propagateStatementTimeout(cause, statementTimeoutMs);
+  captureError(cause, handlerErrorContext(event, logContext));
+  logger.error("flow.automated_run_start_failed", {
+    ...logContext,
+    "error.type": errorTag(cause),
+  });
+};
+
 export const startAutomatedFlowRun = async (
   input: StartAutomatedFlowRunArgs,
   {
@@ -223,6 +333,7 @@ export const startAutomatedFlowRun = async (
     insertWithinCap,
     enqueueStep,
     kickoff = runQueuedKickoff,
+    statementTimeoutMs,
   }: StartAutomatedFlowRunDependencies,
 ): Promise<StartAutomatedFlowRunOutcome> => {
   const {
@@ -259,6 +370,7 @@ export const startAutomatedFlowRun = async (
     }),
   );
   if (Result.isError(admission)) {
+    propagateStatementTimeout(admission.error, statementTimeoutMs);
     observeFailure(admission.error, {
       sink: AUTOMATED_RUN_START_FAILURE,
       ctx: { workspaceId, organizationId },
@@ -277,10 +389,11 @@ export const startAutomatedFlowRun = async (
     catch: (cause) => cause,
   });
   if (Result.isError(definitionResult)) {
-    captureError(definitionResult.error, logContext);
-    logger.error("flow.automated_run_start_failed", {
-      ...logContext,
-      "error.type": errorTag(definitionResult.error),
+    reportAutomatedStartFailure({
+      cause: definitionResult.error,
+      event: "flows.startAutomatedFlowRun.definitionResult_error",
+      logContext,
+      statementTimeoutMs,
     });
     return { status: "retry" };
   }
@@ -315,10 +428,11 @@ export const startAutomatedFlowRun = async (
     catch: (cause) => cause,
   });
   if (Result.isError(authorization)) {
-    captureError(authorization.error, logContext);
-    logger.error("flow.automated_run_start_failed", {
-      ...logContext,
-      "error.type": errorTag(authorization.error),
+    reportAutomatedStartFailure({
+      cause: authorization.error,
+      event: "flows.startAutomatedFlowRun.authorization_error",
+      logContext,
+      statementTimeoutMs,
     });
     return { status: "retry" };
   }
@@ -354,15 +468,17 @@ export const startAutomatedFlowRun = async (
           expectedScheduleTrigger,
           uploadTriggerClaimToken,
           schedulerClaim,
+          ...(statementTimeoutMs !== undefined && { statementTimeoutMs }),
           ...(reservePeriod && { reservePeriod }),
         }),
       catch: (cause) => cause,
     });
     if (Result.isError(insertResult)) {
-      captureError(insertResult.error, logContext);
-      logger.error("flow.automated_run_start_failed", {
-        ...logContext,
-        "error.type": errorTag(insertResult.error),
+      reportAutomatedStartFailure({
+        cause: insertResult.error,
+        event: "flows.createAndEnqueue.insertResult_error",
+        logContext,
+        statementTimeoutMs,
       });
       return;
     }
@@ -382,29 +498,11 @@ export const startAutomatedFlowRun = async (
         panic("Unknown automated run insertion disposition");
     }
 
-    // Enqueue after the rows commit. A failure here leaves the run `pending`; the
-    // durable reconciler re-enqueues its current step without duplicating runs.
-    const enqueued = await Result.tryPromise({
-      try: async () =>
-        await enqueueStep({
-          runId,
-          stepIndex: 0,
-          ...(enqueueDelayMs !== undefined && { delayMs: enqueueDelayMs }),
-        }),
-      catch: (cause) => cause,
-    });
-    if (Result.isError(enqueued)) {
-      captureError(enqueued.error, logContext);
-      logger.error("flow.automated_run_start_failed", {
-        ...logContext,
-        "error.type": errorTag(enqueued.error),
-      });
-      return;
-    }
-
-    logger.info("flow.automated_run_started", {
-      ...logContext,
+    await enqueueAutomatedRun({
+      enqueueStep,
       runId,
+      enqueueDelayMs,
+      logContext,
       triggerType: triggerSource.type,
     });
   };
@@ -421,6 +519,7 @@ export const startAutomatedFlowRun = async (
     catch: (cause) => cause,
   });
   if (Result.isError(started)) {
+    propagateStatementTimeout(started.error, statementTimeoutMs);
     observeFailure(started.error, {
       sink: AUTOMATED_RUN_START_FAILURE,
       ctx: { workspaceId, organizationId },

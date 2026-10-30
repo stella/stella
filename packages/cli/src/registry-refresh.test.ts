@@ -16,8 +16,8 @@ import {
   CACHE_SCHEMA_VERSION,
   cachePathFor,
   readCacheFile,
-  writeCacheFile,
   type RegistryCacheFile,
+  writeCacheFile,
 } from "./registry-cache.js";
 import {
   type CurrentRegistry,
@@ -332,7 +332,6 @@ describe("resolveCommandTree (S5.3)", () => {
       token: "admitted-caller",
       env,
       force: true,
-      fetchLatestVersion: async () => undefined,
       bakedListings: snapshot.listings,
       fetchRaw: okFetch(
         JSON.stringify({
@@ -692,7 +691,6 @@ describe("refreshRegistryCache (S5.3/S5.5)", () => {
       serverOrigin: ORIGIN,
       token: "t",
       env,
-      fetchLatestVersion: async () => undefined,
       fetchRaw: okFetch(toolsBody(["list_matters"])),
       bakedListings: [listing("list_matters")],
     });
@@ -722,7 +720,6 @@ describe("refreshRegistryCache (S5.3/S5.5)", () => {
       token: "t",
       env,
       force: true,
-      fetchLatestVersion: async () => undefined,
       fetchRaw: okFetch(toolsBody(["list_matters", "list_widgets"]), {
         grantedScopes: ["stella:read", "stella:search"],
         scopeOmittedTools: ["save_filled_template"],
@@ -758,7 +755,6 @@ describe("refreshRegistryCache (S5.3/S5.5)", () => {
       token: "t",
       env,
       force: true,
-      fetchLatestVersion: async () => undefined,
       fetchRaw: okFetch(toolsBody(["list_matters"]), {
         grantedScopes: ["stella:read", "stella:search"],
         scopeOmittedTools: [],
@@ -806,7 +802,6 @@ describe("refreshRegistryCache (S5.3/S5.5)", () => {
       token: "t",
       env,
       force: true,
-      fetchLatestVersion: async () => undefined,
       fetchRaw: okFetch(toolsBody(["list_matters"])),
       bakedListings: [listing("list_matters"), listing("search_case_law")],
     });
@@ -827,7 +822,6 @@ describe("refreshRegistryCache (S5.3/S5.5)", () => {
       token: "t",
       env,
       force: true,
-      fetchLatestVersion: async () => undefined,
       fetchRaw: okFetch(toolsBody(["list_matters"])),
       bakedListings: [listing("list_matters")],
     });
@@ -841,7 +835,6 @@ describe("refreshRegistryCache (S5.3/S5.5)", () => {
       token: "t",
       env,
       force: true,
-      fetchLatestVersion: async () => undefined,
       fetchRaw: okFetch(toolsBody(["Bad Name"])), // invalid tool name
       bakedListings: [listing("list_matters")],
     });
@@ -856,7 +849,6 @@ describe("refreshRegistryCache (S5.3/S5.5)", () => {
       token: "t",
       env,
       force: true,
-      fetchLatestVersion: async () => undefined,
       fetchRaw: errFetch(),
       bakedListings: [listing("list_matters")],
     });
@@ -873,7 +865,6 @@ describe("refreshRegistryCache (S5.3/S5.5)", () => {
       token: "t",
       env,
       force: true,
-      fetchLatestVersion: async () => undefined,
       fetchRaw: okFetch(toolsBody(["list_matters", "list_widgets"])),
       bakedListings: [listing("list_matters")],
     });
@@ -919,8 +910,10 @@ describe("CLI update nudge (spec 051 addendum)", () => {
           ...(over.cliMinimum === undefined
             ? {}
             : { cliMinimum: over.cliMinimum }),
+          ...(over.npmLatest === undefined
+            ? {}
+            : { cliLatest: over.npmLatest }),
         }),
-        fetchLatestVersion: async () => over.npmLatest,
         bakedListings: [listing("list_matters")],
       }),
     };
@@ -934,7 +927,7 @@ describe("CLI update nudge (spec 051 addendum)", () => {
     expect(outcome).toMatchObject({
       status: "refreshed",
       deltaEmpty: true,
-      nudge: "stella 0.1.0 -> 0.2.0 available; npm i -g @stll/cli",
+      nudge: "update available: 0.1.0 -> 0.2.0, run npm i -g @stll/cli@latest",
     });
     // The anti-nag key is persisted for the next refresh.
     const written = await readCacheFile(cachePathFor(ORIGIN, env));
@@ -977,7 +970,7 @@ describe("CLI update nudge (spec 051 addendum)", () => {
     expect(outcome.status).toBe("refreshed");
     if (outcome.status === "refreshed") {
       expect(outcome.nudge).toBe(
-        "stella 0.1.0 is no longer supported (server requires >= 0.2.0); upgrade with: npm i -g @stll/cli",
+        "this CLI is too old for this server: 0.1.0 < 0.2.0; run npm i -g @stll/cli@latest",
       );
     }
   });
@@ -989,7 +982,7 @@ describe("CLI update nudge (spec 051 addendum)", () => {
     });
     expect(outcome.status).toBe("refreshed");
     if (outcome.status === "refreshed") {
-      expect(outcome.nudge).toContain("no longer supported");
+      expect(outcome.nudge).toContain("too old for this server");
     }
   });
 

@@ -15,8 +15,8 @@ import { createManagedOpenRouterCredentialProvider } from "@/api/lib/chat/openro
 import { MANAGED_PROVIDER_UNAVAILABLE_CODE } from "@/api/lib/chat/provider-data-policy";
 import { readProviderStatus } from "@/api/lib/observability/failure-evidence";
 import {
-  setMetricLineSinkForTesting,
   resetMetricLineSinkForTesting,
+  setMetricLineSinkForTesting,
 } from "@/api/lib/observability/request-metrics";
 import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { resolveTanStackTextModel } from "@/api/lib/tanstack-ai-generate";
@@ -252,6 +252,7 @@ const runFederated401 = async (
       {
         modelId: MODEL,
         organizationId: null,
+        userId: null,
         admission: NO_ORGANIZATION_MODEL_DISPATCH,
         orgAIConfig: undefined,
         reasoningEffort: undefined,

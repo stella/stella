@@ -10,6 +10,7 @@ import {
   entityFeatureGateColumns,
   entityFeatureWorkspaceGateColumns,
 } from "../entity-feature-gate-columns";
+import { registeredReviewResetPolicies } from "../review-reset-policies";
 import {
   organization,
   p,
@@ -497,5 +498,7 @@ export const documentProcessingRuns = p.pgTable(
       requestShapeCheck: scopedEnqueueShapeCheck,
       tableName: "document_processing_runs",
     }),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );

@@ -6,6 +6,7 @@ import type { SQLWrapper } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { compareCodeUnit } from "@stll/collation";
+import { writeRegeneratedFile } from "@stll/test-kit";
 
 import { databaseRelations } from "@/api/db/database-relations";
 import type { Transaction } from "@/api/db/root";
@@ -21,7 +22,6 @@ import { PUBLIC_LAW_SHARED_QUERY } from "@/api/lib/public-law-shared-query";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   createTestPglite,
-  grantPgliteDecisionCitationStatsReader,
   withPublicLawReaderRole,
 } from "@/api/tests/pglite-test-db";
 import planContracts from "@/api/tests/query-plans/contracts.json" with { type: "json" };
@@ -98,7 +98,6 @@ beforeAll(
   async () => {
     client = await createTestPglite();
     db = drizzle({ client, relations: databaseRelations });
-    await grantPgliteDecisionCitationStatsReader(db);
     await seedQueryPlanData(db);
   },
   { timeout: DB_TEST_TIMEOUT_MS },
@@ -115,10 +114,12 @@ afterAll(async () => {
     if (Object.keys(observedContracts).length !== QUERY_PLAN_REGISTRY.length) {
       panic("Plan contract update did not observe every registry entry");
     }
-    await Bun.write(
-      new URL("contracts.json", import.meta.url),
-      `${JSON.stringify(observedContracts, null, 2)}\n`,
-    );
+    writeRegeneratedFile({
+      flag: "STELLA_UPDATE_PLAN_CONTRACTS",
+      value: "1",
+      file: new URL("contracts.json", import.meta.url),
+      contents: `${JSON.stringify(observedContracts, null, 2)}\n`,
+    });
   }
   await client.close();
 });
@@ -418,24 +419,31 @@ test(
 );
 
 test(
-  "the current sitemap refresh bounds its covering scan to a page",
+  "the sitemap month count reads one country-month range of the sitemap index",
   async () => {
     const entry =
-      QUERY_PLAN_REGISTRY.find(({ id }) => id === "case-law.sitemap-refresh") ??
-      panic("Sitemap refresh is absent from the plan registry");
+      QUERY_PLAN_REGISTRY.find(
+        ({ id }) => id === "case-law.sitemap-month-count",
+      ) ?? panic("Sitemap month count is absent from the plan registry");
     const scans = await explainPhysical(
       entry.role,
       entry.build,
       "planMode" in entry ? entry.planMode : undefined,
     );
-    expect(
-      scans.some(
-        ({ relation, nodeType, limitAbove }) =>
-          relation === "case_law_decisions" &&
-          nodeType === "Index Only Scan" &&
-          limitAbove,
-      ),
-    ).toBe(true);
+    const decisions = scans.filter(
+      ({ relation }) => relation === "case_law_decisions",
+    );
+    expect(decisions).toHaveLength(2);
+    expect(decisions[1]?.index).toBe("case_law_decisions_lang_group_idx");
+    expect(decisions[1]?.indexCond).toMatch(/language_group_key/u);
+    expect(decisions[0]?.nodeType).not.toBe("Seq Scan");
+    expect(decisions[0]?.index).toBe(
+      "case_law_decisions_sitemap_shard_published_idx",
+    );
+    // The country and both ends of the month bound the range the scan reads.
+    expect(decisions[0]?.indexCond).toMatch(/\bcountry(?:\)::text)? = /u);
+    expect(decisions[0]?.indexCond).toMatch(/\bdecision_date >= /u);
+    expect(decisions[0]?.indexCond).toMatch(/\bdecision_date < /u);
     expect(
       heapFetchRiskViolations(
         scans,
@@ -488,10 +496,12 @@ test("recognizes the workspace RLS subplan in its real role", async () => {
   );
   expect(withoutAuthorizationSubplans(scan)).not.toContain("SubPlan");
   if (UPDATE_PLAN_CONTRACTS) {
-    await Bun.write(
-      new URL("workspace-rls-plan.fixture.json", import.meta.url),
-      `${JSON.stringify(plan, null, 2)}\n`,
-    );
+    writeRegeneratedFile({
+      flag: "STELLA_UPDATE_PLAN_CONTRACTS",
+      value: "1",
+      file: new URL("workspace-rls-plan.fixture.json", import.meta.url),
+      contents: `${JSON.stringify(plan, null, 2)}\n`,
+    });
   }
 });
 
@@ -502,7 +512,6 @@ const reportRegistryScans = async (profile: ScaleProfile | null) => {
       client: reportClient,
       relations: databaseRelations,
     });
-    await grantPgliteDecisionCitationStatsReader(reportDb);
     await seedQueryPlanData(reportDb);
     if (profile !== null) {
       await injectScaleProfile(reportDb, profile);

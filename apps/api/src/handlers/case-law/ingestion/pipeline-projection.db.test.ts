@@ -17,8 +17,8 @@ import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/deci
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import {
   CORPUS_INDEX_MANIFESTS,

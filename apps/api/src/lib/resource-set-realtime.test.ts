@@ -1,10 +1,10 @@
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { status } from "elysia";
 
 import { RESOURCE_TYPE, type ResourceType } from "@stll/api-contract";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import { status } from "@/api/http/status";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import {
   ACCOUNT_ACCESS,
@@ -392,6 +392,7 @@ describe("an organization handler's declared resource sets", () => {
       async function* () {
         return Result.ok({ ok: true });
       },
+      { authorize: async () => Result.ok(undefined) },
     );
   });
 });

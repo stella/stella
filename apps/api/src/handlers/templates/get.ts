@@ -1,15 +1,18 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { ownerSyntheticSessionAuthorityReader } from "@/api/lib/auth";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { storedKeyForOrganization } from "@/api/lib/file-key";
+import { callerDownloadSource } from "@/api/lib/s3-presign";
 
-const getTemplateParamsSchema = t.Object({
-  templateId: tSafeId("template"),
+const getTemplateParamsSchema = v.object({
+  templateId: resourceIdSchema("template"),
 });
 
 /** Presigned URL validity in seconds (15 min). */
@@ -32,7 +35,7 @@ const config = {
 
 const getTemplate = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session, params, recordAuditEvent }) {
+  async function* ({ safeDb, session, params, user, recordAuditEvent }) {
     const templateId = params.templateId;
     const organizationId = session.activeOrganizationId;
 
@@ -67,13 +70,20 @@ const getTemplate = createSafeRootHandler(
         if (!template) {
           return null;
         }
+        const s3Key = storedKeyForOrganization(template.s3Key, organizationId);
+        if (s3Key === null) {
+          return null;
+        }
 
         const presignedUrl = await auditedPresignDownload({
+          readSessionAuthority: ownerSyntheticSessionAuthorityReader,
           tx,
           recordAuditEvent,
           resourceType: AUDIT_RESOURCE_TYPE.TEMPLATE,
           resourceId: templateId,
-          s3Key: template.s3Key,
+          userId: user.id,
+          source: callerDownloadSource(session),
+          s3Key,
           expiresInSeconds: PRESIGN_EXPIRES_IN,
           fileName: template.fileName,
           organizationId,

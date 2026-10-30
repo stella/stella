@@ -1,20 +1,22 @@
 import { panic } from "better-result";
 import type { SQL } from "drizzle-orm";
 
+import { withOrgScope } from "@/api/db/org-scope";
+import type { OrgScope } from "@/api/db/org-scope";
 import type { ScopedTransaction } from "@/api/db/safe-db";
-import type {
+import {
   flowUploadTriggerIntents,
   pendingScoutEmissions,
 } from "@/api/db/schema";
 import {
-  timestampCasToken,
   type TimestampCasToken,
+  timestampCasToken,
 } from "@/api/lib/db/timestamp-cas";
 
 type CreateUploadReceipt = {
   type: "create-upload";
-  tx: Pick<ScopedTransaction, "insert">;
-  table: typeof flowUploadTriggerIntents;
+  tx: ScopedTransaction;
+  scope: OrgScope;
   rows: Pick<
     typeof flowUploadTriggerIntents.$inferInsert,
     | "definitionId"
@@ -26,8 +28,8 @@ type CreateUploadReceipt = {
 };
 type CreateScoutReceipt = {
   type: "create-hearing";
-  tx: Pick<ScopedTransaction, "insert">;
-  table: typeof pendingScoutEmissions;
+  tx: ScopedTransaction;
+  scope: OrgScope;
   rows: Pick<
     typeof pendingScoutEmissions.$inferInsert,
     "organizationId" | "workspaceId" | "sourceKind" | "sourceId"
@@ -38,26 +40,28 @@ type CreateReviewReceipt = Omit<CreateScoutReceipt, "type"> & {
 };
 type DequeueScoutReceipt = {
   type: "dequeue-scout";
-  tx: Pick<ScopedTransaction, "delete">;
-  table: typeof pendingScoutEmissions;
+  tx: ScopedTransaction;
+  scope: OrgScope;
   where: SQL;
 };
 type SettleUploadReceipt = {
   type: "settle-upload";
-  tx: Pick<ScopedTransaction, "delete">;
-  table: typeof flowUploadTriggerIntents;
+  tx: ScopedTransaction;
+  scope: OrgScope;
   where: SQL;
 };
 type SettleScoutReceipt = {
   type: "settle-scout";
-  tx: Pick<ScopedTransaction, "delete">;
-  table: typeof pendingScoutEmissions;
+  tx: ScopedTransaction;
+  scope: OrgScope;
   where: SQL;
 };
 type RecordedScoutReceipt = Pick<
   typeof pendingScoutEmissions.$inferSelect,
   "sourceId"
-> & { nextAttemptAt: TimestampCasToken };
+> & {
+  nextAttemptAt: TimestampCasToken;
+};
 
 export function mutateRecoveryReceipt(
   op: CreateUploadReceipt | DequeueScoutReceipt,
@@ -89,43 +93,57 @@ export async function mutateRecoveryReceipt(
   | Pick<typeof flowUploadTriggerIntents.$inferSelect, "entityId">[]
   | Pick<typeof pendingScoutEmissions.$inferSelect, "sourceId">[]
 > {
-  // audit: skip — derived recovery receipts record delivery intent or token-fenced settlement for their audited source effects. Pure recovery bookkeeping; no user/customer data or auth/permission change.
-  switch (op.type) {
-    case "create-upload":
-      await op.tx.insert(op.table).values(op.rows).onConflictDoNothing();
-      return;
-    case "create-hearing":
-      return await op.tx
-        .insert(op.table)
-        .values(op.rows)
-        .onConflictDoNothing()
-        .returning({
-          sourceId: op.table.sourceId,
-          nextAttemptAt: timestampCasToken(op.table.nextAttemptAt),
-        });
-    case "create-review":
-      return await op.tx
-        .insert(op.table)
-        .values(op.rows)
-        .onConflictDoNothing()
-        .returning({
-          nextAttemptAt: timestampCasToken(op.table.nextAttemptAt),
-        });
-    case "dequeue-scout":
-      await op.tx.delete(op.table).where(op.where);
-      return;
-    case "settle-upload":
-      return await op.tx
-        .delete(op.table)
-        .where(op.where)
-        .returning({ entityId: op.table.entityId });
-    case "settle-scout":
-      return await op.tx
-        .delete(op.table)
-        .where(op.where)
-        .returning({ sourceId: op.table.sourceId });
-    default:
-      op satisfies never;
-      return panic("Unknown recovery receipt operation");
-  }
+  return await withOrgScope({
+    tx: op.tx,
+    scope: op.scope,
+    actor: { type: "system" },
+    fn: async (tx) => {
+      // audit: skip — derived recovery receipts record delivery intent or token-fenced settlement for their audited source effects. Pure recovery bookkeeping; no user/customer data or auth/permission change.
+      switch (op.type) {
+        case "create-upload":
+          await tx
+            .insert(flowUploadTriggerIntents)
+            .values(op.rows)
+            .onConflictDoNothing();
+          return;
+        case "create-hearing":
+          return await tx
+            .insert(pendingScoutEmissions)
+            .values(op.rows)
+            .onConflictDoNothing()
+            .returning({
+              sourceId: pendingScoutEmissions.sourceId,
+              nextAttemptAt: timestampCasToken(
+                pendingScoutEmissions.nextAttemptAt,
+              ),
+            });
+        case "create-review":
+          return await tx
+            .insert(pendingScoutEmissions)
+            .values(op.rows)
+            .onConflictDoNothing()
+            .returning({
+              nextAttemptAt: timestampCasToken(
+                pendingScoutEmissions.nextAttemptAt,
+              ),
+            });
+        case "dequeue-scout":
+          await tx.delete(pendingScoutEmissions).where(op.where);
+          return;
+        case "settle-upload":
+          return await tx
+            .delete(flowUploadTriggerIntents)
+            .where(op.where)
+            .returning({ entityId: flowUploadTriggerIntents.entityId });
+        case "settle-scout":
+          return await tx
+            .delete(pendingScoutEmissions)
+            .where(op.where)
+            .returning({ sourceId: pendingScoutEmissions.sourceId });
+        default:
+          op satisfies never;
+          return panic("Unknown recovery receipt operation");
+      }
+    },
+  });
 }

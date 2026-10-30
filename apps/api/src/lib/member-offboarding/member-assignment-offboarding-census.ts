@@ -11,16 +11,19 @@ import {
   session,
 } from "@/api/db/auth-schema";
 import {
+  chatToolGrants,
+  contacts,
   correspondence,
   desktopEditHandoffs,
   desktopEditSessions,
   desktopPresence,
-  folioCollabRoomTokens,
   flowRuns,
+  folioCollabRoomTokens,
   mcpOAuthState,
   mcpUserConnections,
+  mcpWebHandoff,
   pdfSigningSessions,
-  contacts,
+  requestIdempotencyReceipts,
   searchHistoryEntries,
   searchHistoryOwners,
   searchHistoryTombstones,
@@ -28,8 +31,8 @@ import {
   sharepointOAuthState,
   taskAssignees,
   timeEntries,
-  workspaceMembers,
   workObligations,
+  workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
 
@@ -47,6 +50,8 @@ export type MemberCleanupDisposition =
  */
 export const ORGANIZATION_MEMBER_CLEANUP_COLUMNS = [
   [member.userId, "cleared"],
+  [chatToolGrants.userId, "cleared"],
+  [mcpWebHandoff.userId, "cleared"],
   [desktopPresence.userId, "cleared"],
   [searchHistoryEntries.userId, "cleared"],
   [searchHistoryOwners.userId, "cleared"],
@@ -69,7 +74,7 @@ export const ORGANIZATION_MEMBER_CLEANUP_COLUMNS = [
   [sharepointOAuthState.userId, "cleared"],
   [invitation.inviterId, "cleared"],
   [correspondence.assigneeId, "cleared"],
-  // Revoked by `removeOrganizationMemberWithAuthArtifacts`.
+  // Account credentials are revoked by their authentication owner.
   [session.userId, "cleared"],
   [apikey.referenceId, "cleared"],
   [oauthAccessToken.userId, "cleared"],
@@ -77,7 +82,10 @@ export const ORGANIZATION_MEMBER_CLEANUP_COLUMNS = [
   [oauthConsent.userId, "cleared"],
   [agentRegistration.boundUserId, "cleared"],
   [agentDelegation.userId, "cleared"],
+  // API-issued room tokens are cleared by the member removal owner.
   [folioCollabRoomTokens.userId, "cleared"],
+  [requestIdempotencyReceipts.userId, "cleared"],
+  [requestIdempotencyReceipts.responseBody, "cleared"],
 ] as const satisfies readonly (readonly [PgColumn, MemberCleanupDisposition])[];
 
 /**

@@ -1,5 +1,6 @@
 import type { ViewLayout } from "@/api/lib/views-schema";
 
+import { registeredReviewResetPolicies } from "../review-reset-policies";
 import { entityViewPolicies } from "../rls";
 import {
   organization,
@@ -7,8 +8,8 @@ import {
   pUuid,
   safeOrganizationId,
   sql,
-  user,
   timestamptz,
+  user,
 } from "./common";
 
 /** Organization-wide, user-owned saved layouts for cross-matter surfaces. */
@@ -41,5 +42,7 @@ export const entityViews = p.pgTable(
       sql`(jsonb_typeof(${table.layout}) = 'object' AND ${table.layout}->'version' = '1'::jsonb) IS TRUE`,
     ),
     ...entityViewPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );

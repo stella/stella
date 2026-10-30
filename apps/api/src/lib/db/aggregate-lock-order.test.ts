@@ -8,8 +8,8 @@ import {
   aggregateExecutionRows,
   aggregateFences,
   aggregateRecorder,
-  plantedDescendingBlockingAcquisition,
   plantedBlockingUpgradeAtHighWater,
+  plantedDescendingBlockingAcquisition,
   plantedWeakerHeldModeReuse,
 } from "@/api/tests/fixtures/aggregate-lock-order";
 
@@ -21,6 +21,44 @@ import {
 } from "./aggregate-lock";
 
 describe("blocking aggregate order regressions", () => {
+  test("review reset registration locks its organization identity with key share", async () => {
+    const fixture = aggregateFences();
+    const { tx, statements } = aggregateRecorder();
+    expect(
+      await withAggregateLock({ ...fixture.reviewResetRegistration, tx }),
+    ).toEqual({ status: "locked" });
+    expect(statements).toHaveLength(1);
+    expect(statements.at(0)?.sql).toContain(
+      'FROM "public"."review_reset_organizations"',
+    );
+    expect(statements.at(0)?.sql).toContain('"organization_id" = $1');
+    expect(statements.at(0)?.sql).toContain("FOR KEY SHARE");
+    expect(statements.at(0)?.params).toEqual([fixture.organization.id]);
+  });
+
+  test("review reset registration follows organization and precedes matter locks", async () => {
+    const fixture = aggregateFences();
+    const ordered = aggregateRecorder();
+    await withAggregateLock({ ...fixture.organization, tx: ordered.tx });
+    await withAggregateLock({
+      ...fixture.reviewResetRegistration,
+      tx: ordered.tx,
+    });
+    await withAggregateLock({ ...fixture.workspace, tx: ordered.tx });
+    expect(ordered.statements).toHaveLength(3);
+    const descending = aggregateRecorder();
+    await withAggregateLock({ ...fixture.workspace, tx: descending.tx });
+    expect(
+      await rejectionOf(
+        withAggregateLock({
+          ...fixture.reviewResetRegistration,
+          tx: descending.tx,
+        }),
+      ),
+    ).toMatchObject({ message: "Aggregate lock rank inversion" });
+    expect(descending.statements).toHaveLength(1);
+  });
+
   test("recovery receipts lock their complete registered identity", async () => {
     const fixture = aggregateFences();
     const receipt = fixture.uploadReceipt.id;

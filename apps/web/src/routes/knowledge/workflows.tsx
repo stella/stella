@@ -23,8 +23,10 @@ import {
   flowsOptions,
   knowledgeKeys,
 } from "@/lib/knowledge/queries";
+import { pageTitle } from "@/lib/page-title";
 import { toSafeId } from "@/lib/safe-id";
 import { loadAuthContext } from "@/routes/-auth-context";
+import { routePresentation } from "@/routes/-route-presentation";
 import { FlowEditor } from "@/routes/knowledge/-components/flow-editor";
 import type { FlowExampleKey } from "@/routes/knowledge/-components/flow-examples";
 import { FlowList } from "@/routes/knowledge/-components/flow-list";
@@ -40,6 +42,13 @@ type View =
   | { kind: "editor"; flowId: string | null; example?: FlowExampleKey };
 
 export const Route = createFileRoute("/knowledge/workflows")({
+  staticData: {
+    presentation: routePresentation({
+      type: "label",
+      labelKey: "common.workflows",
+      to: "/knowledge/workflows",
+    }),
+  },
   beforeLoad: async ({ context }) => {
     const auth =
       context.user === undefined
@@ -60,6 +69,7 @@ export const Route = createFileRoute("/knowledge/workflows")({
     }
   },
   component: GuardedWorkflowsPage,
+  head: () => ({ meta: [{ title: pageTitle("common.workflows") }] }),
 });
 
 const FLOW_ROW_KEYS = ["a", "b", "c", "d", "e"];
@@ -159,7 +169,13 @@ function RouteComponent() {
     );
     if (Result.isError(detailResult)) {
       setTogglingId(null);
-      getAnalytics().captureError(detailResult.error);
+      getAnalytics().captureError(detailResult.error, {
+        fingerprintKey: "RouteComponent.handleToggleEnabled:failure",
+        scope: {
+          type: "handler",
+          handlerId: "RouteComponent.handleToggleEnabled:failure",
+        },
+      });
       notifyUserError(detailResult.error, t("flows.saveFailed"));
       return;
     }

@@ -1,9 +1,10 @@
+// parser-output-unchanged: imports byte-identical raw-envelope codecs from their pure owner.
 import { panic } from "better-result";
 
 import {
   decodeSourceRawEnvelope,
   encodeSourceRawEnvelope,
-} from "@/api/lib/legal-search/ingestion-types";
+} from "@/api/lib/legal-search/source-raw-envelope";
 
 export const FORMEX_ARCHIVE_PREFIX = "formex-archive:";
 
@@ -14,10 +15,8 @@ export const encodeEcjFormexArchive = (
   FORMEX_ARCHIVE_PREFIX +
   encodeSourceRawEnvelope(
     Object.fromEntries(
-      entries.map(([name, bytes]) => [
-        name,
-        Buffer.from(bytes).toString("base64"),
-      ]),
+      // parser-output-unchanged: [eu-ecj] toBase64() emits the same padded base64 as toString("base64").
+      entries.map(([name, bytes]) => [name, Buffer.from(bytes).toBase64()]),
     ),
   );
 

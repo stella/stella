@@ -15,10 +15,10 @@ import {
   isReviewAccountBodyEmailPath,
   isReviewAccountEmail,
   readReviewAccountOrganizationTargets,
-  REVIEW_ACCOUNT_OPERATION,
-  REVIEW_ACCOUNT_REFUSAL_MESSAGE,
   resolveReviewAccountBodyEmailOperation,
   resolveReviewAccountSessionOperation,
+  REVIEW_ACCOUNT_OPERATION,
+  REVIEW_ACCOUNT_REFUSAL_MESSAGE,
 } from "@/api/lib/auth/review-account-policy";
 import type {
   ReviewAccountConfig,
@@ -46,6 +46,8 @@ type SignInBudget = ReturnType<typeof createAccountAttemptBudget>;
 
 type ReviewAccountPluginOptions = {
   config: ReviewAccountConfig;
+  checkAccess?: typeof checkReviewAccountAccess;
+  id?: string;
   /**
    * Self-hosted local password sign-in stays open to every account; without
    * it, only the review account may sign in with a password.
@@ -53,6 +55,10 @@ type ReviewAccountPluginOptions = {
   localPasswordEnabled: boolean;
   /** Per-account failure budget; absent when auth rate limits are off. */
   signInBudget?: SignInBudget | undefined;
+  authorizeSession?: (session: {
+    id: string;
+    userId: string;
+  }) => Promise<boolean>;
 };
 
 export const requireReviewAccountAccess = (
@@ -82,9 +88,10 @@ const sessionCheckedOperation = ({
   if (operation !== null) {
     return operation;
   }
-  return path.startsWith("/oauth2/") || path.startsWith("/organization/")
-    ? "session-only"
-    : null;
+  if (path.startsWith("/oauth2/")) {
+    return REVIEW_ACCOUNT_OPERATION.mcp;
+  }
+  return path.startsWith("/organization/") ? "session-only" : null;
 };
 
 /** Refuses a request naming any organization but the review account's own. */
@@ -95,7 +102,9 @@ const requireNamedOrganizations = async ({
   email,
   path,
   query,
+  checkAccess,
 }: {
+  checkAccess: typeof checkReviewAccountAccess;
   adapter: Pick<AuthContext["adapter"], "findOne">;
   body: unknown;
   config: ReviewAccountConfig;
@@ -117,7 +126,7 @@ const requireNamedOrganizations = async ({
   );
   for (const organizationId of [...targets.ids, ...slugTargets]) {
     requireReviewAccountAccess(
-      checkReviewAccountAccess({
+      checkAccess({
         email,
         config,
         operation: REVIEW_ACCOUNT_OPERATION.session,
@@ -225,9 +234,7 @@ export const createReviewAccountDatabaseHooks = (
     account: { userId: string; providerId: string },
     // Absent outside a request (the operator command), where it is allowed.
     context:
-      | { context: Pick<AuthContext, "internalAdapter"> }
-      | null
-      | undefined,
+      { context: Pick<AuthContext, "internalAdapter"> } | null | undefined,
   ): Promise<undefined> => {
     if (
       config.email === undefined ||
@@ -317,14 +324,37 @@ export const createReviewOrganizationHooks = (
   },
 });
 
-export const createReviewAccountPlugin = ({
+const createAccountTokenRedemptionHook = ({
   config,
+  checkAccess = checkReviewAccountAccess,
+}: Pick<ReviewAccountPluginOptions, "config" | "checkAccess">) =>
+  createAuthMiddleware(async (ctx) => {
+    const resolve = findReviewAccountTokenRedemption(ctx.path);
+    const subjects =
+      resolve === undefined
+        ? []
+        : await resolve({
+            body: ctx.body,
+            query: ctx.query,
+            internalAdapter: ctx.context.internalAdapter,
+          });
+    for (const { email, operation } of subjects) {
+      requireReviewAccountAccess(checkAccess({ email, config, operation }));
+    }
+    return undefined;
+  });
+
+export const createReviewAccountPlugin = ({
+  authorizeSession,
+  config,
+  checkAccess = checkReviewAccountAccess,
+  id = "restricted-review-account",
   localPasswordEnabled,
   signInBudget,
 }: ReviewAccountPluginOptions) => {
   const configured = config.email !== undefined;
   return {
-    id: "restricted-review-account",
+    id,
     hooks: {
       before: [
         {
@@ -334,6 +364,15 @@ export const createReviewAccountPlugin = ({
           handler: createAuthMiddleware(async (ctx) => {
             const body: unknown = ctx.body;
             const email = isRecord(body) ? body["email"] : undefined;
+            if (typeof email === "string") {
+              requireReviewAccountAccess(
+                checkAccess({
+                  email,
+                  config,
+                  operation: REVIEW_ACCOUNT_OPERATION.passwordSignIn,
+                }),
+              );
+            }
             if (
               typeof email === "string" &&
               isReviewAccountEmail({ email, config })
@@ -381,23 +420,7 @@ export const createReviewAccountPlugin = ({
             configured &&
             path !== undefined &&
             isReviewAccountTokenRedemptionPath(path),
-          handler: createAuthMiddleware(async (ctx) => {
-            const resolve = findReviewAccountTokenRedemption(ctx.path);
-            const subjects =
-              resolve === undefined
-                ? []
-                : await resolve({
-                    body: ctx.body,
-                    query: ctx.query,
-                    internalAdapter: ctx.context.internalAdapter,
-                  });
-            for (const { email, operation } of subjects) {
-              requireReviewAccountAccess(
-                checkReviewAccountAccess({ email, config, operation }),
-              );
-            }
-            return undefined;
-          }),
+          handler: createAccountTokenRedemptionHook({ config, checkAccess }),
         },
         {
           // Recovery and sign-up name the account by email, not by session.
@@ -414,7 +437,7 @@ export const createReviewAccountPlugin = ({
             });
             if (typeof email === "string" && operation !== null) {
               requireReviewAccountAccess(
-                checkReviewAccountAccess({ email, config, operation }),
+                checkAccess({ email, config, operation }),
               );
             }
             await Promise.resolve();
@@ -448,7 +471,7 @@ export const createReviewAccountPlugin = ({
                 throw new APIError("UNAUTHORIZED", { message: "Unauthorized" });
               }
               requireReviewAccountAccess(
-                checkReviewAccountAccess({
+                checkAccess({
                   email: owner.email,
                   config,
                   operation: REVIEW_ACCOUNT_OPERATION.createApiKey,
@@ -460,7 +483,7 @@ export const createReviewAccountPlugin = ({
               return undefined;
             }
             requireReviewAccountAccess(
-              checkReviewAccountAccess({
+              checkAccess({
                 email: resolved.user.email,
                 config,
                 operation: REVIEW_ACCOUNT_OPERATION.session,
@@ -469,6 +492,7 @@ export const createReviewAccountPlugin = ({
             );
             // Every organization the request names, not only the session's.
             await requireNamedOrganizations({
+              checkAccess,
               adapter: ctx.context.adapter,
               body: ctx.body,
               config,
@@ -480,7 +504,7 @@ export const createReviewAccountPlugin = ({
               return undefined;
             }
             requireReviewAccountAccess(
-              checkReviewAccountAccess({
+              checkAccess({
                 email: resolved.user.email,
                 config,
                 operation,
@@ -510,13 +534,20 @@ export const createReviewAccountPlugin = ({
             if (!resolved) {
               return undefined;
             }
-            const access = checkReviewAccountAccess({
+            const access = checkAccess({
               config,
               email: resolved.user.email,
               operation: REVIEW_ACCOUNT_OPERATION.session,
               organizationId: resolved.session["activeOrganizationId"],
             });
-            if (Result.isOk(access)) {
+            if (
+              Result.isOk(access) &&
+              (!authorizeSession ||
+                (await authorizeSession({
+                  id: resolved.session.id,
+                  userId: resolved.session.userId,
+                })))
+            ) {
               return undefined;
             }
             ctx.context.session = null;

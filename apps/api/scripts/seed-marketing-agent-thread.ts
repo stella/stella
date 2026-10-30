@@ -3,8 +3,8 @@ import { readFileSync } from "node:fs";
 import * as v from "valibot";
 
 import {
-  toChatSourceCitationHref,
   type ChatSourceCitationTarget,
+  toChatSourceCitationHref,
 } from "@stll/api-contract";
 import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
 import { generatedVisualInputSchema } from "@stll/api-contract/generated-visual";
@@ -24,7 +24,6 @@ import type {
 import exposureView from "@/api/handlers/visual-sandbox/fixtures/showcase/change-of-control-exposure.json";
 import { prepareGeneratedVisual } from "@/api/handlers/visual-sandbox/prepare";
 import { createVisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
-import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createUserFileKey } from "@/api/lib/file-key";
 import {
@@ -529,7 +528,7 @@ export const buildMarketingAgentThread = ({
         s3Key: createUserFileKey({
           fileId: visualFileId,
           mimeType: TEXT_PLAIN_MIME_TYPE,
-          userId: toSafeId<"user">(userId),
+          organizationId,
         }),
         threadId,
         createdAt: lastMessage.createdAt,

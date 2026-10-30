@@ -1,0 +1,4 @@
+{
+  "add-column": "new table, nothing else holds it",
+  "add-constraint": "For the receipt tables: new table, nothing else holds it. Existing document-processing checks are replaced as NOT VALID without scanning data; registered online steps validate every replacement. Catalog acquisition is bounded by 1s lock_timeout and 5s statement_timeout."
+}

@@ -1,9 +1,9 @@
 import { panic } from "better-result";
 import { and, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
-import { status, t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
+import { numberFromString } from "@stll/api-contract/http-input";
 import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
 
 import { legislationDocuments } from "@/api/db/schema";
@@ -16,17 +16,19 @@ import {
   selectWorkKey,
   workKeyConditions,
 } from "@/api/handlers/legislation/work-key";
+import { status } from "@/api/http/status";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  tPaginationCursor,
-  tPaginationLimit,
-  tSafeId,
+  paginationCursorSchema,
+  paginationLimitSchema,
+  resourceIdSchema,
 } from "@/api/lib/custom-schema";
 import {
   LEGISLATION_AMENDMENT_PAGE_MAX,
   readLegislationAmendments,
   readLegislationAmendmentSnapshot,
 } from "@/api/lib/legal-search/legislation-amendments";
+import { legislationDocumentStatusToday } from "@/api/lib/legal-search/legislation-current-version";
 import { legislationExpressionLabelColumns } from "@/api/lib/legal-search/legislation-expression-label";
 import {
   effectOpensVersion,
@@ -39,22 +41,28 @@ import {
   createCursorPage,
   decodePaginationCursor,
   encodePaginationCursor,
-  isUuidPaginationCursorPart,
   isDateOnlyPaginationCursorPart,
+  isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedLegislationDocumentId } from "@/api/lib/safe-id-boundaries";
 
-export const listStatuteVersionsParamsSchema = t.Object({
-  documentId: tSafeId("legislationDocument"),
+export const listStatuteVersionsParamsSchema = v.object({
+  documentId: resourceIdSchema("legislationDocument"),
 });
 
-export const listStatuteVersionsQuerySchema = t.Object({
-  limit: t.Optional(tPaginationLimit(LIMITS.legislationVersionsPageSizeMax)),
-  cursor: t.Optional(tPaginationCursor()),
+export const listStatuteVersionsQuerySchema = v.object({
+  limit: v.optional(
+    numberFromString(
+      paginationLimitSchema(LIMITS.legislationVersionsPageSizeMax),
+    ),
+  ),
+  cursor: v.optional(paginationCursorSchema()),
 });
 
-type ListStatuteVersionsQuery = Static<typeof listStatuteVersionsQuerySchema>;
+type ListStatuteVersionsQuery = v.InferOutput<
+  typeof listStatuteVersionsQuerySchema
+>;
 
 type ListStatuteVersionsOptions = {
   documentId: SafeId<"legislationDocument">;
@@ -69,7 +77,7 @@ type VersionCursor = {
   id: SafeId<"legislationDocument">;
 };
 
-const decodeVersionCursor = (cursor: string): VersionCursor | null => {
+export const decodeVersionCursor = (cursor: string): VersionCursor | null => {
   const parts = decodePaginationCursor(cursor);
 
   if (parts?.length !== 2) {
@@ -87,6 +95,9 @@ const decodeVersionCursor = (cursor: string): VersionCursor | null => {
 
   return { validFrom, id: brandPersistedLegislationDocumentId(id) };
 };
+
+export const encodeVersionCursor = (cursor: VersionCursor): string =>
+  encodePaginationCursor([cursor.validFrom, cursor.id]);
 
 /**
  * Every consolidated version of the work the given document belongs to,
@@ -142,7 +153,7 @@ export const listStatuteVersionsHandler = async ({
         country: legislationDocuments.country,
         language: legislationDocuments.language,
         documentType: legislationDocuments.documentType,
-        status: legislationDocuments.status,
+        status: legislationDocumentStatusToday,
         effectiveDate: legislationDocuments.effectiveDate,
         versionValidFrom: legislationDocuments.versionValidFrom,
         versionValidTo: legislationDocuments.versionValidTo,

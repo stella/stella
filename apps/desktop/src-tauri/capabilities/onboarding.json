@@ -1,0 +1,31 @@
+{
+  "identifier": "onboarding",
+  "description": "First-run setup window",
+  "windows": ["onboarding"],
+  "permissions": [
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+    "allow-get-desktop-language",
+    "allow-set-desktop-language",
+    "allow-account-record-use",
+    "allow-account-get-state",
+    "allow-open-stella-account",
+    "allow-desktop-report-error",
+    "allow-set-autostart",
+    "allow-onboarding-get-snapshot",
+    "allow-onboarding-advance",
+    "allow-onboarding-complete",
+    "allow-onboarding-later",
+    "allow-onboarding-open-settings",
+    "allow-permissions-get-snapshot",
+    "allow-permissions-request",
+    "allow-permissions-open-settings",
+    "allow-shortcut-get-snapshot",
+    "allow-shortcut-check",
+    "allow-shortcut-pause",
+    "allow-shortcut-resume",
+    "allow-onboarding-dismiss",
+    "allow-onboarding-open-activity",
+    "allow-shortcut-set"
+  ]
+}

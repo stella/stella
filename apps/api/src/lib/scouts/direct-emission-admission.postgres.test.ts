@@ -22,15 +22,16 @@ import {
   documentReviewRuns,
   entities,
   entityVersions,
-  fields,
-  properties,
   featureEnrolments,
-  pendingScoutEmissions,
+  fields,
   notifications,
+  pendingScoutEmissions,
+  properties,
+  schedulerJobs,
   scoutRuns,
   signals,
-  workspaceMembers,
   workObligations,
+  workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
 import { markRlsDatabase } from "@/api/db/scoped";
@@ -57,7 +58,6 @@ import {
   recoverScoutEmission,
   resumeScoutEmissionAfterGrant,
 } from "@/api/lib/scheduler/tasks/scout-emission-recovery";
-import type { SchedulerJob } from "@/api/lib/scheduler/types";
 import { pauseDocumentDeadlineScoutAfterGrantLoss } from "@/api/lib/scouts/document-deadline-recovery";
 import { settleDocumentDeadlineScoutClaim } from "@/api/lib/scouts/document-deadlines";
 import { runWorkAttentionScout } from "@/api/lib/scouts/work-attention";
@@ -627,38 +627,86 @@ describe.skipIf(!enabled)(
                     });
                     break;
                   case "scout-recovery": {
-                    const job = {
-                      id: "signals.scoutRecovery.organization-fixture",
-                      task: RECOVER_SCOUT_EMISSION_TASK,
-                      description: null,
-                      schedule: { type: "interval", everyMs: 60_000 },
-                      payload: null,
-                      enabled: true,
-                      pausedBy: null,
-                      pausedUntil: null,
-                      pauseReason: null,
-                      nextRunAt: NOW,
-                      lastRunAt: null,
-                      lastSuccessAt: null,
-                      lastFailureAt: null,
-                      lastError: null,
-                      lockedAt: NOW,
-                      lockedUntil: null,
-                      lockedBy: "fixture",
-                      createdAt: NOW,
-                      updatedAt: NOW,
-                    } as const satisfies SchedulerJob;
-                    await recoverScoutEmission({
-                      db: asTestRaw<typeof rootDb>(db),
-                      dueAt: DueSlot.of(job),
-                      job,
-                      payload: null,
-                      runId: createSafeId<"schedulerJobRun">(),
-                      scheduleContinuation: () => undefined,
-                      signal: new AbortController().signal,
-                      logger,
-                    });
-                    expect((await readFixture(db, a)).signals).toHaveLength(1);
+                    const jobId = "signals.recoverScoutEmission.fiveMinute";
+                    const existingJob = (
+                      await db
+                        .select()
+                        .from(schedulerJobs)
+                        .where(eq(schedulerJobs.id, jobId))
+                    ).at(0);
+                    const lease = `scout-recovery#${Bun.randomUUIDv7()}`;
+                    try {
+                      await db
+                        .insert(schedulerJobs)
+                        .values({
+                          id: jobId,
+                          task: RECOVER_SCOUT_EMISSION_TASK,
+                          description: "Scout recovery fixture",
+                          schedule: { type: "interval", everyMs: 5 * 60_000 },
+                          payload: {},
+                          enabled: true,
+                          nextRunAt: NOW,
+                          lockedAt: NOW,
+                          lockedUntil: new Date(NOW.getTime() + 5 * 60_000),
+                          lockedBy: lease,
+                        })
+                        .onConflictDoUpdate({
+                          target: schedulerJobs.id,
+                          set: {
+                            task: RECOVER_SCOUT_EMISSION_TASK,
+                            description: "Scout recovery fixture",
+                            schedule: { type: "interval", everyMs: 5 * 60_000 },
+                            payload: {},
+                            enabled: true,
+                            nextRunAt: NOW,
+                            lockedAt: NOW,
+                            lockedUntil: new Date(NOW.getTime() + 5 * 60_000),
+                            lockedBy: lease,
+                          },
+                        });
+                      const job =
+                        (
+                          await db
+                            .select()
+                            .from(schedulerJobs)
+                            .where(eq(schedulerJobs.id, jobId))
+                        ).at(0) ??
+                        panic("Missing registered scout recovery job");
+                      await recoverScoutEmission({
+                        db: asTestRaw<typeof rootDb>(db),
+                        dueAt: DueSlot.of(job),
+                        job,
+                        payload: job.payload,
+                        runId: createSafeId<"schedulerJobRun">(),
+                        scheduleContinuation: () => undefined,
+                        signal: new AbortController().signal,
+                        logger,
+                      });
+                      expect((await readFixture(db, a)).signals).toHaveLength(
+                        1,
+                      );
+                    } finally {
+                      if (existingJob === undefined) {
+                        await db
+                          .delete(schedulerJobs)
+                          .where(eq(schedulerJobs.id, jobId));
+                      } else {
+                        await db
+                          .update(schedulerJobs)
+                          .set({
+                            task: existingJob.task,
+                            description: existingJob.description,
+                            enabled: existingJob.enabled,
+                            nextRunAt: existingJob.nextRunAt,
+                            schedule: existingJob.schedule,
+                            payload: existingJob.payload,
+                            lockedAt: existingJob.lockedAt,
+                            lockedUntil: existingJob.lockedUntil,
+                            lockedBy: existingJob.lockedBy,
+                          })
+                          .where(eq(schedulerJobs.id, jobId));
+                      }
+                    }
                     break;
                   }
                   case "signals-resume":

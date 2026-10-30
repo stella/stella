@@ -1,5 +1,5 @@
-import { Value } from "@sinclair/typebox/value";
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
 import { COUNTRY_CODES } from "@stll/country-codes";
 
@@ -13,7 +13,7 @@ import {
 describe("person contact details", () => {
   test("the import draft accepts the full country-code set", () => {
     expect(
-      Value.Check(contactImportCandidateSchema, {
+      v.is(contactImportCandidateSchema, {
         type: "person",
         displayName: "Example Person",
         nationalityCodes: [...COUNTRY_CODES],

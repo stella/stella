@@ -16,8 +16,8 @@ import { cn } from "../lib/utils";
 import {
   KANBAN_CARD_STICKY_TOP_VAR,
   KANBAN_STICKY_TOP_CLASS,
-  resolveKanbanCardStickyTop,
   type KanbanCardStickyTopStyle,
+  resolveKanbanCardStickyTop,
 } from "./sticky-lane";
 
 const DEFAULT_ESTIMATE_SIZE_PX = 128;

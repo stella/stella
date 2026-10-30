@@ -4,9 +4,9 @@
  * The capacity is the `organization_member_capacity` database function: an
  * organization whose access state is not `self_managed_keys` and whose
  * effective policy (`organization_effective_policy`: a live entitlement's
- * policy, or the free floor) sets `maxMembers` is bounded by it and, for a
- * per-seat policy, by its seat count. A policy without `maxMembers` (every
- * policy that predates the column) bounds nothing. The
+ * policy, or the free floor) is bounded by it: a per-seat policy by its seat
+ * count and `maxMembers`, a flat policy by `maxMembers`. A flat policy
+ * without `maxMembers` bounds nothing. The
  * `member_organization_capacity`
  * trigger enforces it inside every inserting transaction; the checks here
  * read the same bound, whatever `FEATURE_ORG_ACCESS_STATE` says, so a request
@@ -16,8 +16,8 @@
  * seat assignment to AI work, whichever key pays for it.
  */
 
-import { Result } from "better-result";
-import { and, count, eq, gt, ne, sql } from "drizzle-orm";
+import { panic, Result } from "better-result";
+import { and, count, eq, gt, sql } from "drizzle-orm";
 
 import { invitation, member, organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -30,9 +30,13 @@ import type { USAGE_POLICY_PRICE_BASES } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { isSyntheticPrincipal } from "@/api/lib/synthetic-principal/constants";
 
 export const MEMBER_CAPACITY_REACHED_ERROR_CODE =
   "organization_member_capacity_reached";
+
+export const ORGANIZATION_ACCESS_STATE_REQUIRED_ERROR_CODE =
+  "organization_access_state_required";
 
 const memberCapacityReachedError = () =>
   new HandlerError({
@@ -40,6 +44,25 @@ const memberCapacityReachedError = () =>
     status: 409,
     message: "The organization has reached its member capacity",
   });
+
+const organizationAccessStateRequiredError = () =>
+  new HandlerError({
+    code: ORGANIZATION_ACCESS_STATE_REQUIRED_ERROR_CODE,
+    status: 409,
+    message: "The organization access state is not ready",
+  });
+
+const readOrganizationAccessState = async (
+  db: Pick<Transaction, "select">,
+  organizationId: SafeId<"organization">,
+) =>
+  (
+    await db
+      .select({ state: organizationAccessStates.state })
+      .from(organizationAccessStates)
+      .where(eq(organizationAccessStates.organizationId, organizationId))
+      .limit(1)
+  ).at(0)?.state;
 
 /**
  * The organization's member capacity, or null when nothing bounds it: the
@@ -111,6 +134,9 @@ export const checkMemberAdmission = async (
   db: Pick<Transaction, "select">,
   { organizationId, kind }: MemberAdmission,
 ): Promise<Result<void, HandlerError<409>>> => {
+  if ((await readOrganizationAccessState(db, organizationId)) === undefined) {
+    return Result.err(organizationAccessStateRequiredError());
+  }
   const capacity = await readOrganizationMemberCapacity(db, organizationId);
   if (capacity === null) {
     return Result.ok(undefined);
@@ -140,7 +166,8 @@ const memberCapacityBelowMembersError = () =>
 /**
  * The member capacity a usage policy grants at a seat count: the same bound
  * `organization_member_capacity` computes from a stored entitlement. A
- * policy without a member bound bounds nothing, whatever its seats.
+ * per-seat policy is bounded by its seats, a flat policy without a member
+ * bound bounds nothing.
  */
 export const memberCapacityOf = ({
   maxMembers,
@@ -151,10 +178,16 @@ export const memberCapacityOf = ({
   priceBasis: (typeof USAGE_POLICY_PRICE_BASES)[number];
   seats: number;
 }): number | null => {
-  if (maxMembers === null) {
-    return null;
+  switch (priceBasis) {
+    case "per_seat":
+      return maxMembers === null ? seats : Math.min(maxMembers, seats);
+    case "flat":
+      return maxMembers;
+    default: {
+      priceBasis satisfies never;
+      return panic(`Unhandled price basis: ${String(priceBasis)}`);
+    }
   }
-  return priceBasis === "per_seat" ? Math.min(maxMembers, seats) : maxMembers;
 };
 
 /**
@@ -177,20 +210,11 @@ export const checkMemberCapacityChange = async (
   if (nextCapacity === null) {
     return Result.ok(undefined);
   }
-  const bounded = await db
-    .select({ organizationId: organizationAccessStates.organizationId })
-    .from(organizationAccessStates)
-    .where(
-      and(
-        eq(organizationAccessStates.organizationId, organizationId),
-        ne(
-          organizationAccessStates.state,
-          ORGANIZATION_ACCESS_STATE.selfManagedKeys,
-        ),
-      ),
-    )
-    .limit(1);
-  if (bounded.at(0) === undefined) {
+  const accessState = await readOrganizationAccessState(db, organizationId);
+  if (accessState === undefined) {
+    return Result.err(organizationAccessStateRequiredError());
+  }
+  if (accessState === ORGANIZATION_ACCESS_STATE.selfManagedKeys) {
     return Result.ok(undefined);
   }
   const members = await countMembers(db, organizationId);
@@ -204,20 +228,47 @@ export const checkMemberCapacityChange = async (
  * with a member capacity (see above), only a member holding a seat
  * assignment may, whether the organization's own key or the instance
  * provider would serve the work; anyone else is refused rather than served
- * from the organization's shared pool. Always true while the flag is off,
- * without a query.
+ * from the organization's shared pool. The monitoring principal is not
+ * admitted. Current organization membership is always required; turning the
+ * flag off skips only the seat-policy query.
  */
 export const memberMayUseAI = async (
   db: Pick<Transaction, "select">,
   organizationId: SafeId<"organization">,
   userId: SafeId<"user">,
 ): Promise<boolean> => {
+  if (isSyntheticPrincipal({ organizationId, userId })) {
+    return false;
+  }
   if (!isDeploymentFeatureEnabled("FEATURE_ORG_ACCESS_STATE")) {
-    return true;
+    const currentMember = (
+      await db
+        .select({ id: member.id })
+        .from(member)
+        .where(
+          and(
+            eq(member.organizationId, organizationId),
+            eq(member.userId, userId),
+          ),
+        )
+        .limit(1)
+    ).at(0);
+    return currentMember !== undefined;
   }
   const rows = await db
-    .select({ assignmentId: usageSeatAssignments.id })
-    .from(organizationAccessStates)
+    .select({
+      accessState: organizationAccessStates.state,
+      assignmentId: usageSeatAssignments.id,
+      // Seats are a paid-plan concept: the free floor bounds the
+      // organization's budget, not who may spend it, so members kept
+      // after a downgrade keep AI access.
+      requiresAssignment: sql<boolean>`${organizationAccessStates.state} <> ${ORGANIZATION_ACCESS_STATE.selfManagedKeys} AND exists (select 1 from organization_effective_policy(${organizationAccessStates.organizationId}) ep where (ep.price_basis = 'per_seat' or ep.max_members is not null) and ep.policy_kind <> 'free')`,
+    })
+    .from(member)
+    .leftJoin(
+      organizationAccessStates,
+      eq(organizationAccessStates.organizationId, member.organizationId),
+    )
     .leftJoin(
       usageSeatAssignments,
       and(
@@ -225,23 +276,17 @@ export const memberMayUseAI = async (
           usageSeatAssignments.organizationId,
           organizationAccessStates.organizationId,
         ),
-        eq(usageSeatAssignments.userId, userId),
+        eq(usageSeatAssignments.userId, member.userId),
       ),
     )
     .where(
-      and(
-        eq(organizationAccessStates.organizationId, organizationId),
-        ne(
-          organizationAccessStates.state,
-          ORGANIZATION_ACCESS_STATE.selfManagedKeys,
-        ),
-        // Seats are a paid-plan concept: the free floor bounds the
-        // organization's budget, not who may spend it, so members kept
-        // after a downgrade keep AI access.
-        sql`exists (select 1 from organization_effective_policy(${organizationAccessStates.organizationId}) ep where ep.max_members is not null and ep.policy_kind <> 'free')`,
-      ),
+      and(eq(member.organizationId, organizationId), eq(member.userId, userId)),
     )
     .limit(1);
   const row = rows.at(0);
-  return row === undefined || row.assignmentId !== null;
+  return (
+    row !== undefined &&
+    row.accessState !== null &&
+    (!row.requiresAssignment || row.assignmentId !== null)
+  );
 };

@@ -98,6 +98,12 @@ describe("warning code census", () => {
         filters: ["court"],
         emptyResultSet: true,
       }).map(({ code }) => code),
+      ...caseLawSearchWarnings({
+        droppedFunctionWords: [],
+        partialHitCount: 2,
+        filters: [],
+        emptyResultSet: false,
+      }).map(({ code }) => code),
     ]);
 
     expect([...produced].toSorted()).toEqual(

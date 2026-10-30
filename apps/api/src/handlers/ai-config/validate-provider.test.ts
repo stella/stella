@@ -1,12 +1,12 @@
-import { Value } from "@sinclair/typebox/value";
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
 import { TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
 
 import {
+  createTestHandlerContext,
   NO_AUDIT,
   NO_DB,
-  createTestHandlerContext,
 } from "@/api/tests/helpers/handler-context";
 
 import validateProvider, { validateProviderBody } from "./validate-provider";
@@ -40,7 +40,7 @@ describe("provider settings validation", () => {
 test("workspace probe schema requires a safe nonempty header value", () => {
   const body = { provider: "anthropic", apiKey: "fixture-key" };
   expect(
-    Value.Check(validateProviderBody, {
+    v.is(validateProviderBody, {
       ...body,
       anthropicWorkspaceId: "wrk_safe-ID_01",
     }),
@@ -53,9 +53,9 @@ test("workspace probe schema requires a safe nonempty header value", () => {
     "wrk with space",
     "wrk/path",
   ]) {
-    expect(
-      Value.Check(validateProviderBody, { ...body, anthropicWorkspaceId }),
-    ).toBe(false);
+    expect(v.is(validateProviderBody, { ...body, anthropicWorkspaceId })).toBe(
+      false,
+    );
   }
 });
 

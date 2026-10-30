@@ -1,8 +1,8 @@
 import { and, eq, isNull } from "drizzle-orm";
-import { status } from "elysia";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { entities, entityVersions, fields } from "@/api/db/schema";
+import { status } from "@/api/http/status";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
@@ -10,6 +10,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { isStampableDocx } from "@/api/lib/docx-stamp";
 import { isNativelyRenderableMimeType } from "@/api/lib/files/gotenberg";
 import { createFileKey } from "@/api/lib/files/utils";
+import type { SignedDownloadSource } from "@/api/lib/s3-presign";
+import type { SyntheticSessionAuthorityReader } from "@/api/lib/synthetic-principal/session-authority";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 export const FILE_READ_URL_EXPIRY_SECONDS = 15 * 60;
@@ -17,12 +19,39 @@ export const FILE_READ_URL_EXPIRY_SECONDS = 15 * 60;
 type FilePurpose = "download" | "display" | "native-display";
 
 type ReadFileHandlerProps = {
+  userId: SafeId<"user">;
+  source: SignedDownloadSource;
   scopedDb: ScopedDb;
   fieldId: SafeId<"field">;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   purpose: FilePurpose;
   recordAuditEvent: AuditRecorder;
+  readSessionAuthority: SyntheticSessionAuthorityReader;
+};
+
+type DisplayedFileContent = {
+  id: string;
+  mimeType: string;
+  pdfFileId: string | null;
+};
+
+/**
+ * The PDF the viewer shows for a file field: its PDF rendition, else the
+ * file itself when it is a PDF. Null when the viewer renders the file
+ * natively, or there is no PDF to show. Anything anchored to what the
+ * reader saw (a mark's page text) reads these bytes.
+ */
+export const displayedPdfFileId = (
+  content: DisplayedFileContent,
+): string | null => {
+  if (isNativelyRenderableMimeType(content.mimeType)) {
+    return null;
+  }
+  return (
+    content.pdfFileId ??
+    (content.mimeType === PDF_MIME_TYPE ? content.id : null)
+  );
 };
 
 export const fileFieldQuery = async (
@@ -59,11 +88,14 @@ export const fileFieldQuery = async (
 
 export const readFileHandler = async ({
   scopedDb,
+  userId,
+  source,
   fieldId,
   organizationId,
   workspaceId,
   purpose,
   recordAuditEvent,
+  readSessionAuthority,
 }: ReadFileHandlerProps) => {
   const rows = await fileFieldQuery(scopedDb, fieldId, workspaceId);
   const row = rows.at(0);
@@ -100,10 +132,13 @@ export const readFileHandler = async ({
     await scopedDb(
       async (tx) =>
         await auditedPresignDownload({
+          readSessionAuthority,
           tx,
           recordAuditEvent,
           resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
           resourceId: row.entityId,
+          userId,
+          source,
           s3Key,
           expiresInSeconds: FILE_READ_URL_EXPIRY_SECONDS,
           ...(fileName === undefined ? {} : { fileName }),
@@ -165,10 +200,10 @@ export const readFileHandler = async ({
     };
   }
 
-  if (!content.pdfFileId && content.mimeType !== PDF_MIME_TYPE) {
+  const displayFileId = displayedPdfFileId(content);
+  if (displayFileId === null) {
     return status(400);
   }
-  const displayFileId = content.pdfFileId ?? content.id;
   const displayFileKey = createFileKey({
     organizationId,
     workspaceId,

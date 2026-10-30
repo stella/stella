@@ -380,9 +380,9 @@ const readArgument = (
   return index === -1 ? undefined : args[index + 1];
 };
 
-const resolveDecision = (args: readonly string[]): Decision => {
-  const base = readArgument(args, "--base") ?? "";
-  const head = readArgument(args, "--head") ?? "HEAD";
+type LandingRange = { readonly base: string; readonly head: string };
+
+const resolveDecision = ({ base, head }: LandingRange): Decision => {
   if (base === "" || EMPTY_REVISION.test(base)) {
     return { affected: true, reason: "there is no base revision to compare" };
   }
@@ -410,10 +410,22 @@ const resolveDecision = (args: readonly string[]): Decision => {
   });
 };
 
-if (import.meta.main) {
-  const decision = resolveDecision(Bun.argv.slice(2));
+export const landingDeployAffected = (range: LandingRange): boolean => {
+  const decision = resolveDecision(range);
   console.error(
     `${LANDING_PACKAGE} ${decision.affected ? "affected" : "unaffected"}: ${decision.reason}`,
   );
-  console.log(String(decision.affected));
+  return decision.affected;
+};
+
+if (import.meta.main) {
+  const args = Bun.argv.slice(2);
+  console.log(
+    String(
+      landingDeployAffected({
+        base: readArgument(args, "--base") ?? "",
+        head: readArgument(args, "--head") ?? "HEAD",
+      }),
+    ),
+  );
 }

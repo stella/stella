@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, eq, isNull } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { CHAT_THREAD_PLACEHOLDER_TITLE } from "@stll/api-contract";
 
@@ -10,7 +10,7 @@ import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
@@ -27,13 +27,9 @@ const config = {
     reason: "assistant_chat",
     consumesServices: false,
   },
-  params: t.Object({ threadId: tSafeId("chatThread") }),
-  query: t.Object({
-    workspaceId: t.Optional(tSafeId("workspace")),
-  }),
-  body: t.Object({
-    webSearchEnabled: t.Boolean(),
-  }),
+  params: v.object({ threadId: resourceIdSchema("chatThread") }),
+  query: v.object({ workspaceId: v.optional(resourceIdSchema("workspace")) }),
+  body: v.object({ webSearchEnabled: v.boolean() }),
 } satisfies HandlerConfig;
 
 const updateThread = createSafeRootHandler(

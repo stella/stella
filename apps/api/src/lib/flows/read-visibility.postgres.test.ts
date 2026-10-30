@@ -15,6 +15,7 @@ import {
   readOverviewActivityPage,
 } from "@/api/handlers/workspaces/read-overview-activity.query";
 import { readSearchPreviewHandler } from "@/api/handlers/workspaces/read-search-preview.query";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
@@ -118,6 +119,10 @@ if (!databaseUrl || !enabled) {
             const calendar = await calendarTasks.handler(
               asTestRaw<Parameters<typeof calendarTasks.handler>[0]>({
                 ...context,
+                request: new Request(
+                  `https://api.example.test/v1/tasks/${fixture.workspaceId}/calendar`,
+                ),
+                route: "/v1/tasks/:workspaceId/calendar" satisfies ApiRoutePath,
                 body: {
                   dateFrom: "2099-01-01T00:00:00Z",
                   dateTo: "2099-01-03T00:00:00Z",
@@ -126,7 +131,11 @@ if (!databaseUrl || !enabled) {
               }),
             );
             const matters = await readWorkspaces.handler(
-              asTestRaw<Parameters<typeof readWorkspaces.handler>[0]>(context),
+              asTestRaw<Parameters<typeof readWorkspaces.handler>[0]>({
+                ...context,
+                request: new Request("https://api.example.test/v1/workspaces"),
+                route: "/v1/workspaces" satisfies ApiRoutePath,
+              }),
             );
             const preview = await readSearchPreviewHandler({
               ...principal,

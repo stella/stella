@@ -4,20 +4,39 @@ import { createMemoryBodySchema } from "@/api/handlers/memories/create-schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { AI_MEMORY_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { sanitizePersonMemoryContent } from "@/api/lib/memory/memory-content-safety";
 import {
   memoryWriteRefusalHandlerError,
   persistExplicitMemory,
   resolveMemoryWriteScope,
 } from "@/api/lib/memory/persist-explicit-memory";
+import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
 const config = {
+  featureAccess: { type: "required", featureId: AI_MEMORY_FEATURE_ID },
   contract: "patch",
+  description:
+    "Save an assistant memory that future chats will read. scope user is " +
+    "private to you and takes kind preference or instruction; scope " +
+    "workspace belongs to one active matter (matterId) and also takes fact, " +
+    "decision or relationship, and needs permission to update that matter. " +
+    "Content identical to an existing memory returns that memory's id with " +
+    "type existing, or reactivated when it was archived, instead of a " +
+    "duplicate. Firm-wide memory cannot be created here.",
   // Memory is part of the AI assistant; gate on the chat capability.
   // Firm-scoped writes go through the separate, permission-gated route.
   permissions: { chat: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
-  mcp: { type: "internal", reason: "assistant_chat" },
+  mcp: {
+    type: "capability",
+    confirmation: "required",
+    reason: "assistant_memory",
+    consumesServices: false,
+  },
+  realtime: noResourceSetUpdates(
+    "Memory mutation callers invalidate the caller-scoped memory queries after a successful write.",
+  ),
   body: createMemoryBodySchema,
 } satisfies HandlerConfig;
 
@@ -58,7 +77,7 @@ const createMemory = createSafeRootHandler(
       );
     }
 
-    const created = yield* Result.await(
+    const outcome = yield* Result.await(
       safeDb(
         async (tx) =>
           await persistExplicitMemory({
@@ -80,7 +99,10 @@ const createMemory = createSafeRootHandler(
       ),
     );
 
-    return Result.ok(created);
+    if (outcome.type === "authority_unavailable") {
+      return Result.err(memoryWriteRefusalHandlerError(outcome.error));
+    }
+    return Result.ok(outcome);
   },
 );
 

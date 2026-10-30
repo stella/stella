@@ -1,16 +1,15 @@
 import { expect, test } from "bun:test";
-import { readFileSync, readdirSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import ts from "typescript";
+import { API } from "tsrs/unstable/async";
 import * as v from "valibot";
 
-import { withoutTsgoOnlyOptionDiagnostics } from "../packages/scripts/src/tsgo-compiler-options.ts";
 import { CACHE_SAVE_REVISION } from "./ci-store-save";
 import { storeSaverCensus } from "./ci-store-save-policy";
 import { mainHeavyJobs } from "./main-heavy-plan";
 import {
-  MAIN_ONLY_BUN_CACHE_SAVE,
   jobCachePolicy,
+  MAIN_ONLY_BUN_CACHE_SAVE,
   workflowCacheProblems,
 } from "./workflow-cache-policy.ts";
 
@@ -333,8 +332,14 @@ test("every scoped install key has exactly one declared saver across all workflo
   }
   // Main can reuse the queued proof and skip generated-sources. The browser
   // store must still have a writer in the main-heavy partition itself.
+  // The suite axis is plan-generated, so the census names the job without a
+  // matrix row.
   const browserStore = groups.find((group) =>
-    group.callers.some((caller) => caller.startsWith("ci.yml/ci-browser ")),
+    group.callers.some(
+      (caller) =>
+        caller === "ci.yml/ci-browser" ||
+        caller.startsWith("ci.yml/ci-browser "),
+    ),
   );
   if (browserStore === undefined) {
     expect.unreachable("Missing browser store callers");
@@ -434,7 +439,7 @@ test("the census catches duplicate writers, missing writers and per-row mode dri
   );
 });
 
-test("scoped store saves are non-fatal post hooks, and containers cannot restore a gzip-only version", () => {
+test("scoped store saves are non-fatal post hooks, and containers cannot restore a gzip-only version", async () => {
   const action = v.parse(
     v.object({
       inputs: v.object({
@@ -494,26 +499,17 @@ test("scoped store saves are non-fatal post hooks, and containers cannot restore
   );
   expect(cleanup.runs.main).toBe("index.mjs");
   expect(cleanup.runs.post).toBe(cleanup.runs.main);
-  const project = ts.getParsedCommandLineOfConfigFile(
-    fileURLToPath(new URL("../tsconfig.scripts.json", import.meta.url)),
-    {},
-    {
-      ...ts.sys,
-      onUnRecoverableConfigFileDiagnostic: (diagnostic) => {
-        expect.unreachable(
-          ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"),
-        );
-      },
-    },
-  );
-  if (project === undefined) {
-    expect.unreachable("Missing CI scripts typecheck project");
-  }
-  expect(
-    withoutTsgoOnlyOptionDiagnostics(project.errors).map((diagnostic) =>
-      ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"),
-    ),
-  ).toEqual([]);
+  const api = new API({ cwd: fileURLToPath(new URL("..", import.meta.url)) });
+  const project = await (async () => {
+    try {
+      return await api.parseConfigFile(
+        fileURLToPath(new URL("../tsconfig.scripts.json", import.meta.url)),
+      );
+    } finally {
+      await api.close();
+    }
+  })();
+  expect(project.errors.map(({ text }) => text)).toEqual([]);
   expect(project.options.allowJs).toBe(true);
   expect(project.options.checkJs).toBe(true);
   for (const entrypoint of [cleanup.runs.main, cleanup.runs.post]) {

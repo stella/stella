@@ -1,5 +1,9 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
+
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+import { sha256Base64Url as hashSha256Base64Url } from "@stll/sha256/bun";
+import { isUuid } from "@stll/uuid-codec";
 /**
  * The wire format of a corpus-index search cursor: its one owner.
  *
@@ -80,8 +84,6 @@ import * as v from "valibot";
  *
  * One metadata segment therefore means a window rank and nothing else.
  */
-
-import { sha256Base64Url as hashSha256Base64Url } from "@stll/sha256/bun";
 
 import type { SearchCursor } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
@@ -192,7 +194,7 @@ const serializePhase = (phase: CorpusSearchPhase): string => {
   if (validated === null) {
     return panic("A search phase does not satisfy the corpus cursor grammar");
   }
-  return `${PHASE_SEGMENT_PREFIX}${Buffer.from(JSON.stringify(validated)).toString("base64url")}`;
+  return `${PHASE_SEGMENT_PREFIX}${Buffer.from(JSON.stringify(validated)).toBase64({ alphabet: "base64url", omitPadding: true })}`;
 };
 
 /** The excluded-groups segment, or null when there is nothing to carry. */
@@ -236,7 +238,9 @@ const parseExcludedGroups = (value: string): string[] | null => {
 };
 
 const parseWindowStart = (value: string): number | null =>
-  WINDOW_RANK_PATTERN.test(value) ? Number(value) : null;
+  WINDOW_RANK_PATTERN.test(value)
+    ? parseIntegerToken(value, { sign: "unsigned" }).unwrapOr(null)
+    : null;
 
 /** The order segment, read against the declared list rather than a pattern. */
 const parseSearchSort = (value: string): SearchSort | null =>
@@ -284,7 +288,9 @@ const parsePhase = (segment: string): CorpusSearchPhase | null => {
     return null;
   }
   const decoded = Buffer.from(payload, "base64url");
-  if (decoded.toString("base64url") !== payload) {
+  if (
+    decoded.toBase64({ alphabet: "base64url", omitPadding: true }) !== payload
+  ) {
     return null;
   }
   const parsed = Result.try({
@@ -503,7 +509,7 @@ export const decodeCorpusSearchCursor = (
   }
   const segments = decoded.id.split(":");
   const id = segments.at(-1);
-  if (id === undefined || id.length === 0) {
+  if (id === undefined || !isUuid(id)) {
     return null;
   }
   const cursorOf = ({

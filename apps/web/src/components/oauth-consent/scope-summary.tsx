@@ -1,15 +1,16 @@
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { TriangleAlertIcon } from "@stll/ui/icons";
 
+import { useFormatter } from "@/i18n/formatting-context";
 import type Messages from "@/i18n/langs/messages.gen";
 import type { TranslationKey } from "@/i18n/types";
 import {
-  type OAuthScopeGroup,
-  type OAuthScopeDisplayEntry,
-  type OAuthScopeSummaryGroup,
   groupOAuthScopeDisplayEntries,
   groupOAuthScopeSummaryEntries,
+  type OAuthScopeDisplayEntry,
+  type OAuthScopeGroup,
+  type OAuthScopeSummaryGroup,
   toOAuthScopeDisplayEntries,
   translateOAuthScopeEntry,
   translateOAuthScopeSummary,

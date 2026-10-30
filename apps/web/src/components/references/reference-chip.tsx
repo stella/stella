@@ -2,10 +2,16 @@ import type { ReactNode } from "react";
 import { createContext, Fragment, isValidElement, use } from "react";
 
 import { skipToken, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate, useRouterState } from "@tanstack/react-router";
+import { useNavigate, useRouter } from "@tanstack/react-router";
 import { panic } from "better-result";
 
-import { LandmarkIcon, LibraryIcon, SkillIcon } from "@stll/ui/icons";
+import {
+  Building2Icon,
+  LandmarkIcon,
+  LibraryIcon,
+  PlugIcon,
+  SkillIcon,
+} from "@stll/ui/icons";
 import { resolveMatterColor } from "@stll/ui/matter-colors";
 import { MatterIcon } from "@stll/ui/matter-icon";
 import { cn } from "@stll/ui/utils";
@@ -13,6 +19,7 @@ import { cn } from "@stll/ui/utils";
 import { openCaseLawDecision } from "@/components/chat/case-law-open";
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import { skillRefDestination } from "@/components/chat/skill-ref-link";
+import { CHIP_ICON_CLASS } from "@/components/chip-scale";
 import { InlinePill } from "@/components/inline-pill";
 import { referenceHintOptions } from "@/components/references/reference-hints";
 import {
@@ -35,10 +42,12 @@ import { SIGNED_OUT_QUERY_OWNER } from "@/lib/account/queries";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { organizationOptions } from "@/lib/organization/queries";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import { entityOptions } from "@/lib/workspaces/queries/entities";
 import { navigateToWorkspaceFolder } from "@/lib/workspaces/reveal-navigation";
+import { getCurrentWorkspaceDocument } from "@/lib/workspaces/use-workspace-view-params";
 
 /**
  * The matter a chat surface renders in. An entity href persisted without its
@@ -63,7 +72,7 @@ export const ReferenceRenderScope = ({
 export const useReferenceRenderWorkspaceId = (): string | undefined =>
   use(ReferenceRenderContext).workspaceId;
 
-const GLYPH_CLASS = "size-3 shrink-0";
+const GLYPH_CLASS = CHIP_ICON_CLASS;
 
 const toLiveFact = <TData, TValue>(
   query: { data: TData | undefined; isError: boolean; isPending: boolean },
@@ -113,8 +122,8 @@ const useReferenceFacts = (reference: ChatReference): ReferenceLiveFacts => {
       reference.type === "entity" ? reference.entityId : null,
     ),
   );
-  const hintQueryView = useQueryView(hintQuery);
-  useQueryViewError(hintQueryView);
+  const hintQueryView = queryView(hintQuery);
+  useQueryViewError(hintQueryView, "useReferenceFacts:query");
   // The navigation list is already in flight on every chat surface, so the
   // matter colour is a cache read rather than a fetch.
   const mattersQuery = useQuery({
@@ -230,6 +239,10 @@ const ReferenceGlyphIcon = ({
       ) : (
         <LibraryIcon className={GLYPH_CLASS} />
       );
+    case "registry":
+      return <Building2Icon className={GLYPH_CLASS} />;
+    case "connector":
+      return <PlugIcon className={GLYPH_CLASS} />;
     case "user":
       return (
         <UserIdentityAvatar
@@ -275,6 +288,9 @@ const ReferenceChipView = ({
         <ReferenceGlyphIcon glyph={visual.glyph} matter={visual.matter} />
       }
       onActivate={onActivate}
+      // The label truncates, so the full name stays one hover away and is
+      // the chip's accessible name. A rich label carries no plain string.
+      title={labelContent === undefined ? visual.label : undefined}
       truncate
     >
       {label}
@@ -289,9 +305,7 @@ const ReferenceChipView = ({
 export const useReferenceActivation = (reference: ChatReference) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const pathname = useRouterState({
-    select: (state) => state.location.pathname,
-  });
+  const router = useRouter();
   const { open: openDecision } = useOpenDecisionTab();
 
   switch (reference.type) {
@@ -303,16 +317,19 @@ export const useReferenceActivation = (reference: ChatReference) => {
       return () =>
         detached(
           (async () => {
-            const result = await openEntityInInspector(
+            const result = await openEntityInInspector({
+              documentOnScreen: getCurrentWorkspaceDocument(
+                router.state.matches,
+              ),
               entityId,
               label,
-              matterId,
-            );
+              workspaceId: matterId,
+            });
             if (result.type === "folder") {
               await navigateToWorkspaceFolder({
                 folderId: result.entityId,
                 navigate,
-                pathname,
+                router,
                 queryClient,
                 targetWorkspaceId: result.workspaceId,
               });
@@ -348,9 +365,11 @@ export const useReferenceActivation = (reference: ChatReference) => {
           navigate(skillRefDestination(reference.slug)),
           "reference-chip.open-skill",
         );
-    // A person has no page here; a corpus scope is not a document to open.
+    // A person has no page here; a source scope is not a document to open.
     case "user":
     case "corpus":
+    case "registry":
+    case "connector":
       return undefined;
     default:
       reference satisfies never;

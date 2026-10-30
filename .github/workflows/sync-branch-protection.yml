@@ -32,7 +32,10 @@ permissions: {}
 
 jobs:
   sync:
-    runs-on: ubuntu-latest
+    if: >-
+      github.event_name != 'workflow_dispatch'
+      || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: read
@@ -65,10 +68,11 @@ jobs:
 
       - name: Create GitHub App token
         id: app-token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         with:
           client-id: ${{ vars.BRANCH_PROTECTION_APP_CLIENT_ID }}
           private-key: ${{ secrets.BRANCH_PROTECTION_APP_KEY }}
+          permission-administration: write
 
       - name: Apply ruleset
         # On push, the `on.push.paths` filter already established that

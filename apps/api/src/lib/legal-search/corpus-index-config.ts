@@ -72,10 +72,7 @@ type CorpusIndexFieldMapping = {
   // Built-in names plus whatever `CUSTOM_TOKENIZERS` declares, so a field can
   // never name a tokenizer the doc mapping does not ship.
   tokenizer?:
-    | "raw"
-    | "default"
-    | "en_stem"
-    | (typeof CUSTOM_TOKENIZERS)[number]["name"];
+    "raw" | "default" | "en_stem" | (typeof CUSTOM_TOKENIZERS)[number]["name"];
   record?: "basic" | "freq" | "position";
   fieldnorms?: boolean;
   /** Fast-field resolution for a datetime; coarser truncates harder. */
@@ -566,7 +563,9 @@ const FAMILY_FIELDS: Record<CorpusFamily, CorpusIndexFieldMapping[]> = {
       stored: true,
       fast: false,
     },
-    // current | historical | repealed
+    // The stored status. `current` and `historical` are the ingest day's
+    // reading of the window, so search filters only the other values here
+    // (see `legislationStatusToday`).
     {
       name: "status",
       type: "text",

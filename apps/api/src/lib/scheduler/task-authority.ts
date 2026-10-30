@@ -15,6 +15,8 @@ export const MEMBER_RUN_ACTOR_RESOLVERS = [
 type MemberRunActorResolver = (typeof MEMBER_RUN_ACTOR_RESOLVERS)[number];
 
 type TaskAuthorityBase = {
+  /** Ownership of the scheduler row, distinct from the task's run authority. */
+  schedulerOwnership: "organization" | "platform";
   /** The module that implements the task the registry runs. */
   module: string;
   /** Why the task runs under this authority. */
@@ -51,6 +53,7 @@ const TASKS = "apps/api/src/lib/scheduler/tasks";
 
 const platform = (module: string, reason: string) =>
   ({
+    schedulerOwnership: "platform",
     authority: "org-automation",
     module: `${TASKS}/${module}`,
     reason,
@@ -64,6 +67,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
   "signals.recoverScoutEmission": platform(
     "scout-emission-recovery.ts",
     "Replays deferred scout sources only for live enrolled recipients.",
+  ),
+  "caseLaw.reconcilePublisherRemovals": platform(
+    "case-law-publisher-removals.ts",
+    "Reconciles publisher removals in the public legal corpus.",
   ),
   "actions.sweepCosts": platform(
     "action-cost-retention.ts",
@@ -101,6 +108,14 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "case-law-raw-storage.ts",
     "Public legal corpus storage census.",
   ),
+  "caseLaw.refreshCoverage": platform(
+    "case-law-coverage-refresh.ts",
+    "Precomputes the public legal corpus coverage summary.",
+  ),
+  "caseLaw.reportFreshness": platform(
+    "case-law-freshness-report.ts",
+    "Reports public legal corpus freshness metrics.",
+  ),
   "caseLaw.reconcileCorpusUploadIntents": platform(
     "case-law-corpus-upload-cleanup.ts",
     "Public legal corpus upload cleanup.",
@@ -108,6 +123,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
   "caseLaw.reconcileRawRows": platform(
     "case-law-raw-storage.ts",
     "Public legal corpus storage reconciliation.",
+  ),
+  "caseLaw.reconcileDecisionIdentifiers": platform(
+    "case-law-decision-identifier-reconciliation.ts",
+    "Public legal corpus identifier reconciliation.",
   ),
   "caseLaw.reconcileRawSweeps": platform(
     "case-law-raw-storage.ts",
@@ -126,6 +145,7 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "Public legal corpus aggregates.",
   ),
   "chat.compactThreads": {
+    schedulerOwnership: "platform",
     authority: "member-run",
     module: `${TASKS}/chat-thread-compactor.ts`,
     runActor: {
@@ -159,6 +179,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "document-processing-ocr.ts",
     "Hands queued document processing runs to their queue.",
   ),
+  "documentProcessing.dispatchNativeExtraction": platform(
+    "document-processing-native-extraction.ts",
+    "Hands queued native extraction runs to their queue.",
+  ),
   "documentProcessing.recoverDeadlineScouts": platform(
     "document-deadline-scout-recovery.ts",
     "Hands pending deadline scans to their queue.",
@@ -184,6 +208,7 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "Hands stuck renditions back to the derivatives queue.",
   ),
   "flow.run": {
+    schedulerOwnership: "organization",
     authority: "member-run",
     module: `${TASKS}/flow-run.ts`,
     runActor: {
@@ -196,6 +221,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
   "flows.reconcileOrphanRuns": platform(
     "flow-run-orphan-reconcile.ts",
     "Hands stalled flow runs back to their queue.",
+  ),
+  "emailDeliverability.receive": platform(
+    "email-deliverability-receive.ts",
+    "Applies the mail provider's bounce and complaint events to the accounts whose addresses they name; stores only whether each address is deliverable.",
   ),
   "inboundMail.receive": platform(
     "inbound-mail-receive.ts",
@@ -226,6 +255,7 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "Ages memories by their timestamps, recorded as a service.",
   ),
   "memory.extractor": {
+    schedulerOwnership: "platform",
     authority: "member-run",
     module: `${TASKS}/memory-extractor.ts`,
     runActor: {
@@ -235,6 +265,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
     reason:
       "Reads a thread owner's compacted chat and stores memory suggestions attributed to that owner, as that owner's run actor.",
   },
+  "observability.checkDataInvariants": platform(
+    "data-invariants.ts",
+    "Reads tenant-spanning aggregate counts to judge pipeline output.",
+  ),
   "organizations.recordMissingAccessStates": platform(
     "organization-access-state-reconcile.ts",
     "Records organization access state.",
@@ -246,6 +280,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
   "reportExports.reconcileQueued": platform(
     "report-export-reconcile.ts",
     "Recovers stuck exports and hands queued ones back to their queue, whose worker resolves the requester's run actor.",
+  ),
+  "requests.sweepReceipts": platform(
+    "request-receipt-retention.ts",
+    "Retention sweep of expired technical request receipts under each receipt's organization and user scope.",
   ),
   "sanctions.backfillMonitoring": platform(
     "sanctions-monitoring-backfill.ts",
@@ -259,13 +297,19 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "sanctions-refresh.ts",
     "Refreshes public sanctions lists.",
   ),
+  "scheduler.auditPauses": platform(
+    "scheduler-pause-audit.ts",
+    "Reports overdue scheduler operator pauses.",
+  ),
   "scheduler.dispatchBullMq": {
+    schedulerOwnership: "platform",
     authority: "unclassified",
     module: "apps/api/src/lib/scheduler/bullmq.ts",
     reason:
       "Forwards to whichever queue a stored job names; the code does not fix the target queue, so the authority depends on data.",
   },
   "scheduler.noop": {
+    schedulerOwnership: "platform",
     authority: "org-automation",
     module: "apps/api/src/lib/scheduler/registry.ts",
     reason: "Does nothing.",
@@ -303,3 +347,13 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "Data backfill from existing tasks, keeping only current members as assignees.",
   ),
 } as const satisfies SchedulerTaskAuthorityRegistry;
+
+export type SchedulerTaskWithOwnership<
+  Ownership extends TaskAuthorityBase["schedulerOwnership"],
+> = {
+  [
+    Task in keyof typeof SCHEDULER_TASK_AUTHORITY
+  ]: (typeof SCHEDULER_TASK_AUTHORITY)[Task]["schedulerOwnership"] extends Ownership
+    ? Task
+    : never;
+}[keyof typeof SCHEDULER_TASK_AUTHORITY];

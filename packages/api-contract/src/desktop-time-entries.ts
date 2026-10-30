@@ -1,5 +1,7 @@
 import * as v from "valibot";
 
+import { apiDateSchema } from "./api-date";
+
 export const desktopMatterSchema = v.strictObject({
   id: v.pipe(v.string(), v.maxLength(200)),
   name: v.pipe(v.string(), v.maxLength(1024)),
@@ -18,6 +20,7 @@ export type DesktopMattersResponse = v.InferOutput<
 >;
 
 export const DESKTOP_ACTIVITY_REVIEW_LIMIT = 100;
+export const DESKTOP_TIME_ENTRY_NARRATIVE_MAX_LENGTH = 10_000;
 export const desktopMatterCandidateSchema = v.strictObject({
   ...desktopMatterSchema.entries,
   clientName: v.nullable(v.pipe(v.string(), v.maxLength(1024))),
@@ -42,7 +45,7 @@ export type DesktopMatterCandidatesResponse = v.InferOutput<
 
 export const desktopTimeEntryBatchItemSchema = v.strictObject({
   matterId: v.pipe(v.string(), v.uuid()),
-  dateWorked: v.pipe(v.string(), v.isoDate()),
+  dateWorked: apiDateSchema,
   timezoneId: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
   durationMinutes: v.pipe(
     v.number(),
@@ -50,7 +53,10 @@ export const desktopTimeEntryBatchItemSchema = v.strictObject({
     v.minValue(1),
     v.maxValue(1440),
   ),
-  narrative: v.pipe(v.string(), v.maxLength(10_000)),
+  narrative: v.pipe(
+    v.string(),
+    v.maxLength(DESKTOP_TIME_ENTRY_NARRATIVE_MAX_LENGTH),
+  ),
   billable: v.boolean(),
 });
 export const desktopTimeEntryBatchSchema = v.strictObject({

@@ -24,12 +24,12 @@ import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
-  caseLawDecisions,
   caseLawCorpusPackRefs,
-  corpusIndexProjectionStates,
+  caseLawDecisions,
   caseLawSearchDocumentPreviewPassages,
   caseLawSearchDocuments,
   caseLawSources,
+  corpusIndexProjectionStates,
 } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
@@ -230,6 +230,39 @@ if (!databaseUrl || !runPostgresTests) {
       }
     });
 
+    test("deferred storage keeps text when its AST has duplicate anchors", async () => {
+      const id = await insertDecision({
+        caseNumber: `reader-schema-${suffix}`,
+      });
+      const decision = await claimFor(id);
+      const block = parsedAst.blocks.at(0);
+      if (block === undefined) {
+        expect.unreachable("Fixture has a heading");
+      }
+      const invalidAst = {
+        ...parsedAst,
+        blocks: [block, { ...block, id: "b2" }],
+      };
+      await storeBackfilledDocument({
+        decision,
+        document: { ...parsedDocument, documentAst: invalidAst },
+        scopedDb,
+        mode: "off",
+        transfer: null,
+      });
+      const row = (
+        await db
+          .select({
+            fulltext: caseLawDecisions.fulltext,
+            documentAst: caseLawDecisions.documentAst,
+          })
+          .from(caseLawDecisions)
+          .where(eq(caseLawDecisions.id, id))
+      ).at(0);
+      expect(row?.fulltext).toBe(parsedDocument.fulltext);
+      expect(row?.documentAst).toEqual({});
+    });
+
     test("moves the row's keys and hash onto the real document", async () => {
       const emptyHash = EMPTY_CORPUS_CONTENT_HASHES.at(0) ?? "";
       const caseNumber = `corpus-${suffix}`;
@@ -247,6 +280,10 @@ if (!databaseUrl || !runPostgresTests) {
       await storeBackfilledDocument({
         decision: await claimFor(id),
         document: parsedDocument,
+        capturedRaw: {
+          sourceRawS3Key: "deferred-raw-envelope",
+          sourceRawContentType: "application/vnd.stella.case-law-raw+json",
+        },
         scopedDb,
         transfer: {
           layout: "packs",
@@ -280,9 +317,15 @@ if (!databaseUrl || !runPostgresTests) {
           normalizedS3Key: true,
           astS3Key: true,
           contentHash: true,
+          sourceRawS3Key: true,
+          sourceRawContentType: true,
         },
       });
 
+      expect(stored?.sourceRawS3Key).toBe("deferred-raw-envelope");
+      expect(stored?.sourceRawContentType).toBe(
+        "application/vnd.stella.case-law-raw+json",
+      );
       // The document reached object storage as members of one pack under
       // this decision's id and jurisdiction, not just the columns.
       expect(packedMembers).toEqual([
@@ -609,6 +652,10 @@ if (!databaseUrl || !runPostgresTests) {
       const outcome = await storeBackfilledDocument({
         decision: await claimFor(id),
         document: parsedDocument,
+        capturedRaw: {
+          sourceRawS3Key: "deferred-raw-envelope",
+          sourceRawContentType: "application/vnd.stella.case-law-raw+json",
+        },
         mode: "canonical",
         scopedDb,
         transfer: {
@@ -632,12 +679,16 @@ if (!databaseUrl || !runPostgresTests) {
             corpusMirrorStatus: true,
             fulltext: true,
             textS3Key: true,
+            sourceRawS3Key: true,
+            sourceRawContentType: true,
           },
         }),
       ).toMatchObject({
         corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
         fulltext: null,
         textS3Key: null,
+        sourceRawS3Key: null,
+        sourceRawContentType: null,
       });
     });
 

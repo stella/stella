@@ -1,5 +1,4 @@
 import { Result } from "better-result";
-import { t } from "elysia";
 import * as v from "valibot";
 
 import {
@@ -20,6 +19,8 @@ import {
   spliceSpanProposal,
 } from "@/api/handlers/chat/messages/revisions/span-proposal";
 import { resolveCaching } from "@/api/lib/ai-config";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
@@ -29,6 +30,7 @@ import {
 } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { resolveEffectiveChatModelSelection } from "@/api/lib/chat-model-selection";
+import { readChatCopyProjection } from "@/api/lib/chat/withdrawn-copies";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
@@ -50,19 +52,21 @@ const config = {
   mcp: { type: "internal", reason: "chat_thread_ui" },
   requiresUsage: { actionType: "chat", modelTask: "chat" },
   params: revisionParams,
-  body: t.Object({
+  body: v.object({
     baseRevision: revisionNumber,
-    start: t.Integer({ minimum: 0 }),
-    end: t.Integer({ minimum: 1 }),
-    selectedTextHash: t.String({
-      minLength: 64,
-      maxLength: 64,
-      pattern: "^[a-f0-9]{64}$",
-    }),
-    instruction: t.String({
-      minLength: 1,
-      maxLength: CHAT_MESSAGE_EDIT_INSTRUCTION_MAX_LENGTH,
-    }),
+    start: v.pipe(v.number(), v.integer(), v.minValue(0)),
+    end: v.pipe(v.number(), v.integer(), v.minValue(1)),
+    selectedTextHash: v.pipe(
+      v.string(),
+      v.minLength(64),
+      v.maxLength(64),
+      v.regex(/^[a-f0-9]{64}$/u),
+    ),
+    instruction: v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(CHAT_MESSAGE_EDIT_INSTRUCTION_MAX_LENGTH),
+    ),
   }),
 } satisfies HandlerConfig;
 
@@ -82,6 +86,7 @@ export const createProposeMessageSpanEdit = ({
   createSafeRootHandler(
     config,
     async function* ({
+      orgAIConfigStatus,
       body,
       params: { threadId, messageId },
       safeDb,
@@ -95,6 +100,10 @@ export const createProposeMessageSpanEdit = ({
       request,
       promptCachingEnabled,
     }) {
+      if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+        return Result.err(storedAIConfigUnreadableError());
+      }
+
       const organizationId = session.activeOrganizationId;
       const loaded = yield* Result.await(
         safeDb(
@@ -114,7 +123,17 @@ export const createProposeMessageSpanEdit = ({
           new HandlerError({ status: 404, message: "Chat message not found" }),
         );
       }
-      const prepared = prepareSpanRewrite({ loaded, body });
+      const { projection } = yield* Result.await(
+        safeDb(
+          async (tx) =>
+            await readChatCopyProjection({
+              tx,
+              threadIds: [threadId],
+              values: loaded,
+            }),
+        ),
+      );
+      const prepared = prepareSpanRewrite({ loaded, body, projection });
       if (Result.isError(prepared)) {
         return Result.err(prepared.error);
       }
@@ -161,6 +180,7 @@ export const createProposeMessageSpanEdit = ({
         Result.tryPromise({
           try: async () =>
             await generateObject({
+              userId: admission.userId,
               dataClass: "customer",
               admission,
               task: "chat",
@@ -200,8 +220,8 @@ export const createProposeMessageSpanEdit = ({
               abortSignal: AbortSignal.any([
                 request.signal,
                 ...(actionSignal ? [actionSignal] : []),
-                AbortSignal.timeout(SPAN_EDIT_TIMEOUT_MS),
               ]),
+              deadlineMs: SPAN_EDIT_TIMEOUT_MS,
             }),
           catch: (cause) => {
             analytics.captureError(cause);
@@ -221,6 +241,7 @@ export const createProposeMessageSpanEdit = ({
         return Result.err(
           new HandlerError({
             status: 502,
+            code: "internal_error",
             message:
               "Answer rewrite returned unbalanced Markdown; try another instruction",
           }),
@@ -249,7 +270,7 @@ export const createProposeMessageSpanEdit = ({
 
 const proposeMessageSpanEdit = createProposeMessageSpanEdit();
 
-declareAggregateMutation(proposeMessageSpanEdit.handler, {
+declareAggregateMutation(proposeMessageSpanEdit, {
   type: "independent",
   reason:
     "Produces a proposal without changing chat messages, revisions or threads; model usage is recorded by the shared usage ledger.",

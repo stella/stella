@@ -241,18 +241,26 @@ export const backgroundFeatureMemberExists = ({
   organizationId,
   userId,
   featureId,
-}: BackgroundFeatureMemberExistsOptions) => sql`EXISTS (
-  SELECT 1 FROM ${member}
-  JOIN ${user} ON ${user.id} = ${member.userId}
-  JOIN ${featureEnrolments}
-    ON ${featureEnrolments.organizationId} = ${member.organizationId}
-    AND ${featureEnrolments.userId} = ${member.userId}
-    AND ${featureEnrolments.featureId} = ${featureId}
-  WHERE ${member.organizationId} = ${organizationId}
-    AND ${member.userId} = ${userId}
-    AND ${user.emailVerified} = true
-    AND ${user.deletedAt} IS NULL
+}: BackgroundFeatureMemberExistsOptions) => {
+  const admittedMember = alias(member, "background_feature_member_member");
+  const admittedUser = alias(user, "background_feature_member_user");
+  const admittedEnrolments = alias(
+    featureEnrolments,
+    "background_feature_member_featureEnrolments",
+  );
+  return sql`EXISTS (
+  SELECT 1 FROM ${member} AS ${admittedMember}
+  JOIN ${user} AS ${admittedUser} ON ${admittedUser.id} = ${admittedMember.userId}
+  JOIN ${featureEnrolments} AS ${admittedEnrolments}
+    ON ${admittedEnrolments.organizationId} = ${admittedMember.organizationId}
+    AND ${admittedEnrolments.userId} = ${admittedMember.userId}
+    AND ${admittedEnrolments.featureId} = ${featureId}
+  WHERE ${admittedMember.organizationId} = ${organizationId}
+    AND ${admittedMember.userId} = ${userId}
+    AND ${admittedUser.emailVerified} = true
+    AND ${admittedUser.deletedAt} IS NULL
 )`;
+};
 
 type BackgroundFeatureActorExistsOptions = {
   organizationId: SQLWrapper | string;
@@ -267,22 +275,37 @@ export const backgroundFeatureActorExists = ({
   workspaceId,
   featureId,
   userId,
-}: BackgroundFeatureActorExistsOptions) => sql`EXISTS (
-    SELECT 1 FROM ${member}
-    JOIN ${user} ON ${user.id} = ${member.userId}
-    JOIN ${featureEnrolments}
-      ON ${featureEnrolments.organizationId} = ${member.organizationId}
-      AND ${featureEnrolments.userId} = ${member.userId}
-      AND ${featureEnrolments.featureId} = ${featureId}
-    JOIN ${workspaces}
-      ON ${workspaces.id} = ${workspaceId}
-      AND ${workspaces.organizationId} = ${member.organizationId}
-    WHERE ${member.organizationId} = ${organizationId}
-      AND ${user.emailVerified} = true
-      AND ${user.deletedAt} IS NULL
-      AND ${userId === undefined ? sql`true` : sql`${member.userId} = ${userId}`}
+}: BackgroundFeatureActorExistsOptions) => {
+  const admittedMember = alias(member, "background_feature_actor_member");
+  const admittedUser = alias(user, "background_feature_actor_user");
+  const admittedEnrolments = alias(
+    featureEnrolments,
+    "background_feature_actor_featureEnrolments",
+  );
+  const admittedWorkspace = alias(
+    workspaces,
+    "background_feature_actor_workspaces",
+  );
+  return sql`EXISTS (
+    SELECT 1 FROM ${member} AS ${admittedMember}
+    JOIN ${user} AS ${admittedUser} ON ${admittedUser.id} = ${admittedMember.userId}
+    JOIN ${featureEnrolments} AS ${admittedEnrolments}
+      ON ${admittedEnrolments.organizationId} = ${admittedMember.organizationId}
+      AND ${admittedEnrolments.userId} = ${admittedMember.userId}
+      AND ${admittedEnrolments.featureId} = ${featureId}
+    JOIN ${workspaces} AS ${admittedWorkspace}
+      ON ${admittedWorkspace.id} = ${workspaceId}
+      AND ${admittedWorkspace.organizationId} = ${admittedMember.organizationId}
+    WHERE ${admittedMember.organizationId} = ${organizationId}
+      AND ${admittedUser.emailVerified} = true
+      AND ${admittedUser.deletedAt} IS NULL
+      AND ${userId === undefined ? sql`true` : sql`${admittedMember.userId} = ${userId}`}
       AND ${memberReachesMatterSql(
-        { organizationId: member.organizationId, userId: member.userId },
-        workspaces.id,
+        {
+          organizationId: admittedMember.organizationId,
+          userId: admittedMember.userId,
+        },
+        admittedWorkspace.id,
       )}
   )`;
+};

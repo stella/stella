@@ -1,16 +1,16 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  createDesktopEditHandoffToken,
   DESKTOP_EDIT_HANDOFF_TTL_MS,
   DESKTOP_EDIT_SESSION_LIVENESS_REFRESH_INTERVAL_MS,
-  SESSION_TOKEN_TTL_MS,
-  createDesktopEditHandoffToken,
   hashDesktopEditHandoffToken,
+  SESSION_TOKEN_TTL_MS,
 } from "@/api/lib/desktop-edit-sessions";
 
 describe("desktop edit handoff tokens", () => {
   test("uses a short-lived opaque token that can be stored as a hash", () => {
-    const token = createDesktopEditHandoffToken();
+    const token = createDesktopEditHandoffToken({ userId: null });
 
     expect(token).toMatch(/^[0-9a-f]{64}$/u);
     expect(hashDesktopEditHandoffToken(token)).toMatch(/^[0-9a-f]{64}$/u);

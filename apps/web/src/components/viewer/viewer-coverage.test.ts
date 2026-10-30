@@ -69,9 +69,10 @@ const VIEWER_DATA_READERS: Record<string, ViewerCoverage> = {
     type: "pending",
     reason: "markdown viewer's inline error refetches on retry",
   },
-  "components/inspector/pdf-sign-placement.tsx": {
-    type: "pending",
-    reason: "signing placement preview reports its own failure",
+  "features/avt/original-pdf-view.tsx": {
+    type: "not-a-viewer",
+    reason:
+      "reads the PDF for claim boxes; the PeekPdfViewer it mounts shows the file and its load failure",
   },
   "hooks/use-verified-email-citation-target.ts": {
     type: "not-a-viewer",
@@ -80,7 +81,7 @@ const VIEWER_DATA_READERS: Record<string, ViewerCoverage> = {
 };
 
 /** Shrink-only: migrate a pending reader, then lower this number. */
-const MAX_PENDING_READERS = 8;
+const MAX_PENDING_READERS = 7;
 
 const listSourceFiles = (): string[] =>
   [...new Bun.Glob("**/*.{ts,tsx}").scanSync({ cwd: SRC })].filter(

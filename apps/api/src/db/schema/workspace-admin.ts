@@ -1,4 +1,7 @@
-import { BUSINESS_REGISTRY_CREDENTIAL_SLUGS } from "@stll/api-contract";
+import {
+  BUSINESS_REGISTRY_CREDENTIAL_SLUGS,
+  INVOICE_LANGUAGES,
+} from "@stll/api-contract";
 import type { TimeZoneId } from "@stll/time";
 
 import { entityFeaturePolicies } from "@/api/db/entity-feature-policies";
@@ -14,20 +17,21 @@ import {
   entityFeatureGateColumns,
   entityFeatureWorkspaceGateColumns,
 } from "../entity-feature-gate-columns";
+import { registeredReviewResetPolicies } from "../review-reset-policies";
 import {
   bytea,
   jsonb,
-  orgPolicies,
   organization,
+  orgPolicies,
   p,
   pUuid,
   safeOrganizationId,
   safeUuid,
   safeWorkspaceId,
   sql,
+  timestamptz,
   user,
   wsPolicies,
-  timestamptz,
 } from "./common";
 import type { PracticeJurisdiction } from "./common";
 import { workspaces } from "./contacts";
@@ -101,6 +105,8 @@ export const matterCounters = p.pgTable(
       .uniqueIndex("matter_counters_org_scope_uidx")
       .on(table.organizationId, table.scopeKey),
     ...orgPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -170,6 +176,8 @@ export const documentReferenceCounters = p.pgTable(
       .on(table.organizationId, table.reference),
     p.index("document_reference_counters_workspace_idx").on(table.workspaceId),
     ...orgPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -185,6 +193,8 @@ export const organizationSettings = p.pgTable(
       .text("personal_api_key_policy", { enum: PERSONAL_API_KEY_POLICIES })
       .notNull()
       .default("enabled"),
+    /** Default document language for invoices; null derives it from the seller. */
+    invoiceLanguage: p.text("invoice_language", { enum: INVOICE_LANGUAGES }),
     sanctionsMonitoringMode: p
       .text("sanctions_monitoring_mode", { enum: SANCTIONS_MONITORING_MODES })
       .notNull()
@@ -352,6 +362,13 @@ export const organizationSettings = p.pgTable(
       )})`,
     ),
     p.check(
+      "organization_settings_invoice_language_check",
+      sql`${table.invoiceLanguage} IS NULL OR ${table.invoiceLanguage} IN (${sql.join(
+        INVOICE_LANGUAGES.map((value) => sql`${value}`),
+        sql`, `,
+      )})`,
+    ),
+    p.check(
       "organization_settings_time_minimum_unit_check",
       sql`${table.timeMinimumUnitMinutes} > 0 AND 60 % ${table.timeMinimumUnitMinutes} = 0`,
     ),
@@ -474,6 +491,8 @@ export const anonymizationAllowlistEntries = p.pgTable(
       .on(table.entityId, sql`lower(${table.canonical})`)
       .where(sql`${table.entityId} is not null`),
     ...orgPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -538,5 +557,7 @@ export const anonymizationBlacklistEntries = p.pgTable(
       .on(table.workspaceId, sql`lower(${table.canonical})`)
       .where(sql`${table.workspaceId} is not null`),
     ...orgPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );

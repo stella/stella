@@ -144,14 +144,6 @@
     "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
   },
   {
-    "id": "apps/api/src/lib/account-deletion-steps.ts::revokeOAuthTokensAndGrants",
-    "writes": {
-      "delete:oauthClient": 1,
-      "delete:oauthConsent": 1
-    },
-    "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
-  },
-  {
     "id": "apps/api/src/lib/agent-auth-idjag.ts::bindCeremonyToIssuer",
     "writes": {
       "update:agentRegistration": 1
@@ -273,41 +265,6 @@
     "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
   },
   {
-    "id": "apps/api/src/lib/auth-artifacts.ts::desktopEditHandoff",
-    "writes": {
-      "delete:desktopEditHandoffs": 1
-    },
-    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
-  },
-  {
-    "id": "apps/api/src/lib/auth-artifacts.ts::desktopEditSession",
-    "writes": {
-      "update:desktopEditSessions": 1
-    },
-    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
-  },
-  {
-    "id": "apps/api/src/lib/auth-artifacts.ts::folioCollabRoomToken",
-    "writes": {
-      "delete:folioCollabRoomTokens": 1
-    },
-    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
-  },
-  {
-    "id": "apps/api/src/lib/auth-artifacts.ts::mcpOAuthState",
-    "writes": {
-      "delete:mcpOAuthState": 1
-    },
-    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
-  },
-  {
-    "id": "apps/api/src/lib/auth-artifacts.ts::mcpUserConnection",
-    "writes": {
-      "delete:mcpUserConnections": 1
-    },
-    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
-  },
-  {
     "id": "apps/api/src/lib/auth-artifacts.ts::oauthAccessToken",
     "writes": {
       "delete:oauthAccessToken": 1
@@ -325,20 +282,6 @@
     "id": "apps/api/src/lib/auth-artifacts.ts::oauthRefreshToken",
     "writes": {
       "delete:oauthRefreshToken": 1
-    },
-    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
-  },
-  {
-    "id": "apps/api/src/lib/auth-artifacts.ts::pdfSigningSession",
-    "writes": {
-      "delete:pdfSigningSessions": 1
-    },
-    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
-  },
-  {
-    "id": "apps/api/src/lib/auth-artifacts.ts::removeOrganizationMemberWithAuthArtifacts",
-    "writes": {
-      "delete:member": 1
     },
     "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
   },
@@ -376,20 +319,6 @@
     "id": "apps/api/src/lib/auth-artifacts.ts::session",
     "writes": {
       "delete:sessionTable": 1
-    },
-    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
-  },
-  {
-    "id": "apps/api/src/lib/auth-artifacts.ts::sharepointConnection",
-    "writes": {
-      "delete:sharepointConnections": 1
-    },
-    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
-  },
-  {
-    "id": "apps/api/src/lib/auth-artifacts.ts::sharepointOAuthState",
-    "writes": {
-      "delete:sharepointOAuthState": 1
     },
     "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
   },
@@ -1502,38 +1431,9 @@
     "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
   },
   {
-    "id": "apps/api/src/lib/scheduler/jobs.ts::ensureDefaultSchedulerJobs",
-    "writes": {
-      "update:schedulerJobs": 1
-    },
-    "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
-  },
-  {
-    "id": "apps/api/src/lib/scheduler/jobs.ts::ensureOneShotSchedulerJob",
-    "writes": {
-      "insert:schedulerJobs": 1
-    },
-    "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
-  },
-  {
-    "id": "apps/api/src/lib/scheduler/jobs.ts::removeSchedulerJob",
-    "writes": {
-      "delete:schedulerJobs": 1
-    },
-    "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
-  },
-  {
-    "id": "apps/api/src/lib/scheduler/runner.ts::acquireNextDueJob",
-    "writes": {
-      "update:schedulerJobs": 1
-    },
-    "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
-  },
-  {
     "id": "apps/api/src/lib/scheduler/runner.ts::completeRun",
     "writes": {
-      "update:schedulerJobRuns": 1,
-      "update:schedulerJobs": 1
+      "update:schedulerJobRuns": 1
     },
     "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
   },
@@ -1545,30 +1445,9 @@
     "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
   },
   {
-    "id": "apps/api/src/lib/scheduler/runner.ts::startLeaseHeartbeat.renew",
-    "writes": {
-      "update:schedulerJobs": 1
-    },
-    "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
-  },
-  {
-    "id": "apps/api/src/lib/scheduler/tasks/agent-client-storage-backfill.ts::backfillAgentClientStorage",
-    "writes": {
-      "update:schedulerJobs": 1
-    },
-    "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
-  },
-  {
     "id": "apps/api/src/lib/scheduler/tasks/desktop-edit-session-expiry.ts::publishAndMarkExpiryNotifications",
     "writes": {
       "update:desktopEditSessions": 1
-    },
-    "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
-  },
-  {
-    "id": "apps/api/src/lib/scheduler/tasks/file-derivative-repair.ts::persistCursor",
-    "writes": {
-      "update:schedulerJobs": 1
     },
     "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
   },
@@ -1626,8 +1505,7 @@
     "id": "apps/api/src/lib/scheduler/tasks/work-obligation-backfill.ts::backfillWorkObligations",
     "writes": {
       "insert:workObligationEvents": 1,
-      "insert:workObligations": 1,
-      "update:schedulerJobs": 2
+      "insert:workObligations": 1
     },
     "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
   },
@@ -1787,23 +1665,9 @@
     "reason": "Usage metering or counter row that is itself the accounting record."
   },
   {
-    "id": "apps/api/src/lib/usage/organization-access-state.ts::endOrganizationEvaluation",
-    "writes": {
-      "update:organizationAccessStates": 1
-    },
-    "reason": "Usage metering or counter row that is itself the accounting record."
-  },
-  {
     "id": "apps/api/src/lib/usage/organization-access-state.ts::recordMissingOrganizationAccessStates",
     "writes": {
       "insert:?": 1
-    },
-    "reason": "Usage metering or counter row that is itself the accounting record."
-  },
-  {
-    "id": "apps/api/src/lib/usage/organization-access-state.ts::recordNewOrganizationAccessState",
-    "writes": {
-      "insert:organizationAccessStates": 1
     },
     "reason": "Usage metering or counter row that is itself the accounting record."
   },

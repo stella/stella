@@ -16,8 +16,8 @@ import { executedRows } from "@/api/lib/db/executed-rows";
 import { formatCorpusLocation } from "@/api/lib/legal-search/corpus-location";
 import type { PackedCorpusLocation } from "@/api/lib/legal-search/corpus-location";
 import {
-  corpusTombstoneReaderForTx,
   CORPUS_TOMBSTONE_PRIME_MAX_AGE_MS,
+  corpusTombstoneReaderForTx,
   prefetchCorpusTombstones,
 } from "@/api/lib/legal-search/corpus-tombstones";
 import { isRecord } from "@/api/lib/type-guards";

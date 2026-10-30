@@ -7,6 +7,8 @@ import { TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
 import type { TanStackAIProvider } from "@stll/ai-catalog";
 import { AI_ERROR_KINDS } from "@stll/api-contract";
 
+import type { TanStackTextFinishReason } from "@/api/lib/chat/tanstack-chat-runtime";
+
 // Provider wire cassettes: what a provider's HTTP API answered one of a
 // fixed set of synthetic requests, byte for byte, with what the adapter must
 // make of it. `provider-wire-replay.ts` serves them to the real adapters
@@ -170,12 +172,23 @@ const exchangeSchema = v.strictObject({
 
 export type ProviderWireExchange = v.InferOutput<typeof exchangeSchema>;
 
-const FINISH_REASONS = ["content_filter", "length", "stop", "tool_calls"];
+const FINISH_REASONS = [
+  "content_filter",
+  "length",
+  "stop",
+  "tool_calls",
+] as const satisfies readonly NonNullable<TanStackTextFinishReason>[];
+
+const tokenCountSchema = v.pipe(v.number(), v.integer(), v.minValue(0));
 
 const usageSchema = v.strictObject({
-  completionTokens: v.pipe(v.number(), v.integer(), v.minValue(0)),
-  promptTokens: v.pipe(v.number(), v.integer(), v.minValue(0)),
-  totalTokens: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  completionTokens: tokenCountSchema,
+  promptTokens: tokenCountSchema,
+  totalTokens: tokenCountSchema,
+  /** The share of the output the model spent reasoning, where the provider
+   *  reports it: a reasoning model can spend its whole output ceiling there
+   *  and write no text. */
+  reasoningTokens: v.optional(tokenCountSchema),
 });
 
 const expectSchema = v.variant("outcome", [

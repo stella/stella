@@ -1,0 +1,25 @@
+name: Resolve the comparison base
+description: >
+  The commit a run compares its changes against. A pull request compares
+  against the base branch tip its merge commit was built on (the event's
+  base when the checkout is not that merge commit). A merge group compares against the target branch, not
+  against the previous queue entry's commit: the queue merges
+  every earlier entry together with this one, so the group must certify all of
+  their changes. Empty when the event has no base (push, schedule). A merge
+  group whose target branch cannot be resolved fails here: an empty base would
+  let a consumer compare HEAD with itself and skip its check.
+outputs:
+  base_sha:
+    description: Comparison base commit; empty only for events without a base.
+    value: ${{ steps.resolve.outputs.base_sha }}
+runs:
+  using: composite
+  steps:
+    - id: resolve
+      shell: bash
+      env:
+        EVENT_NAME: ${{ github.event_name }}
+        PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        TARGET_REF: ${{ github.event.merge_group.base_ref }}
+      run: bash "$GITHUB_ACTION_PATH/../../../scripts/merge-target-base.sh"

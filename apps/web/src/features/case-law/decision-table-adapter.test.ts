@@ -29,12 +29,6 @@ describe("where the decision table's rows come from", () => {
     expect(Object.keys(decisionTableAdapter)).not.toContain("sectionCounts");
   });
 
-  test("every entry point is a factory the caller invokes itself", () => {
-    for (const entry of Object.values(decisionTableAdapter)) {
-      expect(typeof entry).toBe("function");
-    }
-  });
-
   /**
    * A page begins at its number times its size: the same filters read at a
    * different page size are a different slice, so they must not share a

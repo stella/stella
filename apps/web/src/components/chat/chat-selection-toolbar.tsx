@@ -1,10 +1,8 @@
 import { useCallback, useState } from "react";
-import type { Dispatch, RefObject, SetStateAction } from "react";
+import type { RefObject } from "react";
 
-import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { copyToClipboard } from "@stll/clipboard";
 import { Button } from "@stll/ui/button";
 import { AiActionIcon } from "@stll/ui/icons";
 
@@ -38,14 +36,11 @@ import type { AnswerFormatEntry } from "@/features/chat/answer-edit/answer-forma
 import { ChatSelectionActions } from "@/features/chat/answer-edit/chat-selection-actions";
 import { useChatSelectionEvents } from "@/features/chat/answer-edit/use-chat-selection-events";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
-import { getAnalytics } from "@/lib/analytics/provider";
-import { notifyUserError } from "@/lib/errors/user-toast";
 import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 
 /** `ChatThreadMessages` marks every message it renders with its id. */
 const CHAT_MESSAGE_ATTRIBUTE = "data-chat-message-id";
 
-const COPIED_RESET_MS = 2000;
 const EMPTY_MESSAGES: readonly ChatUIMessage[] = [];
 
 /** Below `sm` a full row of localized labels outgrows the screen, so the
@@ -114,7 +109,6 @@ export const ChatSelectionToolbar = ({
   const [selected, setSelected] = useState<Selected | null>(null);
   const [editing, setEditing] = useState<AnswerEditing | null>(null);
   const [editError, setEditError] = useState(false);
-  const [copied, setCopied] = useState(false);
   // Where the bar stood when its words went to a new chat: the confirmation
   // stays there, where the reader is looking, after the selection is gone.
   const [confirmAt, setConfirmAt] = useState<SelectionToolbarAnchor | null>(
@@ -154,10 +148,6 @@ export const ChatSelectionToolbar = ({
       if (anchor === null) {
         setSelected(null);
         return;
-      }
-      // A fresh selection must not inherit the previous one's confirmation.
-      if (selected?.quote !== quote) {
-        setCopied(false);
       }
       // Nor may the last confirmation return once this selection goes.
       setConfirmAt(null);
@@ -293,13 +283,6 @@ export const ChatSelectionToolbar = ({
     insertPastedTextIntoThread(source.threadRef, chip);
   };
 
-  const copy = async () =>
-    copySelectedText({
-      quote: selected.quote,
-      setCopied,
-      errorMessage: t("errors.actionFailed"),
-    });
-
   const actions = chatSelectionActions({
     quote: selected.quote,
     source,
@@ -378,8 +361,7 @@ export const ChatSelectionToolbar = ({
             actions={actions}
             askInNewChat={askInNewChat}
             quoteInReply={quoteInReply}
-            copy={copy}
-            copied={copied}
+            copyText={selected.quote}
           />
         </div>
       </SelectionToolbar>
@@ -387,27 +369,6 @@ export const ChatSelectionToolbar = ({
     </>
   );
 };
-
-type CopySelectedTextOptions = {
-  quote: string;
-  setCopied: Dispatch<SetStateAction<boolean>>;
-  errorMessage: string;
-};
-
-async function copySelectedText({
-  quote,
-  setCopied,
-  errorMessage,
-}: CopySelectedTextOptions) {
-  const result = await copyToClipboard(quote);
-  if (Result.isError(result)) {
-    getAnalytics().captureError(result.error);
-    notifyUserError(result.error, errorMessage);
-    return;
-  }
-  setCopied(true);
-  setTimeout(() => setCopied(false), COPIED_RESET_MS);
-}
 
 type AnswerEditing = SelectionToolbarAnchor &
   (

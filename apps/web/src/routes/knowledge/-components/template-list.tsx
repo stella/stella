@@ -26,15 +26,16 @@ import {
 import type { ContextMenuAction } from "@stll/ui/context-menu";
 import {
   Dialog,
-  DialogFormState,
   DialogClose,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
 import {
+  AiActionIcon,
   CheckIcon,
   DownloadIcon,
   PencilLineIcon,
@@ -42,13 +43,13 @@ import {
   SquarePenIcon,
   TagIcon,
   Trash2Icon,
-  AiActionIcon,
   XIcon,
 } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
 
+import { matchesComboboxItem } from "@/components/combobox-filter.logic";
 import Tooltip from "@/components/tooltip";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import { memberKnowledgeActions } from "@/features/knowledge/member/member-knowledge";
@@ -71,7 +72,7 @@ import { isDocxFile } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { toSafeId } from "@/lib/safe-id";
 import { CategoryMobileFilterBar } from "@/routes/knowledge/-components/category-sidebar";
@@ -82,6 +83,7 @@ import {
 } from "@/routes/knowledge/-components/template-category-sidebar";
 import type { TemplateCategoryItem } from "@/routes/knowledge/-components/template-category-sidebar";
 import { TEMPLATE_DRAG_MIME } from "@/routes/knowledge/-components/template-drag";
+import { filterTemplateTagSuggestions } from "@/routes/knowledge/-components/template-studio-search.logic";
 import { TemplateUpload } from "@/routes/knowledge/-components/template-upload";
 import { UseTemplateDialog } from "@/routes/knowledge/-components/use-template-dialog";
 
@@ -134,7 +136,7 @@ export const TemplateList = ({
 
   const discover = async (file: File) => {
     if (!isDocxFile(file)) {
-      notifyUserError(undefined, t("templates.invalidFileType"));
+      notifyUserProblem(t("templates.invalidFileType"));
       return;
     }
 
@@ -162,7 +164,7 @@ export const TemplateList = ({
 
     const { data } = response;
     if (data instanceof Response) {
-      notifyUserError(undefined, t("templates.discoveryFailed"));
+      notifyUserProblem(t("templates.discoveryFailed"));
       return;
     }
 
@@ -171,7 +173,7 @@ export const TemplateList = ({
 
   const dropFile = (file: File) => {
     if (!isDocxFile(file)) {
-      notifyUserError(undefined, t("templates.invalidFileType"));
+      notifyUserProblem(t("templates.invalidFileType"));
       return;
     }
     // Errors are surfaced as toasts inside discover
@@ -341,7 +343,7 @@ const MemberTemplateRow = ({
   const downloadSource = async () => {
     const sourceUrl = await templateActions.readSourceUrl(template.id);
     if (sourceUrl === null) {
-      notifyUserError(undefined, t("common.unexpectedError"));
+      notifyUserProblem(t("common.unexpectedError"));
       return;
     }
     openIsolatedWindow(sourceUrl);
@@ -503,8 +505,6 @@ const MemberTemplateRow = ({
 
 // ── Tags dialog ──────────────────────────────────────
 
-const MAX_TAG_SUGGESTIONS = 6;
-
 type TemplateTagsDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -553,13 +553,11 @@ const TemplateTagsDialogBody = ({
     setInput("");
   };
 
-  const matchingSuggestions = suggestions
-    .filter(
-      (tag) =>
-        !tags.includes(tag) &&
-        tag.toLowerCase().includes(input.trim().toLowerCase()),
-    )
-    .slice(0, MAX_TAG_SUGGESTIONS);
+  const matchingSuggestions = filterTemplateTagSuggestions(
+    suggestions,
+    tags,
+    input,
+  );
 
   const handleSave = async () => {
     setSaving(true);
@@ -880,6 +878,7 @@ const TemplateLanguagesField = ({
       {!atLimit && (
         <Combobox<LanguagePick>
           autoHighlight
+          filter={matchesComboboxItem}
           isItemEqualToValue={(a, b) => a.code === b.code}
           items={options}
           itemToStringLabel={(item) => item.label}

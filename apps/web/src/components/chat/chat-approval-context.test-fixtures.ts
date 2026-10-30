@@ -13,11 +13,15 @@ export const testChatApprovalContextValue = {
   activeOrganizationId: "test-active-organization",
   alwaysApprovedTools: new Set(),
   conversationApprovedTools: new Set(),
+  confirmStoredApprovalGrant: async () => await Promise.resolve(false),
   handleAllowInConversation: ignore,
   handleAlwaysAllow: ignore,
   handleApprove: ignore,
   handleDeny: ignore,
   continueRequestSecret: async () => await Promise.resolve(),
+  continueConnectConnector: async () => await Promise.resolve(),
+  handleConnectConnector: async () =>
+    await Promise.resolve({ status: "declined", connectorSlug: "test" }),
   handleRequestSecret: async () =>
     await Promise.resolve({
       status: "declined",

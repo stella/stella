@@ -1,14 +1,15 @@
 import { sql } from "drizzle-orm";
 
+import { registeredReviewResetPolicies } from "../review-reset-policies";
 import {
   organization,
   p,
   pUuid,
   safeOrganizationId,
   safeWorkspaceId,
+  timestamptz,
   user,
   wsOrganizationReadOnlyPolicies,
-  timestamptz,
 } from "./common";
 import { workspaces } from "./contacts";
 
@@ -110,5 +111,7 @@ export const extractionRuns = p.pgTable(
       })
       .onDelete("cascade"),
     ...wsOrganizationReadOnlyPolicies("extraction_runs"),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );

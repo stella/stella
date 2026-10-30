@@ -27,8 +27,8 @@ import type {
   IdealLanguage,
   Position,
   PositionSource,
-  Tiers,
   TierRule,
+  Tiers,
 } from "@/api/lib/workflow/playbook-positions";
 import { gradedPositionHasContent } from "@/api/lib/workflow/playbook-positions-validation";
 import { uuidInputSchema } from "@/api/mcp/tool-utils";

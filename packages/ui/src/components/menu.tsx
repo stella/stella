@@ -21,7 +21,7 @@ function MenuTrigger({
   ...props
 }: MenuPrimitive.Trigger.Props & { tooltip?: React.ReactNode }) {
   return renderTooltipTrigger({
-    tooltip: tooltip ?? props["aria-label"] ?? props.title,
+    tooltip,
     trigger: (
       <MenuPrimitive.Trigger data-slot="menu-trigger" nativeButton {...props} />
     ),

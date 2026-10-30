@@ -7,7 +7,10 @@ import type {
 } from "@stll/api-contract/ai-decision-provider";
 import type { TemplatePackAuthor } from "@stll/template-packs/schema";
 
-import { systemScopePolicies } from "@/api/db/system-scope-policies";
+import {
+  systemScopePolicies,
+  workspaceActivityProjectionPolicies,
+} from "@/api/db/system-scope-policies";
 import type { ClauseDirectiveWarning } from "@/api/lib/clauses/clause-directives";
 import type { AiFieldError } from "@/api/lib/docx/resolve-ai-fields";
 import { LOOKUP_REGISTRIES } from "@/api/lib/docx/types";
@@ -18,34 +21,35 @@ import {
   entityFeatureWorkspaceGateColumns,
 } from "../entity-feature-gate-columns";
 import { entityFeaturePolicies } from "../entity-feature-policies";
+import { registeredReviewResetPolicies } from "../review-reset-policies";
 import {
   deletionCleanupConstraints,
   deletionCleanupRetryColumns,
 } from "./cleanup-ledgers";
 import {
-  ENTITY_KINDS,
-  SEARCH_PROJECTION_KINDS,
-  TEMPLATE_DELETION_CLEANUP_STATUSES,
   bytea,
+  ENTITY_KINDS,
   jsonb,
+  organization,
   organizationCheck,
   orgPolicies,
   orgReadOnlyPolicies,
-  organization,
   p,
   pUuid,
   safeOrganizationId,
   safeUuid,
   safeWorkspaceId,
+  SEARCH_PROJECTION_KINDS,
   stella,
   storedFileScanState,
   storedFileScanStateCheck,
+  TEMPLATE_DELETION_CLEANUP_STATUSES,
+  timestamptz,
   tsvector,
   user,
   userOrganizationPolicies,
   wsOrganizationPolicies,
   wsOrganizationReadOnlyPolicies,
-  timestamptz,
 } from "./common";
 import type {
   AnyPgColumn,
@@ -55,7 +59,7 @@ import type {
   TemplateManifest,
 } from "./common";
 import { contacts, workspaces } from "./contacts";
-import { TEMPLATE_KINDS, entities, entityVersions, fields } from "./entities";
+import { entities, entityVersions, fields, TEMPLATE_KINDS } from "./entities";
 
 export const LOOKUP_FORMAT_PREFERENCE = {
   SAVED: "saved",
@@ -109,6 +113,8 @@ export const templateLookupFormats = p.pgTable(
       sql`length(btrim(${table.format})) > 0`,
     ),
     ...orgPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -174,6 +180,8 @@ export const templateLookupFormatUserDefaults = p.pgTable(
       .index("template_lookup_format_user_defaults_format_idx")
       .on(table.formatId),
     ...userOrganizationPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -202,6 +210,8 @@ export const templateCategories = p.pgTable(
       .index("template_categories_org_parent_idx")
       .on(table.organizationId, table.parentId),
     ...orgPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -296,6 +306,10 @@ export const templates = p.pgTable(
     p.unique("templates_id_org_unq").on(table.id, table.organizationId),
     storedFileScanStateCheck("templates_scan_state_check", table.scanState),
     p.check(
+      "templates_s3_key_organization_check",
+      sql`starts_with(${table.s3Key}, ${table.organizationId} || '/')`,
+    ),
+    p.check(
       "templates_origin_type_values_check",
       sql`${table.originType} IN (${sql.join(TEMPLATE_ORIGIN_TYPE_SQL_VALUES, sql`, `)})`,
     ),
@@ -319,6 +333,8 @@ export const templates = p.pgTable(
       )
       .where(sql`${table.originType} = 'bundled-pack'`),
     ...orgPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -445,6 +461,8 @@ export const templatePersistenceRequests = p.pgTable(
     ...wsOrganizationPolicies("template_persistence_requests", {
       columns: table,
     }),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -481,7 +499,13 @@ export const templateVersions = p.pgTable(
       "template_versions_scan_state_check",
       table.scanState,
     ),
+    p.check(
+      "template_versions_s3_key_organization_check",
+      sql`starts_with(${table.s3Key}, ${table.organizationId} || '/')`,
+    ),
     ...orgPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -569,6 +593,8 @@ export const searchDocuments = p.pgTable(
         [table.entityId, { target: "entities", kind: "owned-content" }],
       ]),
     }),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -626,6 +652,8 @@ export const searchDocumentPreviewPassages = p.pgTable(
         [table.entityId, { target: "entities", kind: "owned-content" }],
       ]),
     ),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -659,6 +687,8 @@ export const contactSearchDocuments = p.pgTable(
       .on(table.organizationId, table.updatedAt.desc(), table.contactId.desc()),
     p.index("contact_search_docs_tsv_idx").using("gin", table.tsv),
     ...orgPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -698,6 +728,8 @@ export const contactSearchDocumentPreviewPassages = p.pgTable(
       })
       .onDelete("cascade"),
     ...orgReadOnlyPolicies("contact_search_document_preview_passages"),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -717,6 +749,7 @@ export const workspaceSearchDocuments = p.pgTable(
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
+    ...workspaceActivityProjectionPolicies(table),
     p.index("workspace_search_docs_org_idx").on(table.organizationId),
     p
       .index("workspace_search_docs_org_updated_id_idx")
@@ -734,6 +767,8 @@ export const workspaceSearchDocuments = p.pgTable(
       })
       .onDelete("cascade"),
     ...wsOrganizationPolicies("workspace_search_documents", { columns: table }),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -785,6 +820,8 @@ export const workspaceSearchDocumentPreviewPassages = p.pgTable(
     ...wsOrganizationReadOnlyPolicies(
       "workspace_search_document_preview_passages",
     ),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -856,6 +893,8 @@ export const searchProjectionRepairQueue = p.pgTable(
       })
       .onDelete("cascade"),
     ...orgPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -947,5 +986,7 @@ export const extractedContent = p.pgTable(
         [table.entityId, { target: "entities", kind: "owned-content" }],
       ]),
     }),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );

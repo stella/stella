@@ -15,7 +15,7 @@
 
 import { panic, Result } from "better-result";
 
-import { type CentsAmount, cents } from "./cents";
+import { cents, type CentsAmount } from "./cents";
 
 /**
  * Two, the ISO 4217 default, used when a stored code is one `Intl` will not

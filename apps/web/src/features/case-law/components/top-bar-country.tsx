@@ -18,9 +18,9 @@ import {
   PUBLIC_CASE_LAW_COUNTRIES,
   toCaseLawCountryParam,
 } from "@/features/case-law/case-law-jurisdiction";
-import { caseLawCountryName } from "@/features/case-law/components/case-law-search";
 import { countryScopedLawRoute } from "@/features/case-law/country-scope.logic";
 import { useFormatter } from "@/i18n/formatting-context";
+import { caseLawCountryName } from "@/lib/case-law-route";
 import { detached } from "@/lib/detached";
 import {
   isPublicStatuteCountry,
@@ -84,6 +84,9 @@ const TopBarCaseLawCountry = ({ route }: { route: "home" | "cases" }) => {
           ...previous,
           ...clearedCaseLawFilters(),
           country: next,
+          // A rewrite was judged against the previous corpus, not this one.
+          rewrite: undefined,
+          rewrittenFrom: undefined,
         }),
         replace: true,
       }),

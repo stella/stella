@@ -5,6 +5,7 @@ import {
   buildDocumentVersionUploadReservationInput,
   buildUploadAbortInput,
   buildUploadFinalizeInput,
+  DOCUMENT_UPLOAD_PUT_TIMEOUT_MS,
   DOCUMENT_VERSION_UPLOAD_TRANSPORT,
 } from "@stll/api-contract";
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
@@ -15,16 +16,14 @@ import { formatAppError, LocalizedAppError } from "../shared/app-error";
 import { applyUploadHostStyles, parseAppToolPayload } from "../shared/bridge";
 import { appLocale, setAppDocumentLocale } from "../shared/locale";
 import {
-  isUploadRecord,
-  createUploadTranslator,
+  bindUploadSdkErrors,
   connectUploadApp,
   createUploadSubscriptions,
-  bindUploadSdkErrors,
+  createUploadTranslator,
+  isUploadRecord,
 } from "../shared/upload-bridge";
 import { createUploadTargetController } from "./upload-target";
 import type { UploadTarget } from "./upload-target";
-
-const UPLOAD_TIMEOUT_MS = 1_800_000;
 
 class UploadAppError extends TaggedError("UploadAppError")<{
   message: string;
@@ -112,7 +111,7 @@ const uploadSelectedFile = async ({
       method: "PUT",
       headers: reservation.headers,
       body: file,
-      timeout: { type: "headers", ms: UPLOAD_TIMEOUT_MS },
+      timeout: { type: "headers", ms: DOCUMENT_UPLOAD_PUT_TIMEOUT_MS },
     });
     if (!put.ok) {
       return Result.err(

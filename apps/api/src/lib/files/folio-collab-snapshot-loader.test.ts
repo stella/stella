@@ -6,18 +6,18 @@ import * as yjs from "yjs";
 
 import { createHiddenEditorState } from "@stll/folio-core/controller/hiddenEditorManager";
 import {
-  materializeYjsDocx,
   extractDocxText,
   FOLIO_YJS_ATTR_SCHEMA_VERSION,
+  materializeYjsDocx,
   migrateFolioYjsSnapshot,
   parseDocx,
 } from "@stll/folio-core/server";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import {
+  decideFolioSnapshotRecoveryState,
   FOLIO_COLLAB_SNAPSHOT_LOAD_OUTCOME,
   loadPersistedFolioSnapshot,
-  decideFolioSnapshotRecoveryState,
 } from "@/api/lib/files/folio-collab-snapshot-loader";
 
 const { Doc, XmlElement, XmlText, encodeStateAsUpdate } = yjs;
@@ -91,7 +91,7 @@ describe("persisted Folio collaboration snapshot loading", () => {
         ),
       );
       const refusal = migrateFolioYjsSnapshot(snapshotBytes);
-      expect(FOLIO_YJS_ATTR_SCHEMA_VERSION).toBe(13);
+      expect(FOLIO_YJS_ATTR_SCHEMA_VERSION).toBe(14);
       expect(Result.isError(refusal) && refusal.error.code).toBe(
         "unsupported_version",
       );

@@ -9,10 +9,19 @@ import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemet
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
-const executeMock = mock(
-  async (_query: SQL): Promise<Record<string, unknown>[]> => [],
-);
-const upsertSearchDocumentMock = mock(async () => undefined);
+beforeEach(() => {
+  executeMock.mockReset();
+  executeMock.mockImplementation(executeDefault);
+  upsertSearchDocumentMock.mockReset();
+  upsertSearchDocumentMock.mockImplementation(upsertSearchDocumentDefault);
+});
+
+const executeDefault = async (
+  _query: SQL,
+): Promise<Record<string, unknown>[]> => [];
+const executeMock = mock(executeDefault);
+const upsertSearchDocumentDefault = async () => undefined;
+const upsertSearchDocumentMock = mock(upsertSearchDocumentDefault);
 
 const { repairSearchSemanticTimestamps } =
   await import("@/api/lib/scheduler/tasks/search-semantic-timestamps");
@@ -82,6 +91,12 @@ test("rebuilds one bounded page and checkpoints after the projection", async () 
   expect(checkpointQuery.sql).toContain("SET payload = jsonb_build_object(");
   expect(checkpointQuery.sql).toContain("'cursor'");
   expect(checkpointQuery.params).toContain(entityId);
+  expect(checkpointQuery.sql).toContain("task =");
+  expect(checkpointQuery.params).toContain("search.repairSemanticTimestamps");
+  expect(checkpointQuery.params).toContain(
+    "search.repairSemanticTimestamps.v1",
+  );
+  expect(checkpointQuery.params).toContain("runner#lease-1");
   expect(upsertSearchDocumentMock).toHaveBeenCalledWith(entityId);
 });
 
@@ -120,7 +135,13 @@ test("checkpoints the last scanned row when a clean page needs no repair", async
     executeMock.mock.calls.at(1)?.at(0) ?? sql``,
   );
   expect(checkpointQuery.params).toContain(entityId);
-  expect(checkpointQuery.params).toContain("verify");
+  expect(checkpointQuery.sql).toContain("task =");
+  expect(checkpointQuery.params).toContain("search.repairSemanticTimestamps");
+  expect(checkpointQuery.params).toContain(
+    "search.repairSemanticTimestamps.v1",
+  );
+  expect(checkpointQuery.params).toContain("runner#lease-1");
+  expect(checkpointQuery.sql).toContain("'pass', 'verify'::text");
 });
 
 test("durably marks verification dirty before rebuilding a mismatch", async () => {
@@ -159,9 +180,10 @@ test("durably marks verification dirty before rebuilding a mismatch", async () =
     executeMock.mock.calls.at(1)?.at(0) ?? sql``,
   );
   expect(dirtyCheckpoint.sql).toContain("'dirty', true");
-  expect(dirtyCheckpoint.sql).toContain("'pass', $2::text");
-  expect(dirtyCheckpoint.sql).toContain("'passStartedAt', $3::text");
-  expect(dirtyCheckpoint.sql).toContain("'quietSince', $4::text");
+  expect(dirtyCheckpoint.sql).toContain("'pass', 'verify'::text");
+  expect(dirtyCheckpoint.sql).toContain("'cleanPasses', 0");
+  expect(dirtyCheckpoint.sql).toContain("'passStartedAt'");
+  expect(dirtyCheckpoint.sql).toContain("'quietSince'");
   expect(dirtyCheckpoint.params).toContain("2026-07-29T00:05:00.000Z");
   expect(upsertSearchDocumentMock).toHaveBeenCalledWith(entityId);
 });

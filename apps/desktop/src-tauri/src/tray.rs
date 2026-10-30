@@ -123,6 +123,7 @@ fn set_tray_icon(
 
 const OPEN_ABOUT_ACTION: &str = "open-about";
 const CHECK_FOR_UPDATES_ACTION: &str = "check-for-updates";
+const UPDATES_MANAGED_ITEM: &str = "updates-managed";
 const OPEN_EDIT_ROOT_ACTION: &str = "open-edit-root";
 const COPY_DIAGNOSTICS_ACTION: &str = "copy-diagnostics";
 const EMAIL_SUPPORT_ACTION: &str = "email-support";
@@ -224,6 +225,55 @@ pub fn refresh(app: &AppHandle, snapshot: &AppSnapshot) {
   }
 }
 
+/// The status icon and its owning screen in one logical coordinate space;
+/// `None` when there is no icon or the OS cannot place it (an icon in
+/// Windows' hidden overflow area). The handle is read and dropped on the
+/// main thread, like every other tray handle.
+#[cfg(target_os = "macos")]
+pub fn status_icon_placement(
+  app: &AppHandle,
+) -> Option<crate::window_placement::ScreenPlacement> {
+  let handle = app.clone();
+  crate::window_placement::on_main_thread(app, None, move || {
+    let main_thread = TrayMainThread::new()?;
+    status_icon_placement_on_main_thread(&handle, &main_thread)
+  })
+}
+
+/// The status icon and its owning screen; see the macOS twin.
+#[cfg(not(target_os = "macos"))]
+pub fn status_icon_placement(
+  app: &AppHandle,
+) -> Option<crate::window_placement::ScreenPlacement> {
+  status_icon_placement_on_main_thread(app, &TrayMainThread)
+}
+
+#[allow(
+  clippy::disallowed_methods,
+  reason = "the tray owner: the main-thread proof keeps every native handle local"
+)]
+fn status_icon_placement_on_main_thread(
+  app: &AppHandle,
+  _main_thread: &TrayMainThread,
+) -> Option<crate::window_placement::ScreenPlacement> {
+  let tray = app.tray_by_id("main")?;
+  #[cfg(target_os = "macos")]
+  {
+    tray
+      .with_inner_tray_icon(|inner| {
+        let main_thread = TrayMainThread::new()?;
+        let window = inner.ns_status_item()?.button(main_thread)?.window()?;
+        crate::window_placement::native_window_placement(&window, main_thread)
+      })
+      .ok()
+      .flatten()
+  }
+  #[cfg(not(target_os = "macos"))]
+  {
+    crate::window_placement::physical_rect_placement(app, tray.rect().ok().flatten()?)
+  }
+}
+
 #[allow(
   clippy::disallowed_methods,
   reason = "the tray owner: the main-thread proof keeps every native handle local"
@@ -290,9 +340,12 @@ fn build_tray_menu_with_activity(
     builder = builder.separator();
   }
 
-  builder = builder.item(
-    &MenuItemBuilder::with_id(OPEN_CLIPBOARD_ACTION, t("tray.clipboard")).build(app)?,
-  );
+  if !crate::managed_policy::current().clipboard_disabled {
+    builder = builder.item(
+      &MenuItemBuilder::with_id(OPEN_CLIPBOARD_ACTION, t("tray.clipboard"))
+        .build(app)?,
+    );
+  }
   if let Some(activity) = activity {
     builder = builder.item(
       &MenuItemBuilder::with_id(ACTIVITY_STATUS_ITEM, activity_status_label(activity))
@@ -327,17 +380,25 @@ fn build_tray_menu_with_activity(
       .build(app)?,
   );
 
-  // Check for updates
-  builder = builder.item(
-    &MenuItemBuilder::with_id(CHECK_FOR_UPDATES_ACTION, t("tray.checkForUpdates"))
-      .enabled(!matches!(
-        snapshot.update.status,
-        crate::types::DesktopUpdateStatus::Checking
-          | crate::types::DesktopUpdateStatus::Downloading
-          | crate::types::DesktopUpdateStatus::Applying
-      ))
-      .build(app)?,
-  );
+  // Check for updates, unless the organization deploys them itself
+  if crate::managed_policy::current().updates_disabled {
+    builder = builder.item(
+      &MenuItemBuilder::with_id(UPDATES_MANAGED_ITEM, t("tray.updatesManaged"))
+        .enabled(false)
+        .build(app)?,
+    );
+  } else {
+    builder = builder.item(
+      &MenuItemBuilder::with_id(CHECK_FOR_UPDATES_ACTION, t("tray.checkForUpdates"))
+        .enabled(!matches!(
+          snapshot.update.status,
+          crate::types::DesktopUpdateStatus::Checking
+            | crate::types::DesktopUpdateStatus::Downloading
+            | crate::types::DesktopUpdateStatus::Applying
+        ))
+        .build(app)?,
+    );
+  }
 
   // Support submenu
   let support_menu = SubmenuBuilder::new(app, t("tray.support"))

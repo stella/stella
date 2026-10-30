@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { getTableName } from "drizzle-orm";
 
 import { withGatedTestClients } from "../tests/gated-test-database";
-import { pendingScoutEmissions, flowUploadTriggerIntents } from "./schema";
+import { flowUploadTriggerIntents, pendingScoutEmissions } from "./schema";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -21,7 +21,7 @@ describe.skipIf(!enabled)("feature recovery receipts", () => {
       const owner = `recovery_owner_${suffix}`;
       const migration = await Bun.file(
         new URL(
-          "../../drizzle/20261012030000_feature_recovery_receipt_owner_access/migration.sql",
+          "../../drizzle/20261030052802_feature_recovery_receipt_owner_access/migration.sql",
           import.meta.url,
         ),
       ).text();

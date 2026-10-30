@@ -1,79 +1,123 @@
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
-import ts from "typescript";
+
+import {
+  type CallExpression,
+  isObjectLiteralProperty,
+  type Node,
+  parseSource,
+  walk,
+} from "@stll/scripts/src/syntax-tree";
 
 const apiRoot = path.resolve(import.meta.dir, "../../..");
 const decisionOwner = "src/lib/workflow/decisions/decide.ts";
 
-const isFunction = (node: ts.Node) =>
-  ts.isArrowFunction(node) ||
-  ts.isFunctionExpression(node) ||
-  ts.isFunctionDeclaration(node) ||
-  ts.isMethodDeclaration(node);
-
-const callName = (node: ts.CallExpression) => {
-  if (ts.isIdentifier(node.expression)) {
-    return node.expression.text;
+// A method's function value is its own scope; accessors and constructors stay
+// in the scope that declares them.
+const isFunction = (node: Node, parent: Node | undefined) => {
+  if (
+    node.type === "ArrowFunctionExpression" ||
+    node.type === "FunctionDeclaration" ||
+    node.type === "TSDeclareFunction"
+  ) {
+    return true;
   }
-  return ts.isPropertyAccessExpression(node.expression)
-    ? node.expression.name.text
-    : "";
+  if (
+    node.type !== "FunctionExpression" &&
+    node.type !== "TSEmptyBodyFunctionExpression"
+  ) {
+    return false;
+  }
+  if (
+    parent?.type === "MethodDefinition" ||
+    parent?.type === "TSAbstractMethodDefinition"
+  ) {
+    return parent.kind === "method";
+  }
+  return parent?.type !== "Property" || parent.kind === "init";
+};
+
+const callName = (node: CallExpression) => {
+  if (node.callee.type === "Identifier") {
+    return node.callee.name;
+  }
+  if (node.callee.type !== "MemberExpression" || node.callee.computed) {
+    return "";
+  }
+  return node.callee.property.type === "PrivateIdentifier"
+    ? `#${node.callee.property.name}`
+    : node.callee.property.name;
 };
 
 const generationCall = (name: string) =>
   /^(?:generate(?:TanStack|Field)|collectTanStack|classifyWithLLM)/u.test(name);
 
+const isStringLiteral = (node: Node, text?: string) =>
+  node.type === "Literal" &&
+  typeof node.value === "string" &&
+  (text === undefined || node.value === text);
+
 // Inspect each function separately: a generator callback handed to decide is
 // owned by decide, whereas calling it after a decided-return is a private tier.
-const functionNodes = (root: ts.Node) => {
-  const nodes: ts.Node[] = [];
-  const visit = (node: ts.Node) => {
-    if (node !== root && isFunction(node)) {
-      return;
+const functionNodes = (root: Node) => {
+  const nodes: Node[] = [];
+  walk(root, (node, ancestors) => {
+    if (node !== root && isFunction(node, ancestors.at(-1))) {
+      return "skip-children";
     }
     nodes.push(node);
-    ts.forEachChild(node, visit);
-  };
-  visit(root);
+    return undefined;
+  });
   return nodes;
 };
+
+const functionCalls = (nodes: readonly Node[]) =>
+  nodes.filter(
+    (node): node is CallExpression => node.type === "CallExpression",
+  );
 
 const fallbackViolations = (file: string, source: string) => {
   if (file === decisionOwner) {
     return [];
   }
-  const ast = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
+  const ast = parseSource(file, source);
+  const text = (node: Node) => source.slice(node.start, node.end);
   const decisionCalls = new Set([
     "decide",
     "decideMany",
     "classifyWithSystemOne",
   ]);
   const generationCalls = new Set<string>();
-  const localFunctions = new Map<string, ts.Node>();
-  const index = (node: ts.Node) => {
-    if (ts.isImportSpecifier(node)) {
-      const imported = node.propertyName?.text ?? node.name.text;
+  const localFunctions = new Map<string, Node>();
+  walk(ast.program, (node) => {
+    if (node.type === "ImportSpecifier") {
+      const imported =
+        node.imported.type === "Identifier"
+          ? node.imported.name
+          : node.imported.value;
       if (decisionCalls.has(imported)) {
-        decisionCalls.add(node.name.text);
+        decisionCalls.add(node.local.name);
       }
       if (generationCall(imported)) {
-        generationCalls.add(node.name.text);
+        generationCalls.add(node.local.name);
       }
     }
-    if (ts.isFunctionDeclaration(node) && node.name) {
-      localFunctions.set(node.name.text, node);
+    if (
+      (node.type === "FunctionDeclaration" ||
+        node.type === "TSDeclareFunction") &&
+      node.id
+    ) {
+      localFunctions.set(node.id.name, node);
     }
     if (
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      node.initializer &&
-      isFunction(node.initializer)
+      node.type === "VariableDeclarator" &&
+      node.id.type === "Identifier" &&
+      node.init &&
+      isFunction(node.init, node)
     ) {
-      localFunctions.set(node.name.text, node.initializer);
+      localFunctions.set(node.id.name, node.init);
     }
-    ts.forEachChild(node, index);
-  };
-  index(ast);
+  });
   const isGeneration = (name: string) =>
     generationCall(name) || generationCalls.has(name);
   // Follow local wrappers as well as imported generator aliases, so moving a
@@ -86,9 +130,8 @@ const fallbackViolations = (file: string, source: string) => {
         continue;
       }
       if (
-        functionNodes(fn).some(
-          (child) =>
-            ts.isCallExpression(child) && isGeneration(callName(child)),
+        functionCalls(functionNodes(fn)).some((child) =>
+          isGeneration(callName(child)),
         )
       ) {
         generationCalls.add(name);
@@ -97,21 +140,22 @@ const fallbackViolations = (file: string, source: string) => {
     }
   }
   const violations = new Set<string>();
-  const report = (node: ts.Node, reason: string) => {
-    const { line } = ast.getLineAndCharacterOfPosition(node.getStart(ast));
-    violations.add(`${file}:${line + 1}: ${reason}`);
+  const report = (node: Node, reason: string) => {
+    const { line } = ast.locate(node.start);
+    violations.add(`${file}:${line}: ${reason}`);
   };
-  const visit = (node: ts.Node) => {
-    if (isFunction(node)) {
+  walk(ast.program, (node, ancestors) => {
+    const parent = ancestors.at(-1);
+    if (isFunction(node, parent)) {
       const nodes = functionNodes(node);
-      const calls = nodes.filter(ts.isCallExpression);
+      const calls = functionCalls(nodes);
       const asksDecision = calls.some((call) =>
         decisionCalls.has(callName(call)),
       );
       const readsDecisionState = nodes.some(
         (child) =>
-          ts.isStringLiteral(child) &&
-          (child.text === "decided" || child.text === "undecided"),
+          isStringLiteral(child, "decided") ||
+          isStringLiteral(child, "undecided"),
       );
       if (asksDecision && readsDecisionState) {
         for (const call of calls) {
@@ -122,44 +166,39 @@ const fallbackViolations = (file: string, source: string) => {
       }
     }
     const undecidedBranch =
-      (ts.isIfStatement(node) &&
-        functionNodes(node.expression).some(
-          (child) => ts.isStringLiteral(child) && child.text === "undecided",
+      (node.type === "IfStatement" &&
+        functionNodes(node.test).some((child) =>
+          isStringLiteral(child, "undecided"),
         )) ||
-      (ts.isCaseClause(node) &&
-        ts.isStringLiteral(node.expression) &&
-        node.expression.text === "undecided");
+      (node.type === "SwitchCase" &&
+        node.test !== null &&
+        isStringLiteral(node.test, "undecided"));
     if (undecidedBranch) {
-      for (const child of functionNodes(node)) {
-        if (!ts.isCallExpression(child)) {
-          continue;
-        }
+      for (const child of functionCalls(functionNodes(node))) {
         const name = callName(child);
         const queueWrite =
           name === "push" &&
-          ts.isPropertyAccessExpression(child.expression) &&
-          /fallback|generative|remaining/iu.test(
-            child.expression.expression.getText(ast),
-          );
+          child.callee.type === "MemberExpression" &&
+          /fallback|generative|remaining/iu.test(text(child.callee.object));
         if (isGeneration(name) || queueWrite) {
           report(child, "undecided outcome enters a private generative tier");
         }
       }
     }
     if (
-      ts.isPropertyAssignment(node) &&
-      /^(?:generative|remaining)$/u.test(node.name.getText(ast)) &&
-      ts.isCallExpression(node.initializer) &&
-      callName(node.initializer) === "filter" &&
-      /\boutput\s*\[[\s\S]*?===\s*undefined/u.test(
-        node.initializer.getText(ast),
-      )
+      isObjectLiteralProperty(node, parent) &&
+      node.kind === "init" &&
+      !node.method &&
+      !node.shorthand &&
+      !node.computed &&
+      /^(?:generative|remaining)$/u.test(text(node.key)) &&
+      node.value.type === "CallExpression" &&
+      callName(node.value) === "filter" &&
+      /\boutput\s*\[[\s\S]*?===\s*undefined/u.test(text(node.value))
     ) {
       report(node, "missing typed output enters a private generative tier");
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(ast);
+  });
   return [...violations];
 };
 

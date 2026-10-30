@@ -6,8 +6,8 @@ import { drizzle } from "drizzle-orm/pglite";
 
 import { createHeavyWorkSlot } from "@stll/db-load-gate/slot";
 import {
-  PROVISION_EXTRACTION_ADMISSION_SCOPES,
   PROVISION_EXTRACTION_ADMISSION_REVISION,
+  PROVISION_EXTRACTION_ADMISSION_SCOPES,
 } from "@stll/legal-atlas/provision-extraction-admission";
 
 import { BackfillFailedError } from "@/api/db/backfill-runtime";
@@ -321,7 +321,7 @@ describe.skipIf(!enabled)("provision task on PostgreSQL", () => {
         await held.run();
       } finally {
         await slot.close();
-        session.release();
+        await session.release();
       }
       expect(held.failures).toEqual([]);
       expect((await checkpoint()).batch.holdUntil).not.toBeNull();

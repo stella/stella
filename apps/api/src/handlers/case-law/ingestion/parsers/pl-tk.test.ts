@@ -7,15 +7,25 @@
 
 import { describe, expect, test } from "bun:test";
 import * as cheerio from "cheerio";
+import fc from "fast-check";
 
 import {
+  type Block,
+  hasInlineChildren,
+  type Inline,
+} from "@stll/legal-ast/document-ast";
+import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
+
+import { extractCitations } from "@/api/handlers/case-law/ingestion/citation-extractor";
+import {
   listPlTkPageFields,
+  parsePlTkPage,
   parsePlTkText,
   parsePolishDate,
   readPlTkCasePage,
   readPlTkRuling,
-  validatePlTkBlocks,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-tk";
+import { segmentDecision } from "@/api/lib/legal-search/segment-decision";
 
 const FIXTURES = new URL("__fixtures__/", import.meta.url);
 
@@ -27,11 +37,17 @@ const casePage = async (name: string): Promise<string> =>
   );
 
 const rulingOf = async (name: string, documentId: string) => {
-  const ruling = readPlTkRuling(await casePage(name), documentId);
+  const { ruling } = await rulingAndPageOf(name, documentId);
+  return ruling;
+};
+
+const rulingAndPageOf = async (name: string, documentId: string) => {
+  const page = parsePlTkPage(await casePage(name));
+  const ruling = readPlTkRuling(page, documentId);
   if (ruling === null) {
     throw new Error(`${name} holds no ruling ${documentId}`);
   }
-  return ruling;
+  return { page, ruling };
 };
 
 describe("dates as the portal prints them", () => {
@@ -49,7 +65,9 @@ describe("dates as the portal prints them", () => {
 
 describe("the case record", () => {
   test("a judgment's case: parties, reviewed provisions, standards and filings", async () => {
-    const page = readPlTkCasePage(await casePage("pl-tk-case-k-2-26.html.gz"));
+    const page = readPlTkCasePage(
+      parsePlTkPage(await casePage("pl-tk-case-k-2-26.html.gz")),
+    );
 
     expect(page?.rulingIds).toEqual(["25564"]);
     expect(page?.record.caseNumber).toBe("K 2/26");
@@ -78,7 +96,7 @@ describe("the case record", () => {
 
   test("a case holding three rulings names every one, with its links to other cases", async () => {
     const page = readPlTkCasePage(
-      await casePage("pl-tk-case-sk-14-11.html.gz"),
+      parsePlTkPage(await casePage("pl-tk-case-sk-14-11.html.gz")),
     );
 
     expect(page?.rulingIds).toEqual(["9895", "9897", "9896"]);
@@ -88,7 +106,7 @@ describe("the case record", () => {
 
   test("a preliminary review names the case it was transferred to", async () => {
     const page = readPlTkCasePage(
-      await casePage("pl-tk-case-ts-70-24.html.gz"),
+      parsePlTkPage(await casePage("pl-tk-case-ts-70-24.html.gz")),
     );
 
     expect(page?.record.transferredTo).toEqual(["SK 44/26"]);
@@ -96,7 +114,9 @@ describe("the case record", () => {
   });
 
   test("a resolution names the signalling decision issued with it", async () => {
-    const page = readPlTkCasePage(await casePage("pl-tk-case-w-3-94.html.gz"));
+    const page = readPlTkCasePage(
+      parsePlTkPage(await casePage("pl-tk-case-w-3-94.html.gz")),
+    );
 
     expect(page?.record.signalledCase).toEqual(["S 1/94"]);
   });
@@ -105,14 +125,15 @@ describe("the case record", () => {
 describe("one ruling's tab", () => {
   test("the ruling's own record, not another ruling's in the same case", async () => {
     const html = await casePage("pl-tk-case-sk-14-11.html.gz");
-    const judgment = readPlTkRuling(html, "9897");
-    const costs = readPlTkRuling(html, "9895");
+    const parsedPage = parsePlTkPage(html);
+    const judgment = readPlTkRuling(parsedPage, "9897");
+    const costs = readPlTkRuling(parsedPage, "9895");
 
     expect(judgment?.decisionForm).toBe("Wyrok");
     expect(costs?.decisionForm).toBe("Postanowienie dot. kosztów");
     expect(judgment?.decisionDate).toBe("2013-10-22");
     expect(judgment?.textHtml).not.toBe(costs?.textHtml);
-    expect(readPlTkRuling(html, "1")).toBeNull();
+    expect(readPlTkRuling(parsedPage, "1")).toBeNull();
   });
 
   test("the bench, its functions and the portal's judge ids", async () => {
@@ -174,7 +195,10 @@ describe("one ruling's tab", () => {
   });
 
   test("the publication annotation is read as a footnote, and printed once in the text", async () => {
-    const ruling = await rulingOf("pl-tk-case-k-44-16.html.gz", "16940");
+    const { page, ruling } = await rulingAndPageOf(
+      "pl-tk-case-k-44-16.html.gz",
+      "16940",
+    );
 
     expect(ruling.footnotes).toHaveLength(2);
     expect(ruling.footnotes[0]).toStartWith(
@@ -184,6 +208,7 @@ describe("one ruling's tab", () => {
     // The portal prints each note twice: in a popup beside its mark, and in
     // the table closing the text. The popup is dropped, the table read.
     const { documentAst } = parsePlTkText({
+      page,
       caseNumber: "K 44/16",
       court: "Trybunał Konstytucyjny",
       decisionDate: ruling.decisionDate,
@@ -207,8 +232,9 @@ describe("one ruling's tab", () => {
 
 describe("the ruling's text as blocks", () => {
   const blocksOf = async (name: string, documentId: string) => {
-    const ruling = await rulingOf(name, documentId);
+    const { page, ruling } = await rulingAndPageOf(name, documentId);
     return parsePlTkText({
+      page,
       caseNumber: "K 2/26",
       court: "Trybunał Konstytucyjny",
       decisionDate: ruling.decisionDate,
@@ -236,7 +262,8 @@ describe("the ruling's text as blocks", () => {
       "2 I",
       "2 II",
       "2 III",
-      "1 Zdanie odrębne",
+      // The heading prints `Zdanie odrębne`; the next line names the author.
+      "1 Zdanie odrębne sędziego TK Andrzeja Zielonackiego",
     ]);
     const roleOf = (text: string): string | undefined =>
       documentAst.blocks.flatMap((block) =>
@@ -306,7 +333,9 @@ describe("the labels a case page states", () => {
       "pl-tk-case-u-1-86.html.gz",
       "pl-tk-case-w-3-94.html.gz",
     ]) {
-      for (const label of listPlTkPageFields(await casePage(name))) {
+      for (const label of listPlTkPageFields(
+        parsePlTkPage(await casePage(name)),
+      )) {
         labels.add(label);
       }
     }
@@ -336,9 +365,13 @@ describe("the labels a case page states", () => {
 
 describe("what the portal's markup states beyond the words", () => {
   const judgmentBlocks = async () => {
-    const ruling = await rulingOf("pl-tk-case-k-2-26.html.gz", "25564");
+    const { page, ruling } = await rulingAndPageOf(
+      "pl-tk-case-k-2-26.html.gz",
+      "25564",
+    );
     const textHtml = ruling.textHtml ?? "";
     const { documentAst } = parsePlTkText({
+      page,
       caseNumber: "K 2/26",
       court: "Trybunał Konstytucyjny",
       decisionDate: ruling.decisionDate,
@@ -366,32 +399,16 @@ describe("what the portal's markup states beyond the words", () => {
     // `<font class="wyrok_kursywa">` around Latin phrases in the reasons.
     expect(serialized).toContain('"type":"italic"');
   });
-
-  test("the text is checked against the portal's markup, so dropped text is caught", async () => {
-    const { textHtml, blocks } = await judgmentBlocks();
-
-    const whole = validatePlTkBlocks("K 2/26", textHtml, blocks);
-    const truncated = validatePlTkBlocks(
-      "K 2/26",
-      textHtml,
-      blocks.slice(0, 40),
-    );
-
-    expect(whole.issues.map((issue) => issue.code)).not.toContain(
-      "CONTENT_LOSS",
-    );
-    expect(truncated.issues.map((issue) => issue.code)).toContain(
-      "CONTENT_LOSS",
-    );
-  });
 });
 
 describe("the court a ruling names", () => {
   const judgmentWith = async (
     edit: (html: string) => string,
   ): Promise<string | undefined> =>
-    readPlTkRuling(edit(await casePage("pl-tk-case-k-2-26.html.gz")), "25564")
-      ?.courtAsPrinted;
+    readPlTkRuling(
+      parsePlTkPage(edit(await casePage("pl-tk-case-k-2-26.html.gz"))),
+      "25564",
+    )?.courtAsPrinted;
 
   test("a full bench is the same court", async () => {
     expect(
@@ -416,6 +433,21 @@ describe("the court a ruling names", () => {
 
     expect(court).toBeUndefined();
   });
+
+  test("a reasons section nested in a front wrapper cannot name the deciding court", () => {
+    const page = parsePlTkPage(`<div id="sprawaForm:tabView">
+      <div id="sprawaForm:tabView:dok_1">
+        <div id="tekst_1"><div class="document-wrapper">
+          <p>Wprowadzenie do orzeczenia</p>
+          <section><div class="wyrok_uzasadnienie">
+            <p>Sąd Najwyższy w składzie siedmiu sędziów</p>
+          </div></section>
+        </div></div>
+      </div>
+    </div>`);
+
+    expect(readPlTkRuling(page, "1")?.courtAsPrinted).toBeUndefined();
+  });
 });
 
 for (const href of [
@@ -430,7 +462,7 @@ for (const href of [
     const documents = $('[id="sprawaForm:tabView:dokumentyWSprawie"]');
     documents.empty().append("<ul><li><a>Document</a></li></ul>");
     documents.find("a").attr("href", href);
-    const page = readPlTkCasePage($.html());
+    const page = readPlTkCasePage(parsePlTkPage($.html()));
     expect(page).not.toBeNull();
     expect(page?.record).toHaveProperty(
       "caseDocuments",
@@ -448,11 +480,11 @@ for (const href of [
 
 test("excludes script and style from ruling metadata", () => {
   const ruling = readPlTkRuling(
-    `<div id="sprawaForm:tabView:dok_1">
+    parsePlTkPage(`<div id="sprawaForm:tabView:dok_1">
     <div class="prop"><div class="name">Dotyczy<script>bad-label</script></div><div class="value">Visible<style>bad-value</style> subject</div></div>
     <div class="prop"><div class="name">Miejsce publikacji</div><div class="value"><table><tr><td><table><tr><td>Dz.U.<script>bad-citation</script> 2026</td><td>other register</td></tr></table></td><td><a href="https://example.org">ISAP<style>bad-link</style></a></td></tr></table></div></div>
     <div id="tekst_1"><p>Visible decision<script>bad-script</script><style>bad-style</style></p></div>
-  </div>`,
+  </div>`),
     "1",
   );
   expect(ruling?.textHtml).toBe("<p>Visible decision</p>");
@@ -465,4 +497,313 @@ test("excludes script and style from ruling metadata", () => {
   const url = publication?.links.at(0)?.url;
   // A defect object is not a string and fails the comparison.
   expect(typeof url === "string" && url === "https://example.org/").toBe(true);
+});
+
+/** Every ruling of a capture, read and built the way ingestion builds it. */
+const everyRuling = async (name: string) => {
+  const page = parsePlTkPage(await casePage(name));
+  const record = readPlTkCasePage(page);
+  if (record === null) {
+    throw new Error(`${name} is not a case page`);
+  }
+  return record.rulingIds.flatMap((documentId) => {
+    const ruling = readPlTkRuling(page, documentId);
+    if (ruling?.textHtml === undefined) {
+      return [];
+    }
+    const { documentAst } = parsePlTkText({
+      page,
+      caseNumber: record.record.caseNumber ?? documentId,
+      court: "Trybunał Konstytucyjny",
+      decisionDate: ruling.decisionDate,
+      decisionType: ruling.decisionForm,
+      documentId,
+      sourceUrl: "https://ipo.trybunal.gov.pl/ipo/Sprawa",
+      documentUrl: undefined,
+      textHtml: ruling.textHtml,
+    });
+    return [{ documentId, ruling, blocks: documentAst.blocks }];
+  });
+};
+
+const textLeaves = (inlines: readonly Inline[]): string[] =>
+  inlines.flatMap((inline) => {
+    if (inline.type === "text") {
+      return [inline.text];
+    }
+    return hasInlineChildren(inline) ? textLeaves(inline.children) : [];
+  });
+
+const linksIn = (inline: Inline): Inline[] => {
+  if (inline.type === "link") {
+    return [inline];
+  }
+  return hasInlineChildren(inline) ? inline.children.flatMap(linksIn) : [];
+};
+
+const inlinesOf = (block: Block | undefined): Inline[] =>
+  block?.type === "paragraph" || block?.type === "heading" ? block.inlines : [];
+
+/** The text before and after the first inline of `type`, and that inline. */
+const aroundFirst = (inlines: readonly Inline[], type: Inline["type"]) => {
+  const at = inlines.findIndex((inline) => inline.type === type);
+  return at === -1
+    ? undefined
+    : {
+        before: textLeaves(inlines.slice(0, at)).join(""),
+        found: inlines[at],
+        after: textLeaves(inlines.slice(at + 1)).join(""),
+      };
+};
+
+describe("the portal's typesetting, read as a browser lays it out", () => {
+  // A word, the export's line break and indentation, a word.
+  const HARD_WRAP = /\S\n[ \t]+\S/u;
+  const SOURCE_WHITESPACE = /[\t\n\r\f]| {2}/u;
+
+  test("the export's line wrapping and indentation never reach a block's text", async () => {
+    const names = (
+      await Array.fromAsync(
+        new Bun.Glob("pl-tk-case-*.html.gz").scan({ cwd: FIXTURES.pathname }),
+      )
+    ).toSorted();
+    const offenders: string[] = [];
+    let wrappedRulings = 0;
+    for (const name of names) {
+      for (const { documentId, ruling, blocks } of await everyRuling(name)) {
+        if (HARD_WRAP.test(ruling.textHtml ?? "")) {
+          wrappedRulings += 1;
+        }
+        for (const block of blocks) {
+          const leaves = textLeaves(inlinesOf(block));
+          if (leaves.some((leaf) => SOURCE_WHITESPACE.test(leaf))) {
+            offenders.push(`${name} ${documentId} ${block.anchorId}`);
+          }
+        }
+      }
+    }
+
+    // The captures carry the export's hard wrapping, so the check reaches it.
+    expect(wrappedRulings).toBeGreaterThan(0);
+    expect(offenders).toEqual([]);
+  });
+
+  test(
+    "pl-tk.hard-wrapped-paragraph-reads-as-its-words",
+    () => {
+      const word = fc.stringMatching(/^[a-ząćęłńóśźż0-9.,()§]{1,8}$/u);
+      const gap = fc.oneof(
+        fc.constant(" "),
+        fc
+          .integer({ min: 0, max: 24 })
+          .map((width) => `\n${" ".repeat(width)}`),
+      );
+      assertProperty(
+        "pl-tk.hard-wrapped-paragraph-reads-as-its-words",
+        fc.property(
+          fc.array(fc.tuple(word, gap, fc.boolean()), {
+            minLength: 1,
+            maxLength: 30,
+          }),
+          (runs) => {
+            const body = runs
+              .map(([text, separator, italic], index) => {
+                const run = italic
+                  ? `<font class="wyrok_kursywa">${text}</font>`
+                  : text;
+                return index === 0 ? run : `${separator}${run}`;
+              })
+              .join("");
+            const page = parsePlTkPage(`<div id="sprawaForm:tabView:dok_1">
+              <div id="tekst_1"><div class="wyrok_akapitCaly">
+                <div class="wyrok_akapitNr"><a name="akapit1">1</a></div>
+                <div class="wyrok_akapitNumerowany">
+                  ${body}
+                </div>
+              </div></div>
+            </div>`);
+            const ruling = readPlTkRuling(page, "1");
+            const { documentAst } = parsePlTkText({
+              page,
+              caseNumber: "K 1/26",
+              court: "Trybunał Konstytucyjny",
+              decisionDate: undefined,
+              decisionType: undefined,
+              documentId: "1",
+              sourceUrl: "https://ipo.trybunal.gov.pl/ipo/Sprawa",
+              documentUrl: undefined,
+              textHtml: ruling?.textHtml ?? "",
+            });
+            const words = runs.map(([text]) => text).join(" ");
+            const [paragraph] = documentAst.blocks;
+
+            expect(paragraph?.plainText).toBe(words);
+            expect(textLeaves(inlinesOf(paragraph)).join("")).toBe(words);
+          },
+        ),
+        { numRuns: 200, seed: 69_000_001 },
+      );
+    },
+    propertyTestTimeout(30_000),
+  );
+
+  test.each([
+    [" \n\t\n\r\f", ""],
+    [" \t\f", " \t\f"],
+    // HTML normalizes a carriage return to a line feed before cleanup.
+    [" \t\r\f", ""],
+    ["\n\u00a0\n", "\n\u00a0"],
+    ["\n\u000b\n", "\n\u000b"],
+    [`${" ".repeat(20_000)}\n${"\t".repeat(20_000)}`, ""],
+  ])(
+    "raised marks remove only line-bearing export whitespace (case %#)",
+    (gap, kept) => {
+      const page = parsePlTkPage(`<div id="sprawaForm:tabView:dok_1">
+      <div id="tekst_1"><p>word${gap}<span class="wyrok_indeks_gorny">1</span></p></div>
+    </div>`);
+      const ruling = readPlTkRuling(page, "1");
+      expect(
+        cheerio
+          .load(ruling?.textHtml ?? "")("p")
+          .text(),
+      ).toBe(`word${kept}1`);
+    },
+  );
+
+  test("a raised number stays on the word it belongs to", async () => {
+    const judgment = (await everyRuling("pl-tk-case-sk-14-11.html.gz")).find(
+      (ruling) => ruling.documentId === "9897",
+    );
+    const cited = judgment?.blocks.find((block) =>
+      block.plainText.startsWith("2.4. W myśl art. 767"),
+    );
+    const around = aroundFirst(inlinesOf(cited), "superscript");
+
+    expect(around?.before).toBe("2.4. W myśl art. 767");
+    expect(around?.found).toEqual({
+      type: "superscript",
+      children: [{ type: "text", text: "4" }],
+    });
+    expect(around?.after).toStartWith(" § 1 k.p.c.");
+  });
+
+  test("a raised number the export indents inside its own run still closes up", async () => {
+    const [judgment] = await everyRuling("pl-tk-case-sk-68-25.html.gz");
+    const quoted = judgment?.blocks.find(
+      (block) => block.type === "paragraph" && block.number === 170,
+    );
+    const around = aroundFirst(
+      inlinesOf(quoted).flatMap((inline) =>
+        inline.type === "italic" ? inline.children : [inline],
+      ),
+      "superscript",
+    );
+
+    // `(§ 2</font> <font> <font class="wyrok_indeks_gorny">1</font> </font>).`
+    expect(around?.before).toEndWith("stosuje się odpowiednio (§ 2");
+    expect(around?.found).toEqual({
+      type: "superscript",
+      children: [{ type: "text", text: "1" }],
+    });
+    expect(around?.after).toStartWith("). Jeżeli powód");
+  });
+
+  test("a footnote mark in the text links to the note the closing table prints", async () => {
+    for (const [name, documentId, mark] of [
+      ["pl-tk-case-k-24-04.html.gz", "238", "*"],
+      ["pl-tk-case-k-44-16.html.gz", "16940", "1"],
+    ] as const) {
+      const ruling = (await everyRuling(name)).find(
+        (candidate) => candidate.documentId === documentId,
+      );
+      const reference = (ruling?.blocks ?? [])
+        .flatMap((block) => inlinesOf(block).flatMap(linksIn))
+        .find(
+          (link) =>
+            link.type === "link" &&
+            textLeaves(link.children).join("") === `[${mark}]`,
+        );
+      const href = reference?.type === "link" ? reference.href : "";
+      const note = ruling?.blocks.find(
+        (block) => `#${block.anchorId}` === href,
+      );
+
+      expect(href).toStartWith("#tresc-przypisu-");
+      // The note keeps the label the portal prints beside it.
+      expect(note?.type === "paragraph" && note.note).toMatchObject({
+        type: "footnote",
+        label: mark,
+      });
+    }
+  });
+
+  test("a numbered footnote mark never runs into the docket it follows", async () => {
+    const ruling = (await everyRuling("pl-tk-case-k-44-16.html.gz")).find(
+      (candidate) => candidate.documentId === "16940",
+    );
+    const blocks = ruling?.blocks ?? [];
+    const marked = blocks.findIndex(
+      (block) => block.type === "paragraph" && block.number === 10,
+    );
+    // The text up to the marked paragraph, as the stored fulltext joins it.
+    const textThrough = (end: number): string =>
+      blocks
+        .slice(0, end)
+        .map((block) => block.plainText)
+        .filter((text) => text.length > 0)
+        .join("\n\n");
+    const citedIn = (text: string): string[] =>
+      extractCitations(segmentDecision(text)).map(
+        ({ citationText }) => citationText,
+      );
+
+    // Note 1 is printed raised right after the docket.
+    expect(blocks[marked]?.plainText).toContain("w sprawie K 39/16[1] ");
+    // No earlier paragraph names the docket, so the marked one is what
+    // the extractor reads it from.
+    expect(citedIn(textThrough(marked))).not.toContain("K 39/16");
+    expect(citedIn(textThrough(marked + 1))).toContain("K 39/16");
+  });
+});
+
+describe("dissenting opinions", () => {
+  test("each dissent's heading names its authors, wherever the Tribunal prints them", async () => {
+    const [judgment] = await everyRuling("pl-tk-case-k-24-04.html.gz");
+    const dissentHeadings = (judgment?.blocks ?? []).flatMap((block) =>
+      block.type === "heading" && block.plainText.startsWith("Zdanie odrębne")
+        ? [block.plainText]
+        : [],
+    );
+
+    expect(dissentHeadings).toEqual([
+      "Zdanie odrębne Sędziego TK Jerzego Ciemniewskiego",
+      "Zdanie odrębne sędzi TK Ewy Łętowskiej",
+      // Printed with the name in the heading itself.
+      "Zdanie odrębne sędziego TK Janusza Niemcewicza",
+    ]);
+    // The author line keeps the Tribunal's running number.
+    const authorLine = judgment?.blocks.find(
+      (block) => block.plainText === "sędzi TK Ewy Łętowskiej",
+    );
+    expect(authorLine?.type === "paragraph" && authorLine.number).toBe(66);
+  });
+
+  test("the line naming the ruling is never read as a dissent's author", async () => {
+    const ruling = await rulingOf("pl-tk-case-k-24-04.html.gz", "238");
+
+    expect(ruling.dissents).toEqual([
+      {
+        authorsAsPrinted: "Sędziego TK Jerzego Ciemniewskiego",
+        judges: ["Jerzy Ciemniewski"],
+      },
+      {
+        authorsAsPrinted: "sędzi TK Ewy Łętowskiej",
+        judges: ["Ewa Łętowska"],
+      },
+      {
+        authorsAsPrinted: "sędziego TK Janusza Niemcewicza",
+        judges: ["Janusz Niemcewicz"],
+      },
+    ]);
+  });
 });

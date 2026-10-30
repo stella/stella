@@ -1,14 +1,14 @@
 import { panic, Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { workObligationRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
-  FLOW_TASK_FEATURE_ACCESS,
   admitTaskFlowAccess,
   decideGateForTask,
+  FLOW_TASK_FEATURE_ACCESS,
   gateDecisionForTransition,
   reviewGateForTask,
 } from "@/api/lib/flows/review-gate-task";
@@ -20,10 +20,12 @@ import {
   WORK_OBLIGATION_TRANSITION_ACTIONS,
 } from "@/api/lib/work-obligations/transitions";
 
-const transitionParams = workspaceParams({ entityId: tSafeId("entity") });
-const transitionBody = t.Object({
-  action: t.UnionEnum(WORK_OBLIGATION_TRANSITION_ACTIONS),
-  reason: t.Optional(t.String({ minLength: 1, maxLength: 1000 })),
+const transitionParams = workspaceParams({
+  entityId: resourceIdSchema("entity"),
+});
+const transitionBody = v.object({
+  action: v.picklist(WORK_OBLIGATION_TRANSITION_ACTIONS),
+  reason: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(1000))),
 });
 
 const transitionWorkObligation = createSafeHandler(

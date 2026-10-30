@@ -1,7 +1,9 @@
-import { panic } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { and, asc, eq, sql } from "drizzle-orm";
+import type { PreparedQueryConfig } from "drizzle-orm/pg-core";
 
+import { withTimeout } from "@stll/concurrency/with-timeout";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -13,8 +15,9 @@ import {
   flowRuns,
   flowRunSteps,
   flowUploadTriggerIntents,
-  pendingScoutEmissions,
   notifications,
+  pendingScoutEmissions,
+  schedulerJobs,
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
@@ -29,9 +32,14 @@ import {
   startAutomatedFlowRun,
 } from "@/api/lib/flows/start-automated-flow-run";
 import { logger } from "@/api/lib/observability/logger";
+import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
+import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
 import { DueSlot } from "@/api/lib/scheduler/due-slot";
+import { DECLARED_SCHEDULER_JOBS } from "@/api/lib/scheduler/jobs";
+import { SchedulerTaskFailure } from "@/api/lib/scheduler/types";
 import type {
   SchedulerDb,
+  SchedulerJob,
   SchedulerTaskContext,
 } from "@/api/lib/scheduler/types";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
@@ -44,17 +52,21 @@ import {
 } from "@/api/tests/helpers/org-scoped-fixture";
 import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { measureScheduledJobRunRaw } from "@/api/tests/query-perf/scheduled-run";
 import {
   explainRoot,
   scanOccurrences,
 } from "@/api/tests/query-plans/plan-walker";
 
+import { readRecoveryScanState } from "./recovery-scan-cursor";
 import { recoverScoutEmission } from "./scout-emission-recovery";
 import {
+  RECOVER_UPLOAD_FLOW_TRIGGERS_TASK,
   recoverUploadFlowTriggerIntents,
+  recoverUploadFlowTriggers,
   resumeUploadTriggersAfterGrant,
-  uploadTriggerGrantRepairQuery,
   UPLOAD_TRIGGER_BATCH_SIZE,
+  uploadTriggerGrantRepairQuery,
 } from "./upload-flow-trigger-recovery";
 
 const testState = createTestState({ file: import.meta.path, config: env });
@@ -63,6 +75,10 @@ const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const databaseUrl = process.env["DATABASE_URL"];
 const NOW = new Date("2030-01-01T12:00:00.000Z");
 const LATER = new Date("2030-01-01T12:10:00.000Z");
+
+class FixtureContinuationCrash extends TaggedError("FixtureContinuationCrash")<{
+  message: string;
+}> {}
 
 type ReceiptRaceDatabaseOptions = {
   database: GatedTestDb;
@@ -260,6 +276,660 @@ const changeTrigger = async ({
 };
 
 describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
+  test("a short task statement deadline preserves the census cursor and resumes", async () => {
+    const previous = env.FEATURE_FLOWS;
+    const restoreMode = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
+    testState.setConfig("FEATURE_FLOWS", true);
+    try {
+      await withGatedTestClients(
+        databaseUrl ?? panic("Missing PostgreSQL test URL"),
+        async ({ openClient }) => {
+          const { db } = openClient();
+          const blocker = openClient();
+          const fixture = await uploadFixture(db);
+          const secondEntityId = createSafeId<"entity">();
+          await db.insert(entities).values({
+            id: secondEntityId,
+            workspaceId: fixture.workspaceId,
+            name: "second-receipt.pdf",
+            createdBy: fixture.userId,
+          });
+          await withOrgScopedFixtureTransaction({
+            tx: db,
+            workspaceId: fixture.workspaceId,
+            fn: async (fixtureTx) =>
+              await fixtureTx.insert(flowUploadTriggerIntents).values({
+                definitionId: fixture.definitionId,
+                entityId: secondEntityId,
+                organizationId: fixture.organizationId,
+                workspaceId: fixture.workspaceId,
+                fileExtension: "pdf",
+                retryAt: NOW,
+              }),
+          });
+
+          const definition =
+            DECLARED_SCHEDULER_JOBS.find(
+              ({ id }) => id === "flows.recoverUploadTriggers.fiveMinute",
+            ) ?? panic("Missing declared upload recovery scheduler job");
+          const leaseToken = `deadline-${createSafeId<"schedulerJobRun">()}`;
+          const job =
+            (
+              await db
+                .insert(schedulerJobs)
+                .values({
+                  id: definition.id,
+                  task: definition.task,
+                  description: definition.description,
+                  schedule: definition.schedule,
+                  payload: "payload" in definition ? definition.payload : null,
+                  enabled: true,
+                  nextRunAt: NOW,
+                  lockedAt: NOW,
+                  lockedBy: leaseToken,
+                  lockedUntil: new Date(NOW.getTime() + 60_000),
+                })
+                .onConflictDoUpdate({
+                  target: schedulerJobs.id,
+                  set: {
+                    lockedAt: NOW,
+                    lockedBy: leaseToken,
+                    lockedUntil: new Date(NOW.getTime() + 60_000),
+                  },
+                })
+                .returning()
+            ).at(0) ?? panic("Expected a persisted upload recovery job");
+
+          let releaseBlocker = () => undefined;
+          let announceLock = () => undefined;
+          const lockHeld = new Promise<void>((resolve) => {
+            announceLock = resolve;
+          });
+          const blockerRelease = new Promise<void>((resolve) => {
+            releaseBlocker = resolve;
+          });
+          const blockerTransaction = blocker.db.transaction(async (tx) => {
+            await lockFeatureRecoveryAdmission({
+              tx,
+              organizationId: fixture.organizationId,
+              featureId: "flows",
+            });
+            announceLock();
+            await blockerRelease;
+          });
+
+          let censusCheckpointCommitted = false;
+          let timeoutWasShortened = false;
+          const transaction = db.transaction.bind(db);
+          const shortDeadlineDb = asTestRaw<SchedulerDb>({
+            select: db.select.bind(db),
+            query: db.query,
+            transaction: async (operation) => {
+              const result = await transaction(async (tx) => {
+                const session = tx._.session;
+                const prepare = session.prepareQuery.bind(session);
+                session.prepareQuery = <
+                  T extends PreparedQueryConfig = PreparedQueryConfig,
+                >(
+                  ...args: Parameters<typeof session.prepareQuery>
+                ) => {
+                  const query = args[0];
+                  if (
+                    censusCheckpointCommitted &&
+                    query.sql.includes("set_config('statement_timeout'") &&
+                    query.params.includes("5000ms")
+                  ) {
+                    args[0] = {
+                      ...query,
+                      params: query.params.map((value) =>
+                        value === "5000ms" ? "1ms" : value,
+                      ),
+                    };
+                    timeoutWasShortened = true;
+                  }
+                  return prepare<T>(...args);
+                };
+                try {
+                  return await operation(tx);
+                } finally {
+                  session.prepareQuery = prepare;
+                }
+              });
+              const persistedJob =
+                (
+                  await db
+                    .select()
+                    .from(schedulerJobs)
+                    .where(eq(schedulerJobs.id, job.id))
+                ).at(0) ?? panic("Missing upload recovery cursor checkpoint");
+              const state = readRecoveryScanState(
+                persistedJob,
+                persistedJob.payload,
+              );
+              censusCheckpointCommitted =
+                state.type === "upload" &&
+                state.value.census !== null &&
+                state.value.dispatch === null;
+              return result;
+            },
+          });
+          const invoke = async (database: SchedulerDb, current: SchedulerJob) =>
+            await recoverUploadFlowTriggers({
+              db: database,
+              dueAt: DueSlot.of(current),
+              job: current,
+              payload: current.payload,
+              runId: createSafeId<"schedulerJobRun">(),
+              signal: new AbortController().signal,
+              scheduleContinuation: () => undefined,
+              logger,
+            } satisfies SchedulerTaskContext);
+
+          let admissionLockHeld = false;
+          let pendingTask:
+            Promise<Awaited<ReturnType<typeof invoke>>> | undefined;
+          try {
+            await withTimeout(async () => await lockHeld, {
+              label: "upload recovery admission lock",
+              timeoutMs: 1000,
+            });
+            admissionLockHeld = true;
+            const censusOutcome = await invoke(shortDeadlineDb, job);
+            expect(
+              censusOutcome === undefined || Result.isOk(censusOutcome),
+            ).toBe(true);
+            const dispatchJob =
+              (
+                await db
+                  .select()
+                  .from(schedulerJobs)
+                  .where(eq(schedulerJobs.id, definition.id))
+              ).at(0) ?? panic("Missing dispatch-phase recovery job");
+            expect(dispatchJob.payload?.recoveryScan).toMatchObject({
+              phase: "dispatch",
+            });
+            const firstRun = invoke(shortDeadlineDb, dispatchJob);
+            pendingTask = firstRun;
+            const firstOutcome = await withTimeout(async () => await firstRun, {
+              label: "upload recovery statement timeout",
+              timeoutMs: 1000,
+            });
+            expect(censusCheckpointCommitted).toBe(true);
+            expect(timeoutWasShortened).toBe(true);
+            if (firstOutcome === undefined || Result.isOk(firstOutcome)) {
+              panic("Expected the upload recovery task to return a failure");
+            }
+            expect(firstOutcome.error).toBeInstanceOf(SchedulerTaskFailure);
+            expect(isPgError(firstOutcome.error, PG_ERROR.QUERY_CANCELED)).toBe(
+              true,
+            );
+
+            const checkpointed =
+              (
+                await db
+                  .select()
+                  .from(schedulerJobs)
+                  .where(eq(schedulerJobs.id, definition.id))
+              ).at(0) ?? panic("Missing checkpointed upload recovery job");
+            expect(checkpointed.payload?.recoveryScan).toMatchObject({
+              census: {
+                definitionId: fixture.definitionId,
+              },
+              dispatch: null,
+            });
+
+            await changeTrigger({ db, fixture, change: "disabled" });
+            releaseBlocker();
+            await blockerTransaction;
+            admissionLockHeld = false;
+            await pendingTask;
+            const resumed = await invoke(db, checkpointed);
+            expect(resumed === undefined || Result.isOk(resumed)).toBe(true);
+            expect(
+              await db
+                .select({ status: flowUploadTriggerIntents.status })
+                .from(flowUploadTriggerIntents)
+                .where(
+                  and(
+                    eq(
+                      flowUploadTriggerIntents.definitionId,
+                      fixture.definitionId,
+                    ),
+                    eq(flowUploadTriggerIntents.entityId, fixture.entityId),
+                  ),
+                ),
+            ).toEqual([{ status: "skipped" }]);
+          } finally {
+            if (admissionLockHeld) {
+              await changeTrigger({ db, fixture, change: "disabled" });
+            }
+            releaseBlocker();
+            await blockerTransaction;
+            await pendingTask;
+            await db
+              .delete(organization)
+              .where(eq(organization.id, fixture.organizationId));
+            await db.delete(user).where(eq(user.id, fixture.userId));
+          }
+        },
+      );
+    } finally {
+      testState.setConfig("FEATURE_FLOWS", previous);
+      restoreMode();
+    }
+  });
+
+  for (const scenario of ["admitted", "revoked-before-dispatch"] as const) {
+    test(`resumes a persisted upload cursor after continuation scheduling fails (${scenario})`, async () => {
+      const previous = env.FEATURE_FLOWS;
+      const restoreMode = setRuntimeModeForTesting({
+        mode: RUNTIME_MODE.strict,
+      });
+      testState.setConfig("FEATURE_FLOWS", true);
+      try {
+        await withGatedTestClients(
+          databaseUrl ?? panic("Missing PostgreSQL test URL"),
+          async ({ openClient }) => {
+            const { db } = openClient();
+            const definition =
+              DECLARED_SCHEDULER_JOBS.find(
+                ({ id }) => id === "flows.recoverUploadTriggers.fiveMinute",
+              ) ?? panic("Missing declared upload recovery scheduler job");
+            const previousJob = (
+              await db
+                .select()
+                .from(schedulerJobs)
+                .where(eq(schedulerJobs.id, definition.id))
+            ).at(0);
+            let fixture: Awaited<ReturnType<typeof uploadFixture>> | undefined;
+            const leaseToken = `continuation-crash-${createSafeId<"schedulerJobRun">()}`;
+            const crash = new FixtureContinuationCrash({
+              message: "Synthetic continuation scheduling failure",
+            });
+
+            const restoreSchedulerJob = async () => {
+              if (previousJob === undefined) {
+                await db
+                  .delete(schedulerJobs)
+                  .where(eq(schedulerJobs.id, definition.id));
+                return;
+              }
+              await db
+                .insert(schedulerJobs)
+                .values(previousJob)
+                .onConflictDoUpdate({
+                  target: schedulerJobs.id,
+                  set: { ...previousJob },
+                });
+            };
+            const readJob = async () => {
+              const rows = await db
+                .select()
+                .from(schedulerJobs)
+                .where(eq(schedulerJobs.id, definition.id))
+                .limit(1);
+              return (
+                rows.at(0) ??
+                panic("Missing persisted upload recovery scheduler job")
+              );
+            };
+            const renewLease = async () => {
+              const lockedAt = new Date(NOW);
+              const renewedLeaseToken = `continuation-resume-${createSafeId<"schedulerJobRun">()}`;
+              await db
+                .update(schedulerJobs)
+                .set({
+                  lockedAt,
+                  lockedBy: renewedLeaseToken,
+                  lockedUntil: new Date(lockedAt.getTime() + 60_000),
+                })
+                .where(eq(schedulerJobs.id, definition.id));
+              return await readJob();
+            };
+            const invoke = async (
+              job: SchedulerJob,
+              scheduleContinuation: SchedulerTaskContext["scheduleContinuation"],
+            ) =>
+              await recoverUploadFlowTriggers({
+                db: asTestRaw<SchedulerDb>(db),
+                dueAt: DueSlot.of(job),
+                job,
+                payload: job.payload,
+                runId: createSafeId<"schedulerJobRun">(),
+                signal: new AbortController().signal,
+                scheduleContinuation,
+                logger,
+              } satisfies SchedulerTaskContext);
+
+            try {
+              const currentFixture = await uploadFixture(db);
+              fixture = currentFixture;
+              await db
+                .update(flowDefinitions)
+                .set({
+                  steps: [
+                    {
+                      kind: "review-gate",
+                      name: "Review upload",
+                      instructions: "Review the uploaded source.",
+                    },
+                  ],
+                })
+                .where(eq(flowDefinitions.id, currentFixture.definitionId));
+              await withOrgScopedFixture({
+                database: db,
+                workspaceId: currentFixture.workspaceId,
+                fn: async (fixtureTx) =>
+                  await fixtureTx
+                    .update(flowUploadTriggerIntents)
+                    .set({ status: "awaiting_grant", retryAt: NOW })
+                    .where(
+                      and(
+                        eq(
+                          flowUploadTriggerIntents.definitionId,
+                          currentFixture.definitionId,
+                        ),
+                        eq(
+                          flowUploadTriggerIntents.entityId,
+                          currentFixture.entityId,
+                        ),
+                      ),
+                    ),
+              });
+              const secondEntityId = brandPersistedEntityId(
+                "ffffffff-ffff-7fff-bfff-ffffffffffff",
+              );
+              expect(secondEntityId > currentFixture.entityId).toBe(true);
+              await db.insert(workspaceMembers).values({
+                workspaceId: currentFixture.otherWorkspaceId,
+                userId: currentFixture.userId,
+              });
+              await db.insert(entities).values({
+                id: secondEntityId,
+                workspaceId: currentFixture.otherWorkspaceId,
+                name: "cursor-sentinel.pdf",
+                createdBy: currentFixture.userId,
+              });
+              await withOrgScopedFixture({
+                database: db,
+                workspaceId: currentFixture.otherWorkspaceId,
+                fn: async (fixtureTx) =>
+                  await fixtureTx.insert(flowUploadTriggerIntents).values({
+                    definitionId: currentFixture.definitionId,
+                    entityId: secondEntityId,
+                    organizationId: currentFixture.organizationId,
+                    workspaceId: currentFixture.otherWorkspaceId,
+                    fileExtension: "pdf",
+                    status: "awaiting_grant",
+                    retryAt: NOW,
+                  }),
+              });
+
+              const leaseUntil = new Date(NOW.getTime() + 60_000);
+              const job =
+                (
+                  await db
+                    .insert(schedulerJobs)
+                    .values({
+                      id: definition.id,
+                      task: definition.task,
+                      description: definition.description,
+                      schedule: definition.schedule,
+                      payload:
+                        "payload" in definition ? definition.payload : null,
+                      enabled: true,
+                      nextRunAt: NOW,
+                      lockedAt: NOW,
+                      lockedBy: leaseToken,
+                      lockedUntil: leaseUntil,
+                    })
+                    .onConflictDoUpdate({
+                      target: schedulerJobs.id,
+                      set: {
+                        task: definition.task,
+                        description: definition.description,
+                        schedule: definition.schedule,
+                        payload:
+                          "payload" in definition ? definition.payload : null,
+                        enabled: true,
+                        nextRunAt: NOW,
+                        lockedAt: NOW,
+                        lockedBy: leaseToken,
+                        lockedUntil: leaseUntil,
+                      },
+                    })
+                    .returning()
+                ).at(0) ?? panic("Expected a persisted upload recovery job");
+
+              const crashed = await invoke(job, () => {
+                throw crash;
+              });
+              if (crashed === undefined || Result.isOk(crashed)) {
+                panic("Expected continuation scheduling to fail");
+              }
+              expect(crashed.error).toBeInstanceOf(SchedulerTaskFailure);
+              expect(crashed.error.cause).toBe(crash);
+
+              const checkpointed = await readJob();
+              const checkpoint = readRecoveryScanState(
+                checkpointed,
+                checkpointed.payload,
+              );
+              if (checkpoint.type !== "upload") {
+                panic("Upload recovery persisted a scout cursor");
+              }
+              expect(checkpoint.value).toEqual({
+                phase: "dispatch",
+                census: {
+                  definitionId: currentFixture.definitionId,
+                  entityId: currentFixture.entityId,
+                },
+                dispatch: null,
+              });
+              expect(
+                await db.$count(
+                  flowRuns,
+                  eq(flowRuns.definitionId, currentFixture.definitionId),
+                ),
+              ).toBe(0);
+
+              if (scenario === "revoked-before-dispatch") {
+                await db
+                  .delete(featureEnrolments)
+                  .where(
+                    and(
+                      eq(
+                        featureEnrolments.organizationId,
+                        currentFixture.organizationId,
+                      ),
+                      eq(featureEnrolments.userId, currentFixture.userId),
+                      eq(featureEnrolments.featureId, "flows"),
+                    ),
+                  );
+              }
+              const resumed = await invoke(await renewLease(), () => undefined);
+              expect(resumed === undefined || Result.isOk(resumed)).toBe(true);
+              if (scenario === "revoked-before-dispatch") {
+                expect(
+                  await db.$count(
+                    flowUploadTriggerIntents,
+                    and(
+                      eq(
+                        flowUploadTriggerIntents.definitionId,
+                        currentFixture.definitionId,
+                      ),
+                      eq(
+                        flowUploadTriggerIntents.entityId,
+                        currentFixture.entityId,
+                      ),
+                    ),
+                  ),
+                ).toBe(1);
+                expect(
+                  await db.$count(
+                    flowRuns,
+                    eq(flowRuns.definitionId, currentFixture.definitionId),
+                  ),
+                ).toBe(0);
+                await db.insert(featureEnrolments).values({
+                  organizationId: currentFixture.organizationId,
+                  userId: currentFixture.userId,
+                  featureId: "flows",
+                });
+                for (let pass = 0; pass < 4; pass += 1) {
+                  const continued = await invoke(
+                    await renewLease(),
+                    () => undefined,
+                  );
+                  expect(
+                    continued === undefined || Result.isOk(continued),
+                  ).toBe(true);
+                }
+              }
+              expect(
+                await db.$count(
+                  flowUploadTriggerIntents,
+                  and(
+                    eq(
+                      flowUploadTriggerIntents.definitionId,
+                      currentFixture.definitionId,
+                    ),
+                    eq(
+                      flowUploadTriggerIntents.entityId,
+                      currentFixture.entityId,
+                    ),
+                  ),
+                ),
+              ).toBe(0);
+              expect(
+                await db.$count(
+                  flowRuns,
+                  eq(flowRuns.definitionId, currentFixture.definitionId),
+                ),
+              ).toBe(1);
+
+              for (let pass = 0; pass < 2; pass += 1) {
+                const continued = await invoke(
+                  await renewLease(),
+                  () => undefined,
+                );
+                expect(continued === undefined || Result.isOk(continued)).toBe(
+                  true,
+                );
+                expect(
+                  await db.$count(
+                    flowUploadTriggerIntents,
+                    and(
+                      eq(
+                        flowUploadTriggerIntents.definitionId,
+                        currentFixture.definitionId,
+                      ),
+                      eq(
+                        flowUploadTriggerIntents.entityId,
+                        currentFixture.entityId,
+                      ),
+                    ),
+                  ),
+                ).toBe(0);
+                expect(
+                  await db.$count(
+                    flowRuns,
+                    eq(flowRuns.definitionId, currentFixture.definitionId),
+                  ),
+                ).toBe(1);
+              }
+            } finally {
+              try {
+                await restoreSchedulerJob();
+              } finally {
+                if (fixture !== undefined) {
+                  await db
+                    .delete(organization)
+                    .where(eq(organization.id, fixture.organizationId));
+                  await db.delete(user).where(eq(user.id, fixture.userId));
+                }
+              }
+            }
+          },
+        );
+      } finally {
+        testState.setConfig("FEATURE_FLOWS", previous);
+        restoreMode();
+      }
+    });
+  }
+
+  test("scheduled measurement persists the recovery transition", async () => {
+    const previous = env.FEATURE_FLOWS;
+    const restoreMode = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
+    testState.setConfig("FEATURE_FLOWS", true);
+    try {
+      await withGatedTestClients(
+        databaseUrl ?? panic("Missing PostgreSQL test URL"),
+        async ({ openClient }) => {
+          const { db } = openClient();
+          const fixture = await uploadFixture(db);
+          try {
+            await db
+              .delete(featureEnrolments)
+              .where(
+                and(
+                  eq(featureEnrolments.organizationId, fixture.organizationId),
+                  eq(featureEnrolments.userId, fixture.userId),
+                  eq(featureEnrolments.featureId, "flows"),
+                ),
+              );
+
+            const measured = await measureScheduledJobRunRaw({
+              database: db,
+              jobId: "flows.recoverUploadTriggers.fiveMinute",
+              task: RECOVER_UPLOAD_FLOW_TRIGGERS_TASK,
+              now: NOW,
+            });
+            expect(
+              measured.executedStatements.some(
+                ({ text }) =>
+                  /\bupdate\b/iu.test(text) &&
+                  text.includes("flow_upload_trigger_intents"),
+              ),
+            ).toBe(true);
+            expect(
+              JSON.stringify(measured.statements.map(({ plan }) => plan)),
+            ).toContain("app.organization_id");
+            expect(
+              await db
+                .select({ status: flowUploadTriggerIntents.status })
+                .from(flowUploadTriggerIntents)
+                .where(
+                  and(
+                    eq(
+                      flowUploadTriggerIntents.definitionId,
+                      fixture.definitionId,
+                    ),
+                    eq(flowUploadTriggerIntents.entityId, fixture.entityId),
+                  ),
+                ),
+            ).toEqual([{ status: "awaiting_grant" }]);
+            expect(
+              await db.$count(
+                flowRuns,
+                eq(flowRuns.definitionId, fixture.definitionId),
+              ),
+            ).toBe(0);
+          } finally {
+            await db
+              .delete(organization)
+              .where(eq(organization.id, fixture.organizationId));
+            await db.delete(user).where(eq(user.id, fixture.userId));
+          }
+        },
+      );
+    } finally {
+      testState.setConfig("FEATURE_FLOWS", previous);
+      restoreMode();
+    }
+  });
+
   test("global upload recovery retains other organizations' scheduled sources", async () => {
     const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
     testState.setConfig("FEATURE_FLOWS", true);

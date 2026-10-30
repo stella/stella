@@ -1,13 +1,15 @@
 import { Result } from "better-result";
 import { and, asc, eq, ilike, or, sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { numberFromString } from "@stll/api-contract/http-input";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { entities, fields } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tPaginationCursor } from "@/api/lib/custom-schema";
+import { paginationCursorSchema } from "@/api/lib/custom-schema";
 import {
   decodeEntityFileListCursor,
   encodeEntityFileListCursor,
@@ -24,17 +26,21 @@ import { DOCX_MIME_TYPE } from "@/api/mime-types";
 const SOURCES_PAGE_SIZE_DEFAULT = 20;
 const SOURCES_PAGE_SIZE_MAX = 50;
 
-const listSourcesQuerySchema = t.Object({
-  q: t.Optional(t.String({ maxLength: LIMITS.entityNameMaxLength })),
-  limit: t.Optional(
-    t.Integer({
-      minimum: 1,
-      maximum: SOURCES_PAGE_SIZE_MAX,
-    }),
+const listSourcesQuerySchema = v.object({
+  q: v.optional(v.pipe(v.string(), v.maxLength(LIMITS.entityNameMaxLength))),
+  limit: v.optional(
+    numberFromString(
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(1),
+        v.maxValue(SOURCES_PAGE_SIZE_MAX),
+      ),
+    ),
   ),
-  cursor: t.Optional(tPaginationCursor()),
+  cursor: v.optional(paginationCursorSchema()),
 });
-type ListSourcesQuery = (typeof listSourcesQuerySchema)["static"];
+type ListSourcesQuery = v.InferOutput<typeof listSourcesQuerySchema>;
 
 type ListSourcesArgs = {
   safeDb: SafeDb;

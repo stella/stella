@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 
 import { OUTLINE_CONTROL_MIN_SIZE } from "./outline-rail";
 
@@ -218,69 +218,59 @@ for (const presentation of ["rail", "popover"] as const) {
   });
 }
 
-test("popover trigger has a usable target and does not cover any tick", async ({
+test("popover tick focus opens the outline and Escape returns focus", async ({
   page,
 }) => {
   await openFixture(page, "popover");
-  const trigger = page.getByRole("button", { name: "Document outline" });
-  const triggerBox = await readBox(trigger);
-  expect(triggerBox.width).toBeGreaterThanOrEqual(OUTLINE_CONTROL_MIN_SIZE);
-  expect(triggerBox.height).toBeGreaterThanOrEqual(OUTLINE_CONTROL_MIN_SIZE);
+  const ticks = page.locator("[data-outline-ticks]");
+  const firstTick = ticks.locator("button").first();
+  const panel = page.getByRole("navigation", { name: "Document outline" });
 
-  const ticks = await page.locator("[data-outline-ticks] button").all();
-  expect(ticks.length).toBeGreaterThan(0);
-  for (const tick of ticks) {
-    const tickBox = await readBox(tick);
-    const overlaps =
-      triggerBox.x < tickBox.x + tickBox.width &&
-      triggerBox.x + triggerBox.width > tickBox.x &&
-      triggerBox.y < tickBox.y + tickBox.height &&
-      triggerBox.y + triggerBox.height > tickBox.y;
-    expect(overlaps).toBe(false);
-  }
+  await firstTick.focus();
+  await expect(firstTick).toHaveAttribute("aria-expanded", "true");
+  await expect(panel).toBeVisible();
+  await panel.locator("button").first().focus();
+  await page.keyboard.press("Escape");
+  await expect(firstTick).toHaveAttribute("aria-expanded", "false");
+  await expect(panel).toBeHidden();
+  await expect(firstTick).toBeFocused();
 });
 
-test("a second disclosure click closes the pinned outline, while outside focus still dismisses it", async ({
+test("popover closes when focus leaves its rail", async ({ page }) => {
+  await openFixture(page, "popover");
+  const ticks = page.locator("[data-outline-ticks]");
+  const firstTick = ticks.locator("button").first();
+  await firstTick.focus();
+  await expect(firstTick).toHaveAttribute("aria-expanded", "true");
+  await page.getByTestId("resize-composer").focus();
+  await expect(firstTick).toHaveAttribute("aria-expanded", "false");
+});
+
+test("popover opens when the pointer hovers the tick strip", async ({
   page,
 }) => {
   await openFixture(page, "popover");
-  const trigger = page.getByRole("button", {
-    name: "Document outline",
-    exact: true,
-  });
-  const panel = page.getByRole("navigation", {
-    name: "Document outline",
-    exact: true,
-  });
-  await trigger.click();
-  await expect(trigger).toHaveAttribute("aria-expanded", "true");
-  await expect(panel).toBeFocused();
-  await trigger.click();
-  await expect(trigger).toHaveAttribute("aria-expanded", "false");
-  await expect(panel).toBeHidden();
-  await trigger.click();
-  await expect(panel).toBeFocused();
-  await page.getByTestId("resize-composer").click();
-  await expect(trigger).toHaveAttribute("aria-expanded", "false");
+  const ticks = page.locator("[data-outline-ticks]");
+  const firstTick = ticks.locator("button").first();
+  const panel = page.getByRole("navigation", { name: "Document outline" });
+  await expect(firstTick).toHaveAttribute("aria-expanded", "false");
+  await ticks.hover({ position: { x: 1, y: 1 } });
+  await expect(firstTick).toHaveAttribute("aria-expanded", "true");
+  await expect(panel).toBeVisible();
 });
 
 test.describe("coarse-pointer controls", () => {
   test.use({ hasTouch: true });
 
-  test("disclosure and tree controls keep 32px visuals with 44px touch targets", async ({
+  test("tick-strip taps open the panel and tree controls keep 44px touch targets", async ({
     page,
   }) => {
     await openFixture(page, "popover");
     expect(
       await page.evaluate(() => matchMedia("(pointer: coarse)").matches),
     ).toBe(true);
-    const trigger = page.getByRole("button", {
-      name: "Document outline",
-      exact: true,
-    });
-    const triggerBox = await readBox(trigger);
-    expect(triggerBox.width).toBe(OUTLINE_CONTROL_MIN_SIZE);
-    expect(triggerBox.height).toBe(OUTLINE_CONTROL_MIN_SIZE);
+    const ticks = page.locator("[data-outline-ticks]");
+    const firstTick = ticks.locator("button").first();
     const assertTouchTarget = async (control: Locator) => {
       const target = await control.evaluate((element) => {
         const style = getComputedStyle(element, "::after");
@@ -292,13 +282,11 @@ test.describe("coarse-pointer controls", () => {
       expect(target.width).toBeGreaterThanOrEqual(44);
       expect(target.height).toBeGreaterThanOrEqual(44);
     };
-    await assertTouchTarget(trigger);
-    // Four pixels beyond the painted edge must still operate the disclosure.
-    await page.mouse.click(
-      triggerBox.x + triggerBox.width + 4,
-      triggerBox.y + triggerBox.height / 2,
-    );
-    await expect(trigger).toHaveAttribute("aria-expanded", "true");
+    await ticks.tap({ position: { x: 1, y: 1 } });
+    await expect(firstTick).toHaveAttribute("aria-expanded", "true");
+    await page.getByTestId("resize-composer").tap();
+    await expect(firstTick).toHaveAttribute("aria-expanded", "false");
+    await ticks.tap({ position: { x: 1, y: 1 } });
     const collapse = page
       .getByRole("button", { name: "Collapse", exact: true })
       .first();
@@ -321,22 +309,4 @@ test.describe("coarse-pointer controls", () => {
       composerBox.y,
     );
   });
-});
-
-test("disclosure icon mirrors with RTL chrome", async ({ page }) => {
-  await openFixture(page, "popover");
-  const icon = page
-    .getByRole("button", { name: "Document outline", exact: true })
-    .locator("svg");
-  expect(
-    await icon.evaluate((element) => getComputedStyle(element).scale),
-  ).toBe("none");
-  await page.evaluate(() => {
-    document.documentElement.dir = "rtl";
-  });
-  await expect
-    .poll(async () =>
-      icon.evaluate((element) => getComputedStyle(element).scale),
-    )
-    .toBe("-1 1");
 });

@@ -328,6 +328,178 @@ describe("the hard invariants of a numbering", () => {
     ).toEqual([1, 2, null, null, null, 3]);
   });
 
+  test("earlier English quotes cannot cancel a later Czech quotation", () => {
+    const numbering = extractCourtParagraphNumbers(
+      [
+        "[1] Výraz “pojem” soud vysvětlil: „Citace začíná.",
+        "[117] Citace končí.“",
+        "[2] Soud dále uvážil.",
+        "[3] Soud uzavřel.",
+      ].map((text, index) => paragraph(index, text)),
+    );
+    expect(numbering.type).toBe("numbered");
+    expect(
+      numbering.blocks.map((block) =>
+        block.type === "paragraph" ? (block.number ?? null) : null,
+      ),
+    ).toEqual([1, null, 2, 3]);
+  });
+
+  test.each([1, 2, 3, 4, 117, 118])(
+    "a quoted paragraph %i cannot advance the court's sequence",
+    (quotedNumber) => {
+      const numbering = extractCourtParagraphNumbers(
+        [
+          "[1] Soud uvážil.",
+          "[2] Soud uvedl: „Citace začíná.",
+          `[${String(quotedNumber)}] Citace pokračuje a končí.“`,
+          "[3] Soud dále uvážil.",
+          "[4] Soud uzavřel.",
+        ].map((text, index) => paragraph(index, text)),
+      );
+      expect(numbering.type).toBe("numbered");
+      expect(
+        numbering.blocks.map((block) =>
+          block.type === "paragraph" ? (block.number ?? null) : null,
+        ),
+      ).toEqual([1, 2, null, 3, 4]);
+    },
+  );
+
+  test("a quoted decision's paragraph numbers are not the court's", () => {
+    const read = (quoted: string) =>
+      extractCourtParagraphNumbers(
+        [
+          "[1] Soud uvážil.",
+          "[2] Osmý senát uvedl:",
+          `${quoted}[117] Citovaný soud rozhodl takto.`,
+          "[118] Citace pokračuje a končí.“",
+          "[3] Soud dále uvážil.",
+        ].map((text, index) => paragraph(index, text)),
+      );
+    const numbers = (numbering: ReturnType<typeof read>) =>
+      numbering.blocks.map((block) =>
+        block.type === "paragraph" ? (block.number ?? null) : null,
+      );
+    // The quotation the court opened before "[117]" is still open at
+    // "[118]": that number is the quoted decision's.
+    expect(numbers(read("„"))).toEqual([1, 2, null, null, 3]);
+    // Without the quotation, "[118]" is a marker nothing explains.
+    expect(read("").type).toBe("rejected");
+  });
+
+  test.each([
+    ["„ … ”", "„", "”"],
+    ["» … «", "»", "«"],
+    ["« … »", "«", "»"],
+  ])(
+    "a quotation printed %s sets its paragraph numbers apart",
+    (_, open, close) => {
+      const numbering = extractCourtParagraphNumbers(
+        [
+          "[1] Soud uvážil.",
+          "[2] Osmý senát uvedl:",
+          `${open}[117] Citovaný soud rozhodl takto.`,
+          `[118] Citace pokračuje a končí.${close}`,
+          "[3] Soud dále uvážil.",
+        ].map((text, index) => paragraph(index, text)),
+      );
+      expect(
+        numbering.blocks.map((block) =>
+          block.type === "paragraph" ? (block.number ?? null) : null,
+        ),
+      ).toEqual([1, 2, null, null, 3]);
+    },
+  );
+
+  test.each(["dot", "paren", "bracket"] as const)(
+    "closed guillemet quotations cannot hide the court's next %s marker",
+    (style) => {
+      const marker = {
+        dot: (number: number) => `${String(number)}.`,
+        paren: (number: number) => `${String(number)})`,
+        bracket: (number: number) => `[${String(number)}]`,
+      }[style];
+      for (const [open, close] of [
+        ["«", "»"],
+        ["»", "«"],
+      ] as const) {
+        const numbering = extractCourtParagraphNumbers(
+          [
+            `${marker(1)} Soud uvážil.`,
+            `${marker(2)} Soud uvedl ${open}první citaci${close}.`,
+            `${marker(3)} Soud uvedl ${open}další citaci.`,
+            `Citace pokračuje a končí.${close}`,
+            `${marker(4)} Soud uzavřel.`,
+          ].map((text, index) => paragraph(index, text)),
+        );
+        expect(
+          numbering.blocks.map((block) =>
+            block.type === "paragraph" ? (block.number ?? null) : null,
+          ),
+          `${open} … ${close}`,
+        ).toEqual([1, 2, 3, null, 4]);
+      }
+    },
+  );
+
+  test.each(["dot", "paren", "bracket"] as const)(
+    "a quote closing in a later paragraph cannot hide the next court %s marker",
+    (style) => {
+      const marker = {
+        dot: (number: number) => `${String(number)}.`,
+        paren: (number: number) => `${String(number)})`,
+        bracket: (number: number) => `[${String(number)}]`,
+      }[style];
+      for (const [open, close] of [
+        ["«", "»"],
+        ["»", "«"],
+        ["„", "“"],
+      ] as const) {
+        const numbering = extractCourtParagraphNumbers(
+          [
+            `${marker(1)} Soud uvážil.`,
+            `${marker(2)} Soud uvedl ${open}první citaci.`,
+            `Citace pokračuje a končí.${close}`,
+            `${marker(3)} Soud uvedl ${open}další citaci.`,
+            `Druhá citace končí.${close}`,
+            `${marker(4)} Soud uzavřel.`,
+          ].map((text, index) => paragraph(index, text)),
+        );
+        expect(
+          numbering.blocks.map((block) =>
+            block.type === "paragraph" ? (block.number ?? null) : null,
+          ),
+          `${open} … ${close}`,
+        ).toEqual([1, 2, null, 3, null, 4]);
+      }
+    },
+  );
+
+  test.each([
+    // Closed by a straight quote, which closes no Czech quotation.
+    ['[4] Soud cituje: „Takto rozhodl."', "[5] Soud uvážil."],
+    // Closed by the other pair's mark.
+    ["[4] Soud cituje: „Takto rozhodl.«", "[5] Soud uvážil."],
+  ])(
+    "an unmatched quotation leaves the court's markers its own: %s",
+    (quoting, next) => {
+      const numbering = extractCourtParagraphNumbers(
+        [
+          "[1] Soud uvážil.",
+          "[2] Soud uvážil dále.",
+          "[3] Soud uvážil znovu.",
+          quoting,
+          next,
+          "[6] Soud uvážil naposledy.",
+          "[4] Soud se vrací.",
+        ].map((text, index) => paragraph(index, text)),
+      );
+      // "[4]" after "[6]" goes backwards; no quotation explains it.
+      expect(numbering.type).toBe("rejected");
+    },
+  );
+
   test("consecutive lists that could own the court's next number reject the decision", () => {
     // Court 1, 2; list 1-3; list 1-2; court 3, 4, 5; list 1-2; court 6. The
     // first list's 3 could be the court's 3 with the second list following
@@ -517,3 +689,27 @@ describe("#par= links on Czech decisions", () => {
     });
   });
 });
+
+test.each([
+  ["„", "“", "«", "»"],
+  ["«", "»", "„", "“"],
+] as const)(
+  "an unmatched nested %s quote cannot survive its enclosing close %s",
+  (outerOpen, outerClose, innerOpen, innerClose) => {
+    const numbering = extractCourtParagraphNumbers(
+      [
+        "[1] Soud uvážil.",
+        `Soud cituje ${outerOpen}vnější citaci.`,
+        `[117] Citace obsahuje ${innerOpen}nedokončený úryvek.`,
+        `Vnější citace končí.${outerClose}`,
+        "[2] Soud dále uvážil.",
+        `[3] Soud vysvětlil osamocený znak ${innerClose}.`,
+      ].map((text, index) => paragraph(index, text)),
+    );
+    expect(
+      numbering.blocks.map((block) =>
+        block.type === "paragraph" ? (block.number ?? null) : null,
+      ),
+    ).toEqual([1, null, null, null, 2, 3]);
+  },
+);

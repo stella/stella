@@ -1,8 +1,12 @@
-import { panic, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 
 import type { ScopedDb } from "@/api/db/safe-db";
+import { ownAIKeyRequiredError } from "@/api/lib/ai-config-response";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
+import { admitSwitchedAction } from "@/api/lib/kill-switches/admission";
 import type { ActionKind } from "@/api/lib/rate-limit/action-kinds";
+import { isSyntheticPrincipal } from "@/api/lib/synthetic-principal/constants";
 import {
   MANAGED_MODEL_TIER,
   type ManagedModelTier,
@@ -30,6 +34,7 @@ class ModelDispatchAdmissionSettledError extends TaggedError(
  */
 export type ModelDispatchAdmission = {
   readonly type: "organization";
+  readonly userId: SafeId<"user"> | null;
   readonly organizationId: SafeId<"organization">;
   readonly actionKind: ActionKind;
   readonly modelTier: ManagedModelTier;
@@ -53,6 +58,7 @@ export type NoOrganizationModelDispatch = {
 };
 
 type AdmitModelDispatchOptions<T> = {
+  userId: SafeId<"user"> | null;
   organizationId: SafeId<"organization">;
   actionKind: ActionKind;
   /** The admitted organization's scope, read for its managed model tier. */
@@ -70,15 +76,21 @@ type AdmitModelDispatchOptions<T> = {
  * The proof lives exactly as long as `run`: when `run` settles, its signal
  * aborts and any later dispatch on it panics, so work that outlives its
  * admission (a detached generation, a proof returned out of the admitted
- * callback) cannot reach a model.
+ * callback) cannot reach a model. A proof is never minted for an action whose
+ * kill switch is off; the refusal returns as the wrapper's admission refusal.
  */
 export const admitModelDispatch = async <T>({
+  userId,
   organizationId,
   actionKind,
   organizationStateDb,
   signal,
   run,
-}: AdmitModelDispatchOptions<T>): Promise<T> => {
+}: AdmitModelDispatchOptions<T>): Promise<Result<T, ActionAdmissionError>> => {
+  const switched = admitSwitchedAction(actionKind);
+  if (Result.isError(switched)) {
+    return Result.err(switched.error);
+  }
   const modelTier = await readManagedModelTier(
     organizationStateDb,
     organizationId,
@@ -86,14 +98,17 @@ export const admitModelDispatch = async <T>({
   const settled = new AbortController();
   const hold: AdmittedHold = { status: "held" };
   try {
-    return await run({
-      type: "organization",
-      organizationId,
-      actionKind,
-      modelTier,
-      signal: AbortSignal.any([signal, settled.signal]),
-      [ADMITTED]: hold,
-    });
+    return Result.ok(
+      await run({
+        type: "organization",
+        userId,
+        organizationId,
+        actionKind,
+        modelTier,
+        signal: AbortSignal.any([signal, settled.signal]),
+        [ADMITTED]: hold,
+      }),
+    );
   } finally {
     hold.status = "settled";
     settled.abort(
@@ -111,15 +126,18 @@ export const admitModelDispatch = async <T>({
  * (`fixture-model-dispatch-admission`). Its signal never aborts.
  */
 export const admitFixtureModelDispatch = ({
+  userId,
   organizationId,
   actionKind,
   modelTier,
 }: {
+  userId: SafeId<"user"> | null;
   organizationId: SafeId<"organization">;
   actionKind: ActionKind;
   modelTier: ManagedModelTier;
 }): ModelDispatchAdmission => ({
   type: "organization",
+  userId,
   organizationId,
   actionKind,
   modelTier,
@@ -144,7 +162,9 @@ export const requireChatToolModelAdmission = (
   admission ?? panic("A chat tool dispatched a model outside an admitted turn");
 
 /** Who a dispatch serves, and the proof that its work was admitted. */
-export type ModelDispatchScope =
+export type ModelDispatchScope = {
+  userId: SafeId<"user"> | null;
+} & (
   | {
       organizationId: SafeId<"organization">;
       admission: ModelDispatchAdmission;
@@ -152,13 +172,23 @@ export type ModelDispatchScope =
   | {
       organizationId: null;
       admission: NoOrganizationModelDispatch;
-    };
+    }
+);
 
 /** A proof minted for one organization never admits another's dispatch. */
 export const assertModelDispatchScope = ({
+  userId,
   organizationId,
   admission,
 }: ModelDispatchScope): void => {
+  if (
+    isSyntheticPrincipal({
+      userId: userId ?? undefined,
+      organizationId: organizationId ?? undefined,
+    })
+  ) {
+    throw ownAIKeyRequiredError();
+  }
   switch (admission.type) {
     case "organization":
       if (admission.organizationId !== organizationId) {

@@ -6,6 +6,7 @@
 // annotations, so the trees are byte-identical.
 
 import { TaggedError, type TaggedErrorClass } from "better-result";
+import * as v from "valibot";
 
 import { RESERVED_FLAGS, RESERVED_TOP_LEVEL_NAMES } from "./annotations.js";
 import { flagKey } from "./flag-name.js";
@@ -61,7 +62,7 @@ const propertyMap = (schema: PropSchema): Record<string, PropSchema> => {
   return out;
 };
 
-/** Hard codegen failure: a collision or reserved-name violation (spec S1). */
+/** Hard codegen failure: invalid enum data, a collision or a reserved-name violation. */
 const RouteGenerationErrorBase: TaggedErrorClass<"RouteGenerationError"> =
   TaggedError("RouteGenerationError");
 
@@ -191,13 +192,20 @@ const unwrapNullableUnion = (schema: PropSchema): PropSchema => {
   return { ...outer, ...valueBranch, type: [...valueTypes, "null"] };
 };
 
+const parseEnumStrings = (values: unknown) => {
+  const parsed = v.safeParse(v.array(v.string()), values);
+  if (!parsed.success) {
+    throw new RouteGenerationError(
+      "Tool schema enum must be an array of strings",
+    );
+  }
+  return parsed.output;
+};
+
 const enumValues = (schema: PropSchema): readonly string[] | undefined => {
   const values = schema["enum"];
   if (values !== undefined) {
-    return Array.isArray(values) &&
-      values.every((value) => typeof value === "string")
-      ? values
-      : undefined;
+    return parseEnumStrings(values);
   }
   const branches = schema["anyOf"];
   if (!Array.isArray(branches) || branches.length === 0) {
@@ -205,16 +213,17 @@ const enumValues = (schema: PropSchema): readonly string[] | undefined => {
   }
   const literals: string[] = [];
   for (const branch of branches) {
+    // A string `const` implies its type, so a branch may leave `type` out.
     if (
       !isRecordSchema(branch) ||
-      branch["type"] !== "string" ||
+      (branch["type"] !== undefined && branch["type"] !== "string") ||
       typeof branch["const"] !== "string"
     ) {
       return undefined;
     }
     literals.push(branch["const"]);
   }
-  return [...new Set(literals)];
+  return parseEnumStrings([...new Set(literals)]);
 };
 
 const typeInfo = (schema: PropSchema): TypeInfo => {
@@ -332,7 +341,8 @@ const classifyObject = (
   if (schema["additionalProperties"] === true) {
     return { kind: "input-only" };
   }
-  if (!isRecord(schema["properties"])) {
+  const properties = schema["properties"];
+  if (!isRecord(properties)) {
     return { kind: "input-only" };
   }
 
@@ -345,7 +355,7 @@ const classifyObject = (
       : [],
   );
   const children: DotPathChild[] = [];
-  for (const [childName, childSchema] of Object.entries(schema["properties"])) {
+  for (const [childName, childSchema] of Object.entries(properties)) {
     if (!isRecord(childSchema)) {
       return { kind: "input-only" };
     }
@@ -385,7 +395,7 @@ const classifyObject = (
 /**
  * The schema's own `description`, as a spreadable field. Present on a curated
  * tool's hand-written property schema and on any handler-config property given
- * an Elysia `t.X({ description })`; both reach the generator as plain JSON
+ * a `v.description(...)`; both reach the generator as plain JSON
  * Schema, so one helper covers the tool tree and the capability tree alike.
  */
 const descriptionField = (schema: PropSchema): { description?: string } => {

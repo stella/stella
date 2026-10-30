@@ -3,16 +3,19 @@ import { and, asc, desc, eq, gt, isNull, lt, sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
-import { isEligibleLegislationExpression } from "@stll/api-contract/legislation-expression";
+import {
+  isEligibleLegislationExpression,
+  LEGISLATION_IDENTITY_MODES,
+} from "@stll/api-contract/legislation-expression";
 import type { LegislationWindowDispositionBasis } from "@stll/api-contract/legislation-expression";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
-import { legislationDocuments } from "@/api/db/schema";
+import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import { restrictLegislationDocumentUrls } from "@/api/handlers/legislation/ingestion/outbound-urls";
 import {
-  LegislationRevision,
   LEGISLATION_CORPUS_DEPENDENCIES,
+  LegislationRevision,
 } from "@/api/handlers/legislation/revision";
 import type {
   LegislationAmendmentObservation,
@@ -60,12 +63,14 @@ import {
   eligibleExpression,
   legislationVersionRef,
 } from "@/api/lib/legal-search/legislation-validity-window";
+import { syncLegislationWorkIdentifiersTx } from "@/api/lib/legal-search/legislation-work-identifiers";
 import { syncLegislationWorkNamesTx } from "@/api/lib/legal-search/legislation-work-names";
 import {
   RAW_SOURCE_FAMILY,
   writeRawSourcePayload,
 } from "@/api/lib/legal-search/raw-source-storage";
 import type { WriteRawSourcePayload } from "@/api/lib/legal-search/raw-source-storage";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 
 export { legislationSourceHash } from "@/api/handlers/legislation/revision";
@@ -112,7 +117,7 @@ export type ProcessLegislationResult =
  * built before publisher identities existed, whose lookup by version window
  * can land on the wrong one of two same-day versions, cannot overwrite a row.
  */
-export const LEGISLATION_WRITER_CONTRACT = "expression-v1";
+export const LEGISLATION_WRITER_CONTRACT = "expression-v2";
 
 export const declareWriterContract = async (tx: Transaction): Promise<void> => {
   await tx.execute(
@@ -385,10 +390,13 @@ const storeSourceRaw = async ({
       sourceId: input.sourceId,
       eli: input.eli,
     });
-    captureError(written.error, {
-      sourceId: input.sourceId,
-      step: "processLegislationDocument.sourceRawWrite",
-    });
+    captureError(
+      written.error,
+      handlerErrorContext("legislation.storeSourceRaw.written_error", {
+        sourceId: input.sourceId,
+        step: "processLegislationDocument.sourceRawWrite",
+      }),
+    );
     return null;
   }
   return { sourceRawS3Key: written.value, sourceRawContentType: contentType };
@@ -671,6 +679,7 @@ const commitLegislationVersion = async ({
       sourceHash: revision.sourceHash(decided),
     };
     const id = await writeDecidedVersionTx(tx, row, decidedValues, publisherId);
+    await syncLegislationWorkIdentifiersTx(tx, input);
     if (bodyChanged && projectionLock !== null) {
       await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
         lock: projectionLock,
@@ -856,6 +865,39 @@ type ProcessLegislationDocumentOptions = {
   writeSourceRaw?: WriteRawSourcePayload | undefined;
 };
 
+const validateSourceIdentity = async (
+  raw: LegislationDocumentInput,
+  scopedDb: ScopedDb,
+): Promise<void> => {
+  const hasAliases =
+    raw.identifiers?.some((identifier) => identifier !== raw.eli) === true;
+  if (raw.expression === undefined || hasAliases) {
+    const source = await scopedDb(async (tx) =>
+      (
+        await tx
+          .select({ identityMode: legislationSources.identityMode })
+          .from(legislationSources)
+          .where(eq(legislationSources.id, raw.sourceId))
+          .limit(1)
+      ).at(0),
+    );
+    if (
+      source?.identityMode === LEGISLATION_IDENTITY_MODES.publisher &&
+      raw.expression === undefined
+    ) {
+      panic("Publisher-identity legislation source requires an expression id");
+    }
+    // Older legacy writers do not reserve aliases, so only fenced sources can
+    // prevent a later canonical work from claiming an alias already in use.
+    if (
+      hasAliases &&
+      source?.identityMode !== LEGISLATION_IDENTITY_MODES.publisher
+    ) {
+      panic("Legislation work aliases require a publisher-identity source");
+    }
+  }
+};
+
 /**
  * Store + upsert one legislation document. Deduplicates by a source hash
  * over the corpus payload plus all persisted metadata: an unchanged
@@ -873,15 +915,22 @@ export const processLegislationDocument = async (
     writeSourceRaw = writeRawSourcePayload,
   }: ProcessLegislationDocumentOptions = {},
 ): Promise<ProcessLegislationResult> => {
+  await validateSourceIdentity(input, scopedDb);
   const revision = new LegislationRevision(input);
   const revisionInput = revision.input;
   const amendmentObservation = revision.amendmentObservation;
   if (amendmentObservation.type === "rejected") {
-    captureError(amendmentObservation.error, {
-      reason: amendmentObservation.error.reason,
-      sourceId: revisionInput.sourceId,
-      step: "processLegislationDocument.amendmentObservation",
-    });
+    captureError(
+      amendmentObservation.error,
+      handlerErrorContext(
+        "legislation.processLegislationDocument.amendmentObservation",
+        {
+          reason: amendmentObservation.error.reason,
+          sourceId: revisionInput.sourceId,
+          step: "processLegislationDocument.amendmentObservation",
+        },
+      ),
+    );
   }
   const window = revision.window;
   const stated = statedClassification(revisionInput);
@@ -1001,11 +1050,14 @@ export const processLegislationDocument = async (
       });
     } catch (error) {
       corpusWriteFailed = true;
-      captureError(error, {
-        documentId: id,
-        sourceId: revisionInput.sourceId,
-        step: "processLegislationDocument.corpusWrite",
-      });
+      captureError(
+        error,
+        handlerErrorContext("legislation.processLegislationDocument", {
+          documentId: id,
+          sourceId: revisionInput.sourceId,
+          step: "processLegislationDocument.corpusWrite",
+        }),
+      );
       await preserveLegislationCorpusWriteRetry({
         documentId: id,
         previousSourceHash: existing?.sourceHash ?? null,

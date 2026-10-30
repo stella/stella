@@ -20,6 +20,11 @@
 import { panic } from "better-result";
 import * as v from "valibot";
 
+import {
+  UNTRUSTED_CONTENT_CLOSE,
+  UNTRUSTED_CONTENT_OPEN,
+} from "@stll/api-contract/untrusted-content-fence";
+
 const untrustedTextSchema = v.pipe(v.string(), v.brand("UntrustedText"));
 const promptSafeTextSchema = v.pipe(v.string(), v.brand("PromptSafeText"));
 
@@ -47,8 +52,8 @@ type SanitizeForPromptOptions = {
   close?: string;
 };
 
-const DEFAULT_OPEN = "<<<UNTRUSTED>>>";
-const DEFAULT_CLOSE = "<<<END_UNTRUSTED>>>";
+const DEFAULT_OPEN = UNTRUSTED_CONTENT_OPEN;
+const DEFAULT_CLOSE = UNTRUSTED_CONTENT_CLOSE;
 
 // Structural model-control tokens (ChatML, Llama [INST]/<<SYS>>). These
 // never occur in legitimate prose, so callers that store rather than wrap
@@ -192,6 +197,20 @@ export const sanitizePromptLine = ({
     .replaceAll(DEFAULT_OPEN, " ")
     .replaceAll(DEFAULT_CLOSE, " ");
   return truncateAtUtf16Boundary(cleaned, maxLength);
+};
+
+/**
+ * Untrusted text with everything stripped that could act on the prompt around
+ * it (the same cleaning `sanitizeForPrompt` applies), without wrapping it.
+ * For values that keep their place inside structured data, such as a string
+ * field of a connector's JSON result.
+ */
+export const neutralizePromptText = (text: string): string => {
+  let cleaned = stripPromptUnsafeChars(text);
+  for (const pattern of ROLE_MARKERS) {
+    cleaned = cleaned.replace(pattern, "");
+  }
+  return cleaned.replaceAll(DEFAULT_OPEN, " ").replaceAll(DEFAULT_CLOSE, " ");
 };
 
 /**

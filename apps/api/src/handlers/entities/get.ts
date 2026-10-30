@@ -4,21 +4,22 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import {
   resolveCurrentExtractionFileField,
   resolveCurrentFileSourceField,
+  resolveDesignatedExtractionFileField,
   selectCurrentExtractedContent,
 } from "@/api/lib/document-content-provenance";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
-  FLOW_TASK_FEATURE_ACCESS,
   admitTaskFlowAccess,
+  FLOW_TASK_FEATURE_ACCESS,
 } from "@/api/lib/flows/review-gate-task";
 import { LIMITS } from "@/api/lib/limits";
 
 const readEntityByIdParamsSchema = workspaceParams({
-  entityId: tSafeId("entity", { description: "Document entity ID" }),
+  entityId: resourceIdSchema("entity", { description: "Document entity ID" }),
 });
 
 type ReadEntityByIdHandlerProps = {
@@ -100,10 +101,24 @@ export const readEntityByIdHandler = async function* ({
           },
         },
       });
-      return Result.ok(entity);
+      const pendingExtractionRun =
+        entity?.currentVersion && entity.extractedContent === null
+          ? await tx.query.documentProcessingRuns.findFirst({
+              where: {
+                entityId: { eq: entityId },
+                entityVersionId: { eq: entity.currentVersion.id },
+                kind: { eq: "native-extraction" },
+                status: { in: ["queued", "running", "failed"] },
+                workspaceId: { eq: workspaceId },
+              },
+              columns: { fieldId: true },
+              orderBy: { createdAt: "desc", id: "desc" },
+            })
+          : null;
+      return Result.ok({ entity, pendingExtractionRun });
     }),
   );
-  const entity = yield* read;
+  const { entity, pendingExtractionRun } = yield* read;
 
   if (!entity) {
     return Result.err(
@@ -127,11 +142,19 @@ export const readEntityByIdHandler = async function* ({
     currentVersionId: entity.currentVersion.id,
     fields: entity.currentVersion.fields,
   });
-  const extractionFileField = resolveCurrentExtractionFileField({
-    currentVersionId: entity.currentVersion.id,
-    extracted: currentExtracted,
-    fields: entity.currentVersion.fields,
-  });
+  const extractionFileField =
+    entity.extractedContent === null
+      ? resolveDesignatedExtractionFileField({
+          currentVersionId: entity.currentVersion.id,
+          extracted: null,
+          fields: entity.currentVersion.fields,
+          pendingSourceFieldId: pendingExtractionRun?.fieldId,
+        })
+      : resolveCurrentExtractionFileField({
+          currentVersionId: entity.currentVersion.id,
+          extracted: currentExtracted,
+          fields: entity.currentVersion.fields,
+        });
   const processingFileField = resolveCurrentFileSourceField({
     currentVersionId: entity.currentVersion.id,
     extracted: entity.extractedContent,

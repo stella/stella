@@ -1,0 +1,6 @@
+{
+  "row-level-security": "new table, nothing else holds it",
+  "create-policy": "new table, nothing else holds it",
+  "add-constraint": "The feature enrolment check is installed NOT VALID without scanning existing rows; its registered online validation is fatal if incomplete. Catalog acquisition is bounded by 1s lock_timeout and 5s statement_timeout.",
+  "add-foreign-key": "Foreign keys from the new receipt tables to existing parents are installed NOT VALID without scanning data, then validated by registered online steps. Catalog acquisition is bounded by 1s lock_timeout and 5s statement_timeout."
+}

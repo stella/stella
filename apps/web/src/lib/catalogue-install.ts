@@ -1,5 +1,6 @@
 import { api } from "@/lib/api";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { invokeCapability } from "@/lib/capabilities/capability-request";
+import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 
 /**
  * Minimal per-kind shape needed to install a catalogue entry. Kept
@@ -42,7 +43,7 @@ export const installCatalogueEntry = async (
       description: entry.description,
       url: entry.url,
     });
-    const data = unwrapEden(response);
+    const data = unwrapApiResponse(response);
     if (data.type === "confirmation_required") {
       throw toAPIError({
         status: 409,
@@ -52,11 +53,11 @@ export const installCatalogueEntry = async (
     return data;
   }
 
-  const response = await api.catalogue["install-skill"].post({
-    slug: entry.slug,
+  return await invokeCapability("catalogue.install", async (request) => {
+    const response = await api.catalogue["install-skill"].post(
+      { slug: entry.slug },
+      request,
+    );
+    return unwrapApiResponse(response);
   });
-  if (response.error) {
-    throw toAPIError(response.error);
-  }
-  return response.data;
 };

@@ -94,6 +94,10 @@
     "./provision-version-grammar": {
       "types": "./src/provision-version-grammar.ts",
       "import": "./src/provision-version-grammar.ts"
+    },
+    "./us-code-citations": {
+      "types": "./src/us-code-citations.ts",
+      "import": "./src/us-code-citations.ts"
     }
   },
   "scripts": {
@@ -102,16 +106,17 @@
     "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts')",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/legal-atlas",
-    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/legal-atlas",
-    "format": "bun ../../scripts/run-oxfmt.ts ."
+    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/legal-atlas"
   },
   "dependencies": {
+    "@stll/agent-input": "workspace:*",
     "@stll/api-contract": "workspace:*",
     "@stll/concurrency": "workspace:*",
+    "@stll/errors": "workspace:*",
     "@stll/legal-ast": "workspace:*",
     "@stll/locales": "workspace:*",
     "@stll/text-normalize": "workspace:*",
-    "@stll/time": "workspace:*",
+    "@stll/time": "0.4.1",
     "better-result": "catalog:",
     "valibot": "catalog:"
   },

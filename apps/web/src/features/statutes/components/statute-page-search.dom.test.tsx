@@ -4,8 +4,8 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 import { sleep } from "@stll/concurrency/sleep";
 
 import {
-  readProvisionCitingSearch,
   publicStatuteSearchSchema,
+  readProvisionCitingSearch,
   updateProvisionCitingSearch,
 } from "@/features/statutes/statute-page-search";
 import type { api } from "@/lib/api";

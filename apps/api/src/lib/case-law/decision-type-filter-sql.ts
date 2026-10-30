@@ -5,8 +5,8 @@ import type { SQL, SQLWrapper } from "drizzle-orm";
 import { DECISION_TYPE_KIND_OTHER } from "@stll/api-contract/case-law-decision-types";
 
 import {
-  decisionTypeFilter,
   DECISION_TYPE_KIND_BY_KEY,
+  decisionTypeFilter,
 } from "@/api/lib/case-law/decision-type-kind";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 

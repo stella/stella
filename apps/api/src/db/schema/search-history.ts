@@ -1,5 +1,8 @@
+import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
+
 import { systemScopePolicies } from "@/api/db/system-scope-policies";
 
+import { registeredReviewResetPolicies } from "../review-reset-policies";
 import {
   bytea,
   organization,
@@ -41,6 +44,14 @@ export const searchHistoryEntries = p.pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     kind: p.text("kind", { enum: SEARCH_HISTORY_KINDS }).notNull(),
+    /**
+     * The jurisdiction the entry belongs to: the one a query was typed under,
+     * or the one an opened page's path names. Null on queries a browser kept
+     * from before entries named one; no country-scoped list shows those.
+     */
+    country: p.text("country").$type<CaseLawJurisdiction>(),
+    /** When the latest use naming `country` happened; it decides refiling. */
+    countryUsedAt: timestamptz("country_used_at"),
     courtId: p.varchar("court_id", { length: 128 }),
     lookupKey: p.varchar("lookup_key", { length: 64 }).notNull(),
     ciphertext: bytea("ciphertext").notNull(),
@@ -57,6 +68,17 @@ export const searchHistoryEntries = p.pgTable(
     p
       .index("search_history_entries_owner_recent_idx")
       .on(table.organizationId, table.userId, table.lastUsedAt, table.id),
+    // Built online (`ONLINE_MIGRATION_INDEXES`): the law home lists one
+    // jurisdiction's entries.
+    p
+      .index("search_history_entries_owner_country_recent_idx")
+      .on(
+        table.organizationId,
+        table.userId,
+        table.country,
+        table.lastUsedAt,
+        table.id,
+      ),
     p
       .index("search_history_entries_owner_kind_recent_idx")
       .on(
@@ -90,6 +112,8 @@ export const searchHistoryEntries = p.pgTable(
       using: tableOwner,
       withCheck: tableOwner,
     }),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -118,6 +142,8 @@ export const searchHistoryOwners = p.pgTable(
       using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.search_history_owners'::regclass)`,
       withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.search_history_owners'::regclass)`,
     }),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -180,5 +206,7 @@ export const searchHistoryTombstones = p.pgTable(
       using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.search_history_tombstones'::regclass)`,
       withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.search_history_tombstones'::regclass)`,
     }),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );

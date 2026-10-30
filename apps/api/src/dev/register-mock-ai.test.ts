@@ -9,6 +9,7 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { apiDateSchema } from "@stll/api-contract/api-date";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
@@ -27,6 +28,7 @@ import { createTanStackTextAdapterFactory } from "@/api/lib/tanstack-ai-models";
 import { toTanStackValibotSchema } from "@/api/lib/tanstack-ai-schema";
 import { withTimeout } from "@/api/lib/with-timeout";
 import { createTestState } from "@/api/tests/helpers/test-state";
+import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 const testState = createTestState({ file: import.meta.path, config: env });
 
@@ -110,11 +112,11 @@ const novelSchema = v.strictObject({
 });
 
 // A required-nullable ISO-date leaf: the `"mock"` string primitive fails
-// `v.isoDate()`, so only synthesizing `null` for a nullable field keeps this
+// `v.isoDate(), API_CALENDAR_DATE_CHECK`, so only synthesizing `null` for a nullable field keeps this
 // parseable. Under the Google projection the field arrives as
 // `nullable: true` rather than an `anyOf` null branch.
 const nullableIsoDateSchema = v.strictObject({
-  when: v.nullable(v.pipe(v.string(), v.isoDate())),
+  when: v.nullable(apiDateSchema),
 });
 
 // A genuinely optional (not nullable) field: valid to omit, invalid as null.
@@ -326,7 +328,10 @@ for (const marker of [MOCK_AI_CANCELLATION_MARKER, MOCK_AI_CONTINUOUS_MARKER]) {
           }
           return text;
         },
-        { label: "registered live answer batch delivery", timeoutMs: 1000 },
+        {
+          label: "registered live answer batch delivery",
+          timeoutMs: HAPPY_PATH_TIMEOUT_MS,
+        },
       );
     try {
       const received = await readBatch();
@@ -386,7 +391,10 @@ for (const marker of [MOCK_AI_CANCELLATION_MARKER, MOCK_AI_CONTINUOUS_MARKER]) {
             // The replay viewer drains the producer's cancellation terminal.
           }
         },
-        { label: "registered live stream cancellation", timeoutMs: 1000 },
+        {
+          label: "registered live stream cancellation",
+          timeoutMs: HAPPY_PATH_TIMEOUT_MS,
+        },
       );
       expect(
         (await durability.snapshot()).filter(

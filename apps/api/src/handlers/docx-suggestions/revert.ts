@@ -3,7 +3,7 @@ import { and, eq, ne } from "drizzle-orm";
 
 import { docxSuggestions } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { syncReviewFindingsForSuggestions } from "@/api/lib/document-review/suggestion-finding-sync";
 import {
   DOCX_PENDING_CAPACITY,
@@ -11,6 +11,7 @@ import {
   lockDocxSuggestionPendingCapacity,
 } from "@/api/lib/docx/suggestion-pending-capacity";
 import { unreachable } from "@/api/lib/errors/tagged-errors";
+import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
 const REVERT_OUTCOME = {
   reverted: "reverted",
@@ -36,12 +37,26 @@ const REVERT_OUTCOME = {
 const revertDocxSuggestion = createSafeHandler(
   {
     contract: "patch",
+    description:
+      "Return an accepted or rejected redline suggestion to pending, clearing " +
+      "who resolved it and when. This does not undo a change already applied " +
+      "to the document file. A suggestion that is already pending answers " +
+      "{ updated: false }; a document at its pending-suggestion limit refuses " +
+      "the revert. A linked document-review finding is reopened with it.",
     permissions: { entity: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
-    mcp: { type: "internal", reason: "document_processing" },
+    mcp: {
+      type: "capability",
+      confirmation: "required",
+      reason: "document_processing",
+      consumesServices: false,
+    },
+    realtime: noResourceSetUpdates(
+      "The document review store updates reverted suggestions locally and hydrates them when the document opens.",
+    ),
     params: workspaceParams({
-      entityId: tSafeId("entity"),
-      suggestionId: tSafeId("docxSuggestion"),
+      entityId: resourceIdSchema("entity"),
+      suggestionId: resourceIdSchema("docxSuggestion"),
     }),
   },
   async function* ({ workspaceId, params, recordAuditEvent, safeDb, user }) {

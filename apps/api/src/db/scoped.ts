@@ -10,14 +10,13 @@ import type { SQLWrapper } from "drizzle-orm";
 
 import type { OrgScope, OrgScopeActor } from "@/api/db/org-scope";
 import {
-  SETTING_WORKSPACE_ACCESS_MODE,
   SETTING_ORGANIZATION_ID,
   SETTING_USER_ID,
+  SETTING_WORKSPACE_ACCESS_MODE,
   SETTING_WORKSPACE_IDS,
-  WORKSPACE_ACCESS_MODE,
   stella,
-  stellaSystem,
   stellaIngestion,
+  WORKSPACE_ACCESS_MODE,
 } from "@/api/db/rls";
 import type { Transaction } from "@/api/db/root";
 import { workspaces } from "@/api/db/schema";
@@ -38,6 +37,8 @@ import {
 import { isRecord } from "@/api/lib/type-guards";
 
 import { runUnderCorpusSchemaLane } from "./corpus-schema-lane";
+import { MEMBER_REMOVAL_SETTING } from "./member-removal-settings";
+import { SCOPED_TRANSACTION_ROLE_NAMES } from "./org-scope-role-names";
 import { resolveScopedFeatureIds } from "./scoped-feature-access";
 
 // Generic constraint accepts any drizzle instance (prod or
@@ -111,7 +112,7 @@ type SetScopedTransactionSettingsOptions = {
   userId: SafeId<"user"> | null;
   workspaceScope: WorkspaceScope;
   featureIds: readonly string[];
-  role?: "application" | "system";
+  role?: keyof typeof SCOPED_TRANSACTION_ROLE_NAMES;
 };
 
 const workspaceIdsSetting = (workspaceScope: WorkspaceScope): string => {
@@ -132,7 +133,7 @@ const installScopedTransactionSettings = async ({
   role = "application",
 }: SetScopedTransactionSettingsOptions): Promise<void> => {
   const wsIds = workspaceIdsSetting(workspaceScope);
-  const scopedRole = role === "system" ? stellaSystem : stella;
+  const scopedRole = SCOPED_TRANSACTION_ROLE_NAMES[role];
   if (userId === null) {
     // A service actor has no membership-derived authority. Resolve its
     // explicit workspace IDs against the tenant before changing the role.
@@ -150,7 +151,7 @@ const installScopedTransactionSettings = async ({
 
   await tx.execute(
     sql`SELECT
-      set_config('role', ${scopedRole.name}, true),
+      set_config('role', ${scopedRole}, true),
       set_config('${sql.raw(SETTING_WORKSPACE_IDS)}', ${userId === null ? sql`pg_catalog.current_setting('${sql.raw(SETTING_WORKSPACE_IDS)}', true)` : sql`${wsIds}`}, true),
       set_config('${sql.raw(SETTING_WORKSPACE_ACCESS_MODE)}', ${workspaceScope.type}, true),
       set_config('${sql.raw(SETTING_ORGANIZATION_ID)}', ${organizationId}, true),
@@ -170,7 +171,8 @@ type ScopedWorkInTransactionOptions<T> = {
   userId: SafeId<"user"> | null;
   workspaceScope: WorkspaceScope;
   fn: (tx: Transaction) => Promise<T>;
-  role?: "application" | "system";
+  memberTarget?: { userId: SafeId<"user">; memberId: string };
+  role?: keyof typeof SCOPED_TRANSACTION_ROLE_NAMES;
 };
 
 /** Keep aggregate cleanup atomic while lending it the application role. */
@@ -182,12 +184,15 @@ const runScopedTransactionContext = async <T>(
     workspaceScope,
     fn,
     role = "application",
+    memberTarget,
   }: ScopedWorkInTransactionOptions<T>,
   ownerFeatureIds?: readonly string[],
 ): Promise<T> => {
   const [previous] = await tx
     .select({
       role: sql<string>`current_setting('role')`,
+      removalUserId: sql<string>`coalesce(current_setting(${MEMBER_REMOVAL_SETTING.userId}, true), '')`,
+      removalMemberId: sql<string>`coalesce(current_setting(${MEMBER_REMOVAL_SETTING.memberId}, true), '')`,
       organizationId: sql<string>`coalesce(current_setting('app.organization_id', true), '')`,
       userId: sql<string>`coalesce(current_setting('app.user_id', true), '')`,
       workspaceIds: sql<string>`coalesce(current_setting('app.workspace_ids', true), '')`,
@@ -217,10 +222,16 @@ const runScopedTransactionContext = async <T>(
       featureIds,
       role,
     });
+    await scopedTx.execute(sql`SELECT
+      set_config(${MEMBER_REMOVAL_SETTING.userId}, ${memberTarget?.userId ?? ""}, true),
+      set_config(${MEMBER_REMOVAL_SETTING.memberId}, ${memberTarget?.memberId ?? ""}, true)
+    `);
     return await fn(scopedTx);
   });
   await tx.execute(sql`SELECT
     set_config('role', ${previous.role}, true),
+    set_config(${MEMBER_REMOVAL_SETTING.userId}, ${previous.removalUserId}, true),
+    set_config(${MEMBER_REMOVAL_SETTING.memberId}, ${previous.removalMemberId}, true),
     set_config('app.organization_id', ${previous.organizationId}, true),
     set_config('app.user_id', ${previous.userId}, true),
     set_config('app.workspace_ids', ${previous.workspaceIds}, true),
@@ -251,6 +262,55 @@ export const runScopedOwnerWorkInTransaction = async <T>({
   fn,
 }: ScopedOwnerWorkOptions<T>): Promise<T> => {
   switch (actor.type) {
+    case "member-removal":
+    case "correspondence-offboarding":
+    case "folio-collab-token-offboarding":
+    case "member-exchange-offboarding":
+      return await runScopedTransactionContext(
+        {
+          tx,
+          organizationId: scope.organizationId,
+          userId: actor.userId,
+          workspaceScope: {
+            type: WORKSPACE_ACCESS_MODE.explicit,
+            workspaceIds: [...scope.workspaceIds],
+          },
+          role: actor.type,
+          memberTarget: { userId: actor.userId, memberId: actor.memberId },
+          fn,
+        },
+        [],
+      );
+    case "review-reset":
+      return await runScopedTransactionContext(
+        {
+          tx,
+          organizationId: scope.organizationId,
+          userId: actor.userId,
+          workspaceScope: {
+            type: WORKSPACE_ACCESS_MODE.explicit,
+            workspaceIds: [...scope.workspaceIds],
+          },
+          role: "review-reset",
+          fn,
+        },
+        [],
+      );
+    case "workspace-search-activity":
+      return await runScopedTransactionContext(
+        {
+          tx,
+          organizationId: scope.organizationId,
+          userId: null,
+          workspaceScope: {
+            type: WORKSPACE_ACCESS_MODE.explicit,
+            workspaceIds: [...scope.workspaceIds],
+          },
+          role: actor.type,
+          fn,
+        },
+        [],
+      );
     case "system":
       return await runScopedTransactionContext({
         tx,

@@ -1,0 +1,3 @@
+{
+  "add-column": "The NOT NULL jsonb column uses a constant '[]'::jsonb default on PostgreSQL's fast-default catalog path without scanning or rewriting answer rows, under 1s lock_timeout and 5s statement_timeout."
+}

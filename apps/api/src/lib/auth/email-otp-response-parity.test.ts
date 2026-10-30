@@ -26,8 +26,7 @@ const createScheduledAuth = async (
   const delivery = Promise.withResolvers<undefined>();
   const detached: Promise<void>[] = [];
   let action:
-    | Awaited<ReturnType<typeof getNewAccountEmailOtpAction>>["type"]
-    | undefined;
+    Awaited<ReturnType<typeof getNewAccountEmailOtpAction>>["type"] | undefined;
   let delivered = false;
   const delay = getEmailOtpMinimumResponseDuration({
     path: sendPath,

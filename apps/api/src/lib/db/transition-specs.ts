@@ -2,16 +2,17 @@ import { DESKTOP_TIME_ENTRY_BATCH_STATUSES } from "@stll/api-contract/desktop-ti
 
 import {
   caseLawDecisionCitationStatsState,
-  desktopEditSessions,
   desktopTimeEntryBatches,
-  workObligations,
 } from "@/api/db/schema";
 import { ACCOUNT_EXPORT_TRANSITIONS } from "@/api/lib/account-export/store";
+import { INVOICE_TRANSITIONS } from "@/api/lib/billing/invoice-transition-spec";
+import { TIME_ENTRY_TRANSITIONS } from "@/api/lib/billing/time-entry-transition-spec";
 import {
   EU_COMPLETION_APPROVAL_PROOF,
   EU_COMPLETION_CONTROL_LIFECYCLE,
   EU_COMPLETION_RECEIPT_LIFECYCLE,
 } from "@/api/lib/case-law/eu-completion-transitions";
+import { CASE_LAW_REPLAY_BATCH_TRANSITIONS } from "@/api/lib/case-law/replay-batch-transitions";
 import {
   FLOW_RUN_SCOPED_TRANSITIONS,
   FLOW_RUN_STEP_TRANSITIONS_V1,
@@ -19,32 +20,36 @@ import {
 import { FOLIO_COLLAB_SEED_TRANSITIONS } from "@/api/lib/db/folio-collab-transitions";
 import { READER_ANSWER_MESSAGE_TRANSITIONS } from "@/api/lib/db/reader-answer-transitions";
 import type {
-  WRITABLE_STATUS_COLUMNS,
   StatusTable,
+  WRITABLE_STATUS_COLUMNS,
 } from "@/api/lib/db/status-tables.gen";
 import {
   defineKeyedTransitions,
   defineScopedTransitions,
-  defineTransitions,
 } from "@/api/lib/db/transitions";
 import type {
-  ScopedTransitionDeclaration,
   FixedLifecycleSpec,
   LifecycleSpec,
+  ScopedTransitionDeclaration,
   TransitionSpec,
 } from "@/api/lib/db/transitions";
+import { DESKTOP_EDIT_SESSION_TRANSITIONS } from "@/api/lib/desktop-edit-session-transitions";
 import { PDF_SIGNING_SESSION_TRANSITIONS } from "@/api/lib/files/pdf-signing/transition-spec";
 import { UPLOAD_TRIGGER_TRANSITIONS } from "@/api/lib/flows/upload-trigger-transitions";
+import { REQUEST_IDEMPOTENCY_RECEIPT_TRANSITIONS } from "@/api/lib/idempotency/request-receipt-transition-spec";
 import {
   CONTACT_MONITORING_TRANSITIONS,
   FIRM_MONITORING_TRANSITIONS,
   MATCH_MEMBERSHIP_TRANSITIONS,
   MATCH_REVIEW_TRANSITIONS,
-  SCREENING_COVERAGE_TRANSITIONS,
   SANCTIONS_EDITION_FANOUT_TRANSITIONS,
   SANCTIONS_MONITORING_BACKFILL_TRANSITIONS,
+  SCREENING_COVERAGE_TRANSITIONS,
 } from "@/api/lib/lists/sanctions/monitoring-transition-specs";
 import { SCOUT_EMISSION_TRANSITIONS } from "@/api/lib/signals/scout-emission-transitions";
+import { SYNTHETIC_SESSION_CONTROL_TRANSITIONS } from "@/api/lib/synthetic-principal/transitions";
+import { ORGANIZATION_ACCESS_STATE_TRANSITIONS } from "@/api/lib/usage/organization-access-state-transitions";
+import { WORK_OBLIGATION_TRANSITIONS } from "@/api/lib/work-obligations/transition-spec";
 
 // Each table chooses an ownership category explicitly; new status tables must
 // choose a category or declare a managed spec before the total map compiles.
@@ -88,17 +93,6 @@ const DECISION_CITATION_STATS_TRANSITIONS = defineKeyedTransitions({
   options: { terminal: ["exact"] },
 });
 
-const DESKTOP_EDIT_SESSION_TRANSITIONS = defineTransitions(
-  desktopEditSessions,
-  {
-    open: ["finalized", "cancelled", "expired"],
-    finalized: [],
-    cancelled: [],
-    expired: [],
-  },
-  { terminal: ["finalized", "cancelled", "expired"] },
-);
-
 const DESKTOP_TIME_ENTRY_BATCH_RECEIPT_LIFECYCLE = defineScopedTransitions({
   table: desktopTimeEntryBatches,
   key: "idempotencyKey",
@@ -106,35 +100,6 @@ const DESKTOP_TIME_ENTRY_BATCH_RECEIPT_LIFECYCLE = defineScopedTransitions({
   stateColumn: "status",
   edges: { committed: [], cancelled: [] },
   initial: DESKTOP_TIME_ENTRY_BATCH_STATUSES,
-});
-
-const WORK_OBLIGATION_TRANSITIONS = defineKeyedTransitions({
-  table: workObligations,
-  key: "entityId",
-  edges: {
-    unassigned: [
-      "awaiting_acknowledgement",
-      "active",
-      "completed",
-      "cancelled",
-    ],
-    awaiting_acknowledgement: [
-      "unassigned",
-      "active",
-      "completed",
-      "cancelled",
-    ],
-    active: [
-      "unassigned",
-      "awaiting_acknowledgement",
-      "completed",
-      "cancelled",
-    ],
-    completed: ["unassigned", "awaiting_acknowledgement", "active"],
-    cancelled: ["unassigned", "awaiting_acknowledgement", "active"],
-  },
-  // Closed obligations can reopen according to their current ownership state.
-  options: { terminal: [] },
 });
 
 type StatusColumns<TTable extends StatusTable> =
@@ -188,7 +153,7 @@ export const TRANSITIONS = {
   caseLawProvisionExtractions: { unmanaged: UNMANAGED_REASONS.workerRun },
   caseLawProvisionExtractionScopes: { unmanaged: UNMANAGED_REASONS.workerRun },
   caseLawReconciliationItems: { unmanaged: UNMANAGED_REASONS.projection },
-  caseLawReplayBatches: { unmanaged: UNMANAGED_REASONS.workerRun },
+  caseLawReplayBatches: CASE_LAW_REPLAY_BATCH_TRANSITIONS,
   caseLawResearchAnswers: { unmanaged: UNMANAGED_REASONS.workerRun },
   caseLawSearchBackfillFailures: { unmanaged: UNMANAGED_REASONS.workerRun },
   caseLawStatuteCitationCountState: { unmanaged: UNMANAGED_REASONS.projection },
@@ -225,7 +190,7 @@ export const TRANSITIONS = {
   flowUploadTriggerIntents: UPLOAD_TRIGGER_TRANSITIONS,
   folioCollabRooms: FOLIO_COLLAB_SEED_TRANSITIONS,
   invitation: { unmanaged: UNMANAGED_REASONS.delegatedAuth },
-  invoices: { unmanaged: UNMANAGED_REASONS.userWorkflow },
+  invoices: INVOICE_TRANSITIONS,
   legalListClaims: { unmanaged: UNMANAGED_REASONS.userWorkflow },
   legalListGenerationCandidates: { unmanaged: UNMANAGED_REASONS.workerRun },
   legalListGenerationRuns: { unmanaged: UNMANAGED_REASONS.workerRun },
@@ -242,7 +207,7 @@ export const TRANSITIONS = {
   mcpOAuthState: { unmanaged: UNMANAGED_REASONS.antiForgery },
   mcpUserConnections: { unmanaged: UNMANAGED_REASONS.connection },
   officeFileEvidence: { unmanaged: UNMANAGED_REASONS.workerRun },
-  organizationAccessStates: { unmanaged: UNMANAGED_REASONS.projection },
+  organizationAccessStates: ORGANIZATION_ACCESS_STATE_TRANSITIONS,
   organizationConfiguredAccess: { unmanaged: UNMANAGED_REASONS.projection },
   organizationFileObjects: { unmanaged: UNMANAGED_REASONS.fileLifecycle },
   organizationSettings: FIRM_MONITORING_TRANSITIONS,
@@ -252,6 +217,7 @@ export const TRANSITIONS = {
   playbookDefinitions: { unmanaged: UNMANAGED_REASONS.userDecision },
   properties: { unmanaged: UNMANAGED_REASONS.userWorkflow },
   reportExports: { unmanaged: UNMANAGED_REASONS.workerRun },
+  requestIdempotencyReceipts: REQUEST_IDEMPOTENCY_RECEIPT_TRANSITIONS,
   sanctionsContactMatches: {
     scoped: {
       state: MATCH_MEMBERSHIP_TRANSITIONS,
@@ -272,12 +238,13 @@ export const TRANSITIONS = {
   softLawIngestionAttempts: { unmanaged: UNMANAGED_REASONS.workerRun },
   softLawSources: { unmanaged: UNMANAGED_REASONS.workerRun },
   styleSets: { unmanaged: UNMANAGED_REASONS.fileLifecycle },
+  syntheticSessionControl: SYNTHETIC_SESSION_CONTROL_TRANSITIONS,
   templateDeletionCleanupRequests: { unmanaged: UNMANAGED_REASONS.cleanup },
   templateFills: { unmanaged: UNMANAGED_REASONS.workerRun },
   templatePersistenceRequests: { unmanaged: UNMANAGED_REASONS.cleanup },
   templates: { unmanaged: UNMANAGED_REASONS.fileLifecycle },
   templateVersions: { unmanaged: UNMANAGED_REASONS.fileLifecycle },
-  timeEntries: { unmanaged: UNMANAGED_REASONS.userWorkflow },
+  timeEntries: TIME_ENTRY_TRANSITIONS,
   timeEntrySuggestions: { unmanaged: UNMANAGED_REASONS.userDecision },
   timeEntryTimerStates: { unmanaged: UNMANAGED_REASONS.projection },
   timeTimers: { unmanaged: UNMANAGED_REASONS.coordinatedTimers },

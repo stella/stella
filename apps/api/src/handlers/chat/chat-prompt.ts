@@ -30,8 +30,8 @@ import type {
   ReaderAnnotationColor,
   ReaderAnnotationKind,
   ReaderAnnotationStyle,
-  ReaderAnnotationTargetType,
   ReaderAnnotationVisibility,
+  ReaderDocumentTargetType,
 } from "@stll/api-contract/legal-reader-annotations";
 import { isEligibleLegislationExpression } from "@stll/api-contract/legislation-expression";
 import type {
@@ -47,15 +47,15 @@ import type { SkillMetadata } from "@stll/skills/frontmatter";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
-  legalReaderAnnotations,
   caseLawSources,
-  publishedCaseLawDecisions,
   entities,
   entityVersions,
   fields,
+  legalReaderAnnotations,
   legislationDocuments,
   legislationSources,
   properties,
+  publishedCaseLawDecisions,
   workspaces,
 } from "@/api/db/schema";
 import type { PracticeJurisdiction } from "@/api/db/schema";
@@ -92,6 +92,8 @@ import {
 import type { RegistryReadToolName } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { CHAT_REFERENCE_HREF_PREFIXES } from "@/api/handlers/chat/types";
 import type { ChatMessage } from "@/api/handlers/chat/types";
+import { skillBindingAllows } from "@/api/lib/agent-skills/binding";
+import type { SkillBindingScope } from "@/api/lib/agent-skills/binding";
 import { offerSkillsToModel } from "@/api/lib/agent-skills/invocation";
 import type { ModelOfferedSkills } from "@/api/lib/agent-skills/invocation";
 import type { RequestedSkills } from "@/api/lib/agent-skills/requested-skills";
@@ -112,6 +114,7 @@ import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { formatDecisionForPrompt } from "@/api/lib/case-law/analysis-prompt";
 import { readDecisionAnalysisAst } from "@/api/lib/case-law/decision-analysis";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
+import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
 import {
   chatCacheStablePrefixSchema,
   chatOrganizationPromptLayerSchema,
@@ -124,7 +127,6 @@ import type {
 import { estimateTextTokens } from "@/api/lib/chat/compaction-tokens";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { formatDateInTimeZone } from "@/api/lib/date-format";
-import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { DOCX_REVIEW_MARKUP_EXAMPLES } from "@/api/lib/docx-review-markup";
 import {
   CorpusPayloadUnavailableError,
@@ -144,6 +146,7 @@ import {
 import { allowsDerivedAi } from "@/api/lib/legal-search/corpus-source";
 import { readCorpusPayloadOrFallback } from "@/api/lib/legal-search/corpus-storage";
 import { canonicalLegislationTextSource } from "@/api/lib/legal-search/legislation-canonical-source";
+import { legislationDocumentStatusToday } from "@/api/lib/legal-search/legislation-current-version";
 import {
   publishedLegislationDocumentFor,
   redistributableLegislationVersionFor,
@@ -155,6 +158,7 @@ import {
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 import type { LegislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
   sanitizeForPrompt,
   sanitizePromptLine,
@@ -709,6 +713,8 @@ type BuildChatSystemPromptProps = {
    * or as the thread's active skill.
    */
   requestedSkillNames: ReadonlySet<string>;
+  /** Where this turn may use a bound skill (`resolveSkillBindingScope`). */
+  skillBindingScope: SkillBindingScope;
   threadId: SafeId<"chatThread">;
   /**
    * The conditionally-registered tools handed to the model this turn.
@@ -841,19 +847,31 @@ const resolveActiveFilePromptContext = async ({
     catch: (cause) => cause,
   });
   if (Result.isError(readResult)) {
-    captureError(readResult.error, {
-      fieldId: fileFieldId,
-      workspaceId,
-    });
+    captureError(
+      readResult.error,
+      handlerErrorContext(
+        "chat.resolveActiveFilePromptContext.readResult_error",
+        {
+          fieldId: fileFieldId,
+          workspaceId,
+        },
+      ),
+    );
     return Result.ok(promptBase);
   }
   const previewResult = await emailToPreview(readResult.value, emailMimeType);
   if (Result.isError(previewResult)) {
-    captureError(previewResult.error, {
-      fieldId: fileFieldId,
-      mimeType: emailMimeType,
-      workspaceId,
-    });
+    captureError(
+      previewResult.error,
+      handlerErrorContext(
+        "chat.resolveActiveFilePromptContext.previewResult_error",
+        {
+          fieldId: fileFieldId,
+          mimeType: emailMimeType,
+          workspaceId,
+        },
+      ),
+    );
     return Result.ok(promptBase);
   }
 
@@ -894,6 +912,28 @@ const buildOwnedActiveTemplateSection = async ({
   );
 };
 
+/**
+ * The thread's active skill was resolved before the turn's matters were
+ * known; a skill bound to another matter or client does not run here.
+ */
+const requireActiveSkillInBindingScope = ({
+  activeSkillContext,
+  skillBindingScope,
+}: {
+  activeSkillContext: ActiveChatSkillContext | null;
+  skillBindingScope: SkillBindingScope;
+}): Result<void, HandlerError<403>> =>
+  activeSkillContext === null ||
+  skillBindingAllows(skillBindingScope, activeSkillContext.binding)
+    ? Result.ok(undefined)
+    : Result.err(
+        new HandlerError({
+          status: 403,
+          message:
+            "The active skill is bound to another matter or client and cannot be used in this conversation.",
+        }),
+      );
+
 export const buildChatSystemPromptParts = async ({
   caseLawDb = caseLawPublicReadDb,
   featureAccessContext,
@@ -913,6 +953,7 @@ export const buildChatSystemPromptParts = async ({
   safeDb,
   messages,
   requestedSkillNames,
+  skillBindingScope,
   threadId,
   toolAvailability,
   userContext,
@@ -922,10 +963,15 @@ export const buildChatSystemPromptParts = async ({
   Result<ChatSystemPromptParts, HandlerError<403 | 404 | 500> | SafeDbError>
 > =>
   await Result.gen(async function* () {
+    yield* requireActiveSkillInBindingScope({
+      activeSkillContext,
+      skillBindingScope,
+    });
     const listedSkills =
       organizationId && userId
         ? yield* Result.await(
             listAvailableChatSkillMetadata({
+              bindingScope: skillBindingScope,
               organizationId,
               safeDb,
               userId,
@@ -1051,11 +1097,11 @@ export const buildChatSystemPromptParts = async ({
     // session (e.g. anonymous prompt-preview builders) there is no
     // memory to inject.
     const memorySection =
-      isDeploymentFeatureEnabled("FEATURE_AI_MEMORY") &&
-      organizationId &&
-      userId
+      organizationId && userId
         ? yield* Result.await(
             buildMemoryPromptParts({
+              featureAccessSnapshot:
+                featureAccessContext?.featureAccessSnapshot,
               contextMatterIds,
               hydrateRefs: refRegistry.hydrateAssistantTextRefs,
               organizationId,
@@ -1972,7 +2018,7 @@ export const buildActiveDecisionPrompt = ({
 const ACTIVE_READER_ANNOTATIONS_LIMIT = 200;
 const SHARED_ANNOTATION: ReaderAnnotationVisibility = "shared";
 /** The chat's active document is a decision; a statute's marks are not it. */
-const DECISION_ANNOTATION_TARGET: ReaderAnnotationTargetType = "decision";
+const DECISION_ANNOTATION_TARGET: ReaderDocumentTargetType = "decision";
 const ANNOTATION_QUOTE_MAX_CHARS = 1200;
 const ANNOTATION_BODY_MAX_CHARS = 2000;
 /** The column's own bound. */
@@ -2147,10 +2193,13 @@ const readActiveDecisionAst = async (row: ActiveDecisionAstPointers) => {
       raised,
     );
   }
-  captureError(raised, {
-    decisionId: row.id,
-    step: ACTIVE_DECISION_AST_READ_STEP,
-  });
+  captureError(
+    raised,
+    handlerErrorContext("chat.readActiveDecisionAst.raised", {
+      decisionId: row.id,
+      step: ACTIVE_DECISION_AST_READ_STEP,
+    }),
+  );
   return null;
 };
 
@@ -2321,6 +2370,22 @@ export const buildActiveDecisionSection = async ({
       }),
     );
 
+    const withdrawal = yield* Result.await(
+      Result.tryPromise(async () =>
+        readWithdrawnCopyProjection({
+          values: null,
+          decisionIds: [activeDecision.decisionId],
+          caseLawDb,
+        }),
+      ),
+    );
+    const marker = withdrawal.marker(null, activeDecision.decisionId);
+    if (marker !== null) {
+      return Result.ok({
+        prompt: marker,
+        passageNumbers: NO_DECISION_PASSAGE_NUMBERS,
+      });
+    }
     if (decision === null) {
       return Result.ok(NO_ACTIVE_DECISION_SECTION);
     }
@@ -2545,7 +2610,7 @@ export const buildActiveStatutePrompt = ({
     .join("\n\n");
 
 /** The chat's active document is a statute; a decision's marks are not it. */
-const STATUTE_ANNOTATION_TARGET: ReaderAnnotationTargetType = "statute";
+const STATUTE_ANNOTATION_TARGET: ReaderDocumentTargetType = "statute";
 /** Names these reads in a payload-unavailable capture. */
 const ACTIVE_STATUTE_READ_STEP = "chatPrompt.activeStatuteAst";
 const ACTIVE_STATUTE_TEXT_READ_STEP = "chatPrompt.activeStatuteText";
@@ -2648,7 +2713,7 @@ export const buildActiveStatuteSection = async ({
                   documentType: legislationDocuments.documentType,
                   eli: legislationDocuments.eli,
                   language: legislationDocuments.language,
-                  status: legislationDocuments.status,
+                  status: legislationDocumentStatusToday,
                   title: legislationDocuments.title,
                   versionValidFrom: legislationDocuments.versionValidFrom,
                   versionValidTo: legislationDocuments.versionValidTo,
@@ -3159,8 +3224,7 @@ const buildPromptParts = ({
   // anonymizer in anonymized mode. The tail carries no cache marker, so its
   // user and volatile sections keep the order they have always had.
   const untrustedSections: (
-    | ChatUserPromptSection
-    | ChatVolatilePromptSection
+    ChatUserPromptSection | ChatVolatilePromptSection
   )[] = [
     // Team skills and the user's own (`listAvailableChatSkillMetadata`).
     chatUserPromptSection(buildSkillCatalogSection(installedSkillMetadata)),

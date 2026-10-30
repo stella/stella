@@ -5,18 +5,19 @@
 // This guard enumerates what that owner cannot see on its own:
 //
 //   - every declared flag has at least one reader (an owner call, a `feature`
-//     tag on an agent surface, a catalog entry's `feature`, or a sanctioned
-//     raw read), and every literal read names a declared flag;
+//     tag on an agent surface, a catalog entry's `feature`, a sanctioned raw
+//     read, or a mounted route gate), and every literal read names a declared
+//     flag;
 //   - no `FEATURE_*` key is read off `process.env`, `Bun.env` or
 //     `import.meta.env` anywhere in apps or packages;
-//   - over the real route tree (every handler file that builds an Elysia
-//     instance, plus the server root), a capability whose catalog entry carries
-//     a flag is mounted behind a gate that reads that flag on every mount,
-//     every gate reads declared flags, and every route file is classified: gated, serving a flagged
-//     capability, or declared always-on in `ALWAYS_ON_ROUTE_FILES`.
+//   - over the route table the API serves (`apiRoutes`), a capability whose
+//     catalog entry carries a flag is mounted behind a gate on that flag on
+//     every mount, every gate stands for a declared flag, and every route is
+//     classified: gated, serving a flagged capability, or under a path prefix
+//     declared always-on in `ALWAYS_ON_ROUTE_PREFIXES`.
 //
-// Existing gaps live in `apps/api/deployment-feature-baseline.json`, one row
-// per finding with its reason. The baseline only shrinks: a finding missing
+// Existing gaps live in `apps/api/deployment-feature-routes-baseline.json`, one
+// row per finding with its reason. The baseline only shrinks: a finding missing
 // from it fails, a row whose finding is gone fails as stale, and with `--base`
 // a row absent from the base revision's baseline fails as growth.
 //
@@ -34,8 +35,10 @@ import { pathToFileURL } from "node:url";
 import { compareCodeUnit } from "@stll/collation";
 
 import { readCapabilityCatalog } from "../../../packages/cli/src/capability-catalog-data";
+import { deriveCapabilityId } from "./lib/capability-catalog";
 import type {
   Finding,
+  MountedRoute,
   ParseCache,
   ScanInput,
   ScanResult,
@@ -46,47 +49,90 @@ import {
   createParseCache,
   DEPLOYMENT_FEATURE_OWNER_FILE,
   findingKey,
+  routeKey,
   scanDeploymentFeatures,
-  SERVER_ROOT_FILE,
 } from "./lib/deployment-feature-scan";
-import { isRecord, REPO_ROOT } from "./lib/enumerate-safe-handlers";
+import {
+  discoverSafeHandlers,
+  isRecord,
+  REPO_ROOT,
+} from "./lib/enumerate-safe-handlers";
 
-const BASELINE_FILE = "apps/api/deployment-feature-baseline.json";
+const BASELINE_FILE = "apps/api/deployment-feature-routes-baseline.json";
 const CATALOG_DIRECTORY = "packages/cli/capabilities";
 
 /**
- * Route files that serve an always-on surface: no deployment flag may gate
- * them (file -> reason). Classifying a file here is a product decision; until
- * then it sits in the baseline as unclassified.
+ * Path prefixes that serve an always-on surface: no deployment flag may gate
+ * them (prefix -> reason). A prefix covers the routes at it and below it.
+ * Classifying a surface here is a product decision; until then its routes sit
+ * in the baseline as unclassified.
  */
-const ALWAYS_ON_ROUTE_FILES: ReadonlyMap<string, string> = new Map([
+const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
   [
-    "apps/api/src/handlers/desktop-time-entries/routes.ts",
+    "/v1/workspaces/:workspaceId/vocabulary",
+    "Matter vocabulary uses the normal matter read permission on every deployment",
+  ],
+  [
+    "/v1/desktop/matter-candidates",
     "Desktop billing routes enforce authenticated activity and billing feature decisions on every deployment",
   ],
   [
-    "apps/api/src/handlers/search-history/routes.ts",
+    "/v1/desktop/matters",
+    "Desktop billing routes enforce authenticated activity and billing feature decisions on every deployment",
+  ],
+  [
+    "/v1/desktop/time-entries",
+    "Desktop billing routes enforce authenticated activity and billing feature decisions on every deployment",
+  ],
+  [
+    "/v1/search-history",
     "Personal search history is available on every deployment",
   ],
   [
-    "apps/api/src/handlers/account-exports/routes.ts",
+    "/v1/me/data-exports",
     "A personal data export is available to every account on every deployment",
   ],
   [
-    "apps/api/src/handlers/desktop-feature-access/routes.ts",
+    "/v1/chat/threads/:threadId/connectors/:toolCallId",
+    "Authenticated chat connector receipts are available on every deployment",
+  ],
+  [
+    "/v1/desktop/feature-access",
     "Desktop feature access answers per-caller decisions on every deployment",
   ],
   [
-    "apps/api/src/handlers/desktop-presence/routes.ts",
+    "/v1/desktop/presence",
     "Desktop account presence supports handoff on every deployment",
   ],
   [
-    "apps/api/src/handlers/operator/routes.ts",
-    "Operator HTTP access is deployment-owned and refuses access when its credential is unset",
+    "/v1/tasks",
+    "Tasks are part of every matter on every deployment; legal-list placement keeps its own feature access",
   ],
   [
-    "apps/api/src/handlers/sanctions/public-routes.ts",
-    "Public sanctions search is available on every deployment",
+    "/v1/mcp/oauth/mobile-client-metadata.json",
+    "The mobile app's client identity is published by every deployment it can sign in to",
+  ],
+  ["/favicon.ico", "The API host's icon is served by every deployment"],
+  [
+    "/v1/mobile/updates",
+    "Mobile builds ask every deployment for updates; one with nothing published answers 404",
+  ],
+  [
+    "/operator",
+    "Operator HTTP access is deployment-owned and refuses access when its credential is unset",
+  ],
+  ["/v1/sanctions", "Public sanctions search is available on every deployment"],
+  [
+    "/v1/entities/:workspaceId/entity/:entityId/annotations",
+    "Highlights and comments on a matter document are available on every deployment",
+  ],
+  [
+    "/v1/entities/:workspaceId/entity/:entityId/field/:fieldId/annotations",
+    "Highlights and comments on a matter document are available on every deployment",
+  ],
+  [
+    "/synthetic",
+    "Dedicated session creation is deployment-owned and refuses access when its credential is unset",
   ],
 ]);
 
@@ -128,16 +174,52 @@ const readCatalogFeatures = (): Map<string, string | undefined> => {
   return features;
 };
 
+/**
+ * The served route table as plain records. A route's capability is the
+ * catalog entry whose handler export is the very definition the route mounts.
+ * Handler discovery seeds the API env defaults the route modules read at load,
+ * so the route table is imported after it.
+ */
+const loadMountedRoutes = async (
+  catalogFeatures: ReadonlyMap<string, string | undefined>,
+): Promise<MountedRoute[]> => {
+  const discovery = await discoverSafeHandlers();
+  if (discovery.importErrors.length > 0) {
+    return panic(
+      `deployment-feature-guard: handler modules failed to import, so capability mounts cannot be read: ${discovery.importErrors.map(({ id, message }) => `${id}: ${message}`).join("; ")}`,
+    );
+  }
+  const capabilityByDefinition = new Map<object, string>();
+  for (const endpoint of discovery.endpoints) {
+    const id = deriveCapabilityId({
+      file: endpoint.file,
+      exportName: endpoint.exportName,
+    });
+    if (catalogFeatures.has(id)) {
+      capabilityByDefinition.set(endpoint.definition, id);
+    }
+  }
+  const { apiRoutes } = await import("../src/api-routes");
+  const { deploymentFeatureGateFlag, localDevelopmentGate } =
+    await import("../src/lib/deployment-feature-route");
+  return apiRoutes.map((entry) => ({
+    method: entry.method,
+    path: entry.path,
+    gateFlags: entry.middleware.flatMap((middleware) => {
+      const flag = deploymentFeatureGateFlag(middleware);
+      return flag === undefined ? [] : [flag];
+    }),
+    localDevelopment: entry.middleware.includes(localDevelopmentGate),
+    capability: capabilityByDefinition.get(entry.definition),
+  }));
+};
+
 /** The real tree, as the scanner's input. Each file is read from disk once. */
-export const loadRealInput = (): ScanInput => {
-  const sources = new Map<string, string | undefined>();
+export const loadRealInput = async (): Promise<ScanInput> => {
   const allFiles = new Set(scanFiles(["apps/api/src/**/*.{ts,tsx}"]));
-  const routeFiles = scanFiles(["apps/api/src/handlers/**/*.ts"])
-    .map(readRecord)
-    .filter(({ source }) => /\bnew Elysia\s*\(/u.test(source));
-  routeFiles.push(readRecord(SERVER_ROOT_FILE));
   const withFlagText = (files: readonly string[]) =>
     files.map(readRecord).filter(({ source }) => source.includes("FEATURE_"));
+  const catalogFeatures = readCatalogFeatures();
   return {
     ownerSource: readRecord(DEPLOYMENT_FEATURE_OWNER_FILE).source,
     readerFiles: withFlagText([...allFiles]),
@@ -149,21 +231,9 @@ export const loadRealInput = (): ScanInput => {
         "packages/*/scripts/**/*.ts",
       ]).filter((file) => !allFiles.has(file)),
     ),
-    routeFiles,
-    catalogFeatures: readCatalogFeatures(),
-    alwaysOnRouteFiles: ALWAYS_ON_ROUTE_FILES,
-    allFiles,
-    readSource: (file) => {
-      if (sources.has(file)) {
-        return sources.get(file);
-      }
-      const absolute = path.join(REPO_ROOT, file);
-      const source = existsSync(absolute)
-        ? readFileSync(absolute, "utf-8")
-        : undefined;
-      sources.set(file, source);
-      return source;
-    },
+    routes: await loadMountedRoutes(catalogFeatures),
+    catalogFeatures,
+    alwaysOnRoutePrefixes: ALWAYS_ON_ROUTE_PREFIXES,
   };
 };
 
@@ -178,12 +248,12 @@ const reasonFor = (finding: Finding): string => {
   switch (finding.kind) {
     case "dead-flag":
     case "flagged-capability":
-    case "route-file":
+    case "unclassified-route":
       return BASELINE_REASON;
     case "undeclared-read":
     case "process-env-read":
     case "undeclared-gate-flag":
-    case "unattributed-mount":
+    case "stale-always-on":
       return panic(
         `deployment-feature-guard: ${finding.kind} findings are never baselined`,
       );
@@ -315,28 +385,50 @@ type SelfTestCase = {
 
 const SELF_TEST_UNDECLARED = "FEATURE_SELF_TEST_UNDECLARED";
 const SELF_TEST_DEAD = "FEATURE_SELF_TEST_DEAD";
-const GATED_ROUTE_FILE = "apps/api/src/handlers/lists/routes.ts";
 const GATED_ROUTE_FLAG = "FEATURE_LEGAL_LISTS";
-const SELF_TEST_ROUTE_FILE = "apps/api/src/handlers/self-test/routes.ts";
+/** A declared flag that does not gate the lists routes. */
+const OTHER_DECLARED_FLAG = "FEATURE_USAGE";
+const SELF_TEST_PATH = "/v1/self-test";
 
 const hasKey = (result: ScanResult, key: string): boolean =>
   result.findings.some((finding) => findingKey(finding) === key);
 
-const replaceRouteSource = (
+/** Every route gated on `GATED_ROUTE_FLAG`, its gate flags replaced. */
+const regateRoutes = (
   input: ScanInput,
-  file: string,
-  replace: (source: string) => string,
+  replace: (flags: readonly string[]) => string[],
 ): ScanInput => ({
   ...input,
-  routeFiles: input.routeFiles.map((record) =>
-    record.file === file ? { file, source: replace(record.source) } : record,
+  routes: input.routes.map((route) =>
+    route.gateFlags.includes(GATED_ROUTE_FLAG)
+      ? { ...route, gateFlags: replace(route.gateFlags) }
+      : route,
   ),
 });
 
-const flaggedCapabilitiesIn = (input: ScanInput, domain: string): string[] =>
-  [...input.catalogFeatures]
-    .filter(([id, flag]) => id.startsWith(`${domain}.`) && flag !== undefined)
-    .map(([id]) => id);
+/** Mounted routes serving a capability whose catalog entry carries the gated flag. */
+const flaggedMounts = (input: ScanInput): MountedRoute[] =>
+  input.routes.filter(
+    (route) =>
+      route.capability !== undefined &&
+      input.catalogFeatures.get(route.capability) === GATED_ROUTE_FLAG,
+  );
+
+const reportsEveryFlaggedMount = (
+  result: ScanResult,
+  real: ScanInput,
+): boolean => {
+  const expected = flaggedMounts(real);
+  return (
+    expected.length > 0 &&
+    expected.every((route) =>
+      hasKey(
+        result,
+        `flagged-capability:${route.capability ?? ""}@${routeKey(route)}`,
+      ),
+    )
+  );
+};
 
 export const SELF_TEST_CASES: readonly SelfTestCase[] = [
   {
@@ -392,95 +484,102 @@ export const SELF_TEST_CASES: readonly SelfTestCase[] = [
       ),
   },
   {
-    name: "removing a real route's flag check is reported",
+    name: "removing a real route's gate is reported on every flagged mount",
     mutate: (input) =>
-      replaceRouteSource(input, GATED_ROUTE_FILE, (source) =>
-        source.replace(
-          `isDeploymentFeatureEnabled("${GATED_ROUTE_FLAG}")`,
-          () => "true",
+      regateRoutes(input, (flags) =>
+        flags.filter((flag) => flag !== GATED_ROUTE_FLAG),
+      ),
+    expect: reportsEveryFlaggedMount,
+  },
+  {
+    name: "a gate on another flag does not cover a flagged capability",
+    mutate: (input) =>
+      regateRoutes(input, (flags) =>
+        flags.map((flag) =>
+          flag === GATED_ROUTE_FLAG ? OTHER_DECLARED_FLAG : flag,
+        ),
+      ),
+    expect: reportsEveryFlaggedMount,
+  },
+  {
+    name: "a gate on an undeclared flag fails",
+    mutate: (input) =>
+      regateRoutes(input, (flags) =>
+        flags.map((flag) =>
+          flag === GATED_ROUTE_FLAG ? SELF_TEST_UNDECLARED : flag,
         ),
       ),
     expect: (result, real) => {
-      const expected = flaggedCapabilitiesIn(real, "lists");
+      const gated = real.routes.filter((route) =>
+        route.gateFlags.includes(GATED_ROUTE_FLAG),
+      );
       return (
-        expected.length > 0 &&
-        expected.every((id) =>
-          result.findings.some(
-            (finding) =>
-              finding.kind === "flagged-capability" &&
-              finding.capability === id,
+        gated.length > 0 &&
+        gated.every((route) =>
+          hasKey(
+            result,
+            `undeclared-gate-flag:${SELF_TEST_UNDECLARED}@${routeKey(route)}`,
           ),
         )
       );
     },
   },
   {
-    name: "a gate added after the routes does not cover them",
-    mutate: (input) =>
-      replaceRouteSource(input, GATED_ROUTE_FILE, (source) => {
-        const gate = `  .use(\n    deploymentFeatureGate(() =>\n      isDeploymentFeatureEnabled("${GATED_ROUTE_FLAG}"),\n    ),\n  )\n`;
-        if (!source.includes(gate)) {
-          return panic(
-            "self-test: the lists route gate moved; update the case",
-          );
-        }
-        return source
-          .replace(gate, () => "")
-          .replace(/;\s*$/u, () => `\n${gate};\n`);
-      }),
-    expect: (result) =>
-      result.findings.some(
-        (finding) =>
-          finding.kind === "flagged-capability" &&
-          finding.routeFile === GATED_ROUTE_FILE,
-      ),
+    name: "a flagged capability mounted again without its gate fails",
+    mutate: (input) => {
+      const [mounted] = flaggedMounts(input);
+      if (mounted === undefined) {
+        return panic(
+          `self-test: no capability flagged ${GATED_ROUTE_FLAG} is mounted; update the case`,
+        );
+      }
+      return {
+        ...input,
+        routes: [
+          ...input.routes,
+          { ...mounted, path: SELF_TEST_PATH, gateFlags: [] },
+        ],
+      };
+    },
+    expect: (result, real) => {
+      const [mounted] = flaggedMounts(real);
+      return (
+        mounted !== undefined &&
+        hasKey(
+          result,
+          `flagged-capability:${mounted.capability ?? ""}@${mounted.method} ${SELF_TEST_PATH}`,
+        )
+      );
+    },
   },
   {
-    name: "a gate reading an undeclared flag fails",
-    mutate: (input) =>
-      replaceRouteSource(input, GATED_ROUTE_FILE, (source) =>
-        source.replace(
-          `isDeploymentFeatureEnabled("${GATED_ROUTE_FLAG}")`,
-          () => `isDeploymentFeatureEnabled("${SELF_TEST_UNDECLARED}")`,
-        ),
-      ),
-    expect: (result) =>
-      hasKey(
-        result,
-        `undeclared-gate-flag:${SELF_TEST_UNDECLARED}:${GATED_ROUTE_FILE}`,
-      ),
-  },
-  {
-    name: "a new route file nobody classified fails",
+    name: "a new route nobody classified fails",
     mutate: (input) => ({
       ...input,
-      routeFiles: [
-        ...input.routeFiles,
+      routes: [
+        ...input.routes,
         {
-          file: SELF_TEST_ROUTE_FILE,
-          source: `import Elysia from "elysia";\nexport const selfTestRoute = new Elysia().get("/", () => "ok");\n`,
-        },
-      ],
-    }),
-    expect: (result) => hasKey(result, `route-file:${SELF_TEST_ROUTE_FILE}`),
-  },
-  {
-    name: "a mount outside any walked chain fails",
-    mutate: (input) => ({
-      ...input,
-      routeFiles: [
-        ...input.routeFiles,
-        {
-          file: SELF_TEST_ROUTE_FILE,
-          source: `import Elysia from "elysia";\nimport readLists from "@/api/handlers/lists/list";\nexport const selfTestRoute = new Elysia();\nexport const mount = (app: typeof selfTestRoute) => app.get("/", readLists.handler);\n`,
+          method: "GET",
+          path: SELF_TEST_PATH,
+          gateFlags: [],
+          localDevelopment: false,
+          capability: undefined,
         },
       ],
     }),
     expect: (result) =>
-      hasKey(
-        result,
-        `unattributed-mount:readLists.handler@${SELF_TEST_ROUTE_FILE}`,
-      ),
+      hasKey(result, `unclassified-route:GET ${SELF_TEST_PATH}`),
+  },
+  {
+    name: "an always-on prefix no route sits under fails",
+    mutate: (input) => ({
+      ...input,
+      alwaysOnRoutePrefixes: new Map([
+        ...input.alwaysOnRoutePrefixes,
+        [SELF_TEST_PATH, "self-test"],
+      ]),
+    }),
+    expect: (result) => hasKey(result, `stale-always-on:${SELF_TEST_PATH}`),
   },
 ];
 
@@ -494,12 +593,12 @@ export const runSelfTest = (input: ScanInput, cache: ParseCache): string[] => {
   const clean = scanDeploymentFeatures(input, cache);
   if (
     clean.declared.length === 0 ||
-    clean.routeFileCount < 50 ||
-    clean.instanceCount < 50 ||
+    clean.routeCount < 200 ||
+    clean.gatedRouteCount < 10 ||
     clean.capabilityMountCount < 100
   ) {
     failures.push(
-      `the real tree scanned too little (flags ${clean.declared.length}, route files ${clean.routeFileCount}, instances ${clean.instanceCount}, capability mounts ${clean.capabilityMountCount})`,
+      `the real tree scanned too little (flags ${clean.declared.length}, routes ${clean.routeCount}, gated routes ${clean.gatedRouteCount}, capability mounts ${clean.capabilityMountCount})`,
     );
   }
   for (const testCase of SELF_TEST_CASES) {
@@ -530,7 +629,7 @@ const printReport = (result: ScanResult): void => {
     console.log(`  ${flag}: ${summary}`);
   }
   console.log(
-    `route files ${result.routeFileCount}, instances ${result.instanceCount}, capability mounts ${result.capabilityMountCount}`,
+    `routes ${result.routeCount}, gated routes ${result.gatedRouteCount}, capability mounts ${result.capabilityMountCount}`,
   );
   const byKind = new Map<string, number>();
   for (const finding of result.findings) {
@@ -560,7 +659,7 @@ const baseArgument = (): string | undefined => {
 const main = async (): Promise<number> => {
   // Parsed first so a bad `--base` fails before the scan.
   const base = baseArgument();
-  const input = loadRealInput();
+  const input = await loadRealInput();
   if (process.argv.includes("--self-test")) {
     const failures = runSelfTest(input, createParseCache());
     for (const failure of failures) {
@@ -604,11 +703,11 @@ const main = async (): Promise<number> => {
     }
   };
   report(
-    "these findings are never baselined; fix them (declare the flag in the env schema and the owner map, read env through the env module, or mount the route inside a walked Elysia chain):",
+    "these findings are never baselined; fix them (declare the flag in the env schema and the owner map, read env through the env module, or remove an always-on prefix no route sits under):",
     diff.errors,
   );
   report(
-    `new findings; gate the route on its flag, wire or delete the flag, or classify the route file (ALWAYS_ON_ROUTE_FILES). ${BASELINE_FILE} only shrinks:`,
+    `new findings; gate the route on its flag, wire or delete the flag, or classify the route's path (ALWAYS_ON_ROUTE_PREFIXES). ${BASELINE_FILE} only shrinks:`,
     diff.unbaselined,
   );
   report(
@@ -632,7 +731,7 @@ const main = async (): Promise<number> => {
       0 || diff.malformed;
   if (!failed) {
     console.log(
-      `deployment-feature-guard: ${result.declared.length} flags, ${result.routeFileCount} route files, ${result.capabilityMountCount} capability mounts; ${result.findings.length} baselined findings.`,
+      `deployment-feature-guard: ${result.declared.length} flags, ${result.routeCount} routes, ${result.capabilityMountCount} capability mounts; ${result.findings.length} baselined findings.`,
     );
   }
   return failed ? 1 : 0;

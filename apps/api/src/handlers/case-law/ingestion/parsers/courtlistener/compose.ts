@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports the unchanged citation scope shape from its pure owner.
 // parser-output-unchanged: Unicode owner migration retains native normalization forms, mark classes and operation order; no folding is added.
 import { Result } from "better-result";
 /**
@@ -20,21 +21,21 @@ import {
   COURTLISTENER_REJECTION_REASON,
   type CourtListenerRejectionReason,
 } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/rejection";
-import type { OpinionRow } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/snapshot-columns";
 import {
   compareOpinionOrder,
   type OpinionType,
 } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/vocabulary";
 import { indexCitationScopes } from "@/api/handlers/case-law/ingestion/citation-scopes";
+import type { OpinionRow } from "@/api/handlers/case-law/ingestion/parsers/courtlistener/opinion-row";
 import {
   scanRun,
   US_CITATION_WORK_LIMIT,
 } from "@/api/handlers/case-law/ingestion/us-citation-scanner";
+import type { CitationOpinionScope } from "@/api/lib/legal-search/citation-opinion-scope";
 import type {
   DecisionSection,
   DecisionSectionType,
 } from "@/api/lib/legal-search/document-types";
-import type { CitationOpinionScope } from "@/api/lib/legal-search/ingestion-types";
 
 import {
   composeFrontMatter,

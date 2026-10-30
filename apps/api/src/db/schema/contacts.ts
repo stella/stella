@@ -1,10 +1,17 @@
 import type { SQLWrapper } from "drizzle-orm";
 
-import { CONTACT_TYPES, WORKSPACE_CONTACT_ROLES } from "@stll/api-contract";
+import {
+  CONTACT_TYPES,
+  INVOICE_LANGUAGES,
+  WORKSPACE_CONTACT_ROLES,
+} from "@stll/api-contract";
 
 import { RETAINED_ACTIVITY_FEATURE_OWNERS } from "@/api/db/feature-owner";
 import { retainedActivityOwnerCheck, workspaceInsertCheck } from "@/api/db/rls";
-import { systemScopePolicies } from "@/api/db/system-scope-policies";
+import {
+  systemScopePolicies,
+  workspaceActivitySourcePolicies,
+} from "@/api/db/system-scope-policies";
 import {
   ACCOUNT_AUDIT_EVENT_TYPES,
   AUDIT_ACTION,
@@ -15,12 +22,22 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { SANCTIONS_CONTACT_MODES } from "@/api/lib/lists/sanctions/monitoring-vocabulary";
 
 import {
+  FLOW_RUN_TASK,
+  flowScheduleJobIdSql,
+} from "../../lib/scheduler/flow-schedule-identity";
+import { registeredReviewResetPolicies } from "../review-reset-policies";
+import { stellaSystem } from "../rls";
+import {
+  FOLIO_COLLAB_TOKEN_OFFBOARDING_ROLE_NAME,
+  MEMBER_EXCHANGE_OFFBOARDING_ROLE_NAME,
+} from "../role-names";
+import {
   centsColumn,
   isNotNull,
   jsonb,
-  orgPolicies,
   organization,
   organizationCheck,
+  orgPolicies,
   p,
   pUuid,
   safeOrganizationId,
@@ -28,11 +45,11 @@ import {
   safeWorkspaceId,
   sql,
   stella,
+  timestamptz,
   user,
   workspaceIdCheck,
   wsOrganizationPolicies,
   wsPolicies,
-  timestamptz,
 } from "./common";
 import type {
   BankAccount,
@@ -90,11 +107,16 @@ export const contacts = p.pgTable(
       length: 64,
     }),
     taxId: p.varchar("tax_id", { length: 64 }),
+    vatId: p.varchar("vat_id", { length: 64 }),
+    // Null means the payer status has not been established.
+    vatPayer: p.boolean("vat_payer"),
     bankAccounts: jsonb("bank_accounts").$type<BankAccount[]>(),
     billingAddress: jsonb("billing_address").$type<BillingAddress>(),
     defaultHourlyRate: centsColumn("default_hourly_rate"),
     currency: p.varchar({ length: 3 }),
     paymentTermDays: p.integer("payment_term_days"),
+    /** Language preferred for invoices sent to this contact; null uses the issuer default. */
+    invoiceLanguage: p.text("invoice_language", { enum: INVOICE_LANGUAGES }),
 
     // Attorney responsibility
     originatingAttorneyId: p
@@ -115,6 +137,13 @@ export const contacts = p.pgTable(
   },
   (table) => [
     ...systemScopePolicies(table),
+    p.check(
+      "contacts_invoice_language_check",
+      sql`${table.invoiceLanguage} IS NULL OR ${table.invoiceLanguage} IN (${sql.join(
+        INVOICE_LANGUAGES.map((value) => sql`${value}`),
+        sql`, `,
+      )})`,
+    ),
     p.unique("contacts_org_id_unique").on(table.organizationId, table.id),
     p.index("contacts_organization_id_idx").on(table.organizationId),
     p.index("contacts_org_type_idx").on(table.organizationId, table.type),
@@ -165,6 +194,8 @@ export const contacts = p.pgTable(
       )})`,
     ),
     ...orgPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -180,6 +211,7 @@ export type ContactImportReceiptResult = {
           | "contacts_limit_reached"
           | "duplicate_contact_id"
           | "duplicate_tax_id"
+          | "in_file_duplicate"
           | "invalid_row"
           | "invalid_tax_id";
       }
@@ -217,6 +249,8 @@ export const contactImportRequests = p.pgTable(
       sql`${table.requestFingerprint} ~ '^[0-9a-f]{64}$'`,
     ),
     ...orgPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -262,6 +296,8 @@ export const contactExtractionUploads = p.pgTable(
       )`,
     ),
     ...orgPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -300,6 +336,8 @@ export const contactRelationships = p.pgTable(
       sql`${table.personId} != ${table.relatedContactId}`,
     ),
     ...orgPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -341,6 +379,16 @@ export const workspaces = p.pgTable(
   },
   (table) => [
     ...systemScopePolicies(table),
+    p.pgPolicy("workspaces_member_exchange_offboarding_read", {
+      for: "select",
+      to: MEMBER_EXCHANGE_OFFBOARDING_ROLE_NAME,
+      using: sql`${table.organizationId} = nullif(current_setting('app.organization_id', true), '')
+        AND ${table.id} = ANY(coalesce(nullif(current_setting('app.workspace_ids', true), ''), '{}')::uuid[])`,
+    }),
+    ...workspaceActivitySourcePolicies({
+      organizationId: table.organizationId,
+      workspaceId: table.id,
+    }),
     p.index("workspaces_organization_id_idx").on(table.organizationId),
     p
       .unique("workspaces_org_reference_uidx")
@@ -361,6 +409,12 @@ export const workspaces = p.pgTable(
       for: "select",
       to: stella,
       using: workspaceIdCheck,
+    }),
+    p.pgPolicy("workspace_folio_collab_token_offboarding_read", {
+      for: "select",
+      to: FOLIO_COLLAB_TOKEN_OFFBOARDING_ROLE_NAME,
+      using: sql`${table.organizationId} = nullif(current_setting('app.organization_id', true), '')
+        AND ${table.id} = ANY(coalesce(nullif(current_setting('app.workspace_ids', true), ''), '{}')::uuid[])`,
     }),
     p.pgPolicy("workspace_insert", {
       for: "insert",
@@ -442,6 +496,8 @@ export const workspaceContacts = p.pgTable(
       .uniqueIndex("workspace_contacts_ws_contact_role_uidx")
       .on(table.workspaceId, table.contactId, table.role),
     ...wsOrganizationPolicies("workspace_contacts", { columns: table }),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -773,6 +829,7 @@ export const schedulerJobs = p.pgTable(
     payload: jsonb().$type<SchedulerPayload | null>(),
     enabled: p.boolean().notNull().default(true),
     pausedBy: p.text("paused_by"),
+    pausedSince: timestamptz("paused_since"),
     pausedUntil: timestamptz("paused_until"),
     pauseReason: p.text("pause_reason"),
     nextRunAt: timestamptz("next_run_at").notNull(),
@@ -789,23 +846,59 @@ export const schedulerJobs = p.pgTable(
       .defaultNow()
       .$onUpdate(() => new Date()),
   },
-  (table) => [
-    p
-      .index("scheduler_jobs_enabled_next_run_idx")
-      .on(table.enabled, table.nextRunAt),
-    p.index("scheduler_jobs_task_idx").on(table.task),
-    p.index("scheduler_jobs_locked_until_idx").on(table.lockedUntil),
-    p.check(
-      "scheduler_jobs_pause_attribution_check",
-      sql`${table.pausedUntil} IS NULL OR (${table.pausedBy} IS NOT NULL AND length(btrim(${table.pausedBy})) > 0 AND ${table.pauseReason} IS NOT NULL AND length(btrim(${table.pauseReason})) >= 8)`,
-    ),
-    p.pgPolicy("scheduler_jobs_no_stella_access", {
-      for: "all",
-      to: stella,
-      using: sql`false`,
-      withCheck: sql`false`,
-    }),
-  ],
+  (table) => {
+    const existingSource =
+      sql`${table.task} = ${sql.raw(`'${FLOW_RUN_TASK}'`)} AND EXISTS (
+      SELECT 1 FROM public.flow_definitions scheduler_definition
+      WHERE ${table.id} = ${flowScheduleJobIdSql(sql`scheduler_definition.id`)}
+        AND scheduler_definition.organization_id = nullif(current_setting('app.organization_id', true), '')
+    )`.inlineParams();
+    const consistentSource =
+      sql`${existingSource} AND ${table.id} = ${flowScheduleJobIdSql(sql`lower(${table.payload}->>'definitionId')`)}`.inlineParams();
+    return [
+      p
+        .index("scheduler_jobs_enabled_next_run_idx")
+        .on(table.enabled, table.nextRunAt),
+      p.index("scheduler_jobs_task_idx").on(table.task),
+      p.index("scheduler_jobs_locked_until_idx").on(table.lockedUntil),
+      p
+        .index("scheduler_jobs_paused_until_idx")
+        .on(table.pausedUntil)
+        .where(sql`${table.pausedUntil} IS NOT NULL`),
+      p.check(
+        "scheduler_jobs_pause_attribution_check",
+        sql`${table.pausedUntil} IS NULL OR (${table.pausedBy} IS NOT NULL AND length(btrim(${table.pausedBy})) > 0 AND ${table.pauseReason} IS NOT NULL AND length(btrim(${table.pauseReason})) >= 8)`,
+      ),
+      p.check(
+        "scheduler_jobs_pause_finite_check",
+        sql`${table.pausedUntil} IS NULL OR isfinite(${table.pausedUntil})`,
+      ),
+      // The pause audit watches every pause, so it can never be paused itself.
+      p.check(
+        "scheduler_jobs_pause_audit_unpausable_check",
+        sql`${table.id} <> 'scheduler.pauseAudit.hourly' OR ${table.pausedUntil} IS NULL`,
+      ),
+      p.pgPolicy("scheduler_jobs_no_stella_access", {
+        for: "all",
+        to: stella,
+        using: sql`false`,
+        withCheck: sql`false`,
+      }),
+      p.pgPolicy("scheduler_flow_system_access", {
+        for: "all",
+        to: stellaSystem,
+        using: existingSource,
+        withCheck: consistentSource,
+      }),
+      p.pgPolicy("scheduler_flow_system_scope", {
+        as: "restrictive",
+        for: "all",
+        to: stellaSystem,
+        using: existingSource,
+        withCheck: consistentSource,
+      }),
+    ];
+  },
 );
 
 export const schedulerJobRuns = p.pgTable(

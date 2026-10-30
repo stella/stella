@@ -4,8 +4,8 @@ import { panic } from "better-result";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import type { fetchWorkspaceNavigationPage } from "@/lib/memory-api";
+import { queryView } from "@/lib/query-view.logic";
 import { ensureRouteQueryData } from "@/lib/react-query";
-import { useQueryView } from "@/lib/use-query-view";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import type { WorkspaceNavigationCaller } from "@/lib/workspaces/queries.logic";
 
@@ -35,7 +35,7 @@ export const useNavigationFeatureEnabled = (
   feature: NavigationFeature,
 ): boolean => {
   const user = useMaybeAuthenticatedUser();
-  const view = useQueryView(
+  const view = queryView(
     useChromeQuery({
       ...workspacesNavigationOptions({
         userId: user?.id ?? "",

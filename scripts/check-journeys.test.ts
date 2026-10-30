@@ -73,6 +73,8 @@ type Scenario = {
     | "auth-error"
     | "invalid-hit"
     | "absent-decision";
+  promotionVersion?: string;
+  promotionAgeSeconds?: number;
   cliVersion?: string;
   cliExit?: string;
   cliDiagnostic?: string;
@@ -188,18 +190,27 @@ const desktopFixture = ({ pathname, scenario }: DesktopFixtureOptions) => {
   }
   if (pathname === "/desktop/release-workflow") {
     return Response.json({
-      workflow_runs: scenario.releaseWorkflowRuns ?? [
-        {
-          status: scenario.releaseWorkflowStatus ?? "completed",
-          conclusion: scenario.releaseWorkflowConclusion ?? "success",
-          created_at: "2026-10-09T09:00:00Z",
-        },
-      ],
+      workflow_runs: (
+        scenario.releaseWorkflowRuns ?? [
+          {
+            status: scenario.releaseWorkflowStatus ?? "completed",
+            conclusion: scenario.releaseWorkflowConclusion ?? "success",
+            created_at: "2026-10-09T09:00:00Z",
+          },
+        ]
+      ).map((run) => ({
+        ...run,
+        display_title: run.display_title ?? "Release Artifacts v10.0.0",
+      })),
     });
   }
-  // GitHub lists a workflow_run-triggered run under the default branch, so a
-  // branch-filtered query for the tag finds none of the desktop runs.
-  if (pathname === "/desktop/desktop-workflow-by-branch") {
+  // GitHub lists a dispatched release run and every workflow_run-triggered
+  // run under the default branch, so a branch-filtered query for the tag
+  // finds none of them.
+  if (
+    pathname === "/desktop/release-workflow-by-branch" ||
+    pathname === "/desktop/desktop-workflow-by-branch"
+  ) {
     return Response.json({ workflow_runs: [] });
   }
   if (pathname === "/desktop/desktop-workflow") {
@@ -214,7 +225,7 @@ const desktopFixture = ({ pathname, scenario }: DesktopFixtureOptions) => {
         ]
       ).map((run) => ({
         ...run,
-        display_title: run.display_title ?? "Release Desktop App v10.0.0",
+        display_title: run.display_title ?? "Desktop Release Artifacts v10.0.0",
       })),
     });
   }
@@ -245,6 +256,18 @@ const run = async ({
     async fetch(req) {
       const pathname = new URL(req.url).pathname;
       counts.set(pathname, (counts.get(pathname) ?? 0) + 1);
+      if (pathname === "/releases") {
+        return Response.json([
+          {
+            tag_name: "v1.0.0",
+            draft: false,
+            prerelease: false,
+            published_at: new Date(
+              Date.now() - (scenario.promotionAgeSeconds ?? 3600) * 1000,
+            ).toISOString(),
+          },
+        ]);
+      }
       const desktop = desktopFixture({ pathname, scenario });
       if (desktop !== null) {
         return desktop;
@@ -386,7 +409,7 @@ const run = async ({
     await Bun.write(path.join(work, "cli-calls"), "");
     await Bun.write(
       path.join(work, "npm"),
-      `#!/usr/bin/env bash\nif [[ -n "\${MCP_CANARY_TOKEN:-}" || -n "\${STELLA_API_KEY:-}" || " $* " != *" --ignore-scripts "* ]]; then exit 1; fi\necho clean > "$INSTALL_CHECK"\necho '${SENTINEL}' >&2\nif [[ "$INSTALL_EXIT" != 0 ]]; then exit "$INSTALL_EXIT"; fi\nwhile [[ "$1" != --prefix ]]; do shift; done\nmkdir -p "$2/bin"\ncp "$CLI_FIXTURE" "$2/bin/stella"\n`,
+      `#!/usr/bin/env bash\nif [[ -n "\${MCP_CANARY_TOKEN:-}" || -n "\${STELLA_API_KEY:-}" || " $* " != *" --ignore-scripts "* ]]; then exit 1; fi\necho clean > "$INSTALL_CHECK"\necho 'npm fixture failure' >&2\nif [[ "$INSTALL_EXIT" != 0 ]]; then exit "$INSTALL_EXIT"; fi\nwhile [[ "$1" != --prefix ]]; do shift; done\nmkdir -p "$2/bin"\ncp "$CLI_FIXTURE" "$2/bin/stella"\n`,
     );
     await Bun.write(
       path.join(work, "stella"),
@@ -394,7 +417,7 @@ const run = async ({
     );
     await Bun.write(
       path.join(work, "git"),
-      `#!/usr/bin/env bash\nif [[ "$*" != "tag --list @stll/cli@*" ]]; then exit 1; fi\nprintf '%s\\n' '@stll/cli@2.0.0' '@stll/cli@10.0.0' '@stll/cli@11.0.0-beta.1'\n`,
+      `#!/usr/bin/env bash\nif [[ "$*" == "show v1.0.0:packages/cli/package.json" ]]; then printf '{"name":"@stll/cli","version":"%s"}\\n' "$PROMOTION_VERSION"; else exit 1; fi\n`,
     );
     await Bun.write(
       path.join(work, "gh"),
@@ -405,6 +428,7 @@ case "$*" in
   *releases/tags*) route=release ;;
   *release-desktop.yml*branch=*) route=desktop-workflow-by-branch ;;
   *release-desktop.yml*) route=desktop-workflow ;;
+  *release.yml*branch=*) route=release-workflow-by-branch ;;
   *release.yml*) route=release-workflow ;;
   *) route=latest ;;
 esac
@@ -446,6 +470,8 @@ rm -f "$response"
           STELLA_DESKTOP_NOW_EPOCH: "1791536400",
           JOURNEY_TIMEOUT_SECONDS: scenario.delay ? "0.1" : "3",
           CLI_FIXTURE: path.join(work, "stella"),
+          JOURNEY_RELEASES_API_URL: `${server.url.toString()}releases`,
+          PROMOTION_VERSION: scenario.promotionVersion ?? "10.0.0",
           CLI_VERSION: scenario.cliVersion ?? "10.0.0",
           CLI_EXIT: scenario.cliExit ?? "0",
           CLI_DIAGNOSTIC: scenario.cliDiagnostic ?? "",
@@ -471,9 +497,24 @@ rm -f "$response"
     expect(stdout + stderr).not.toContain(token || "absent-token");
     if (mode !== "desktop") {
       expect(stderr).toBe("");
-      for (const line of stdout.trim().split("\n")) {
+      const lines = stdout.trim().split("\n");
+      const failures = lines.filter((line) =>
+        /^journey (cli_|mcp_)\S+ failed /u.test(line),
+      );
+      for (const failure of failures) {
+        const name = failure.split(" ").at(1);
+        expect(name).toBeDefined();
+        expect(
+          lines.filter((line) =>
+            line.startsWith(`journey-detail ${name ?? ""} `),
+          ),
+        ).toHaveLength(1);
+      }
+      for (const line of lines.filter(
+        (entry) => !entry.startsWith("journey-detail "),
+      )) {
         expect(line).toMatch(
-          /^journey [a-z_]+ (passed|passed_after_retry|failed|skipped) (http_status|timeout|missing_marker|empty_result|contract_error|version_mismatch|registry_rejected|no_credential|auth_rejected|ok)$/u,
+          /^journey [a-z_]+ (passed|passed_after_retry|failed|skipped) (http_status|timeout|missing_marker|empty_result|contract_error|publish_lagging|pending_release|promotion_unavailable|registry_rejected|no_credential|auth_rejected|ok)$/u,
         );
       }
     }
@@ -609,7 +650,7 @@ describe("scheduled read journeys", () => {
   test("accepts SSE envelopes", async () => {
     expect((await run({ scenario: { rpc: "sse" } })).exit).toBe(0);
   });
-  test("uses the newest stable CLI publication tag", async () => {
+  test("runs journeys when the installed CLI meets the promoted target", async () => {
     const result = await run({ mode: "cli" });
     expect(result.exit).toBe(0);
     expect(result.stdout.match(/ passed ok/gu)).toHaveLength(3);
@@ -624,14 +665,62 @@ describe("scheduled read journeys", () => {
       ),
     ).toBe(true);
   });
-  test("classifies CLI version disagreement", async () => {
+  test("fails all CLI journeys after the publication deadline", async () => {
     const result = await run({
-      scenario: { cliVersion: "2.0.0" },
+      scenario: { cliVersion: "2.0.0", promotionAgeSeconds: 86_401 },
       mode: "cli",
     });
     expect(result.exit).toBe(1);
-    expect(result.stdout).toContain("cli_version failed version_mismatch");
+    expect(result.stdout).toContain("cli_version failed publish_lagging");
     expect(result.counts.get("/cli/search")).toBeUndefined();
+  });
+  test("skips all CLI journeys during promotion grace with target and deadline", async () => {
+    const result = await run({
+      mode: "cli",
+      scenario: { cliVersion: "2.0.0" },
+    });
+    expect(result.exit).toBe(0);
+    expect(result.stdout.match(/skipped pending_release/gu)).toHaveLength(3);
+    expect(
+      result.stdout.match(/target 10\.0\.0; publication deadline /gu),
+    ).toHaveLength(3);
+    expect(result.counts.get("/cli/search")).toBeUndefined();
+  });
+  test("redacts credentials before bounding the first diagnostic line", async () => {
+    const token = "secret.[+](literal)";
+    const result = await run({
+      mode: "cli",
+      token,
+      scenario: {
+        cliExit: "1",
+        cliDiagnostic: `failure ${token} Bearer unknown-bearer api_key=unknown-key token="unknown-token" ${"x".repeat(500)}\nsecond-private-line`,
+      },
+    });
+    expect(result.stdout).toContain(
+      "journey-detail cli_search failure [REDACTED]",
+    );
+    for (const secret of [
+      token,
+      "unknown-bearer",
+      "unknown-key",
+      "unknown-token",
+      "second-private-line",
+    ]) {
+      expect(result.stdout).not.toContain(secret);
+    }
+    for (const line of result.stdout
+      .split("\n")
+      .filter((entry) => entry.startsWith("journey-detail "))) {
+      expect(line.length).toBeLessThanOrEqual(440);
+    }
+  });
+  test("identifies the failing payload check for CLI and MCP", async () => {
+    for (const mode of ["cli", "web"] as const) {
+      const result = await run({ mode, scenario: { rpc: "wrong-shape" } });
+      expect(result.stdout).toContain(
+        `journey-detail ${mode === "cli" ? "cli" : "mcp"}_search payload shape check: .results`,
+      );
+    }
   });
   test("contains install and command diagnostics", async () => {
     for (const scenario of [{ installExit: "1" }, { cliExit: "1" }]) {
@@ -768,7 +857,7 @@ describe("scheduled read journeys", () => {
             status: "in_progress",
             conclusion: null,
             created_at: "2026-10-09T09:00:00Z",
-            display_title: "Release Desktop App v2.0.0",
+            display_title: "Desktop Release Artifacts v2.0.0",
           },
         ],
       },
@@ -777,6 +866,53 @@ describe("scheduled read journeys", () => {
     expect(result.exit).toBe(1);
     expect(result.stderr).toContain(
       "Desktop latest must match the newest stable application tag",
+    );
+  });
+  test("finds a dispatched release run for the tag by its run name", async () => {
+    const releaseRun = (display_title: string): WorkflowRun => ({
+      status: "in_progress",
+      conclusion: null,
+      created_at: "2026-10-09T09:00:00Z",
+      display_title,
+    });
+    const publishing = await run({
+      scenario: {
+        latest: "v2.0.0",
+        newestTagCreatedAt: "2020-01-01T00:00:00Z",
+        releaseWorkflowRuns: [releaseRun("Release Artifacts v10.0.0")],
+        desktopWorkflowRuns: [],
+      },
+      mode: "desktop",
+    });
+    expect(publishing.exit).toBe(0);
+    expect(publishing.stdout).toBe("desktop-release-policy: publishing\n");
+
+    const otherTag = await run({
+      scenario: {
+        latest: "v2.0.0",
+        newestTagCreatedAt: "2020-01-01T00:00:00Z",
+        releaseWorkflowRuns: [releaseRun("Release Artifacts v2.0.0")],
+        desktopWorkflowRuns: [],
+      },
+      mode: "desktop",
+    });
+    expect(otherTag.exit).toBe(1);
+    expect(otherTag.stderr).toContain(
+      "Desktop latest must match the newest stable application tag",
+    );
+  });
+  test("fails on a failed release run for the tag", async () => {
+    const result = await run({
+      scenario: {
+        latest: "v2.0.0",
+        releaseWorkflowConclusion: "failure",
+        desktopWorkflowRuns: [],
+      },
+      mode: "desktop",
+    });
+    expect(result.exit).toBe(1);
+    expect(result.stderr).toContain(
+      "Desktop release workflow failed for the newest stable application tag",
     );
   });
   test("rejects an old newest release that is not latest", async () => {
@@ -953,4 +1089,37 @@ test("schedules bounded journeys and routes alerts", async () => {
   ).text();
   expect(alerts).toContain("- Journey canary");
   expect(alerts).toContain('".github/workflows/journey-canary.yml"');
+});
+
+test("redacts known credential values literally and strips terminal controls", async () => {
+  const secrets = {
+    JOURNEY_DETAIL_CREDENTIAL: "canary.[+](secret)",
+    STELLA_API_KEY: "api.[+](secret)",
+    GITHUB_TOKEN: "github.[+](secret)",
+    GH_TOKEN: "gh.[+](secret)",
+    JOURNEY_DETAIL_SESSION: "session.[+](secret)",
+  };
+  const child = Bun.spawn(["jq", "-Rrs", "-f", "scripts/journey-detail.jq"], {
+    cwd: ROOT,
+    env: { ...process.env, ...secrets },
+    stdin: new TextEncoder().encode(
+      `\u001b[31m${Object.values(secrets).join(" ")}\r\nprivate second line`,
+    ),
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const [output, stderr, exit] = await Promise.all([
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+    child.exited,
+  ]);
+  expect(exit).toBe(0);
+  expect(stderr).toBe("");
+  expect(output.match(/\[REDACTED\]/gu)).toHaveLength(5);
+  for (const secret of Object.values(secrets)) {
+    expect(output).not.toContain(secret);
+  }
+  expect(output).not.toContain("\u001b");
+  expect(output).not.toContain("\r");
+  expect(output).not.toContain("private second line");
 });

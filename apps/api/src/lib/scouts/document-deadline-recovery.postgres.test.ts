@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { and, eq, getColumns, sql } from "drizzle-orm";
 
@@ -6,6 +6,7 @@ import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import { member, organization, user } from "@/api/db/auth-schema";
+import { proveOrgScope } from "@/api/db/org-scope";
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import {
@@ -15,10 +16,11 @@ import {
   extractedContent,
   featureEnrolments,
   fields,
-  properties,
-  pendingScoutEmissions,
-  signals,
   notifications,
+  pendingScoutEmissions,
+  properties,
+  schedulerJobs,
+  signals,
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
@@ -31,13 +33,19 @@ import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
 import { DOCUMENT_OCR_PROCESSOR_VERSION } from "@/api/lib/document-processing-contract";
 import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
 import { logger } from "@/api/lib/observability/logger";
+import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
 import { DueSlot } from "@/api/lib/scheduler/due-slot";
+import {
+  RECOVERY_SCAN_IDENTITIES,
+  RECOVERY_SCAN_PAGE_SIZES,
+  RECOVERY_SCAN_PHASES,
+} from "@/api/lib/scheduler/tasks/recovery-scan-identity";
 import {
   RECOVER_SCOUT_EMISSION_TASK,
   recoverScoutEmission,
   resumeScoutEmissionAfterGrant,
 } from "@/api/lib/scheduler/tasks/scout-emission-recovery";
-import type { SchedulerJob } from "@/api/lib/scheduler/types";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
@@ -48,7 +56,6 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
 
 import {
-  DEADLINE_DISPATCH_RECOVERY,
   pauseDocumentDeadlineScoutAfterGrantLoss,
   recoverDocumentDeadlineScoutDispatches,
   resumeDocumentDeadlineScoutsAfterGrant,
@@ -82,6 +89,7 @@ const fixture = async (db: GatedTestDb, options?: DeadlineFixtureOptions) =>
       slug: organizationId,
       createdAt: OLD,
     });
+    await recordNewOrganizationAccessState(tx, { organizationId, now: OLD });
     await tx.insert(user).values(
       [admittedUserId, pausedUserId].map((id) => ({
         id,
@@ -214,6 +222,257 @@ const fixture = async (db: GatedTestDb, options?: DeadlineFixtureOptions) =>
   });
 
 describe.skipIf(!enabled)("deadline admission recovery (postgres)", () => {
+  test("separate dispatch cursor passes an ungranted prefix and resumes from its persisted lease cursor", async () => {
+    const previousSignals = env.FEATURE_SIGNALS;
+    testState.setConfig("FEATURE_SIGNALS", true);
+    try {
+      await withGatedTestClients(
+        databaseUrl ?? panic("Missing PostgreSQL test URL"),
+        async ({ openClient }) => {
+          const client = openClient();
+          const f = await fixture(client.db, { pausedSources: 0 });
+          const now = new Date("2030-01-01T12:00:00.000Z");
+          const jobId = RECOVERY_SCAN_IDENTITIES.scout.jobId;
+          const lease = `recovery-cursor#${Bun.randomUUIDv7()}`;
+          const prefixIds = [1, 2, 3, 4, 5].map(
+            (index) =>
+              `00000000-0000-7000-8000-${String(index).padStart(12, "0")}`,
+          );
+          const eligibleSourceId = "00000000-0000-7000-8000-000000000010";
+          const firstPrefixId =
+            prefixIds.at(0) ?? panic("Missing first prefix source");
+          const continuations: Date[] = [];
+          const existingJob = (
+            await client.db
+              .select()
+              .from(schedulerJobs)
+              .where(eq(schedulerJobs.id, jobId))
+          ).at(0);
+          try {
+            await client.db
+              .insert(schedulerJobs)
+              .values({
+                id: jobId,
+                task: RECOVER_SCOUT_EMISSION_TASK,
+                description: "Scout recovery cursor fixture",
+                enabled: true,
+                nextRunAt: now,
+                schedule: { type: "interval", everyMs: 5 * 60_000 },
+                payload: {},
+                lockedAt: now,
+                lockedUntil: new Date(now.getTime() + 5 * 60_000),
+                lockedBy: lease,
+              })
+              .onConflictDoUpdate({
+                target: schedulerJobs.id,
+                set: {
+                  task: RECOVER_SCOUT_EMISSION_TASK,
+                  description: "Scout recovery cursor fixture",
+                  enabled: true,
+                  nextRunAt: now,
+                  schedule: { type: "interval", everyMs: 5 * 60_000 },
+                  payload: {},
+                  lockedAt: now,
+                  lockedUntil: new Date(now.getTime() + 5 * 60_000),
+                  lockedBy: lease,
+                },
+              });
+            await withOrgScopedFixture({
+              database: client.db,
+              workspaceId: f.pausedWorkspaceId,
+              fn: async (fixtureTx) =>
+                await fixtureTx.insert(pendingScoutEmissions).values(
+                  prefixIds.map((sourceId) => ({
+                    organizationId: f.organizationId,
+                    workspaceId: f.pausedWorkspaceId,
+                    sourceKind: "infosoud-hearing",
+                    sourceId,
+                    status: "pending",
+                    nextAttemptAt: now,
+                  })),
+                ),
+            });
+            await client.db.insert(entities).values({
+              id: brandPersistedEntityId(eligibleSourceId),
+              workspaceId: f.admittedWorkspaceId,
+              name: "Hearing source",
+              kind: "document",
+              externalSource: "infosoud",
+              externalId: "infosoud:hearing:recovery-cursor",
+              startAt: new Date("2030-01-01T13:00:00.000Z"),
+              externalData: {
+                source: "infosoud",
+                case: {
+                  caseMark: "12 C 45/2030",
+                  court: "Fixture court",
+                  parentCourt: "Fixture parent court",
+                },
+                hearing: {
+                  cancelled: false,
+                  date: "01.01.2030",
+                  judge: "Fixture judge",
+                  private: false,
+                  result: null,
+                  room: "12",
+                  subject: "Fixture hearing",
+                  time: "13:00",
+                  type: "Jednání",
+                },
+              },
+            });
+            await withOrgScopedFixture({
+              database: client.db,
+              workspaceId: f.admittedWorkspaceId,
+              fn: async (fixtureTx) =>
+                await fixtureTx.insert(pendingScoutEmissions).values({
+                  organizationId: f.organizationId,
+                  workspaceId: f.admittedWorkspaceId,
+                  sourceKind: "infosoud-hearing",
+                  sourceId: eligibleSourceId,
+                  status: "pending",
+                  nextAttemptAt: now,
+                }),
+            });
+            const run = async () => {
+              const job =
+                (
+                  await client.db
+                    .select()
+                    .from(schedulerJobs)
+                    .where(eq(schedulerJobs.id, jobId))
+                ).at(0) ?? panic("Missing registered scout recovery job");
+              const result = await recoverScoutEmission({
+                db: asTestRaw<typeof rootDb>(client.db),
+                dueAt: DueSlot.of(job),
+                job,
+                payload: job.payload,
+                runId: createSafeId<"schedulerJobRun">(),
+                scheduleContinuation: (nextRunAt) =>
+                  continuations.push(nextRunAt),
+                signal: new AbortController().signal,
+                logger,
+              });
+              expect(result === undefined || Result.isOk(result)).toBe(true);
+            };
+
+            await run();
+            const firstPage = await client.db
+              .select({
+                sourceId: pendingScoutEmissions.sourceId,
+                status: pendingScoutEmissions.status,
+              })
+              .from(pendingScoutEmissions)
+              .where(eq(pendingScoutEmissions.organizationId, f.organizationId))
+              .orderBy(pendingScoutEmissions.sourceId);
+            const prefix = firstPage.filter(({ sourceId }) =>
+              prefixIds.includes(sourceId),
+            );
+            expect(prefix).toHaveLength(prefixIds.length);
+            expect(
+              prefix
+                .slice(0, RECOVERY_SCAN_PAGE_SIZES.census)
+                .every(({ status }) => status === "awaiting_grant"),
+            ).toBe(true);
+            expect(
+              prefix
+                .slice(RECOVERY_SCAN_PAGE_SIZES.census)
+                .every(({ status }) => status === "pending"),
+            ).toBe(true);
+            expect(
+              firstPage.find(({ sourceId }) => sourceId === eligibleSourceId)
+                ?.status,
+            ).toBe("pending");
+            expect(continuations).toHaveLength(1);
+            const checkpoint = (
+              await client.db
+                .select({ payload: schedulerJobs.payload })
+                .from(schedulerJobs)
+                .where(eq(schedulerJobs.id, jobId))
+            ).at(0)?.payload?.["recoveryScan"];
+            expect(checkpoint).toEqual({
+              census: {
+                organizationId: f.organizationId,
+                sourceKind: "infosoud-hearing",
+                sourceId: firstPrefixId,
+              },
+              dispatch: null,
+              phase: RECOVERY_SCAN_PHASES.dispatch,
+            });
+            await run();
+            expect(
+              (
+                await client.db
+                  .select({ payload: schedulerJobs.payload })
+                  .from(schedulerJobs)
+                  .where(eq(schedulerJobs.id, jobId))
+              ).at(0)?.payload?.["recoveryScan"],
+            ).toEqual({
+              census: {
+                organizationId: f.organizationId,
+                sourceKind: "infosoud-hearing",
+                sourceId: firstPrefixId,
+              },
+              dispatch: {
+                organizationId: f.organizationId,
+                sourceKind: "infosoud-hearing",
+                sourceId: firstPrefixId,
+              },
+              phase: RECOVERY_SCAN_PHASES.census,
+            });
+
+            const remainingPages =
+              Math.ceil(
+                (prefixIds.length + 1) / RECOVERY_SCAN_PAGE_SIZES.dispatch,
+              ) - 1;
+            for (let page = 0; page < remainingPages; page += 1) {
+              await run();
+              await run();
+            }
+            expect(
+              await client.db
+                .select({ sourceId: pendingScoutEmissions.sourceId })
+                .from(pendingScoutEmissions)
+                .where(eq(pendingScoutEmissions.sourceId, eligibleSourceId)),
+            ).toEqual([]);
+            expect(
+              await client.db
+                .select({ id: signals.id })
+                .from(signals)
+                .where(eq(signals.organizationId, f.organizationId)),
+            ).toHaveLength(1);
+          } finally {
+            if (existingJob === undefined) {
+              await client.db
+                .delete(schedulerJobs)
+                .where(eq(schedulerJobs.id, jobId));
+            } else {
+              await client.db
+                .update(schedulerJobs)
+                .set({
+                  task: existingJob.task,
+                  description: existingJob.description,
+                  enabled: existingJob.enabled,
+                  nextRunAt: existingJob.nextRunAt,
+                  schedule: existingJob.schedule,
+                  payload: existingJob.payload,
+                  lockedAt: existingJob.lockedAt,
+                  lockedUntil: existingJob.lockedUntil,
+                  lockedBy: existingJob.lockedBy,
+                })
+                .where(eq(schedulerJobs.id, jobId));
+            }
+            await client.db
+              .delete(organization)
+              .where(eq(organization.id, f.organizationId));
+            await client.db.delete(user).where(eq(user.id, f.admittedUserId));
+            await client.db.delete(user).where(eq(user.id, f.pausedUserId));
+          }
+        },
+      );
+    } finally {
+      testState.setConfig("FEATURE_SIGNALS", previousSignals);
+    }
+  });
   test.each(["validation", "settlement"] as const)(
     "%s deadline owner retains other organizations' fresh sources",
     async (entry) => {
@@ -563,6 +822,13 @@ describe.skipIf(!enabled)("deadline admission recovery (postgres)", () => {
           const client = openClient();
           const f = await fixture(client.db);
           const sourceId = createSafeId<"documentReviewRun">();
+          const jobId = "signals.recoverScoutEmission.fiveMinute";
+          const existingJob = (
+            await client.db
+              .select()
+              .from(schedulerJobs)
+              .where(eq(schedulerJobs.id, jobId))
+          ).at(0);
           try {
             await withOrgScopedFixture({
               database: client.db,
@@ -601,32 +867,47 @@ describe.skipIf(!enabled)("deadline admission recovery (postgres)", () => {
               ).at(0),
             ).toEqual({ status: "awaiting_grant", retryAt: OLD });
             const now = new Date();
-            const job = {
-              id: "signals.scoutRecovery.source-less-test",
-              task: RECOVER_SCOUT_EMISSION_TASK,
-              description: null,
-              schedule: { type: "interval", everyMs: 60_000 },
-              payload: null,
-              enabled: true,
-              pausedBy: null,
-              pausedUntil: null,
-              pauseReason: null,
-              nextRunAt: now,
-              lastRunAt: null,
-              lastSuccessAt: null,
-              lastFailureAt: null,
-              lastError: null,
-              lockedAt: now,
-              lockedUntil: null,
-              lockedBy: "recovery-test",
-              createdAt: now,
-              updatedAt: now,
-            } as const satisfies SchedulerJob;
+            const lease = `source-less-recovery#${Bun.randomUUIDv7()}`;
+            await client.db
+              .insert(schedulerJobs)
+              .values({
+                id: jobId,
+                task: RECOVER_SCOUT_EMISSION_TASK,
+                description: "Source-less scout recovery fixture",
+                schedule: { type: "interval", everyMs: 5 * 60_000 },
+                payload: {},
+                enabled: true,
+                nextRunAt: now,
+                lockedAt: now,
+                lockedUntil: new Date(now.getTime() + 5 * 60_000),
+                lockedBy: lease,
+              })
+              .onConflictDoUpdate({
+                target: schedulerJobs.id,
+                set: {
+                  task: RECOVER_SCOUT_EMISSION_TASK,
+                  description: "Source-less scout recovery fixture",
+                  schedule: { type: "interval", everyMs: 5 * 60_000 },
+                  payload: {},
+                  enabled: true,
+                  nextRunAt: now,
+                  lockedAt: now,
+                  lockedUntil: new Date(now.getTime() + 5 * 60_000),
+                  lockedBy: lease,
+                },
+              });
+            const job =
+              (
+                await client.db
+                  .select()
+                  .from(schedulerJobs)
+                  .where(eq(schedulerJobs.id, jobId))
+              ).at(0) ?? panic("Missing registered scout recovery job");
             await recoverScoutEmission({
               db: asTestRaw<typeof rootDb>(client.db),
               dueAt: DueSlot.of(job),
               job,
-              payload: null,
+              payload: job.payload,
               runId: createSafeId<"schedulerJobRun">(),
               scheduleContinuation: () => undefined,
               signal: new AbortController().signal,
@@ -639,6 +920,26 @@ describe.skipIf(!enabled)("deadline admission recovery (postgres)", () => {
                 .where(eq(pendingScoutEmissions.sourceId, sourceId)),
             ).toEqual([]);
           } finally {
+            if (existingJob === undefined) {
+              await client.db
+                .delete(schedulerJobs)
+                .where(eq(schedulerJobs.id, jobId));
+            } else {
+              await client.db
+                .update(schedulerJobs)
+                .set({
+                  task: existingJob.task,
+                  description: existingJob.description,
+                  enabled: existingJob.enabled,
+                  nextRunAt: existingJob.nextRunAt,
+                  schedule: existingJob.schedule,
+                  payload: existingJob.payload,
+                  lockedAt: existingJob.lockedAt,
+                  lockedUntil: existingJob.lockedUntil,
+                  lockedBy: existingJob.lockedBy,
+                })
+                .where(eq(schedulerJobs.id, jobId));
+            }
             await client.db
               .delete(organization)
               .where(eq(organization.id, f.organizationId));
@@ -754,14 +1055,19 @@ describe.skipIf(!enabled)("deadline admission recovery (postgres)", () => {
         const f = await fixture(holder.db);
         const source = f.sources.at(100) ?? panic("Missing admitted source");
         const claimAt = new Date();
-        const claim = async (
-          tx: Pick<Transaction, "execute" | "rollback" | "select">,
-        ) =>
-          await mutateRecoveryClaim({
+        const claim = async (tx: Transaction) => {
+          // A matter KEY SHARE proof permits both contenders to exercise the source claim CAS.
+          const proof = await proveOrgScope(tx, {
+            table: "workspaces",
+            where: eq(workspaces.id, source.workspaceId),
+          });
+          if (proof.isErr()) {
+            return panic("Missing claim source scope fixture");
+          }
+          return await mutateRecoveryClaim({
             type: "deadline-claim",
             tx,
-            table: documentProcessingRuns,
-            spec: DEADLINE_DISPATCH_RECOVERY,
+            scope: proof.value,
             sourceRunId: source.runId,
             now: claimAt,
             where: sql`${and(
@@ -770,6 +1076,7 @@ describe.skipIf(!enabled)("deadline admission recovery (postgres)", () => {
               eq(documentProcessingRuns.deadlineScoutStatus, "pending"),
             )}`,
           });
+        };
         const sessionPid = async (db: GatedTestDb) => {
           const result = await db.execute(sql`SELECT pg_backend_pid() AS pid`);
           const pid = Number(result.at(0)?.["pid"]);

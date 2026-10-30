@@ -7,8 +7,10 @@ import type { NotificationMetadataValue } from "@stll/api-contract/notifications
 import { RETAINED_ACTIVITY_FEATURE_OWNERS } from "@/api/db/feature-owner";
 import { systemScopePolicies } from "@/api/db/system-scope-policies";
 
+import { registeredReviewResetPolicies } from "../review-reset-policies";
 import {
   jsonb,
+  notificationPolicies,
   organization,
   p,
   pUuid,
@@ -17,7 +19,6 @@ import {
   sql,
   timestamptz,
   user,
-  notificationPolicies,
 } from "./common";
 import { workspaces } from "./contacts";
 
@@ -121,5 +122,7 @@ export const notifications = p.pgTable(
       sql`(${table.entityType} IS NULL) = (${table.entityId} IS NULL)`,
     ),
     ...notificationPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );

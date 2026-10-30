@@ -182,7 +182,7 @@ export const fileFlowRunCompletionNotice = async (
         if (!(await flowRunActorExists(actorUserId, scopedTx))) {
           await recordDeferredNoticeState(scopedTx, {
             type: "actor-removed",
-            table: flowRuns,
+            scope: proven,
             runId: notice.runId,
             workspaceId: notice.workspaceId,
           });
@@ -200,7 +200,7 @@ export const fileFlowRunCompletionNotice = async (
           // The completed source records only notices whose filing was deferred.
           await recordDeferredNoticeState(scopedTx, {
             type: "completion-notice-pending",
-            table: flowRuns,
+            scope: proven,
             runId: notice.runId,
             workspaceId: notice.workspaceId,
           });
@@ -212,7 +212,7 @@ export const fileFlowRunCompletionNotice = async (
         );
         await recordDeferredNoticeState(scopedTx, {
           type: "clear",
-          table: flowRuns,
+          scope: proven,
           runId: notice.runId,
           workspaceId: notice.workspaceId,
         });

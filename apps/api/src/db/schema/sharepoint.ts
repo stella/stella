@@ -8,8 +8,8 @@ import {
   safeOrganizationId,
   sharepointConnectionPolicies,
   sharepointOAuthStatePolicies,
-  user,
   timestamptz,
+  user,
 } from "./common";
 
 /**

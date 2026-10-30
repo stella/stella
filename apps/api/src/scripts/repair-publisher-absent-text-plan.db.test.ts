@@ -33,11 +33,11 @@ import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
-  TEXT_ABSENCE_REASON,
-  TEXT_FIELD_TYPE,
   absentTextComparisonsFor,
   readDecisionTextMetadata,
   sourceTextField,
+  TEXT_ABSENCE_REASON,
+  TEXT_FIELD_TYPE,
 } from "@/api/lib/case-law/decision-text";
 import { publisherHeadnoteOf } from "@/api/lib/case-law/publisher-summary";
 import { executedRows } from "@/api/lib/db/executed-rows";

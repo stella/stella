@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { readFile, readdir } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
 const DESKTOP_ROOT = path.join(import.meta.dir, "..");

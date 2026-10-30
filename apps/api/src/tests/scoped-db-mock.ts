@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { getColumns } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
+import { QueryPromise } from "drizzle-orm/query-promise";
 
 import { member, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -28,6 +29,14 @@ export const toSafeDbMock =
     return result;
   };
 
+type DocumentProcessingRunFindFirst =
+  Transaction["query"]["documentProcessingRuns"]["findFirst"];
+
+export const findNoDocumentProcessingRun = async (
+  _input?: Parameters<DocumentProcessingRunFindFirst>[0],
+): Promise<Awaited<ReturnType<DocumentProcessingRunFindFirst>>> =>
+  await Promise.resolve(undefined);
+
 type FeatureAccessMockOptions = {
   /** With `userId`, only that member's enrolments join the identity row. */
   identity:
@@ -50,6 +59,7 @@ type ScopedDbMockOptions = {
     entityId: typeof entities.$inferSelect.id;
     eligible: boolean;
   }[];
+  authorizedWorkspaceIds?: readonly string[];
   siblingRows?: { name: string; parentId: string | null }[];
   featureAccess?: FeatureAccessMockOptions;
   flowTaskGates?: {
@@ -64,36 +74,52 @@ type ScopedDbMockOptions = {
   };
 };
 
+class FixtureQuery<TRow> extends QueryPromise<TRow[]> {
+  private readonly rows: TRow[];
+
+  constructor(rows: TRow[]) {
+    super();
+    this.rows = rows;
+  }
+
+  async execute() {
+    return await Promise.resolve(this.rows);
+  }
+}
+
 // Query fixtures provide the rows matching their select boundary. Keep the
 // awaitable builder shape intact for locking and bounded reads.
 export const createSelectQueryMock = <TRow>(rows: TRow[]) => {
   let rowOffset = 0;
-  // oxlint-disable-next-line typescript/promise-function-async -- async would wrap the query promise and discard its for method
   const limit = (count: number) => {
     const selected = rows.slice(rowOffset, rowOffset + count);
-    return Object.assign(Promise.resolve(selected), {
-      for: () => selected,
+    return Object.assign(new FixtureQuery(selected), {
+      for: async () => await Promise.resolve(selected),
     });
   };
   const offset = (count: number) => {
     rowOffset = count;
     return { limit };
   };
-  // oxlint-disable-next-line typescript/promise-function-async -- async would wrap the query promise and discard its query methods
   const where = () =>
-    Object.assign(Promise.resolve(rows), {
+    Object.assign(new FixtureQuery(rows), {
       limit,
       offset,
-      for: () => rows,
+      for: async () => await Promise.resolve(rows),
       orderBy: () => ({ limit, offset }),
     });
-  return {
-    from: () => ({
-      where,
-      innerJoin: () => ({ where }),
-      leftJoin: () => ({ where }),
-    }),
+  type JoinedQuery = FixtureQuery<TRow> & {
+    where: typeof where;
+    innerJoin: () => JoinedQuery;
+    leftJoin: () => JoinedQuery;
   };
+  const from = (): JoinedQuery =>
+    Object.assign(new FixtureQuery(rows), {
+      where,
+      innerJoin: from,
+      leftJoin: from,
+    });
+  return { from };
 };
 
 // Every aggregate advisory statement (exclusive, shared, try, or the
@@ -274,9 +300,38 @@ export const createScopedDbMock = (
       advisoryKeys.set(identity, key);
       return [{ key1: 1, key2: key, acquired: true }];
     };
+    const providedQuery =
+      typeof tx === "object" &&
+      tx !== null &&
+      "query" in tx &&
+      typeof tx.query === "object" &&
+      tx.query !== null
+        ? tx.query
+        : {};
+    const providedDocumentProcessingRuns =
+      "documentProcessingRuns" in providedQuery &&
+      typeof providedQuery.documentProcessingRuns === "object" &&
+      providedQuery.documentProcessingRuns !== null
+        ? providedQuery.documentProcessingRuns
+        : {};
     const transaction = {
       execute: advisoryExecute,
+      ...(options?.authorizedWorkspaceIds === undefined
+        ? {}
+        : {
+            selectDistinct: () =>
+              createSelectQueryMock(
+                options.authorizedWorkspaceIds?.map((id) => ({ id })) ?? [],
+              ),
+          }),
       ...(typeof tx === "object" && tx !== null ? tx : {}),
+      query: {
+        ...providedQuery,
+        documentProcessingRuns: {
+          findFirst: findNoDocumentProcessingRun,
+          ...providedDocumentProcessingRuns,
+        },
+      },
       ...(transferEligibility === undefined
         ? {}
         : {

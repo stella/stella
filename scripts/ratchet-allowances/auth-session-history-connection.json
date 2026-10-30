@@ -1,0 +1,6 @@
+{
+  "metric": "direct-root-connection-imports",
+  "file": "apps/api/src/lib/auth/session-history.ts",
+  "delta": 1,
+  "reason": "The sign-in notice reads the signed-in user's own other sessions from the authentication session table inside the authentication hook, before any organization scope exists; the read is filtered by that user's id and returns only device fields. No database handle is exported."
+}

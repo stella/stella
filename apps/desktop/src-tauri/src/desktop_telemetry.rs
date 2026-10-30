@@ -29,6 +29,7 @@ pub enum DesktopTelemetryWindow {
   TakeoverDialog,
   SelfHostConnectDialog,
   Activity,
+  Onboarding,
 }
 
 impl DesktopTelemetryWindow {
@@ -40,6 +41,7 @@ impl DesktopTelemetryWindow {
       Self::TakeoverDialog => "takeoverDialog",
       Self::SelfHostConnectDialog => "selfHostConnectDialog",
       Self::Activity => "activity",
+      Self::Onboarding => "onboarding",
     }
   }
 }
@@ -68,6 +70,8 @@ pub enum DesktopTelemetryOperation {
   ActivityRead,
   ActivitySubscribe,
   ActivityUpdate,
+  ShortcutUpdate,
+  PermissionsUpdate,
 }
 
 impl DesktopTelemetryOperation {
@@ -94,6 +98,8 @@ impl DesktopTelemetryOperation {
       Self::ActivityRead => "activityRead",
       Self::ActivitySubscribe => "activitySubscribe",
       Self::ActivityUpdate => "activityUpdate",
+      Self::ShortcutUpdate => "shortcutUpdate",
+      Self::PermissionsUpdate => "permissionsUpdate",
     }
   }
 }
@@ -353,6 +359,9 @@ pub enum DesktopTelemetrySpan {
   ClipboardHistoryReady,
   /// Window focus after a reopen until the next painted frame.
   ClipboardReopenPaint,
+  /// Edit request until the editor window read its clip: a created window
+  /// (first open) or a reused one (reopen).
+  ClipboardEditorOpen,
 }
 
 impl DesktopTelemetrySpan {
@@ -371,6 +380,7 @@ impl DesktopTelemetrySpan {
       Self::ClipboardFirstPaint => "clipboardFirstPaint",
       Self::ClipboardHistoryReady => "clipboardHistoryReady",
       Self::ClipboardReopenPaint => "clipboardReopenPaint",
+      Self::ClipboardEditorOpen => "clipboardEditorOpen",
     }
   }
 }
@@ -558,6 +568,9 @@ impl DesktopTelemetry {
     if !enabled && let Ok(mut reported) = self.reported.lock() {
       reported.clear();
     }
+    // Released only once the crash monitor and the reported set follow the
+    // new preference, so no request observes a half-applied change.
+    drop(gate);
     Ok(enabled)
   }
 
@@ -588,6 +601,12 @@ impl DesktopTelemetry {
       crate::activity_window::ACTIVITY_WINDOW_LABEL => {
         report.window = DesktopTelemetryWindow::Activity;
         report.detail = None;
+      }
+      crate::onboarding::ONBOARDING_WINDOW_LABEL => {
+        report.window = DesktopTelemetryWindow::Onboarding;
+      }
+      crate::accessibility_guide::GUIDE_WINDOW_LABEL => {
+        report.window = DesktopTelemetryWindow::Onboarding;
       }
       _ => {}
     }
@@ -904,7 +923,8 @@ pub fn desktop_report_timing(
       | DesktopTelemetryWindow::ClipboardEditor
       | DesktopTelemetryWindow::TakeoverDialog
       | DesktopTelemetryWindow::SelfHostConnectDialog
-      | DesktopTelemetryWindow::Activity,
+      | DesktopTelemetryWindow::Activity
+      | DesktopTelemetryWindow::Onboarding,
       _,
     ) => None,
   };

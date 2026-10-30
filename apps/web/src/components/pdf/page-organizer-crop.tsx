@@ -33,9 +33,9 @@ import {
   cropToMarginsMm,
   displayedCropBox,
   displayedPageSizeMm,
-  MIN_CROP_SIZE_MM,
   marginsFromDisplayedBox,
   marginsMmToCrop,
+  MIN_CROP_SIZE_MM,
 } from "./page-organizer-crop.logic";
 import type {
   CropAdjustMode,
@@ -331,7 +331,10 @@ const CropPreview = ({
           return;
         }
         if (Result.isError(result)) {
-          analytics.captureError(result.error);
+          analytics.captureError(result.error, {
+            fingerprintKey: "CropPreview:failure",
+            scope: { type: "handler", handlerId: "CropPreview:failure" },
+          });
           setStatus("failed");
           return;
         }

@@ -3,10 +3,10 @@ import { Result } from "better-result";
 import { loadEntityVersionDiffSources } from "@/api/handlers/entities/version-diff-sources";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import {
-  FLOW_TASK_FEATURE_ACCESS,
   admitTaskFlowAccess,
+  FLOW_TASK_FEATURE_ACCESS,
 } from "@/api/lib/flows/review-gate-task";
 import { buildLineDiffSegments } from "@/api/lib/text-diff";
 
@@ -30,8 +30,8 @@ const config = {
   mcp: { type: "covered", by: "read_document" },
   access: "read",
   params: workspaceParams({
-    entityId: tSafeId("entity"),
-    versionId: tSafeId("entityVersion"),
+    entityId: resourceIdSchema("entity"),
+    versionId: resourceIdSchema("entityVersion"),
   }),
 } satisfies WorkspaceHandlerConfig;
 

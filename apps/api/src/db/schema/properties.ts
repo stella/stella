@@ -1,22 +1,23 @@
 import { PLAYBOOK_VERSION_SOURCES } from "@/api/lib/workflow/playbook-positions";
 import type { PlaybookVersionSource } from "@/api/lib/workflow/playbook-positions";
 
+import { registeredReviewResetPolicies } from "../review-reset-policies";
 import {
-  PROPERTY_ROLES,
-  PROPERTY_STATUSES,
   isNotNull,
   jsonb,
-  orgPolicies,
   organization,
+  orgPolicies,
   p,
+  PROPERTY_ROLES,
+  PROPERTY_STATUSES,
   pUuid,
   safeOrganizationId,
   safeUuid,
   safeWorkspaceId,
   sql,
+  timestamptz,
   user,
   wsPolicies,
-  timestamptz,
 } from "./common";
 import type {
   ConditionNode,
@@ -203,6 +204,8 @@ export const playbookDefinitions = p.pgTable(
       .unique("playbook_definitions_id_org_unq")
       .on(table.id, table.organizationId),
     ...orgPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -262,6 +265,8 @@ export const playbookDefinitionVersions = p.pgTable(
       sql`${table.source} IN (${VERSION_SOURCE_SQL_VALUES})`,
     ),
     ...orgPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -294,6 +299,8 @@ export const documentTypes = p.pgTable(
       .on(table.organizationId, table.sortOrder),
     p.unique("document_types_org_key_unq").on(table.organizationId, table.key),
     ...orgPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 

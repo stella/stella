@@ -16,13 +16,13 @@ import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 import {
   PUBLISHER_BODY_MAX_BYTES,
+  type PublisherReadInit,
   readBodyText,
   readGatedResponseText,
   readPublisher,
   readPublisherBytes,
   readPublisherText,
   unreadPublisherError,
-  type PublisherReadInit,
 } from "./publisher-read";
 
 const originalFetch = globalThis.fetch;

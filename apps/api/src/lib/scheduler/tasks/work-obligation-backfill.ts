@@ -5,7 +5,6 @@ import { isUuid } from "@stll/uuid-codec";
 
 import {
   entities,
-  schedulerJobs,
   taskAssignees,
   workObligationEvents,
   workObligations,
@@ -14,6 +13,7 @@ import {
 import { env } from "@/api/env";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import {
   brandPersistedEntityId,
@@ -21,6 +21,7 @@ import {
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
+import { writePlatformSchedulerTaskState } from "@/api/lib/scheduler/upsert-job";
 import { isWorkObligationEligible } from "@/api/lib/work-obligations/eligibility";
 import {
   legacyWorkObligationCreatedEvents,
@@ -65,7 +66,7 @@ export const backfillWorkObligations: SchedulerTask = async ({
   const leaseToken =
     job.lockedBy ??
     panic("Work-obligation backfill requires a scheduler lease");
-  const outcome = await db.transaction(async (tx) => {
+  const outcome = await withAggregateTransaction(db, async (tx) => {
     const entityPage = await tx
       .select({
         id: entities.id,
@@ -96,15 +97,13 @@ export const backfillWorkObligations: SchedulerTask = async ({
     signal.throwIfAborted();
     const lastEntity = entityPage.at(-1);
     if (!lastEntity) {
-      await tx
-        .update(schedulerJobs)
-        .set({ payload: { cursor: null } })
-        .where(
-          and(
-            eq(schedulerJobs.id, job.id),
-            eq(schedulerJobs.lockedBy, leaseToken),
-          ),
-        );
+      await writePlatformSchedulerTaskState({
+        db: tx,
+        jobId: job.id,
+        leaseToken,
+        state: { type: "checkpoint", payload: { cursor: null } },
+        task: BACKFILL_WORK_OBLIGATIONS_TASK,
+      });
       return { status: "cycle_complete" as const, inserted: 0, scanned: 0 };
     }
 
@@ -184,15 +183,13 @@ export const backfillWorkObligations: SchedulerTask = async ({
       }
     }
 
-    await tx
-      .update(schedulerJobs)
-      .set({ payload: { cursor: lastEntity.id } })
-      .where(
-        and(
-          eq(schedulerJobs.id, job.id),
-          eq(schedulerJobs.lockedBy, leaseToken),
-        ),
-      );
+    await writePlatformSchedulerTaskState({
+      db: tx,
+      jobId: job.id,
+      leaseToken,
+      state: { type: "checkpoint", payload: { cursor: lastEntity.id } },
+      task: BACKFILL_WORK_OBLIGATIONS_TASK,
+    });
 
     return {
       status: "progress" as const,

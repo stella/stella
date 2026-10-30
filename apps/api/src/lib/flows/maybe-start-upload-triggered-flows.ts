@@ -8,11 +8,7 @@ import {
 } from "@/api/db/org-scope";
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
-import {
-  entities,
-  flowDefinitions,
-  flowUploadTriggerIntents,
-} from "@/api/db/schema";
+import { entities, flowDefinitions } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
@@ -24,6 +20,7 @@ import {
   fileUploadTriggerMatches,
 } from "@/api/lib/flows/flow-trigger-logic";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import { recoverUploadFlowTriggerIntents } from "@/api/lib/scheduler/tasks/upload-flow-trigger-recovery";
 
@@ -83,7 +80,7 @@ export const recordUploadTriggeredFlowIntents = async (
       await mutateRecoveryReceipt({
         type: "create-upload",
         tx: scopedTx,
-        table: flowUploadTriggerIntents,
+        scope: scope.value,
         rows: matching.map(({ id }) => ({
           definitionId: id,
           entityId,
@@ -122,7 +119,13 @@ export const maybeStartUploadTriggeredFlows = async ({
     });
   });
   if (Result.isError(dispatched)) {
-    captureError(dispatched.error, { entityId, workspaceId });
+    captureError(
+      dispatched.error,
+      handlerErrorContext(
+        "flows.maybeStartUploadTriggeredFlows.dispatched_error",
+        { entityId, workspaceId },
+      ),
+    );
     logger.error("flow.upload_trigger_dispatch_failed", {
       entityId,
       workspaceId,

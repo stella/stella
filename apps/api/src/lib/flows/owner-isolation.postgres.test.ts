@@ -5,20 +5,20 @@ import { and, eq } from "drizzle-orm";
 import { flowRunUpdateRealtimeEvent } from "@stll/api-contract";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
-import { member, user } from "@/api/db/auth-schema";
+import { member, session, user } from "@/api/db/auth-schema";
 import { proveOrgScope, withOrgScope } from "@/api/db/org-scope";
 import {
   featureEnrolments,
-  flowUploadTriggerIntents,
-  workspaceMembers,
-  workspaces,
   flowDefinitions,
   flowRuns,
+  flowUploadTriggerIntents,
   notifications,
   schedulerJobs,
+  workspaceMembers,
+  workspaces,
 } from "@/api/db/schema";
 import { env } from "@/api/env";
-import { realtimeAuthorizers } from "@/api/lib/auth";
+import { resolveWorkspaceRealtimeAudience } from "@/api/lib/auth";
 import { createSafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { resumeFeatureAfterGrant } from "@/api/lib/feature-access/grant-recovery";
@@ -30,7 +30,6 @@ import {
 } from "@/api/lib/flows/flow-executor";
 import { fileFlowRunCompletionNotice } from "@/api/lib/flows/flow-run-actor";
 import { notifyFlowRunActorOfCompletion } from "@/api/lib/flows/flow-run-completion-notice";
-import { deliverFlowRunWorkspaceEvent } from "@/api/lib/flows/flow-run-events";
 import { reconcileOrphanedFlowRuns } from "@/api/lib/flows/flow-run-worker";
 import { resumeFlowsAfterGrant as resumeFacade } from "@/api/lib/flows/grant-recovery";
 import { maybeStartUploadTriggeredFlows as dispatchUploadOwner } from "@/api/lib/flows/maybe-start-upload-triggered-flows";
@@ -43,13 +42,13 @@ import {
 import { buildFlowRunRows } from "@/api/lib/flows/start-flow-run";
 import { syncFlowScheduleTriggerInTransaction } from "@/api/lib/flows/sync-flow-schedule-trigger";
 import {
-  recordUploadTriggeredFlowIntents,
   maybeStartUploadTriggeredFlows as dispatchUploadFacade,
+  recordUploadTriggeredFlowIntents,
 } from "@/api/lib/flows/upload-trigger-recording";
 import {
   FLOW_RUN_TASK,
   flowScheduleJobId,
-} from "@/api/lib/scheduler/tasks/flow-run";
+} from "@/api/lib/scheduler/flow-schedule-identity";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import {
@@ -595,16 +594,25 @@ describe.skipIf(!enabled)(
       });
     });
 
-    test("flow event delivery retains other organizations' recipient admission", async () => {
+    test("realtime delivery stays bound to the session's organization and source", async () => {
       await withGatedTestClients(databaseUrl(), async ({ openClient }) => {
         const { db } = openClient();
         const a = await flowReviewGateFixture(db, { intermediate: false });
         const b = await flowReviewGateFixture(db, { intermediate: false });
+        const sessionId = Bun.randomUUIDv7();
+        const previousFlag = env.FEATURE_FLOWS;
         const restoreRuntime = setRuntimeModeForTesting({
           mode: RUNTIME_MODE.strict,
         });
         testState.setConfig("FEATURE_FLOWS", true);
         try {
+          await db.insert(session).values({
+            id: sessionId,
+            token: Bun.randomUUIDv7(),
+            userId: a.userId,
+            activeOrganizationId: a.organizationId,
+            expiresAt: new Date("2100-01-01T00:00:00.000Z"),
+          });
           await db.insert(member).values({
             id: mintAuthProviderIdValue(),
             organizationId: b.organizationId,
@@ -621,27 +629,49 @@ describe.skipIf(!enabled)(
             featureId: "flows",
           });
           const before = await b.read();
-          const delivered = new Set<string>();
-          await deliverFlowRunWorkspaceEvent({
-            database: db,
+          const connection = {
+            sessionId,
             organizationId: a.organizationId,
-            workspaceId: b.workspaceId,
-            userIds: [a.userId],
-            event: flowRunUpdateRealtimeEvent({
-              runId: b.runId,
-              status: "awaiting_review",
-              currentStepIndex: 0,
-              steps: [],
-            }).toJSON(),
-            deliver: (recipients) => {
-              for (const recipient of recipients) {
-                delivered.add(recipient);
-              }
+            userId: a.userId,
+          };
+          const ownEvent = flowRunUpdateRealtimeEvent({
+            runId: a.runId,
+            status: "awaiting_review",
+            currentStepIndex: 0,
+            steps: [],
+          }).toJSON();
+          const ownAuthorization = await resolveWorkspaceRealtimeAudience(
+            {
+              connections: [connection],
+              workspaceId: a.workspaceId,
+              event: ownEvent,
             },
+            db,
+          );
+          expect(ownAuthorization.get(sessionId)).toEqual({
+            organizationId: a.organizationId,
+            userId: a.userId,
+            delivery: { type: "deliver", event: ownEvent },
           });
-          expect(delivered).toEqual(new Set());
+
+          const foreignEvent = flowRunUpdateRealtimeEvent({
+            runId: b.runId,
+            status: "awaiting_review",
+            currentStepIndex: 0,
+            steps: [],
+          }).toJSON();
+          const foreignAuthorization = await resolveWorkspaceRealtimeAudience(
+            {
+              connections: [connection],
+              workspaceId: b.workspaceId,
+              event: foreignEvent,
+            },
+            db,
+          );
+          expect(foreignAuthorization.has(sessionId)).toBe(false);
           expect(await b.read()).toEqual(before);
         } finally {
+          testState.setConfig("FEATURE_FLOWS", previousFlag);
           restoreRuntime();
           await b.cleanup();
           await a.cleanup();
@@ -1042,77 +1072,6 @@ describe.skipIf(!enabled)(
                 .limit(1)
             ).at(0)?.status,
           ).toBe("pending");
-        } finally {
-          restoreRuntime();
-          await b.cleanup();
-          await a.cleanup();
-        }
-      });
-    });
-
-    test("realtime workspace facade retains other organizations' recipient admission", async () => {
-      await withGatedTestClients(databaseUrl(), async ({ openClient }) => {
-        const { db } = openClient();
-        const a = await flowReviewGateFixture(db, { intermediate: false });
-        const b = await flowReviewGateFixture(db, { intermediate: false });
-        const restoreRuntime = setRuntimeModeForTesting({
-          mode: RUNTIME_MODE.strict,
-        });
-        testState.setConfig("FEATURE_FLOWS", true);
-        try {
-          await db.insert(member).values({
-            id: mintAuthProviderIdValue(),
-            organizationId: b.organizationId,
-            userId: a.userId,
-            role: "member",
-            createdAt: new Date(),
-          });
-          await db
-            .insert(workspaceMembers)
-            .values({ workspaceId: b.workspaceId, userId: a.userId });
-          await db.insert(featureEnrolments).values({
-            organizationId: b.organizationId,
-            userId: a.userId,
-            featureId: "flows",
-          });
-          const before = await b.read();
-          const delivered = new Set<string>();
-          await realtimeAuthorizers.workspaceEvent({
-            organizationId: a.organizationId,
-            workspaceId: b.workspaceId,
-            userIds: [a.userId],
-            event: flowRunUpdateRealtimeEvent({
-              runId: b.runId,
-              status: "awaiting_review",
-              currentStepIndex: 0,
-              steps: [],
-            }).toJSON(),
-            deliver: (recipients) => {
-              for (const recipient of recipients) {
-                delivered.add(recipient);
-              }
-            },
-          });
-          expect(delivered).toEqual(new Set());
-          expect(await b.read()).toEqual(before);
-          await realtimeAuthorizers.workspaceEvent({
-            organizationId: a.organizationId,
-            workspaceId: a.workspaceId,
-            userIds: [a.userId],
-            event: flowRunUpdateRealtimeEvent({
-              runId: a.runId,
-              status: "awaiting_review",
-              currentStepIndex: 0,
-              steps: [],
-            }).toJSON(),
-            deliver: (recipients) => {
-              for (const recipient of recipients) {
-                delivered.add(recipient);
-              }
-            },
-          });
-          expect(delivered).toEqual(new Set([a.userId]));
-          expect(await b.read()).toEqual(before);
         } finally {
           restoreRuntime();
           await b.cleanup();

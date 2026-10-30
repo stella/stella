@@ -1,3 +1,4 @@
+// parser-output-unchanged: the decision-date availability marker is derived only from metadata a source sets; sources that never set it parse as before.
 import { panic } from "better-result";
 
 // parser-output-unchanged: Publication provenance and its schema checks affect metadata only, not canonical document payloads.
@@ -14,6 +15,16 @@ export const TEXT_FIELD_TYPE = {
   ABSENT: "absent",
   PRESENT: "present",
 } as const;
+
+// parser-output-unchanged: Text availability labels describe public reads only; ingestion output is unchanged.
+/** Recorded text presence; licences and read-time failures are separate. */
+export const DECISION_TEXT_AVAILABILITY = {
+  AVAILABLE: "available",
+  METADATA_ONLY: "metadata_only",
+} as const;
+
+export type DecisionTextAvailability =
+  (typeof DECISION_TEXT_AVAILABILITY)[keyof typeof DECISION_TEXT_AVAILABILITY];
 
 export const DECISION_TEXT_WITHHELD_REASON = {
   SOURCE_LICENCE: "source_licence",
@@ -157,6 +168,20 @@ export const SK_US_ECLI_AVAILABILITY_STATUSES = [
 
 export type SkUsEcliAvailability = {
   status: (typeof SK_US_ECLI_AVAILABILITY_STATUSES)[number];
+};
+
+/**
+ * Whether the source states a decision's issue date. Any source declares it
+ * in `metadata.decisionDateAvailability` when the date is not published, so
+ * the absence is a typed marker rather than a missing value.
+ */
+export const DECISION_DATE_AVAILABILITY_STATUSES = [
+  "published",
+  "not-published-by-source",
+] as const;
+
+export type DecisionDateAvailability = {
+  status: (typeof DECISION_DATE_AVAILABILITY_STATUSES)[number];
 };
 
 export const SK_COURTS_SOURCE_URL_STATUSES = [

@@ -34,47 +34,47 @@ signals.created_at          timestamptz         default,not null  signals.ts:149
 signals.updated_at          timestamptz         default,not null  signals.ts:150
 ```
 
-## signal_events · `signalEvents` · signals.ts:230 · rls
+## signal_events · `signalEvents` · signals.ts:232 · rls
 
 Append-only lifecycle audit for a signal.
 
 ```text
-signal_events.id               pUuid               pk,not null       signals.ts:233
-signal_events.organization_id  safeOrganizationId  not null          signals.ts:234
-signal_events.signal_id        safeUuid            not null          signals.ts:235
-signal_events.type             text                not null          signals.ts:236
-signal_events.actor_user_id    text                fk,null           signals.ts:237
-signal_events.payload          jsonb               null              signals.ts:240
-signal_events.created_at       timestamptz         default,not null  signals.ts:241
+signal_events.id               pUuid               pk,not null       signals.ts:235
+signal_events.organization_id  safeOrganizationId  fk,not null       signals.ts:236
+signal_events.signal_id        safeUuid            fk,not null       signals.ts:237
+signal_events.type             text                not null          signals.ts:238
+signal_events.actor_user_id    text                fk,null           signals.ts:239
+signal_events.payload          jsonb               null              signals.ts:242
+signal_events.created_at       timestamptz         default,not null  signals.ts:243
 ```
 
-## scout_runs · `scoutRuns` · signals.ts:307 · rls
+## scout_runs · `scoutRuns` · signals.ts:311 · rls
 
 Census of scout executions: proves a scout ran and how many signals it emitted vs. deduplicated, so "no signals" is distinguishable from "never ran".
 
 ```text
-scout_runs.id               pUuid               pk,not null       signals.ts:310
-scout_runs.organization_id  safeOrganizationId  fk,not null       signals.ts:311
-scout_runs.scout_key        text                not null          signals.ts:314
-scout_runs.status           text                not null          signals.ts:315
-scout_runs.emitted_count    integer             default,not null  signals.ts:316
-scout_runs.inserted_count   integer             default,not null  signals.ts:317
-scout_runs.error            text                null              signals.ts:318
-scout_runs.started_at       timestamptz         default,not null  signals.ts:319
-scout_runs.finished_at      timestamptz         null              signals.ts:320
+scout_runs.id               pUuid               pk,not null       signals.ts:314
+scout_runs.organization_id  safeOrganizationId  fk,not null       signals.ts:315
+scout_runs.scout_key        text                not null          signals.ts:318
+scout_runs.status           text                not null          signals.ts:319
+scout_runs.emitted_count    integer             default,not null  signals.ts:320
+scout_runs.inserted_count   integer             default,not null  signals.ts:321
+scout_runs.error            text                null              signals.ts:322
+scout_runs.started_at       timestamptz         default,not null  signals.ts:323
+scout_runs.finished_at      timestamptz         null              signals.ts:324
 ```
 
-## pending_scout_emissions · `pendingScoutEmissions` · signals.ts:346 · rls
+## pending_scout_emissions · `pendingScoutEmissions` · signals.ts:352 · rls
 
 A source commits its deferred emission before its own terminal transition.
 
 ```text
-pending_scout_emissions.organization_id  safeOrganizationId  fk,not null       signals.ts:349
-pending_scout_emissions.workspace_id     safeWorkspaceId     not null          signals.ts:352
-pending_scout_emissions.source_kind      text                not null          signals.ts:353
-pending_scout_emissions.source_id        uuid                not null          signals.ts:356
-pending_scout_emissions.status           text                default,not null  signals.ts:357
-pending_scout_emissions.next_attempt_at  timestamptz         default,not null  signals.ts:361
-pending_scout_emissions.last_error       varchar             null              signals.ts:362
-pending_scout_emissions.created_at       timestamptz         default,not null  signals.ts:363
+pending_scout_emissions.organization_id  safeOrganizationId  fk,not null       signals.ts:355
+pending_scout_emissions.workspace_id     safeWorkspaceId     fk,not null       signals.ts:358
+pending_scout_emissions.source_kind      text                not null          signals.ts:359
+pending_scout_emissions.source_id        uuid                not null          signals.ts:362
+pending_scout_emissions.status           text                default,not null  signals.ts:363
+pending_scout_emissions.next_attempt_at  timestamptz         default,not null  signals.ts:367
+pending_scout_emissions.last_error       varchar             null              signals.ts:368
+pending_scout_emissions.created_at       timestamptz         default,not null  signals.ts:369
 ```

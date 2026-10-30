@@ -624,7 +624,7 @@ describe("file derivative repair", () => {
     {
       cause: new Error("Queue write refused"),
       grade: "defect",
-      reason: "unclassified",
+      reason: "tagged_failure",
     },
     {
       cause: Object.assign(new Error("Redis connection reset"), {
@@ -634,7 +634,7 @@ describe("file derivative repair", () => {
       reason: "network_reset",
     },
   ])(
-    "the runner captures one $grade exception per failed tick",
+    "the runner records a $grade failure per failed tick",
     async ({ cause, grade, reason }) => {
       await seedFileField();
       const task = createRepairFileDerivativesTask({
@@ -645,11 +645,20 @@ describe("file derivative repair", () => {
 
       expect(await runRepairInRunner(task)).toBe("failed");
       const exceptions = analytics.exceptions();
-      expect(exceptions).toHaveLength(1);
-      expect(exceptions.at(0)?.properties).toMatchObject({
-        "error.class": "FileDerivativeRepairError",
-        "failure.grade": grade,
-        "failure.reason": reason,
+      expect(exceptions).toHaveLength(grade === "defect" ? 1 : 0);
+      if (grade === "defect") {
+        expect(exceptions.at(0)?.properties).toMatchObject({
+          "error.class": "FileDerivativeRepairError",
+          "failure.grade": grade,
+          "failure.reason": reason,
+        });
+      }
+      expect(
+        logs.records.find(({ message }) => message === "scheduler.job_failed")
+          ?.attributes,
+      ).toMatchObject({
+        "failure.shadow_grade": grade,
+        "failure.shadow_reason": reason,
       });
       expect(
         logs.records.filter(

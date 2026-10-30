@@ -11,12 +11,16 @@ export {
   didYouMean,
   failure,
   KIT_ERROR_CODES,
+  MAX_TOOL_NAME_CHARS,
   success,
   toCallResult,
   toolError,
   validationError,
+  toolNameDistance,
+  toolNameKey,
 } from "./envelope";
 export { readToolInput, type ReadInput } from "./input";
+export { localMcpClientHeaders } from "./local-client-identity";
 export {
   advertisedBytes,
   compactSchema,

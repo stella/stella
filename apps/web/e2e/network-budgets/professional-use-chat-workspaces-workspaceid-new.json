@@ -1,6 +1,6 @@
 {
   "route": "/chat/workspaces/$workspaceId/new",
-  "reason": "Load professional-use acceptance before protected route data is requested.",
+  "reason": "Load professional-use acceptance before protected route data is requested. The sidebar's Time link reads the approval queue's bounded count of submitted time waiting for the signed-in person (one request, limit 1).",
   "budget": {
     "depth": 8,
     "requests": [
@@ -11,6 +11,7 @@
       "GET /v1/chat/skill-availability",
       "GET /v1/chat/threads",
       "GET /v1/chat/threads/:id/messages",
+      "GET /v1/chat/tool-grants",
       "GET /v1/mcp/connectors",
       "GET /v1/me/professional-use",
       "GET /v1/notifications",
@@ -19,6 +20,7 @@
       "GET /v1/organization-settings/deployment-features",
       "GET /v1/signals/count",
       "GET /v1/skills",
+      "GET /v1/time-entries/approval-queue",
       "GET /v1/time-timers",
       "GET /v1/usage/entitlement",
       "GET /v1/views/:id",
@@ -33,7 +35,9 @@
       "GET /v1/chat/skill-availability": 1,
       "GET /v1/chat/threads": 1,
       "GET /v1/chat/threads/:id/messages": 1,
+      "GET /v1/chat/tool-grants": 1,
       "GET /v1/mcp/connectors": 1,
+      "GET /v1/me/professional-use": 1,
       "GET /v1/notifications": 1,
       "GET /v1/notifications/events": 1,
       "GET /v1/organization-settings/ai-availability": 1,
@@ -45,7 +49,7 @@
       "GET /v1/views/:id": 1,
       "GET /v1/workspaces/:id/activity": 1,
       "GET /v1/workspaces/navigation": 1,
-      "GET /v1/me/professional-use": 1
+      "GET /v1/time-entries/approval-queue": 1
     },
     "dbQueries": {
       "GET /api/auth/get-session": 4,
@@ -55,7 +59,9 @@
       "GET /v1/chat/skill-availability": 12,
       "GET /v1/chat/threads": 6,
       "GET /v1/chat/threads/:id/messages": 7,
+      "GET /v1/chat/tool-grants": 6,
       "GET /v1/mcp/connectors": 8,
+      "GET /v1/me/professional-use": 1,
       "GET /v1/notifications": 6,
       "GET /v1/notifications/events": 4,
       "GET /v1/organization-settings/ai-availability": 4,
@@ -67,7 +73,7 @@
       "GET /v1/views/:id": 9,
       "GET /v1/workspaces/:id/activity": 7,
       "GET /v1/workspaces/navigation": 7,
-      "GET /v1/me/professional-use": 1
+      "GET /v1/time-entries/approval-queue": 10
     },
     "responseSizes": {
       "GET /api/auth/get-session": 1024,
@@ -77,7 +83,9 @@
       "GET /v1/chat/skill-availability": 1024,
       "GET /v1/chat/threads": 4096,
       "GET /v1/chat/threads/:id/messages": 1024,
+      "GET /v1/chat/tool-grants": 1024,
       "GET /v1/mcp/connectors": 6144,
+      "GET /v1/me/professional-use": 1024,
       "GET /v1/notifications": 4096,
       "GET /v1/organization-settings/ai-availability": 1024,
       "GET /v1/organization-settings/deployment-features": 1024,
@@ -88,7 +96,7 @@
       "GET /v1/views/:id": 2048,
       "GET /v1/workspaces/:id/activity": 1024,
       "GET /v1/workspaces/navigation": 20480,
-      "GET /v1/me/professional-use": 1024
+      "GET /v1/time-entries/approval-queue": 1024
     }
   }
 }

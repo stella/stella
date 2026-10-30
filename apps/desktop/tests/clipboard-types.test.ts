@@ -1,19 +1,25 @@
 import { describe, expect, test } from "bun:test";
 
+import contract from "../fixtures/clipboard-contract.json" with { type: "json" };
 import { CLIPBOARD_GROUP_COLOR_PRESETS } from "../src/clipboard/clipboard-style";
 import {
+  CLIPBOARD_EDITOR_SESSION_EVENT,
+  CLIPBOARD_HISTORY_CHANGED_EVENT,
   CLIPBOARD_RETENTIONS,
   CLIPBOARD_SCREEN_CAPTURES,
+  isClipboardCaptureRevision,
   isClipboardCopyError,
   isClipboardEditorContext,
+  isClipboardEditorSession,
+  isClipboardGroup,
   isClipboardGroupColor,
   isClipboardImagePreviewDataUrl,
-  isClipboardGroup,
   isClipboardItem,
   isClipboardSnapshot,
 } from "../src/clipboard/clipboard-types";
 
 const snapshotWithWelcomeStatus = (welcomeStatus: unknown) => ({
+  revision: 0,
   captureStatus: "active",
   groupLimit: 24,
   groups: [],
@@ -25,6 +31,23 @@ const snapshotWithWelcomeStatus = (welcomeStatus: unknown) => ({
   sourceAppExclusions: [],
   sourceAppVisuals: [],
   welcomeStatus,
+});
+
+test("capture notifications contain only a bounded revision and no clip content", () => {
+  for (const revision of [0, 1, 0xff_ff_ff_ff]) {
+    expect(isClipboardCaptureRevision({ revision })).toBe(true);
+  }
+  for (const payload of [
+    null,
+    1,
+    {},
+    { revision: -1 },
+    { revision: 1.5 },
+    { revision: 0x1_00_00_00_00 },
+    { revision: 1, item: CLIPBOARD_HISTORY_CHANGED_EVENT },
+  ]) {
+    expect(isClipboardCaptureRevision(payload)).toBe(false);
+  }
 });
 
 describe("clipboard snapshot welcome state", () => {
@@ -265,5 +288,22 @@ describe("clipboard image preview data URLs", () => {
     expect(
       isClipboardImagePreviewDataUrl("data:image/png;base64,not valid"),
     ).toBe(false);
+  });
+});
+
+describe("clipboard events", () => {
+  test("event names match the native contract", () => {
+    expect(CLIPBOARD_EDITOR_SESSION_EVENT).toBe(contract.editorSessionEvent);
+    expect(CLIPBOARD_HISTORY_CHANGED_EVENT).toBe(contract.historyChangedEvent);
+  });
+
+  test("accepts the editor session payloads the native side sends", () => {
+    expect(isClipboardEditorSession({ session: 3, type: "open" })).toBe(true);
+    expect(isClipboardEditorSession({ type: "idle" })).toBe(true);
+    expect(isClipboardEditorSession({ type: "open" })).toBe(false);
+    expect(isClipboardEditorSession({ session: 1.5, type: "open" })).toBe(
+      false,
+    );
+    expect(isClipboardEditorSession({ type: "closed" })).toBe(false);
   });
 });

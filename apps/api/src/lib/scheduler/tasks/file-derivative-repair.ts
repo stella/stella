@@ -1,17 +1,11 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, asc, eq, gt, isNull, lt, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { Temporal } from "@stll/time";
 import { isUuid } from "@stll/uuid-codec";
 
-import {
-  entities,
-  entityVersions,
-  fields,
-  schedulerJobs,
-  workspaces,
-} from "@/api/db/schema";
+import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { DERIVATIVE_FAILURE_REASON } from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -28,12 +22,14 @@ import {
 import type { FileDerivativeKind } from "@/api/lib/file-derivative-queue";
 import { shouldGenerateImageThumbnail } from "@/api/lib/files/image-derivative";
 import { shouldGeneratePdfDerivative } from "@/api/lib/files/pdf-derivative-policy";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
   brandPersistedFieldId,
   brandPersistedUserId,
 } from "@/api/lib/safe-id-boundaries";
 import type { SchedulerDb, SchedulerTask } from "@/api/lib/scheduler/types";
 import { SchedulerTaskFailure } from "@/api/lib/scheduler/types";
+import { writePlatformSchedulerTaskState } from "@/api/lib/scheduler/upsert-job";
 
 export const REPAIR_FILE_DERIVATIVES_TASK = "files.repairDerivatives" as const;
 
@@ -73,8 +69,7 @@ const UNRECOGNIZED_STATE = { status: "unrecognized" } as const;
  * below without a case.
  */
 type ReadDerivativeState =
-  | NonNullable<DerivativeState>
-  | typeof UNRECOGNIZED_STATE;
+  NonNullable<DerivativeState> | typeof UNRECOGNIZED_STATE;
 
 const storedDerivativeStateSchema = v.union([
   v.object({ status: v.literal("not-required") }),
@@ -303,7 +298,11 @@ const requeueRow = async (
       new UnrecognizedDerivativeStateError({
         message: `Persisted ${kind} derivative state is unreadable to this build`,
       }),
-      { fieldId: row.fieldId, kind, workspaceId: row.workspaceId },
+      handlerErrorContext("tasks.requeueRow", {
+        fieldId: row.fieldId,
+        kind,
+        workspaceId: row.workspaceId,
+      }),
     );
   }
   let requeued = 0;
@@ -345,12 +344,13 @@ const persistCursor = async ({
   leaseToken: string;
   nextCursor: SafeId<"field"> | null;
 }): Promise<void> => {
-  await db
-    .update(schedulerJobs)
-    .set({ payload: { cursor: nextCursor } })
-    .where(
-      and(eq(schedulerJobs.id, jobId), eq(schedulerJobs.lockedBy, leaseToken)),
-    );
+  await writePlatformSchedulerTaskState({
+    db,
+    jobId,
+    leaseToken,
+    state: { type: "checkpoint", payload: { cursor: nextCursor } },
+    task: REPAIR_FILE_DERIVATIVES_TASK,
+  });
 };
 
 /**

@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { abortableTx } from "@/api/db/safe-db";
 import { properties, propertyDependencies } from "@/api/db/schema";
@@ -13,10 +13,12 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { requireComputedColumnInputs } from "@/api/lib/properties/computed-column-input";
+import { computedColumnInputHandlerError } from "@/api/lib/properties/computed-column-input-handler-error";
 import {
-  DOCUMENT_TYPE_CLASSIFIER_ROLE,
   buildPropertyParts,
   createPropertyBodySchema,
+  DOCUMENT_TYPE_CLASSIFIER_ROLE,
   isDocumentTypeClassifierProperty,
 } from "@/api/lib/properties/create-schema";
 import { propertyKindsForTool } from "@/api/lib/properties/property-kinds";
@@ -24,6 +26,7 @@ import { lockWorkspacePropertyWrites } from "@/api/lib/properties/property-lock"
 
 const config = {
   contract: "patch",
+  idempotency: { type: "replay" },
   description:
     "Add up to ten properties (columns) to a matter in a single transaction, " +
     "under the same rules as properties.create: all of them land or none do, " +
@@ -38,8 +41,12 @@ const config = {
     reason: "workspace_schema",
     consumesServices: false,
   },
-  body: t.Object({
-    items: t.Array(createPropertyBodySchema, { minItems: 1, maxItems: 10 }),
+  body: v.object({
+    items: v.pipe(
+      v.array(createPropertyBodySchema),
+      v.minLength(1),
+      v.maxLength(10),
+    ),
   }),
 } satisfies WorkspaceHandlerConfig;
 
@@ -47,6 +54,7 @@ const createPropertiesBatch = createSafeHandler(
   config,
   async function* ({ safeDb, workspaceId, body, recordAuditEvent }) {
     const builtItems = body.items.map((item) => ({
+      id: createSafeId<"property">(),
       name: item.name,
       built: buildPropertyParts(item),
     }));
@@ -78,6 +86,26 @@ const createPropertiesBatch = createSafeHandler(
             status: 400,
             message: "Properties limit reached",
           });
+        }
+
+        const resultingColumns = [
+          ...existingRows,
+          ...builtItems.flatMap(({ id, built }) =>
+            "status" in built ? [] : [{ id, content: built.content }],
+          ),
+        ];
+        for (const { built } of builtItems) {
+          if ("status" in built || built.tool.type !== "ai-model") {
+            continue;
+          }
+          const resolved = requireComputedColumnInputs({
+            candidates: resultingColumns,
+            inputs: built.dependencies,
+          });
+          if (Result.isError(resolved)) {
+            return Result.err(computedColumnInputHandlerError(resolved.error));
+          }
+          built.dependencies = [...resolved.value];
         }
 
         const createsDocumentTypeClassifier = builtItems.filter(
@@ -139,13 +167,11 @@ const createPropertiesBatch = createSafeHandler(
         // rows, their dependency rows and their audit events can be assembled
         // in full before anything is written: three statements for the batch
         // instead of two per item.
-        for (const { name, built } of builtItems) {
+        for (const { id: propertyId, name, built } of builtItems) {
           if ("status" in built) {
             continue;
           }
           const { content, tool, dependencies, role } = built;
-          const propertyId = createSafeId<"property">();
-
           propertyRows.push({
             id: propertyId,
             workspaceId,
@@ -202,6 +228,9 @@ const createPropertiesBatch = createSafeHandler(
       }),
     );
 
+    if ("status" in txResult) {
+      return txResult;
+    }
     return Result.ok({ ids: txResult.ids });
   },
 );

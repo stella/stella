@@ -9,6 +9,7 @@ import {
 } from "@/api/lib/auth/review-account-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { checkSyntheticPrincipalAccess } from "@/api/lib/synthetic-principal/policy";
 
 export const getReviewAccountConfig = () => ({
   email: env.APP_REVIEW_ACCOUNT_EMAIL,
@@ -21,7 +22,16 @@ export const isReviewAccountConfigured = () =>
 
 export const checkConfiguredReviewAccountAccess = (
   options: Omit<Parameters<typeof checkReviewAccountAccess>[0], "config">,
-) => checkReviewAccountAccess({ ...options, config: getReviewAccountConfig() });
+) => {
+  const syntheticAccess = checkSyntheticPrincipalAccess(options);
+  if (Result.isError(syntheticAccess)) {
+    return syntheticAccess;
+  }
+  return checkReviewAccountAccess({
+    ...options,
+    config: getReviewAccountConfig(),
+  });
+};
 
 /** Whether this account may work in this organization at all. */
 export const checkReviewAccountOrganization = ({

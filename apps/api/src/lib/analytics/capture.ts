@@ -1,25 +1,48 @@
 import { Result } from "better-result";
 
-import { createDetached, sanitizeErrorForOutput } from "@stll/errors";
+import {
+  createDetached,
+  type ExceptionScope,
+  type FailureGrade,
+  type FailureReason,
+  type HandlerExceptionScope,
+  type RequestExceptionScope,
+} from "@stll/errors";
 import { Temporal } from "@stll/time";
 
 import { getServerAnalytics } from "@/api/lib/analytics/client";
 import type { ExceptionProperties } from "@/api/lib/analytics/server-analytics";
 import { SERVER_ANALYTICS_EVENTS } from "@/api/lib/analytics/server-analytics";
+import { sanitizeDiagnosticErrorForOutput } from "@/api/lib/errors/handoff-diagnostics";
 import {
   errorTag,
   logServerDevError,
   safeErrorTelemetryFields,
 } from "@/api/lib/errors/utils";
+import type {
+  CaptureErrorInput,
+  ErrorTelemetryContext,
+} from "@/api/lib/observability/exception-context";
+import {
+  exceptionFingerprint,
+  type StableExceptionKey,
+} from "@/api/lib/observability/exception-fingerprint";
+import { getRequestExceptionScopes } from "@/api/lib/observability/exception-scope";
 import type { FailureGrading } from "@/api/lib/observability/failure";
-import { identityFields } from "@/api/lib/observability/failure";
+import {
+  identityFields,
+  providerStatusFieldsOf,
+  requestErrorStatusFields,
+} from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
+import { failureOutputPolicy } from "@/api/lib/observability/failure-output-policy";
 import {
   observeShadow,
   reportEmitFailure,
   SHADOW_SINKS,
   shadowFields,
 } from "@/api/lib/observability/failure-shadow";
+import { providerErrorFields } from "@/api/lib/observability/provider-error-reason";
 import { getRequestContext } from "@/api/lib/observability/request-context";
 
 /**
@@ -40,9 +63,9 @@ import { getRequestContext } from "@/api/lib/observability/request-context";
  * Pass `context` with safe correlation IDs (entity IDs, request
  * IDs) to make errors traceable without leaking content.
  */
-type ErrorTelemetryContext = Record<string, string>;
-
 type CaptureErrorOptions = {
+  scope: ExceptionScope;
+  fingerprintKey: StableExceptionKey;
   context?: ErrorTelemetryContext | undefined;
   distinctId?: string | undefined;
   organizationId?: string | undefined;
@@ -56,6 +79,8 @@ type CaptureErrorOptions = {
 };
 
 type CaptureRequestErrorOptions = {
+  scope: RequestExceptionScope | HandlerExceptionScope;
+  fingerprintKey: StableExceptionKey;
   context?: ErrorTelemetryContext | undefined;
   request: Request;
 };
@@ -99,59 +124,84 @@ type CaptureWindow = { startedAt: number; suppressed: number };
 
 const captureWindows = new Map<string, CaptureWindow>();
 
-/**
- * The components of an error's structural identity, in fixed order.
- *
- * Positions are fixed and a missing component stays empty, so a frameless
- * error's cause frame can never occupy the position another error's primary
- * frame uses.
- *
- * The SQLSTATE earns its place because a database call site fails in ways
- * that are unrelated defects: a missing column and a violated check
- * constraint are raised from the same line, so they share a class, a stable
- * code, and both frames. Without the SQLSTATE they are one identity, which
- * is the opposite of what the identity is for. A wrapper class that carries
- * no `code` of its own makes this worse, because `error.code` then repeats
- * the class name and distinguishes nothing.
- */
-const ERROR_IDENTITY_COMPONENTS = [
-  "error.class",
-  "error.code",
-  "error.frame",
-  "error.cause.frame",
-  "error.cause.pg_code",
-] as const;
+declare const exceptionClassBrand: unique symbol;
+type ExceptionClass = string & { readonly [exceptionClassBrand]: true };
+declare const exceptionCodeBrand: unique symbol;
+type ExceptionCode = string & { readonly [exceptionCodeBrand]: true };
+declare const exceptionFrameBrand: unique symbol;
+type ExceptionFrame = string & { readonly [exceptionFrameBrand]: true };
+
+type ExceptionValueFields = {
+  className: ExceptionClass | "UnknownError";
+  code?: ExceptionCode;
+  status?: number;
+  reason?: FailureReason;
+  grade?: FailureGrade;
+  frame?: ExceptionFrame;
+};
+
+/** Renders only structural fields that have already crossed their allowlist. */
+const exceptionValue = ({
+  className,
+  code,
+  status,
+  reason,
+  grade,
+  frame,
+}: ExceptionValueFields): string => {
+  const distinctReason =
+    reason !== undefined && reason !== code ? reason : undefined;
+  return `${className}${code === undefined ? "" : `[${code}]`}${
+    status === undefined ? "" : ` ${status}`
+  }${distinctReason === undefined ? "" : ` ${distinctReason}`}${
+    grade === undefined ? "" : ` ${grade}`
+  }${frame === undefined ? "" : ` at ${frame}`}`;
+};
+
+const CLASS_TOKEN = /^[A-Za-z_$][A-Za-z0-9_$]{0,127}$/u;
+const CODE_TOKEN = /^[A-Za-z0-9_.:-]{1,64}$/u;
+// The checkout root differs per host (container, CI runner, laptop) and may
+// carry a user name, so only the repository-relative suffix is kept.
+const REPOSITORY_FRAME =
+  /(?:^|\/)((?:apps|packages)\/[A-Za-z0-9_./-]+:\d+(?::\d+)?)$/u;
+const REPOSITORY_FRAME_SUFFIX =
+  /^(?:apps|packages)\/[A-Za-z0-9_./-]+:\d+(?::\d+)?$/u;
+
+// The allowlists narrow by predicate, so a branded value only ever comes from
+// a string that passed its pattern.
+const isExceptionClass = (value: string): value is ExceptionClass =>
+  CLASS_TOKEN.test(value);
+
+const isExceptionCode = (value: string): value is ExceptionCode =>
+  CODE_TOKEN.test(value);
+
+const isExceptionFrame = (value: string): value is ExceptionFrame =>
+  REPOSITORY_FRAME_SUFFIX.test(value);
+
+const UNKNOWN_EXCEPTION_CLASS = "UnknownError";
+
+const exceptionClass = (
+  value: string,
+): ExceptionClass | typeof UNKNOWN_EXCEPTION_CLASS =>
+  // `errorTag` normally supplies a class token; keep a fixed fallback if a
+  // foreign Error overrides its name with free text.
+  isExceptionClass(value) ? value : UNKNOWN_EXCEPTION_CLASS;
+
+const exceptionCode = (value: string | undefined): ExceptionCode | undefined =>
+  value !== undefined && isExceptionCode(value) ? value : undefined;
+
+const exceptionFrame = (
+  value: string | undefined,
+): ExceptionFrame | undefined => {
+  const repositoryFrame =
+    value === undefined ? undefined : REPOSITORY_FRAME.exec(value)?.at(1);
+  return repositoryFrame !== undefined && isExceptionFrame(repositoryFrame)
+    ? repositoryFrame
+    : undefined;
+};
 
 /**
- * The grouping fingerprint and the suppression key are the same identity read
- * from two different places, so both derive from `ERROR_IDENTITY_COMPONENTS`
- * rather than repeating it. Listing the components twice lets one list gain a
- * component the other never gets, which silently regroups issues on one path
- * and throttles across defects on the other.
- */
-const errorIdentity = (component: (key: string) => string): string =>
-  ERROR_IDENTITY_COMPONENTS.map(component).join("|");
 
-/**
- * Structural key for repeat suppression: error class, stable code, code
- * location, and SQLSTATE, deliberately excluding the caller's correlation
- * context.
- *
- * A stuck loop re-reports the same defect with a fresh request or entity ID
- * every cycle, so keying on context would defeat the throttle in exactly the
- * case that motivates it. Two call sites that genuinely share every component
- * above are the same defect.
- */
-const captureWindowKey = (properties: ExceptionProperties): string =>
-  errorIdentity((key) => {
-    // `ExceptionProperties` widens every value to include `$exception_list`,
-    // so read each field back as a string rather than stringifying whatever
-    // is there.
-    const value = properties[key];
-    return typeof value === "string" ? value : "";
-  });
-
-/**
  * Drop the key whose window opened longest ago once the map is full, so a
  * process that sees an unbounded variety of errors cannot grow this map
  * without limit. Evicting an old window at worst re-reports its next
@@ -211,24 +261,13 @@ export const resetCaptureWindows = (): void => {
   captureWindows.clear();
 };
 
-const captureErrorWithOptions = (
+const sanitizedCaptureOutput = (
   error: unknown,
-  options: CaptureErrorOptions,
+  captureContext: ErrorTelemetryContext | undefined,
 ) => {
-  const tag = errorTag(error);
-  const fingerprint = identityFields(readEvidence(error));
-  const grading =
-    options.observed === undefined
-      ? observeShadow({
-          error,
-          sink: SHADOW_SINKS.capture,
-          channel: "capture",
-          request: options.request,
-        })
-      : options.observed.grading;
-  const safeOutput = sanitizeErrorForOutput({
+  const safeOutput = sanitizeDiagnosticErrorForOutput({
     error,
-    context: options.context,
+    context: captureContext,
   });
   const safeEnvelope =
     safeOutput !== null &&
@@ -253,38 +292,96 @@ const captureErrorWithOptions = (
         )
       : undefined;
   const { context, rejected } = acceptCaptureContext(safeContext);
+  return { safeError, context, rejected };
+};
+
+const captureErrorWithOptions = (
+  error: unknown,
+  options: CaptureErrorOptions,
+) => {
+  const tag = errorTag(error);
+  const evidence = readEvidence(error);
+  const fingerprint = identityFields(evidence);
+  const stableFingerprint = exceptionFingerprint(evidence, {
+    fingerprintKey: options.fingerprintKey,
+    scope: options.scope,
+    inheritedScopes: getRequestExceptionScopes(),
+  });
+  const grading =
+    options.observed === undefined
+      ? observeShadow({
+          error,
+          sink: SHADOW_SINKS.capture,
+          channel: "capture",
+          request: options.request,
+        })
+      : options.observed.grading;
+  const { safeError, context, rejected } = sanitizedCaptureOutput(
+    error,
+    options.context,
+  );
+  // A provider error an adapter forwards as a plain object has no class, code
+  // or frame of its own, so its provider status and body code are the only
+  // structural fields that tell one refused request from another. Read only
+  // at the root: there the provider status shows the root is a provider error.
+  const rootProviderStatus = evidence.nodes.at(0)?.providerStatus?.status;
+  const providerFields =
+    rootProviderStatus === undefined ? {} : providerErrorFields(error);
+  const providerStatusFields = providerStatusFieldsOf(evidence);
+  const groupingFingerprint =
+    rootProviderStatus === undefined
+      ? stableFingerprint
+      : JSON.stringify([
+          stableFingerprint,
+          providerFields["error.provider.code"] ??
+            providerFields["error.provider.type"] ??
+            "",
+          String(rootProviderStatus),
+        ]);
+  const status =
+    requestErrorStatusFields(evidence)["error.status_code"] ??
+    rootProviderStatus;
+  const className = exceptionClass(tag);
+  // The identity fills a missing code with the class tag; that echo is no
+  // code. Compared before branding: the two brands never overlap.
+  const ownCode = fingerprint["error.code"];
+  const code = exceptionCode(
+    ownCode === undefined || ownCode === tag
+      ? (providerFields["error.provider.code"] ??
+          providerFields["error.provider.type"])
+      : ownCode,
+  );
+  const frame = exceptionFrame(fingerprint["error.frame"]);
+  const value = exceptionValue({
+    className,
+    ...(code === undefined ? {} : { code }),
+    ...(status === undefined ? {} : { status }),
+    ...(grading === undefined
+      ? {}
+      : { reason: grading.reason, grade: grading.grade }),
+    ...(frame === undefined ? {} : { frame }),
+  });
   // PostHog ingestion drops `$exception` events that lack `$exception_list`,
-  // so the entry is required even though we deliberately keep it empty —
-  // the redaction contract above forbids shipping the message or stack.
+  // so the entry is required. Its value is built only from typed structural
+  // fields; the redaction contract above forbids the message and stack.
   // The caller's context goes first: every key after it is owned here.
   const properties: ExceptionProperties = {
     ...context,
-    // PostHog groups issues from `$exception_list` content; with the message
-    // and stack redacted, every event of one error class collapses into a
-    // single issue and first-seen automations never fire for new defects.
-    // Group by the structural fingerprint instead: same non-PII components,
-    // one issue per distinct defect, read from `ERROR_IDENTITY_COMPONENTS` so
-    // it stays the identity `captureWindowKey` throttles on. The production
-    // server and long-running worker embed source maps, so the frames are
-    // source positions rather than bundle positions; the artifact test guards
-    // that build contract. Stack symbols are deliberately absent: engines can
-    // infer one from a data-derived computed property key.
-    $exception_fingerprint: errorIdentity((key) => fingerprint[key] ?? ""),
+    $exception_fingerprint: groupingFingerprint,
+
     $exception_level: "error",
     $exception_list: [
       {
         mechanism: { handled: true, synthetic: false, type: "generic" },
         type: tag,
-        value: "",
+        value,
       },
     ],
     $exception_type: tag,
-    // Non-PII structural fingerprint (class, stable code, top
-    // `file:line:col` frames). The redaction contract above still
-    // forbids the message and stack; a code location and class name
-    // carry no client data, so they make the exception actionable in
-    // the dashboard without violating it.
+    // Source positions remain diagnostic properties, separate from grouping.
     ...fingerprint,
+    ...providerStatusFields,
+    ...providerFields,
     ...safeErrorTelemetryFields(error),
     ...(options.organizationId
       ? { organization_id: options.organizationId }
@@ -298,8 +395,12 @@ const captureErrorWithOptions = (
   // reproducing a tight failure loop needs every occurrence.
   logServerDevError(safeError, properties);
 
+  if (grading !== undefined && !failureOutputPolicy(grading.grade).capture) {
+    return;
+  }
+
   const suppressed = admitCapture(
-    captureWindowKey(properties),
+    groupingFingerprint,
     Temporal.Now.instant().epochMilliseconds,
   );
   if (suppressed === null) {
@@ -328,13 +429,18 @@ const captureErrorWithOptions = (
 
 export const captureError = (
   error: unknown,
-  context?: ErrorTelemetryContext,
+  { fingerprintKey, context, scope }: CaptureErrorInput & { request?: never },
 ) => {
-  captureErrorWithOptions(error, { context });
+  captureErrorWithOptions(error, { fingerprintKey, context, scope });
 };
 
+/** Bind a callback's declared identity at the shared capture boundary. */
+export const createErrorCapture =
+  (options: Parameters<typeof captureError>[1]) => (error: unknown) =>
+    captureError(error, options);
+
 const requestCaptureOptions = (request: Request) => {
-  const reqCtx = getRequestContext(request);
+  const reqCtx = getRequestContext();
   return {
     request,
     distinctId: reqCtx?.posthogDistinctId,
@@ -345,19 +451,24 @@ const requestCaptureOptions = (request: Request) => {
 
 export const captureRequestError = (
   error: unknown,
-  { context, request }: CaptureRequestErrorOptions,
+  { context, request, fingerprintKey, scope }: CaptureRequestErrorOptions,
 ) => {
   captureErrorWithOptions(error, {
+    fingerprintKey,
     context,
     ...requestCaptureOptions(request),
+    scope,
   });
 };
 
 type CaptureObservedErrorOptions = {
+  fingerprintKey: StableExceptionKey;
   context?: ErrorTelemetryContext | undefined;
-  request?: Request | undefined;
   observation: FailureGrading | undefined;
-};
+} & (
+  | { request: Request; scope: RequestExceptionScope | HandlerExceptionScope }
+  | { request?: undefined; scope: ExceptionScope }
+);
 
 /**
  * Capture a failure its caller has already graded and counted, so the capture
@@ -365,12 +476,20 @@ type CaptureObservedErrorOptions = {
  */
 export const captureObservedError = (
   error: unknown,
-  { context, request, observation }: CaptureObservedErrorOptions,
+  {
+    context,
+    request,
+    observation,
+    fingerprintKey,
+    scope,
+  }: CaptureObservedErrorOptions,
 ) => {
   captureErrorWithOptions(error, {
+    fingerprintKey,
     context,
     ...(request === undefined ? {} : requestCaptureOptions(request)),
     observed: { grading: observation },
+    scope,
   });
 };
 
@@ -386,5 +505,9 @@ export const captureObservedError = (
  * identifiers, so it stays a safe correlation tag in telemetry.
  */
 export const detached = createDetached((error, context) => {
-  captureError(error, { detached: context });
+  captureError(error, {
+    fingerprintKey: `detached.${context}`,
+    scope: { type: "handler", handlerId: `detached.${context}` },
+    context: { detached: context },
+  });
 });

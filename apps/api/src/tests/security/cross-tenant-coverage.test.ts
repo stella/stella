@@ -121,6 +121,8 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   "visual-sandbox": WAIVER_REASON.noTenantReadSurface,
   mcp: WAIVER_REASON.noTenantReadSurface,
   "mcp-connectors": WAIVER_REASON.noTenantReadSurface,
+  // Relays signed public update manifests from the downloads CDN; no tenant data.
+  "mobile-updates": WAIVER_REASON.noTenantReadSurface,
   // Deployment-owned directory access, independent of tenant membership;
   // credential denial and the projected read are covered by operator/routes.test.ts
   // and lib/db/operator-registrations/read.postgres.test.ts.
@@ -136,6 +138,10 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   // workspace-scoped surface the A-vs-B RLS matrix can meaningfully isolate.
   sharepoint: WAIVER_REASON.noTenantReadSurface,
   smoke: WAIVER_REASON.noTenantReadSurface,
+  // Key-authenticated session creation writes only the fixed dedicated
+  // principal and organization; it accepts no tenant identity and exposes no
+  // tenant-scoped read surface.
+  synthetic: WAIVER_REASON.noTenantReadSurface,
   // Public corpus ingestion has no tenant data or tenant-facing read surface.
   "soft-law": WAIVER_REASON.noTenantReadSurface,
   uploads: WAIVER_REASON.noTenantReadSurface,
@@ -184,6 +190,7 @@ const PER_HANDLER_WAIVERS: Record<string, Record<string, WaiverReason>> = {
   chat: {
     // Authenticated public-host icon bytes contain no tenant-owned records.
     "link-icons/get": WAIVER_REASON.noTenantReadSurface,
+    "link-icons/get-exact": WAIVER_REASON.noTenantReadSurface,
     // The model catalog for the caller's own organization: no record id in,
     // nothing another tenant owns out.
     "get-model-options": WAIVER_REASON.noTenantReadSurface,

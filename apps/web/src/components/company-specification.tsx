@@ -1,7 +1,6 @@
 import { useId, useRef, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { Result } from "better-result";
 import { useDebounce } from "use-debounce";
 import { useTranslations } from "use-intl";
 
@@ -11,13 +10,11 @@ import {
   parseRegistryFormatMarkdown,
   stripRegistryFormatMarkdown,
 } from "@stll/business-registries/default-formats";
-import { copyToClipboard } from "@stll/clipboard";
 import { Button } from "@stll/ui/button";
 import { Field, FieldControl, FieldLabel } from "@stll/ui/field";
-import { CopyIcon, Settings2Icon } from "@stll/ui/icons";
+import { Settings2Icon } from "@stll/ui/icons";
 import { Skeleton } from "@stll/ui/skeleton";
 import { Textarea } from "@stll/ui/textarea";
-import { stellaToast } from "@stll/ui/toast";
 
 import {
   CompanyFormatLibrary,
@@ -30,16 +27,15 @@ import {
   companySpecificationQueryKey,
   insertCompanySpecificationToken,
 } from "@/components/company-specification.logic";
+import { CopyActionButton } from "@/components/copy-action-button";
 import { RegistryCredentialSetup } from "@/components/registry-credential-setup";
 import { REGISTRY_RETURN_FIELDS } from "@/components/templates/registry-format-config";
 import type { LookupRegistryOption } from "@/components/templates/registry-options";
-import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { APIError, unwrapEden } from "@/lib/errors/api";
+import { APIError, unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import { notifyUserError } from "@/lib/errors/user-toast";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 
 const FORMAT_DEBOUNCE_MS = 400;
@@ -118,7 +114,7 @@ const CompanySpecificationEditor = ({
       format: debouncedFormat,
     }),
     queryFn: async ({ signal }) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api.templates["lookup-preview"].post(
           {
             registry,
@@ -150,21 +146,6 @@ const CompanySpecificationEditor = ({
       textarea?.focus();
       textarea?.setSelectionRange(insertion.caret, insertion.caret);
     });
-  };
-
-  const copySpecification = async () => {
-    if (data === undefined) {
-      return;
-    }
-    const copied = await copyToClipboard(
-      stripRegistryFormatMarkdown(data.rendered),
-    );
-    if (Result.isError(copied)) {
-      getAnalytics().captureError(copied.error);
-      notifyUserError(copied.error, t("errors.actionFailed"));
-      return;
-    }
-    stellaToast.success(t("common.copied"));
   };
 
   return (
@@ -271,7 +252,7 @@ const CompanySpecificationEditor = ({
         </div>
       </div>
 
-      <Button
+      <CopyActionButton
         className="w-full"
         disabled={
           !canCopyCompanySpecification({
@@ -281,19 +262,17 @@ const CompanySpecificationEditor = ({
             debouncedFormat,
           })
         }
-        onClick={() =>
-          detached(copySpecification(), "company-specification.copy")
-        }
-        type="button"
-      >
-        <CopyIcon />
-        {t(
+        iconClassName="size-4"
+        label={t(
           BUSINESS_REGISTRY_FORMAT_CAPABILITIES[registry].type ===
             "company-specification"
             ? "templates.copyCompanySpecification"
             : "templates.copyRegistryResult",
         )}
-      </Button>
+        text={
+          data === undefined ? "" : stripRegistryFormatMarkdown(data.rendered)
+        }
+      />
     </section>
   );
 };

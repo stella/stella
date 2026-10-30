@@ -28,9 +28,9 @@ import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapter
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import { getCaseLawIngestionMetadata } from "@/api/handlers/case-law/metadata";
 import {
+  absentDecisionTextFields,
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,
-  absentDecisionTextFields,
 } from "@/api/lib/case-law/decision-text";
 import { toUtcDateString } from "@/api/lib/dates";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";

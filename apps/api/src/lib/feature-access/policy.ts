@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import { normalizeEmail } from "@/api/lib/email/normalized-email";
 import type { FeatureAccessGrants } from "@/api/lib/feature-access/grants-schema";
 import { featurePrerequisiteClosure } from "@/api/lib/feature-access/prerequisites";
 import { deploymentFeatureFor } from "@/api/lib/feature-access/registry";
@@ -16,8 +17,7 @@ export type FeatureAccessProof = {
 };
 
 export type FeatureAccessDecision =
-  | { status: "enabled"; proof: FeatureAccessProof }
-  | { status: "hidden" };
+  { status: "enabled"; proof: FeatureAccessProof } | { status: "hidden" };
 
 export type FeatureAccessPrincipal = {
   readonly organizationId: string;
@@ -104,7 +104,7 @@ const decideSingleFeatureAccess = ({
       };
     }
     case "invitation": {
-      const email = user.email.trim().toLowerCase();
+      const email = normalizeEmail(user.email);
       const enabled = grants[featureId]?.some((grant) => {
         if (grant.organizationId !== organizationId) {
           return false;
@@ -113,7 +113,7 @@ const decideSingleFeatureAccess = ({
           case "organization":
             return true;
           case "member":
-            return grant.email.trim().toLowerCase() === email;
+            return normalizeEmail(grant.email) === email;
           default: {
             grant satisfies never;
             return panic("Feature access requires a supported grant type");

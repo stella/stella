@@ -10,6 +10,10 @@ import {
   lockOrgScopeSource,
 } from "@/api/lib/db/aggregate-lock";
 
+import type { WorkspaceSearchActivityActor } from "../lib/db/workspace-search-activity-actor";
+import type { MemberRemovalActor } from "../lib/member-offboarding/member-assignment-offboarding-owner";
+import type { ReviewResetActor } from "./review-reset-owner";
+
 const ORG_SCOPE: unique symbol = Symbol("stella.orgScope");
 
 export type OrgScope = {
@@ -127,13 +131,26 @@ export const combineOrgScopes = (
 
 export type OrgScopeActor =
   | { type: "system" }
-  | { type: "actor"; userId: SafeId<"user"> };
+  | { type: "actor"; userId: SafeId<"user"> }
+  | ReviewResetActor
+  | MemberRemovalActor
+  | WorkspaceSearchActivityActor;
+
+const ORG_SCOPED_TRANSACTION: unique symbol = Symbol(
+  "stella.orgScopedTransaction",
+);
+
+/** A transaction lent only while the organization scope is installed. */
+export type OrgScopedTransaction = {
+  readonly [ORG_SCOPED_TRANSACTION]: true;
+  readonly tx: Transaction;
+};
 
 type WithOrgScopeOptions<T> = {
   tx: Transaction;
   scope: OrgScope;
   actor: OrgScopeActor;
-  fn: (tx: Transaction) => Promise<T>;
+  fn: (tx: Transaction, scoped: OrgScopedTransaction) => Promise<T>;
 };
 
 export const withOrgScope = async <T>({
@@ -142,4 +159,10 @@ export const withOrgScope = async <T>({
   actor,
   fn,
 }: WithOrgScopeOptions<T>): Promise<T> =>
-  await runScopedOwnerWorkInTransaction({ tx, scope, actor, fn });
+  await runScopedOwnerWorkInTransaction({
+    tx,
+    scope,
+    actor,
+    fn: async (scopedTx) =>
+      await fn(scopedTx, { [ORG_SCOPED_TRANSACTION]: true, tx: scopedTx }),
+  });

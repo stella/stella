@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 
 import { systemScopePolicies } from "@/api/db/system-scope-policies";
+import type { AuthorizationResponseBinding } from "@/api/lib/mcp-upstream/oauth";
 
 import { MCP_CONNECTION_STATUSES, MCP_CONNECTOR_AUTH_TYPES } from "./chat";
 import type {
@@ -23,8 +24,8 @@ import {
   pUuid,
   safeOrganizationId,
   safeUuid,
-  user,
   timestamptz,
+  user,
 } from "./common";
 
 export const mcpConnectors = p.pgTable(
@@ -301,6 +302,9 @@ export const mcpOAuthState = p.pgTable(
     redirectUri: p.text("redirect_uri").notNull(),
     resourceUrl: p.text("resource_url").notNull(),
     authorizationServerUrl: p.text("authorization_server_url").notNull(),
+    authorizationResponseBinding: p
+      .jsonb("authorization_response_binding")
+      .$type<AuthorizationResponseBinding>(),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
@@ -309,6 +313,9 @@ export const mcpOAuthState = p.pgTable(
     p
       .index("mcp_oauth_state_org_user_idx")
       .on(table.organizationId, table.userId),
+    // The (organization, connector, user) unique index ships with the pending
+    // contract step (pending-contract-migrations/20261028061200_*); declare it
+    // here when that step moves into drizzle/.
     ...mcpOAuthStatePolicies(),
   ],
 );

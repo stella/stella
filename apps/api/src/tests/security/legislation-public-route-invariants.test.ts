@@ -4,6 +4,7 @@ import nodePath from "node:path";
 import { repoRelativePath } from "@stll/portable-path";
 
 import { publicLegislationRoute } from "@/api/handlers/legislation/public-routes";
+import type { RouteDefinition } from "@/api/http/route";
 import { isPublicReadBudgetHandler } from "@/api/lib/api-handlers";
 import {
   apiSourceRoot,
@@ -26,6 +27,10 @@ const PUBLIC_LEGISLATION_ROUTES = [
   "GET /law/statutes/shelf",
   "POST /law/statutes/resolve",
 ] as const;
+
+/** The safe factory's handler a definition carries, when a factory built it. */
+const handlerOf = (definition: RouteDefinition): unknown =>
+  "handler" in definition ? definition.handler : undefined;
 
 const routesFile = nodePath.resolve(
   apiSourceRoot,
@@ -82,16 +87,17 @@ const collectPublicOperationGraph = async (
 
 describe("public legislation route boundary", () => {
   test("every declared public legislation route uses a budgeted public-safe handler", () => {
-    const declared = publicLegislationRoute.routes.filter(
-      (route) => typeof route.handler === "function",
-    );
     expect(
-      declared
-        .filter((route) => !isPublicReadBudgetHandler(route.handler))
+      publicLegislationRoute
+        .filter(
+          (route) => !isPublicReadBudgetHandler(handlerOf(route.definition)),
+        )
         .map((route) => `${route.method} ${route.path}`),
     ).toEqual([]);
     expect(
-      declared.map((route) => `${route.method} ${route.path}`).toSorted(),
+      publicLegislationRoute
+        .map((route) => `${route.method} ${route.path}`)
+        .toSorted(),
     ).toEqual([...PUBLIC_LEGISLATION_ROUTES]);
   });
 
@@ -165,11 +171,17 @@ describe("public legislation route boundary", () => {
   });
 
   test("public legislation routing never installs authenticated context", async () => {
+    // Who may call a route is its definition's own decision.
+    expect(
+      publicLegislationRoute
+        .filter((route) => route.definition.access !== "public")
+        .map((route) => `${route.method} ${route.path}`),
+    ).toEqual([]);
     const source = await Bun.file(routesFile).text();
     for (const token of [
-      "authMacro",
-      "permissionMacro",
-      "workspaceAccessMacro",
+      "authenticateMember",
+      "authenticateSession",
+      "authorizeWorkspace",
       "validateAuth",
       "permissions:",
     ]) {

@@ -170,6 +170,7 @@ const generateAtOutputCeiling = async ({
     finishPolicy,
     maxOutputTokens: TEST_OUTPUT_CEILING_TOKENS,
     organizationId: null,
+    userId: null,
     admission: NO_ORGANIZATION_MODEL_DISPATCH,
     orgAIConfig: null,
     prompt: "Rewrite it.",
@@ -199,8 +200,9 @@ const generateWithCancellation = async (cancelAt: CancellationPoint) => {
     dataClass: "public_corpus",
     abortSignal: controller.signal,
     caching: noCaching,
-    finishPolicy: "allow-incomplete",
+    finishPolicy: "require-complete",
     organizationId: null,
+    userId: null,
     admission: NO_ORGANIZATION_MODEL_DISPATCH,
     orgAIConfig: null,
     prompt: "Rewrite it.",
@@ -251,6 +253,7 @@ describe("TanStack completed-run canary", () => {
         caching: noCaching,
         finishPolicy: "require-complete",
         organizationId: null,
+        userId: null,
         admission: NO_ORGANIZATION_MODEL_DISPATCH,
         orgAIConfig: null,
         prompt: "Rewrite it.",
@@ -281,19 +284,7 @@ describe("TanStack cancellation canary", () => {
 });
 
 describe("TanStack output-ceiling canary", () => {
-  test("returns partial text through a real chat run and finishes middleware at length", async () => {
-    const terminalEvents: string[] = [];
-
-    expect(
-      await generateAtOutputCeiling({
-        finishPolicy: "allow-incomplete",
-        terminalEvents,
-      }),
-    ).toBe("as far as it got");
-    expect(terminalEvents).toEqual(["finish:length"]);
-  });
-
-  test("returns the same partial text to an output-ceiling caller", async () => {
+  test("returns partial text through a real chat run to an output-ceiling caller and finishes middleware at length", async () => {
     const terminalEvents: string[] = [];
 
     expect(
@@ -327,6 +318,7 @@ describe("TanStack output-ceiling canary", () => {
         caching: noCaching,
         maxOutputTokens: TEST_OUTPUT_CEILING_TOKENS,
         organizationId: null,
+        userId: null,
         admission: NO_ORGANIZATION_MODEL_DISPATCH,
         orgAIConfig: null,
         outputSchema: v.strictObject({ answer: v.string() }),

@@ -5,12 +5,20 @@ import { eq, inArray } from "drizzle-orm";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import { entities, flowRuns, flowRunSteps } from "@/api/db/schema";
+import {
+  entities,
+  entityVersions,
+  fields,
+  flowRuns,
+  flowRunSteps,
+} from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -44,6 +52,21 @@ afterEach(async () => {
   if (seededIds.length === 0) {
     return;
   }
+  // A seeded entity points at its current version, so detach it first.
+  await testDb
+    .update(entities)
+    .set({ currentVersionId: null })
+    .where(inArray(entities.id, seededIds));
+  const seededVersionIds = testDb
+    .select({ id: entityVersions.id })
+    .from(entityVersions)
+    .where(inArray(entityVersions.entityId, seededIds));
+  await testDb
+    .delete(fields)
+    .where(inArray(fields.entityVersionId, seededVersionIds));
+  await testDb
+    .delete(entityVersions)
+    .where(inArray(entityVersions.entityId, seededIds));
   await testDb.delete(entities).where(inArray(entities.id, seededIds));
   seededIds.length = 0;
 });
@@ -173,6 +196,33 @@ describe("matter search preview", () => {
         updatedAt: new Date("3000-01-01T00:00:00.000Z"),
       },
     ]);
+    const recentVersionId = createSafeId<"entityVersion">();
+    await testDb.insert(entityVersions).values({
+      id: recentVersionId,
+      workspaceId: ids.wsA1,
+      entityId: recentDocumentId,
+    });
+    await testDb.insert(fields).values({
+      id: createSafeId<"field">(),
+      workspaceId: ids.wsA1,
+      propertyId: ids.filePropertyA1,
+      entityVersionId: recentVersionId,
+      content: {
+        version: 1,
+        type: "file",
+        id: Bun.randomUUIDv7(),
+        fileName: "Preview latest document.docx",
+        mimeType: DOCX_MIME_TYPE,
+        sizeBytes: 2048,
+        encrypted: false,
+        sha256Hex: "b".repeat(64),
+        pdfFileId: null,
+      },
+    });
+    await testDb
+      .update(entities)
+      .set({ currentVersionId: recentVersionId })
+      .where(eq(entities.id, recentDocumentId));
 
     const result = await readSearchPreviewHandler({
       organizationId: ids.orgA,
@@ -185,24 +235,25 @@ describe("matter search preview", () => {
       LIMITS.matterSearchPreviewAgendaItems,
     );
     expect(result.upcomingAgenda.map(({ id }) => id)).toEqual([
-      firstTaskId,
-      secondTaskId,
-      thirdTaskId,
+      ...overdueTaskIds,
     ]);
     expect(result.recentDocuments).toEqual([
       {
         id: legacyDocumentId,
         name: "Preview document without edit timestamp",
+        mimeType: null,
         updatedAt: "2999-01-03T00:00:00.000Z",
       },
       {
         id: recentDocumentId,
         name: "Preview latest document",
+        mimeType: DOCX_MIME_TYPE,
         updatedAt: "2999-01-02T00:00:00.000Z",
       },
       {
         id: olderDocumentId,
         name: "Preview older document",
+        mimeType: null,
         updatedAt: "2999-01-01T00:00:00.000Z",
       },
     ]);
@@ -211,7 +262,7 @@ describe("matter search preview", () => {
     ).toBe(false);
     expect(
       result.upcomingAgenda.some(({ id }) => overdueTaskIds.includes(id)),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       result.upcomingAgenda.some(({ id }) =>
         referenceItems.some((item) => item.id === id),
@@ -273,6 +324,11 @@ describe("matter search preview", () => {
       const readThroughHandler = async () => {
         const response = await readSearchPreview.handler(
           asTestRaw<Parameters<typeof readSearchPreview.handler>[0]>({
+            request: new Request(
+              `https://api.example.test/v1/workspaces/${ids.wsA1}/search-preview`,
+            ),
+            route:
+              "/v1/workspaces/:workspaceId/search-preview" satisfies ApiRoutePath,
             memberRole: sessionMemberRole("owner"),
             scopedDb,
             workspaceId: ids.wsA1,

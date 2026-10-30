@@ -50,9 +50,9 @@ import { createPromptPrefixLedger } from "@/api/tests/helpers/chat-prompt-prefix
 import type { ScriptedTurn } from "@/api/tests/helpers/chat-round-trip";
 import { TURN_STATUS_CLAIM } from "@/api/tests/helpers/chat-turn-outcome";
 import {
+  createTestHandlerContext,
   NO_AUDIT,
   NO_DB,
-  createTestHandlerContext,
 } from "@/api/tests/helpers/handler-context";
 import {
   testModelAdmission,
@@ -98,8 +98,8 @@ import type {
   ExpectedSettlement,
   ResponseShape,
   SurfaceCombination,
-  TurnCombination,
   SURFACES,
+  TurnCombination,
 } from "@/api/tests/helpers/turn-outcome-matrix";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -396,7 +396,6 @@ const prepareThread = async (
       );
       const outcome = await runChatThreadCompaction({
         abortSignal: AbortSignal.timeout(TURN_TIMEOUT_MS),
-        dataWorkspaceIds: [],
         orgAIConfig: orgConfigOf(provider, { fallback: false }),
         managedAIResidency: "eu" as const,
         organizationId: ids.orgA,
@@ -405,6 +404,8 @@ const prepareThread = async (
         safeDb,
         threadId,
         triggerTokens: 1,
+        userId: ids.userA1,
+        withStoredContentEgress: async ({ work }) => await work(),
       });
       replay.takeFindings();
       expect(

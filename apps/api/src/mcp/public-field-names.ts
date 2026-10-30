@@ -1,17 +1,16 @@
 import { panic } from "better-result";
 
-import { isRecord } from "@/api/lib/type-guards";
+import { isUnknownArray } from "@/api/lib/type-guards";
 
 /**
  * The one table naming the client-engagement container on the agent surface.
  *
  * A capability input field is a `workspaceId` in the DB, the handler config and
  * the REST route, and a `matterId` to every agent. Both directions of that
- * rename are derived from this record, so the catalog exporter's outbound
- * projection (`withPublicFieldNames`, apps/api/scripts/export-capability-catalog.ts)
- * and the capability executors' inbound one (`withInternalFieldNames`,
- * apps/api/src/mcp/capability-tools.ts) cannot disagree about which fields are
- * renamed or how.
+ * rename are derived from this record, so the outbound projection
+ * (`withPublicFieldNames`, below) and the capability executors' inbound one
+ * (`withInternalFieldNames`, apps/api/src/mcp/capability-tools.ts) cannot
+ * disagree about which fields are renamed or how.
  *
  * Every entry is an exact key, never a substring: `matterCode`,
  * `matterNumberPattern` and the like are unrelated words that must not move.
@@ -83,8 +82,9 @@ const SCHEMA_NODE_MAP_KEYWORDS = [
  *
  * The container is a `workspaceId` in the DB, the handler config and the REST
  * route; it is a `matterId` to every agent. This is the outbound half of that
- * split: `describe_capability` and the CLI's generated `--matter-id` flag both
- * read this schema. The inbound half is `withInternalFieldNames`
+ * split: the catalog exporter (`buildInputSchema`) and `describe_capability`
+ * both advertise through it, so the CLI's generated `--matter-id` flag and the
+ * MCP description name the field the capability executors accept. The inbound half is `withInternalFieldNames`
  * (apps/api/src/mcp/capability-tools.ts), which renames the field back before
  * the handler's own schema validates it, so the two names never both reach a
  * handler. Both halves derive from `PUBLIC_FIELD_NAME`'s one table.
@@ -102,10 +102,10 @@ const SCHEMA_NODE_MAP_KEYWORDS = [
  * internal name to rename, so the two cannot meet.
  */
 export const withPublicFieldNames = (node: unknown): unknown => {
-  if (Array.isArray(node)) {
+  if (isUnknownArray(node)) {
     return node.map((entry) => withPublicFieldNames(entry));
   }
-  if (!isRecord(node)) {
+  if (!isPlainRecord(node)) {
     return node;
   }
   const rename = (name: string): string => {
@@ -126,7 +126,7 @@ export const withPublicFieldNames = (node: unknown): unknown => {
   }
   for (const keyword of SCHEMA_NODE_LIST_KEYWORDS) {
     const branches = node[keyword];
-    if (Array.isArray(branches)) {
+    if (isUnknownArray(branches)) {
       projected.set(
         keyword,
         branches.map((branch) => withPublicFieldNames(branch)),
@@ -135,7 +135,7 @@ export const withPublicFieldNames = (node: unknown): unknown => {
   }
   for (const keyword of SCHEMA_NODE_MAP_KEYWORDS) {
     const members = node[keyword];
-    if (!isRecord(members)) {
+    if (!isPlainRecord(members)) {
       continue;
     }
     // `$defs`/`definitions` name reusable schemas, not input fields, so only
@@ -162,12 +162,10 @@ export const withPublicFieldNames = (node: unknown): unknown => {
   }
 
   const required = node["required"];
-  if (Array.isArray(required)) {
+  if (isUnknownArray(required)) {
     projected.set(
       "required",
-      required.map((name: unknown) =>
-        typeof name === "string" ? rename(name) : name,
-      ),
+      required.map((name) => (typeof name === "string" ? rename(name) : name)),
     );
   }
   return Object.fromEntries(projected);

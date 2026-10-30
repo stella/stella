@@ -1,10 +1,10 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
-import { Temporal, DAY_IN_MS } from "@stll/time";
+import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import { api } from "@/lib/api";
 import type { EntityKind, GlobalSearchResultType } from "@/lib/api-contract";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import { toSafeId } from "@/lib/safe-id";
 import { normalizeSearchQuery } from "@/lib/search.logic";
@@ -225,7 +225,7 @@ export const searchInfiniteOptions = (params: SearchParams) =>
         { fetch: { signal } },
       );
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     initialPageParam: stringCursorSeed(),
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
@@ -281,7 +281,7 @@ export const searchPreviewOptions = ({
         { fetch: { signal } },
       );
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     // The key is content-addressed (query + resultId + updatedAt), so a
     // cached preview can never show stale content for a changed document —
@@ -360,7 +360,7 @@ export const recentFilePreviewFieldOptions = (
         .entities({ workspaceId: toSafeId<"workspace">(params.workspaceId) })
         .entity({ entityId: toSafeId<"entity">(params.entityId) })
         .get({ fetch: { signal } });
-      const entity = unwrapEden(response);
+      const entity = unwrapApiResponse(response);
       return resolveRecentFilePreviewFieldId({
         fields: entity.fields,
         fileFieldId: params.fileFieldId,
@@ -393,7 +393,7 @@ export const searchFacetOptions = (params: SearchFacetParams) =>
         { fetch: { signal } },
       );
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     enabled: params.enabled,
     placeholderData: (previousData, previousQuery) =>

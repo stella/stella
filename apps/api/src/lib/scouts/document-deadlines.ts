@@ -1,5 +1,5 @@
 import { panic, Result, TaggedError } from "better-result";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
 import {
@@ -9,21 +9,16 @@ import {
 } from "@stll/api-contract/signals";
 
 import { proveOrgScope, withOrgScope } from "@/api/db/org-scope";
+import type { OrgScope } from "@/api/db/org-scope";
 import type { rootDb, Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
-import {
-  documentProcessingRuns,
-  entities,
-  extractedContent,
-  workspaces,
-} from "@/api/db/schema";
+import { documentProcessingRuns, workspaces } from "@/api/db/schema";
 import type { RlsDatabase } from "@/api/db/scoped";
-import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
+import { type OrgAIConfig, resolveCaching } from "@/api/lib/ai-config";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
-import { decryptContent } from "@/api/lib/content-encryption";
 import {
   withAggregateLock,
   withAggregateRowQuery,
@@ -34,8 +29,12 @@ import { timestampMatchesCasToken } from "@/api/lib/db/timestamp-cas";
 import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import {
-  findSignalsBackgroundActor,
+  isCurrentDeadlineSource,
+  loadCurrentDeadlineSource,
+} from "@/api/lib/document-content-provenance";
+import {
   backgroundFeatureActorExists,
+  findSignalsBackgroundActor,
   isBackgroundFeatureEnabled,
 } from "@/api/lib/feature-access/background";
 import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
@@ -43,10 +42,7 @@ import { logger } from "@/api/lib/observability/logger";
 import type { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
 import { createModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
 import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
-import {
-  DEADLINE_DISPATCH_RECOVERY,
-  pauseDocumentDeadlineScoutAfterGrantLoss,
-} from "@/api/lib/scouts/document-deadline-recovery";
+import { pauseDocumentDeadlineScoutAfterGrantLoss } from "@/api/lib/scouts/document-deadline-recovery";
 import type { DeadlineScoutClaimSettlement } from "@/api/lib/scouts/document-deadline-recovery";
 import { deadlineScoutDue } from "@/api/lib/scouts/document-deadline-skip";
 import {
@@ -55,9 +51,9 @@ import {
   DEADLINE_TEXT_MIN_CHARS,
   deadlineDedupeKey,
   deadlineExtractionSchema,
+  type DeadlineScanAdmission,
   deadlineScanAdmission,
   deadlineScoutFailureStatus,
-  type DeadlineScanAdmission,
   deadlineSeverity,
   filterDeadlines,
 } from "@/api/lib/scouts/document-deadlines.logic";
@@ -85,7 +81,10 @@ class DocumentDeadlineScoutError extends TaggedError(
   cause: unknown;
 }> {}
 
-type DeadlineScoutDb = Pick<typeof rootDb, "select" | "update" | "transaction">;
+type DeadlineScoutDb = Pick<
+  typeof rootDb,
+  "select" | "update" | "execute" | "transaction"
+>;
 
 export type RunDocumentDeadlineScoutArgs = {
   db: DeadlineScoutDb;
@@ -101,17 +100,23 @@ type ClaimedRun = typeof documentProcessingRuns.$inferSelect & {
   deadlineScoutClaimedAtToken: TimestampCasToken;
 };
 
-const claimRun = async (
-  db: Transaction,
-  sourceRunId: SafeId<"documentProcessingRun">,
-): Promise<ClaimedRun | null> => {
+type ClaimRunOptions = {
+  db: Transaction;
+  scope: OrgScope;
+  sourceRunId: SafeId<"documentProcessingRun">;
+};
+
+const claimRun = async ({
+  db,
+  scope,
+  sourceRunId,
+}: ClaimRunOptions): Promise<ClaimedRun | null> => {
   const now = new Date();
   const claimed = await mutateRecoveryClaim({
     type: "deadline-claim",
     tx: db,
-    spec: DEADLINE_DISPATCH_RECOVERY,
+    scope,
     sourceRunId,
-    table: documentProcessingRuns,
     now,
     where: sql`${and(
       eq(documentProcessingRuns.id, sourceRunId),
@@ -201,6 +206,7 @@ const extractDeadlines = async ({
   })(
     async ({ admission }) =>
       await generateTanStackObjectForTask({
+        userId: admission.userId,
         dataClass: "customer",
         task: "chat",
         organizationId: run.organizationId,
@@ -218,7 +224,7 @@ const extractDeadlines = async ({
           scopeKey: run.organizationId,
         }),
         serviceTier: "flex",
-        abortSignal: AbortSignal.timeout(DEADLINE_GENERATION_TIMEOUT_MS),
+        deadlineMs: DEADLINE_GENERATION_TIMEOUT_MS,
         outputSchema: deadlineExtractionSchema,
       }),
   );
@@ -248,49 +254,6 @@ const extractDeadlines = async ({
     throw error;
   }
   return admitted.value;
-};
-
-const currentSourceWhere = (run: ClaimedRun) =>
-  and(
-    eq(extractedContent.entityId, run.entityId),
-    eq(extractedContent.organizationId, run.organizationId),
-    eq(extractedContent.workspaceId, run.workspaceId),
-    eq(extractedContent.sourceEntityVersionId, run.entityVersionId),
-    eq(extractedContent.sourceFieldId, run.fieldId),
-    eq(extractedContent.sourceFileId, run.sourceFileId),
-    eq(extractedContent.sourceSha256Hex, run.sourceSha256Hex),
-    run.kind === "ocr"
-      ? eq(extractedContent.ocrRunId, run.id)
-      : isNull(extractedContent.ocrRunId),
-    eq(entities.currentVersionId, run.entityVersionId),
-    eq(workspaces.status, "active"),
-  );
-
-const loadCurrentSource = async (db: DeadlineScoutDb, run: ClaimedRun) => {
-  const rows = await db
-    .select({
-      ciphertext: extractedContent.ciphertext,
-      entityName: entities.name,
-      iv: extractedContent.iv,
-    })
-    .from(extractedContent)
-    .innerJoin(
-      entities,
-      and(
-        eq(entities.id, extractedContent.entityId),
-        eq(entities.workspaceId, extractedContent.workspaceId),
-      ),
-    )
-    .innerJoin(
-      workspaces,
-      and(
-        eq(workspaces.id, extractedContent.workspaceId),
-        eq(workspaces.organizationId, extractedContent.organizationId),
-      ),
-    )
-    .where(currentSourceWhere(run))
-    .limit(1);
-  return rows.at(0) ?? null;
 };
 
 /**
@@ -371,8 +334,7 @@ export const settleDocumentDeadlineScoutClaim = async ({
         await mutateRecoveryClaim({
           type: "deadline-settlement",
           tx: scopedTx,
-          spec: DEADLINE_DISPATCH_RECOVERY,
-          table: documentProcessingRuns,
+          scope,
           now: new Date(),
           status,
           errorCode,
@@ -620,26 +582,9 @@ export const validateDocumentDeadlineScoutClaim = async ({
   if (claimed.rows.length === 0) {
     return "stale_claim" as const;
   }
-  const current = await tx
-    .select({ entityId: extractedContent.entityId })
-    .from(extractedContent)
-    .innerJoin(
-      entities,
-      and(
-        eq(entities.id, extractedContent.entityId),
-        eq(entities.workspaceId, extractedContent.workspaceId),
-      ),
-    )
-    .innerJoin(
-      workspaces,
-      and(
-        eq(workspaces.id, extractedContent.workspaceId),
-        eq(workspaces.organizationId, extractedContent.organizationId),
-      ),
-    )
-    .where(currentSourceWhere(run))
-    .limit(1);
-  return current.length === 1 ? ("current" as const) : ("superseded" as const);
+  return (await isCurrentDeadlineSource(tx, run))
+    ? ("current" as const)
+    : ("superseded" as const);
 };
 
 type PauseDeadlineScoutOptions = {
@@ -823,7 +768,8 @@ const claimAdmittedDeadlineSource = async ({
       tx,
       scope,
       actor: { type: "system" },
-      fn: async (scopedTx) => await claimRun(scopedTx, sourceRunId),
+      fn: async (scopedTx) =>
+        await claimRun({ db: scopedTx, scope, sourceRunId }),
     });
   });
 
@@ -877,17 +823,16 @@ export const runDocumentDeadlineScout = async ({
           userId: actorUserId,
           scoutKey: SCOUT_KEY.DOCUMENT_DEADLINES,
           observe: async () => {
-            const source = await loadCurrentSource(db, run);
+            // Deadline scouting is system work bound to its persisted run source.
+            const source = await loadCurrentDeadlineSource(
+              db,
+              "deadline-scout",
+              run,
+            );
             if (!source) {
               return [];
             }
-            const text = capText(
-              await decryptContent(
-                run.organizationId,
-                source.ciphertext,
-                source.iv,
-              ),
-            );
+            const text = capText(source.text);
             if (text.length < DEADLINE_TEXT_MIN_CHARS) {
               return [];
             }

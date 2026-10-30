@@ -11,12 +11,7 @@ const API_BASE_URL = `${E2E_API_ORIGIN}/v1`;
 const API_REQUEST_TIMEOUT_MS = 30_000;
 
 type Json =
-  | Record<string, unknown>
-  | unknown[]
-  | string
-  | number
-  | boolean
-  | null;
+  Record<string, unknown> | unknown[] | string | number | boolean | null;
 
 const url = (path: string) =>
   `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`;

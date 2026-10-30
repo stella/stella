@@ -2,25 +2,28 @@ import { panic } from "better-result";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import type { SelectResultFields } from "drizzle-orm/query-builders/select.types";
-import { status, t } from "elysia";
-import type { Static } from "elysia";
 import * as v from "valibot";
 
+import { numberFromString } from "@stll/api-contract/http-input";
 import { provisionLinkCapability } from "@stll/api-contract/provision-link-capability";
 import type { ProvisionLinkCapability } from "@stll/api-contract/provision-link-capability";
 import { PROVISION_LINK_STATUS_TYPES } from "@stll/api-contract/provision-link-status";
 import type { ProvisionLinkStatus } from "@stll/api-contract/provision-link-status";
 
 import {
-  publishedCaseLawDecisions,
   caseLawProvisionCitations,
-  caseLawProvisionExtractions,
   caseLawProvisionExtractionRevisions,
   caseLawProvisionExtractionRevisionsRegistry,
+  caseLawProvisionExtractions,
+  publishedCaseLawDecisions,
 } from "@/api/db/schema";
+import { status } from "@/api/http/status";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
-import { tPaginationCursor, tPaginationLimit } from "@/api/lib/custom-schema";
+import {
+  paginationCursorSchema,
+  paginationLimitSchema,
+} from "@/api/lib/custom-schema";
 import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-storage";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -37,16 +40,26 @@ import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
 import { provisionStatusForCapability } from "./status-for-capability";
 import {
-  PROVISION_VERSION_COLUMNS,
   projectProvisionVersion,
+  PROVISION_VERSION_COLUMNS,
 } from "./version-response";
 
-export const listDecisionProvisionsQuerySchema = t.Object({
-  limit: t.Optional(tPaginationLimit(LIMITS.caseLawSearchPageSizeMax)),
-  cursor: t.Optional(tPaginationCursor()),
+export const listDecisionProvisionsQuerySchema = v.object({
+  limit: v.optional(
+    numberFromString(paginationLimitSchema(LIMITS.caseLawSearchPageSizeMax)),
+  ),
+  cursor: v.optional(
+    v.pipe(
+      paginationCursorSchema(),
+      v.check(
+        (cursor) => decodeProvisionCursor(cursor) !== null,
+        "Invalid cursor",
+      ),
+    ),
+  ),
 });
 
-type ListDecisionProvisionsQuery = Static<
+type ListDecisionProvisionsQuery = v.InferOutput<
   typeof listDecisionProvisionsQuerySchema
 >;
 
@@ -67,7 +80,9 @@ type ProvisionCursor = {
   anchor: string;
 };
 
-const decodeProvisionCursor = (cursor: string): ProvisionCursor | null => {
+export const decodeProvisionCursor = (
+  cursor: string,
+): ProvisionCursor | null => {
   const parts = decodePaginationCursor(cursor);
   if (parts?.length !== 3) {
     return null;
@@ -88,6 +103,9 @@ const decodeProvisionCursor = (cursor: string): ProvisionCursor | null => {
 
   return { generation, spanStart, anchor };
 };
+
+export const encodeProvisionCursor = (cursor: ProvisionCursor): string =>
+  encodePaginationCursor([cursor.generation, cursor.spanStart, cursor.anchor]);
 
 const LEGACY_CITATION_FIELDS = {
   // Drizzle detects absent left-join rows from the first column; keep it non-null.

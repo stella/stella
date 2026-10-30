@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import { AGENT_INPUT_NORMALIZATION_KIND } from "@stll/agent-input";
+import { API_CALENDAR_DATE_CHECK } from "@stll/api-contract/api-date";
 import { legalResolveResponseSchema } from "@stll/api-contract/legal-resolve";
 import { CASE_LAW_RESULTS_RESOURCE_URI } from "@stll/mcp-apps/resource-uri";
 
@@ -16,9 +17,9 @@ import type { TypedMcpToolHandler } from "./tool-types";
 import {
   countryInputSchema,
   countryNormalization,
+  featureDisabledHint,
   nullAsAbsent,
   structuredErrorResult,
-  featureDisabledHint,
   toolDataResult,
   validationErrorResult,
 } from "./tool-utils";
@@ -26,6 +27,7 @@ import {
   defineMcpToolOutput,
   defineValibotMcpTool,
 } from "./valibot-tool-definition";
+import { openMcpRead } from "./write-tool-authority";
 
 type AdmissionFailure = Extract<
   ReturnType<typeof admitLawRead>,
@@ -70,7 +72,7 @@ const resolveDecisionArgsSchema = nullAsAbsent(
     identifier: v.pipe(
       citationText,
       v.description(
-        "One exact docket as the court wrote it, including its sheet, or ECLI. Use search_case_law for a description of a case.",
+        "Docket (and sheet if known) or ECLI. For CZ/SK, add a court name or alias to constrain it; search_case_law handles descriptions.",
       ),
     ),
   }),
@@ -120,6 +122,7 @@ const resolveLawArgsSchema = nullAsAbsent(
       v.pipe(
         v.string(),
         v.isoDate(),
+        API_CALENDAR_DATE_CHECK,
         v.description(
           "Expression date YYYY-MM-DD; omit for the current expression.",
         ),
@@ -131,6 +134,7 @@ const resolveLawArgsSchema = nullAsAbsent(
 const common = {
   consumesServices: false,
   access: "read",
+  permissions: openMcpRead("public law corpus"),
   readClass: "public",
   anonymized: { exposure: "passthrough" },
   feature: "FEATURE_PUBLIC_LAW",
@@ -154,7 +158,7 @@ const LEGAL_RESOLVE_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "Resolve one exact docket (including its sheet) or ECLI; use search_case_law for descriptions in searchable countries. Resolved returns the selected language, languageAlternates, decisionId and bounded text. Continue partial text with read_case_law_decision and its decisionId. Ambiguous lists candidates without choosing. Incomplete_identifier lists missing parts: supply them and retry. Not_found names the reason. Country_unavailable means this country has no exact-identity surface. Add missing stella:read through OAuth consent before recovery calls.",
+      "Resolve a docket or ECLI; search_case_law handles descriptions. A CZ/SK court in identifier constrains it. otherCourtCandidates are DIFFERENT decisions at other courts, not the requested one; ask the user to choose. Only elsewhere: not_found/not_at_this_court. Unknown court: not_found/court_unrecognized. Resolved gives the decision and text; continue with read_case_law_decision. Ambiguous gives candidates; incomplete_identifier gives missing parts. Country_unavailable: no identity surface. Missing stella:read requires OAuth consent.",
     inputSchema: resolveDecisionArgsSchema,
     _meta: {
       ui: {

@@ -10,8 +10,8 @@ import { eq, inArray } from "drizzle-orm";
 
 import { user } from "@/api/db/auth-schema";
 import {
-  featureEnrolments,
   entities,
+  featureEnrolments,
   flowRuns,
   flowRunSteps,
   WORK_OBLIGATION_SOURCE,
@@ -21,6 +21,7 @@ import {
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import acknowledgeWorkObligation from "@/api/handlers/work-obligations/acknowledgements/create";
 import transitionWorkObligation from "@/api/handlers/work-obligations/transition";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -207,7 +208,8 @@ const acknowledge = async (
     asTestRaw<AcknowledgeContext>({
       ...contextBase(userId),
       params: { workspaceId: ids.wsA1, entityId },
-      route: "/test/work-obligations/acknowledge",
+      route:
+        "/v1/work-obligations/:workspaceId/:entityId/acknowledge" satisfies ApiRoutePath,
     }),
   );
 
@@ -231,7 +233,8 @@ const transition = async (
         ...(options.reason === undefined ? {} : { reason: options.reason }),
       },
       params: { workspaceId: ids.wsA1, entityId },
-      route: "/test/work-obligations/transition",
+      route:
+        "/v1/work-obligations/:workspaceId/:entityId/transition" satisfies ApiRoutePath,
     }),
   );
 
@@ -281,6 +284,35 @@ describe("work obligation transitions", () => {
     });
     expect(obligation?.status).toBe(WORK_OBLIGATION_STATUS.COMPLETED);
     expect(task?.status).toBe("done");
+  });
+
+  test("completed work reopens for its owner and returns the task to progress", async () => {
+    const entityId = await seedOpenWork(WORK_OBLIGATION_STATUS.ACTIVE);
+
+    expect(await transition(entityId, ids.userA1, "complete")).toEqual({
+      success: true,
+    });
+    expect(await transition(entityId, ids.userA1, "reopen")).toEqual({
+      success: true,
+    });
+
+    const obligation = await testDb.query.workObligations.findFirst({
+      where: { entityId: { eq: entityId } },
+      columns: { status: true },
+    });
+    const task = await testDb.query.entities.findFirst({
+      where: { id: { eq: entityId } },
+      columns: { status: true },
+    });
+    const events = await testDb.query.workObligationEvents.findMany({
+      where: {
+        obligationEntityId: { eq: entityId },
+        type: { eq: "reopened" },
+      },
+    });
+    expect(obligation?.status).toBe(WORK_OBLIGATION_STATUS.ACTIVE);
+    expect(task?.status).toBe("in_progress");
+    expect(events).toHaveLength(1);
   });
 
   test.each([undefined, "   ", "  No longer needed  "])(

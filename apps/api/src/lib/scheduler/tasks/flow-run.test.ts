@@ -35,6 +35,10 @@ import type {
 import type { StartAutomatedFlowRunOutcome } from "@/api/lib/flows/start-automated-flow-run";
 import { logger } from "@/api/lib/observability/logger";
 import { DueSlot } from "@/api/lib/scheduler/due-slot";
+import {
+  FLOW_RUN_TASK,
+  flowScheduleJobId,
+} from "@/api/lib/scheduler/flow-schedule-identity";
 import type { SchedulerDb, SchedulerJob } from "@/api/lib/scheduler/types";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
@@ -43,11 +47,7 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
-import {
-  createScheduledFlowTask,
-  FLOW_RUN_TASK,
-  flowScheduleJobId,
-} from "./flow-run";
+import { createScheduledFlowTask } from "./flow-run";
 
 const testState = createTestState({ file: import.meta.path, config: env });
 const testDb: TestDatabase = await getTestDb();
@@ -155,6 +155,7 @@ describe("scheduled flow due day", () => {
       payload: persisted?.payload ?? { definitionId },
       enabled: true,
       pausedBy: null,
+      pausedSince: null,
       pausedUntil: null,
       pauseReason: null,
       nextRunAt,

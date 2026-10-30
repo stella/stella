@@ -1,7 +1,6 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
@@ -17,13 +16,13 @@ import {
 } from "@/api/lib/billing/time-entry-authorization";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { formatTodayInTimeZone } from "@/api/lib/timezone";
 
-const deleteTimeEntryBodySchema = t.Object({
-  id: tSafeId("timeEntry", {
+const deleteTimeEntryBodySchema = v.object({
+  id: resourceIdSchema("timeEntry", {
     description: "Time entry ID to delete or write off",
   }),
 });
@@ -36,7 +35,7 @@ export type DeleteTimeEntryHandlerProps = {
     memberRole: AuthorizedMemberRole;
   };
   recordAuditEvent: AuditRecorder;
-  body: Static<typeof deleteTimeEntryBodySchema>;
+  body: v.InferOutput<typeof deleteTimeEntryBodySchema>;
 };
 
 // Shared time-entry deletion logic reused by the HTTP handler and the

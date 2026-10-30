@@ -11,6 +11,7 @@ import {
   entities,
   featureEnrolments,
   pendingScoutEmissions,
+  schedulerJobs,
   signals,
   workspaceMembers,
   workspaces,
@@ -28,7 +29,6 @@ import {
   recoverScoutEmission,
   resumeScoutEmissionAfterGrant,
 } from "@/api/lib/scheduler/tasks/scout-emission-recovery";
-import type { SchedulerJob } from "@/api/lib/scheduler/types";
 import { maybeEmitDocumentReviewSignal } from "@/api/lib/scouts/document-review";
 import { emitInfoSoudHearingSignals } from "@/api/lib/scouts/infosoud-hearings";
 import type { HearingRecord } from "@/api/lib/scouts/infosoud-hearings.logic";
@@ -84,7 +84,12 @@ testState.beforeAll(async () => {
     .values({ id: createSafeId<"workspaceMember">(), workspaceId, userId });
 });
 
+const SCOUT_RECOVERY_JOB_ID = "signals.recoverScoutEmission.fiveMinute";
+
 beforeEach(async () => {
+  await db
+    .delete(schedulerJobs)
+    .where(eq(schedulerJobs.id, SCOUT_RECOVERY_JOB_ID));
   await withOrgScopedFixture({
     database: db,
     workspaceId,
@@ -100,6 +105,9 @@ beforeEach(async () => {
 });
 
 afterAll(async () => {
+  await db
+    .delete(schedulerJobs)
+    .where(eq(schedulerJobs.id, SCOUT_RECOVERY_JOB_ID));
   restoreMode();
   await db.delete(organization).where(eq(organization.id, organizationId));
   await db.delete(user).where(eq(user.id, userId));
@@ -122,32 +130,42 @@ const emitted = async () =>
     .where(eq(signals.organizationId, organizationId));
 
 const runRecovery = async (now = initialTime) => {
-  const job = {
-    id: "signals.scoutRecovery.test",
-    task: RECOVER_SCOUT_EMISSION_TASK,
-    description: null,
-    schedule: { type: "interval", everyMs: 60_000 },
-    payload: null,
-    enabled: true,
-    pausedBy: null,
-    pausedUntil: null,
-    pauseReason: null,
-    nextRunAt: now,
-    lastRunAt: null,
-    lastSuccessAt: null,
-    lastFailureAt: null,
-    lastError: null,
-    lockedAt: now,
-    lockedUntil: null,
-    lockedBy: "recovery-test",
-    createdAt: now,
-    updatedAt: now,
-  } as const satisfies SchedulerJob;
+  await db
+    .insert(schedulerJobs)
+    .values({
+      id: SCOUT_RECOVERY_JOB_ID,
+      task: RECOVER_SCOUT_EMISSION_TASK,
+      description: "Scout recovery test lease",
+      schedule: { type: "interval", everyMs: 5 * 60_000 },
+      payload: null,
+      enabled: true,
+      nextRunAt: now,
+      lockedAt: now,
+      lockedUntil: new Date(now.getTime() + 5 * 60_000),
+      lockedBy: "recovery-test",
+    })
+    .onConflictDoNothing();
+  await db
+    .update(schedulerJobs)
+    .set({
+      nextRunAt: now,
+      lockedAt: now,
+      lockedUntil: new Date(now.getTime() + 5 * 60_000),
+      lockedBy: "recovery-test",
+    })
+    .where(eq(schedulerJobs.id, SCOUT_RECOVERY_JOB_ID));
+  const job =
+    (
+      await db
+        .select()
+        .from(schedulerJobs)
+        .where(eq(schedulerJobs.id, SCOUT_RECOVERY_JOB_ID))
+    ).at(0) ?? panic("Missing registered scout recovery test job");
   await recoverScoutEmission({
     db: asTestRaw<typeof rootDb>(db),
     dueAt: DueSlot.of(job),
     job,
-    payload: null,
+    payload: job.payload,
     runId: createSafeId<"schedulerJobRun">(),
     scheduleContinuation: () => undefined,
     signal: new AbortController().signal,

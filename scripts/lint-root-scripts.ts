@@ -4,8 +4,8 @@ import { panic } from "better-result";
 
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
 import {
-  rootTypeAwareLintCommand,
   rootScriptLintPaths,
+  rootTypeAwareLintCommand,
 } from "./root-script-lint";
 
 const tracked = Bun.spawnSync(["git", "ls-files", "-z"]);

@@ -28,12 +28,14 @@
 // Exit codes: 0 every package is on npm, 1 a package lags, 2 bad arguments or
 // manifests, 3 the guard itself failed.
 
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { STABLE_RELEASE_TAG } from "./promoted-release-policy";
 import { ALL_PACKAGE_ORDER } from "./publish-packages";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
-const STABLE_TAG = /^v\d+\.\d+\.\d+$/u;
 
 class NpmPublishLagError extends Error {
   readonly _tag = "NpmPublishLagError";
@@ -51,13 +53,41 @@ const fail = (message: string): never => {
 export const DAY_SECONDS = 24 * 60 * 60;
 const SEMVER = /^\d+\.\d+\.\d+(?:-[\da-zA-Z.-]+)?(?:\+[\da-zA-Z.-]+)?$/u;
 
-export type RegistryResult =
+type RegistryCheckResult =
   | { status: "passed"; reason: "ok" }
+  | { status: "passed"; reason: "published_from_declared_repository" }
   | { status: "skipped"; reason: "publish_pending" }
+  // npm's `latest`, so callers can tell a lagging registry from one ahead.
+  | { status: "failed"; reason: "version_mismatch"; latest: string }
   | {
       status: "failed";
-      reason: "http_status" | "timeout" | "contract_error" | "version_mismatch";
+      reason:
+        "http_status" | "timeout" | "contract_error" | "unattested_publish";
     };
+
+type RepositoryField = string | { url: string };
+
+export const normalizeGitHubRepository = (
+  repository: RepositoryField | undefined,
+): string | undefined => {
+  const value = typeof repository === "string" ? repository : repository?.url;
+  if (value === undefined) {
+    return undefined;
+  }
+  try {
+    const url = new URL(value.replace(/^git\+/u, ""));
+    const segments = url.pathname.split("/").filter(Boolean);
+    const repositoryName = segments.at(-1);
+    if (repositoryName?.endsWith(".git") === true) {
+      segments[segments.length - 1] = repositoryName.slice(0, -".git".length);
+    }
+    return url.hostname.toLowerCase() === "github.com" && segments.length === 2
+      ? `github.com/${segments.join("/")}`.toLowerCase()
+      : undefined;
+  } catch {
+    return undefined;
+  }
+};
 
 export const versionBumpTime = (history: string): number | undefined => {
   for (const commit of history.split("journey-commit ").slice(1)) {
@@ -119,14 +149,216 @@ const comparePublishedVersion = ({
   }
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const repositoryField = (value: unknown): RepositoryField | undefined => {
+  if (typeof value === "string") {
+    return value;
+  }
+  return isRecord(value) && typeof value["url"] === "string"
+    ? { url: value["url"] }
+    : undefined;
+};
+
+type NpmRunOptions = {
+  args: readonly string[];
+  cwd: string;
+  env: Record<string, string | undefined>;
+  timeoutMs: number;
+};
+
+export type NpmRunResult = { exitCode: number; stdout: string };
+export type NpmRunner = (options: NpmRunOptions) => Promise<NpmRunResult>;
+
+const runNpm: NpmRunner = async ({ args, cwd, env, timeoutMs }) => {
+  const child = Bun.spawn(["npm", ...args], {
+    cwd,
+    env,
+    stdout: "pipe",
+    stderr: "ignore",
+    timeout: timeoutMs,
+  });
+  const [exitCode, stdout] = await Promise.all([
+    child.exited,
+    new Response(child.stdout).text(),
+  ]);
+  return { exitCode, stdout };
+};
+
+const packageEntryMatches = (
+  value: unknown,
+  name: string,
+  version: string,
+): boolean =>
+  isRecord(value) && value["name"] === name && value["version"] === version;
+
+// The audit runs on a pinned npm whose `--include-attestations` JSON lists
+// each verified package with its verified attestation bundles. Older npm
+// prints failures only, which is no evidence that an attestation was checked.
+const NPM_AUDIT_VERSION = "11.20.0";
+const SLSA_PROVENANCE_V1 = "https://slsa.dev/provenance/v1";
+
+type ProvenanceExpectation = { subject: string; repository: string };
+
+// Reads the in-toto statement of one bundle npm reported as verified, so the
+// subject and source repository come from the same signed envelope npm checked.
+const statementMatches = (
+  bundle: unknown,
+  expected: ProvenanceExpectation,
+): boolean => {
+  if (!isRecord(bundle) || bundle["predicateType"] !== SLSA_PROVENANCE_V1) {
+    return false;
+  }
+  const sigstore = bundle["bundle"];
+  const envelope = isRecord(sigstore) ? sigstore["dsseEnvelope"] : undefined;
+  if (!isRecord(envelope) || typeof envelope["payload"] !== "string") {
+    return false;
+  }
+  const statement: unknown = JSON.parse(
+    Buffer.from(envelope["payload"], "base64").toString("utf-8"),
+  );
+  if (!isRecord(statement) || !Array.isArray(statement["subject"])) {
+    return false;
+  }
+  const predicate = statement["predicate"];
+  const buildDefinition = isRecord(predicate)
+    ? predicate["buildDefinition"]
+    : undefined;
+  const externalParameters = isRecord(buildDefinition)
+    ? buildDefinition["externalParameters"]
+    : undefined;
+  const workflow = isRecord(externalParameters)
+    ? externalParameters["workflow"]
+    : undefined;
+  return (
+    statement["subject"].some(
+      (subject) => isRecord(subject) && subject["name"] === expected.subject,
+    ) &&
+    isRecord(workflow) &&
+    normalizeGitHubRepository(repositoryField(workflow["repository"])) ===
+      expected.repository
+  );
+};
+
+// npm is the trust anchor here: it verifies the registry signature, Sigstore
+// root and signer identity, and binds the attestation subject digest to the
+// published tarball. A pass needs npm's affirmative record of a verified
+// provenance bundle for this exact version, and that same bundle must name the
+// declared source repository.
+const verifyPackageWithNpm = async ({
+  name,
+  version,
+  expected,
+  registry,
+  timeoutMs,
+  npmRunner,
+}: {
+  name: string;
+  version: string;
+  expected: ProvenanceExpectation;
+  registry: string;
+  timeoutMs: number;
+  npmRunner: NpmRunner;
+}): Promise<boolean> => {
+  const directory = await mkdtemp(path.join(tmpdir(), "npm-provenance-"));
+  const cache = path.join(directory, "cache");
+  const env = { ...process.env, npm_config_cache: cache };
+  try {
+    await Bun.write(
+      path.join(directory, "package.json"),
+      JSON.stringify({ private: true, dependencies: { [name]: version } }),
+    );
+    const install = await npmRunner({
+      args: [
+        "install",
+        "--ignore-scripts",
+        "--no-audit",
+        "--no-fund",
+        "--registry",
+        registry,
+      ],
+      cwd: directory,
+      env,
+      timeoutMs,
+    });
+    if (install.exitCode !== 0) {
+      return false;
+    }
+    const audit = await npmRunner({
+      args: [
+        "exec",
+        "--yes",
+        `npm@${NPM_AUDIT_VERSION}`,
+        "--",
+        "audit",
+        "signatures",
+        "--json",
+        "--include-attestations",
+        "--registry",
+        registry,
+      ],
+      cwd: directory,
+      env,
+      timeoutMs,
+    });
+    if (audit.exitCode !== 0) {
+      return false;
+    }
+    const report: unknown = JSON.parse(audit.stdout);
+    if (
+      !isRecord(report) ||
+      !Array.isArray(report["invalid"]) ||
+      !Array.isArray(report["missing"]) ||
+      !Array.isArray(report["verified"])
+    ) {
+      return false;
+    }
+    const targetMatches = (entry: unknown) =>
+      packageEntryMatches(entry, name, version);
+    if (
+      report["invalid"].length > 0 ||
+      report["missing"].some(targetMatches) ||
+      !report["verified"].some(
+        (entry) =>
+          targetMatches(entry) &&
+          isRecord(entry) &&
+          Array.isArray(entry["attestationBundles"]) &&
+          entry["attestationBundles"].some((bundle) =>
+            statementMatches(bundle, expected),
+          ),
+      )
+    ) {
+      return false;
+    }
+    const installed: unknown = await Bun.file(
+      path.join(directory, "node_modules", name, "package.json"),
+    ).json();
+    return packageEntryMatches(installed, name, version);
+  } catch {
+    return false;
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+};
+
 type CheckRegistryOptions = {
   name: string;
   version: string;
+  /** The allow-listed repository this package's releases moved to, if any. */
+  movedRepository: string | undefined;
   bumpedAt: number | undefined;
   now: number;
   registry: string;
   timeoutMs: number;
+  npmRunner?: NpmRunner;
+  fetchImpl?: RegistryFetch;
 };
+
+export type RegistryFetch = (
+  input: string | URL | Request,
+  init?: RequestInit,
+) => Promise<Response>;
 
 // This is the network boundary: exceptions become fixed, credential-free reasons.
 export const checkRegistry = async ({
@@ -136,9 +368,12 @@ export const checkRegistry = async ({
   now,
   registry,
   timeoutMs,
-}: CheckRegistryOptions): Promise<RegistryResult> => {
+  movedRepository,
+  npmRunner = runNpm,
+  fetchImpl = fetch,
+}: CheckRegistryOptions): Promise<RegistryCheckResult> => {
   try {
-    const response = await fetch(
+    const response = await fetchImpl(
       `${registry.replace(/\/$/u, "")}/${encodeURIComponent(name)}/latest`,
       { signal: AbortSignal.timeout(timeoutMs) },
     );
@@ -147,16 +382,39 @@ export const checkRegistry = async ({
     }
     const payload: unknown = await response.json();
     if (
-      typeof payload !== "object" ||
-      payload === null ||
-      !("version" in payload) ||
-      typeof payload.version !== "string" ||
-      !SEMVER.test(payload.version)
+      !isRecord(payload) ||
+      typeof payload["version"] !== "string" ||
+      !SEMVER.test(payload["version"])
     ) {
       return { status: "failed", reason: "contract_error" };
     }
+    const npmRepository = normalizeGitHubRepository(
+      repositoryField(payload["repository"]),
+    );
+    // Only an allow-listed move takes the provenance path, and only when npm
+    // declares exactly that repository; any other declaration is judged by
+    // the exact version comparison below, as before the move.
+    if (movedRepository !== undefined && npmRepository === movedRepository) {
+      const verified = await verifyPackageWithNpm({
+        name,
+        version: payload["version"],
+        expected: {
+          subject: `pkg:npm/${name
+            .split("/")
+            .map(encodeURIComponent)
+            .join("/")}@${payload["version"]}`,
+          repository: movedRepository,
+        },
+        registry,
+        timeoutMs,
+        npmRunner,
+      });
+      return verified
+        ? { status: "passed", reason: "published_from_declared_repository" }
+        : { status: "failed", reason: "unattested_publish" };
+    }
     const assessment = comparePublishedVersion({
-      latest: payload.version,
+      latest: payload["version"],
       target: version,
       policy: PUBLISHED_VERSION_POLICY.journey,
       bumpedAt,
@@ -168,7 +426,11 @@ export const checkRegistry = async ({
       case "pending":
         return { status: "skipped", reason: "publish_pending" };
       case "mismatch":
-        return { status: "failed", reason: "version_mismatch" };
+        return {
+          status: "failed",
+          reason: "version_mismatch",
+          latest: payload["version"],
+        };
       default: {
         assessment satisfies never;
         throw new NpmPublishLagError("Unhandled version assessment");
@@ -183,6 +445,84 @@ export const checkRegistry = async ({
           ? "timeout"
           : "contract_error",
     };
+  }
+};
+
+// A release target carries its promotion time, never a main bump timestamp.
+type PromotedPackage = {
+  version: string;
+  promotedAt: number;
+};
+
+export type RegistryResult =
+  | RegistryCheckResult
+  | PromotedRegistryResult
+  | FirstPublishResult
+  | { status: "failed"; reason: "promotion_unavailable" };
+
+// A package still at the enrollment version on main has never been released.
+// Only a pending changeset naming it makes that expected; the release that
+// consumes the changeset bumps the version and ends the pending state.
+export type FirstPublishResult =
+  | { status: "skipped"; reason: "pending_first_publish" }
+  | { status: "failed"; reason: "first_publish_unplanned" };
+
+type PromotedRegistryResult =
+  | { status: "passed"; reason: "published" }
+  | { status: "skipped"; reason: "pending_release" }
+  | { status: "skipped"; reason: "publish_pending" }
+  | { status: "failed"; reason: "publish_lagging"; latest: string };
+
+type CheckPromotedRegistryOptions = Omit<
+  CheckRegistryOptions,
+  "version" | "bumpedAt" | "movedRepository"
+> & {
+  mainVersion: string;
+  promotion: PromotedPackage;
+};
+
+export const checkPromotedRegistry = async ({
+  mainVersion,
+  promotion,
+  ...options
+}: CheckPromotedRegistryOptions): Promise<RegistryResult> => {
+  const result = await checkRegistry({
+    ...options,
+    version: promotion.version,
+    bumpedAt: undefined,
+    movedRepository: undefined,
+  });
+  switch (result.reason) {
+    case "ok":
+      return Bun.semver.order(mainVersion, promotion.version) > 0
+        ? { status: "skipped", reason: "pending_release" }
+        : { status: "passed", reason: "published" };
+    case "version_mismatch":
+      // A newer published release also fulfills the promoted minimum.
+      if (Bun.semver.order(result.latest, promotion.version) > 0) {
+        return Bun.semver.order(mainVersion, promotion.version) > 0
+          ? { status: "skipped", reason: "pending_release" }
+          : { status: "passed", reason: "published" };
+      }
+      return promotion.promotedAt <= options.now &&
+        options.now - promotion.promotedAt < DAY_SECONDS
+        ? { status: "skipped", reason: "publish_pending" }
+        : {
+            status: "failed",
+            reason: "publish_lagging",
+            latest: result.latest,
+          };
+    case "http_status":
+    case "timeout":
+    case "contract_error":
+    case "unattested_publish":
+    case "published_from_declared_repository":
+    case "publish_pending":
+      return result;
+    default: {
+      result satisfies never;
+      throw new NpmPublishLagError("Unhandled promoted registry assessment");
+    }
   }
 };
 
@@ -284,9 +624,6 @@ export const renderLagTable = (rows: readonly PackageLag[]): string => {
     .join("\n");
 };
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
 type ReadPackageManifestOptions = {
   directory: string;
   text: string | undefined;
@@ -324,7 +661,11 @@ export const readPackageManifest = ({
       `packages/${directory}/package.json has an invalid name or version`,
     );
   }
-  return { directory, name: manifest["name"], version: manifest["version"] };
+  return {
+    directory,
+    name: manifest["name"],
+    version: manifest["version"],
+  };
 };
 
 /**
@@ -358,9 +699,20 @@ export const readPublishablePackages = ({
   });
 };
 
-/** The newest stable `vX.Y.Z` tag among those listed, newest first. */
-export const newestStableTag = (tags: readonly string[]): string | undefined =>
-  tags.find((tag) => STABLE_TAG.test(tag));
+/** The newest final tag, optionally bounded strictly below a release version. */
+export const newestStableTag = (
+  tags: readonly string[],
+  beforeVersion?: string,
+): string | undefined =>
+  tags
+    .filter(
+      (tag) =>
+        STABLE_RELEASE_TAG.test(tag) &&
+        (beforeVersion === undefined ||
+          Bun.semver.order(tag.slice(1), beforeVersion) < 0),
+    )
+    .toSorted((left, right) => Bun.semver.order(right.slice(1), left.slice(1)))
+    .at(0);
 
 type Attempt = {
   readonly attempts: number;
@@ -501,26 +853,32 @@ export const parseArgs = (argv: readonly string[]): Args => {
   };
 };
 
-const resolveRef = (args: Args): string => {
+export const resolveRef = (args: Args, execute = run): string => {
   if (args.ref !== undefined) {
     return args.ref;
   }
-  const tags = run([
-    "git",
-    "tag",
-    "--merged",
-    args.previousReleaseOf ?? "HEAD",
-    "--list",
-    "v*",
-    "--sort=-v:refname",
-  ]);
+  const previousReleaseOf = args.previousReleaseOf ?? "HEAD";
+  const versionFile = execute(["git", "show", `${previousReleaseOf}:VERSION`]);
+  if (!versionFile.ok) {
+    return fail(
+      `cannot read VERSION at ${previousReleaseOf}: ${versionFile.stderr.trim()}`,
+    );
+  }
+  const version = versionFile.stdout.trim();
+  if (!/^\d+\.\d+\.\d+$/u.test(version)) {
+    return fail(`VERSION at ${previousReleaseOf} must be X.Y.Z`);
+  }
+  const tags = execute(["git", "tag", "--list", "v*"]);
   if (!tags.ok) {
-    return fail(`git tag --merged failed: ${tags.stderr.trim()}`);
+    return fail(`git tag --list failed: ${tags.stderr.trim()}`);
   }
   return (
-    newestStableTag(tags.stdout.split("\n").map((tag) => tag.trim())) ??
+    newestStableTag(
+      tags.stdout.split("\n").map((tag) => tag.trim()),
+      version,
+    ) ??
     fail(
-      `no stable release tag is reachable from ${args.previousReleaseOf ?? "HEAD"}`,
+      `no final release tag is strictly lower than ${version} at ${previousReleaseOf}`,
     )
   );
 };

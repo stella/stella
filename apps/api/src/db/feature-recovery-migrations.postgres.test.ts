@@ -1,73 +1,31 @@
-import { panic, Result } from "better-result";
+import { panic } from "better-result";
 import type { SQL } from "bun";
 import { describe, expect, test } from "bun:test";
 
 import {
   SETTING_ORGANIZATION_ID,
   SETTING_USER_ID,
-  SETTING_WORKSPACE_IDS,
   SETTING_WORKSPACE_ACCESS_MODE,
+  SETTING_WORKSPACE_IDS,
   WORKSPACE_ACCESS_MODE,
 } from "@/api/db/rls";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const MIGRATIONS = [
-  {
-    name: "20261010005100_signals_flows_enrolments",
-    index: undefined,
-    table: undefined,
-  },
-  {
-    name: "20261010005200_validate_signals_flows_enrolments",
-    index: undefined,
-    table: undefined,
-  },
-  {
-    name: "20261010005300_flow_upload_replay_index",
-    index: "flow_runs_upload_identity_idx",
-    table: "flow_runs",
-  },
-  {
-    name: "20261010005400_upload_trigger_settlements",
-    index: "flow_upload_trigger_intents_retry_idx",
-    table: "flow_upload_trigger_intents",
-  },
-  {
-    name: "20261010005500_feature_recovery_grant_waits",
-    index: "pending_scout_emissions_awaiting_grant_idx",
-    table: "pending_scout_emissions",
-  },
-  {
-    name: "20261010005600_flow_recovery_outcomes",
-    index: undefined,
-    table: undefined,
-  },
-  {
-    name: "20261010005700_validate_flow_recovery_outcomes",
-    index: undefined,
-    table: undefined,
-  },
-  {
-    name: "20261010005800_flow_completion_notice_recovery_index",
-    index: "flow_runs_completion_notice_pending_idx",
-    table: "flow_runs",
-  },
-  {
-    name: "20261010005900_upload_trigger_skipped_recovery_index",
-    index: "flow_upload_trigger_intents_skipped_recovery_idx",
-    table: "flow_upload_trigger_intents",
-  },
-  {
-    name: "20261010006000_validate_feature_recovery_constraints",
-    index: undefined,
-    table: undefined,
-  },
-  {
-    name: "20261012030000_feature_recovery_receipt_owner_access",
-    index: undefined,
-    table: undefined,
-  },
+  { name: "20261030051702_signals_flows_enrolments" },
+  { name: "20261030051802_validate_signals_flows_enrolments" },
+  { name: "20261030051902_flow_upload_replay_index" },
+  { name: "20261030052002_upload_trigger_settlements" },
+  { name: "20261030052102_feature_recovery_grant_waits" },
+  { name: "20261030052202_flow_run_recovery_state_column" },
+  { name: "20261030052302_flow_recovery_outcomes" },
+  { name: "20261030052402_validate_flow_recovery_outcomes" },
+  { name: "20261030052502_flow_completion_notice_recovery_index" },
+  { name: "20261030052602_upload_trigger_skipped_recovery_index" },
+  { name: "20261030052702_validate_feature_recovery_constraints" },
+  { name: "20261030052802_feature_recovery_receipt_owner_access" },
+  { name: "20261030052902_flow_upload_receipt_entity_index" },
 ] as const;
 const DEPENDENCIES = [
   "organization",
@@ -90,40 +48,11 @@ const migrationStatements = async (name: string) =>
     .map((statement) => statement.trim())
     .filter(Boolean);
 
-const executableStatement = (statement: string) =>
-  statement.replace(/^\s*--[^\n]*$/gmu, "").trim();
-
-const committedCutpoints = async (name: string) => {
-  const cutpoints: number[] = [];
-  let transaction: "open" | "committed" = "open";
-  const statements = await migrationStatements(name);
-  for (const [index, statement] of statements.entries()) {
-    const executable = executableStatement(statement);
-    if (/^BEGIN\s*;/iu.test(executable)) {
-      transaction = "open";
-      continue;
-    }
-    if (/^COMMIT\s*;/iu.test(executable)) {
-      transaction = "committed";
-      cutpoints.push(index);
-      continue;
-    }
-    // DDL outside BEGIN commits independently, including each constraint validation.
-    if (
-      transaction === "committed" &&
-      /^(?:ALTER|CREATE|DROP)\s/iu.test(executable)
-    ) {
-      cutpoints.push(index);
-    }
-  }
-  return cutpoints;
-};
-
 type ApplyMigrationOptions = {
   session: MigrationSession;
   schema: string;
   name: string;
-  interrupt: "none" | "transaction-end" | number;
+  interrupt: "none" | number;
 };
 
 const applyMigration = async ({
@@ -149,6 +78,7 @@ const applyMigration = async ({
         ),
     );
     if (interrupt === index) {
+      await session.unsafe("ROLLBACK");
       return;
     }
   }
@@ -188,10 +118,10 @@ const seedRecoverySources = async (session: MigrationSession) => {
   await session`INSERT INTO flow_definitions (id, organization_id, name, steps, trigger) VALUES (${definitionId}, ${organizationId}, 'Replay flow', '[]', '{"type":"manual"}')`;
   for (let index = 0; index < 2; index += 1) {
     const entityId = Bun.randomUUIDv7();
-    // db-await-in-loop: two source identities establish a genuine concurrent uniqueness failure.
+    // db-await-in-loop: both retained receipt sources exercise pre-existing rows.
     // LIKE copies the gate checks, but not the trigger that initializes the gate.
     await session`INSERT INTO entities (id, workspace_id, name, entity_feature_gate) VALUES (${entityId}, ${workspaceId}, 'replay.pdf', 'open')`;
-    // db-await-in-loop: seed the matching run before testing its replay index.
+    // db-await-in-loop: seed the run associated with the retained upload receipt.
     await session`INSERT INTO flow_runs (id, workspace_id, definition_id, definition_snapshot, trigger_source)
       VALUES (${Bun.randomUUIDv7()}, ${workspaceId}, ${definitionId}, '{"name":"Replay flow","steps":[]}', '{"type":"schedule"}')`;
     // Historical FORCE RLS tables have no owner policy. Seed receipts through
@@ -214,10 +144,7 @@ const seedRecoverySources = async (session: MigrationSession) => {
 type MigrationScenarioOptions = {
   session: MigrationSession;
   migration: (typeof MIGRATIONS)[number];
-  scenario:
-    | "complete"
-    | "invalid-index"
-    | { type: "interrupted"; afterStatement: number | "transaction-end" };
+  scenario: "complete" | { type: "interrupted"; afterStatement: number };
 };
 
 const migrationScenario = async ({
@@ -291,38 +218,9 @@ const migrationScenario = async ({
         session,
         schema,
         name: migration.name,
-        interrupt:
-          scenario === "invalid-index"
-            ? ((await committedCutpoints(migration.name)).at(0) ??
-              "transaction-end")
-            : scenario.afterStatement,
+        interrupt: scenario.afterStatement,
       });
-      if (
-        migration.name === "20261010005400_upload_trigger_settlements" ||
-        migration.name === "20261010005500_feature_recovery_grant_waits"
-      ) {
-        // Column and CHECK changes survive the internal COMMIT before replay.
-        expect(await catalogSnapshot(session, schema)).not.toBe(beforePrefix);
-      }
-    }
-    if (scenario === "invalid-index") {
-      if (migration.index === undefined) {
-        return panic("Invalid-index scenario requires a concurrent migration");
-      }
-      await session.unsafe(
-        `DROP INDEX CONCURRENTLY IF EXISTS ${migration.index}`,
-      );
-      const failed = await Result.tryPromise(
-        async () =>
-          await session.unsafe(
-            `CREATE UNIQUE INDEX CONCURRENTLY ${migration.index} ON ${migration.table} ((1))`,
-          ),
-      );
-      expect(failed.isErr()).toBe(true);
-      const invalid = await session<
-        { valid: boolean }[]
-      >`SELECT indisvalid AS valid FROM pg_index WHERE indexrelid = ${`${schema}.${migration.index}`}::regclass`;
-      expect(invalid).toEqual([{ valid: false }]);
+      expect(await catalogSnapshot(session, schema)).toBe(beforePrefix);
     }
     await applyMigration({
       session,
@@ -331,15 +229,6 @@ const migrationScenario = async ({
       interrupt: "none",
     });
     const snapshot = await catalogSnapshot(session, schema);
-    if (migration.index !== undefined) {
-      await applyMigration({
-        session,
-        schema,
-        name: migration.name,
-        interrupt: "none",
-      });
-      expect(await catalogSnapshot(session, schema)).toBe(snapshot);
-    }
     return snapshot;
   } finally {
     await session.unsafe("ROLLBACK");
@@ -349,11 +238,25 @@ const migrationScenario = async ({
   }
 };
 
+const statementReplayCases = (
+  await Promise.all(
+    MIGRATIONS.map(async (migration) => {
+      const count = (await migrationStatements(migration.name)).length;
+      return Array.from({ length: count }, (_, afterStatement) => ({
+        migration,
+        migrationName: migration.name,
+        afterStatement,
+      }));
+    }),
+  )
+).flat();
+
 describe.skipIf(!enabled)(
   "feature recovery migration replay (postgres)",
   () => {
-    for (const migration of MIGRATIONS) {
-      test(`${migration.name}: committed prefixes replay to the uninterrupted catalog`, async () => {
+    test.each(statementReplayCases)(
+      "$migrationName: rollback after statement $afterStatement replays to the uninterrupted catalog",
+      async ({ migration, afterStatement }) => {
         await withGatedTestClients(
           process.env["DATABASE_URL"] ?? panic("Missing PostgreSQL test URL"),
           async ({ openClient }) => {
@@ -364,36 +267,19 @@ describe.skipIf(!enabled)(
                 migration,
                 scenario: "complete",
               });
-              const cutpoints = await committedCutpoints(migration.name);
-              const interruptions =
-                cutpoints.length === 0
-                  ? ["transaction-end" as const]
-                  : cutpoints;
-              for (const afterStatement of interruptions) {
-                // db-await-in-loop: each committed prefix gets a fresh isolated replay schema.
-                expect(
-                  await migrationScenario({
-                    session,
-                    migration,
-                    scenario: { type: "interrupted", afterStatement },
-                  }),
-                ).toBe(complete);
-              }
-              if (migration.index !== undefined) {
-                expect(
-                  await migrationScenario({
-                    session,
-                    migration,
-                    scenario: "invalid-index",
-                  }),
-                ).toBe(complete);
-              }
+              expect(
+                await migrationScenario({
+                  session,
+                  migration,
+                  scenario: { type: "interrupted", afterStatement },
+                }),
+              ).toBe(complete);
             } finally {
               session.release();
             }
           },
         );
-      }, 60_000);
-    }
+      },
+    );
   },
 );

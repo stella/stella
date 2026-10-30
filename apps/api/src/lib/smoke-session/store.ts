@@ -21,6 +21,7 @@ import { env } from "@/api/env";
 import { seedDefaultSkills } from "@/api/lib/agent-skills/default-skills";
 import { sessionCookieName } from "@/api/lib/auth/auth-cookie-name";
 import { acceptProfessionalUse } from "@/api/lib/auth/professional-use";
+import { createSignedSessionCookieValue } from "@/api/lib/auth/signed-session-cookie";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { logger } from "@/api/lib/observability/logger";
 import {
@@ -188,12 +189,6 @@ export const mintSmokeSession = async (
     userAgent: "stella-smoke/deploy-verify",
   });
 
-  // better-auth cookies are "{token}.{hmac_base64}" signed with
-  // BETTER_AUTH_SECRET (same scheme as scripts/seed-test-user.ts).
-  const signature = new Bun.CryptoHasher("sha256", env.BETTER_AUTH_SECRET)
-    .update(token)
-    .digest("base64");
-
   // Emit an alertable signal on every mint. This endpoint issues a real
   // owner session (scoped to the fixed synthetic org, never a real tenant),
   // guarded only by SMOKE_SESSION_SECRET; a structured event lets an operator
@@ -207,7 +202,7 @@ export const mintSmokeSession = async (
 
   return {
     cookieName: smokeCookieName(),
-    cookieValue: `${token}.${signature}`,
+    cookieValue: createSignedSessionCookieValue(token, env.BETTER_AUTH_SECRET),
     expiresAt: expiresAt.toISOString(),
   };
 };

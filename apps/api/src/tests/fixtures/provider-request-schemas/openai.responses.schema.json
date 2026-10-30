@@ -2311,6 +2311,9 @@
             }
           ]
         },
+        "error": {
+          "$ref": "#/$defs/ImageGenToolCallError"
+        },
         "id": {
           "type": "string"
         },
@@ -2383,6 +2386,57 @@
         }
       },
       "required": ["type", "id", "status", "result"],
+      "type": "object"
+    },
+    "ImageGenToolCallError": {
+      "properties": {
+        "code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "message": {
+          "type": "string"
+        },
+        "moderation_details": {
+          "$ref": "#/$defs/ImageGenToolCallModerationDetails"
+        },
+        "param": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "type": "string"
+        }
+      },
+      "required": ["code", "type", "message", "param"],
+      "type": "object"
+    },
+    "ImageGenToolCallModerationDetails": {
+      "properties": {
+        "categories": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "moderation_stage": {
+          "enum": ["input", "output", "unknown"],
+          "type": "string"
+        }
+      },
+      "required": ["moderation_stage", "categories"],
       "type": "object"
     },
     "ImageOutputFormat": {
@@ -3953,6 +4007,10 @@
         "mode": {
           "enum": ["explicit"],
           "type": "string"
+        },
+        "ttl": {
+          "enum": ["30m", "12h"],
+          "type": "string"
         }
       },
       "required": ["mode"],
@@ -5094,11 +5152,18 @@
           "type": "string"
         },
         "url": {
-          "format": "uri",
-          "type": "string"
+          "anyOf": [
+            {
+              "format": "uri",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
-      "required": ["type", "url", "pattern"],
+      "required": ["type", "pattern"],
       "type": "object"
     },
     "WebSearchActionOpenPage": {

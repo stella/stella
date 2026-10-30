@@ -19,6 +19,7 @@ import { withAggregateRowQuery } from "@/api/lib/db/aggregate-lock";
 import { errorTag } from "@/api/lib/errors/error-tag";
 import { isBackgroundFeatureEnabled } from "@/api/lib/feature-access/background";
 import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { emitSignals } from "@/api/lib/signals/emit";
 import type { EmitSignalsResult, NewSignal } from "@/api/lib/signals/emit";
 
@@ -281,10 +282,13 @@ export const runScout = async ({
         }),
     );
     if (Result.isError(recorded)) {
-      captureError(recorded.error, {
-        operation: "signals.scout.record-failure",
-        runId,
-      });
+      captureError(
+        recorded.error,
+        handlerErrorContext("signals.runScout.recorded_error", {
+          operation: "signals.scout.record-failure",
+          runId,
+        }),
+      );
     } else if (!recorded.value.at(0)) {
       return {
         insertedIds: [],

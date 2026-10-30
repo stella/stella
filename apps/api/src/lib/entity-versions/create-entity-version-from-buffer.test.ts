@@ -38,9 +38,23 @@ import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 import { createEncryptedPdf } from "@/api/tests/helpers/signed-pdf";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
+beforeEach(() => {
+  broadcastMock.mockReset();
+  diffStatsMock.mockReset();
+  enqueueSearchRepairsMock.mockReset();
+  flushSearchRepairsMock.mockReset();
+  pdfDerivativeMock.mockReset();
+  processExtractionMock.mockReset();
+  requestNativeExtractionRunMock.mockReset();
+  thumbnailDerivativeMock.mockReset();
+  writeFileVersionMock.mockReset();
+});
+
 const writeFileVersionMock = mock();
 const processExtractionMock = mock();
 const requestNativeExtractionRunMock = mock();
+const enqueueSearchRepairsMock = mock();
+const flushSearchRepairsMock = mock();
 const pdfDerivativeMock = mock();
 const thumbnailDerivativeMock = mock();
 const diffStatsMock = mock();
@@ -167,6 +181,8 @@ const dependencies = {
   writeFileVersion: writeFileVersionMock,
   processExtraction: processExtractionMock,
   requestNativeExtractionRun: requestNativeExtractionRunMock,
+  enqueueEntitySearchRepairs: enqueueSearchRepairsMock,
+  flushEntitySearchRepairs: flushSearchRepairsMock,
   enqueuePdfDerivativeOrMarkFailed: pdfDerivativeMock,
   enqueueImageThumbnailOrMarkFailed: thumbnailDerivativeMock,
   computeVersionDiffStats: diffStatsMock,
@@ -202,6 +218,8 @@ describe("createEntityVersionFromBuffer", () => {
       writeFileVersionMock,
       processExtractionMock,
       requestNativeExtractionRunMock,
+      enqueueSearchRepairsMock,
+      flushSearchRepairsMock,
       pdfDerivativeMock,
       thumbnailDerivativeMock,
       diffStatsMock,
@@ -211,6 +229,8 @@ describe("createEntityVersionFromBuffer", () => {
     }
     processExtractionMock.mockResolvedValue(undefined);
     requestNativeExtractionRunMock.mockResolvedValue(null);
+    enqueueSearchRepairsMock.mockResolvedValue(undefined);
+    flushSearchRepairsMock.mockResolvedValue({ failed: 0, repaired: 0 });
     pdfDerivativeMock.mockResolvedValue(undefined);
     thumbnailDerivativeMock.mockResolvedValue(undefined);
     diffStatsMock.mockResolvedValue(undefined);
@@ -368,6 +388,11 @@ describe("createEntityVersionFromBuffer", () => {
       filePropertyId: "property_1",
     });
     expect(broadcastMock).toHaveBeenCalledTimes(1);
+    // The search repair mark commits with the version; the flush runs after.
+    expect(enqueueSearchRepairsMock).toHaveBeenCalledWith(expect.anything(), [
+      "entity_1",
+    ]);
+    expect(flushSearchRepairsMock).toHaveBeenCalledWith(["entity_1"]);
     expect(broadcastMock).toHaveBeenCalledWith("ws_1", {
       type: REALTIME_EVENT_TYPE.RESOURCE_UPDATED,
       resource: { type: RESOURCE_TYPE.ENTITY, id: "entity_1" },
@@ -570,7 +595,9 @@ describe("createEntityVersionFromBuffer", () => {
     // The extraction request rode along with the version write, so an
     // acknowledgement lost after that commit still leaves a queued run.
     expect(requestNativeExtractionRunMock).toHaveBeenCalledTimes(1);
+    expect(enqueueSearchRepairsMock).toHaveBeenCalledTimes(1);
     expect(processExtractionMock).not.toHaveBeenCalled();
+    expect(flushSearchRepairsMock).not.toHaveBeenCalled();
   });
 
   test("rolls back persistence when the in-transaction callback fails", async () => {

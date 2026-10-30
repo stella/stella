@@ -2,10 +2,10 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { is, sql as ormSql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
-import { PgDialect, PgTable, getTableConfig } from "drizzle-orm/pg-core";
-import { readFileSync, readdirSync } from "node:fs";
+import { getTableConfig, PgDialect, PgTable } from "drizzle-orm/pg-core";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 
 import { repoRelativePath } from "@stll/portable-path";
 
@@ -226,14 +226,17 @@ type DeclaredName = {
 // without an unsafe type assertion.
 const isPgTable = (value: unknown): value is PgTable => is(value, PgTable);
 
-test("organization scope classification contains only schema metadata calls", () => {
-  const registryFile = path.resolve(
-    import.meta.dir,
-    "../../db/org-scope-registry.ts",
-  );
+type RegistryMetadataSourceOptions = {
+  registryFile: string;
+  sourceText: string;
+};
+const assertRegistryMetadataSource = ({
+  registryFile,
+  sourceText,
+}: RegistryMetadataSourceOptions) => {
   const source = ts.createSourceFile(
     registryFile,
-    readFileSync(registryFile, "utf-8"),
+    sourceText,
     ts.ScriptTarget.Latest,
     true,
   );
@@ -270,15 +273,38 @@ test("organization scope classification contains only schema metadata calls", ()
     }
   }
   const inspect = (node: ts.Node): void => {
-    if (ts.isCallExpression(node)) {
-      expect(
-        ts.isIdentifier(node.expression) &&
-          constructors.has(node.expression.text),
-      ).toBe(true);
+    if (
+      ts.isCallExpression(node) &&
+      (!ts.isIdentifier(node.expression) ||
+        !constructors.has(node.expression.text))
+    ) {
+      panic("Scope metadata permits only declared SQL constructors");
     }
     ts.forEachChild(node, inspect);
   };
   inspect(source);
+};
+
+test("organization scope classification contains only schema metadata calls", () => {
+  const registryFile = path.resolve(
+    import.meta.dir,
+    "../../db/org-scope-registry.ts",
+  );
+  assertRegistryMetadataSource({
+    registryFile,
+    sourceText: readFileSync(registryFile, "utf-8"),
+  });
+});
+
+test("organization scope metadata refuses receipt row operations", () => {
+  const registryFile = path.resolve(
+    import.meta.dir,
+    "../../db/org-scope-registry.ts",
+  );
+  const sourceText = `${readFileSync(registryFile, "utf-8")}\ndb.delete(requestIdempotencyReceipts);`;
+  expect(() =>
+    assertRegistryMetadataSource({ registryFile, sourceText }),
+  ).toThrow(/Scope metadata permits only declared SQL constructors/iu);
 });
 
 test("every migration RLS table has one explicit scope classification and resolver metadata", () => {

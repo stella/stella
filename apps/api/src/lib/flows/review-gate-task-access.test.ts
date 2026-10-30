@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
@@ -85,7 +85,7 @@ describe("linked task flow admission", () => {
   }
   test("linked-resource access retains ordinary task input schemas", () => {
     const schemas = {
-      body: t.Object({ taskId: t.String(), status: t.Optional(t.String()) }),
+      body: v.object({ taskId: v.string(), status: v.optional(v.string()) }),
       params: undefined,
       query: undefined,
     };

@@ -48,25 +48,34 @@ test("still polices the first key when a script key count is opaque", async () =
 });
 
 test("does not treat malformed or unsafe key counts as known zero", async () => {
-  for (const count of [
-    "",
-    " ",
-    "-1",
-    "-0",
-    "+0",
-    "00",
-    "0x0",
-    "0e0",
-    "0.5",
-    "NaN",
-    "Infinity",
-    "9007199254740992",
-  ]) {
-    expect(
-      await lintSingleRule(
-        "require-coordination-key",
-        scriptCalls(`${JSON.stringify(count)}, "key", "argument"`),
-      ),
-    ).toEqual([1, 2, 3, 4]);
-  }
+  const results = await Promise.all(
+    [
+      "",
+      " ",
+      "-1",
+      "-0",
+      "+0",
+      "00",
+      "0x0",
+      "0e0",
+      "0.5",
+      "NaN",
+      "Infinity",
+      "9007199254740992",
+    ].map(async (lintCase, index) => {
+      const count = lintCase;
+
+      return {
+        label: `case ${index + 1}: ${JSON.stringify(lintCase)}`,
+        result: await lintSingleRule(
+          "require-coordination-key",
+          scriptCalls(`${JSON.stringify(count)}, "key", "argument"`),
+        ),
+        expected: [1, 2, 3, 4],
+      };
+    }),
+  );
+  expect(results.map(({ label, result }) => ({ label, result }))).toEqual(
+    results.map(({ label, expected }) => ({ label, result: expected })),
+  );
 });

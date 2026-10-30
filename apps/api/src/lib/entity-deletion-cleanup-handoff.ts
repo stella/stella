@@ -1,7 +1,9 @@
 import { Result } from "better-result";
 
+import type { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { errorTag } from "@/api/lib/errors/utils";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import { withTimeout } from "@/api/lib/with-timeout";
 
@@ -11,10 +13,7 @@ const CLEANUP_HANDOFF_TIMEOUT_LABEL = "entity-deletion-cleanup.handoff";
 const CLEANUP_HANDOFF_BATCH_MAX = 4;
 
 type CleanupHandoffOptions = {
-  captureDeliveryError: (
-    error: unknown,
-    context: { requestId: SafeId<"entityDeletionCleanupRequest"> },
-  ) => void;
+  captureDeliveryError: typeof captureError;
   enqueueCleanup: (
     requestId: SafeId<"entityDeletionCleanupRequest">,
   ) => Promise<void>;
@@ -43,7 +42,11 @@ export const handoffCommittedEntityDeletionCleanup = async ({
   });
   if (Result.isError(enqueueResult)) {
     const captureResult = Result.try({
-      try: () => captureDeliveryError(enqueueResult.error, { requestId }),
+      try: () =>
+        captureDeliveryError(
+          enqueueResult.error,
+          handlerErrorContext("entityDeletion.handoff", { requestId }),
+        ),
       catch: (cause) => cause,
     });
     if (Result.isError(captureResult)) {

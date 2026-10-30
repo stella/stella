@@ -1,12 +1,12 @@
 import { spawnSync } from "node:child_process";
 
 import {
+  type Lockfile,
   parseLockfile,
   workspaceClosure,
-  type Lockfile,
 } from "./landing-deploy-scope";
 
-type DependencyScope =
+export type DependencyScope =
   | { type: "none"; files: readonly string[] }
   | { type: "dev-tooling"; files: readonly string[] }
   | { type: "runtime"; files: readonly string[] }
@@ -25,14 +25,14 @@ const SHARED_BASE_FILES = new Set([
   "bunfig.toml",
   "stll-toolchain.json",
 ]);
-const DEV_TOOL =
-  /^(?:@stll\/oxlint-|@types\/|oxlint$|oxfmt$|typescript$|knip$)/u;
+const DEV_TOOL = /^(?:@stll\/oxlint-|@types\/|oxlint$|typescript$|knip$)/u;
 
 const isRecord = (value: unknown): value is JsonRecord =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
 const readAt = (revision: string, file: string): string | undefined => {
   const result = spawnSync("git", ["show", `${revision}:${file}`], {
+    maxBuffer: 2 ** 30,
     encoding: "utf-8",
   });
   return result.status === 0 ? result.stdout : undefined;

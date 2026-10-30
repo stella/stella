@@ -38,6 +38,20 @@ describe("which warning drives the line above the results", () => {
     });
   });
 
+  test("partial matches are disclosed even when function words were also dropped", () => {
+    for (const codes of [
+      ["partial_matches_appended", "function_words_optional"],
+      ["function_words_optional", "partial_matches_appended"],
+    ] as const) {
+      expect(caseLawWarningSurfaces(answered(...codes)).resultsLine).toEqual({
+        surface: "resultsLine",
+        messageKey: "caseLaw.searchWarnings.partialMatches",
+        actionKey: "caseLaw.searchWarnings.searchEveryWord",
+        query: "výpověď z nájmu",
+      });
+    }
+  });
+
   test("a search that required every word draws no line", () => {
     expect(caseLawWarningSurfaces(answered()).resultsLine).toBeNull();
     expect(caseLawWarningSurfaces(answered("no_hits")).resultsLine).toBeNull();

@@ -40,7 +40,7 @@ const buildDeps = (
 };
 
 describe("buildMcpContextFromChat", () => {
-  test("maps every McpRequestContext field from chat-resolved state", () => {
+  test("maps every AuthorizedMcpRequestContext field from chat-resolved state", () => {
     const deps = buildDeps();
     const context = buildMcpContextFromChat(deps);
 
@@ -104,7 +104,6 @@ describe("buildMcpContextFromChat", () => {
     const noop = buildMcpContextFromChat(
       buildDeps({ recordAuditEvent: undefined }),
     ).recordAuditEvent;
-    expect(typeof noop).toBe("function");
     const settled = noop(asTestRaw(null), asTestRaw({ action: "noop" }));
     expect(settled).toBeInstanceOf(Promise);
     await settled;

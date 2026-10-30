@@ -1,9 +1,9 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import {
   FLOW_TASK_FEATURE_ACCESS,
@@ -20,10 +20,11 @@ const config = {
   featureAccess: FLOW_TASK_FEATURE_ACCESS,
   mcp: { type: "covered", by: "list_documents" },
   access: "read",
-  body: t.Object({
-    entityIds: t.Array(tSafeId("entity"), {
-      maxItems: LIMITS.entitiesPageSizeMax,
-    }),
+  body: v.object({
+    entityIds: v.pipe(
+      v.array(resourceIdSchema("entity")),
+      v.maxLength(LIMITS.entitiesPageSizeMax),
+    ),
   }),
 } satisfies WorkspaceHandlerConfig;
 

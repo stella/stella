@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
-# Read-only journeys; all external output stays in private temporary files.
+# Read-only journeys; external output is private except redacted failure excerpts.
 set -euo pipefail
 umask 077
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 scratch="$(mktemp -d)"
 trap 'rm -rf "$scratch"' EXIT
 failed=0
+detail=
 reason=contract_error
 credential="${MCP_CANARY_TOKEN:-}"
 unset MCP_CANARY_TOKEN
@@ -23,10 +25,24 @@ decision_path="/law/cze/cases/nejvyssi-spravni-soud/2-azs-146-2026"
 
 report() {
   printf 'journey %s %s %s\n' "$1" "$2" "$3"
-  if [[ "$2" == failed ]]; then failed=1; fi
+  if [[ "$2" != failed ]]; then return; fi
+  failed=1
+  case "$1" in
+    cli_*|mcp_*)
+      local excerpt="$detail"
+      if [[ -z "$excerpt" && -s "$scratch/error" ]]; then
+        excerpt="$(head -n 1 "$scratch/error")"
+      fi
+      excerpt="${excerpt:-check failed: $3}"
+      excerpt="$(printf '%s' "$excerpt" | JOURNEY_DETAIL_CREDENTIAL="$credential" JOURNEY_DETAIL_SESSION="$session_id" \
+        jq -Rrs -f "$script_dir/journey-detail.jq")"
+      printf 'journey-detail %s %s\n' "$1" "$excerpt"
+      ;;
+  esac
 }
 
 request() {
+  detail=
   local response status redirects allowed_redirects="${redirect_limit:-0}" rc=0
   if [[ "$request_count" -ge 10 ]]; then reason=http_status; return 1; fi
   request_count=$((request_count + 1))
@@ -36,20 +52,34 @@ request() {
   status="${response%% *}"
   redirects="${response##* }"
   request_count=$((request_count + redirects))
+  if [[ ! -s "$scratch/error" ]]; then detail="HTTP status check: received $status (curl exit $rc)"; fi
   if [[ "$rc" == 28 ]]; then reason=timeout; return 1; fi
   if [[ "$status" == 401 || "$status" == 403 ]]; then reason=auth_rejected; return 1; fi
   if [[ "$rc" != 0 || ! "$status" =~ ${accepted_status:-^200$} ]]; then reason=http_status; return 1; fi
 }
 
 probe() {
+  detail=
+  probe_status=passed
+  probe_reason=ok
+  : > "$scratch/error"
   local name="$1"
   shift
-  if "$@"; then report "$name" passed ok; return; fi
+  if "$@"; then report "$name" "$probe_status" "$probe_reason"; return; fi
   local first_reason="$reason"
   if [[ "$reason" != auth_rejected && "$retry_budget" -gt 0 ]]; then
     retry_budget=$((retry_budget - 1))
     sleep "$pause"
-    if "$@"; then report "$name" passed_after_retry "$first_reason"; return; fi
+    detail=
+    : > "$scratch/error"
+    if "$@"; then
+      if [[ "$probe_status" == skipped ]]; then
+        report "$name" skipped "$probe_reason"
+      else
+        report "$name" passed_after_retry "$first_reason"
+      fi
+      return
+    fi
   fi
   report "$name" failed "$reason"
 }
@@ -69,6 +99,7 @@ rpc() {
     -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
     -H "MCP-Protocol-Version: $protocol_version" -H "Mcp-Session-Id: $session_id" --data "$1" "$mcp" || return 1
   reason=contract_error
+  detail="JSON-RPC envelope: expected matching id and object result"
   # Streamable HTTP may answer a JSON envelope or an SSE data frame.
   if [[ "$(head -c 1 "$scratch/body")" != '{' ]]; then
     sed -n 's/^data: //p' "$scratch/body" > "$scratch/frame"
@@ -86,6 +117,7 @@ initialize() {
   session_id=
   protocol_version=2025-11-25
   rpc '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"journey-canary","version":"1"}}}' 1 || return 1
+  detail="initialize shape check: protocolVersion date and nonempty serverInfo.name"
   jq -e '.result | (.protocolVersion | type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}$")) and (.serverInfo.name | type == "string" and length > 0)' \
     "$scratch/body" >/dev/null 2>"$scratch/error" || return 1
   protocol_version="$(jq -r '.result.protocolVersion' "$scratch/body")"
@@ -97,12 +129,15 @@ initialize() {
       -H "Mcp-Session-Id: $session_id" --data '{"jsonrpc":"2.0","method":"notifications/initialized"}' "$mcp" || return 1
   fi
   reason=contract_error
+  detail=
 }
 
 validate_payload() {
   reason=contract_error
+  detail="payload shape check: $1"
   jq -e "$1" "$scratch/payload" >/dev/null 2>"$scratch/error" || return 1
   reason=empty_result
+  detail="payload nonempty check: $2"
   jq -e "$2" "$scratch/payload" >/dev/null 2>"$scratch/error" || return 1
   reason=contract_error
 }
@@ -118,10 +153,12 @@ mcp_tool() {
   local payload
   payload="$(jq -nc --arg name "$1" --argjson args "$2" '{jsonrpc:"2.0",id:2,method:"tools/call",params:{name:$name,arguments:$args}}')"
   rpc "$payload" 2 || return 1
+  detail="tool result check: isError must not be true"
   if ! jq -e '.result.isError != true' "$scratch/body" >/dev/null 2>"$scratch/error"; then
     auth_rejection "$scratch/body"
     return 1
   fi
+  detail="tool content check: expected exactly one JSON text payload"
   jq -e '.result.content | map(select(.type == "text") | .text | fromjson) | if length == 1 then .[0] else error("contract") end' \
     "$scratch/body" > "$scratch/payload" 2>"$scratch/error" || return 1
   validate_payload "$3" "$4"
@@ -129,20 +166,26 @@ mcp_tool() {
 
 cli_version() {
   reason=contract_error
-  git tag --list '@stll/cli@*' > "$scratch/tags" 2>"$scratch/error" || return 1
-  expected="$(jq -erRs 'split("\n") | map(select(test("^@stll/cli@[0-9]+\\.[0-9]+\\.[0-9]+$")) | split("@")[2]) | sort_by(split(".") | map(tonumber)) | last | strings' "$scratch/tags" 2>"$scratch/error")" || return 1
-  if ! env -u MCP_CANARY_TOKEN -u STELLA_API_KEY npm i -g @stll/cli --ignore-scripts --prefix "$scratch/install" >"$scratch/install-log" 2>&1; then return 1; fi
+  if ! env -u MCP_CANARY_TOKEN -u STELLA_API_KEY -u GITHUB_TOKEN -u GH_TOKEN npm i -g @stll/cli --ignore-scripts --prefix "$scratch/install" >"$scratch/install-log" 2>"$scratch/error"; then return 1; fi
   cli="$scratch/install/bin/stella"
-  actual="$(env -u MCP_CANARY_TOKEN -u STELLA_API_KEY "$cli" --version 2>"$scratch/error")" || return 1
-  reason=version_mismatch
-  [[ "$actual" == "$expected" ]] || return 1
+  actual="$(env -u MCP_CANARY_TOKEN -u STELLA_API_KEY -u GITHUB_TOKEN -u GH_TOKEN "$cli" --version 2>"$scratch/error")" || return 1
+  bun "$script_dir/check-cli-promotion.ts" "$actual" >"$scratch/promotion" 2>"$scratch/error" || return 1
+  probe_status="$(jq -er '.status | select(. == "passed" or . == "skipped" or . == "failed")' "$scratch/promotion" 2>"$scratch/error")" || return 1
+  probe_reason="$(jq -er '.reason' "$scratch/promotion" 2>"$scratch/error")" || return 1
+  detail="$(jq -r 'if .target then "target \(.target); publication deadline \(.deadline)" else .message // "promotion metadata check failed" end' "$scratch/promotion")"
+  reason="$probe_reason"
+  if [[ "$probe_status" == skipped ]]; then
+    printf 'journey-detail cli_version %s\n' "$detail"
+  fi
+  [[ "$probe_status" != failed ]]
 }
 
 cli_tool() {
   reason=contract_error
+  detail=
   local shape="$1" nonempty="$2" rc=0
   shift 2
-  STELLA_API_KEY="${credential}" STELLA_SERVER_URL="$cli_server" \
+  env -u GITHUB_TOKEN -u GH_TOKEN STELLA_API_KEY="${credential}" STELLA_SERVER_URL="$cli_server" \
     XDG_CONFIG_HOME="$scratch/config" XDG_CACHE_HOME="$scratch/cache" \
     "$cli" "$@" --json >"$scratch/payload" 2>"$scratch/error" || rc=$?
   # A rejected server registry leaves the CLI on its built-in commands: never a pass,
@@ -152,6 +195,7 @@ cli_tool() {
     return 1
   fi
   if [[ "$rc" != 0 ]]; then
+    if [[ ! -s "$scratch/error" ]]; then detail="CLI exited $rc"; fi
     auth_rejection "$scratch/error" "$scratch/payload"
     return 1
   fi
@@ -168,12 +212,16 @@ case_args='{"queries":["smlouva"],"country":"CZE","limit":1}'
 read_args="$(jq -nc --arg id "$decision_id" '{decision_ids:[$id],max_chars:1000,include:[]}')"
 if [[ "${1:-}" == --cli ]]; then
   probe cli_version cli_version
-  if [[ -z "$credential" ]]; then
+  if [[ "$probe_status" == skipped ]]; then
+    report cli_search skipped "$probe_reason"
+    report cli_read skipped "$probe_reason"
+    printf 'journey-detail cli_search %s\njourney-detail cli_read %s\n' "$detail" "$detail"
+  elif [[ "$failed" != 0 ]]; then
+    report cli_search failed "$reason"
+    report cli_read failed "$reason"
+  elif [[ -z "$credential" ]]; then
     report cli_search skipped no_credential
     report cli_read skipped no_credential
-  elif [[ "$failed" != 0 ]]; then
-    report cli_search failed contract_error
-    report cli_read failed contract_error
   else
     probe cli_search cli_tool "$case_shape" "$case_nonempty" case-law search --queries smlouva --country CZE --limit 1
     probe cli_read cli_tool "$read_shape" "$read_nonempty" case-law read --decision-ids "$decision_id"

@@ -3,49 +3,53 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
 
 import {
+  type BuiltRealtimeEvent,
   REALTIME_EVENT_TYPE,
   RESOURCE_TYPE,
-  resourceRef,
-  resourceUpdatedRealtimeEvent,
-  resourceSetUpdatedRealtimeEvent,
-  resourceDeletedRealtimeEvent,
   resourceDeletedChange,
+  resourceDeletedRealtimeEvent,
+  resourceRef,
   resourcesChangedRealtimeEvent,
+  resourceSetUpdatedRealtimeEvent,
+  resourceUpdatedRealtimeEvent,
   type WorkspaceRealtimeEvent,
-  type BuiltRealtimeEvent,
 } from "@stll/api-contract";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
-import { member, organization, user } from "@/api/db/auth-schema";
+import { member, organization, session, user } from "@/api/db/auth-schema";
 import {
   entities,
+  featureEnrolments,
   flowRuns,
   flowRunSteps,
-  featureEnrolments,
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
 import { env } from "@/api/env";
+import { resolveWorkspaceRealtimeAudience } from "@/api/lib/auth";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { deliverFlowRunWorkspaceEvent } from "@/api/lib/flows/flow-run-events";
 import { classifyEntityResourceDeletions } from "@/api/lib/flows/visibility";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { createTestState } from "@/api/tests/helpers/test-state";
-import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 
 const testState = createTestState({ file: import.meta.path, config: env });
 const db = await getTestDb();
-const database =
-  asTestRaw<Parameters<typeof deliverFlowRunWorkspaceEvent>[0]["database"]>(db);
 const organizationId = mintAuthProviderId<"organization">();
 const workspaceId = createSafeId<"workspace">();
 const enrolledUserId = mintAuthProviderId<"user">();
 const ungrantedUserId = mintAuthProviderId<"user">();
 const unassignedUserId = mintAuthProviderId<"user">();
 const userIds = [enrolledUserId, ungrantedUserId, unassignedUserId];
+const sessionIdByUserId = new Map(
+  userIds.map((userId) => [userId, Bun.randomUUIDv7()] as const),
+);
+const ordinaryEntityId = createSafeId<"entity">();
+const sessionIdFor = (userId: SafeId<"user">) =>
+  sessionIdByUserId.get(userId) ?? panic(`Missing session for ${userId}`);
 const flowEvent = {
   type: REALTIME_EVENT_TYPE.FLOW_RUN_UPDATE,
   data: {
@@ -65,12 +69,25 @@ testState.beforeAll(async () => {
       createdAt: new Date(),
     })),
   );
+  await recordNewOrganizationAccessState(db, {
+    organizationId,
+    now: new Date(),
+  });
   await db.insert(user).values(
     userIds.map((id) => ({
       id,
       email: `${id}@example.test`,
       name: "Flow recipient",
       emailVerified: true,
+    })),
+  );
+  await db.insert(session).values(
+    userIds.map((userId) => ({
+      id: sessionIdFor(userId),
+      token: Bun.randomUUIDv7(),
+      userId,
+      activeOrganizationId: organizationId,
+      expiresAt: new Date("2100-01-01T00:00:00.000Z"),
     })),
   );
   await db.insert(member).values(
@@ -88,6 +105,13 @@ testState.beforeAll(async () => {
     clientId: null,
     name: "Flow delivery matter",
     reference: "FLOW-DELIVERY",
+  });
+  await db.insert(entities).values({
+    id: ordinaryEntityId,
+    workspaceId,
+    kind: "document",
+    featureOwner: "shared",
+    name: "Ordinary live event target",
   });
   await db.insert(flowRuns).values({
     id: flowEvent.data.runId,
@@ -119,24 +143,33 @@ const observeDeliveryEvents = async (
   candidateUserIds = userIds,
 ) => {
   const event = "toJSON" in input ? input.toJSON() : input;
-  const delivered = new Map<SafeId<"user">, WorkspaceRealtimeEvent[]>();
-  await deliverFlowRunWorkspaceEvent({
-    database,
+  const connections = candidateUserIds.map((userId) => ({
+    sessionId: sessionIdFor(userId),
     organizationId,
-    workspaceId,
-    userIds: candidateUserIds,
-    event,
-    deliver: (recipients, authorizedEvent) => {
-      for (const recipient of recipients) {
-        const prior = delivered.get(recipient);
-        if (prior) {
-          prior.push(authorizedEvent);
-        } else {
-          delivered.set(recipient, [authorizedEvent]);
-        }
-      }
-    },
-  });
+    userId,
+  }));
+  const authorizations = await resolveWorkspaceRealtimeAudience(
+    { connections, workspaceId, event },
+    db,
+  );
+  const delivered = new Map<SafeId<"user">, WorkspaceRealtimeEvent[]>();
+  for (const connection of connections) {
+    const authorization = authorizations.get(connection.sessionId);
+    if (
+      authorization === undefined ||
+      authorization.organizationId !== connection.organizationId ||
+      authorization.userId !== connection.userId ||
+      authorization.delivery.type === "hidden"
+    ) {
+      continue;
+    }
+    const prior = delivered.get(connection.userId);
+    if (prior) {
+      prior.push(authorization.delivery.event);
+    } else {
+      delivered.set(connection.userId, [authorization.delivery.event]);
+    }
+  }
   return delivered;
 };
 
@@ -174,12 +207,11 @@ describe("flow progress recipient admission", () => {
       testState.setConfig("FEATURE_FLOWS", false);
       expect(await observeDelivery(flowEvent)).toEqual(new Set());
       const ordinaryEvent = resourceUpdatedRealtimeEvent(
-        resourceRef({
-          type: RESOURCE_TYPE.ENTITY,
-          id: createSafeId<"entity">(),
-        }),
+        resourceRef({ type: RESOURCE_TYPE.ENTITY, id: ordinaryEntityId }),
       );
-      expect(await observeDelivery(ordinaryEvent)).toEqual(new Set(userIds));
+      expect(await observeDelivery(ordinaryEvent)).toEqual(
+        new Set([enrolledUserId, ungrantedUserId]),
+      );
     } finally {
       testState.setConfig("FEATURE_FLOWS", previousFlag);
       restoreMode();
@@ -251,14 +283,16 @@ test("review-task identifiers require current grant while ordinary invalidations
     testState.setConfig("FEATURE_FLOWS", false);
     expect(await observeDelivery(linkedEvent)).toEqual(new Set());
     const ordinaryEvent = resourceUpdatedRealtimeEvent(
-      resourceRef({ type: RESOURCE_TYPE.ENTITY, id: createSafeId<"entity">() }),
+      resourceRef({ type: RESOURCE_TYPE.ENTITY, id: ordinaryEntityId }),
     );
-    expect(await observeDelivery(ordinaryEvent)).toEqual(new Set(userIds));
+    expect(await observeDelivery(ordinaryEvent)).toEqual(
+      new Set([enrolledUserId, ungrantedUserId]),
+    );
     expect(
       await observeDelivery(
         resourceSetUpdatedRealtimeEvent(RESOURCE_TYPE.ENTITY),
       ),
-    ).toEqual(new Set(userIds));
+    ).toEqual(new Set([enrolledUserId, ungrantedUserId]));
   } finally {
     await db.delete(flowRuns).where(eq(flowRuns.id, runId));
     await db.delete(entities).where(eq(entities.id, taskEntityId));
@@ -272,7 +306,7 @@ test("committed task deletions preserve recipient-specific single and mixed chan
   const restoreMode = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
   testState.setConfig("FEATURE_FLOWS", true);
   const taskEntityId = createSafeId<"entity">();
-  const ordinaryEntityId = createSafeId<"entity">();
+  const deletedOrdinaryEntityId = createSafeId<"entity">();
   const runId = createSafeId<"flowRun">();
   const recipients = [enrolledUserId, ungrantedUserId];
   try {
@@ -285,7 +319,7 @@ test("committed task deletions preserve recipient-specific single and mixed chan
         name: "Review task",
       },
       {
-        id: ordinaryEntityId,
+        id: deletedOrdinaryEntityId,
         workspaceId,
         kind: "task",
         name: "Ordinary task",
@@ -319,14 +353,14 @@ test("committed task deletions preserve recipient-specific single and mixed chan
     const classified = await db.transaction(async (tx) => {
       const classification = await classifyEntityResourceDeletions(tx, {
         workspaceId,
-        entityIds: [taskEntityId, ordinaryEntityId],
+        entityIds: [taskEntityId, deletedOrdinaryEntityId],
       });
       await tx
         .delete(entities)
         .where(
           and(
             eq(entities.workspaceId, workspaceId),
-            inArray(entities.id, [taskEntityId, ordinaryEntityId]),
+            inArray(entities.id, [taskEntityId, deletedOrdinaryEntityId]),
           ),
         );
       return classification.deletions;
@@ -379,7 +413,7 @@ test("committed task deletions preserve recipient-specific single and mixed chan
   } finally {
     await db.delete(flowRuns).where(eq(flowRuns.id, runId));
     await db.delete(entities).where(eq(entities.id, taskEntityId));
-    await db.delete(entities).where(eq(entities.id, ordinaryEntityId));
+    await db.delete(entities).where(eq(entities.id, deletedOrdinaryEntityId));
     testState.setConfig("FEATURE_FLOWS", previousFlag);
     restoreMode();
   }

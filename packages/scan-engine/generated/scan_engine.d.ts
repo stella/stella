@@ -25,11 +25,7 @@ export function clean_scan_rgba(
 ): WasmScanResult;
 
 export type InitInput =
-  | RequestInfo
-  | URL
-  | Response
-  | BufferSource
-  | WebAssembly.Module;
+  RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
   readonly memory: WebAssembly.Memory;

@@ -1,15 +1,22 @@
 import { panic, Result, TaggedError } from "better-result";
 import path from "node:path";
-import ts from "typescript";
+import { API } from "tsrs/unstable/async";
+import { serverFS } from "tsrs/unstable/fs";
 import * as v from "valibot";
 
 import { waiverKey } from "./dated-waiver-fix-task";
 import type { DatedWaiver } from "./dated-waivers";
 
 export const REMOVAL_TITLE = "chore: remove verified dated waiver";
+// One reserved branch carries every documentation-waiver renewal of a run.
+export const RENEWAL_BRANCH = "chore/dated-waiver-renewal";
+export const RENEWAL_TITLE = "chore: renew rechecked documentation waivers";
+const proposalTitle = (branch: string): string =>
+  branch === RENEWAL_BRANCH ? RENEWAL_TITLE : REMOVAL_TITLE;
 type RemovalPr = { number: number; body: string; title: string };
 type ReconcileRemovalOptions = {
   body: string;
+  title?: string;
   github: {
     list: () => Promise<RemovalPr[]>;
     create: (body: string) => Promise<number>;
@@ -18,6 +25,7 @@ type ReconcileRemovalOptions = {
 };
 export const reconcileRemovalPr = async ({
   body,
+  title = REMOVAL_TITLE,
   github,
 }: ReconcileRemovalOptions): Promise<number> => {
   const open = await github.list();
@@ -28,7 +36,7 @@ export const reconcileRemovalPr = async ({
   if (!existing) {
     return github.create(body);
   }
-  if (existing.body !== body || existing.title !== REMOVAL_TITLE) {
+  if (existing.body !== body || existing.title !== title) {
     await github.update(existing.number, body);
   }
   return existing.number;
@@ -60,31 +68,62 @@ const MODULE_EXTENSIONS = new Set([
   ".mjs",
   ".cjs",
 ]);
-export const validateRemovalModules = (
+export const validateRemovalModules = async (
   files: Readonly<Record<string, string>>,
-): void => {
+): Promise<void> => {
   const failures: WaiverPublishFailure[] = [];
   for (const [file, content] of Object.entries(files)) {
     if (!MODULE_EXTENSIONS.has(path.extname(file))) {
       continue;
     }
-    const parsed = Result.try(() => {
-      const source = ts.createSourceFile(
-        file,
-        content,
-        ts.ScriptTarget.Latest,
-        true,
-      );
-      const options = { allowJs: true, noLib: true, noResolve: true };
-      const host = ts.createCompilerHost(options);
-      host.getSourceFile = (name) => (name === file ? source : undefined);
-      const diagnostics = ts
-        .createProgram([file], options, host)
-        .getSyntacticDiagnostics(source);
-      if (diagnostics.length > 0) {
-        throw new WaiverPublishError({
-          message: `Generated module has syntax diagnostics: ${file}: ${diagnostics.map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText, " ")).join("; ")}`,
-        });
+    const parsed = await Result.tryPromise(async () => {
+      const filename = path.resolve(file);
+      const config = path.resolve("tsconfig.__waiver-publish__.json");
+      const virtualFiles = new Map([
+        [filename, content],
+        [
+          config,
+          JSON.stringify({
+            files: [filename],
+            compilerOptions: {
+              allowJs: true,
+              noLib: true,
+              noResolve: true,
+              noEmit: true,
+            },
+          }),
+        ],
+      ]);
+      const api = new API({
+        cwd: process.cwd(),
+        fs: {
+          readFile: (name) => virtualFiles.get(name) ?? serverFS.useOS,
+          fileExists: (name) =>
+            virtualFiles.has(name) ? true : serverFS.useOS,
+          directoryExists: serverFS.useOS,
+          getAccessibleEntries: serverFS.useOS,
+          realpath: (name) =>
+            virtualFiles.has(name) ? serverFS.identity : serverFS.useOS,
+          stat: serverFS.useOS,
+          writeFile: serverFS.error,
+          removeFile: serverFS.error,
+        },
+      });
+      try {
+        const snapshot = await api.createSnapshot({ openProjects: [config] });
+        const project =
+          snapshot.getConfiguredProject(config) ??
+          panic("The generated module program did not open");
+        const diagnostics = await project.program.getSyntacticDiagnostics([
+          filename,
+        ]);
+        if (diagnostics.length > 0) {
+          throw new WaiverPublishError({
+            message: `Generated module has syntax diagnostics: ${file}: ${diagnostics.map(({ text }) => text).join("; ")}`,
+          });
+        }
+      } finally {
+        await api.close();
       }
     });
     if (Result.isError(parsed)) {
@@ -177,7 +216,7 @@ const removalLocation = ({
   branch,
   repo,
 }: Pick<RemovalBranchOptions, "branch" | "repo">) => {
-  if (!REMOVAL_BRANCH.test(branch)) {
+  if (!REMOVAL_BRANCH.test(branch) && branch !== RENEWAL_BRANCH) {
     panic("Invalid removal branch");
   }
   const repository = requireRemovalRepository(repo);
@@ -241,6 +280,14 @@ export const listRemovalProposals = async ({
     }
   }
 };
+
+// The renewal branch carries no waiver key, so the keyed listing above never
+// returns it; this read lets a run with nothing due still retire it.
+export const renewalProposalOpen = async ({
+  repo,
+  request,
+}: ListRemovalProposalsOptions): Promise<boolean> =>
+  (await listRemovalPrs({ branch: RENEWAL_BRANCH, repo, request })).length > 0;
 
 export const orphanRemovalProposals = (
   inventory: readonly DatedWaiver[],
@@ -332,8 +379,9 @@ export const publishRemoval = async ({
   request,
   disarmExisting,
 }: PublishRemovalOptions): Promise<PublishedRemoval | undefined> => {
-  validateRemovalModules(files);
+  await validateRemovalModules(files);
   const { api } = removalLocation({ branch, repo });
+  const title = proposalTitle(branch);
   const setRef = async (refBranch: string, sha: string): Promise<void> => {
     const refs = v.parse(
       REF_LIST,
@@ -359,7 +407,7 @@ export const publishRemoval = async ({
         await request([`${api}/pulls`, "--method", "POST", "--input", "-"], {
           head: branch,
           base: "main",
-          title: REMOVAL_TITLE,
+          title,
           body: prBody,
           draft: false,
         }),
@@ -367,7 +415,7 @@ export const publishRemoval = async ({
     update: async (number: number, prBody: string): Promise<void> => {
       await request(
         [`${api}/pulls/${number}`, "--method", "PATCH", "--input", "-"],
-        { title: REMOVAL_TITLE, body: prBody },
+        { title, body: prBody },
       );
     },
   };
@@ -423,11 +471,11 @@ export const publishRemoval = async ({
         input: {
           branch: { repositoryNameWithOwner: repo, branchName: buildBranch },
           expectedHeadOid: base,
-          message: { headline: REMOVAL_TITLE },
+          message: { headline: title },
           fileChanges: {
             additions: Object.entries(files).map(([file, contents]) => ({
               path: file,
-              contents: Buffer.from(contents).toString("base64"),
+              contents: Buffer.from(contents).toBase64(),
             })),
           },
         },
@@ -459,7 +507,7 @@ export const publishRemoval = async ({
   }
   await request([`${api}/git/refs/heads/${buildBranch}`, "--method", "DELETE"]);
   return {
-    number: await reconcileRemovalPr({ body, github }),
+    number: await reconcileRemovalPr({ body, title, github }),
     headSha: pushed,
   };
 };

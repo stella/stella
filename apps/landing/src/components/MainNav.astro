@@ -1,6 +1,9 @@
 ---
 import ProductMediaFrame from "./ProductMediaFrame.astro";
+import { MenuFeaturePreview } from "./react/MenuFeaturePreview";
+import type { MenuFeaturePreviewLabels } from "./react/MenuFeaturePreview";
 import { productHref } from "../data/products/links";
+import { MENU_FEATURE_PREVIEWS } from "../data/products/menu-previews";
 import { pillars } from "../data/products/pillars";
 import { productBySlug } from "../data/products/registry";
 import { connectLinks, isExternal, resolveNavLinks, resourceLinks } from "../data/site-nav";
@@ -32,12 +35,26 @@ const previews = pillars.flatMap((pillar) =>
     return {
       slug,
       hero: product.hero,
+      scene: MENU_FEATURE_PREVIEWS[slug],
       href: productHref(slug, locale),
       title: t(`nav.products.${slug}.title`),
       blurb: t(`nav.products.${slug}.blurb`),
     };
   }),
 );
+
+// Interface labels of the feature-preview scenes. The scenes' mock data (names,
+// documents, decisions) stays in English by design; only their chrome is
+// translated.
+const featurePreviewLabels = {
+  matters: {
+    open: t("nav.featurePreviews.matters.open"),
+    inProgress: t("nav.featurePreviews.matters.inProgress"),
+    done: t("nav.featurePreviews.matters.done"),
+  },
+  documents: { comments: t("nav.featurePreviews.documents.comments") },
+  research: { caseLaw: t("nav.featurePreviews.research.caseLaw") },
+} satisfies MenuFeaturePreviewLabels;
 
 const compactMenus = [
   {
@@ -112,7 +129,13 @@ const compactMenus = [
                 class={`nav-mega-pane ${i === 0 ? "is-active" : ""}`}
                 data-pane={preview.slug}
               >
-                <ProductMediaFrame media={preview.hero} compact deferThemeImage thumbnail />
+                {preview.scene === null ? (
+                  <ProductMediaFrame media={preview.hero} compact deferThemeImage thumbnail />
+                ) : (
+                  <div class="nav-mega-scene">
+                    <MenuFeaturePreview scene={preview.scene} labels={featurePreviewLabels} locale={locale} />
+                  </div>
+                )}
                 <span class="mt-3 block text-base font-medium leading-snug" style="color: var(--foreground)">
                   {preview.title}
                 </span>
@@ -281,6 +304,14 @@ const compactMenus = [
      adapt to the unified box. */
   .nav-mega-pane :global(.product-media) {
     aspect-ratio: 16 / 10 !important;
+  }
+
+  /* Feature-preview scenes fill the same box and borrow the thumbnails'
+     shadow, so a scene pane and a capture pane read as one set. */
+  .nav-mega-scene {
+    aspect-ratio: 16 / 10;
+    border-radius: 0.5rem;
+    box-shadow: 0 18px 42px -30px rgba(0, 0, 0, 0.5);
   }
 </style>
 

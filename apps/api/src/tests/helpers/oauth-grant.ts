@@ -123,11 +123,14 @@ export const registerOAuthClient = async (
 const toCodeChallenge = async (verifier: string) =>
   Buffer.from(
     await hashSha256Bytes(new TextEncoder().encode(verifier)),
-  ).toString("base64url");
+  ).toBase64({ alphabet: "base64url", omitPadding: true });
 
 const readCode = (redirectUrl: string): string =>
   new URL(redirectUrl).searchParams.get("code") ??
   panic(`consent redirect carried no code: ${redirectUrl}`);
+
+/** The web sign-in page the provider sends a browser to when it must sign in. */
+export const OAUTH_LOGIN_PAGE_PATH = "/auth";
 
 /** The web page the provider sends a browser to when consent is needed. */
 export const OAUTH_CONSENT_PAGE_PATH = "/consent";
@@ -158,6 +161,7 @@ export const authorizeOAuthClient = async (
   client: RegisteredOAuthClient,
   // `null` sends no `scope` parameter at all.
   scope: string | null = GRANTED_SCOPES.join(" "),
+  prompt?: string,
 ): Promise<AuthorizationStart> => {
   const codeVerifier = `${Bun.randomUUIDv7()}${Bun.randomUUIDv7()}`;
   const authorizeUrl = new URL(getAuthEndpointUrl("oauth2/authorize"));
@@ -169,6 +173,7 @@ export const authorizeOAuthClient = async (
     resource: getMcpResourceUrl(),
     response_type: "code",
     ...(scope === null ? {} : { scope }),
+    ...(prompt === undefined ? {} : { prompt }),
     state: Bun.randomUUIDv7(),
   }).toString();
 
@@ -188,6 +193,8 @@ type ConsentAndExchangeOptions = {
   client: RegisteredOAuthClient;
   codeVerifier: string;
   consentPage: URL;
+  /** The callback the authorization used, when not the default one. */
+  redirectUri?: string;
 };
 
 /** Accept on the consent page the provider sent the browser to, then exchange the code. */
@@ -196,6 +203,7 @@ export const consentAndExchange = async ({
   client,
   codeVerifier,
   consentPage,
+  redirectUri = REDIRECT_URI,
 }: ConsentAndExchangeOptions): Promise<OAuthGrant> => {
   const auth = getAuth();
   if (consentPage.pathname !== OAUTH_CONSENT_PAGE_PATH) {
@@ -223,6 +231,7 @@ export const consentAndExchange = async ({
     client,
     codeVerifier,
     redirect: new URL(consented.url),
+    redirectUri,
   });
 };
 
@@ -231,6 +240,7 @@ type ExchangeOAuthCodeOptions = {
   codeVerifier: string;
   /** The redirect back to the client that carries the code. */
   redirect: URL;
+  redirectUri?: string;
 };
 
 /** Exchange the code a redirect back to the client carries. */
@@ -238,6 +248,7 @@ export const exchangeOAuthCode = async ({
   client,
   codeVerifier,
   redirect,
+  redirectUri = REDIRECT_URI,
 }: ExchangeOAuthCodeOptions): Promise<OAuthGrant> => {
   const tokens = await readJson(
     await getAuth().handler(
@@ -249,7 +260,7 @@ export const exchangeOAuthCode = async ({
         code: readCode(redirect.href),
         code_verifier: codeVerifier,
         grant_type: "authorization_code",
-        redirect_uri: REDIRECT_URI,
+        redirect_uri: redirectUri,
         resource: getMcpResourceUrl(),
       }),
     ),

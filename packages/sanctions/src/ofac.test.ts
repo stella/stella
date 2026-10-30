@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { parseOfacList, readOfacListVersion } from "./ofac";
 import { checkListReplacement } from "./replacement";
-import { DEFAULT_CUTOFF, buildScreeningIndex, screen } from "./screening";
+import { buildScreeningIndex, DEFAULT_CUTOFF, screen } from "./screening";
 
 const SDN = path.join(import.meta.dir, "fixtures", "ofac-sdn.xml");
 const NON_SDN = path.join(import.meta.dir, "fixtures", "ofac-non-sdn.xml");

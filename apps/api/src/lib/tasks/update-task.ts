@@ -1,8 +1,9 @@
 import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
 import { isDeepStrictEqual } from "node:util";
+import * as v from "valibot";
+
+import { apiDateSchema } from "@stll/api-contract/api-date";
 
 import type { Transaction } from "@/api/db/root";
 import { abortableTx } from "@/api/db/safe-db";
@@ -25,7 +26,7 @@ import type {
 } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import type { AgendaItemKind } from "@/api/lib/entity-constants";
 import {
@@ -36,9 +37,9 @@ import {
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { FlowReviewDecision } from "@/api/lib/flows/flow-types";
 import {
+  admitTaskFlowAccess,
   decideGateForTask,
   gateDecisionForTaskStatus,
-  admitTaskFlowAccess,
 } from "@/api/lib/flows/review-gate-task";
 import {
   agendaFieldsBodySchema,
@@ -64,19 +65,21 @@ import {
 } from "@/api/lib/work-obligations/transitions";
 import type { WorkObligationTransitionAction } from "@/api/lib/work-obligations/transitions";
 
-export const updateTaskBodySchema = t.Object({
-  taskId: tSafeId("entity"),
-  name: t.Optional(t.String({ minLength: 1, maxLength: 255 })),
-  agendaKind: t.Optional(t.String({ minLength: 1, maxLength: 32 })),
-  status: t.Optional(t.String({ minLength: 1, maxLength: 32 })),
-  priority: t.Optional(t.String({ minLength: 1, maxLength: 16 })),
-  dueDate: t.Optional(t.Nullable(t.String({ format: "date" }))),
-  listItemType: t.Optional(t.String({ minLength: 1, maxLength: 32 })),
-  ...agendaFieldsBodySchema.properties,
-  sortOrder: t.Optional(t.Nullable(t.String({ maxLength: 64 }))),
-  workflowReason: t.Optional(t.String({ minLength: 1, maxLength: 1000 })),
+export const updateTaskBodySchema = v.object({
+  taskId: resourceIdSchema("entity"),
+  name: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(255))),
+  agendaKind: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(32))),
+  status: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(32))),
+  priority: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(16))),
+  dueDate: v.optional(v.nullable(apiDateSchema)),
+  listItemType: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(32))),
+  ...agendaFieldsBodySchema.entries,
+  sortOrder: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(64)))),
+  workflowReason: v.optional(
+    v.pipe(v.string(), v.minLength(1), v.maxLength(1000)),
+  ),
 });
-type UpdateTaskBody = Static<typeof updateTaskBodySchema>;
+type UpdateTaskBody = v.InferOutput<typeof updateTaskBodySchema>;
 
 const toDateOrNull = (value: string | null | undefined): Date | null =>
   value ? new Date(value) : null;
@@ -503,8 +506,7 @@ export type UpdateTaskHandlerProps = {
 };
 
 type ApplyTaskUpdateOutcome =
-  | { type: "updated" }
-  | { type: "gate"; decision: FlowReviewDecision };
+  { type: "updated" } | { type: "gate"; decision: FlowReviewDecision };
 
 // Keeps both branches typed as the union, so the wrapper reads one `Result`
 // rather than one per branch.

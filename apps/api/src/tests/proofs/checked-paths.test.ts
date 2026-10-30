@@ -1,10 +1,10 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
-import ts from "typescript";
 import * as v from "valibot";
 
 import { MODEL_TASKS } from "@stll/ai-catalog";
+import { parseSource } from "@stll/scripts/src/syntax-tree";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { USAGE_ACTION_TYPES, USAGE_SERVICE_TIERS } from "@/api/db/schema";
@@ -13,8 +13,8 @@ import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import {
   ACCOUNT_ACCESS,
-  authorizeHandlerUsage,
   authorizeHandlerRunSize,
+  authorizeHandlerUsage,
   createSafeRootHandler,
 } from "@/api/lib/api-handlers";
 import type { UsageMeteringConfig } from "@/api/lib/api-handlers";
@@ -24,8 +24,8 @@ import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
 import { ACTION_KINDS } from "@/api/lib/rate-limit/action-kinds";
 import type {
-  PeriodActionKind,
   ConcurrencyOnlyActionKind,
+  PeriodActionKind,
 } from "@/api/lib/rate-limit/action-kinds";
 import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -211,19 +211,15 @@ describe.serial("registered conditional admission", () => {
     const expectedOwners: string[] = [];
     for (const file of entry.owner) {
       const text = await Bun.file(path.join(REPO_ROOT, file)).text();
-      const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest);
-      const hasRuntimeChecker = source.statements.some((statement) => {
+      const { program } = parseSource(file, text);
+      const hasRuntimeChecker = program.body.some((statement) => {
         if (
-          !ts.isImportDeclaration(statement) ||
-          !ts.isStringLiteral(statement.moduleSpecifier) ||
-          statement.importClause?.phaseModifier === ts.SyntaxKind.TypeKeyword
+          statement.type !== "ImportDeclaration" ||
+          statement.importKind === "type"
         ) {
           return false;
         }
-        const moduleId = canonicalModuleId(
-          statement.moduleSpecifier.text,
-          file,
-        );
+        const moduleId = canonicalModuleId(statement.source.value, file);
         if (
           !specifiers.some(
             (specifier) => canonicalModuleId(specifier, file) === moduleId,
@@ -231,17 +227,17 @@ describe.serial("registered conditional admission", () => {
         ) {
           return false;
         }
-        const bindings = statement.importClause?.namedBindings;
-        if (bindings === undefined) {
-          return false;
-        }
-        if (ts.isNamespaceImport(bindings)) {
-          return true;
-        }
-        return bindings.elements.some(
+        // A namespace import reaches every checker; a default import none.
+        return statement.specifiers.some(
           (binding) =>
-            !binding.isTypeOnly &&
-            names.has(binding.propertyName?.text ?? binding.name.text),
+            binding.type === "ImportNamespaceSpecifier" ||
+            (binding.type === "ImportSpecifier" &&
+              binding.importKind !== "type" &&
+              names.has(
+                binding.imported.type === "Identifier"
+                  ? binding.imported.name
+                  : binding.imported.value,
+              )),
         );
       });
       if (hasRuntimeChecker) {

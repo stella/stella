@@ -19,10 +19,13 @@ import {
 const testState = createTestState({ file: import.meta.path, config: env });
 
 const findFirstMock = mock();
+const processingRunFindFirstMock = mock();
 
 describe("readEntityByIdHandler", () => {
   beforeEach(() => {
     findFirstMock.mockReset();
+    processingRunFindFirstMock.mockReset();
+    processingRunFindFirstMock.mockResolvedValue(null);
     findFirstMock.mockResolvedValue({
       kind: "document",
       name: "Share Purchase Agreement",
@@ -133,7 +136,10 @@ describe("readEntityByIdHandler", () => {
   test("loads extraction provenance with the bounded current fields", async () => {
     const { safeDb } = createScopedDbMock({
       select: () => createSelectQueryMock([]),
-      query: { entities: { findFirst: findFirstMock } },
+      query: {
+        documentProcessingRuns: { findFirst: processingRunFindFirstMock },
+        entities: { findFirst: findFirstMock },
+      },
     });
 
     const result = await Result.gen(() =>
@@ -220,7 +226,10 @@ describe("readEntityByIdHandler", () => {
     });
     const { safeDb } = createScopedDbMock({
       select: () => createSelectQueryMock([]),
-      query: { entities: { findFirst: findFirstMock } },
+      query: {
+        documentProcessingRuns: { findFirst: processingRunFindFirstMock },
+        entities: { findFirst: findFirstMock },
+      },
     });
 
     const result = await Result.gen(() =>
@@ -274,7 +283,10 @@ describe("readEntityByIdHandler", () => {
     });
     const { safeDb } = createScopedDbMock({
       select: () => createSelectQueryMock([]),
-      query: { entities: { findFirst: findFirstMock } },
+      query: {
+        documentProcessingRuns: { findFirst: processingRunFindFirstMock },
+        entities: { findFirst: findFirstMock },
+      },
     });
 
     const result = await Result.gen(() =>
@@ -326,7 +338,10 @@ describe("readEntityByIdHandler", () => {
     });
     const { safeDb } = createScopedDbMock({
       select: () => createSelectQueryMock([]),
-      query: { entities: { findFirst: findFirstMock } },
+      query: {
+        documentProcessingRuns: { findFirst: processingRunFindFirstMock },
+        entities: { findFirst: findFirstMock },
+      },
     });
 
     const result = await Result.gen(() =>
@@ -347,7 +362,7 @@ describe("readEntityByIdHandler", () => {
     }
   });
 
-  test("keeps missing extraction unavailable and ignores JSON-null fields", async () => {
+  test("returns the designated source while extraction is pending and ignores JSON-null fields", async () => {
     findFirstMock.mockResolvedValue({
       kind: "document",
       name: "Pending Email",
@@ -377,7 +392,10 @@ describe("readEntityByIdHandler", () => {
     });
     const { safeDb } = createScopedDbMock({
       select: () => createSelectQueryMock([]),
-      query: { entities: { findFirst: findFirstMock } },
+      query: {
+        documentProcessingRuns: { findFirst: processingRunFindFirstMock },
+        entities: { findFirst: findFirstMock },
+      },
     });
 
     const result = await Result.gen(() =>
@@ -391,10 +409,80 @@ describe("readEntityByIdHandler", () => {
 
     expect(Result.isOk(result)).toBe(true);
     if (Result.isOk(result)) {
-      expect(result.value.extractionFileFieldId).toBeNull();
+      expect(result.value.extractionFileFieldId).toBe(
+        toSafeId<"field">("field_email"),
+      );
       expect(result.value.processingFileFieldId).toBe(
         toSafeId<"field">("field_email"),
       );
     }
+  });
+
+  test("returns the queued source selected by an explicit file property on a new version", async () => {
+    findFirstMock.mockResolvedValue({
+      kind: "document",
+      name: "Pending Agreement",
+      extractedContent: null,
+      currentVersion: {
+        createdAt: new Date("2026-01-02T00:00:00.000Z"),
+        id: "entity_version_2",
+        stamp: null,
+        fields: [
+          {
+            id: "field_default",
+            propertyId: "property_default",
+            content: {
+              type: "file",
+              id: "file_default",
+              sha256Hex: "a".repeat(64),
+            },
+          },
+          {
+            id: "field_explicit",
+            propertyId: "property_explicit",
+            content: {
+              type: "file",
+              id: "file_explicit",
+              sha256Hex: "b".repeat(64),
+            },
+          },
+        ],
+      },
+      versions: [{ id: "entity_version_2" }],
+    });
+    processingRunFindFirstMock.mockResolvedValue({ fieldId: "field_explicit" });
+    const { safeDb } = createScopedDbMock({
+      query: {
+        documentProcessingRuns: { findFirst: processingRunFindFirstMock },
+        entities: { findFirst: findFirstMock },
+      },
+    });
+
+    const result = await Result.gen(() =>
+      readEntityByIdHandler({
+        safeDb,
+        workspaceId: toSafeId("ws_1"),
+        entityId: toSafeId("entity_1"),
+        userId: toSafeId("reader_1"),
+      }),
+    );
+
+    expect(Result.isOk(result)).toBe(true);
+    if (Result.isOk(result)) {
+      expect(result.value.extractionFileFieldId).toBe(
+        toSafeId<"field">("field_explicit"),
+      );
+    }
+    expect(processingRunFindFirstMock).toHaveBeenCalledWith({
+      where: {
+        entityId: { eq: "entity_1" },
+        entityVersionId: { eq: "entity_version_2" },
+        kind: { eq: "native-extraction" },
+        status: { in: ["queued", "running", "failed"] },
+        workspaceId: { eq: "ws_1" },
+      },
+      columns: { fieldId: true },
+      orderBy: { createdAt: "desc", id: "desc" },
+    });
   });
 });

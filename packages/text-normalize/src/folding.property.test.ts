@@ -39,7 +39,9 @@ const config = (numRuns: number) =>
  * compatibility ligatures, dotted and dotless i, Greek final sigma,
  * Arabic with tashkeel, and Arabic-Indic digits.
  */
-const SCRIPT_CHARACTERS = "abzAZáčěŘšůžłøđßæœﬁﬂİıΣσςΟمحمدًٌَُّْ٠١٢٣0123".split("");
+const SCRIPT_CHARACTERS = "abzAZáčěŘšůžłøđßæœﬁﬂİıΣσςΟمحمدًٌَُّْ٠١٢٣0123".split(
+  "",
+);
 
 /** No-break space: a word gap that survives HTML whitespace collapsing. */
 const NBSP = String.fromCodePoint(0x00_a0);

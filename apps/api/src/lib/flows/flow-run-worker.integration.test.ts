@@ -34,14 +34,14 @@ import { member, organization, user } from "@/api/db/auth-schema";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   entities,
-  taskAssignees,
-  fields,
   featureEnrolments,
+  fields,
   flowDefinitions,
   flowRunSteps,
   notifications,
   organizationSettings,
   properties,
+  taskAssignees,
   WORK_OBLIGATION_SOURCE,
   WORK_OBLIGATION_STATUS,
   workObligations,
@@ -63,8 +63,8 @@ import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import type { CreateEntityFromBufferDependencies } from "@/api/lib/entities/create-from-buffer";
 import {
-  ProviderCallError,
   PROVIDER_CALL_ERROR_MESSAGE,
+  ProviderCallError,
 } from "@/api/lib/errors/provider-call-error";
 import { isBackgroundFeatureEnabled } from "@/api/lib/feature-access/background";
 import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
@@ -81,12 +81,15 @@ import type { notifyFlowRunActorOfCompletion } from "@/api/lib/flows/flow-run-co
 import type { FlowStep, FlowTrigger } from "@/api/lib/flows/flow-types";
 import { decideGateForTask } from "@/api/lib/flows/review-gate-task";
 import { startFlowRun } from "@/api/lib/flows/start-flow-run";
+import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
 import { updateTaskHandler } from "@/api/lib/tasks/update-task";
-import type { McpRequestContext } from "@/api/mcp/context";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { handleMcpToolCall } from "@/api/mcp/tools";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
@@ -107,6 +110,10 @@ import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 const testState = createTestState({ file: import.meta.path, config: env });
+beforeEach(() => {
+  enqueueFlowStepMock.mockClear();
+  generateTanStackTextForTaskMock.mockClear();
+});
 
 setDefaultTimeout(60_000);
 
@@ -173,6 +180,8 @@ const createEntityDependencies = {
   enqueueImageThumbnailOrMarkFailed: async () => undefined,
   enqueuePdfDerivativeOrMarkFailed: async () => undefined,
   processExtraction: async () => undefined,
+  enqueueEntitySearchRepairs,
+  flushEntitySearchRepairs: async () => ({ failed: 0, repaired: 0 }),
   requestNativeExtractionRun: async () => null,
 } satisfies CreateEntityFromBufferDependencies;
 
@@ -301,6 +310,10 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       name: "Flow Worker Test Org",
       slug: `flow-worker-test-${organizationId}`,
       createdAt: new Date(),
+    });
+    await recordNewOrganizationAccessState(testDb, {
+      organizationId,
+      now: new Date(),
     });
     await testDb.insert(user).values({
       id: userId,
@@ -732,7 +745,7 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
             value: "Reviewed",
           });
         } else {
-          const mcpContext = {
+          const mcpContext = authorizedMcpContextForTest({
             accessibleWorkspaceIds: [workspaceId],
             accessibleWorkspaceIdSet: new Set([workspaceId]),
             accessibleWorkspaceStatusById: new Map([
@@ -744,12 +757,12 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
             organizationId,
             recordAuditEvent: context.recordAuditEvent,
             safeDb,
-            scopedDb: asTestRaw<McpRequestContext["scopedDb"]>(
+            scopedDb: asTestRaw<AuthorizedMcpRequestContext["scopedDb"]>(
               context.scopedDb,
             ),
             userId,
             userEmail: `${userId}@example.com`,
-          } satisfies McpRequestContext;
+          });
           const result = await handleMcpToolCall({
             toolName: "save_task",
             args: { task_id: taskEntityId, status, name: "Reviewed task" },

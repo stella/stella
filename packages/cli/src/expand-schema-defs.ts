@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 // Expander for the capability catalog's `$defs`/`$ref` compaction.
 //
 // The api-side exporter hoists repeated subschemas of a capability's input
@@ -73,69 +75,146 @@ type ExpansionState = {
   budget: number;
 };
 
-const expandValue = (
-  value: unknown,
-  depth: number,
-  state: ExpansionState,
-  // `unknown` already covers the sentinel; naming it in the union would widen
-  // to `unknown` anyway. Callers compare against EXPANSION_FAILED directly.
-): unknown => {
-  if (depth > MAX_EXPANSION_DEPTH) {
-    return EXPANSION_FAILED;
-  }
-  state.budget -= 1;
-  if (state.budget < 0) {
-    return EXPANSION_FAILED;
-  }
-  if (Array.isArray(value)) {
-    const items: unknown[] = [];
-    for (const item of value) {
-      const expanded = expandValue(item, depth + 1, state);
-      if (expanded === EXPANSION_FAILED) {
-        return EXPANSION_FAILED;
+type ExpansionWork =
+  | { type: "visit"; value: unknown; depth: number }
+  | { type: "expanded"; value: unknown };
+
+type ExpansionFrame =
+  | {
+      type: "array";
+      source: readonly unknown[];
+      nextIndex: number;
+      depth: number;
+      items: unknown[];
+    }
+  | {
+      type: "object";
+      source: [string, unknown][];
+      nextIndex: number;
+      depth: number;
+      key: string;
+      entries: [string, unknown][];
+    }
+  | { type: "ref"; name: string };
+
+const expandValue = (value: unknown, state: ExpansionState) => {
+  const frames: ExpansionFrame[] = [];
+  let work: ExpansionWork = { type: "visit", value, depth: 0 };
+  while (true) {
+    switch (work.type) {
+      case "visit": {
+        if (work.depth > MAX_EXPANSION_DEPTH) {
+          return EXPANSION_FAILED;
+        }
+        state.budget -= 1;
+        if (state.budget < 0) {
+          return EXPANSION_FAILED;
+        }
+        const { value: current, depth } = work;
+        if (Array.isArray(current)) {
+          const items: unknown[] = [];
+          if (current.length === 0) {
+            work = { type: "expanded", value: items };
+            continue;
+          }
+          frames.push({
+            type: "array",
+            source: current,
+            nextIndex: 1,
+            depth,
+            items,
+          });
+          work = { type: "visit", value: current.at(0), depth: depth + 1 };
+          continue;
+        }
+        if (!isRecord(current)) {
+          work = { type: "expanded", value: current };
+          continue;
+        }
+        if ("$ref" in current) {
+          const name = defsRefName(current);
+          if (
+            name === null ||
+            !Object.hasOwn(state.defs, name) ||
+            state.resolving.has(name)
+          ) {
+            return EXPANSION_FAILED;
+          }
+          state.resolving.add(name);
+          // A sibling may reuse the ref only after its entire target has completed.
+          frames.push({ type: "ref", name });
+          work = { type: "visit", value: state.defs[name], depth: depth + 1 };
+          continue;
+        }
+        const source = Object.entries(current);
+        const first = source.at(0);
+        if (first === undefined) {
+          work = { type: "expanded", value: Object.fromEntries([]) };
+          continue;
+        }
+        frames.push({
+          type: "object",
+          source,
+          nextIndex: 1,
+          depth,
+          key: first[0],
+          entries: [],
+        });
+        work = { type: "visit", value: first[1], depth: depth + 1 };
+        continue;
       }
-      items.push(expanded);
+      case "expanded": {
+        const frame = frames.at(-1);
+        if (frame === undefined) {
+          return work.value;
+        }
+        switch (frame.type) {
+          case "ref":
+            frames.pop();
+            state.resolving.delete(frame.name);
+            break;
+          case "array":
+            frame.items.push(work.value);
+            if (frame.nextIndex >= frame.source.length) {
+              frames.pop();
+              work = { type: "expanded", value: frame.items };
+            } else {
+              work = {
+                type: "visit",
+                value: frame.source.at(frame.nextIndex),
+                depth: frame.depth + 1,
+              };
+              frame.nextIndex += 1;
+            }
+            break;
+          case "object": {
+            frame.entries.push([frame.key, work.value]);
+            const next = frame.source.at(frame.nextIndex);
+            if (next === undefined) {
+              frames.pop();
+              // Define own data even for __proto__, preserving the original key order.
+              work = {
+                type: "expanded",
+                value: Object.fromEntries(frame.entries),
+              };
+            } else {
+              frame.key = next[0];
+              frame.nextIndex += 1;
+              work = { type: "visit", value: next[1], depth: frame.depth + 1 };
+            }
+            break;
+          }
+          default:
+            frame satisfies never;
+            return panic("Unknown schema expansion frame");
+        }
+        break;
+      }
+      default:
+        work satisfies never;
+        return panic("Unknown schema expansion work");
     }
-    return items;
   }
-  if (!isRecord(value)) {
-    return value;
-  }
-  if ("$ref" in value) {
-    const name = defsRefName(value);
-    if (name === null) {
-      return EXPANSION_FAILED;
-    }
-    // An unknown name or a name already on the resolution path is a corrupt
-    // artifact: the compactor only ever emits refs to defs it wrote, and a
-    // subschema cannot structurally contain itself, so no cycle can arise from
-    // a well-formed export.
-    //
-    // `Object.hasOwn` rather than a plain read: `state.defs` comes from
-    // `JSON.parse` and still inherits `Object.prototype`, so a ref to
-    // `#/$defs/constructor` would otherwise resolve to an inherited function
-    // and be inlined as a lost subtree instead of failing loudly.
-    if (!Object.hasOwn(state.defs, name) || state.resolving.has(name)) {
-      return EXPANSION_FAILED;
-    }
-    const target = state.defs[name];
-    state.resolving.add(name);
-    const expanded = expandValue(target, depth + 1, state);
-    state.resolving.delete(name);
-    return expanded;
-  }
-  // Collected then built with `Object.fromEntries`, which defines own data
-  // properties: a JSON-parsed document can carry an own `__proto__` key, and
-  // assigning that key would invoke the prototype setter instead of storing it.
-  const entries: [string, unknown][] = [];
-  for (const [key, child] of Object.entries(value)) {
-    const expandedChild = expandValue(child, depth + 1, state);
-    if (expandedChild === EXPANSION_FAILED) {
-      return EXPANSION_FAILED;
-    }
-    entries.push([key, expandedChild]);
-  }
-  return Object.fromEntries(entries);
 };
 
 /**
@@ -169,7 +248,7 @@ export const expandSchemaDefs = (
     if (key === DEFS_KEY) {
       continue;
     }
-    const expandedValue = expandValue(value, 0, state);
+    const expandedValue = expandValue(value, state);
     if (expandedValue === EXPANSION_FAILED) {
       return null;
     }

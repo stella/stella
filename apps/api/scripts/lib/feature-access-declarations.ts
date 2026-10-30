@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 
 import { DESKTOP_FEATURE_IDS } from "@stll/api-contract/desktop-feature-access";
 import { compareCodeUnit } from "@stll/collation";
@@ -164,8 +164,100 @@ const literalProperty = (node: ts.Expression, name: string) => {
   return undefined;
 };
 
+const bindingIdentifiers = (name: ts.BindingName): ts.Identifier[] =>
+  ts.isIdentifier(name)
+    ? [name]
+    : name.elements.flatMap((element) =>
+        ts.isOmittedExpression(element) ? [] : bindingIdentifiers(element.name),
+      );
+
+const statementBindings = (statement: ts.Statement): ts.Identifier[] => {
+  if (ts.isVariableStatement(statement)) {
+    return statement.declarationList.declarations.flatMap((declaration) =>
+      bindingIdentifiers(declaration.name),
+    );
+  }
+  if (ts.isFunctionDeclaration(statement) || ts.isClassDeclaration(statement)) {
+    return statement.name === undefined ? [] : [statement.name];
+  }
+  if (
+    !ts.isImportDeclaration(statement) ||
+    statement.importClause === undefined
+  ) {
+    return [];
+  }
+  const clause = statement.importClause;
+  const names = clause.name === undefined ? [] : [clause.name];
+  const bindings = clause.namedBindings;
+  if (bindings !== undefined) {
+    names.push(
+      ...(ts.isNamedImports(bindings)
+        ? bindings.elements.map((binding) => binding.name)
+        : [bindings.name]),
+    );
+  }
+  return names;
+};
+
+const resolveBinding = (
+  reference: ts.Identifier,
+): ts.Identifier | undefined => {
+  for (
+    let scope: ts.Node | undefined = reference.parent;
+    scope !== undefined;
+    scope = scope.parent
+  ) {
+    let names: ts.Identifier[] = [];
+    if (ts.isFunctionLike(scope)) {
+      names = scope.parameters.flatMap((parameter) =>
+        bindingIdentifiers(parameter.name),
+      );
+      if (ts.isFunctionExpression(scope) && scope.name !== undefined) {
+        names.push(scope.name);
+      }
+    } else if (
+      ts.isSourceFile(scope) ||
+      ts.isBlock(scope) ||
+      ts.isModuleBlock(scope)
+    ) {
+      names = scope.statements.flatMap(statementBindings);
+    } else if (ts.isCaseBlock(scope)) {
+      names = scope.clauses.flatMap((clause) =>
+        clause.statements.flatMap(statementBindings),
+      );
+    } else if (
+      ts.isCatchClause(scope) &&
+      scope.variableDeclaration !== undefined
+    ) {
+      names = bindingIdentifiers(scope.variableDeclaration.name);
+    } else if (
+      ts.isForStatement(scope) ||
+      ts.isForInStatement(scope) ||
+      ts.isForOfStatement(scope)
+    ) {
+      const initializer = scope.initializer;
+      if (
+        initializer !== undefined &&
+        ts.isVariableDeclarationList(initializer)
+      ) {
+        names = initializer.declarations.flatMap((declaration) =>
+          bindingIdentifiers(declaration.name),
+        );
+      }
+    }
+    const binding = names.find((name) => name.text === reference.text);
+    if (binding !== undefined) {
+      return binding;
+    }
+  }
+  return undefined;
+};
+
+// Direct Drizzle accepts its own option overloads; owner wrappers forward one
+// particular parameter, derived from the executable declaration below.
+type DatabaseConstructors = ReadonlyMap<ts.Identifier, number | undefined>;
 const drizzleConstructors = (ast: ts.SourceFile) => {
-  const constructors = new Set<string>();
+  const constructors = new Map<ts.Identifier, number | undefined>();
   for (const statement of ast.statements) {
     if (
       !runtimeImport(statement) ||
@@ -178,16 +270,81 @@ const drizzleConstructors = (ast: ts.SourceFile) => {
       continue;
     }
     for (const binding of bindings.elements) {
-      if ((binding.propertyName?.text ?? binding.name.text) === "drizzle") {
-        constructors.add(binding.name.text);
+      if (
+        !binding.isTypeOnly &&
+        (binding.propertyName?.text ?? binding.name.text) === "drizzle"
+      ) {
+        constructors.set(binding.name, undefined);
       }
     }
   }
   return constructors;
 };
+
+const forwardedDatabaseFactories = (ast: ts.SourceFile) => {
+  const constructors = drizzleConstructors(ast);
+  const factories = new Map<string, number>();
+  for (const statement of ast.statements) {
+    if (!exported(statement) || !ts.isVariableStatement(statement)) {
+      continue;
+    }
+    for (const declaration of statement.declarationList.declarations) {
+      const factory =
+        declaration.initializer === undefined
+          ? undefined
+          : unwrapExpression(declaration.initializer);
+      if (
+        !ts.isIdentifier(declaration.name) ||
+        factory === undefined ||
+        (!ts.isArrowFunction(factory) && !ts.isFunctionExpression(factory))
+      ) {
+        continue;
+      }
+      const forwarded = new Set<number>();
+      const visit = (node: ts.Node): void => {
+        if (ts.isFunctionLike(node)) {
+          return;
+        }
+        if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
+          const constructor = resolveBinding(node.expression);
+          const options = node.arguments.at(0);
+          if (
+            constructor !== undefined &&
+            constructors.has(constructor) &&
+            options !== undefined &&
+            ts.isObjectLiteralExpression(options)
+          ) {
+            for (const property of options.properties) {
+              if (
+                !ts.isSpreadAssignment(property) ||
+                !ts.isIdentifier(property.expression)
+              ) {
+                continue;
+              }
+              const parameter = resolveBinding(property.expression);
+              const index = factory.parameters.findIndex(
+                (candidate) => candidate.name === parameter,
+              );
+              if (index !== -1) {
+                forwarded.add(index);
+              }
+            }
+          }
+        }
+        ts.forEachChild(node, visit);
+      };
+      visit(factory.body);
+      const parameter = [...forwarded].at(0);
+      if (forwarded.size === 1 && parameter !== undefined) {
+        factories.set(declaration.name.text, parameter);
+      }
+    }
+  }
+  return factories;
+};
 const schemaRegistrationReference = (
   node: ts.Identifier,
-  constructors: ReadonlySet<string>,
+  constructors: DatabaseConstructors,
 ) => {
   const property = node.parent;
   let isOption = false;
@@ -203,22 +360,32 @@ const schemaRegistrationReference = (
   }
   const object = property.parent;
   const call = object.parent;
-  return (
-    isOption &&
-    ts.isObjectLiteralExpression(object) &&
-    ts.isCallExpression(call) &&
-    ts.isIdentifier(call.expression) &&
-    constructors.has(call.expression.text)
-  );
+  if (
+    !isOption ||
+    !ts.isObjectLiteralExpression(object) ||
+    !ts.isCallExpression(call) ||
+    !ts.isIdentifier(call.expression)
+  ) {
+    return false;
+  }
+  const constructor = resolveBinding(call.expression);
+  if (constructor === undefined || !constructors.has(constructor)) {
+    return false;
+  }
+  const parameter = constructors.get(constructor);
+  return parameter === undefined || call.arguments.at(parameter) === object;
 };
 // Registration defines a database handle; it does not consume feature tables.
 // Any other runtime use of the same binding keeps the dependency in the graph.
-const registrationOnly = (ast: ts.SourceFile, name: string) => {
+const registrationOnly = (
+  ast: ts.SourceFile,
+  name: string,
+  constructors: DatabaseConstructors,
+) => {
   const references = runtimeReferences(ast, name);
   if (references.length === 0) {
     return false;
   }
-  const constructors = drizzleConstructors(ast);
   return references.every((reference) =>
     schemaRegistrationReference(reference, constructors),
   );
@@ -227,6 +394,10 @@ const registrationOnly = (ast: ts.SourceFile, name: string) => {
 /** Parses source once; no handler or runtime dependency is loaded. */
 class DeclarationSourceGraph {
   private readonly parsed = new Map<string, ts.SourceFile>();
+  private readonly constructors = new WeakMap<
+    ts.SourceFile,
+    DatabaseConstructors
+  >();
   private readonly imports = new Map<
     string,
     { targets: string[]; missing: string[] }
@@ -263,6 +434,42 @@ class DeclarationSourceGraph {
       `${base}/index.tsx`,
       base.replace(/\.js$/u, ".ts"),
     ].find((candidate) => this.sources.has(candidate));
+  }
+  private databaseConstructors(ast: ts.SourceFile): DatabaseConstructors {
+    const cached = this.constructors.get(ast);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const constructors = drizzleConstructors(ast);
+    for (const statement of ast.statements) {
+      if (
+        !runtimeImport(statement) ||
+        this.resolve(ast.fileName, statement.moduleSpecifier.text) !==
+          "apps/api/src/db/sql-client.ts"
+      ) {
+        continue;
+      }
+      const owner = this.sourceFile("apps/api/src/db/sql-client.ts");
+      const bindings = statement.importClause?.namedBindings;
+      if (
+        owner === undefined ||
+        bindings === undefined ||
+        !ts.isNamedImports(bindings)
+      ) {
+        continue;
+      }
+      const factories = forwardedDatabaseFactories(owner);
+      for (const binding of bindings.elements) {
+        const parameter = factories.get(
+          binding.propertyName?.text ?? binding.name.text,
+        );
+        if (!binding.isTypeOnly && parameter !== undefined) {
+          constructors.set(binding.name, parameter);
+        }
+      }
+    }
+    this.constructors.set(ast, constructors);
+    return constructors;
   }
   private localExport(
     ast: ts.SourceFile,
@@ -391,7 +598,11 @@ class DeclarationSourceGraph {
       for (const binding of bindings.elements) {
         if (
           binding.isTypeOnly ||
-          registrationOnly(ast, binding.name.text) ||
+          registrationOnly(
+            ast,
+            binding.name.text,
+            this.databaseConstructors(ast),
+          ) ||
           dispatchRegistrationOnly(ast, binding.name.text)
         ) {
           continue;
@@ -405,7 +616,13 @@ class DeclarationSourceGraph {
       return targets;
     }
     if (bindings !== undefined && ts.isNamespaceImport(bindings)) {
-      if (registrationOnly(ast, bindings.name.text)) {
+      if (
+        registrationOnly(
+          ast,
+          bindings.name.text,
+          this.databaseConstructors(ast),
+        )
+      ) {
         return [];
       }
       const members = new Set<string>();

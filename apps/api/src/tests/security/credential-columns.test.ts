@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { is, sql } from "drizzle-orm";
+import { is, sql, TransactionRollbackError } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import {
   boolean,
@@ -61,6 +61,10 @@ const classificationSchema = v.variant("status", [
     reason: reasonSchema,
   }),
   v.strictObject({ status: v.literal("cleartext"), reason: reasonSchema }),
+  v.strictObject({
+    status: v.literal("resource_content"),
+    reason: reasonSchema,
+  }),
 ]);
 const registrySchema = v.record(v.string(), classificationSchema);
 type ClassificationRegistry = v.InferOutput<typeof registrySchema>;
@@ -103,6 +107,7 @@ const OPAQUE_CREDENTIAL_COLUMNS = new Set([
   "sharepoint_oauth_state.state",
   "mcp_oauth_clients.registration_response",
   "business_registry_credentials.ciphertext",
+  "request_idempotency_receipts.response_body",
 ]);
 
 const discoverTables = async () => {
@@ -243,7 +248,10 @@ const organizationCredentialTables = () => {
   const credentialTables = new Set(
     Object.entries(classifications)
       .filter(
-        ([, classification]) => classification.status !== "public_by_design",
+        ([, classification]) =>
+          classification.status === "hashed" ||
+          classification.status === "encrypted" ||
+          classification.status === "cleartext",
       )
       .map(([column]) => column.split(".").at(0)),
   );
@@ -281,15 +289,21 @@ const handledMemberTables = async (omittedDelete?: PgTable) => {
   const handled = new Set<string>();
   const organizationId = mintAuthProviderId<"organization">();
   const memberId = mintAuthProviderIdValue();
+  const userId = mintAuthProviderId<"user">();
   // Only awaited statements reach this transport; constructing a builder or
   // declaring a cleanup disposition cannot satisfy the guard.
-  const database = drizzle(async (query) => {
+  const database = drizzle(async (query, params) => {
     // Counted cleanups wrap their delete in `WITH removed AS (...)`.
     const table = /^(?:WITH removed AS \()?(?:delete from|update) "([^"]+)"/u
       .exec(query)
       ?.at(1);
     if (table !== undefined) {
       handled.add(table);
+    }
+    if (table === "mcp_web_handoff") {
+      expect(query).toContain('"mcp_web_handoff"."user_id" = $1');
+      expect(query).toContain('"mcp_web_handoff"."organization_id" = $2');
+      expect(params).toEqual([userId, organizationId]);
     }
     if (query.includes("AS aggregate_context")) {
       return { rows: [["fixture_owner", "", "", "", "", ""]] };
@@ -298,10 +312,19 @@ const handledMemberTables = async (omittedDelete?: PgTable) => {
     if (query.startsWith('select "organization_id" from "member"')) {
       return { rows: [[organizationId]] };
     }
+    // Advisory fences report their physical identity and acquisition.
+    if (query.includes("AS key1")) {
+      return { rows: [{ acquired: true, key1: 1, key2: 2 }] };
+    }
     return { rows: query.startsWith("select count(*)") ? [[0]] : [] };
   });
+  const transactionHandle = Object.assign(database, {
+    rollback() {
+      throw new TransactionRollbackError();
+    },
+  });
   const createTransaction = (): typeof database =>
-    new Proxy(database, {
+    new Proxy(transactionHandle, {
       get: (target, property, receiver) => {
         if (property === "execute") {
           return async (statement: SQL) => {
@@ -346,7 +369,7 @@ const handledMemberTables = async (omittedDelete?: PgTable) => {
     });
   await removeOrganizationMemberInTransaction(asTestRaw(createTransaction()), {
     organizationId,
-    userId: mintAuthProviderId<"user">(),
+    userId,
     actorUserId: mintAuthProviderId<"user">(),
     memberId,
   });

@@ -39,10 +39,13 @@ const {
   fetchPublicSitemapShards,
   SITEMAP_XML_RESPONSE_HEADERS,
 } = await import("@/lib/public-law-sitemap");
+const {
+  createSitemapReadFailureResponse,
+  createSitemapUpstreamBusyError,
+  SitemapUpstreamBusyError,
+} = await import("@/lib/public-sitemap");
 const { isPublicSsrPath } = await import("@/lib/public-ssr-paths");
 const { ssrCacheClassHeaders } = await import("@/route-response-policy");
-const { isWorkspaceDocumentRoutePath } =
-  await import("@/components/workspaces/entity-utils");
 const { Route: robotsRoute, robotsHandlers } =
   await import("@/routes/robots[.]txt");
 
@@ -355,6 +358,49 @@ describe("public law sitemap", () => {
     expect(requestedUrls).toEqual([
       "http://localhost:3001/v1/case/sitemap/decisions/shard?country=cze&year=2026&month=05&bucket=07",
     ]);
+  });
+
+  test.each([
+    ["17", "17"],
+    [String(Number.MAX_SAFE_INTEGER), String(Number.MAX_SAFE_INTEGER)],
+    ["1e100", "60"],
+    ["9007199254740992", "60"],
+    ["Infinity", "60"],
+    ["NaN", "60"],
+    ["1.5", "60"],
+    ["0", "60"],
+    ["-1", "60"],
+    ["", "60"],
+  ])("normalizes retry delay %s to decimal seconds", (header, expected) => {
+    const error = createSitemapUpstreamBusyError({
+      action: "readPublicSitemap",
+      response: new Response("busy", {
+        status: 429,
+        headers: { "Retry-After": header },
+      }),
+    });
+
+    const response = createSitemapReadFailureResponse(error);
+    expect(response.status).toBe(429);
+    expect(response.headers.get("Retry-After")).toBe(expected);
+    expect(response.headers.get("Retry-After")).toMatch(/^[1-9][0-9]*$/u);
+  });
+
+  test("a budget refusal rejects with a retryable busy error", async () => {
+    const fetchImpl = async () => new Response("busy", { status: 429 });
+
+    const error = await rejectionOf(
+      fetchPublicSitemapDecisions({
+        fetchImpl,
+        shard: { bucket: "all", country: "cze", month: "05", year: "2026" },
+      }),
+    );
+
+    expect(SitemapUpstreamBusyError.is(error)).toBe(true);
+    expect(createSitemapReadFailureResponse(error).status).toBe(429);
+    expect(
+      createSitemapReadFailureResponse(error).headers.get("Retry-After"),
+    ).toBe("60");
   });
 
   test("fetches public sitemap shards from the public case-law API only", async () => {
@@ -956,14 +1002,13 @@ describe("public law sitemap", () => {
       "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.route.tsx",
     );
 
-    expect(
-      isWorkspaceDocumentRoutePath("/workspaces/workspace-id/view-id/document"),
-    ).toBe(true);
-    expect(
-      isWorkspaceDocumentRoutePath("/workspaces/workspace-id/view-id"),
-    ).toBe(false);
+    // The document page comes from the route matches (see
+    // use-workspace-view-params.dom.test.tsx), read in beforeLoad.
     expect(source).toContain(
-      "const isDocumentRoute = isWorkspaceDocumentRoutePath(location.pathname)",
+      "return { documentOnScreen: getCurrentWorkspaceDocument(matches) };",
+    );
+    expect(source).toContain(
+      "const isDocumentRoute = context.documentOnScreen !== undefined;",
     );
     expect(source).toContain("if (isDocumentRoute)");
     expect(source).toContain("timeEntrySummaryOptions(");
@@ -1086,7 +1131,11 @@ describe("public law sitemap", () => {
   });
 
   test("start client orders i18n around hydration per path kind", async () => {
-    const source = await readSource("apps/web/src/client.tsx");
+    const [entry, source] = await Promise.all([
+      readSource("apps/web/src/client.tsx"),
+      readSource("apps/web/src/client-runtime.tsx"),
+    ]);
+    expect(entry).toContain('import("@/client-runtime")');
 
     // Public SSR paths hydrate first (against the server's English) and
     // load the persisted locale after first paint; app paths keep the

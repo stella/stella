@@ -9,6 +9,8 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { requireComputedColumnInputs } from "@/api/lib/properties/computed-column-input";
+import { computedColumnInputHandlerError } from "@/api/lib/properties/computed-column-input-handler-error";
 import {
   buildPropertyParts,
   createPropertyBodySchema,
@@ -47,7 +49,7 @@ const createProperty = createSafeHandler(
         new HandlerError({ status: built.status, message: built.message }),
       );
     }
-    const { content, tool, dependencies, role } = built;
+    const { content, tool, dependencies: requestedDependencies, role } = built;
 
     const txResult = yield* Result.await(
       abortableTx(safeDb, async (tx) => {
@@ -85,6 +87,18 @@ const createProperty = createSafeHandler(
             status: 422,
             message: "Document type classifier already exists",
           });
+        }
+
+        let dependencies = requestedDependencies;
+        if (tool.type === "ai-model") {
+          const resolved = requireComputedColumnInputs({
+            candidates: existingRows,
+            inputs: requestedDependencies,
+          });
+          if (Result.isError(resolved)) {
+            return Result.err(computedColumnInputHandlerError(resolved.error));
+          }
+          dependencies = [...resolved.value];
         }
 
         if (dependencies.length > 0) {
@@ -165,6 +179,9 @@ const createProperty = createSafeHandler(
       }),
     );
 
+    if ("status" in txResult) {
+      return txResult;
+    }
     return Result.ok({ id: txResult.id });
   },
 );

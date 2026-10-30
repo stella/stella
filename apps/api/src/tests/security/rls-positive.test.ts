@@ -93,7 +93,12 @@ const addVisibleWorkspaceSelectTest = (table: WorkspaceScopedTable) => {
   const tableName = getTableName(table);
 
   test(`${tableName}: correct workspace IDs → rows visible`, async () => {
-    const c = await scopedQuery([ids.wsA1], ids.orgA, (tx) => tx.$count(table));
+    const c = await scopedQuery(
+      [ids.wsA1],
+      ids.orgA,
+      (tx) => tx.$count(table),
+      ids.userA1,
+    );
     expect(c).toBeGreaterThan(0);
   });
 };
@@ -102,7 +107,12 @@ const addVisibleOrganizationSelectTest = (table: OrganizationScopedTable) => {
   const tableName = getTableName(table);
 
   test(`${tableName}: correct org ID → rows visible`, async () => {
-    const c = await scopedQuery([ids.wsA1], ids.orgA, (tx) => tx.$count(table));
+    const c = await scopedQuery(
+      [ids.wsA1],
+      ids.orgA,
+      (tx) => tx.$count(table),
+      ids.userA1,
+    );
     expect(c).toBeGreaterThan(0);
   });
 };
@@ -112,7 +122,7 @@ const addAffectedMutationTest = (
   scopeLabel: "workspace" | "org",
 ) => {
   test(`UPDATE ${getTableName(table)} in own ${scopeLabel} → affected`, async () => {
-    const rows = await scopedQuery([ids.wsA1], ids.orgA, query);
+    const rows = await scopedQuery([ids.wsA1], ids.orgA, query, ids.userA1);
     expect(rows).toHaveLength(1);
   });
 };
@@ -825,20 +835,25 @@ describe("workspace INSERT — correct scope", () => {
   });
 
   test("INSERT invoice → succeeds", async () => {
-    await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
-      const rows = await tx
-        .insert(invoices)
-        .values({
-          id: testId(),
-          organizationId: ids.orgA,
-          workspaceId: ids.wsA1,
-          invoiceNumber: "RLS-POS-001",
-          invoiceDate: "2025-06-01",
-          currency: "USD",
-        })
-        .returning({ id: invoices.id });
-      expect(rows).toHaveLength(1);
-    });
+    await dryScopedQuery(
+      [ids.wsA1],
+      ids.orgA,
+      async (tx) => {
+        const rows = await tx
+          .insert(invoices)
+          .values({
+            id: testId(),
+            organizationId: ids.orgA,
+            workspaceId: ids.wsA1,
+            invoiceNumber: "RLS-POS-001",
+            invoiceDate: "2025-06-01",
+            currency: "USD",
+          })
+          .returning({ id: invoices.id });
+        expect(rows).toHaveLength(1);
+      },
+      ids.userA1,
+    );
   });
 
   test("INSERT caseLawMatterLink → succeeds", async () => {
@@ -899,7 +914,7 @@ describe("organization INSERT — correct scope", () => {
           organizationId: ids.orgA,
           name: "RLS Positive",
           fileName: "pos.docx",
-          s3Key: "test/pos.docx",
+          s3Key: `${ids.orgA}/test/pos.docx`,
           sizeBytes: 512,
           createdBy: ids.userA1,
         })
@@ -917,7 +932,7 @@ describe("organization INSERT — correct scope", () => {
           organizationId: ids.orgA,
           templateId: ids.templateA,
           version: 99,
-          s3Key: "test/pos-v99.docx",
+          s3Key: `${ids.orgA}/test/pos-v99.docx`,
           createdBy: ids.userA1,
         })
         .returning({ id: templateVersions.id });
@@ -1335,22 +1350,27 @@ describe("workspace DELETE — correct scope", () => {
   });
 
   test("DELETE invoice in own workspace → succeeds", async () => {
-    await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
-      const delId = testId();
-      await tx.insert(invoices).values({
-        id: delId,
-        organizationId: ids.orgA,
-        workspaceId: ids.wsA1,
-        invoiceNumber: "DEL-001",
-        invoiceDate: "2025-07-01",
-        currency: "USD",
-      });
-      const rows = await tx
-        .delete(invoices)
-        .where(eq(invoices.id, delId))
-        .returning({ id: invoices.id });
-      expect(rows).toHaveLength(1);
-    });
+    await dryScopedQuery(
+      [ids.wsA1],
+      ids.orgA,
+      async (tx) => {
+        const delId = testId();
+        await tx.insert(invoices).values({
+          id: delId,
+          organizationId: ids.orgA,
+          workspaceId: ids.wsA1,
+          invoiceNumber: "DEL-001",
+          invoiceDate: "2025-07-01",
+          currency: "USD",
+        });
+        const rows = await tx
+          .delete(invoices)
+          .where(eq(invoices.id, delId))
+          .returning({ id: invoices.id });
+        expect(rows).toHaveLength(1);
+      },
+      ids.userA1,
+    );
   });
 
   test("DELETE caseLawMatterLink in own workspace → succeeds", async () => {
@@ -1408,7 +1428,7 @@ describe("organization DELETE — correct scope", () => {
         organizationId: ids.orgA,
         name: "To Delete",
         fileName: "del.docx",
-        s3Key: "test/del.docx",
+        s3Key: `${ids.orgA}/test/del.docx`,
         sizeBytes: 512,
         createdBy: ids.userA1,
       });
@@ -1428,7 +1448,7 @@ describe("organization DELETE — correct scope", () => {
         organizationId: ids.orgA,
         templateId: ids.templateA,
         version: 98,
-        s3Key: "test/del-v98.docx",
+        s3Key: `${ids.orgA}/test/del-v98.docx`,
         createdBy: ids.userA1,
       });
       const rows = await tx

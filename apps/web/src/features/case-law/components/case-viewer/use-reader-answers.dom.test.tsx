@@ -1,16 +1,21 @@
 import type { PropsWithChildren } from "react";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, expect, test } from "bun:test";
+import { panic, Result } from "better-result";
+import { afterAll, afterEach, expect, jest, test } from "bun:test";
 import { DetachedWindowAPI } from "happy-dom";
 
+import { DOCUMENT_OCR_AVAILABILITY } from "@stll/api-contract/document-ocr-availability";
 import { READER_ANSWER_DEADLINE_MS } from "@stll/api-contract/reader-answers";
 import type {
-  ReaderAnswerErrorCode,
   ReaderAnswer,
+  ReaderAnswerAnchor,
+  ReaderAnswerErrorCode,
   ReaderAnswerStreamEvent,
 } from "@stll/api-contract/reader-answers";
 import { sleep } from "@stll/concurrency/sleep";
+import { restoreRealTimers } from "@stll/property-testing/fake-timers";
+import { rejectionOf } from "@stll/property-testing/rejection";
 import { Temporal } from "@stll/time";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
@@ -22,6 +27,8 @@ const { act, cleanup, fireEvent, render, renderHook, waitFor } =
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
+const { IntlProvider: MessagesProvider } = await import("use-intl");
+const { default: csMessages } = await import("@/i18n/langs/cs.json");
 const { toSafeId } = await import("@/lib/safe-id");
 const { useReaderAnswers } = await import("./use-reader-answers");
 const {
@@ -33,8 +40,14 @@ const { readerAnswersOptions } = await import("./reader-answers-query");
 
 const { document: testDocument, window: testWindow } = globalThis;
 const originalFetch = globalThis.fetch;
+const originalAbortSignalTimeout = AbortSignal.timeout;
 const clients: InstanceType<typeof QueryClient>[] = [];
 afterEach(async () => {
+  restoreRealTimers();
+  Object.defineProperty(AbortSignal, "timeout", {
+    configurable: true,
+    value: originalAbortSignalTimeout,
+  });
   testDocument.getSelection()?.removeAllRanges();
   await act(async () => {
     cleanup();
@@ -66,12 +79,13 @@ const user = {
   timezoneId: "UTC",
   wordEditShortcut: null,
 };
-const anchor = {
+const span = {
   paragraphId: "paragraph-1",
   quote: "Selected text",
   startOffset: 0,
   endOffset: 13,
 };
+const anchor: ReaderAnswerAnchor = { spans: [span] };
 const now = "2026-10-10T12:00:00.000Z";
 
 const setup = () => {
@@ -83,14 +97,28 @@ const setup = () => {
     <StrictMode>
       <QueryClientProvider client={client}>
         <AuthenticatedUserProvider user={user}>
-          <FormattingProvider locale="cs" timeZone="UTC">
-            {children}
-          </FormattingProvider>
+          <MessagesProvider locale="cs" messages={csMessages} timeZone="UTC">
+            <FormattingProvider locale="cs" timeZone="UTC">
+              {children}
+            </FormattingProvider>
+          </MessagesProvider>
         </AuthenticatedUserProvider>
       </QueryClientProvider>
     </StrictMode>
   );
   return { client, wrapper };
+};
+
+const advanceClock = async (milliseconds: number) => {
+  await act(async () => {
+    jest.advanceTimersByTime(milliseconds);
+  });
+  await act(
+    async () =>
+      await new Promise<void>((resolve) => {
+        setImmediate(resolve);
+      }),
+  );
 };
 
 const fakeServer = (
@@ -100,6 +128,7 @@ const fakeServer = (
   let rows: ReaderAnswer[] = [];
   let sequence = 0;
   const bodies: unknown[] = [];
+  const preferenceBodies: unknown[] = [];
   globalThis.fetch = Object.assign(
     async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
       const request = new Request(input, init);
@@ -112,6 +141,10 @@ const fakeServer = (
         return Response.json({ success: true });
       }
       const body: unknown = await request.json();
+      if (path.endsWith("/auth/update-user")) {
+        preferenceBodies.push(body);
+        return Response.json({ user });
+      }
       bodies.push(body);
       if (request.method === "PATCH") {
         if (
@@ -198,7 +231,7 @@ const fakeServer = (
     },
     { preconnect: originalFetch.preconnect },
   );
-  return { bodies };
+  return { bodies, preferenceBodies };
 };
 
 test("a response with the wrong stream content type cancels its body and releases creation", async () => {
@@ -238,8 +271,208 @@ test("a response with the wrong stream content type cancels its body and release
     kind: "protocol",
     message: "Missing reader answer stream",
   });
+  const creationError =
+    hook.result.current.errors.get("create") ??
+    panic("Expected creation failure");
+  expect(hook.result.current.failureNotices).toEqual([
+    { type: "operation", error: creationError },
+  ]);
   expect(hook.result.current.isCreating).toBe(false);
   expect(hook.result.current.busyAnswerIds.size).toBe(0);
+});
+
+test("a rejected account language update preserves the preference and does not regenerate", async () => {
+  const server = fakeServer();
+  const readerFetch = globalThis.fetch;
+  globalThis.fetch = Object.assign(
+    async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      const request = new Request(input, init);
+      if (new URL(request.url).pathname.endsWith("/auth/update-user")) {
+        return Response.json(
+          { code: "BAD_REQUEST", message: "Language preference rejected" },
+          { status: 400 },
+        );
+      }
+      return await readerFetch(input, init);
+    },
+    { preconnect: readerFetch.preconnect },
+  );
+  const { wrapper } = setup();
+  const hook = renderHook(
+    () =>
+      useReaderAnswers({
+        decisionId: "decision-1",
+        generationMode: "enabled",
+        documentLanguage: "sk",
+      }),
+    { wrapper },
+  );
+  await waitFor(() => expect(hook.result.current.isLoading).toBe(false));
+  await act(
+    async () => await hook.result.current.setAnswerLanguage("en", "answer-1"),
+  );
+  expect(hook.result.current.languagePreference).toBe("document");
+  expect(hook.result.current.isSavingLanguage).toBe(false);
+  expect(server.bodies).toEqual([]);
+});
+
+test.each(["sk", "cs", "pl"])(
+  "reader request uses document language %s and saves a chosen answer language before regenerating",
+  async (documentLanguage) => {
+    const server = fakeServer();
+    const { wrapper, client } = setup();
+    const { sessionOptions, fetchSession } = await import("@/lib/auth-queries");
+    // The session owner supplies this preference after a reload too.
+    const sessionUser = {
+      ...user,
+      readerAnswerLanguage: "en",
+      emailVerified: true,
+      createdAt: new Date("2026-01-01"),
+      updatedAt: new Date("2026-01-01"),
+      twoFactorEnabled: false,
+    };
+    client.setQueryData(
+      sessionOptions.queryKey,
+      () =>
+        ({
+          user: sessionUser,
+          session: {
+            id: "test-session",
+            userId: user.id,
+            activeOrganizationId: user.activeOrganizationId,
+            expiresAt: new Date("2030-01-01"),
+            createdAt: new Date("2026-01-01"),
+            updatedAt: new Date("2026-01-01"),
+            token: "test-token",
+            ipAddress: null,
+            userAgent: null,
+          },
+        }) satisfies NonNullable<Awaited<ReturnType<typeof fetchSession>>>,
+    );
+    const hook = renderHook(
+      () =>
+        useReaderAnswers({
+          decisionId: "decision-1",
+          generationMode: "enabled",
+          documentLanguage,
+        }),
+      { wrapper },
+    );
+    await waitFor(() => expect(hook.result.current.isLoading).toBe(false));
+    await act(async () => await hook.result.current.createExplain(anchor));
+    expect(server.bodies.at(0)).toMatchObject({ locale: "en" });
+    await act(
+      async () =>
+        await hook.result.current.setAnswerLanguage("document", "answer-1"),
+    );
+    expect(server.preferenceBodies).toEqual([
+      { readerAnswerLanguage: "document" },
+    ]);
+    expect(server.bodies.at(-1)).toEqual({ locale: documentLanguage });
+    expect(hook.result.current.languagePreference).toBe("document");
+    await act(
+      async () => await hook.result.current.followUp("answer-1", "Continue"),
+    );
+    expect(server.bodies.at(-1)).toMatchObject({ locale: documentLanguage });
+    await act(
+      async () => await hook.result.current.setAnswerLanguage("en", "answer-1"),
+    );
+    expect(server.preferenceBodies.at(-1)).toEqual({
+      readerAnswerLanguage: "en",
+    });
+    expect(server.bodies.at(-1)).toEqual({ locale: "en" });
+    await act(async () => await hook.result.current.createExplain(anchor));
+    expect(server.bodies.at(-1)).toMatchObject({ locale: "en" });
+  },
+);
+
+test("a language change queues regeneration behind a busy answer", async () => {
+  const server = fakeServer();
+  const readerFetch = globalThis.fetch;
+  let releaseFollowUp: () => void = () => undefined;
+  const followUpGate = new Promise<void>((resolve) => {
+    releaseFollowUp = resolve;
+  });
+  let holdNextAnswerRequest = false;
+  globalThis.fetch = Object.assign(
+    async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      const request = new Request(input, init);
+      const path = new URL(request.url).pathname;
+      if (
+        holdNextAnswerRequest &&
+        request.method === "POST" &&
+        !path.endsWith("/auth/update-user")
+      ) {
+        holdNextAnswerRequest = false;
+        await followUpGate;
+      }
+      return await readerFetch(input, init);
+    },
+    { preconnect: readerFetch.preconnect },
+  );
+  const { wrapper, client } = setup();
+  const { sessionOptions, fetchSession } = await import("@/lib/auth-queries");
+  client.setQueryData(
+    sessionOptions.queryKey,
+    () =>
+      ({
+        user: {
+          ...user,
+          readerAnswerLanguage: "document",
+          emailVerified: true,
+          createdAt: new Date("2026-01-01"),
+          updatedAt: new Date("2026-01-01"),
+          twoFactorEnabled: false,
+        },
+        session: {
+          id: "test-session",
+          userId: user.id,
+          activeOrganizationId: user.activeOrganizationId,
+          expiresAt: new Date("2030-01-01"),
+          createdAt: new Date("2026-01-01"),
+          updatedAt: new Date("2026-01-01"),
+          token: "test-token",
+          ipAddress: null,
+          userAgent: null,
+        },
+      }) satisfies NonNullable<Awaited<ReturnType<typeof fetchSession>>>,
+  );
+  const hook = renderHook(
+    () =>
+      useReaderAnswers({
+        decisionId: "decision-1",
+        generationMode: "enabled",
+        documentLanguage: "cs",
+      }),
+    { wrapper },
+  );
+  await waitFor(() => expect(hook.result.current.isLoading).toBe(false));
+  await act(async () => await hook.result.current.createExplain(anchor));
+  holdNextAnswerRequest = true;
+
+  let followUp: Promise<unknown> | undefined;
+  act(() => {
+    followUp = hook.result.current.followUp("answer-1", "Continue");
+  });
+  await waitFor(() =>
+    expect(hook.result.current.busyAnswerIds.has("answer-1")).toBe(true),
+  );
+  let languageChange: Promise<unknown> | undefined;
+  act(() => {
+    languageChange = hook.result.current.setAnswerLanguage("en", "answer-1");
+  });
+  await waitFor(() =>
+    expect(server.preferenceBodies).toEqual([{ readerAnswerLanguage: "en" }]),
+  );
+  expect(server.bodies).toHaveLength(1);
+
+  releaseFollowUp();
+  await act(async () => {
+    await followUp;
+    await languageChange;
+  });
+  expect(server.bodies.at(-1)).toEqual({ locale: "en" });
+  expect(server.bodies).toHaveLength(3);
 });
 
 test("reader answers create, follow up, regenerate, share, reload and delete through the HTTP boundary", async () => {
@@ -263,7 +496,6 @@ test("reader answers create, follow up, regenerate, share, reload and delete thr
     decisionId: "decision-1",
     kind: "explain",
     anchor,
-    locale: "cs",
   });
   expect(hook.result.current.activeAnswerId).toBe("answer-1");
   await act(async () => {
@@ -324,6 +556,13 @@ test("failed regeneration keeps one fresh assistant and sanitized partials survi
     status: "failed",
   });
   expect(hook.result.current.errors.get("answer-1")).toBeUndefined();
+  expect(hook.result.current.failureNotices).toMatchObject([
+    {
+      type: "message",
+      messageId: "assistant-2",
+      error: { code: "provider-error" },
+    },
+  ]);
   expect(
     hook.result.current.answers.at(0)?.messages.at(-1)?.invalidCitationCount,
   ).toBe(1);
@@ -346,6 +585,14 @@ test("failed regeneration keeps one fresh assistant and sanitized partials survi
     errorCode: "provider-error",
     invalidCitationCount: 1,
   });
+  expect(reloaded.result.current.errors.size).toBe(0);
+  expect(reloaded.result.current.failureNotices).toMatchObject([
+    {
+      type: "message",
+      messageId: "assistant-2",
+      error: { code: "provider-error" },
+    },
+  ]);
 });
 
 // oxlint-disable-next-line require-contract-domains/require-contract-domains -- These are tested reader actions, not API domain values.
@@ -429,26 +676,19 @@ test.each(["create", "follow-up", "regenerate"] as const)(
           active={false}
           openRevision={0}
           busy={false}
-          error={readerAnswerFailureKind(
-            hook.result.current.errors.get(answer.id),
-          )}
           onOpen={() => undefined}
           onFollowUp={() => undefined}
           onRegenerate={() => undefined}
           onDelete={() => undefined}
           onVisibility={() => undefined}
           onCitation={() => undefined}
-          citationLabel={(citation) => citation.paragraphId}
+          citationTarget={() => ({ type: "unresolved" })}
+          language="en"
         />
       </IntlProvider>,
     );
     expect(view.getByText(content)).toBeTruthy();
-    expect(view.queryByText(messages.readerAnswers.networkError)).toBeNull();
-    expect(view.queryByText(messages.readerAnswers.modelError)).toBe(
-      action === "regenerate"
-        ? view.getByText(messages.readerAnswers.modelError)
-        : null,
-    );
+    expect(view.queryByRole("alert")).toBeNull();
     expect(hook.result.current.errors.size).toBe(0);
     expect(hook.result.current.error).toBeNull();
   },
@@ -507,7 +747,7 @@ test.each(["follow-up", "regenerate", "share", "delete"] as const)(
     );
     expect(
       readerAnswerFailureKind(hook.result.current.errors.get("answer-1")),
-    ).toBe("network");
+    ).toBe("model");
   },
 );
 
@@ -558,6 +798,8 @@ test("selecting decision text and clicking Explain opens the persisted margin an
   const { AnnotationToolbar } =
     await import("@/components/legal-reader/annotations/annotation-toolbar");
   const { ReaderAnswerCard } = await import("./reader-answer-card");
+  const { ReaderAnswerLanguagePicker } =
+    await import("./reader-answer-language-picker");
   const { ActionCapabilitiesProvider } =
     await import("@/lib/organization/feature-access/capability-actions");
   const { resolveActionCapabilities } =
@@ -572,17 +814,27 @@ test("selecting decision text and clicking Explain opens the persisted margin an
     return (
       <>
         <article ref={root} style={{ overflow: "visible" }}>
-          <p data-anchor={anchor.paragraphId}>{anchor.quote}</p>
+          <p data-anchor={span.paragraphId}>{span.quote}</p>
         </article>
         <AnnotationToolbar
           activeAnnotation={null}
           activeSpans={[]}
           controller={{
-            create: () => undefined,
-            remove: () => undefined,
-            update: () => undefined,
+            create: async () => Result.ok(undefined),
+            redo: async () => undefined,
+            remove: async () => Result.ok(undefined),
+            undo: async () => undefined,
+            update: async () => Result.ok(undefined),
           }}
           mode="authenticated"
+          explainLanguagePicker={
+            <ReaderAnswerLanguagePicker
+              disabled={false}
+              documentLanguage="cs"
+              onChange={() => undefined}
+              value="document"
+            />
+          }
           onClearActive={() => undefined}
           onActivateAnnotation={() => undefined}
           scrollContainerRef={root}
@@ -599,13 +851,17 @@ test("selecting decision text and clicking Explain opens the persisted margin an
             name: null,
           }}
           onExplain={(spans) => {
-            const span = spans.at(0);
-            if (span) {
+            const selected = spans.at(0);
+            if (selected) {
               void answers.createExplain({
-                paragraphId: span.blockAnchorId,
-                quote: span.quote,
-                startOffset: span.startOffset,
-                endOffset: span.endOffset,
+                spans: [
+                  {
+                    paragraphId: selected.blockAnchorId,
+                    quote: selected.quote,
+                    startOffset: selected.startOffset,
+                    endOffset: selected.endOffset,
+                  },
+                ],
               });
             }
           }}
@@ -631,7 +887,8 @@ test("selecting decision text and clicking Explain opens the persisted margin an
               void answers.setVisibility(answer.id, visibility);
             }}
             onCitation={() => undefined}
-            citationLabel={(citation) => citation.paragraphId}
+            citationTarget={() => ({ type: "unresolved" })}
+            language="en"
             busy={answers.busyAnswerIds.has(answer.id)}
           />
         ))}
@@ -672,7 +929,7 @@ test("selecting decision text and clicking Explain opens the persisted margin an
               role: "member",
               ai: true,
               deepl: false,
-              ocr: false,
+              ocr: DOCUMENT_OCR_AVAILABILITY.unconfigured,
               desktop: "none",
               settings: undefined,
             })}
@@ -700,6 +957,26 @@ test("selecting decision text and clicking Explain opens the persisted margin an
     const explain = await view.findByRole("button", {
       name: messages.readerAnswers.explain,
     });
+    fireEvent.click(
+      view.getByRole("button", { name: messages.readerAnswers.answerLanguage }),
+    );
+    const english = await view.findByRole("menuitemradio", {
+      name: "English",
+    });
+    if (fireEvent.mouseDown(english)) {
+      selection.removeAllRanges();
+      testDocument.dispatchEvent(new Event("selectionchange"));
+    }
+    fireEvent.click(english);
+    await act(async () => {
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => resolve());
+      });
+    });
+    expect(selection.toString()).toBe(span.quote);
+    expect(
+      view.getByRole("button", { name: messages.readerAnswers.explain }),
+    ).toBe(explain);
     fireEvent.click(explain);
     await waitFor(() => expect(view.getByText("Answer 1")).toBeTruthy());
     expect(view.getByRole("region")).toBeTruthy();
@@ -707,7 +984,6 @@ test("selecting decision text and clicking Explain opens the persisted margin an
       decisionId: "decision-1",
       kind: "explain",
       anchor,
-      locale: "cs",
     });
   } finally {
     testDocument.getSelection()?.removeAllRanges();
@@ -1034,6 +1310,15 @@ test.each(["never", "hanging"] as const)(
   async (settlement) => {
     const server = pollingServer(settlement);
     const { wrapper } = setup();
+    jest.useFakeTimers();
+    Object.defineProperty(AbortSignal, "timeout", {
+      configurable: true,
+      value: (milliseconds: number) => {
+        const controller = new AbortController();
+        setTimeout(() => controller.abort(), milliseconds);
+        return controller.signal;
+      },
+    });
     const hook = renderHook(
       () =>
         useReaderAnswers({
@@ -1048,16 +1333,14 @@ test.each(["never", "hanging"] as const)(
       ),
     );
     server.releaseRecovery();
-    await waitFor(
-      () =>
-        expect(
-          hook.result.current.answers.at(0)?.messages.at(-1),
-        ).toMatchObject({
-          status: "failed",
-          errorCode: "timeout",
-        }),
-      { timeout: 7000 },
-    );
+    await advanceClock(300);
+    await advanceClock(5000);
+    await advanceClock(0);
+    expect(hook.result.current.answers.at(0)?.messages.at(-1)).toMatchObject({
+      status: "failed",
+      errorCode: "timeout",
+    });
+    restoreRealTimers();
     const settledReads = server.reads();
     await act(async () => {
       await sleep(50);
@@ -1068,12 +1351,18 @@ test.each(["never", "hanging"] as const)(
         hook.result.current.answers.at(0)?.messages.at(-1)?.errorCode ?? null,
       ),
     ).toBe("timeout");
+    expect(hook.result.current.failureNotices).toContainEqual(
+      expect.objectContaining({
+        type: "message",
+        messageId: hook.result.current.answers.at(0)?.messages.at(-1)?.id,
+        error: expect.objectContaining({ code: "timeout" }),
+      }),
+    );
     await act(async () => {
       await hook.result.current.remove("answer-1");
     });
     expect(server.deletions()).toBe(1);
   },
-  10_000,
 );
 
 // oxlint-disable-next-line require-contract-domains/require-contract-domains -- These are fake recovery HTTP outcomes, not API domain values.
@@ -1193,3 +1482,72 @@ test.each([
     expect(reads).toBe(settledReads);
   },
 );
+
+test("a dropped reader GET is a request failure and keeps its cause", async () => {
+  const dropped = new TypeError("Dropped connection");
+  globalThis.fetch = Object.assign(
+    async () => {
+      throw dropped;
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  const { client } = setup();
+  expect(
+    await rejectionOf(
+      client.query(
+        readerAnswersOptions({
+          decisionId: "decision-1",
+          organizationId: user.activeOrganizationId,
+          userId: user.id,
+        }),
+      ),
+    ),
+  ).toMatchObject({ kind: "request", cause: dropped });
+});
+
+test("a non-network reader GET rejection retains the original error", async () => {
+  const misuse = new RangeError("Programmer invariant");
+  globalThis.fetch = Object.assign(
+    async () => {
+      throw misuse;
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  const { client } = setup();
+  expect(
+    await rejectionOf(
+      client.query(
+        readerAnswersOptions({
+          decisionId: "decision-1",
+          organizationId: user.activeOrganizationId,
+          userId: user.id,
+        }),
+      ),
+    ),
+  ).toBe(misuse);
+});
+
+test("a reader GET API response is unwrapped outside the network conversion", async () => {
+  globalThis.fetch = Object.assign(
+    async () =>
+      Response.json(
+        {
+          message: "Unavailable",
+        },
+        { status: 503 },
+      ),
+    { preconnect: originalFetch.preconnect },
+  );
+  const { client } = setup();
+  expect(
+    await rejectionOf(
+      client.query(
+        readerAnswersOptions({
+          decisionId: "decision-1",
+          organizationId: user.activeOrganizationId,
+          userId: user.id,
+        }),
+      ),
+    ),
+  ).toMatchObject({ status: 503 });
+});

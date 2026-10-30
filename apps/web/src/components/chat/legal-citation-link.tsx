@@ -1,16 +1,17 @@
 import type { MouseEventHandler, ReactElement, ReactNode } from "react";
 
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { extractCaseLawDecisionIdFromIdRouteParam } from "@stll/api-contract/case-law-decision-route";
 import { resolveLegalCitationLinks } from "@stll/api-contract/legal-citation-links";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { BidiText } from "@stll/ui/bidi-text";
-import { ScrollTextIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
+import { openCaseLawDecision } from "@/components/chat/case-law-open";
 import { classifyChatHttpLink } from "@/components/chat/chat-app-link.logic";
+import { chatAppOrigins } from "@/components/chat/chat-app-origins";
 import {
   ChatDecisionCitation,
   ChatRouteDecisionCitation,
@@ -20,8 +21,9 @@ import { useOpenStatuteLink } from "@/components/chat/statute-open";
 import { InlinePill } from "@/components/inline-pill";
 import { isPlainPrimaryClick } from "@/components/inspector/case-decision-view";
 import type { CitedDecisionParagraph } from "@/components/references/reference.logic";
-import { env } from "@/env";
+import { useOpenDecisionTab } from "@/features/case-law/open-decision-tab";
 import { ProxyChatLink } from "@/features/chat/components/proxy-chat-link";
+import type { LinkIconSource } from "@/features/chat/components/proxy-chat-link";
 import { detached } from "@/lib/detached";
 
 type LegalCitationLinks = ReturnType<typeof resolveLegalCitationLinks>;
@@ -29,6 +31,8 @@ type StatuteCitationLinks = Extract<LegalCitationLinks, { type: "statute" }>;
 
 type LegalCitationLinkProps = {
   source: ExternalSourceReference;
+  /** Whether `source` is a record a tool returned or was built from model text. */
+  linkIconSource: LinkIconSource;
   externalHref?: string;
   children: ReactNode;
   interactive: boolean;
@@ -36,37 +40,12 @@ type LegalCitationLinkProps = {
   workspaceId?: string | null | undefined;
   anchorId?: string | undefined;
   fallback?: ReactElement;
+  fullTrayLabel?: boolean | undefined;
 };
 
-type LegalCitationLabelProps = Pick<
-  LegalCitationLinkProps,
-  "appearance" | "children"
-> & {
-  icon: ReactNode;
-};
-
-const LegalCitationLabel = ({
-  appearance,
-  children,
-  icon,
-}: LegalCitationLabelProps) => {
-  if (appearance === "tray") {
-    return (
-      <>
-        <span>{icon}</span>
-        <BidiText as="span" className="max-w-[20ch] truncate">
-          {children}
-        </BidiText>
-      </>
-    );
-  }
-  return (
-    <InlinePill leadingIcon={icon} truncate>
-      {children}
-    </InlinePill>
-  );
-};
-
+// One chip per citation and no glyph: the citation's own text names the
+// provision, so the chip only has to read as clickable. The reader opens the
+// publisher source, so the chip never trails a second link.
 const LegalCitationView = ({
   appearance,
   children,
@@ -75,38 +54,28 @@ const LegalCitationView = ({
 }: LegalCitationLinkProps & {
   citation: StatuteCitationLinks;
   onClick?: MouseEventHandler<HTMLAnchorElement> | undefined;
-}) => {
-  const t = useTranslations();
-  const icon = <ScrollTextIcon className="size-3 shrink-0" />;
-  const label = (
-    <LegalCitationLabel appearance={appearance} icon={icon}>
-      {children}
-    </LegalCitationLabel>
-  );
-  return (
-    <span className="inline-flex max-w-full shrink-0 items-center gap-1 align-middle">
-      <a
-        className={cn(
-          "cursor-pointer",
-          appearance === "tray" &&
-            "bg-muted/50 hover:bg-muted inline-flex shrink-0 items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs",
-        )}
-        href={sanitizeHref(citation.url)}
-        onClick={onClick}
-      >
-        {label}
-      </a>
-      {citation.source_url !== undefined && (
-        <ProxyChatLink
-          href={citation.source_url}
-          newTabLabel={t("common.openInNewTab")}
-        >
-          {t("common.source")}
-        </ProxyChatLink>
-      )}
-    </span>
-  );
-};
+}) => (
+  <a
+    className={cn(
+      "focus-visible:outline-ring cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2",
+      appearance === "tray"
+        ? "bg-muted/50 hover:bg-muted inline-flex max-w-full shrink-0 items-center rounded-md border px-1.5 py-0.5 text-xs"
+        : "group rounded",
+    )}
+    href={sanitizeHref(citation.url)}
+    onClick={onClick}
+  >
+    {appearance === "tray" ? (
+      <BidiText as="span" className="max-w-[20ch] truncate">
+        {children}
+      </BidiText>
+    ) : (
+      <InlinePill className="group-hover:bg-accent/80" truncate>
+        {children}
+      </InlinePill>
+    )}
+  </a>
+);
 
 const InteractiveLegalCitation = ({
   citation,
@@ -142,6 +111,83 @@ const InteractiveLegalCitation = ({
   return <LegalCitationView {...props} citation={citation} onClick={onClick} />;
 };
 
+/** A source-tray row for a decision with a known id: it keeps its full label,
+ *  and a plain click opens the decision as an inline citation does, while
+ *  other clicks follow the link. */
+const DecisionTrayLink = ({
+  decisionId,
+  href,
+  children,
+  linkIconSource,
+}: {
+  decisionId: string;
+  href: string;
+  children: ReactNode;
+  linkIconSource: LinkIconSource;
+}) => {
+  const t = useTranslations();
+  const { open } = useOpenDecisionTab();
+  const onClick: MouseEventHandler<HTMLAnchorElement> = (event) => {
+    if (!isPlainPrimaryClick(event) || event.defaultPrevented) {
+      return;
+    }
+    event.preventDefault();
+    detached(
+      openCaseLawDecision({ type: "ref", ref: decisionId }, open),
+      "legal-citation.open-tray-decision",
+    );
+  };
+  return (
+    <ProxyChatLink
+      appearance="tray"
+      href={href}
+      iconSource={linkIconSource}
+      newTabLabel={t("common.openInNewTab")}
+      onClick={onClick}
+    >
+      {children}
+    </ProxyChatLink>
+  );
+};
+
+/** A tray row that shows its own full label: a decision with a known id opens
+ *  in the reader, anything else is a link. */
+const FullLabelTrayLink = ({
+  citation,
+  ...props
+}: LegalCitationLinkProps & {
+  citation: ReturnType<typeof resolveLegalCitationLinks>;
+}) => {
+  const t = useTranslations();
+  const href = citation.type === "external" ? props.source.url : citation.url;
+  const decisionId =
+    props.source.caseLawDecision?.decisionId ??
+    (citation.type === "decision"
+      ? extractCaseLawDecisionIdFromIdRouteParam(citation.params.slug)
+      : null);
+  if (props.interactive && decisionId !== null) {
+    return (
+      <DecisionTrayLink
+        decisionId={decisionId}
+        href={href}
+        linkIconSource={props.linkIconSource}
+      >
+        {props.children}
+      </DecisionTrayLink>
+    );
+  }
+  return (
+    <ProxyChatLink
+      appearance="tray"
+      href={href}
+      iconSource={props.linkIconSource}
+      newTabLabel={t("common.openInNewTab")}
+    >
+      {props.children}
+    </ProxyChatLink>
+  );
+};
+
 // A publisher alias can carry its paragraph anchor only in the stored reader URL.
 const readUrlAnchor = (href: string): string | undefined => {
   const { hash } = new URL(href);
@@ -162,15 +208,15 @@ const uncountedParagraph = (anchorId: string): CitedDecisionParagraph => ({
 
 export const LegalCitationLink = (props: LegalCitationLinkProps) => {
   const t = useTranslations();
-  const appOrigins = new Set([
-    new URL(env.VITE_PUBLIC_APP_URL).origin,
-    ...(typeof window === "undefined" ? [] : [window.location.origin]),
-  ]);
+  const appOrigins = chatAppOrigins();
   const citation = resolveLegalCitationLinks({
     url: props.source.url,
     sourceUrl: props.source.sourceUrl ?? props.source.url,
     appOrigins,
   });
+  if (props.appearance === "tray" && props.fullTrayLabel === true) {
+    return <FullLabelTrayLink {...props} citation={citation} />;
+  }
   const passage =
     props.appearance === "inline"
       ? props.children
@@ -235,6 +281,7 @@ export const LegalCitationLink = (props: LegalCitationLinkProps) => {
           href={
             citation.url === null ? "" : (props.externalHref ?? citation.url)
           }
+          iconSource={props.linkIconSource}
           newTabLabel={t("common.openInNewTab")}
         >
           {props.children}

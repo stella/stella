@@ -1,6 +1,6 @@
 import { TaggedError } from "better-result";
 
-import { declareFailureClass } from "@stll/errors";
+import { declareFailureClass, declareFingerprintFields } from "@stll/errors";
 import type { FailureReason } from "@stll/errors";
 import type { SanctionsSource } from "@stll/sanctions";
 
@@ -39,7 +39,6 @@ export type SanctionsScreeningFailureCause =
   | "entries-read"
   | "read-stalled"
   | "short-read"
-  | "index-load"
   | "work-limit"
   | "matcher-unavailable";
 
@@ -67,7 +66,6 @@ const SCREENING_FAILURE_REASON = {
   // Read/operation boundaries retain the shared infrastructure classification.
   "freshness-read": "unclassified",
   "entries-read": "unclassified",
-  "index-load": "unclassified",
   operation: "unclassified",
 } as const satisfies Record<SanctionsScreeningFailureCause, FailureReason>;
 
@@ -79,6 +77,10 @@ export class SanctionsScreeningFailure extends TaggedError(
   reason: SanctionsScreeningFailureCause;
   cause?: unknown;
 }> {
+  static {
+    declareFingerprintFields(this, ["stage", "reason"]);
+  }
+
   static {
     declareFailureClass(this, ({ reason, cause }) => {
       const declared = SCREENING_FAILURE_REASON[reason];

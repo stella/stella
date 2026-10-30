@@ -7,7 +7,8 @@ import type { StreamChunk } from "@tanstack/ai";
 // streams each kind in tiny deltas through the page's real runtime and holds
 // the commit rate to its budget, and the e2e spec
 // `chat-stream-commit-budget.spec.ts` does the same on the running app, with
-// the mock model streaming each kind (by its `mockAiMarker`).
+// the mock model streaming each kind (by its `mockAiMarker`). The DOM test
+// also holds each commit's width: what it rendered that had not changed.
 //
 // Calibration: the canary (`lib/render-storm-canary.ts`) reports a storm above
 // 80 commits a second held for two seconds, the floor of a damped render loop.
@@ -18,19 +19,48 @@ import type { StreamChunk } from "@tanstack/ai";
 
 /** A kind of chunk that streams repeatedly while a response is written. */
 export type StreamChunkKind =
-  | "reasoning"
-  | "status"
-  | "subagent"
-  | "text"
-  | "tool-input"
-  | "tool-output";
+  "reasoning" | "status" | "subagent" | "text" | "tool-input" | "tool-output";
 
 /** The most the page may commit per second while `kind` streams. */
 const STREAMING_COMMITS_PER_SECOND = 45;
 
+// Width: a commit renders what changed, not every part streamed before it. A
+// part list whose unchanged cards re-render on each new chunk renders about
+// one component per finished part per commit, so with a hundred tool calls
+// streamed it renders some twenty-four props-unchanged components a commit;
+// the page as it ships stays under one (the page's own clock and similar).
+/** The most components a commit may render with props equal to the last. */
+const STREAMING_UNCHANGED_PROPS_RENDERS_PER_COMMIT = 2;
+
+type ComposerControls = {
+  ComposerPlusMenu: { name: string };
+  ChatPromptImproveButton: { name: string };
+  ChatComposerActionButton: { name: string };
+};
+
+// Resolve names from the real imports after the DOM probe is installed. This
+// budget is also imported by e2e runners, so it cannot eagerly load the UI.
+const untouchedComposerControls = ({
+  ComposerPlusMenu,
+  ChatPromptImproveButton,
+  ChatComposerActionButton,
+}: ComposerControls) => [
+  ComposerPlusMenu.name,
+  ChatPromptImproveButton.name,
+  ChatComposerActionButton.name,
+];
+
 type StreamChunkBudget = {
+  /** Controls whose inputs are unchanged throughout the chunk burst. */
+  untouched: typeof untouchedComposerControls;
   /** The most commits per second while this kind streams. */
   commitsPerSecond: number;
+  /**
+   * The most components a commit may render on average with props equal to
+   * their last ones: renders a memo boundary would have spared, counted by
+   * `@stll/render-probe` in the DOM test.
+   */
+  unchangedPropsRendersPerCommit: number;
   /**
    * Text that makes the mock model (`apps/api/src/dev/mock-ai-stream-kinds.ts`,
    * `MOCK_AI_STREAM_KIND_MARKERS`) stream this kind as tiny deltas. The web
@@ -44,32 +74,50 @@ type StreamChunkBudget = {
 
 export const STREAM_CHUNK_COMMIT_BUDGET = {
   reasoning: {
+    untouched: untouchedComposerControls,
     commitsPerSecond: STREAMING_COMMITS_PER_SECOND,
+    unchangedPropsRendersPerCommit:
+      STREAMING_UNCHANGED_PROPS_RENDERS_PER_COMMIT,
     mockAiMarker: "Stream reasoning in tiny deltas please",
     streams: "reasoning deltas of a thinking block",
   },
   status: {
+    untouched: untouchedComposerControls,
     commitsPerSecond: STREAMING_COMMITS_PER_SECOND,
+    unchangedPropsRendersPerCommit:
+      STREAMING_UNCHANGED_PROPS_RENDERS_PER_COMMIT,
     mockAiMarker: "Stream status updates in tiny deltas please",
     streams: "step, activity, state and custom progress events",
   },
   subagent: {
+    untouched: untouchedComposerControls,
     commitsPerSecond: STREAMING_COMMITS_PER_SECOND,
+    unchangedPropsRendersPerCommit:
+      STREAMING_UNCHANGED_PROPS_RENDERS_PER_COMMIT,
     mockAiMarker: "Stream a subagent run in tiny deltas please",
     streams: "a subagent run's own text deltas, inside its card",
   },
   text: {
+    untouched: untouchedComposerControls,
     commitsPerSecond: STREAMING_COMMITS_PER_SECOND,
+    unchangedPropsRendersPerCommit:
+      STREAMING_UNCHANGED_PROPS_RENDERS_PER_COMMIT,
     mockAiMarker: "Stream the answer text in tiny deltas please",
     streams: "text deltas of the answer",
   },
   "tool-input": {
+    untouched: untouchedComposerControls,
     commitsPerSecond: STREAMING_COMMITS_PER_SECOND,
+    unchangedPropsRendersPerCommit:
+      STREAMING_UNCHANGED_PROPS_RENDERS_PER_COMMIT,
     mockAiMarker: "Stream a tool input in tiny deltas please",
     streams: "argument deltas of one tool call",
   },
   "tool-output": {
+    untouched: untouchedComposerControls,
     commitsPerSecond: STREAMING_COMMITS_PER_SECOND,
+    unchangedPropsRendersPerCommit:
+      STREAMING_UNCHANGED_PROPS_RENDERS_PER_COMMIT,
     mockAiMarker: "Stream tool outputs in tiny deltas please",
     streams: "results of many small tool calls, one after another",
   },
