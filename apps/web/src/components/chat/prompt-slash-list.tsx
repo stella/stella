@@ -6,6 +6,7 @@ import { useTranslations } from "use-intl";
 
 import { CommandIcon, SkillIcon } from "@stll/ui/icons";
 import { Popover, PopoverPopup } from "@stll/ui/popover";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import type { SlashItem } from "@/components/chat/prompt-slash-extension";
@@ -212,9 +213,12 @@ export const PromptSlashList = ({
                       <span className="text-foreground block text-xs font-medium">
                         {getItemName(item)}
                       </span>
-                      <span className="text-muted-foreground text-2xs line-clamp-2 leading-snug">
+                      <TruncatedText
+                        className="text-muted-foreground text-2xs leading-snug"
+                        lines={2}
+                      >
                         {getItemSecondary(item)}
-                      </span>
+                      </TruncatedText>
                     </span>
                   </button>
                 );

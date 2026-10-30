@@ -8,6 +8,7 @@ import { modelSelectionLabel } from "@stll/chat/model-selector";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Menu, MenuPopup, MenuTrigger } from "@stll/ui/menu";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import type { ProviderValue } from "@/components/ai-config-role-models.logic";
@@ -101,9 +102,9 @@ export const ChatModelSelector = ({
         {selectedOption && (
           <ModelTriggerIcon provider={selectedOption.iconProvider} />
         )}
-        <BidiText as="span" className="max-w-36 truncate">
+        <TruncatedText className="max-w-36" render={<BidiText as="span" />}>
           {triggerLabel}
-        </BidiText>
+        </TruncatedText>
       </MenuTrigger>
       <MenuPopup
         align="start"

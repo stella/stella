@@ -22,6 +22,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { useChatEditorManager } from "@/components/chat-editor-provider";
 import type { ChatPart } from "@/components/chat/chat-ui-tools";
@@ -276,9 +277,9 @@ const GeneratedVisualFrame = ({
       <header className="text-muted-foreground flex min-w-0 items-baseline gap-1.5 text-xs">
         <span className="shrink-0">{t("chat.generatedView")}</span>
         <span aria-hidden="true">·</span>
-        <span className="text-foreground truncate font-medium">
+        <TruncatedText className="text-foreground font-medium">
           {view.title}
-        </span>
+        </TruncatedText>
       </header>
       <div className="overflow-hidden rounded-md border p-4">
         <iframe

@@ -37,6 +37,7 @@ import {
   MenuSubTrigger,
   MenuTrigger,
 } from "@stll/ui/menu";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { typedCharacter } from "@stll/ui/typed-character";
 import { cn } from "@stll/ui/utils";
 
@@ -549,15 +550,12 @@ const ComposerSkillItemBody = ({
       className={cn("mt-0.5 self-start", blocked && "text-muted-foreground")}
     />
     <span className="min-w-0 flex-1">
-      <BidiText
-        as="span"
-        className={cn(
-          "block truncate text-sm",
-          blocked && "text-muted-foreground",
-        )}
+      <TruncatedText
+        className={cn("text-sm", blocked && "text-muted-foreground")}
+        render={<BidiText as="span" />}
       >
         {itemName(item)}
-      </BidiText>
+      </TruncatedText>
       <BidiText
         as="span"
         className={cn(
@@ -1267,9 +1265,9 @@ const ComposerMentionItem = ({
         {...capabilityProps}
       >
         <MentionIcon mention={option} />
-        <BidiText as="span" className="min-w-0 flex-1 truncate">
+        <TruncatedText className="flex-1" render={<BidiText as="span" />}>
           {option.label}
-        </BidiText>
+        </TruncatedText>
       </MenuItem>
     )}
   </CapabilityAction>
@@ -1399,9 +1397,9 @@ const ComposerContextMatterSub = ({
           className="size-3.5 shrink-0"
           matter={{ id: matter.id, color: matter.color }}
         />
-        <BidiText as="span" className="min-w-0 flex-1 truncate">
+        <TruncatedText className="flex-1" render={<BidiText as="span" />}>
           {matter.name}
-        </BidiText>
+        </TruncatedText>
       </MenuSubTrigger>
       <MenuSubPopup
         className="w-72"
@@ -1431,15 +1429,18 @@ const ComposerContextMatterSub = ({
                   matter={{ id: matter.id, color: matter.color }}
                 />
                 <span className="min-w-0 flex-1">
-                  <BidiText as="span" className="block truncate text-sm">
+                  <TruncatedText
+                    className="text-sm"
+                    render={<BidiText as="span" />}
+                  >
                     {matter.name}
-                  </BidiText>
-                  <BidiText
-                    as="span"
-                    className="text-muted-foreground block truncate text-xs"
+                  </TruncatedText>
+                  <TruncatedText
+                    className="text-muted-foreground text-xs"
+                    render={<BidiText as="span" />}
                   >
                     {t("chat.composerMenu.referenceMatter")}
-                  </BidiText>
+                  </TruncatedText>
                 </span>
               </MenuItem>
             )}
@@ -1554,9 +1555,9 @@ export const ComposerMcpSubmenu = ({
       if (!connection) {
         return (
           <MenuItem key={connector.id} onClick={openMcpSettings}>
-            <BidiText as="span" className="truncate">
+            <TruncatedText render={<BidiText as="span" />}>
               {connector.displayName}
-            </BidiText>
+            </TruncatedText>
           </MenuItem>
         );
       }
@@ -1572,9 +1573,9 @@ export const ComposerMcpSubmenu = ({
             );
           }}
         >
-          <BidiText as="span" className="truncate">
+          <TruncatedText render={<BidiText as="span" />}>
             {connector.displayName}
-          </BidiText>
+          </TruncatedText>
         </MenuCheckboxItem>
       );
     });

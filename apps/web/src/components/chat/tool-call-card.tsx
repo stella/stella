@@ -11,6 +11,7 @@ import { ChevronRightIcon, CircleHelpIcon } from "@stll/ui/icons";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { StatusMark } from "@stll/ui/status-mark";
 import type { StatusMarkStatus } from "@stll/ui/status-mark";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { CHAT_PENDING_TEXT_CLASS } from "@/components/chat/chat-pending-text";
@@ -584,11 +585,10 @@ const ToolCallCardComponent = ({
           type="button"
         >
           <StatusMark label={statusLabel} status={status} />
-          <span
-            className={cn(
-              "min-w-0 truncate",
-              isLoading && CHAT_PENDING_TEXT_CLASS,
-            )}
+          <TruncatedText
+            render={
+              <span className={cn(isLoading && CHAT_PENDING_TEXT_CLASS)} />
+            }
           >
             <span>{label}</span>
             {subtitle && (
@@ -598,7 +598,7 @@ const ToolCallCardComponent = ({
                 {subtitle}
               </span>
             )}
-          </span>
+          </TruncatedText>
           {elapsed && (
             <span className="text-foreground-ghost shrink-0 text-xs font-normal tabular-nums">
               {elapsed}
