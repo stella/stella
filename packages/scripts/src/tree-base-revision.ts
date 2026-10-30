@@ -81,21 +81,6 @@ const realPath = (label: string, target: string) => {
 };
 
 /**
- * CI event inputs describe only the workflow's own checkout. A repository a
- * step builds for itself (a fixture) inherits that environment without the
- * event's history, so the event never applies to it.
- */
-const isWorkflowCheckout = (repoRoot: string, env: NodeJS.ProcessEnv) => {
-  const workspace = env["GITHUB_WORKSPACE"];
-  if (!workspace) {
-    return false;
-  }
-  return (
-    realPath("repository", repoRoot) === realPath("GITHUB_WORKSPACE", workspace)
-  );
-};
-
-/**
  * The base this tree is compared against, in order: an explicit base or
  * RATCHET_BASE_REF, the CI event's base, then the merge base with
  * origin/main. The event base applies only to the workflow's checkout with no
@@ -128,6 +113,20 @@ export const treeBaseRevision = ({
     }
     return result.stdout.toString().trim();
   };
+  // CI event inputs describe only the workflow's own checkout. A repository a
+  // step builds for itself (a fixture) inherits that environment without the
+  // event's history, so the event never applies to it. Callers may pass a
+  // directory inside the checkout, so compare its top level.
+  const isWorkflowCheckout = () => {
+    const workspace = env["GITHUB_WORKSPACE"];
+    if (!workspace) {
+      return false;
+    }
+    const topLevel = readGit(["rev-parse", "--show-toplevel"]);
+    return (
+      realPath("checkout", topLevel) === realPath("GITHUB_WORKSPACE", workspace)
+    );
+  };
   const checkoutEventBase = (): string | undefined => {
     const eventBase = eventBaseRevision(env);
     if (eventBase === undefined) {
@@ -146,7 +145,7 @@ export const treeBaseRevision = ({
   const revision =
     baseRef ??
     env["RATCHET_BASE_REF"] ??
-    (headRef === undefined && isWorkflowCheckout(repoRoot, env)
+    (headRef === undefined && isWorkflowCheckout()
       ? checkoutEventBase()
       : undefined) ??
     readGit(["merge-base", "origin/main", headRef ?? "HEAD"]);

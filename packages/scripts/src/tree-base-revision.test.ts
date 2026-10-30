@@ -1,5 +1,11 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 
 import { treeBaseRevision } from "./tree-base-revision";
@@ -248,15 +254,42 @@ test("another repository ignores the workflow's event inputs", () => {
       GITHUB_EVENT_PATH: path.join(repoRoot, "absent.json"),
       MERGE_GROUP_BASE_SHA: "d".repeat(40),
     };
-    for (const env of [
-      {
-        ...workflowEnv(path.resolve(import.meta.dir, "../../..")),
-        ...inherited,
-      },
-      { ...localEnv(), ...inherited },
-    ]) {
-      expect(treeBaseRevision({ repoRoot, env })).toBe(fork);
+    // The fixture sits inside the workflow checkout; its own top level wins.
+    const packageDirectory = path.join(repoRoot, "packages", "app");
+    mkdirSync(packageDirectory, { recursive: true });
+    for (const directory of [repoRoot, packageDirectory]) {
+      for (const env of [
+        {
+          ...workflowEnv(path.resolve(import.meta.dir, "../../..")),
+          ...inherited,
+        },
+        { ...localEnv(), ...inherited },
+      ]) {
+        expect(treeBaseRevision({ repoRoot: directory, env })).toBe(fork);
+      }
     }
+  });
+});
+
+test("a package directory of the workflow checkout uses the event base", () => {
+  withRepository((repoRoot, git) => {
+    const { fork, payloadBase } = advanceMainPastPayloadBase(repoRoot, git);
+    expect(payloadBase).not.toBe(fork);
+    // Tests run from a package directory pass it as their repository root.
+    const packageDirectory = path.join(repoRoot, "packages", "app");
+    mkdirSync(packageDirectory, { recursive: true });
+    expect(
+      treeBaseRevision({
+        repoRoot: packageDirectory,
+        env: {
+          ...workflowEnv(repoRoot),
+          GITHUB_EVENT_NAME: "merge_group",
+          GITHUB_EVENT_PATH: writeEvent(repoRoot, {
+            merge_group: { base_sha: payloadBase },
+          }),
+        },
+      }),
+    ).toBe(payloadBase);
   });
 });
 
