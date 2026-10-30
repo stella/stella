@@ -14,6 +14,10 @@
       "reason": "An audit procedure; its items are what a reviewer inspects, so each one is a review step by construction."
     },
     {
+      "file": ".ai/local-skills/test-mobile/SKILL.md",
+      "reason": "Operating manual for driving the mobile app against the local stack: setup and sign-in steps, not standing rules."
+    },
+    {
       "file": ".ai/local-skills/update-deps/SKILL.md",
       "reason": "A dependency update procedure; its items are steps, not standing rules."
     },
