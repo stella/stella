@@ -202,6 +202,7 @@ const DOMAIN_SCOPE: Record<string, string> = {
   notifications: "stella:matters_write",
   "vat-rates": "stella:billing_write",
   "organization-settings": "stella:admin_write",
+  organizations: "stella:admin_write",
   playbooks: "stella:knowledge_write",
   // Now carries property create/update/delete capabilities, so it reuses the
   // workspace write bucket rather than the read scope its read tool used.

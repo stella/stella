@@ -5260,6 +5260,13 @@
       "renameDescription": "Členovia uvidia nový názov okamžite.",
       "renameTitle": "Premenovať organizáciu",
       "renameTypeToConfirm": "Pre potvrdenie napíšte nový názov: {name}",
+      "slug": {
+        "change": "Zmeniť identifikátor",
+        "conflict": "Tento identifikátor už používa iná organizácia.",
+        "description": "Zvoľte nový identifikátor alebo vygenerujte náhodný. Pôvodný identifikátor prestane fungovať.",
+        "opaque": "Vygenerovať náhodný identifikátor",
+        "title": "Identifikátor organizácie"
+      },
       "timePolicy": {
         "description": "Nastavte zaokrúhľovanie času, obmedzenia úprav a uzamykanie mesiacov.",
         "editWindow": "Lehota na úpravy (dni)",

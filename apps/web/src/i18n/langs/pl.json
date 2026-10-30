@@ -5260,6 +5260,13 @@
       "renameDescription": "Członkowie od razu zobaczą nową nazwę.",
       "renameTitle": "Zmień nazwę organizacji",
       "renameTypeToConfirm": "Aby potwierdzić, wpisz nową nazwę: {name}",
+      "slug": {
+        "change": "Zmień identyfikator",
+        "conflict": "Ten identyfikator jest już używany przez inną organizację.",
+        "description": "Wybierz nowy identyfikator lub wygeneruj losowy. Poprzedni identyfikator przestanie działać.",
+        "opaque": "Wygeneruj losowy identyfikator",
+        "title": "Identyfikator organizacji"
+      },
       "timePolicy": {
         "description": "Ustaw zaokrąglanie czasu, terminy edycji i blokady miesięcy.",
         "editWindow": "Termin edycji (dni)",

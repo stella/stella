@@ -33,7 +33,10 @@ import {
   PROFESSIONAL_USE_REQUIRED_CODE,
   PROFESSIONAL_USE_STATUS,
 } from "@stll/api-contract/professional-use";
-import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
+import {
+  BETTER_AUTH_ORGANIZATION_OPTIONS,
+  ORGANIZATION_SLUG_RULES,
+} from "@stll/auth-model";
 import { errorOutputLogger } from "@stll/errors";
 import { isUiLocale } from "@stll/locales";
 import { ac, assignableRoles, roles } from "@stll/permissions";
@@ -167,6 +170,7 @@ import {
   createStellaOAuthProvider,
   OAUTH_DISABLED_PATHS,
 } from "@/api/lib/auth/oauth-registration-policy";
+import { isOrganizationSlugUpdate } from "@/api/lib/auth/organization-slug-update-scope";
 import { resolveEmailAndPasswordOptions } from "@/api/lib/auth/password-sign-in-options";
 import {
   professionalUseColumns,
@@ -1761,7 +1765,38 @@ export const createAuth = (
     roles,
     organizationHooks: {
       ...organizationLifecycleHooks,
-      async beforeCreateOrganization({ user }) {
+      async beforeUpdateOrganization({
+        organization: org,
+        user,
+        member: membership,
+      }) {
+        if (
+          org.slug !== undefined &&
+          !isOrganizationSlugUpdate({
+            organizationId: membership.organizationId,
+            userId: user.id,
+            slug: org.slug,
+          })
+        ) {
+          throw new APIError("BAD_REQUEST", {
+            code: "organization_slug_update_required",
+            message:
+              "Change the slug through the organization slug settings operation.",
+          });
+        }
+        await Promise.resolve();
+      },
+      async beforeCreateOrganization({ user, organization: org }) {
+        if (
+          org.slug === undefined ||
+          org.slug.length < ORGANIZATION_SLUG_RULES.minLength ||
+          org.slug.length > ORGANIZATION_SLUG_RULES.maxLength ||
+          !ORGANIZATION_SLUG_RULES.pattern.test(org.slug)
+        ) {
+          throw new APIError("BAD_REQUEST", {
+            message: `Organization slugs must be ${ORGANIZATION_SLUG_RULES.minLength}–${ORGANIZATION_SLUG_RULES.maxLength} lowercase letters, digits or hyphens.`,
+          });
+        }
         requireDemoAccountAccess(
           checkConfiguredDemoAccountAccess({
             email: user.email,
@@ -2866,7 +2901,9 @@ export const createAuth = (
       }),
     },
   });
-  return isLocalDevOpen() ? instrumentQueryOrigins(auth) : auth;
+  return Object.assign(isLocalDevOpen() ? instrumentQueryOrigins(auth) : auth, {
+    organizationUpdateEndpoint: organizationPlugin.endpoints.updateOrganization,
+  });
 };
 
 let _auth: ReturnType<typeof createAuth> | undefined;

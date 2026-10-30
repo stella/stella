@@ -28,6 +28,7 @@ import { mcpScalingScenarios } from "./mcp-scenarios";
 import { mobileClientMetadataScalingScenario } from "./mobile-client-metadata";
 import { mobileUpdateScalingScenario } from "./mobile-updates";
 import { myOpenTasksScalingScenario } from "./my-open-tasks";
+import { organizationSlugScalingScenario } from "./organization-slug";
 import {
   readScenarioRegistry,
   scenarioMembershipViolations,
@@ -60,6 +61,7 @@ const measuredApiScenarios = [
   myOpenTasksScalingScenario,
   mobileUpdateScalingScenario,
   ...invoicePaymentScalingScenarios,
+  organizationSlugScalingScenario,
 ];
 const measuredApiReads = apiApp.routes
   .filter(({ definition }) =>

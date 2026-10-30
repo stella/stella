@@ -5260,6 +5260,13 @@
       "renameDescription": "Mitglieder sehen den neuen Namen sofort.",
       "renameTitle": "Organisation umbenennen",
       "renameTypeToConfirm": "Geben Sie zur Bestätigung den neuen Namen ein: {name}",
+      "slug": {
+        "change": "Kennung ändern",
+        "conflict": "Diese Kennung wird bereits von einer anderen Organisation verwendet.",
+        "description": "Wählen Sie eine neue Kennung oder lassen Sie eine zufällige erstellen. Die bisherige Kennung funktioniert danach nicht mehr.",
+        "opaque": "Zufällige Kennung erstellen",
+        "title": "Organisationskennung"
+      },
       "timePolicy": {
         "description": "Legen Sie Zeitrundung, Bearbeitungsfristen und Monatssperren fest.",
         "editWindow": "Bearbeitungsfrist (Tage)",

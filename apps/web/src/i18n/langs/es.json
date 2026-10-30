@@ -5260,6 +5260,13 @@
       "renameDescription": "Los miembros verán el nuevo nombre de inmediato.",
       "renameTitle": "Cambiar nombre de la organización",
       "renameTypeToConfirm": "Escribe el nuevo nombre para confirmar: {name}",
+      "slug": {
+        "change": "Cambiar identificador",
+        "conflict": "Otra organización ya utiliza este identificador.",
+        "description": "Elige un nuevo identificador o genera uno aleatorio. El identificador anterior dejará de funcionar.",
+        "opaque": "Generar un identificador aleatorio",
+        "title": "Identificador de la organización"
+      },
       "timePolicy": {
         "description": "Configura el redondeo del tiempo, los límites de edición y los bloqueos mensuales.",
         "editWindow": "Plazo de edición (días)",
