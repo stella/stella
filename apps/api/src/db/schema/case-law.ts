@@ -2822,6 +2822,49 @@ export const caseLawBrowseFacetCounts = p.pgTable(
   ],
 );
 
+/** Coverage's bounded per-source court projection, replaced with its facet snapshot. */
+export const caseLawCoverageCourtBuckets = p.pgTable(
+  "case_law_coverage_court_buckets",
+  {
+    sourceId: safeUuid<"caseLawSource">("source_id")
+      .notNull()
+      .references(() => caseLawSources.id, { onDelete: "cascade" }),
+    rank: p.integer().notNull(),
+    court: p.varchar({ length: 512 }),
+    total: p.integer().notNull(),
+  },
+  (t) => [
+    p.primaryKey({
+      name: "case_law_coverage_court_buckets_pkey",
+      columns: [t.sourceId, t.rank],
+    }),
+    p.check(
+      "case_law_coverage_court_buckets_rank_positive",
+      sql`${t.rank} > 0`,
+    ),
+    p.check(
+      "case_law_coverage_court_buckets_total_positive",
+      sql`${t.total} > 0`,
+    ),
+    ...removalSnapshotPolicies(),
+    p.pgPolicy("case_law_coverage_court_bucket_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_coverage_court_buckets'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_coverage_court_buckets'::regclass)`,
+    }),
+    p.pgPolicy("public_law_reader_access", {
+      for: "select",
+      to: stellaPublicLawReader,
+      using: sql`EXISTS (
+        SELECT 1 FROM ${caseLawSources} AS coverage_court_source
+        WHERE coverage_court_source.id = ${t.sourceId}
+          AND ${redistributableCaseLawSourceFor(sql`coverage_court_source.descriptor`)}
+      )`,
+    }),
+  ],
+);
+
 /**
  * What became public for each source in the seven days before `counted_at`,
  * replaced as one snapshot by the scheduler so the coverage page never counts

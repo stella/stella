@@ -10,6 +10,7 @@ import { isPublicCaseLawCountry } from "@stll/api-contract/case-law-launch-readi
 
 import {
   caseLawBrowseFacetCounts,
+  caseLawCoverageCourtBuckets,
   caseLawSources,
   publishedCaseLawDecisions,
   SOURCE_TOTAL_ORIGIN,
@@ -67,6 +68,7 @@ import {
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { CASE_LAW_SOURCE_ROWS_BOUND } from "@/api/lib/legal-search/ingestion-constants";
+import { readPgFtsBrowseFacetsBatch } from "@/api/lib/legal-search/pg-fts-browse-facets";
 import {
   createUnrecognizedSourceReporter,
   SOURCE_REPORT_FEATURE,
@@ -327,6 +329,16 @@ export const readCaseLawCoverageSourcesQuery = definePublicLawSharedQuery(
         storedTotal: caseLawSources.storedTotal,
         storedTotalAsOf: caseLawSources.storedTotalAsOf,
         courts: sql<CoverageCourt[]>`coalesce((
+          SELECT jsonb_agg(jsonb_build_object('court', materialized.court, 'decisions', materialized.total)
+            ORDER BY materialized.rank)
+          FROM LATERAL (
+            SELECT court, total, rank
+            FROM ${caseLawCoverageCourtBuckets}
+            WHERE source_id = case_law_sources.id
+            ORDER BY source_id, rank
+            LIMIT ${LIMITS.caseLawFacetLimit + 1}
+          ) AS materialized
+        ), (
           WITH population AS (
             SELECT f.value AS court, f.total AS decisions
             FROM LATERAL (
@@ -481,6 +493,9 @@ type CoverageLoad = {
   readFacets: (
     country: string,
   ) => Promise<Result<LegalBrowseFacets, { message: string }>>;
+  readFacetsBatch?: (
+    countries: readonly string[],
+  ) => Promise<ReadonlyMap<string, LegalBrowseFacets>>;
   readCourts: (options: {
     country: string;
     buckets: LegalBrowseFacets["court"];
@@ -501,11 +516,46 @@ const reportingNull = async <Value>(
   return value;
 };
 
+/** Explicit unknown state for the optional arrivals claim. */
+const unavailableCoverageArrivals = (): null => null;
+
 const coverageError = (fallback: string) => (cause: unknown) =>
   new CoverageError({
     message: cause instanceof Error ? cause.message : fallback,
     cause,
   });
+
+const facetsForCountry = async (
+  country: string,
+  batch: Result<ReadonlyMap<string, LegalBrowseFacets>, CoverageError> | null,
+  readOne: CoverageLoad["readFacets"],
+): Promise<Result<LegalBrowseFacets, { message: string }>> => {
+  if (batch === null) {
+    return await readOne(country);
+  }
+  if (Result.isError(batch)) {
+    return batch;
+  }
+  return Result.ok(
+    batch.value.get(country) ?? { country: [], court: [], year: [] },
+  );
+};
+
+const readCoverageFacetBatch = async (
+  countries: readonly string[],
+  readBatch: CoverageLoad["readFacetsBatch"],
+): Promise<Result<
+  ReadonlyMap<string, LegalBrowseFacets>,
+  CoverageError
+> | null> => {
+  if (readBatch === undefined) {
+    return null;
+  }
+  return await Result.tryPromise({
+    try: async () => await readBatch(countries),
+    catch: coverageError("reading case-law facets failed"),
+  });
+};
 
 /**
  * The whole page, assembled from the source catalogue outward.
@@ -523,6 +573,7 @@ export const loadCaseLawCoverage = async ({
   readArrivals,
   readCourts,
   readFacets,
+  readFacetsBatch,
   readSources,
   readYearCompleteness,
 }: CoverageLoad): Promise<Result<CaseLawCoverage, CoverageError>> => {
@@ -632,6 +683,10 @@ export const loadCaseLawCoverage = async ({
   const countries: CaseLawCoverageCountry[] = [];
   let storedTotal = 0;
   let storedAsOf: string | null = null;
+  const batchedFacets = await readCoverageFacetBatch(
+    [...byCountry.keys()].filter(isPublicCaseLawCountry),
+    readFacetsBatch,
+  );
 
   // Sorted so the page's order is the payload's order and two requests a
   // minute apart cannot reshuffle the table. Codepoint order rather than the
@@ -668,7 +723,7 @@ export const loadCaseLawCoverage = async ({
       continue;
     }
 
-    const facets = await readFacets(country);
+    const facets = await facetsForCountry(country, batchedFacets, readFacets);
     if (Result.isError(facets)) {
       // An admitted country whose index cannot be read has no searchable
       // number, and zero is not that: the row degrades to what is stored,
@@ -930,7 +985,7 @@ export const computeCaseLawCoverageAnswer = async (
           logger.warn("case_law.coverage.arrivals_unavailable", {
             "error.type": errorTag(arrivals.error),
           });
-          return null;
+          return unavailableCoverageArrivals();
         }
         return arrivals.value;
       },
@@ -939,6 +994,19 @@ export const computeCaseLawCoverageAnswer = async (
           async (tx) =>
             await readBrowseFacetsWithin(tx, { country, excludedSourceIds }),
         ),
+      ...(envBase.LEGAL_SEARCH_PROVIDER === "pg-fts"
+        ? {
+            readFacetsBatch: async (countries: readonly string[]) =>
+              await caseLawDb(
+                async (tx) =>
+                  await readPgFtsBrowseFacetsBatch(
+                    tx,
+                    countries,
+                    LIMITS.caseLawFacetLimit,
+                  ),
+              ),
+          }
+        : {}),
       readCourts: async ({ buckets, country, total }) => {
         const [courtWeights, activity, courtCount] = await Promise.all([
           caseLawDb(async (tx) => await loadPublicCourtWeightsWithin(tx)),

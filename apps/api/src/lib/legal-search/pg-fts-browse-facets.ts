@@ -12,6 +12,7 @@ import {
   type CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import { LegalBrowseFacetsError } from "@/api/lib/legal-search/browse-facets";
 import type {
   LegalBrowseFacets,
@@ -22,12 +23,94 @@ import {
   PUBLIC_LAW_SHARED_QUERY,
 } from "@/api/lib/public-law-shared-query";
 import type { FacetBucket } from "@/api/lib/search/types";
+import { isRecord } from "@/api/lib/type-guards";
 
 /** Refreshed hourly, so visible bucket counts can be up to one hour stale. */
 
 const toFacetBuckets = (
   rows: readonly { count: number; value: string }[],
 ): FacetBucket[] => rows.map((row) => ({ count: row.count, value: row.value }));
+
+/** One readiness probe and one bounded aggregate for every coverage country. */
+export const readPgFtsBrowseFacetsBatch = async (
+  tx: CaseLawPublicReadTransaction,
+  countries: readonly string[],
+  limit: number,
+): Promise<ReadonlyMap<string, LegalBrowseFacets>> => {
+  const snapshot = await tx
+    .select({ kind: caseLawBrowseFacetCounts.kind })
+    .from(caseLawBrowseFacetCounts)
+    .orderBy(caseLawBrowseFacetCounts.kind)
+    .limit(1);
+  if (snapshot.length === 0) {
+    const entries: [string, LegalBrowseFacets][] = [];
+    for (const country of countries) {
+      // db-await-in-loop: fresh installs have no snapshot; the bounded public-country set uses the live fallback once.
+      entries.push([
+        country,
+        await readLivePgFtsBrowseFacets(tx, {
+          jurisdiction: country,
+          excludedSourceIds: [],
+          limit,
+        }),
+      ]);
+    }
+    return new Map(entries);
+  }
+
+  const rows = executedRows(
+    await tx.execute(sql`
+    WITH totals AS (
+      SELECT facets.country, facets.kind, facets.value,
+        sum(facets.total)::int AS total
+      FROM ${caseLawBrowseFacetCounts} AS facets
+      INNER JOIN ${caseLawSources} ON ${caseLawSources.id} = facets.source_id
+      WHERE facets.country = ANY(ARRAY[${sql.join(
+        countries.map((country) => sql`${country}`),
+        sql`, `,
+      )}]::text[])
+        AND ${redistributableCaseLawSource}
+      GROUP BY facets.country, facets.kind, facets.value
+    ), ranked AS (
+      SELECT *, row_number() OVER (
+        PARTITION BY country, kind
+        ORDER BY CASE WHEN kind = 'year' THEN 0 ELSE total END DESC, value DESC
+      ) AS position
+      FROM totals
+    )
+    SELECT country, kind, value, total FROM ranked
+    WHERE position <= ${limit}
+    ORDER BY country, kind, position
+  `),
+  );
+  const result = new Map<string, LegalBrowseFacets>();
+  for (const country of countries) {
+    result.set(country, { country: [], court: [], year: [] });
+  }
+  for (const row of rows) {
+    if (
+      !isRecord(row) ||
+      typeof row["country"] !== "string" ||
+      typeof row["kind"] !== "string" ||
+      typeof row["value"] !== "string" ||
+      typeof row["total"] !== "number"
+    ) {
+      continue;
+    }
+    const facets = result.get(row["country"]);
+    if (facets === undefined) {
+      continue;
+    }
+    if (
+      row["kind"] === "country" ||
+      row["kind"] === "court" ||
+      row["kind"] === "year"
+    ) {
+      facets[row["kind"]].push({ value: row["value"], count: row["total"] });
+    }
+  }
+  return result;
+};
 
 /** Serve fresh installs before the first scheduled snapshot refresh. */
 const readLivePgFtsBrowseFacets = async (

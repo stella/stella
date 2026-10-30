@@ -3169,7 +3169,7 @@
   },
   {
     "file": "apps/api/src/lib/legal-search/pg-fts-browse-facet-refresh.ts",
-    "fingerprint": "91f5e28e38c944c22b7e3e98887bcb4c5bb7f9c65a060b0cf370abdad2b8ab9f",
+    "fingerprint": "b6e34dd9b552a2dafd8ba8c8b77065553229280d9cdf5fdb8f9f5f8891064939",
     "count": 1,
     "reason": "transaction-boundary in apps/api/src/lib/legal-search/pg-fts-browse-facet-refresh.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
   },

@@ -415,6 +415,19 @@ const seedBrowseFacetCounts = async (database: GatedTestDb) => {
       FROM generate_series(1, ${FACET_YEARS}) n
       ON CONFLICT DO NOTHING`);
   }
+  await database.execute(sql`INSERT INTO case_law_coverage_court_buckets
+    (source_id, rank, court, total)
+    SELECT source_id, rank::integer, court, total FROM (
+      SELECT source_id, value AS court, total,
+        row_number() OVER (PARTITION BY source_id ORDER BY total DESC, value ASC) AS rank
+      FROM case_law_browse_facet_counts WHERE kind = 'court'
+    ) ranked WHERE rank <= 20
+    UNION ALL
+    SELECT source_id, 21, NULL, sum(total)::integer FROM (
+      SELECT source_id, total,
+        row_number() OVER (PARTITION BY source_id ORDER BY total DESC, value ASC) AS rank
+      FROM case_law_browse_facet_counts WHERE kind = 'court'
+    ) ranked WHERE rank > 20 GROUP BY source_id`);
 };
 
 export const seedCorpusReadBudgets = async (database: GatedTestDb) => {
@@ -558,6 +571,12 @@ export const seedSitemapReadBudget = async ({
     SELECT 'court', country, source_id, court, count(*)::integer
     FROM case_law_decisions WHERE source_id = ${sourceId}::uuid
     GROUP BY country, source_id, court`);
+  await database.execute(sql`DELETE FROM case_law_coverage_court_buckets
+    WHERE source_id = ${sourceId}::uuid`);
+  await database.execute(sql`INSERT INTO case_law_coverage_court_buckets
+    (source_id, rank, court, total)
+    SELECT ${sourceId}::uuid, 1, 'Fixture court', count(*)::integer
+    FROM case_law_decisions WHERE source_id = ${sourceId}::uuid`);
   // Existing shards represent the unrelated, previously refreshed months.
   await database.execute(sql`DELETE FROM case_law_sitemap_shards`);
   await database.execute(sql`INSERT INTO case_law_sitemap_shards
@@ -575,6 +594,7 @@ export const seedSitemapReadBudget = async ({
     FROM generate_series(1, ${scenario.rows}) i`);
   await database.execute(sql`VACUUM (ANALYZE) case_law_decisions`);
   await database.execute(sql`VACUUM (ANALYZE) case_law_browse_facet_counts`);
+  await database.execute(sql`VACUUM (ANALYZE) case_law_coverage_court_buckets`);
   await database.execute(sql`VACUUM (ANALYZE) case_law_sitemap_shards`);
   await database.execute(sql`VACUUM (ANALYZE) case_law_sitemap_changes`);
   const acquired = Promise.withResolvers<undefined>();
