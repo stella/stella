@@ -1090,7 +1090,9 @@
     },
     "emptyState": "لم يُعثر على أي قرارات. اضبط مصدرًا وشغّل مزامنة لاستيراد الاجتهاد القضائي.",
     "filters": {
-      "remove": "إزالة عامل التصفية {filter}"
+      "countryMismatch": "أُزيلت عوامل التصفية لأنها لا تخص البلد المحدد ({country}): {filters}.",
+      "remove": "إزالة عامل التصفية {filter}",
+      "showInCountry": "عرض {filter} في {country}"
     },
     "languages": {
       "count": "{count, plural, zero {لا توجد لغات} one {لغة واحدة} two {لغتان} few {# لغات} many {# لغة} other {# لغة}}",
@@ -1346,6 +1348,7 @@
       "toastTitle": "العرض الكامل غير متاح بعد"
     },
     "activity": {
+      "newerVersion": "يُعرض هذا المحتوى في إصدار أحدث.",
       "review": "تحديث المراجعة"
     },
     "aiPrompt": "أداة تحرير رسائل الذكاء الاصطناعي",
@@ -2084,8 +2087,6 @@
     "clearFilters": "مسح عوامل التصفية",
     "clearSearch": "مسح البحث",
     "close": "إغلاق",
-    "closeAll": "إغلاق الكل",
-    "closeOthers": "إغلاق الأخرى",
     "columns": "الأعمدة",
     "comfortable": "مريح",
     "comingSoon": "قريبًا",
@@ -2359,6 +2360,7 @@
     "unknownUser": "مستخدم غير معروف",
     "unpin": "إلغاء التثبيت",
     "unsavedChanges": "تغييرات غير محفوظة",
+    "unsavedChangesClose": "تغييرات غير محفوظة. أغلق مرة أخرى لتجاهلها",
     "unsavedChangesEscape": "تغييرات غير محفوظة. اضغط على Esc مرة أخرى لتجاهلها",
     "unsavedLeaveConfirm": "لديك تغييرات غير محفوظة. هل تغادر دون حفظ؟",
     "unverified": "غير مُتحقَّق منه",
@@ -2400,6 +2402,8 @@
     "returnToAgent": "ارجع إلى وكيلك للمتابعة.",
     "returnsLocally": "ستعود إلى {clientName} على هذا الكمبيوتر",
     "returnsTo": "ستعود إلى {clientName}",
+    "scopeAccountExportRead": "قراءة صادرات بياناتك الشخصية",
+    "scopeAccountExportWrite": "طلب صادرات بياناتك الشخصية",
     "scopeAdminRead": "قراءة سجل تدقيق مؤسستك",
     "scopeAdminWrite": "إدارة أعضاء المؤسسة وإعداداتها",
     "scopeBillingWrite": "إنشاء إدخالات الوقت الخاصة بك وتعديلها وحذفها",
@@ -3674,6 +3678,9 @@
       "unsupportedVisualContent": "يحتوي هذا الملف على صور أو رسومات متجهة يتعذر فحصها بحثًا عن نص حساس. التصدير غير متاح.",
       "workspaceTermsHeading": "مصطلحات مساحة العمل ({count})"
     },
+    "closeAllTabs": "{count, plural, zero {إغلاق # علامة تبويب} one {إغلاق علامة تبويب واحدة} two {إغلاق علامتَي التبويب} few {إغلاق جميع علامات التبويب (#)} many {إغلاق جميع علامات التبويب (#)} other {إغلاق جميع علامات التبويب (#)}}",
+    "closeOtherTabs": "{count, plural, zero {إغلاق # علامة تبويب أخرى} one {إغلاق علامة تبويب أخرى} two {إغلاق علامتَي تبويب أخريين} few {إغلاق # علامات تبويب أخرى} many {إغلاق # علامة تبويب أخرى} other {إغلاق # علامة تبويب أخرى}}",
+    "closeTab": "إغلاق <bdi>{name}</bdi>",
     "conversionRefusal": {
       "legacyFormat": "هذا ملف {format} قديم. أعد حفظه بصيغة {replacementExtension} لتحويله.",
       "unsupportedEncoding": "هذا المستند يستخدم ترميز {encoding} غير مدعوم، لذا لا يمكن تحويله.",
@@ -5048,6 +5055,8 @@
       "desktopCardConnectedTitle": "تم ربط stella desktop",
       "desktopCardMissingDetail": "ثبّته، أو اربطه إذا كان مثبتًا بالفعل على هذا الكمبيوتر.",
       "desktopCardMissingTitle": "لم يُربط stella desktop بعد",
+      "desktopCardOpeningDetail": "جارٍ ربط هذا الكمبيوتر بـ <bdi>{identity}</bdi> على {host}. إذا طلب المتصفح ذلك، فاسمح له بفتح stella desktop.",
+      "desktopCardOpeningTitle": "جارٍ فتح stella desktop...",
       "desktopCardOutdatedDetail": "الإصدار {version} مرتبط بـ <bdi>{identity}</bdi>. ثبّت أحدث إصدار لتستمر المستندات والنشاط في العمل.",
       "desktopCardOutdatedTitle": "يحتاج stella desktop إلى تحديث",
       "desktopClipboardDescription": "افتح النص المنسوخ من أي تطبيق وابحث فيه ونظّمه وأعد استخدامه.",
@@ -5067,6 +5076,7 @@
       "desktopInstallOpenStep": "افتح stella desktop مرة واحدة. تظهر الحافظة فورًا وتبقى متاحة من شريط القوائم في macOS أو منطقة الإعلام في Windows.",
       "desktopInstallTitle": "التثبيت والفتح",
       "desktopInstallWindowsStep": "شغّل برنامج التثبيت واتبع التعليمات.",
+      "desktopOpenApp": "فتح stella desktop",
       "desktopPrivacyDescription": "يُشفَّر سجل الحافظة ويُخزَّن على هذا الجهاز.",
       "desktopPrivacyTitle": "خاص تلقائيًا",
       "desktopSelfHostDescription": "ثق بعنوان URL الخاص بهذه stella في تطبيق سطح المكتب الموقع كي يمكن فتح مستندات هذا التثبيت محليا.",
@@ -5076,6 +5086,15 @@
       "displayNameSaved": "تم تحديث الاسم الظاهر",
       "enterOtp": "رمز التحقق",
       "otpSentSuccess": "تم إرسال رمز التحقق إلى بريدك الإلكتروني.",
+      "personalDataExportDescription": "اطلب نسخة قابلة للتنزيل من البيانات الشخصية المحفوظة في حسابك. يتوفر التنزيل لمدة ساعة واحدة.",
+      "personalDataExportExpired": "انتهت صلاحية هذا التصدير.",
+      "personalDataExportExpiresAt": "متاح حتى {expiresAt}.",
+      "personalDataExportFailed": "تعذّر إعداد التصدير.",
+      "personalDataExportReady": "التصدير جاهز.",
+      "personalDataExportRequest": "طلب التصدير",
+      "personalDataExportRequestNew": "طلب تصدير جديد",
+      "personalDataExportTitle": "تصدير بياناتي",
+      "personalDataExportWorking": "جارٍ إعداد التصدير…",
       "preferredName": "الاسم المفضّل",
       "preferredNameDescription": "يُستخدَم كمؤلِّف للتغييرات المتعقَّبة والتعليقات في DOCX.",
       "preferredNamePlaceholder": "اسمك",
@@ -5413,6 +5432,7 @@
     "showCitedPartOnly": "عرض الجزء المستشهد به فقط",
     "showFullProvision": "عرض الحكم كاملًا",
     "showInText": "عرض في النص",
+    "sortNeedsYear": "اختر سنة في عوامل التصفية للفرز حسب هذا العمود.",
     "statedWindow": "التواريخ التي ذكرها الناشر: {range}",
     "status": {
       "current": "نافذ",
@@ -6510,6 +6530,14 @@
           "started": "بدأ مراجعة المستند"
         },
         "empty": "لا يوجد نشاط في هذا الملف القانوني بعد.",
+        "fields": {
+          "dueDate": "تاريخ الاستحقاق",
+          "parentFolder": "المجلد الأصل",
+          "priority": "الأولوية",
+          "property": "الخاصية",
+          "schedule": "الجدول الزمني",
+          "sortOrder": "الترتيب"
+        },
         "filterLabel": "تصفية النشاط",
         "filters": {
           "all": "كل النشاط",
@@ -6559,6 +6587,7 @@
           "translation": "ترجمة"
         },
         "title": "النشاط",
+        "updatedFields": "تم تحديث {fields}",
         "views": {
           "list": "عرض القائمة",
           "timeline": "عرض الخط الزمني"

@@ -33,7 +33,7 @@ const PLAN_KEYWORDS: ReadonlySet<string> = new Set([
   "delete",
 ]);
 
-const asQuery = ({ text, params }: Statement) =>
+export const capturedStatementQuery = ({ text, params }: Statement) =>
   sql.join(
     text.split(/\$(\d+)/u).map((part, index) => {
       if (index % 2 === 0) {
@@ -127,7 +127,7 @@ export const measureJobStatements = async <T>({
       const plan = await withQueryPerfRollback(
         owner,
         async (savepoint) =>
-          await explainOwnerStatement(savepoint, asQuery(query)),
+          await explainOwnerStatement(savepoint, capturedStatementQuery(query)),
       );
       statements.push({ query, plan });
       return () => {

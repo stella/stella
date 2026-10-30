@@ -946,52 +946,15 @@ const readGlobalSearch = async (
   const caseLawPromise = rowsWhen(
     !restrictToEntities && shouldSearchType(selected, "case-law"),
     () =>
-      database.execute(sql`
-      SELECT
-        clsd.decision_id AS id,
-        d.case_number,
-        d.ecli,
-        d.case_number_type,
-        d.court,
-        d.country,
-        d.decision_date,
-        d.slug,
-        d.language,
-        d.language_group_key,
-        (
-          SELECT coalesce(
-            jsonb_agg(
-              jsonb_build_object('type', identifier.type, 'value', identifier.value)
-              ORDER BY identifier.type, identifier.value
-            ),
-            '[]'::jsonb
-          )
-          FROM case_law_decision_identifiers identifier
-          WHERE identifier.decision_id = d.id
-        ) AS identifiers,
-        ${searchHeadline(sql`coalesce(nullif(body_preview.text, ''), d.fulltext, clsd.searchable_text)`)},
-        ${searchTier(sql`clsd.title`)},
-        ${searchScore({ tsv: sql`clsd.tsv`, updatedAt: sql`d.updated_at` })},
-        d.updated_at
-      FROM case_law_search_documents clsd
-      JOIN case_law_published_decisions d ON d.id = clsd.decision_id
-      ${publicCaseLawDecisionJoin}
-      ${caseLawBodyPreviewJoin}
-      WHERE TRUE
-        ${caseLawTextSearchFilter}
-        ${caseLawUpdatedFilter}
-        ${globalSearchCursorSql({
-          cursor: searchCursor,
-          tier: searchTierValue(sql`clsd.title`),
-          score: searchScoreValue({
-            tsv: sql`clsd.tsv`,
-            updatedAt: sql`d.updated_at`,
-          }),
-          id: sql`'case-law:' || clsd.decision_id::text`,
-        })}
-      ORDER BY ${searchOrderBy({ id: sql`clsd.decision_id`, updatedAt: sql`d.updated_at` })}
-      LIMIT ${fetchLimit}
-    `),
+      database.execute(
+        globalCaseLawHitsStatement({
+          query,
+          updatedFrom,
+          updatedTo,
+          searchCursor,
+          fetchLimit,
+        }),
+      ),
   );
 
   const chatScope = chatThreadScopeSql({
@@ -1465,6 +1428,122 @@ const readGlobalSearch = async (
     },
     caseLawLanguageGroups,
   };
+};
+
+type GlobalCaseLawHitsOptions = {
+  query: string;
+  updatedFrom?: string | undefined;
+  updatedTo?: string | undefined;
+  searchCursor: GlobalSearchCursor | null;
+  fetchLimit: number;
+};
+
+/** Rank narrow candidates first; only the returned page reads and aggregates bodies. */
+export const globalCaseLawHitsStatement = ({
+  query,
+  updatedFrom,
+  updatedTo,
+  searchCursor,
+  fetchLimit,
+}: GlobalCaseLawHitsOptions): SQL => {
+  const {
+    caseLawTextSearchFilter,
+    caseLawUpdatedFilter,
+    searchHeadline,
+    searchTier,
+    searchScore,
+    searchTierValue,
+    searchScoreValue,
+    searchOrderBy,
+  } = buildSearchFilterFragments({
+    query,
+    updatedFrom,
+    updatedTo,
+    types: ["case-law"],
+    editedByUserIds: [],
+    mimeTypes: [],
+  });
+  // Text matches drive indexed publication checks. A flattened join instead
+  // hashes the hits and scans every decision, even when the hit set is fixed.
+  // Filter-only search keeps the planner free to use the updated-time order.
+  const candidateDecisionJoin =
+    query.trim().length > 0
+      ? sql`JOIN LATERAL (
+          SELECT decision.id, decision.updated_at, decision.source_id
+          FROM case_law_published_decisions decision
+          WHERE decision.id = clsd.decision_id
+          OFFSET 0
+        ) d ON true`
+      : sql`JOIN case_law_published_decisions d ON d.id = clsd.decision_id`;
+  // MATERIALIZED keeps the body lateral join outside the candidate scan even
+  // when the planner would otherwise inline the page and move its work earlier.
+  // OFFSET 0 retains parameterized primary-key enrichment probes: flattening them
+  // lets a hash join scan the whole corpus even though its other side is bounded.
+  return sql`
+    WITH page AS MATERIALIZED (
+      SELECT clsd.decision_id, d.updated_at,
+        ${searchTier(sql`clsd.title`)},
+        ${searchScore({ tsv: sql`clsd.tsv`, updatedAt: sql`d.updated_at` })}
+      FROM case_law_search_documents clsd
+      ${candidateDecisionJoin}
+      ${publicCaseLawDecisionJoin}
+      WHERE TRUE
+        ${caseLawTextSearchFilter}
+        ${caseLawUpdatedFilter}
+        ${globalSearchCursorSql({
+          cursor: searchCursor,
+          tier: searchTierValue(sql`clsd.title`),
+          score: searchScoreValue({
+            tsv: sql`clsd.tsv`,
+            updatedAt: sql`d.updated_at`,
+          }),
+          id: sql`'case-law:' || clsd.decision_id::text`,
+        })}
+      ORDER BY ${searchOrderBy({ id: sql`clsd.decision_id`, updatedAt: sql`d.updated_at` })}
+      LIMIT ${fetchLimit}
+    )
+      SELECT
+        clsd.decision_id AS id,
+        d.case_number,
+        d.ecli,
+        d.case_number_type,
+        d.court,
+        d.country,
+        d.decision_date,
+        d.slug,
+        d.language,
+        d.language_group_key,
+        (
+          SELECT coalesce(
+            jsonb_agg(
+              jsonb_build_object('type', identifier.type, 'value', identifier.value)
+              ORDER BY identifier.type, identifier.value
+            ),
+            '[]'::jsonb
+          )
+          FROM case_law_decision_identifiers identifier
+          WHERE identifier.decision_id = d.id
+        ) AS identifiers,
+        ${searchHeadline(sql`coalesce(nullif(body_preview.text, ''), d.fulltext, clsd.searchable_text)`)},
+        page.tier,
+        page.score,
+        d.updated_at
+      FROM page
+      JOIN LATERAL (
+        SELECT document.*
+        FROM case_law_search_documents document
+        WHERE document.decision_id = page.decision_id
+        OFFSET 0
+      ) clsd ON true
+      JOIN LATERAL (
+        SELECT decision.*
+        FROM case_law_published_decisions decision
+        WHERE decision.id = page.decision_id
+        OFFSET 0
+      ) d ON true
+      ${caseLawBodyPreviewJoin}
+      ORDER BY ${searchOrderBy({ id: sql`clsd.decision_id`, updatedAt: sql`d.updated_at` })}
+`;
 };
 
 /**
