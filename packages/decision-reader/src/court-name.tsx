@@ -1,6 +1,7 @@
 import type { CourtTierLabel as CourtTier } from "@stll/api-contract/case-law-court-tiers";
 import { BidiText } from "@stll/ui/bidi-text";
 import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 type CourtNameProps = {
@@ -34,8 +35,8 @@ export const CourtName = ({
         courtTier: tier,
       }}
     />
-    <BidiText as="span" className="truncate" title={court}>
+    <TruncatedText hint={false} render={<BidiText as="span" />} title={court}>
       {court}
-    </BidiText>
+    </TruncatedText>
   </span>
 );
