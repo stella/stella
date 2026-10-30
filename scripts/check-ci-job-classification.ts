@@ -1,5 +1,5 @@
-import { Result } from "better-result";
-import { appendFileSync } from "node:fs";
+import { panic, Result, TaggedError } from "better-result";
+import { appendFileSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { writeApproval } from "./ci-job-classification/decisions";
@@ -10,6 +10,7 @@ import {
 } from "./ci-job-classification/generate";
 import type { DerivedJob } from "./ci-job-classification/generate";
 import {
+  approvalPathForKey,
   CLASSIFICATION_DECISIONS_PATH,
   decisionPathForKey,
   isClassificationInput,
@@ -111,6 +112,136 @@ const generateBase = (root: string, base: string) => {
   return { inputs, generation };
 };
 
+const SHA = /^[0-9a-f]{40}$/u;
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+type MergeGroupRevisions = { base: string; head: string };
+
+const mergeGroupRevisions = (): MergeGroupRevisions | undefined => {
+  if (process.env["GITHUB_EVENT_NAME"] !== "merge_group") {
+    return undefined;
+  }
+  const eventPath = process.env["GITHUB_EVENT_PATH"];
+  if (!eventPath) {
+    throw new AdmissionError({ message: "Merge-group event path is missing" });
+  }
+  const event: unknown = JSON.parse(readFileSync(eventPath, "utf-8"));
+  const group = isRecord(event) ? event["merge_group"] : undefined;
+  if (
+    !isRecord(group) ||
+    typeof group["base_sha"] !== "string" ||
+    typeof group["head_sha"] !== "string" ||
+    !SHA.test(group["base_sha"]) ||
+    !SHA.test(group["head_sha"])
+  ) {
+    throw new AdmissionError({ message: "Merge-group revisions are invalid" });
+  }
+  return { base: group["base_sha"], head: group["head_sha"] };
+};
+
+const gitHead = (root: string) => {
+  const result = Bun.spawnSync(["git", "-C", root, "rev-parse", "HEAD"], {
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if (result.exitCode !== 0) {
+    throw new AdmissionError({ message: "Cannot read the checked-out HEAD" });
+  }
+  return new TextDecoder().decode(result.stdout).trim();
+};
+
+type MergeGroupJobChange =
+  | { type: "added"; key: string; job: DerivedJob }
+  | { type: "modified"; key: string; job: DerivedJob }
+  | { type: "removed"; key: string };
+
+export class MergeGroupApprovalRequiredError extends TaggedError(
+  "MergeGroupApprovalRequiredError",
+)<{
+  message: string;
+  job: string;
+  digest: string;
+  approvalPath: string;
+}> {}
+
+// A queued group's base is its parent: main for the first entry, the previous
+// group's commit after that, so each group answers for its own entry only.
+const checkMergeGroupClassification = (
+  root: string,
+  { base, head }: MergeGroupRevisions,
+) => {
+  const checkedOut = gitHead(root);
+  if (checkedOut !== head) {
+    throw new AdmissionError({
+      message: `Merge-group head ${head} is not the checked-out revision ${checkedOut}`,
+    });
+  }
+  const groupInputs = readClassificationInputs(root);
+  const group = generateWithJobs(groupInputs);
+  const baseRevision = generateBase(root, base);
+  const baseGeneration = baseRevision.generation;
+  const changes: MergeGroupJobChange[] = [
+    ...new Set([...group.jobs.keys(), ...baseGeneration.jobs.keys()]),
+  ].flatMap((key): MergeGroupJobChange[] => {
+    const current = group.jobs.get(key);
+    const previous = baseGeneration.jobs.get(key);
+    if (current === undefined) {
+      return [{ type: "removed", key }];
+    }
+    if (previous === undefined) {
+      return [{ type: "added", key, job: current }];
+    }
+    return current.digest === previous.digest
+      ? []
+      : [{ type: "modified", key, job: current }];
+  });
+  for (const change of changes) {
+    switch (change.type) {
+      case "removed":
+        break;
+      case "added":
+      case "modified": {
+        const decision = groupInputs.decisions[change.key];
+        if (!decision?.approvedDigests.includes(change.job.digest)) {
+          const approvalPath = approvalPathForKey(
+            change.key,
+            change.job.digest,
+          );
+          throw new MergeGroupApprovalRequiredError({
+            message: `Merge-group approval is missing or mismatched for ${change.key} at digest ${change.job.digest}; expected ${approvalPath}`,
+            job: change.key,
+            digest: change.job.digest,
+            approvalPath,
+          });
+        }
+        break;
+      }
+      default: {
+        change satisfies never;
+        panic("Unhandled merge-group job change");
+      }
+    }
+  }
+  // Approvals cover review; the group tree must still pass every other
+  // generation rule (action pinning, complete classification, no cycles, no
+  // stale decisions).
+  if (
+    group.result.isErr() &&
+    !(group.result.error instanceof ReviewRequiredError)
+  ) {
+    throw group.result.error;
+  }
+  return {
+    workflowCount: group.workflowCount,
+    privilegedJobs: sensitiveChanges({
+      head: group,
+      headDecisions: groupInputs.decisions,
+      base: baseGeneration,
+      baseDecisions: baseRevision.inputs.decisions,
+    }),
+  };
+};
+
 // Rewrites only the digests of mechanical refreshes.
 export const refreshJobClassificationDigests = (root: string, base: string) =>
   Result.try({
@@ -167,6 +298,8 @@ const misclassifiedWriters = (
 export const checkJobClassification = (root: string, base?: string) =>
   Result.try({
     try: () => {
+      // Pull requests and merge groups both refuse a writer approved under
+      // any kind but priority, before any approval is accepted.
       const headInputs = readClassificationInputs(root);
       const head = generateWithJobs(headInputs);
       const writers = misclassifiedWriters(head.jobs, headInputs.decisions);
@@ -174,6 +307,10 @@ export const checkJobClassification = (root: string, base?: string) =>
         throw new AdmissionError({
           message: `Jobs that write the repository (contents write permission, an app token requesting it, or the signed-commit action) publish and must be classified priority. Set kind "priority" and describe what they publish in:\n${writers.map(decisionPathForKey).join("\n")}`,
         });
+      }
+      const mergeGroup = mergeGroupRevisions();
+      if (mergeGroup) {
+        return checkMergeGroupClassification(root, mergeGroup);
       }
       const privilegedJobs = base
         ? (() => {
@@ -211,7 +348,10 @@ export const checkJobClassification = (root: string, base?: string) =>
 const gitMergeBase = (root: string) => {
   const result = Bun.spawnSync(
     ["git", "-C", root, "merge-base", "origin/main", "HEAD"],
-    { stdout: "pipe", stderr: "pipe" },
+    {
+      stdout: "pipe",
+      stderr: "pipe",
+    },
   );
   if (result.exitCode !== 0) {
     throw new AdmissionError({
@@ -311,7 +451,10 @@ const decisionsFileChanged = (root: string) =>
       "--",
       CLASSIFICATION_DECISIONS_PATH,
     ],
-    { stdout: "pipe", stderr: "ignore" },
+    {
+      stdout: "pipe",
+      stderr: "ignore",
+    },
   ).stdout.length > 0;
 
 const runCheck = (root: string, base: string) => {
