@@ -239,6 +239,7 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
     "scripts/schema-introspection.ts",
   ],
   "ci-checks-rest/Test capability shard merge and package parity": [
+    "packages/scripts/src/tree-base-revision.ts",
     "scripts/capability-shard-merge.test.ts",
     "scripts/capability-shard-pack.test.ts",
     "scripts/changeset-guard.ts",

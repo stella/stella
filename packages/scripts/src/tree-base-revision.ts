@@ -69,11 +69,18 @@ type TreeBaseRevisionOptions = {
   env?: NodeJS.ProcessEnv;
 };
 
+/** `git merge-base --is-ancestor` exits 1 for a commit that is not an ancestor. */
+const NOT_ANCESTOR_STATUS = 1;
+/** `git rev-parse --verify --quiet` exits 1 for a commit this repository lacks. */
+const MISSING_COMMIT_STATUS = 1;
+
 /**
  * The base this tree is compared against, in order: an explicit base or
  * RATCHET_BASE_REF, the CI event's base, then the merge base with
  * origin/main. The event base describes the checked-out tree, so it applies
- * only when no other head is named.
+ * only when no other head is named, and only when that tree contains it: a
+ * repository a CI step builds for itself (a fixture) inherits the event
+ * environment without the event's history.
  */
 export const treeBaseRevision = ({
   repoRoot,
@@ -87,24 +94,68 @@ export const treeBaseRevision = ({
       ([key, value]) => !key.startsWith("GIT_") && value !== undefined,
     ),
   );
-  const readGit = (args: [string, ...string[]]) => {
+  const runGit = (args: [string, ...string[]]) => {
     const result = Bun.spawnSync(["git", ...args], {
       cwd: repoRoot,
       env: gitEnv,
       stdout: "pipe",
       stderr: "pipe",
     });
-    if (childExitStatus(result) !== 0) {
+    return {
+      status: childExitStatus(result),
+      stdout: result.stdout.toString().trim(),
+      stderr: result.stderr.toString().trim(),
+    };
+  };
+  const readGit = (args: [string, ...string[]]) => {
+    const { status, stdout, stderr } = runGit(args);
+    if (status !== 0) {
       return panic(
-        `${UNAVAILABLE}: git ${args[0]} failed (${args.join(" ")}): ${result.stderr.toString().trim()}`,
+        `${UNAVAILABLE}: git ${args[0]} failed (${args.join(" ")}): ${stderr}`,
       );
     }
-    return result.stdout.toString().trim();
+    return stdout;
+  };
+  const inspectedEventBase = (): string | undefined => {
+    const eventBase = eventBaseRevision(env);
+    if (eventBase === undefined) {
+      return undefined;
+    }
+    const commit = runGit([
+      "rev-parse",
+      "--verify",
+      "--quiet",
+      "--end-of-options",
+      `${eventBase}^{commit}`,
+    ]);
+    if (commit.status === MISSING_COMMIT_STATUS) {
+      return undefined;
+    }
+    if (commit.status !== 0) {
+      return panic(
+        `${UNAVAILABLE}: git rev-parse ${eventBase} failed: ${commit.stderr}`,
+      );
+    }
+    const ancestry = runGit([
+      "merge-base",
+      "--is-ancestor",
+      commit.stdout,
+      "HEAD",
+    ]);
+    if (ancestry.status === NOT_ANCESTOR_STATUS) {
+      return undefined;
+    }
+    if (ancestry.status !== 0) {
+      return panic(
+        `${UNAVAILABLE}: git merge-base --is-ancestor ${commit.stdout} HEAD failed: ${ancestry.stderr}`,
+      );
+    }
+    return commit.stdout;
   };
   const revision =
     baseRef ??
     env["RATCHET_BASE_REF"] ??
-    (headRef === undefined ? eventBaseRevision(env) : undefined) ??
+    (headRef === undefined ? inspectedEventBase() : undefined) ??
     readGit(["merge-base", "origin/main", headRef ?? "HEAD"]);
   return readGit([
     "rev-parse",

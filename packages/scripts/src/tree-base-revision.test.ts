@@ -45,28 +45,32 @@ const localEnv = () => ({
 
 type AdvancedMain = { fork: string; payloadBase: string; tip: string };
 
-/** A branch forked before main advanced to the event's base and past it. */
+/**
+ * A merge group built on a queued base while origin/main advanced on its own
+ * line: the payload base is in the checked-out tree, the main tip is not, and
+ * the live merge base is older than both.
+ */
 const advanceMainPastPayloadBase = (
   root: string,
   git: (...args: string[]) => string,
 ): AdvancedMain => {
   const fork = git("rev-parse", "HEAD");
-  git("switch", "-qc", "feature");
+  git("switch", "-qc", "group");
+  git("commit", "-q", "--allow-empty", "-m", "queued base");
+  const payloadBase = git("rev-parse", "HEAD");
   writeFileSync(path.join(root, "feature.txt"), "feature");
   git("add", "feature.txt");
   git("commit", "-qm", "feature");
   git("switch", "-q", "main");
-  git("commit", "-q", "--allow-empty", "-m", "queued base");
-  const payloadBase = git("rev-parse", "HEAD");
   git("commit", "-q", "--allow-empty", "-m", "main advances");
   git("update-ref", "refs/remotes/origin/main", "HEAD");
   const tip = git("rev-parse", "HEAD");
-  git("switch", "-q", "feature");
+  git("switch", "-q", "group");
   return { fork, payloadBase, tip };
 };
 
 const writeEvent = (root: string, payload: unknown) => {
-  const eventPath = path.join(root, "event.json");
+  const eventPath = path.join(root, `event-${crypto.randomUUID()}.json`);
   writeFileSync(eventPath, JSON.stringify(payload));
   return eventPath;
 };
@@ -166,18 +170,63 @@ test("a merge group without an override compares against its payload base, not t
       }),
     };
     expect(treeBaseRevision({ repoRoot, env })).toBe(payloadBase);
-    // The workflow's exported group base and an explicit override still win.
+    // The workflow's exported group base wins over the payload.
     expect(
       treeBaseRevision({
         repoRoot,
-        env: { ...env, MERGE_GROUP_BASE_SHA: tip },
+        env: {
+          ...env,
+          MERGE_GROUP_BASE_SHA: payloadBase,
+          GITHUB_EVENT_PATH: writeEvent(repoRoot, {
+            merge_group: { base_sha: fork },
+          }),
+        },
       }),
-    ).toBe(tip);
+    ).toBe(payloadBase);
+    // An explicit override stays authoritative, even outside the tree.
     expect(
-      treeBaseRevision({ repoRoot, env: { ...env, RATCHET_BASE_REF: fork } }),
-    ).toBe(fork);
+      treeBaseRevision({ repoRoot, env: { ...env, RATCHET_BASE_REF: tip } }),
+    ).toBe(tip);
     // The payload describes the checked-out tree, not another named head.
     expect(treeBaseRevision({ repoRoot, headRef: "HEAD", env })).toBe(fork);
+  });
+});
+
+test("an event base the inspected tree does not contain falls back to the merge base", () => {
+  withRepository((repoRoot, git) => {
+    const { fork, tip } = advanceMainPastPayloadBase(repoRoot, git);
+    // A fixture repository inherits a CI step's event, whose base it lacks.
+    const absent = "d".repeat(40);
+    const gitStatus = (...args: string[]) =>
+      Bun.spawnSync(["git", ...args], {
+        cwd: repoRoot,
+        env: { ...localEnv(), GIT_DIR: undefined, GIT_WORK_TREE: undefined },
+      }).exitCode;
+    expect(gitStatus("cat-file", "-e", `${absent}^{commit}`)).not.toBe(0);
+    // The main tip exists here but is not an ancestor of the inspected head.
+    expect(gitStatus("cat-file", "-e", `${tip}^{commit}`)).toBe(0);
+    expect(gitStatus("merge-base", "--is-ancestor", tip, "HEAD")).toBe(1);
+    for (const base of [absent, tip]) {
+      for (const env of [
+        {
+          ...localEnv(),
+          GITHUB_EVENT_NAME: "merge_group",
+          GITHUB_EVENT_PATH: writeEvent(repoRoot, {
+            merge_group: { base_sha: base },
+          }),
+        },
+        {
+          ...localEnv(),
+          GITHUB_EVENT_NAME: "pull_request",
+          GITHUB_EVENT_PATH: writeEvent(repoRoot, {
+            pull_request: { base: { sha: base } },
+          }),
+        },
+        { ...localEnv(), MERGE_GROUP_BASE_SHA: base },
+      ]) {
+        expect(treeBaseRevision({ repoRoot, env })).toBe(fork);
+      }
+    }
   });
 });
 
