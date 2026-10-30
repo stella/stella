@@ -67,7 +67,7 @@ test("every generated list command exposes the server paging contract", () => {
   if (matters === undefined) {
     throw new TypeError("Missing list_matters");
   }
-  const matterLimit = schemaObject(matters.inputSchema.properties["limit"]);
+  const matterLimit = schemaObject(matters.inputSchema.properties.limit);
   for (const name of names) {
     const tool = registry.find((entry) => entry.name === name);
     expect(tool, name).toBeDefined();
