@@ -940,12 +940,16 @@
         "reasoning": "Rozumowanie"
       },
       "errors": {
+        "analysisDisabled": "Generowanie analiz AI jest wyłączone na tym serwerze. Przeczytaj tekst orzeczenia lub spróbuj ponownie później.",
         "answerIncomplete": "{source, select, organization {Klucz {provider} Twojej organizacji zwrócił niepełną odpowiedź.} other {Model AI zwrócił niepełną odpowiedź.}}",
+        "decisionNotFound": "Nie znaleziono tego orzeczenia. Otwórz je ponownie z wyników wyszukiwania.",
+        "documentUnparseable": "Tekst orzeczenia nie jest gotowy do analizy. Przeczytaj materiał źródłowy.",
+        "languageUnsupported": "Analiza AI nie obsługuje jeszcze języka tego orzeczenia. Przeczytaj tekst orzeczenia lub materiał źródłowy.",
         "providerRefused": "{source, select, organization {{provider} odrzucił żądanie wysłane z kluczem Twojej organizacji. Sprawdź klucz, jego limit i rozliczenia w ustawieniach organizacji.} other {Dostawca AI odrzucił żądanie.}}",
         "providerUnavailable": "{source, select, organization {{provider} jest teraz niedostępny dla klucza Twojej organizacji.} other {Dostawca AI jest teraz niedostępny.}}",
         "retryAfter": "Możesz spróbować ponownie po {time}.",
-        "timedOut": "{source, select, organization {{provider} nie odpowiedział na czas z kluczem Twojej organizacji.} other {Model AI nie odpowiedział na czas.}}",
-        "unavailable": "Analiza AI nie jest dostępna dla tego orzeczenia."
+        "sourceRestricted": "Źródło nie zezwala na analizę AI. Przeczytaj tekst orzeczenia lub materiał źródłowy.",
+        "timedOut": "{source, select, organization {{provider} nie odpowiedział na czas z kluczem Twojej organizacji.} other {Model AI nie odpowiedział na czas.}}"
       },
       "generate": "Ułóż tezy w AI",
       "invitation": "Z bezpłatnym kontem AI przygotuje robocze notatki do tego orzeczenia.",
@@ -1150,7 +1154,7 @@
     "reader": {
       "documentUpdated": "Dokument został zaktualizowany.",
       "expandProvisions": "Rozwiń przepisy",
-      "headMatter": "Część wstępna",
+      "headMatter": "Informacje o sprawie",
       "sourceAttribution": "Dane źródłowe są ogólnodostępne pod adresem <link>{source}</link>."
     },
     "research": {
@@ -2865,6 +2869,8 @@
       "forbidden": "Nie masz uprawnień do wykonania tej czynności.",
       "hostedCheckoutOpen": "Dla tej organizacji jest już otwarta płatność. Dokończ ją albo rozpocznij nową po jej wygaśnięciu.",
       "hostedSubscriptionLive": "Ta organizacja ma już subskrypcję. Zmień ją w sekcji „Zarządzaj użyciem hostowanym”.",
+      "idempotencyInProgress": "To żądanie jest nadal przetwarzane. Poczekaj chwilę i spróbuj ponownie.",
+      "idempotencyKeyReused": "Dane zmieniły się od poprzedniej próby. Zresetuj formularz i spróbuj ponownie.",
       "internalServerError": "Coś poszło nie tak. Spróbuj ponownie.",
       "legalSourceEntityLimitReached": "Ta sprawa osiągnęła limit elementów, dlatego nie można było utworzyć dokumentu.",
       "legalSourceFilePropertyMissing": "W tej sprawie brakuje właściwości pliku, dlatego nie można było utworzyć dokumentu.",
@@ -4885,7 +4891,9 @@
     "viewOnGithub": "Zobacz na GitHubie"
   },
   "readerAnswers": {
+    "answerLanguage": "Język odpowiedzi",
     "budgetError": "Budżet na odpowiedzi został wyczerpany.",
+    "documentLanguage": "Język dokumentu ({language})",
     "expand": "Rozwiń odpowiedź",
     "explain": "Wyjaśnij",
     "followUp": "Zadaj dodatkowe pytanie",

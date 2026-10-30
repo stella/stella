@@ -940,12 +940,16 @@
         "reasoning": "Uvažovanie"
       },
       "errors": {
+        "analysisDisabled": "Generovanie AI analýzy je na tomto serveri vypnuté. Prečítajte si text rozhodnutia alebo to skúste neskôr.",
         "answerIncomplete": "{source, select, organization {Kľúč vašej organizácie pre {provider} vrátil neúplnú odpoveď.} other {AI model vrátil neúplnú odpoveď.}}",
+        "decisionNotFound": "Rozhodnutie sa nenašlo. Otvorte ho znova z vyhľadávania.",
+        "documentUnparseable": "Text rozhodnutia nie je pripravený na analýzu. Prečítajte si pôvodný zdroj.",
+        "languageUnsupported": "AI analýza zatiaľ nepodporuje jazyk tohto rozhodnutia. Prečítajte si text rozhodnutia alebo pôvodný zdroj.",
         "providerRefused": "{source, select, organization {{provider} odmietol požiadavku s kľúčom vašej organizácie. Skontrolujte kľúč, jeho kvótu a fakturáciu v nastaveniach organizácie.} other {Poskytovateľ AI požiadavku odmietol.}}",
         "providerUnavailable": "{source, select, organization {{provider} je pre kľúč vašej organizácie momentálne nedostupný.} other {Poskytovateľ AI je momentálne nedostupný.}}",
         "retryAfter": "Znova to môžete skúsiť po {time}.",
-        "timedOut": "{source, select, organization {{provider} s kľúčom vašej organizácie neodpovedal včas.} other {AI model neodpovedal včas.}}",
-        "unavailable": "AI analýza nie je pre toto rozhodnutie k dispozícii."
+        "sourceRestricted": "Zdroj nepovoľuje AI analýzu. Prečítajte si text rozhodnutia alebo pôvodný zdroj.",
+        "timedOut": "{source, select, organization {{provider} s kľúčom vašej organizácie neodpovedal včas.} other {AI model neodpovedal včas.}}"
       },
       "generate": "Zostaviť právne vety pomocou AI",
       "invitation": "S bezplatným účtom vám AI k rozhodnutiu pripraví pracovné poznámky.",
@@ -1150,7 +1154,7 @@
     "reader": {
       "documentUpdated": "Dokument bol aktualizovaný.",
       "expandProvisions": "Rozbaliť ustanovenia",
-      "headMatter": "Úvodná časť",
+      "headMatter": "Informácie o veci",
       "sourceAttribution": "Zdroj údajov je voľne dostupný na <link>{source}</link>."
     },
     "research": {
@@ -2865,6 +2869,8 @@
       "forbidden": "Na túto akciu nemáte oprávnenie.",
       "hostedCheckoutOpen": "Pre túto organizáciu je už otvorená objednávka. Dokončite ju alebo začnite novú, keď vyprší.",
       "hostedSubscriptionLive": "Táto organizácia už má predplatné. Zmeňte ho v časti Spravovať hostované využitie.",
+      "idempotencyInProgress": "Táto požiadavka sa ešte spracúva. Chvíľu počkajte a skúste to znova.",
+      "idempotencyKeyReused": "Odosielané údaje sa od predchádzajúceho pokusu zmenili. Obnovte formulár a skúste to znova.",
       "internalServerError": "Niečo sa pokazilo. Skúste to prosím znova.",
       "legalSourceEntityLimitReached": "Tento spis dosiahol limit položiek, preto dokument nebolo možné vytvoriť.",
       "legalSourceFilePropertyMissing": "V tomto spise chýba vlastnosť súboru, preto dokument nebolo možné vytvoriť.",
@@ -4885,7 +4891,9 @@
     "viewOnGithub": "Zobraziť na GitHube"
   },
   "readerAnswers": {
+    "answerLanguage": "Jazyk odpovede",
     "budgetError": "Rozpočet na odpovede je vyčerpaný.",
+    "documentLanguage": "Jazyk dokumentu ({language})",
     "expand": "Rozbaliť odpoveď",
     "explain": "Vysvetliť",
     "followUp": "Položiť doplňujúcu otázku",

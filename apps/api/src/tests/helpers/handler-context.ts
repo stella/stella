@@ -1,6 +1,8 @@
 import { panic } from "better-result";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import { createScopedDb } from "@/api/db/scoped";
+import type { RlsDatabase } from "@/api/db/scoped";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import {
   ORG_AI_CONFIG_STATUS,
@@ -14,8 +16,20 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
+import { executeRowsScopedDb } from "@/api/tests/helpers/pglite-rows-scoped-db";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import type { TestDatabaseTransaction } from "@/api/tests/security/test-utils";
+
+type OrganizationTestPrincipal = {
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+};
+
+/** Run handler authorization against the fixture's actual scoped database. */
+export const createOrganizationScopedTestDb = (
+  database: RlsDatabase,
+  { organizationId, userId }: OrganizationTestPrincipal,
+) => executeRowsScopedDb(createScopedDb(database, [], organizationId, userId));
 
 /**
  * Assert that this path must not record audit events. The recorder panics, but

@@ -1,4 +1,6 @@
 import { useState } from "react";
+
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 /**
  * Bilingual-version trigger + dialog.
  *
@@ -6,8 +8,6 @@ import { useState } from "react";
  * and a target language, asks the API for a two-column copy of the document
  * (source text left, a copy to translate right) and links to the new document.
  */
-
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
@@ -38,6 +38,7 @@ import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { toSafeId } from "@/lib/safe-id";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import { useWorkspaceViewParams } from "@/lib/workspaces/use-workspace-view-params";
@@ -56,6 +57,7 @@ export const BilingualDocumentDialog = ({
   fieldId,
   disabled = false,
 }: BilingualDocumentDialogProps) => {
+  const submit = useIdempotentSubmit();
   const t = useTranslations();
   const locale = useMessageLocale();
   const analytics = useAnalytics();
@@ -74,15 +76,24 @@ export const BilingualDocumentDialog = ({
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      const response = await api
-        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .bilingual.post({
+      const client = api.entities({
+        workspaceId: toSafeId<"workspace">(workspaceId),
+      }).bilingual;
+      const response = await submit.run({
+        operation: `bilingual-create:${workspaceId}`,
+        send: async (body) => {
+          const reply = await client.post(body);
+          unwrapApiResponse(reply);
+          return reply;
+        },
+        body: {
           entityId: toSafeId<"entity">(entityId),
           fieldId: toSafeId<"field">(fieldId),
           sourceLang,
           targetLang,
           borders: "none",
-        });
+        } satisfies Parameters<typeof client.post>[0],
+      });
       return unwrapApiResponse(response);
     },
     onSuccess: async (data) => {

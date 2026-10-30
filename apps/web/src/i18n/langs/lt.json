@@ -940,12 +940,16 @@
         "reasoning": "Mąstymas"
       },
       "errors": {
+        "analysisDisabled": "DI analizės kūrimas šiame serveryje išjungtas. Skaitykite sprendimo tekstą arba bandykite vėliau.",
         "answerIncomplete": "{source, select, organization {Jūsų organizacijos {provider} raktas grąžino neišsamų atsakymą.} other {DI modelis grąžino neišsamų atsakymą.}}",
+        "decisionNotFound": "Šis teismo sprendimas nerastas. Atverkite jį iš naujo paieškoje.",
+        "documentUnparseable": "Teismo sprendimo tekstas dar neparengtas analizei. Skaitykite pirminį šaltinį.",
+        "languageUnsupported": "DI analizė dar nepalaiko šio teismo sprendimo kalbos. Skaitykite sprendimo tekstą arba pirminį šaltinį.",
         "providerRefused": "{source, select, organization {{provider} atmetė užklausą, pateiktą su jūsų organizacijos raktu. Patikrinkite raktą, jo kvotą ir atsiskaitymą organizacijos nustatymuose.} other {DI teikėjas atmetė užklausą.}}",
         "providerUnavailable": "{source, select, organization {{provider} šiuo metu nepasiekiamas su jūsų organizacijos raktu.} other {DI teikėjas šiuo metu nepasiekiamas.}}",
         "retryAfter": "Bandyti dar kartą galėsite po {time}.",
-        "timedOut": "{source, select, organization {{provider} neatsakė laiku naudojant jūsų organizacijos raktą.} other {DI modelis neatsakė laiku.}}",
-        "unavailable": "Šiam sprendimui DI analizė neprieinama."
+        "sourceRestricted": "Šaltinis neleidžia atlikti DI analizės. Skaitykite sprendimo tekstą arba pirminį šaltinį.",
+        "timedOut": "{source, select, organization {{provider} neatsakė laiku naudojant jūsų organizacijos raktą.} other {DI modelis neatsakė laiku.}}"
       },
       "generate": "Parengti DI santraukas",
       "invitation": "Su nemokama paskyra DI parengia darbines pastabas apie šį sprendimą.",
@@ -1150,7 +1154,7 @@
     "reader": {
       "documentUpdated": "Dokumentas atnaujintas.",
       "expandProvisions": "Išskleisti nuostatas",
-      "headMatter": "Antraštinė dalis",
+      "headMatter": "Bylos informacija",
       "sourceAttribution": "Šaltinio duomenys laisvai prieinami adresu <link>{source}</link>."
     },
     "research": {
@@ -2865,6 +2869,8 @@
       "forbidden": "Neturite teisės atlikti šio veiksmo.",
       "hostedCheckoutOpen": "Šiai organizacijai jau atidarytas apmokėjimas. Užbaikite jį arba pradėkite naują, kai jis baigs galioti.",
       "hostedSubscriptionLive": "Ši organizacija jau turi prenumeratą. Pakeiskite ją skiltyje „Tvarkyti prieglobos naudojimą“.",
+      "idempotencyInProgress": "Ši užklausa vis dar apdorojama. Šiek tiek palaukite ir bandykite dar kartą.",
+      "idempotencyKeyReused": "Duomenys pasikeitė nuo ankstesnio bandymo. Iš naujo nustatykite formą ir bandykite dar kartą.",
       "internalServerError": "Kažkas nepavyko. Bandykite dar kartą.",
       "legalSourceEntityLimitReached": "Šioje byloje pasiektas elementų limitas, todėl dokumento sukurti nepavyko.",
       "legalSourceFilePropertyMissing": "Šioje byloje trūksta failo ypatybės, todėl dokumento sukurti nepavyko.",
@@ -4885,7 +4891,9 @@
     "viewOnGithub": "Peržiūrėti GitHub platformoje"
   },
   "readerAnswers": {
+    "answerLanguage": "Atsakymo kalba",
     "budgetError": "Atsakymams skirtas biudžetas išnaudotas.",
+    "documentLanguage": "Dokumento kalba ({language})",
     "expand": "Išskleisti atsakymą",
     "explain": "Paaiškinti",
     "followUp": "Užduoti papildomą klausimą",

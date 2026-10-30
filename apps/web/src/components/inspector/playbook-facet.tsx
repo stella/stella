@@ -237,6 +237,7 @@ import { DOCX_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
+import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import type {
   Negotiation,
   PlaybookListItem,
@@ -1306,7 +1307,7 @@ const ReviewRunPanel = ({
     playbookDetailView.type === "items" ? playbookDetailView.items : undefined;
 
   const navigate = useNavigate();
-  const saveAsPlaybook = useMutation({
+  const saveAsPlaybook = useIdempotentMutation({
     mutationFn: saveRunAsPlaybook,
     onSuccess: () => {
       stellaToast.add({

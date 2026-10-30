@@ -42,6 +42,7 @@ import type { ReviewSuggestion } from "@/components/ai-suggestions/review-store"
 import { api } from "@/lib/api";
 import type { ChatThreadId } from "@/lib/chat-thread-ref";
 import { APIError, unwrapApiResponse } from "@/lib/errors/api";
+import { createSubmitIntent } from "@/lib/idempotency/idempotent-submit.logic";
 import { toSafeId } from "@/lib/safe-id";
 import { readDocxSuggestionCreatedAt } from "@/lib/workspaces/queries/docx-suggestions";
 
@@ -108,15 +109,22 @@ export const createDocxSuggestionsRequest = async ({
           },
         ],
   );
-  if (body.length === 0) {
+  const first = body.at(0);
+  if (first === undefined) {
     return Result.ok(null);
   }
 
+  // Suggestion refs already identify this immutable batch intent across retries.
+  const intent = createSubmitIntent(() => first.ref);
+  const request = intent.request();
   const result = await Result.tryPromise({
     try: async () => {
       const response = await api["docx-suggestions"]({ workspaceId })
         .entity({ entityId })
-        .put({ suggestions: body, originThreadId: chatThreadId ?? null });
+        .put(
+          { suggestions: body, originThreadId: chatThreadId ?? null },
+          request,
+        );
       return unwrapApiResponse(response);
     },
     catch: (cause) => cause,

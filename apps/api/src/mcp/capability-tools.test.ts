@@ -2155,6 +2155,28 @@ describe("capability executor workspace resolution", () => {
 });
 
 describe("handlerCtx capability authorization lifetime", () => {
+  test("RPC submission headers do not become capability replay keys", async () => {
+    const request = new Request("http://localhost/mcp", {
+      method: "POST",
+      body: JSON.stringify({ method: "tools/call" }),
+      headers: {
+        "Idempotency-Key": "rpc-submission",
+        "X-Request-Id": "rpc-request",
+      },
+    });
+    expect(await request.json()).toEqual({ method: "tools/call" });
+    const handlerCtx = await capabilityHandlerContext({
+      capabilityId: "playbooks.create",
+      context: createContext(),
+      input: { body: {}, params: {}, query: {} },
+      request,
+      workspaceId: undefined,
+    });
+    expect(handlerCtx.request.headers.get("Idempotency-Key")).toBeNull();
+    expect(handlerCtx.request.headers.get("X-Request-Id")).toBe("rpc-request");
+    expect(request.headers.get("Idempotency-Key")).toBe("rpc-submission");
+  });
+
   test("preserves MCP provenance in recorders rebound to another workspace", async () => {
     let inserted: Record<string, unknown>[] = [];
     const context = createContext({ workspaceIds: ["ws_1", "ws_2"] });

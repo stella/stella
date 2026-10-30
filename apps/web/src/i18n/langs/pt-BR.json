@@ -940,12 +940,16 @@
         "reasoning": "Fundamentação"
       },
       "errors": {
+        "analysisDisabled": "A geração de análises por IA está desativada neste servidor. Leia o texto da decisão ou tente novamente mais tarde.",
         "answerIncomplete": "{source, select, organization {A chave {provider} da sua organização retornou uma resposta incompleta.} other {O modelo de IA retornou uma resposta incompleta.}}",
+        "decisionNotFound": "Esta decisão não foi encontrada. Abra-a novamente pela busca.",
+        "documentUnparseable": "O texto da decisão não está pronto para análise. Consulte a fonte original.",
+        "languageUnsupported": "A análise por IA ainda não oferece suporte ao idioma desta decisão. Leia o texto da decisão ou consulte a fonte original.",
         "providerRefused": "{source, select, organization {{provider} recusou a solicitação feita com a chave da sua organização. Verifique a chave, a cota e o faturamento nas configurações da organização.} other {O provedor de IA recusou a solicitação.}}",
         "providerUnavailable": "{source, select, organization {{provider} está indisponível no momento para a chave da sua organização.} other {O provedor de IA está indisponível no momento.}}",
         "retryAfter": "Você poderá tentar novamente a partir de {time}.",
-        "timedOut": "{source, select, organization {{provider} não respondeu a tempo com a chave da sua organização.} other {O modelo de IA não respondeu a tempo.}}",
-        "unavailable": "A análise por IA não está disponível para esta decisão."
+        "sourceRestricted": "A fonte não permite análise por IA. Leia o texto da decisão ou consulte a fonte original.",
+        "timedOut": "{source, select, organization {{provider} não respondeu a tempo com a chave da sua organização.} other {O modelo de IA não respondeu a tempo.}}"
       },
       "generate": "Gerar ementas com IA",
       "invitation": "Com uma conta gratuita, a IA prepara notas de trabalho sobre esta decisão.",
@@ -1150,7 +1154,7 @@
     "reader": {
       "documentUpdated": "O documento foi atualizado.",
       "expandProvisions": "Expandir dispositivos",
-      "headMatter": "Cabeçalho",
+      "headMatter": "Informações do processo",
       "sourceAttribution": "Os dados de origem estão livremente disponíveis em <link>{source}</link>."
     },
     "research": {
@@ -2865,6 +2869,8 @@
       "forbidden": "Você não tem permissão para fazer isso.",
       "hostedCheckoutOpen": "Já existe um pagamento aberto para esta organização. Conclua-o ou inicie um novo depois que ele expirar.",
       "hostedSubscriptionLive": "Esta organização já tem uma assinatura. Altere-a em “Gerenciar uso hospedado”.",
+      "idempotencyInProgress": "Esta solicitação ainda está sendo processada. Aguarde um momento e tente novamente.",
+      "idempotencyKeyReused": "Os dados mudaram desde a tentativa anterior. Redefina o formulário e tente novamente.",
       "internalServerError": "Algo deu errado. Tente novamente.",
       "legalSourceEntityLimitReached": "Este assunto atingiu o limite de itens, portanto não foi possível criar o documento.",
       "legalSourceFilePropertyMissing": "Este assunto não tem uma propriedade de arquivo, portanto não foi possível criar o documento.",
@@ -4885,7 +4891,9 @@
     "viewOnGithub": "Ver no GitHub"
   },
   "readerAnswers": {
+    "answerLanguage": "Idioma da resposta",
     "budgetError": "O orçamento para respostas foi esgotado.",
+    "documentLanguage": "Idioma do documento ({language})",
     "expand": "Expandir resposta",
     "explain": "Explicar",
     "followUp": "Fazer uma pergunta de acompanhamento",

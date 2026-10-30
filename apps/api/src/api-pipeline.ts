@@ -184,6 +184,7 @@ export const apiPipeline: readonly Middleware[] = [
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: [
       "Content-Type",
+      "Idempotency-Key",
       "Authorization",
       "MCP-Protocol-Version",
       LOCAL_CLIENT_IDENTITY_HEADER,

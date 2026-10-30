@@ -3,7 +3,10 @@ import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
 
-import { WORK_OBLIGATION_STATUSES } from "@/api/db/schema";
+import {
+  REQUEST_IDEMPOTENCY_STATES,
+  WORK_OBLIGATION_STATUSES,
+} from "@/api/db/schema";
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { permitsTransition } from "@/api/lib/db/transitions";
 import {
@@ -90,4 +93,15 @@ test("citation recounts publish exact state without reopening pending state", ()
   expect(permitsTransition(spec, "pending", "exact")).toBe(true);
   expect(permitsTransition(spec, "exact", "exact")).toBe(true);
   expect(permitsTransition(spec, "exact", "pending")).toBe(false);
+});
+
+test("request receipt completion is terminal", () => {
+  const spec = TRANSITIONS.requestIdempotencyReceipts;
+  for (const from of REQUEST_IDEMPOTENCY_STATES) {
+    for (const to of REQUEST_IDEMPOTENCY_STATES) {
+      expect(permitsTransition(spec, from, to)).toBe(
+        from === "pending" || from === to,
+      );
+    }
+  }
 });

@@ -63,6 +63,7 @@ import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { expensesQueryRoot } from "@/lib/resource-query-roots.logic";
 import { toSafeId } from "@/lib/safe-id";
 import {
@@ -428,7 +429,7 @@ type CreateInvoiceBody = Parameters<ReturnType<typeof api.invoices>["put"]>[0];
  * saved draft and says why, so nothing the person composed is lost; so
  * does an issue or read that fails after the draft was saved.
  */
-const useComposerSubmit = ({
+export const useComposerSubmit = ({
   workspaceId,
   client,
   onDone,
@@ -439,6 +440,7 @@ const useComposerSubmit = ({
 }) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
+  const submit = useIdempotentSubmit();
   return useMutation({
     mutationFn: async ({
       issue,
@@ -455,49 +457,65 @@ const useComposerSubmit = ({
         create: async () => {
           if (client === undefined) {
             return unwrapApiResponse(
-              await invokeCapability("invoices.create", async (request) =>
-                invoices.put(body, request),
-              ),
+              await submit.run({
+                operation: `invoices.${workspaceId}.create`,
+                body,
+                send: async (payload) =>
+                  await invokeCapability("invoices.create", async (request) =>
+                    invoices.put(payload, request),
+                  ),
+              }),
             );
           }
           return unwrapApiResponse(
-            await invokeCapability("client-invoices.create", async (request) =>
-              api["client-invoices"]({
-                clientId: toSafeId<"contact">(client.clientId),
-              }).put(
-                {
-                  ...clientInvoiceDetails(body),
-                  matters: client.matters.flatMap((matter) => {
-                    const timeEntryIds = matter.prefill.timeEntries
-                      .filter((entry) =>
-                        body.timeEntryIds.includes(
-                          toSafeId<"timeEntry">(entry.id),
-                        ),
-                      )
-                      .map((entry) => toSafeId<"timeEntry">(entry.id));
-                    const expenseIds = matter.prefill.expenses
-                      .filter((expense) =>
-                        body.expenseIds?.includes(
-                          toSafeId<"expense">(expense.id),
-                        ),
-                      )
-                      .map((expense) => toSafeId<"expense">(expense.id));
-                    return timeEntryIds.length + expenseIds.length === 0
-                      ? []
-                      : [
-                          {
-                            workspaceId: toSafeId<"workspace">(
-                              matter.workspaceId,
-                            ),
-                            timeEntryIds,
-                            expenseIds,
-                          },
-                        ];
-                  }),
-                },
-                request,
-              ),
-            ),
+            await submit.run({
+              operation: `client-invoices.${client.clientId}.create`,
+              body: {
+                ...clientInvoiceDetails(body),
+                matters: client.matters.flatMap((matter) => {
+                  const timeEntryIds = matter.prefill.timeEntries
+                    .filter((entry) =>
+                      body.timeEntryIds.includes(
+                        toSafeId<"timeEntry">(entry.id),
+                      ),
+                    )
+                    .map((entry) => toSafeId<"timeEntry">(entry.id));
+                  const expenseIds = matter.prefill.expenses
+                    .filter((expense) =>
+                      body.expenseIds?.includes(
+                        toSafeId<"expense">(expense.id),
+                      ),
+                    )
+                    .map((expense) => toSafeId<"expense">(expense.id));
+                  return timeEntryIds.length + expenseIds.length === 0
+                    ? []
+                    : [
+                        {
+                          workspaceId: toSafeId<"workspace">(
+                            matter.workspaceId,
+                          ),
+                          timeEntryIds,
+                          expenseIds,
+                        },
+                      ];
+                }),
+              },
+              send: async (payload, replayRequest) =>
+                await invokeCapability(
+                  "client-invoices.create",
+                  async (request) =>
+                    api["client-invoices"]({
+                      clientId: toSafeId<"contact">(client.clientId),
+                    }).put(payload, {
+                      ...request,
+                      headers: {
+                        "Idempotency-Key":
+                          replayRequest.headers["Idempotency-Key"],
+                        ...request.headers,
+                      },
+                    }),
+                ),
+            }),
           );
         },
         finalize: async (id) => {
@@ -508,12 +526,7 @@ const useComposerSubmit = ({
                 invoiceId: toSafeId<"invoice">(id),
               }).transition.post({ action: "finalize" }, request),
           );
-          if (finalized.error) {
-            notifyUserError(
-              finalized.error,
-              t("billing.invoiceComposer.issueFailed"),
-            );
-          }
+          unwrapApiResponse(finalized);
         },
         read: async (id): Promise<IssuedInvoice> => {
           const invoice = await queryClient.query(

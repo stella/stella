@@ -95,6 +95,12 @@ test("state-column ownership covers every scoped runtime transition", () => {
     [
       ...Object.values(SANCTIONS_MONITORING_TRANSITION_IDENTITIES),
       desktopBatchReceipt,
+      {
+        tableName: "requestIdempotencyReceipts",
+        key: "id",
+        scope: [],
+        stateColumn: "state",
+      },
       organizationAccessState,
       ...Object.values(READER_ANSWER_TRANSITION_IDENTITIES),
       ...Object.values(FOLIO_COLLAB_TRANSITION_IDENTITIES),

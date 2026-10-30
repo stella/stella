@@ -960,15 +960,18 @@ export const installPgliteServiceClientCredentialCascade = async (
   }
 };
 
-/** Install the summary reader and its privileges from the committed migration. */
+const CASE_LAW_COVERAGE_SUMMARY_MIGRATIONS = [
+  "20261027160000_case_law_coverage_summary",
+  "20261029141500_case_law_coverage_snapshot_freshness",
+] as const;
+
+/** Install the summary reader and its privileges from the committed migrations, in order. */
 export const installPgliteCaseLawCoverageSummary = async (
   db: PgliteSchemaDb,
 ): Promise<void> => {
-  const statements = readMigrationStatements(
-    nodePath.join(
-      DRIZZLE_DIR,
-      "20261027160000_case_law_coverage_summary",
-      "migration.sql",
+  const statements = CASE_LAW_COVERAGE_SUMMARY_MIGRATIONS.flatMap((migration) =>
+    readMigrationStatements(
+      nodePath.join(DRIZZLE_DIR, migration, "migration.sql"),
     ),
   ).filter((statement) => {
     const source = executableSql(statement);
@@ -1107,6 +1110,34 @@ export const installPgliteCaseLawParsedSourceInvalidation = async (
   });
   if (statements.length !== 2) {
     panic("Expected the parsed-source invalidation function and trigger");
+  }
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
+/**
+ * Install the sitemap change-log functions and triggers from the production
+ * migration after schema push.
+ */
+export const installPgliteCaseLawSitemapChanges = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261029140900_case_law_sitemap_changes",
+      "migration.sql",
+    ),
+  ).filter((statement) => {
+    const source = executableSql(statement);
+    return (
+      source.startsWith('CREATE FUNCTION "log_case_law_sitemap_') ||
+      source.startsWith('CREATE TRIGGER "case_law_')
+    );
+  });
+  if (statements.length !== 8) {
+    panic("Expected the three sitemap change functions and five triggers");
   }
   for (const statement of statements) {
     await db.execute(sql.raw(statement));
