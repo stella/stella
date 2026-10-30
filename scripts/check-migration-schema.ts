@@ -34,6 +34,19 @@ const readSchemaInputs = (root: string) => {
   );
 };
 
+const canonicalJson = (value: unknown): string => {
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => canonicalJson(item)).join(",")}]`;
+  }
+  if (value !== null && typeof value === "object") {
+    return `{${Object.entries(value)
+      .toSorted(([left], [right]) => (left < right ? -1 : 1))
+      .map(([key, item]) => `${JSON.stringify(key)}:${canonicalJson(item)}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
+};
+
 const generateSchemaSnapshot = async (root: string) => {
   const schemaEntries = await Promise.all(
     readSchemaInputs(root).map(async (input, inputIndex) => {
@@ -44,8 +57,14 @@ const generateSchemaSnapshot = async (root: string) => {
     }),
   );
   const schema = Object.fromEntries(schemaEntries.flat());
-  const snapshot = await generateDrizzleJson(schema, undefined, ["public"]);
-  return JSON.stringify({ ...snapshot, id: "generated" });
+  const { ddl } = await generateDrizzleJson(schema, undefined, ["public"]);
+  // Entity order follows schema input order, which a table move changes; each
+  // entity is self-contained, so sorting them keeps only semantic differences.
+  // Arrays inside an entity (column lists) stay ordered: their order is DDL.
+  return ddl
+    .map((entity) => canonicalJson(entity))
+    .toSorted()
+    .join("\n");
 };
 
 const runGit = (root: string, arguments_: readonly string[]) => {
@@ -64,10 +83,13 @@ export const checkMigrationRequirement = async (
   root: string,
   baseRef: string,
 ) => {
+  // Both the changed-file list and the baseline schema come from the merge
+  // base: a base branch that moved on must not judge this branch's schema.
+  const mergeBase = runGit(root, ["merge-base", baseRef, "HEAD"]).trim();
   const changedFiles = runGit(root, [
     "diff",
     "--name-only",
-    `${baseRef}...HEAD`,
+    `${mergeBase}..HEAD`,
   ])
     .trim()
     .split("\n");
@@ -77,7 +99,7 @@ export const checkMigrationRequirement = async (
 
   const baseRoot = mkdtempSync(path.join(tmpdir(), "migration-schema-base-"));
   try {
-    runGit(root, ["worktree", "add", "--detach", baseRoot, baseRef]);
+    runGit(root, ["worktree", "add", "--detach", baseRoot, mergeBase]);
     if (!existsSync(path.join(baseRoot, "node_modules"))) {
       symlinkSync(
         path.join(root, "node_modules"),

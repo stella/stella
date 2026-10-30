@@ -110,3 +110,86 @@ test("an unrelated comment in a schema file passes", () => {
   git("commit", "-m", "document schema");
   expect(runGuard(root).exitCode).toBe(0);
 });
+
+test("a schema change on an advanced base branch does not fail an unrelated branch", () => {
+  const { root, git } = createFixture();
+  git("switch", "-c", "feature");
+  writeFileSync(
+    path.join(root, "apps/api/src/db/schema/one.ts"),
+    `// ownership note\n${table()}`,
+  );
+  git("add", ".");
+  git("commit", "-m", "document schema");
+  git("switch", "main");
+  writeFileSync(
+    path.join(root, "apps/api/src/db/schema/one.ts"),
+    table("integer"),
+  );
+  mkdirSync(path.join(root, "apps/api/drizzle/20261030000000_change"), {
+    recursive: true,
+  });
+  writeFileSync(
+    path.join(root, "apps/api/drizzle/20261030000000_change/migration.sql"),
+    "ALTER TABLE items ALTER COLUMN value TYPE integer;\n",
+  );
+  git("add", ".");
+  git("commit", "-m", "change table on main");
+  git("tag", "-f", "base", "main");
+  git("switch", "feature");
+  expect(runGuard(root).exitCode).toBe(0);
+});
+
+const tables = (...names: string[]) =>
+  `import { pgTable, text } from "drizzle-orm/pg-core";\n${names
+    .map(
+      (name) =>
+        `export const ${name} = pgTable("${name}", { value: text("value") });\n`,
+    )
+    .join("")}`;
+
+test("a table move that reorders several tables passes", () => {
+  const { root, git } = createFixture();
+  writeFileSync(
+    path.join(root, "apps/api/src/db/schema/one.ts"),
+    tables("alpha", "beta"),
+  );
+  writeFileSync(
+    path.join(root, "apps/api/src/db/schema/two.ts"),
+    tables("gamma"),
+  );
+  git("add", ".");
+  git("commit", "-m", "several tables");
+  git("tag", "-f", "base");
+  writeFileSync(
+    path.join(root, "apps/api/src/db/schema/one.ts"),
+    tables("beta"),
+  );
+  writeFileSync(
+    path.join(root, "apps/api/src/db/schema/two.ts"),
+    tables("gamma", "alpha"),
+  );
+  git("add", ".");
+  git("commit", "-m", "move alpha");
+  expect(runGuard(root).exitCode).toBe(0);
+});
+
+test("a column type change among several tables fails", () => {
+  const { root, git } = createFixture();
+  writeFileSync(
+    path.join(root, "apps/api/src/db/schema/two.ts"),
+    tables("alpha", "beta"),
+  );
+  git("add", ".");
+  git("commit", "-m", "several tables");
+  git("tag", "-f", "base");
+  writeFileSync(
+    path.join(root, "apps/api/src/db/schema/two.ts"),
+    tables("beta").replace(
+      'import { pgTable, text } from "drizzle-orm/pg-core";\n',
+      'import { integer, pgTable, text } from "drizzle-orm/pg-core";\nexport const alpha = pgTable("alpha", { value: integer("value") });\n',
+    ),
+  );
+  git("add", ".");
+  git("commit", "-m", "change alpha");
+  expect(runGuard(root).exitCode).toBe(1);
+});
