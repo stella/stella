@@ -1447,6 +1447,14 @@
     "attachedImage": "Priložený obrázok",
     "attachment": "Príloha",
     "audioContent": "Vygenerovaný zvuk",
+    "browserExtension": {
+      "connect": "Pripojiť rozšírenie",
+      "connectDescription": "Na tejto karte kliknite na ikonu rozšírenia stella na paneli prehliadača. Ak sa zobrazí žiadosť o prístup k webom, povoľte ho a pripojte túto kartu.",
+      "connected": "Rozšírenie pripojené",
+      "description": "stella vám na požiadanie otvorí a prečíta webové stránky v samostatnej karte.",
+      "install": "Nainštalovať rozšírenie",
+      "installDescription": "S rozšírením stella vám môže stella na požiadanie otvárať a čítať weby v samostatnej karte. Nainštalujete ho z Internetového obchodu Chrome."
+    },
     "cancelQueuedMessage": "Zrušiť správu v poradí",
     "caseLawGreeting": "Spýtajte sa na toto rozhodnutie — plný text je k dispozícii.",
     "chatAbout": "Vložiť do AI chatu",

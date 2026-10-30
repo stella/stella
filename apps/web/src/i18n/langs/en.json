@@ -1447,6 +1447,14 @@
     "attachedImage": "Attached image",
     "attachment": "Attachment",
     "audioContent": "Generated audio",
+    "browserExtension": {
+      "connect": "Connect extension",
+      "connectDescription": "Click the stella extension icon in the browser toolbar on this tab, allow website access if asked, and connect this tab.",
+      "connected": "Extension connected",
+      "description": "stella can open and read websites for you in a separate tab when you ask.",
+      "install": "Install extension",
+      "installDescription": "The stella extension lets stella open and read websites for you in a separate tab when you ask. Install it from the Chrome Web Store."
+    },
     "cancelQueuedMessage": "Cancel queued message",
     "caseLawGreeting": "Ask about this decision — its full text is available here.",
     "chatAbout": "Chat about this",
