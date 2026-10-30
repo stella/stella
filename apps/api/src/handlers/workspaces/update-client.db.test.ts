@@ -49,8 +49,8 @@ test("stale client preconditions preserve the latest assignment and skip side ef
   const safeDb = asTestRaw<SafeDb>(
     createSafeDb(testDb, [workspaceId], ids.orgA, ids.userA1),
   );
-  const callUpdate = (expectedClientId: string | null) =>
-    Result.gen(() =>
+  const callUpdate = async (expectedClientId: string | null) =>
+    await Result.gen(() =>
       updateWorkspaceHandler({
         safeDb,
         organizationId: ids.orgA,
