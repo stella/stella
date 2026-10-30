@@ -10,6 +10,7 @@ import { useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { requireBrowserStorage } from "@/lib/account/browser-storage";
 import { MCP_OAUTH_REQUEST_STORAGE_KEY } from "@/lib/account/storage-keys";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { createRandomValue } from "@/lib/uuid";
 
 const CHANNEL_NAME = "mcp-oauth";
@@ -288,7 +289,7 @@ function isLiveRedirectRecord(serialized: string): boolean {
 // outlive the session. One pass: collect keys first, since removal shifts
 // indexes.
 export function sweepStaleRedirectRequests(): void {
-  requireBrowserStorage("session").andThen((storage) =>
+  const swept = requireBrowserStorage("session").andThen((storage) =>
     Result.try(() => {
       const stale: string[] = [];
       for (let index = 0; index < storage.length; index += 1) {
@@ -306,6 +307,12 @@ export function sweepStaleRedirectRequests(): void {
       }
     }),
   );
+  if (swept.isErr()) {
+    getAnalytics().captureError(swept.error, {
+      fingerprintKey: "sweepStaleRedirectRequests:failure",
+      scope: { type: "handler", handlerId: "sweepStaleRedirectRequests" },
+    });
+  }
 }
 
 function broadcastMcpConnectionRefresh(): void {
