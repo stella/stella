@@ -257,7 +257,7 @@ const ReadingChip = ({ label, onRemove }: ReadingChipProps) => {
       {onRemove && (
         <Button
           aria-label={t("common.remove")}
-          className="group/act ms-0.5 -me-1 inline-flex size-3.5 items-center justify-center opacity-0 group-hover:opacity-100"
+          className="group/act ms-0.5 -me-1 inline-flex size-3.5 items-center justify-center opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100"
           onClick={onRemove}
           tooltip={t("common.remove")}
           variant="plain"

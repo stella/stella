@@ -1,6 +1,3 @@
-import { panic } from "better-result";
-
-import { parseApiErrorValue } from "@stll/api-contract";
 import {
   parsePolishedTimeEntryNarrativeResponse,
   parseTimeApprovalBatch,
@@ -13,95 +10,64 @@ import {
   parseTimeEntrySummary,
   parseTimeEntryUpdatedResponse,
   parseTimeReturnBatch,
+  type TimeEntry,
+  type TimeEntryListPage,
 } from "@stll/api-contract/time-entries";
-import type {
-  TimeEntry,
-  TimeEntryListPage,
-  TimeEntrySuggestionsResponse,
-  TimeEntrySummary,
-} from "@stll/api-contract/time-entries";
-import { fetchWithTimeout } from "@stll/fetch";
 import { cents } from "@stll/money";
 import type { CentsAmount } from "@stll/money";
 
-import {
-  getApiRequestHeaders,
-  waitForSimulatedApiDelay,
-} from "@/lib/api-request-context";
-import { apiUrl } from "@/lib/api-url";
-import { toAPIError } from "@/lib/errors/api";
+import { api } from "@/lib/api";
+import type { WebApiRoutes } from "@/lib/api";
+import { invokeCapability } from "@/lib/capabilities/capability-request";
+import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
+import type { ApiResponse } from "@/lib/errors/api";
 
-type TimeApprovalBatch = NonNullable<ReturnType<typeof parseTimeApprovalBatch>>;
-type TimeReturnBatch = NonNullable<ReturnType<typeof parseTimeReturnBatch>>;
+const timeEntryResponseParsers = {
+  approve: parseTimeApprovalBatch,
+  batchDelete: parseTimeEntryUpdatedResponse,
+  batchUpdate: parseTimeEntryUpdatedResponse,
+  create: parseTimeEntryIdResponse,
+  decideSuggestion: parseTimeEntrySuggestionDecision,
+  delete: parseTimeEntryDeleteResponse,
+  list: parseTimeEntryListPage,
+  polishNarrative: parsePolishedTimeEntryNarrativeResponse,
+  return: parseTimeReturnBatch,
+  split: parseTimeEntrySplitResponse,
+  suggestions: parseTimeEntrySuggestionsResponse,
+  summary: parseTimeEntrySummary,
+  update: parseTimeEntryIdResponse,
+} as const;
 
-const TIME_ENTRY_REQUEST_TIMEOUT_MS = 30_000;
-
-type TimeEntryQueryValue = boolean | number | string | undefined;
-
-type TimeEntryRequestOptions<T> = {
-  body?: unknown;
-  method?: "DELETE" | "GET" | "PATCH" | "POST" | "PUT";
-  parse: (input: unknown) => T | null;
-  path: "" | `/${string}`;
-  query?: Record<string, TimeEntryQueryValue>;
-  signal?: AbortSignal | undefined;
-  /** The matter the route is scoped to; null for organization-wide routes. */
-  workspaceId: string | null;
-};
-
-const requestTimeEntries = async <T>({
-  body,
-  method = "GET",
-  parse,
-  path,
-  query,
-  signal,
-  workspaceId,
-}: TimeEntryRequestOptions<T>): Promise<T> => {
-  await waitForSimulatedApiDelay();
-  const url = new URL(
-    apiUrl(
-      workspaceId === null
-        ? `/time-entries${path}`
-        : `/time-entries/${encodeURIComponent(workspaceId)}${path}`,
-    ),
-  );
-  if (query) {
-    for (const [key, value] of Object.entries(query)) {
-      if (value !== undefined) {
-        url.searchParams.set(key, String(value));
-      }
-    }
-  }
-  const response = await fetchWithTimeout(url, {
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-    credentials: "include",
-    headers: {
-      ...getApiRequestHeaders(),
-      ...(body === undefined ? {} : { "content-type": "application/json" }),
-    },
-    method,
-    signal,
-    timeoutMs: TIME_ENTRY_REQUEST_TIMEOUT_MS,
-  });
-  if (!response.ok) {
-    const payload: unknown = await response.json().catch(() => null);
-    throw toAPIError({
-      status: response.status,
-      value: parseApiErrorValue(payload),
-    });
-  }
-  const parsed = parse(await response.json());
+const parseTimeEntryResponse = <T>(
+  response: ApiResponse<unknown>,
+  parser: (input: unknown) => T | null,
+): T => {
+  const parsed = parser(unwrapApiResponse(response));
   if (parsed === null) {
     throw toAPIError({ status: 502, value: null });
   }
   return parsed;
 };
 
-type FetchTimeEntriesOptions = {
-  query: Record<string, TimeEntryQueryValue>;
-  signal?: AbortSignal | undefined;
-  workspaceId: string;
+const timeEntriesRoute = (workspaceId: string) =>
+  api["time-entries"]({ workspaceId });
+
+// Request bodies are the API's own route schemas, so a field the API does
+// not accept cannot be sent.
+type TimeEntryRoutes = WebApiRoutes["time-entries"][":workspaceId"];
+
+type TimeEntriesQuery = {
+  limit?: number;
+  cursor?: string;
+  userId?: string;
+  scope?: "me";
+  workItemId?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  status?: "approved" | "billed" | "draft" | "submitted" | "written_off";
+  source?: "activity" | "manual" | "suggested" | "timer";
+  billable?: boolean;
+  hasActiveTimer?: boolean;
 };
 
 type BrowserTimeEntry = Omit<TimeEntry, "rateAtEntry"> & {
@@ -112,140 +78,137 @@ type BrowserTimeEntryListPage = Omit<TimeEntryListPage, "items"> & {
   items: BrowserTimeEntry[];
 };
 
+type FetchTimeEntriesOptions = {
+  query: TimeEntriesQuery;
+  signal?: AbortSignal | undefined;
+  workspaceId: string;
+};
+
 export const fetchTimeEntries = async ({
   query,
   signal,
   workspaceId,
 }: FetchTimeEntriesOptions): Promise<BrowserTimeEntryListPage> => {
-  const page = await requestTimeEntries({
-    parse: parseTimeEntryListPage,
-    path: "",
-    query,
-    signal,
-    workspaceId,
-  });
+  const page = parseTimeEntryResponse(
+    await timeEntriesRoute(workspaceId).get({
+      query,
+      ...(signal === undefined ? {} : { fetch: { signal } }),
+    }),
+    timeEntryResponseParsers.list,
+  );
   return {
     ...page,
-    items: page.items.map((entry) =>
-      Object.assign(entry, { rateAtEntry: cents(entry.rateAtEntry) }),
-    ),
+    items: page.items.map((entry) => ({
+      ...entry,
+      rateAtEntry: cents(entry.rateAtEntry),
+    })),
   };
+};
+
+type FetchTimeEntrySummaryOptions = {
+  query: { dateFrom: string; dateTo: string; scope?: "team" };
+  signal?: AbortSignal | undefined;
+  workspaceId: string;
 };
 
 export const fetchTimeEntrySummary = async ({
   query,
   signal,
   workspaceId,
-}: FetchTimeEntriesOptions): Promise<TimeEntrySummary> =>
-  await requestTimeEntries({
-    parse: parseTimeEntrySummary,
-    path: "/summary",
-    query,
-    signal,
-    workspaceId,
-  });
+}: FetchTimeEntrySummaryOptions) =>
+  parseTimeEntryResponse(
+    await timeEntriesRoute(workspaceId).summary.get({
+      query,
+      ...(signal === undefined ? {} : { fetch: { signal } }),
+    }),
+    timeEntryResponseParsers.summary,
+  );
+
+type FetchTimeEntrySuggestionsOptions = {
+  query: { date: string; timezoneId: string };
+  signal?: AbortSignal | undefined;
+  workspaceId: string;
+};
 
 export const fetchTimeEntrySuggestions = async ({
   query,
   signal,
   workspaceId,
-}: FetchTimeEntriesOptions): Promise<TimeEntrySuggestionsResponse> =>
-  await requestTimeEntries({
-    parse: parseTimeEntrySuggestionsResponse,
-    path: "/suggestions",
-    query,
-    signal,
-    workspaceId,
-  });
+}: FetchTimeEntrySuggestionsOptions) =>
+  parseTimeEntryResponse(
+    await timeEntriesRoute(workspaceId).suggestions.get({
+      query,
+      ...(signal === undefined ? {} : { fetch: { signal } }),
+    }),
+    timeEntryResponseParsers.suggestions,
+  );
 
-type TimeEntryMutation =
-  | { body: unknown; type: "create" }
-  | { body: unknown; type: "update" }
-  | { body: unknown; type: "delete" }
-  | { body: unknown; type: "batch_update" }
-  | { body: unknown; type: "batch_delete" }
-  | { body: unknown; type: "split" }
-  | { body: unknown; type: "suggestion_decision" };
+export type CreateTimeEntryBody = TimeEntryRoutes["put"]["body"];
 
-type SendTimeEntryMutationOptions = {
-  mutation: TimeEntryMutation;
-  workspaceId: string;
-};
+export const createTimeEntry = async (
+  workspaceId: string,
+  body: CreateTimeEntryBody,
+) =>
+  parseTimeEntryResponse(
+    await timeEntriesRoute(workspaceId).put(body),
+    timeEntryResponseParsers.create,
+  );
 
-export const sendTimeEntryMutation = async ({
-  mutation,
-  workspaceId,
-}: SendTimeEntryMutationOptions): Promise<void> => {
-  switch (mutation.type) {
-    case "create":
-      await requestTimeEntries({
-        body: mutation.body,
-        method: "PUT",
-        parse: parseTimeEntryIdResponse,
-        path: "/",
-        workspaceId,
-      });
-      return;
-    case "update":
-      await requestTimeEntries({
-        body: mutation.body,
-        method: "PATCH",
-        parse: parseTimeEntryIdResponse,
-        path: "/",
-        workspaceId,
-      });
-      return;
-    case "delete":
-      await requestTimeEntries({
-        body: mutation.body,
-        method: "DELETE",
-        parse: parseTimeEntryDeleteResponse,
-        path: "/",
-        workspaceId,
-      });
-      return;
-    case "batch_update":
-      await requestTimeEntries({
-        body: mutation.body,
-        method: "POST",
-        parse: parseTimeEntryUpdatedResponse,
-        path: "/batch",
-        workspaceId,
-      });
-      return;
-    case "batch_delete":
-      await requestTimeEntries({
-        body: mutation.body,
-        method: "DELETE",
-        parse: parseTimeEntryUpdatedResponse,
-        path: "/batch",
-        workspaceId,
-      });
-      return;
-    case "split":
-      await requestTimeEntries({
-        body: mutation.body,
-        method: "POST",
-        parse: parseTimeEntrySplitResponse,
-        path: "/split",
-        workspaceId,
-      });
-      return;
-    case "suggestion_decision":
-      await requestTimeEntries({
-        body: mutation.body,
-        method: "POST",
-        parse: parseTimeEntrySuggestionDecision,
-        path: "/suggestions/decisions",
-        workspaceId,
-      });
-      return;
-    default: {
-      mutation satisfies never;
-      return panic(`Unhandled mutation: ${String(mutation)}`);
-    }
-  }
-};
+export type UpdateTimeEntryBody = TimeEntryRoutes["patch"]["body"];
+
+export const updateTimeEntry = async (
+  workspaceId: string,
+  body: UpdateTimeEntryBody,
+) =>
+  parseTimeEntryResponse(
+    await timeEntriesRoute(workspaceId).patch(body),
+    timeEntryResponseParsers.update,
+  );
+
+export const deleteTimeEntry = async (workspaceId: string, id: string) =>
+  parseTimeEntryResponse(
+    await timeEntriesRoute(workspaceId).delete({ id }),
+    timeEntryResponseParsers.delete,
+  );
+
+export const batchUpdateTimeEntries = async (
+  workspaceId: string,
+  body: TimeEntryRoutes["batch"]["post"]["body"],
+) =>
+  parseTimeEntryResponse(
+    await timeEntriesRoute(workspaceId).batch.post(body),
+    timeEntryResponseParsers.batchUpdate,
+  );
+
+export const batchDeleteTimeEntries = async (
+  workspaceId: string,
+  ids: string[],
+) =>
+  parseTimeEntryResponse(
+    await timeEntriesRoute(workspaceId).batch.delete({ ids }),
+    timeEntryResponseParsers.batchDelete,
+  );
+
+export const splitTimeEntry = async (
+  workspaceId: string,
+  body: TimeEntryRoutes["split"]["post"]["body"],
+) =>
+  parseTimeEntryResponse(
+    await timeEntriesRoute(workspaceId).split.post(body),
+    timeEntryResponseParsers.split,
+  );
+
+export type TimeSuggestionDecisionBody =
+  TimeEntryRoutes["suggestions"]["decisions"]["post"]["body"];
+
+export const decideTimeSuggestion = async (
+  workspaceId: string,
+  body: TimeSuggestionDecisionBody,
+) =>
+  parseTimeEntryResponse(
+    await timeEntriesRoute(workspaceId).suggestions.decisions.post(body),
+    timeEntryResponseParsers.decideSuggestion,
+  );
 
 type PolishTimeEntryNarrativeOptions = {
   instruction: string;
@@ -257,45 +220,49 @@ export const polishTimeEntryNarrative = async ({
   instruction,
   narrative,
   workspaceId,
-}: PolishTimeEntryNarrativeOptions): Promise<{ narrative: string }> =>
-  await requestTimeEntries({
-    body: { instruction, narrative },
-    method: "POST",
-    parse: parsePolishedTimeEntryNarrativeResponse,
-    path: "/polish-narrative",
-    workspaceId,
-  });
+}: PolishTimeEntryNarrativeOptions) =>
+  parseTimeEntryResponse(
+    await timeEntriesRoute(workspaceId)["polish-narrative"].post({
+      instruction,
+      narrative,
+    }),
+    timeEntryResponseParsers.polishNarrative,
+  );
 
-/**
- * Approves entries across the organization's matters in one call; the API
- * answers per entry, approved or refused with its reason.
- */
-export const approveTimeEntries = async (
-  ids: readonly string[],
-): Promise<TimeApprovalBatch> =>
-  await requestTimeEntries({
-    body: { ids },
-    method: "POST",
-    parse: parseTimeApprovalBatch,
-    path: "/approve",
-    workspaceId: null,
-  });
+/** Approves entries across the organization's matters in one call. */
+export const approveTimeEntries = async (ids: readonly string[]) =>
+  await invokeCapability(
+    "time-entries.approval-queue.approve",
+    async (request) => {
+      const response = await api["time-entries"].approve.post(
+        { ids: [...ids] },
+        request,
+      );
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      return parseTimeEntryResponse(response, timeEntryResponseParsers.approve);
+    },
+  );
 
-/**
- * Returns entries to their owners with one comment in one call; the API
- * answers per entry, returned or refused with its reason.
- */
+/** Returns entries to their owners with one comment in one call. */
 export const returnTimeEntries = async ({
   comment,
   ids,
 }: {
   comment: string;
   ids: readonly string[];
-}): Promise<TimeReturnBatch> =>
-  await requestTimeEntries({
-    body: { comment, ids },
-    method: "POST",
-    parse: parseTimeReturnBatch,
-    path: "/approval-queue/return",
-    workspaceId: null,
-  });
+}) =>
+  await invokeCapability(
+    "time-entries.approval-queue.return",
+    async (request) => {
+      const response = await api["time-entries"]["approval-queue"].return.post(
+        { comment, ids: [...ids] },
+        request,
+      );
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      return parseTimeEntryResponse(response, timeEntryResponseParsers.return);
+    },
+  );

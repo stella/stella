@@ -64,6 +64,7 @@ import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import {
   CapabilityAction,
   useActionCapabilities,
@@ -100,6 +101,7 @@ type TranslateDocumentDialogProps = TranslateDocumentDialogCommonProps &
 export const TranslateDocumentDialog = (
   props: TranslateDocumentDialogProps,
 ) => {
+  const idempotentSubmit = useIdempotentSubmit();
   const {
     workspaceId,
     viewId,
@@ -382,10 +384,18 @@ export const TranslateDocumentDialog = (
         switch (choice) {
           case "translated:deepl":
             return unwrapApiResponse(
-              await client.post({
-                ...common,
-                output: "translated",
-                engine: "deepl",
+              await idempotentSubmit.run({
+                operation: `translations.${workspaceId}.create`,
+                body: {
+                  ...common,
+                  output: "translated" as const,
+                  engine: "deepl" as const,
+                },
+                send: async (body) => {
+                  const reply = await client.post(body);
+                  unwrapApiResponse(reply);
+                  return reply;
+                },
               }),
             );
           case "translated:ai":
@@ -394,11 +404,22 @@ export const TranslateDocumentDialog = (
               preparationQuery.data?.entityVersionId ??
               panic("AI translation started without a prepared version");
             return unwrapApiResponse(
-              await client.post({
-                ...common,
-                output: choice === "translated:ai" ? "translated" : "bilingual",
-                engine: "ai",
-                entityVersionId,
+              await idempotentSubmit.run({
+                operation: `translations.${workspaceId}.create`,
+                body: {
+                  ...common,
+                  output:
+                    choice === "translated:ai"
+                      ? ("translated" as const)
+                      : ("bilingual" as const),
+                  engine: "ai" as const,
+                  entityVersionId,
+                },
+                send: async (body) => {
+                  const reply = await client.post(body);
+                  unwrapApiResponse(reply);
+                  return reply;
+                },
               }),
             );
           }

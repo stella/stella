@@ -176,7 +176,7 @@ export const CellMetadataFlags = ({
               aria-label={t("workspaces.table.lock.lock")}
               className={cn(
                 CELL_CORNER_CLASS.start,
-                "flex opacity-0 transition-opacity group-hover/cell-content:opacity-100 focus-visible:opacity-100",
+                "flex opacity-0 transition-opacity group-hover/cell-content:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100",
               )}
               data-row-expansion-ignore
               onClick={(event) => {
@@ -214,7 +214,7 @@ export const CellMetadataFlags = ({
               aria-label={getFlagLabel(VERIFIED_FLAG_ID)}
               className={cn(
                 CELL_CORNER_CLASS.end,
-                "flex opacity-0 transition-opacity group-hover/cell-content:opacity-100 focus-visible:opacity-100",
+                "flex opacity-0 transition-opacity group-hover/cell-content:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100",
               )}
               onClick={(event) => {
                 event.stopPropagation();

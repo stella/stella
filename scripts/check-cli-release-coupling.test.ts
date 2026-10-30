@@ -619,9 +619,15 @@ const releasedTagFixture = (tagged: "release" | "elsewhere" | "none") => {
   return root;
 };
 
-const runBase = (root: string) =>
+const runBase = (root: string, env: NodeJS.ProcessEnv = {}) =>
   Bun.spawnSync([process.execPath, SCRIPT, "--base", "fixture-main"], {
     cwd: root,
+    env: {
+      ...process.env,
+      GITHUB_EVENT_NAME: "pull_request",
+      GITHUB_REF: "refs/pull/123/merge",
+      ...env,
+    },
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -695,5 +701,148 @@ test("an advancing base does not turn an unchanged PR into a release", () => {
     );
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+const mergeGroupFixture = (tagged: "release" | "elsewhere") => {
+  const root = releasedTagFixture(tagged);
+  const git = (...args: string[]) => {
+    const result = spawnSync("git", args, {
+      maxBuffer: 2 ** 30,
+      cwd: root,
+      encoding: "utf-8",
+    });
+    expect(result.status, result.stderr).toBe(0);
+    return result.stdout.trim();
+  };
+  const prHead = git("rev-parse", "HEAD");
+  git("clone", "--bare", "--no-local", root, path.join(root, "remote.git"));
+  git("remote", "add", "origin", path.join(root, "remote.git"));
+  git("push", "origin", `${prHead}:refs/pull/123/head`);
+  git("checkout", "fixture-main");
+  mkdirSync(path.join(root, ".changeset"));
+  writeFileSync(
+    path.join(root, ".changeset/pending.md"),
+    '---\n"@stll/cli": patch\n---\nPending CLI change.\n',
+  );
+  git("add", ".changeset/pending.md");
+  git("commit", "-m", "fixture pending CLI change on main");
+  // The queue builds its group commit on top of the base, never on it.
+  git("checkout", "-b", "merge-group");
+  git("merge", "--squash", prHead);
+  git("commit", "-m", "fixture squash merge group");
+  expect(
+    spawnSync("git", ["merge-base", "--is-ancestor", prHead, "HEAD"], {
+      maxBuffer: 2 ** 30,
+      cwd: root,
+    }).status,
+  ).toBe(1);
+  // The full check must report pending changesets without contacting npm.
+  mkdirSync(path.join(root, "packages/cli"), { recursive: true });
+  writeFileSync(
+    path.join(root, "packages/cli/package.json"),
+    '{"version":"0.10.1"}',
+  );
+  mkdirSync(path.join(root, "bin"));
+  writeFileSync(
+    path.join(root, "bin/npm"),
+    `#!/bin/sh\nprintf '%s\\n' '{"dist-tags.latest":"0.10.1","versions":["0.10.1"]}'\n`,
+    { mode: 0o755 },
+  );
+  const env = {
+    GITHUB_EVENT_NAME: "merge_group",
+    GITHUB_REF: `refs/heads/gh-readonly-queue/main/pr-123-${git("rev-parse", "HEAD")}`,
+    PATH: `${path.join(root, "bin")}${path.delimiter}${process.env["PATH"] ?? ""}`,
+  };
+  return { root, git, prHead, env };
+};
+
+test("a squash merge group accepts the tagged PR history despite pending CLI changesets on main", () => {
+  const { root, env } = mergeGroupFixture("release");
+  try {
+    const result = runBase(root, env);
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
+    expect(result.stdout.toString()).toContain("v0.9.48 is already tagged at");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a squash merge group fetches a PR head absent from the checkout", () => {
+  const { root, env, git, prHead } = mergeGroupFixture("release");
+  try {
+    git("push", "origin", "HEAD:refs/heads/merge-group");
+    const checkout = path.join(root, "checkout");
+    git(
+      "clone",
+      "--no-local",
+      "--depth",
+      "1",
+      "--branch",
+      "merge-group",
+      path.join(root, "remote.git"),
+      checkout,
+    );
+    expect(
+      spawnSync("git", ["cat-file", "-e", prHead], {
+        maxBuffer: 2 ** 30,
+        cwd: checkout,
+      }).status,
+    ).not.toBe(0);
+    const result = runBase(checkout, env);
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
+    expect(result.stdout.toString()).toContain("v0.9.48 is already tagged at");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("merge groups fail closed for unrelated tags, malformed refs, and missing PR heads", () => {
+  for (const failure of [
+    "unrelated-tag",
+    "malformed-ref",
+    "trailing-newline",
+    "zero-pr",
+    "short-sha",
+    "missing-pr-head",
+    "lookup-failure",
+  ] as const) {
+    const { root, env, git } = mergeGroupFixture(
+      failure === "unrelated-tag" ? "elsewhere" : "release",
+    );
+    try {
+      switch (failure) {
+        case "unrelated-tag":
+          break;
+        case "malformed-ref":
+          env.GITHUB_REF += "/extra";
+          break;
+        case "trailing-newline":
+          env.GITHUB_REF += "\n";
+          break;
+        case "zero-pr":
+          env.GITHUB_REF = env.GITHUB_REF.replace("pr-123-", "pr-0-");
+          break;
+        case "short-sha":
+          env.GITHUB_REF = env.GITHUB_REF.slice(0, -1);
+          break;
+        case "missing-pr-head":
+          git("push", "origin", ":refs/pull/123/head");
+          break;
+        case "lookup-failure":
+          git("remote", "set-url", "origin", path.join(root, "missing.git"));
+          break;
+        default:
+          failure satisfies never;
+      }
+      const result = runBase(root, env);
+      expect(result.exitCode, failure).toBe(1);
+      expect(result.stderr.toString(), failure).toContain(
+        "pending changesets name @stll/cli",
+      );
+      expect(result.stdout.toString(), failure).not.toContain("already tagged");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   }
 });

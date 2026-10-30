@@ -6,6 +6,7 @@ import { panic, Result } from "better-result";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
+import { parseDecimalToken } from "@stll/agent-input/numeric-token";
 import type { ConditionNode, Operand } from "@stll/conditions";
 import { evaluateCondition, isSafeFieldPath } from "@stll/template-conditions";
 import { Button } from "@stll/ui/button";
@@ -106,6 +107,7 @@ import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { toSafeId } from "@/lib/safe-id";
 import { downloadFile } from "@/lib/utils";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
@@ -549,13 +551,10 @@ const EditFieldButton = ({ onEdit }: { onEdit: () => void }) => {
 
 /** A number field's stored text as the number it shows; empty or unreadable
  *  text shows an empty field. */
-const numberFieldValue = (value: unknown): number | null => {
-  if (typeof value !== "string" || value.trim() === "") {
-    return null;
-  }
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-};
+const numberFieldValue = (value: unknown): number | null =>
+  typeof value === "string"
+    ? parseDecimalToken(value.trim()).unwrapOr(null)
+    : null;
 
 /** Standard field label line: label text, required marker, prefill badge, and
  *  (when an edit handler is present) a trailing pencil. */
@@ -1475,6 +1474,7 @@ export const TemplateForm = ({
   prefill,
   initialValues,
 }: TemplateFormProps) => {
+  const idempotentSubmit = useIdempotentSubmit();
   const t = useTranslations();
   const queryClient = useQueryClient();
   // Formula fields are derived server-side at fill time, never user-entered:
@@ -2149,16 +2149,16 @@ export const TemplateForm = ({
         conditionFields: aiConditionFields,
         conditions,
       });
-      const response = await api
-        .templates({ templateId })
-        ["fill-to"]({ workspaceId })
-        .post({
+      const response = await idempotentSubmit.run({
+        operation: `templates.${templateId}.fill-to.${workspaceId}`,
+        body: {
           values: submitValues,
           clauseOverrides,
-          ...(parentId !== null && {
-            parentId: toSafeId<"entity">(parentId),
-          }),
-        });
+          ...(parentId !== null && { parentId: toSafeId<"entity">(parentId) }),
+        },
+        send: async (body) =>
+          api.templates({ templateId })["fill-to"]({ workspaceId }).post(body),
+      });
 
       if (response.error) {
         notifyUserError(toAPIError(response.error), t("templates.fillFailed"));

@@ -148,10 +148,8 @@ export const PublicLawPager = ({
             {t("caseLaw.pagination.refineForMore")}
           </p>
         ) : null}
-        <Label className="gap-2 text-xs font-normal sm:text-xs">
-          <span className="text-muted-foreground">
-            {t("caseLaw.pagination.perPage")}
-          </span>
+        <Label variant="muted">
+          {t("caseLaw.pagination.perPage")}
           <Select
             onValueChange={(value: string | null) => {
               const next = PUBLIC_LAW_PAGE_SIZES.find(

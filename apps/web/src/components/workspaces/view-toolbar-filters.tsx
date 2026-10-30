@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { useTranslations } from "use-intl";
 
+import { parseDecimalToken } from "@stll/agent-input/numeric-token";
 import {
   ENTITY_PRIORITIES as PRIORITY_VALUES,
   TASK_STATUSES as STATUS_VALUES,
@@ -78,13 +79,8 @@ import {
 
 /** A filter value's text as the number its field shows; empty or unreadable
  *  text shows an empty field. */
-const leafNumberValue = (value: string): number | null => {
-  if (value.trim() === "") {
-    return null;
-  }
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-};
+const leafNumberValue = (value: string): number | null =>
+  parseDecimalToken(value.trim()).unwrapOr(null);
 
 type FilterChipsProps = {
   filters: ConditionNode[];

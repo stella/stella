@@ -368,7 +368,8 @@
     "welcomeShortcutDescription": "Naciśnij {shortcut}, aby przejrzeć historię i wybrać wycinek.",
     "welcomeShortcutTitle": "Otwórz go z dowolnego miejsca.",
     "welcomeStart": "Zacznij kopiować",
-    "welcomeTitle": "Poznaj swój schowek"
+    "welcomeTitle": "Poznaj swój schowek",
+    "registryIdentifierSearchHint": "Wprowadź {identifiers}."
   },
   "activity": {
     "title": "Aktywność",

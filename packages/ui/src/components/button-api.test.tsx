@@ -26,7 +26,8 @@ describe("Button selected", () => {
       </Button>,
     );
 
-    expect(markup).not.toContain("data-pressed");
+    // The classes name the state; the attribute that turns it on is absent.
+    expect(markup).not.toContain('data-pressed=""');
   });
 
   test.each([
@@ -216,5 +217,15 @@ describe("Button consolidated additions", () => {
     expect(markup).toContain("size-5");
     expect(markup).toContain("data-base-ui-tooltip-trigger");
     expect(markup).toContain("text-muted-foreground");
+  });
+});
+
+describe("Button plain positioning", () => {
+  test("is the containing block for anything it overlays", () => {
+    const classes = classesOf(
+      renderToStaticMarkup(<Button variant="plain">Card</Button>),
+    );
+
+    expect(classes).toContain("relative");
   });
 });

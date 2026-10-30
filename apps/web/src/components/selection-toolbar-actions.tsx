@@ -1,5 +1,5 @@
 import { useId, useRef, useState } from "react";
-import type { RefObject } from "react";
+import type { ReactNode, RefObject } from "react";
 import { createPortal } from "react-dom";
 
 import { Result } from "better-result";
@@ -143,7 +143,6 @@ export const SelectionCopyMenu = ({
           setPreviewMode(null);
           onOpenChange(!open);
         }}
-        onMouseDown={(event) => event.preventDefault()}
         size="sm"
         variant="ghost"
       >
@@ -208,7 +207,6 @@ export const SelectionCopyMenu = ({
                       ?.focus();
                   }}
                   onFocus={() => setPreviewMode(copyMode)}
-                  onMouseDown={(event) => event.preventDefault()}
                   onMouseEnter={() => setPreviewMode(copyMode)}
                 >
                   <span className="hover:bg-accent block rounded-sm px-2 py-1.5 text-xs whitespace-nowrap">
@@ -227,6 +225,7 @@ export const SelectionCopyMenu = ({
 type SelectionAIActionsProps = {
   onAsk: () => void;
   /** Absent where the surface has no explanation to offer. */
+  explainLanguagePicker?: ReactNode;
   onExplain?: (() => void) | undefined;
   /** Why Explain cannot take this selection, or `undefined` when it can. */
   explainRefusal?: string | undefined;
@@ -236,6 +235,7 @@ type SelectionAIActionsProps = {
 export const SelectionAIActions = ({
   onAsk,
   onExplain,
+  explainLanguagePicker,
   explainRefusal,
 }: SelectionAIActionsProps) => {
   const t = useTranslations();
@@ -259,6 +259,7 @@ export const SelectionAIActions = ({
           </Button>
         )}
       </CapabilityAction>
+      {onExplain !== undefined && explainLanguagePicker}
       {onExplain !== undefined &&
         (explainRefusal === undefined ? (
           <CapabilityAction action={{ capability: "ai" }} surface="control">

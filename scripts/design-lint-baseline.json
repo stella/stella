@@ -101,7 +101,7 @@
     "apps/web/src/components/workspaces/table/metadata-popover.tsx": 1,
     "apps/web/src/components/workspaces/table/table-find-bar.tsx": 2,
     "apps/web/src/components/workspaces/tasks/task-metadata.tsx": 19,
-    "apps/web/src/components/workspaces/view-toolbar-filters.tsx": 3,
+    "apps/web/src/components/workspaces/view-toolbar-filters.tsx": 2,
     "apps/web/src/features/case-law/components/case-viewer/analysis/ai-headnotes.tsx": 1,
     "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx": 3,
     "apps/web/src/features/case-law/components/case-viewer/leading-citations.tsx": 4,
@@ -382,7 +382,6 @@
     "packages/ui/src/kanban/virtual-cell.tsx": 1
   },
   "no-imported-class-constant/no-imported-class-constant": {
-    "apps/web/src/components/app-sidebar.tsx": 1,
     "apps/web/src/components/chat/chat-composer-action-button.tsx": 1,
     "apps/web/src/components/chat/chat-matter-picker.tsx": 1,
     "apps/web/src/components/chat/chat-model-selector.tsx": 1,
@@ -826,7 +825,7 @@
     "apps/api/src/lib/legal-search/corpus-index-projection-erasure-store.ts": 3,
     "apps/api/src/lib/legal-search/corpus-index-projection-store.ts": 15,
     "apps/api/src/lib/legal-search/reconciliation-store.ts": 4,
-    "apps/api/src/lib/legal-search/sk-document-backfill.ts": 3,
+    "apps/api/src/lib/legal-search/sk-document-backfill.ts": 2,
     "apps/api/src/lib/legal-search/soft-law-ingestion-store.ts": 11,
     "apps/api/src/lib/lists/sanctions/refresh.ts": 5,
     "apps/api/src/lib/lists/verification/run-queue.ts": 1,
@@ -938,6 +937,7 @@
     "apps/web/src/components/inspector/playbook-facet.tsx": 13,
     "apps/web/src/components/inspector/skill-history/proposal-panel.tsx": 1,
     "apps/web/src/components/jurisdiction-picker.tsx": 2,
+    "apps/web/src/components/workspaces/table/select-row-content.tsx": 1,
     "apps/web/src/features/avt/verification-view.tsx": 2,
     "apps/web/src/features/case-law/components/case-viewer/analysis/annotation-visibility-toggle.tsx": 1,
     "apps/web/src/features/case-law/components/case-viewer/analysis/current-section.tsx": 1,
@@ -1034,7 +1034,8 @@
     "packages/mcp-apps/src/decision-reader/view.tsx": 2
   },
   "no-native-ui/no-native-checkbox": {
-    "apps/web/src/components/chat/request-secret-card.tsx": 2
+    "apps/web/src/components/chat/request-secret-card.tsx": 2,
+    "apps/web/src/components/workspaces/table/select-row-content.tsx": 1
   },
   "no-native-ui/no-native-details-grid": {
     "apps/landing/src/components/react/previews/RegistryLookupPreview.tsx": 3,
@@ -1159,6 +1160,8 @@
   "no-native-ui/no-native-table": {
     "apps/web/src/components/ai-suggestions/review-presence-matrix.tsx": 8,
     "apps/web/src/components/ai-suggestions/review-term-row.tsx": 1,
+    "apps/web/src/components/workspaces/table/workspace-grid.tsx": 3,
+    "apps/web/src/components/workspaces/table/workspace-table/workspace-table.tsx": 1,
     "apps/web/src/features/chat/components/lazy-chat-table-chart.tsx": 1,
     "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel.tsx": 14,
     "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-payments.tsx": 15,
@@ -1575,7 +1578,6 @@
     "apps/web/src/components/search-matter-preview.tsx": 1,
     "apps/web/src/components/templates/fill-clauses-section.tsx": 1,
     "apps/web/src/components/templates/template-ai-conditions.tsx": 1,
-    "apps/web/src/components/templates/template-form.tsx": 1,
     "apps/web/src/components/workspaces/copy-to-matter-dialog.tsx": 1,
     "apps/web/src/components/workspaces/hooks/use-create-b-boxes.ts": 1,
     "apps/web/src/components/workspaces/hooks/use-retry-cell.ts": 1,
@@ -1584,7 +1586,6 @@
     "apps/web/src/features/chat/hooks/use-chat-session.ts": 1,
     "apps/web/src/features/chat/queries.ts": 3,
     "apps/web/src/lib/desktop-bridge.ts": 2,
-    "apps/web/src/lib/files/queries.ts": 2,
     "apps/web/src/lib/workspaces/mutations/entities.ts": 1,
     "apps/web/src/lib/workspaces/mutations/properties.ts": 1,
     "apps/web/src/lib/workspaces/mutations/use-create-file-entities.ts": 1,

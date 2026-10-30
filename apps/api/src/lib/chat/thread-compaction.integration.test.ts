@@ -578,7 +578,9 @@ describe("chat thread compaction", () => {
 
     const messageReads = run.queries.filter(
       ({ query }) =>
-        query.includes('from "chat_messages"') && query.startsWith("select"),
+        query.includes('from "chat_messages"') &&
+        !query.includes('from "chat_threads"') &&
+        query.startsWith("select"),
     );
     expect(messageReads.length).toBeGreaterThan(0);
 
@@ -601,7 +603,9 @@ describe("chat thread compaction", () => {
 
     const messageReads = second.queries.filter(
       ({ query }) =>
-        query.includes('from "chat_messages"') && query.startsWith("select"),
+        query.includes('from "chat_messages"') &&
+        !query.includes('from "chat_threads"') &&
+        query.startsWith("select"),
     );
     // The keyset predicate against created_at is what bounds the second run to
     // the delta; without it the read would start at message zero again.
