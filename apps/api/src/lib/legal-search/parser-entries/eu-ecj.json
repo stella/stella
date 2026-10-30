@@ -6,6 +6,6 @@
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",
-    "reason": "the citations a decision makes are derived from its whole text: every case a joined or ranged CJEU reference names, and the ECLI that pins it, are re-read from the stored document with no feature storage of their own"
+    "reason": "Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters; the citations a decision makes are derived from its whole text: every case a joined or ranged CJEU reference names, and the ECLI that pins it, are re-read from the stored document with no feature storage of their own"
   }
 }
