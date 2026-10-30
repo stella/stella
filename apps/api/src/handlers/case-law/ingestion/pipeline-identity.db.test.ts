@@ -1616,7 +1616,7 @@ if (!databaseUrl || !runPostgresTests) {
           sourceId,
           scopedDb: concurrentDb,
           observedAt: new Date("2026-07-31T12:00:00.000Z"),
-        }).unwrap(),
+        }).then((outcome) => outcome.unwrap()),
         processDecision({
           input: plainTextIngestionResult({
             ...base,
@@ -1627,7 +1627,7 @@ if (!databaseUrl || !runPostgresTests) {
           sourceId,
           scopedDb: concurrentDb,
           observedAt: new Date("2026-07-31T12:00:01.000Z"),
-        }).unwrap(),
+        }).then((outcome) => outcome.unwrap()),
       ]);
 
       expect(outcomes.every(({ status }) => status === "complete")).toBe(true);
@@ -1977,7 +1977,7 @@ if (!databaseUrl || !runPostgresTests) {
         sourceId,
         scopedDb: replayScopedDb,
         observedAt: new Date("2026-07-31T12:03:02.000Z"),
-      }).unwrap();
+      }).then((outcome) => outcome.unwrap());
       await replayHasRead;
       (
         await processDecision({
@@ -2080,7 +2080,7 @@ if (!databaseUrl || !runPostgresTests) {
         sourceId,
         scopedDb: parseFailureDb,
         observedAt: new Date("2000-01-01T00:00:05.000Z"),
-      }).unwrap();
+      }).then((outcome) => outcome.unwrap());
       await parseFailureHasRead;
       (
         await processDecision({
@@ -2265,14 +2265,14 @@ if (!databaseUrl || !runPostgresTests) {
           sourceId,
           scopedDb,
           observedAt: new Date("2026-07-31T12:00:00.000Z"),
-        }).unwrap(),
+        }).then((outcome) => outcome.unwrap()),
         processDecision({
           input: second,
           observationOrder: 1n,
           sourceId,
           scopedDb,
           observedAt: new Date("2026-07-31T12:00:00.000Z"),
-        }).unwrap(),
+        }).then((outcome) => outcome.unwrap()),
       ]);
 
       const slugs = await storedSlugs(["concurrent-a", "concurrent-b"]);
@@ -2287,14 +2287,14 @@ if (!databaseUrl || !runPostgresTests) {
           sourceId,
           scopedDb,
           observedAt: new Date("2026-07-31T12:00:01.000Z"),
-        }).unwrap(),
+        }).then((outcome) => outcome.unwrap()),
         processDecision({
           input: second,
           observationOrder: 2n,
           sourceId,
           scopedDb,
           observedAt: new Date("2026-07-31T12:00:01.000Z"),
-        }).unwrap(),
+        }).then((outcome) => outcome.unwrap()),
       ]);
       expect(await storedSlugs(["concurrent-a", "concurrent-b"])).toEqual(
         beforeReplay,
@@ -2405,7 +2405,7 @@ if (!databaseUrl || !runPostgresTests) {
         sourceId,
         scopedDb: firstScopedDb,
         observedAt: new Date("2026-07-31T12:00:00.000Z"),
-      }).unwrap();
+      }).then((outcome) => outcome.unwrap());
       const firstWriteSettled = firstWrite.then(releaseFirstWrite, () => {
         // Release the second writer either way; `firstWrite` below reports
         // the failure, and leaving the latch closed would hang the suite.
@@ -2421,7 +2421,7 @@ if (!databaseUrl || !runPostgresTests) {
           sourceId,
           scopedDb: secondScopedDb,
           observedAt: new Date("2026-07-31T12:00:01.000Z"),
-        }).unwrap(),
+        }).then((outcome) => outcome.unwrap()),
       ]);
 
       const rows = await db.execute(

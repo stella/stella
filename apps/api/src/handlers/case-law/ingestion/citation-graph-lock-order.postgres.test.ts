@@ -254,7 +254,7 @@ if (!databaseUrl || !enabled) {
           const observed = observeDecision({
             input: input("standalone", "b".repeat(64)),
             sourceId,
-          });
+          }).unwrap();
           const identity = await scopedDb(
             async (tx) =>
               await resolveDecisionIdentityTx(tx, {

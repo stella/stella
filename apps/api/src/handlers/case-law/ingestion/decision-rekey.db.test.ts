@@ -285,7 +285,7 @@ if (!databaseUrl || !runPostgresTests) {
           input: observation({ registration, sourceDocumentId: "doc-c", ecli }),
           sourceId,
           metadataUrlSchema: contract.metadataUrlSchema,
-        });
+        }).unwrap();
         const identity = await scopedDb(
           async (tx) =>
             await resolveDecisionIdentityTx(tx, {
