@@ -2,6 +2,8 @@ import { expect, test } from "bun:test";
 
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 
+import { listAdapters } from "./adapters/adapter-registry";
+import { replayCapability } from "./replay";
 import {
   BACKGROUND_REPLAY_LIMITS,
   REPLAY_ENROLMENT,
@@ -56,4 +58,19 @@ test("the committed registry previews paragraph-label sources and the common cou
     dailyBudget: BACKGROUND_REPLAY_LIMITS.maxDailyBudget,
     reviewedDryRun: "fixture receipt",
   });
+});
+
+test("every enabled replay source can reparse its archived input", () => {
+  for (const adapter of listAdapters()) {
+    if (REPLAY_ENROLMENT[adapter.key].mode === "off") {
+      continue;
+    }
+    expect({
+      adapter: adapter.key,
+      capability: replayCapability(adapter).type,
+    }).toEqual({
+      adapter: adapter.key,
+      capability: "supported",
+    });
+  }
 });
