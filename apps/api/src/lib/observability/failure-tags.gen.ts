@@ -403,6 +403,8 @@ export const FAILURE_TAGS = [
   "SharedPostgresDockerError",
   "SharedTestPostgresError",
   "SkCollectionIssueError",
+  "SkDocumentRawMissingError",
+  "SkDocumentRawStorageError",
   "SkillFileError",
   "SkillRequiredToolsError",
   "SnapshotReconciliationError",

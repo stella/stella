@@ -412,6 +412,8 @@ export const TAGGED_FAILURE_REASON = {
   SharedPostgresDockerError: "tagged_failure",
   SharedTestPostgresError: "tagged_failure",
   SkCollectionIssueError: "tagged_failure",
+  SkDocumentRawMissingError: "tagged_failure",
+  SkDocumentRawStorageError: "tagged_failure",
   SkillFileError: "tagged_failure",
   SkillRequiredToolsError: "tagged_failure",
   SnapshotReconciliationError: "tagged_failure",
