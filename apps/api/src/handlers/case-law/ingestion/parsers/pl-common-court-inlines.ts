@@ -28,6 +28,7 @@ import { panic } from "better-result";
 import type { Inline } from "@stll/legal-ast/document-ast";
 import { hasInlineChildren } from "@stll/legal-ast/document-ast";
 
+import { startsWithPlOperativeVerb } from "./pl-operative-verbs";
 import { appendTextInline } from "./shared-inlines";
 
 // Built from code points: the characters are invisible in a regex literal.
@@ -94,10 +95,6 @@ const isEnumerationItem = (text: string): boolean => {
   return false;
 };
 
-/** An operative point opens with its verb: "oddala apelację". */
-const OPERATIVE_POINT =
-  /^(?:oddala|zmienia|uchyla|zasądza|stwierdza|umarza|utrzymuje|nakazuje|odrzuca|ustala|przyznaje|zwraca|przekazuje|obciąża|nie obciąża|znosi|orzeka|uznaje|wymierza|zwalnia|zakazuje|postanawia)\b/iu;
-
 /** The postal code of an address line: "00-001 Warszawa". */
 const POSTAL_CODE = /^\d{2}-\d{3}\b/u;
 
@@ -129,7 +126,7 @@ const isLineWrap = (before: string, after: string): boolean => {
     !BENCH_TITLE.test(previous) &&
     SENTENCE_CONTINUATION.test(next) &&
     !isEnumerationItem(next) &&
-    !OPERATIVE_POINT.test(next) &&
+    !startsWithPlOperativeVerb(next) &&
     !POSTAL_CODE.test(next) &&
     !BENCH_ROLE.test(next)
   );

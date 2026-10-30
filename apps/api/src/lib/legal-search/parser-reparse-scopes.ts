@@ -125,11 +125,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.CZ_NSS]: {
-    version: 24,
+    version: 25,
     scope: {
       type: "all",
       reason:
-        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
+        "Rebuild decision text, structure and paragraph identities from archived pages or registry originals; read current scalar metadata separately from related-record evidence and retain conflicting scalar values. Rebuild inline emphasis from retained PDF originals with the shared style mapper. Discovering an uncaptured original requires a normal re-crawl.",
     },
   },
   [ADAPTER_KEYS.CZ_US]: {
@@ -141,43 +141,43 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.SK_COURTS]: {
-    version: 20,
+    version: 21,
     scope: {
       type: "all",
       reason:
-        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
+        "Replay reads the stored source envelope and document objects through the ingestion parser, verifying each recorded digest and length; parser output is unchanged and the parsed decision has no feature storage of its own.",
     },
   },
   [ADAPTER_KEYS.SK_US]: {
-    version: 17,
+    version: 18,
     scope: {
       type: "all",
       reason:
-        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
+        "Replay reads the stored source envelope and document objects through the ingestion parser, verifying each recorded digest and length; parser output is unchanged and the parsed decision has no feature storage of its own.",
     },
   },
   [ADAPTER_KEYS.PL_COURTS]: {
-    version: 17,
+    version: 18,
     scope: {
       type: "all",
       reason:
-        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
+        "Re-read printed title order and opening, operative and signature roles from stored source; roles and block ordering have no independent feature storage.",
     },
   },
   [ADAPTER_KEYS.PL_SN]: {
-    version: 10,
-    scope: {
-      type: "all",
-      reason:
-        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
-    },
-  },
-  [ADAPTER_KEYS.PL_KIO]: {
     version: 11,
     scope: {
       type: "all",
       reason:
-        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
+        "Re-read printed title order and opening, operative and signature roles from stored source; preserve inline bold and italic emphasis in PDFs.",
+    },
+  },
+  [ADAPTER_KEYS.PL_KIO]: {
+    version: 12,
+    scope: {
+      type: "all",
+      reason:
+        "Re-read printed title order and opening, operative and signature roles from stored source; roles and block ordering have no independent feature storage.",
     },
   },
   [ADAPTER_KEYS.PL_TK]: {
@@ -197,11 +197,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_NCOURT]: {
-    version: 18,
+    version: 19,
     scope: {
       type: "all",
       reason:
-        "Re-read portal statute links against their anchor text: links whose provisions the anchor does not print lose them, links naming another act or a bare paragraph become plain text, and the metadata lists what was dropped. Also revalidates publisher head-matter ordering across the complete document AST.",
+        "Re-read printed title order and opening, operative and signature roles from stored source; roles and block ordering have no independent feature storage.",
     },
   },
   [ADAPTER_KEYS.AT_COURTS]: {
@@ -325,11 +325,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_KIS]: {
-    version: 11,
+    version: 13,
     scope: {
       type: "all",
       reason:
-        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
+        "Replay reads the stored source envelope and document objects through the ingestion parser, verifying each recorded digest and length; parser output is unchanged and the parsed decision has no feature storage of its own.",
     },
   },
   [ADAPTER_KEYS.PL_UODO]: {
@@ -341,19 +341,19 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_UOKIK]: {
-    version: 12,
+    version: 14,
     scope: {
       type: "all",
       reason:
-        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
+        "Replay reads the stored source envelope and document objects through the ingestion parser, verifying each recorded digest and length; parser output is unchanged and the parsed decision has no feature storage of its own.",
     },
   },
   [ADAPTER_KEYS.CZ_UOHS]: {
-    version: 5,
+    version: 7,
     scope: {
       type: "all",
       reason:
-        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
+        "Replay reads the stored source envelope and document objects through the ingestion parser, verifying each recorded digest and length; parser output is unchanged and the parsed decision has no feature storage of its own.",
     },
   },
 } as const satisfies ParserVersionScopes<
