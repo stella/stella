@@ -2,7 +2,7 @@ import type { PropsWithChildren } from "react";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic, Result } from "better-result";
-import { afterAll, afterEach, expect, jest, test } from "bun:test";
+import { afterAll, afterEach, expect, jest, mock, spyOn, test } from "bun:test";
 import { DetachedWindowAPI } from "happy-dom";
 
 import { DOCUMENT_OCR_AVAILABILITY } from "@stll/api-contract/document-ocr-availability";
@@ -57,6 +57,7 @@ afterEach(async () => {
   }
   clients.length = 0;
   globalThis.fetch = originalFetch;
+  mock.restore();
 });
 afterAll(async () => {
   // The DOM runner isolates this file. Shared UI roots can queue React work
@@ -1182,6 +1183,10 @@ test("stream admission exhaustion stays a budget failure after reload", async ()
 });
 
 const pollingServer = (settlement: "complete" | "never" | "hanging") => {
+  // Observing the initial claim must not consume its remaining lifetime.
+  let claimClock = Temporal.Instant.from(now);
+  // oxlint-disable-next-line no-restricted-properties -- The HTTP recovery fixture owns its claim clock independently of asynchronous observation.
+  spyOn(Temporal.Now, "instant").mockImplementation(() => claimClock);
   let row: ReaderAnswer | undefined;
   let listRequests = 0;
   let deletions = 0;
@@ -1195,9 +1200,7 @@ const pollingServer = (settlement: "complete" | "never" | "hanging") => {
       }
       listRequests += 1;
       if (row === undefined) {
-        // oxlint-disable-next-line no-restricted-properties -- The fake HTTP boundary owns this live claim clock; it never runs during SSR.
-        const clock = Temporal.Now.instant();
-        const claimAt = clock
+        const claimAt = claimClock
           .subtract({ milliseconds: READER_ANSWER_DEADLINE_MS - 300 })
           .toString();
         row = {
@@ -1263,6 +1266,10 @@ const pollingServer = (settlement: "complete" | "never" | "hanging") => {
     { preconnect: originalFetch.preconnect },
   );
   return {
+    advanceClaimClock: async (milliseconds: number) => {
+      claimClock = claimClock.add({ milliseconds });
+      await advanceClock(milliseconds);
+    },
     reads: () => listRequests,
     deletions: () => deletions,
     releaseRecovery: () => {
@@ -1333,9 +1340,9 @@ test.each(["never", "hanging"] as const)(
       ),
     );
     server.releaseRecovery();
-    await advanceClock(300);
-    await advanceClock(5000);
-    await advanceClock(0);
+    await server.advanceClaimClock(300);
+    await server.advanceClaimClock(5000);
+    await server.advanceClaimClock(0);
     expect(hook.result.current.answers.at(0)?.messages.at(-1)).toMatchObject({
       status: "failed",
       errorCode: "timeout",
