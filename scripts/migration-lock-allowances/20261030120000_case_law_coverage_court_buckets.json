@@ -1,0 +1,5 @@
+{
+  "create-table-references": "The foreign key takes SHARE ROW EXCLUSIVE on case_law_sources only while creating an empty table; acquisition is bounded by the one-second lock timeout and failure rolls the migration back for retry.",
+  "create-policy": "Each policy takes ACCESS EXCLUSIVE only on the newly created empty table; acquisition is bounded by the one-second lock timeout and failure rolls the migration back for retry.",
+  "row-level-security": "ENABLE and FORCE each take ACCESS EXCLUSIVE only on the newly created empty table; acquisition is bounded by the one-second lock timeout and failure rolls the migration back for retry."
+}

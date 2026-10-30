@@ -1,0 +1,8 @@
+[
+  {
+    "file": "apps/api/src/lib/legal-search/pg-fts-browse-facet-refresh.ts",
+    "from": "91f5e28e38c944c22b7e3e98887bcb4c5bb7f9c65a060b0cf370abdad2b8ab9f",
+    "to": "f989e482b41a612078ab00b9b38107f3b66e8b9071dc8b073e978c935853c53d",
+    "reason": "Existing facet-refresh transaction boundary; materializing and merging the bounded coverage court buckets changed the site's fingerprint."
+  }
+]

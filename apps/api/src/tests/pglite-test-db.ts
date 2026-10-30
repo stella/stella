@@ -490,6 +490,7 @@ export const ROLE_GRANT_STATEMENTS = [
   `
     GRANT SELECT, DELETE ON TABLE
       "case_law_browse_facet_counts",
+      "case_law_coverage_court_buckets",
       "case_law_coverage_summaries",
       "case_law_sitemap_shard_counts",
       "case_law_sitemap_shards",

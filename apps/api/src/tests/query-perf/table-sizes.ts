@@ -6,6 +6,8 @@
 export const QUERY_PERF_TABLE_SIZES = {
   // The court registry: patterns per country, read whole into the weight cache.
   case_law_court_weights: "small",
+  // At most the source census bound times the fixed top-court limit plus other.
+  case_law_coverage_court_buckets: "small",
   case_law_sources: "small",
   corpus_index_generations: "small",
   corpus_index_jurisdiction_serving: "small",

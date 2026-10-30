@@ -180,6 +180,10 @@ export const CASE_LAW_REMOVAL_STORES = {
     type: "removed-by-owner",
     owner: "invalidateCaseLawRemovalSnapshotsTx",
   },
+  case_law_coverage_court_buckets: {
+    type: "removed-by-owner",
+    owner: "invalidateCaseLawRemovalSnapshotsTx",
+  },
   case_law_source_arrivals: {
     type: "removed-by-owner",
     owner: "invalidateCaseLawRemovalSnapshotsTx",

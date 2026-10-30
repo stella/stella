@@ -4,9 +4,11 @@ import { eq, sql } from "drizzle-orm";
 import type { rootDb } from "@/api/db/root";
 import {
   caseLawBrowseFacetCounts,
+  caseLawCoverageCourtBuckets,
   publishedCaseLawDecisions,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { LIMITS } from "@/api/lib/limits";
 
 type RefreshDb = Pick<typeof rootDb, "select" | "transaction">;
 
@@ -30,6 +32,7 @@ export const refreshPgFtsBrowseFacets = async (
 ) =>
   await db.transaction(async (tx) => {
     await tx.delete(caseLawBrowseFacetCounts).where(sql`true`);
+    await tx.delete(caseLawCoverageCourtBuckets).where(sql`true`);
     await tx.execute(sql`
       WITH published AS MATERIALIZED (${pgFtsBrowseFacetPublishedQuery(tx)})
       INSERT INTO ${caseLawBrowseFacetCounts}
@@ -47,6 +50,28 @@ export const refreshPgFtsBrowseFacets = async (
       FROM published
       WHERE decision_date IS NOT NULL
       GROUP BY source_id, country, to_char(decision_date, 'YYYY')
+    `);
+    await tx.execute(sql`
+      WITH normalized AS (
+        SELECT source_id, nullif(btrim(value), '') AS court, sum(total)::int AS total
+        FROM ${caseLawBrowseFacetCounts}
+        WHERE kind = 'court'
+        GROUP BY source_id, nullif(btrim(value), '')
+      ), ranked AS (
+        SELECT source_id, court, total,
+          row_number() OVER (PARTITION BY source_id ORDER BY total DESC, court ASC) AS rank
+        FROM normalized
+      ), buckets AS (
+        SELECT source_id, rank::int, court, total FROM ranked
+        WHERE rank <= ${LIMITS.caseLawFacetLimit} AND court IS NOT NULL
+        UNION ALL
+        SELECT source_id, (${LIMITS.caseLawFacetLimit} + 1)::int, NULL, sum(total)::int
+        FROM ranked
+        WHERE rank > ${LIMITS.caseLawFacetLimit} OR court IS NULL
+        GROUP BY source_id
+      )
+      INSERT INTO ${caseLawCoverageCourtBuckets} (source_id, rank, court, total)
+      SELECT source_id, rank, court, total FROM buckets
     `);
 
     const [summary] = await tx
@@ -72,4 +97,7 @@ export const invalidatePgFtsBrowseFacetsTx = async (
   await tx
     .delete(caseLawBrowseFacetCounts)
     .where(eq(caseLawBrowseFacetCounts.sourceId, sourceId));
+  await tx
+    .delete(caseLawCoverageCourtBuckets)
+    .where(eq(caseLawCoverageCourtBuckets.sourceId, sourceId));
 };

@@ -24,12 +24,31 @@ import { resetPublicCaseLawConfigForTesting } from "@/api/lib/case-law/public-ca
 import { CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT } from "@/api/lib/decision-date-bounds-sql";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { refreshPgFtsBrowseFacets } from "@/api/lib/legal-search/pg-fts-browse-facet-refresh";
+import {
+  readPgFtsBrowseFacets,
+  readPgFtsBrowseFacetsBatch,
+} from "@/api/lib/legal-search/pg-fts-browse-facets";
 import { LIMITS } from "@/api/lib/limits";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
+
+const byCourtName = (
+  left: { court: string | null },
+  right: { court: string | null },
+) => {
+  const leftCourt = left.court ?? "";
+  const rightCourt = right.court ?? "";
+  if (leftCourt < rightCourt) {
+    return -1;
+  }
+  if (leftCourt > rightCourt) {
+    return 1;
+  }
+  return 0;
+};
 
 describe.skipIf(!enabled)("coverage computation (postgres)", () => {
   // timeout: exercise the complete coverage read against migrated PostgreSQL.
@@ -54,6 +73,7 @@ describe.skipIf(!enabled)("coverage computation (postgres)", () => {
           "case_law_decisions",
           "case_law_search_documents",
           "case_law_browse_facet_counts",
+          "case_law_coverage_court_buckets",
           "case_law_court_weights",
         ]) {
           // db-await-in-loop: clone the finite migrated corpus fixture.
@@ -188,9 +208,13 @@ describe.skipIf(!enabled)("coverage computation (postgres)", () => {
             { court: "", decisionDate: "0001-01-01" },
             { court: "Krajský soud v Brně", decisionDate: "9999-01-01" },
           ];
-          const regionalCourts = Object.values(CZ_ECLI_COURT_REGISTRY).map(
-            ({ name }) => name,
-          );
+          const regionalCourts = [
+            ...Object.values(CZ_ECLI_COURT_REGISTRY).map(({ name }, index) =>
+              index < 3 ? "" : name,
+            ),
+            "Coverage overflow court 1",
+            "Coverage overflow court 2",
+          ];
           expect(regionalCourts.length).toBeGreaterThan(
             LIMITS.caseLawFacetLimit,
           );
@@ -301,11 +325,24 @@ describe.skipIf(!enabled)("coverage computation (postgres)", () => {
           });
           expect(undated?.courts).toContainEqual({
             court: null,
-            decisions: regionalCourts.length - LIMITS.caseLawFacetLimit,
+            decisions: regionalCourts.length - LIMITS.caseLawFacetLimit + 1,
           });
+          expect(
+            undated?.courts.filter(({ court }) => court === null),
+          ).toHaveLength(1);
           expect(computedCountry.decisionYearFrom).toBe(2024);
           expect(computedCountry.decisionYearTo).toBe(2026);
           await refreshPgFtsBrowseFacets(tx);
+          const unnamedBuckets = await tx.execute(sql`
+            SELECT rank, total FROM case_law_coverage_court_buckets
+            WHERE source_id = ${undatedSourceId} AND court IS NULL
+          `);
+          expect(unnamedBuckets).toEqual([
+            {
+              rank: LIMITS.caseLawFacetLimit + 1,
+              total: regionalCourts.length - LIMITS.caseLawFacetLimit + 1,
+            },
+          ]);
           const snapshot = await computeCaseLawCoverageAnswer(
             async (read) => await read(tx),
             [],
@@ -322,7 +359,7 @@ describe.skipIf(!enabled)("coverage computation (postgres)", () => {
               ({ adapterKey, publishedDecisions, courts }) => ({
                 adapterKey,
                 publishedDecisions,
-                courts,
+                courts: courts.toSorted(byCourtName),
               }),
             ),
           ).toEqual(
@@ -330,9 +367,42 @@ describe.skipIf(!enabled)("coverage computation (postgres)", () => {
               ({ adapterKey, publishedDecisions, courts }) => ({
                 adapterKey,
                 publishedDecisions,
-                courts,
+                courts: courts.toSorted(byCourtName),
               }),
             ),
+          );
+
+          const facetQuery = {
+            jurisdiction: "CZE",
+            excludedSourceIds: [sourceId],
+            limit: LIMITS.caseLawFacetLimit,
+          };
+          const allSourceFacets = await readPgFtsBrowseFacets(tx, {
+            ...facetQuery,
+            excludedSourceIds: [],
+          });
+          const excludedSourceFacets = await readPgFtsBrowseFacets(
+            tx,
+            facetQuery,
+          );
+          expect(allSourceFacets.country.at(0)?.count).toBeGreaterThan(
+            excludedSourceFacets.country.at(0)?.count ?? 0,
+          );
+          const snapshotBatch = await readPgFtsBrowseFacetsBatch(tx, {
+            countries: ["CZE"],
+            excludedSourceIds: [sourceId],
+            limit: LIMITS.caseLawFacetLimit,
+          });
+          expect(snapshotBatch.get("CZE")).toEqual(excludedSourceFacets);
+
+          await tx.execute(sql`DELETE FROM ${caseLawBrowseFacetCounts}`);
+          const liveBatch = await readPgFtsBrowseFacetsBatch(tx, {
+            countries: ["CZE"],
+            excludedSourceIds: [sourceId],
+            limit: LIMITS.caseLawFacetLimit,
+          });
+          expect(liveBatch.get("CZE")).toEqual(
+            await readPgFtsBrowseFacets(tx, facetQuery),
           );
         });
       } finally {

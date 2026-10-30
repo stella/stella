@@ -68,6 +68,7 @@ describe.skipIf(!enabled)("published coverage bounds plan (postgres)", () => {
           "case_law_decisions",
           "case_law_search_documents",
           "case_law_browse_facet_counts",
+          "case_law_coverage_court_buckets",
         ]) {
           await db.execute(sql`CREATE TABLE ${schema}.${sql.identifier(table)}
             (LIKE public.${sql.identifier(table)} INCLUDING ALL)`);
@@ -193,7 +194,26 @@ describe.skipIf(!enabled)("published coverage bounds plan (postgres)", () => {
           SELECT 'year', 'CZE', sources.id, 'unused/' || n, 1
           FROM case_law_sources sources
           CROSS JOIN generate_series(1, ${FACET_YEARS}) n`);
+        await db.execute(sql`TRUNCATE case_law_coverage_court_buckets`);
+        await db.execute(sql`WITH normalized AS (
+          SELECT source_id, nullif(btrim(value), '') AS court, sum(total)::int AS total
+          FROM case_law_browse_facet_counts WHERE kind = 'court'
+          GROUP BY source_id, nullif(btrim(value), '')
+        ), ranked AS (
+          SELECT source_id, court, total,
+            row_number() OVER (PARTITION BY source_id ORDER BY total DESC, court ASC) AS rank
+          FROM normalized
+        ), buckets AS (
+          SELECT source_id, rank::int, court, total FROM ranked
+          WHERE rank <= ${LIMITS.caseLawFacetLimit}
+          UNION ALL
+          SELECT source_id, (${LIMITS.caseLawFacetLimit} + 1)::int, NULL, sum(total)::int
+          FROM ranked WHERE rank > ${LIMITS.caseLawFacetLimit} GROUP BY source_id
+        )
+        INSERT INTO case_law_coverage_court_buckets (source_id, rank, court, total)
+        SELECT source_id, rank, court, total FROM buckets`);
         await db.execute(sql`VACUUM (ANALYZE) case_law_browse_facet_counts`);
+        await db.execute(sql`VACUUM (ANALYZE) case_law_coverage_court_buckets`);
         captured.length = 0;
         const rows = await readCaseLawCoverageSourcesQuery(
           asTestRaw<CaseLawPublicReadTransaction>(db),
@@ -276,8 +296,20 @@ describe.skipIf(!enabled)("published coverage bounds plan (postgres)", () => {
           expect(probe["Index Name"], planEvidence).toBe(FACET_INDEX);
           expect(probe["Index Cond"], planEvidence).toContain("source_id");
           expect(probe["Index Cond"], planEvidence).toContain("court");
-          expect(probe["Actual Loops"], planEvidence).toBe(SOURCES);
+          // Only the source whose materialized row is absent reaches the
+          // compatibility fallback; populated sources use the bounded table.
+          expect(probe["Actual Loops"], planEvidence).toBe(1);
         }
+        const courtBucketProbes = planNodes(root).filter(
+          (node) =>
+            node["Relation Name"] === "case_law_coverage_court_buckets" &&
+            node["Actual Loops"] !== 0,
+        );
+        expect(courtBucketProbes, planEvidence).toHaveLength(1);
+        expect(
+          ["Seq Scan", "Index Scan", "Index Only Scan"],
+          planEvidence,
+        ).toContain(String(courtBucketProbes[0]?.["Node Type"]));
         const probes = planNodes(root).filter(
           (node) =>
             node["Relation Name"] === "case_law_decisions" &&
