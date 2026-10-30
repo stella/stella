@@ -872,7 +872,11 @@ const GENERATOR_DECLARATIONS = [
       ".prettierrc.yml",
     ],
     write: ["bun", "scripts/generate-main-heavy-infrastructure-steps.ts"],
-    check: null,
+    check: [
+      "bun",
+      "scripts/generate-main-heavy-infrastructure-steps.ts",
+      "--check",
+    ],
     checkedBy: "Generated files manifest guard",
     autofix: true,
     after: [],

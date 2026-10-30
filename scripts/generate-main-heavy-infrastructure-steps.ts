@@ -104,8 +104,20 @@ if (import.meta.main) {
   const workflow = await Bun.file(
     path.join(ROOT, ".github/workflows/ci.yml"),
   ).text();
-  writeFileSync(
-    path.join(ROOT, "scripts/main-heavy-infrastructure-steps.json"),
-    await generateMainHeavyInfrastructureSteps(workflow),
+  const outputPath = path.join(
+    ROOT,
+    "scripts/main-heavy-infrastructure-steps.json",
   );
+  const generated = await generateMainHeavyInfrastructureSteps(workflow);
+  if (process.argv.includes("--check")) {
+    const committed = await Bun.file(outputPath).text();
+    if (committed !== generated) {
+      console.error(
+        "scripts/main-heavy-infrastructure-steps.json is stale; run bun scripts/generate-main-heavy-infrastructure-steps.ts",
+      );
+      process.exit(1);
+    }
+  } else {
+    writeFileSync(outputPath, generated);
+  }
 }
