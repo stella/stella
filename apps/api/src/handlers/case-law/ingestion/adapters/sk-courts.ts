@@ -1,3 +1,5 @@
+// parser-output-unchanged: legacy wrappers nested by deferred capture produce the same metadata as their original raw shape; existing raw shapes are unchanged.
+// parser-output-unchanged: Deferred document raw storage is declared without changing metadata or document parsing.
 // parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
 // parser-output-unchanged: document-fetch routing metadata preserves parsed decision fields.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
@@ -108,6 +110,7 @@ import {
   FetchBoundaryError,
 } from "@/api/lib/errors/tagged-errors";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import { DOCUMENT_RAW_CAPTURE } from "@/api/lib/legal-search/document-raw-capture";
 import { DOCUMENT_DELIVERY } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { restrictSkCourtDocumentUrl } from "@/api/lib/legal-search/sk-court-document-url";
@@ -1927,7 +1930,9 @@ const skCourtsStoredRawParts = (
 ): SourceRawParts | null => {
   const envelope = decodeSourceRawEnvelope(raw);
   if (envelope !== null) {
-    return envelope;
+    return envelope["listing"] === undefined && envelope["legacy"] !== undefined
+      ? skCourtsStoredRawParts(envelope["legacy"], "application/json")
+      : envelope;
   }
   if (contentType !== null && contentType !== "application/json") {
     return null;
@@ -2102,10 +2107,9 @@ const reparseStoredRaw = (
  * keeps it.
  *
  * The listing row and the detail record are both kept, each verbatim. The
- * document file is fetched by a separate walk that keeps no part of it, so it
- * is the one surface of this source that is read and thrown away. The rest are
- * service-wide: a schema, registries, code lists, a hearing calendar and a
- * mirror this project is not the publisher of.
+ * document file is fetched by a separate walk and retained as an object
+ * beside the envelope. The remaining surfaces are service-wide: a schema,
+ * registries, code lists, a hearing calendar and a third-party mirror.
  */
 const SOURCE_SURFACES = [
   "listing",
@@ -2127,9 +2131,8 @@ const SK_COURTS_SOURCE_SURFACES = {
   surfaces: {
     listing: storedSourceSurface("listing"),
     detail: storedSourceSurface("detail"),
-    document: backlogSurface(
-      ADAPTER_KEYS.SK_COURTS,
-      "binary part; envelope object references not yet available",
+    document: storedSourceSurface(
+      DOCUMENT_RAW_CAPTURE[ADAPTER_KEYS.SK_COURTS].objectPart,
     ),
     openapi: excludedSourceSurface(
       "the service's own schema: the field list an inventory is written from, not a payload about any one decision",

@@ -36,6 +36,7 @@ import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import {
   clauseCategoriesOptions,
   clausesOptions,
@@ -81,6 +82,7 @@ export const LinkClauseDialog = ({
   defaultSlotName,
   reservedSlotNames,
 }: LinkClauseDialogProps) => {
+  const idempotentSubmit = useIdempotentSubmit();
   const t = useTranslations();
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const [selectedCategory, setSelectedCategory] = useState("");
@@ -258,9 +260,14 @@ export const LinkClauseDialog = ({
       body.slotName = slotName;
     }
 
-    const response = await api
-      .templates({ templateId: toSafeId<"template">(templateId) })
-      .clauses.put(body);
+    const response = await idempotentSubmit.run({
+      operation: `templates.${templateId}.clauses.create`,
+      body,
+      send: async (payload) =>
+        api
+          .templates({ templateId: toSafeId<"template">(templateId) })
+          .clauses.put(payload),
+    });
 
     setLinking(false);
 
