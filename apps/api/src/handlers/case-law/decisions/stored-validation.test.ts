@@ -74,6 +74,27 @@ const expectStoredValidationLog = (
   );
 };
 
+const expectStoredValidationReports = ({
+  logged,
+  captured,
+}: ReturnType<typeof recordReports>): void => {
+  expectStoredValidationLog(logged);
+  expect(captured).toHaveBeenCalledTimes(1);
+  const error = captured.mock.calls[0]?.[0];
+  expect(error).toBeInstanceOf(StoredCorpusValidationError);
+  if (!StoredCorpusValidationError.is(error)) {
+    expect.unreachable(
+      "The reader must retain its classified validation failure",
+    );
+  }
+  expect(error.code).toBe("stored_corpus_invalid");
+  expect(error.paths).toEqual(["$"]);
+  expect(JSON.stringify(logged.mock.calls)).not.toContain("Synthetic private");
+  expect(JSON.stringify(captured.mock.calls)).not.toContain(
+    "Synthetic private",
+  );
+};
+
 afterEach(() => {
   mock.restore();
 });
@@ -152,19 +173,6 @@ describe("invalid stored decision payloads", () => {
         ),
     },
     {
-      surface: "web and MCP through a cached row",
-      read: async () =>
-        await readServedDecisionAst({
-          astS3Key: null,
-          contentHash: null,
-          pgAst: null,
-          readPgAst: readInvalidRowAst(),
-          decisionId,
-          corpusReadEnabled: false,
-          readStore: async () => null,
-        }),
-    },
-    {
       surface: "summary and citation passages",
       read: async () =>
         await readDecisionAnalysisAst(
@@ -176,6 +184,29 @@ describe("invalid stored decision payloads", () => {
           },
           async () => new Set<string>(),
         ),
+    },
+  ])(
+    "recovers the $surface validation failure as null and reports it once",
+    async ({ read }) => {
+      const reports = recordReports();
+      expect(await read()).toBeNull();
+      expectStoredValidationReports(reports);
+    },
+  );
+
+  test.each([
+    {
+      surface: "web and MCP through a cached row",
+      read: async () =>
+        await readServedDecisionAst({
+          astS3Key: null,
+          contentHash: null,
+          pgAst: null,
+          readPgAst: readInvalidRowAst(),
+          decisionId,
+          corpusReadEnabled: false,
+          readStore: async () => null,
+        }),
     },
     {
       surface: "canonical object storage",
@@ -203,20 +234,13 @@ describe("invalid stored decision payloads", () => {
   ])(
     "contains the $surface reader failure and reports it once",
     async ({ read }) => {
-      const { logged, captured } = recordReports();
+      const reports = recordReports();
       const outcome = await containPayloadUnavailable(async () => {
         await read();
         return "read";
       }, decisionId);
       expect(outcome).toEqual({ payload: null, unavailable: true });
-      expectStoredValidationLog(logged);
-      expect(captured).toHaveBeenCalledTimes(1);
-      expect(captured.mock.calls[0]?.[0]).toBeInstanceOf(
-        StoredCorpusValidationError,
-      );
-      expect(JSON.stringify(logged.mock.calls)).not.toContain(
-        "Synthetic private",
-      );
+      expectStoredValidationReports(reports);
     },
   );
 });
