@@ -30,7 +30,14 @@ const authoredOrigin = v.strictObject({ type: v.literal("authored") });
 const storedOrigin = v.variant("type", [generatedOrigin, authoredOrigin]);
 const storedProvenance = v.strictObject({
   version: v.literal(1),
-  slots: v.record(v.pipe(v.string(), v.minLength(1)), storedOrigin),
+  slots: v.pipe(
+    v.unknown(),
+    v.check(
+      (slots) => !Array.isArray(slots),
+      "Provenance slots must be an object",
+    ),
+    v.record(v.pipe(v.string(), v.minLength(1)), storedOrigin),
+  ),
 });
 export type StoredArtefactProvenance = v.InferOutput<typeof storedProvenance>;
 export type ArtefactOrigin =

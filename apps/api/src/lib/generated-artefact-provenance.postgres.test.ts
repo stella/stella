@@ -368,6 +368,10 @@ describe.skipIf(!enabled)("generated artefact storage (postgres)", () => {
   };
   test.each([
     null,
+    ...[{}, [], [validOrigin], null, "", 0, true].map((slots) => ({
+      version: 1,
+      slots,
+    })),
     { version: 1, slots: { title: {} } },
     [validOrigin],
     { version: 1, slots: [{ title: validOrigin }] },

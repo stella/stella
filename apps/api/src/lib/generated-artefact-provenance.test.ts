@@ -110,6 +110,7 @@ test("source unions are invariant under duplicates and input order", async () =>
 test("stored provenance rejects invalid recorded states instead of treating them as legacy", () => {
   for (const metadata of [
     { version: 2, slots: {} },
+    { version: 1, slots: [] },
     { version: 1, slots: { title: {} } },
     {
       version: 1,
