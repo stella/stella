@@ -1090,7 +1090,9 @@
     },
     "emptyState": "Žádná rozhodnutí nenalezena. Nastavte zdroj a spusťte synchronizaci pro import judikatury.",
     "filters": {
-      "remove": "Odebrat filtr {filter}"
+      "countryMismatch": "Filtry byly odebrány, protože nepatří do země {country}: {filters}.",
+      "remove": "Odebrat filtr {filter}",
+      "showInCountry": "Zobrazit {filter} pro zemi {country}"
     },
     "languages": {
       "count": "{count, plural, one {# jazyk} few {# jazyky} other {# jazyků}}",
@@ -1346,6 +1348,7 @@
       "toastTitle": "Celé zobrazení zatím není dostupné"
     },
     "activity": {
+      "newerVersion": "Tento obsah se zobrazí v novější verzi.",
       "review": "Informace o revizi"
     },
     "aiPrompt": "Pole pro zprávu AI",
@@ -2357,6 +2360,7 @@
     "unknownUser": "Neznámý uživatel",
     "unpin": "Odepnout",
     "unsavedChanges": "Neuložené změny",
+    "unsavedChangesClose": "Neuložené změny. Dalším zavřením je zahodíte",
     "unsavedChangesEscape": "Neuložené změny. Dalším stisknutím Esc je zahodíte",
     "unsavedLeaveConfirm": "Máte neuložené změny. Odejít bez uložení?",
     "unverified": "Neověřeno",
@@ -5425,6 +5429,7 @@
     "showCitedPartOnly": "Zobrazit jen citovanou část",
     "showFullProvision": "Zobrazit celé ustanovení",
     "showInText": "Zobrazit v textu",
+    "sortNeedsYear": "Pro řazení podle tohoto sloupce zvolte ve filtrech rok.",
     "statedWindow": "Data uvedená vydavatelem: {range}",
     "status": {
       "current": "Účinné",
