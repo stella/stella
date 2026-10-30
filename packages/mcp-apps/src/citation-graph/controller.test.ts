@@ -35,6 +35,7 @@ const citation = (citationId: string, decisionId = "synthetic-target") =>
     citationId,
     citationText: `Synthetic citation ${citationId}`,
     textWithheldReason: null,
+    extractionWarnings: [],
     polarity: "unclassified",
     doctrine: null,
     decision: {
@@ -67,6 +68,7 @@ const openedDecision = (decisionId: string, url: string | null) =>
   ({
     status: "unavailable",
     metadata: {
+      extractionWarnings: [],
       decisionId,
       url,
       caseNumber: "Synthetic case",
