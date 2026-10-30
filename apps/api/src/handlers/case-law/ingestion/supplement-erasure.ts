@@ -60,6 +60,7 @@ import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { metadataMarkedListingOnly } from "@/api/lib/legal-search/partial-observation-sql";
 import type { RemovalEvidence } from "@/api/lib/legal-search/removal-evidence";
+import type { RemovalRetryItem } from "@/api/lib/legal-search/removal-reconciliation-store";
 
 /** How long a run waits for a crawl to release the source's lease. */
 const HOLDER_LEASE_WAIT_MS = 2 * 60 * 1000;
@@ -80,6 +81,7 @@ export type RedactWithSupplementHoldersOutcome = {
 };
 
 type RedactWithSupplementHoldersOptions = {
+  retryItem?: RemovalRetryItem | undefined;
   evidence?: RemovalEvidence | undefined;
   decisionId: SafeId<"caseLawDecision">;
   scopedDb: ScopedDb;
@@ -377,6 +379,7 @@ export const redactCaseLawDecisionWithSupplementHolders = async ({
   redactDecision = redactCaseLawDecision,
   withdrawDocument = withdrawCaseLawDecisionDocument,
   evidence,
+  retryItem,
 }: RedactWithSupplementHoldersOptions): Promise<
   Result<RedactWithSupplementHoldersOutcome, DatabaseError>
 > => {
@@ -386,6 +389,7 @@ export const redactCaseLawDecisionWithSupplementHolders = async ({
     decisionId,
     scopedDb,
     evidence,
+    retryItem,
     prepareSupplementHolders: async (claim) => {
       acceptedClaim = claim;
       discovered = await discoverClaimHolders(claim);
@@ -468,12 +472,17 @@ export const redactCaseLawDecisionWithSupplementHolders = async ({
     ) &&
     claim.recovery.type === "owned"
   ) {
-    const retryId = claim.recovery.id;
+    const { id: retryId, attempts } = claim.recovery;
     await claim.scopedDb(async (tx) => {
       // audit: skip - retires only this erasure's completed recovery obligation.
       await tx
         .delete(caseLawRemovalReconciliationItems)
-        .where(eq(caseLawRemovalReconciliationItems.id, retryId));
+        .where(
+          and(
+            eq(caseLawRemovalReconciliationItems.id, retryId),
+            eq(caseLawRemovalReconciliationItems.attempts, attempts),
+          ),
+        );
     });
   }
   return Result.ok({

@@ -1346,6 +1346,16 @@ describe("the reasons' stored payload", () => {
       lastAttemptAt: new Date("2026-01-01T00:00:00.000Z"),
       lastError: REMOVAL_PENDING_REASON.PUBLISHER_UNAVAILABLE,
     });
+    const retryNow = new Date("2099-01-01T00:00:00.000Z");
+    const retryOptions = {
+      scopedDb,
+      sourceId: fixture.sourceId,
+      now: retryNow,
+      perKindLimit: 10,
+    };
+    const staleItem =
+      (await selectDueRemovalRetries(retryOptions)).at(0) ??
+      panic("Missing prior retry");
     const interruption = await rejectionOf(
       redactCaseLawDecisionWithSupplementHolders({
         decisionId: absorbed.id,
@@ -1374,18 +1384,23 @@ describe("the reasons' stored payload", () => {
       message: "sentinel interruption after the claim",
     });
     expect(await decisionBy(fixture.sourceId, "339002")).toEqual(ruling);
-    const retryNow = new Date("2099-01-01T00:00:00.000Z");
-    const retryOptions = {
-      scopedDb,
-      sourceId: fixture.sourceId,
-      now: retryNow,
-      perKindLimit: 10,
-    };
+    expect(
+      await scopedDb(
+        async (tx) =>
+          await persistRemovalOutcomeTx(tx, {
+            sourceId: fixture.sourceId,
+            decisionId: absorbed.id,
+            outcome: { type: "settled" },
+            now: retryNow,
+            origin: { type: "retry", item: staleItem },
+          }),
+      ),
+    ).toBe(false);
     const item =
       (await selectDueRemovalRetries(retryOptions)).at(0) ??
       panic("Missing durable erasure retry");
     expect(item.id).toBe(priorRetryId);
-    expect(item.attempts).toBe(priorAttempts);
+    expect(item.attempts).toBe(priorAttempts + 1);
     if (item.payload.type !== "pending" || item.payload.operation !== "erase") {
       return panic("The accepted erasure must retain its evidence");
     }
@@ -1397,6 +1412,7 @@ describe("the reasons' stored payload", () => {
         readStoredRaw,
         reparseStoredRaw,
         leaseWaitMs: 0,
+        retryItem: item,
         evidence:
           item.payload.type === "pending" && item.payload.operation === "erase"
             ? item.payload.evidence

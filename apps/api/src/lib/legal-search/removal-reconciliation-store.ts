@@ -12,6 +12,7 @@ import {
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { lockCaseLawRemovalSource } from "@/api/lib/db/aggregate-lock";
 import {
   REMOVAL_PENDING_REASON,
   REMOVAL_RETRY_KIND,
@@ -102,6 +103,7 @@ export const selectDueRemovalRetries = async ({
 };
 
 type RetainClaimedErasureOptions = {
+  retryItem?: RemovalRetryItem | undefined;
   decisionId: SafeId<"caseLawDecision">;
   sourceId: SafeId<"caseLawSource">;
   evidence: RemovalEvidence;
@@ -110,17 +112,28 @@ type RetainClaimedErasureOptions = {
 
 export type ClaimedErasureRecovery =
   | { type: "external" }
-  | { type: "owned"; id: SafeId<"caseLawRemovalReconciliationItem"> };
+  | {
+      type: "owned";
+      id: SafeId<"caseLawRemovalReconciliationItem">;
+      attempts: number;
+    };
 
 /**
  * The decision fence has accepted this evidence. Only a newly created item
- * belongs to this caller; an existing item's id and attempt revision stay
- * with the reconciliation worker even when the claim promotes its payload.
+ * belongs to this caller. A foreign takeover advances the attempt revision;
+ * only the worker presenting that exact revision can retain its settlement right.
  */
 export const retainClaimedErasureTx = async (
   tx: Transaction,
-  { evidence, now, decisionId, sourceId }: RetainClaimedErasureOptions,
+  {
+    evidence,
+    now,
+    decisionId,
+    sourceId,
+    retryItem,
+  }: RetainClaimedErasureOptions,
 ): Promise<ClaimedErasureRecovery> => {
+  await lockCaseLawRemovalSource({ tx, sourceId });
   const payload = {
     type: "pending",
     operation: "erase",
@@ -150,15 +163,22 @@ export const retainClaimedErasureTx = async (
       set: {
         kind: REMOVAL_RETRY_KIND.ERASURE,
         payload,
+        attempts:
+          retryItem === undefined
+            ? sql`${caseLawRemovalReconciliationItems.attempts} + 1`
+            : sql`CASE WHEN ${caseLawRemovalReconciliationItems.id} = ${retryItem.id} AND ${caseLawRemovalReconciliationItems.attempts} = ${retryItem.attempts} THEN ${caseLawRemovalReconciliationItems.attempts} ELSE ${caseLawRemovalReconciliationItems.attempts} + 1 END`,
         nextAttemptAt: sql`LEAST(${caseLawRemovalReconciliationItems.nextAttemptAt}, excluded.next_attempt_at)`,
         lastError: payload.reason,
       },
     })
-    .returning({ id: caseLawRemovalReconciliationItems.id });
+    .returning({
+      id: caseLawRemovalReconciliationItems.id,
+      attempts: caseLawRemovalReconciliationItems.attempts,
+    });
   const row =
     retained.at(0) ?? panic("Accepted erasure did not retain recovery work");
   return row.id === proposedId
-    ? { type: "owned", id: row.id }
+    ? { type: "owned", id: row.id, attempts: row.attempts }
     : { type: "external" };
 };
 
@@ -226,6 +246,7 @@ export const persistRemovalOutcomeTx = async (
   tx: Transaction,
   { sourceId, decisionId, outcome, now, origin }: PersistRemovalOutcomeOptions,
 ): Promise<boolean> => {
+  await lockCaseLawRemovalSource({ tx, sourceId });
   // audit: skip — durable reconciliation outcome for the canonical removal audit.
   const previous = (
     await tx

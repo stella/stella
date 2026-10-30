@@ -320,6 +320,36 @@ type ProcessRemovalDecisionOptions = {
   mode: { type: "discovery" } | { type: "retry"; item: RemovalRetryItem };
   now: () => Date;
 };
+const readRemovalDecision = async ({
+  scopedDb,
+  sourceId,
+  decisionId,
+}: Pick<
+  ProcessRemovalDecisionOptions,
+  "scopedDb" | "sourceId" | "decisionId"
+>) =>
+  await scopedDb(async (tx) =>
+    (
+      await tx
+        .select({
+          id: caseLawDecisions.id,
+          sourceId: caseLawDecisions.sourceId,
+          sourceDocumentId: caseLawDecisions.sourceDocumentId,
+          redactedAt: caseLawDecisions.redactedAt,
+          sourceObservedAt: caseLawDecisions.sourceObservedAt,
+          sourceObservationOrder: caseLawDecisions.sourceObservationOrder,
+        })
+        .from(caseLawDecisions)
+        .where(
+          and(
+            eq(caseLawDecisions.id, decisionId),
+            eq(caseLawDecisions.sourceId, sourceId),
+          ),
+        )
+        .limit(1)
+    ).at(0),
+  );
+
 /** Every item-local failure is an explicit durable disposition, never an enumeration stop. */
 const processRemovalDecision = async ({
   scopedDb,
@@ -341,27 +371,11 @@ const processRemovalDecision = async ({
       : undefined;
   const result = await Result.tryPromise({
     try: async (): Promise<RemovalStepOutcome | SourcePausedOutcome> => {
-      const decision = await scopedDb(async (tx) =>
-        (
-          await tx
-            .select({
-              id: caseLawDecisions.id,
-              sourceId: caseLawDecisions.sourceId,
-              sourceDocumentId: caseLawDecisions.sourceDocumentId,
-              redactedAt: caseLawDecisions.redactedAt,
-              sourceObservedAt: caseLawDecisions.sourceObservedAt,
-              sourceObservationOrder: caseLawDecisions.sourceObservationOrder,
-            })
-            .from(caseLawDecisions)
-            .where(
-              and(
-                eq(caseLawDecisions.id, decisionId),
-                eq(caseLawDecisions.sourceId, sourceId),
-              ),
-            )
-            .limit(1)
-        ).at(0),
-      );
+      const decision = await readRemovalDecision({
+        scopedDb,
+        sourceId,
+        decisionId,
+      });
       if (decision === undefined) {
         return { type: "settled" };
       }
@@ -461,7 +475,12 @@ const processRemovalDecision = async ({
               : REMOVAL_PENDING_REASON.STORES_PENDING,
         };
       }
-      const removed = await remove({ scopedDb, decisionId, evidence });
+      const removed = await remove({
+        scopedDb,
+        decisionId,
+        evidence,
+        retryItem: mode.type === "retry" ? mode.item : undefined,
+      });
       if (removed.isErr()) {
         captureError(
           removed.error,

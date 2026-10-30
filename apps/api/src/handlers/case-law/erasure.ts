@@ -58,7 +58,10 @@ import type {
   RemovalEvidence,
   RemovalSupersededReason,
 } from "@/api/lib/legal-search/removal-evidence";
-import type { ClaimedErasureRecovery } from "@/api/lib/legal-search/removal-reconciliation-store";
+import type {
+  ClaimedErasureRecovery,
+  RemovalRetryItem,
+} from "@/api/lib/legal-search/removal-reconciliation-store";
 import { retainClaimedErasureTx } from "@/api/lib/legal-search/removal-reconciliation-store";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 
@@ -170,6 +173,7 @@ export type CaseLawRedactionClaim = {
 };
 
 type RedactInput = {
+  retryItem?: RemovalRetryItem | undefined;
   prepareSupplementHolders?: (
     claim: CaseLawRedactionClaim,
   ) => Promise<Result<void, DatabaseError>>;
@@ -347,6 +351,7 @@ export const redactCaseLawDecision = async ({
   lockSource = lockActiveCorpusProjectionSourceTx,
   evidence,
   prepareSupplementHolders,
+  retryItem,
 }: RedactInput): Promise<
   Result<RedactCaseLawDecisionOutcome, DatabaseError>
 > => {
@@ -457,6 +462,7 @@ export const redactCaseLawDecision = async ({
         panic("Claim omitted its canonical decision");
       const now = new Date();
       recovery = await retainClaimedErasureTx(tx, {
+        retryItem,
         now,
         decisionId: requested.id,
         sourceId: requested.sourceId,
