@@ -5055,6 +5055,8 @@
       "desktopCardConnectedTitle": "stella desktop susieta",
       "desktopCardMissingDetail": "Įdiekite ją arba prijunkite, jei ji jau įdiegta šiame kompiuteryje.",
       "desktopCardMissingTitle": "stella desktop dar nesusieta",
+      "desktopCardOpeningDetail": "Šis kompiuteris susiejamas su <bdi>{identity}</bdi> serveryje {host}. Jei naršyklė paklaus, leiskite jai atidaryti stella desktop.",
+      "desktopCardOpeningTitle": "Atidaroma stella desktop...",
       "desktopCardOutdatedDetail": "Versija {version} susieta su <bdi>{identity}</bdi>. Įdiekite naujausią versiją, kad dokumentai ir veikla toliau veiktų.",
       "desktopCardOutdatedTitle": "stella desktop reikia atnaujinti",
       "desktopClipboardDescription": "Atidarykite, ieškokite, tvarkykite ir pakartotinai naudokite tekstą, nukopijuotą iš bet kurios programos.",
@@ -5074,6 +5076,7 @@
       "desktopInstallOpenStep": "Vieną kartą atidarykite „stella desktop“. Iškarpinė pasirodys iškart ir liks pasiekiama macOS meniu juostoje arba Windows sistemos dėkle.",
       "desktopInstallTitle": "Įdiegti ir atidaryti",
       "desktopInstallWindowsStep": "Paleiskite diegimo programą ir vykdykite nurodymus.",
+      "desktopOpenApp": "Atidaryti stella desktop",
       "desktopPrivacyDescription": "Iškarpinės istorija užšifruojama ir saugoma šiame įrenginyje.",
       "desktopPrivacyTitle": "Privatu pagal numatytuosius nustatymus",
       "desktopSelfHostDescription": "Patikėkite šį stella URL pasirašytoje desktop programoje, kad šios instaliacijos dokumentai galėtų būti atidaromi lokaliai.",
@@ -6527,6 +6530,14 @@
           "started": "Pradėjo dokumento peržiūrą:"
         },
         "empty": "Šioje byloje veiklos dar nėra.",
+        "fields": {
+          "dueDate": "terminas",
+          "parentFolder": "pirminis aplankas",
+          "priority": "prioritetas",
+          "property": "savybė",
+          "schedule": "tvarkaraštis",
+          "sortOrder": "eilės tvarka"
+        },
         "filterLabel": "Filtruoti veiklą",
         "filters": {
           "all": "Visa veikla",
@@ -6576,6 +6587,7 @@
           "translation": "vertimas"
         },
         "title": "Veikla",
+        "updatedFields": "Atnaujinta: {fields}",
         "views": {
           "list": "Sąrašo rodinys",
           "timeline": "Laiko juostos rodinys"

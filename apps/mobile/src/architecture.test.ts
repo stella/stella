@@ -20,6 +20,7 @@ import {
   MOBILE_UPDATE_SIGNING_KEY_ID,
   MOBILE_UPDATES_PATH,
 } from "@stll/api-contract/mobile-updates";
+import { UI_LOCALES } from "@stll/locales";
 
 import {
   appConfigFor,
@@ -46,9 +47,12 @@ const DEVICE_MODULES = new Set([
   "session-provider.tsx",
 ]);
 
+/** What a module imports or re-exports, including imports run only for their effect. */
 const importsOf = (source: string): string[] =>
   [
-    ...source.matchAll(/^\s*(?:import|export)[^;]*?from\s+["']([^"']+)["']/gmu),
+    ...source.matchAll(
+      /^\s*(?:(?:import|export)[^;]*?from\s+|import\s+)["']([^"']+)["']/gmu,
+    ),
   ].map((match) => match[1] ?? "");
 
 const connectionModules = readdirSync(path.join(SOURCE_ROOT, "connection"))
@@ -262,6 +266,32 @@ describe("the app's JavaScript engine", () => {
       ).toEqual([]);
     },
   );
+});
+
+describe("the app's plurals", () => {
+  // Hermes has no Intl.PluralRules either. Without it use-intl cannot format
+  // an ICU plural and shows the message's key: a scan's page count read
+  // "scan.pages", which looks like a file in Apple's Pages format.
+  test("installs plural rules before the catalogues format a message", () => {
+    expect(
+      importsOf(
+        readFileSync(path.join(SOURCE_ROOT, "i18n", "index.tsx"), "utf-8"),
+      )[0],
+    ).toBe("@/i18n/plural-rules");
+  });
+
+  test("has the plural rules of every UI locale", () => {
+    const loaded = importsOf(
+      readFileSync(path.join(SOURCE_ROOT, "i18n", "plural-rules.ts"), "utf-8"),
+    );
+    expect(loaded).toContain("@formatjs/intl-pluralrules/polyfill.js");
+    expect(
+      UI_LOCALES.map(
+        (locale) =>
+          `@formatjs/intl-pluralrules/locale-data/${locale.split("-")[0] ?? locale}.js`,
+      ).filter((data) => !loaded.includes(data)),
+    ).toEqual([]);
+  });
 });
 
 describe("the app's dates", () => {
