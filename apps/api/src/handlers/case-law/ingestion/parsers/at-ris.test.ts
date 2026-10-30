@@ -193,6 +193,18 @@ it.each([
     '<absatz typ="erltext" ct="text">Die Genehmigung erfolgt unter dem Vorbehalt, dass die Projektwerber die Verfügungsbefugnis für die</absatz><abstand ct="text"/><absatz typ="erltext" ct="text">nötigen Grundstücksflächen erhalten.</absatz>',
   ],
   [
+    "a short line before a digit-led line",
+    '<absatz typ="erltext" ct="text">nach Kinscher/Paliege-Barfuß, Kommentar zur GewO Anmerkung 67 zu</absatz><absatz typ="erltext" ct="text">§ 74 GewO</absatz><absatz typ="erltext" ct="text">1994, mit weiteren Nachweisen.</absatz>',
+  ],
+  [
+    "a wrapped section reference",
+    '<absatz typ="erltext" ct="text">Von der Forderung nach Messungen ist abzusehen, wenn die Feststellung nach Nummer</absatz><absatz typ="erltext" ct="text">5.3.3 oder Nummer 5.3.4 erfolgt.</absatz>',
+  ],
+  [
+    "a list item the closing text finishes",
+    '<liste><strichliste ebene="1"><listelem ct="text"><symbol stellen="1">-</symbol>Aufgrund eines aktuellen Auszugs des KSV wird die Zahlweise</listelem></strichliste><schluss typ="Abs" ct="text">vom KSV mit 250 bewertet.</schluss></liste>',
+  ],
+  [
     "wrapped closing lines",
     '<schluss typ="Abs" ct="text">Bei der Vorschreibung von Vorkehrungen ist weiters auf die Erfordernisse einer</schluss><schluss typ="Abs" ct="text">zeitgemäßen Land- und Forstwirtschaft Bedacht zu nehmen.</schluss>',
   ],
@@ -207,6 +219,19 @@ it("an abstand before a capitalised line still ends the paragraph", () => {
   expect(
     bodyParagraphs(
       '<absatz typ="erltext" ct="text">Die Genehmigung erfolgt unter dem Vorbehalt der zivilrechtlichen Verfügungsbefugnis</absatz><abstand ct="text"/><absatz typ="erltext" ct="text">Die Auflage wird abgeändert.</absatz>',
+    ),
+  ).toHaveLength(2);
+});
+
+it("a numbered point and a capitalised closing text still open their own paragraphs", () => {
+  expect(
+    bodyParagraphs(
+      '<absatz typ="erltext" ct="text">Die Behörde hat folgende Auflagen vorgeschrieben, die einzuhalten sind:</absatz><absatz typ="erltext" ct="text">5. Die Anlage ist jährlich zu prüfen.</absatz>',
+    ),
+  ).toHaveLength(2);
+  expect(
+    bodyParagraphs(
+      '<liste><strichliste ebene="1"><listelem ct="text"><symbol stellen="1">-</symbol>Aufgrund eines aktuellen Auszugs des KSV wird die Zahlweise</listelem></strichliste><schluss typ="Abs" ct="text">Die Zahlungen erfolgen fristgerecht.</schluss></liste>',
     ),
   ).toHaveLength(2);
 });

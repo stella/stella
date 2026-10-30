@@ -149,22 +149,61 @@ export const MIN_WRAPPED_LINE_CHARS = 55;
 /** A sentence ends here: the author ended the line, not a margin. */
 const SENTENCE_END_RE = /[.!?:;]["'’“”»«)\]]*$/u;
 
-/** A list marker, numbered point or `Label:` field opens a unit of its own. */
+/**
+ * A list marker, numbered point or `Label:` field opens a unit of its own. A
+ * point's number is never followed by another digit, so a section reference
+ * that wrapped (`nach Nummer` / `5.3.3 oder …`) is not one.
+ */
 const STRUCTURAL_START_RE =
-  /^(?:\(?\d{1,3}[.)]|\(?[IVXLC]{1,6}[.)]|\(?\p{L}\)|[-–•*]|\p{Lu}[\p{L}/ ]{1,30}:\s)/u;
+  /^(?:\(?\d{1,3}[.)](?!\d)|\(?[IVXLC]{1,6}[.)]|\(?\p{L}\)|[-–•*]|\p{Lu}[\p{L}/ ]{1,30}:\s)/u;
+
+/** No sentence opens on a lowercase letter or a digit. */
+const CONTINUATION_START_RE = /^[\p{Ll}\d]/u;
 
 const LOWERCASE_START_RE = /^\p{Ll}/u;
 
 /**
  * A line that fills the measure and stops mid-sentence goes on in the next.
- * A shorter one ends its paragraph, unless the next line opens in lowercase:
- * no sentence starts there, so a justified line that wrapped one long word
- * (`Grundstücksflächen` / `erhalten.`) still continues.
+ * A shorter one ends its paragraph, unless the next line opens in lowercase
+ * or on a digit: a justified line that wrapped one long word
+ * (`Grundstücksflächen` / `erhalten.`) or a number (`§ 74 GewO` / `1994`)
+ * still continues.
  */
 const continuesLine = (above: string, below: string): boolean =>
   !SENTENCE_END_RE.test(above) &&
   !STRUCTURAL_START_RE.test(below) &&
-  (above.length >= MIN_WRAPPED_LINE_CHARS || LOWERCASE_START_RE.test(below));
+  (above.length >= MIN_WRAPPED_LINE_CHARS || CONTINUATION_START_RE.test(below));
+
+type WrappedLine = { item: RisParagraphItem; lastLine: string };
+
+/**
+ * Whether `item` goes on from the open line. Lines of one element join as
+ * `continuesLine` says, an `abstand` between them only before a lowercase
+ * line. A list item joins only the closing text after its list, when that
+ * text goes on in lowercase: the publisher closed the list mid-sentence.
+ */
+const joinsLine = (
+  current: WrappedLine,
+  item: RisParagraphItem,
+  { below, spaced }: { below: string; spaced: boolean },
+): boolean => {
+  if (item.contentType !== current.item.contentType) {
+    return false;
+  }
+  if (current.item.element === "listelem") {
+    return (
+      item.element === "schluss" &&
+      !spaced &&
+      !SENTENCE_END_RE.test(current.lastLine) &&
+      LOWERCASE_START_RE.test(below)
+    );
+  }
+  return (
+    item.element === current.item.element &&
+    continuesLine(current.lastLine, below) &&
+    (!spaced || LOWERCASE_START_RE.test(below))
+  );
+};
 
 /**
  * An apparatus section (citing decisions, norms, numbers) is a register:
@@ -172,7 +211,9 @@ const continuesLine = (above: string, below: string): boolean =>
  */
 const wrappableText = (item: RisItem | undefined): string | undefined =>
   item?.type === "paragraph" &&
-  (item.element === "absatz" || item.element === "schluss") &&
+  (item.element === "absatz" ||
+    item.element === "schluss" ||
+    item.element === "listelem") &&
   item.layout !== "pre" &&
   paragraphRole(item.contentType) !== "apparatus"
     ? plainTextOf(item.inlines)
@@ -189,7 +230,7 @@ const wrappableText = (item: RisItem | undefined): string | undefined =>
  */
 export const joinWrappedLines = (items: readonly RisItem[]): RisItem[] => {
   const joined: RisItem[] = [];
-  let current: { item: RisParagraphItem; lastLine: string } | undefined;
+  let current: WrappedLine | undefined;
   let spacing: RisItem[] = [];
   for (const item of items) {
     if (item.type === "break" && current !== undefined) {
@@ -201,10 +242,7 @@ export const joinWrappedLines = (items: readonly RisItem[]): RisItem[] => {
       current !== undefined &&
       item.type === "paragraph" &&
       below !== undefined &&
-      item.element === current.item.element &&
-      item.contentType === current.item.contentType &&
-      continuesLine(current.lastLine, below) &&
-      (spacing.length === 0 || LOWERCASE_START_RE.test(below))
+      joinsLine(current, item, { below, spaced: spacing.length > 0 })
     ) {
       current.item.inlines.push({ type: "text", text: " " }, ...item.inlines);
       current.lastLine = below;
