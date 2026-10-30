@@ -1200,7 +1200,7 @@ const baseSteps = legSteps(baseline, baselineIds).map((step) => {
     const end = run.indexOf("done\n", start) + "done\n".length;
     expect(end).toBeGreaterThan(start);
     const legacy = run.slice(start, end);
-    const [declarations, loop] = legacy.split(")\n");
+    const [declarations, loop = ""] = legacy.split(")\n");
     expect(
       declarations
         ?.slice("outputs=(\n".length)

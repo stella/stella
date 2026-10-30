@@ -1525,8 +1525,9 @@ test("every declared app output is checked even when another app has that output
   await withMcpOutputs(async (root, appDirectories) => {
     expect(appDirectories).toHaveLength(2);
     expect(mcpAppOutputFailures({ root, appDirectories })).toEqual([]);
+    const secondAppDirectory = appDirectories.slice(1, 2).join("");
     for (const file of MCP_APP_DIRECTORY_OUTPUTS) {
-      const missing = `packages/mcp-apps/src/${appDirectories.at(1)}/generated/${file}`;
+      const missing = `packages/mcp-apps/src/${secondAppDirectory}/generated/${file}`;
       const target = nodePath.join(root, missing);
       await rm(target);
       expect(mcpAppOutputFailures({ root, appDirectories })).toEqual([
@@ -1539,7 +1540,8 @@ test("every declared app output is checked even when another app has that output
 
 test("an absent app directory cannot disappear from the expected output inventory", async () => {
   await withMcpOutputs(async (root, appDirectories) => {
-    const missingApp = `packages/mcp-apps/src/${appDirectories.at(1)}`;
+    const secondAppDirectory = appDirectories.slice(1, 2).join("");
+    const missingApp = `packages/mcp-apps/src/${secondAppDirectory}`;
     await rm(nodePath.join(root, missingApp), { recursive: true });
     expect(mcpAppOutputFailures({ root, appDirectories }).toSorted()).toEqual(
       MCP_APP_DIRECTORY_OUTPUTS.map(
