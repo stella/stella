@@ -21,7 +21,11 @@ describe.skipIf(!enabled)("sitemap visibility drain (postgres)", () => {
       const sent: string[] = [];
       const { db } = openClient({
         max: 1,
-        logger: { logQuery: (query) => sent.push(query) },
+        logger: {
+          logQuery: (query) => {
+            sent.push(query);
+          },
+        },
       });
       const { db: writerDb } = openClient({ max: 1 });
       const schema = sql.identifier(

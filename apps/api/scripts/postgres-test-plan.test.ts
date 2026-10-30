@@ -188,6 +188,7 @@ describe("PostgreSQL shared batch", () => {
 });
 
 test.each([
+  "src/lib/case-law/sitemap-shard-refresh.postgres.test.ts",
   "src/lib/case-law/sitemap-backlog-drain.postgres.test.ts",
   "src/lib/case-law/sitemap-visibility-drain.postgres.test.ts",
 ])(

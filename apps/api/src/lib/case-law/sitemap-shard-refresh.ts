@@ -553,7 +553,6 @@ const drainMonth = async (
             to: "draining",
             set: { coveredBefore, retiredThrough },
           },
-          // audit: skip - derived sitemap checkpoints contain no user-authored state.
           recordTransitionAuditEvent: () => undefined,
         });
         if (changed.length !== 1) {
@@ -619,7 +618,6 @@ const drainMonth = async (
           to: "awaiting_visibility",
           set: { retiredThrough },
         },
-        // audit: skip - derived sitemap checkpoints contain no user-authored state.
         recordTransitionAuditEvent: () => undefined,
       });
       if (changed.length !== 1) {
