@@ -7,6 +7,7 @@ import {
   listDecisionFacetsHandler,
   listDecisionFacetsQuerySchema,
 } from "@/api/handlers/case-law/decisions/facets";
+import validateDecisionFilters from "@/api/handlers/case-law/decisions/filter-validation";
 import {
   readDecisionHandler,
   readDecisionQuerySchema,
@@ -487,6 +488,7 @@ export const publicCaseLawRoute = routes(
     "/coverage": { GET: readCaseLawCoverage },
     "/decisions": { GET: listDecisions },
     "/decisions/facets": { GET: listDecisionFacets },
+    "/decisions/filter-validation": { GET: validateDecisionFilters },
     "/decisions/status": { GET: readCaseLawCorpusStatus },
     "/decisions/latest": { GET: listLatestDecisions },
     "/decisions/by-slug/:slug": { GET: readDecisionBySlug },
