@@ -144,6 +144,39 @@ test("keeps two added migrations in relative order", () => {
   }
 });
 
+test("moves a later valid migration rather than reordering the branch", () => {
+  const root = fixture();
+  try {
+    migration(root, "20260101010000_first");
+    migration(root, "20260101020030_second");
+    commitFeature(root);
+    advanceBase(root);
+    // first must follow the base at 02:00; second (02:00:30) is valid alone
+    // but would then run before first, so it moves after it.
+    expect(restampMigrations({ baseRef: "base", cwd: root })).toEqual([
+      { oldName: "20260101010000_first", newName: "20260101020100_first" },
+      { oldName: "20260101020030_second", newName: "20260101020200_second" },
+    ]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("keeps an added migration that already follows the moved ones", () => {
+  const root = fixture();
+  try {
+    migration(root, "20260101010000_first");
+    migration(root, "20260101030000_later");
+    commitFeature(root);
+    advanceBase(root);
+    expect(restampMigrations({ baseRef: "base", cwd: root })).toEqual([
+      { oldName: "20260101010000_first", newName: "20260101020100_first" },
+    ]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("never touches a base migration and leaves newer branches unchanged", () => {
   const root = fixture();
   try {

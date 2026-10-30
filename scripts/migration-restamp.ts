@@ -281,12 +281,38 @@ export const restampMigrations = ({
   if (baseStamp === undefined) {
     panic("Newest base migration has no timestamp");
   }
-  const baseDate = stampToDate(baseStamp);
-  return stale.map(({ directory }, index) => {
+  // Plan over every migration the branch adds, in its own order: each keeps
+  // its stamp when that is still at least a minute after the previous one,
+  // and moves just past it otherwise, so a re-stamp never reorders the set.
+  const added = snapshot.changes.addedDirectories
+    .filter((directory) =>
+      MIGRATION_TIMESTAMP.test(path.posix.basename(directory)),
+    )
+    .toSorted((left, right) => {
+      const leftName = path.posix.basename(left);
+      const rightName = path.posix.basename(right);
+      if (leftName < rightName) {
+        return -1;
+      }
+      return leftName > rightName ? 1 : 0;
+    });
+  let earliest = stampToDate(baseStamp).getTime() + 60_000;
+  const moves = added.flatMap((directory) => {
+    const stamp = MIGRATION_TIMESTAMP.exec(path.posix.basename(directory))?.at(
+      1,
+    );
+    if (stamp === undefined) {
+      panic(`Added migration ${directory} has no timestamp`);
+    }
+    const own = stampToDate(stamp).getTime();
+    const target = Math.max(own, earliest);
+    earliest = target + 60_000;
+    return target === own ? [] : [{ directory, target: new Date(target) }];
+  });
+  return moves.map(({ directory, target }) => {
     const oldName = path.posix.basename(directory);
     const suffix = oldName.slice(15);
-    const nextDate = new Date(baseDate.getTime() + (index + 1) * 60_000);
-    const newName = `${dateToStamp(nextDate)}_${suffix}`;
+    const newName = `${dateToStamp(target)}_${suffix}`;
     const sqlPath = path.join(cwd, directory, "migration.sql");
     const sqlBytes = readFileSync(sqlPath);
     const references = trackedReferenceFiles(cwd, oldName).filter(
