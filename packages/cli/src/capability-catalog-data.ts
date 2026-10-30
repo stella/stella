@@ -2,9 +2,14 @@
 import { panic } from "better-result";
 import { readdirSync, readFileSync } from "node:fs";
 
+import { runtimeAssetUrl } from "./runtime-asset-url.js";
+
 /** Read shards in capability-id order; no CLI schema projection is applied. */
 export const readCapabilityCatalog = (
-  directory: URL = new URL("../capabilities/", import.meta.url),
+  directory: URL = runtimeAssetUrl(
+    new URL("../capabilities/", import.meta.url),
+    "capabilities/",
+  ),
 ): unknown[] => {
   const entries: unknown[] = [];
   for (const filename of readdirSync(directory).toSorted()) {

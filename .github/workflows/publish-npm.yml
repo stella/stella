@@ -219,6 +219,7 @@ jobs:
       package_files: ${{ steps.pack.outputs.package_files }}
       packages: ${{ steps.pack.outputs.packages }}
       source_sha: ${{ steps.pack.outputs.source_sha }}
+      cli_release_ref: ${{ steps.release-source.outputs.release_ref }}
     steps:
       - name: Checkout network retry helper
         timeout-minutes: 2
@@ -439,6 +440,7 @@ jobs:
             exit 1
           fi
           echo "expected_production_commit=${release_sha}" >> "$GITHUB_OUTPUT"
+          echo "release_ref=${release_ref}" >> "$GITHUB_OUTPUT"
 
       - name: Set up Node for the CLI smoke test
         if: contains(fromJSON(steps.pack.outputs.packages), 'cli')
@@ -705,6 +707,193 @@ jobs:
           path: release-artifacts/cli/
           retention-days: 1
           if-no-files-found: error
+
+  cli-native-build:
+    name: Build standalone CLI (${{ matrix.platform }})
+    needs: pack
+    if: needs.pack.outputs.cli_release_ref != ''
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: darwin-arm64
+            runner: macos-14
+            target: bun-darwin-arm64
+            extension: ""
+          - platform: darwin-x64
+            runner: macos-14
+            target: bun-darwin-x64
+            extension: ""
+          - platform: linux-x64
+            runner: ubuntu-24.04
+            target: bun-linux-x64-baseline
+            extension: ""
+          - platform: linux-arm64
+            runner: ubuntu-24.04-arm
+            target: bun-linux-arm64
+            extension: ""
+          - platform: windows-x64
+            runner: windows-latest
+            target: bun-windows-x64-baseline
+            extension: .exe
+    steps:
+      - name: Checkout validated CLI release source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.pack.outputs.source_sha }}
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: package.json
+          no-cache: true
+
+      - name: Install locked build dependencies
+        timeout-minutes: 20
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+
+      - name: Compile standalone CLI
+        timeout-minutes: 10
+        env:
+          CLI_TARGET: ${{ matrix.target }}
+          CLI_ASSET: stella-${{ matrix.platform }}${{ matrix.extension }}
+        run: |
+          bun run --cwd packages/cli codegen:runtime
+          mkdir -p native-cli
+          cd packages/cli
+          bash ../../scripts/retry.sh bun build src/cli.ts --compile \
+            --target="$CLI_TARGET" --outfile="../../native-cli/$CLI_ASSET" \
+            --asset capabilities --asset src/generated/registry-snapshot.json \
+            --no-compile-autoload-dotenv --no-compile-autoload-bunfig
+
+      - name: Import Apple Developer ID certificate into temporary keychain
+        if: startsWith(matrix.platform, 'darwin-')
+        uses: apple-actions/import-codesign-certs@77ba2a2a8f5cfc8c405ebf3159f767c323e238f9 # v7.1.0
+        with:
+          p12-file-base64: ${{ secrets.APPLE_CERTIFICATE }}
+          p12-password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+
+      - name: Sign and notarize macOS CLI
+        if: startsWith(matrix.platform, 'darwin-')
+        timeout-minutes: 25
+        env:
+          CLI_ASSET: stella-${{ matrix.platform }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_KEY_PATH: ${{ runner.temp }}/apple-api.p8
+          APPLE_API_KEY_BASE64: ${{ secrets.APPLE_API_KEY }}
+        run: |
+          set -euo pipefail
+          trap 'rm -f "$APPLE_API_KEY_PATH"' EXIT
+          umask 077
+          printf '%s' "$APPLE_API_KEY_BASE64" | base64 -d > "$APPLE_API_KEY_PATH"
+          codesign --force --timestamp --options runtime \
+            --identifier app.stll.cli --entitlements packages/cli/entitlements.plist \
+            --sign "$APPLE_SIGNING_IDENTITY" "native-cli/$CLI_ASSET"
+          codesign --verify --strict --verbose=2 "native-cli/$CLI_ASSET"
+          ditto -c -k --keepParent "native-cli/$CLI_ASSET" "$RUNNER_TEMP/cli-notary.zip"
+          xcrun notarytool submit "$RUNNER_TEMP/cli-notary.zip" \
+            --key "$APPLE_API_KEY_PATH" --key-id "$APPLE_API_KEY" \
+            --issuer "$APPLE_API_ISSUER" --wait --timeout 20m --output-format json \
+            > "$RUNNER_TEMP/cli-notary-result.json"
+          jq -e '.status == "Accepted"' "$RUNNER_TEMP/cli-notary-result.json"
+          # A bare Mach-O cannot be stapled. Gatekeeper checks its accepted
+          # notarization ticket online when the installed executable runs.
+
+      - name: Ensure PSGallery is registered for Windows signing
+        if: matrix.platform == 'windows-x64'
+        shell: pwsh
+        run: |
+          $expectedSourceLocation = "https://www.powershellgallery.com/api/v2"
+          $repository = Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue
+          if (-not $repository) {
+            Register-PSRepository -Default
+            $repository = Get-PSRepository -Name PSGallery -ErrorAction Stop
+          }
+          if ($repository.SourceLocation.TrimEnd("/") -ne $expectedSourceLocation) {
+            throw "PSGallery has an unexpected source location"
+          }
+
+      - name: Sign Windows CLI via Azure Trusted Signing
+        if: matrix.platform == 'windows-x64'
+        timeout-minutes: 10
+        uses: azure/trusted-signing-action@c7ab2a863ab5f9a846ddb8265964877ef296ee82 # v2.0.0
+        with:
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          endpoint: ${{ secrets.AZURE_ENDPOINT }}
+          trusted-signing-account-name: ${{ secrets.AZURE_CODE_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ secrets.AZURE_CERT_PROFILE }}
+          files-folder: native-cli
+          files-folder-filter: exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
+      - name: Smoke test standalone CLI
+        # macOS x64 runs under Rosetta on the signing runner.
+        env:
+          CLI_ASSET: stella-${{ matrix.platform }}${{ matrix.extension }}
+        run: |
+          "./native-cli/$CLI_ASSET" --version
+          "./native-cli/$CLI_ASSET" --help
+
+      - name: Upload signed standalone CLI
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: cli-native-${{ matrix.platform }}
+          path: native-cli/*
+          if-no-files-found: error
+          retention-days: 7
+
+  cli-native-upload:
+    name: Publish standalone CLI assets
+    needs: [pack, release-cli, cli-native-build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - name: Checkout release upload tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Download standalone CLI binaries
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: cli-native-*
+          path: native-cli
+          merge-multiple: true
+
+      - name: Hash final signed binaries and attach to the production release
+        timeout-minutes: 5
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CLI_RELEASE_REF: ${{ needs.pack.outputs.cli_release_ref }}
+        run: |
+          set -euo pipefail
+          assets=(stella-darwin-arm64 stella-darwin-x64 stella-linux-x64 stella-linux-arm64 stella-windows-x64.exe)
+          (
+            cd native-cli
+            sha256sum "${assets[@]}" > checksums.txt
+          )
+          # The release already exists at the validated production tag. Never
+          # create a separate native release or replace an immutable asset.
+          bash scripts/gh-retry.sh release upload "$CLI_RELEASE_REF" \
+            --repo "$GITHUB_REPOSITORY" native-cli/*
 
   # npm-release-jobs:start
 

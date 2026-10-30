@@ -9,22 +9,37 @@
 import { run } from "@stricli/core";
 import type { StricliProcess } from "@stricli/core";
 import { Result } from "better-result";
+import { Temporal } from "temporal-polyfill/full";
 
 import {
   actionAdmissionRefusalOutput,
   type CliActionAdmissionRefusal,
 } from "./action-admission-refusal.js";
 import { defaultConfigDir } from "./auth/config-dir.js";
+import {
+  findDefaultCredential,
+  readCredentialFile,
+} from "./auth/credential-store.js";
 import { resolveAccessToken } from "./auth/resolve-access-token.js";
 import { resolveServerUrl } from "./auth/server-resolution.js";
 import { buildApp } from "./build-cli-tree.js";
 import { normalizeProcessExitCode } from "./cli-exit-code.js";
 import { buildVersionNudge } from "./cli-version-nudge.js";
+import {
+  checkCommandCompatibility,
+  commandNeedsCompatibility,
+} from "./command-compatibility.js";
 import { commandNeedsRegistry } from "./command-locality.js";
-import { HOME, XDG_CACHE_HOME } from "./env.js";
+import {
+  HOME,
+  STELLA_API_KEY,
+  UPDATE_CHECK_ENABLED,
+  XDG_CACHE_HOME,
+} from "./env.js";
 import type { CallerFeatureAccess } from "./feature-command-projection.js";
 import { CLI_VERSION } from "./generated/cli-version.js";
 import { generatedRouteMap } from "./generated/route-map.js";
+import { detectInstallChannel, upgradeCommandFor } from "./install-channel.js";
 import { reportFatalError } from "./main-error-boundary.js";
 import { EXIT_CODES, resolveMcpErrorCodeExit } from "./mcp-constants.js";
 import { preparseServerFlag } from "./preparse-server-flag.js";
@@ -45,6 +60,9 @@ const resolvePreamble = async (
   token: string | undefined;
 }> => {
   const configDir = defaultConfigDir();
+  if (["update", "doctor"].includes(process.argv[2] ?? "")) {
+    return { configDir, serverUrl: undefined, token: undefined };
+  }
   const serverUrlResult = await resolveServerUrl({
     configDir,
     flagValue: serverFlag,
@@ -54,6 +72,39 @@ const resolvePreamble = async (
     : undefined;
   if (serverUrl === undefined) {
     return { configDir, serverUrl: undefined, token: undefined };
+  }
+
+  const argv = process.argv.slice(2);
+  if (!commandNeedsCompatibility(argv)) {
+    // Authenticated domain help uses the caller's current feature projection.
+    // Without credentials it remains local; with credentials, discovery must
+    // precede token refresh and the registry request just as for execution.
+    const projectsCallerHelp =
+      commandNeedsRegistry(argv) &&
+      argv.some((arg) => ["--help", "-h", "--schema"].includes(arg));
+    if (
+      !projectsCallerHelp ||
+      (!STELLA_API_KEY &&
+        findDefaultCredential(
+          await readCredentialFile(configDir),
+          serverUrl,
+        ) === undefined)
+    ) {
+      return { configDir, serverUrl, token: undefined };
+    }
+  }
+  const compatibility = await checkCommandCompatibility({
+    serverUrl,
+    env: { HOME, XDG_CACHE_HOME },
+    now: Temporal.Now.instant().epochMilliseconds,
+  });
+  if (Result.isError(compatibility)) {
+    const channel = await detectInstallChannel({ configDir });
+    process.stderr.write(
+      `${compatibility.error.message.replace(/\s+/gu, " ")} Run ${upgradeCommandFor(channel)}.\n`,
+    );
+    process.exitCode = EXIT_CODES.validation;
+    return { configDir, serverUrl, token: undefined };
   }
 
   // The single choke point where a stored credential becomes a request token:
@@ -120,8 +171,10 @@ const isVersionAdmissionExempt = (argv: readonly string[]): boolean =>
 const cachedUnsupportedLine = async ({
   serverUrl,
   cacheEnv,
+  updateCommand,
 }: {
   serverUrl: string;
+  updateCommand: string;
   cacheEnv: { XDG_CACHE_HOME: string | undefined; HOME: string | undefined };
 }): Promise<string | undefined> => {
   const cached = await readCacheFile(cachePathFor(serverUrl, cacheEnv));
@@ -129,12 +182,25 @@ const cachedUnsupportedLine = async ({
     return undefined;
   }
   const policy = buildVersionNudge({
+    updateCommand,
     current: CLI_VERSION,
     latest: cached.cliLatest,
     minimum: cached.cliMinimum,
     lastNudged: cached.lastNudgedVersion,
   });
   return policy.unsupported === true ? policy.line : undefined;
+};
+
+const printVersionNudge = ({
+  nudge,
+  unsupported,
+}: {
+  nudge?: string;
+  unsupported?: boolean;
+}): void => {
+  if (nudge !== undefined && (unsupported === true || UPDATE_CHECK_ENABLED)) {
+    process.stderr.write(`${nudge}\n`);
+  }
 };
 
 const main = async (): Promise<void> => {
@@ -154,6 +220,12 @@ const main = async (): Promise<void> => {
   // rather than only on the ones that resolve a server themselves.
   const serverFlag = preparseServerFlag(argv);
   const { configDir, serverUrl, token } = await resolvePreamble(serverFlag);
+  if (process.exitCode !== undefined && process.exitCode !== 0) {
+    return;
+  }
+  const updateCommand = upgradeCommandFor(
+    await detectInstallChannel({ configDir }),
+  );
   const versionExempt = isVersionAdmissionExempt(argv);
   let unsupportedLine: string | undefined;
 
@@ -169,6 +241,7 @@ const main = async (): Promise<void> => {
     (needsRegistry || requiresFeatureSnapshot)
   ) {
     const outcome = await refreshRegistryCache({
+      updateCommand,
       serverOrigin: serverUrl,
       token,
       env: cacheEnv,
@@ -187,13 +260,17 @@ const main = async (): Promise<void> => {
     }
     if (outcome.status === "failed") {
       process.stderr.write(`${outcome.warning}\n`);
-    } else if (outcome.status === "refreshed" && outcome.nudge !== undefined) {
-      process.stderr.write(`${outcome.nudge}\n`);
+    } else if (outcome.status === "refreshed") {
+      printVersionNudge(outcome);
     }
   }
 
   if (serverUrl !== undefined && unsupportedLine === undefined) {
-    unsupportedLine = await cachedUnsupportedLine({ serverUrl, cacheEnv });
+    unsupportedLine = await cachedUnsupportedLine({
+      serverUrl,
+      cacheEnv,
+      updateCommand,
+    });
   }
   if (!versionExempt && unsupportedLine !== undefined) {
     process.stderr.write(`${unsupportedLine}\n`);
@@ -244,6 +321,7 @@ const main = async (): Promise<void> => {
     const refreshed = await resolvePreamble(serverFlag);
     if (refreshed.serverUrl !== undefined && refreshed.token !== undefined) {
       const outcome = await refreshRegistryCache({
+        updateCommand,
         serverOrigin: refreshed.serverUrl,
         token: refreshed.token,
         env: cacheEnv,
@@ -255,11 +333,8 @@ const main = async (): Promise<void> => {
       }
       if (outcome.status === "failed") {
         process.stderr.write(`${outcome.warning}\n`);
-      } else if (
-        outcome.status === "refreshed" &&
-        outcome.nudge !== undefined
-      ) {
-        process.stderr.write(`${outcome.nudge}\n`);
+      } else if (outcome.status === "refreshed") {
+        printVersionNudge(outcome);
       }
     }
   }

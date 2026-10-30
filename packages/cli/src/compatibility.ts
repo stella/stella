@@ -23,7 +23,7 @@ const SEMVER_PATTERN =
 const SEMVER_BUILD_PATTERN = /^[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*$/u;
 const positiveIntegerSchema = v.pipe(v.number(), v.integer(), v.minValue(1));
 
-const compatibilityMetadataSchema = v.object({
+export const compatibilityMetadataSchema = v.object({
   resource: v.pipe(v.string(), v.url()),
   scopes_supported: v.array(v.string()),
   stella_contract: v.optional(
@@ -273,7 +273,7 @@ const validateLegacyCompatibility = (
   });
 };
 
-const validateCompatibility = (
+export const validateCompatibility = (
   metadata: CompatibilityMetadata,
   serverUrl: string,
 ): Result<CompatibilityReport, CompatibilityCheckError> => {
@@ -294,6 +294,25 @@ const validateCompatibility = (
     return Result.err(negotiated.error);
   }
 
+  const minimumVersion = metadata.stella_compatibility?.cli_version.minimum;
+  const minimum =
+    minimumVersion === undefined ? undefined : parseSemver(minimumVersion);
+  const current = parseSemver(packageJson.version);
+  if (minimum === undefined || current === undefined) {
+    return Result.err(
+      new CompatibilityCheckError({
+        message:
+          "Server compatibility metadata lacks a valid minimum CLI version.",
+      }),
+    );
+  }
+  if (compareSemver(current, minimum) < 0) {
+    return Result.err(
+      new CompatibilityCheckError({
+        message: `CLI ${packageJson.version} is below the server minimum ${minimumVersion}.`,
+      }),
+    );
+  }
   const supportedScopes = new Set(metadata.scopes_supported);
   const missingScopes = CLI_REQUIRED_RESOURCE_SCOPES.filter(
     (scope) => !supportedScopes.has(scope),
@@ -328,6 +347,7 @@ const validateCompatibility = (
 
 export const checkServerCompatibility = async (
   serverUrl: string,
+  onMetadata?: (metadata: CompatibilityMetadata) => Promise<void>,
 ): Promise<Result<CompatibilityReport, CompatibilityCheckError>> =>
   await Result.tryPromise({
     catch: (cause) =>
@@ -371,6 +391,7 @@ export const checkServerCompatibility = async (
       if (Result.isError(result)) {
         throw result.error;
       }
+      await onMetadata?.(parsed.output);
       return result.value;
     },
   });

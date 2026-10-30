@@ -134,7 +134,7 @@ describe("stella CLI version admission", () => {
       "run npm i -g @stll/cli@latest",
     );
     expect(refused.stderr.toString()).not.toContain("server registry differs");
-    for (const args of [["--version"], ["--help"], ["update"]]) {
+    for (const args of [["--version"], ["--help"], ["update", "--help"]]) {
       expect(run(args).exitCode).toBe(0);
     }
   }, 20_000);
@@ -242,11 +242,11 @@ describe("stella CLI: offline registry projection", () => {
     expect(() => JSON.parse(result.stdout.toString())).not.toThrow();
   });
 
-  test("legacy caller omissions do not disable baked commands offline", () => {
+  test("a legacy cache cannot authorize a write without a fresh contract", () => {
     const result = spawnDrifted(["task", "save", "--name", "x"]);
-    expect(result.exitCode).toBe(3);
+    expect(result.exitCode).toBe(2);
     const stderr = result.stderr.toString();
-    expect(stderr).toContain("Not signed in");
+    expect(stderr).toContain("compatibility");
     expect(stderr).not.toContain("not available on this server");
   });
 });
