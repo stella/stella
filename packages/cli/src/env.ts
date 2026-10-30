@@ -31,4 +31,6 @@ export const XDG_CACHE_HOME: string | undefined = process.env["XDG_CACHE_HOME"];
 /** Home directory, the `~/.cache` fallback root for the registry cache. */
 export const HOME: string | undefined = process.env["HOME"];
 
-export const UPDATE_CHECK_ENABLED = backgroundUpdateCheckEnabled(process.env);
+export const UPDATE_CHECK_ENABLED: boolean = backgroundUpdateCheckEnabled(
+  process.env,
+);

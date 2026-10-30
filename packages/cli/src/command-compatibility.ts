@@ -1,8 +1,9 @@
-import * as v from "valibot";
+import type { Result } from "better-result";
 
 import {
   checkServerCompatibility,
-  compatibilityMetadataSchema,
+  type CompatibilityCheckError,
+  type CompatibilityReport,
   validateCompatibility,
 } from "./compatibility.js";
 import {
@@ -38,7 +39,9 @@ export const checkCommandCompatibility = async ({
   serverUrl,
   env,
   now,
-}: CheckCommandCompatibilityOptions) => {
+}: CheckCommandCompatibilityOptions): Promise<
+  Result<CompatibilityReport, CompatibilityCheckError>
+> => {
   const filePath = cachePathFor(serverUrl, env);
   const cached = await readCacheFile(filePath);
   const evidence = cached?.compatibility;
@@ -48,10 +51,7 @@ export const checkCommandCompatibility = async ({
     now >= evidence.checkedAt &&
     now - evidence.checkedAt < DEFAULT_TTL_SECONDS * 1000
   ) {
-    const parsed = v.safeParse(compatibilityMetadataSchema, evidence.metadata);
-    if (parsed.success) {
-      return validateCompatibility(parsed.output, serverUrl);
-    }
+    return validateCompatibility(evidence.metadata, serverUrl);
   }
   return checkServerCompatibility(serverUrl, async (metadata) => {
     await writeCacheFile(filePath, {

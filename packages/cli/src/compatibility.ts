@@ -23,7 +23,7 @@ const SEMVER_PATTERN =
 const SEMVER_BUILD_PATTERN = /^[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*$/u;
 const positiveIntegerSchema = v.pipe(v.number(), v.integer(), v.minValue(1));
 
-export const compatibilityMetadataSchema = v.object({
+const compatibilityMetadataSchema = v.object({
   resource: v.pipe(v.string(), v.url()),
   scopes_supported: v.array(v.string()),
   stella_contract: v.optional(
@@ -274,9 +274,18 @@ const validateLegacyCompatibility = (
 };
 
 export const validateCompatibility = (
-  metadata: CompatibilityMetadata,
+  input: unknown,
   serverUrl: string,
 ): Result<CompatibilityReport, CompatibilityCheckError> => {
+  const parsed = v.safeParse(compatibilityMetadataSchema, input);
+  if (!parsed.success) {
+    return Result.err(
+      new CompatibilityCheckError({
+        message: "Server compatibility metadata is absent or malformed.",
+      }),
+    );
+  }
+  const metadata = parsed.output;
   let negotiated: Result<NegotiatedContract, CompatibilityCheckError>;
   if (metadata.stella_contract !== undefined) {
     negotiated = validateContract(metadata.stella_contract);
@@ -347,7 +356,7 @@ export const validateCompatibility = (
 
 export const checkServerCompatibility = async (
   serverUrl: string,
-  onMetadata?: (metadata: CompatibilityMetadata) => Promise<void>,
+  onMetadata?: (metadata: unknown) => Promise<void>,
 ): Promise<Result<CompatibilityReport, CompatibilityCheckError>> =>
   await Result.tryPromise({
     catch: (cause) =>
@@ -380,18 +389,11 @@ export const checkServerCompatibility = async (
       }
 
       const body: unknown = await response.json();
-      const parsed = v.safeParse(compatibilityMetadataSchema, body);
-      if (!parsed.success) {
-        throw new CompatibilityCheckError({
-          message: `stella compatibility discovery at ${discoveryUrl.toString()} is absent or malformed. Deploy an API that advertises a stella compatibility contract before publishing this CLI.`,
-        });
-      }
-
-      const result = validateCompatibility(parsed.output, serverUrl);
+      const result = validateCompatibility(body, serverUrl);
       if (Result.isError(result)) {
         throw result.error;
       }
-      await onMetadata?.(parsed.output);
+      await onMetadata?.(body);
       return result.value;
     },
   });
