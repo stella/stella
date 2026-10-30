@@ -2,63 +2,46 @@ import { expect, test } from "bun:test";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
-import { runPopupAction } from "./popup-actions";
+import { type PopupTab, runPopupAction } from "./popup-actions";
 import { popupView } from "./popup-view";
 
 const renderedTab = {
-  active: true,
-  autoDiscardable: true,
-  discarded: false,
-  frozen: false,
-  groupId: -1,
-  highlighted: true,
   id: 1,
-  incognito: false,
-  index: 0,
-  lastAccessed: 0,
-  pinned: false,
-  selected: true,
   url: "https://app.stll.app",
-  windowId: 1,
-} satisfies chrome.tabs.Tab;
+} satisfies PopupTab;
 const currentTab = { ...renderedTab, id: 2 };
 
 const createDependencies = () => {
   const calls: string[] = [];
-  const pairedTabs: (chrome.tabs.Tab | null)[] = [];
-  const adoptedTabs: (chrome.tabs.Tab | null)[] = [];
+  const pairedTabs: (PopupTab | null)[] = [];
+  const adoptedTabs: (PopupTab | null)[] = [];
   const access = Promise.withResolvers<boolean>();
   const deps = {
     renderedTab,
-    requestAccess: () => {
+    requestAccess: async () => {
       calls.push("requestAccess");
       return access.promise;
     },
-    readActiveTab: () => {
+    readActiveTab: async () => {
       calls.push("readActiveTab");
-      return Promise.resolve(currentTab);
+      return currentTab;
     },
-    pair: (tab: chrome.tabs.Tab | null) => {
+    pair: async (tab: PopupTab | null) => {
       calls.push("pair");
       pairedTabs.push(tab);
-      return Promise.resolve();
     },
-    adopt: (tab: chrome.tabs.Tab | null) => {
+    adopt: async (tab: PopupTab | null) => {
       calls.push("adopt");
       adoptedTabs.push(tab);
-      return Promise.resolve();
     },
-    disconnect: () => {
+    disconnect: async () => {
       calls.push("disconnect");
-      return Promise.resolve();
     },
-    revoke: () => {
+    revoke: async () => {
       calls.push("revoke");
-      return Promise.resolve();
     },
-    render: () => {
+    render: async () => {
       calls.push("render");
-      return Promise.resolve();
     },
   } satisfies Parameters<typeof runPopupAction>[1];
   return { access, adoptedTabs, calls, deps, pairedTabs };
@@ -120,7 +103,7 @@ for (const action of ["disconnect", "revoke"] as const) {
   test(`${action} refreshes the popup after completing`, async () => {
     const { calls, deps } = createDependencies();
     const operation = Promise.withResolvers<undefined>();
-    deps[action] = () => {
+    deps[action] = async () => {
       calls.push(action);
       return operation.promise;
     };

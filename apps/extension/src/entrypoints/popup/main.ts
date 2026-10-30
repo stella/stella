@@ -4,7 +4,7 @@ import { hasAllSiteAccess, requestAllSiteAccess } from "../../lib/access";
 import { readBrowserController } from "../../lib/controller";
 import { downloadNoticeMessage } from "../../lib/download-guard";
 import { parseControllableUrl } from "../../lib/origin-policy";
-import { runPopupAction } from "../../lib/popup-actions";
+import { type PopupTab, runPopupAction } from "../../lib/popup-actions";
 import { type PopupResponse, sendPopupRequest } from "../../lib/popup-request";
 import {
   handedTabView,
@@ -55,11 +55,11 @@ titleElement.textContent = message("extensionName");
 purposeElement.textContent = message("connectionPurpose");
 statusElement.textContent = message("checkingAccess");
 
-const readActiveTab = async (): Promise<chrome.tabs.Tab | null> =>
+const readActiveTab = async (): Promise<PopupTab | null> =>
   (await chrome.tabs.query({ active: true, currentWindow: true })).at(0) ??
   null;
 
-const activeTabKind = (tab: chrome.tabs.Tab | null): PopupActiveTab => {
+const activeTabKind = (tab: PopupTab | null): PopupActiveTab => {
   const url = tab?.url ?? "";
   if (trustedStellaOriginFromUrl(url) !== null) {
     return tab?.id === undefined
@@ -126,9 +126,7 @@ const render = (view: PopupView): void => {
   );
 };
 
-const pairActiveTab = async (
-  activeTab: chrome.tabs.Tab | null,
-): Promise<void> => {
+const pairActiveTab = async (activeTab: PopupTab | null): Promise<void> => {
   const result =
     activeTab?.id === undefined
       ? ({ status: "unsupported-tab" } as const)
@@ -153,9 +151,7 @@ const adoptFailureMessage = {
   PopupMessageKey
 >;
 
-const adoptActiveTab = async (
-  activeTab: chrome.tabs.Tab | null,
-): Promise<void> => {
+const adoptActiveTab = async (activeTab: PopupTab | null): Promise<void> => {
   if (activeTab?.id === undefined) {
     renderFailure("unsupportedTab");
     return;
@@ -205,7 +201,7 @@ primaryButton.addEventListener("click", () => {
   }
 });
 
-let renderedTab: chrome.tabs.Tab | null = null;
+let renderedTab: PopupTab | null = null;
 
 const renderAccess = async (): Promise<void> => {
   const [granted, controller, activeTab] = await Promise.all([

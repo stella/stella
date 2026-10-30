@@ -2,12 +2,15 @@ import { panic } from "better-result";
 
 import type { PopupAction, PopupSecondaryAction } from "./popup-view";
 
+/** The tab fields the popup reads: its id to address it and its url to classify it. */
+export type PopupTab = Pick<chrome.tabs.Tab, "id" | "url">;
+
 type PopupActionDependencies = {
-  renderedTab: chrome.tabs.Tab | null;
+  renderedTab: PopupTab | null;
   requestAccess: () => Promise<boolean>;
-  readActiveTab: () => Promise<chrome.tabs.Tab | null>;
-  pair: (tab: chrome.tabs.Tab | null) => Promise<void>;
-  adopt: (tab: chrome.tabs.Tab | null) => Promise<void>;
+  readActiveTab: () => Promise<PopupTab | null>;
+  pair: (tab: PopupTab | null) => Promise<void>;
+  adopt: (tab: PopupTab | null) => Promise<void>;
   disconnect: () => Promise<void>;
   revoke: () => Promise<void>;
   render: () => Promise<void>;
