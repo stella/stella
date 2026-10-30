@@ -2115,6 +2115,15 @@ const storageBoundedCitationMatch = ({
   };
 };
 
+type ExtractCitationsOptions = {
+  /**
+   * The text's language, which settles the one word whose meaning differs
+   * between languages (`a` joins two case numbers in Czech and ranges them
+   * in Spanish). Without it the word joins, which never invents a case.
+   */
+  language?: string | undefined;
+};
+
 /**
  * Extract citation references from decision text.
  *
@@ -2124,16 +2133,12 @@ const storageBoundedCitationMatch = ({
  */
 export const extractCitations = (
   sections: { index: number; text: string }[],
-  {
-    language,
-  }: {
-    /**
-     * The text's language, which settles the one word whose meaning differs
-     * between languages (`a` joins two case numbers in Czech and ranges them
-     * in Spanish). Without it the word joins, which never invents a case.
-     */
-    language?: string | undefined;
-  } = {},
+  { language }: ExtractCitationsOptions = {},
+): ExtractedCitation[] => citationsOf(sections, language);
+
+const citationsOf = (
+  sections: { index: number; text: string }[],
+  language: string | undefined,
 ): ExtractedCitation[] => {
   const byKey = new Map<string, ExtractedCitation>();
   const positions = new Map<string, CitationPosition>();
