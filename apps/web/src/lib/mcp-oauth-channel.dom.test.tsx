@@ -250,6 +250,120 @@ test("callback with a forged redirect nonce does not refresh connections", async
   }
 });
 
+const REDIRECT_PREFIX = `${MCP_OAUTH_REQUEST_STORAGE_KEY}:`;
+
+const countRefreshes = async (run: () => void) => {
+  const { subscribeToMcpConnectionRefresh } =
+    await import("./mcp-oauth-channel");
+  const OriginalBroadcastChannel = globalThis.BroadcastChannel;
+  const peers = new Set<BroadcastChannel>();
+  class RefreshOnlyBroadcastChannel extends OriginalBroadcastChannel {
+    constructor(name: string) {
+      super(name);
+      peers.add(this);
+    }
+    override postMessage(message: unknown): void {
+      if (this.name !== "mcp-oauth-refresh") {
+        return;
+      }
+      for (const peer of peers) {
+        if (peer !== this && peer.name === this.name) {
+          peer.dispatchEvent(
+            new NativeMessageEvent("message", { data: message }),
+          );
+        }
+      }
+    }
+    override close(): void {
+      peers.delete(this);
+      super.close();
+    }
+  }
+  globalThis.BroadcastChannel = RefreshOnlyBroadcastChannel;
+  let refreshes = 0;
+  const unsubscribe = subscribeToMcpConnectionRefresh(() => {
+    refreshes += 1;
+  });
+  try {
+    run();
+    return refreshes;
+  } finally {
+    unsubscribe();
+    for (const peer of peers) {
+      peer.close();
+    }
+    globalThis.BroadcastChannel = OriginalBroadcastChannel;
+  }
+};
+
+const callbackWithRecord = async (record: string) => {
+  const { broadcastMcpOAuthOutcome } = await import("./mcp-oauth-channel");
+  const storage = requireBrowserStorage("session").unwrap();
+  const nonce = createRandomValue();
+  const key = `${REDIRECT_PREFIX}${nonce}`;
+  storage.setItem(key, record);
+  const refreshes = await countRefreshes(() => {
+    storage.setItem(MCP_OAUTH_REQUEST_STORAGE_KEY, nonce);
+    broadcastMcpOAuthOutcome({ status: "connected" });
+  });
+  return { key, refreshes, storage };
+};
+
+test("a second callback with a consumed redirect record does not refresh", async () => {
+  const { broadcastMcpOAuthOutcome } = await import("./mcp-oauth-channel");
+  const valid = JSON.stringify({ expiresAt: Date.now() + 60_000 });
+  const first = await callbackWithRecord(valid);
+  expect(first.refreshes).toBe(1);
+  expect(first.storage.getItem(first.key)).toBeNull();
+  const nonce = first.key.slice(REDIRECT_PREFIX.length);
+  const refreshes = await countRefreshes(() => {
+    first.storage.setItem(MCP_OAUTH_REQUEST_STORAGE_KEY, nonce);
+    broadcastMcpOAuthOutcome({ status: "connected" });
+  });
+  expect(refreshes).toBe(0);
+});
+
+test("an expired redirect record is refused and removed", async () => {
+  const { key, refreshes, storage } = await callbackWithRecord(
+    JSON.stringify({ expiresAt: Date.now() - 1 }),
+  );
+  expect(refreshes).toBe(0);
+  expect(storage.getItem(key)).toBeNull();
+});
+
+test("a schema-invalid redirect record is refused and removed", async () => {
+  for (const record of ["{}", "{not json", '{"expiresAt":"soon"}']) {
+    const { key, refreshes, storage } = await callbackWithRecord(record);
+    expect(refreshes).toBe(0);
+    expect(storage.getItem(key)).toBeNull();
+  }
+});
+
+test("module load sweeps expired and invalid unread redirect records", async () => {
+  const storage = requireBrowserStorage("session").unwrap();
+  const expiredKey = `${REDIRECT_PREFIX}expired`;
+  const invalidKey = `${REDIRECT_PREFIX}invalid`;
+  const malformedKey = `${REDIRECT_PREFIX}malformed`;
+  const validKey = `${REDIRECT_PREFIX}valid`;
+  const unrelatedKey = "unrelated-key";
+  storage.setItem(expiredKey, JSON.stringify({ expiresAt: Date.now() - 1 }));
+  storage.setItem(invalidKey, "{}");
+  storage.setItem(malformedKey, "{not json");
+  storage.setItem(validKey, JSON.stringify({ expiresAt: Date.now() + 60_000 }));
+  storage.setItem(unrelatedKey, "{}");
+  try {
+    await import("./mcp-oauth-channel?load-sweep");
+    expect(storage.getItem(expiredKey)).toBeNull();
+    expect(storage.getItem(invalidKey)).toBeNull();
+    expect(storage.getItem(malformedKey)).toBeNull();
+    expect(storage.getItem(validKey)).not.toBeNull();
+    expect(storage.getItem(unrelatedKey)).toBe("{}");
+  } finally {
+    storage.removeItem(validKey);
+    storage.removeItem(unrelatedKey);
+  }
+});
+
 test("authorization URL validation runs before opening a window", () => {
   const open = spyOn(window, "open").mockReturnValue(window);
   try {
