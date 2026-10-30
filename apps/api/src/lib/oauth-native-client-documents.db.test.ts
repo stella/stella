@@ -49,6 +49,8 @@ const { rootDb } = await import("@/api/db/root");
 const { workspaceMembers, workspaces } = await import("@/api/db/schema");
 const { createSafeId, toSafeId } = await import("@/api/lib/branded-types");
 const { readSignedQuery } = await import("@/api/tests/helpers/oauth-grant");
+const { installScriptedProvider } =
+  await import("@/api/tests/helpers/chat-scripted-provider");
 const { login } = await import("../../../../packages/cli/src/auth/login.ts");
 const { CLI_DEFAULT_RESOURCE_SCOPES, CLI_KNOWN_SCOPES, CLI_REQUIRED_SCOPES } =
   await import("../../../../packages/cli/src/auth/constants.ts");
@@ -459,8 +461,7 @@ describe("stella mobile client document", () => {
     const threadId = createSafeId<"chatThread">();
     const messageId = createSafeId<"chatMessage">();
     const runId = Bun.randomUUIDv7();
-    // The envelope the app sends; the file is of a kind chat never takes, so
-    // the handler refuses it before any model runs.
+    // The envelope the app sends; the file is of a kind chat never takes.
     const forwarded = {
       threadId,
       runId,
@@ -512,12 +513,30 @@ describe("stella mobile client document", () => {
       'Bearer error="insufficient_scope"',
     );
 
-    // With the scope the request reaches the chat handler, whose own checks
-    // answer it as they answer a browser session.
+    // With the scope the chat handler takes the request and refuses the
+    // file as it refuses a browser session's: before the thread exists or a
+    // model runs. The scripted model makes the deployment's AI available, so
+    // the refusal is the attachment check's; the thread is scripted with no
+    // run, so a model call on it would be recorded.
     const { access } = await mobileSignIn(browser);
-    const reached = await send(access.token);
-    expect([401, 403]).not.toContain(reached.status);
-    expect(reached.headers.get("www-authenticate")).toBeNull();
+    const provider = installScriptedProvider();
+    try {
+      provider.script(threadId);
+      const refusedFile = await send(access.token);
+      expect(refusedFile.status).toBe(400);
+      expect(refusedFile.headers.get("www-authenticate")).toBeNull();
+      expect(await refusedFile.json()).toEqual({
+        message: "Unsupported chat attachment type",
+      });
+      expect(provider.takeRequests(threadId)).toEqual([]);
+      expect(provider.takeFindings(threadId)).toEqual({
+        changedToolResults: [],
+        unconsumedScripts: [],
+        unscriptedCalls: [],
+      });
+    } finally {
+      provider.restore();
+    }
   });
 
   test("no client but the app is granted the REST API", async () => {
