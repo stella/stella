@@ -62,9 +62,9 @@ export const INSTALL_OWNED_IGNORED_GENERATED_OUTPUTS = [
 ] as const;
 
 export const CI_GENERATION_COMMANDS = [
+  ["bun", "--cwd=packages/cli", "run", "codegen:runtime"],
   ["bun", "apps/api/scripts/generate-capability-runtime.ts"],
   ["bun", "scripts/prepare-mcp-apps.ts"],
-  ["bun", "--cwd=packages/cli", "run", "codegen:runtime"],
   ["bun", "--cwd=apps/web", "run", "typegen"],
   ["bun", "--cwd=apps/web", "run", "generate:route-tree"],
   [

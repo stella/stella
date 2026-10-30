@@ -1,5 +1,11 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, symlinkSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+} from "node:fs";
 import { readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -20,17 +26,16 @@ const run = (args: string[], cwd: string): void => {
   ).toBe(0);
 };
 
-const catalogBytes = async (root: string) => {
-  const directory = path.join(root, "packages/cli/capabilities");
+const catalogBytes = async (directory: string) => {
   const files = (await readdir(directory)).toSorted();
   return new Map(
     files.map((file) => [file, readFileSync(path.join(directory, file))]),
   );
 };
 
-// timeout: exercises two real CLI lifecycle builds and an npm dry-run pack.
+// timeout: exercises the release packer's two full CLI builds.
 test(
-  "CLI consumers and npm prepack regenerate byte-identical capability shards",
+  "the reproducible CLI release pack contains freshly generated capability shards",
   async () => {
     const temporary = mkdtempSync(path.join(tmpdir(), "stella-cli-build-"));
     const checkout = path.join(temporary, "checkout");
@@ -41,7 +46,7 @@ test(
           "-a",
           `--link-dest=${ROOT}`,
           "--exclude=.git",
-          "--exclude=node_modules",
+          "--exclude=/node_modules",
           "--exclude=packages/cli/dist",
           `${ROOT}/`,
           checkout,
@@ -53,31 +58,39 @@ test(
         path.join(checkout, "node_modules"),
         "dir",
       );
+      await rm(path.join(checkout, "packages/cli/capabilities"), {
+        recursive: true,
+        force: true,
+      });
+      const destination = path.join(temporary, "packed");
+      run(
+        ["bash", "scripts/pack-reproducibly.sh", "cli", destination],
+        checkout,
+      );
+
+      const tarballs = (await readdir(destination)).filter((file) =>
+        file.endsWith(".tgz"),
+      );
+      expect(tarballs).toHaveLength(1);
+      const extracted = path.join(temporary, "extracted");
+      mkdirSync(extracted);
+      run(
+        ["tar", "-xzf", path.join(destination, tarballs[0]!), "-C", extracted],
+        checkout,
+      );
+      await rm(path.join(checkout, "packages/cli/capabilities"), {
+        recursive: true,
+        force: true,
+      });
       run(
         ["bun", "run", "generate:capabilities"],
         path.join(checkout, "packages/cli"),
       );
-      const expected = await catalogBytes(checkout);
-
-      await rm(path.join(checkout, "packages/cli/capabilities"), {
-        recursive: true,
-        force: true,
-      });
-      run(
-        ["bun", "run", "codegen:runtime"],
-        path.join(checkout, "packages/cli"),
+      expect(
+        await catalogBytes(path.join(extracted, "package/capabilities")),
+      ).toEqual(
+        await catalogBytes(path.join(checkout, "packages/cli/capabilities")),
       );
-      expect(await catalogBytes(checkout)).toEqual(expected);
-
-      await rm(path.join(checkout, "packages/cli/capabilities"), {
-        recursive: true,
-        force: true,
-      });
-      run(
-        ["npm", "pack", "--dry-run", "--json"],
-        path.join(checkout, "packages/cli"),
-      );
-      expect(await catalogBytes(checkout)).toEqual(expected);
     } finally {
       rmSync(temporary, { recursive: true, force: true });
     }
