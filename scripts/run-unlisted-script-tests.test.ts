@@ -444,6 +444,23 @@ test("a tracked existence probe requires a file declaration without an open", ()
   expect(undeclaredTracedFiles({ ...options, declared: [file] })).toEqual([]);
 });
 
+test("socket descriptor annotations preserve subsequent path probes", () => {
+  const file = "scripts/script-test-inputs.json";
+  for (const descriptor of [
+    "1<UNIX-STREAM:[31339->31338]>",
+    "1<TCP:[127.0.0.1:80->127.0.0.1:90]>",
+  ]) {
+    expect(
+      undeclaredTracedFiles({
+        trace: `1 fstat(${descriptor}, {st_mode=S_IFSOCK|0777, st_size=0, ...}) = 0\n1 access("${path.resolve(file)}", F_OK) = 0`,
+        closure: new Set(),
+        declared: [],
+        tracked: new Set([file]),
+      }),
+    ).toEqual([file]);
+  }
+});
+
 test("the trace filter is exactly the syscall dependency registry", () => {
   expect(SCRIPT_TEST_TRACE_FILTER).toBe(
     `trace=${Object.keys(SCRIPT_TEST_TRACE_SYSCALLS).join(",")}`,

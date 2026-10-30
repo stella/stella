@@ -2,6 +2,7 @@
   "inputs": {
     "scripts/api-dockerfile-entrypoints.test.ts": ["**"],
     "scripts/api-test-impact.test.ts": ["**"],
+    "scripts/audit-mutation-ledger.test.ts": ["**"],
     "scripts/autofix-baseline-prune.test.ts": [
       ".oxlint-plugins/**",
       "scripts/**"
@@ -36,6 +37,7 @@
       "packages/uuid-codec/**",
       "scripts/**"
     ],
+    "scripts/autofix-push-scope.test.ts": ["**"],
     "scripts/baseline-paths.test.ts": ["**"],
     "scripts/bot-refresh-auto-merge.test.ts": [
       ".github/workflows/bot-refresh-auto-merge.yml"
@@ -520,8 +522,6 @@
     ]
   },
   "noTrackedInputs": {
-    "scripts/audit-mutation-ledger.test.ts": "Uses only temporary fixtures and its static import closure.",
-    "scripts/autofix-push-scope.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/bundle-worker-only-groups.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/check-contract-domain-ledger.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/check-instruction-references.test.ts": "Uses only temporary fixtures and its static import closure.",

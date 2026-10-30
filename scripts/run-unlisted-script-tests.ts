@@ -460,9 +460,10 @@ const syscallArguments = (source: string): string[] => {
     if (quoted) {
       continue;
     }
+    // Socket descriptor annotations include peer arrows inside their brackets.
     if (char === "<") {
       annotation = true;
-    } else if (char === ">") {
+    } else if (char === ">" && source.at(index - 1) !== "-") {
       annotation = false;
     }
     if (annotation) {
