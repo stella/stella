@@ -1,6 +1,7 @@
 import type { SQLWrapper } from "drizzle-orm";
 
 import type { TransactionOf } from "@/api/db/scoped";
+import { buildEuCompletionPageQuery } from "@/api/handlers/case-law/ingestion/eu-completion-store";
 import { legislationCandidateRowsStatement } from "@/api/handlers/legislation/search";
 import type {
   ReadBudgetId,
@@ -48,6 +49,28 @@ export const queryPerfRegistry = (
 export const corpusStatementRegistry = (seed: CorpusReadBudgetSeed) =>
   [
     {
+      budgetId: "statement.caseLaw.euCompletionPage",
+      build: (tx: TransactionOf<GatedTestDb>) =>
+        buildEuCompletionPageQuery(tx, {
+          sourceId: seed.completionSourceId,
+          mode: "dry-run",
+          parserVersion: 2,
+          after: null,
+          limit: 100,
+        }),
+      expectedRows: 100,
+      read: async (tx: TransactionOf<GatedTestDb>) =>
+        await buildEuCompletionPageQuery(tx, {
+          sourceId: seed.completionSourceId,
+          mode: "dry-run",
+          parserVersion: 2,
+          after: null,
+          limit: 100,
+        }),
+      ownerDeadlineMs:
+        QUERY_PERF_OWNER_DEADLINES["statement.caseLaw.euCompletionPage"],
+    },
+    {
       budgetId: "statement.legislation.candidateRows",
       build: (tx: TransactionOf<GatedTestDb>) =>
         // The fixture's transaction supplies the select surface the reader uses.
@@ -66,6 +89,7 @@ export const corpusStatementRegistry = (seed: CorpusReadBudgetSeed) =>
   ] as const satisfies readonly {
     budgetId: ReadBudgetId;
     build: (tx: TransactionOf<GatedTestDb>) => SQLWrapper;
+    read?: (tx: TransactionOf<GatedTestDb>) => Promise<unknown[]>;
     expectedRows: number;
     ownerDeadlineMs: number | undefined;
   }[];
@@ -165,6 +189,7 @@ export const READ_BUDGET_PROFILES = {
   "scheduled.caseLaw.reportFreshness": "corpus",
   "scheduled.requests.sweepReceipts": "corpus",
   "statement.caseLaw.coverageSources": "coverage",
+  "statement.caseLaw.euCompletionPage": "corpus",
   "statement.legislation.candidateRows": "corpus",
   "statement.documents.searchHits": "tenant",
 } as const satisfies Record<
