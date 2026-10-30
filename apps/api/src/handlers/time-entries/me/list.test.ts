@@ -132,6 +132,7 @@ beforeAll(async () => {
       }),
       workspaceId: null,
       activityGroup: TIME_ENTRY_ACTIVITY_GROUP.INTERNAL,
+      activityCode: null,
       currency: UNPRICED_TIME_ENTRY_CURRENCY,
       durationMinutes: 25,
       billedMinutes: 0,
