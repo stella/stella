@@ -377,23 +377,27 @@ export const reviewSourcesCurrent = (
     );
   });
 
-/** A structure is accepted only for the source activity it was reviewed on. */
+/** Applied results are valid only for the source activity reviewed with them. */
 export const currentReviewContent = (
   content: ReviewContent,
   groups: ReadonlyMap<string, DraftableGroup>,
 ): ReviewContent => {
-  if (content.type !== "accepted") {
+  const acceptance = content.type === "accepted" ? content : content.acceptance;
+  if (
+    acceptance === undefined ||
+    reviewSourcesCurrent(acceptance.sources, groups)
+  ) {
     return content;
   }
-  const unchanged = reviewSourcesCurrent(content.sources, groups);
-  if (unchanged) {
-    return content;
+  const original = currentReviewContent(acceptance.undoContent, groups);
+  if (original.type !== "single") {
+    return panic("An applied draft must restore scalar content");
   }
   return {
     type: "single",
-    narrative: content.undoContent.narrative,
-    classification: content.undoContent.classification,
-    billable: content.undoContent.billable,
+    narrative: original.narrative,
+    classification: original.classification,
+    billable: original.billable,
     notice: "sourceChanged",
   };
 };

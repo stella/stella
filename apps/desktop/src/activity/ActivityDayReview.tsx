@@ -166,9 +166,10 @@ const useReviewEdits = (groups: ReadonlyMap<string, DraftableGroup>) => {
       const latestGroups = new Map(
         current.sources.map((group) => [group.id, group]),
       );
-      const action =
-        event.type === "offer-results"
-          ? ({
+      const action = (() => {
+        switch (event.type) {
+          case "offer-results":
+            return {
               type: "offer-results",
               groups: latestGroups,
               mode: event.mode,
@@ -182,8 +183,14 @@ const useReviewEdits = (groups: ReadonlyMap<string, DraftableGroup>) => {
                       : offer.initial,
                 };
               }),
-            } as const satisfies ReviewAction)
-          : event;
+            } as const satisfies ReviewAction;
+          case "use-draft":
+          case "apply-proposal":
+            return { ...event, groups: latestGroups };
+          default:
+            return event;
+        }
+      })();
       const next = reviewReducer(current.edits, action);
       return next === current.edits
         ? current

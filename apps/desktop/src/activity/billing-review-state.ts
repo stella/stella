@@ -17,19 +17,22 @@ import type {
   StructureSummary,
 } from "./billing-draft-logic";
 
+type ReviewAcceptance = {
+  sources: readonly DraftableGroup[];
+  undoContent: SingleReviewContent;
+};
 export type SingleReviewContent = {
   type: "single";
   narrative: string;
   billable: boolean;
   classification: DesktopTimeEntryClassification | null;
   notice?: "sourceChanged";
+  acceptance?: ReviewAcceptance;
 };
-export type AcceptedReviewContent = {
+export type AcceptedReviewContent = ReviewAcceptance & {
   type: "accepted";
   summary: StructureSummary;
-  sources: readonly DraftableGroup[];
   items: readonly ReviewItem[];
-  undoContent: SingleReviewContent;
 };
 export type ReviewContent = SingleReviewContent | AcceptedReviewContent;
 type AppliedDraftState = {
@@ -79,12 +82,15 @@ export type ReviewAction =
       })[];
     }
   | (ReviewTarget & {
-      type:
-        | "use-original"
-        | "use-draft"
-        | "apply-proposal"
-        | "dismiss-proposal"
-        | "undo-structure";
+      type: "use-original" | "dismiss-proposal" | "undo-structure";
+    })
+  | (ReviewTarget & {
+      type: "use-draft";
+      groups: ReadonlyMap<string, DraftableGroup>;
+    })
+  | (ReviewTarget & {
+      type: "apply-proposal";
+      groups: ReadonlyMap<string, DraftableGroup>;
     })
   | (ReviewTarget & {
       type: "accept-structure";
@@ -94,9 +100,18 @@ export type ReviewAction =
   | { type: "undo-all" };
 
 /** Source context is supplied by the review owner, never by a pending request. */
+type SourceBoundAction = Extract<
+  ReviewAction,
+  { groups: ReadonlyMap<string, DraftableGroup> }
+>;
 export type ReviewEvent =
-  | Exclude<ReviewAction, { type: "offer-results" }>
-  | Omit<Extract<ReviewAction, { type: "offer-results" }>, "groups">;
+  | Exclude<ReviewAction, SourceBoundAction>
+  | {
+      [Type in SourceBoundAction["type"]]: Omit<
+        Extract<SourceBoundAction, { type: Type }>,
+        "groups"
+      >;
+    }[SourceBoundAction["type"]];
 
 export const initialReviewEdit = (content: SingleReviewContent): EntryEdit => ({
   selected: true,
@@ -183,6 +198,10 @@ const appliedContent = (
     narrative: scalars.narrative,
     classification: scalars.classification,
     billable: scalars.billable ?? billable,
+    acceptance: {
+      sources: result.sources,
+      undoContent: current.acceptance?.undoContent ?? current,
+    },
   };
 };
 const applyResult = (
@@ -217,6 +236,23 @@ const applyResult = (
               proposal: null,
             }),
     },
+  });
+};
+
+const applyReviewedResult = (
+  state: ReviewState,
+  action: Extract<ReviewAction, { type: "use-draft" | "apply-proposal" }>,
+  result: DraftResult,
+): ReviewState => {
+  const sources = result.sources.map((source) => action.groups.get(source.id));
+  if (sources.some((source) => source === undefined)) {
+    return state;
+  }
+  return applyResult(state, action, {
+    draft: result.draft,
+    sources: captureReviewSources(
+      sources.filter((source) => source !== undefined),
+    ),
   });
 };
 
@@ -261,6 +297,9 @@ const offerResults = (
               billable: current.content.billable,
               classification: current.content.classification,
               notice: "sourceChanged",
+              ...(current.content.acceptance
+                ? { acceptance: current.content.acceptance }
+                : {}),
             }
           : current.content,
       draft,
@@ -306,6 +345,8 @@ const editItem = (
           billable:
             action.type === "set-billable" ? action.billable : content.billable,
           classification: content.classification,
+          ...(content.notice ? { notice: content.notice } : {}),
+          ...(content.acceptance ? { acceptance: content.acceptance } : {}),
         },
       },
     });
@@ -448,7 +489,13 @@ export const reviewStateForGroups = (
       state: next,
       groupId,
       current: edit,
-      change: { content },
+      change: {
+        content,
+        draft:
+          edit.draft === null
+            ? null
+            : { using: "proposal", result: edit.draft.result },
+      },
     });
   }
   return next;
@@ -537,13 +584,13 @@ export const reviewReducer = (
     case "use-draft":
       return own.draft === null
         ? state
-        : applyResult(state, action, own.draft.result);
+        : applyReviewedResult(state, action, own.draft.result);
     case "apply-proposal": {
       const result =
         own.draft?.using === "proposal"
           ? own.draft.result
           : own.draft?.proposal;
-      return result ? applyResult(state, action, result) : state;
+      return result ? applyReviewedResult(state, action, result) : state;
     }
     case "dismiss-proposal": {
       if (own.draft === null) {

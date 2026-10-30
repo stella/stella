@@ -778,9 +778,12 @@ for (const change of ["added", "reassigned", "moved-all"] as const) {
       </DesktopIntlProvider>,
     );
     expect(view.getByText(messages.activity.aiStructureChanged)).toBeTruthy();
-    expect(
-      view.queryByRole("button", { name: messages.activity.aiUndo }),
-    ).toBeNull();
+    expect(view.queryByText(messages.activity.aiApplied)).toBeNull();
+    if (change !== "moved-all") {
+      expect(
+        view.getByRole("button", { name: messages.activity.aiAccept }),
+      ).toBeTruthy();
+    }
     if (change === "added") {
       fireEvent.click(
         view.getByRole("button", { name: messages.activity.aiDraft }),
@@ -965,3 +968,62 @@ for (const mode of ["initial", "redraft", "steer"] as const) {
     });
   }
 }
+
+test("recording after an applied scalar draft requires review and enables redrafting", async () => {
+  const boundary = installNativeBoundary();
+  const view = mountReview();
+  const request = await startDrafting(view, boundary.draftRequests);
+  await resolveDraft(
+    request,
+    review([
+      draft("entry_1", "Earlier AI narrative", [], BASE_LEDGER_CLASSIFICATION),
+    ]),
+  );
+  expect(
+    view.getByRole("textbox", { name: messages.activity.entryNarrative }),
+  ).toHaveProperty("value", "Earlier AI narrative");
+  expect(visibleReviewCodes(view.container)).toEqual([
+    ["BASE-TASK", "BASE-ACTIVITY"],
+  ]);
+  const updated = snapshot([
+    ...segments,
+    {
+      appIdentifier: "com.example.editor",
+      appName: "Example Editor",
+      matterId: FIRST_MATTER_ID,
+      start: "2026-10-07T10:00:00Z",
+      end: "2026-10-07T10:06:00Z",
+    },
+  ]);
+  view.rerender(
+    <DesktopIntlProvider language="en" messages={messages}>
+      <ActivityDayReview
+        snapshot={updated}
+        header={<span>Review</span>}
+        billingDrafts={billingDrafts}
+        onCopy={(_text, onSettled) => onSettled(true)}
+        onReviewStatusChange={() => undefined}
+      />
+    </DesktopIntlProvider>,
+  );
+  expect(view.getByText(messages.activity.aiStructureChanged)).toBeTruthy();
+  expect(
+    view.getByRole("textbox", { name: messages.activity.entryNarrative }),
+  ).not.toHaveProperty("value", "Earlier AI narrative");
+  expect(visibleReviewCodes(view.container)).toEqual([[]]);
+  expect(
+    view.getByRole("button", { name: messages.activity.aiAccept }),
+  ).toBeTruthy();
+  fireEvent.click(
+    view.getByRole("button", { name: messages.activity.aiDraft }),
+  );
+  await waitFor(() => expect(boundary.draftRequests).toHaveLength(2));
+  await resolveDraft(
+    boundary.draftRequests.at(1) ?? panic("Expected redraft request"),
+    review([draft("entry_1", "Current AI narrative")]),
+  );
+  expect(
+    view.getByRole("textbox", { name: messages.activity.entryNarrative }),
+  ).toHaveProperty("value", "Current AI narrative");
+  expect(view.queryByText(messages.activity.aiStructureChanged)).toBeNull();
+});

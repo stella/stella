@@ -269,7 +269,11 @@ test("late offers snapshot live edits only at the first actual application", () 
   });
   expect(entry(state).content).toBe(edited);
   expect(entry(state).draft?.using).toBe("proposal");
-  state = reviewReducer(state, { type: "apply-proposal", ...target });
+  state = reviewReducer(state, {
+    type: "apply-proposal",
+    groups: currentGroups,
+    ...target,
+  });
   state = reviewReducer(state, { type: "use-original", ...target });
   expect(entry(state).content).toEqual(edited);
   state = reviewReducer(state, {
@@ -278,7 +282,11 @@ test("late offers snapshot live edits only at the first actual application", () 
     itemKey: "first",
     narrative: "New undo baseline",
   });
-  state = reviewReducer(state, { type: "use-draft", ...target });
+  state = reviewReducer(state, {
+    type: "use-draft",
+    groups: currentGroups,
+    ...target,
+  });
   state = reviewReducer(state, { type: "use-original", ...target });
   expect(entry(state).content).toBe(edited);
 });
@@ -375,10 +383,20 @@ test("scalar proposals never flatten accepted geometry or release its participan
         },
       ],
     });
-    expect(reviewReducer(state, { type: "apply-proposal", ...target })).toBe(
-      state,
-    );
-    expect(reviewReducer(state, { type: "use-draft", ...target })).toBe(state);
+    expect(
+      reviewReducer(state, {
+        type: "apply-proposal",
+        groups: currentGroups,
+        ...target,
+      }),
+    ).toBe(state);
+    expect(
+      reviewReducer(state, {
+        type: "use-draft",
+        groups: currentGroups,
+        ...target,
+      }),
+    ).toBe(state);
     expect(entry(state).content).toBe(accepted);
     state = reviewReducer(state, { type: "undo-all" });
     expect(entry(state).content).toBe(accepted);
@@ -396,7 +414,11 @@ test("scalar proposals never flatten accepted geometry or release its participan
       },
     ],
   });
-  merged = reviewReducer(merged, { type: "apply-proposal", ...target });
+  merged = reviewReducer(merged, {
+    type: "apply-proposal",
+    groups: currentGroups,
+    ...target,
+  });
   const third = makeGroup("third");
   const overlap = { ...merge, groupIds: ["second", "third"] };
   expect(
@@ -457,7 +479,11 @@ test.each(["use-original", "undo-all"] as const)(
         },
       ],
     });
-    state = reviewReducer(state, { type: "apply-proposal", ...target });
+    state = reviewReducer(state, {
+      type: "apply-proposal",
+      groups: currentGroups,
+      ...target,
+    });
     expect(entry(state).content).toMatchObject({
       narrative: "Steered proposal",
       billable: true,
@@ -635,6 +661,109 @@ test("billing-review.offers-are-bound-to-requested-activity", () => {
         ).toBe(offered);
         if (change !== "unchanged") {
           expect(updated.content).toMatchObject({ notice: "sourceChanged" });
+        }
+      },
+    ),
+  );
+});
+
+test("billing-review.applied-results-cannot-survive-source-edit-sequences", () => {
+  assertProperty(
+    "billing-review.applied-results-cannot-survive-source-edit-sequences",
+    fc.property(
+      fc.array(
+        fc.record({
+          narrative: fc.string({ maxLength: 30 }),
+          billable: fc.boolean(),
+          selected: fc.boolean(),
+          evidence: fc.string({ maxLength: 30 }),
+        }),
+        { minLength: 1, maxLength: 20 },
+      ),
+      (edits) => {
+        for (const proposal of [null, split, merge, move]) {
+          const live = new Map(currentGroups);
+          let state = reviewReducer(new Map(), {
+            type: "offer-results",
+            groups: live,
+            mode: "initial",
+            offers: [
+              {
+                ...target,
+                expectedRevision: 0,
+                result: result("AI narrative"),
+              },
+            ],
+          });
+          if (proposal !== null) {
+            state = reviewReducer(state, {
+              type: "accept-structure",
+              ...target,
+              proposal,
+              groups: sources,
+            });
+          }
+          for (const [index, edit] of edits.entries()) {
+            const before = entry(state);
+            const key =
+              before.content.type === "accepted"
+                ? (before.content.items.at(0)?.key ??
+                  panic("Missing accepted item"))
+                : target.groupId;
+            state = reviewReducer(state, {
+              type: "set-narrative",
+              ...target,
+              itemKey: key,
+              narrative: edit.narrative,
+            });
+            state = reviewReducer(state, {
+              type: "set-billable",
+              ...target,
+              itemKey: key,
+              billable: edit.billable,
+            });
+            state = reviewReducer(state, {
+              type: "set-selected",
+              ...target,
+              selected: edit.selected,
+            });
+            const source =
+              live.get(target.groupId) ?? panic("Missing live source");
+            const changed = {
+              ...source,
+              durationMs: source.durationMs + 360_000,
+              roundedTenths: source.roundedTenths + 1,
+              evidence: [`${index}: ${edit.evidence}`],
+            };
+            expect(changed).not.toEqual(source);
+            live.set(source.id, changed);
+            // Both projection and persisted reducer state reject every applied result.
+            expect(
+              reviewItems(
+                [{ group: changed, content: entry(state).content }],
+                live,
+              ).at(0)?.classification,
+            ).toBeNull();
+            state = reviewStateForGroups(state, live);
+            expect(entry(state).content).toMatchObject({
+              type: "single",
+              notice: "sourceChanged",
+              classification: null,
+            });
+            expect(entry(state).draft?.using).toBe("proposal");
+            const invalidated = state;
+            expect(reviewStateForGroups(state, currentGroups)).toBe(
+              invalidated,
+            );
+            // Explicit review accepts the proposal for the latest source, then the next edit invalidates it again.
+            state = reviewReducer(state, {
+              type: "apply-proposal",
+              ...target,
+              groups: live,
+            });
+            expect(entry(state).draft?.using).toBe("draft");
+            expect(reviewStateForGroups(state, live)).toBe(state);
+          }
         }
       },
     ),
