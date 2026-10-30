@@ -24,6 +24,8 @@ import {
   type SoftLawSourceAdapter,
 } from "@/api/lib/legal-search/soft-law-types";
 
+import { listingOnlyCoverage } from "./listing-only";
+
 const ORIGIN = "https://www.bfdi.bund.de";
 const HTML_TYPES = ["text/html", "application/xhtml+xml"] as const;
 const POLICY_BYTE_LIMIT = 1024 * 1024;
@@ -398,13 +400,9 @@ const BFDI_DEFINITION = {
     userAgent: "Stella/1.0 (+https://github.com/stella/stella)",
     window: { type: "any_time" },
   },
-  getTotalCount: async () =>
-    await Promise.resolve({ type: "no-count-endpoint" }),
-  sliceWalk: {
-    type: "unsupported",
-    reason:
-      "Topical publication pages provide no exhaustive count or date-slice interface.",
-  },
+  ...listingOnlyCoverage(
+    "Topical publication pages provide no exhaustive count or date-slice interface.",
+  ),
   sourceFields: {
     status: "declared",
     fields: SOURCE_FIELD_DISPOSITIONS,

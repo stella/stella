@@ -21,6 +21,8 @@ import {
   type SoftLawSourceAdapter,
 } from "@/api/lib/legal-search/soft-law-types";
 
+import { listingOnlyCoverage } from "./listing-only";
+
 const ORIGIN = "https://dataprotection.gov.sk";
 const INDEX_URL = `${ORIGIN}/sk/urad/o-nas/vyrocne-spravy/`;
 const REPORT_PATH = /^\/files\/annual-reports\/[^/]+\.pdf$/u;
@@ -328,13 +330,9 @@ export const uoouSkAdapter = {
         ...extraction,
       });
     }),
-  getTotalCount: async () =>
-    await Promise.resolve({ type: "no-count-endpoint" as const }),
-  sliceWalk: {
-    type: "unsupported",
-    reason:
-      "The publisher serves one undated, unpaginated annual-report index and no count endpoint.",
-  },
+  ...listingOnlyCoverage(
+    "The publisher serves one undated, unpaginated annual-report index and no count endpoint.",
+  ),
   sourceFields: {
     status: "declared",
     fields: SOURCE_FIELD_DISPOSITIONS,
