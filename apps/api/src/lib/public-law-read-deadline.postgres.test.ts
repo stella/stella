@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 
@@ -13,6 +13,7 @@ import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { publicLawReadDb } from "@/api/lib/public-law-read-db";
 import { isRecord } from "@/api/lib/type-guards";
 import { withTimeout } from "@/api/lib/with-timeout";
+import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgres = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -172,7 +173,7 @@ if (!databaseUrl || !runPostgres) {
         { label: "read_statute", budgetMs: BUDGET_MS },
         async () =>
           await runWithPublicReadStatementTimeout(
-            100,
+            { budgetMs: 100 },
             async () =>
               await Result.tryPromise({
                 try: async () =>
@@ -191,35 +192,80 @@ if (!databaseUrl || !runPostgres) {
     });
 
     test("an explicit cancellation inside the request budget keeps its original error", async () => {
-      let cancellation: unknown;
-      const outcome = await runWithinRequestLatencyBudget(
-        { label: "read_statute", budgetMs: BUDGET_MS },
-        async () =>
-          await Result.tryPromise({
-            try: async () =>
-              await publicLawReadDb(async (tx) => {
-                const cancelled = await Result.tryPromise({
-                  try: async () =>
-                    await tx.execute(
-                      sql`SELECT pg_cancel_backend(pg_backend_pid())`,
-                    ),
-                  catch: (cause) => cause,
-                });
-                if (Result.isError(cancelled)) {
-                  cancellation = cancelled.error;
-                  throw cancelled.error;
-                }
-                return "not cancelled";
+      await withGatedTestClients(
+        envBase.PUBLIC_LAW_DATABASE_URL ?? databaseUrl,
+        async ({ openClient }) => {
+          const { sql: control } = openClient({
+            connection: { statement_timeout: 1000 },
+          });
+          let cancellation: unknown;
+          const outcome = await runWithinRequestLatencyBudget(
+            { label: "read_statute", budgetMs: BUDGET_MS },
+            async () =>
+              await Result.tryPromise({
+                try: async () =>
+                  await publicLawReadDb(async (tx) => {
+                    const row = executedRows(
+                      await tx.execute(sql`SELECT pg_backend_pid() AS pid`),
+                    ).at(0);
+                    if (!isRecord(row) || typeof row["pid"] !== "number") {
+                      panic("Public read did not report its backend PID");
+                    }
+                    const pid = row["pid"];
+                    const pending = Result.tryPromise({
+                      try: async () =>
+                        await tx.execute(sql`SELECT pg_sleep(1)`),
+                      catch: (cause) => cause,
+                    });
+                    // The reader cannot signal its owner session. Wait until
+                    // its statement is active, then cancel from the control connection.
+                    await withTimeout(
+                      async () => {
+                        // real-time: cancellation must target an active PostgreSQL statement.
+                        while (true) {
+                          const active = executedRows(
+                            await control.unsafe(
+                              "SELECT wait_event FROM pg_stat_activity WHERE pid = $1",
+                              [pid],
+                            ),
+                          ).at(0);
+                          if (
+                            isRecord(active) &&
+                            active["wait_event"] === "PgSleep"
+                          ) {
+                            await control.unsafe(
+                              "SELECT pg_cancel_backend($1)",
+                              [pid],
+                            );
+                            return;
+                          }
+                          // real-time: observe the database's wait state before signaling its backend.
+                          await Bun.sleep(1);
+                        }
+                      },
+                      {
+                        label: "observe_public_read_cancellation",
+                        timeoutMs: 1000, // timeout: observe the statement under test before its sleep finishes
+                      },
+                    );
+                    const cancelled = await pending;
+                    if (Result.isError(cancelled)) {
+                      cancellation = cancelled.error;
+                      throw cancelled.error;
+                    }
+                    return "not cancelled";
+                  }),
+                catch: (cause) => cause,
               }),
-            catch: (cause) => cause,
-          }),
+          );
+          expect(Result.isError(outcome)).toBe(true);
+          const error = Result.isError(outcome) ? outcome.error : undefined;
+          expect(error).toBe(cancellation);
+          expect(error).not.toBeInstanceOf(TimeoutError);
+          expect(getPgErrorCode(error)).toBe(PG_ERROR.QUERY_CANCELED);
+          expect(readFailureBrand(error)?.reason).not.toBe("timeout_budgeted");
+        },
       );
-      expect(Result.isError(outcome)).toBe(true);
-      const error = Result.isError(outcome) ? outcome.error : undefined;
-      expect(error).toBe(cancellation);
-      expect(error).not.toBeInstanceOf(TimeoutError);
-      expect(getPgErrorCode(error)).toBe(PG_ERROR.QUERY_CANCELED);
-      expect(readFailureBrand(error)?.reason).not.toBe("timeout_budgeted");
     });
 
     test("a read inside its budget answers, and a read outside a scope keeps no deadline", async () => {
