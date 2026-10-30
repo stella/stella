@@ -5,11 +5,13 @@ import type { SQL } from "drizzle-orm";
 import { isNonNullObject } from "@stll/template-conditions/path";
 
 import type { ScopedDb } from "@/api/db/safe-db";
+import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { publicCaseLawDecisionJoin } from "@/api/lib/case-law/search-sql";
 import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
-import { projectThreadArtefactProvenance } from "@/api/lib/generated-artefact-provenance";
+import { decodeRawThreadArtefactProvenance } from "@/api/lib/generated-artefact-provenance";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { CHAT_SEARCH_DISPLAY_METADATA_GENERATION } from "@/api/lib/search/chat-search-generation";
 import { normalizeSearchableChatMessageContent } from "@/api/lib/search/chat-search-text";
 import { chatThreadScopeSql } from "@/api/lib/search/chat-thread-scope-sql";
@@ -73,7 +75,7 @@ type SearchPreviewChatMessageRow = {
 };
 
 type SearchPreviewChatRow = {
-  generationProvenance?: unknown;
+  generation_provenance: unknown;
   subjectDecisionId?: unknown;
   titleSource?: unknown;
   isTitleOnlyMatch: unknown;
@@ -460,7 +462,7 @@ export const buildSearchPreviewQuery = ({
           cst.title,
           t.subject_decision_id AS "subjectDecisionId",
           t.title_source AS "titleSource",
-          t.generation_provenance AS "generationProvenance",
+          t.generation_provenance,
           ${chatPreviewTitleOnlyMatch(tsQuery)},
           ${chatPreviewMessages(locatorTsQuery)}
         FROM chat_thread_search_documents cst
@@ -556,10 +558,21 @@ export const readSearchPreview = async (
         await tx.execute<SearchPreviewChatRow>(buildSearchPreviewQuery(input)),
     );
     const row = rows.at(0);
-    if (!row || !Array.isArray(row.messages)) {
+    if (!row) {
       return null;
     }
 
+    const provenance = decodeRawThreadArtefactProvenance(row);
+    if (provenance.isErr()) {
+      captureError(
+        provenance.error,
+        handlerErrorContext("search.preview.provenance_decode"),
+      );
+      throw provenance.error;
+    }
+    if (!Array.isArray(row.messages)) {
+      return null;
+    }
     const withdrawal = await readWithdrawnCopyProjection({ values: row });
     const subject =
       typeof row.subjectDecisionId === "string" ? row.subjectDecisionId : null;
@@ -567,7 +580,7 @@ export const readSearchPreview = async (
       title: row.title,
       titleSource: row.titleSource,
       subjectDecisionId: subject?.toLowerCase() ?? null,
-      ...projectThreadArtefactProvenance(row.generationProvenance),
+      ...provenance.value,
       messages: row.messages,
     });
     if (titleMarker !== null) {

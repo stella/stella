@@ -1,5 +1,8 @@
 import { expect, test } from "bun:test";
+import { sql } from "drizzle-orm";
 
+import { chatThreads } from "@/api/db/schema";
+import { createMockDatabase } from "@/api/db/sql-client";
 import { toSafeId } from "@/api/lib/branded-types";
 import { WithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-projection";
 
@@ -262,4 +265,93 @@ test("provenance projection forwards stored rows rather than accepting bare valu
   expect(projectThreadArtefactProvenance(row)).toEqual(row);
   // @ts-expect-error -- only a stored row can be forwarded; a bare value cannot construct provenance.
   projectThreadArtefactProvenance("untrusted");
+});
+
+test("provenance selection constants are immutable and cannot manufacture stored metadata", async () => {
+  const {
+    THREAD_ARTEFACT_PROVENANCE_SELECTION,
+    THREAD_ARTEFACT_PROVENANCE_COLUMNS,
+  } = await import("./generated-artefact-provenance");
+  expect(Object.keys(THREAD_ARTEFACT_PROVENANCE_SELECTION)).toEqual([
+    "generationProvenance",
+  ]);
+  expect(THREAD_ARTEFACT_PROVENANCE_SELECTION.generationProvenance).toBe(
+    chatThreads.generationProvenance,
+  );
+  expect(THREAD_ARTEFACT_PROVENANCE_COLUMNS).toEqual({
+    generationProvenance: true,
+  });
+  expect(Object.isFrozen(THREAD_ARTEFACT_PROVENANCE_SELECTION)).toBe(true);
+  expect(Object.isFrozen(THREAD_ARTEFACT_PROVENANCE_COLUMNS)).toBe(true);
+  const db = createMockDatabase();
+  const selectionUpdate = db
+    .update(chatThreads)
+    .set({ ...THREAD_ARTEFACT_PROVENANCE_SELECTION })
+    .where(sql`false`)
+    .toSQL();
+  expect(selectionUpdate.sql).toContain(
+    '"generation_provenance" = "chat_threads"."generation_provenance"',
+  );
+  expect(selectionUpdate.sql).not.toMatch(/"generation_provenance" = \$/u);
+  db.update(chatThreads)
+    // @ts-expect-error -- relational column selection cannot be persisted as provenance.
+    .set({ ...THREAD_ARTEFACT_PROVENANCE_COLUMNS })
+    .where(sql`false`)
+    .toSQL();
+});
+
+test("raw provenance decoding accepts only null or validated stored records", async () => {
+  const { decodeRawThreadArtefactProvenance } =
+    await import("./generated-artefact-provenance");
+  const record = {
+    version: 1,
+    slots: {
+      title: {
+        type: "generated",
+        generator,
+        decisionIds: [first],
+        coverage: "complete",
+      },
+      recap: { type: "authored" },
+    },
+  };
+  for (const value of [null, record]) {
+    const decoded = decodeRawThreadArtefactProvenance({
+      generation_provenance: value,
+    });
+    expect(decoded.isOk()).toBe(true);
+    expect(decoded.unwrap()).toEqual({ generationProvenance: value });
+  }
+});
+
+test("raw provenance decoding rejects absent fields and malformed metadata with a typed error", async () => {
+  const { decodeRawThreadArtefactProvenance, ArtefactProvenanceDecodeError } =
+    await import("./generated-artefact-provenance");
+  for (const value of [
+    undefined,
+    {},
+    [],
+    1,
+    true,
+    "null",
+    "{invalid json",
+    '{"version":1,"slots":{}}',
+    { version: 2, slots: {} },
+    { version: 1, slots: { title: {} } },
+    { version: 1, slots: [] },
+  ]) {
+    const decoded = decodeRawThreadArtefactProvenance({
+      generation_provenance: value,
+    });
+    expect(decoded.isErr(), JSON.stringify(value)).toBe(true);
+    if (decoded.isErr()) {
+      expect(decoded.error).toBeInstanceOf(ArtefactProvenanceDecodeError);
+    }
+  }
+  // @ts-expect-error -- raw query consumers must select the required database column.
+  const missing = decodeRawThreadArtefactProvenance({});
+  expect(missing.isErr()).toBe(true);
+  if (missing.isErr()) {
+    expect(missing.error).toBeInstanceOf(ArtefactProvenanceDecodeError);
+  }
 });

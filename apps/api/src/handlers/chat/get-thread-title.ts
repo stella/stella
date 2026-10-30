@@ -9,7 +9,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { projectThreadArtefactProvenance } from "@/api/lib/generated-artefact-provenance";
+import { THREAD_ARTEFACT_PROVENANCE_SELECTION } from "@/api/lib/generated-artefact-provenance";
 
 const config = {
   contract: "patch",
@@ -48,9 +48,7 @@ const getThreadTitle = createSafeRootHandler(
           .select({
             title: chatThreads.title,
             titleSource: chatThreads.titleSource,
-            ...projectThreadArtefactProvenance(
-              chatThreads.generationProvenance,
-            ),
+            ...THREAD_ARTEFACT_PROVENANCE_SELECTION,
             subjectDecisionId: chatThreads.subjectDecisionId,
           })
           .from(chatThreads)

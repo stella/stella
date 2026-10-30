@@ -303,3 +303,37 @@ export const writeThreadArtefactTitle = async ({
 export const projectThreadArtefactProvenance = (
   row: Pick<typeof chatThreads.$inferSelect, "generationProvenance">,
 ) => ({ generationProvenance: row.generationProvenance });
+
+export const THREAD_ARTEFACT_PROVENANCE_SELECTION = Object.freeze({
+  generationProvenance: chatThreads.generationProvenance,
+} as const);
+
+export const THREAD_ARTEFACT_PROVENANCE_COLUMNS = Object.freeze({
+  generationProvenance: true,
+} as const);
+
+export class ArtefactProvenanceDecodeError extends TaggedError(
+  "ArtefactProvenanceDecodeError",
+)<{ message: string }> {}
+
+/** Raw SQL records must satisfy the same persisted contract as typed rows. */
+export const decodeRawThreadArtefactProvenance = (row: {
+  generation_provenance: unknown;
+}) => {
+  if (row.generation_provenance === null) {
+    return Result.ok(
+      projectThreadArtefactProvenance({ generationProvenance: null }),
+    );
+  }
+  const parsed = v.safeParse(storedProvenance, row.generation_provenance);
+  if (!parsed.success) {
+    return Result.err(
+      new ArtefactProvenanceDecodeError({
+        message: "Invalid stored artefact provenance",
+      }),
+    );
+  }
+  return Result.ok(
+    projectThreadArtefactProvenance({ generationProvenance: parsed.output }),
+  );
+};

@@ -4,10 +4,15 @@ import { sql } from "drizzle-orm";
 import { GLOBAL_SEARCH_RANK_WORK_LIMIT_CODE } from "@stll/api-contract/search";
 
 import type { Transaction } from "@/api/db/root";
+import { captureError } from "@/api/lib/analytics/capture";
 import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { projectThreadArtefactProvenance } from "@/api/lib/generated-artefact-provenance";
+import {
+  decodeRawThreadArtefactProvenance,
+  projectThreadArtefactProvenance,
+} from "@/api/lib/generated-artefact-provenance";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
 import {
@@ -22,6 +27,7 @@ import { searchTitleTierSql } from "./search-ranking";
 
 export type ChatSearchCandidateRow = Record<string, unknown> & {
   id: string;
+  generation_provenance: unknown;
   score: number;
   tier: SearchRankingTier;
 };
@@ -88,14 +94,25 @@ type ProjectChatCandidatesOptions = {
 /** Ranks and previews only admitted source text from a bounded candidate window. */
 export const projectChatSearchCandidates = async ({
   database,
-  rows,
+  rows: candidates,
   query,
   cursor,
   limit,
 }: ProjectChatCandidatesOptions) => {
-  if (rows.length === 0) {
+  if (candidates.length === 0) {
     return [];
   }
+  const rows = candidates.map((row) => {
+    const provenance = decodeRawThreadArtefactProvenance(row);
+    if (provenance.isErr()) {
+      captureError(
+        provenance.error,
+        handlerErrorContext("search.candidates.provenance_decode"),
+      );
+      throw provenance.error;
+    }
+    return { ...row, ...provenance.value };
+  });
   const projection = await readWithdrawnCopyProjection({ values: rows });
   const admitted = rows.map((row) => {
     const subject =
@@ -106,7 +123,7 @@ export const projectChatSearchCandidates = async ({
       title: row["title"],
       titleSource: row["title_source"],
       subjectDecisionId: subject?.toLowerCase() ?? null,
-      ...projectThreadArtefactProvenance(row["generation_provenance"]),
+      ...projectThreadArtefactProvenance(row),
       source_messages: row["source_messages"],
     });
     const title = titleMarker === null ? String(row["title"]) : "";
@@ -177,7 +194,7 @@ export const projectChatSearchCandidates = async ({
       title: row["title"],
       titleSource: row["title_source"],
       subjectDecisionId: subject?.toLowerCase() ?? null,
-      ...projectThreadArtefactProvenance(row["generation_provenance"]),
+      ...projectThreadArtefactProvenance(row),
       source_messages: row["source_messages"],
     });
     return [

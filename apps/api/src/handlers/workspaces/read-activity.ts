@@ -26,7 +26,7 @@ import {
   pgTimestampCursorValue,
 } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { projectThreadArtefactProvenance } from "@/api/lib/generated-artefact-provenance";
+import { THREAD_ARTEFACT_PROVENANCE_SELECTION } from "@/api/lib/generated-artefact-provenance";
 import { LIMITS } from "@/api/lib/limits";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 
@@ -188,9 +188,7 @@ const readWorkspaceActivity = createSafeHandler(
               id: chatThreads.id,
               title: chatThreads.title,
               titleSource: chatThreads.titleSource,
-              ...projectThreadArtefactProvenance(
-                chatThreads.generationProvenance,
-              ),
+              ...THREAD_ARTEFACT_PROVENANCE_SELECTION,
               subjectDecisionId: chatThreads.subjectDecisionId,
             })
             .from(chatThreads)

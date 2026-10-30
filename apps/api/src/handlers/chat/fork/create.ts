@@ -51,7 +51,7 @@ import {
 import { createUserFileKey } from "@/api/lib/files/utils";
 import {
   copyThreadArtefactTitle,
-  projectThreadArtefactProvenance,
+  THREAD_ARTEFACT_PROVENANCE_SELECTION,
 } from "@/api/lib/generated-artefact-provenance";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { isMissingS3ObjectError } from "@/api/lib/s3";
@@ -108,7 +108,7 @@ const FORKED_THREAD_COLUMNS = {
   dataWorkspaceIds: chatThreads.dataWorkspaceIds,
   title: chatThreads.title,
   titleSource: chatThreads.titleSource,
-  ...projectThreadArtefactProvenance(chatThreads.generationProvenance),
+  ...THREAD_ARTEFACT_PROVENANCE_SELECTION,
   subjectDecisionId: chatThreads.subjectDecisionId,
   usedAnonymization: chatThreads.usedAnonymization,
   webSearchEnabled: chatThreads.webSearchEnabled,
@@ -644,9 +644,7 @@ export const createForkThread = ({
             parentThreadId: chatThreads.parentThreadId,
             title: chatThreads.title,
             titleSource: chatThreads.titleSource,
-            ...projectThreadArtefactProvenance(
-              chatThreads.generationProvenance,
-            ),
+            ...THREAD_ARTEFACT_PROVENANCE_SELECTION,
             subjectDecisionId: chatThreads.subjectDecisionId,
           })
           .from(chatThreads)

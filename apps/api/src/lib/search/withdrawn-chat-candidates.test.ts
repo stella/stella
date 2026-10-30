@@ -13,6 +13,7 @@ test("candidate batches advance their SQL keyset through the entire bounded inpu
     { length: 251 },
     (_, index) =>
       ({
+        generation_provenance: null,
         id: String(index),
         tier: index < 100 ? 4 : 1,
         score: (index < 100 ? 1000 : 2000) - index,
@@ -48,7 +49,12 @@ test("candidate ranking reports the work limit instead of returning a truncated 
       calls++;
       return Array.from(
         { length: LIMITS.searchChatCandidateThreadsMax + 1 },
-        (_, index) => ({ id: String(index), tier: 1, score: 1 }),
+        (_, index) => ({
+          id: String(index),
+          generation_provenance: null,
+          tier: 1,
+          score: 1,
+        }),
       );
     },
   });
@@ -63,6 +69,7 @@ test("candidate source bytes share the ranking work limit", async () => {
   const result = await readChatCandidateBatches({
     readBatch: async () => [
       {
+        generation_provenance: null,
         id: "one",
         tier: 1,
         score: 1,
@@ -80,6 +87,7 @@ test("source completeness is required before an admitted ranking can be returned
   const result = await readChatCandidateBatches({
     readBatch: async () => [
       {
+        generation_provenance: null,
         id: "one",
         tier: 1,
         score: 1,

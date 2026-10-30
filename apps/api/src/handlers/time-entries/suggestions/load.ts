@@ -40,7 +40,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
-import { projectThreadArtefactProvenance } from "@/api/lib/generated-artefact-provenance";
+import { THREAD_ARTEFACT_PROVENANCE_SELECTION } from "@/api/lib/generated-artefact-provenance";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
 
@@ -331,7 +331,7 @@ const readChatSignals = async (tx: Transaction, scope: SuggestionReadScope) =>
       threadId: chatMessages.threadId,
       title: chatThreads.title,
       titleSource: chatThreads.titleSource,
-      ...projectThreadArtefactProvenance(chatThreads.generationProvenance),
+      ...THREAD_ARTEFACT_PROVENANCE_SELECTION,
       subjectDecisionId: chatThreads.subjectDecisionId,
       createdAt: chatMessages.createdAt,
     })
