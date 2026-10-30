@@ -1,5 +1,5 @@
 {
   "metric": "direct-third-party-declarations",
   "delta": 1,
-  "reason": "packages/ai-catalog adds fast-check as a devDependency for the frontier module property test; fast-check is already used across the repository."
+  "reason": "The root workspace declares drizzle-kit (catalog version) for scripts/check-migration-schema.ts, which generates the schema snapshot; apps/api already depends on it."
 }
