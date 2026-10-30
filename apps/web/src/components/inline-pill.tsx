@@ -180,7 +180,7 @@ export const InlinePill = ({
     </span>
   );
 
-  if (hint === undefined || hint === null || hint === "") {
+  if (hint === undefined || hint === "") {
     return element;
   }
 

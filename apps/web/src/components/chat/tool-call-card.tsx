@@ -721,13 +721,13 @@ const ToolCallHeaderLabel = ({
   statusLabel,
   subtitle,
 }: {
-  elapsed: ReactNode;
+  elapsed: string | null;
   hasError: boolean;
   isLoading: boolean;
   label: ReactNode;
   status: StatusMarkStatus;
   statusLabel: string | undefined;
-  subtitle: ReactNode;
+  subtitle: ReturnType<typeof getToolSubtitle>;
 }) => (
   <span
     className={cn(

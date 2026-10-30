@@ -125,7 +125,7 @@ const disclosureExpanded = (html: string, label: string): string | null => {
   root.innerHTML = html;
   const triggers = [
     ...root.querySelectorAll('[data-slot="collapsible-trigger"]'),
-  ].filter((trigger) => trigger.textContent?.includes(label) === true);
+  ].filter((trigger) => trigger.textContent.includes(label));
   return triggers.at(-1)?.getAttribute("aria-expanded") ?? null;
 };
 
