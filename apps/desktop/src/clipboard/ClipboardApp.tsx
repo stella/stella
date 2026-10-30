@@ -112,6 +112,7 @@ import {
   SCROLL_EDGE_FADE_CLASS,
 } from "@stll/ui/scroll-edge-fade";
 import { StellaMark } from "@stll/ui/stella-mark";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import { typedCharacter } from "@stll/ui/typed-character";
 import { cn } from "@stll/ui/utils";
 
@@ -3210,33 +3211,40 @@ const ClipboardApp = () => {
                 >
                   {searchSource === "clips" ? (
                     <Menu>
-                      <MenuTrigger
-                        render={
-                          <button
-                            aria-label={t("searchOptions")}
-                            className="focus-visible:ring-ring data-popup-open:bg-foreground/6 hover:bg-foreground/6 relative grid size-8 place-items-center rounded-full outline-none focus-visible:ring-2"
-                            data-active={
-                              activeSearchOptionCount > 0 ? "" : undefined
-                            }
-                            title={t("searchOptions")}
-                            type="button"
-                          />
-                        }
-                      >
-                        <ListFilterIcon
-                          aria-hidden="true"
-                          className={cn(
-                            "size-4",
-                            activeSearchOptionCount > 0 && "text-primary",
-                          )}
-                        />
-                        {activeSearchOptionCount > 0 ? (
-                          <span
+                      <Tooltip>
+                        <MenuTrigger
+                          render={
+                            <TooltipTrigger
+                              render={
+                                <Button
+                                  aria-label={t("searchOptions")}
+                                  className="relative rounded-full"
+                                  data-active={
+                                    activeSearchOptionCount > 0 ? "" : undefined
+                                  }
+                                  size="icon-sm"
+                                  variant="ghost"
+                                />
+                              }
+                            />
+                          }
+                        >
+                          <ListFilterIcon
                             aria-hidden="true"
-                            className="bg-primary absolute end-1 top-1 size-1.5 rounded-full"
+                            className={cn(
+                              "size-4",
+                              activeSearchOptionCount > 0 && "text-primary",
+                            )}
                           />
-                        ) : null}
-                      </MenuTrigger>
+                          {activeSearchOptionCount > 0 ? (
+                            <span
+                              aria-hidden="true"
+                              className="bg-primary absolute end-1 top-1 size-1.5 rounded-full"
+                            />
+                          ) : null}
+                        </MenuTrigger>
+                        <TooltipPopup>{t("searchOptions")}</TooltipPopup>
+                      </Tooltip>
                       <MenuPopup
                         align="end"
                         className="w-60"
