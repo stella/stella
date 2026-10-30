@@ -37,6 +37,9 @@ const PURE_AUTOFIX = {
   "api-image-install-tooling": "scripts/docker-source-closure.ts",
   // Serializes package.json's packageManager pin.
   "bun-toolchain": "scripts/generate-bun-toolchain.ts",
+  // Parses the committed CI workflow and formats a deterministic JSON map.
+  "main-heavy-infrastructure-steps":
+    "scripts/generate-main-heavy-infrastructure-steps.ts",
   // Parses schema source without opening a database connection.
   "status-tables": "apps/api/scripts/generate-status-tables.ts",
   "account-export-tables": "apps/api/scripts/generate-account-export-tables.ts",
@@ -100,6 +103,8 @@ const PURE_AUTOFIX = {
 // A committed generator must have an explicit purity decision. Native builds
 // need toolchains outside the Bun install, and recorders need live services.
 const EXCLUDED_AUTOFIX = {
+  "request-replay-routes":
+    "Mounted handler discovery runs API module initialization under its test preload",
   "playwright-devices":
     "Device descriptors are refreshed explicitly from the installed SDK",
   "ci-job-classification-digests":

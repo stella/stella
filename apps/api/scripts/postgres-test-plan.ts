@@ -7,7 +7,9 @@ import { compareCodeUnit } from "@stll/collation";
 /**
  * These suites change committed tables in the common PostgreSQL test database.
  * They run after every ordinary suite, each in its own test process, so no CRUD
- * transaction can retain a conflicting table lock while their DDL runs.
+ * transaction can retain a conflicting table lock while their DDL runs. Each
+ * starts on a fresh clone of the template, so rows the earlier suites left in
+ * shared tables cannot change what it observes.
  */
 export const EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS: ReadonlySet<string> =
   new Set([

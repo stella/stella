@@ -279,6 +279,7 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
     type: "resource",
     resourceType: RESOURCE_TYPE.REPORT_EXPORT,
   },
+  requestIdempotencyReceipt: { type: "non_resource", reason: "workflow" },
   savedSearch: { type: "resource", resourceType: RESOURCE_TYPE.SAVED_SEARCH },
   savedTimeNarrative: {
     type: "resource",

@@ -16,9 +16,11 @@ import { withGatedTestClients } from "@/api/tests/gated-test-database";
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
 test("the committed SQL function is derived from the registered filing-year rules", () => {
-  expect(readDecisionDocketFilingYearMigration()).toBe(
-    decisionDocketFilingYearFunctionSql(),
-  );
+  const migration = readDecisionDocketFilingYearMigration();
+  const declaration = migration.startsWith("CREATE OR REPLACE")
+    ? "replace"
+    : "create";
+  expect(migration).toBe(decisionDocketFilingYearFunctionSql(declaration));
 });
 
 describe.skipIf(!enabled)("docket filing-year parity (postgres)", () => {

@@ -212,7 +212,9 @@ const postgresPatternSource = (pattern: RegExp) => {
 };
 
 /** Migration DDL derived from every registered grammar's explicit policy. */
-export const decisionDocketFilingYearFunctionSql = () => {
+export const decisionDocketFilingYearFunctionSql = (
+  declaration: "create" | "replace",
+) => {
   const branches = Object.values(DECISION_DOCKET_GRAMMARS).map(
     ({ jurisdiction, filingYearRule }) => {
       switch (filingYearRule.type) {
@@ -263,7 +265,7 @@ export const decisionDocketFilingYearFunctionSql = () => {
         `\\${(character.codePointAt(0) ?? panic("Missing whitespace code point")).toString(16).padStart(4, "0")}`,
     )
     .join("");
-  return `CREATE OR REPLACE FUNCTION public.decision_docket_filing_year(case_number text, jurisdiction text)
+  return `CREATE ${declaration === "replace" ? "OR REPLACE " : ""}FUNCTION public.decision_docket_filing_year(case_number text, jurisdiction text)
 RETURNS jsonb
 LANGUAGE sql IMMUTABLE PARALLEL SAFE
 AS $function$
