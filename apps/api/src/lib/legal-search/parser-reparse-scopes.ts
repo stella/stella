@@ -141,11 +141,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.SK_COURTS]: {
-    version: 21,
+    version: 22,
     scope: {
       type: "all",
       reason:
-        "Replay reads the stored source envelope and document objects through the ingestion parser, verifying each recorded digest and length; parser output is unchanged and the parsed decision has no feature storage of its own.",
+        "Revalidate deferred stored PDF payloads through the shared typed corpus-validation result; invalid textless structure is a classified no-document outcome, while readable source text and AST retain the same parser. Replay reads the stored source envelope and document objects through the ingestion parser, verifying each recorded digest and length; parser output is unchanged and the parsed decision has no feature storage of its own.",
     },
   },
   [ADAPTER_KEYS.SK_US]: {
