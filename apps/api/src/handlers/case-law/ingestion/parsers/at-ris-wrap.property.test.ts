@@ -79,7 +79,7 @@ const textOfItem = (item: RisItem): string =>
 describe("RIS wrapped lines", () => {
   test("lines join only at a margin's boundary", () => {
     assertProperty(
-      "at-ris-wrap-joins-only-at-margins",
+      "lines join only at a margin's boundary",
       fc.property(fc.array(printed, { maxLength: 30 }), (lines) => {
         const items = lines.map(toItem);
         const joined = joinWrappedLines(items);
