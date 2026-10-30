@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 
-import { getAdapter } from "./adapters/adapter-registry";
+import { listAdapters } from "./adapters/adapter-registry";
 import { replayCapability } from "./replay";
 import {
   BACKGROUND_REPLAY_LIMITS,
@@ -55,18 +55,17 @@ test("the committed registry previews only the Constitutional Court and the comm
   });
 });
 
-// The replay tick refuses to start while any previewed or enrolled source's
-// adapter cannot re-parse stored raw; this keeps that refusal out of the
-// committed map.
-test("every previewed or enrolled source's adapter can replay stored raw", () => {
-  for (const [adapterKey, { mode }] of Object.entries(REPLAY_ENROLMENT)) {
-    if (mode === "off") {
+test("every enabled replay source can reparse its archived input", () => {
+  for (const adapter of listAdapters()) {
+    if (REPLAY_ENROLMENT[adapter.key].mode === "off") {
       continue;
     }
-    const adapter = getAdapter(adapterKey);
-    expect(
-      adapter === undefined ? "unregistered" : replayCapability(adapter).type,
-      adapterKey,
-    ).toBe("supported");
+    expect({
+      adapter: adapter.key,
+      capability: replayCapability(adapter).type,
+    }).toEqual({
+      adapter: adapter.key,
+      capability: "supported",
+    });
   }
 });
