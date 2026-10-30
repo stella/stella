@@ -2086,8 +2086,6 @@
     "clearFilters": "Clear filters",
     "clearSearch": "Clear search",
     "close": "Close",
-    "closeAll": "Close all",
-    "closeOthers": "Close others",
     "columns": "Columns",
     "comfortable": "Comfortable",
     "comingSoon": "Coming soon",
@@ -2872,6 +2870,8 @@
       "forbidden": "You do not have permission to do this.",
       "hostedCheckoutOpen": "A checkout for this organization is already open. Complete it, or start a new one after it expires.",
       "hostedSubscriptionLive": "This organization already has a subscription. Change it under Manage hosted usage.",
+      "idempotencyInProgress": "This request is still being processed. Wait a moment, then try again.",
+      "idempotencyKeyReused": "This submission changed since the previous attempt. Reset the form and try again.",
       "internalServerError": "The server could not complete the action. Please try again.",
       "legalSourceEntityLimitReached": "This matter has reached its item limit, so the document could not be created.",
       "legalSourceFilePropertyMissing": "This matter is missing a file property, so the document could not be created.",
@@ -3674,6 +3674,9 @@
       "unsupportedVisualContent": "This file contains images or vector graphics that cannot be checked for sensitive text. Export is unavailable.",
       "workspaceTermsHeading": "Workspace terms ({count})"
     },
+    "closeAllTabs": "Close {count, plural, one {# tab} other {all # tabs}}",
+    "closeOtherTabs": "Close {count, plural, one {# other tab} other {# other tabs}}",
+    "closeTab": "Close <bdi>{name}</bdi>",
     "conversionRefusal": {
       "legacyFormat": "This is a legacy {format} file. Re-save it as {replacementExtension} to convert it.",
       "unsupportedEncoding": "This document uses the unsupported {encoding} encoding, so it can't be converted.",
