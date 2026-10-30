@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { appendFileSync, readFileSync } from "node:fs";
+import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
 
@@ -187,8 +187,16 @@ if (import.meta.main) {
   }
   const matrix =
     plan.type === "run" ? plan.matrix : { shard: ["rest-web"] as const };
+  const encodedFiles = serializeApiTestFilesOutput(plan.impact.files);
+  writeFileSync(
+    path.join(
+      process.env["RUNNER_TEMP"] ?? panic("Missing RUNNER_TEMP"),
+      "api-test-files",
+    ),
+    encodedFiles,
+  );
   appendFileSync(
     process.env["GITHUB_OUTPUT"] ?? panic("Missing GITHUB_OUTPUT"),
-    `ci_tests_required=${plan.type === "run"}\nci_tests_matrix=${JSON.stringify(matrix)}\napi_test_shards=${plan.impact.shards}\ntest_scope=${testScope}\napi_test_files_encoded=${serializeApiTestFilesOutput(plan.impact.files)}\n`,
+    `ci_tests_required=${plan.type === "run"}\nci_tests_matrix=${JSON.stringify(matrix)}\napi_test_shards=${plan.impact.shards}\ntest_scope=${testScope}\napi_test_files_encoded=${encodedFiles}\n`,
   );
 }

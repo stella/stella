@@ -1,11 +1,13 @@
-import { createContext, createElement, use, useId } from "react";
-import type { MouseEvent, ReactElement, ReactNode } from "react";
+import { createContext, createElement, use, useId, useState } from "react";
+import type { KeyboardEvent, MouseEvent, ReactElement, ReactNode } from "react";
 
 import { queryOptions, useQuery } from "@tanstack/react-query";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { MenuItem } from "@stll/ui/menu";
+import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 
 import { desktopPresenceOptions } from "@/features/desktop/desktop-presence";
 import { api } from "@/lib/api";
@@ -15,6 +17,7 @@ import { deepLAvailabilityOptions } from "@/lib/deepl/queries";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { aiAvailabilityOptions } from "@/lib/organization/ai-config-queries";
 import { queryView } from "@/lib/query-view.logic";
+import type { QueryView } from "@/lib/query-view.logic";
 import { useQueryViewError } from "@/lib/use-query-view";
 import { optionalOrganizationSettingsOptions } from "@/queries/organization-settings";
 
@@ -108,13 +111,31 @@ const useLiveActionCapabilities = (
   useQueryViewError(role, "useLiveActionCapabilities:query-6");
   return resolveActionCapabilities({
     role: role.type === "items" ? role.items : undefined,
-    ai: ai.type === "items" ? ai.items.available : undefined,
-    deepl: deepl.type === "items" ? deepl.items.configured : undefined,
-    ocr: ocr.type === "items" ? ocr.items : undefined,
-    desktop: desktop.type === "items" ? desktop.items.type : undefined,
-    settings: settings.type === "items" ? settings.items : undefined,
+    ai: capabilityObservation(ai, (items) => items.available),
+    deepl: capabilityObservation(deepl, (items) => items.configured),
+    ocr: capabilityObservation(ocr, (items) => items),
+    desktop: capabilityObservation(desktop, (items) => items.type),
+    settings: capabilityObservation(settings, (items) => items),
   });
 };
+
+function capabilityObservation<T, TValue>(
+  view: QueryView<T, unknown>,
+  project: (items: T) => TValue,
+): TValue | undefined | { status: "error" } {
+  switch (view.type) {
+    case "items":
+      return project(view.items);
+    case "error":
+      return { status: "error" };
+    case "pending":
+    case "empty":
+      return undefined;
+    default:
+      view satisfies never;
+      return panic("Unknown capability observation");
+  }
+}
 
 export const useActionCapabilities = (
   capability?: Capability | null,
@@ -155,6 +176,13 @@ function renderCapabilityActionChromeContent({
   capabilities: ActionCapabilities;
   children?: ReactElement;
 }): ReactElement | null {
+  const state =
+    action.capability === null
+      ? null
+      : capabilities.capabilities[action.capability];
+  if (state?.type === "pending") {
+    return null;
+  }
   return isCapabilityActionVisible(action, capabilities)
     ? (children ?? null)
     : null;
@@ -162,9 +190,11 @@ function renderCapabilityActionChromeContent({
 
 type CapabilityActionChildProps = {
   disabled?: boolean;
+  "data-accessible-disabled"?: "";
   "aria-disabled"?: boolean;
   "aria-describedby"?: string;
   onClick?: (event: MouseEvent) => void;
+  onKeyDown?: (event: KeyboardEvent) => void;
   onSelect?: () => void;
 };
 export const CapabilityAction = ({
@@ -179,6 +209,7 @@ export const CapabilityAction = ({
   const resolved = useActionCapabilities(action.capability);
   const t = useTranslations();
   const reasonId = useId();
+  const [explanationOpen, setExplanationOpen] = useState(false);
   const state =
     action.capability === null
       ? null
@@ -186,13 +217,64 @@ export const CapabilityAction = ({
   if (state === null || state.type === "available") {
     return children({});
   }
+  if (state.type === "pending") {
+    return null;
+  }
+  if (state.type === "error") {
+    return null;
+  }
   if (!isCapabilityActionVisible(action, resolved)) {
     return null;
+  }
+  const reason = t(
+    surface === "control" &&
+      action.capability === "deepl" &&
+      state.reason === "deeplMissing"
+      ? "capabilityActions.deeplPdfRequired"
+      : CAPABILITY_REASON_KEYS[state.reason],
+  );
+  const unavailableControl = children({
+    "aria-disabled": true,
+    "aria-describedby": reasonId,
+    "data-accessible-disabled": "",
+    onClick: (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      setExplanationOpen(true);
+    },
+    onKeyDown: (event) => {
+      if (event.key !== "Enter" && event.key !== " ") {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      setExplanationOpen(true);
+    },
+    // Clear a handler installed before the capability props are spread.
+    onSelect: () => undefined,
+  });
+  if (surface === "control") {
+    return (
+      <Popover onOpenChange={setExplanationOpen} open={explanationOpen}>
+        <PopoverTrigger render={unavailableControl} />
+        <span className="sr-only" id={reasonId}>
+          {reason}
+        </span>
+        <PopoverPopup className="max-w-72" tooltipStyle>
+          <div className="flex items-center gap-2">
+            <span>{reason}</span>
+            <a href={sanitizeHref(state.settingsLink)}>
+              {t("organization.aiConfig.configure")}
+            </a>
+          </div>
+        </PopoverPopup>
+      </Popover>
+    );
   }
   return (
     <>
       {children({
-        ...(surface === "menu" ? { disabled: true } : {}),
+        disabled: true,
         "aria-disabled": true,
         "aria-describedby": reasonId,
         onClick: (event) => {
@@ -203,21 +285,14 @@ export const CapabilityAction = ({
         onSelect: () => undefined,
       })}
       <div className="text-muted-foreground flex items-center gap-2 px-2 text-xs">
-        <span id={reasonId}>{t(CAPABILITY_REASON_KEYS[state.reason])}</span>
-        {surface === "control" && (
-          <a href={sanitizeHref(state.settingsLink)}>
-            {t("organization.aiConfig.configure")}
-          </a>
-        )}
+        <span id={reasonId}>{reason}</span>
       </div>
-      {surface === "menu" && (
-        <MenuItem
-          aria-describedby={reasonId}
-          render={<a href={sanitizeHref(state.settingsLink)} />}
-        >
-          {t("organization.aiConfig.configure")}
-        </MenuItem>
-      )}
+      <MenuItem
+        aria-describedby={reasonId}
+        render={<a href={sanitizeHref(state.settingsLink)} />}
+      >
+        {t("organization.aiConfig.configure")}
+      </MenuItem>
     </>
   );
 };

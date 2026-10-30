@@ -699,9 +699,20 @@ export const readPublishablePackages = ({
   });
 };
 
-/** The newest stable `vX.Y.Z` tag among those listed, newest first. */
-export const newestStableTag = (tags: readonly string[]): string | undefined =>
-  tags.find((tag) => STABLE_RELEASE_TAG.test(tag));
+/** The newest final tag, optionally bounded strictly below a release version. */
+export const newestStableTag = (
+  tags: readonly string[],
+  beforeVersion?: string,
+): string | undefined =>
+  tags
+    .filter(
+      (tag) =>
+        STABLE_RELEASE_TAG.test(tag) &&
+        (beforeVersion === undefined ||
+          Bun.semver.order(tag.slice(1), beforeVersion) < 0),
+    )
+    .toSorted((left, right) => Bun.semver.order(right.slice(1), left.slice(1)))
+    .at(0);
 
 type Attempt = {
   readonly attempts: number;
@@ -842,26 +853,32 @@ export const parseArgs = (argv: readonly string[]): Args => {
   };
 };
 
-const resolveRef = (args: Args): string => {
+export const resolveRef = (args: Args, execute = run): string => {
   if (args.ref !== undefined) {
     return args.ref;
   }
-  const tags = run([
-    "git",
-    "tag",
-    "--merged",
-    args.previousReleaseOf ?? "HEAD",
-    "--list",
-    "v*",
-    "--sort=-v:refname",
-  ]);
+  const previousReleaseOf = args.previousReleaseOf ?? "HEAD";
+  const versionFile = execute(["git", "show", `${previousReleaseOf}:VERSION`]);
+  if (!versionFile.ok) {
+    return fail(
+      `cannot read VERSION at ${previousReleaseOf}: ${versionFile.stderr.trim()}`,
+    );
+  }
+  const version = versionFile.stdout.trim();
+  if (!/^\d+\.\d+\.\d+$/u.test(version)) {
+    return fail(`VERSION at ${previousReleaseOf} must be X.Y.Z`);
+  }
+  const tags = execute(["git", "tag", "--list", "v*"]);
   if (!tags.ok) {
-    return fail(`git tag --merged failed: ${tags.stderr.trim()}`);
+    return fail(`git tag --list failed: ${tags.stderr.trim()}`);
   }
   return (
-    newestStableTag(tags.stdout.split("\n").map((tag) => tag.trim())) ??
+    newestStableTag(
+      tags.stdout.split("\n").map((tag) => tag.trim()),
+      version,
+    ) ??
     fail(
-      `no stable release tag is reachable from ${args.previousReleaseOf ?? "HEAD"}`,
+      `no final release tag is strictly lower than ${version} at ${previousReleaseOf}`,
     )
   );
 };

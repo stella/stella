@@ -19,7 +19,10 @@ const MCP_CODE_TO_CHAT_KIND = {
   [ACTION_ADMISSION_CODES.notEnabled]: "unavailable",
   [ACTION_ADMISSION_CODES.featureDisabled]: "unavailable",
   [ACTION_ADMISSION_CODES.concurrencyBusy]: "transient",
-  [ACTION_ADMISSION_CODES.admissionUnavailable]: "transient",
+  [ACTION_ADMISSION_CODES.storeUnavailable]: "transient",
+  [ACTION_ADMISSION_CODES.configurationIncomplete]: "server-defect",
+  [ACTION_ADMISSION_CODES.organizationStateUnreadable]: "transient",
+  [ACTION_ADMISSION_CODES.leaseLost]: "transient",
   // Active runs free up as they finish; the daily cap holds until tomorrow.
   [VERIFICATION_RUN_CAP_CODES.active]: "transient",
   [VERIFICATION_RUN_CAP_CODES.daily]: "limit",

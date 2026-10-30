@@ -17,6 +17,7 @@ import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
 import { LEGISLATION_LIST_VALIDITIES } from "@stll/api-contract/legislation-status";
+import { statuteDisplayLabel } from "@stll/api-contract/statute-display-label";
 import type { StatuteQueryIntent } from "@stll/api-contract/statute-query-intent";
 import {
   createStatuteIndexPath,
@@ -50,6 +51,7 @@ import {
 import type { PublicLawFilterChip } from "@/components/public-law-table/public-law-results-toolbar";
 import { usePublicLawPageArrival } from "@/components/public-law-table/use-public-law-page-arrival";
 import { TableFindBar } from "@/components/workspaces/table/table-find-bar";
+import { StatuteDisplayLabel } from "@/features/statutes/components/statute-display-label";
 import { StatuteFilterPopover } from "@/features/statutes/components/statute-filter-popover";
 import { StatuteSearch } from "@/features/statutes/components/statute-search";
 import { StatuteSearchResults } from "@/features/statutes/components/statute-search-results";
@@ -221,7 +223,7 @@ export const Route = createFileRoute("/law/$country/statutes/")({
         kind: "statutes",
         items: loaderData
           ? loaderData.statutes.map((statute) => ({
-              name: statute.title,
+              name: statuteDisplayLabel(statute).text,
               url: createPublicLawCanonicalUrl(
                 createStatutePath(
                   createStatuteRouteParams({
@@ -413,7 +415,7 @@ function PublicStatuteFullText({ query }: { query: string }) {
                       versionValidFrom: null,
                     })}
                   >
-                    {hit.title}
+                    <StatuteDisplayLabel statute={hit} />
                   </Link>
                 );
               }}
@@ -463,6 +465,28 @@ const useStatuteListFilterChips = ({
 
   return chips;
 };
+
+/** The rows phase of the statute walk, counting the rows its held pages carry. */
+const statuteRowsPhase = (
+  query: {
+    data: { pages: readonly { items: readonly unknown[] }[] } | undefined;
+    isLoading: boolean;
+    isPlaceholderData: boolean;
+  },
+  routeState: PublicLawRouteState,
+) =>
+  publicLawRowsPhase({
+    isLoading: query.isLoading,
+    isPlaceholderData: query.isPlaceholderData,
+    keptRowCount:
+      query.data === undefined
+        ? 0
+        : query.data.pages.reduce(
+            (count, page) => count + page.items.length,
+            0,
+          ),
+    routeState,
+  });
 
 function PublicStatuteList({
   routeState,
@@ -532,13 +556,8 @@ function PublicStatuteList({
     // so stepping between pages never blanks the table.
     placeholderData: keepPreviousData,
   });
-  const {
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-    isLoading,
-    isPlaceholderData,
-  } = dataQuery;
+  const { fetchNextPage, hasNextPage, isFetchingNextPage, isPlaceholderData } =
+    dataQuery;
   useSearchResultsTiming(
     "legislation",
     search.q ?? "",
@@ -555,7 +574,7 @@ function PublicStatuteList({
   const facetsView = queryView(facetsQuery);
   useQueryViewError(facetsView, "PublicStatuteList:query");
   const facets = facetsView.type === "items" ? facetsView.items : undefined;
-  const rows = publicLawRowsPhase({ isLoading, isPlaceholderData, routeState });
+  const rows = statuteRowsPhase(dataQuery, routeState);
 
   const walkedPageCount = data?.pages.length ?? 0;
   const pager = publicLawPagerModel({

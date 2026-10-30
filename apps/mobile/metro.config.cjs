@@ -9,8 +9,12 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { getDefaultConfig } = require("expo/metro-config");
+const { withUniwindConfig } = require("uniwind/metro");
 
 const config = getDefaultConfig(__dirname);
+// Bun can link Metro's runtime outside the checkout. Its empty module must
+// be visible to the file map even when no import traverses that symlink.
+config.watchFolders.push(path.dirname(config.resolver.emptyModulePath));
 const NODE_MODULES = `${path.sep}node_modules${path.sep}`;
 
 const typeScriptSourceOf = (originModulePath, moduleName) => {
@@ -34,4 +38,8 @@ config.resolver.resolveRequest = (context, moduleName, platform) =>
     platform,
   );
 
-module.exports = config;
+// Tailwind classes, compiled to native styles, over the web's tokens.
+module.exports = withUniwindConfig(config, {
+  cssEntryFile: "./global.css",
+  dtsFile: "./uniwind-types.gen.d.ts",
+});

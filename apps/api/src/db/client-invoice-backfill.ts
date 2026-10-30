@@ -13,6 +13,7 @@ import type { OnlineRepair } from "./online-migration-connection";
 
 /** Indexes are ready before repairs; startup refuses an unfinished installation. */
 export const CLIENT_INVOICE_TENANT_KEY = {
+  introducedBy: "20261026220000_client_invoices",
   name: "client-invoice-tenant-key",
   readCompletion: async (connection) =>
     (await readInvoiceTenantKeyInstalled(connection))
@@ -36,6 +37,7 @@ const PENDING_CLIENT_INVOICES = `SELECT i.id FROM public.invoices i JOIN public.
 
 /** A committed row leaves the predicate, so interrupted deployments resume without replaying writes. */
 export const CLIENT_INVOICE_BACKFILL = {
+  introducedBy: "20261026220000_client_invoices",
   name: "client-invoice-clients",
   readCompletion: async (connection) => {
     const pending = await connection.query(
@@ -112,6 +114,10 @@ export const CLIENT_INVOICE_CONSTRAINT_VALIDATIONS =
     (constraint) =>
       ({
         name: constraint.constraintName,
+        introducedBy: {
+          type: "code",
+          owner: "src/db/client-invoice-backfill.ts",
+        },
         readCompletion: async (connection) =>
           await readConstraintCompletion({
             connection,

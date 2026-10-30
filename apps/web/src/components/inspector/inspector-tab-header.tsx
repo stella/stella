@@ -76,6 +76,9 @@ type InspectorTabHeaderProps = {
    * (e.g. extension stripped for files, chat title for chats).
    */
   label: string;
+  /** Legal identities wrap; other tab labels keep the compact single-line header. */
+  labelOverflow?: "truncate" | "wrap";
+  labelContent?: ReactNode;
   /**
    * Click handler that puts the label into rename mode. When
    * omitted the label is read-only.
@@ -112,6 +115,8 @@ type InspectorTabHeaderProps = {
 
 export const InspectorTabHeader = ({
   label,
+  labelOverflow = "truncate",
+  labelContent,
   onStartRename,
   onLabelContextMenu,
   rename,
@@ -125,12 +130,17 @@ export const InspectorTabHeader = ({
   const visibleActions = filterAvailable(actions, usePlatformCapabilities());
 
   return (
-    <div className="flex h-12 shrink-0 items-center justify-between border-b bg-(--matter-sidebar-tint) px-3">
+    <div
+      className={cn(
+        "flex shrink-0 items-center justify-between border-b bg-(--matter-sidebar-tint) px-3",
+        labelOverflow === "wrap" ? "min-h-12 py-3" : "h-12",
+      )}
+    >
       {/* Only the label clips: the field's focus ring is drawn outside it. */}
       <div
         className={cn(
           "flex min-w-0 items-center gap-2",
-          !renaming && "overflow-hidden",
+          !renaming && labelOverflow === "truncate" && "overflow-hidden",
         )}
       >
         <Button
@@ -161,13 +171,16 @@ export const InspectorTabHeader = ({
           <div className="flex min-w-0 flex-col items-start md:flex-row md:items-center md:gap-2">
             <span
               className={cn(
-                "max-w-full overflow-hidden text-xs font-medium text-ellipsis whitespace-pre",
+                "max-w-full min-w-0 text-xs font-medium",
+                labelOverflow === "wrap"
+                  ? "wrap-anywhere whitespace-normal"
+                  : "overflow-hidden text-ellipsis whitespace-pre",
                 onStartRename !== undefined && "cursor-text",
               )}
               onContextMenu={onLabelContextMenu}
               onDoubleClick={onStartRename}
             >
-              <UserText>{label}</UserText>
+              {labelContent ?? <UserText>{label}</UserText>}
             </span>
             {matter !== undefined && (
               <>

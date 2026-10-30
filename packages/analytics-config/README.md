@@ -10,8 +10,9 @@ organization group type. The tests pin that behaviour.
 
 ## What does not
 
-The adapters themselves: the server wraps `posthog-node` and the browser wraps
-`posthog-js`, each with its own event list, redaction and wiring.
+The adapters themselves: the server sends to the PostHog batch API through its
+own `fetch` client and the browser wraps `posthog-js`, each with its own event
+list, redaction and wiring.
 
 ## License
 

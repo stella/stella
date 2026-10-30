@@ -6,12 +6,14 @@ import * as v from "valibot";
 import { compareCodeUnit } from "../../packages/collation/src/collation";
 import { CLASSIFICATIONS, sha256 } from "./classification-values";
 import { readDecisions } from "./decisions";
-import { decisionPathForKey } from "./inputs";
+import { approvalPathForKey, decisionPathForKey } from "./inputs";
 import { verifyPublicMetadata } from "./public-metadata";
 import type { MetadataReader, PublicMetadata } from "./public-metadata";
 import {
   GIT_ORIGIN,
   parseRemoteReference,
+  recordMetadataMount,
+  resolveLocalMetadataPath,
   sameMetadataOrigin,
 } from "./references";
 import type { MetadataOrigin, MetadataReferenceKind } from "./references";
@@ -28,15 +30,19 @@ const DECISIONS = v.record(
   v.strictObject({
     kind: v.picklist(CLASSIFICATIONS),
     qualifier: v.pipe(v.string(), v.minLength(1)),
-    reviewedDigest: v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/u)),
+    approvedDigests: v.array(v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/u))),
   }),
 );
+// The decision shape the generator accepts, as readDecisions produces it.
+export type ClassificationDecisionsInput = v.InferInput<typeof DECISIONS>;
 const REVISION_DECISIONS = v.record(
   v.string(),
   v.strictObject({
     kind: v.picklist(CLASSIFICATIONS),
     qualifier: v.pipe(v.string(), v.minLength(1)),
-    reviewedDigest: v.optional(v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/u))),
+    approvedDigests: v.optional(
+      v.array(v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/u))),
+    ),
   }),
 );
 const SNAPSHOTS = v.record(
@@ -171,7 +177,7 @@ export const readClassificationInputsAtRevision = (
           key,
           {
             ...decision,
-            reviewedDigest: decision.reviewedDigest ?? "0".repeat(64),
+            approvedDigests: decision.approvedDigests ?? [],
           },
         ]),
       ),
@@ -338,7 +344,10 @@ const reviewJobs = ({
   documentDigest,
   observeJobs,
 }: ReviewJobsOptions) => {
-  const entries: Record<string, unknown> = {};
+  const entries: Record<
+    string,
+    { kind: string; qualifier: string; reviewedDigest: string }
+  > = {};
   const privilegedJobs: string[] = [];
   const observedJobs = new Set<string>();
   const derivedJobs = new Map<string, DerivedJob>();
@@ -363,14 +372,6 @@ const reviewJobs = ({
               : [];
           }),
       );
-      const digest = Object.keys(dependencyDigests).length
-        ? sha256(
-            JSON.stringify({
-              digest: job.digest,
-              dependencies: dependencyDigests,
-            }),
-          )
-        : job.digest;
       const decision = decisions[key];
       const targets = Object.keys(job.dependencies).flatMap((reference) => {
         const target = node.edges[reference];
@@ -383,9 +384,19 @@ const reviewJobs = ({
       });
       const privileged = isPrivilegedJobClosure({
         kind: decision?.kind,
+        privileged: job.privileged,
         shape: job.shape,
         reachableDocuments: reachable,
       });
+      const surfaceDigest = privileged ? job.privilegedDigest : job.digest;
+      const digest = Object.keys(dependencyDigests).length
+        ? sha256(
+            JSON.stringify({
+              digest: surfaceDigest,
+              dependencies: dependencyDigests,
+            }),
+          )
+        : surfaceDigest;
       derivedJobs.set(key, {
         digest,
         privileged,
@@ -394,11 +405,12 @@ const reviewJobs = ({
           reachableDocuments: reachable,
         }),
       });
-      if (!decision || decision.reviewedDigest !== digest) {
+      if (!decision || !decision.approvedDigests.includes(digest)) {
         entries[key] = {
           kind: decision?.kind ?? "<choose ordinary, support, or priority>",
           qualifier:
             decision?.qualifier ?? "<describe the reviewed classification>",
+          // The approval file format the decision reader validates.
           reviewedDigest: digest,
         };
         if (privileged) {
@@ -433,7 +445,7 @@ const reviewJobs = ({
       )
         .map(
           ([key, value]) =>
-            `${decisionPathForKey(key)}\n${JSON.stringify(value, null, 2)}`,
+            `${decisionPathForKey(key)}\n${approvalPathForKey(key, value.reviewedDigest)}\n${JSON.stringify(value, null, 2)}`,
         )
         .join("\n")}`,
       privilegedJobs,
@@ -459,19 +471,32 @@ export const generateClassification = ({
     try: () => {
       const nodes: MetadataNodes = new Map();
       const parsedDocuments = new Map<string, ParsedDocument>();
+      const mounts = new Map<string, string>();
       type VisitOptions = {
         repository: string;
         file: string;
         origin: MetadataOrigin;
+        mount?: string | null;
       };
-      const visit = ({ repository, file, origin }: VisitOptions): string => {
+      const visit = ({
+        repository,
+        file,
+        origin,
+        mount = null,
+      }: VisitOptions): string => {
         const id = `source-${sha256(`${repository}:${file}`)}`;
-        if (nodes.has(id)) {
-          return id;
-        }
         const parsed = parseDocument(reader.read(repository, file));
         if (parsed.isErr()) {
           throw parsed.error;
+        }
+        recordMetadataMount({
+          mounts,
+          identity: id,
+          mount,
+          document: parsed.value,
+        });
+        if (nodes.has(id)) {
+          return id;
         }
         const references: string[] = [];
         const edges: Record<string, string> = {};
@@ -495,8 +520,13 @@ export const generateClassification = ({
           let targetId: string;
           if (reference.startsWith("$/") || reference.startsWith("./")) {
             const relative = reference.slice(2);
-            const relocation = parsed.value.relocatedActions[reference]?.at(0);
-            const sourcePath = relocation?.path ?? relative;
+            const selected = resolveLocalMetadataPath({
+              reference,
+              kind,
+              relocations: parsed.value.relocatedActions[reference] ?? [],
+              inheritedMount: mount,
+            });
+            const sourcePath = selected.path;
             let targetPath: string;
             if (kind === "reusable-workflow") {
               targetPath = relative;
@@ -516,7 +546,12 @@ export const generateClassification = ({
               }
               targetPath = found;
             }
-            targetId = visit({ repository, file: targetPath, origin });
+            targetId = visit({
+              repository,
+              file: targetPath,
+              origin,
+              mount: selected.mount,
+            });
           } else {
             const source = findRemoteSource({ reference, kind, snapshots });
             if (source) {
