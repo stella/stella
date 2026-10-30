@@ -1,0 +1,11 @@
+{
+  "type": "parser",
+  "name": "CZ_UOHS",
+  "key": "cz-uohs",
+  "parserVersion": 6,
+  "sourceFingerprintVersion": 0,
+  "scope": {
+    "type": "all",
+    "reason": "Re-read font-run segmentation after the shared PDF style mapping changed; Czech output remains plain text and footnote links, with no independent feature storage."
+  }
+}

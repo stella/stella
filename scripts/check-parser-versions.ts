@@ -3,7 +3,6 @@ import path from "node:path";
 import {
   PARSER_ENTRY_DIRECTORY,
   PARSER_REGISTRY_OUTPUT,
-  renderParserRegistry,
 } from "./parser-registry";
 
 /**
@@ -104,6 +103,11 @@ type SpreadEntriesOptions = {
   seen: Set<string>;
 };
 
+type StaticTreeOptions = {
+  boundaries: readonly ParserOutputBoundary[];
+  purpose?: "parser-output" | "dependency-graph";
+};
+
 // Only source is read: no importing the registry, adapter initialization,
 // dependencies, fixtures, or publisher clients into this check.
 class StaticTree {
@@ -117,24 +121,12 @@ class StaticTree {
 
   constructor(
     files: SourceTree,
-    boundaries: readonly ParserOutputBoundary[] = PARSER_OUTPUT_BOUNDARIES,
+    { boundaries, purpose = "parser-output" }: StaticTreeOptions,
   ) {
-    const materialized = new Map(files);
-    const registry = renderParserRegistry(materialized);
-    if (registry !== undefined) {
-      materialized.set(PARSER_REGISTRY_OUTPUT, registry);
-    }
-    this.files = materialized;
+    this.files = files;
     this.outputBoundaries = new Set([
       ...boundaries.map(({ path: file }) => file),
-      ...(registry === undefined
-        ? []
-        : [
-            PARSER_REGISTRY_OUTPUT,
-            ...[...materialized.keys()].filter((file) =>
-              file.startsWith(PARSER_ENTRY_DIRECTORY),
-            ),
-          ]),
+      ...(purpose === "parser-output" ? [PARSER_REGISTRY_OUTPUT] : []),
     ]);
   }
 
@@ -325,11 +317,11 @@ class StaticTree {
         continue;
       }
       const entry =
-        /^\s*(?:\[([\w.]+)\]|([\w]+))\s*:\s*("[^"]*"|[\w]+)\s*$/u.exec(
+        /^\s*(?:\[([\w.]+)\]|"([^"]+)"|([\w]+))\s*:\s*("[^"]*"|[\w]+)\s*$/u.exec(
           property,
         );
       const key = entry === null ? undefined : this.mapKey(file, entry);
-      const value = entry?.at(3);
+      const value = entry?.at(4);
       if (key === undefined || value === undefined || entries.has(key)) {
         return undefined;
       }
@@ -353,7 +345,11 @@ class StaticTree {
 
   private mapKey(file: string, entry: RegExpExecArray): string | undefined {
     const computedKey = entry.at(1);
-    const propertyKey = entry.at(2);
+    const literalKey = entry.at(2);
+    const propertyKey = entry.at(3);
+    if (literalKey !== undefined) {
+      return JSON.stringify(literalKey);
+    }
     if (propertyKey !== undefined) {
       return propertyKey;
     }
@@ -616,7 +612,7 @@ class StaticTree {
 export const sourceOwners = (
   files: SourceTree,
   boundaries: readonly ParserOutputBoundary[] = PARSER_OUTPUT_BOUNDARIES,
-): SourceOwnersResult => new StaticTree(files, boundaries).owners();
+): SourceOwnersResult => new StaticTree(files, { boundaries }).owners();
 
 /**
  * The repository modules each file imports by value (static imports and
@@ -626,7 +622,10 @@ export const sourceOwners = (
  * need the whole reachable graph (the retention projections' independence).
  */
 export const valueImportGraph = (files: SourceTree) => {
-  const tree = new StaticTree(files, []);
+  const tree = new StaticTree(files, {
+    boundaries: [],
+    purpose: "dependency-graph",
+  });
   return {
     imports: (file: string): readonly string[] => tree.imports(file),
     closure: (file: string): ReadonlySet<string> => tree.closure(file),
@@ -798,8 +797,8 @@ export const checkParserVersions = ({
   head,
   boundaries = PARSER_OUTPUT_BOUNDARIES,
 }: CheckParserVersionsOptions): string[] => {
-  const baseTree = new StaticTree(base, boundaries);
-  const headTree = new StaticTree(head, boundaries);
+  const baseTree = new StaticTree(base, { boundaries });
+  const headTree = new StaticTree(head, { boundaries });
   const before = baseTree.owners();
   const after = headTree.owners();
   const errors = [

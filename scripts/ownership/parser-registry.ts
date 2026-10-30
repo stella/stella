@@ -10,7 +10,8 @@ export default {
   summary:
     "Each parser source owns one entry containing its key, parser version, fingerprint version and replay scope. " +
     "Import-only sources declare their key and fingerprint version. " +
-    "A committed typed index imports source entries without embedding versions. Parser bumps leave the index unchanged; source additions regenerate it. " +
+    "A committed typed index inlines validated JSON source entries, keeping the runtime import graph independent of source count. " +
+    "Entry changes regenerate the index; conflicts in generated output are resolved by regeneration. " +
     "Parser changes bump only their own version above main's value; the parser-version guard reads entries from each Git tree.",
   enforcement: { kind: "none" },
 } as const satisfies OwnershipEntry;

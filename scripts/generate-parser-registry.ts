@@ -15,11 +15,19 @@ export const generateParserRegistry = (
   const directory = new URL(PARSER_ENTRY_DIRECTORY, root);
   const files = new Map(
     readdirSync(directory, { withFileTypes: true })
-      .filter((entry) => entry.isFile() && entry.name.endsWith(".ts"))
-      .map(({ name }) => [
-        `${PARSER_ENTRY_DIRECTORY}${name}`,
-        readFileSync(new URL(name, directory), "utf-8"),
-      ]),
+      .toSorted((left, right) => {
+        if (left.name < right.name) {
+          return -1;
+        }
+        return left.name > right.name ? 1 : 0;
+      })
+      .map((entry) => {
+        const file = `${PARSER_ENTRY_DIRECTORY}${entry.name}`;
+        if (!entry.isFile() || !entry.name.endsWith(".json")) {
+          panic(`Expected a JSON source entry file: ${file}`);
+        }
+        return [file, readFileSync(new URL(entry.name, directory), "utf-8")];
+      }),
   );
   const source = renderParserRegistry(files);
   if (source === undefined) {

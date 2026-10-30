@@ -1,0 +1,11 @@
+{
+  "type": "parser",
+  "name": "SK_US",
+  "key": "sk-us",
+  "parserVersion": 17,
+  "sourceFingerprintVersion": 0,
+  "scope": {
+    "type": "all",
+    "reason": "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage."
+  }
+}

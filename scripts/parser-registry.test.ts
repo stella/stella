@@ -14,219 +14,14 @@ import { pathToFileURL } from "node:url";
 
 import { generateParserRegistry } from "./generate-parser-registry";
 import {
+  parseParserEntry,
   PARSER_ENTRY_DIRECTORY,
   PARSER_REGISTRY_NAMES as names,
   PARSER_REGISTRY_OUTPUT,
   renderParserRegistry,
 } from "./parser-registry";
 
-const root = path.resolve(import.meta.dirname, "..");
-const registryDirectory = "apps/api/src/lib/legal-search/";
-
-const entrySources = () =>
-  new Map(
-    readdirSync(path.join(root, PARSER_ENTRY_DIRECTORY)).map((file) => [
-      `${PARSER_ENTRY_DIRECTORY}${file}`,
-      readFileSync(path.join(root, PARSER_ENTRY_DIRECTORY, file), "utf-8"),
-    ]),
-  );
-
-const loadRegistry = (directory: string) => {
-  const script = `import * as registry from ${JSON.stringify(path.join(directory, PARSER_REGISTRY_OUTPUT))}; process.stdout.write(JSON.stringify(registry));`;
-  const result = Bun.spawnSync([process.execPath, "-e", script], {
-    cwd: directory,
-  });
-  expect(result.stderr.toString()).toBe("");
-  expect(result.exitCode).toBe(0);
-  const loaded: unknown = JSON.parse(result.stdout.toString());
-  return loaded;
-};
-
-const renderedRegistry = (files: ReadonlyMap<string, string>) => {
-  const rendered = renderParserRegistry(files);
-  if (rendered === undefined) {
-    throw new TypeError("No parser registry entries");
-  }
-  return rendered;
-};
-
-const record = (value: unknown): Record<string, unknown> => {
-  if (typeof value !== "object" || value === null) {
-    throw new TypeError("Invalid parser registry");
-  }
-  return value;
-};
-
-const assertRegistryInvariants = (directory: string) => {
-  const loaded = record(loadRegistry(directory));
-  const adapters = record(Reflect.get(loaded, "ADAPTER_KEYS"));
-  const imports = record(Reflect.get(loaded, "IMPORT_SOURCE_KEYS"));
-  const versions = record(Reflect.get(loaded, "PARSER_VERSIONS"));
-  const fingerprints = record(
-    Reflect.get(loaded, "SOURCE_FINGERPRINT_VERSIONS"),
-  );
-  const scopes = record(Reflect.get(loaded, "PARSER_VERSION_SCOPES"));
-  const adapterKeys = Object.values(adapters).toSorted();
-  const importKeys = Object.values(imports).toSorted();
-  const sourceKeys = [...adapterKeys, ...importKeys].toSorted();
-  const entryKeys = readdirSync(path.join(directory, PARSER_ENTRY_DIRECTORY))
-    .filter((file) => file.endsWith(".ts"))
-    .map((file) => path.basename(file, ".ts"))
-    .toSorted();
-  expect(new Set(sourceKeys).size).toBe(sourceKeys.length);
-  expect(sourceKeys).toEqual(entryKeys);
-  expect(Object.keys(versions).toSorted()).toEqual(adapterKeys);
-  expect(Object.keys(scopes).toSorted()).toEqual(adapterKeys);
-  expect(Object.keys(fingerprints).toSorted()).toEqual(sourceKeys);
-  for (const fingerprint of Object.values(fingerprints)) {
-    expect(Number.isSafeInteger(fingerprint)).toBe(true);
-    expect(fingerprint).toBeGreaterThanOrEqual(0);
-  }
-  for (const [key, version] of Object.entries(versions)) {
-    expect(Number.isSafeInteger(version)).toBe(true);
-    expect(version).toBeGreaterThan(0);
-    const scope = record(Reflect.get(scopes, key));
-    expect(scope.version).toBe(version);
-    const selector = record(scope.scope);
-    if (selector.type === "all") {
-      expect(typeof selector.reason).toBe("string");
-      if (typeof selector.reason === "string") {
-        expect(selector.reason.trim().length).toBeGreaterThan(0);
-      }
-      continue;
-    }
-    expect(selector.type).toBe("features");
-    expect(Array.isArray(selector.features)).toBe(true);
-    if (Array.isArray(selector.features)) {
-      expect(selector.features.length).toBeGreaterThan(0);
-      for (const feature of selector.features) {
-        expect(typeof feature).toBe("string");
-      }
-    }
-  }
-  return loaded;
-};
-
-test("every source has a unique entry and complete parser or import-only metadata", () => {
-  assertRegistryInvariants(root);
-});
-
-test("generation reads regular TypeScript entry files only", () => {
-  const directory = mkdtempSync(path.join(tmpdir(), "parser-registry-files-"));
-  try {
-    const entries = entrySources();
-    for (const [file, source] of entries) {
-      mkdirSync(path.dirname(path.join(directory, file)), { recursive: true });
-      writeFileSync(path.join(directory, file), source);
-    }
-    writeFileSync(path.join(directory, "README.md"), "not a registry entry");
-    writeFileSync(
-      path.join(directory, PARSER_ENTRY_DIRECTORY, "notes.txt"),
-      "not a registry entry",
-    );
-    mkdirSync(path.join(directory, PARSER_ENTRY_DIRECTORY, "nested"), {
-      recursive: true,
-    });
-    writeFileSync(
-      path.join(directory, PARSER_ENTRY_DIRECTORY, "nested", "ignored.ts"),
-      "not a registry entry",
-    );
-    mkdirSync(path.dirname(path.join(directory, PARSER_REGISTRY_OUTPUT)), {
-      recursive: true,
-    });
-
-    generateParserRegistry(pathToFileURL(`${directory}/`));
-
-    expect(
-      readFileSync(path.join(directory, PARSER_REGISTRY_OUTPUT), "utf-8"),
-    ).toBe(renderedRegistry(entries));
-    generateParserRegistry(pathToFileURL(`${directory}/`), "check");
-    writeFileSync(
-      path.join(directory, PARSER_REGISTRY_OUTPUT),
-      "// stale index\n",
-    );
-    expect(() =>
-      generateParserRegistry(pathToFileURL(`${directory}/`), "check"),
-    ).toThrow("Parser registry index is stale");
-  } finally {
-    rmSync(directory, { recursive: true, force: true });
-  }
-});
-
-test("an empty entry directory fails with a descriptive invariant", () => {
-  const directory = mkdtempSync(path.join(tmpdir(), "parser-registry-empty-"));
-  try {
-    mkdirSync(path.join(directory, PARSER_ENTRY_DIRECTORY), {
-      recursive: true,
-    });
-    expect(() =>
-      generateParserRegistry(pathToFileURL(`${directory}/`)),
-    ).toThrow("No parser registry entries");
-  } finally {
-    rmSync(directory, { recursive: true, force: true });
-  }
-});
-
-test("renderer ignores fake exports and rejects an incomplete entry", () => {
-  const file = `${PARSER_ENTRY_DIRECTORY}incomplete.ts`;
-  const source = [
-    'export const ADAPTER_KEYS = { A: "a" } as const;',
-    "export const PARSER_VERSIONS = { a: 1 };",
-    "export const PARSER_VERSION_SCOPES = {};",
-    "// export const SOURCE_FINGERPRINT_VERSIONS = {};",
-    'const fake = "export const SOURCE_FINGERPRINT_VERSIONS = {};";',
-  ].join("\n");
-
-  expect(() => renderParserRegistry(new Map([[file, source]]))).toThrow(
-    `Incomplete parser registry entry: ${file}`,
-  );
-});
-
-test("import-only entries reject parser metadata", () => {
-  const file = `${PARSER_ENTRY_DIRECTORY}import-only.ts`;
-  const source = [
-    'export const IMPORT_SOURCE_KEYS = { IMPORT_ONLY: "import-only" } as const;',
-    'export const SOURCE_FINGERPRINT_VERSIONS = { "import-only": 0 } as const;',
-    'export const PARSER_VERSIONS = { "import-only": 1 } as const;',
-  ].join("\n");
-  expect(() => renderParserRegistry(new Map([[file, source]]))).toThrow(
-    `Incomplete parser registry entry: ${file}`,
-  );
-});
-
-test("source entries exclusively own registry declarations", () => {
-  for (const file of ["ingestion-constants.ts", "parser-reparse-scopes.ts"]) {
-    const source = readFileSync(
-      path.join(root, registryDirectory, file),
-      "utf-8",
-    );
-    for (const name of names) {
-      expect(source).not.toMatch(
-        new RegExp(`(?:const|let|var)\\s+${name}\\s*=`, "u"),
-      );
-    }
-  }
-  const seenKeys = new Set<string>();
-  const seenNames = new Set<string>();
-  for (const [file, source] of entrySources()) {
-    const keys = [
-      ...source.matchAll(
-        /export const (?:ADAPTER_KEYS|IMPORT_SOURCE_KEYS) = \{\s*(\w+): "([^"]+)"\s*,?\s*\}/gu,
-      ),
-    ];
-    expect(keys).toHaveLength(1);
-    const key = keys.at(0)?.at(2);
-    const name = keys.at(0)?.at(1);
-    expect(key).toBe(path.basename(file, ".ts"));
-    expect(seenKeys.has(String(key))).toBe(false);
-    expect(seenNames.has(String(name))).toBe(false);
-    seenKeys.add(String(key));
-    seenNames.add(String(name));
-  }
-  expect(renderParserRegistry(entrySources())).toBe(
-    readFileSync(path.join(root, PARSER_REGISTRY_OUTPUT), "utf-8"),
-  );
-});
+const repositoryRoot = path.resolve(import.meta.dirname, "..");
 
 const gitResult = (directory: string, args: string[]) =>
   Bun.spawnSync(["git", ...args], {
@@ -244,7 +39,6 @@ const gitResult = (directory: string, args: string[]) =>
 
 const git = (directory: string, args: string[]) => {
   const result = gitResult(directory, args);
-  expect(result.stderr.toString(), args.join(" ")).not.toContain("CONFLICT");
   expect(
     result.exitCode,
     `${args.join(" ")}: ${result.stderr.toString()}`,
@@ -252,73 +46,322 @@ const git = (directory: string, args: string[]) => {
   return result.stdout.toString().trim();
 };
 
+const sourceEntries = (directory: string) =>
+  new Map(
+    readdirSync(path.join(directory, PARSER_ENTRY_DIRECTORY)).map((name) => {
+      const file = `${PARSER_ENTRY_DIRECTORY}${name}`;
+      return [file, readFileSync(path.join(directory, file), "utf-8")];
+    }),
+  );
+
+const record = (value: unknown): Record<string, unknown> => {
+  if (typeof value !== "object" || value === null) {
+    throw new TypeError("Invalid parser registry value");
+  }
+  return value;
+};
+
+const expectedRegistry = (entries: ReadonlyMap<string, string>) => {
+  const registry = {
+    ADAPTER_KEYS: {},
+    IMPORT_SOURCE_KEYS: {},
+    PARSER_VERSIONS: {},
+    SOURCE_FINGERPRINT_VERSIONS: {},
+    PARSER_VERSION_SCOPES: {},
+  } satisfies Record<(typeof names)[number], Record<string, unknown>>;
+  for (const [file, source] of entries) {
+    const entry = parseParserEntry({ file, source });
+    const keyMap =
+      entry.type === "parser" ? "ADAPTER_KEYS" : "IMPORT_SOURCE_KEYS";
+    Reflect.set(registry[keyMap], entry.name, entry.key);
+    Reflect.set(
+      registry.SOURCE_FINGERPRINT_VERSIONS,
+      entry.key,
+      entry.sourceFingerprintVersion,
+    );
+    if (entry.type !== "parser") {
+      continue;
+    }
+    Reflect.set(registry.PARSER_VERSIONS, entry.key, entry.parserVersion);
+    Reflect.set(registry.PARSER_VERSION_SCOPES, entry.key, {
+      version: entry.parserVersion,
+      scope: entry.scope,
+    });
+  }
+  return registry;
+};
+
+const loadRegistry = (directory: string) => {
+  const script = `import * as registry from ${JSON.stringify(path.join(directory, PARSER_REGISTRY_OUTPUT))}; process.stdout.write(JSON.stringify(registry));`;
+  const result = Bun.spawnSync([process.execPath, "-e", script], {
+    cwd: directory,
+  });
+  expect(result.stderr.toString()).toBe("");
+  expect(result.exitCode).toBe(0);
+  return record(JSON.parse(result.stdout.toString()));
+};
+
+const assertRegistryMatchesEntries = (directory: string) => {
+  const expected = expectedRegistry(sourceEntries(directory));
+  const loaded = loadRegistry(directory);
+  expect(loaded).toEqual(expected);
+  return loaded;
+};
+
+const runGenerator = (directory: string, mode: "write" | "check" = "write") =>
+  generateParserRegistry(pathToFileURL(`${directory}/`), mode);
+
+const writeSourceEntries = (
+  directory: string,
+  entries: ReadonlyMap<string, string>,
+) => {
+  for (const [file, source] of entries) {
+    const absolute = path.join(directory, file);
+    mkdirSync(path.dirname(absolute), { recursive: true });
+    writeFileSync(absolute, source);
+  }
+};
+
+const initializeRepository = (
+  directory: string,
+  entries: ReadonlyMap<string, string>,
+) => {
+  writeSourceEntries(directory, entries);
+  mkdirSync(path.dirname(path.join(directory, PARSER_REGISTRY_OUTPUT)), {
+    recursive: true,
+  });
+  git(directory, ["init", "--initial-branch=base"]);
+  git(directory, ["add", PARSER_ENTRY_DIRECTORY]);
+  git(directory, ["-c", "commit.gpgsign=false", "commit", "-m", "entries"]);
+  runGenerator(directory);
+  git(directory, ["add", PARSER_REGISTRY_OUTPUT]);
+  git(directory, ["-c", "commit.gpgsign=false", "commit", "-m", "index"]);
+};
+
+test("canonical JSON entries define unique complete parser and import metadata", () => {
+  const entries = sourceEntries(repositoryRoot);
+  const parsed = [...entries].map(([file, source]) =>
+    parseParserEntry({ file, source }),
+  );
+  const keys = parsed.map(({ key }) => key);
+  const sourceNames = parsed.map(({ name }) => name);
+  expect(new Set(keys).size).toBe(keys.length);
+  expect(new Set(sourceNames).size).toBe(sourceNames.length);
+  expect(renderParserRegistry(entries)).toBe(
+    readFileSync(path.join(repositoryRoot, PARSER_REGISTRY_OUTPUT), "utf-8"),
+  );
+  assertRegistryMatchesEntries(repositoryRoot);
+});
+
+test("entry JSON schema rejects malformed and type-inconsistent records", () => {
+  const file = `${PARSER_ENTRY_DIRECTORY}entry.json`;
+  const invalidSources = [
+    JSON.stringify({ type: "parser", name: "bad-name", key: "entry" }),
+    JSON.stringify({
+      type: "parser",
+      name: "ENTRY",
+      key: "wrong-path",
+      parserVersion: 1,
+      sourceFingerprintVersion: 0,
+      scope: { type: "all", reason: "valid" },
+    }),
+    JSON.stringify({
+      type: "parser",
+      name: "ENTRY",
+      key: "entry",
+      parserVersion: 0,
+      sourceFingerprintVersion: 0,
+      scope: { type: "all", reason: "valid" },
+    }),
+    JSON.stringify({
+      type: "parser",
+      name: "ENTRY",
+      key: "entry",
+      parserVersion: 1,
+      sourceFingerprintVersion: 0,
+      scope: { type: "all", reason: " " },
+    }),
+    JSON.stringify({
+      type: "import",
+      name: "ENTRY",
+      key: "entry",
+      sourceFingerprintVersion: 0,
+      parserVersion: 1,
+    }),
+  ];
+  for (const source of invalidSources) {
+    expect(() => parseParserEntry({ file, source })).toThrow(
+      `Invalid parser registry entry: ${file}`,
+    );
+  }
+  expect(() => parseParserEntry({ file, source: "{" })).toThrow(
+    `Invalid parser registry JSON: ${file}`,
+  );
+});
+
+test("entry sources exclusively own registry declarations", () => {
+  for (const file of ["ingestion-constants.ts", "parser-reparse-scopes.ts"]) {
+    const source = readFileSync(
+      path.join(repositoryRoot, "apps/api/src/lib/legal-search", file),
+      "utf-8",
+    );
+    for (const name of names) {
+      expect(source).not.toMatch(
+        new RegExp(`(?:const|let|var)\\s+${name}\\s*=`, "u"),
+      );
+    }
+  }
+});
+
+test("generated index has no runtime imports after type erasure", () => {
+  const source = readFileSync(
+    path.join(repositoryRoot, PARSER_REGISTRY_OUTPUT),
+    "utf-8",
+  );
+  const transpiler = new Bun.Transpiler({ loader: "ts" });
+  expect(transpiler.scanImports(transpiler.transformSync(source))).toEqual([]);
+});
+
+test("canonical JSON inventory includes new entries before Git staging", () => {
+  const directory = mkdtempSync(
+    path.join(tmpdir(), "parser-registry-inventory-"),
+  );
+  try {
+    writeSourceEntries(directory, sourceEntries(repositoryRoot));
+    expect(existsSync(path.join(directory, ".git"))).toBe(false);
+    runGenerator(directory);
+    runGenerator(directory, "check");
+    const added = {
+      type: "parser",
+      name: "TEMP_UNSTAGED",
+      key: "temp-unstaged",
+      parserVersion: 7,
+      sourceFingerprintVersion: 0,
+      scope: { type: "all", reason: "temporary source entry" },
+    } as const;
+    const addedPath = `${PARSER_ENTRY_DIRECTORY}${added.key}.json`;
+    writeFileSync(
+      path.join(directory, addedPath),
+      `${JSON.stringify(added)}\n`,
+    );
+    expect(() => runGenerator(directory, "check")).toThrow(
+      "Parser registry index is stale",
+    );
+    runGenerator(directory);
+    const loaded = assertRegistryMatchesEntries(directory);
+    expect(record(Reflect.get(loaded, "PARSER_VERSIONS"))[added.key]).toBe(
+      added.parserVersion,
+    );
+    runGenerator(directory, "check");
+    const indexWithoutGit = readFileSync(
+      path.join(directory, PARSER_REGISTRY_OUTPUT),
+      "utf-8",
+    );
+    git(directory, ["init", "--initial-branch=inventory"]);
+    git(directory, ["add", PARSER_ENTRY_DIRECTORY]);
+    runGenerator(directory, "check");
+    expect(
+      readFileSync(path.join(directory, PARSER_REGISTRY_OUTPUT), "utf-8"),
+    ).toBe(indexWithoutGit);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("source inventory rejects non-JSON and unparsable entries with their paths", () => {
+  const directory = mkdtempSync(
+    path.join(tmpdir(), "parser-registry-invalid-"),
+  );
+  try {
+    writeSourceEntries(directory, sourceEntries(repositoryRoot));
+    for (const name of ["notes.txt", "broken.json", "nested"]) {
+      const file = `${PARSER_ENTRY_DIRECTORY}${name}`;
+      const absolute = path.join(directory, file);
+      if (name === "nested") {
+        mkdirSync(absolute);
+      } else {
+        writeFileSync(absolute, "{");
+      }
+      expect(() => runGenerator(directory)).toThrow(file);
+      rmSync(absolute, { recursive: true });
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("an empty entry set fails instead of emitting an empty index", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "parser-registry-empty-"));
+  try {
+    mkdirSync(path.join(directory, PARSER_ENTRY_DIRECTORY), {
+      recursive: true,
+    });
+    expect(() => runGenerator(directory)).toThrow("No parser registry entries");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 for (const operation of ["add", "bump"] as const) {
-  const mergeBehavior =
-    operation === "add"
-      ? "load both additions after regenerating the index"
-      : "merge cleanly with an unchanged index";
-  test(`independent parser ${operation} edits ${mergeBehavior} without fixtures`, () => {
+  test(`independent parser ${operation}s merge and regenerate both entries without fixtures`, () => {
     const directory = mkdtempSync(
       path.join(tmpdir(), "parser-registry-merge-"),
     );
     try {
-      mkdirSync(path.join(directory, PARSER_ENTRY_DIRECTORY), {
-        recursive: true,
-      });
-      const sources = entrySources();
-      for (const [file, source] of sources) {
-        writeFileSync(path.join(directory, file), source);
-      }
-      const indexPath = path.join(directory, PARSER_REGISTRY_OUTPUT);
-      mkdirSync(path.dirname(indexPath), { recursive: true });
-      const baseIndex = renderedRegistry(sources);
-      writeFileSync(indexPath, baseIndex);
-      git(directory, ["init", "--initial-branch=base"]);
-      git(directory, ["add", "."]);
-      git(directory, ["-c", "commit.gpgsign=false", "commit", "-m", "base"]);
-      expect(
-        existsSync(path.join(directory, registryDirectory, "__fixtures__")),
-      ).toBe(false);
-      const original = assertRegistryInvariants(directory);
+      const originalEntries = sourceEntries(repositoryRoot);
+      initializeRepository(directory, originalEntries);
+      const original = assertRegistryMatchesEntries(directory);
       const originalVersions = record(Reflect.get(original, "PARSER_VERSIONS"));
-      const expected = structuredClone(original);
+      const expectedEntries = new Map(originalEntries);
+
       for (const [branch, existing, added] of [
         ["left", "cz-ns", "test-left"],
         ["right", "cz-us", "test-right"],
       ] as const) {
         git(directory, ["switch", "-c", branch, "base"]);
-        const file = `${PARSER_ENTRY_DIRECTORY}${existing}.ts`;
-        const source = sources.get(file);
+        const file = `${PARSER_ENTRY_DIRECTORY}${existing}.json`;
+        const source = originalEntries.get(file);
         if (source === undefined) {
-          throw new TypeError("Missing merge fixture entry");
+          throw new TypeError(`Missing canonical entry ${file}`);
         }
-        const symbol = existing.replaceAll("-", "_").toUpperCase();
-        const newSymbol = added.replaceAll("-", "_").toUpperCase();
-        const next =
+        const parsed = parseParserEntry({ file, source });
+        if (parsed.type !== "parser") {
+          throw new TypeError(`Expected parser entry ${file}`);
+        }
+        const updated =
           operation === "bump"
-            ? source.replace(
-                /((?:PARSER_VERSIONS = \{\s*\[ADAPTER_KEYS\.\w+\]:|version:)\s*)(\d+)/gu,
-                (_, prefix: string, value: string) =>
-                  `${prefix}${Number(value) + 1}`,
-              )
-            : source
-                .replaceAll(existing, () => added)
-                .replaceAll(symbol, () => newSymbol);
+            ? {
+                type: "parser" as const,
+                name: parsed.name,
+                key: parsed.key,
+                sourceFingerprintVersion: parsed.sourceFingerprintVersion,
+                parserVersion: parsed.parserVersion + 1,
+                scope: parsed.scope,
+              }
+            : {
+                type: "parser" as const,
+                name: added.replaceAll("-", "_").toUpperCase(),
+                key: added,
+                sourceFingerprintVersion: 0,
+                parserVersion: 1,
+                scope: parsed.scope,
+              };
         const target =
-          operation === "bump" ? file : `${PARSER_ENTRY_DIRECTORY}${added}.ts`;
-        writeFileSync(path.join(directory, target), next);
+          operation === "bump"
+            ? file
+            : `${PARSER_ENTRY_DIRECTORY}${added}.json`;
+        const next = `${JSON.stringify(updated, null, 2)}\n`;
         if (operation === "add") {
-          const branchEntries = new Map([...sources, [target, next]]);
-          writeFileSync(indexPath, renderedRegistry(branchEntries));
-          git(directory, ["add", target, PARSER_REGISTRY_OUTPUT]);
+          expectedEntries.set(target, next);
         } else {
-          expect(readFileSync(indexPath, "utf-8")).toBe(baseIndex);
-          expect(renderedRegistry(new Map([...sources, [target, next]]))).toBe(
-            baseIndex,
-          );
-          git(directory, ["add", target]);
+          expectedEntries.set(file, next);
         }
+        writeFileSync(path.join(directory, target), next);
+        git(directory, ["add", target]);
+        runGenerator(directory);
+        git(directory, ["add", PARSER_REGISTRY_OUTPUT]);
         git(directory, ["-c", "commit.gpgsign=false", "commit", "-m", branch]);
+
         const changedFiles = git(directory, [
           "diff",
           "--name-only",
@@ -327,30 +370,18 @@ for (const operation of ["add", "bump"] as const) {
         ])
           .split("\n")
           .toSorted();
-        const expectedFiles =
-          operation === "add" ? [target, PARSER_REGISTRY_OUTPUT] : [target];
-        expect(changedFiles).toEqual(expectedFiles.toSorted());
-        generateParserRegistry(pathToFileURL(`${directory}/`), "check");
-        const edited = assertRegistryInvariants(directory);
-        const editedVersions = record(Reflect.get(edited, "PARSER_VERSIONS"));
-        const versionKey = operation === "bump" ? existing : added;
+        expect(changedFiles).toEqual(
+          [target, PARSER_REGISTRY_OUTPUT].toSorted(),
+        );
+        runGenerator(directory, "check");
+        const loaded = assertRegistryMatchesEntries(directory);
+        const versions = record(Reflect.get(loaded, "PARSER_VERSIONS"));
+        const versionKey = operation === "add" ? added : existing;
         const expectedVersion =
-          operation === "bump"
-            ? Reflect.get(originalVersions, existing) + 1
-            : Reflect.get(originalVersions, existing);
-        expect(Reflect.get(editedVersions, versionKey)).toBe(expectedVersion);
-        for (const name of names) {
-          if (name === "IMPORT_SOURCE_KEYS") {
-            continue;
-          }
-          const adapterName = operation === "add" ? newSymbol : symbol;
-          const key = name === "ADAPTER_KEYS" ? adapterName : versionKey;
-          Reflect.set(
-            record(Reflect.get(expected, name)),
-            key,
-            Reflect.get(record(Reflect.get(edited, name)), key),
-          );
-        }
+          operation === "add"
+            ? 1
+            : Number(Reflect.get(originalVersions, existing)) + 1;
+        expect(Reflect.get(versions, versionKey)).toBe(expectedVersion);
       }
 
       const merge = gitResult(directory, [
@@ -363,36 +394,37 @@ for (const operation of ["add", "bump"] as const) {
       if (tree === undefined) {
         throw new TypeError("Missing merge tree");
       }
-      if (operation === "bump") {
-        expect(merge.exitCode).toBe(0);
-        expect(merge.stdout.toString()).not.toContain("CONFLICT");
-        expect(
-          git(directory, ["show", `${tree}:${PARSER_REGISTRY_OUTPUT}`]),
-        ).toBe(baseIndex.trim());
-      } else {
-        expect([0, 1]).toContain(merge.exitCode);
-        const conflicts = [
-          ...merge.stdout.toString().matchAll(/CONFLICT .* in (.+)$/gmu),
-        ].map((match) => match[1]);
-        const expectedConflicts =
-          merge.exitCode === 0 ? [] : [PARSER_REGISTRY_OUTPUT];
-        expect(conflicts).toEqual(expectedConflicts);
-      }
+      const conflicts = [
+        ...merge.stdout.toString().matchAll(/CONFLICT .* in (.+)$/gmu),
+      ].map((match) => match[1]);
+      const cleanMerge = merge.exitCode === 0 && conflicts.length === 0;
+      const indexOnlyConflict =
+        merge.exitCode === 1 &&
+        conflicts.length > 0 &&
+        conflicts.every((file) => file === PARSER_REGISTRY_OUTPUT);
+      expect(cleanMerge || indexOnlyConflict).toBe(true);
       git(directory, ["read-tree", "--reset", "-u", tree]);
-      if (operation === "add") {
-        generateParserRegistry(pathToFileURL(`${directory}/`));
-        git(directory, ["add", PARSER_REGISTRY_OUTPUT]);
-      }
+      runGenerator(directory);
+      git(directory, ["add", PARSER_REGISTRY_OUTPUT]);
       git(directory, ["diff", "--check"]);
       git(directory, ["write-tree"]);
-      generateParserRegistry(pathToFileURL(`${directory}/`), "check");
-      expect(assertRegistryInvariants(directory)).toEqual(expected);
+      runGenerator(directory, "check");
+      expect(assertRegistryMatchesEntries(directory)).toEqual(
+        expectedRegistry(expectedEntries),
+      );
+
+      const merged = loadRegistry(directory);
+      const mergedVersions = record(Reflect.get(merged, "PARSER_VERSIONS"));
       if (operation === "add") {
-        const mergedKeys = record(
-          Reflect.get(record(loadRegistry(directory)), "ADAPTER_KEYS"),
+        expect(mergedVersions["test-left"]).toBe(1);
+        expect(mergedVersions["test-right"]).toBe(1);
+      } else {
+        expect(mergedVersions["cz-ns"]).toBe(
+          Number(Reflect.get(originalVersions, "cz-ns")) + 1,
         );
-        expect(Reflect.get(mergedKeys, "TEST_LEFT")).toBe("test-left");
-        expect(Reflect.get(mergedKeys, "TEST_RIGHT")).toBe("test-right");
+        expect(mergedVersions["cz-us"]).toBe(
+          Number(Reflect.get(originalVersions, "cz-us")) + 1,
+        );
       }
     } finally {
       rmSync(directory, { recursive: true, force: true });
