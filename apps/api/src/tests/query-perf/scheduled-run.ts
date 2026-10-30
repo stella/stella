@@ -34,9 +34,9 @@ const noopTask = () => undefined;
 
 /**
  * The load governor's admission for a measured run. The governor holds work
- * in its busy windows (06:30-08:00 Europe/Prague by default), and held work
- * issues only its own bookkeeping, so the measurement admits explicitly and
- * the time of day cannot decide whether the measured work happens.
+ * in its configured busy windows, and held work issues only its own
+ * bookkeeping, so the measurement admits explicitly and the time of day
+ * cannot decide whether the measured work happens.
  */
 export const QUERY_PERF_ADMISSION = {
   kind: "normal",
