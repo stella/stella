@@ -82,6 +82,7 @@ import {
   EMAIL_UNDELIVERABLE_CONSTRAINTS,
 } from "./email-undeliverable-constraint-validation";
 import { ENTITY_FEATURE_GATE_REPAIR } from "./entity-feature-gate-repair";
+import { FUNCTION_DEPENDENT_INDEX_REINDEXES } from "./function-dependent-index-reindex";
 import {
   INVOICE_LANGUAGE_CONSTRAINT_VALIDATIONS,
   INVOICE_LANGUAGE_CONSTRAINTS,
@@ -954,6 +955,7 @@ export const ONLINE_VALIDATED_INDEX_NAMES: ReadonlySet<string> = new Set([
  * skips the ones already complete, and validates their completion.
  */
 export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
+  ...FUNCTION_DEPENDENT_INDEX_REINDEXES,
   CHAT_RUN_TEXT_BOUNDARIES,
   ACCOUNT_AUDIT_CONSTRAINT_VALIDATION,
   CLIENT_INVOICE_TENANT_KEY,
