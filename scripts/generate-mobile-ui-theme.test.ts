@@ -1,9 +1,9 @@
 import { expect, test } from "bun:test";
 
 import {
+  additionalColorsOf,
   declarationsOf,
   mobileUiTheme,
-  optionColorsOf,
   semanticColorsOf,
   substitute,
   toSrgb,
@@ -78,10 +78,25 @@ test("carries the option palette under its web names", () => {
 }`,
     ":root",
   );
-  expect(optionColorsOf(scope)).toEqual(
+  expect(additionalColorsOf(scope)).toEqual(
     new Map([
       ["option-red", "--option-red"],
       ["option-red-bg", "--option-red-bg"],
     ]),
   );
+});
+
+test("carries the sign-in backdrop in both schemes without adding web utility colours", () => {
+  const css = UI.replace(
+    "--background: var(--color-white);",
+    "--background: var(--color-white);\n  --auth-gradient-end: #cbe1fc;",
+  ).replace(
+    "--background: var(--color-neutral-800);",
+    "--background: var(--color-neutral-800);\n  --auth-gradient-end: #1a3a5c;",
+  );
+  expect(mobileUiTheme(css, PALETTE)).toMatchObject({
+    light: { "auth-gradient-end": "#cbe1fc" },
+    dark: { "auth-gradient-end": "#1a3a5c" },
+  });
+  expect(semanticColorsOf(css).has("auth-gradient-end")).toBe(false);
 });

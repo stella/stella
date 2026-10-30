@@ -56,14 +56,16 @@ export const semanticColorsOf = (css: string): Map<string, string> => {
 };
 
 /**
- * The option palette (`--option-blue`, `--option-blue-bg`, ...), which paints
- * a matter's colour, tags and other user-chosen tints. The web reads it
- * directly rather than through `@theme`, so it comes along as `option-blue`.
+ * Theme colours consumed outside web utilities: the option palette and the
+ * sign-in backdrop, carried to native under their existing web names.
  */
-export const optionColorsOf = (scope: Scope): Map<string, string> =>
+export const additionalColorsOf = (scope: Scope): Map<string, string> =>
   new Map(
     [...scope.keys()]
-      .filter((name) => name.startsWith("--option-"))
+      .filter(
+        (name) =>
+          name.startsWith("--option-") || name === "--auth-gradient-end",
+      )
       .map((name) => [name.slice(2), name]),
   );
 
@@ -134,7 +136,7 @@ export const mobileUiTheme = (uiCss: string, tailwindCss: string) => {
   const dark = new Map([...light, ...declarationsOf(uiCss, ".dark")]);
   const colorsFor = (scope: Scope) =>
     Object.fromEntries(
-      [...semanticColorsOf(uiCss), ...optionColorsOf(light)].map(
+      [...semanticColorsOf(uiCss), ...additionalColorsOf(light)].map(
         ([name, source]) => [
           name,
           toSrgb(substitute(`var(${source})`, [scope, palette])),
