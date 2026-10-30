@@ -4,6 +4,15 @@ import { describe, expect, test } from "bun:test";
 
 import { Textarea } from "./textarea";
 
+/**
+ * The counter's text without React's server text separators, which some
+ * react-dom releases print between adjacent text nodes and others omit.
+ */
+const countText = (markup: string): string | undefined =>
+  /data-slot="textarea-count"[^>]*>(?<text>[^<]*(?:<!-- -->[^<]*)*)</u
+    .exec(markup)
+    ?.groups?.["text"]?.replaceAll("<!-- -->", "");
+
 describe("Textarea limits", () => {
   test("maxRows caps the height at that many lines", () => {
     const markup = renderToStaticMarkup(
@@ -44,8 +53,10 @@ describe("Textarea limits", () => {
     );
 
     expect(markup).toContain('data-slot="textarea-count"');
-    expect(markup).toContain("5<!-- -->/<!-- -->280");
-    expect(markup).toContain('maxlength="280"');
+    expect(countText(markup)).toBe("5/280");
+    // HTML attribute names are case-insensitive, and react-dom releases
+    // differ in the case they print.
+    expect(markup).toMatch(/ maxlength="280"/iu);
   });
 
   test("a controlled value is counted as given", () => {
@@ -59,7 +70,7 @@ describe("Textarea limits", () => {
       />,
     );
 
-    expect(markup).toContain("3<!-- -->/<!-- -->10");
+    expect(countText(markup)).toBe("3/10");
   });
 
   test("no counter without a maxLength", () => {
