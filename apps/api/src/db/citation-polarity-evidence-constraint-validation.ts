@@ -48,6 +48,11 @@ export const CITATION_POLARITY_EVIDENCE_CONSTRAINT_VALIDATIONS =
   CITATION_POLARITY_EVIDENCE_CONSTRAINTS.map(
     (constraint) =>
       ({
+        introducedBy:
+          constraint.tableName === "case_law_citation_reviews" ||
+          constraint.tableName === "case_law_citation_doctrine_reviews"
+            ? "20261030213429_case_law_review_text_revision"
+            : "20261030213329_case_law_polarity_kind_evidence",
         name: constraint.constraintName,
         readCompletion: async (connection) =>
           await readConstraintCompletion({
