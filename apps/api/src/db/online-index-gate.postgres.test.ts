@@ -115,11 +115,7 @@ type Fixture = {
   pid: number;
   table: string;
   name: string;
-  index: {
-    name: string;
-    tableName: string;
-    definitionBody: string;
-    isUnique: boolean;
+  index: Parameters<typeof ensureOnlineIndexValid>[0]["index"] & {
     createSql: string;
   };
   gate: OnlineIndexGateOptions & {
@@ -186,6 +182,7 @@ const withFixture = async (work: (fixture: Fixture) => Promise<void>) => {
       );
       await owner.unsafe(`INSERT INTO public.${table} VALUES (1, 2)`);
       const index = {
+        introducedBy: "20261001123000_database_backfill_state",
         name,
         tableName: table,
         definitionBody: `ON public.${table} USING btree (id)`,

@@ -979,12 +979,16 @@
         "reasoning": "Mąstymas"
       },
       "errors": {
+        "analysisDisabled": "DI analizės kūrimas šiame serveryje išjungtas. Skaitykite sprendimo tekstą arba bandykite vėliau.",
         "answerIncomplete": "{source, select, organization {Jūsų organizacijos {provider} raktas grąžino neišsamų atsakymą.} other {DI modelis grąžino neišsamų atsakymą.}}",
+        "decisionNotFound": "Šis teismo sprendimas nerastas. Atverkite jį iš naujo paieškoje.",
+        "documentUnparseable": "Teismo sprendimo tekstas dar neparengtas analizei. Skaitykite pirminį šaltinį.",
+        "languageUnsupported": "DI analizė dar nepalaiko šio teismo sprendimo kalbos. Skaitykite sprendimo tekstą arba pirminį šaltinį.",
         "providerRefused": "{source, select, organization {{provider} atmetė užklausą, pateiktą su jūsų organizacijos raktu. Patikrinkite raktą, jo kvotą ir atsiskaitymą organizacijos nustatymuose.} other {DI teikėjas atmetė užklausą.}}",
         "providerUnavailable": "{source, select, organization {{provider} šiuo metu nepasiekiamas su jūsų organizacijos raktu.} other {DI teikėjas šiuo metu nepasiekiamas.}}",
         "retryAfter": "Bandyti dar kartą galėsite po {time}.",
-        "timedOut": "{source, select, organization {{provider} neatsakė laiku naudojant jūsų organizacijos raktą.} other {DI modelis neatsakė laiku.}}",
-        "unavailable": "Šiam sprendimui DI analizė neprieinama."
+        "sourceRestricted": "Šaltinis neleidžia atlikti DI analizės. Skaitykite sprendimo tekstą arba pirminį šaltinį.",
+        "timedOut": "{source, select, organization {{provider} neatsakė laiku naudojant jūsų organizacijos raktą.} other {DI modelis neatsakė laiku.}}"
       },
       "generate": "Parengti DI santraukas",
       "invitation": "Su nemokama paskyra DI parengia darbines pastabas apie šį sprendimą.",
@@ -1189,7 +1193,7 @@
     "reader": {
       "documentUpdated": "Dokumentas atnaujintas.",
       "expandProvisions": "Išskleisti nuostatas",
-      "headMatter": "Antraštinė dalis",
+      "headMatter": "Bylos informacija",
       "sourceAttribution": "Šaltinio duomenys laisvai prieinami adresu <link>{source}</link>."
     },
     "research": {
@@ -2118,8 +2122,6 @@
     "clearFilters": "Išvalyti filtrus",
     "clearSearch": "Išvalyti paiešką",
     "close": "Uždaryti",
-    "closeAll": "Uždaryti viską",
-    "closeOthers": "Uždaryti kitus",
     "columns": "Stulpeliai",
     "comfortable": "Patogus",
     "comingSoon": "Netrukus",
@@ -2393,6 +2395,7 @@
     "unknownUser": "Nežinomas naudotojas",
     "unpin": "Atsegti",
     "unsavedChanges": "Neišsaugoti pakeitimai",
+    "unsavedChangesClose": "Neišsaugoti pakeitimai. Dar kartą uždarykite, kad juos atmestumėte",
     "unsavedChangesEscape": "Neišsaugoti pakeitimai. Dar kartą paspauskite Esc, kad juos atmestumėte",
     "unsavedLeaveConfirm": "Turite neišsaugotų pakeitimų. Išeiti neišsaugojus?",
     "unverified": "Nepatvirtinta",
@@ -2434,6 +2437,8 @@
     "returnToAgent": "Norėdami tęsti, grįžkite pas savo agentą.",
     "returnsLocally": "Šiame kompiuteryje grįšite į „{clientName}“",
     "returnsTo": "Grįšite į „{clientName}“",
+    "scopeAccountExportRead": "Skaityti savo asmens duomenų eksportus",
+    "scopeAccountExportWrite": "Prašyti savo asmens duomenų eksportų",
     "scopeAdminRead": "Skaityti jūsų organizacijos audito žurnalą",
     "scopeAdminWrite": "Tvarkyti organizacijos narius ir nustatymus",
     "scopeBillingWrite": "Kurti, redaguoti ir ištrinti jūsų laiko įrašus",
@@ -2904,6 +2909,8 @@
       "forbidden": "Neturite teisės atlikti šio veiksmo.",
       "hostedCheckoutOpen": "Šiai organizacijai jau atidarytas apmokėjimas. Užbaikite jį arba pradėkite naują, kai jis baigs galioti.",
       "hostedSubscriptionLive": "Ši organizacija jau turi prenumeratą. Pakeiskite ją skiltyje „Tvarkyti prieglobos naudojimą“.",
+      "idempotencyInProgress": "Ši užklausa vis dar apdorojama. Šiek tiek palaukite ir bandykite dar kartą.",
+      "idempotencyKeyReused": "Duomenys pasikeitė nuo ankstesnio bandymo. Iš naujo nustatykite formą ir bandykite dar kartą.",
       "internalServerError": "Kažkas nepavyko. Bandykite dar kartą.",
       "legalSourceEntityLimitReached": "Šioje byloje pasiektas elementų limitas, todėl dokumento sukurti nepavyko.",
       "legalSourceFilePropertyMissing": "Šioje byloje trūksta failo ypatybės, todėl dokumento sukurti nepavyko.",
@@ -3706,6 +3713,9 @@
       "unsupportedVisualContent": "Šiame faile yra vaizdų arba vektorinės grafikos, kurių neįmanoma patikrinti, ar juose nėra neskelbtino teksto. Eksportuoti negalima.",
       "workspaceTermsHeading": "Darbo srities terminai ({count})"
     },
+    "closeAllTabs": "Uždaryti {count, plural, one {# kortelę} few {visas # korteles} other {visas # kortelių}}",
+    "closeOtherTabs": "Uždaryti {count, plural, one {# kitą kortelę} few {# kitas korteles} other {# kitų kortelių}}",
+    "closeTab": "Uždaryti <bdi>{name}</bdi>",
     "conversionRefusal": {
       "legacyFormat": "Tai seno formato „{format}“ failas. Norėdami jį konvertuoti, iš naujo įrašykite kaip {replacementExtension}.",
       "unsupportedEncoding": "Šiame dokumente naudojama nepalaikoma {encoding} koduotė, todėl jo konvertuoti negalima.",
@@ -4949,7 +4959,9 @@
     "viewOnGithub": "Peržiūrėti GitHub platformoje"
   },
   "readerAnswers": {
+    "answerLanguage": "Atsakymo kalba",
     "budgetError": "Atsakymams skirtas biudžetas išnaudotas.",
+    "documentLanguage": "Dokumento kalba ({language})",
     "expand": "Išskleisti atsakymą",
     "explain": "Paaiškinti",
     "followUp": "Užduoti papildomą klausimą",
@@ -5131,6 +5143,15 @@
       "displayNameSaved": "Rodomas vardas atnaujintas",
       "enterOtp": "Patvirtinimo kodas",
       "otpSentSuccess": "Patvirtinimo kodas išsiųstas į jūsų el. paštą.",
+      "personalDataExportDescription": "Prašykite atsisiunčiamos paskyroje saugomų asmens duomenų kopijos. Atsisiųsti ją bus galima vieną valandą.",
+      "personalDataExportExpired": "Šio eksporto galiojimo laikas baigėsi.",
+      "personalDataExportExpiresAt": "Pasiekiama iki {expiresAt}.",
+      "personalDataExportFailed": "Nepavyko paruošti eksporto.",
+      "personalDataExportReady": "Jūsų eksportas paruoštas.",
+      "personalDataExportRequest": "Prašyti eksporto",
+      "personalDataExportRequestNew": "Prašyti naujo eksporto",
+      "personalDataExportTitle": "Eksportuoti mano duomenis",
+      "personalDataExportWorking": "Ruošiamas eksportas…",
       "preferredName": "Pageidaujamas vardas",
       "preferredNameDescription": "Naudojamas kaip DOCX sekamų pakeitimų ir komentarų autorius.",
       "preferredNamePlaceholder": "Jūsų vardas",

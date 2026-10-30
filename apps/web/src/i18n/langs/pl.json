@@ -979,12 +979,16 @@
         "reasoning": "Rozumowanie"
       },
       "errors": {
+        "analysisDisabled": "Generowanie analiz AI jest wyłączone na tym serwerze. Przeczytaj tekst orzeczenia lub spróbuj ponownie później.",
         "answerIncomplete": "{source, select, organization {Klucz {provider} Twojej organizacji zwrócił niepełną odpowiedź.} other {Model AI zwrócił niepełną odpowiedź.}}",
+        "decisionNotFound": "Nie znaleziono tego orzeczenia. Otwórz je ponownie z wyników wyszukiwania.",
+        "documentUnparseable": "Tekst orzeczenia nie jest gotowy do analizy. Przeczytaj materiał źródłowy.",
+        "languageUnsupported": "Analiza AI nie obsługuje jeszcze języka tego orzeczenia. Przeczytaj tekst orzeczenia lub materiał źródłowy.",
         "providerRefused": "{source, select, organization {{provider} odrzucił żądanie wysłane z kluczem Twojej organizacji. Sprawdź klucz, jego limit i rozliczenia w ustawieniach organizacji.} other {Dostawca AI odrzucił żądanie.}}",
         "providerUnavailable": "{source, select, organization {{provider} jest teraz niedostępny dla klucza Twojej organizacji.} other {Dostawca AI jest teraz niedostępny.}}",
         "retryAfter": "Możesz spróbować ponownie po {time}.",
-        "timedOut": "{source, select, organization {{provider} nie odpowiedział na czas z kluczem Twojej organizacji.} other {Model AI nie odpowiedział na czas.}}",
-        "unavailable": "Analiza AI nie jest dostępna dla tego orzeczenia."
+        "sourceRestricted": "Źródło nie zezwala na analizę AI. Przeczytaj tekst orzeczenia lub materiał źródłowy.",
+        "timedOut": "{source, select, organization {{provider} nie odpowiedział na czas z kluczem Twojej organizacji.} other {Model AI nie odpowiedział na czas.}}"
       },
       "generate": "Ułóż tezy w AI",
       "invitation": "Z bezpłatnym kontem AI przygotuje robocze notatki do tego orzeczenia.",
@@ -1189,7 +1193,7 @@
     "reader": {
       "documentUpdated": "Dokument został zaktualizowany.",
       "expandProvisions": "Rozwiń przepisy",
-      "headMatter": "Część wstępna",
+      "headMatter": "Informacje o sprawie",
       "sourceAttribution": "Dane źródłowe są ogólnodostępne pod adresem <link>{source}</link>."
     },
     "research": {
@@ -2118,8 +2122,6 @@
     "clearFilters": "Wyczyść filtry",
     "clearSearch": "Wyczyść wyszukiwanie",
     "close": "Zamknij",
-    "closeAll": "Zamknij wszystko",
-    "closeOthers": "Zamknij pozostałe",
     "columns": "Kolumny",
     "comfortable": "Komfortowy",
     "comingSoon": "Wkrótce",
@@ -2393,6 +2395,7 @@
     "unknownUser": "Nieznany użytkownik",
     "unpin": "Odepnij",
     "unsavedChanges": "Niezapisane zmiany",
+    "unsavedChangesClose": "Niezapisane zmiany. Zamknij ponownie, aby je odrzucić",
     "unsavedChangesEscape": "Niezapisane zmiany. Naciśnij ponownie Esc, aby je odrzucić",
     "unsavedLeaveConfirm": "Masz niezapisane zmiany. Wyjść bez zapisywania?",
     "unverified": "Niezweryfikowane",
@@ -2434,6 +2437,8 @@
     "returnToAgent": "Wróć do swojego agenta, aby kontynuować.",
     "returnsLocally": "Wrócisz do {clientName} na tym komputerze",
     "returnsTo": "Wrócisz do {clientName}",
+    "scopeAccountExportRead": "Odczyt eksportów Twoich danych osobowych",
+    "scopeAccountExportWrite": "Zamawianie eksportów Twoich danych osobowych",
     "scopeAdminRead": "Odczyt dziennika audytu Twojej organizacji",
     "scopeAdminWrite": "Zarządzanie członkami i ustawieniami organizacji",
     "scopeBillingWrite": "Tworzenie, edytowanie i usuwanie Twoich wpisów czasu",
@@ -2904,6 +2909,8 @@
       "forbidden": "Nie masz uprawnień do wykonania tej czynności.",
       "hostedCheckoutOpen": "Dla tej organizacji jest już otwarta płatność. Dokończ ją albo rozpocznij nową po jej wygaśnięciu.",
       "hostedSubscriptionLive": "Ta organizacja ma już subskrypcję. Zmień ją w sekcji „Zarządzaj użyciem hostowanym”.",
+      "idempotencyInProgress": "To żądanie jest nadal przetwarzane. Poczekaj chwilę i spróbuj ponownie.",
+      "idempotencyKeyReused": "Dane zmieniły się od poprzedniej próby. Zresetuj formularz i spróbuj ponownie.",
       "internalServerError": "Coś poszło nie tak. Spróbuj ponownie.",
       "legalSourceEntityLimitReached": "Ta sprawa osiągnęła limit elementów, dlatego nie można było utworzyć dokumentu.",
       "legalSourceFilePropertyMissing": "W tej sprawie brakuje właściwości pliku, dlatego nie można było utworzyć dokumentu.",
@@ -3706,6 +3713,9 @@
       "unsupportedVisualContent": "Ten plik zawiera obrazy lub grafikę wektorową, których nie można sprawdzić pod kątem wrażliwego tekstu. Eksport jest niedostępny.",
       "workspaceTermsHeading": "Terminy obszaru roboczego ({count})"
     },
+    "closeAllTabs": "Zamknij {count, plural, one {# kartę} few {wszystkie # karty} many {wszystkie # kart} other {wszystkie # karty}}",
+    "closeOtherTabs": "Zamknij {count, plural, one {# inną kartę} few {# inne karty} many {# innych kart} other {# innej karty}}",
+    "closeTab": "Zamknij <bdi>{name}</bdi>",
     "conversionRefusal": {
       "legacyFormat": "To jest plik {format} w starszym formacie. Zapisz go ponownie jako {replacementExtension}, aby go przekonwertować.",
       "unsupportedEncoding": "Ten dokument używa nieobsługiwanego kodowania {encoding}, dlatego nie można go przekonwertować.",
@@ -4949,7 +4959,9 @@
     "viewOnGithub": "Zobacz na GitHubie"
   },
   "readerAnswers": {
+    "answerLanguage": "Język odpowiedzi",
     "budgetError": "Budżet na odpowiedzi został wyczerpany.",
+    "documentLanguage": "Język dokumentu ({language})",
     "expand": "Rozwiń odpowiedź",
     "explain": "Wyjaśnij",
     "followUp": "Zadaj dodatkowe pytanie",
@@ -5131,6 +5143,15 @@
       "displayNameSaved": "Zaktualizowano nazwę wyświetlaną",
       "enterOtp": "Kod weryfikacyjny",
       "otpSentSuccess": "Kod weryfikacyjny został wysłany na Twój adres e-mail.",
+      "personalDataExportDescription": "Poproś o kopię danych osobowych z konta do pobrania. Plik będzie dostępny przez godzinę.",
+      "personalDataExportExpired": "Ten eksport wygasł.",
+      "personalDataExportExpiresAt": "Dostępny do {expiresAt}.",
+      "personalDataExportFailed": "Nie udało się przygotować eksportu.",
+      "personalDataExportReady": "Eksport jest gotowy.",
+      "personalDataExportRequest": "Poproś o eksport",
+      "personalDataExportRequestNew": "Poproś o nowy eksport",
+      "personalDataExportTitle": "Eksportuj moje dane",
+      "personalDataExportWorking": "Przygotowywanie eksportu…",
       "preferredName": "Preferowane imię",
       "preferredNameDescription": "Używane jako autor śledzonych zmian i komentarzy w plikach DOCX.",
       "preferredNamePlaceholder": "Twoje imię",

@@ -29,10 +29,21 @@
       // builds; knip evaluates the development one, where it is off. The
       // test-mobile skill drives simulators through agent-device's CLI. The
       // DM Sans faces are embedded by expo-font's config plugin from their
-      // paths in app.config.ts, which import nothing.
+      // paths in app.config.ts, which import nothing. The document viewer's
+      // folio faces (folio-fonts.gen.ts) are folio's own fontsource
+      // dependencies, which Metro resolves from @stll/folio-react's location
+      // so their versions stay the ones folio's stylesheet was built for.
       "ignoreDependencies": [
         "@babel/core",
         "@expo-google-fonts/dm-sans",
+        "@fontsource/arimo",
+        "@fontsource/caladea",
+        "@fontsource/carlito",
+        "@fontsource/cousine",
+        "@fontsource/lato",
+        "@fontsource/noto-sans-arabic",
+        "@fontsource/source-sans-3",
+        "@fontsource/tinos",
         "agent-device",
         "expo-doctor",
         "expo-updates"
@@ -205,13 +216,33 @@
     "packages/template-conditions": {
       "entry": ["src/**/*.test.ts"]
     },
+    "packages/transcript": {
+      "entry": [
+        "src/transcript.ts",
+        "src/timeline.ts",
+        "src/exporters.ts",
+        "src/vocabulary.ts",
+        "src/**/*.test.ts"
+      ]
+    },
     "packages/typescript-config": {
       "entry": ["*.json", "**/*.test.ts"]
     },
     "packages/transactional": { "entry": ["emails/*.tsx"] },
     "packages/ui": {
       // Browser fixture CSS imports Tailwind; the Vite plugin consumes its peer.
-      "ignoreDependencies": ["tailwindcss"],
+      // The React Native renderers (src/components/*.native.tsx) import React
+      // Native, uniwind, react-native-svg and lucide-react-native as optional
+      // peers: the app that renders them installs them, and declaring them for
+      // development would pull the React Native graph into every install of
+      // this package (scripts/ci-scoped-install.test.ts).
+      "ignoreDependencies": [
+        "lucide-react-native",
+        "react-native",
+        "react-native-svg",
+        "tailwindcss",
+        "uniwind"
+      ],
       "entry": [
         "src/components/*.tsx",
         "src/hooks/*.ts",

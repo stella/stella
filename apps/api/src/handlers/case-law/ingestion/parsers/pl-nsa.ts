@@ -16,7 +16,6 @@
 
 import { panic } from "better-result";
 
-// parser-output-unchanged: imports the document AST from its package owner
 import type {
   Block,
   DocumentAst,
@@ -536,7 +535,7 @@ const fromSections = (
       anchorId: `h-${section}`,
       type: "heading",
       level: 2,
-      role: "section-heading",
+      role: section === "thesis" ? "publisher-heading" : "section-heading",
       inlines: [{ type: "text", text: heading }],
       plainText: heading,
     });
