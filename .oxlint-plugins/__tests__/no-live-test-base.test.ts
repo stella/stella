@@ -35,9 +35,12 @@ test("rejects moving test baselines in the checkout", async () => {
         // A Git-named wrapper without a directory runs in the checkout.
         'git("show", "origin/main:x");',
         'git("show", "origin/main:x", { cwd: REPO_ROOT });',
+        // A local wrapper that spawns Git without a cwd runs in the checkout.
+        'const localGit = (...args) => Bun.spawnSync(["git", ...args]);',
+        'localGit("show", "origin/main:x");',
       ].join("\n"),
     ),
-  ).toEqual([3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 15, 17, 18, 19, 20]);
+  ).toEqual([3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 15, 17, 18, 19, 20, 22]);
 });
 
 test("allows fixture repositories and pinned reads without exemptions", async () => {
@@ -61,6 +64,11 @@ test("allows fixture repositories and pinned reads without exemptions", async ()
         'Bun.spawnSync(["git", "show", "origin/main:a.json"], fixtureOptions);',
         'git(fixture, "show", "origin/main:x");',
         'git("show", "origin/main:x", { cwd: fixture });',
+        // Wrappers whose definition captures a fixture repository.
+        'const withFixture = (verify) => { const root = mkdtempSync("fixture-"); const git = (...args) => Bun.spawnSync(["git", ...args], { cwd: root }); verify(root, git); };',
+        'withFixture((root, git) => { git("show", "origin/main:x"); git("merge-base", "origin/main", "HEAD"); });',
+        'function fixtureGit(...args) { return Bun.spawnSync(["git", ...args], { cwd: fixture }); }',
+        'fixtureGit("show", "origin/main:x");',
       ].join("\n"),
     ),
   ).toEqual([]);

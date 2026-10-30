@@ -5,10 +5,12 @@
  * cwd means the checkout; an explicit cwd is checked only when its
  * initializer derives from import.meta or process.cwd(), and an options
  * spread that may replace cwd but cannot be resolved counts as the checkout.
- * Fixture directories (mkdtemp, parameters, and their aliases) need no
- * exemptions. Arbitrary shell strings, explicit PATH overrides,
- * interprocedural cwd forwarding and dynamically built argv are outside this
- * syntactic check.
+ * A git-named wrapper without a directory argument is followed to its local
+ * definition (or the one a factory passes to a callback); an unresolved one
+ * runs in the checkout. Fixture directories (mkdtemp, parameters, and their
+ * aliases) need no exemptions. Arbitrary shell strings, explicit PATH
+ * overrides, other interprocedural cwd forwarding and dynamically built argv
+ * are outside this syntactic check.
  */
 import { eslintCompatPlugin, type Ranged } from "@oxlint/plugins";
 import { panic } from "better-result";
@@ -223,6 +225,178 @@ const overridesGitPath = (value: unknown): boolean => {
   });
 };
 
+const calleeName = (callee: unknown) => {
+  const node = unwrapExpression(callee);
+  return node?.type === "Identifier"
+    ? node.name
+    : node?.type === "MemberExpression"
+      ? getPropertyName(node.property)
+      : null;
+};
+
+const FUNCTION_TYPES = new Set([
+  "ArrowFunctionExpression",
+  "FunctionExpression",
+  "FunctionDeclaration",
+]);
+
+const descendantCalls = (root: AstNode): AstNode[] => {
+  const calls: AstNode[] = [];
+  const pending: unknown[] = [root];
+  while (pending.length > 0) {
+    const value = pending.pop();
+    if (Array.isArray(value)) {
+      pending.push(...value);
+      continue;
+    }
+    if (!isAstNode(value)) {
+      continue;
+    }
+    if (value.type === "CallExpression") {
+      calls.push(value);
+    }
+    for (const [key, child] of Object.entries(value)) {
+      if (key !== "parent") {
+        pending.push(child);
+      }
+    }
+  }
+  return calls;
+};
+
+/** The function a stable binding names: a declaration or a `const` initializer. */
+const functionDefinition = (
+  context: ScopeContext,
+  value: unknown,
+): AstNode | null => {
+  const node = resolveStable(context, value);
+  if (node !== null && FUNCTION_TYPES.has(node.type)) {
+    return node;
+  }
+  if (!isIdentifierReference(node)) {
+    return null;
+  }
+  const variable = resolveVariable(context, node);
+  const definition = variable?.defs.at(0);
+  return variable?.defs.length === 1 &&
+    definition?.type === "FunctionName" &&
+    isAstNode(definition.node)
+    ? definition.node
+    : null;
+};
+
+/** Where a Git-named wrapper without a directory argument runs Git. */
+type WrapperCheckout = "fixture" | "checkout";
+
+type WrapperOptions = {
+  context: ScopeContext;
+  callee: unknown;
+  seen: Set<unknown>;
+};
+
+// A wrapper body runs in a fixture only when every spawn in it passes an
+// explicit cwd that does not derive from the checkout.
+const functionCheckout = (
+  context: ScopeContext,
+  fn: AstNode,
+): WrapperCheckout => {
+  const spawns = descendantCalls(fn).filter((call) => {
+    const name = calleeName(call.callee);
+    return typeof name === "string" && SPAWN_CALLS.has(name);
+  });
+  const fixtureBound =
+    spawns.length > 0 &&
+    spawns.every((call) => {
+      const cwd =
+        (Array.isArray(call.arguments) ? call.arguments : [])
+          .map((arg) => cwdSetting({ context, value: arg }))
+          .find((setting) => setting.type !== "absent") ?? CWD_ABSENT;
+      return cwd.type === "set" && !checkoutPath({ context, value: cwd.value });
+    });
+  return fixtureBound ? "fixture" : "checkout";
+};
+
+// A callback parameter is bound by the factory that invokes the callback:
+// follow `factory((…, git) => …)` to the factory's `callback(…, git)` calls.
+const parameterCheckout = (
+  { context, seen }: Omit<WrapperOptions, "callee">,
+  callback: AstNode,
+  parameter: unknown,
+): WrapperCheckout => {
+  const parameters = Array.isArray(callback.params) ? callback.params : [];
+  const position = parameters.indexOf(parameter);
+  const call = isAstNode(callback.parent) ? callback.parent : null;
+  if (
+    position === -1 ||
+    call?.type !== "CallExpression" ||
+    !Array.isArray(call.arguments)
+  ) {
+    return "checkout";
+  }
+  const callbackPosition = call.arguments.indexOf(callback);
+  const factory = functionDefinition(context, call.callee);
+  const factoryParameter =
+    factory !== null && callbackPosition !== -1 && Array.isArray(factory.params)
+      ? factory.params.at(callbackPosition)
+      : undefined;
+  if (factory === null || !isIdentifierReference(factoryParameter)) {
+    return "checkout";
+  }
+  const invocations = descendantCalls(factory).filter((invocation) => {
+    const callee = unwrapExpression(invocation.callee);
+    return (
+      isIdentifierReference(callee) && callee.name === factoryParameter.name
+    );
+  });
+  const fixtureBound =
+    invocations.length > 0 &&
+    invocations.every(
+      (invocation) =>
+        Array.isArray(invocation.arguments) &&
+        wrapperCheckout({
+          context,
+          callee: invocation.arguments.at(position),
+          seen,
+        }) === "fixture",
+    );
+  return fixtureBound ? "fixture" : "checkout";
+};
+
+/**
+ * Resolves a Git-named wrapper to its local definition. One the rule cannot
+ * follow, such as an import, runs in the checkout.
+ */
+const wrapperCheckout = ({
+  context,
+  callee,
+  seen,
+}: WrapperOptions): WrapperCheckout => {
+  const node = unwrapExpression(callee);
+  if (!isIdentifierReference(node) || seen.has(node)) {
+    return "checkout";
+  }
+  seen.add(node);
+  const variable = resolveVariable(context, node);
+  const definition = variable?.defs.at(0);
+  if (
+    variable === null ||
+    definition === undefined ||
+    variable.defs.length !== 1 ||
+    !isAstNode(definition.node)
+  ) {
+    return "checkout";
+  }
+  if (definition.type === "Parameter") {
+    return parameterCheckout(
+      { context, seen },
+      definition.node,
+      definition.name,
+    );
+  }
+  const fn = functionDefinition(context, node);
+  return fn === null ? "checkout" : functionCheckout(context, fn);
+};
+
 export const createTestBasePlugin = (enforcesLine = guardEnforcesLine) =>
   eslintCompatPlugin({
     meta: { name: "no-live-test-base" },
@@ -279,13 +453,7 @@ export const createTestBasePlugin = (enforcesLine = guardEnforcesLine) =>
               if (!argv.some((arg) => /^origin\/main(?:[:.^~]|$)/u.test(arg))) {
                 return;
               }
-              const callee = unwrapExpression(node.callee);
-              const name =
-                callee?.type === "Identifier"
-                  ? callee.name
-                  : callee?.type === "MemberExpression"
-                    ? getPropertyName(callee.property)
-                    : null;
+              const name = calleeName(node.callee);
               const gitWrapper =
                 typeof name === "string" && /git$/iu.test(name);
               if (
@@ -335,6 +503,20 @@ export const createTestBasePlugin = (enforcesLine = guardEnforcesLine) =>
                     !directories.some((arg) =>
                       checkoutPath({ context, value: arg }),
                     )
+                  ) {
+                    return;
+                  }
+                  // A wrapper may carry its own directory, such as a fixture
+                  // repository captured where it is defined.
+                  if (
+                    directories.length === 0 &&
+                    gitWrapper &&
+                    !COMMAND_CALLS.has(name) &&
+                    wrapperCheckout({
+                      context,
+                      callee: node.callee,
+                      seen: new Set(),
+                    }) === "fixture"
                   ) {
                     return;
                   }
