@@ -18,6 +18,7 @@ import {
 } from "@stll/ui/dialog";
 import { CheckIcon, FileTextIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { styleSetsOptions } from "@/features/style-sets/style-set-queries";
@@ -205,8 +206,12 @@ const StyleChoice = ({
       <FileTextIcon className="text-muted-foreground size-4" />
     </div>
     <div className="min-w-0 flex-1">
-      <p className="truncate text-sm font-medium">{name}</p>
-      <p className="text-muted-foreground truncate text-xs">{description}</p>
+      <TruncatedText className="text-sm font-medium" render={<p />}>
+        {name}
+      </TruncatedText>
+      <TruncatedText className="text-muted-foreground text-xs" render={<p />}>
+        {description}
+      </TruncatedText>
     </div>
     {selected && <CheckIcon className="size-4 shrink-0" />}
   </button>

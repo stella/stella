@@ -12,6 +12,7 @@ import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ArrowLeftIcon, PlayIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import { Skeleton } from "@stll/ui/skeleton";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { RunSizeConfirmDialog } from "@/components/usage/run-size-confirm-dialog";
@@ -73,11 +74,8 @@ export const VerificationDetail = ({
           {t("avt.runs.back")}
         </Button>
         {documentName !== null && (
-          <h2
-            className="min-w-0 flex-1 truncate text-base font-semibold"
-            dir="auto"
-          >
-            {documentName}
+          <h2 className="min-w-0 flex-1 text-base font-semibold" dir="auto">
+            <TruncatedText>{documentName}</TruncatedText>
           </h2>
         )}
         {run !== undefined && (

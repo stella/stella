@@ -32,6 +32,7 @@ import {
   SEARCH_HIT_MARK,
   TextMark,
 } from "@stll/ui/text-mark";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { HighlightedText } from "@/components/workspaces/table/find-highlight";
@@ -239,9 +240,9 @@ const identityLineValue = (
   switch (field) {
     case "court":
       return (
-        <BidiText as="span" className="truncate" title={decision.court}>
+        <TruncatedText render={<BidiText as="span" />}>
           {decision.court}
-        </BidiText>
+        </TruncatedText>
       );
     case "date": {
       const date = formatDecisionDate(decision.decisionDate, format);

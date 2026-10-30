@@ -17,6 +17,7 @@ import {
   UserIcon,
   XIcon,
 } from "@stll/ui/icons";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
@@ -56,10 +57,12 @@ export const ToolDetailPanelView = ({
         )}
       >
         <h2
-          className="text-foreground min-w-0 truncate text-sm font-semibold"
+          className="text-foreground min-w-0 text-sm font-semibold"
           dir="auto"
         >
-          {labelKey ? t(labelKey) : tool.displayName}
+          <TruncatedText>
+            {labelKey ? t(labelKey) : tool.displayName}
+          </TruncatedText>
         </h2>
         {homepageUrl && (
           <a
@@ -272,9 +275,12 @@ const Field = ({ icon: Icon, ariaLabel, value }: FieldProps) => {
             aria-hidden="true"
             className="text-muted-foreground size-4 shrink-0"
           />
-          <span className="text-foreground min-w-0 truncate text-sm font-medium">
+          <TruncatedText
+            className="text-foreground text-sm font-medium"
+            hint={false}
+          >
             {value}
-          </span>
+          </TruncatedText>
         </div>
       }
     />
@@ -299,9 +305,12 @@ const AuthorField = ({ ariaLabel, authorUrl, value }: AuthorFieldProps) => {
         aria-hidden="true"
         className="text-muted-foreground size-4 shrink-0"
       />
-      <span className="text-foreground min-w-0 truncate text-sm font-medium">
+      <TruncatedText
+        className="text-foreground text-sm font-medium"
+        hint={false}
+      >
         {value}
-      </span>
+      </TruncatedText>
       {safeAuthorUrl && (
         <ExternalLinkIcon
           aria-hidden="true"

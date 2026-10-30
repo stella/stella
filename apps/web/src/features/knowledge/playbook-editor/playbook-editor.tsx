@@ -38,6 +38,7 @@ import {
 import { Step, Steps } from "@stll/ui/steps";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { useReferencePassageTexts } from "@/components/ai-suggestions/document-review-passage-texts";
@@ -1942,9 +1943,9 @@ const OutlineRail = ({
                 size="xs"
                 variant="ghost"
               >
-                <span
+                <TruncatedText
                   className={cn(
-                    "min-w-0 flex-1 truncate text-sm leading-5",
+                    "flex-1 text-sm leading-5",
                     issue
                       ? "text-foreground font-medium"
                       : "text-muted-foreground italic",
@@ -1952,7 +1953,7 @@ const OutlineRail = ({
                   dir="auto"
                 >
                   {issue || t("knowledge.playbooks.untitledPosition")}
-                </span>
+                </TruncatedText>
                 {position.mode === "graded" && (
                   <span
                     className="size-2 shrink-0 rounded-full"

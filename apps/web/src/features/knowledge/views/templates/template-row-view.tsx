@@ -17,6 +17,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@stll/ui/menu";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import Tooltip from "@/components/tooltip";
@@ -208,16 +209,16 @@ export const TemplateRowView = ({
                 onClick={actions.open}
                 type="button"
               >
-                <span className="truncate text-sm font-medium" dir="auto">
+                <TruncatedText className="text-sm font-medium" dir="auto">
                   {template.name}
-                </span>
+                </TruncatedText>
                 {categoryName !== null && (
-                  <span
-                    className="text-muted-foreground shrink-0 truncate text-xs"
+                  <TruncatedText
+                    className="text-muted-foreground shrink-0 text-xs"
                     dir="auto"
                   >
                     {categoryName}
-                  </span>
+                  </TruncatedText>
                 )}
               </button>
               {trailing}
@@ -230,9 +231,9 @@ export const TemplateRowView = ({
                   onClick={actions.open}
                   type="button"
                 >
-                  <span className="truncate text-sm font-medium" dir="auto">
+                  <TruncatedText className="text-sm font-medium" dir="auto">
                     {template.name}
-                  </span>
+                  </TruncatedText>
                 </button>
                 {trailing}
               </div>
@@ -307,7 +308,7 @@ const RowStats = ({ template, lang }: RowStatsProps) => {
           ))}
         </span>
       )}
-      <span className="truncate">{segments.join(" · ")}</span>
+      <TruncatedText>{segments.join(" · ")}</TruncatedText>
     </span>
   );
 };
@@ -343,14 +344,14 @@ const RowDescription = ({
           type="button"
         >
           <PencilLineIcon className="size-3 shrink-0" />
-          <span className="truncate">
+          <TruncatedText>
             {guidance === "" ? t("templates.describeWhenToUse") : guidance}
-          </span>
+          </TruncatedText>
         </button>
       );
     }
     if (guidance !== "") {
-      return <span className="truncate">{guidance}</span>;
+      return <TruncatedText>{guidance}</TruncatedText>;
     }
     return null;
   })();

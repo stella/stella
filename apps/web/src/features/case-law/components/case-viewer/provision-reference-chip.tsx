@@ -16,6 +16,7 @@ import {
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { ProvisionVersionBasisLabel } from "@/components/provision-version-basis";
 import type { ProvisionGroup } from "@/features/case-law/components/case-viewer/provisions-cited.logic";
@@ -143,13 +144,14 @@ export const ProvisionReferenceChip = ({
             </div>
           )}
           {wording !== undefined && wording !== null && (
-            <BidiText
-              as="span"
-              className="line-clamp-6 text-xs leading-relaxed"
+            <TruncatedText
+              className="text-xs leading-relaxed"
               lang={wording.language}
+              lines={6}
+              render={<BidiText as="span" />}
             >
               {wording.blocks.map(({ text }) => text).join("\n\n")}
-            </BidiText>
+            </TruncatedText>
           )}
           <span className="text-muted-foreground text-2xs">
             {t("caseLaw.viewer.citedDecisionPassage")}

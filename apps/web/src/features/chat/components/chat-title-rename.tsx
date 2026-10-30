@@ -6,6 +6,7 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { AiActionIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { InlineEdit } from "@/components/inline-edit";
@@ -307,12 +308,12 @@ const ChatTitleRenameSession = ({
           onClick={startEditing}
           type="button"
         >
-          <BidiText
-            as="span"
-            className="max-w-full overflow-hidden text-ellipsis whitespace-pre"
+          <TruncatedText
+            className="whitespace-pre"
+            render={<BidiText as="span" />}
           >
             {displayTitle}
-          </BidiText>
+          </TruncatedText>
         </button>
       }
     />

@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
  */
 
 import { Button } from "@stll/ui/button";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import {
   SourceLocatorLabel,
@@ -39,9 +40,9 @@ export const FactSource = ({
       onClick={() => openSourceDocument(documentId, sourceLocatorPage(locator))}
       variant="link"
     >
-      <span className="truncate">
+      <TruncatedText>
         <SourceLocatorLabel documentName={documentName} locator={locator} />
-      </span>
+      </TruncatedText>
     </Button>
   );
 };
