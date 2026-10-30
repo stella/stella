@@ -147,10 +147,15 @@ function forgetPointerType(event: React.FocusEvent<HTMLElement>): void {
   LAST_POINTER_TYPE.delete(event.currentTarget);
 }
 
+/**
+ * `max-w-full` caps the text at its container even where the container does
+ * not stretch it (a flex column with `items-start`, an inline-block): without
+ * it a nowrap line sizes to its whole text and runs past the container.
+ */
 const TRUNCATED_TEXT_LINES_CLASS = {
-  1: "block min-w-0 truncate",
-  2: "line-clamp-2 min-w-0 wrap-anywhere",
-  3: "line-clamp-3 min-w-0 wrap-anywhere",
+  1: "block min-w-0 max-w-full truncate",
+  2: "line-clamp-2 min-w-0 max-w-full wrap-anywhere",
+  3: "line-clamp-3 min-w-0 max-w-full wrap-anywhere",
 } as const satisfies Record<TruncatedTextLines, string>;
 
 /** Whether the element's text is cut by its box, in either direction. */

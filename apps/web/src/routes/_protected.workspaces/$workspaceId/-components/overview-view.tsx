@@ -42,6 +42,7 @@ import {
   TooltipPopup,
   TooltipTrigger,
 } from "@stll/ui/tooltip";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
@@ -1079,9 +1080,9 @@ const StatCard = ({ icon, label, value, sublabel, onClick }: StatCardProps) => {
       </div>
       <div className="text-xl font-semibold tabular-nums">{value}</div>
       {sublabel && (
-        <span className="text-muted-foreground truncate text-xs">
+        <TruncatedText className="text-muted-foreground text-xs">
           {sublabel}
-        </span>
+        </TruncatedText>
       )}
     </>
   );
@@ -1089,7 +1090,7 @@ const StatCard = ({ icon, label, value, sublabel, onClick }: StatCardProps) => {
   if (onClick) {
     return (
       <button
-        className="bg-card hover:bg-muted/50 flex cursor-pointer flex-col items-start gap-1.5 rounded-lg border px-4 py-3 text-start"
+        className="bg-card hover:bg-muted/50 flex min-w-0 cursor-pointer flex-col items-start gap-1.5 rounded-lg border px-4 py-3 text-start"
         onClick={onClick}
         type="button"
       >
@@ -1099,7 +1100,7 @@ const StatCard = ({ icon, label, value, sublabel, onClick }: StatCardProps) => {
   }
 
   return (
-    <div className="bg-card flex flex-col gap-1.5 rounded-lg border px-4 py-3">
+    <div className="bg-card flex min-w-0 flex-col gap-1.5 rounded-lg border px-4 py-3">
       {content}
     </div>
   );
