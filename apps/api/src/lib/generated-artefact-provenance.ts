@@ -293,6 +293,6 @@ export const writeThreadArtefactTitle = async ({
 };
 
 /** Preserve the provenance column when a reader rebuilds a complete thread row. */
-export const projectThreadArtefactProvenance = <const Value>(value: Value) => ({
-  generationProvenance: value,
-});
+export const projectThreadArtefactProvenance = (
+  row: Pick<typeof chatThreads.$inferSelect, "generationProvenance">,
+) => ({ generationProvenance: row.generationProvenance });

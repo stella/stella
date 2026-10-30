@@ -89,7 +89,7 @@ export const readEditableMessageOnTx = async ({
       activeSkill: row.thread.activeSkill,
       title: row.thread.title,
       titleSource: row.thread.titleSource,
-      ...projectThreadArtefactProvenance(row.thread.generationProvenance),
+      ...projectThreadArtefactProvenance(row.thread),
       rollbackToken: row.thread.rollbackToken,
       contextMatterIds: row.thread.contextMatterIds,
       dataWorkspaceIds: row.thread.dataWorkspaceIds,

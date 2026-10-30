@@ -1080,6 +1080,7 @@ test("generated artefact provenance reserves every object property for its exact
     'const row = { ["generationProvenance"]: value };',
     "const row = { generationProvenance: table.generationProvenance };",
     "const row = [{ nested: { generationProvenance: value } }];",
+    'import { projectThreadArtefactProvenance } from "@/api/lib/generated-artefact-provenance"; projectThreadArtefactProvenance({ generationProvenance: value });',
   ]) {
     const source = `export {};\n${property}`;
     expect(

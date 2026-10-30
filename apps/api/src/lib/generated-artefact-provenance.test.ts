@@ -9,6 +9,7 @@ import {
   copyThreadArtefactTitle,
   generateArtefact,
   projectArtefactText,
+  projectThreadArtefactProvenance,
   readArtefactOrigin,
   readArtefactText,
 } from "./generated-artefact-provenance";
@@ -253,4 +254,11 @@ test("thread copies retain the title origin without copying other slots", () => 
     copyThreadArtefactTitle({ ...source, generationProvenance: null })
       .generationProvenance,
   ).toBeNull();
+});
+
+test("provenance projection forwards stored rows rather than accepting bare values", () => {
+  const row = { generationProvenance: null };
+  expect(projectThreadArtefactProvenance(row)).toEqual(row);
+  // @ts-expect-error -- only a stored row can be forwarded; a bare value cannot construct provenance.
+  projectThreadArtefactProvenance("untrusted");
 });
