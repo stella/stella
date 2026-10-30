@@ -12,8 +12,8 @@ import {
   EmptyFieldValue,
   ErrorFieldValue,
   formatIntFieldValue,
-  getIntClassName,
   getSelectPropertyColor,
+  NumericFieldText,
   PendingSkeleton,
   PersonAvatar,
   UnsupportedFieldValue,
@@ -148,9 +148,9 @@ export const IntFieldValue = ({
   const format = useFormatter();
 
   return (
-    <span className={cn(getIntClassName(variant ?? "default"))}>
+    <NumericFieldText variant={variant ?? "default"}>
       {formatIntFieldValue({ content, format })}
-    </span>
+    </NumericFieldText>
   );
 };
 
@@ -165,13 +165,13 @@ const MoneyFieldValue = ({
   const resolvedVariant = variant ?? "default";
 
   return (
-    <span className={cn(getIntClassName(resolvedVariant))}>
+    <NumericFieldText variant={resolvedVariant}>
       {formatMoneyCents({
         amountCents: content.amountCents,
         currency: content.currency,
         locale,
       })}
-    </span>
+    </NumericFieldText>
   );
 };
 
@@ -265,12 +265,14 @@ const FileFieldValue = ({
   }
 
   return (
-    <BidiText
-      as="span"
-      className={cn(variant === "table" ? "truncate" : "text-sm")}
+    <TruncatedText
+      className={cn(variant !== "table" && "text-sm")}
+      lines={variant === "table" ? 1 : "none"}
+      render={<BidiText as="span" />}
+      tooltip={content.fileName}
     >
       <HighlightedText columnId={propertyId} text={content.fileName} />
-    </BidiText>
+    </TruncatedText>
   );
 };
 

@@ -120,9 +120,9 @@ export const IntFieldValue = ({
   const format = useFormatter();
 
   return (
-    <span className={getIntClassName(variant ?? "default")}>
+    <NumericFieldText variant={variant ?? "default"}>
       {formatIntFieldValue({ content, format })}
-    </span>
+    </NumericFieldText>
   );
 };
 
@@ -165,13 +165,13 @@ export const MoneyFieldValue = ({
   const resolvedVariant = variant ?? "default";
 
   return (
-    <span className={cn(getIntClassName(resolvedVariant))}>
+    <NumericFieldText variant={resolvedVariant}>
       {formatMoneyCents({
         amountCents: content.amountCents,
         currency: content.currency,
         locale,
       })}
-    </span>
+    </NumericFieldText>
   );
 };
 
@@ -637,14 +637,33 @@ export const getSelectPropertyColor = (
   return resolveOptionColor(color);
 };
 
-export const getIntClassName = (variant: FieldValueVariant) => {
+/**
+ * A formatted int or money value: a small chip on a card, one line cut at
+ * its container everywhere else.
+ */
+export const NumericFieldText = ({
+  children,
+  variant,
+}: {
+  children: string;
+  variant: FieldValueVariant;
+}) => {
   if (variant === "kanban") {
-    return "text-muted-foreground bg-muted/60 rounded px-1.5 py-0.5 text-xs leading-none tabular-nums";
+    return (
+      <span className="text-muted-foreground bg-muted/60 rounded px-1.5 py-0.5 text-xs leading-none tabular-nums">
+        {children}
+      </span>
+    );
   }
 
-  if (variant === "table") {
-    return "block max-w-full min-w-0 truncate text-start tabular-nums";
-  }
-
-  return "block min-w-0 max-w-full truncate text-start text-sm tabular-nums";
+  return (
+    <TruncatedText
+      className={cn(
+        "text-start tabular-nums",
+        variant === "default" && "text-sm",
+      )}
+    >
+      {children}
+    </TruncatedText>
+  );
 };
