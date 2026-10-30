@@ -280,6 +280,10 @@ if (!databaseUrl || !runPostgresTests) {
       await storeBackfilledDocument({
         decision: await claimFor(id),
         document: parsedDocument,
+        capturedRaw: {
+          sourceRawS3Key: "deferred-raw-envelope",
+          sourceRawContentType: "application/vnd.stella.case-law-raw+json",
+        },
         scopedDb,
         transfer: {
           layout: "packs",
@@ -313,9 +317,15 @@ if (!databaseUrl || !runPostgresTests) {
           normalizedS3Key: true,
           astS3Key: true,
           contentHash: true,
+          sourceRawS3Key: true,
+          sourceRawContentType: true,
         },
       });
 
+      expect(stored?.sourceRawS3Key).toBe("deferred-raw-envelope");
+      expect(stored?.sourceRawContentType).toBe(
+        "application/vnd.stella.case-law-raw+json",
+      );
       // The document reached object storage as members of one pack under
       // this decision's id and jurisdiction, not just the columns.
       expect(packedMembers).toEqual([
@@ -642,6 +652,10 @@ if (!databaseUrl || !runPostgresTests) {
       const outcome = await storeBackfilledDocument({
         decision: await claimFor(id),
         document: parsedDocument,
+        capturedRaw: {
+          sourceRawS3Key: "deferred-raw-envelope",
+          sourceRawContentType: "application/vnd.stella.case-law-raw+json",
+        },
         mode: "canonical",
         scopedDb,
         transfer: {
@@ -665,12 +679,16 @@ if (!databaseUrl || !runPostgresTests) {
             corpusMirrorStatus: true,
             fulltext: true,
             textS3Key: true,
+            sourceRawS3Key: true,
+            sourceRawContentType: true,
           },
         }),
       ).toMatchObject({
         corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
         fulltext: null,
         textS3Key: null,
+        sourceRawS3Key: null,
+        sourceRawContentType: null,
       });
     });
 
