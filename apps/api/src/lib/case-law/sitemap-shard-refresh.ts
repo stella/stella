@@ -428,12 +428,15 @@ const expandEveryCountry = async (tx: RefreshTransaction): Promise<void> => {
 /** One index descent finds the oldest remaining target, without aggregating the log. */
 export const sitemapPendingMonthsSql = (): SQL => sql`
   WITH draining AS MATERIALIZED (
-    SELECT country, year, month FROM ${caseLawSitemapDrainProgress} LIMIT 1
+    SELECT country, year, month,
+      CASE WHEN phase = 'awaiting_visibility' AND covered_before >= pg_snapshot_xmin(pg_current_snapshot())
+        THEN 'waiting' ELSE 'ready' END AS status
+    FROM ${caseLawSitemapDrainProgress} LIMIT 1
   )
-  SELECT country, year, month FROM draining
+  SELECT country, year, month, status FROM draining
   UNION ALL
   (
-    SELECT country, year, month
+    SELECT country, year, month, 'ready' AS status
     FROM ${caseLawSitemapChanges}
     WHERE NOT EXISTS (SELECT 1 FROM draining)
     ORDER BY id
@@ -442,24 +445,30 @@ export const sitemapPendingMonthsSql = (): SQL => sql`
   LIMIT 1
 `;
 
+type PendingMonth =
+  { status: "empty" | "waiting" } | { status: "ready"; target: SitemapMonth };
+
 const readPendingMonth = async ({
   db,
   budget,
-}: RunContext): Promise<SitemapMonth | undefined> =>
+}: RunContext): Promise<PendingMonth> =>
   await withAggregateTransaction(db, async (tx) => {
     await tx.execute(sql`SET TRANSACTION READ ONLY`);
     await setTransactionBudget(tx, budget);
     const row = executedRows(await tx.execute(sitemapPendingMonthsSql())).at(0);
-    return row === undefined
-      ? undefined
-      : v.parse(
-          v.object({
-            country: v.string(),
-            year: v.string(),
-            month: v.string(),
-          }),
-          row,
-        );
+    if (row === undefined) {
+      return { status: "empty" };
+    }
+    const { status, ...target } = v.parse(
+      v.object({
+        status: v.picklist(["ready", "waiting"]),
+        country: v.string(),
+        year: v.string(),
+        month: v.string(),
+      }),
+      row,
+    );
+    return status === "waiting" ? { status } : { status, target };
   });
 
 /**
@@ -470,8 +479,12 @@ const readPendingMonth = async ({
  * retirement cursor cannot skip a late commit and avoids rescanning dead entries.
  */
 type DrainMonthResult =
-  | { status: "held" }
-  | { status: "complete" | "draining"; retired: number; recounted: boolean };
+  | { status: "held" | "waiting" }
+  | {
+      status: "complete" | "draining";
+      candidatesRead: number;
+      recounted: boolean;
+    };
 
 const drainMonth = async (
   { db, budget, signal }: RunContext,
@@ -492,7 +505,10 @@ const drainMonth = async (
     let coveredBefore = progress?.coveredBefore;
     let retiredThrough = progress?.retiredThrough ?? "0";
     let recounted = false;
-    if (coveredBefore === undefined) {
+    if (
+      coveredBefore === undefined ||
+      progress?.phase === "awaiting_visibility"
+    ) {
       // Capture before counting/enumerating; every earlier transaction is in
       // every subsequent READ COMMITTED snapshot used to publish this work.
       const snapshot = executedRows(
@@ -500,10 +516,17 @@ const drainMonth = async (
         SELECT pg_snapshot_xmin(pg_current_snapshot())::text AS covered_before
       `),
       ).at(0);
-      coveredBefore = v.parse(
+      const nextBoundary = v.parse(
         v.object({ covered_before: v.string() }),
         snapshot,
       ).covered_before;
+      if (
+        coveredBefore !== undefined &&
+        BigInt(nextBoundary) <= BigInt(coveredBefore)
+      ) {
+        return { status: "waiting" };
+      }
+      coveredBefore = nextBoundary;
       if (target.country === SITEMAP_WHOLE_COUNTRY) {
         await expandEveryCountry(tx);
       } else if (target.year === SITEMAP_WHOLE_COUNTRY) {
@@ -514,36 +537,70 @@ const drainMonth = async (
       }
       await tx
         .insert(caseLawSitemapDrainProgress)
-        .values({ ...target, coveredBefore });
+        .values({ ...target, coveredBefore })
+        .onConflictDoUpdate({
+          target: [
+            caseLawSitemapDrainProgress.country,
+            caseLawSitemapDrainProgress.year,
+            caseLawSitemapDrainProgress.month,
+          ],
+          set: { coveredBefore, retiredThrough, phase: "draining" },
+        });
     }
-    const retiredRows = executedRows(
-      await tx.execute(sql`
-      WITH retiring AS MATERIALIZED (
-        SELECT xact FROM ${caseLawSitemapChanges}
-        WHERE country = ${target.country} AND year = ${target.year} AND month = ${target.month}
-          AND xact > ${retiredThrough}::xid8 AND xact < ${coveredBefore}::xid8
-        ORDER BY country, year, month, xact
-        LIMIT ${rows}
-      )
-      DELETE FROM ${caseLawSitemapChanges} AS changes
-      USING retiring WHERE changes.country = ${target.country}
-          AND changes.year = ${target.year} AND changes.month = ${target.month}
-          AND changes.xact = retiring.xact
-      RETURNING changes.id, changes.xact::text AS retired_through
-    `),
+    const retirement = v.parse(
+      v.object({
+        candidates_read: v.number(),
+        retired: v.number(),
+        retired_through: v.nullable(v.string()),
+      }),
+      executedRows(
+        await tx.execute(sql`
+        WITH RECURSIVE candidates AS (
+          (
+            SELECT id, xact, 1 AS step FROM ${caseLawSitemapChanges}
+            WHERE country = ${target.country} AND year = ${target.year} AND month = ${target.month}
+              AND xact > ${retiredThrough}::xid8
+            ORDER BY country, year, month, xact
+            LIMIT 1
+          )
+          UNION ALL
+          SELECT next.id, next.xact, candidates.step + 1
+          FROM candidates
+          CROSS JOIN LATERAL (
+            SELECT id, xact FROM ${caseLawSitemapChanges}
+            WHERE country = ${target.country} AND year = ${target.year} AND month = ${target.month}
+              AND xact > candidates.xact
+            ORDER BY country, year, month, xact
+            LIMIT 1
+          ) AS next
+          WHERE candidates.step < ${rows} AND candidates.xact < ${coveredBefore}::xid8
+        ), retired AS (
+          DELETE FROM ${caseLawSitemapChanges} AS changes
+          WHERE changes.id = ANY(ARRAY(
+            SELECT id FROM candidates WHERE xact < ${coveredBefore}::xid8
+          ))
+          RETURNING changes.xact
+        )
+        SELECT (SELECT count(*)::int FROM candidates) AS candidates_read,
+          count(*)::int AS retired, max(xact)::text AS retired_through FROM retired
+      `),
+      ).at(0),
     );
-    for (const row of retiredRows) {
-      const { retired_through: xact } = v.parse(
-        v.object({ retired_through: v.string() }),
-        row,
-      );
-      if (BigInt(xact) > BigInt(retiredThrough)) {
-        retiredThrough = xact;
-      }
+    // One ordered probe per candidate remains cheap even with stale statistics.
+    // Stop at the first uncovered transaction and charge it to the allowance.
+    // The materialized ID array also bounds the DELETE probes.
+    const candidatesRead = retirement.candidates_read;
+    const complete =
+      candidatesRead < rows || retirement.retired < candidatesRead;
+    if (retirement.retired_through !== null) {
+      retiredThrough = retirement.retired_through;
     }
-    const retired = retiredRows.length;
-    const complete = retired < rows;
-    if (complete) {
+    if (retirement.retired < candidatesRead) {
+      await tx
+        .update(caseLawSitemapDrainProgress)
+        .set({ retiredThrough, phase: "awaiting_visibility" })
+        .where(targetConditions(target));
+    } else if (complete) {
       await tx
         .delete(caseLawSitemapDrainProgress)
         .where(targetConditions(target));
@@ -554,7 +611,11 @@ const drainMonth = async (
         .where(targetConditions(target));
     }
     throwIfAborted(signal);
-    return { status: complete ? "complete" : "draining", retired, recounted };
+    return {
+      status: complete ? "complete" : "draining",
+      candidatesRead,
+      recounted,
+    };
   });
 
 /** The public index's size, read back for the capacity alarm. */
@@ -684,10 +745,14 @@ export const refreshCaseLawSitemapShards = async (
     if (changeBudget.remainingRows < 2) {
       return "immediate";
     }
-    const target = await readPendingMonth(run);
-    if (target === undefined) {
+    const pending = await readPendingMonth(run);
+    if (pending.status === "empty") {
       return "done";
     }
+    if (pending.status === "waiting") {
+      return "delayed";
+    }
+    const { target } = pending;
     changeBudget.remainingRows -= 1;
     if (progress.worked.has(monthKey(target))) {
       return "delayed";
@@ -706,11 +771,14 @@ export const refreshCaseLawSitemapShards = async (
     }
     const step = await drainMonth(run, target, changeBudget.remainingRows);
     switch (step.status) {
+      case "waiting":
+        changeBudget.remainingRows += 1;
+        return "delayed";
       case "held":
         return "delayed";
       case "complete":
       case "draining":
-        changeBudget.remainingRows -= step.retired;
+        changeBudget.remainingRows -= step.candidatesRead;
         progress.units += 1;
         if (step.recounted) {
           progress.months += 1;

@@ -944,14 +944,15 @@ case_law_decision_citation_stats_state.decision_id  safeUuid  pk,fk,not null    
 case_law_decision_citation_stats_state.status       text      default,not null  case-law.ts:3865
 ```
 
-## case_law_sitemap_drain_progress · `caseLawSitemapDrainProgress` · case-law.ts:3895 · rls
+## case_law_sitemap_drain_progress · `caseLawSitemapDrainProgress` · case-law.ts:3897 · rls
 
 A published recount's safe transaction boundary, retained while its log rows drain.
 
 ```text
-case_law_sitemap_drain_progress.country          text  not null          case-law.ts:3898
-case_law_sitemap_drain_progress.year             text  not null          case-law.ts:3899
-case_law_sitemap_drain_progress.month            text  not null          case-law.ts:3900
-case_law_sitemap_drain_progress.covered_before   xid8  not null          case-law.ts:3901
-case_law_sitemap_drain_progress.retired_through  xid8  default,not null  case-law.ts:3902
+case_law_sitemap_drain_progress.country          text  not null          case-law.ts:3900
+case_law_sitemap_drain_progress.year             text  not null          case-law.ts:3901
+case_law_sitemap_drain_progress.month            text  not null          case-law.ts:3902
+case_law_sitemap_drain_progress.covered_before   xid8  not null          case-law.ts:3903
+case_law_sitemap_drain_progress.phase            text  default,not null  case-law.ts:3904
+case_law_sitemap_drain_progress.retired_through  xid8  default,not null  case-law.ts:3905
 ```

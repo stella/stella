@@ -3891,6 +3891,8 @@ export const caseLawDecisionCitationStatsState = p.pgTable(
   ],
 );
 
+const SITEMAP_DRAIN_PHASES = ["draining", "awaiting_visibility"] as const;
+
 /** A published recount's safe transaction boundary, retained while its log rows drain. */
 export const caseLawSitemapDrainProgress = p.pgTable(
   "case_law_sitemap_drain_progress",
@@ -3899,12 +3901,20 @@ export const caseLawSitemapDrainProgress = p.pgTable(
     year: p.text().notNull(),
     month: p.text().notNull(),
     coveredBefore: xid8("covered_before").notNull(),
+    phase: p.text({ enum: SITEMAP_DRAIN_PHASES }).notNull().default("draining"),
     retiredThrough: xid8("retired_through")
       .notNull()
       .default(sql`'0'::xid8`),
   },
   (t) => [
     p.primaryKey({ columns: [t.country, t.year, t.month] }),
+    p.check(
+      "case_law_sitemap_drain_phase_check",
+      sql`${t.phase} IN (${sql.join(
+        SITEMAP_DRAIN_PHASES.map((phase) => sql`${phase}`),
+        sql`, `,
+      )})`,
+    ),
     p.pgPolicy("case_law_sitemap_drain_owner_access", {
       for: "all",
       to: "public",

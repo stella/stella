@@ -5,6 +5,8 @@
  */
 export const QUERY_PERF_TABLE_SIZES = {
   case_law_sources: "small",
+  // One row per country-month or broad invalidation target currently being retired.
+  case_law_sitemap_drain_progress: "small",
   corpus_index_generations: "small",
   corpus_index_jurisdiction_serving: "small",
   corpus_index_projection_intents: "large",

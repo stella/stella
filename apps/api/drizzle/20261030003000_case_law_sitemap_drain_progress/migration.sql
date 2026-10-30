@@ -6,6 +6,7 @@ CREATE TABLE "case_law_sitemap_drain_progress" (
   "year" text NOT NULL,
   "month" text NOT NULL,
   "covered_before" xid8 NOT NULL,
+  "phase" text DEFAULT 'draining' NOT NULL CONSTRAINT "case_law_sitemap_drain_phase_check" CHECK ("phase" IN ('draining', 'awaiting_visibility')),
   "retired_through" xid8 DEFAULT '0'::xid8 NOT NULL,
   PRIMARY KEY ("country", "year", "month")
 );--> statement-breakpoint
