@@ -2,15 +2,15 @@ import type { Reference, Variable } from "@oxlint/plugins";
 
 import {
   getPropertyName,
+  type ImportedBinding,
   isAstNode,
   isIdentifierReference,
   memberPropertyName,
-  type ImportedBinding,
   resolveImport,
   resolveImportedExpressionForEnforcement,
   resolveVariable,
-  staticStringValue,
   type ScopeContext,
+  staticStringValue,
   unwrapExpression,
 } from "./utils.ts";
 
