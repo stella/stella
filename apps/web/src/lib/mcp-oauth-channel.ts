@@ -287,7 +287,7 @@ function isLiveRedirectRecord(serialized: string): boolean {
 // Records the callback never consumed (tab closed mid-flow) would otherwise
 // outlive the session. One pass: collect keys first, since removal shifts
 // indexes.
-function sweepStaleRedirectRequests(): void {
+export function sweepStaleRedirectRequests(): void {
   requireBrowserStorage("session").andThen((storage) =>
     Result.try(() => {
       const stale: string[] = [];
@@ -306,10 +306,6 @@ function sweepStaleRedirectRequests(): void {
       }
     }),
   );
-}
-
-if (typeof window !== "undefined") {
-  sweepStaleRedirectRequests();
 }
 
 function broadcastMcpConnectionRefresh(): void {

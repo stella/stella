@@ -339,7 +339,7 @@ test("a schema-invalid redirect record is refused and removed", async () => {
   }
 });
 
-test("module load sweeps expired and invalid unread redirect records", async () => {
+test("the sweep removes expired and invalid unread redirect records", async () => {
   const storage = requireBrowserStorage("session").unwrap();
   const expiredKey = `${REDIRECT_PREFIX}expired`;
   const invalidKey = `${REDIRECT_PREFIX}invalid`;
@@ -352,7 +352,8 @@ test("module load sweeps expired and invalid unread redirect records", async () 
   storage.setItem(validKey, JSON.stringify({ expiresAt: Date.now() + 60_000 }));
   storage.setItem(unrelatedKey, "{}");
   try {
-    await import("./mcp-oauth-channel?load-sweep");
+    const { sweepStaleRedirectRequests } = await import("./mcp-oauth-channel");
+    sweepStaleRedirectRequests();
     expect(storage.getItem(expiredKey)).toBeNull();
     expect(storage.getItem(invalidKey)).toBeNull();
     expect(storage.getItem(malformedKey)).toBeNull();
