@@ -3,6 +3,7 @@ import * as v from "valibot";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { setMemberBillingAccess } from "@/api/lib/auth";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 
 export const createMemberBillingAccessHandler = (
   changeAccess: typeof setMemberBillingAccess = setMemberBillingAccess,
@@ -40,4 +41,12 @@ export const createMemberBillingAccessHandler = (
     },
   );
 
-export default createMemberBillingAccessHandler();
+const updateMemberBillingAccess = createMemberBillingAccessHandler();
+
+declareAggregateMutation(updateMemberBillingAccess, {
+  type: "independent",
+  reason:
+    "Updates one member attribute. The auth owner locks the scoped actor and target rows in ID order and rechecks authority in the same transaction; no aggregate state spans members.",
+});
+
+export default updateMemberBillingAccess;

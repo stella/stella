@@ -22,7 +22,6 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { issueDesktopAccountCredential } from "@/api/lib/business-registries/desktop/issuance";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { escapeLike } from "@/api/lib/escape-like";
 import {
   createPersonalApiKey,
   issueMachineApiKey,
@@ -125,8 +124,8 @@ if (!databaseUrl || !runPostgres) {
           }
           expect(firstWorker.pid).not.toBe(secondWorker.pid);
           const pending: ReturnType<typeof create>[] = [];
-          // Both named worker sessions must wait at the organization reservation
-          // SELECT before the control transaction releases its row lock.
+          // Observe the relation lock, independent of the lock owner's SQL
+          // spelling, before the control transaction releases its row lock.
           try {
             await controlDb.transaction(async (tx) => {
               const [locked] = await tx
@@ -145,10 +144,15 @@ if (!databaseUrl || !runPostgres) {
                   (
                     await observerDb
                       .select({
-                        waiting: sql<number>`(SELECT count(*)::integer FROM pg_stat_activity
-                      WHERE pid IN (${firstWorker.pid}, ${secondWorker.pid})
-                        AND wait_event_type = 'Lock'
-                        AND query ILIKE ${`% from "${escapeLike(getTableName(organization))}" where % for no key update`})`,
+                        waiting: sql<number>`(SELECT count(*)::integer FROM pg_stat_activity AS activity
+                      WHERE activity.pid IN (${firstWorker.pid}, ${secondWorker.pid})
+                        AND activity.wait_event_type = 'Lock'
+                        AND EXISTS (
+                          SELECT 1 FROM pg_locks AS held
+                          WHERE held.pid = activity.pid
+                            AND held.relation = ${getTableName(organization)}::regclass
+                            AND held.mode = 'RowShareLock'
+                        ))`,
                       })
                       .from(organization)
                       .where(eq(organization.id, organizationId))

@@ -455,7 +455,7 @@ if (!databaseUrl || !runPostgres) {
             }),
             session: { activeOrganizationId: organizationId },
             user: { id: userId },
-            memberRole: sessionMemberRole("member"),
+            memberRole: sessionMemberRole("member", true),
             featureAccessSnapshot: enrolledTimeBillingSnapshot({
               organizationId,
               userId,

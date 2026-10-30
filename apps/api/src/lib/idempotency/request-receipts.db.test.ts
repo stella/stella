@@ -266,7 +266,7 @@ test("HTTP monetary responses recheck current authority for fresh requests and s
           .from(contacts)
           .where(inArray(contacts.id, createdIds)),
     ),
-  ).toEqual([{ id: createdIds.at(0) }]);
+  ).toEqual(createdIds.slice(0, 1).map((id) => ({ id })));
   expect(
     await scopedDb(
       async (tx) =>

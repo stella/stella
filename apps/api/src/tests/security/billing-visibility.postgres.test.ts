@@ -27,8 +27,10 @@ import setBillingAccess from "@/api/handlers/organization-settings/members/billi
 import listApprovalQueue from "@/api/handlers/time-entries/approval-queue/list";
 import getTimeEntry from "@/api/handlers/time-entries/get";
 import listTimeEntries from "@/api/handlers/time-entries/list";
-import { checkHandlerConfigurationAdmission } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import {
+  checkHandlerConfigurationAdmission,
+  getSafeHandlerAccessMetadata,
+} from "@/api/lib/api-handlers";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { resolveMemberAuthorization } from "@/api/lib/auth";
 import { moneyPaths } from "@/api/lib/billing/money-response";
@@ -347,8 +349,11 @@ const assertMonetaryAdmission = async ({
     actor.billingAccess || actor.role === "owner" || actor.role === "admin";
   let routes = 0;
   for (const { definition, path } of apiApp.routes) {
-    const config = asTestRaw<HandlerConfig>(definition.config);
+    const config = getSafeHandlerAccessMetadata(
+      "handler" in definition ? definition.handler : undefined,
+    );
     if (
+      config === undefined ||
       config.access !== "read" ||
       !config.permissions.billing?.includes("read")
     ) {

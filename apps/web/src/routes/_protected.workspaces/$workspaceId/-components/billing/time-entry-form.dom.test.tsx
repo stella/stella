@@ -202,7 +202,7 @@ describe("TimeEntryForm activity pricing", () => {
     automatic: { type: "automatic" },
     manual: { type: "manual", draft: "275.50", currency: "EUR" },
   } as const satisfies Record<
-    TimeEntryPricingSelection["type"],
+    Exclude<TimeEntryPricingSelection["type"], "hidden">,
     TimeEntryPricingSelection
   >;
   test.each(Object.values(pricingCases))(
