@@ -6,6 +6,7 @@
     "activityRecording": "Darbība: Ierakstīšana · šodien {hours} st.",
     "activityPaused": "Darbība: Apturēta · šodien {hours} st.",
     "activityOff": "Darbība: Izslēgta",
+    "openActivity": "Atvērt darbību",
     "activityNow": "Tagad: {name}",
     "activityPause": "Apturēt ierakstīšanu",
     "activityResume": "Atsākt ierakstīšanu",

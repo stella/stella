@@ -163,7 +163,6 @@
     "newest": "Najnowsze orzeczenia",
     "noResults": "Nic nie odpowiada słowom wymaganym przez to wyszukiwanie.",
     "noResultsHint": "Spróbuj mniej lub innych słów: pojęć, których użyłoby orzeczenie, a nie zdania, w którym zadaje się pytanie.",
-    "unavailable": "Wyszukiwanie jest tymczasowo niedostępne",
     "retry": "Spróbuj ponownie",
     "headnote": "Teza",
     "textUnavailable": "Do tego orzeczenia nie ma dostępnego tekstu",
@@ -179,6 +178,14 @@
   "writes": {
     "consentNeeded": "Aby wprowadzać zmiany z aplikacji, stella potrzebuje Twojej zgody. Zaloguj się ponownie, aby jej udzielić.",
     "signInAgain": "Zaloguj się ponownie"
+  },
+  "loads": {
+    "offline": "stella nie może połączyć się z Twoim serwerem. Sprawdź połączenie i spróbuj ponownie.",
+    "outdated": "Serwer odpowiedział w formacie, którego ta wersja aplikacji nie rozumie. Zaktualizuj aplikację lub serwer, jeśli nim zarządzasz.",
+    "consent": "To logowanie nie pozwala aplikacji odczytać tych danych. Zaloguj się ponownie, aby przyznać dostęp.",
+    "session": "Twoja sesja wygasła. Zaloguj się ponownie.",
+    "server": "Na serwerze wystąpił problem (błąd {status}). Spróbuj ponownie za chwilę.",
+    "refused": "Serwer odrzucił żądanie (błąd {status})."
   },
   "timers": {
     "title": "Liczniki czasu",
