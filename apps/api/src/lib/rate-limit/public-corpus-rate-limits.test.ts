@@ -14,6 +14,7 @@ import {
   setMetricLineSinkForTesting,
 } from "@/api/lib/observability/request-metrics";
 import { createPublicCorpusRateLimitComposition } from "@/api/lib/rate-limit/public-corpus-rate-limit-composition";
+import { classifyRouteGate } from "@/api/lib/route-gates";
 import {
   getPublicCorpusClassPolicy,
   PUBLIC_CORPUS_ROUTE_POLICY,
@@ -161,6 +162,20 @@ const createApp = (binding: typeof createRedisRateLimit): TestServer =>
     publicCorpusFixtureRoutes(),
     createPublicCorpusRateLimitComposition({ createRedisBinding: binding }),
   );
+
+test("public corpus quota preparation adds no capability access gates", () => {
+  const bindings = createBindings();
+  try {
+    const composition = createPublicCorpusRateLimitComposition({
+      createRedisBinding: bindings.binding,
+    });
+    expect(
+      composition.every((stage) => classifyRouteGate(stage).kind === "budget"),
+    ).toBe(true);
+  } finally {
+    bindings.kill();
+  }
+});
 
 test("verified crawlers bypass public browse quotas while impersonators remain limited", async () => {
   testState.setConfig("RATE_LIMIT_API_API_MAX", 2);

@@ -7,7 +7,7 @@ import {
   createPublicCorpusAddressRateLimitOptions,
   createPublicCorpusGlobalRateLimitOptions,
 } from "@/api/lib/rate-limit/public-corpus-rate-limits";
-import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
+import { asRouteBudget, rateLimit } from "@/api/lib/rate-limit/rate-limit";
 import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
 import {
   createSearchCrawlerVerifier,
@@ -32,7 +32,7 @@ export const createPublicCorpusRateLimitComposition = ({
   verifyCrawlerAddress = createSearchCrawlerVerifier(),
 }: PublicCorpusRateLimitCompositionOptions = {}): readonly Middleware[] => {
   const crawlers = new WeakSet<Request>();
-  const verifyCrawler: Middleware = async (ctx, inner) => {
+  const verifyCrawler = asRouteBudget(async (ctx, inner) => {
     const routeClass = publicCorpusClassOf(ctx.routeEntry);
     if (
       (routeClass === "browse" || routeClass === "sitemap") &&
@@ -46,7 +46,7 @@ export const createPublicCorpusRateLimitComposition = ({
       crawlers.add(ctx.request);
     }
     return await inner();
-  };
+  });
   const sitemapAddress = createPublicCorpusAddressRateLimitOptions(
     "sitemap",
     createRedisBinding,
