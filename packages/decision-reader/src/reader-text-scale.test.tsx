@@ -2,11 +2,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { expect, test } from "bun:test";
 
-import { useReaderTextScale } from "./use-reader-text-scale";
-import type { ReaderTextScaleOptions } from "./use-reader-text-scale";
+import { createReaderTextScale } from "./reader-text-scale";
+import type { ReaderTextScaleOptions } from "./reader-text-scale";
 
 const ScaleRoot = ({ options }: { options?: ReaderTextScaleOptions }) => {
-  const scale = useReaderTextScale(options);
+  const scale = createReaderTextScale(options);
   return (
     <article {...scale.rootProps}>
       {String(scale.level)}:{String(scale.atMin)}:{String(scale.atMax)}

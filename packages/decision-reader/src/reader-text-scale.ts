@@ -30,7 +30,7 @@ type ReaderTextScale = {
 };
 
 /** The host owns the choice and supplies its server-renderable value. */
-export const useReaderTextScale = ({
+export const createReaderTextScale = ({
   initialScale = READER_TEXT_SCALE_DEFAULT,
   onScaleChange,
 }: ReaderTextScaleOptions = {}): ReaderTextScale => {

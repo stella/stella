@@ -24,8 +24,8 @@ const { act, cleanup, fireEvent, render, screen, waitFor, within } =
 const { IntlProvider } = await import("use-intl");
 const { TooltipProvider } = await import("@stll/ui/tooltip");
 const { ReaderBreadcrumb } = await import("./reader-breadcrumb");
-const { useReaderTextScale } =
-  await import("@stll/decision-reader/use-reader-text-scale");
+const { createReaderTextScale } =
+  await import("@stll/decision-reader/reader-text-scale");
 const { READER_TEXT_SCALE_DEFAULT } =
   await import("@stll/decision-reader/reader-text-scale.logic");
 const { default: messages } = await import("@/i18n/langs/en.json");
@@ -136,7 +136,7 @@ test("scrolling keeps the breadcrumb in a pinned row outside the viewport", asyn
     const [scale, setScale] = useState<ReaderTextScale>(
       READER_TEXT_SCALE_DEFAULT,
     );
-    const textScale = useReaderTextScale({
+    const textScale = createReaderTextScale({
       initialScale: scale,
       onScaleChange: setScale,
     });

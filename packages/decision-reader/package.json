@@ -34,12 +34,12 @@
     "./reader-message-types": "./src/reader-message-types.ts",
     "./reader-outline": "./src/reader-outline.ts",
     "./reader-search": "./src/reader-search.ts",
+    "./reader-text-scale": "./src/reader-text-scale.ts",
     "./reader-text-scale.logic": "./src/reader-text-scale.logic.ts",
     "./reader-types": "./src/reader-types.ts",
     "./reader.css": "./src/reader.css",
     "./sanitize-href": "./src/sanitize-href.ts",
-    "./source-link-policy": "./src/source-link-policy.tsx",
-    "./use-reader-text-scale": "./src/use-reader-text-scale.ts"
+    "./source-link-policy": "./src/source-link-policy.tsx"
   },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",
