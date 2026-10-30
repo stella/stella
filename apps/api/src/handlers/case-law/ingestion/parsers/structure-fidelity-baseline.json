@@ -410,6 +410,13 @@
           "excerpt": "NÁLEZ\n\nÚstavný súd Slovenskej republiky v senáte o ústavnej sťažnosti sťažovateľa\n\nanonymizované takto\n\nrozhodol:\n\nZákla"
         }
       ],
+      "pps/api/src/handlers/case-law/ingestion/parsers/__fixtures__/sk-us-pl-us-10-2014.content.json.gz (recorded document; census metadata)": [
+        {
+          "rule": "ast-missing",
+          "anchorId": "document",
+          "excerpt": "SLOVENSKÁ REPUBLIKA\n\nNÁLEZ\n\nÚstavného súdu Slovenskej republiky\n\nV mene Slovenskej republiky\n\nPL. ÚS 10/2014-78\n\nÚstavný"
+        }
+      ],
       "pps/api/src/handlers/case-law/ingestion/parsers/__fixtures__/sk-us-iii-us-265-2026.content.json.gz (recorded document; census metadata)": [
         {
           "rule": "sentence-cut",
@@ -429,13 +436,6 @@
           "rule": "ast-missing",
           "anchorId": "document",
           "excerpt": "SLOVENSKÁ REPUBLIKA\n\nUZNESENIE\n\nÚstavného súdu Slovenskej republiky\n\nPL. ÚS 24/2014-22\n\nÚstavný súd Slovenskej republiky"
-        }
-      ],
-      "pps/api/src/handlers/case-law/ingestion/parsers/__fixtures__/sk-us-pl-us-10-2014.content.json.gz (recorded document; census metadata)": [
-        {
-          "rule": "ast-missing",
-          "anchorId": "document",
-          "excerpt": "SLOVENSKÁ REPUBLIKA\n\nNÁLEZ\n\nÚstavného súdu Slovenskej republiky\n\nV mene Slovenskej republiky\n\nPL. ÚS 10/2014-78\n\nÚstavný"
         }
       ]
     },
@@ -1261,20 +1261,6 @@
           "excerpt": "ie społeczne wnioskodawcy – w najkorzystniejszym wariancie - ⏎ z przyjęciem do rozważań - wynagrodzeń :"
         }
       ],
-      "pl-courts-dump-day.json.gz:40": [
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-4",
-          "excerpt": "zpoznaniu w dniu 22 marca 2018 r., na posiedzeniu niejawnym, ⏎ sprawy z odwołania A. N."
-        }
-      ],
-      "pl-courts-dump-day.json.gz:41": [
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-8",
-          "excerpt": "zpoznaniu w dniu 22 marca 2018 r., na posiedzeniu niejawnym, ⏎ sprawy z odwołania (...) DRUKARNIA spółki z ograniczoną o"
-        }
-      ],
       "pl-courts-dump-day.json.gz:50": [
         {
           "rule": "sentence-cut",
@@ -1327,20 +1313,6 @@
           "rule": "sentence-cut",
           "anchorId": "p-45",
           "excerpt": "enie biegłego A. M. (1) ma uwiarygodnić wniosek końcowy jego ⏎ opinii?;"
-        }
-      ],
-      "pl-courts-dump-day.json.gz:58": [
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-9",
-          "excerpt": "Sekurytyzacyjnego Funduszu Inwestycyjnego Zamkniętego we W., ⏎ przeciwko E. W."
-        }
-      ],
-      "pl-courts-dump-day.json.gz:59": [
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-9",
-          "excerpt": "Sekurytyzacyjnego Funduszu Inwestycyjnego Zamkniętego we W., ⏎ przeciwko A. M.,"
         }
       ],
       "pl-courts-dump-day.json.gz:67": [
@@ -2145,181 +2117,6 @@
           "rule": "sentence-cut",
           "anchorId": "p-1",
           "excerpt": "-notice/legal-notice.html?locale=en#5.%20Cookies%20notice\" } ⏎ document.addEventListener('DOMContentLoaded', function ()"
-        }
-      ]
-    },
-    "pl-kis": {
-      "pl-kis-listing-01-ind-2008.json:0": [
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-7",
-          "excerpt": "lowania zobowiązań związanych z zakupem opon od producentów, ⏎ reklamę,"
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-10",
-          "excerpt": "owych technologii związanych z obsługą sklepu internetowego, ⏎ zmniejszenie finansowania działalności kapitałami obcymi,"
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-13",
-          "excerpt": " związane z przekształceniem spółki jawnej w spółkę akcyjną, ⏎ doradztwo finansowe związane z przygotowaniem prospektu e"
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-14",
-          "excerpt": "wo finansowe związane z przygotowaniem prospektu emisyjnego, ⏎ usługi biura maklerskiego,"
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-16",
-          "excerpt": "widenta związane z badaniem sprawozdania finansowego spółki, ⏎ opłaty sądowe, skarbowe i notarialne,"
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-18",
-          "excerpt": "awnych związany z podniesieniem kapitału zakładowego spółki, ⏎ wydatki administracyjne związane z drukiem, publikacją i "
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-19",
-          "excerpt": "ne z drukiem, publikacją i dystrybucją prospektu emisyjnego, ⏎ ogłoszenia wymagane przepisami prawa,"
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-34",
-          "excerpt": " skróconej wersji, koszty oferowania papierów wartościowych, ⏎ stanowiły wartości niematerialne i prawne podlegające amo"
-        }
-      ],
-      "pl-kis-listing-01-ind-superseded.json:0": [
-        {
-          "rule": "stray-leading-number",
-          "anchorId": "p-6",
-          "excerpt": "27 kwietnia 2026 r. wpłynął Pani wniosek o wydanie interpretacji indywidualnej. Treść wniosku jest następująca:"
-        }
-      ],
-      "pl-kis-listing-01-ind.json:0": [
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-44",
-          "excerpt": "ym niż uprawniony odbiorca w rozumieniu tych przepisów, albo ⏎ 3a) uprawnionym odbiorcy dokonującym nabycia wewnątrzwspó"
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-55",
-          "excerpt": "go od paliw silnikowych lub gazu z innego tytułu niż import, ⏎ 1a) 10 dni od dnia powstania obowiązku zapłaty - w przypa"
-        }
-      ],
-      "pl-kis-listing-02-ind-zm.json:0": [
-        {
-          "rule": "stray-leading-number",
-          "anchorId": "p-4",
-          "excerpt": "27 sierpnia 2020 roku do Dyrektora Krajowej Informacji Skarbowej wpłynął wniosek o wydanie interpretacji indywidualnej, "
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-67",
-          "excerpt": "a 12, 00‑916 Warszawa (art. 47 § 1 i art. 54 § 1 ww. ustawy) ⏎ lub"
-        }
-      ],
-      "pl-kis-document-05-objas.pdf": [
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-1",
-          "excerpt": "ochodowym od osób fizycznych-Rozdział 2-art. 10-ust. 1-pkt 7 ⏎ 1 [PIT] Ustawa o podatku dochodowym od osób fizycznych-Ro"
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-3",
-          "excerpt": " ochronna 1. Przyczyna wydania objaśnień i czego one dotyczą ⏎ 2 Objaśnienia podatkowe omawiają zasady opodatkowania prz"
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-6",
-          "excerpt": "akiego należy zakwalifikować przychody z waloryzacji środków ⏎ pieniężnych na takich rachunkach, - momentu powstania prz"
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-7",
-          "excerpt": "u przez płatnika podatku od przychodów z waloryzacji środków ⏎ pieniężnych znajdujących się na takich rachunkach. Celem "
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-12",
-          "excerpt": "a lub inwestowania, prowadzonych przez podmiot uprawniony na ⏎ 3"
-        },
-        {
-          "rule": "page-number-block",
-          "anchorId": "p-13",
-          "excerpt": "3"
-        },
-        {
-          "rule": "page-number-block",
-          "anchorId": "p-20",
-          "excerpt": "5"
-        }
-      ],
-      "pl-kis-listing-06-wis.json:0": [
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-35",
-          "excerpt": "blicznej, są klasyfikowane według Nomenklatury scalonej (CN) ⏎ lub klasyfikacji wydanych na podstawie przepisów o statys"
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-59",
-          "excerpt": "ą tych produktów jest to, że powracają one do stanu ciekłego ⏎ lub półciekłego, w temperaturze otoczenia zbliżonej do 0 "
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-78",
-          "excerpt": "ręczenia decyzji o zmianie WIS albo decyzji o uchyleniu WIS, ⏎ albo"
-        }
-      ],
-      "pl-kis-listing-09-wis-uch.json:0": [
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-74",
-          "excerpt": " owocowych, z orzechów i warzywnych, objętych pozycją 2009”, ⏎ czy do pozycji"
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-111",
-          "excerpt": " usług podobnych wobec siebie, które w następstwie odesłania ⏎ do kodów CN, mógłby podlegać odmiennemu traktowaniu dla p"
-        }
-      ],
-      "pl-kis-listing-17-opw.json:0": [
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-3",
-          "excerpt": "akres wniosku o opinię w sprawie opodatkowania wyrównawczego ⏎ 1 stycznia 2026 r. wpłynął wniosek z 1 stycznia 2026 r. o"
-        },
-        {
-          "rule": "stray-leading-number",
-          "anchorId": "p-4",
-          "excerpt": "1 stycznia 2026 r. wpłynął wniosek z 1 stycznia 2026 r. o opinię w sprawie opodatkowania wyrównawczego. Przedmiotowy wni"
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-133",
-          "excerpt": "ion in the Transition Year and subsequent years. Rather than ⏎ requiring an MNE Group to undertake complex calculations "
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-212",
-          "excerpt": "f a Constituent Entity for the Fiscal Year shall be equal to ⏎ the current tax expense accrued in its Financial Accounti"
-        }
-      ],
-      "pl-kis-listing-18-opw-odm.json:0": [
-        {
-          "rule": "stray-leading-number",
-          "anchorId": "p-4",
-          "excerpt": "29 stycznia 2026 r. wpłynął wniosek z 28 stycznia 2026 r. o opinię w sprawie opodatkowania wyrównawczego. 3 czerwca 2026"
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-74",
-          "excerpt": "iałający w reżimie prawnym ułatwiającym pozyskanie kapitału, ⏎ mogłyby zostać osiągnięte niezależnie od tego, czy powoła"
         }
       ]
     },

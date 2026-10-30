@@ -2,10 +2,10 @@
   "type": "parser",
   "name": "PL_COURTS",
   "key": "pl-courts",
-  "parserVersion": 18,
+  "parserVersion": 19,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",
-    "reason": "Re-read printed title order and opening, operative and signature roles from stored source; roles and block ordering have no independent feature storage."
+    "reason": "Re-read common-court opening recitals as whole sentences when the editor lays them out across adjacent lines."
   }
 }

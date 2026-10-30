@@ -96,6 +96,32 @@ const textLeaves = (blocks: readonly Block[]): string[] => {
 };
 
 describe("source whitespace", () => {
+  test.each([
+    [
+      "czynności, o których mowa w art. 5, są klasyfikowane według Nomenklatury scalonej (CN)",
+      "lub klasyfikacji wydanych na podstawie przepisów o statystyce publicznej.",
+    ],
+    [
+      "Podstawową właściwością tych produktów jest to, że powracają one do stanu ciekłego",
+      "lub półciekłego, w temperaturze otoczenia zbliżonej do 0 °C.",
+    ],
+    [
+      "1) następującym po dniu doręczenia decyzji o zmianie WIS albo decyzji o uchyleniu WIS,",
+      "albo",
+    ],
+  ])(
+    "a word-processor line break does not cut its Polish sentence",
+    (above, below) => {
+      const { documentAst } = parse(`${above} <br>${below}`);
+      expect(documentAst.blocks.map((block) => block.plainText)).toContain(
+        `${above} ${below}`,
+      );
+      expect(documentAst.blocks.map((block) => block.plainText)).not.toContain(
+        below,
+      );
+    },
+  );
+
   test("the fixtures carry the export's line wraps inside paragraphs", async () => {
     // A wrap between two words, inside one element: what the parse must fold.
     expect(await htmlOf(WRAPPED)).toMatch(/\p{L}\n\p{L}/u);

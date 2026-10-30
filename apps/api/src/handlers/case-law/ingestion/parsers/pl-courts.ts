@@ -113,6 +113,8 @@ type ParsePlDecisionInput = {
  */
 export const PL_DECISION_MARKUP = {
   COMMON_COURT: "common-court",
+  /** A word-processor export where one `<br>` wraps a line and two end a paragraph. */
+  PRINTED_LINES: "printed-lines",
 } as const;
 
 type PlDecisionMarkup =
@@ -1122,6 +1124,53 @@ const parseNode = (
   }
 };
 
+/**
+ * A word-processor export whose body is text separated by `<br>` elements.
+ * One break is a printed line wrap; an empty line is the paragraph boundary.
+ */
+const parsePrintedLineChildren = (
+  $: cheerio.CheerioAPI,
+  state: ParserState,
+  root: cheerio.Cheerio<AnyNode>,
+): void => {
+  let run: AnyNode[] = [];
+  const flush = (): void => {
+    if (run.length === 0) {
+      return;
+    }
+    const wrapper = $("<span></span>").append($(run).clone());
+    run = [];
+    wrapper.find("br").replaceWith(" ");
+    parseParagraphElement($, state, wrapper);
+  };
+  const contents = root.contents().toArray();
+  for (const [index, node] of contents.entries()) {
+    if (!isTag(node) || node.tagName.toLowerCase() !== "br") {
+      run.push(node);
+      continue;
+    }
+    const next = contents[index + 1];
+    if (
+      next !== undefined &&
+      isTag(next) &&
+      next.tagName.toLowerCase() === "br"
+    ) {
+      flush();
+      continue;
+    }
+    const previous = contents[index - 1];
+    if (
+      previous !== undefined &&
+      isTag(previous) &&
+      previous.tagName.toLowerCase() === "br"
+    ) {
+      continue;
+    }
+    run.push(node);
+  }
+  flush();
+};
+
 /** A marker no paragraph took, kept as a paragraph of its own. */
 const flushPendingMarker = (state: ParserState): void => {
   const marker = state.pendingMarker;
@@ -1212,10 +1261,51 @@ function parseChildren(
     parseCommonCourtChildren($, state, root);
     return;
   }
+  if (state.markup === PL_DECISION_MARKUP.PRINTED_LINES) {
+    parsePrintedLineChildren($, state, root);
+    return;
+  }
   root.contents().each((_, node) => {
     parseNode($, state, node);
   });
 }
+
+const RECITAL_CONTINUATION_RE =
+  /^(?:sprawy\s+z|przeciwko|przy\s+udziale|o\s+|na\s+skutek)\b/iu;
+
+/** Join a common-court recital that the editor laid out over several lines. */
+const joinOpeningRecitalLines = (state: ParserState): void => {
+  const joined: Block[] = [];
+  for (const block of state.blocks) {
+    const previous = joined.at(-1);
+    if (
+      state.markup === PL_DECISION_MARKUP.COMMON_COURT &&
+      previous?.type === "paragraph" &&
+      block.type === "paragraph" &&
+      previous.role === "intro" &&
+      block.role === "intro" &&
+      /[,]$/u.test(previous.plainText) &&
+      RECITAL_CONTINUATION_RE.test(block.plainText)
+    ) {
+      appendTextInline(previous.inlines, " ");
+      previous.inlines.push(...block.inlines);
+      previous.plainText = `${previous.plainText} ${block.plainText}`;
+      continue;
+    }
+    joined.push(block);
+  }
+  state.blocks = joined;
+};
+
+const renumberBlocks = (state: ParserState): void => {
+  for (const [index, block] of state.blocks.entries()) {
+    const order = index + 1;
+    block.id = `b${order}`;
+    block.anchorId = `${BLOCK_ANCHOR_PREFIX[block.type]}-${order}`;
+  }
+  state.blockIndex = state.blocks.length;
+  state.blockIdCounter = state.blocks.length;
+};
 
 const plainTextParagraphsToInlines = (text: string): Inline[] => {
   const lines = text.split("\n");
@@ -1376,6 +1466,8 @@ export const parsePlDecisionContent = (
     parsePlainText(state, normalizedContent);
   }
 
+  joinOpeningRecitalLines(state);
+
   if (!state.sawDecisionTitle && state.fallbackDecisionTitle !== undefined) {
     const title = state.fallbackDecisionTitle;
     pushHeading(state, 1, title, "decision-title", textInline(title));
@@ -1389,14 +1481,10 @@ export const parsePlDecisionContent = (
     if (title === POLISH_DECISION_TITLE_MAP.uzasadnienie) {
       state.section = "reasoning";
     }
-    for (const [index, block] of state.blocks.entries()) {
-      const order = index + 1;
-      block.id = `b${order}`;
-      block.anchorId = `${BLOCK_ANCHOR_PREFIX[block.type]}-${order}`;
-    }
-    state.blockIndex = state.blocks.length;
-    state.blockIdCounter = state.blocks.length;
   }
+
+  // Joining a source line removes a block even when the title was explicit.
+  renumberBlocks(state);
 
   let sawTerminalSignature = false;
   for (const block of state.blocks.toReversed()) {

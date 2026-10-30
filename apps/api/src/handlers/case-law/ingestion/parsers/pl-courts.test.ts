@@ -9,7 +9,10 @@ import {
   PL_KIO_HTML_BUDGET,
   PlKioHtmlBudgetError,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-kio-response-budget";
-import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
+import {
+  parsePlDecisionContent,
+  PL_DECISION_MARKUP,
+} from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 
 // Spies created in a test stay attached if it fails before restoring them.
 afterEach(() => {
@@ -58,6 +61,37 @@ const flattenInlineText = (inlines: Inline[]): string =>
     .join("");
 
 describe("parsePlDecisionContent", () => {
+  test.each([
+    [
+      "Sąd Apelacyjny w Szczecinie III Wydział Pracy i Ubezpieczeń Społecznych w osobie sędziego SA Urszuli Iwanowskiej, po rozpoznaniu w dniu 22 marca 2018 r., na posiedzeniu niejawnym,",
+      '<strong>sprawy z odwołania </strong><span class="anon-block">A. N.</span>',
+    ],
+    [
+      "po rozpoznaniu w dniu 22 marca 2018 r., na posiedzeniu niejawnym,",
+      '<strong>sprawy z odwołania </strong><span class="anon-block"> (...) DRUKARNIA spółki z ograniczoną odpowiedzialnością</span> w <span class="anon-block">S.</span>',
+    ],
+  ])(
+    "a common-court opening recital stays whole across its printed lines",
+    (opening, continuation) => {
+      const { documentAst } = parsePlDecisionContent(
+        baseInput(`<p>${opening}</p><p>${continuation}</p>`, {
+          markup: PL_DECISION_MARKUP.COMMON_COURT,
+        }),
+      );
+      const recital = documentAst.blocks.find((block) =>
+        block.plainText.startsWith(opening),
+      );
+      expect(recital?.plainText).toBe(
+        `${opening} ${cheerio.load(continuation).text()}`.replace(/\s+/gu, " "),
+      );
+      expect(
+        documentAst.blocks.some((block) =>
+          block.plainText.startsWith("sprawy z odwołania"),
+        ),
+      ).toBe(false);
+    },
+  );
+
   test("keeps a Polish court's printed order and assigns roles from its text", () => {
     const content = `
       <p><strong>II CSKP 1456/22</strong></p>
