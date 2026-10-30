@@ -7,6 +7,7 @@ import {
   MCP_OAUTH_PROTOCOL_SCOPES,
   type OAuthConsentClient,
 } from "@stll/api-contract";
+import { CLI_LOOPBACK_CLIENT_METADATA } from "@stll/cli/client-metadata-document";
 
 import { CACHE_CONTROL_HEADER, PRIVATE_CACHE_CONTROL } from "@/api/http/cache";
 import { getAuth } from "@/api/lib/auth";
@@ -106,6 +107,28 @@ const acceptanceCases = Object.values(OAUTH_CLIENT_REGISTRATION_FIXTURES).map(
 );
 
 describe("OAuth dynamic client registration", () => {
+  test("reserves first-party display names for the exact public native CLI registration", async () => {
+    for (const name of [
+      "stella",
+      "stella CLI",
+      "stella-cli",
+      "STELLA_CLI",
+      "stеlla",
+      "stella\u200bcli",
+    ]) {
+      const response = await registerClient({
+        client_name: name,
+        redirect_uris: ["https://unrelated.example/callback"],
+      });
+      expect(response.status).toBe(400);
+    }
+    const response = await registerClient({
+      ...CLI_LOOPBACK_CLIENT_METADATA,
+      client_name: "stella CLI",
+    });
+    expect(response.status).toBe(201);
+  });
+
   test("requires a session for consent details", async () => {
     const response = await getAuth().handler(
       new Request(

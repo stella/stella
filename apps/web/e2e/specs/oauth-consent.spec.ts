@@ -158,7 +158,7 @@ test("OAuth consent keeps its decision in view on a laptop and a phone", async (
   }
 });
 
-test("OAuth consent allows and declines through the top-level callback", async ({
+test("OAuth consent skips loopback completion and keeps hosted completion", async ({
   context,
   page,
 }) => {
@@ -182,6 +182,14 @@ test("OAuth consent allows and declines through the top-level callback", async (
       redirectUri: callbackUrl,
     });
     await page.route(`${callbackUrl}**`, async (route) => {
+      if (decision === "allow" && destination === "loopback") {
+        // Navigation is paused here, so this still inspects the consent document.
+        await expect(
+          page.getByRole("heading", {
+            name: `Connected to Consent browser test ${id}`,
+          }),
+        ).toHaveCount(0);
+      }
       await route.fulfill({
         contentType: "text/html",
         body: "<!doctype html><title>OAuth callback received</title><p>Callback received</p>",
@@ -199,7 +207,7 @@ test("OAuth consent allows and declines through the top-level callback", async (
       })
       .click();
 
-    if (decision === "allow") {
+    if (decision === "allow" && destination === "hosted") {
       await expect(
         page.getByRole("heading", {
           name: `Connected to Consent browser test ${id}`,
@@ -219,7 +227,11 @@ test("OAuth consent allows and declines through the top-level callback", async (
 
     const callbackParams = callback.searchParams;
     if (decision === "allow") {
-      expect(Date.now() - clickedAt).toBeGreaterThanOrEqual(800);
+      if (destination === "hosted") {
+        expect(Date.now() - clickedAt).toBeGreaterThanOrEqual(800);
+      } else {
+        expect(callbackParams.get("organization_name")).not.toBeNull();
+      }
       expect(callbackParams.get("code")).not.toBeNull();
     } else {
       expect(callbackParams.get("code")).toBeNull();

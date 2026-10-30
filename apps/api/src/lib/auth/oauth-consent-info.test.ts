@@ -232,7 +232,7 @@ describe("OAuth consent app details", () => {
       [MOBILE_DOCUMENT, "stella_ios"],
       [
         "https://stella.example/v1/mcp/oauth/cli-client-metadata.json",
-        "stella",
+        "stella_cli",
       ],
     ] as const) {
       expect(documentClient(clientId), clientId).toEqual({
@@ -302,7 +302,14 @@ describe("OAuth consent app details", () => {
   });
 
   test("an unverified client remains unverified when claiming a product name", () => {
-    for (const name of ["Claude", "Claude Code", "ChatGPT", "stella"]) {
+    for (const name of [
+      "Claude",
+      "Claude Code",
+      "ChatGPT",
+      "stella",
+      "stella CLI",
+      "stella-cli",
+    ]) {
       expect(
         redirectClient(["https://connector.example/callback"], name),
       ).toEqual({ type: "unverified", name });

@@ -271,6 +271,7 @@ export const RESULT_BOUNDARY_GLOBS = [
   "apps/api/src/lib/auth/demo-account-hooks.ts",
   "apps/api/src/lib/auth/review-account-plugin.ts",
   "apps/api/src/lib/auth/request-budget-hooks.ts",
+  "apps/api/src/lib/auth/oauth-registration-name-hooks.ts",
   // Better Auth consumes adapter failures through Promise rejection.
   "apps/api/src/lib/auth/registration-adapter.ts",
   // The OAuth provider consumes a client discovery's refusal as a rejected
