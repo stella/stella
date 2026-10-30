@@ -105,7 +105,10 @@ const STATE_BYTES = 32;
 const randomBase64Url = (byteLength: number): string => {
   const bytes = new Uint8Array(byteLength);
   crypto.getRandomValues(bytes);
-  return Buffer.from(bytes).toString("base64url");
+  return Buffer.from(bytes).toBase64({
+    alphabet: "base64url",
+    omitPadding: true,
+  });
 };
 
 export const createPkce = () => {
@@ -176,6 +179,7 @@ const requestToken = async ({
       if (!response.ok) {
         throw new HandlerError({
           status: 502,
+          code: "internal_error",
           message: `Microsoft token endpoint returned HTTP ${response.status}`,
         });
       }
@@ -188,6 +192,7 @@ const requestToken = async ({
     catch: (cause): HandlerError<502> =>
       new HandlerError({
         status: 502,
+        code: "internal_error",
         message: HandlerError.is(cause)
           ? cause.message
           : "Failed to reach the Microsoft token endpoint",

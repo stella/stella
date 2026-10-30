@@ -16,6 +16,7 @@ import { enqueueFlowStep } from "@/api/lib/flows/flow-run-queue";
 import type { FlowTriggerSource } from "@/api/lib/flows/flow-types";
 import { buildFlowRunRows } from "@/api/lib/flows/start-flow-run";
 import { isMemberRole } from "@/api/lib/member-roles";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -143,7 +144,13 @@ export const startAutomatedFlowRun = async (
     catch: (cause) => cause,
   });
   if (Result.isError(definitionResult)) {
-    captureError(definitionResult.error, logContext);
+    captureError(
+      definitionResult.error,
+      handlerErrorContext(
+        "flows.startAutomatedFlowRun.definitionResult_error",
+        logContext,
+      ),
+    );
     logger.error("flow.automated_run_start_failed", {
       ...logContext,
       "error.type": errorTag(definitionResult.error),
@@ -178,7 +185,13 @@ export const startAutomatedFlowRun = async (
     catch: (cause) => cause,
   });
   if (Result.isError(authorization)) {
-    captureError(authorization.error, logContext);
+    captureError(
+      authorization.error,
+      handlerErrorContext(
+        "flows.startAutomatedFlowRun.authorization_error",
+        logContext,
+      ),
+    );
     logger.error("flow.automated_run_start_failed", {
       ...logContext,
       "error.type": errorTag(authorization.error),
@@ -220,7 +233,13 @@ export const startAutomatedFlowRun = async (
       catch: (cause) => cause,
     });
     if (Result.isError(insertResult)) {
-      captureError(insertResult.error, logContext);
+      captureError(
+        insertResult.error,
+        handlerErrorContext(
+          "flows.createAndEnqueue.insertResult_error",
+          logContext,
+        ),
+      );
       logger.error("flow.automated_run_start_failed", {
         ...logContext,
         "error.type": errorTag(insertResult.error),
@@ -248,7 +267,13 @@ export const startAutomatedFlowRun = async (
       catch: (cause) => cause,
     });
     if (Result.isError(enqueued)) {
-      captureError(enqueued.error, logContext);
+      captureError(
+        enqueued.error,
+        handlerErrorContext(
+          "flows.createAndEnqueue.enqueued_error",
+          logContext,
+        ),
+      );
       logger.error("flow.automated_run_start_failed", {
         ...logContext,
         "error.type": errorTag(enqueued.error),

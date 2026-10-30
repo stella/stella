@@ -120,8 +120,15 @@ const GeneratedVisualFrame = ({
         }
         themeFailureReported.current = true;
         getAnalytics().captureError(error, {
-          type: "detached",
-          operation: "generated-visual.read-theme",
+          fingerprintKey: "GeneratedVisualFrame.report:failure",
+          scope: {
+            type: "handler",
+            handlerId: "GeneratedVisualFrame.report:failure",
+          },
+          context: {
+            type: "detached",
+            operation: "generated-visual.read-theme",
+          },
         });
       },
     }),
@@ -231,7 +238,7 @@ const GeneratedVisualFrame = ({
           })(),
           {
             context: "generated-visual.open-decision",
-            failureMessage: t("common.error"),
+            failureMessage: t("errors.actionFailed"),
           },
         );
         return;

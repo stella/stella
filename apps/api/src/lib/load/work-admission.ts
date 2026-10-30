@@ -1,7 +1,11 @@
-// parser-output-unchanged: declares bounded work failure grades without changing admitted work or parser results.
+// parser-output-unchanged: failure grades and fingerprint dimensions preserve admitted work, error payloads and parser results.
 import { panic, Result, TaggedError, UnhandledException } from "better-result";
 
-import { declareFailureClass, type FailureReason } from "@stll/errors";
+import {
+  declareFailureClass,
+  declareFingerprintFields,
+  type FailureReason,
+} from "@stll/errors";
 import { Temporal } from "@stll/time";
 
 import { LIMITS } from "@/api/lib/limits";
@@ -28,6 +32,7 @@ export class WorkRefusal extends TaggedError("WorkRefusal")<{
 }> {
   static {
     declareFailureClass(this, ({ reason }) => WORK_REFUSAL_REASON[reason]);
+    declareFingerprintFields(this, ["reason"]);
   }
 }
 

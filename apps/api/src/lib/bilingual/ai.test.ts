@@ -21,6 +21,10 @@ import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemet
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
+beforeEach(() => {
+  generateObjectMock.mockClear();
+});
+
 type GenerateOptions = {
   analytics: TanStackAIAnalyticsCallbacks;
   messages: { content: { content: string; type: "text" }[] }[];

@@ -362,7 +362,10 @@ const seed = async (db: GatedTestDb) => {
       },
     });
     const encode = (value: object) =>
-      Buffer.from(JSON.stringify(value)).toString("base64url");
+      Buffer.from(JSON.stringify(value)).toBase64({
+        alphabet: "base64url",
+        omitPadding: true,
+      });
     const token = `${encode({ alg: "none", typ: "JWT" })}.${encode({
       sub: actor,
       scope: "stella:read",
@@ -528,7 +531,7 @@ describe.skipIf(!enabled)("verification point-read audit", () => {
     await withFixture(async (f) => {
       const dispatch =
         await CAPABILITY_DISPATCH["lists.verifications.get"].load();
-      expect(dispatch.default).toBe(get);
+      expect(dispatch["default"]).toBe(get);
       const rest = await f.invoke();
       const mcp = await f.capabilityRead();
       expect(mcp.isError).not.toBe(true);

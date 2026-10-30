@@ -12,7 +12,7 @@ One translation of a bilingual document (a two-column table laid out by folio).
 bilingual_translation_runs.id                        pUuid               pk,not null       bilingual.ts:57
 bilingual_translation_runs.organization_id           safeOrganizationId  fk,not null       bilingual.ts:58
 bilingual_translation_runs.workspace_id              safeWorkspaceId     fk,not null       bilingual.ts:61
-bilingual_translation_runs.entity_id                 safeUuid            not null          bilingual.ts:66  Version and field ids preserve the historical input while the entity FK makes permanent document deletion erase every copied source/target row.
+bilingual_translation_runs.entity_id                 safeUuid            fk,not null       bilingual.ts:66  Version and field ids preserve the historical input while the entity FK makes permanent document deletion erase every copied source/target row.
 bilingual_translation_runs.file_field_id             safeUuid            not null          bilingual.ts:67
 bilingual_translation_runs.entity_version_id         safeUuid            not null          bilingual.ts:68
 bilingual_translation_runs.source_lang               varchar             not null          bilingual.ts:69
@@ -38,7 +38,7 @@ One row of the bilingual table inside a run: its disposition as confirmed by the
 bilingual_translation_rows.id                  pUuid               pk,not null       bilingual.ts:159
 bilingual_translation_rows.organization_id     safeOrganizationId  fk,not null       bilingual.ts:160
 bilingual_translation_rows.workspace_id        safeWorkspaceId     fk,not null       bilingual.ts:163
-bilingual_translation_rows.run_id              safeUuid            not null          bilingual.ts:168  Named explicitly: the generated name would exceed Postgres's 63-byte identifier limit and be truncated.
+bilingual_translation_rows.run_id              safeUuid            fk,not null       bilingual.ts:168  Named explicitly: the generated name would exceed Postgres's 63-byte identifier limit and be truncated.
 bilingual_translation_rows.row_id              varchar             not null          bilingual.ts:171  The folio row handle: the right-column paragraph's `w14:paraId`, or the paragraph's own id for a paragraph inside a kept table.
 bilingual_translation_rows.ordinal             integer             not null          bilingual.ts:172
 bilingual_translation_rows.kind                text                not null          bilingual.ts:173

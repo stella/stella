@@ -66,6 +66,7 @@ import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryptio
 import { convertToPdf } from "@/api/lib/files/gotenberg";
 import { isMemberRole } from "@/api/lib/member-roles";
 import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -183,17 +184,23 @@ export const initReportExportWorker = ({ db }: BullMqWorkerContext) => {
     if (job) {
       markExportFailed(job.data, toExportErrorMessage(error)).catch(
         (markError: unknown) => {
-          captureError(markError, {
-            exportId: job.data.exportId,
-            workspaceId: job.data.workspaceId,
-          });
+          captureError(
+            markError,
+            handlerErrorContext("reports.initReportExportWorker.markError", {
+              exportId: job.data.exportId,
+              workspaceId: job.data.workspaceId,
+            }),
+          );
         },
       );
     }
-    captureError(error, {
-      exportId: job?.data.exportId ?? "",
-      workspaceId: job?.data.workspaceId ?? "",
-    });
+    captureError(
+      error,
+      handlerErrorContext("reports.initReportExportWorker", {
+        exportId: job?.data.exportId ?? "",
+        workspaceId: job?.data.workspaceId ?? "",
+      }),
+    );
     logger.error("report_export.failed", {
       exportId: job?.data.exportId ?? "",
       "error.type": errorTag(error),
@@ -230,9 +237,12 @@ export const initReportExportWorker = ({ db }: BullMqWorkerContext) => {
     intervalMs: NOTIFICATION_RECONCILE_INTERVAL_MS,
     run: runNotificationReconcile,
     onError: (error) => {
-      captureError(error, {
-        operation: "report_export.notification.reconcile",
-      });
+      captureError(
+        error,
+        handlerErrorContext("reports.closeNotificationReconcile", {
+          operation: "report_export.notification.reconcile",
+        }),
+      );
     },
   });
 

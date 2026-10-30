@@ -49,9 +49,24 @@ import { sessionOptions } from "@/lib/auth-queries";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { APIError, toAPIError } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
-import { notifyUserError } from "@/lib/errors/user-toast";
-import { useQueryView } from "@/lib/use-query-view";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
+import { queryView } from "@/lib/query-view.logic";
 import { downloadFile } from "@/lib/utils";
+
+const ERROR_CAPTURE = {
+  enable: {
+    fingerprintKey: "EnableTwoFactorDialog:failure",
+    scope: { type: "handler", handlerId: "EnableTwoFactorDialog:failure" },
+  },
+  verify: {
+    fingerprintKey: "EnableTwoFactorDialog:failure-2",
+    scope: { type: "handler", handlerId: "EnableTwoFactorDialog:failure-2" },
+  },
+  backup: {
+    fingerprintKey: "EnableTwoFactorDialog:failure-3",
+    scope: { type: "handler", handlerId: "EnableTwoFactorDialog:failure-3" },
+  },
+} as const;
 
 const TOTP_LENGTH = 6;
 const HTTP_BAD_REQUEST = 400;
@@ -85,7 +100,7 @@ export const TwoFactorCard = () => {
   // as distinct from "no password needed": starting a password-gated action
   // before the account type is known could otherwise fire the plugin call
   // without a password for a credential account.
-  const accountsView = useQueryView(accountsQuery, { isEmpty: () => false });
+  const accountsView = queryView(accountsQuery, { isEmpty: () => false });
   const requiresPassword =
     accountsView.type === "items" && accountsView.refetchError === undefined
       ? accountsView.items.some(
@@ -102,7 +117,7 @@ export const TwoFactorCard = () => {
     ...authCapabilitiesOptions,
     enabled: isAnyDialogOpen,
   });
-  const capabilitiesView = useQueryView(capabilitiesQuery);
+  const capabilitiesView = queryView(capabilitiesQuery);
   const canEmailConfirmationCode =
     capabilitiesView.type === "items" &&
     capabilitiesView.refetchError === undefined
@@ -251,7 +266,7 @@ const showManagementMutationError = (
     return;
   }
   if (error.status === HTTP_BAD_REQUEST) {
-    notifyUserError(undefined, invalidCodeMessage);
+    notifyUserProblem(invalidCodeMessage);
     return;
   }
   const authError = toAuthClientError(error);
@@ -360,7 +375,7 @@ const EnableTwoFactorDialog = ({
         error,
         APIError.is(error) ? error.message : t("errors.actionFailed"),
       );
-      analytics.captureError(error);
+      analytics.captureError(error, ERROR_CAPTURE.enable);
     },
   });
 
@@ -409,7 +424,7 @@ const EnableTwoFactorDialog = ({
       // rejected password can be retyped).
       setCode("");
       setStep("confirm");
-      analytics.captureError(error);
+      analytics.captureError(error, ERROR_CAPTURE.verify);
     },
   });
 
@@ -441,7 +456,7 @@ const EnableTwoFactorDialog = ({
       });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, ERROR_CAPTURE.backup);
     },
   });
 
@@ -684,7 +699,10 @@ const DisableTwoFactorDialog = ({
         error,
         APIError.is(error) ? error.message : t("errors.actionFailed"),
       );
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "DisableTwoFactorDialog:failure",
+        scope: { type: "handler", handlerId: "DisableTwoFactorDialog:failure" },
+      });
     },
   });
 
@@ -731,7 +749,13 @@ const DisableTwoFactorDialog = ({
       // requests a fresh one instead of leaving an input nothing can satisfy.
       setCode("");
       setStep("confirm");
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "DisableTwoFactorDialog:failure-2",
+        scope: {
+          type: "handler",
+          handlerId: "DisableTwoFactorDialog:failure-2",
+        },
+      });
     },
   });
 
@@ -876,7 +900,13 @@ const RegenerateBackupCodesDialog = ({
         error,
         APIError.is(error) ? error.message : t("errors.actionFailed"),
       );
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "RegenerateBackupCodesDialog:failure",
+        scope: {
+          type: "handler",
+          handlerId: "RegenerateBackupCodesDialog:failure",
+        },
+      });
     },
   });
 
@@ -928,7 +958,13 @@ const RegenerateBackupCodesDialog = ({
       // requests a fresh one instead of leaving an input nothing can satisfy.
       setCode("");
       setStep("confirm");
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "RegenerateBackupCodesDialog:failure-2",
+        scope: {
+          type: "handler",
+          handlerId: "RegenerateBackupCodesDialog:failure-2",
+        },
+      });
     },
   });
 

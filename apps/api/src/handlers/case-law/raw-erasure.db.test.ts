@@ -42,6 +42,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";
+import { redactCaseLawDecisionWithSupplementHolders } from "@/api/handlers/case-law/ingestion/supplement-erasure";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -173,37 +174,39 @@ const observe = async ({
   file,
   order,
 }: ObserveOptions) =>
-  await processDecision({
-    input: plainTextIngestionResult({
-      caseNumber,
-      ...(sourceDocumentId === undefined ? {} : { sourceDocumentId }),
-      court: "Ústavný súd Slovenskej republiky",
-      country: "SVK",
-      language: "sk",
-      fulltext: "Rozhodnutie o veci samej.",
-      metadata: {},
-      textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-      rawHash: sha256(`${listing}|${file ?? ""}`),
-      documentAst: EMPTY_AST,
-      sourceRaw: encodeSourceRawEnvelope({ listing }),
-      ...(file === undefined
-        ? {}
-        : {
-            sourceRawObjects: {
-              "document-file": {
-                bytes: bytesOf(file),
-                contentType: "application/pdf",
+  (
+    await processDecision({
+      input: plainTextIngestionResult({
+        caseNumber,
+        ...(sourceDocumentId === undefined ? {} : { sourceDocumentId }),
+        court: "Ústavný súd Slovenskej republiky",
+        country: "SVK",
+        language: "sk",
+        fulltext: "Rozhodnutie o veci samej.",
+        metadata: {},
+        textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+        rawHash: sha256(`${listing}|${file ?? ""}`),
+        documentAst: EMPTY_AST,
+        sourceRaw: encodeSourceRawEnvelope({ listing }),
+        ...(file === undefined
+          ? {}
+          : {
+              sourceRawObjects: {
+                "document-file": {
+                  bytes: bytesOf(file),
+                  contentType: "application/pdf",
+                },
               },
-            },
-          }),
-      sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-    }),
-    sourceId,
-    scopedDb,
-    observedAt: new Date(),
-    observationOrder: order,
-    refresh: DECISION_REFRESH.ALWAYS,
-  });
+            }),
+        sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+      }),
+      sourceId,
+      scopedDb,
+      observedAt: new Date(),
+      observationOrder: order,
+      refresh: DECISION_REFRESH.ALWAYS,
+    })
+  ).unwrap();
 
 const rowOf = async (decisionId: SafeId<"caseLawDecision">) =>
   (
@@ -434,6 +437,22 @@ test("erasing a retired decision removes the canonical and retired copies", asyn
       { id: retiredId, fulltext: null },
     ]),
   );
+});
+
+test("a retired decision address acquires its canonical holder claim", async () => {
+  const { canonicalId, retiredId } = await seedLinkedPair();
+  await db.delete(caseLawDecisions).where(eq(caseLawDecisions.id, retiredId));
+  expect(await rowOf(retiredId)).toBeUndefined();
+  const result = await redactCaseLawDecisionWithSupplementHolders({
+    decisionId: retiredId,
+    scopedDb,
+    leaseWaitMs: 0,
+  });
+  expect(result.unwrap()).toMatchObject({
+    redaction: { type: "redacted" },
+    holders: [],
+  });
+  expect((await rowOf(canonicalId))?.redactedAt).not.toBeNull();
 });
 
 test("erasing through a retired id whose row is gone still erases its canonical group", async () => {
@@ -1228,27 +1247,31 @@ describe("moving decisions out of the older layout", () => {
       .where(eq(caseLawDecisions.id, legacy.decisionId));
 
     // What a replay hands the pipeline: the stored envelope, no bytes.
-    await processDecision({
-      input: plainTextIngestionResult({
-        caseNumber: "VIII. ÚS 1/2026",
-        sourceDocumentId: "replayed",
-        court: "Ústavný súd Slovenskej republiky",
-        country: "SVK",
-        language: "sk",
-        fulltext: "Rozhodnutie o veci samej.",
-        metadata: {},
-        textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-        rawHash: sha256(envelope),
-        documentAst: EMPTY_AST,
-        sourceRaw: envelope,
-        sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-      }),
-      sourceId,
-      scopedDb,
-      observedAt: new Date(),
-      observationOrder: 1n,
-      refresh: DECISION_REFRESH.ALWAYS,
-    });
+    (
+      await processDecision({
+        input: plainTextIngestionResult({
+          caseNumber: "VIII. ÚS 1/2026",
+          sourceDocumentId: "replayed",
+          court: "Ústavný súd Slovenskej republiky",
+          country: "SVK",
+          language: "sk",
+          fulltext: "Rozhodnutie o veci samej.",
+          metadata: {},
+          textFields: absentDecisionTextFields(
+            TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+          ),
+          rawHash: sha256(envelope),
+          documentAst: EMPTY_AST,
+          sourceRaw: envelope,
+          sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+        }),
+        sourceId,
+        scopedDb,
+        observedAt: new Date(),
+        observationOrder: 1n,
+        refresh: DECISION_REFRESH.ALWAYS,
+      })
+    ).unwrap();
 
     const named = await namedBy(legacy.decisionId);
     expect(named).toHaveLength(2);

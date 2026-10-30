@@ -8,9 +8,11 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import { captureError } from "@/api/lib/analytics/capture";
 import { toSafeId } from "@/api/lib/branded-types";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createFeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import type { LogRecord } from "@/api/lib/observability/logger";
 import {
   resetLogSinkForTesting,
@@ -20,6 +22,7 @@ import { McpGatewayLoadError } from "@/api/mcp/errors";
 import type { GatewayDispatchResult } from "@/api/mcp/gateway/dispatch-call";
 import { gatewayLoadErrorResult } from "@/api/mcp/gateway/external-tools";
 import { withInputNotes } from "@/api/mcp/input-normalization";
+import { observeMcpToolCall } from "@/api/mcp/observe-tool-call";
 import { listMcpResources, readMcpResource } from "@/api/mcp/resources";
 import { createMcpHttpRequestHandler } from "@/api/mcp/server-core";
 import { scopeToolResultToSurface } from "@/api/mcp/surface-tool-mentions";
@@ -132,6 +135,43 @@ const expectOutcome = (expected: {
 };
 
 describe("MCP calls emit one private-data-free outcome across dispatch paths", () => {
+  test("shared captures retain canonical tool scope without dynamic name values", async () => {
+    const context = contextFor();
+    const run = async () => {
+      captureError(
+        new Error("Shared tool failure"),
+        handlerErrorContext("test.sharedToolFailure"),
+      );
+      return { content: [] };
+    };
+    for (const toolName of ["list_matters", "save_time_entry"]) {
+      await observeMcpToolCall({ context, mode: "default", toolName, run });
+    }
+    const first = analytics.exceptions();
+    expect(first).toHaveLength(2);
+    expect(first.at(0)?.properties["$exception_fingerprint"]).toContain(
+      "list_matters",
+    );
+    expect(first.at(1)?.properties["$exception_fingerprint"]).toContain(
+      "save_time_entry",
+    );
+    expect(first.at(0)?.properties["$exception_fingerprint"]).not.toBe(
+      first.at(1)?.properties["$exception_fingerprint"],
+    );
+    await observeMcpToolCall({
+      context,
+      mode: "default",
+      toolName: `mcp__${PRIVATE_TEXT}__private_tool`,
+      run,
+    });
+    const events = analytics.exceptions();
+    expect(events).toHaveLength(3);
+    expect(events.at(2)?.properties["$exception_fingerprint"]).toContain(
+      "external_mcp",
+    );
+    expect(JSON.stringify(events)).not.toContain(PRIVATE_TEXT);
+  });
+
   test("parallel calls sharing their context and tool each emit one record", async () => {
     const context = contextFor();
     const results = await Promise.all(
@@ -422,6 +462,7 @@ describe("MCP calls emit one private-data-free outcome across dispatch paths", (
     internalFailureResult: () =>
       internalFailureResult(
         new HandlerError({ status: 500, message: PRIVATE_TEXT }),
+        "mcp.internalErrorBuilders.failure",
       ),
     structuredErrorResult: () =>
       structuredErrorResult({
@@ -473,6 +514,7 @@ describe("MCP calls emit one private-data-free outcome across dispatch paths", (
     const business = serializeToolResult(
       internalFailureResult(
         new HandlerError({ status: 400, message: "invalid date" }),
+        "mcp.business.failure",
       ),
     );
     expect(getMcpToolCallOutcome(business)).toBe("tool_error");

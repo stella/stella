@@ -42,6 +42,18 @@ up as a reviewable diff in the PR. The guards include:
   (`.oxlint-plugins/require-loader-prefetch.ts`): static, not baseline-based;
   flags the waterfall pattern the network baseline would otherwise only catch
   after the fact.
+- **Read budgets** (`apps/api/src/lib/db/read-budgets.ts`, measured by
+  `apps/api/src/tests/query-perf`): absolute shared-buffer budgets per call
+  of a hot statement and per run of a scheduled job, checked with
+  `EXPLAIN (ANALYZE, BUFFERS)` on a corpus fixture in production's shape.
+  A scheduled job is measured by running its registered task, at one corpus
+  size and at twice that size, and must read the same pages at both. Every
+  declared job states its `reads` (a budget, `"load-governed"` for batches
+  under the backfill runtime, or a shrink-only ledger entry), and every MCP
+  tool has a budget or a ledger entry. A job that needs more than the
+  ungoverned ceiling per run batches through the load governor instead.
+  Nothing is compared with an earlier recording; raise a budget only with a
+  reason that derives the new number.
 - **Per-iteration I/O checks**: `scripts/db-await-in-loop.ts` (type-aware,
   CI) flags a database call awaited once per loop iteration (the N+1),
   recognizing handles by type rather than name and suppressed with
@@ -83,17 +95,18 @@ the deterministic before/after values and the rejected mutation in the PR.
 
 The performance coverage inventories are:
 
-| Census                                              | Test or check                                                                                         | Ledger or coverage inventory                                                               |
-| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| Mounted API v1 routes                               | `apps/api/src/tests/read-scaling/census.test.ts`                                                      | `apps/api/src/tests/read-scaling/api-scaling-ledger.json`                                  |
-| Curated MCP tools                                   | `apps/api/src/tests/read-scaling/census.test.ts`                                                      | `apps/api/src/tests/read-scaling/mcp-scaling-ledger.json`                                  |
-| Repeated SQL fingerprints per request and call site | `apps/api/src/lib/db-query-counter.test.ts`; `scripts/check-repeated-sql-fingerprints-ledger.test.ts` | `apps/api/src/lib/observability/repeated-sql-fingerprints.json`                            |
-| Web route smoke list                                | `apps/web/e2e/specs/route-smoke.spec.ts` (`assertSmokeRouteCoverage`)                                 | `apps/web/e2e/helpers/smoke-route-defs.ts` (`INTENTIONALLY_NOT_SMOKED`)                    |
-| Query performance registry                          | `apps/api/src/tests/query-perf/query-perf.test.ts`; `scripts/query-perf-baseline.test.ts`             | `apps/api/src/tests/query-perf/registry.ts`; `apps/api/src/tests/query-perf/baseline.json` |
-| Create-form single-flight coverage                  | `apps/web/src/hooks/single-flight-census.test.ts`                                                     | Same file (`UNGUARDED_CREATE_FORMS`)                                                       |
+| Census                                              | Test or check                                                                                         | Ledger or coverage inventory                                                              |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Mounted API v1 routes                               | `apps/api/src/tests/read-scaling/census.test.ts`                                                      | `apps/api/src/tests/read-scaling/api-scaling-ledger.json`                                 |
+| Curated MCP tools                                   | `apps/api/src/tests/read-scaling/census.test.ts`                                                      | `apps/api/src/tests/read-scaling/mcp-scaling-ledger.json`                                 |
+| Repeated SQL fingerprints per request and call site | `apps/api/src/lib/db-query-counter.test.ts`; `scripts/check-repeated-sql-fingerprints-ledger.test.ts` | `apps/api/src/lib/observability/repeated-sql-fingerprints.json`                           |
+| Web route smoke list                                | `apps/web/e2e/specs/route-smoke.spec.ts` (`assertSmokeRouteCoverage`)                                 | `apps/web/e2e/helpers/smoke-route-defs.ts` (`INTENTIONALLY_NOT_SMOKED`)                   |
+| Read budgets (scheduled jobs, MCP tools)            | `apps/api/src/lib/db/read-budgets.test.ts`; `apps/api/src/tests/query-perf/query-perf.test.ts`        | `apps/api/src/lib/db/read-budgets.ts`; `apps/api/src/lib/db/read-budgets-unmeasured.json` |
+| Create-form single-flight coverage                  | `apps/web/src/hooks/single-flight-census.test.ts`                                                     | Same file (`UNGUARDED_CREATE_FORMS`)                                                      |
 
-The existing web route inventory and query baseline retain their recorded-budget
-policies below; they do not replace the two-size scaling measurement. The query
+The existing web route inventory retains its recorded-budget policy below; it
+does not replace the two-size scaling measurement. Read budgets are absolute
+and are never recorded. The query
 plan gate measures shared blocks; its execution-time limit remains a hang guard.
 
 ## The Core Norm

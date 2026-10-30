@@ -30,6 +30,7 @@ import {
   readThreadStoredContentSendModeOnTx,
   THREAD_STORED_CONTENT_SEND_MODE,
 } from "@/api/lib/chat/thread-stored-content-send-mode";
+import { readChatCopyProjection } from "@/api/lib/chat/withdrawn-copies";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { holdMemberAccessOnTx } from "@/api/lib/db/member-access-hold";
 import { errorTag } from "@/api/lib/errors/utils";
@@ -43,6 +44,7 @@ import { sanitizeMemoryContent } from "@/api/lib/memory/memory-content-safety";
 import { createMemoryDedupIdentity } from "@/api/lib/memory/memory-dedup";
 import { isMemoryExtractionConsentValid } from "@/api/lib/memory/memory-extraction-consent";
 import { buildExtractionPrompt } from "@/api/lib/memory/memory-extraction-prompt";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { runScheduledBackgroundWork } from "@/api/lib/rate-limit/queued-action-admission";
 import { createRootRunActor } from "@/api/lib/root-scoped-db";
 import type { RootRunActor } from "@/api/lib/root-scoped-db";
@@ -346,17 +348,29 @@ const recordMemoryExtractionFailure = async ({
       .where(eq(chatThreadCompactions.id, compactionId));
   });
   if (Result.isError(stampResult)) {
-    captureError(stampResult.error, {
-      feature: "memory.extractor.failure_stamp",
-      compactionId,
-    });
+    captureError(
+      stampResult.error,
+      handlerErrorContext(
+        "tasks.recordMemoryExtractionFailure.stampResult_error",
+        {
+          feature: "memory.extractor.failure_stamp",
+          compactionId,
+        },
+      ),
+    );
     logger.warn("scheduler.memory_extractor_failure_stamp_failed", {
       "error.type": errorTag(stampResult.error),
       "compaction.id": compactionId,
     });
   }
 
-  captureError(error, { feature, compactionId });
+  captureError(
+    error,
+    handlerErrorContext("tasks.recordMemoryExtractionFailure", {
+      feature,
+      compactionId,
+    }),
+  );
   logger.warn(logEvent, {
     "error.type": errorTag(error),
     "compaction.id": compactionId,
@@ -501,7 +515,19 @@ const extractCandidates = async ({
 }: ExtractCandidatesOptions): Promise<
   Result<ExtractedCandidate[] | null, unknown>
 > => {
-  const summary = compaction.summaryMarkdown.slice(0, SUMMARY_MAX_CHARS);
+  const summary = await actor.inputDb(async (tx) => {
+    const { projection, subjectByThread } = await readChatCopyProjection({
+      tx,
+      threadIds: [compaction.threadId],
+      values: compaction.summaryMarkdown,
+    });
+    return (
+      projection.marker(
+        compaction.summaryMarkdown,
+        subjectByThread.get(compaction.threadId),
+      ) ?? compaction.summaryMarkdown
+    ).slice(0, SUMMARY_MAX_CHARS);
+  });
   // The summary is lossy by design; the messages it replaced are still in
   // the database, so mine those too. A failure here degrades to
   // summary-only extraction rather than losing the whole compaction.
@@ -519,9 +545,12 @@ const extractCandidates = async ({
     catch: (error: unknown) => error,
   });
   if (Result.isError(transcriptResult)) {
-    captureError(transcriptResult.error, {
-      feature: "memory.extractor.transcript",
-    });
+    captureError(
+      transcriptResult.error,
+      handlerErrorContext("tasks.extractCandidates.transcriptResult_error", {
+        feature: "memory.extractor.transcript",
+      }),
+    );
   }
   const transcript = Result.isError(transcriptResult)
     ? ""

@@ -16,7 +16,17 @@ export type CachePolicy =
   | { readonly kind: "private"; readonly maxAge: number }
   | { readonly kind: "public"; readonly maxAge: number; readonly swr?: number };
 
-export const NO_CACHE: CachePolicy = { kind: "none" };
+/**
+ * What a route declares for every answer it gives: kept publicly, or never
+ * kept. A private lifetime depends on the answer (a found icon, not a failure),
+ * so only the handler chooses it, through `ctx.set.cache`.
+ */
+export type RouteCachePolicy = Extract<
+  CachePolicy,
+  { kind: "none" | "public" }
+>;
+
+export const NO_CACHE: RouteCachePolicy = { kind: "none" };
 
 export const publicCacheControl = (
   cache: Extract<CachePolicy, { kind: "public" }>,

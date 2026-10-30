@@ -52,7 +52,7 @@ afterEach(() => {
 type Transaction = Parameters<Parameters<GatedTestDb["transaction"]>[0]>[0];
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
-const credential = Buffer.alloc(32, 0x2a).toString("hex");
+const credential = Buffer.alloc(32, 0x2a).toHex();
 
 const withStoredValues = async (
   connectionUrl: string,
@@ -453,9 +453,7 @@ if (!databaseUrl || !enabled) {
           throw new Error("registration fixture missing");
         }
         const replacement = (
-          await encryptAgentClientCredential(
-            Buffer.alloc(32, 0x2b).toString("hex"),
-          )
+          await encryptAgentClientCredential(Buffer.alloc(32, 0x2b).toHex())
         ).unwrap();
         await db.transaction(
           async (tx) =>
@@ -493,7 +491,7 @@ if (!databaseUrl || !enabled) {
         if (!stored) {
           throw new Error("registration fixture missing");
         }
-        const alternateKey = Buffer.alloc(32, 0x2b).toString("hex");
+        const alternateKey = Buffer.alloc(32, 0x2b).toHex();
         const child = Bun.spawn({
           cmd: [
             process.execPath,
@@ -520,7 +518,7 @@ if (!databaseUrl || !enabled) {
             ...process.env,
             CONTENT_ENCRYPTION_KEY:
               process.env["CONTENT_ENCRYPTION_KEY"] === alternateKey
-                ? Buffer.alloc(32, 0x2c).toString("hex")
+                ? Buffer.alloc(32, 0x2c).toHex()
                 : alternateKey,
             STORED_AGENT_TEST_VALUE: stored.clientSecretSink,
           },

@@ -3,6 +3,10 @@ import { isNotNull } from "drizzle-orm";
 
 import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 
+import {
+  CASE_LAW_INGESTION_FAILURES_SOURCE_RECORD_UIDX,
+  onlineUniqueIndexTarget,
+} from "@/api/db/online-unique-indexes";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawIngestionFailures } from "@/api/db/schema";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
@@ -46,6 +50,7 @@ import type {
   CorpusPackBatch,
   CorpusPackBatchOutcomes,
 } from "@/api/lib/legal-search/corpus-pack-batch";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink, gradeFailure } from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
 import { logger } from "@/api/lib/observability/logger";
@@ -147,10 +152,10 @@ const logIngestionFailures = async (
         .insert(caseLawIngestionFailures)
         .values(identified)
         .onConflictDoNothing({
-          target: [
-            caseLawIngestionFailures.sourceId,
-            caseLawIngestionFailures.recordIdentity,
-          ],
+          target: onlineUniqueIndexTarget(
+            CASE_LAW_INGESTION_FAILURES_SOURCE_RECORD_UIDX,
+            caseLawIngestionFailures,
+          ),
           where: isNotNull(caseLawIngestionFailures.recordIdentity),
         });
     }
@@ -340,11 +345,14 @@ const rejectDecision = ({
       "error.detail": wrappedErrorDetail(error),
     }),
   );
-  captureError(error, {
-    adapterKey,
-    caseNumber: input.caseNumber,
-    cursor: cursor ?? "",
-  });
+  captureError(
+    error,
+    handlerErrorContext("pipeline.rejectDecision", {
+      adapterKey,
+      caseNumber: input.caseNumber,
+      cursor: cursor ?? "",
+    }),
+  );
 
   if (error instanceof TimeoutError) {
     tally.settlements.push({
@@ -449,10 +457,13 @@ const settlePack = ({
         "error.detail": wrappedErrorDetail(flushed.error),
       }),
     );
-    captureError(flushed.error, {
-      adapterKey,
-      step: "applyDecisionBatch.corpusPackFlush",
-    });
+    captureError(
+      flushed.error,
+      handlerErrorContext("pipeline.settlePack.flushed_error", {
+        adapterKey,
+        step: "applyDecisionBatch.corpusPackFlush",
+      }),
+    );
     for (const indexes of queued.values()) {
       for (const index of indexes) {
         unsettlePayload(tally, index);
@@ -537,7 +548,6 @@ export const applyDecisionBatch = async (
   const pack = openCorpusPackBatch({
     scopedDb,
     transfer: corpus.transfer,
-    ...(signal === undefined ? {} : { signal }),
   });
   // Which record queued each decision's payloads, so every one is checked
   // against the pack's answer rather than only those the pack returned.
@@ -545,13 +555,17 @@ export const applyDecisionBatch = async (
   let current = 0;
   const corpusBatch: CorpusPackBatch = {
     enqueue: (entry) => {
+      const enqueued = pack.enqueue(entry);
+      if (enqueued.isErr()) {
+        return enqueued;
+      }
       const indexes = queued.get(entry.decisionId);
       if (indexes === undefined) {
         queued.set(entry.decisionId, [current]);
       } else {
         indexes.push(current);
       }
-      pack.enqueue(entry);
+      return enqueued;
     },
     flush: pack.flush,
   };
@@ -576,7 +590,7 @@ export const applyDecisionBatch = async (
         continue;
       }
       const { decision: input, recordIdentity } = record;
-      const processed = await Result.tryPromise({
+      const attempt = await Result.tryPromise({
         try: async () =>
           // db-await-in-loop: per-decision ingest pipeline: identity locks, corpus write, upsert, citations, ordered per observation
           await processDecision(
@@ -590,11 +604,19 @@ export const applyDecisionBatch = async (
               corpus,
               corpusBatch,
               polarityRules,
+              ...(signal === undefined ? {} : { signal }),
             },
             resolveSourceContract,
           ),
         catch: (cause) => cause,
       });
+      const processed = attempt.andThen((outcome) => outcome);
+      // A caller cancellation leaves the record for replay. An operation's
+      // error without that signal remains a decision failure.
+      if (signal?.aborted) {
+        halt = { type: "aborted" };
+        break;
+      }
       halt = Result.isError(processed)
         ? rejectDecision({
             tally,
@@ -610,6 +632,7 @@ export const applyDecisionBatch = async (
       }
     }
   } finally {
+    // Drain queued payloads independently of the admission signal.
     // The pack goes out whatever stopped the loop: the decisions already
     // processed have rows waiting for their payloads. One whose settlement
     // did not land holds the caller's progress, so the batch is applied

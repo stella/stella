@@ -49,6 +49,10 @@ import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { richChatParts } from "./__fixtures__/rich-chat-parts";
 
+beforeEach(() => {
+  anonymizeTextFieldsMock.mockClear();
+});
+
 const anonymizeTextFieldsMock = mock(
   async ({
     fields,
@@ -540,9 +544,7 @@ describe("chat third-party anonymization boundary", () => {
       throw new TypeError("Expected prepared attachment part");
     }
     expect(getChatAttachmentUrl(part)).toContain(
-      Buffer.from("[CUSTOM_1] notes for [PERSON_1]", "utf-8").toString(
-        "base64",
-      ),
+      Buffer.from("[CUSTOM_1] notes for [PERSON_1]", "utf-8").toBase64(),
     );
   });
 

@@ -25,7 +25,7 @@ import {
   organizationSettingsKeys,
   organizationSettingsOptions,
 } from "@/lib/organization/settings-queries";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 import { useSettingsMutation } from "@/routes/_protected.admin/-hooks/use-settings-mutation";
 
 const PATTERN_PRESETS = [
@@ -47,7 +47,7 @@ export const MatterNumberingCard = () => {
       userId,
     }),
   );
-  const settingsView = useQueryView(settingsQuery);
+  const settingsView = queryView(settingsQuery);
   const settings =
     settingsView.type === "items" ? settingsView.items : undefined;
 
@@ -108,12 +108,16 @@ const MatterNumberingCardBody = ({
         ),
       ),
   });
-  const previewView = useQueryView(previewQuery);
+  const previewView = queryView(previewQuery);
   const previewData =
     previewView.type === "items" ? previewView.items : undefined;
   const preview = previewData?.preview ?? null;
 
   const numberingToggle = useSettingsMutation({
+    exceptionScope: {
+      type: "handler",
+      handlerId: "MatterNumberingCardBody.numberingToggle.useSettingsMutation",
+    },
     mutationFn: async (enabled: boolean) =>
       unwrapApiResponse(
         await api["organization-settings"].post({
@@ -126,6 +130,10 @@ const MatterNumberingCardBody = ({
   });
 
   const updateMutation = useSettingsMutation({
+    exceptionScope: {
+      type: "handler",
+      handlerId: "MatterNumberingCardBody.updateMutation.useSettingsMutation",
+    },
     mutationFn: async () =>
       unwrapApiResponse(
         await api["organization-settings"].post({

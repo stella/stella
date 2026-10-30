@@ -11,8 +11,9 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { parseDeterministicDate } from "@/lib/deterministic-date";
+import { queryView } from "@/lib/query-view.logic";
 import { organizationAccessOptions } from "@/lib/usage-queries";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 const ACCESS_REFRESH_INTERVAL_MS = 60_000;
 
@@ -24,7 +25,7 @@ export const PaymentRetryBanner = () => {
   const [now, setNow] = useState(
     () => Temporal.Now.instant().epochMilliseconds,
   );
-  const accessView = useQueryView(
+  const accessView = queryView(
     useChromeQuery({
       ...organizationAccessOptions({ organizationId: activeOrganizationId }),
       enabled: env.VITE_FEATURE_USAGE && canUseChat,
@@ -42,7 +43,7 @@ export const PaymentRetryBanner = () => {
       },
     }),
   );
-  useQueryViewError(accessView);
+  useQueryViewError(accessView, "PaymentRetryBanner:query");
   const data = accessView.type === "items" ? accessView.items : undefined;
   const retryEndsAt =
     data?.paymentRetry.status === "payment_retry"

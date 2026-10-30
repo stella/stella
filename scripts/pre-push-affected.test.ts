@@ -10,6 +10,8 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { waitForExternalState } from "@stll/property-testing/external-state";
+
 import {
   changedPaths,
   descendantPids,
@@ -204,11 +206,11 @@ describe("pre-push affected checks", () => {
           .trim();
         return state !== "" && !state.startsWith("Z");
       };
-      const settled = Date.now() + 5000;
-      while (running() && Date.now() < settled) {
-        await Bun.sleep(50);
-      }
-      expect(running()).toBe(false);
+      await waitForExternalState({
+        description: `grandchild ${String(grandchild)} stops running`,
+        intervalMs: 50,
+        read: () => !running(),
+      });
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }

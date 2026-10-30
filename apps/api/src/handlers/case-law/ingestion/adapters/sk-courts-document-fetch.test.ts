@@ -87,6 +87,7 @@ test("document downloads identify the client and preserve the caller's abort and
     INGESTION_USER_AGENT,
   );
   expect(init?.redirect).toBe("error");
+  expect(init).toMatchObject({ timeoutMs: 30_000 });
   controller.abort();
   expect(init?.signal?.aborted).toBe(true);
 });

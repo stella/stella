@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { beforeAll, describe, expect, test } from "bun:test";
 import { asc, eq, inArray, sql } from "drizzle-orm";
 
@@ -18,6 +18,7 @@ import {
   schedulerJobs,
   systemAuditRuns,
 } from "@/api/db/schema";
+import { setSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
 import { processLegislationDocument } from "@/api/handlers/legislation/ingestion";
 import type { LegislationCorpusDependencies } from "@/api/handlers/legislation/ingestion";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
@@ -71,6 +72,19 @@ export const registerExpressionBackfillCases = ({
 }: ExpressionBackfillCasesOptions) => {
   let db: GatedTestDb;
   let continuationAt: Date | undefined;
+
+  // Set the short timeout only after checkpoint setup, at the page boundary.
+  const createPageTimeoutRuntime = ((options) => {
+    const runtime = createRuntime(options);
+    return {
+      ...runtime,
+      step: async (work) =>
+        await runtime.step(async (context) => {
+          await setSharedStatementTimeout(context.tx, 100);
+          return await work(context);
+        }),
+    };
+  }) satisfies typeof createRuntime;
 
   /** One scheduled run; true when it asked to be followed at once. */
   const run = async (
@@ -484,15 +498,14 @@ export const registerExpressionBackfillCases = ({
         await db.transaction(async (tx) => await callback(asTestRaw(tx)));
       const corpus = {
         mode: "off",
-        write: async (input) =>
-          await Promise.resolve(
-            (() => {
-              const plan = planCorpusDocumentWrite(input);
-              return plan.type === "put"
-                ? { type: "written" as const, written: plan.written }
-                : plan;
-            })(),
-          ),
+        write: async (input) => {
+          const plan = planCorpusDocumentWrite(input);
+          return Result.ok(
+            plan.type === "put"
+              ? { type: "written" as const, written: plan.written }
+              : plan,
+          );
+        },
       } satisfies LegislationCorpusDependencies;
       const result = await processLegislationDocument(
         {
@@ -652,15 +665,7 @@ export const registerExpressionBackfillCases = ({
           const outcome = await run(
             createTask({
               pageRows: 1,
-              createRuntime: (options) =>
-                createRuntime({
-                  ...options,
-                  config: {
-                    ...SCHEDULER_BACKFILL_CONFIG,
-                    ...options.config,
-                    batchStatementTimeoutMs: 100,
-                  },
-                }),
+              createRuntime: createPageTimeoutRuntime,
             }),
             recording,
           );
@@ -720,15 +725,7 @@ export const registerExpressionBackfillCases = ({
                     BACKFILL_LEGISLATION_EXPRESSION_IDS_TASK,
                     createTask({
                       pageRows: 1,
-                      createRuntime: (options) =>
-                        createRuntime({
-                          ...options,
-                          config: {
-                            ...SCHEDULER_BACKFILL_CONFIG,
-                            ...options.config,
-                            batchStatementTimeoutMs: 100,
-                          },
-                        }),
+                      createRuntime: createPageTimeoutRuntime,
                     }),
                   ],
                 ]),

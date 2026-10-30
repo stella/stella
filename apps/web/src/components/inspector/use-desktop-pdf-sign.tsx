@@ -31,7 +31,11 @@ import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { APIError } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import { detachedUserAction, notifyUserError } from "@/lib/errors/user-toast";
+import {
+  detachedUserAction,
+  notifyUserError,
+  notifyUserProblem,
+} from "@/lib/errors/user-toast";
 
 const START_ERROR_KEYS = {
   entity_read_only: "workspaces.files.pdfSigning.readOnlyDescription",
@@ -175,33 +179,25 @@ export const useDesktopPdfSign = ({
       // The deep link was never redeemed: the app is missing, not
       // running, or not connected to this account.
       case "handoff": {
-        notifyUserError(
-          undefined,
-          t("workspaces.files.pdfSigning.notPickedUpTitle"),
-          {
-            toastId,
-            action: retry,
-            description: (
-              <TextWithAction
-                actionLabel={t("workspaces.files.desktopGate.connect")}
-                onAction={connectDesktop}
-                text={t("workspaces.files.pdfSigning.notPickedUpDescription")}
-              />
-            ),
-          },
-        );
+        notifyUserProblem(t("workspaces.files.pdfSigning.notPickedUpTitle"), {
+          toastId,
+          action: retry,
+          description: (
+            <TextWithAction
+              actionLabel={t("workspaces.files.desktopGate.connect")}
+              onAction={connectDesktop}
+              text={t("workspaces.files.pdfSigning.notPickedUpDescription")}
+            />
+          ),
+        });
         return;
       }
       case "session": {
-        notifyUserError(
-          undefined,
-          t("workspaces.files.pdfSigning.expiredTitle"),
-          {
-            toastId,
-            action: retry,
-            description: t("workspaces.files.pdfSigning.expiredDescription"),
-          },
-        );
+        notifyUserProblem(t("workspaces.files.pdfSigning.expiredTitle"), {
+          toastId,
+          action: retry,
+          description: t("workspaces.files.pdfSigning.expiredDescription"),
+        });
         return;
       }
       default: {
@@ -219,7 +215,13 @@ export const useDesktopPdfSign = ({
       async () => await createPdfSigningHandoff({ ...target, stamp }),
     );
     if (Result.isError(started)) {
-      getAnalytics().captureError(started.error.cause);
+      getAnalytics().captureError(started.error.cause, {
+        fingerprintKey: "useDesktopPdfSign.signWithToast:cause",
+        scope: {
+          type: "handler",
+          handlerId: "useDesktopPdfSign.signWithToast:cause",
+        },
+      });
       notifyUserError(
         started.error,
         t("workspaces.files.pdfSigning.startFailedTitle"),
@@ -285,7 +287,13 @@ export const useDesktopPdfSign = ({
     );
 
     if (Result.isError(watched)) {
-      getAnalytics().captureError(watched.error.cause);
+      getAnalytics().captureError(watched.error.cause, {
+        fingerprintKey: "useDesktopPdfSign.signWithToast:cause-2",
+        scope: {
+          type: "handler",
+          handlerId: "useDesktopPdfSign.signWithToast:cause-2",
+        },
+      });
       notifyUserError(
         watched.error,
         t("workspaces.files.pdfSigning.statusUnavailableTitle"),
@@ -318,7 +326,7 @@ export const useDesktopPdfSign = ({
               ),
             },
           );
-          notifyUserError(undefined, options.title, {
+          notifyUserProblem(options.title, {
             ...NO_ACTION,
             toastId,
             description: options.description,
@@ -326,8 +334,7 @@ export const useDesktopPdfSign = ({
           return;
         }
         if (outcome.closeReason === DESKTOP_HANDOFF_FAILURE.accountRequired) {
-          notifyUserError(
-            undefined,
+          notifyUserProblem(
             t("workspaces.files.desktopEdit.accountRequiredTitle"),
             {
               toastId,
@@ -403,7 +410,10 @@ export const useDesktopPdfSign = ({
     busy.current = false;
     setIsSigning(false);
     if (Result.isError(signed)) {
-      getAnalytics().captureError(signed.error.cause);
+      getAnalytics().captureError(signed.error.cause, {
+        fingerprintKey: "useDesktopPdfSign.sign:cause",
+        scope: { type: "handler", handlerId: "useDesktopPdfSign.sign:cause" },
+      });
       notifyUserError(signed.error, t("errors.actionFailed"), {
         ...NO_ACTION,
         toastId,

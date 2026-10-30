@@ -18,23 +18,26 @@ import {
   sellerProfiles,
   timeEntries,
 } from "@/api/db/schema";
-import { lockInvoiceInStatus } from "@/api/handlers/invoices/lock-invoice";
 import { invoiceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { FieldDiffs } from "@/api/lib/audit-log";
 import { flatFeeInvoiceRefusal } from "@/api/lib/billing/invoice-arrangements";
+import {
+  tInvoiceDocumentType,
+  validateInvoiceDocument,
+} from "@/api/lib/billing/invoice-document-type";
+import { recalculateInvoiceTotals } from "@/api/lib/billing/invoice-lines";
+import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   invoiceLanguageSchema,
   resourceIdSchema,
   workspaceParams,
 } from "@/api/lib/custom-schema";
+import { lockInvoiceInStatus } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { pickDefined } from "@/api/lib/pick-defined";
-
-import { tInvoiceDocumentType, validateInvoiceDocument } from "./document-type";
-import { recalculateInvoiceTotals } from "./invoice-lines";
 
 const updateInvoiceBodySchema = v.object({
   invoiceNumber: v.exactOptional(
@@ -184,7 +187,7 @@ type InvoiceEntriesScope = {
 };
 const invoiceHasEntries = async (
   tx: Transaction,
-  { invoiceId, workspaceId, lines }: InvoiceEntriesScope,
+  { invoiceId, lines }: InvoiceEntriesScope,
 ) => {
   const line = await tx
     .select({ id: invoiceLines.id })
@@ -192,7 +195,6 @@ const invoiceHasEntries = async (
     .where(
       and(
         eq(invoiceLines.invoiceId, invoiceId),
-        eq(invoiceLines.workspaceId, workspaceId),
         lines === "entry-sourced"
           ? ne(invoiceLines.source, INVOICE_LINE_SOURCE.MANUAL)
           : undefined,
@@ -206,12 +208,7 @@ const invoiceHasEntries = async (
   const attachedTimeEntry = await tx
     .select({ id: timeEntries.id })
     .from(timeEntries)
-    .where(
-      and(
-        eq(timeEntries.invoiceId, invoiceId),
-        eq(timeEntries.workspaceId, workspaceId),
-      ),
-    )
+    .where(and(eq(timeEntries.invoiceId, invoiceId)))
     .limit(1);
   if (attachedTimeEntry.at(0)) {
     return true;
@@ -220,12 +217,7 @@ const invoiceHasEntries = async (
   const attachedExpense = await tx
     .select({ id: expenses.id })
     .from(expenses)
-    .where(
-      and(
-        eq(expenses.invoiceId, invoiceId),
-        eq(expenses.workspaceId, workspaceId),
-      ),
-    )
+    .where(and(eq(expenses.invoiceId, invoiceId)))
     .limit(1);
   if (attachedExpense.at(0)) {
     return true;
@@ -315,6 +307,7 @@ const updateInvoice = createSafeHandler(
             invoiceId: params.invoiceId,
             workspaceId,
             status: INVOICE_STATUS.DRAFT,
+            matterLocks: { type: "acquire" },
           });
           if (!existing) {
             return Result.ok({ status: "not-updated" });
@@ -410,12 +403,7 @@ const updateInvoice = createSafeHandler(
                 grossAmount: sql`-${invoiceLines.grossAmount}`,
                 updatedAt: set.updatedAt,
               })
-              .where(
-                and(
-                  eq(invoiceLines.invoiceId, params.invoiceId),
-                  eq(invoiceLines.workspaceId, workspaceId),
-                ),
-              );
+              .where(and(eq(invoiceLines.invoiceId, params.invoiceId)));
           }
 
           const updated = await tx
@@ -424,7 +412,7 @@ const updateInvoice = createSafeHandler(
             .where(
               and(
                 eq(invoices.id, params.invoiceId),
-                eq(invoices.workspaceId, workspaceId),
+                invoiceInMatter(invoices, workspaceId),
                 eq(invoices.status, INVOICE_STATUS.DRAFT),
               ),
             )

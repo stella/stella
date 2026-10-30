@@ -5,6 +5,8 @@ import { readMigrationFiles } from "drizzle-orm/migrator";
 import { getMigrationsToRun } from "drizzle-orm/migrator.utils";
 import { migrate as pgCoreMigrate } from "drizzle-orm/pg-core";
 
+import { declareFingerprintFields } from "@stll/errors";
+
 import type { ConfiguredEbsConfiguration } from "../lib/db/ebs-signal-reader";
 import migrationAliasInventory from "../lib/db/migration-alias-inventory.json";
 import {
@@ -38,7 +40,10 @@ import { createOnlineIndexHold } from "./online-index-gate";
 import type { OnlineIndexHoldRef } from "./online-index-gate";
 import { openOnlineIndexObserver } from "./online-index-observer";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
-import { runOnlineMigrations } from "./online-migrations";
+import {
+  ONLINE_MIGRATION_REPAIRS,
+  runOnlineMigrations,
+} from "./online-migrations";
 import { APPLICATION_RLS_ROLE_NAME } from "./role-names";
 import { createDatabase } from "./sql-client";
 import { terminateReserved } from "./sql-close";
@@ -326,7 +331,11 @@ export class MigrationLockWaitError extends TaggedError(
   attempts: number;
   lockTimeoutMs: number;
   cause: unknown;
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 type LockWaitRetry = LockRetryConfig & LockRetryRuntime;
 
@@ -695,6 +704,23 @@ const createSchemaObservation = async ({
     });
 };
 
+/** The migrator's own session, lent to the online phase without release. */
+const createOnlineSession = (
+  connection: ReservedSQL,
+  session: { state: "open" | "terminated" },
+): OnlineMigrationConnection => ({
+  terminate: async () => {
+    session.state = "terminated";
+    await terminateReserved(connection);
+  },
+  execute: async (query, params = []) => {
+    await connection.unsafe(query, [...params]);
+  },
+  query: async (query, params = []) =>
+    await connection.unsafe(query, [...params]),
+  release: (): void => undefined,
+});
+
 export const runMigrations = async ({
   connection,
   databaseUrl,
@@ -838,24 +864,14 @@ export const runMigrations = async ({
       retriesSpent: () => lockTelemetry.retriesSpent,
     };
     clock.startedAt = timing.clock();
-    const onlineConnection: OnlineMigrationConnection = {
-      terminate: async () => {
-        session.state = "terminated";
-        await terminateReserved(connection);
-      },
-      execute: async (query, params = []) => {
-        await connection.unsafe(query, [...params]);
-      },
-      query: async (query, params = []) =>
-        await connection.unsafe(query, [...params]),
-      release: (): void => undefined,
-    };
+    const onlineConnection = createOnlineSession(connection, session);
     const online = await runOnline(
       { reserve: async () => await Promise.resolve(onlineConnection) },
       {
         indexGate: { ebs, hold: onlineIndexHold, lockTelemetry },
         reserveObserver: async () => await openOnlineIndexObserver(databaseUrl),
         timing: onlineTiming,
+        repairs: ONLINE_MIGRATION_REPAIRS,
       },
     );
     clock.retriesSpent = lockTelemetry.retriesSpent - onlineRetriesAtStart;

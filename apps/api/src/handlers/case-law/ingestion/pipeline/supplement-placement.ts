@@ -48,6 +48,7 @@ import {
   RAW_SOURCE_FAMILY,
 } from "@/api/lib/legal-search/raw-source-storage";
 import type { RawSourceWriteWindow } from "@/api/lib/legal-search/raw-source-storage";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 
 /** One supplement's placement: its options and what they resolve to. */
@@ -228,7 +229,13 @@ const supplementRawWriteFailed = (
       "error.detail": wrappedErrorDetail(error),
     }),
   );
-  captureError(error, { sourceId, step: "processSupplement.raw" });
+  captureError(
+    error,
+    handlerErrorContext("pipeline.supplementRawWriteFailed", {
+      sourceId,
+      step: "processSupplement.raw",
+    }),
+  );
   return {
     status: PROCESS_DECISION_STATUS.RETRYABLE,
     reason: PROCESS_DECISION_RETRY_REASON.SOURCE_RAW_WRITE,
@@ -410,7 +417,7 @@ export const supplementJudgmentReadFailed = (
 export const keepSupplementStandalone = async (
   placement: SupplementPlacement,
   reason: SupplementStandaloneReason,
-): Promise<ProcessSupplementResult> => {
+): Promise<Result<ProcessSupplementResult, unknown>> => {
   const {
     scopedDb,
     sourceId,
@@ -456,8 +463,11 @@ export const keepSupplementStandalone = async (
     },
     placement.resolveSourceContract,
   );
-  if (written.status === PROCESS_DECISION_STATUS.RETRYABLE) {
+  if (written.isErr()) {
     return written;
+  }
+  if (written.value.status === PROCESS_DECISION_STATUS.RETRYABLE) {
+    return Result.ok(written.value);
   }
   // Standalone, the supplement is its own row's: that row stored the
   // payload under its prefix, and the supplement names the same object.
@@ -490,12 +500,12 @@ export const keepSupplementStandalone = async (
     catch: (cause) => cause,
   });
   if (Result.isError(pointed)) {
-    return supplementRawWriteFailed(placement, pointed.error);
+    return Result.ok(supplementRawWriteFailed(placement, pointed.error));
   }
-  return {
+  return Result.ok({
     status: PROCESS_DECISION_STATUS.COMPLETE,
     disposition: { type: "standalone", reason },
-  };
+  });
 };
 
 /**

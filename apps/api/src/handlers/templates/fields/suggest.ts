@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
   ACCOUNT_ACCESS,
@@ -53,6 +55,7 @@ const config = {
 const suggestFields = createSafeRootHandler(
   config,
   async function* ({
+    orgAIConfigStatus,
     modelAdmission,
     session,
     body,
@@ -61,6 +64,10 @@ const suggestFields = createSafeRootHandler(
     managedAIResidency,
     user,
   }) {
+    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+      return Result.err(storedAIConfigUnreadableError());
+    }
+
     const organizationId = session.activeOrganizationId;
     const { text, instructions } = body;
     const trimmed = text.trim();

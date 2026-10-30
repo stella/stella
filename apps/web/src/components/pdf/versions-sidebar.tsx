@@ -53,6 +53,30 @@ import {
   entityVersionsKeys,
 } from "@/lib/workspaces/queries/entity-versions";
 
+const ERROR_CAPTURE = {
+  handleDeleteVersion: {
+    fingerprintKey: "VersionsSidebar.handleDeleteVersion:failure",
+    scope: {
+      type: "handler",
+      handlerId: "VersionsSidebar.handleDeleteVersion:failure",
+    },
+  },
+  handleSetLabel: {
+    fingerprintKey: "VersionsSidebar.handleSetLabel:failure",
+    scope: {
+      type: "handler",
+      handlerId: "VersionsSidebar.handleSetLabel:failure",
+    },
+  },
+  handleRestore: {
+    fingerprintKey: "VersionsSidebar.handleRestore:failure",
+    scope: {
+      type: "handler",
+      handlerId: "VersionsSidebar.handleRestore:failure",
+    },
+  },
+} as const;
+
 export type { EntityVersion as Version } from "@/lib/workspaces/queries/entity-versions";
 
 type VersionsSidebarProps = {
@@ -271,7 +295,10 @@ export const VersionsSidebar = ({
       ),
     );
     if (Result.isError(requested)) {
-      getAnalytics().captureError(requested.error);
+      getAnalytics().captureError(
+        requested.error,
+        ERROR_CAPTURE.handleDeleteVersion,
+      );
       notifyUserError(requested.error, t("errors.actionFailed"));
       await invalidateVersions();
       return;
@@ -300,7 +327,10 @@ export const VersionsSidebar = ({
       ),
     );
     if (Result.isError(requested)) {
-      getAnalytics().captureError(requested.error);
+      getAnalytics().captureError(
+        requested.error,
+        ERROR_CAPTURE.handleSetLabel,
+      );
       notifyUserError(requested.error, t("errors.actionFailed"));
     }
 
@@ -318,7 +348,7 @@ export const VersionsSidebar = ({
       ),
     );
     if (Result.isError(requested)) {
-      getAnalytics().captureError(requested.error);
+      getAnalytics().captureError(requested.error, ERROR_CAPTURE.handleRestore);
       notifyUserError(requested.error, t("errors.actionFailed"));
     }
 

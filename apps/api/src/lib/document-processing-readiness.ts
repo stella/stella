@@ -1,7 +1,12 @@
 import { Result } from "better-result";
+import * as v from "valibot";
+
+import { DOCUMENT_OCR_AVAILABILITY } from "@stll/api-contract/document-ocr-availability";
+import type { DocumentOcrAvailability } from "@stll/api-contract/document-ocr-availability";
 
 import { captureError, detached } from "@/api/lib/analytics/capture";
 import { errorTag } from "@/api/lib/errors/utils";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import {
   createLazyRedisClient,
@@ -15,16 +20,30 @@ import {
 } from "@/api/lib/redis-keys";
 import { withTimeout } from "@/api/lib/with-timeout";
 
-// A single process-wide lease, so the worker role is its own colocation unit.
-const DOCUMENT_OCR_WORKER_READINESS_KEY = coordinationKey({
+// A single process-wide slot, so the worker role is its own colocation unit
+// and both leases are read with one MGET.
+const DOCUMENT_OCR_WORKER_LIVE_KEY = coordinationKey({
   scope: "ocr-readiness",
   slot: "ocr-worker",
   suffix: "v1",
 });
+const DOCUMENT_OCR_WORKER_BATCH_KEY = coordinationKey({
+  scope: "ocr-readiness",
+  slot: "ocr-worker",
+  suffix: "batch-v1",
+});
 const DOCUMENT_OCR_WORKER_READINESS_VALUE = "ready";
-const DOCUMENT_OCR_WORKER_READINESS_TTL_SECONDS = 90;
+const DOCUMENT_OCR_WORKER_LIVE_TTL_SECONDS = 90;
 const DOCUMENT_OCR_WORKER_HEARTBEAT_INTERVAL_MS = 30_000;
 const DOCUMENT_OCR_REDIS_COMMAND_TIMEOUT_MS = 2000;
+// A batch worker exits between batches, and a missed start only delays work
+// to the next one. The batch lease therefore outlives the worker's last beat
+// by two batch intervals before the deployment reads as unconfigured.
+const DOCUMENT_OCR_BATCH_LEASE_INTERVALS = 2;
+
+const documentOcrBatchLeaseTtlSeconds = (
+  batchIntervalMinutes: number,
+): number => batchIntervalMinutes * 60 * DOCUMENT_OCR_BATCH_LEASE_INTERVALS;
 
 type DocumentOcrReadinessClient = ReturnType<typeof createRedisClient>;
 
@@ -42,73 +61,111 @@ const createDocumentOcrReadinessClient = () =>
 // dropped with it and the next command builds a replacement.
 const readinessReader = createLazyRedisClient(createDocumentOcrReadinessClient);
 
-export const readDocumentOcrWorkerAvailability = async (
-  readLease: () => Promise<string | null>,
+const leaseReplySchema = v.tuple([
+  v.nullable(v.string()),
+  v.nullable(v.string()),
+]);
+
+type DocumentOcrLeases = { live: string | null; batch: string | null };
+
+export const readDocumentOcrAvailability = async (
+  readLeases: () => Promise<DocumentOcrLeases>,
   timeoutMs = DOCUMENT_OCR_REDIS_COMMAND_TIMEOUT_MS,
-): Promise<boolean> =>
-  (await withTimeout(readLease, {
+): Promise<DocumentOcrAvailability> => {
+  const { live, batch } = await withTimeout(readLeases, {
     label: "document OCR readiness read",
     timeoutMs,
-  })) === DOCUMENT_OCR_WORKER_READINESS_VALUE;
+  });
+  if (live === DOCUMENT_OCR_WORKER_READINESS_VALUE) {
+    return DOCUMENT_OCR_AVAILABILITY.live;
+  }
+  if (batch === DOCUMENT_OCR_WORKER_READINESS_VALUE) {
+    return DOCUMENT_OCR_AVAILABILITY.batched;
+  }
+  return DOCUMENT_OCR_AVAILABILITY.unconfigured;
+};
 
-export const isDocumentOcrWorkerAvailable = async (
+export const getDocumentOcrAvailability = async (
   createClient: () => Pick<
     DocumentOcrReadinessClient,
-    "get"
+    "send"
   > = createDocumentOcrReadinessClient,
-): Promise<boolean> => {
+): Promise<DocumentOcrAvailability> => {
   const availability = await Result.tryPromise({
     try: async () =>
-      await readDocumentOcrWorkerAvailability(async () => {
+      await readDocumentOcrAvailability(async () => {
         const client =
           createClient === createDocumentOcrReadinessClient
             ? await readinessReader.ready()
             : createClient();
-        return await client.get(DOCUMENT_OCR_WORKER_READINESS_KEY);
+        const reply: unknown = await client.send("MGET", [
+          DOCUMENT_OCR_WORKER_LIVE_KEY,
+          DOCUMENT_OCR_WORKER_BATCH_KEY,
+        ]);
+        const [live, batch] = v.parse(leaseReplySchema, reply);
+        return { live, batch };
       }),
     catch: (cause) => cause,
   });
   if (Result.isError(availability)) {
     // A dropped Redis socket rejects the first read after an idle window;
-    // the caller already degrades to "worker unavailable", and the next
-    // read retries on a reconnected socket.
+    // the caller already degrades to "unconfigured", and the next read
+    // retries on a reconnected socket.
     if (isTransientRedisConnectionError(availability.error)) {
       logger.warn("document_processing.readiness_read_disrupted", {
         "error.type": errorTag(availability.error),
       });
     } else {
-      captureError(availability.error);
+      captureError(
+        availability.error,
+        handlerErrorContext(
+          "lib.getDocumentOcrAvailability.availability_error",
+        ),
+      );
     }
-    return false;
+    return DOCUMENT_OCR_AVAILABILITY.unconfigured;
   }
   return availability.value;
 };
 
 const HEARTBEAT_TIMEOUT_LABEL = "document OCR readiness heartbeat";
 
-/** Apply the lease constants. Unbounded: the caller decides its own deadline. */
-const writeReadinessLease = async (
-  writeLease: (
-    key: CoordinationKey,
-    value: string,
-    ttlSeconds: number,
-  ) => Promise<unknown>,
-): Promise<unknown> =>
-  await writeLease(
-    DOCUMENT_OCR_WORKER_READINESS_KEY,
-    DOCUMENT_OCR_WORKER_READINESS_VALUE,
-    DOCUMENT_OCR_WORKER_READINESS_TTL_SECONDS,
-  );
+type WriteLease = (
+  key: CoordinationKey,
+  value: string,
+  ttlSeconds: number,
+) => Promise<unknown>;
 
-export const refreshDocumentOcrWorkerReadiness = async (
-  writeLease: (
-    key: CoordinationKey,
-    value: string,
-    ttlSeconds: number,
-  ) => Promise<unknown>,
+/** Apply the lease constants. Unbounded: the caller decides its own deadline. */
+const writeReadinessLeases = async (
+  writeLease: WriteLease,
+  batchIntervalMinutes: number,
+): Promise<unknown> =>
+  await Promise.all([
+    writeLease(
+      DOCUMENT_OCR_WORKER_LIVE_KEY,
+      DOCUMENT_OCR_WORKER_READINESS_VALUE,
+      DOCUMENT_OCR_WORKER_LIVE_TTL_SECONDS,
+    ),
+    writeLease(
+      DOCUMENT_OCR_WORKER_BATCH_KEY,
+      DOCUMENT_OCR_WORKER_READINESS_VALUE,
+      documentOcrBatchLeaseTtlSeconds(batchIntervalMinutes),
+    ),
+  ]);
+
+type RefreshDocumentOcrWorkerReadinessOptions = {
+  writeLease: WriteLease;
+  batchIntervalMinutes: number;
+  timeoutMs?: number;
+};
+
+export const refreshDocumentOcrWorkerReadiness = async ({
+  writeLease,
+  batchIntervalMinutes,
   timeoutMs = DOCUMENT_OCR_REDIS_COMMAND_TIMEOUT_MS,
-): Promise<void> => {
-  const write = writeReadinessLease(writeLease);
+}: RefreshDocumentOcrWorkerReadinessOptions): Promise<void> => {
+  const write = writeReadinessLeases(writeLease, batchIntervalMinutes);
   await withTimeout(async () => await write, {
     label: HEARTBEAT_TIMEOUT_LABEL,
     timeoutMs,
@@ -158,12 +215,14 @@ export const createSingleFlightBeat = (runBeat: () => SingleFlightBeat) => {
   };
 };
 
-export const startDocumentOcrWorkerReadiness = () => {
+export const startDocumentOcrWorkerReadiness = (
+  batchIntervalMinutes: number,
+) => {
   const heartbeatClient = createLazyRedisClient(
     createDocumentOcrReadinessClient,
   );
   const beat = createSingleFlightBeat(() => {
-    const chain = writeReadinessLease(async (key, value, ttlSeconds) => {
+    const chain = writeReadinessLeases(async (key, value, ttlSeconds) => {
       const client = await heartbeatClient.ready();
       const reply: unknown = await client.send(
         "SET",
@@ -174,7 +233,7 @@ export const startDocumentOcrWorkerReadiness = () => {
         }),
       );
       return reply;
-    });
+    }, batchIntervalMinutes);
     return {
       chain,
       // The deadline bounds only what this interval waits for and logs. The
@@ -192,7 +251,7 @@ export const startDocumentOcrWorkerReadiness = () => {
       return;
     }
     // A dropped Redis socket rejects the first write after an idle window;
-    // the 90s lease outlives one missed 30s beat, and the next beat writes
+    // the 90s live lease outlives one missed 30s beat, and the next beat writes
     // on a reconnected socket. Anything else is a defect and is captured.
     detached(
       started.catch((error: unknown) => {
@@ -202,7 +261,10 @@ export const startDocumentOcrWorkerReadiness = () => {
           });
           return;
         }
-        captureError(error);
+        captureError(
+          error,
+          handlerErrorContext("documentProcessing.heartbeat"),
+        );
         logger.error("document_processing.readiness_heartbeat_failed", {
           "error.type": errorTag(error),
         });

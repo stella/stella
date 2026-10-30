@@ -47,7 +47,9 @@ test("Czech host locale renders headings and retry action with the recoverable f
   });
   const ui = render(<CaseLawApp bridge={host.bridge} />);
   expect(ui.getByRole("heading", { name: "Judikatura" })).toBeDefined();
-  expect(ui.getByRole("alert").textContent).toContain("Chyba");
+  expect(ui.getByRole("alert").textContent).toContain(
+    "Něco se pokazilo. Zkuste to znovu.",
+  );
   fireEvent.click(ui.getByRole("button", { name: "Spustit znovu" }));
   expect(host.retries()).toBe(1);
 });
@@ -209,3 +211,21 @@ for (const { locale, label, direction } of [
     },
   );
 }
+
+test("metadata-only search hits visibly distinguish summaries from decision text", () => {
+  const host = fakeBridge({
+    ...baseSnapshot,
+    result: {
+      status: "ready",
+      view: searchView({
+        ...APP_SEARCH_FIXTURE,
+        results: APP_SEARCH_FIXTURE.results.map((row) => ({
+          ...row,
+          textAvailability: "metadata_only" as const,
+        })),
+      }),
+    },
+  });
+  const ui = render(<CaseLawApp bridge={host.bridge} />);
+  expect(ui.getByText("Rozhodnutí nemá text")).toBeDefined();
+});

@@ -1,55 +1,23 @@
+import type { CurrentWorkspaceDocument } from "@/lib/workspaces/use-workspace-view-params";
+
 /**
- * Detect that the user is already on the document route for this
- * entity. The route is `/workspaces/{workspaceId}/{viewId}/document`
- * where viewId is the view selector (typically "all"), and the
- * entity being viewed lives in the `entity` search param. If both
- * match, the entity is already the main view and clicking its
- * mention should surface metadata in the inspector rather than
- * opening a duplicate file lane that races the main view.
- *
- * The `location` argument defaults to `window.location` so the
- * call sites stay one-arg, but the test suite can pass a stub
- * (Bun's web test runtime has no DOM globals).
+ * Whether the entity is already the main view: the document page on screen
+ * (`getCurrentWorkspaceDocument`) shows it in its matter. Clicking its
+ * mention then surfaces metadata in the inspector rather than opening a
+ * duplicate file lane that races the main view.
  */
-type LocationLike = { pathname: string; search: string };
-
 export const isEntityActiveInMainRoute = (
-  entityId: string,
-  workspaceId: string,
-  location: LocationLike | null = typeof window === "undefined"
-    ? null
-    : window.location,
-): boolean => {
-  if (location === null) {
-    return false;
-  }
-  const onDocumentRoute = new RegExp(
-    `^/workspaces/${workspaceId}/[^/]+/document(?:/|$|\\?)`,
-    "u",
-  ).test(location.pathname);
-  if (!onDocumentRoute) {
-    return false;
-  }
-  const entityParam = new URLSearchParams(location.search).get("entity");
-  return entityParam === entityId;
-};
+  entity: { entityId: string; workspaceId: string },
+  document: CurrentWorkspaceDocument,
+): boolean =>
+  document !== undefined &&
+  document.workspaceId === entity.workspaceId &&
+  document.entityId === entity.entityId;
 
-export const isFileActiveInMainRoute = ({
-  entityId,
-  fieldId,
-  location = typeof window === "undefined" ? null : window.location,
-  workspaceId,
-}: {
-  entityId: string;
-  fieldId: string;
-  location?: LocationLike | null;
-  workspaceId: string;
-}): boolean => {
-  if (
-    location === null ||
-    !isEntityActiveInMainRoute(entityId, workspaceId, location)
-  ) {
-    return false;
-  }
-  return new URLSearchParams(location.search).get("field") === fieldId;
-};
+/** Whether the main document page shows this exact file field. */
+export const isFileActiveInMainRoute = (
+  file: { entityId: string; fieldId: string; workspaceId: string },
+  document: CurrentWorkspaceDocument,
+): boolean =>
+  isEntityActiveInMainRoute(file, document) &&
+  document?.fieldId === file.fieldId;

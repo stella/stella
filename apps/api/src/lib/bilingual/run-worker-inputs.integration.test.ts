@@ -12,6 +12,8 @@ import {
   beforeEach,
   describe,
   expect,
+  type Mock,
+  mock,
   setDefaultTimeout,
   spyOn,
   test,
@@ -108,9 +110,9 @@ const actor = createRootRunActor(
 );
 const outputVersionId = createSafeId<"entityVersion">();
 
-const settingsSpy = spyOn(aiConfigLoader, "loadOrgAISettings");
-const translateSpy = spyOn(bilingualAI, "translateBatch");
-const writeSpy = spyOn(versionWriter, "createEntityVersionFromBuffer");
+let settingsSpy: Mock<typeof aiConfigLoader.loadOrgAISettings>;
+let translateSpy: Mock<typeof bilingualAI.translateBatch>;
+let writeSpy: Mock<typeof versionWriter.createEntityVersionFromBuffer>;
 
 const readRun = async () =>
   (
@@ -131,6 +133,10 @@ let downgradeBeforePublication = false;
 
 beforeEach(async () => {
   downgradeBeforePublication = false;
+  settingsSpy = spyOn(aiConfigLoader, "loadOrgAISettings");
+  translateSpy = spyOn(bilingualAI, "translateBatch");
+  writeSpy = spyOn(versionWriter, "createEntityVersionFromBuffer");
+
   settingsSpy.mockReset();
   translateSpy.mockReset();
   writeSpy.mockReset();
@@ -206,6 +212,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  mock.restore();
   await testDb
     .delete(bilingualTranslationRows)
     .where(eq(bilingualTranslationRows.runId, runId));

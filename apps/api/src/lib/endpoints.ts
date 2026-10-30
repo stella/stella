@@ -6,7 +6,7 @@
  * caller exactly like every other route. Business operations use the
  * factories in `lib/api-handlers.ts`.
  */
-import type { CachePolicy } from "@/api/http/cache";
+import type { RouteCachePolicy } from "@/api/http/cache";
 import { decodeRequestInput } from "@/api/http/input";
 import type {
   RouteConfig,
@@ -31,7 +31,7 @@ import { workspaceSegmentSchema } from "@/api/lib/custom-schema";
 
 type EndpointConfig = RouteConfig & {
   /** How long a successful answer may be cached; absent means not at all. */
-  readonly cache?: CachePolicy;
+  readonly cache?: RouteCachePolicy;
   /** `own`: the endpoint answers CORS itself (an any-origin discovery document). */
   readonly cors?: "own";
 };

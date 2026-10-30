@@ -51,6 +51,17 @@ import {
   createSelectQueryMock,
 } from "@/api/tests/scoped-db-mock";
 
+beforeEach(() => {
+  broadcastMock.mockClear();
+  computeVersionDiffStatsMock.mockClear();
+  enqueueImageThumbnailOrMarkFailedMock.mockClear();
+  enqueuePdfDerivativeOrMarkFailedMock.mockClear();
+  flushEntitySearchRepairsMock.mockClear();
+  processExtractionMock.mockClear();
+  requestNativeExtractionRunMock.mockClear();
+  scanFileMock.mockClear();
+});
+
 const processExtractionMock = mock(async () => {});
 const enqueueImageThumbnailOrMarkFailedMock = mock(async () => {});
 const enqueuePdfDerivativeOrMarkFailedMock = mock(async () => {});

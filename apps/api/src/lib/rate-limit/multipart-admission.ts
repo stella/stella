@@ -19,7 +19,9 @@ const isMultipartFormDataRequest = (request: Request): boolean =>
 
 export const admitMultipartRequest = async (request: Request) =>
   isMultipartFormDataRequest(request)
-    ? await boundActionRequest(request, MULTIPART_REQUEST_MAX_BYTES)
+    ? (await boundActionRequest(request, MULTIPART_REQUEST_MAX_BYTES)).map(
+        ({ request: bounded }) => bounded,
+      )
     : Result.ok(request);
 
 /**

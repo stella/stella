@@ -5,7 +5,7 @@ import * as v from "valibot";
 import { entities, workspaces } from "@/api/db/schema";
 import type { LinkMetadata } from "@/api/db/schema";
 import { entityFileRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { captureError } from "@/api/lib/analytics/capture";
+import { createErrorCapture } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -15,6 +15,7 @@ import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { insertEntityVersion } from "@/api/lib/entity-versions/insert-entity-version";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 
@@ -170,7 +171,9 @@ export default createSafeHandler(
       );
     }
 
-    flushEntitySearchRepairs([entityId]).catch(captureError);
+    flushEntitySearchRepairs([entityId]).catch(
+      createErrorCapture(handlerErrorContext("clip.flushEntitySearchRepairs")),
+    );
 
     return Result.ok({ entityId });
   },

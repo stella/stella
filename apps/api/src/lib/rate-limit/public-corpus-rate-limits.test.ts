@@ -5,8 +5,8 @@ import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
 
 import { env } from "@/api/env";
 import { createHttpApp } from "@/api/http/app";
-import { mount, routes } from "@/api/http/route";
-import type { Middleware, RouteTable } from "@/api/http/route";
+import { HTTP_METHODS, mount, routes } from "@/api/http/route";
+import type { HttpMethod, Middleware, RouteTable } from "@/api/http/route";
 import { defineEndpoint } from "@/api/lib/endpoints";
 import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import {
@@ -111,6 +111,30 @@ type PeerRequestOptions = {
 
 const answering = (body: string) => defineEndpoint.public({}, () => body);
 
+const isHttpMethod = (value: string): value is HttpMethod =>
+  HTTP_METHODS.some((method) => method === value);
+
+/** Keep the fixture's addressable routes in lockstep with production policy. */
+const publicCorpusFixtureRoutes = (): RouteTable => {
+  const table: Record<
+    string,
+    Partial<Record<HttpMethod, ReturnType<typeof answering>>>
+  > = {};
+  for (const [route, routeClass] of Object.entries(
+    PUBLIC_CORPUS_ROUTE_POLICY,
+  )) {
+    const separator = route.indexOf(" ");
+    const method = route.slice(0, separator);
+    if (separator === -1 || !isHttpMethod(method)) {
+      panic(`Invalid public corpus route policy key: ${route}`);
+    }
+    const path = route.slice(separator + 1);
+    table[path] ??= {};
+    table[path][method] = answering(routeClass);
+  }
+  return table;
+};
+
 /**
  * Serve `table` under the API version prefix behind the given stages, as the
  * route table mounts the public corpus routes, on a real `Bun.serve`.
@@ -131,15 +155,7 @@ const serveVersioned = (
 
 const createApp = (binding: typeof createRedisRateLimit): TestServer =>
   serveVersioned(
-    {
-      "/law/statutes/search": { GET: answering("search") },
-      "/case/decisions/search": { POST: answering("search") },
-      "/law/statutes/facets": { GET: answering("aggregate") },
-      "/case/decisions/facets": { GET: answering("aggregate") },
-      "/law/sitemap/shards": { GET: answering("sitemap") },
-      "/case/sitemap/shards": { GET: answering("sitemap") },
-      "/law/statutes": { GET: answering("browse") },
-    },
+    publicCorpusFixtureRoutes(),
     createPublicCorpusRateLimitComposition({ createRedisBinding: binding }),
   );
 

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, spyOn, test } from "bun:test";
+import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 
 import * as search from "@/lib/search";
 
@@ -15,6 +15,11 @@ import {
   toggleArrayMember,
 } from "./search-filters.logic";
 import type { SearchFilters } from "./search-filters.logic";
+
+// Spies created in a test stay attached if it fails before restoring them.
+afterEach(() => {
+  mock.restore();
+});
 
 const baseFilters = (
   overrides: Partial<SearchFilters> = {},

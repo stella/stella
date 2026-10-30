@@ -9,7 +9,7 @@ const DATA_URL_PAYLOAD_TOO_LARGE_MESSAGE =
   "Data URL payload exceeds size limit";
 
 export const toDataUrl = (bytes: Uint8Array, mimeType: string) =>
-  `data:${mimeType};base64,${Buffer.from(bytes).toString("base64")}`;
+  `data:${mimeType};base64,${Buffer.from(bytes).toBase64()}`;
 
 type ValidateDataUrlProps = {
   expectedMimeType?: string | undefined;

@@ -478,7 +478,7 @@ describe("building a ruling from its three pages", () => {
             decision.metadata["courtAsStated"] ===
               (refused ? court : undefined),
           ).toBe(true);
-          expect(sanitizeResult(decision).court).toBe(decision.court);
+          expect(sanitizeResult(decision).unwrap().court).toBe(decision.court);
         }
       }
     }
@@ -501,7 +501,7 @@ describe("building a ruling from its three pages", () => {
       true,
     );
     expect(decision.isListingOnly).toBe(true);
-    expect(sanitizeResult(decision).court === "").toBe(true);
+    expect(sanitizeResult(decision).unwrap().court === "").toBe(true);
   });
 
   test("an oversized docket does not quarantine the stated court", () => {
@@ -517,7 +517,7 @@ describe("building a ruling from its three pages", () => {
     expect(decision.metadata["quarantineReason"]).toBeUndefined();
     expect(decision.metadata["courtAsStated"]).toBeUndefined();
     const refused = Result.try({
-      try: () => sanitizeResult(decision),
+      try: () => sanitizeResult(decision).unwrap(),
       catch: (error: unknown) => error,
     });
     expect(refused.isErr()).toBe(true);

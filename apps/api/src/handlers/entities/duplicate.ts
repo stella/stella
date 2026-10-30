@@ -18,7 +18,7 @@ import {
   snapshotOfCurrentVersion,
 } from "@/api/handlers/entities/copy-utils";
 import { entityFileRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, createErrorCapture } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -37,6 +37,7 @@ import {
   retirePublishedCopyIntentsInTransaction,
 } from "@/api/lib/files/copy-organization-files";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
   requestNativeExtractionRuns,
   SEARCH_INDEX_OWNER,
@@ -99,6 +100,59 @@ const defaultDuplicateEntityDependencies = {
   retirePublishedCopyIntentsInTransaction,
 } satisfies DuplicateEntityDependencies;
 
+const DUPLICATE_CAPTURE_CONTEXT = {
+  searchRepair: handlerErrorContext("duplicateEntityHandler.rejection"),
+  documentProcessing: handlerErrorContext(
+    "duplicateEntityHandler.handoffCommittedDocumentProcessingRuns",
+  ),
+  pdfDerivative: handlerErrorContext(
+    "duplicateEntityHandler.enqueuePdfDerivativeOrMarkFailed",
+  ),
+  imageThumbnail: handlerErrorContext(
+    "duplicateEntityHandler.enqueueImageThumbnailOrMarkFailed",
+  ),
+} as const;
+
+type DuplicateReplayOptions = Pick<
+  DuplicateEntityHandlerProps,
+  "safeDb" | "workspaceId" | "userId"
+> & {
+  sourceEntityId: SafeId<"entity">;
+  targetEntityId: SafeId<"entity">;
+};
+
+const findDuplicateReplay = async ({
+  safeDb,
+  workspaceId,
+  userId,
+  sourceEntityId,
+  targetEntityId,
+}: DuplicateReplayOptions) =>
+  await safeDb(
+    async (tx) =>
+      await tx.query.entities.findFirst({
+        where: {
+          id: { eq: targetEntityId },
+          workspaceId: { eq: workspaceId },
+          createdBy: { eq: userId },
+          duplicateSourceEntityId: { eq: sourceEntityId },
+        },
+        columns: { id: true, name: true },
+        with: {
+          currentVersion: {
+            columns: { id: true },
+            with: {
+              fields: {
+                columns: { id: true, content: true },
+                orderBy: { id: "asc" },
+                limit: LIMITS.propertiesCount,
+              },
+            },
+          },
+        },
+      }),
+  );
+
 const duplicateEntityHandler = async function* ({
   safeDb,
   organizationId,
@@ -125,33 +179,16 @@ const duplicateEntityHandler = async function* ({
     );
   }
 
-  const findReplay = async (replayTargetEntityId: SafeId<"entity">) =>
-    await safeDb(
-      async (tx) =>
-        await tx.query.entities.findFirst({
-          where: {
-            id: { eq: replayTargetEntityId },
-            workspaceId: { eq: workspaceId },
-            createdBy: { eq: userId },
-            duplicateSourceEntityId: { eq: sourceEntityId },
-          },
-          columns: { id: true, name: true },
-          with: {
-            currentVersion: {
-              columns: { id: true },
-              with: {
-                fields: {
-                  columns: { id: true, content: true },
-                  orderBy: { id: "asc" },
-                  limit: LIMITS.propertiesCount,
-                },
-              },
-            },
-          },
-        }),
-    );
   if (targetEntityId) {
-    const replayed = yield* Result.await(findReplay(targetEntityId));
+    const replayed = yield* Result.await(
+      findDuplicateReplay({
+        safeDb,
+        workspaceId,
+        userId,
+        sourceEntityId,
+        targetEntityId,
+      }),
+    );
     if (replayed) {
       return Result.ok(duplicateReplayPayload(replayed));
     }
@@ -199,7 +236,13 @@ const duplicateEntityHandler = async function* ({
   });
   if (Result.isError(fileMappings)) {
     await rollbackS3Copies(copiedS3Keys);
-    captureError(fileMappings.error, { workspaceId, sourceEntityId });
+    captureError(
+      fileMappings.error,
+      handlerErrorContext(
+        "entities.duplicateEntityHandler.fileMappings_error",
+        { workspaceId, sourceEntityId },
+      ),
+    );
     return Result.err(
       new HandlerError({ status: 500, message: "Failed to copy files" }),
     );
@@ -257,7 +300,13 @@ const duplicateEntityHandler = async function* ({
 
   if (Result.isError(txResultResult)) {
     if (targetEntityId) {
-      const replayed = await findReplay(targetEntityId);
+      const replayed = await findDuplicateReplay({
+        safeDb,
+        workspaceId,
+        userId,
+        sourceEntityId,
+        targetEntityId,
+      });
       if (Result.isError(replayed)) {
         // The transaction outcome and the ownership of its objects are both
         // unknown. Retain them until a replay can prove whether they are
@@ -284,12 +333,12 @@ const duplicateEntityHandler = async function* ({
         SEARCH_INDEX_OWNER.durableExtraction
       ],
     ])
-    .catch(captureError);
+    .catch(createErrorCapture(DUPLICATE_CAPTURE_CONTEXT.searchRepair));
 
   handoffCommittedDocumentProcessingRuns({
     enqueue: dependencies.enqueueDocumentProcessingRun,
     runIds: txResult.nativeExtractionRunIds,
-  }).catch(captureError);
+  }).catch(createErrorCapture(DUPLICATE_CAPTURE_CONTEXT.documentProcessing));
 
   // The copies reference fresh file IDs, so each needs its own
   // PDF/thumbnail derivatives.
@@ -302,7 +351,7 @@ const duplicateEntityHandler = async function* ({
       organizationId,
       userId,
       workspaceId,
-    }).catch(captureError);
+    }).catch(createErrorCapture(DUPLICATE_CAPTURE_CONTEXT.pdfDerivative));
     enqueueImageThumbnailOrMarkFailed({
       entityId: fileField.entityId,
       fieldId: fileField.fieldId,
@@ -311,7 +360,7 @@ const duplicateEntityHandler = async function* ({
       organizationId,
       userId,
       workspaceId,
-    }).catch(captureError);
+    }).catch(createErrorCapture(DUPLICATE_CAPTURE_CONTEXT.imageThumbnail));
   }
 
   return Result.ok({

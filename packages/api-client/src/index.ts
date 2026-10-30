@@ -18,6 +18,10 @@ import { panic, Result } from "better-result";
 
 import { toWireInput } from "@stll/api-contract/http-input";
 
+import type { ScopedResponseObserver } from "./scoped-response";
+
+export type { ScopedResponse } from "./scoped-response";
+
 const METHOD_NAMES = [
   "get",
   "post",
@@ -69,6 +73,13 @@ export type ApiError<TResponses> = [ErrorKey<TResponses>] extends [never]
       };
     }[ErrorKey<TResponses>];
 
+export type ApiTransportError = {
+  readonly kind: "network" | "timeout" | "aborted";
+  readonly cause: unknown;
+  readonly status: 0;
+  readonly value: null;
+};
+
 /** What every request resolves to: the decoded answer, or the refusal. */
 export type ApiResult<TResponses> =
   | {
@@ -80,7 +91,7 @@ export type ApiResult<TResponses> =
     }
   | {
       readonly data: null;
-      readonly error: ApiError<TResponses>;
+      readonly error: ApiError<TResponses> | ApiTransportError;
       readonly status: number;
       readonly response: Response;
       readonly headers: Headers;
@@ -102,29 +113,80 @@ type HeadersOption<THeaders> = unknown extends THeaders
     ? { readonly headers?: THeaders & HeaderValues }
     : { readonly headers: THeaders & HeaderValues };
 
+type RequestFetchHeaders<THeaders> = THeaders extends {
+  readonly "Idempotency-Key"?: infer TReplayKey;
+}
+  ? string extends TReplayKey
+    ? HeadersInit
+    : Readonly<Record<string, string>> & {
+        readonly "Idempotency-Key"?: TReplayKey;
+      }
+  : HeadersInit;
+
+// Required route headers belong to options.headers; fetch overrides retain
+// the reserved replay-key prohibition without requiring those headers twice.
+type RequestFetchOptions<THeaders> = Omit<RequestInit, "headers"> & {
+  readonly timeoutMs?: number;
+  readonly headers?: RequestFetchHeaders<THeaders>;
+};
+
 /** Per-request options: the route's query and headers, and fetch settings. */
 export type RequestOptions<TRoute extends RouteShape> = QueryOption<
   TRoute["query"]
 > &
-  HeadersOption<TRoute["headers"]> & { readonly fetch?: RequestInit };
+  HeadersOption<TRoute["headers"]> & {
+    readonly fetch?: RequestFetchOptions<TRoute["headers"]>;
+  };
 
 type OptionsArgs<TRoute extends RouteShape> =
   NoOptions extends RequestOptions<TRoute>
     ? [options?: RequestOptions<TRoute>]
     : [options: RequestOptions<TRoute>];
 
-type BodyArgs<TRoute extends RouteShape> =
+// Computed-key payloads expose an index signature, not a known extra field.
+type KnownBodyKeys<TBody> = keyof {
+  [
+    TKey in keyof TBody as string extends TKey
+      ? never
+      : number extends TKey
+        ? never
+        : TKey
+  ]: unknown;
+};
+
+type BodyKeys<TBody> = TBody extends unknown ? keyof TBody : never;
+
+export type ExactRequestBody<
+  TBody,
+  TActual extends TBody,
+> = unknown extends TBody
+  ? TActual
+  : TActual & Record<Exclude<KnownBodyKeys<TActual>, BodyKeys<TBody>>, never>;
+
+type BodyArgs<TRoute extends RouteShape, TActual extends TRoute["body"]> =
   NoOptions extends RequestOptions<TRoute>
     ? undefined extends TRoute["body"]
-      ? [body?: TRoute["body"], options?: RequestOptions<TRoute>]
-      : [body: TRoute["body"], options?: RequestOptions<TRoute>]
-    : [body: TRoute["body"], options: RequestOptions<TRoute>];
+      ? [
+          body?: ExactRequestBody<TRoute["body"], TActual>,
+          options?: RequestOptions<TRoute>,
+        ]
+      : [
+          body: ExactRequestBody<TRoute["body"], TActual>,
+          options?: RequestOptions<TRoute>,
+        ]
+    : [
+        body: ExactRequestBody<TRoute["body"], TActual>,
+        options: RequestOptions<TRoute>,
+      ];
 
-type MethodCall<TName extends MethodName, TRoute extends RouteShape> = (
-  ...args: TName extends BodilessMethodName
-    ? OptionsArgs<TRoute>
-    : BodyArgs<TRoute>
-) => Promise<ApiResult<TRoute["response"]>>;
+type MethodCall<
+  TName extends MethodName,
+  TRoute extends RouteShape,
+> = TName extends BodilessMethodName
+  ? (...args: OptionsArgs<TRoute>) => Promise<ApiResult<TRoute["response"]>>
+  : <TActual extends TRoute["body"]>(
+      ...args: BodyArgs<TRoute, TActual>
+    ) => Promise<ApiResult<TRoute["response"]>>;
 
 type ParamKey<TNode> = Extract<keyof TNode, `:${string}`>;
 
@@ -160,11 +222,23 @@ export type ApiClient<TNode> = {
 
 type MaybePromise<TValue> = TValue | Promise<TValue>;
 
+export type RequestReplayRoute = {
+  readonly method: string;
+  readonly path: string;
+};
+
 export type ApiClientOptions = {
+  /** Only declared method/template pairs may carry an Idempotency-Key. */
+  readonly requestReplayRoutes?: readonly RequestReplayRoute[];
+  /** Observes the same unread response with its declared route, before decoding. */
+  readonly onScopedResponse?: ScopedResponseObserver;
   /** Fetch settings every request starts from; credentials default to `include`. */
   readonly fetch?: RequestInit;
   /** Sends the request; `globalThis.fetch` when absent. */
-  readonly fetcher?: (url: string, init: RequestInit) => Promise<Response>;
+  readonly fetcher?: (
+    url: string,
+    init: RequestInit & { readonly timeoutMs?: number },
+  ) => Promise<Response>;
   /** Headers every request carries, or a function computing them per request. */
   readonly headers?:
     | HeaderValues
@@ -183,19 +257,27 @@ export type ApiClientOptions = {
 type ClientConfig = {
   readonly origin: string;
   readonly options: ApiClientOptions;
+  readonly requestReplayRoutes: ReadonlySet<string>;
+};
+
+type ClientPath = {
+  readonly segments: readonly string[];
+  readonly template: readonly string[];
 };
 
 type CallOptions = {
   readonly query: unknown;
   readonly headers: unknown;
-  readonly fetch: RequestInit | undefined;
+  readonly fetch: (RequestInit & { readonly timeoutMs?: number }) | undefined;
 };
 
-const readRequestInit = (value: unknown): RequestInit | undefined => {
+const readRequestInit = (
+  value: unknown,
+): (RequestInit & { readonly timeoutMs?: number }) | undefined => {
   if (typeof value !== "object" || value === null) {
     return undefined;
   }
-  const init: RequestInit = value;
+  const init: RequestInit & { readonly timeoutMs?: number } = value;
   return init;
 };
 
@@ -243,6 +325,25 @@ const queryString = (query: unknown): string => {
 };
 
 const setHeaders = (target: Headers, values: unknown): void => {
+  if (values instanceof Headers) {
+    for (const [name, value] of values) {
+      target.set(name, value);
+    }
+    return;
+  }
+  if (Array.isArray(values)) {
+    for (const entry of values) {
+      if (
+        Array.isArray(entry) &&
+        entry.length === 2 &&
+        typeof entry[0] === "string" &&
+        typeof entry[1] === "string"
+      ) {
+        target.set(entry[0], entry[1]);
+      }
+    }
+    return;
+  }
   if (typeof values !== "object" || values === null) {
     return;
   }
@@ -379,7 +480,7 @@ const decodeBody = async (response: Response): Promise<unknown> => {
 
 const send = async (
   config: ClientConfig,
-  segments: readonly string[],
+  clientPath: ClientPath,
   method: MethodName,
   args: readonly unknown[],
 ): Promise<unknown> => {
@@ -388,12 +489,12 @@ const send = async (
   const encoded = bodiless
     ? { body: undefined, contentType: undefined }
     : encodeBody(args[0]);
-  const path = `/${segments.join("/")}`;
+  const path = `/${clientPath.segments.join("/")}`;
   const { fetch: clientFetch, headers: clientHeaders } = config.options;
 
   const headers = new Headers(clientFetch?.headers);
   setHeaders(headers, options.fetch?.headers);
-  const init: RequestInit = {
+  const init: RequestInit & { readonly timeoutMs?: number } = {
     ...clientFetch,
     ...options.fetch,
     credentials:
@@ -414,10 +515,50 @@ const send = async (
   }
 
   await config.options.onRequest?.(path, init);
+  const routeTemplate = `/${clientPath.template.join("/")}`;
+  if (
+    !config.requestReplayRoutes.has(`${method.toUpperCase()} ${routeTemplate}`)
+  ) {
+    const outgoingHeaders = new Headers(init.headers);
+    outgoingHeaders.delete("Idempotency-Key");
+    init.headers = outgoingHeaders;
+  }
+
   const url = `${config.origin}${path}${queryString(options.query)}`;
-  const response = await (config.options.fetcher === undefined
-    ? globalThis.fetch(url, init)
-    : config.options.fetcher(url, init));
+  const request = await Result.tryPromise({
+    try: async () =>
+      config.options.fetcher === undefined
+        ? globalThis.fetch(url, init)
+        : config.options.fetcher(url, init),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(request)) {
+    const cause = request.error;
+    const name = cause instanceof Error ? cause.name : undefined;
+    let kind: "network" | "timeout" | "aborted" = "network";
+    if (name === "AbortError") {
+      kind = "aborted";
+    } else if (name === "TimeoutError") {
+      kind = "timeout";
+    }
+    const response = Response.error();
+    return {
+      data: null,
+      error: { kind, cause, status: 0, value: null },
+      status: 0,
+      response,
+      headers: response.headers,
+    };
+  }
+  const response = request.value;
+  await config.options.onScopedResponse?.({
+    response,
+    scope: {
+      type: "request",
+      method: method.toUpperCase(),
+      routeTemplate,
+    },
+  });
   await config.options.onResponse?.(response);
 
   const value = await decodeBody(response);
@@ -436,38 +577,55 @@ const send = async (
 };
 
 /** A path parameter call names one value: `workspaces({ workspaceId })`. */
-const pathSegment = (params: unknown): string => {
+const pathSegment = (params: unknown) => {
   if (typeof params !== "object" || params === null) {
     return panic(
       "A path parameter takes one named value, such as { workspaceId }",
     );
   }
-  const values: unknown[] = Object.values(params);
-  const value = values.at(0);
+  const entries: [string, unknown][] = Object.entries(params);
+  const entry = entries.at(0);
+  const value = entry?.[1];
   if (
-    values.length !== 1 ||
+    entry === undefined ||
+    entries.length !== 1 ||
     (typeof value !== "string" && typeof value !== "number")
   ) {
     return panic(
       "A path parameter takes exactly one string or number, such as { workspaceId }",
     );
   }
-  return encodeURIComponent(String(value));
+  return { value: encodeURIComponent(String(value)), template: `:${entry[0]}` };
 };
 
-const node = (config: ClientConfig, segments: readonly string[]): unknown =>
+const node = (config: ClientConfig, path: ClientPath): unknown =>
   new Proxy(() => undefined, {
     get: (_target, property) =>
       // `then` is read by `await`; a client node is never a promise.
       typeof property === "string" && property !== "then"
-        ? node(config, [...segments, property])
+        ? node(config, {
+            segments: [...path.segments, property],
+            template: [...path.template, property],
+          })
         : undefined,
     apply: (_target, _receiver, args: readonly unknown[]) => {
-      const last = segments.at(-1);
+      const last = path.segments.at(-1);
       if (last !== undefined && isMethodName(last)) {
-        return send(config, segments.slice(0, -1), last, args);
+        return send(
+          config,
+          {
+            segments: path.segments.slice(0, -1),
+            template: path.template.slice(0, -1),
+          },
+          last,
+          args,
+        );
       }
-      return node(config, [...segments, pathSegment(args.at(0))]);
+      const segment = pathSegment(args.at(0));
+      return node(config, {
+        segments: [...path.segments, segment.value],
+        template: [...path.template, segment.template],
+      });
     },
   });
 
@@ -485,7 +643,18 @@ export function createApiClient(
   origin: string,
   options: ApiClientOptions = {},
 ): unknown {
-  return node({ origin: withoutTrailingSlashes(origin), options }, []);
+  return node(
+    {
+      origin: withoutTrailingSlashes(origin),
+      options,
+      requestReplayRoutes: new Set(
+        (options.requestReplayRoutes ?? []).map(
+          ({ method, path }) => `${method.toUpperCase()} ${path}`,
+        ),
+      ),
+    },
+    { segments: [], template: [] },
+  );
 }
 
 // A scan from the end, not `/\/+$/`: that pattern retries from every slash in

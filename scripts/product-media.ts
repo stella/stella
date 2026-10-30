@@ -372,6 +372,7 @@ const verifyFile = async (
 
 export const resolveProductMediaCacheDir = (rootDir: string): string => {
   const result = spawnSync("git", ["rev-parse", "--git-common-dir"], {
+    maxBuffer: 2 ** 30,
     cwd: rootDir,
     encoding: "utf-8",
     stdio: ["ignore", "pipe", "pipe"],
@@ -595,7 +596,7 @@ const publishProductMedia = async (rootDir = ROOT_DIR): Promise<void> => {
   for (const asset of uniqueAssets) {
     const key = assetObjectKey(asset);
     const localPath = nodePath.join(rootDir, "apps/landing/public", asset.path);
-    const digestBase64 = Buffer.from(asset.sha256, "hex").toString("base64");
+    const digestBase64 = Buffer.from(asset.sha256, "hex").toBase64();
     const headArgs = productMediaHeadObjectArgs(bucket, key);
     const existing = runAws(headArgs);
     if (existing.status === 0) {
@@ -637,6 +638,7 @@ const publishProductMedia = async (rootDir = ROOT_DIR): Promise<void> => {
 
 const runAws = (args: readonly string[]): SpawnResult => {
   const result = spawnSync("aws", [...args], {
+    maxBuffer: 2 ** 30,
     encoding: "utf-8",
     stdio: ["ignore", "pipe", "pipe"],
   });

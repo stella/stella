@@ -238,9 +238,7 @@ const presignInput = async ({
     expiresIn: PRESIGN_URL_EXPIRY_SECONDS,
     contentType: DOCX_MIME_TYPE,
     contentLength: reservation.declaredSize,
-    sha256Base64: Buffer.from(reservation.declaredSha256, "hex").toString(
-      "base64",
-    ),
+    sha256Base64: Buffer.from(reservation.declaredSha256, "hex").toBase64(),
     scope: { organizationId, workspaceId: null },
     tagAsTemporaryUpload: true,
   });
@@ -386,7 +384,12 @@ export const reserveFileComparisonInputs = async ({
     return "admitted" as const;
   });
   if (Result.isError(inserted)) {
-    return Result.err(internalFailureResult(inserted.error));
+    return Result.err(
+      internalFailureResult(
+        inserted.error,
+        "mcp.reserveFileComparisonInputs.inserted_error",
+      ),
+    );
   }
   if (inserted.value === "at_capacity") {
     return Result.err(
@@ -418,14 +421,24 @@ export const reserveFileComparisonInputs = async ({
       context,
       uploadIds: [reservedBase.id, reservedTarget.id],
     });
-    return Result.err(internalFailureResult(presignedBase.error));
+    return Result.err(
+      internalFailureResult(
+        presignedBase.error,
+        "mcp.reserveFileComparisonInputs.reservedBase_error",
+      ),
+    );
   }
   if (Result.isError(presignedTarget)) {
     await expireReservedInputs({
       context,
       uploadIds: [reservedBase.id, reservedTarget.id],
     });
-    return Result.err(internalFailureResult(presignedTarget.error));
+    return Result.err(
+      internalFailureResult(
+        presignedTarget.error,
+        "mcp.reserveFileComparisonInputs.reservedTarget_error",
+      ),
+    );
   }
 
   return Result.ok({

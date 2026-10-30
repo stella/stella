@@ -184,8 +184,8 @@ describe.skipIf(!postgresEnabled)(
         const userId = mintAuthProviderId<"user">();
         const organizationId = mintAuthProviderId<"organization">();
         const keyId = mintAuthProviderIdValue();
-        const credential = `${DESKTOP_REGISTRY_KEY_PREFIX}${randomBytes(64).toString("hex")}`;
-        const successorKey = `${DESKTOP_REGISTRY_KEY_PREFIX}${randomBytes(64).toString("hex")}`;
+        const credential = `${DESKTOP_REGISTRY_KEY_PREFIX}${randomBytes(64).toHex()}`;
+        const successorKey = `${DESKTOP_REGISTRY_KEY_PREFIX}${randomBytes(64).toHex()}`;
         const now = new Date();
         await db.transaction(async (tx) => {
           await tx.insert(user).values({

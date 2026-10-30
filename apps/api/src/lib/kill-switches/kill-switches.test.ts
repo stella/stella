@@ -10,9 +10,11 @@ import {
   ACTION_ADMISSION_REFUSALS,
 } from "@stll/api-contract/action-admission";
 import { CHAT_PROMPT_IMPROVEMENT_STRATEGIES } from "@stll/api-contract/chat";
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import improvePrompt from "@/api/handlers/chat/improve-prompt";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createHttpApp } from "@/api/http/app";
 import { routes } from "@/api/http/route";
 import type { RouteDefinition } from "@/api/http/route";
@@ -42,7 +44,6 @@ import { startExecutionAdmission } from "@/api/lib/rate-limit/execution-admissio
 import { admitModelDispatch } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { testOrganizationStateDb } from "@/api/tests/helpers/model-dispatch-admission";
 import { serveForTest } from "@/api/tests/helpers/test-server";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const testState = createTestState({ file: import.meta.path, config: env });
@@ -244,8 +245,8 @@ describe("kill switch at an AI endpoint", () => {
       await improvePrompt.handler(
         asTestRaw({
           set,
-          request: new Request("https://example.test/chat/improve-prompt"),
-          route: "/chat/improve-prompt",
+          request: new Request("https://example.test/v1/chat/improve-prompt"),
+          route: "/v1/chat/improve-prompt" satisfies ApiRoutePath,
           user: { id: userId },
           session: { activeOrganizationId: organizationId },
           memberRole: sessionMemberRole("owner"),
@@ -264,13 +265,15 @@ describe("kill switch at an AI endpoint", () => {
     await using server = serveForTest(
       createHttpApp({
         routes: routes({
-          "/chat/improve-prompt": { POST: improvePromptRoute },
+          "/v1/chat/improve-prompt": { POST: improvePromptRoute },
         }),
         middleware: [errorBoundary],
       }),
     );
     const response = await server.fetch(
-      new Request("http://localhost/chat/improve-prompt", { method: "POST" }),
+      new Request("http://localhost/v1/chat/improve-prompt", {
+        method: "POST",
+      }),
     );
     return { status: response.status, body: await response.json() };
   };

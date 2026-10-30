@@ -8,7 +8,8 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { getPgErrorCode } from "@/api/lib/pg-error";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
-import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
+
+import { ONLINE_MIGRATION_INDEXES } from "./online-migrations";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -17,7 +18,7 @@ const describePostgres = describe.skipIf(!runPostgresTests);
 const migrationStatements = readFileSync(
   path.resolve(
     import.meta.dir,
-    "../../drizzle/20261023151000_mcp_oauth_current_state/migration.sql",
+    "../../drizzle/20261030180734_mcp_oauth_current_state_index/migration.sql",
   ),
   "utf-8",
 )
@@ -25,20 +26,13 @@ const migrationStatements = readFileSync(
   .map((statement) => statement.trim())
   .filter((statement) => statement.length > 0);
 
-const indexBuildPosition = migrationStatements.findIndex((statement) =>
-  statement.includes("CREATE UNIQUE INDEX"),
-);
-if (indexBuildPosition < 1) {
-  panic("The migration builds its unique index after deduplication");
-}
-
-const backendPid = async (session: ReservedSQL): Promise<number> => {
-  const rows = await session<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`;
-  return rows.at(0)?.pid ?? panic("Missing backend pid");
-};
+const currentStateIndex =
+  ONLINE_MIGRATION_INDEXES.find(
+    ({ name }) => name === "mcp_oauth_state_org_connector_user_uidx",
+  ) ?? panic("Missing OAuth current-state online index");
 
 describePostgres("mcp OAuth current-state migration (postgres)", () => {
-  test("a pending authorization written between deduplication and the index build waits and cannot duplicate", async () => {
+  test("retains current authorizations before building uniqueness online", async () => {
     if (!databaseUrl) {
       throw new Error("DATABASE_URL required");
     }
@@ -64,7 +58,6 @@ describePostgres("mcp OAuth current-state migration (postgres)", () => {
             'https://mcp.example.test', 'https://auth.example.test',
             ${attempt.createdAt}
           )`;
-      let pendingWrite: Promise<unknown> | undefined;
       try {
         // LIKE derives the fixture's columns from the migrated schema without
         // its unique index; a private search path keeps the run isolated.
@@ -78,9 +71,6 @@ describePostgres("mcp OAuth current-state migration (postgres)", () => {
           .simple();
         await migration.unsafe(`SET search_path TO ${schema}, public`);
         await application.unsafe(`SET search_path TO ${schema}, public`);
-        // Read both identities first: a blocked session answers nothing.
-        const migrationPid = await backendPid(migration);
-        const applicationPid = await backendPid(application);
 
         // Two attempts share the newest timestamp; the larger state key wins.
         await insertAttempt(migration, {
@@ -105,35 +95,31 @@ describePostgres("mcp OAuth current-state migration (postgres)", () => {
         });
 
         await migration`BEGIN`;
-        for (const statement of migrationStatements.slice(
-          0,
-          indexBuildPosition,
-        )) {
-          // db-await-in-loop: migration statements run in their file order.
-          await migration.unsafe(statement);
-        }
-
-        // The running application starts another authorization for the
-        // retained scope after deduplication and before the index exists.
-        pendingWrite = rejectionOf(
-          insertAttempt(application, {
-            connectorId,
-            createdAt: "2026-10-23T12:00:00Z",
-            state: "state-during-migration",
-          }),
-        );
-        await waitForBlockedPid(observer.sql, {
-          holdingPid: migrationPid,
-          waitingPid: applicationPid,
-        });
-
-        for (const statement of migrationStatements.slice(indexBuildPosition)) {
+        for (const statement of migrationStatements) {
           // db-await-in-loop: migration statements run in their file order.
           await migration.unsafe(statement);
         }
         await migration`COMMIT`;
-
-        expect(getPgErrorCode(await pendingWrite)).toBe("23505");
+        const createSql =
+          currentStateIndex.createSql ?? panic("Missing online index SQL");
+        expect(currentStateIndex.introducedBy).toBe(
+          "20261030180734_mcp_oauth_current_state_index",
+        );
+        expect(createSql).toContain("CREATE UNIQUE INDEX CONCURRENTLY");
+        await migration.unsafe(
+          createSql.replace(
+            'public."mcp_oauth_state"',
+            () => `${schema}."mcp_oauth_state"`,
+          ),
+        );
+        const duplicate = await rejectionOf(
+          insertAttempt(application, {
+            connectorId,
+            createdAt: "2026-10-23T12:00:00Z",
+            state: "state-after-index",
+          }),
+        );
+        expect(getPgErrorCode(duplicate)).toBe("23505");
         const retained = await observer.sql.unsafe<
           { connector_id: string; state: string }[]
         >(
@@ -145,11 +131,6 @@ describePostgres("mcp OAuth current-state migration (postgres)", () => {
         ]);
       } finally {
         await migration`ROLLBACK`;
-        await Promise.allSettled(
-          [pendingWrite].filter(
-            (pending): pending is Promise<unknown> => pending !== undefined,
-          ),
-        );
         await migration
           .unsafe(
             `RESET search_path; RESET lock_timeout; RESET statement_timeout; DROP SCHEMA IF EXISTS ${schema} CASCADE`,

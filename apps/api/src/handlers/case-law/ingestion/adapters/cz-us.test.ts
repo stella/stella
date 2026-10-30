@@ -1241,6 +1241,49 @@ describe("czUsAdapter.fetchPage", () => {
     expect(readAgainByReconciliation(decision)).toBe(false);
   });
 
+  test("joins the printed lines of a typewriter-era legal sentence", async () => {
+    // The court's own cell: one `<br/>` per printed line of the typescript.
+    const page = new TextDecoder().decode(
+      Bun.gunzipSync(
+        await Bun.file(
+          new URL(
+            "__fixtures__/cz-us-abstract-i-us-549-2000.html.gz",
+            import.meta.url,
+          ),
+        ).bytes(),
+      ),
+    );
+    const cell =
+      /<table[^>]*class="legalSentenceContent"[^>]*>\s*<tr>\s*<td[^>]*>(?<cell>[\s\S]*?)<\/td>/u.exec(
+        page,
+      )?.groups?.["cell"];
+    expect(cell).toContain("zásadám<br/>spravedlivého");
+    installSearchMock({
+      rows: [
+        {
+          id: "5002",
+          sz: "1-549-2000",
+          caseNumber: "I.ÚS 549/2000",
+          date: "18. 4. 2001",
+        },
+      ],
+      legalSentence: cell ?? "",
+    });
+
+    const decision = unwrap(
+      await czUsAdapter.fetchPage(historicalCursor(2001), {}),
+    ).decisions.at(0);
+    const legalSentence = decision?.textFields.legalSentence;
+    const text =
+      legalSentence?.type === TEXT_FIELD_TYPE.PRESENT ? legalSentence.text : "";
+
+    expect(text).toStartWith(
+      "Ústavní soud již opakovaně judikoval, že zásadám spravedlivého procesu odpovídá nejen možnost účastníka řízení vyjádřit se k provedeným důkazům, nýbrž i navrhnout důkazy vlastní;",
+    );
+    expect(text).not.toContain("\n");
+    expect(text).not.toMatch(/ {2}/u);
+  });
+
   test("moves the source hash when publisher text changes", async () => {
     const row = {
       id: "fixture-text-hash",
@@ -2338,6 +2381,31 @@ describe("the record card the court prints beside a decision", () => {
     // A label the court prints with nothing in it is a field with no values,
     // never a value that happens to be blank.
     expect(fields?.note).toEqual([]);
+  });
+
+  test("reads each listed act as its own provision value", async () => {
+    const fields = parseNalusDetail(
+      await recordCardFixture("cz-us-record-card-dissents.html.gz"),
+    );
+
+    expect(fields?.otherProvisions.slice(0, 4)).toEqual([
+      "111/2006 Sb., § 18a, § 61 odst.4",
+      "116/2012 Sb.",
+      "182/1993 Sb., § 71 odst.2, § 35 odst.2",
+      "20/1966 Sb., § 67c, § 11 odst.1",
+    ]);
+    expect(fields?.constitutionalProvisions.slice(0, 2)).toEqual([
+      "1/1993 Sb., čl. 15, čl. 5, čl. 6, čl. 1 odst.1",
+      "115/2001 Sb./Sb.m.s., čl. 5",
+    ]);
+    // The card lists one act per item, so a value naming a second act is
+    // two items run together.
+    for (const value of [
+      ...(fields?.otherProvisions ?? []),
+      ...(fields?.constitutionalProvisions ?? []),
+    ]) {
+      expect(value.match(/\d+\/\d{4} Sb\./gu)).toHaveLength(1);
+    }
   });
 
   test("states no dissent where the court printed none", async () => {

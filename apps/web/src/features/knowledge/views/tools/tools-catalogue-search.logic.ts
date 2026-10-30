@@ -1,4 +1,4 @@
-import { containsSearchMatchKey } from "@stll/text-normalize/search-match-key";
+import { createSearchQueryMatcher } from "@stll/text-normalize/search-query-matcher";
 
 import type { ToolsCatalogueKind } from "@/features/knowledge/views/tools/tools-catalogue-view";
 
@@ -28,7 +28,7 @@ export const filterToolsCatalogueEntries = <T extends SearchableTool>({
   localizedName,
   query,
 }: FilterToolsCatalogueOptions<T>): T[] => {
-  const normalised = query.trim().toLowerCase();
+  const matches = createSearchQueryMatcher(query);
   const subset = entries.filter((entry) => {
     if (filter !== "all" && entry.kind !== filter) {
       return false;
@@ -40,16 +40,11 @@ export const filterToolsCatalogueEntries = <T extends SearchableTool>({
     ) {
       return false;
     }
-    if (normalised === "") {
-      return true;
-    }
     return (
-      containsSearchMatchKey(entry.displayName.toLowerCase(), normalised) ||
-      containsSearchMatchKey(localizedName(entry).toLowerCase(), normalised) ||
-      containsSearchMatchKey(entry.description.toLowerCase(), normalised) ||
-      entry.tags.some((tag) =>
-        containsSearchMatchKey(tag.toLowerCase(), normalised),
-      )
+      matches(entry.displayName) ||
+      matches(localizedName(entry)) ||
+      matches(entry.description) ||
+      entry.tags.some(matches)
     );
   });
   return [...subset].toSorted((left, right) => {

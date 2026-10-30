@@ -21,6 +21,7 @@ import {
 import type { FieldContent, PropertyContent } from "@/api/db/schema-validators";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -48,6 +49,15 @@ import {
 
 import { createDuplicateWorkspace } from "./duplicate";
 import type { DuplicateWorkspaceDependencies } from "./duplicate";
+
+beforeEach(() => {
+  enqueueDocumentProcessingRunMock.mockClear();
+  enqueueEntitySearchRepairsMock.mockClear();
+  enqueueWorkspaceSearchRepairsMock.mockClear();
+  flushEntitySearchRepairsMock.mockClear();
+  flushWorkspaceSearchRepairsMock.mockClear();
+  requestNativeExtractionRunsMock.mockClear();
+});
 
 const requestNativeExtractionRunsMock = mock(
   async ({ requests }: { requests: readonly unknown[] }) =>
@@ -269,7 +279,7 @@ const createContext = ({
     orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
     managedAIResidency: "eu" as const,
     request: recorderBindings.request,
-    route: "/v1/workspaces/:workspaceId/duplicate",
+    route: "/v1/workspaces/:workspaceId/duplicate" satisfies ApiRoutePath,
     session: {
       activeOrganizationId: recorderBindings.organizationId,
     },

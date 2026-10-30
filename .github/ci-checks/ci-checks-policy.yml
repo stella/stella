@@ -46,6 +46,22 @@ checks:
     if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_002 != 'true') }}
     run: bun test scripts/ratchet-scan.test.ts
 
+  - name: Web raw JSON API census self-test
+    env:
+      CI_CHECK_KIND: STATIC
+      CI_CHECK_INPUTS: tracked-tree+generated-inputs
+    id: static_check_127
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-policy/Web raw JSON API census self-test')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_127 != 'true') }}
+    run: bun test scripts/web-raw-json-api-census.test.ts
+
+  - name: Web raw JSON API census
+    env:
+      CI_CHECK_KIND: STATIC
+      CI_CHECK_INPUTS: tracked-tree+generated-inputs
+    id: static_check_128
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-policy/Web raw JSON API census')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_128 != 'true') }}
+    run: bun scripts/web-raw-json-api-census.ts
+
   - name: Test subject reachability census
     env:
       CI_CHECK_KIND: CONTEXTUAL
@@ -91,6 +107,20 @@ checks:
       bun test scripts/check-gh-retry.test.ts scripts/gh-retry.test.ts scripts/promote-dispatch.test.ts
       bun scripts/check-gh-retry.ts
 
+  # Every file tracked at HEAD stays within 1 MiB so generated output cannot
+  # be committed; larger files sit in scripts/tracked-file-size-baseline.json
+  # with a reason and a byte ceiling, and stale entries fail.
+  - name: Tracked file sizes
+    id: static_check_125
+    env:
+      CI_CHECK_KIND: STATIC
+      CI_CHECK_INPUTS: tracked-tree+generated-inputs
+      STELLA_VERIFY: check
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_125 != 'true') }}
+    run: |
+      bun test scripts/check-tracked-file-sizes.test.ts
+      bun scripts/check-tracked-file-sizes.ts
+
   # Network fetches retry through scripts/retry.sh and carry a step
   # timeout; the allowlist may only shrink against the measured base.
   - name: CI network step retries and timeouts
@@ -135,6 +165,14 @@ checks:
     id: static_check_005
     if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_005 != 'true') }}
     run: bun test scripts/check-oxlint-test-timeouts.test.ts scripts/run-custom-lint-tests.test.ts
+
+  - name: Guard rollout scope tests
+    env:
+      CI_CHECK_KIND: STATIC
+      CI_CHECK_INPUTS: tracked-tree+generated-inputs
+    id: static_check_013
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_013 != 'true') }}
+    run: bun test scripts/guard-rollouts.test.ts
 
   - name: Dated waiver lifecycle guards
     env:

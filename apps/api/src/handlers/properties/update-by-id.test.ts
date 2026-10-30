@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { PropertyContent, PropertyTool } from "@/api/db/schema-validators";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { auditEventChanges } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
@@ -42,10 +43,11 @@ const createContext = ({
   asTestRaw<UpdatePropertyCtx>({
     body,
     request: new Request(
-      "https://example.test/v1/properties/workspace_test/property_test",
+      "https://example.test/v1/properties/workspace_test/property/property_test",
       { method: "POST" },
     ),
-    route: "/v1/properties/:workspaceId/:propertyId",
+    route:
+      "/v1/properties/:workspaceId/property/:propertyId" satisfies ApiRoutePath,
     safeDb,
     scopedDb,
     params: { propertyId: toSafeId<"property">("property_test") },

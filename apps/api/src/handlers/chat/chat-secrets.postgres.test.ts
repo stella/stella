@@ -346,6 +346,7 @@ if (!databaseUrl || !runPostgres) {
           const continuation = await Result.tryPromise(async () => {
             throw new HandlerError({
               status: 503,
+              code: "internal_error",
               message: "Continuation unavailable",
             });
           });

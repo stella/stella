@@ -39,7 +39,7 @@ if (import.meta.main) {
   const result = spawnSync(
     process.execPath,
     [tsc, ...withCheckerSplit(process.argv.slice(2))],
-    { stdio: "inherit" },
+    { maxBuffer: 2 ** 30, stdio: "inherit" },
   );
 
   if (result.error) {

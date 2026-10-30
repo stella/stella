@@ -280,7 +280,7 @@ export const extractAskContents = async ({
     }
 
     await authorizeModelDispatch?.();
-    const output = yield* Result.await(
+    const generation = yield* Result.await(
       generateWorkflowData({
         files: preparedFiles,
         properties,
@@ -303,7 +303,7 @@ export const extractAskContents = async ({
     const contentBySourceId = new Map<string, AskExtraction>();
     for (const property of properties) {
       const sourceId = sourceIdByPropertyId.get(property.id);
-      const propertyResult = output[property.id];
+      const propertyResult = generation.output[property.id];
       if (sourceId === undefined || !propertyResult) {
         continue;
       }

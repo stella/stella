@@ -14,7 +14,6 @@ import { sha256Base64ToHex } from "@stll/sha256";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
-import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
 import { resultTx } from "@/api/db/safe-db";
 import type { SafeDbError } from "@/api/db/safe-db";
 import { fileComparisonUploads } from "@/api/db/schema";
@@ -30,6 +29,7 @@ import type {
   TrackedChangeDisposition,
 } from "@/api/handlers/documents/compare";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { ownerSyntheticSessionAuthorityReader } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   claimFileComparisonInputTransitions,

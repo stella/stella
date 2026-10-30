@@ -18,9 +18,9 @@ import type {
   OrgAIConfig,
   OrgAIModelSelection,
 } from "@/api/lib/ai-config";
-import { decryptAIConfig } from "@/api/lib/ai-config-crypto";
+import { decryptAIConfig as decryptAIConfigResult } from "@/api/lib/ai-config-crypto";
+import * as outbound from "@/api/lib/auth/authorized-outbound-fetch";
 import { toSafeId } from "@/api/lib/branded-types";
-import * as outbound from "@/api/lib/safe-outbound-fetch";
 import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import {
   createTestHandlerContext,
@@ -29,6 +29,10 @@ import {
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import updateAIConfig from "./update-ai-config";
+
+const decryptAIConfig = async (
+  ...args: Parameters<typeof decryptAIConfigResult>
+) => (await decryptAIConfigResult(...args)).unwrap();
 
 type UpdateContext = Parameters<typeof updateAIConfig.handler>[0];
 
@@ -68,14 +72,12 @@ const createSettingsDb = (
       }),
     }),
   });
-  const safeDb: SafeDb = async <T>(
-    operation: (tx: Transaction) => Promise<T>,
-  ) => {
-    operations += 1;
-    return operations === 1
-      ? Result.ok(asTestRaw<T>(row))
-      : Result.ok(await operation(tx));
-  };
+  const safeDb = asTestRaw<SafeDb>(
+    async (operation: (tx: Transaction) => Promise<unknown>) => {
+      operations += 1;
+      return operations === 1 ? Result.ok(row) : Result.ok(await operation(tx));
+    },
+  );
   return { safeDb, written: () => written, operations: () => operations };
 };
 

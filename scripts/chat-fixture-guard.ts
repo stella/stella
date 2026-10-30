@@ -29,9 +29,17 @@
 import { panic } from "better-result";
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript6";
 
 import { compareCodeUnit } from "@stll/collation";
+
+import {
+  type Expression,
+  type Node,
+  type ObjectProperty as Property,
+  parseSource,
+  type SpreadElement,
+  walk,
+} from "../packages/scripts/src/syntax-tree";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const LEDGER_REL = "scripts/chat-fixture-guard-ledger.json";
@@ -61,155 +69,143 @@ export type SnapshotLiteral = { line: number; path: string };
 const MAX_BINDING_HOPS = 8;
 
 /** `node` without the wrappers that leave its value unchanged. */
-const unwrap = (node: ts.Expression): ts.Expression => {
+const unwrap = (node: Node): Node => {
   let current = node;
   while (
-    ts.isAsExpression(current) ||
-    ts.isSatisfiesExpression(current) ||
-    ts.isTypeAssertionExpression(current) ||
-    ts.isParenthesizedExpression(current) ||
-    ts.isNonNullExpression(current)
+    current.type === "TSAsExpression" ||
+    current.type === "TSSatisfiesExpression" ||
+    current.type === "TSTypeAssertion" ||
+    current.type === "ParenthesizedExpression" ||
+    current.type === "TSNonNullExpression"
   ) {
     current = current.expression;
   }
   return current;
 };
 
-/** A property name's text, however it is quoted, or undefined if computed
- *  from anything but a literal. */
-const propertyNameText = (name: ts.PropertyName): string | undefined => {
+const literalText = (node: Node): string | undefined => {
   if (
-    ts.isIdentifier(name) ||
-    ts.isStringLiteral(name) ||
-    ts.isNoSubstitutionTemplateLiteral(name) ||
-    ts.isNumericLiteral(name)
+    node.type === "Literal" &&
+    (typeof node.value === "string" || typeof node.value === "number")
   ) {
-    return name.text;
+    return String(node.value);
   }
-  if (ts.isComputedPropertyName(name)) {
-    const expression = unwrap(name.expression);
-    return ts.isStringLiteral(expression) ||
-      ts.isNoSubstitutionTemplateLiteral(expression)
-      ? expression.text
-      : undefined;
+  if (node.type === "TemplateLiteral" && node.expressions.length === 0) {
+    return node.quasis.at(0)?.value.cooked ?? undefined;
   }
   return undefined;
 };
-
-/** The initializer of the nearest `const`/`let`/`var` named `name` that
- *  encloses `from`, without a type checker. */
-const bindingOf = (from: ts.Node, name: string): ts.Expression | undefined => {
-  /** The initializer `name` is declared with directly in `scope`, as a
-   *  variable or a parameter default, if any. */
-  const declaredIn = (scope: ts.Node): ts.Expression | undefined => {
-    if (ts.isFunctionLike(scope)) {
-      const parameter = scope.parameters.find(
-        (candidate) =>
-          ts.isIdentifier(candidate.name) && candidate.name.text === name,
-      );
-      if (parameter?.initializer !== undefined) {
-        return parameter.initializer;
-      }
-    }
-    const statements =
-      ts.isSourceFile(scope) || ts.isBlock(scope) || ts.isModuleBlock(scope)
-        ? scope.statements
-        : [];
-    for (const statement of statements) {
-      if (!ts.isVariableStatement(statement)) {
-        continue;
-      }
-      for (const declaration of statement.declarationList.declarations) {
-        if (
-          ts.isIdentifier(declaration.name) &&
-          declaration.name.text === name &&
-          declaration.initializer !== undefined
-        ) {
-          return declaration.initializer;
-        }
-      }
-    }
-    return undefined;
-  };
-  const scope = ts.findAncestor(
-    from.parent,
-    (candidate) => declaredIn(candidate) !== undefined,
-  );
-  return scope === undefined ? undefined : declaredIn(scope);
-};
-
-const isSnapshotType = (node: ts.Expression, hops = 0): boolean => {
-  const value = unwrap(node);
-  if (ts.isStringLiteral(value) || ts.isNoSubstitutionTemplateLiteral(value)) {
-    return value.text === SNAPSHOT_TYPE;
-  }
-  if (ts.isPropertyAccessExpression(value)) {
-    return value.name.text === SNAPSHOT_TYPE;
-  }
-  if (ts.isElementAccessExpression(value)) {
-    const key = unwrap(value.argumentExpression);
-    return (
-      (ts.isStringLiteral(key) || ts.isNoSubstitutionTemplateLiteral(key)) &&
-      key.text === SNAPSHOT_TYPE
-    );
-  }
-  if (ts.isIdentifier(value) && hops < MAX_BINDING_HOPS) {
-    const bound = bindingOf(value, value.text);
-    return bound !== undefined && isSnapshotType(bound, hops + 1);
-  }
-  return false;
-};
-
-/** Whether `property` sets the object's `type` to the snapshot type. */
-const isSnapshotDiscriminant = (property: ts.ObjectLiteralElementLike) => {
-  if (ts.isPropertyAssignment(property)) {
-    return (
-      propertyNameText(property.name) === "type" &&
-      isSnapshotType(property.initializer)
-    );
-  }
-  return (
-    ts.isShorthandPropertyAssignment(property) &&
-    property.name.text === "type" &&
-    isSnapshotType(property.name)
-  );
-};
-
-const isEscapeCall = (node: ts.Node): boolean =>
-  ts.isCallExpression(node) &&
-  ts.isIdentifier(node.expression) &&
-  node.expression.text === ESCAPE_CALL;
-
-const isInsideEscape = (node: ts.Node): boolean =>
-  ts.findAncestor(node.parent, isEscapeCall) !== undefined;
 
 /** The snapshot object literals `source` builds outside the escape. */
 export const findSnapshotLiterals = (
   relativePath: string,
   source: string,
 ): SnapshotLiteral[] => {
-  const file = ts.createSourceFile(
-    relativePath,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    relativePath.endsWith("x") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-  );
-  const found: SnapshotLiteral[] = [];
-  const visit = (node: ts.Node) => {
-    if (
-      ts.isObjectLiteralExpression(node) &&
-      node.properties.some(isSnapshotDiscriminant) &&
-      !isInsideEscape(node)
-    ) {
-      found.push({
-        line: file.getLineAndCharacterOfPosition(node.getStart(file)).line + 1,
-        path: relativePath,
-      });
+  const file = parseSource(relativePath, source);
+  const parents = new Map<Node, readonly Node[]>();
+  walk(file.program, (node, ancestors) => {
+    parents.set(node, [...ancestors]);
+  });
+  const bindingOf = (from: Node, name: string): Expression | undefined => {
+    for (const scope of (parents.get(from) ?? []).toReversed()) {
+      if (
+        scope.type === "FunctionDeclaration" ||
+        scope.type === "FunctionExpression" ||
+        scope.type === "ArrowFunctionExpression"
+      ) {
+        const parameter = scope.params.find(
+          (candidate) =>
+            candidate.type === "AssignmentPattern" &&
+            candidate.left.type === "Identifier" &&
+            candidate.left.name === name,
+        );
+        if (parameter?.type === "AssignmentPattern") {
+          return parameter.right;
+        }
+      }
+      const statements =
+        scope.type === "Program" ||
+        scope.type === "BlockStatement" ||
+        scope.type === "TSModuleBlock"
+          ? scope.body
+          : [];
+      for (const statement of statements) {
+        const declaration =
+          statement.type === "ExportNamedDeclaration"
+            ? statement.declaration
+            : statement;
+        if (declaration?.type !== "VariableDeclaration") {
+          continue;
+        }
+        for (const variable of declaration.declarations) {
+          if (
+            variable.id.type === "Identifier" &&
+            variable.id.name === name &&
+            variable.init
+          ) {
+            return variable.init;
+          }
+        }
+      }
     }
-    ts.forEachChild(node, visit);
+    return undefined;
   };
-  visit(file);
+  const isSnapshotType = (node: Expression, hops = 0): boolean => {
+    const value = unwrap(node);
+    const text = literalText(value);
+    if (text !== undefined) {
+      return text === SNAPSHOT_TYPE;
+    }
+    if (value.type === "MemberExpression") {
+      return value.computed
+        ? literalText(unwrap(value.property)) === SNAPSHOT_TYPE
+        : value.property.type === "Identifier" &&
+            value.property.name === SNAPSHOT_TYPE;
+    }
+    if (value.type === "Identifier" && hops < MAX_BINDING_HOPS) {
+      const bound = bindingOf(value, value.name);
+      return bound !== undefined && isSnapshotType(bound, hops + 1);
+    }
+    return false;
+  };
+  const isSnapshotDiscriminant = (property: Property | SpreadElement) => {
+    if (
+      property.type !== "Property" ||
+      property.method ||
+      property.kind !== "init"
+    ) {
+      return false;
+    }
+    let key: string | undefined;
+    if (property.computed) {
+      key = literalText(unwrap(property.key));
+    } else if (property.key.type === "Identifier") {
+      key = property.key.name;
+    } else {
+      key = literalText(property.key);
+    }
+    return key === "type" && isSnapshotType(property.value);
+  };
+  const found: SnapshotLiteral[] = [];
+  walk(file.program, (node, ancestors) => {
+    if (
+      node.type !== "ObjectExpression" ||
+      !node.properties.some(isSnapshotDiscriminant)
+    ) {
+      return;
+    }
+    if (
+      ancestors.some(
+        (ancestor) =>
+          ancestor.type === "CallExpression" &&
+          ancestor.callee.type === "Identifier" &&
+          ancestor.callee.name === ESCAPE_CALL,
+      )
+    ) {
+      return;
+    }
+    found.push({ line: file.locate(node.start).line, path: relativePath });
+  });
   return found;
 };
 

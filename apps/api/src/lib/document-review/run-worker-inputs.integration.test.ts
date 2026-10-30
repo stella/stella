@@ -5,6 +5,8 @@ import {
   beforeEach,
   describe,
   expect,
+  type Mock,
+  mock,
   spyOn,
   test,
 } from "bun:test";
@@ -123,13 +125,17 @@ const actor = createRootRunActor(
   database,
 );
 
-const preparationSpy = spyOn(preparation, "fetchAndPrepareReviewFiles");
-const modelSpy = spyOn(modelTransport, "generateTanStackTextForTask");
+let preparationSpy: Mock<typeof preparation.fetchAndPrepareReviewFiles>;
+let modelSpy: Mock<typeof modelTransport.generateTanStackTextForTask>;
 const fetchPreconnect = globalThis.fetch.preconnect;
-const fetchSpy = spyOn(globalThis, "fetch");
+let fetchSpy: Mock<typeof globalThis.fetch>;
 const analytics = installRecordingAnalytics();
 
 beforeEach(async () => {
+  preparationSpy = spyOn(preparation, "fetchAndPrepareReviewFiles");
+  modelSpy = spyOn(modelTransport, "generateTanStackTextForTask");
+  fetchSpy = spyOn(globalThis, "fetch");
+
   preparationSpy.mockClear();
   preparationSpy.mockImplementation(async () =>
     panic("Unexpected review file preparation"),
@@ -181,6 +187,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  mock.restore();
   await testDb
     .delete(documentReviewRuns)
     .where(eq(documentReviewRuns.id, runId));

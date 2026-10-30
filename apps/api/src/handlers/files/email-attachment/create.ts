@@ -27,6 +27,7 @@ import {
   organizationFileUsageHandlerError,
 } from "@/api/lib/files/organization-file-usage";
 import { maybeStartUploadTriggeredFlows } from "@/api/lib/flows/maybe-start-upload-triggered-flows";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { broadcastOrganizationResourceSetUpdated } from "@/api/lib/resource-realtime";
 
 import {
@@ -141,10 +142,10 @@ export default createSafeHandler(
 
     const encryption = uploadFileEncryption(
       await detectFileEncryption({ mimeType: attachment.mimeType, scanned }),
-      {
+      handlerErrorContext("emailAttachment.detectEncryption", {
         mimeType: attachment.mimeType,
         sizeBytes: String(attachment.bytes.byteLength),
-      },
+      }),
     );
     if (encryption === null) {
       return Result.err(
@@ -187,10 +188,13 @@ export default createSafeHandler(
       organizationId: session.activeOrganizationId,
       fileName: created.fileName,
     }).catch((error: unknown) => {
-      captureError(error, {
-        entityId: created.entityId,
-        workspaceId: destinationWorkspaceId,
-      });
+      captureError(
+        error,
+        handlerErrorContext("emailattachment.capture", {
+          entityId: created.entityId,
+          workspaceId: destinationWorkspaceId,
+        }),
+      );
     });
     broadcastOrganizationResourceSetUpdated(
       session.activeOrganizationId,

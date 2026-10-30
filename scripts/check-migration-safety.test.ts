@@ -26,11 +26,10 @@ SET LOCAL statement_timeout = '30s';
 `;
 
 const runCheckerOn = (...args: string[]): CheckerResult => {
-  const result = Bun.spawnSync([
-    "bun",
-    "scripts/check-migration-safety.ts",
-    ...args,
-  ]);
+  const result = Bun.spawnSync(
+    ["bun", path.join(import.meta.dir, "check-migration-safety.ts"), ...args],
+    { cwd: path.resolve(import.meta.dir, "..") },
+  );
 
   return {
     exitCode: result.exitCode,
@@ -144,6 +143,121 @@ describe("check-migration-safety", () => {
   });
 
   describe("statement invariants", () => {
+    const reviewedDefiner = (options: string) => `
+      -- stella-migration-safety: reviewed security-definer - Reviewed fixed helper privileges
+      CREATE FUNCTION probe() RETURNS integer
+      LANGUAGE sql SECURITY DEFINER ${options}
+      AS $$ SELECT 1 $$;
+    `;
+
+    it("requires SECURITY DEFINER search paths to end in pg_temp", () => {
+      for (const options of [
+        "",
+        "SET search_path = ''",
+        "SET search_path FROM CURRENT",
+        "SET search_path = pg_catalog, pg_temp, public",
+      ]) {
+        expectFinding(
+          runChecker(reviewedDefiner(options)),
+          "security-definer-search-path",
+        );
+      }
+    });
+
+    it.each([
+      "SET search_path = public, pg_temp",
+      "SET search_path = pg_catalog, public, pg_temp",
+      "SET search_path = writable_owner, pg_temp",
+    ])("rejects untrusted SECURITY DEFINER search path %s", (options) => {
+      expectFinding(
+        runChecker(reviewedDefiner(options)),
+        "security-definer-trusted-search-path",
+      );
+    });
+
+    it("accepts a canonical SECURITY DEFINER search path", () => {
+      expectClean(
+        runChecker(reviewedDefiner("SET search_path = pg_catalog, pg_temp")),
+      );
+    });
+
+    it.each([
+      'SET search_path = pg_catalog, "PG_TEMP"',
+      "SET search_path = 'pg_catalog, public, pg_temp'",
+      "SET search_path = pg_catalog, pg_temp, 'public'",
+      "SET search_path = pg_temp, public, pg_temp",
+      "SET search_path = pg_temp_3, public, pg_temp",
+    ])("rejects non-canonical search path %s", (options) => {
+      expectFinding(
+        runChecker(reviewedDefiner(options)),
+        "security-definer-search-path",
+      );
+    });
+
+    it("rejects repeated SECURITY DEFINER search_path settings", () => {
+      for (const options of [
+        "SET search_path = pg_catalog, pg_temp SET search_path = public",
+        "SET search_path = pg_temp SET search_path = pg_catalog, pg_temp",
+      ]) {
+        const result = runChecker(reviewedDefiner(options));
+
+        expectFinding(result, "security-definer-search-path");
+        expect(result.stderr).toContain(
+          "function probe has a repeated search_path setting",
+        );
+      }
+    });
+
+    it("rejects repeated ALTER FUNCTION search_path settings", () => {
+      const result = runChecker(`
+        ALTER FUNCTION probe()
+        SET search_path = pg_catalog, pg_temp
+        SET search_path = public;
+      `);
+
+      expectFinding(result, "security-definer-search-path");
+      expect(result.stderr).toContain(
+        "function probe has a repeated search_path setting",
+      );
+    });
+
+    it("rejects a non-canonical ALTER FUNCTION search path", () => {
+      expectFinding(
+        runChecker(`
+          ALTER FUNCTION public.entity_feature_gate_value(text, jsonb)
+          SET search_path = public;
+        `),
+        "security-definer-search-path",
+      );
+    });
+
+    it.each([
+      "ALTER FUNCTION f(int) RESET search_path;",
+      'ALTER FUNCTION f(int) RESET "search_path";',
+      'ALTER FUNCTION f(int) RESET "SEARCH_PATH";',
+      'ALTER FUNCTION f(int) SET "search_path" = public;',
+      'ALTER FUNCTION f(int) SET "search_path" = pg_catalog, pg_temp;',
+    ])("rejects ALTER FUNCTION search path reset or quoted name %s", (sql) => {
+      expectFinding(runChecker(sql), "security-definer-search-path");
+    });
+
+    it("accepts a canonical ALTER FUNCTION search path", () => {
+      expectClean(
+        runChecker(
+          "ALTER FUNCTION f(int) SET search_path = pg_catalog, pg_temp;",
+        ),
+      );
+    });
+
+    it("rejects unparseable SECURITY DEFINER search paths by function name", () => {
+      const result = runChecker(
+        reviewedDefiner("SET search_path = pg_catalog + pg_temp"),
+      );
+
+      expectFinding(result, "security-definer-search-path");
+      expect(result.stderr).toContain("function probe");
+    });
+
     it("rejects column-target ON CONFLICT clauses", () => {
       const result = runChecker(`
         INSERT INTO "mcp_connectors" ("slug")
@@ -176,6 +290,122 @@ describe("check-migration-safety", () => {
             WHERE "slug" = 'salvia'
               AND "organization_id" IS NULL
           );
+        `),
+      );
+    });
+  });
+
+  describe("uniqueness contract steps", () => {
+    it("flags a unique index added to an existing table", () => {
+      expectFinding(
+        runChecker(
+          `CREATE UNIQUE INDEX "documents_external_id_unique" ON "documents" ("external_id");`,
+        ),
+        "add-unique-constraint",
+      );
+    });
+
+    const addedUniquenessContracts = [
+      `ALTER TABLE documents ADD UNIQUE NULLS NOT DISTINCT (external_id) INCLUDE (source) USING INDEX TABLESPACE fastspace DEFERRABLE INITIALLY DEFERRED NOT VALID;`,
+      `ALTER TABLE documents ADD PRIMARY KEY NULLS DISTINCT (external_id) INCLUDE (source) USING INDEX TABLESPACE fastspace DEFERRABLE;`,
+      `ALTER TABLE documents ADD EXCLUDE USING gist (validity WITH &&) INCLUDE (source) USING INDEX TABLESPACE fastspace DEFERRABLE NOT VALID;`,
+      `ALTER TABLE documents ADD CONSTRAINT documents_external_id_unique UNIQUE USING INDEX documents_external_id_idx;`,
+      `ALTER TABLE documents ADD PRIMARY KEY USING INDEX documents_external_id_idx;`,
+      `ALTER TABLE documents ADD COLUMN external_id text PRIMARY KEY;`,
+      `ALTER TABLE documents ADD external_id text UNIQUE;`,
+      `ALTER TABLE documents ADD COLUMN IF NOT EXISTS external_id text CONSTRAINT documents_external_id_key UNIQUE;`,
+      `ALTER TABLE documents ADD IF NOT EXISTS external_id text CONSTRAINT documents_external_id_pkey PRIMARY KEY;`,
+      `AlTeR TaBlE "legal"."Documents" ADD CONSTRAINT "External Id Key" UNIQUE ("External Id");`,
+    ];
+
+    it.each(addedUniquenessContracts)(
+      "flags an added table uniqueness contract: %s",
+      (sql) => {
+        expectFinding(runChecker(sql), "add-unique-constraint");
+      },
+    );
+
+    it.each(addedUniquenessContracts)(
+      "allows an added uniqueness contract on a table created in the migration: %s",
+      (sql) => {
+        const qualified = sql.includes('"legal"."Documents"');
+        const create = qualified
+          ? `CREATE TABLE "legal"."Documents" (seed text);`
+          : `CREATE TABLE documents (seed text);`;
+
+        expectClean(runChecker(`${create}\n${sql}`));
+      },
+    );
+
+    it("flags a uniqueness contract in the second ALTER TABLE action", () => {
+      expectFinding(
+        runChecker(`
+          ALTER TABLE "legal"."Documents"
+            ADD COLUMN "status" text,
+            ADD COLUMN IF NOT EXISTS "External Id" text UNIQUE;
+        `),
+        "add-unique-constraint",
+      );
+    });
+
+    it("allows the same SQL in the pending-contract registry", () => {
+      const [result] = checkMigrationSources([
+        {
+          file: "apps/api/src/lib/db/pending-contract-migrations/20261015060000_case_law_decisions_base_table_contract.sql",
+          source: `${TIMEOUTS}CREATE UNIQUE INDEX "documents_external_id_unique" ON "documents" ("external_id");`,
+        },
+      ]);
+
+      expect(result?.guardedFindings).toEqual([]);
+      expect(result?.invariantFindings).toEqual([]);
+      expect(result?.acknowledgementErrors).toEqual([]);
+    });
+
+    it("allows inline uniqueness on a table created in the migration", () => {
+      expectClean(
+        runChecker(`
+          CREATE TABLE "document_aliases" (
+            "id" uuid PRIMARY KEY,
+            "alias" text UNIQUE
+          );
+        `),
+      );
+    });
+
+    it("allows a unique index on a table created in the migration", () => {
+      expectClean(
+        runChecker(`
+          CREATE TABLE "document_aliases" ("alias" text);
+          CREATE UNIQUE INDEX "document_aliases_alias_unique"
+            ON "document_aliases" ("alias");
+        `),
+      );
+    });
+
+    it("recognises concurrently and quoted identifiers", () => {
+      const result = runChecker(`
+        CREATE UNIQUE INDEX CONCURRENTLY "Document External Id Unique"
+          ON "Legal Documents" ("External Id");
+      `);
+
+      expectFinding(result, "add-unique-constraint");
+      expect(result.stderr).toContain("[pre-deploy-concurrent-index]");
+    });
+
+    it("requires typed writer names in an acknowledgement", () => {
+      const result = runChecker(`
+        -- stella-migration-safety: reviewed add-unique-constraint - application code already checks this
+        ALTER TABLE "documents"
+          ADD CONSTRAINT "documents_external_id_unique" UNIQUE ("external_id");
+      `);
+
+      expectFinding(result, "invalid-uniqueness-writers");
+
+      expectClean(
+        runChecker(`
+          -- stella-migration-safety: reviewed add-unique-constraint - writers: createDocument, importDocuments; both reject duplicate external identifiers
+          ALTER TABLE "documents"
+            ADD CONSTRAINT "documents_external_id_unique" UNIQUE ("external_id");
         `),
       );
     });
@@ -426,6 +656,13 @@ describe("check-migration-safety", () => {
           `CREATE FUNCTION copy_documents() RETURNS void LANGUAGE plpgsql AS $$ BEGIN FOR item IN SELECT id FROM documents LOOP INSERT INTO documents_v2 (id) VALUES (item.id); END LOOP; END $$;`,
           "pre-deploy-row-loop",
         ],
+        // A trigger routine is not callable, but a DO block that loops is
+        // refused whatever routine it sits beside.
+        [
+          `CREATE FUNCTION touch_children() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NULL; END $$;
+          DO $$ BEGIN FOR item IN SELECT id FROM documents LOOP PERFORM item.id; END LOOP; END $$;`,
+          "pre-deploy-row-loop",
+        ],
       ] as const;
 
       for (const [sql, ruleId] of refused) {
@@ -442,6 +679,22 @@ describe("check-migration-safety", () => {
             FOREIGN KEY ("state_id") REFERENCES "document_states" ("id") NOT VALID;
           CREATE INDEX "document_states_slug_idx" ON "document_states" ("slug");
           INSERT INTO "document_states" ("id", "slug") VALUES (1, 'ready'), (2, 'archived');
+        `),
+      );
+    });
+
+    it("allows a trigger routine that loops over the rows a write touched", () => {
+      expectClean(
+        runChecker(`
+          SET lock_timeout = '1s';
+          SET statement_timeout = '5s';
+          CREATE FUNCTION touch_children() RETURNS trigger LANGUAGE plpgsql AS $$
+          BEGIN
+            FOR child IN SELECT id FROM documents WHERE parent_id = NEW.id LOOP
+              PERFORM child.id;
+            END LOOP;
+            RETURN NULL;
+          END $$;
         `),
       );
     });
@@ -695,7 +948,7 @@ describe("check-migration-safety", () => {
       "a function header owns its review independently of body layout (%j)",
       (separator) => {
         const sql = `-- stella-migration-safety: reviewed security-definer - Reviewed fixed read-only helper privileges
-CREATE FUNCTION probe() RETURNS integer LANGUAGE sql SECURITY DEFINER AS $$${separator}SELECT 1;${separator}$$;`;
+CREATE FUNCTION probe() RETURNS integer LANGUAGE sql SECURITY DEFINER SET search_path = pg_catalog, pg_temp AS $$${separator}SELECT 1;${separator}$$;`;
         const statements = parseMigrationStatements(sql);
         const header = statements.findIndex(
           (statement) =>

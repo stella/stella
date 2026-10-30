@@ -2,8 +2,10 @@ import { expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
+import { createSafeId } from "@/api/lib/branded-types";
+import { decisionDateRankSql } from "@/api/lib/case-law/decision-date-order";
 import {
-  decisionDatedFilterSql,
+  decisionSearchCursorAfterSql,
   decisionSortKeySql,
 } from "@/api/lib/case-law/decision-search-order-sql";
 
@@ -18,35 +20,26 @@ test("the relevance order sorts by the blended score it was handed", () => {
   );
 });
 
-test("the newest order sorts by the decision date", () => {
+// The search sorts by this key descending, which is the newest date order
+// only because the rank puts an undated decision below every dated one.
+test("the newest order sorts by the shared date rank", () => {
   const rendered = compile(decisionSortKeySql("newest", RELEVANCE_SCORE));
 
-  expect(rendered).toContain("extract(epoch FROM d.decision_date)");
+  expect(rendered).toBe(
+    compile(decisionDateRankSql("newest", sql`d.decision_date`)),
+  );
+  expect(rendered).toContain("'-infinity'::date");
   expect(rendered).not.toContain("blended_rank");
 });
 
-/**
- * A decision the source never dated has no place in a date order, so it is
- * left out of the pages, the total and every facet rather than piled at one
- * end. Without the predicate the sort key below would need a floor to put
- * them at, and whichever end that floor landed on would be wrong for someone.
- */
-test("the newest order keeps only the decisions it can rank", () => {
-  expect(compile(decisionDatedFilterSql("newest"))).toContain(
-    "d.decision_date IS NOT NULL",
+test("a newest cursor resumes on the rank the page was sorted by", () => {
+  const rendered = compile(
+    decisionSearchCursorAfterSql({
+      sort: "newest",
+      position: { band: "undated", id: createSafeId<"caseLawDecision">() },
+    }),
   );
-});
 
-// Relevance ranks an undated decision as well as any other, so it keeps them.
-test("the relevance order excludes nothing", () => {
-  expect(compile(decisionDatedFilterSql("relevance")).trim()).toBe("");
-});
-
-// The predicate above is what lets the key be the bare column: a coalesce to
-// some floor would be a second answer to where an undated decision sorts.
-test("the newest sort key reads the column with no floor under it", () => {
-  const rendered = compile(decisionSortKeySql("newest", RELEVANCE_SCORE));
-
-  expect(rendered).toContain("extract(epoch FROM d.decision_date)");
-  expect(rendered).not.toContain("coalesce");
+  expect(rendered).toStartWith("(m.sort_key, m.decision_id) < (");
+  expect(rendered).toContain("'-infinity'::date");
 });
