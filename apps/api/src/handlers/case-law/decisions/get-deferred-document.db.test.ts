@@ -207,7 +207,8 @@ const checkDeferredRead = async (
           abstract: { type: "present", text: storedMetadata.abstract },
           headnote: { type: "present", text: storedMetadata.headnote },
         },
-        sections: initialSections,
+        // A pending read serves no sections without a usable stored AST.
+        sections: null,
         citationsFrom: [{ id: citationId }],
         source: { allowsDerivedAi: true },
       });
