@@ -403,6 +403,7 @@ const virtualDrainRuntime = (
     },
     deadlineMs,
     pollMs,
+    repeat: () => () => undefined,
   };
 };
 
@@ -433,6 +434,7 @@ const virtualRunnerRuntime = ({
     },
     deadlineMs: SCHEDULER_DRAIN_DEADLINE_MS,
     pollMs: 60_000,
+    repeat: () => () => undefined,
   };
 };
 
@@ -2356,6 +2358,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
               },
               deadlineMs: SCHEDULER_DRAIN_DEADLINE_MS,
               pollMs: 1000,
+              repeat: () => () => undefined,
             };
             const { error, timings } = await attemptRun({
               openClient,
@@ -2376,6 +2379,90 @@ if (!runPostgresTests || databaseUrl === undefined) {
             expect((after?.paused_until?.getTime() ?? 0) > Date.now()).toBe(
               true,
             );
+          },
+        );
+      });
+
+      test("pauses are renewed while the schema work runs past the original pause", async () => {
+        await withSchedulerBundle(
+          `${ALTER_AFTER_DRAIN}--> statement-breakpoint\n${AWAIT_SCHEMA_GATE}`,
+          async ({ observer, openClient, scratchUrl }, folder) => {
+            await operatorPause({
+              observer,
+              id: "job.other",
+              by: "operator",
+              reason: "Ten minute hold",
+              interval: "10 minutes",
+            });
+            const originalOther = rowOf(
+              await schedulerRows(observer),
+              "job.other",
+            );
+            // The test owns the renewal timer: it fires only when told to.
+            let tick: (() => Promise<void>) | undefined;
+            const gate = await openClient().reserve();
+            await gate.unsafe(HOLD_SCHEMA_GATE);
+            const run = attemptRun({
+              openClient,
+              scratchUrl,
+              folder,
+              schedulerDrain: {
+                ...DEFAULT_SCHEDULER_DRAIN_RUNTIME,
+                pollMs: 10,
+                repeat: (callback) => {
+                  tick = callback;
+                  return () => {
+                    tick = undefined;
+                  };
+                },
+              },
+            });
+            try {
+              await waitForSchemaGateWaiter(observer);
+              // The work outlasts the pause: shorten it to what the original
+              // bound would have left, and let it lapse.
+              await observer.unsafe(
+                "UPDATE scheduler_jobs SET paused_until = now() + interval '1 second' WHERE paused_by = 'migrate'",
+              );
+              await waitForExternalState({
+                description: "the step's pauses have lapsed",
+                read: async () => {
+                  const [row] = await observer.unsafe<{ lapsed: number }[]>(
+                    "SELECT count(*)::int AS lapsed FROM scheduler_jobs WHERE paused_by = 'migrate' AND paused_until < now()",
+                  );
+                  return (row?.lapsed ?? 0) > 0;
+                },
+              });
+              await tick?.();
+              const [still] = await observer.unsafe<{ active: number }[]>(
+                "SELECT count(*)::int AS active FROM scheduler_jobs WHERE paused_by = 'migrate' AND paused_until > now() + interval '10 minutes'",
+              );
+              expect(still?.active).toBe(3);
+              await gate.unsafe(RELEASE_SCHEMA_GATE);
+              const { error, timings } = await run;
+              expect(error).toBeNull();
+              expect(schedulerEvents(timings)).toMatchObject([
+                { outcome: "drained", pausedCount: 2, takenOverCount: 1 },
+                {
+                  outcome: "resumed",
+                  renewalCount: 1,
+                  renewalFailureCount: 0,
+                  restoredCount: 1,
+                },
+              ]);
+            } finally {
+              await gate.unsafe(RELEASE_SCHEMA_GATE);
+              // swallow-ok: the run's outcome was asserted above; this only drains it
+              await run.catch(() => undefined);
+              await gate.release();
+            }
+            const rows = await schedulerRows(observer);
+            expect(rowOf(rows, "job.reader")?.paused_until).toBeNull();
+            expect(rowOf(rows, "job.other")).toMatchObject({
+              paused_by: "operator",
+              pause_reason: "Ten minute hold",
+              paused_until: originalOther?.paused_until,
+            });
           },
         );
       });

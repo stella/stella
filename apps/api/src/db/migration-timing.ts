@@ -48,6 +48,11 @@ export type MigrationTimingRecord =
       drainWaitMs: number;
     }
   | {
+      /** A pause renewal that failed while the work ran; the work was not aborted. */
+      event: "migrate.scheduler_renewal_failed";
+      errorName: string;
+    }
+  | {
       /** One still-leased job while the drain waits; emitted at a bounded cadence. */
       event: "migrate.scheduler_drain_progress";
       jobId: string;
@@ -63,6 +68,9 @@ export type MigrationTimingRecord =
       takenOverCount: number;
       resumedCount: number;
       restoredCount: number;
+      /** Ticks that extended at least one pause while the work ran. */
+      renewalCount: number;
+      renewalFailureCount: number;
       durationMs: number;
       errorName?: string;
     };

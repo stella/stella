@@ -45,6 +45,7 @@ import {
 } from "../lib/scheduler/timing";
 import { DEFAULT_LOCK_RETRY_CONFIG } from "./lock-retry-ladder";
 import type { MigrationTiming } from "./migration-timing";
+import type { OnlineMigrationConnection } from "./online-migration-connection";
 
 /**
  * `paused_by` of every pause this step writes; resumes match on it. A resume
@@ -85,6 +86,11 @@ export const SCHEDULER_DRAIN_START_FLOOR_MS =
 export const SCHEDULER_DRAIN_PAUSE_BOUND_MS =
   SCHEDULER_DRAIN_START_FLOOR_MS + SCHEDULER_DRAIN_MARGIN_MS;
 export const SCHEDULER_DRAIN_POLL_MS = 5000;
+/**
+ * While the work runs, the step's pauses are renewed this often, well inside
+ * the work floor they renew to, so a long schema step never outlasts them.
+ */
+export const SCHEDULER_DRAIN_RENEW_EVERY_MS = SCHEDULER_DRAIN_WORK_FLOOR_MS / 4;
 /** One progress event per still-leased job at most this often. */
 export const SCHEDULER_DRAIN_PROGRESS_MS = 60_000;
 
@@ -125,6 +131,8 @@ export type SchedulerDrainRuntime = {
   sleep: (ms: number) => Promise<void>;
   deadlineMs: number;
   pollMs: number;
+  /** Runs `run` every `intervalMs` until the returned function is called. */
+  repeat: (run: () => Promise<void>, intervalMs: number) => () => void;
 };
 
 export const DEFAULT_SCHEDULER_DRAIN_RUNTIME: SchedulerDrainRuntime = {
@@ -132,12 +140,23 @@ export const DEFAULT_SCHEDULER_DRAIN_RUNTIME: SchedulerDrainRuntime = {
   sleep: Bun.sleep,
   deadlineMs: SCHEDULER_DRAIN_DEADLINE_MS,
   pollMs: SCHEDULER_DRAIN_POLL_MS,
+  repeat: (run, intervalMs) => {
+    // `run` reports its own failures and never rejects.
+    const timer = setInterval(run, intervalMs);
+    return () => {
+      clearInterval(timer);
+    };
+  },
 };
 
 type SchedulerDrainOptions = {
   connection: ReservedSQL;
   timing: MigrationTiming;
   runtime: SchedulerDrainRuntime;
+  /** Whether schema migrations are pending; without any there is nothing to drain for. */
+  pending: boolean;
+  /** A session apart from `connection`, which is busy while the work runs. */
+  openRenewalConnection: () => Promise<OnlineMigrationConnection>;
 };
 
 const hasPauseColumns = async (connection: ReservedSQL): Promise<boolean> => {
@@ -411,9 +430,12 @@ const resumeJobs = async (
 const errorName = (error: unknown): string =>
   error instanceof Error ? error.name : "unknown";
 
+type RenewalStats = { renewalCount: number; renewalFailureCount: number };
+
 const resumeAndReport = async (
   { connection, timing, runtime }: SchedulerDrainOptions,
   paused: PauseOutcome,
+  renewals: RenewalStats,
 ): Promise<void> => {
   const startedAt = runtime.now();
   const durationMs = () => Math.max(0, Math.round(runtime.now() - startedAt));
@@ -431,6 +453,7 @@ const resumeAndReport = async (
           ...countRestorations(paused),
           resumedCount: resumed.value.resumedCount,
           restoredCount: resumed.value.restoredCount,
+          ...renewals,
           durationMs: durationMs(),
         }
       : {
@@ -439,10 +462,97 @@ const resumeAndReport = async (
           ...countRestorations(paused),
           resumedCount: 0,
           restoredCount: 0,
+          ...renewals,
           durationMs: durationMs(),
           errorName: errorName(resumed.error),
         },
   );
+};
+
+/**
+ * Extends the step's pauses to the work floor, only for jobs this run wrote
+ * and only while `paused_by` is still the step's, so a row someone else
+ * rewrote is never touched; a pause already longer is never shortened.
+ */
+const RENEW_SQL = `UPDATE scheduler_jobs
+   SET paused_until = now() + $3::integer * interval '1 millisecond',
+       updated_at = now()
+   WHERE id IN (SELECT jsonb_array_elements_text($1::text::jsonb))
+     AND paused_by = $2
+     AND paused_until IS NOT NULL
+     AND paused_until < now() + $3::integer * interval '1 millisecond'
+   RETURNING id`;
+
+type Renewal = { stats: RenewalStats; stop: () => Promise<void> };
+
+/**
+ * Keeps the pauses alive while `work` runs. A failure is reported and never
+ * aborts the work, which may be mid-DDL; the next tick tries again.
+ */
+const startRenewal = async (
+  { timing, runtime, openRenewalConnection }: SchedulerDrainOptions,
+  paused: PauseOutcome,
+): Promise<Renewal> => {
+  const stats: RenewalStats = { renewalCount: 0, renewalFailureCount: 0 };
+  const reportFailure = (cause: unknown) => {
+    stats.renewalFailureCount += 1;
+    timing.emit({
+      event: "migrate.scheduler_renewal_failed",
+      errorName: errorName(cause),
+    });
+  };
+  const opened = await Result.tryPromise({
+    try: async () => await openRenewalConnection(),
+    catch: (cause) => cause,
+  });
+  if (opened.isErr()) {
+    reportFailure(opened.error);
+    return { stats, stop: async () => undefined };
+  }
+  const renewalConnection = opened.value;
+  const ids = JSON.stringify([...paused.keys()]);
+  let stopped = false;
+  let inflight: Promise<void> = Promise.resolve();
+  const tick = async () => {
+    if (stopped) {
+      return;
+    }
+    const renewed = await Result.tryPromise({
+      try: async () =>
+        await renewalConnection.query(RENEW_SQL, [
+          ids,
+          SCHEDULER_DRAIN_ACTOR,
+          SCHEDULER_DRAIN_WORK_FLOOR_MS,
+        ]),
+      catch: (cause) => cause,
+    });
+    if (renewed.isErr()) {
+      reportFailure(renewed.error);
+      return;
+    }
+    if (renewed.value.length > 0) {
+      stats.renewalCount += 1;
+    }
+  };
+  const cancel = runtime.repeat(() => {
+    inflight = tick();
+    return inflight;
+  }, SCHEDULER_DRAIN_RENEW_EVERY_MS);
+  return {
+    stats,
+    stop: async () => {
+      stopped = true;
+      cancel();
+      await inflight;
+      const released = await Result.tryPromise({
+        try: async () => await renewalConnection.release(),
+        catch: (cause) => cause,
+      });
+      if (released.isErr()) {
+        reportFailure(released.error);
+      }
+    },
+  };
 };
 
 /**
@@ -457,12 +567,13 @@ export const withDrainedScheduler = async <T>(
   work: () => Promise<T>,
 ): Promise<T> => {
   const { connection, timing, runtime } = options;
-  if (!(await hasPauseColumns(connection))) {
+  if (!options.pending || !(await hasPauseColumns(connection))) {
     return await work();
   }
   const startedAt = runtime.now();
   const waitedMs = () => Math.max(0, Math.round(runtime.now() - startedAt));
   const paused: PauseOutcome = new Map();
+  let renewals: RenewalStats = { renewalCount: 0, renewalFailureCount: 0 };
 
   try {
     // The first pass must outlast the wait; later passes need only the work
@@ -521,10 +632,18 @@ export const withDrainedScheduler = async <T>(
       leasedCount: 0,
       drainWaitMs: waitedMs(),
     });
-    return await work();
+    const renewal = await startRenewal(options, paused);
+    try {
+      return await work();
+    } finally {
+      // Renewal ends before the resume, so it can never extend a pause the
+      // resume has cleared.
+      await renewal.stop();
+      renewals = renewal.stats;
+    }
   } finally {
     if (paused.size > 0) {
-      await resumeAndReport(options, paused);
+      await resumeAndReport(options, paused, renewals);
     }
   }
 };

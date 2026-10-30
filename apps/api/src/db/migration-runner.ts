@@ -728,6 +728,23 @@ const createSchemaObservation = async ({
     });
 };
 
+/** The migrator's own session as the online phase's connection. */
+const reservedOnlineConnection = (
+  connection: ReservedSQL,
+  session: { state: "open" | "terminated" },
+): OnlineMigrationConnection => ({
+  terminate: async () => {
+    session.state = "terminated";
+    await terminateReserved(connection);
+  },
+  execute: async (query, params = []) => {
+    await connection.unsafe(query, [...params]);
+  },
+  query: async (query, params = []) =>
+    await connection.unsafe(query, [...params]),
+  release: (): void => undefined,
+});
+
 export const runMigrations = async ({
   connection,
   databaseUrl,
@@ -833,14 +850,16 @@ export const runMigrations = async ({
         }),
         retry: lockWaitRetry,
       });
-    if (predicted.length === 0) {
-      await applyPending();
-    } else {
-      await withDrainedScheduler(
-        { connection, timing, runtime: schedulerDrain },
-        applyPending,
-      );
-    }
+    await withDrainedScheduler(
+      {
+        connection,
+        timing,
+        runtime: schedulerDrain,
+        pending: predicted.length > 0,
+        openRenewalConnection: reserveSchemaObserver,
+      },
+      applyPending,
+    );
     clock.retriesSpent = lockTelemetry.retriesSpent - schemaRetriesAtStart;
     await schemaObserver.release();
     schemaObserver = undefined;
@@ -871,18 +890,7 @@ export const runMigrations = async ({
       retriesSpent: () => lockTelemetry.retriesSpent,
     };
     clock.startedAt = timing.clock();
-    const onlineConnection: OnlineMigrationConnection = {
-      terminate: async () => {
-        session.state = "terminated";
-        await terminateReserved(connection);
-      },
-      execute: async (query, params = []) => {
-        await connection.unsafe(query, [...params]);
-      },
-      query: async (query, params = []) =>
-        await connection.unsafe(query, [...params]),
-      release: (): void => undefined,
-    };
+    const onlineConnection = reservedOnlineConnection(connection, session);
     const online = await runOnline(
       { reserve: async () => await Promise.resolve(onlineConnection) },
       {
