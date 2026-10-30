@@ -171,7 +171,10 @@ const DecisionCitationTriggerContent = ({
     paragraph: string | null;
     presentation: DecisionCitationPresentation;
     sourceText: ReactNode;
-  }) => {
+    // Explicit ReactNode: returning `sourceText` infers a type containing
+    // React 19's Promise<AwaitedReactNode> member, which promise-function-async
+    // would otherwise flag on this sync component.
+  }): ReactNode => {
   const t = useTranslations();
   if (sourceText !== undefined) {
     return sourceText;
