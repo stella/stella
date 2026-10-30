@@ -2596,6 +2596,7 @@ const caseLawSearchResult = ({
     decisionId: hit.decisionId,
     resourceName: serializeAuthorizedCorpusMcpResourceName(resource),
     decisionType: hit.decisionType,
+    decisionTypeKind: hit.decisionTypeKind,
     ecli: hit.ecli,
     language: hit.language,
     matchingPassages: hit.matchingPassages,
