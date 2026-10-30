@@ -20,6 +20,10 @@ import {
 } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import {
+  decodeStoredChatContent,
+  encodeStoredChatContent,
+} from "@/api/db/stored-chat-part-codec";
+import {
   chatMessageFromPersisted,
   normalizePersistedChatMessageContent,
   toPersistedChatMessageContentV3,
@@ -37,7 +41,11 @@ import { loadWindowedThreadMessages } from "@/api/handlers/chat/history-window";
 import { readChatMessageRevisionsOnTx } from "@/api/handlers/chat/messages/revisions/list";
 import { writeChatMessageRevisionOnTx } from "@/api/handlers/chat/messages/revisions/revision-on-tx";
 import type { ChatMessageRevisionChange } from "@/api/handlers/chat/messages/revisions/revision-on-tx";
-import type { ChatMessageMetadata } from "@/api/handlers/chat/types";
+import { serializeRevisionSnapshot } from "@/api/handlers/chat/messages/revisions/serialize-revision-snapshot";
+import type {
+  ChatMessageMetadata,
+  PersistedChatMessageContentV3,
+} from "@/api/handlers/chat/types";
 import { NO_SKILL_BINDING_SCOPE } from "@/api/lib/agent-skills/binding";
 import {
   AUDIT_ACTION,
@@ -57,6 +65,7 @@ import {
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
 import { EMPTY_SUMMARY } from "@/api/tests/helpers/chat-compaction-checkpoint";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -247,6 +256,70 @@ if (!databaseUrl || !runPostgres) {
   });
 } else {
   describe("chat message revisions on the migrated schema (postgres)", () => {
+    test("a single text edit retains stored future fields and ignores client additions", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const db = openClient().db;
+        const fixture = await seedFixture(db);
+        try {
+          const stored = {
+            version: 3,
+            data: [
+              {
+                type: "text",
+                content: "Original answer: café\n\nNext paragraph.",
+                later: { owner: "future-release" },
+              },
+            ],
+          };
+          const content = asTestRaw<PersistedChatMessageContentV3>(
+            decodeStoredChatContent(stored),
+          );
+          await db
+            .update(chatMessages)
+            .set({ content })
+            .where(eq(chatMessages.id, fixture.messageId));
+          const visible = serializeRevisionSnapshot(content);
+          expect(JSON.stringify(visible)).not.toContain("future-release");
+          const change = {
+            ...acceptedChange,
+            content: {
+              version: 3 as const,
+              data: [
+                {
+                  type: "text",
+                  content: "**Original** answer: café\n\nNext paragraph.",
+                  later: { owner: "forged-client" },
+                },
+              ],
+            },
+          };
+          expect(await fixture.write(db, change)).toEqual({
+            type: "ok",
+            revision: 1,
+            edited: true,
+          });
+          const observed = await fixture.observe();
+          expect(
+            encodeStoredChatContent(observed.messages.at(0)?.content),
+          ).toEqual({
+            version: 3,
+            data: [
+              {
+                type: "text",
+                content: "**Original** answer: café\n\nNext paragraph.",
+                later: { owner: "future-release" },
+              },
+            ],
+          });
+          expect(
+            encodeStoredChatContent(observed.revisions.at(0)?.content),
+          ).toEqual(stored);
+        } finally {
+          await fixture.cleanUp();
+        }
+      });
+    });
+
     test.each([3] as const)(
       "accept preserves normalized v%i metadata in the snapshot and edited message",
       async () => {
