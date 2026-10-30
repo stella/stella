@@ -357,10 +357,14 @@ export const flattenInlineText = (
 ): string => {
   const parts: string[] = [];
   let precedingCharacter = "";
+  let adjacentNumericSuperscript = false;
   const appendText = (text: string): void => {
     parts.push(text);
     if (projection !== "search") {
       return;
+    }
+    if (text.length > 0) {
+      adjacentNumericSuperscript = false;
     }
     for (let index = text.length - 1; index >= 0; index--) {
       const character = text.charAt(index);
@@ -386,13 +390,19 @@ export const flattenInlineText = (
       }
       if (inline.type === "superscript" && projection === "search") {
         const text = flattenInlineText(inline.children, "rendered");
+        const numeric = /^(\s*)(\d+)(\s*)$/u.exec(text);
         // Numeric indices stay distinct from concatenated numbers across
-        // emphasis wrappers. A unit exponent after a letter is not an index.
-        appendText(
-          /\d/u.test(precedingCharacter)
+        // emphasis wrappers. Adjacent superscripts form one index even when
+        // formatting wrappers split its digits. A unit exponent after a
+        // letter is not an index.
+        const projected =
+          /\d/u.test(precedingCharacter) &&
+          numeric !== null &&
+          !adjacentNumericSuperscript
             ? text.replace(/^(\s*)(\d+)(\s*)$/u, "$1^$2$3")
-            : text,
-        );
+            : text;
+        appendText(projected);
+        adjacentNumericSuperscript = numeric !== null;
         continue;
       }
       walk(inline.children);

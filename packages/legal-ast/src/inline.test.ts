@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { parseDocumentAst, plainTextOf } from "./document-ast";
+import {
+  parseDocumentAst,
+  plainTextOf,
+  projectPlainText,
+} from "./document-ast";
 import {
   flattenInlineText,
   hasInlineChildren,
@@ -129,6 +133,57 @@ describe("text axis", () => {
         { type: "superscript", children: [{ type: "text", text: "note" }] },
       ]),
     ).toBe("note");
+  });
+
+  test("adjacent numeric superscripts share one index boundary", () => {
+    const split: Inline[] = [
+      { type: "text", text: "398" },
+      { type: "superscript", children: [{ type: "text", text: "1" }] },
+      { type: "superscript", children: [{ type: "text", text: "2" }] },
+    ];
+    const formattedSplit: Inline[] = [
+      { type: "text", text: "398" },
+      {
+        type: "superscript",
+        children: [{ type: "bold", children: [{ type: "text", text: "1" }] }],
+      },
+      {
+        type: "italic",
+        children: [
+          { type: "superscript", children: [{ type: "text", text: "2" }] },
+        ],
+      },
+    ];
+    const joined: Inline[] = [
+      { type: "text", text: "398" },
+      { type: "superscript", children: [{ type: "text", text: "12" }] },
+    ];
+    const literal: Inline[] = [{ type: "text", text: "398¹²" }];
+    const projections = [split, formattedSplit, joined, literal].map(
+      (inlines) => projectPlainText(inlines),
+    );
+    const tokens = projections.map((projection) =>
+      projection.split(/[^\p{L}\p{N}]+/u).filter(Boolean),
+    );
+
+    expect(projections).toEqual(["398^12", "398^12", "398^12", "398^12"]);
+    expect(tokens).toEqual([
+      ["398", "12"],
+      ["398", "12"],
+      ["398", "12"],
+      ["398", "12"],
+    ]);
+  });
+
+  test("a character between numeric superscripts starts a new index boundary", () => {
+    expect(
+      projectPlainText([
+        { type: "text", text: "398" },
+        { type: "superscript", children: [{ type: "text", text: "1" }] },
+        { type: "text", text: " " },
+        { type: "superscript", children: [{ type: "text", text: "2" }] },
+      ]),
+    ).toBe("398^1 ^2");
   });
 
   test("literal superscript digits share the search projection across inline boundaries", () => {
