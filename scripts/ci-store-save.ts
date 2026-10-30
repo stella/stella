@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { sha256Hex } from "../packages/sha256/src/node.ts";
+import { killTree } from "./process-tree.ts";
 
 // Node's action runtime must work without any workspace dependencies. Execute
 // the same pinned implementation as restore without private runner-path assumptions.
@@ -49,32 +50,11 @@ export const createSaveProgress = (now: number) => {
   };
 };
 
-const killTree = (child: ChildProcess) => {
-  if (child.pid === undefined) {
-    return;
-  }
-  if (process.platform === "win32") {
-    const killer = spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"], {
-      stdio: "ignore",
-    });
-    killer.on("error", (error) => {
-      warning(`Cache save process-tree cleanup failed: ${error.message}`);
-      child.kill("SIGKILL");
-    });
-    return;
-  }
-  try {
-    process.kill(-child.pid, "SIGKILL");
-  } catch (error) {
-    if (
-      !(error instanceof Error) ||
-      !("code" in error) ||
-      error.code !== "ESRCH"
-    ) {
-      warning(`Cache save process-tree cleanup failed: ${String(error)}`);
-    }
-  }
-};
+const stopTree = async (child: ChildProcess) =>
+  await killTree(child, {
+    onError: (error) =>
+      warning(`Cache save process-tree cleanup failed: ${String(error)}`),
+  });
 
 type RunCacheSaveOptions = {
   entry: string;
@@ -98,6 +78,7 @@ export const runCacheSave = async ({
     let tail = "";
     let outcome: "saved" | "warning" = "warning";
     let stalled = false;
+    let cleanup: Promise<void> | undefined;
     const child = spawn(executable, [entry], {
       cwd: directory,
       // The upstream cache tool places its archive in one UUID subdirectory.
@@ -155,10 +136,10 @@ export const runCacheSave = async ({
         console.log(
           `::warning title=cache-save-skipped::kind=infra class=cache-save outcome=skipped reason=stalled idle_ms=${stallMs}`,
         );
-        killTree(child);
+        cleanup ??= stopTree(child);
       } catch (error) {
         clearInterval(timer);
-        killTree(child);
+        cleanup ??= stopTree(child);
         reject(
           error instanceof Error
             ? error
@@ -173,17 +154,20 @@ export const runCacheSave = async ({
       reject(error);
     });
     child.on("close", (code) => {
-      clearInterval(timer);
-      activeChildren.delete(child);
-      if (stalled) {
-        resolve("stalled");
-        return;
-      }
-      if (code !== 0) {
-        resolve("failed");
-        return;
-      }
-      resolve(outcome);
+      void (async () => {
+        clearInterval(timer);
+        activeChildren.delete(child);
+        await cleanup;
+        if (stalled) {
+          resolve("stalled");
+          return;
+        }
+        if (code !== 0) {
+          resolve("failed");
+          return;
+        }
+        resolve(outcome);
+      })();
     });
   });
 
@@ -289,7 +273,7 @@ export const runStoreSaveAction = async () => {
   // changing the job verdict, even when cleanup or telemetry writing fails.
   const fatal = (error: unknown) => {
     for (const child of activeChildren) {
-      killTree(child);
+      void stopTree(child);
     }
     warning(
       `Cache maintenance failed: ${error instanceof Error ? error.message : String(error)}`,

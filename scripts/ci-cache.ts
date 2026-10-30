@@ -3,6 +3,8 @@ import { appendFileSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { killTree } from "./process-tree.ts";
+
 export const CACHE_REVISION = "55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
 
 const INFRA_ERROR =
@@ -18,6 +20,21 @@ type RunCacheWorkerOptions = {
   stallMs?: number;
 };
 
+export class CacheNodeRuntimeError extends Error {
+  override name = "CacheNodeRuntimeError";
+  readonly _tag = "CacheNodeRuntimeError";
+}
+
+const nodeExecutable = () => {
+  const node = Bun.which("node");
+  if (node === null) {
+    throw new CacheNodeRuntimeError(
+      "Cache worker requires the Node action runtime, but node was not found on PATH",
+    );
+  }
+  return node;
+};
+
 const annotation = (operation: CacheOperation, detail: string) =>
   `::warning title=cache-${operation}-skipped::kind=infra class=cache-${operation} outcome=skipped ${detail}`;
 
@@ -25,15 +42,17 @@ export const runCacheWorker = async ({
   operation,
   entry,
   env = process.env,
-  executable = process.execPath,
+  executable = nodeExecutable(),
   stallMs = 120_000,
 }: RunCacheWorkerOptions) =>
   new Promise<number>((resolve, reject) => {
     let output = "";
     let lastProgress = Date.now();
     let stopped = false;
+    let cleanup: Promise<void> | undefined;
     const child: ChildProcess = spawn(executable, [entry], {
       env,
+      detached: process.platform !== "win32",
       stdio: ["ignore", "pipe", "pipe"],
     });
     const consume = (chunk: Buffer) => {
@@ -49,28 +68,41 @@ export const runCacheWorker = async ({
           return;
         }
         stopped = true;
-        child.kill("SIGKILL");
+        cleanup ??= killTree(child, {
+          onError: (error) =>
+            console.log(
+              annotation(
+                operation,
+                `reason=cleanup-error detail=${String(error)}`,
+              ),
+            ),
+        });
       },
       Math.min(1000, stallMs),
     );
     child.once("error", reject);
     child.once("close", (code) => {
-      clearInterval(timer);
-      if (code === 0) {
-        return resolve(0);
-      }
-      const infra = stopped || INFRA_ERROR.test(output);
-      if (operation === "save" || infra) {
-        const reason = stopped
-          ? `reason=stalled idle_ms=${stallMs}`
-          : "reason=service-error";
-        console.log(annotation(operation, reason));
-        if (operation === "restore" && process.env["GITHUB_OUTPUT"]) {
-          appendFileSync(process.env["GITHUB_OUTPUT"], "cache-hit=false\n");
+      void (async () => {
+        clearInterval(timer);
+        await cleanup;
+        if (code === 0) {
+          resolve(0);
+          return;
         }
-        return resolve(0);
-      }
-      resolve(code ?? 1);
+        const infra = stopped || INFRA_ERROR.test(output);
+        if (operation === "save" || infra) {
+          const reason = stopped
+            ? `reason=stalled idle_ms=${stallMs}`
+            : "reason=service-error";
+          console.log(annotation(operation, reason));
+          if (operation === "restore" && process.env["GITHUB_OUTPUT"]) {
+            appendFileSync(process.env["GITHUB_OUTPUT"], "cache-hit=false\n");
+          }
+          resolve(0);
+          return;
+        }
+        resolve(code ?? 1);
+      })();
     });
   });
 
