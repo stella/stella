@@ -60,9 +60,10 @@ export const LOCAL_ONLY_FEATURES = [
       "src-tauri/capabilities/activity.json": [
         "src/activity/ActivityApp.tsx",
         "src/activity/ActivityCaptureDetails.tsx",
-        "src/activity/ActivityDayReview.tsx",
-        "src/activity/ActivityTimeline.tsx",
+        "src/activity/ActivityDayCalendar.tsx",
+        "src/activity/ActivitySuggestionCard.tsx",
         "src/activity/MatterPicker.tsx",
+        "src/activity/activity-calendar-logic.ts",
         "src/activity/day-review-logic.ts",
       ],
     },
