@@ -1,4 +1,5 @@
 // parser-output-unchanged: [cz-us] CZ-US uses default options; its recorded document and adapter outputs remain byte-identical.
+// parser-output-unchanged: [sk-us] adds `withAttestedLetterSpacing`, which only the Czech parsers call; `collapseLetterSpacing` is unchanged.
 /**
  * Letter-spaced emphasis read back as the words it spells.
  *

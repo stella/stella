@@ -1,3 +1,5 @@
+// parser-output-unchanged: [sk-courts] adds `labelledHeading`, which only the Czech parsers call; `caseLawSectionHeading` is unchanged.
+// parser-output-unchanged: [sk-us] adds `labelledHeading`, which only the Czech parsers call; `caseLawSectionHeading` is unchanged.
 export type CaseLawSectionHeading = {
   level: 3 | 4;
 };
