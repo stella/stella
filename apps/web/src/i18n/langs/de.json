@@ -2084,8 +2084,6 @@
     "clearFilters": "Filter löschen",
     "clearSearch": "Suche löschen",
     "close": "Schließen",
-    "closeAll": "Alle schließen",
-    "closeOthers": "Andere schließen",
     "columns": "Spalten",
     "comfortable": "Komfortabel",
     "comingSoon": "Demnächst verfügbar",
@@ -3674,6 +3672,9 @@
       "unsupportedVisualContent": "Diese Datei enthält Bilder oder Vektorgrafiken, die nicht auf vertraulichen Text geprüft werden können. Der Export ist nicht verfügbar.",
       "workspaceTermsHeading": "Kanzleibegriffe ({count})"
     },
+    "closeAllTabs": "{count, plural, one {# Tab} other {Alle # Tabs}} schließen",
+    "closeOtherTabs": "{count, plural, one {# anderen Tab} other {# andere Tabs}} schließen",
+    "closeTab": "<bdi>{name}</bdi> schließen",
     "conversionRefusal": {
       "legacyFormat": "Dies ist eine ältere {format}-Datei. Speichern Sie sie als {replacementExtension}, um sie zu konvertieren.",
       "unsupportedEncoding": "Dieses Dokument verwendet die nicht unterstützte Zeichenkodierung {encoding} und kann daher nicht konvertiert werden.",
