@@ -4,9 +4,10 @@ import { Result } from "better-result";
 import { ActivityIndicator, ScrollView, StyleSheet, View } from "react-native";
 import { useFormatter, useTranslations } from "use-intl";
 
+import { Text } from "@stll/ui/text";
+
 import { screenStyles } from "@/components/empty-state-screen";
 import { TaskStatusControl } from "@/components/task-status-control";
-import { Text } from "@/components/ui/text";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
 import type { ApiError } from "@/state/api-request";

@@ -148,6 +148,7 @@ export const DOC_SOURCES = {
     dependencies: [
       "@expo-google-fonts/dm-sans",
       "@expo/fingerprint",
+      "@expo/ui",
       "@expo/vector-icons",
       "expo",
       "expo-constants",
@@ -155,6 +156,7 @@ export const DOC_SOURCES = {
       "expo-dev-client",
       "expo-doctor",
       "expo-font",
+      "expo-notifications",
       "expo-linking",
       "expo-router",
       "expo-secure-store",
@@ -162,6 +164,7 @@ export const DOC_SOURCES = {
       "expo-system-ui",
       "expo-updates",
       "expo-web-browser",
+      "expo-widgets",
       "react-native-safe-area-context",
       "react-native-screens",
       "react-native-svg",
@@ -881,11 +884,11 @@ export const DOC_SOURCE_EXCLUSIONS = PROBED_WITHOUT_LLMS_TXT.map(
     reason: "no-llms-txt",
   },
   {
-    checkedAt: "2026-09-30T00:00:00.000Z",
+    checkedAt: "2026-10-30T00:00:00.000Z",
     dependency: "@standard-schema/spec",
     explanation:
       "https://standardschema.dev/llms.txt returns 404. Use the specification at https://standardschema.dev and the typed interfaces in @standard-schema/spec directly.",
-    expiresAt: "2026-10-30T00:00:00.000Z",
+    expiresAt: "2026-11-29T00:00:00.000Z",
     reason: "no-llms-txt",
   },
   {

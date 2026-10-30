@@ -18,7 +18,9 @@ describe("Collapsible", () => {
       </Collapsible>,
     );
     expect(markup).toContain('aria-expanded="false"');
-    expect(markup).toContain('hidden="until-found"');
+    // Base UI renders the closed panel hidden on the server and switches it
+    // to `hidden="until-found"` once mounted; the content is there either way.
+    expect(markup).toMatch(/ hidden="(?:|until-found)"/u);
     expect(markup).toContain("Arguments");
   });
 
@@ -42,7 +44,7 @@ describe("Collapsible", () => {
       </Collapsible>,
     );
     expect(markup).toContain('aria-expanded="true"');
-    expect(markup).not.toContain('hidden="until-found"');
+    expect(markup).not.toMatch(/ hidden=/u);
   });
 
   test("the trigger takes its look from the button it renders", () => {

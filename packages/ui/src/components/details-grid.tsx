@@ -62,7 +62,7 @@ const LABEL_CLASS_NAME = {
 } as const satisfies Record<DetailsVariant, Record<DetailsOrientation, string>>;
 
 const VALUE_CLASS_NAME = {
-  list: "min-w-0",
+  list: "min-w-0 wrap-anywhere",
   sheet: "text-foreground-strong-muted min-w-0 wrap-anywhere",
 } as const satisfies Record<DetailsVariant, string>;
 

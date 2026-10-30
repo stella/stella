@@ -48,6 +48,19 @@ export const CI_GENERATED_OUTPUTS = {
 } as const;
 export const CI_GENERATED_FILES = Object.values(CI_GENERATED_OUTPUTS).flat();
 
+// Postinstall may refresh only ignored outputs. Tracked generated files remain
+// verification failures so installs never hide a change that belongs in Git.
+export const INSTALL_OWNED_IGNORED_GENERATED_OUTPUTS = [
+  {
+    command: [
+      "bun",
+      "packages/scripts/src/api-typecheck-partition.ts",
+      "--write",
+    ],
+    outputs: CI_GENERATED_OUTPUTS.apiTypecheckProjects,
+  },
+] as const;
+
 export const CI_GENERATION_COMMANDS = [
   ["bun", "apps/api/scripts/generate-capability-runtime.ts"],
   ["bun", "scripts/prepare-mcp-apps.ts"],

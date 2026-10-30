@@ -158,7 +158,7 @@ export const CalendarDayCell = ({
               aria-label={t("common.add")}
               render={
                 <Button
-                  className="opacity-0 transition-opacity group-hover/day:opacity-100"
+                  className="opacity-0 transition-opacity group-hover/day:opacity-100 pointer-coarse:opacity-100"
                   size="icon-xs"
                   variant="muted"
                 />

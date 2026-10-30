@@ -105,3 +105,17 @@ describe("details fact sheets", () => {
     expect(markup).not.toContain("uppercase");
   });
 });
+
+describe("details list values", () => {
+  test("a long unbroken value wraps instead of overflowing its column", () => {
+    const markup = renderToStaticMarkup(
+      <DetailsGrid variant="list">
+        <DetailsItem label="Server">
+          https://authorization.example.com/oauth2/v1/authorize
+        </DetailsItem>
+      </DetailsGrid>,
+    );
+
+    expect(markup).toMatch(/<dd class="[^"]*wrap-anywhere/u);
+  });
+});
