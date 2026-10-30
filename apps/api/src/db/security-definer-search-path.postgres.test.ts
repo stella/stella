@@ -32,7 +32,7 @@ describe.skipIf(!enabled)("security-definer search paths (postgres)", () => {
   test("every security-definer function ends its search path with pg_temp", async () => {
     const migration = Bun.file(
       new URL(
-        "../../drizzle/20261030010000_security_definer_search_paths/migration.sql",
+        "../../drizzle/20261030080935_security_definer_search_paths/migration.sql",
         import.meta.url,
       ),
     );
