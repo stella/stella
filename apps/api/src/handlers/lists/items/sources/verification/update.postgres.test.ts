@@ -4,6 +4,7 @@ import { asc, eq, inArray, sql } from "drizzle-orm";
 import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
 import type { ReviewDecision } from "@stll/api-contract/review-decision";
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { createTestState } from "@stll/test-state";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { OnlineMigrationConnection } from "@/api/db/online-migration-connection";
@@ -42,7 +43,6 @@ import {
   createTestHandlerContext,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
-import { createTestState } from "@/api/tests/helpers/test-state";
 
 import { LEGAL_LIST_SOURCE_DECISION_BACKFILL } from "../../../../../db/legal-list-source-decision-backfill";
 

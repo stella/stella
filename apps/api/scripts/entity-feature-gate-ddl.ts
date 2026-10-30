@@ -90,7 +90,7 @@ const GATE_ROLE_SWITCH_REVIEW =
 
 /** The migration safety review of a regenerated gate routine. */
 const GATE_ROUTINE_REVIEW =
-  "-- stella-migration-safety: reviewed security-definer - a gate routine generated from the schema's gate graph, replaced in place as its owner, the gate role, which is neither superuser nor BYPASSRLS; search_path is pinned to pg_catalog";
+  "-- stella-migration-safety: reviewed security-definer - a gate routine generated from the schema's gate graph, replaced in place as its owner, the gate role, which is neither superuser nor BYPASSRLS; search_path is pinned to pg_catalog, then pg_temp";
 
 /**
  * Statements run as the gate role. The gate migration leaves the migrator a

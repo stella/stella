@@ -10,10 +10,10 @@ GRANT stella_entity_gate TO CURRENT_USER WITH SET TRUE;
 --> statement-breakpoint
 SET LOCAL ROLE stella_entity_gate;
 --> statement-breakpoint
--- stella-migration-safety: reviewed security-definer - a gate routine generated from the schema's gate graph, replaced in place as its owner, the gate role, which is neither superuser nor BYPASSRLS; search_path is pinned to pg_catalog
+-- stella-migration-safety: reviewed security-definer - a gate routine generated from the schema's gate graph, replaced in place as its owner, the gate role, which is neither superuser nor BYPASSRLS; search_path is pinned to pg_catalog, then pg_temp
 CREATE OR REPLACE FUNCTION public.entity_feature_gate_propagate()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER
-SET search_path = pg_catalog SET row_security = on
+SET search_path = pg_catalog, pg_temp SET row_security = on
 SET plan_cache_mode = force_generic_plan SET jit = off AS $function$
 DECLARE
   changed_ids uuid[];
