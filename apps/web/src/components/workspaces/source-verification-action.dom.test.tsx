@@ -41,7 +41,7 @@ const listId = "019a0000-0000-7000-8000-000000000002";
 const itemEntityId = "019a0000-0000-7000-8000-000000000003";
 const settings = {
   declaredFeatureIds: ["legal-lists", "list-verification"],
-  deploymentFeatures: { legalLists: true },
+  deploymentFeatures: { legalLists: true, invoiceLinks: true },
   capabilities: {},
   documentProcessingMode: "off",
   matterNumberPattern: "{year}/{number}",

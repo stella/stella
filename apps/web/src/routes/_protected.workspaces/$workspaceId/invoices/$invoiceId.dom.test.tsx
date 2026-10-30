@@ -4,6 +4,8 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 import { cents } from "@stll/money";
 
 import { toSafeId } from "@/lib/safe-id";
+import type { InvoiceSends } from "@/lib/workspaces/queries/invoices";
+import type { OrganizationSettings } from "@/queries/organization-settings";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({
@@ -23,11 +25,17 @@ globalThis.fetch = bootstrapFetch;
 
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
-const { cleanup, render, waitFor } = await import("@testing-library/react");
+const { cleanup, render, waitFor, fireEvent, act } =
+  await import("@testing-library/react");
 const router = await import("@tanstack/react-router");
 const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { default: messages } = await import("@/i18n/langs/en.json");
+const { organizationSettingsOptions } =
+  await import("@/queries/organization-settings");
+const { parseTimeZoneId } = await import("@stll/time");
+const { panic } = await import("better-result");
+
 const { roleOptions } = await import("@/lib/auth-queries");
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
@@ -108,7 +116,10 @@ afterAll(async () => {
   await unregisterDomEnvironment();
 });
 
-const mountInvoice = async (role: "external" | "member") => {
+const mountInvoice = async (
+  role: "external" | "member",
+  deploymentEnabled = true,
+) => {
   globalThis.fetch = Object.assign(
     async (input: RequestInfo | URL, init?: RequestInit) => {
       const request = new Request(input, init);
@@ -117,7 +128,13 @@ const mountInvoice = async (role: "external" | "member") => {
       if (pathname.endsWith("/sends")) {
         return role === "external"
           ? Response.json({ message: "Unavailable" }, { status: 403 })
-          : Response.json({ items: [], nextCursor: null });
+          : Response.json({
+              items: [],
+              nextCursor: null,
+              limit: 50,
+              defaultRecipients: [],
+              replyTo: "member@example.test",
+            } satisfies InvoiceSends);
       }
       if (pathname.startsWith("/api/auth/")) {
         return Response.json(null);
@@ -135,6 +152,34 @@ const mountInvoice = async (role: "external" | "member") => {
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
   client.setQueryData(roleOptions.queryKey, role);
+  client.setQueryData(
+    organizationSettingsOptions({
+      organizationId: invoice.organizationId,
+      userId: "member-1",
+    }).queryKey,
+    {
+      declaredFeatureIds: ["invoice-links"],
+      deploymentFeatures: {
+        legalLists: false,
+        invoiceLinks: deploymentEnabled,
+      },
+      capabilities: { "invoice-links": { status: "enabled" } },
+      documentProcessingMode: "off",
+      matterNumberPattern: "{year}/{number}",
+      matterNumberPadding: 3,
+      matterNumberingEnabled: false,
+      practiceJurisdictions: [],
+      promptCachingEnabled: true,
+      managedAIResidency: "eu",
+      memoryExtractionEnabled: false,
+      timeMinimumUnitMinutes: 1,
+      timeEditWindowDays: 30,
+      timeLockedThroughMonth: null,
+      timeNarrativeRequired: false,
+      timeZone: parseTimeZoneId("UTC") ?? panic("UTC fixture must exist"),
+      timeZoneSource: "organization",
+    } satisfies OrganizationSettings,
+  );
   client.setQueryData(
     invoiceByIdOptions(WORKSPACE_ID, INVOICE_ID).queryKey,
     invoice,
@@ -217,3 +262,33 @@ test("a member with invoice update permission loads send history", async () => {
   view.unmount();
   client.clear();
 });
+
+for (const deploymentEnabled of [false, true]) {
+  test(`invoice email controls follow deployment availability ${deploymentEnabled}`, async () => {
+    const { client, view } = await mountInvoice("member", deploymentEnabled);
+    expect(await view.findByText(invoice.invoiceNumber)).toBeDefined();
+    const send = view.queryByRole("button", {
+      name: messages.billing.invoices.sendByEmail,
+    });
+    expect(send !== null).toBe(deploymentEnabled);
+    expect(
+      view.queryByText(messages.billing.invoices.sending.historyTitle) !== null,
+    ).toBe(deploymentEnabled);
+    if (send !== null) {
+      await act(async () => {
+        fireEvent.click(send);
+      });
+      expect(await view.findByRole("dialog")).toBeDefined();
+      expect(
+        await view.findByText(messages.billing.invoices.sending.recipients),
+      ).toBeDefined();
+    } else {
+      expect(view.queryByRole("dialog")).toBeNull();
+      expect(requests.some((pathname) => pathname.endsWith("/sends"))).toBe(
+        false,
+      );
+    }
+    view.unmount();
+    client.clear();
+  });
+}

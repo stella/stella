@@ -77,7 +77,7 @@ const files = [
 ];
 const settings = {
   declaredFeatureIds: ["legal-lists", "list-verification"],
-  deploymentFeatures: { legalLists: true },
+  deploymentFeatures: { legalLists: true, invoiceLinks: true },
   capabilities: {},
   documentProcessingMode: "off",
   matterNumberPattern: "{year}/{number}",

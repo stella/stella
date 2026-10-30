@@ -37,6 +37,7 @@ import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { detached } from "@/lib/detached";
 import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import type { FeatureAdmission } from "@/lib/organization/feature-access/access";
 import { queryView } from "@/lib/query-view.logic";
 import type { QueryView } from "@/lib/query-view.logic";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
@@ -74,6 +75,7 @@ const invoiceApi = ({ workspaceId, invoiceId }: InvoiceRef) =>
   });
 
 type SendInvoiceFormProps = InvoiceRef & {
+  admission: FeatureAdmission<"invoice-links">;
   invoiceNumber: string;
   /** Addresses to start from; null starts from the client's. */
   recipients: readonly string[] | null;
@@ -291,7 +293,9 @@ export const InvoiceSendsSection = ({
   invoiceId,
   canSend,
   onSendAgain,
-}: InvoiceSendsSectionProps) => {
+}: InvoiceSendsSectionProps & {
+  admission: FeatureAdmission<"invoice-links">;
+}) => {
   const t = useTranslations("billing.invoices.sending");
   const rootT = useTranslations();
   const userId = useAuthenticatedUser().id;

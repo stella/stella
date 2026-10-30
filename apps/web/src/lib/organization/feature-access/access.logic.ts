@@ -18,10 +18,18 @@ const admittedByServer = (
   availability: CallerAvailability,
   feature: CallerFeature,
 ): boolean => {
+  if (
+    feature.deployment !== undefined &&
+    !availability.deploymentFeatures[feature.deployment]
+  ) {
+    return false;
+  }
   if (availability.declaredFeatureIds.includes(feature.id)) {
     return availability.capabilities[feature.id]?.status === "enabled";
   }
   switch (feature.undeclared.type) {
+    case "deployment":
+      return true;
     case "hidden":
       return false;
     // Delete this undeclared policy when the server declares legal-lists.

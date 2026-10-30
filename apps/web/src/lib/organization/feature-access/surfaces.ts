@@ -1,3 +1,5 @@
+import type { OrganizationSettings } from "@/queries/organization-settings";
+
 const LIST_VERIFICATION_FEATURE_ID = "list-verification";
 
 const LEGAL_LISTS_FEATURE = {
@@ -29,8 +31,17 @@ export const CALLER_FEATURE = {
     undeclared: { type: "hidden" },
     routeImports: ["@/features/avt/"],
   },
+  invoiceLinks: {
+    id: "invoice-links",
+    deployment: "invoiceLinks",
+    requires: [],
+    undeclared: { type: "deployment" },
+    routeImports: [],
+  },
   legalLists: LEGAL_LISTS_FEATURE,
 } as const;
 
 export type CallerFeature =
-  (typeof CALLER_FEATURE)[keyof typeof CALLER_FEATURE];
+  (typeof CALLER_FEATURE)[keyof typeof CALLER_FEATURE] & {
+    deployment?: keyof OrganizationSettings["deploymentFeatures"];
+  };

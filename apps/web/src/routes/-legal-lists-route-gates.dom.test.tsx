@@ -34,7 +34,10 @@ for (const deploymentEnabled of [false, true]) {
       const queryClient = new QueryClient();
       const discovery = spyOn(queryClient, "query").mockResolvedValue({
         declaredFeatureIds: [CALLER_FEATURE.verification.id],
-        deploymentFeatures: { legalLists: deploymentEnabled },
+        deploymentFeatures: {
+          legalLists: deploymentEnabled,
+          invoiceLinks: true,
+        },
         capabilities:
           status === undefined
             ? {}

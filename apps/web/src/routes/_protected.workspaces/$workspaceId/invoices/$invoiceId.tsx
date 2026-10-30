@@ -46,6 +46,9 @@ import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { CallerFeatureGate } from "@/lib/organization/feature-access/access";
+import type { FeatureAdmission } from "@/lib/organization/feature-access/access";
+import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import {
@@ -698,37 +701,46 @@ const InvoiceDetail = ({
         </>
       )}
 
-      {canUpdateInvoice && invoiceStatus !== "draft" && (
-        <InvoiceSendsSection
-          canSend={invoiceStatus !== "void"}
-          invoiceId={invoiceId}
-          onSendAgain={(recipients) =>
-            setSendDialog({ type: "open", recipients })
-          }
-          workspaceId={workspaceId}
-        />
-      )}
+      <CallerFeatureGate feature={CALLER_FEATURE.invoiceLinks}>
+        {(admission) => (
+          <>
+            {canUpdateInvoice && invoiceStatus !== "draft" && (
+              <InvoiceSendsSection
+                admission={admission}
+                canSend={invoiceStatus !== "void"}
+                invoiceId={invoiceId}
+                onSendAgain={(recipients) =>
+                  setSendDialog({ type: "open", recipients })
+                }
+                workspaceId={workspaceId}
+              />
+            )}
 
-      <Dialog
-        onOpenChange={(open) => {
-          if (!open) {
-            setSendDialog({ type: "closed" });
-          }
-        }}
-        open={sendDialog.type === "open"}
-      >
-        <DialogPopup className="max-w-md">
-          {sendDialog.type === "open" && invoice.invoiceNumber !== null ? (
-            <SendInvoiceForm
-              invoiceId={invoiceId}
-              invoiceNumber={invoice.invoiceNumber}
-              onClose={() => setSendDialog({ type: "closed" })}
-              recipients={sendDialog.recipients}
-              workspaceId={workspaceId}
-            />
-          ) : null}
-        </DialogPopup>
-      </Dialog>
+            <Dialog
+              onOpenChange={(open) => {
+                if (!open) {
+                  setSendDialog({ type: "closed" });
+                }
+              }}
+              open={sendDialog.type === "open"}
+            >
+              <DialogPopup className="max-w-md">
+                {sendDialog.type === "open" &&
+                invoice.invoiceNumber !== null ? (
+                  <SendInvoiceForm
+                    admission={admission}
+                    invoiceId={invoiceId}
+                    invoiceNumber={invoice.invoiceNumber}
+                    onClose={() => setSendDialog({ type: "closed" })}
+                    recipients={sendDialog.recipients}
+                    workspaceId={workspaceId}
+                  />
+                ) : null}
+              </DialogPopup>
+            </Dialog>
+          </>
+        )}
+      </CallerFeatureGate>
 
       {/* Edit dialog */}
       <Dialog onOpenChange={setEditOpen} open={editOpen}>
@@ -817,10 +829,16 @@ const InvoiceActions = ({
       return (
         <>
           {canUpdateInvoice && (
-            <Button onClick={onSend} size="sm" variant="outline">
-              <SendIcon className="size-3.5" />
-              {t("send")}
-            </Button>
+            <CallerFeatureGate feature={CALLER_FEATURE.invoiceLinks}>
+              {(admission) => (
+                <SendInvoiceButton
+                  admission={admission}
+                  onSend={onSend}
+                  variant="outline"
+                  label={t("send")}
+                />
+              )}
+            </CallerFeatureGate>
           )}
           {canUpdateInvoice && (
             <Button
@@ -860,10 +878,16 @@ const InvoiceActions = ({
     case "paid":
       return canUpdateInvoice ? (
         <>
-          <Button onClick={onSend} size="sm" variant="ghost">
-            <SendIcon className="size-3.5" />
-            {t("sendByEmail")}
-          </Button>
+          <CallerFeatureGate feature={CALLER_FEATURE.invoiceLinks}>
+            {(admission) => (
+              <SendInvoiceButton
+                admission={admission}
+                onSend={onSend}
+                variant="ghost"
+                label={t("sendByEmail")}
+              />
+            )}
+          </CallerFeatureGate>
           <ConfirmAction
             description={t("confirmVoid")}
             onConfirm={() => onTransition("void")}
@@ -1070,3 +1094,19 @@ const EditInvoiceForm = ({
     </Form>
   );
 };
+
+const SendInvoiceButton = ({
+  onSend,
+  variant,
+  label,
+}: {
+  admission: FeatureAdmission<"invoice-links">;
+  onSend: () => void;
+  variant: "outline" | "ghost";
+  label: string;
+}) => (
+  <Button onClick={onSend} size="sm" variant={variant}>
+    <SendIcon className="size-3.5" />
+    {label}
+  </Button>
+);
