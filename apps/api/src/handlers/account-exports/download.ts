@@ -14,11 +14,18 @@ import { hasAccountExportAuthority } from "@/api/lib/auth/account-export-policy"
 import type { SafeId } from "@/api/lib/branded-types";
 import { readAccountEmail } from "@/api/lib/db/account-row";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observedStatus } from "@/api/lib/observability/server-error-answer";
 import { openS3ObjectStreamWithSignal } from "@/api/lib/s3";
 import { parseAuthProviderId } from "@/api/lib/safe-id-boundaries";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { secureDocumentResponse } from "@/api/lib/secure-document-response";
 import { authenticateAccountExportRequest } from "@/api/mcp/auth";
+
+const ACCOUNT_EXPORT_USER_LOOKUP_FAILED = failureSink({
+  event: "account_export.user_lookup_failed",
+  expected: [],
+});
 
 type DownloadAuthenticationDependencies = {
   authenticateOAuth?: typeof authenticateAccountExportRequest;
@@ -70,7 +77,14 @@ const authenticateAccountExportDownload = async (
   }
   const user = await Result.tryPromise(async () => await resolveUser(userId));
   if (Result.isError(user)) {
-    return { ok: false, answer: status(500, AUTH_REJECTION_BODY[500]) };
+    return {
+      ok: false,
+      answer: observedStatus(
+        { sink: ACCOUNT_EXPORT_USER_LOOKUP_FAILED, cause: user.error },
+        500,
+        AUTH_REJECTION_BODY[500],
+      ),
+    };
   }
   if (user.value === null) {
     return { ok: false, answer: status(401, AUTH_REJECTION_BODY[401]) };
