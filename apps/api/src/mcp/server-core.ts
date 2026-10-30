@@ -24,6 +24,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
+import { MCP_REGISTRY_VERSION_HEADER } from "@stll/api-contract/mcp-registry";
 import type { HandlerExceptionScope } from "@stll/errors";
 
 import { hasRequestBody, reframeBoundedRequest } from "@/api/http/request-body";
@@ -136,6 +137,7 @@ import {
   serializeToolResult,
   structuredErrorResult,
 } from "@/api/mcp/tool-utils";
+import { mcpRegistryVersion } from "@/api/mcp/tool-versions";
 import {
   MCP_WEB_HANDOFF_TOOL,
   withWebHandoffLinks,
@@ -624,6 +626,7 @@ const withCappedRequestBody = async (
  */
 type McpFactoryState = {
   context: McpRequestResources;
+  registryVersion?: string;
   session: McpSession;
 };
 
@@ -1102,7 +1105,11 @@ export const createMcpHttpRequestHandler = ({
         version: MCP_SERVER_VERSION,
       },
       {
-        capabilities: { prompts: {}, resources: {}, tools: {} },
+        capabilities: {
+          prompts: {},
+          resources: {},
+          tools: { listChanged: true },
+        },
         instructions: await getMcpInstructions(mode, context),
       },
     );
@@ -1113,6 +1120,10 @@ export const createMcpHttpRequestHandler = ({
         "tool_projection",
         async () => await listMcpTools(context, mode, session.scopes),
       );
+      const state = factoryState.getStore();
+      if (state !== undefined) {
+        state.registryVersion = mcpRegistryVersion(tools);
+      }
       return {
         tools,
         _meta: {
@@ -1664,34 +1675,46 @@ export const createMcpHttpRequestHandler = ({
               };
               const legacyRequest = await isLegacyRequest(request, parsedBody);
               setMcpMetricProtocolPath(legacyRequest ? "legacy" : "modern");
+              const requestFactoryState: McpFactoryState = { context, session };
               const dispatch = async () =>
-                responseDisposition.run(envelopeDisposition, async () =>
-                  legacyRequest
-                    ? await serveLegacyRequest({
-                        authInfo,
-                        context,
-                        mode,
-                        parsedBody,
-                        request,
-                        session,
-                      })
-                    : await factoryState.run(
-                        { context, session },
-                        async () =>
-                          await handlerForMode(mode).fetch(request, {
-                            authInfo,
-                            parsedBody,
-                          }),
-                      ),
+                factoryState.run(requestFactoryState, async () =>
+                  responseDisposition.run(envelopeDisposition, async () =>
+                    legacyRequest
+                      ? await serveLegacyRequest({
+                          authInfo,
+                          context,
+                          mode,
+                          parsedBody,
+                          request,
+                          session,
+                        })
+                      : await handlerForMode(mode).fetch(request, {
+                          authInfo,
+                          parsedBody,
+                        }),
+                  ),
                 );
               const response =
                 policy === undefined
                   ? await dispatch()
                   : await withTenantActionSizePolicy(policy, dispatch);
 
+              const { registryVersion } = requestFactoryState;
+              const versionedResponse =
+                registryVersion === undefined
+                  ? response
+                  : new Response(response.body, {
+                      headers: new Headers({
+                        ...Object.fromEntries(response.headers),
+                        [MCP_REGISTRY_VERSION_HEADER]: registryVersion,
+                      }),
+                      status: response.status,
+                      statusText: response.statusText,
+                    });
+
               // `createMcpHandler` owns and catches modern exchange failures. Restore
               // the public retry contract the outer catch provides on the legacy leg.
-              if (!legacyRequest && response.status >= 500) {
+              if (!legacyRequest && versionedResponse.status >= 500) {
                 return policy === undefined
                   ? retryableServerErrorResponse(requestId)
                   : await completeResponse(
@@ -1700,7 +1723,7 @@ export const createMcpHttpRequestHandler = ({
                     );
               }
 
-              return await completeResponse(response, accepted);
+              return await completeResponse(versionedResponse, accepted);
             } catch (error) {
               return failureResponse({
                 error,
