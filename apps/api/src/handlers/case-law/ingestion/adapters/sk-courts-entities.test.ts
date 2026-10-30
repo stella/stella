@@ -274,6 +274,8 @@ describe("Slovak court display text decodes publisher entities to stable text", 
 
     test("replay rebuilds a row stored under the earlier id under the new one", async () => {
       const earlier = earlierRow();
+      const earlierId =
+        earlier.sourceDocumentId ?? panic("the earlier row has no id");
       const replay =
         skCourtsAdapter.reparseStoredRaw ??
         panic("adapter has no replay reader");
@@ -284,7 +286,7 @@ describe("Slovak court display text decodes publisher entities to stable text", 
         ),
         contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
         caseNumber: earlier.caseNumber,
-        sourceDocumentId: earlier.sourceDocumentId ?? null,
+        sourceDocumentId: earlierId,
         language: "sk",
         court: earlier.court,
         ecli: null,
@@ -308,7 +310,7 @@ describe("Slovak court display text decodes publisher entities to stable text", 
         panic("Expected the stored listing row to parse");
       }
       expect(outcome.result.sourceDocumentIdRepairAliases?.map(String)).toEqual(
-        [earlier.sourceDocumentId],
+        [earlierId],
       );
     });
 

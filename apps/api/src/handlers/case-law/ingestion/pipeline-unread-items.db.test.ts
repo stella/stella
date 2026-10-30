@@ -12,7 +12,12 @@ import { drizzle } from "drizzle-orm/pglite";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
-import { caseLawDecisions, caseLawSources, relations } from "@/api/db/schema";
+import {
+  caseLawDecisions,
+  caseLawListingObservations,
+  caseLawSources,
+  relations,
+} from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import type {
   IngestionResult,
@@ -559,4 +564,102 @@ test("a keyed peer on page one stays separate when its quarantined peer appears 
   expect(keyed.sourceDocumentIdRepairAliases?.map(String)).toEqual([
     quarantine.sourceDocumentId,
   ]);
+});
+
+test("a crawl retains colliding publisher revisions before applying decisions or advancing and replay is a fixed point", async () => {
+  const sourceId = await crawlSource();
+  const quarantine = quarantineIdentity({
+    namespace: QUARANTINE_NAMESPACE.CZ_NS,
+    stableFields: { docket: "21 Cdo 501/2024" },
+  });
+  const records = ["first", "second"].map((record) => ({
+    ...fullDecision("501"),
+    fulltext: undefined,
+    isListingOnly: true,
+    sourceDocumentId: quarantine.sourceDocumentId,
+    sourceRaw: JSON.stringify({ record, caseNumber: "21 Cdo 501/2024" }),
+    rawHash: `source-${record}`,
+    metadata: { publisherRecord: record },
+  }));
+  const evidenceBeforeWrites: number[] = [];
+  const guardedDb: ScopedDb = async (operation) =>
+    await scopedDb(async (tx) => {
+      const result = await operation(tx);
+      const decisions = await tx
+        .select({ id: caseLawDecisions.id })
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.sourceId, sourceId));
+      const source = (
+        await tx
+          .select({ cursor: caseLawSources.syncCursor })
+          .from(caseLawSources)
+          .where(eq(caseLawSources.id, sourceId))
+      ).at(0);
+      if (decisions.length > 0 || source?.cursor === "page-2") {
+        const evidence = await tx
+          .select({ fingerprint: caseLawListingObservations.fingerprint })
+          .from(caseLawListingObservations)
+          .where(eq(caseLawListingObservations.sourceId, sourceId));
+        expect(evidence).toHaveLength(2);
+        evidenceBeforeWrites.push(evidence.length);
+      }
+      return result;
+    });
+  const runPage = async () => {
+    const sourceLease =
+      (await acquireCaseLawSourceIngestionLease({
+        scopedDb: guardedDb,
+        sourceId,
+      })) ?? panic("The collision fixture needs its source lease");
+    try {
+      czNsAdapter.fetchPage = async () =>
+        Result.ok({
+          observations: [],
+          decisions: records,
+          nextCursor: "page-2",
+        });
+      return await runIngestionPipeline({
+        source: sourceLease.source,
+        sourceLease,
+        scopedDb: guardedDb,
+        maxPages: 1,
+        acquireStoredTotalAdmission: async () => "held",
+        corpus,
+      });
+    } finally {
+      await sourceLease.release();
+    }
+  };
+  const first = await runPage();
+  expect(first.haltReason).toBeNull();
+  expect((await sourceState(sourceId)).cursor).toBe("page-2");
+  const readEvidence = async () =>
+    await db
+      .select()
+      .from(caseLawListingObservations)
+      .where(eq(caseLawListingObservations.sourceId, sourceId))
+      .orderBy(caseLawListingObservations.fingerprint);
+  const evidence = await readEvidence();
+  expect(evidence).toHaveLength(2);
+  expect(evidence.map(({ payload }) => payload)).toEqual(
+    expect.arrayContaining(
+      records.map(({ sourceRaw, metadata }) =>
+        expect.objectContaining({
+          listing: expect.objectContaining({
+            quarantineId: quarantine.sourceDocumentId,
+            record: expect.objectContaining({ sourceRaw, metadata }),
+          }),
+        }),
+      ),
+    ),
+  );
+  expect(evidenceBeforeWrites.length).toBeGreaterThan(0);
+  const replay = await runPage();
+  expect(replay.haltReason).toBeNull();
+  expect(await readEvidence()).toEqual(evidence);
+  const canonical = await db
+    .select({ id: caseLawDecisions.id })
+    .from(caseLawDecisions)
+    .where(eq(caseLawDecisions.sourceId, sourceId));
+  expect(canonical).toHaveLength(1);
 });

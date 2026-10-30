@@ -21,12 +21,18 @@ import {
 import { skUsAdapter } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
 import { runListingCensus } from "@/api/handlers/case-law/ingestion/listing-census";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
+import { createQuarantineCollisionRetention } from "@/api/handlers/case-law/ingestion/quarantine-collision-retention";
 import {
   listReconciliationSlice,
   SLICE_LISTING_PROOF,
 } from "@/api/handlers/case-law/ingestion/slice-listing";
 import { createSafeId } from "@/api/lib/branded-types";
+import {
+  absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
+} from "@/api/lib/case-law/decision-text";
 import { storeListingObservations } from "@/api/lib/legal-search/listing-observation-store";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import type { ListingObservation } from "@/api/lib/legal-search/quarantine-identity";
 import {
   LISTING_OBSERVATION_REASON,
@@ -51,6 +57,99 @@ beforeAll(async () => {
   db = connect(client);
 });
 afterAll(async () => await client.close());
+
+test.each([undefined, "Publisher source bytes"])(
+  "reparsing %s keeps one persisted publisher revision across retention instances",
+  async (sourceRaw) => {
+    const sourceId = createSafeId<"caseLawSource">();
+    const adapterKey =
+      sourceRaw === undefined ? "quarantine-no-raw" : "quarantine-raw";
+    await db
+      .insert(caseLawSources)
+      .values({ id: sourceId, adapterKey, name: "Reparse evidence fixture" });
+    const { sourceDocumentId } = quarantineIdentity({
+      namespace: QUARANTINE_NAMESPACE.CZ_NS,
+      stableFields: { docket: "21 Cdo 701/2026" },
+    });
+    const decision = (id: string) =>
+      plainTextIngestionResult({
+        caseNumber: "21 Cdo 701/2026",
+        court: "Nejvyšší soud",
+        country: "CZE",
+        language: "cs",
+        sourceDocumentId,
+        metadata: { publisherLabel: "Original listing label" },
+        fulltext: "Published text.",
+        textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+        sourceRaw,
+        rawHash: `derived-${id}`,
+        parserVersion: id.length,
+        documentAst: {
+          version: 1,
+          source: {
+            system: "test",
+            documentId: sourceDocumentId,
+            webUrl: "",
+            printUrl: "",
+          },
+          metadata: {
+            caseNumber: null,
+            ecli: null,
+            court: null,
+            decisionDate: null,
+            decisionType: null,
+            keywords: [],
+            statutes: [],
+          },
+          blocks: [
+            {
+              id,
+              anchorId: id,
+              type: "paragraph",
+              inlines: [{ type: "text", text: "Published text." }],
+              plainText: "Published text.",
+            },
+          ],
+        },
+      });
+    const retain = async () => {
+      const retention = createQuarantineCollisionRetention({
+        adapterKey,
+        persistCollisionEvidence: async (observations) => {
+          await storeListingObservations(scopedDb, {
+            sourceId,
+            adapterKey,
+            observations,
+          });
+        },
+      });
+      await retention.retainDecisions({
+        type: "crawl",
+        decisions: [decision("first"), decision("reparsed-block-id")],
+        proof: { type: "no-listing-proof" },
+      });
+    };
+    await retain();
+    const read = async () =>
+      await db
+        .select()
+        .from(caseLawListingObservations)
+        .where(eq(caseLawListingObservations.sourceId, sourceId));
+    const before = await read();
+    expect(before).toHaveLength(1);
+    expect(before[0]?.payload).toMatchObject({
+      listing: {
+        quarantineId: sourceDocumentId,
+        record: {
+          metadata: { publisherLabel: "Original listing label" },
+          fulltext: "Published text.",
+        },
+      },
+    });
+    await retain();
+    expect(await read()).toEqual(before);
+  },
+);
 
 test("source evidence is durable, queryable, and separate from canonical decisions", async () => {
   const first = createSafeId<"caseLawSource">();
@@ -218,7 +317,7 @@ test("source evidence is durable, queryable, and separate from canonical decisio
   if (keyed === null) {
     return panic("the keyed PL-Courts item builds a decision");
   }
-  expect(keyed.court).toBe("Sąd powszechny");
+  expect(String(keyed.court)).toBe("Sąd powszechny");
   expect(keyed.sourceDocumentId).toBe("91004");
 
   await processDecision({

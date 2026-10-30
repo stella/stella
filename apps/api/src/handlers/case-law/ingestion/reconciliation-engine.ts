@@ -68,11 +68,11 @@ import {
 import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
 import { readStoredRawFromS3 } from "@/api/handlers/case-law/ingestion/pipeline/stored-raw";
 import { processSupplement } from "@/api/handlers/case-law/ingestion/pipeline/supplement";
+import type { CollisionFilterProof } from "@/api/handlers/case-law/ingestion/quarantine-collision-filter";
 import {
-  type CollisionFilteredDecisions,
-  type CollisionFilterProof,
-  filterQuarantinePeerCollisions,
-} from "@/api/handlers/case-law/ingestion/quarantine-collision-filter";
+  type CollisionRetainedDecisions,
+  retainListedQuarantineDecisions,
+} from "@/api/handlers/case-law/ingestion/quarantine-collision-retention";
 import type {
   FailedSliceCandidate,
   LedgerSlice,
@@ -1225,7 +1225,7 @@ type Processed = Awaited<ReturnType<typeof processDecision>>;
  * the writes cannot be batched.
  */
 const writeInOrder = async (
-  rows: CollisionFilteredDecisions,
+  rows: CollisionRetainedDecisions,
   write: (row: IngestionResult) => Promise<Processed>,
 ): Promise<Processed> => {
   const [first, ...rest] = rows.decisions;
@@ -1376,13 +1376,14 @@ const ingestListedItem = async ({
         // The decision first, then what its page states beside it. A
         // companion that cannot be written parks the item: a rebuild writes
         // both again under the same identities.
-        const processed = await writeInOrder(
-          filterQuarantinePeerCollisions({
-            decisions: [built.decision, ...(built.companions ?? [])],
-            proof: collisionProof,
-          }),
-          write,
-        );
+        const retained = await retainListedQuarantineDecisions({
+          sourceLease: lease,
+          scopedDb,
+          listing: item,
+          built,
+          proof: collisionProof,
+        });
+        const processed = await writeInOrder(retained, write);
         if (processed.status === PROCESS_DECISION_STATUS.RETRYABLE) {
           await park(`retryable:${processed.reason}`);
           return;

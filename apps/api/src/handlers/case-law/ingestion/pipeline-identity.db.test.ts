@@ -1172,7 +1172,8 @@ if (!databaseUrl || !runPostgresTests) {
       if (
         first === undefined ||
         recovered === undefined ||
-        first.sourceDocumentId === undefined
+        first.sourceDocumentId === undefined ||
+        first.sourceRaw === undefined
       ) {
         return panic("Both NALUS listing observations must build");
       }

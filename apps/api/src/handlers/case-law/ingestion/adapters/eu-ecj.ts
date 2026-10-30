@@ -736,7 +736,7 @@ const ecjQuarantineOf = (
 const keyedRepairAliases = (
   sourceDocumentId: string | undefined,
   quarantine: QuarantineIdentity | undefined,
-) => (sourceDocumentId === undefined ? [] : (quarantine?.repairAliases ?? []));
+) => (sourceDocumentId === undefined ? undefined : quarantine?.repairAliases);
 
 /** The fields of one listed binding that decide how its variant is keyed. */
 export type EcjListedVariant = {
@@ -759,7 +759,7 @@ export type EcjVariantIdentity =
   | {
       type: "keyed";
       sourceDocumentId: string;
-      repairAliases: readonly RepairAlias[];
+      repairAliases: readonly RepairAlias[] | undefined;
     }
   | { type: "quarantined"; sourceDocumentId: string; fingerprint: string }
   /** No usable CELEX and a blank ECLI: nothing names this variant. */
@@ -1862,7 +1862,7 @@ const ecjDecisionFromParts = ({
     {
       caseNumber,
       sourceDocumentId,
-      ...(repairAliases.length === 0
+      ...(repairAliases === undefined || repairAliases.length === 0
         ? {}
         : { sourceDocumentIdRepairAliases: repairAliases }),
       // What every row this adapter wrote before it stated an id was stored

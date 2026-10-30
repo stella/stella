@@ -589,6 +589,7 @@ export const runListingCensus = async (
       await sleep(adapter.minRequestIntervalMs);
     }
     const target = checkpoint.nextSlice;
+    // db-await-in-loop: each cursor slice must finish its publisher listing and durable evidence before its checkpoint permits the next slice
     const counted = await countSlice({
       adapter,
       slice: target,

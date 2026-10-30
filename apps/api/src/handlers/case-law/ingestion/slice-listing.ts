@@ -6,9 +6,10 @@
  * disagree about the same slice.
  */
 
-import { panic, Result } from "better-result";
+import { Result } from "better-result";
 
 import { abortableSleep } from "@/api/handlers/case-law/ingestion/abortable-sleep";
+import { createQuarantineCollisionRetention } from "@/api/handlers/case-law/ingestion/quarantine-collision-retention";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import type {
   ListingIdentity,
@@ -21,7 +22,6 @@ import {
   type ListingObservation,
   quarantineCollisionEvidence,
   type QuarantineCollisionObservation,
-  quarantineCollisionObservation,
   quarantinePeerCollisions,
 } from "@/api/lib/legal-search/quarantine-identity";
 import { fingerprintReconciliationPayload } from "@/api/lib/legal-search/reconciliation-payload";
@@ -154,82 +154,6 @@ type ListReconciliationSliceOptions = {
   signal?: AbortSignal | undefined;
 };
 
-type CollisionEvidenceGroup =
-  | {
-      type: "single-revision";
-      observations: Map<string, QuarantineCollisionObservation>;
-    }
-  | { type: "colliding"; known: Set<string> };
-
-type ObserveCollisionEvidenceOptions = {
-  sourceDocumentId: string;
-  payload: unknown;
-};
-
-/** Share the evidence accumulator across both passes, including an unstable verification. */
-const createCollisionEvidenceCollector = ({
-  adapterKey,
-  persistCollisionEvidence,
-}: Pick<
-  ListReconciliationSliceOptions,
-  "adapterKey" | "persistCollisionEvidence"
->) => {
-  const groups = new Map<string, CollisionEvidenceGroup>();
-  const pending = new Map<string, QuarantineCollisionObservation>();
-  return {
-    observe: ({
-      sourceDocumentId,
-      payload,
-    }: ObserveCollisionEvidenceOptions): void => {
-      const observation = quarantineCollisionObservation({
-        source: adapterKey,
-        quarantineId: sourceDocumentId,
-        payload,
-      });
-      const key = observation.identity.fingerprint;
-      const group = groups.get(sourceDocumentId);
-      if (group === undefined) {
-        groups.set(sourceDocumentId, {
-          type: "single-revision",
-          observations: new Map([[key, observation]]),
-        });
-        return;
-      }
-      switch (group.type) {
-        case "single-revision":
-          group.observations.set(key, observation);
-          if (group.observations.size === 1) {
-            return;
-          }
-          for (const [fingerprint, retained] of group.observations) {
-            pending.set(fingerprint, retained);
-          }
-          groups.set(sourceDocumentId, {
-            type: "colliding",
-            known: new Set(group.observations.keys()),
-          });
-          return;
-        case "colliding":
-          if (!group.known.has(key)) {
-            group.known.add(key);
-            pending.set(key, observation);
-          }
-          return;
-        default:
-          group satisfies never;
-          panic("Unknown collision evidence state");
-      }
-    },
-    flush: async (): Promise<void> => {
-      if (pending.size === 0) {
-        return;
-      }
-      await persistCollisionEvidence([...pending.values()]);
-      pending.clear();
-    },
-  };
-};
-
 /** One pass over every page of a slice, keyed as the ingest keys it. */
 const listSlicePass = async (
   {
@@ -242,7 +166,7 @@ const listSlicePass = async (
     sleep,
     signal,
   }: ListReconciliationSliceOptions,
-  collisionEvidence: ReturnType<typeof createCollisionEvidenceCollector>,
+  collisionEvidence: ReturnType<typeof createQuarantineCollisionRetention>,
 ): Promise<Result<SliceListing, AdapterFetchError>> => {
   const listing: SliceListing = {
     keyed: new Map(),
@@ -431,7 +355,7 @@ const sameIdentities = (first: SliceListing, second: SliceListing): boolean =>
 export const listReconciliationSlice = async (
   options: ListReconciliationSliceOptions,
 ): Promise<Result<ListedSlice, AdapterFetchError>> => {
-  const collisionEvidence = createCollisionEvidenceCollector(options);
+  const collisionEvidence = createQuarantineCollisionRetention(options);
   const first = await listSlicePass(options, collisionEvidence);
   if (Result.isError(first)) {
     return first;

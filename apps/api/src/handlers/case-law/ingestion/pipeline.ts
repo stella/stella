@@ -50,11 +50,11 @@ import {
   sameStreaks,
   writeUnavailableStreaks,
 } from "@/api/handlers/case-law/ingestion/pipeline/unread-items";
+import type { CollisionFilterProof } from "@/api/handlers/case-law/ingestion/quarantine-collision-filter";
 import {
-  type CollisionFilteredDecisions,
-  type CollisionFilterProof,
-  filterQuarantinePeerCollisions,
-} from "@/api/handlers/case-law/ingestion/quarantine-collision-filter";
+  type CollisionRetainedDecisions,
+  createQuarantineCollisionRetention,
+} from "@/api/handlers/case-law/ingestion/quarantine-collision-retention";
 import { refreshNextSourceStoredTotal } from "@/api/handlers/case-law/ingestion/source-totals";
 import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -272,6 +272,18 @@ const runScopedIngestionPipeline = async ({
   if (!adapter) {
     panic(`Unknown adapter: ${source.adapterKey}`);
   }
+
+  const collisionRetention = createQuarantineCollisionRetention({
+    adapterKey: adapter.key,
+    persistCollisionEvidence: async (observations) => {
+      await sourceLease.beforeDatabaseMark();
+      await storeListingObservations(scopedDb, {
+        sourceId: source.id,
+        adapterKey: adapter.key,
+        observations,
+      });
+    },
+  });
 
   // Started here rather than passed in, so the budget the loop measures a page
   // against is the same one the abort it would get is derived from.
@@ -504,7 +516,7 @@ const runScopedIngestionPipeline = async ({
     decisions: { decisions },
     observation,
   }: {
-    decisions: CollisionFilteredDecisions;
+    decisions: CollisionRetainedDecisions;
     observation: { order: bigint; observedAt: Date };
   }): Promise<string | null> => {
     for (const batch of admitPageDecisions(decisions, batchRecordLimit)) {
@@ -680,7 +692,7 @@ const runScopedIngestionPipeline = async ({
     if (plan.terminal.length > 0) {
       const s3FailuresBefore = s3UploadFailures;
       const halted = await applyPageDecisions({
-        decisions: reportPageQuarantineCollisions(plan.terminal, proof),
+        decisions: await retainPageQuarantineCollisions(plan.terminal, proof),
         observation,
       });
       if (halted !== null) {
@@ -723,14 +735,18 @@ const runScopedIngestionPipeline = async ({
    * The crawl's half of the walker's quarantine collision count
    * (`countQuarantineCollisions`): two records on one page under one
    * quarantine id with different stored bytes are two records one row cannot
-   * hold, and the pipeline would let the second replace the first. Reported
-   * per id, not stopped: the id is the adapter's to make more specific.
+   * hold. Retain both raw revisions before either can replace its canonical row.
    * Peer repair candidates are removed before any decision reaches identity resolution.
    */
-  const reportPageQuarantineCollisions = (
+  const retainPageQuarantineCollisions = async (
     decisions: SyncPage["decisions"],
     proof: CollisionFilterProof,
-  ): CollisionFilteredDecisions => {
+  ): Promise<CollisionRetainedDecisions> => {
+    const filtered = await collisionRetention.retainDecisions({
+      type: "crawl",
+      decisions,
+      proof,
+    });
     const collisions = countQuarantineCollisions(
       decisions.flatMap(({ sourceDocumentId, rawHash }) =>
         sourceDocumentId === undefined
@@ -749,7 +765,6 @@ const runScopedIngestionPipeline = async ({
     // A keyed record whose repair alias is a quarantine id the same page
     // also stores: two records the fingerprint cannot tell apart, and the
     // alias would merge them.
-    const filtered = filterQuarantinePeerCollisions({ decisions, proof });
     for (const peer of filtered.collidingIds) {
       logger.warn("case_law.ingestion.quarantine_peer_collision", {
         adapterKey: adapter.key,
@@ -785,7 +800,10 @@ const runScopedIngestionPipeline = async ({
       type: "no-listing-proof",
     } as const satisfies CollisionFilterProof;
     const s3FailuresBefore = s3UploadFailures;
-    const decisions = reportPageQuarantineCollisions(page.decisions, proof);
+    const decisions = await retainPageQuarantineCollisions(
+      page.decisions,
+      proof,
+    );
     const halted = await applyPageDecisions({
       decisions,
       observation,

@@ -1308,10 +1308,10 @@ const czRegionalRepairAliases = (
   ];
   return [
     ...new Set(
-      forms.flatMap((halves) => {
-        const quarantine = czRegionalQuarantineIdentity(row.record, halves);
-        return quarantine?.repairAliases ?? [];
-      }),
+      forms
+        .map((halves) => czRegionalQuarantineIdentity(row.record, halves))
+        .filter((quarantine) => quarantine !== undefined)
+        .flatMap((quarantine) => quarantine.repairAliases),
     ),
   ];
 };

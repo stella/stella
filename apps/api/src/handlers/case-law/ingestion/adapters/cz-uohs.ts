@@ -215,7 +215,7 @@ type CzUohsKeyedIdentity = {
   type: "keyed";
   sourceDocumentId: string;
   /** The quarantine id this decision would have had without its IRI. */
-  repairAliases: readonly RepairAlias[];
+  repairAliases: readonly RepairAlias[] | undefined;
 };
 
 type CzUohsQuarantinedIdentity = {
@@ -280,7 +280,7 @@ const czUohsRecordIdentity = (record: CzUohsRecord): CzUohsRecordIdentity => {
     return {
       type: "keyed",
       sourceDocumentId: record.iri,
-      repairAliases: quarantine?.repairAliases ?? [],
+      repairAliases: quarantine?.repairAliases,
     };
   }
   // Only the numbers the decision states: the docket of its listing-only row
@@ -575,9 +575,9 @@ const czUohsSourceRaw = (
 
 /** The quarantine id a keyed record takes over when its IRI recovers. */
 const czUohsRepairAliases = (
-  repairAliases: readonly RepairAlias[],
+  repairAliases: readonly RepairAlias[] | undefined,
 ): Pick<IngestionResult, "sourceDocumentIdRepairAliases"> =>
-  repairAliases.length === 0
+  repairAliases === undefined || repairAliases.length === 0
     ? {}
     : { sourceDocumentIdRepairAliases: repairAliases };
 

@@ -530,7 +530,7 @@ type CzNssRowIdentity =
       type: "document";
       sourceDocumentId: string;
       /** The quarantine id this row would have had without its id. */
-      repairAliases: readonly RepairAlias[];
+      repairAliases: readonly RepairAlias[] | undefined;
     }
   | { type: "quarantined"; sourceDocumentId: string };
 
@@ -583,7 +583,7 @@ const czNssRowIdentity = (row: ParsedRow): CzNssRowIdentity | null => {
     return {
       type: "document",
       sourceDocumentId: documentId,
-      repairAliases: quarantine?.repairAliases ?? [],
+      repairAliases: quarantine?.repairAliases,
     };
   }
   return quarantine === undefined
@@ -2143,7 +2143,9 @@ const rowToResult = ({
     sourceDocumentId,
     // So the listing row a crawl kept for this document while its id was
     // unusable is taken over by it rather than left beside it.
-    ...(identity.type === "document" && identity.repairAliases.length > 0
+    ...(identity.type === "document" &&
+    identity.repairAliases !== undefined &&
+    identity.repairAliases.length > 0
       ? { sourceDocumentIdRepairAliases: identity.repairAliases }
       : {}),
     // What every row this adapter wrote before it stated an id was stored
@@ -2368,7 +2370,7 @@ const rebuildStoredDocument = async ({
 const storedRepairAlias = (
   parts: SourceRawParts | null,
   sourceDocumentId: string | undefined,
-): readonly RepairAlias[] => {
+): readonly RepairAlias[] | undefined => {
   const listing = parts?.[CZ_NSS_RAW_PART.LISTING];
   if (listing === undefined) {
     return [];
@@ -2497,7 +2499,7 @@ const reparseStoredRaw = async (
         ? {}
         : { identifiers: reporterIdentifiers }),
       sourceDocumentId,
-      ...(repairAliases.length === 0
+      ...(repairAliases === undefined || repairAliases.length === 0
         ? {}
         : { sourceDocumentIdRepairAliases: repairAliases }),
       ...(sourceDocumentId === undefined
