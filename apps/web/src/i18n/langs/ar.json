@@ -814,8 +814,10 @@
       "deleteRateTable": "حذف جدول الأسعار",
       "editRateTable": "تعديل جدول الأسعار",
       "effectiveFrom": "ساري من",
+      "effectiveRateRequired": "لا يوجد سعر سارٍ لهذا الملف القانوني وهذا الشخص وهذا التاريخ. أضف سعرًا أو سجّل الوقت كغير قابل للفوترة.",
       "effectiveTo": "ساري حتى",
       "hourlyRate": "السعر بالساعة",
+      "logNonBillable": "تسجيل كغير قابل للفوترة",
       "noRateEntries": "لا توجد إدخالات أسعار بعد",
       "noRateFound": "لم يُضبط أي سعر",
       "noRateTables": "لا توجد جداول أسعار بعد",
@@ -1090,7 +1092,9 @@
     },
     "emptyState": "لم يُعثر على أي قرارات. اضبط مصدرًا وشغّل مزامنة لاستيراد الاجتهاد القضائي.",
     "filters": {
-      "remove": "إزالة عامل التصفية {filter}"
+      "countryMismatch": "أُزيلت عوامل التصفية لأنها لا تخص البلد المحدد ({country}): {filters}.",
+      "remove": "إزالة عامل التصفية {filter}",
+      "showInCountry": "عرض {filter} في {country}"
     },
     "languages": {
       "count": "{count, plural, zero {لا توجد لغات} one {لغة واحدة} two {لغتان} few {# لغات} many {# لغة} other {# لغة}}",
@@ -1346,6 +1350,7 @@
       "toastTitle": "العرض الكامل غير متاح بعد"
     },
     "activity": {
+      "newerVersion": "يُعرض هذا المحتوى في إصدار أحدث.",
       "review": "تحديث المراجعة"
     },
     "aiPrompt": "أداة تحرير رسائل الذكاء الاصطناعي",
@@ -5052,6 +5057,8 @@
       "desktopCardConnectedTitle": "تم ربط stella desktop",
       "desktopCardMissingDetail": "ثبّته، أو اربطه إذا كان مثبتًا بالفعل على هذا الكمبيوتر.",
       "desktopCardMissingTitle": "لم يُربط stella desktop بعد",
+      "desktopCardOpeningDetail": "جارٍ ربط هذا الكمبيوتر بـ <bdi>{identity}</bdi> على {host}. إذا طلب المتصفح ذلك، فاسمح له بفتح stella desktop.",
+      "desktopCardOpeningTitle": "جارٍ فتح stella desktop...",
       "desktopCardOutdatedDetail": "الإصدار {version} مرتبط بـ <bdi>{identity}</bdi>. ثبّت أحدث إصدار لتستمر المستندات والنشاط في العمل.",
       "desktopCardOutdatedTitle": "يحتاج stella desktop إلى تحديث",
       "desktopClipboardDescription": "افتح النص المنسوخ من أي تطبيق وابحث فيه ونظّمه وأعد استخدامه.",
@@ -5071,6 +5078,7 @@
       "desktopInstallOpenStep": "افتح stella desktop مرة واحدة. تظهر الحافظة فورًا وتبقى متاحة من شريط القوائم في macOS أو منطقة الإعلام في Windows.",
       "desktopInstallTitle": "التثبيت والفتح",
       "desktopInstallWindowsStep": "شغّل برنامج التثبيت واتبع التعليمات.",
+      "desktopOpenApp": "فتح stella desktop",
       "desktopPrivacyDescription": "يُشفَّر سجل الحافظة ويُخزَّن على هذا الجهاز.",
       "desktopPrivacyTitle": "خاص تلقائيًا",
       "desktopSelfHostDescription": "ثق بعنوان URL الخاص بهذه stella في تطبيق سطح المكتب الموقع كي يمكن فتح مستندات هذا التثبيت محليا.",
@@ -6524,6 +6532,14 @@
           "started": "بدأ مراجعة المستند"
         },
         "empty": "لا يوجد نشاط في هذا الملف القانوني بعد.",
+        "fields": {
+          "dueDate": "تاريخ الاستحقاق",
+          "parentFolder": "المجلد الأصل",
+          "priority": "الأولوية",
+          "property": "الخاصية",
+          "schedule": "الجدول الزمني",
+          "sortOrder": "الترتيب"
+        },
         "filterLabel": "تصفية النشاط",
         "filters": {
           "all": "كل النشاط",
@@ -6573,6 +6589,7 @@
           "translation": "ترجمة"
         },
         "title": "النشاط",
+        "updatedFields": "تم تحديث {fields}",
         "views": {
           "list": "عرض القائمة",
           "timeline": "عرض الخط الزمني"
