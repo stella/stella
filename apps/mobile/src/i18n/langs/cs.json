@@ -22,7 +22,8 @@
     "toolUsed": "Použito: {tool}",
     "threadTitle": "Konverzace",
     "threadLoadFailed": "Tuto konverzaci se nepodařilo načíst.",
-    "threadEmptyDescription": "Tato konverzace zatím nemá žádné zprávy.",
+    "greeting": "Na čem chcete pracovat?",
+    "greetingSubtitle": "Začněte spisem, dokumentem nebo obyčejnou otázkou.",
     "sections": {
       "today": "Dnes",
       "yesterday": "Včera",
