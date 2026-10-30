@@ -282,35 +282,43 @@ describe.skipIf(!enabled)("published coverage bounds plan (postgres)", () => {
           planEvidence,
         ).toHaveLength(2);
         for (const probe of facetProbes) {
-          expect(probe.indexNames, planEvidence).toContain(FACET_INDEX);
-          expect(probe.indexConditions.join(" "), planEvidence).toContain(
-            "source_id",
-          );
-          expect(probe.indexConditions.join(" "), planEvidence).toContain(
-            "court",
-          );
+          expect(probe.combinator, planEvidence).not.toBe("or");
+          expect(
+            probe.branches.every(
+              ({ indexName, indexCondition }) =>
+                indexName === FACET_INDEX &&
+                indexCondition?.includes("source_id") === true &&
+                indexCondition.includes("court"),
+            ),
+            planEvidence,
+          ).toBe(true);
           expect(probe.actualLoops, planEvidence).toBe(SOURCES);
         }
         const probes = indexedAccessPaths(root, "case_law_decisions").filter(
-          ({ actualLoops, indexNames }) =>
-            actualLoops !== 0 && indexNames.includes(COVERAGE_INDEX),
+          ({ actualLoops, branches }) =>
+            actualLoops !== 0 &&
+            branches.some(({ indexName }) => indexName === COVERAGE_INDEX),
         );
         expect(probes, planEvidence).toHaveLength(2);
         for (const probe of probes) {
           // The endpoint limits and actual scan work are asserted below.
-          expect(probe.indexNames, planEvidence).toContain(COVERAGE_INDEX);
-          expect(probe.indexConditions.join(" "), planEvidence).toContain(
-            "source_id",
-          );
-          expect(probe.indexConditions.join(" "), planEvidence).toContain(
-            "decision_date IS NOT NULL",
-          );
+          expect(probe.combinator, planEvidence).not.toBe("or");
+          expect(
+            probe.branches.every(
+              ({ indexName, indexCondition }) =>
+                indexName === COVERAGE_INDEX &&
+                indexCondition?.includes("source_id") === true &&
+                indexCondition.includes("decision_date IS NOT NULL"),
+            ),
+            planEvidence,
+          ).toBe(true);
         }
         const endpointLimits = planNodes(root).filter(
           (node) =>
             node["Node Type"] === "Limit" &&
             indexedAccessPaths(node, "case_law_decisions").some(
-              ({ indexNames }) => indexNames.includes(COVERAGE_INDEX),
+              ({ branches }) =>
+                branches.some(({ indexName }) => indexName === COVERAGE_INDEX),
             ),
         );
         // Exclude the outer page limit, which owns both correlated probes.

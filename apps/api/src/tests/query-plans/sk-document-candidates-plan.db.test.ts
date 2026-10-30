@@ -124,10 +124,14 @@ test("outstanding candidate pages bound cooldown-heavy first, middle and NULL-ta
         expect(accessPaths).toHaveLength(scans.length);
         for (const path of accessPaths) {
           expect(path.accessKind).toBe("index");
-          expect(path.indexNames).toEqual([
+          expect(path.branches.map(({ indexName }) => indexName)).toEqual([
             DOCUMENT_OUTSTANDING_DATE_INDEX.name,
           ]);
-          expect(path.indexConditions.join(" ")).toContain("source_id");
+          expect(
+            path.branches.every(({ indexCondition }) =>
+              indexCondition?.includes("source_id"),
+            ),
+          ).toBe(true);
           expect(path.node["Filter"]).toBeUndefined();
         }
         for (const scan of scans) {

@@ -51,9 +51,8 @@ test("equivalent index and bitmap plans preserve indexed access bounds", () => {
         };
         const projection = (root: Record<string, unknown>) =>
           indexedAccessPaths(root, relation).map(
-            ({ indexNames, indexConditions, actualLoops, actualRows }) => ({
-              indexNames,
-              indexConditions,
+            ({ branches, actualLoops, actualRows }) => ({
+              branches,
               actualLoops,
               actualRows,
             }),
@@ -71,6 +70,79 @@ test("equivalent index and bitmap plans preserve indexed access bounds", () => {
       },
     ),
   );
+});
+
+const isCoveragePlanProbe = (
+  path: ReturnType<typeof indexedAccessPaths>[number],
+): boolean =>
+  path.combinator !== "or" &&
+  path.branches.every(
+    ({ indexName, indexCondition }) =>
+      indexName === "coverage_idx" &&
+      indexCondition?.includes("source_id") === true &&
+      indexCondition.includes("court"),
+  );
+
+test("a bitmap-or cannot borrow another branch's coverage bounds", () => {
+  const root = {
+    "Node Type": "Bitmap Heap Scan",
+    "Relation Name": "coverage",
+    Plans: [
+      {
+        "Node Type": "BitmapOr",
+        Plans: [
+          {
+            "Node Type": "Bitmap Index Scan",
+            "Index Name": "coverage_idx",
+            "Index Cond": "(source_id = 1 AND court = 'x')",
+          },
+          {
+            "Node Type": "Bitmap Index Scan",
+            "Index Name": "unrelated_idx",
+            "Index Cond": null,
+          },
+        ],
+      },
+    ],
+  };
+  const path =
+    indexedAccessPaths(root, "coverage").at(0) ??
+    panic("Missing synthetic bitmap access path");
+
+  expect(path.combinator).toBe("or");
+  expect(isCoveragePlanProbe(path)).toBe(false);
+});
+
+test("a bitmap-and preserves its branch bounds and combinator", () => {
+  const root = {
+    "Node Type": "Bitmap Heap Scan",
+    "Relation Name": "coverage",
+    Plans: [
+      {
+        "Node Type": "BitmapAnd",
+        Plans: [
+          {
+            "Node Type": "Bitmap Index Scan",
+            "Index Name": "source_idx",
+            "Index Cond": "(source_id = 1)",
+          },
+          {
+            "Node Type": "Bitmap Index Scan",
+            "Index Name": "court_idx",
+            "Index Cond": "(court = 'x')",
+          },
+        ],
+      },
+    ],
+  };
+
+  expect(indexedAccessPaths(root, "coverage").at(0)).toMatchObject({
+    combinator: "and",
+    branches: [
+      { indexName: "source_idx", indexCondition: "(source_id = 1)" },
+      { indexName: "court_idx", indexCondition: "(court = 'x')" },
+    ],
+  });
 });
 
 test("an index-only filter returns only the covering scan of an index scanned twice", () => {

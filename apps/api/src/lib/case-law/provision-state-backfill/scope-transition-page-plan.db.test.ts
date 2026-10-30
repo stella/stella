@@ -108,11 +108,12 @@ const genericPlan = async (read: string) => {
     const paths = indexedAccessPaths(root, "case_law_decisions");
     return {
       nodeTypes: nodeTypes(root),
-      paths: paths.map(({ indexNames, indexConditions, node }) => ({
-        indexNames,
-        boundedOnId: indexConditions.some((condition) =>
-          /\bid > \$3\b/u.test(condition),
-        ),
+      paths: paths.map(({ branches, node }) => ({
+        branches: branches.map(({ indexName, indexCondition }) => ({
+          indexName,
+          boundedOnId:
+            indexCondition !== null && /\bid > \$3\b/u.test(indexCondition),
+        })),
         filter: node["Filter"] ?? null,
       })),
       scanCount: scanOccurrences(root).filter(
@@ -133,8 +134,7 @@ const expectScopeKeyset = async (read: string) => {
   expect(plan.scanCount).toBe(1);
   expect(plan.paths).toEqual([
     {
-      indexNames: [SCOPE_INDEX],
-      boundedOnId: read.includes("$3"),
+      branches: [{ indexName: SCOPE_INDEX, boundedOnId: read.includes("$3") }],
       filter: null,
     },
   ]);
@@ -213,8 +213,7 @@ test(
     const plan = await genericPlan(read);
     expect(plan.paths).not.toEqual([
       {
-        indexNames: [SCOPE_INDEX],
-        boundedOnId: true,
+        branches: [{ indexName: SCOPE_INDEX, boundedOnId: true }],
         filter: null,
       },
     ]);

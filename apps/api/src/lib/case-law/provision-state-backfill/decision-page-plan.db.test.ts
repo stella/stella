@@ -142,8 +142,8 @@ const pageWalk = async (text: string, cursor: string | null) => {
   const { root, scans } = await genericPlanScans(text, cursor);
   const indexed = indexedAccessPaths(root, "case_law_decisions");
   return scans.map(({ index, indexCond, filter, position }) => ({
-    indexScan: indexed.some(({ indexNames }) =>
-      indexNames.includes(index ?? ""),
+    indexScan: indexed.some(({ branches }) =>
+      branches.some(({ indexName }) => indexName === (index ?? "")),
     ),
     index,
     boundedOnId: indexCond !== null && /\bid > /u.test(indexCond),

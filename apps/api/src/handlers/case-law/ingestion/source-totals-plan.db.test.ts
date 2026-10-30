@@ -160,8 +160,8 @@ describe.skipIf(!enabled)("stored total planning on PostgreSQL 18", () => {
       ).toBe(true);
       expect(sourceScan).toBeDefined();
       expect(
-        indexedAccessPaths(root, "case_law_sources").some(({ indexNames }) =>
-          indexNames.some((name) => name.includes("pkey")),
+        indexedAccessPaths(root, "case_law_sources").some(({ branches }) =>
+          branches.some(({ indexName }) => indexName.includes("pkey")),
         ),
       ).toBe(true);
       expect(sourceScan?.index).toContain("pkey");
@@ -188,8 +188,14 @@ describe.skipIf(!enabled)("stored total planning on PostgreSQL 18", () => {
       accessKind: "index-only",
     });
     expect(corpus).toHaveLength(1);
-    expect(corpus.at(0)?.indexConditions.join(" ")).toContain("source_id");
-    expect(corpus.at(0)?.indexNames).not.toEqual([]);
+    expect(
+      corpus
+        .at(0)
+        ?.branches.every(({ indexCondition }) =>
+          indexCondition?.includes("source_id"),
+        ),
+    ).toBe(true);
+    expect(corpus.at(0)?.branches).not.toEqual([]);
     // No other scan of the table, of any kind, may join the covering one.
     const corpusScans = scanOccurrences(root).filter(
       ({ relation }) => relation === "case_law_decisions",

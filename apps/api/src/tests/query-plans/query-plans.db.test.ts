@@ -321,7 +321,7 @@ test("outstanding-document probe is an index-only LIMIT 1 lookup", async () => {
   expect(scans.some(({ nodeType }) => nodeType === "Seq Scan")).toBe(false);
   expect(scans).toHaveLength(1);
   expect(paths).toHaveLength(1);
-  expect(paths[0]?.indexNames).toEqual([
+  expect(paths[0]?.branches.map(({ indexName }) => indexName)).toEqual([
     "case_law_decisions_document_outstanding_idx",
   ]);
   expect(scans[0]).toMatchObject({

@@ -9,8 +9,11 @@ type PlanNode = Record<string, unknown>;
 export type IndexedAccessPath = {
   relation: string;
   accessKind: "index" | "index-only" | "bitmap";
-  indexNames: readonly string[];
-  indexConditions: readonly string[];
+  branches: readonly {
+    indexName: string;
+    indexCondition: string | null;
+  }[];
+  combinator: "single" | "and" | "or";
   recheckCondition: string | null;
   actualLoops: number | null;
   actualRows: number | null;
@@ -154,12 +157,15 @@ export const indexedAccessPaths = (
       path = {
         relation,
         accessKind: nodeType === "Index Only Scan" ? "index-only" : "index",
-        indexNames: [field(node, "Index Name")].filter(
-          (name): name is string => name !== null,
-        ),
-        indexConditions: [field(node, "Index Cond")].filter(
-          (condition): condition is string => condition !== null,
-        ),
+        branches: [
+          {
+            indexName:
+              field(node, "Index Name") ??
+              panic("Indexed scan is missing its index name"),
+            indexCondition: field(node, "Index Cond"),
+          },
+        ],
+        combinator: "single",
         recheckCondition: null,
         actualLoops: numberField(node, "Actual Loops"),
         actualRows: numberField(node, "Actual Rows"),
@@ -170,17 +176,25 @@ export const indexedAccessPaths = (
         (candidate) => field(candidate, "Node Type") === "Bitmap Index Scan",
       );
       if (indexes.length > 0) {
+        const bitmapNodeTypes = attachedDescendants(node).map((candidate) =>
+          field(candidate, "Node Type"),
+        );
+        let combinator: IndexedAccessPath["combinator"] = "single";
+        if (bitmapNodeTypes.includes("BitmapOr")) {
+          combinator = "or";
+        } else if (bitmapNodeTypes.includes("BitmapAnd")) {
+          combinator = "and";
+        }
         path = {
           relation,
           accessKind: "bitmap",
-          indexNames: indexes.flatMap((candidate) => {
-            const name = field(candidate, "Index Name");
-            return name === null ? [] : [name];
-          }),
-          indexConditions: indexes.flatMap((candidate) => {
-            const condition = field(candidate, "Index Cond");
-            return condition === null ? [] : [condition];
-          }),
+          branches: indexes.map((candidate) => ({
+            indexName:
+              field(candidate, "Index Name") ??
+              panic("Bitmap index scan is missing its index name"),
+            indexCondition: field(candidate, "Index Cond"),
+          })),
+          combinator,
           recheckCondition: field(node, "Recheck Cond"),
           actualLoops: numberField(node, "Actual Loops"),
           actualRows: numberField(node, "Actual Rows"),

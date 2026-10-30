@@ -183,7 +183,9 @@ const expectListedCoveringPath = async () => {
       "u",
     ),
   );
-  expect(indexed.map(({ indexNames }) => indexNames)).toEqual([[LISTED_INDEX]]);
+  expect(
+    indexed.map(({ branches }) => branches.map(({ indexName }) => indexName)),
+  ).toEqual([[LISTED_INDEX]]);
   // No other scan of the table, of any kind, may join the covering one.
   expect(scans).toHaveLength(1);
   // The index predicate implies the withdrawn filter, so no row is rechecked.

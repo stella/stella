@@ -164,7 +164,9 @@ describe.skipIf(!enabled)("published court walks (postgres)", () => {
           );
           expect(vocabularyScans).toHaveLength(2);
           for (const scan of vocabularyScans) {
-            expect(scan.indexNames).toEqual([PUBLISHED_INDEX]);
+            expect(scan.branches.map(({ indexName }) => indexName)).toEqual([
+              PUBLISHED_INDEX,
+            ]);
             // A residual filter would walk index entries the bound skips.
             expect(scan.node["Filter"]).toBeUndefined();
           }
