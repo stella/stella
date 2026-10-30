@@ -2,9 +2,18 @@ import { panic } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 
 import {
+  buildPlDecision,
+  normalizeSaosDumpItem,
+  plCourtsAdapter,
+} from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
+import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
+import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
+import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
+import {
   decodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/handlers/case-law/ingestion/adapter";
+  toPlainTextIngestionResult,
+} from "@/api/lib/legal-search/ingestion-types";
 /**
  * What this adapter makes of the payloads SAOS actually serves.
  *
@@ -18,16 +27,7 @@ import {
 import type {
   IngestionResult,
   SourceRawParts,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import {
-  buildPlDecision,
-  normalizeSaosDumpItem,
-  plCourtsAdapter,
-} from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
-import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
-import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
-import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
-import { toPlainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
+} from "@/api/lib/legal-search/ingestion-types";
 import { rehydrateMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import {

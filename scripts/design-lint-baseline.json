@@ -682,7 +682,7 @@
     "packages/ui/src/lib/slot.tsx": 1,
     "scripts/chat-fixture-guard.ts": 1,
     "scripts/check-cli-release-coupling.ts": 1,
-    "scripts/check-migration-order.ts": 2,
+    "scripts/check-migration-order.ts": 1,
     "scripts/check-railway-template-draft.ts": 2,
     "scripts/check-railway-template-shape.ts": 1,
     "scripts/codemod-icons.ts": 2,

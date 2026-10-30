@@ -6583,7 +6583,7 @@ jobs:
   # check/clippy/doc must run where the desktop crate actually builds
   # so platform-gated macOS and Windows code is covered.
   #
-  # The matrix mirrors the release matrix (macos-14 + windows-latest)
+  # The matrix mirrors the release matrix (macos-15 + windows-latest)
   # rather than Linux: the desktop app ships only those two targets,
   # and clippy analyzes the active `cfg` for its host — so these two
   # runners cover the `#[cfg(target_os = "macos")]` / `"windows"`
@@ -6607,7 +6607,7 @@ jobs:
       matrix:
         include:
           - os: macos
-            runner: macos-14
+            runner: macos-15
             target: aarch64-apple-darwin
           - os: windows
             runner: windows-latest
@@ -6789,7 +6789,7 @@ jobs:
       matrix:
         include:
           - os: macos
-            runner: macos-14
+            runner: macos-15
             target: aarch64-apple-darwin
           - os: windows
             runner: windows-latest
