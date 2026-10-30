@@ -485,7 +485,6 @@ describe.skipIf(!enabled)("generated artefact storage (postgres)", () => {
           userId,
           role: message.role,
           content: toPersistedChatMessageContentV3({
-            version: 3,
             data: message.parts,
           }),
         })),
@@ -560,7 +559,6 @@ describe.skipIf(!enabled)("generated artefact storage (postgres)", () => {
       });
       // Editing a source message must not erase the title's captured association.
       const retainedUserContent = toPersistedChatMessageContentV3({
-        version: 3,
         data: [{ type: "text", content: "Authored bronze question" }],
       });
       expect(JSON.stringify(messages)).toContain(decisionId);
