@@ -130,6 +130,30 @@ await Bun.write(
 );
 process.stderr.write(`Wrote ${connectWeightPath.pathname}\n`);
 
+const projectChatGrantPolicy = (
+  tool: McpToolDefinition,
+): "approve-once" | "grantable" => {
+  const { access } = describeAgentAccess({
+    target: { type: "tool", name: tool.name, access: tool.access },
+    context: CLI_AGENT_CONTEXT,
+  });
+  switch (access.kind) {
+    case AGENT_ACCESS_KIND.personApproves:
+    case AGENT_ACCESS_KIND.personOnly:
+    case AGENT_ACCESS_KIND.callerConfirms:
+    case "per-capability":
+      return "approve-once";
+    case AGENT_ACCESS_KIND.open:
+      return tool.accountAccess === ACCOUNT_ACCESS.accountControl ||
+        tool.annotations.destructiveHint
+        ? "approve-once"
+        : "grantable";
+    default:
+      access satisfies never;
+      panic("Unhandled projected tool agent access");
+  }
+};
+
 const projectedChatPolicyKinds: Record<string, "internal" | "mutation"> = {};
 const projectedChatGrantPolicies: Record<string, "approve-once" | "grantable"> =
   {};
@@ -142,28 +166,7 @@ for (const tool of MODEL_VISIBLE_MCP_TOOL_DEFINITIONS) {
   }
 
   projectedChatPolicyKinds[tool.name] = "mutation";
-  const { access } = describeAgentAccess({
-    target: { type: "tool", name: tool.name, access: tool.access },
-    context: CLI_AGENT_CONTEXT,
-  });
-  switch (access.kind) {
-    case AGENT_ACCESS_KIND.personApproves:
-    case AGENT_ACCESS_KIND.personOnly:
-    case AGENT_ACCESS_KIND.callerConfirms:
-    case "per-capability":
-      projectedChatGrantPolicies[tool.name] = "approve-once";
-      break;
-    case AGENT_ACCESS_KIND.open:
-      projectedChatGrantPolicies[tool.name] =
-        tool.accountAccess === ACCOUNT_ACCESS.accountControl ||
-        tool.annotations.destructiveHint
-          ? "approve-once"
-          : "grantable";
-      break;
-    default:
-      access satisfies never;
-      panic("Unhandled projected tool agent access");
-  }
+  projectedChatGrantPolicies[tool.name] = projectChatGrantPolicy(tool);
 }
 
 const generatedChatPolicyPath = new URL(
