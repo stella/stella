@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, jest, test } from "bun:test";
 
 import { sha256Base64Url } from "@stll/sha256/bun";
 
@@ -32,6 +32,16 @@ const STEPS = [
     `successor ${String(round)} read`,
   ]),
 ] as const;
+
+afterEach(() => {
+  jest.useRealTimers();
+});
+
+const flushMicrotasks = async () => {
+  for (let index = 0; index < 32; index += 1) {
+    await Promise.resolve();
+  }
+};
 
 type FixtureOptions = {
   baseUrl?: string;
@@ -243,6 +253,40 @@ const createTransport = ({
 };
 
 describe("per-run OAuth refresh journey", () => {
+  test("bounds a stalled response body by the request budget", async () => {
+    jest.useFakeTimers();
+    const { fetcher: baseFetcher } = createTransport();
+    const fetcher: CanaryFetcher = async (input, init) => {
+      const url = new URL(
+        input instanceof Request ? input.url : input.toString(),
+      );
+      if (url.pathname === "/smoke/session") {
+        return new Response(new ReadableStream<Uint8Array>());
+      }
+      return await baseFetcher(input, init);
+    };
+
+    const result = runRefreshJourney(OPTIONS, fetcher);
+    await flushMicrotasks();
+    jest.advanceTimersByTime(9999);
+    await flushMicrotasks();
+    let settled = false;
+    void result.then(() => {
+      settled = true;
+      return undefined;
+    });
+    await flushMicrotasks();
+    expect(settled).toBe(false);
+    jest.advanceTimersByTime(1);
+    await flushMicrotasks();
+
+    expect(await result).toContainEqual({
+      name: "OAuth refresh: bootstrap",
+      status: "failed",
+      detail: "request timed out after 10000 ms",
+    });
+  });
+
   test("fails a callback with a different state before exchanging its code", async () => {
     const { fetcher, requests } = createTransport({ wrongCallbackState: true });
     const results = await runRefreshJourney(OPTIONS, fetcher);
