@@ -161,11 +161,13 @@ describe.skipIf(!enabled)("generated artefact storage (postgres)", () => {
     await db.delete(user).where(eq(user.id, userId));
   });
   test("the owned write binds value, origin and source without changing legacy rows", async () => {
-    const artefact = await generateArtefact({
-      generator,
-      sources: { decisionIds: [sourceId], inputs: [] },
-      generate: () => text,
-    });
+    const artefact = (
+      await generateArtefact({
+        generator,
+        sources: { decisionIds: [sourceId], inputs: [] },
+        generate: () => text,
+      })
+    ).unwrap();
     expect(
       await scopedDb(
         async (tx) =>
@@ -243,11 +245,13 @@ describe.skipIf(!enabled)("generated artefact storage (postgres)", () => {
     ).toBe("Legacy");
   });
   test("generated writes cannot replace an authored title and authored replacements remain readable", async () => {
-    const artefact = await generateArtefact({
-      generator,
-      sources: { decisionIds: [sourceId], inputs: [] },
-      generate: () => text,
-    });
+    const artefact = (
+      await generateArtefact({
+        generator,
+        sources: { decisionIds: [sourceId], inputs: [] },
+        generate: () => text,
+      })
+    ).unwrap();
     const before = audits;
     expect(
       await scopedDb(
@@ -325,11 +329,13 @@ describe.skipIf(!enabled)("generated artefact storage (postgres)", () => {
   });
   test("an owned write cannot target another organization", async () => {
     const before = audits;
-    const artefact = await generateArtefact({
-      generator,
-      sources: { decisionIds: [], inputs: [] },
-      generate: () => text,
-    });
+    const artefact = (
+      await generateArtefact({
+        generator,
+        sources: { decisionIds: [], inputs: [] },
+        generate: () => text,
+      })
+    ).unwrap();
     expect(
       await scopedDb(
         async (tx) =>
@@ -517,11 +523,13 @@ describe.skipIf(!enabled)("generated artefact storage (postgres)", () => {
       await db.execute(
         sql`UPDATE chat_threads SET generation_provenance = ${metadata}::text::jsonb WHERE id = ${id}`,
       );
-      const artefact = await generateArtefact({
-        generator,
-        sources: { decisionIds: [sourceId], inputs: [] },
-        generate: () => text,
-      });
+      const artefact = (
+        await generateArtefact({
+          generator,
+          sources: { decisionIds: [sourceId], inputs: [] },
+          generate: () => text,
+        })
+      ).unwrap();
       expect(
         await scopedDb(
           async (tx) =>

@@ -1,4 +1,4 @@
-import { panic, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
@@ -45,14 +45,23 @@ type ArtefactSources = {
 class GenerationContext {
   readonly #decisions = new Set<string>();
   #coverage: GeneratedOrigin["coverage"] = "complete";
+  #admission: Result<void, ArtefactSourceLimitError> = Result.ok(undefined);
   readonly generator: ModelOperationId;
-  constructor(generator: ModelOperationId, sources: ArtefactSources) {
+  constructor(generator: ModelOperationId) {
     this.generator = generator;
-    this.include(sources);
   }
-  include({ decisionIds, inputs }: ArtefactSources): void {
+  include({
+    decisionIds,
+    inputs,
+  }: ArtefactSources): Result<void, ArtefactSourceLimitError> {
+    if (this.#admission.isErr()) {
+      return Result.err(this.#admission.error);
+    }
     for (const id of decisionIds) {
-      this.#addDecision(id);
+      const added = this.#addDecision(id);
+      if (added.isErr()) {
+        return added;
+      }
     }
     for (const input of inputs) {
       switch (input.type) {
@@ -63,7 +72,10 @@ class GenerationContext {
           break;
         case "generated":
           for (const id of input.decisionIds) {
-            this.#addDecision(id);
+            const added = this.#addDecision(id);
+            if (added.isErr()) {
+              return added;
+            }
           }
           if (input.coverage === "legacy-input") {
             this.#coverage = "legacy-input";
@@ -74,17 +86,24 @@ class GenerationContext {
           panic("Unhandled artefact input origin");
       }
     }
-    this.snapshot();
+    return this.snapshot().map(() => undefined);
   }
-  #addDecision(id: string): void {
+  #addDecision(id: string): Result<void, ArtefactSourceLimitError> {
     this.#decisions.add(id.toLowerCase());
     if (this.#decisions.size > ARTEFACT_SOURCE_DECISION_LIMIT) {
-      throw new ArtefactSourceLimitError({
-        message: "Generated artefact provenance exceeds its decision limit",
-      });
+      this.#admission = Result.err(
+        new ArtefactSourceLimitError({
+          message: "Generated artefact provenance exceeds its decision limit",
+        }),
+      );
     }
+    return this.#admission;
   }
-  snapshot(): GeneratedOrigin {
+  snapshot(): Result<GeneratedOrigin, ArtefactSourceLimitError> {
+    // A tool may ignore include's result; a failed context must never publish.
+    if (this.#admission.isErr()) {
+      return Result.err(this.#admission.error);
+    }
     const parsed = v.safeParse(generatedOrigin, {
       type: "generated",
       generator: this.generator,
@@ -94,7 +113,7 @@ class GenerationContext {
     if (!parsed.success) {
       return panic("Invalid generated artefact source identity");
     }
-    return parsed.output;
+    return Result.ok(parsed.output);
   }
 }
 
@@ -118,15 +137,24 @@ type GenerateArtefactOptions<T> = {
   generate: (context: GenerationContext) => T | Promise<T>;
 };
 
+type GenerateArtefactResult<T> = Result<
+  ArtefactValue<T>,
+  ArtefactSourceLimitError
+>;
+
 /** No defaults: even a model with no decision inputs states an explicit set. */
 export const generateArtefact = async <T>({
   generator,
   sources,
   generate,
-}: GenerateArtefactOptions<T>): Promise<ArtefactValue<T>> => {
-  const context = new GenerationContext(generator, sources);
+}: GenerateArtefactOptions<T>): Promise<GenerateArtefactResult<T>> => {
+  const context = new GenerationContext(generator);
+  const included = context.include(sources);
+  if (included.isErr()) {
+    return Result.err(included.error);
+  }
   const value = await generate(context);
-  return new Artefact(value, context.snapshot());
+  return context.snapshot().map((origin) => new Artefact(value, origin));
 };
 
 export const authorArtefact = <T>(value: T): ArtefactValue<T> =>

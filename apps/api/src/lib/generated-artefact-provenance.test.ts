@@ -35,29 +35,31 @@ test("generation captures input identities before dispatch and unions later tool
         decisionIds: [second, first],
         inputs: [{ type: "legacy" }],
       });
-      expect(context.snapshot()).toEqual({
+      expect(context.snapshot().unwrap()).toEqual({
         type: "generated",
         generator,
         decisionIds: [first, second],
         coverage: "legacy-input",
       });
-      const snapshot = context.snapshot();
+      const snapshot = context.snapshot().unwrap();
       snapshot.decisionIds.length = 0;
       return text;
     },
   });
   pending.resolve(undefined);
-  expect(projectArtefactText({ artefact: await result, projection })).toBe(
-    "Unavailable",
-  );
+  expect(
+    projectArtefactText({ artefact: (await result).unwrap(), projection }),
+  ).toBe("Unavailable");
 });
 
 test("authored, recorded empty and legacy values remain readable", async () => {
-  const generated = await generateArtefact({
-    generator,
-    sources: { decisionIds: [], inputs: [] },
-    generate: () => text,
-  });
+  const generated = (
+    await generateArtefact({
+      generator,
+      sources: { decisionIds: [], inputs: [] },
+      generate: () => text,
+    })
+  ).unwrap();
   for (const artefact of [generated, authorArtefact(text)]) {
     expect(projectArtefactText({ artefact, projection })).toBe(text);
   }
@@ -85,11 +87,13 @@ test("source unions are invariant under duplicates and input order", async () =>
       decisionIds: [second],
       coverage: "complete",
     } satisfies ArtefactOrigin;
-    const artefact = await generateArtefact({
-      generator,
-      sources: { decisionIds: ids, inputs: [inherited] },
-      generate: () => text,
-    });
+    const artefact = (
+      await generateArtefact({
+        generator,
+        sources: { decisionIds: ids, inputs: [inherited] },
+        generate: () => text,
+      })
+    ).unwrap();
     expect(
       projectArtefactText({
         artefact,
@@ -135,28 +139,84 @@ test("stored provenance rejects invalid recorded states instead of treating them
   }
 });
 
-test("source overflow fails before generation instead of truncating sources", async () => {
+test.each(["direct", "inherited"])(
+  "%s source overflow returns a tagged error before dispatch",
+  async (input) => {
+    const { ARTEFACT_SOURCE_DECISION_LIMIT, ArtefactSourceLimitError } =
+      await import("./generated-artefact-provenance");
+    let dispatched = false;
+    const decisionIds = Array.from(
+      { length: ARTEFACT_SOURCE_DECISION_LIMIT + 1 },
+      (_, index) =>
+        toSafeId<"caseLawDecision">(
+          `00000000-0000-4000-8000-${index.toString(16).padStart(12, "0")}`,
+        ),
+    );
+    const result = await generateArtefact({
+      generator,
+      sources:
+        input === "direct"
+          ? { decisionIds, inputs: [] }
+          : {
+              decisionIds: [],
+              inputs: [
+                {
+                  type: "generated",
+                  generator,
+                  decisionIds,
+                  coverage: "complete",
+                },
+              ],
+            },
+      generate: () => {
+        dispatched = true;
+        return text;
+      },
+    });
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error).toBeInstanceOf(ArtefactSourceLimitError);
+    }
+    expect(dispatched).toBe(false);
+  },
+);
+
+test("an ignored tool source overflow prevents publishing an artefact", async () => {
   const { ARTEFACT_SOURCE_DECISION_LIMIT, ArtefactSourceLimitError } =
     await import("./generated-artefact-provenance");
-  const { rejectionOf } = await import("@stll/property-testing/rejection");
-  let dispatched = false;
   const decisionIds = Array.from(
-    { length: ARTEFACT_SOURCE_DECISION_LIMIT + 1 },
+    { length: ARTEFACT_SOURCE_DECISION_LIMIT },
     (_, index) =>
       toSafeId<"caseLawDecision">(
         `00000000-0000-4000-8000-${index.toString(16).padStart(12, "0")}`,
       ),
   );
-  const error = await rejectionOf(
-    generateArtefact({
-      generator,
-      sources: { decisionIds, inputs: [] },
-      generate: () => {
-        dispatched = true;
-        return text;
-      },
-    }),
-  );
-  expect(error).toBeInstanceOf(ArtefactSourceLimitError);
-  expect(dispatched).toBe(false);
+  expect(
+    (
+      await generateArtefact({
+        generator,
+        sources: { decisionIds, inputs: [] },
+        generate: () => text,
+      })
+    ).isOk(),
+  ).toBe(true);
+  let dispatched = false;
+  const result = await generateArtefact({
+    generator,
+    sources: { decisionIds: [first], inputs: [] },
+    generate: (context) => {
+      dispatched = true;
+      expect(context.include({ decisionIds, inputs: [] }).isErr()).toBe(true);
+      expect(context.include({ decisionIds: [], inputs: [] }).isErr()).toBe(
+        true,
+      );
+      expect(context.snapshot().isErr()).toBe(true);
+      return text;
+    },
+  });
+  expect(dispatched).toBe(true);
+  expect(result.isErr()).toBe(true);
+  if (result.isErr()) {
+    expect(result.error).toBeInstanceOf(ArtefactSourceLimitError);
+  }
 });
