@@ -6,6 +6,7 @@
     "activityRecording": "Tegevus: Salvestamine · täna {hours} h",
     "activityPaused": "Tegevus: Peatatud · täna {hours} h",
     "activityOff": "Tegevus: Väljas",
+    "openActivity": "Ava tegevus",
     "activityNow": "Praegu: {name}",
     "activityPause": "Peata salvestamine",
     "activityResume": "Jätka salvestamist",

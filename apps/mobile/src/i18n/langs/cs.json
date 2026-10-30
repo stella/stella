@@ -163,7 +163,6 @@
     "newest": "Nejnovější rozhodnutí",
     "noResults": "Slovům, která hledání vyžadovalo, nic neodpovídá.",
     "noResultsHint": "Zkuste méně slov nebo jiná: výrazy, které by použilo rozhodnutí, ne větu, kterou se otázka pokládá.",
-    "unavailable": "Vyhledávání je dočasně nedostupné",
     "retry": "Zkusit znovu",
     "headnote": "Právní věta",
     "textUnavailable": "K tomuto rozhodnutí není k dispozici text",
@@ -179,6 +178,14 @@
   "writes": {
     "consentNeeded": "Aby aplikace mohla provádět změny, potřebuje stella vaše svolení. Přihlaste se znovu a udělte ho.",
     "signInAgain": "Přihlásit se znovu"
+  },
+  "loads": {
+    "offline": "stella se nepodařilo spojit s vaším serverem. Zkontrolujte připojení a zkuste to znovu.",
+    "outdated": "Server odpověděl ve formátu, kterému tato verze aplikace nerozumí. Aktualizujte aplikaci, případně server, pokud ho spravujete.",
+    "consent": "Toto přihlášení aplikaci nedovoluje tento obsah číst. Přihlaste se znovu a přístup povolte.",
+    "session": "Vaše přihlášení vypršelo. Přihlaste se znovu.",
+    "server": "Na serveru došlo k chybě (kód {status}). Zkuste to za chvíli znovu.",
+    "refused": "Server požadavek odmítl (kód {status})."
   },
   "timers": {
     "title": "Časovače",
