@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { CONTACT_BULK_DELETE_LIMIT } from "@stll/api-contract";
@@ -67,47 +67,45 @@ const bulkDeleteContacts = createSafeRootHandler(
             ? owned.rows
             : panic("Bulk contact delete read more rows than it requested");
         const ownedIds = ownedContacts.map(({ id }) => id);
-        const clientContacts =
+        const affectedWorkspaces =
           ownedIds.length === 0
             ? []
             : await tx
-                .select({ id: workspaces.clientId })
-                .from(workspaces)
-                .where(
-                  and(
-                    eq(workspaces.organizationId, organizationId),
-                    inArray(workspaces.clientId, ownedIds),
-                  ),
-                );
-        const blockedIds = new Set(clientContacts.map(({ id }) => id));
-        const deletableContacts = ownedContacts.filter(
-          ({ id }) => !blockedIds.has(id),
-        );
-        const deletableIds = deletableContacts.map(({ id }) => id);
-        const affectedWorkspaces =
-          deletableIds.length === 0
-            ? []
-            : await tx
-                .select({ id: workspaceContacts.workspaceId })
+                .select({
+                  contactId: workspaceContacts.contactId,
+                  workspaceId: workspaceContacts.workspaceId,
+                })
                 .from(workspaceContacts)
                 .where(
                   and(
                     eq(workspaceContacts.organizationId, organizationId),
-                    inArray(workspaceContacts.contactId, deletableIds),
+                    inArray(workspaceContacts.contactId, ownedIds),
                   ),
                 );
 
-        if (deletableIds.length > 0) {
-          await tx
-            .delete(contacts)
-            .where(
-              and(
-                eq(contacts.organizationId, organizationId),
-                inArray(contacts.id, deletableIds),
-              ),
-            );
-        }
-        for (const contact of deletableContacts) {
+        const deletedContacts =
+          ownedIds.length === 0
+            ? []
+            : await tx
+                .delete(contacts)
+                .where(
+                  and(
+                    eq(contacts.organizationId, organizationId),
+                    inArray(contacts.id, ownedIds),
+                    sql`NOT EXISTS (
+                      SELECT 1
+                      FROM ${workspaces}
+                      WHERE ${workspaces.organizationId} = ${organizationId}
+                        AND ${workspaces.clientId} = ${contacts.id}
+                    )`,
+                  ),
+                )
+                .returning({ id: contacts.id });
+        const deletedIdSet = new Set(deletedContacts.map(({ id }) => id));
+        for (const contact of ownedContacts) {
+          if (!deletedIdSet.has(contact.id)) {
+            continue;
+          }
           await recordAuditEvent(tx, {
             action: AUDIT_ACTION.DELETE,
             resourceType: AUDIT_RESOURCE_TYPE.CONTACT,
@@ -121,11 +119,12 @@ const bulkDeleteContacts = createSafeRootHandler(
             },
           });
         }
-        const affectedWorkspaceIds = affectedWorkspaces.map(({ id }) => id);
+        const affectedWorkspaceIds = affectedWorkspaces
+          .filter(({ contactId }) => deletedIdSet.has(contactId))
+          .map((row) => row.workspaceId);
         await enqueueWorkspaceSearchRepairs(tx, affectedWorkspaceIds);
 
         const ownedIdSet = new Set(ownedIds);
-        const deletedIdSet = new Set(deletableIds);
         return {
           affectedWorkspaceIds,
           outcomes: body.contactIds.map((contactId) => {

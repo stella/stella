@@ -68,10 +68,12 @@ describe("bulkDeleteContacts", () => {
         }),
       }),
       delete: () => ({
-        where: async () => {
-          deleted = true;
-          return [];
-        },
+        where: () => ({
+          returning: async () => {
+            deleted = true;
+            return [{ id: ownId }];
+          },
+        }),
       }),
     });
 
@@ -116,12 +118,13 @@ describe("bulkDeleteContacts", () => {
                 }),
               };
             }
-            // The second read lists contacts that are a matter's client.
-            return selectCall === 2 ? [{ id: clientId }] : [];
+            return [];
           },
         }),
       }),
-      delete: () => ({ where: async () => [] }),
+      delete: () => ({
+        where: () => ({ returning: async () => [{ id: plainId }] }),
+      }),
     });
 
     const response = await bulkDeleteContacts.handler(
