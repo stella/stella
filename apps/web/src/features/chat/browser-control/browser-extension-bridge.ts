@@ -277,7 +277,7 @@ export const isBrowserExtensionBridgeMounted = (): boolean =>
 
 type BrowserExtensionNavigator = {
   userAgent: string;
-  userAgentData?: { brands: readonly { brand: string }[] };
+  userAgentData?: { brands: readonly { brand: string }[]; mobile?: boolean };
 };
 
 export const supportsBrowserExtension = (
@@ -285,7 +285,8 @@ export const supportsBrowserExtension = (
 ): boolean => {
   if (
     !browser ||
-    /Firefox|FxiOS|CriOS|iPhone|iPad|iPod/u.test(browser.userAgent)
+    /Android|Firefox|FxiOS|CriOS|iPhone|iPad|iPod/u.test(browser.userAgent) ||
+    browser.userAgentData?.mobile === true
   ) {
     return false;
   }

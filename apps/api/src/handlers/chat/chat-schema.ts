@@ -204,10 +204,10 @@ export const activeExternalSchema = activeContextSchema({
   url: v.string(),
 });
 
-// The live web/extension boundary is intentionally exact: an unknown protocol
-// or status cannot advertise a capability the server may interpret differently.
+// Accept version skew so chat can continue; the capability policy disables
+// browser tools and supplies recovery guidance. Unknown statuses stay invalid.
 const browserExtensionSchema = v.strictObject({
-  protocolVersion: v.literal(BROWSER_CONTROL_PROTOCOL_VERSION),
+  protocolVersion: v.pipe(v.number(), v.integer(), v.minValue(1)),
   status: v.picklist(Object.values(BROWSER_EXTENSION_STATUS)),
 });
 

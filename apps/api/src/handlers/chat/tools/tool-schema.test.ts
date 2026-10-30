@@ -949,6 +949,19 @@ describe("chat tool schemas", () => {
     ).not.toHaveProperty(BROWSER_CONTROL_TOOL_NAME);
   });
 
+  test.each([
+    BROWSER_CONTROL_PROTOCOL_VERSION - 1,
+    BROWSER_CONTROL_PROTOCOL_VERSION + 1,
+  ])("omits browser control for protocol version %s", (protocolVersion) => {
+    expect(
+      buildFullCoverageChatTools(
+        rawThirdPartyBoundary,
+        createChatRefRegistry(),
+        { protocolVersion, status: "connected" },
+      ),
+    ).not.toHaveProperty(BROWSER_CONTROL_TOOL_NAME);
+  });
+
   test("keeps historical remember calls schema-valid while memory is disabled", () => {
     const baseArgs = {
       orgAIConfig: null,

@@ -95,6 +95,20 @@ test("checking browser state asks the user to resend once discovery completes", 
   ).toContain("send the message again in a moment");
 });
 
+test.each([
+  BROWSER_CONTROL_PROTOCOL_VERSION - 1,
+  BROWSER_CONTROL_PROTOCOL_VERSION + 1,
+])(
+  "protocol version %s asks the user to reload the stella tab",
+  (protocolVersion) => {
+    expect(
+      browserExtensionPromptLine({ protocolVersion, status: "connected" }),
+    ).toBe(
+      "BROWSER: Tell the user, in their language, to reload this stella tab to use the browser extension. Do not claim you have no way to use a browser.",
+    );
+  },
+);
+
 test("not-paired browser state tells the model how the user connects", () => {
   expect(
     browserExtensionPromptLine({
