@@ -113,12 +113,29 @@ type HeadersOption<THeaders> = unknown extends THeaders
     ? { readonly headers?: THeaders & HeaderValues }
     : { readonly headers: THeaders & HeaderValues };
 
+type RequestFetchHeaders<THeaders> = THeaders extends {
+  readonly "Idempotency-Key"?: infer TReplayKey;
+}
+  ? string extends TReplayKey
+    ? HeadersInit
+    : Readonly<Record<string, string>> & {
+        readonly "Idempotency-Key"?: TReplayKey;
+      }
+  : HeadersInit;
+
+// Required route headers belong to options.headers; fetch overrides retain
+// the reserved replay-key prohibition without requiring those headers twice.
+type RequestFetchOptions<THeaders> = Omit<RequestInit, "headers"> & {
+  readonly timeoutMs?: number;
+  readonly headers?: RequestFetchHeaders<THeaders>;
+};
+
 /** Per-request options: the route's query and headers, and fetch settings. */
 export type RequestOptions<TRoute extends RouteShape> = QueryOption<
   TRoute["query"]
 > &
   HeadersOption<TRoute["headers"]> & {
-    readonly fetch?: RequestInit & { readonly timeoutMs?: number };
+    readonly fetch?: RequestFetchOptions<TRoute["headers"]>;
   };
 
 type OptionsArgs<TRoute extends RouteShape> =
@@ -173,7 +190,14 @@ export type ApiClient<TNode> = {
 
 type MaybePromise<TValue> = TValue | Promise<TValue>;
 
+export type RequestReplayRoute = {
+  readonly method: string;
+  readonly path: string;
+};
+
 export type ApiClientOptions = {
+  /** Only declared method/template pairs may carry an Idempotency-Key. */
+  readonly requestReplayRoutes?: readonly RequestReplayRoute[];
   /** Observes the same unread response with its declared route, before decoding. */
   readonly onScopedResponse?: ScopedResponseObserver;
   /** Fetch settings every request starts from; credentials default to `include`. */
@@ -201,6 +225,7 @@ export type ApiClientOptions = {
 type ClientConfig = {
   readonly origin: string;
   readonly options: ApiClientOptions;
+  readonly requestReplayRoutes: ReadonlySet<string>;
 };
 
 type ClientPath = {
@@ -268,6 +293,25 @@ const queryString = (query: unknown): string => {
 };
 
 const setHeaders = (target: Headers, values: unknown): void => {
+  if (values instanceof Headers) {
+    for (const [name, value] of values) {
+      target.set(name, value);
+    }
+    return;
+  }
+  if (Array.isArray(values)) {
+    for (const entry of values) {
+      if (
+        Array.isArray(entry) &&
+        entry.length === 2 &&
+        typeof entry[0] === "string" &&
+        typeof entry[1] === "string"
+      ) {
+        target.set(entry[0], entry[1]);
+      }
+    }
+    return;
+  }
   if (typeof values !== "object" || values === null) {
     return;
   }
@@ -439,6 +483,15 @@ const send = async (
   }
 
   await config.options.onRequest?.(path, init);
+  const routeTemplate = `/${clientPath.template.join("/")}`;
+  if (
+    !config.requestReplayRoutes.has(`${method.toUpperCase()} ${routeTemplate}`)
+  ) {
+    const outgoingHeaders = new Headers(init.headers);
+    outgoingHeaders.delete("Idempotency-Key");
+    init.headers = outgoingHeaders;
+  }
+
   const url = `${config.origin}${path}${queryString(options.query)}`;
   const request = await Result.tryPromise({
     try: async () =>
@@ -471,7 +524,7 @@ const send = async (
     scope: {
       type: "request",
       method: method.toUpperCase(),
-      routeTemplate: `/${clientPath.template.join("/")}`,
+      routeTemplate,
     },
   });
   await config.options.onResponse?.(response);
@@ -559,7 +612,15 @@ export function createApiClient(
   options: ApiClientOptions = {},
 ): unknown {
   return node(
-    { origin: withoutTrailingSlashes(origin), options },
+    {
+      origin: withoutTrailingSlashes(origin),
+      options,
+      requestReplayRoutes: new Set(
+        (options.requestReplayRoutes ?? []).map(
+          ({ method, path }) => `${method.toUpperCase()} ${path}`,
+        ),
+      ),
+    },
     { segments: [], template: [] },
   );
 }
