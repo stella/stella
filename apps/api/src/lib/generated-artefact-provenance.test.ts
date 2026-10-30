@@ -8,6 +8,7 @@ import {
   authorArtefact,
   generateArtefact,
   projectArtefactText,
+  projectThreadArtefactProvenance,
   readArtefactOrigin,
   readArtefactText,
 } from "./generated-artefact-provenance";
@@ -219,4 +220,11 @@ test("an ignored tool source overflow prevents publishing an artefact", async ()
   if (result.isErr()) {
     expect(result.error).toBeInstanceOf(ArtefactSourceLimitError);
   }
+});
+
+test("provenance projection forwards stored rows rather than accepting bare values", () => {
+  const row = { generationProvenance: null };
+  expect(projectThreadArtefactProvenance(row)).toEqual(row);
+  // @ts-expect-error -- only a stored row can be forwarded; a bare value cannot construct provenance.
+  projectThreadArtefactProvenance("untrusted");
 });
