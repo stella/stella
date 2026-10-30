@@ -77,7 +77,7 @@ export const readLinkRecallPayload = async ({
     }
   }
   const read = await Result.tryPromise({
-    try: () => readObject(request),
+    try: async () => await readObject(request),
     catch: (cause) =>
       new LinkRecallPayloadError({
         message: "Audit payload could not be read",
@@ -113,7 +113,8 @@ export const readLinkRecallPayload = async ({
     }
   }
   return await Result.tryPromise({
-    try: () => zstdDecompressToStringBounded(bytes, maxDecompressedBytes),
+    try: async () =>
+      await zstdDecompressToStringBounded(bytes, maxDecompressedBytes),
     catch: (cause) =>
       cause instanceof PayloadBudgetError
         ? cause

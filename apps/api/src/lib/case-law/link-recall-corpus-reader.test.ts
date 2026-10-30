@@ -14,7 +14,7 @@ const budgets = { maxCompressedBytes: 4096, maxDecompressedBytes: 4096 };
 test("audit reads return typed failures for unavailable or undecodable objects", async () => {
   const cause = new LinkRecallPayloadError({ message: "Object unavailable" });
   for (const readObject of [
-    () => Promise.reject(cause),
+    async () => await Promise.reject(cause),
     async () => new Uint8Array([0, 1, 2]),
   ]) {
     const result = await readLinkRecallPayload({
@@ -24,7 +24,7 @@ test("audit reads return typed failures for unavailable or undecodable objects",
     });
     expect(result.isErr()).toBe(true);
     if (result.isOk()) {
-      return panic("Expected audit read failure");
+      panic("Expected audit read failure");
     }
     expect(result.error).toBeInstanceOf(LinkRecallPayloadError);
     expect(result.error).toMatchObject({ cause: expect.anything() });
@@ -96,7 +96,7 @@ test("audit packed reads reject truncated overlong and tampered members", async 
     });
     expect(error.isErr()).toBe(true);
     if (error.isOk()) {
-      return panic("Expected audit read to fail");
+      panic("Expected audit read to fail");
     }
     expect(error.error).toBeInstanceOf(LinkRecallPayloadError);
     expect(error.error).toMatchObject({
@@ -117,7 +117,7 @@ test("audit reads reject oversized declared ranges before requesting any bytes",
   });
   expect(error.isErr()).toBe(true);
   if (error.isOk()) {
-    return panic("Expected audit read to fail");
+    panic("Expected audit read to fail");
   }
   expect(error.error).toBeInstanceOf(PayloadBudgetError);
   expect(requests).toEqual([]);
@@ -132,7 +132,7 @@ test("audit reads reject empty and overflowing packed address ranges", async () 
     });
     expect(error.isErr()).toBe(true);
     if (error.isOk()) {
-      return panic("Expected audit read to fail");
+      panic("Expected audit read to fail");
     }
     expect(error.error).toBeInstanceOf(LinkRecallPayloadError);
     expect(error.error).toMatchObject({
@@ -149,7 +149,7 @@ test("audit reads bound transferred and decompressed payloads independently", as
   });
   expect(transferred.isErr()).toBe(true);
   if (transferred.isOk()) {
-    return panic("Expected transfer budget failure");
+    panic("Expected transfer budget failure");
   }
   expect(transferred.error).toBeInstanceOf(PayloadBudgetError);
   const bytes = zstdCompress("x".repeat(100_000));
@@ -161,7 +161,7 @@ test("audit reads bound transferred and decompressed payloads independently", as
   });
   expect(decompressed.isErr()).toBe(true);
   if (decompressed.isOk()) {
-    return panic("Expected decompression budget failure");
+    panic("Expected decompression budget failure");
   }
   expect(decompressed.error).toBeInstanceOf(PayloadBudgetError);
 });
