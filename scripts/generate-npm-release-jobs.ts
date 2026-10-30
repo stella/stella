@@ -3,6 +3,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+import { assertOfflineCheckPreload } from "./offline-check-startup";
 import { ALL_PACKAGE_ORDER, npmReleaseJobId } from "./publish-packages";
 
 export const NPM_RELEASE_WORKFLOW =
@@ -350,6 +351,7 @@ export const npmReleaseGraphProblems = ({
 };
 
 if (import.meta.main) {
+  assertOfflineCheckPreload();
   const root = path.resolve(import.meta.dirname, "..");
   const file = path.join(root, WORKFLOW_PATH);
   const source = readFileSync(file, "utf-8");

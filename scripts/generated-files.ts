@@ -76,6 +76,7 @@ const MODEL_CATALOG_INPUTS = [
   "packages/scripts/src/model-catalog-capabilities.ts",
   "packages/scripts/src/model-catalog-rates-gen.ts",
   "packages/scripts/src/model-catalog-snapshot.ts",
+  "packages/scripts/src/offline-check-startup.ts",
 ] as const;
 
 const TRANSITIVE_GENERATOR_INPUTS = {
@@ -1791,6 +1792,7 @@ const GENERATOR_DECLARATIONS = [
       "packages/fetch/src/connection-failure.ts",
       "packages/fetch/src/index.ts",
       "packages/scripts/src/model-catalog-snapshot.ts",
+      "packages/scripts/src/offline-check-startup.ts",
       "packages/skills/src/streaming.ts",
     ],
     inputs: [
@@ -2043,6 +2045,8 @@ const GENERATOR_DECLARATIONS = [
       "packages/stable-stringify/src/index.ts",
       "packages/stable-stringify/src/stable-stringify.ts",
       "scripts/offline-network-preload.ts",
+      "scripts/offline-check-startup.ts",
+      "packages/scripts/src/offline-check-startup.ts",
     ],
     inputs: [
       "packages/catalogue/entries/**",

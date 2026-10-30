@@ -26,6 +26,8 @@ import ts from "typescript6";
 
 import { repoRelativePath } from "@stll/portable-path";
 
+import { assertOfflineCheckPreload } from "./offline-check-startup";
+
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const ICON_MODULE = "packages/ui/src/icons.ts";
 const ICON_SPECIFIER = "@stll/ui/icons";
@@ -482,5 +484,6 @@ const main = (): void => {
 };
 
 if (import.meta.main) {
+  assertOfflineCheckPreload();
   main();
 }

@@ -568,7 +568,13 @@ test("check consumes validated tracked files without spawning under the offline 
 
 test("check requires an explicit tracked-files input", () => {
   const checked = Bun.spawnSync(
-    ["bun", "scripts/dated-waivers.ts", "--check"],
+    [
+      "bun",
+      "--preload",
+      "./scripts/offline-network-preload.ts",
+      "scripts/dated-waivers.ts",
+      "--check",
+    ],
     {
       cwd: path.resolve(import.meta.dir, ".."),
     },
@@ -588,6 +594,8 @@ test("tracked-files input rejects absolute and parent paths", () => {
       const checked = Bun.spawnSync(
         [
           "bun",
+          "--preload",
+          "./scripts/offline-network-preload.ts",
           "scripts/dated-waivers.ts",
           "--check",
           "--tracked-files",
