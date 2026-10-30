@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -72,7 +73,22 @@ const world = (listings: Record<EcjBackfillMonth, EcjCelexVariant[]>) => {
       journal.push(entry);
     },
   } satisfies Partial<EcjLanguageBackfillOptions>;
-  return { held, unavailable, state, journal, ingested, identityOf, seams };
+  /** The identity of a variant the fixture lists, which always has one. */
+  const listedIdentity = (variant: EcjCelexVariant): string =>
+    identityOf(variant) ??
+    panic(
+      `Fixture variant ${variant.celex}:${variant.language} has no identity`,
+    );
+  return {
+    held,
+    unavailable,
+    state,
+    journal,
+    ingested,
+    identityOf,
+    listedIdentity,
+    seams,
+  };
 };
 
 const variant = (celex: string, language: string): EcjCelexVariant => {
@@ -185,7 +201,7 @@ describe("filling in missing language versions", () => {
   });
 
   test("a variant listed but not served is terminal and journaled", async () => {
-    const { seams, state, journal, identityOf } = world(LISTINGS);
+    const { seams, state, journal, listedIdentity } = world(LISTINGS);
     const report = await runEcjLanguageBackfill({
       ...seams,
       ...RUN,
@@ -201,7 +217,7 @@ describe("filling in missing language versions", () => {
     expect(journal.filter(({ outcome }) => outcome === "unavailable")).toEqual([
       {
         month: "2024-03",
-        identity: identityOf(variant("62024CJ0244", "DE")),
+        identity: listedIdentity(variant("62024CJ0244", "DE")),
         celex: "62024CJ0244",
         language: "DE",
         outcome: "unavailable",
@@ -217,7 +233,8 @@ describe("filling in missing language versions", () => {
       "2024-02": [variant("62024CO0100", "EN"), variant("62024CO0100", "BG")],
       "2024-01": [variant("62024CJ0001", "FR")],
     };
-    const { seams, state, ingested, unavailable, identityOf } = world(listings);
+    const { seams, state, ingested, unavailable, listedIdentity } =
+      world(listings);
     const fetched: string[] = [];
     const ingest = async (
       target: EcjCelexVariant,
@@ -244,11 +261,11 @@ describe("filling in missing language versions", () => {
     expect(reports.length).toBeLessThanOrEqual(3);
     expect(fetched.filter((key) => key === "62024CO0100:EN")).toHaveLength(1);
     expect(ingested).toEqual([
-      identityOf(variant("62024CO0100", "BG")),
-      identityOf(variant("62024CJ0001", "FR")),
+      listedIdentity(variant("62024CO0100", "BG")),
+      listedIdentity(variant("62024CJ0001", "FR")),
     ]);
     expect([...unavailable]).toEqual([
-      [identityOf(variant("62024CO0100", "EN")), "2024-02"],
+      [listedIdentity(variant("62024CO0100", "EN")), "2024-02"],
     ]);
     expect(reports.at(1)?.knownUnavailable).toBe(1);
   });
