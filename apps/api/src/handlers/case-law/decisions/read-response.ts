@@ -3,6 +3,7 @@ import * as v from "valibot";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
+import { extractionWarningsSchema } from "@stll/api-contract/case-law-extraction-warnings";
 import { DECISION_JUDGE_ROLES } from "@stll/api-contract/case-law-judges";
 import {
   TEXT_ABSENCE_REASONS,
@@ -201,6 +202,7 @@ export const readDecisionSuccessResponseSchema = v.object({
   decisionDate: nullableBoundedString(DECISION_READER_TEXT_BYTES.decisionDate),
   decisionType: nullableBoundedString(DECISION_READER_TEXT_BYTES.decisionType),
   citationCount: v.number(),
+  extractionWarnings: extractionWarningsSchema,
   documentAst: v.unknown(),
   fulltext: v.nullable(v.string()),
   projectionDigest: nullableBoundedString(
@@ -213,7 +215,7 @@ export const readDecisionSuccessResponseSchema = v.object({
         index: v.number(),
         type: v.picklist([...DECISION_SECTION_TYPES]),
         title: nullableBoundedString(LABEL_BYTES),
-        text: v.string(),
+        blockIndices: v.array(v.pipe(v.number(), v.integer(), v.minValue(0))),
       }),
     ),
   ),
@@ -437,7 +439,7 @@ export const projectDecisionReader = (decision: ReadableDecision) => {
         index: section.index,
         type: section.type,
         title: nullableText(section.title, LABEL_BYTES),
-        text: section.text,
+        blockIndices: section.blockIndices,
       })) ?? null,
     sourceUrl: nullableText(decision.sourceUrl, text.sourceUrl),
     sourceAttributionUrl: nullableText(

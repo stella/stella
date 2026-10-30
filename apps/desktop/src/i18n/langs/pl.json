@@ -6,6 +6,7 @@
     "activityRecording": "Aktywność: Rejestrowanie · dziś {hours} h",
     "activityPaused": "Aktywność: Wstrzymana · dziś {hours} h",
     "activityOff": "Aktywność: Wyłączona",
+    "openActivity": "Otwórz aktywność",
     "activityNow": "Teraz: {name}",
     "activityPause": "Wstrzymaj rejestrowanie",
     "activityResume": "Wznów rejestrowanie",
@@ -368,7 +369,8 @@
     "welcomeShortcutDescription": "Naciśnij {shortcut}, aby przejrzeć historię i wybrać wycinek.",
     "welcomeShortcutTitle": "Otwórz go z dowolnego miejsca.",
     "welcomeStart": "Zacznij kopiować",
-    "welcomeTitle": "Poznaj swój schowek"
+    "welcomeTitle": "Poznaj swój schowek",
+    "registryIdentifierSearchHint": "Wprowadź {identifiers}."
   },
   "activity": {
     "title": "Aktywność",

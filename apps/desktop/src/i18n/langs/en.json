@@ -6,6 +6,7 @@
     "activityRecording": "Activity: Recording · {hours} h today",
     "activityPaused": "Activity: Paused · {hours} h today",
     "activityOff": "Activity: Off",
+    "openActivity": "Open activity",
     "activityNow": "Now: {name}",
     "activityPause": "Pause recording",
     "activityResume": "Resume recording",
@@ -368,7 +369,8 @@
     "welcomeShortcutDescription": "Press {shortcut} to browse your history and choose a clip.",
     "welcomeShortcutTitle": "Open it anywhere.",
     "welcomeStart": "Start copying",
-    "welcomeTitle": "Meet your clipboard"
+    "welcomeTitle": "Meet your clipboard",
+    "registryIdentifierSearchHint": "Enter {identifiers}."
   },
   "activity": {
     "title": "Activity",

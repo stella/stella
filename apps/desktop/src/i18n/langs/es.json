@@ -6,6 +6,7 @@
     "activityRecording": "Actividad: Registrando · {hours} h hoy",
     "activityPaused": "Actividad: En pausa · {hours} h hoy",
     "activityOff": "Actividad: Desactivada",
+    "openActivity": "Abrir actividad",
     "activityNow": "Ahora: {name}",
     "activityPause": "Pausar registro",
     "activityResume": "Reanudar registro",
@@ -368,7 +369,8 @@
     "welcomeShortcutDescription": "Pulsa {shortcut} para consultar el historial y elegir un recorte.",
     "welcomeShortcutTitle": "Ábrelo desde cualquier lugar.",
     "welcomeStart": "Empezar a copiar",
-    "welcomeTitle": "Conoce tu portapapeles"
+    "welcomeTitle": "Conoce tu portapapeles",
+    "registryIdentifierSearchHint": "Introduce {identifiers}."
   },
   "activity": {
     "title": "Actividad",

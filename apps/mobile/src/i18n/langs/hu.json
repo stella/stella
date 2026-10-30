@@ -151,7 +151,9 @@
   "settings": {
     "accountTitle": "Fiók",
     "server": "Szerver",
-    "signOut": "Kijelentkezés"
+    "signOut": "Kijelentkezés",
+    "deleteAccount": "Fiók törlése",
+    "deleteAccountHint": "Megnyitja a fiókját a weben, ahol mindazzal együtt törölheti, ami az öné."
   },
   "header": {
     "search": "Keresés"
@@ -161,7 +163,6 @@
     "newest": "Legújabb határozatok",
     "noResults": "Semmi nem felel meg a keresés által megkívánt szavaknak.",
     "noResultsHint": "Próbáljon kevesebb vagy más szót: azokat a kifejezéseket, amelyeket egy határozat használna, nem a kérdés mondatát.",
-    "unavailable": "A keresés átmenetileg nem érhető el",
     "retry": "Próbálja újra",
     "headnote": "Jogi tétel",
     "textUnavailable": "Ehhez a határozathoz nem érhető el szöveg",
@@ -177,6 +178,14 @@
   "writes": {
     "consentNeeded": "Ahhoz, hogy az alkalmazásból módosíthasson, a stellának szüksége van az engedélyére. Jelentkezzen be újra a megadásához.",
     "signInAgain": "Újra bejelentkezés"
+  },
+  "loads": {
+    "offline": "A stella nem érte el a szervert. Ellenőrizze a kapcsolatot, és próbálja újra.",
+    "outdated": "A szerver olyan formában válaszolt, amelyet az alkalmazás ezen verziója nem ért. Frissítse az alkalmazást, vagy a szervert, ha Ön üzemelteti.",
+    "consent": "Ez a bejelentkezés nem engedi, hogy az alkalmazás ezt olvassa. Jelentkezzen be újra a hozzáférés megadásához.",
+    "session": "A bejelentkezése lejárt. Jelentkezzen be újra.",
+    "server": "Hiba történt a szerveren (hibakód: {status}). Próbálja újra egy kis idő múlva.",
+    "refused": "A szerver elutasította a kérést (hibakód: {status})."
   },
   "timers": {
     "title": "Időzítők",
@@ -199,7 +208,8 @@
     "retry": "Újra",
     "unavailable": "Az időrögzítés nincs bekapcsolva a szervezetében.",
     "startFailed": "Az időzítőt nem sikerült elindítani. Próbálja újra.",
-    "changeFailed": "Az időzítőt nem sikerült módosítani. Próbálja újra."
+    "changeFailed": "Az időzítőt nem sikerült módosítani. Próbálja újra.",
+    "more": "{count, plural, other {még # időmérő}}"
   },
   "scan": {
     "title": "Dokumentum szkennelése",

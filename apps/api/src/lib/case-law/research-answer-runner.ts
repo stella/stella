@@ -4,7 +4,6 @@ import { and, eq, exists, inArray, sql } from "drizzle-orm";
 import type { CaseLawResearchAnswerFailureReason } from "@stll/api-contract";
 import { declareFailureClass, declareFingerprintFields } from "@stll/errors";
 import type { FailureReason } from "@stll/errors";
-import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 import { courtParagraphNumbersByAnchor } from "@stll/legal-ast/court-paragraph-number";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { Temporal } from "@stll/time";
@@ -27,6 +26,7 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import { parseCachedDecisionAst } from "@/api/lib/case-law/decision-ast-normalization";
 import { reportCaseLawIncompleteAnswer } from "@/api/lib/case-law/incomplete-answer-telemetry";
 import type {
   ResearchAnswerCell,
@@ -746,7 +746,7 @@ const readDecisionBlocks = async (
     read: readCorpusAst,
     fallback: () => parsePersistedCorpusAst(decision.documentAst),
   });
-  const ast = stored === null ? null : parseCaseLawDecisionAst(stored);
+  const ast = stored === null ? null : parseCachedDecisionAst(stored);
   return ast === null ? null : ast.blocks;
 };
 

@@ -151,7 +151,9 @@
   "settings": {
     "accountTitle": "Compte",
     "server": "Serveur",
-    "signOut": "Se déconnecter"
+    "signOut": "Se déconnecter",
+    "deleteAccount": "Supprimer le compte",
+    "deleteAccountHint": "Ouvre votre compte sur le web, où vous pouvez le supprimer avec tout ce qui vous appartient."
   },
   "header": {
     "search": "Rechercher"
@@ -161,7 +163,6 @@
     "newest": "Décisions les plus récentes",
     "noResults": "Aucun résultat ne correspond aux mots exigés par cette recherche.",
     "noResultsHint": "Essayez moins de mots ou d’autres mots : les termes qu’emploierait une décision, et non la phrase dans laquelle une question est posée.",
-    "unavailable": "La recherche est temporairement indisponible",
     "retry": "Réessayer",
     "headnote": "Sommaire",
     "textUnavailable": "Aucun texte n'est disponible pour cette décision",
@@ -177,6 +178,14 @@
   "writes": {
     "consentNeeded": "Pour modifier depuis l’app, stella a besoin de votre autorisation. Reconnectez-vous pour la donner.",
     "signInAgain": "Se reconnecter"
+  },
+  "loads": {
+    "offline": "stella n’a pas pu joindre votre serveur. Vérifiez votre connexion et réessayez.",
+    "outdated": "Votre serveur a répondu dans un format que cette version de l’app ne comprend pas. Mettez à jour l’app, ou le serveur si vous l’administrez.",
+    "consent": "Cette connexion ne permet pas à l’app de lire ce contenu. Reconnectez-vous pour lui en donner l’accès.",
+    "session": "Votre session a expiré. Reconnectez-vous.",
+    "server": "Votre serveur a rencontré un problème (erreur {status}). Réessayez dans un instant.",
+    "refused": "Votre serveur a refusé la requête (erreur {status})."
   },
   "timers": {
     "title": "Minuteurs",
@@ -199,7 +208,8 @@
     "retry": "Réessayer",
     "unavailable": "Le suivi du temps n’est pas activé pour votre organisation.",
     "startFailed": "Le minuteur n’a pas pu être démarré. Réessayez.",
-    "changeFailed": "Le minuteur n’a pas pu être modifié. Réessayez."
+    "changeFailed": "Le minuteur n’a pas pu être modifié. Réessayez.",
+    "more": "{count, plural, one {# autre minuteur} other {# autres minuteurs}}"
   },
   "scan": {
     "title": "Numériser un document",

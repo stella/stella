@@ -6,6 +6,7 @@
     "activityRecording": "Tegevus: Salvestamine · täna {hours} h",
     "activityPaused": "Tegevus: Peatatud · täna {hours} h",
     "activityOff": "Tegevus: Väljas",
+    "openActivity": "Ava tegevus",
     "activityNow": "Praegu: {name}",
     "activityPause": "Peata salvestamine",
     "activityResume": "Jätka salvestamist",
@@ -368,7 +369,8 @@
     "welcomeShortcutDescription": "Vajuta {shortcut}, et sirvida ajalugu ja valida lõige.",
     "welcomeShortcutTitle": "Ava see kõikjal.",
     "welcomeStart": "Alusta kopeerimist",
-    "welcomeTitle": "Sinu uus lõikelaud"
+    "welcomeTitle": "Sinu uus lõikelaud",
+    "registryIdentifierSearchHint": "Sisestage {identifiers}."
   },
   "activity": {
     "title": "Tegevus",

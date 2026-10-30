@@ -6,6 +6,7 @@
     "activityRecording": "Atividade: Registrando · {hours} h hoje",
     "activityPaused": "Atividade: Pausada · {hours} h hoje",
     "activityOff": "Atividade: Desativada",
+    "openActivity": "Abrir atividade",
     "activityNow": "Agora: {name}",
     "activityPause": "Pausar registro",
     "activityResume": "Retomar registro",
@@ -368,7 +369,8 @@
     "welcomeShortcutDescription": "Pressione {shortcut} para navegar pelo histórico e escolher um recorte.",
     "welcomeShortcutTitle": "Abra em qualquer lugar.",
     "welcomeStart": "Começar a copiar",
-    "welcomeTitle": "Conheça sua área de transferência"
+    "welcomeTitle": "Conheça sua área de transferência",
+    "registryIdentifierSearchHint": "Insira {identifiers}."
   },
   "activity": {
     "title": "Atividade",

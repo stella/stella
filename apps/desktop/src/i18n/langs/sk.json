@@ -6,6 +6,7 @@
     "activityRecording": "Aktivita: Záznam · dnes {hours} h",
     "activityPaused": "Aktivita: Pozastavené · dnes {hours} h",
     "activityOff": "Aktivita: Vypnuté",
+    "openActivity": "Otvoriť aktivitu",
     "activityNow": "Teraz: {name}",
     "activityPause": "Pozastaviť záznam",
     "activityResume": "Pokračovať v zázname",
@@ -368,7 +369,8 @@
     "welcomeShortcutDescription": "Stlačením {shortcut} prechádzajte históriu a vyberte výstrižok.",
     "welcomeShortcutTitle": "Otvorte ju odkiaľkoľvek.",
     "welcomeStart": "Začať kopírovať",
-    "welcomeTitle": "Zoznámte sa so schránkou"
+    "welcomeTitle": "Zoznámte sa so schránkou",
+    "registryIdentifierSearchHint": "Zadajte {identifiers}."
   },
   "activity": {
     "title": "Aktivita",

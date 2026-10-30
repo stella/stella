@@ -6,6 +6,7 @@
     "activityRecording": "Aktivität: Aufzeichnung · heute {hours} h",
     "activityPaused": "Aktivität: Pausiert · heute {hours} h",
     "activityOff": "Aktivität: Aus",
+    "openActivity": "Aktivität öffnen",
     "activityNow": "Jetzt: {name}",
     "activityPause": "Aufzeichnung pausieren",
     "activityResume": "Aufzeichnung fortsetzen",
@@ -368,7 +369,8 @@
     "welcomeShortcutDescription": "Drücken Sie {shortcut}, um den Verlauf zu durchsuchen und einen Eintrag auszuwählen.",
     "welcomeShortcutTitle": "Überall öffnen.",
     "welcomeStart": "Mit dem Kopieren beginnen",
-    "welcomeTitle": "Ihre neue Zwischenablage"
+    "welcomeTitle": "Ihre neue Zwischenablage",
+    "registryIdentifierSearchHint": "Geben Sie {identifiers} ein."
   },
   "activity": {
     "title": "Aktivität",

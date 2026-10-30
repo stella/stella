@@ -6,6 +6,7 @@
     "activityRecording": "Activité : Enregistrement · {hours} h aujourd’hui",
     "activityPaused": "Activité : En pause · {hours} h aujourd’hui",
     "activityOff": "Activité : Désactivée",
+    "openActivity": "Ouvrir l’activité",
     "activityNow": "Maintenant : {name}",
     "activityPause": "Mettre l’enregistrement en pause",
     "activityResume": "Reprendre l’enregistrement",
@@ -368,7 +369,8 @@
     "welcomeShortcutDescription": "Appuyez sur {shortcut} pour parcourir l’historique et choisir un extrait.",
     "welcomeShortcutTitle": "Ouvrez-le partout.",
     "welcomeStart": "Commencer à copier",
-    "welcomeTitle": "Découvrez votre presse-papiers"
+    "welcomeTitle": "Découvrez votre presse-papiers",
+    "registryIdentifierSearchHint": "Saisissez {identifiers}."
   },
   "activity": {
     "title": "Activité",

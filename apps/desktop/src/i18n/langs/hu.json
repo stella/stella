@@ -6,6 +6,7 @@
     "activityRecording": "Tevékenység: Rögzítés · ma {hours} ó",
     "activityPaused": "Tevékenység: Szünetel · ma {hours} ó",
     "activityOff": "Tevékenység: Kikapcsolva",
+    "openActivity": "Tevékenység megnyitása",
     "activityNow": "Most: {name}",
     "activityPause": "Rögzítés szüneteltetése",
     "activityResume": "Rögzítés folytatása",
@@ -368,7 +369,8 @@
     "welcomeShortcutDescription": "A {shortcut} megnyomásával böngészhet az előzmények között és kiválaszthat egy kivágást.",
     "welcomeShortcutTitle": "Bárhonnan megnyitható.",
     "welcomeStart": "Másolás megkezdése",
-    "welcomeTitle": "Ismerje meg a vágólapot"
+    "welcomeTitle": "Ismerje meg a vágólapot",
+    "registryIdentifierSearchHint": "Adja meg a következőt: {identifiers}."
   },
   "activity": {
     "title": "Tevékenység",

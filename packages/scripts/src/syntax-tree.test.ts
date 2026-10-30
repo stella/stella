@@ -2,11 +2,30 @@ import { expect, test } from "bun:test";
 
 import {
   isObjectLiteralProperty,
+  isSideEffectImport,
   parseSource,
   staticPropertyName,
   Visitor,
   walk,
 } from "./syntax-tree";
+
+test("classifies side-effect imports independently of syntax trivia", () => {
+  for (const [text, expected] of [
+    ['import "module";', true],
+    ['import /* 注釈 */\n// registration\n"module";', true],
+    ['import {} from "module";', false],
+    ['import /* 注釈 */ {} from "module";', false],
+    ['import value from "module";', false],
+    ['import type { Value } from "module";', false],
+  ] as const) {
+    const parsed = parseSource("fixture.ts", text);
+    const statement = parsed.program.body[0];
+    expect(statement?.type).toBe("ImportDeclaration");
+    if (statement?.type === "ImportDeclaration") {
+      expect(isSideEffectImport(statement, parsed)).toBe(expected);
+    }
+  }
+});
 
 test("static property names retain computed-key semantics in objects and bindings", () => {
   const { program } = parseSource(

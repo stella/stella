@@ -1,5 +1,29 @@
 # @stll/ui
 
+## 0.55.1
+
+### Patch Changes
+
+- [#6894](https://github.com/stella/stella/pull/6894) [`32cafef`](https://github.com/stella/stella/commit/32cafefeeae7289d6757ed82a22727190a4b46a5) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Refresh third-party dependencies to their latest minor and patch releases.
+
+- [#7409](https://github.com/stella/stella/pull/7409) [`3de86b1`](https://github.com/stella/stella/commit/3de86b150597e60512d88f053b2ee0c2a9969bbf) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Preserve source word breaks in quoted legal text while wrapping oversized tokens in narrow readers and citation cards.
+
+## 0.55.0
+
+### Minor Changes
+
+- [#7254](https://github.com/stella/stella/pull/7254) [`b1db339`](https://github.com/stella/stella/commit/b1db33914f1bd2cb04d1760ffd8ff1a222c806c2) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `@stll/ui/composer-tokens`: the composer's class tokens (`COMPOSER_BOX_CLASS`, `COMPOSER_SEND_BUTTON_CLASS`, ...) in a module with no React or DOM, so a native app can style its composer with the same classes. `@stll/ui/composer` re-exports them unchanged.
+
+- [#7322](https://github.com/stella/stella/pull/7322) [`5e31c64`](https://github.com/stella/stella/commit/5e31c6433b4bf3400ebb7d137d137e81e419b236) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `DocumentIdentityBadge` takes a `caseNumber` identity: a decision named by its case number, drawn as the same width-aware label a statute number uses, with a closing four-digit year cut to two digits in the short form (`25 Cdo 1234/19`).
+
+- [#7299](https://github.com/stella/stella/pull/7299) [`cd78348`](https://github.com/stella/stella/commit/cd7834897fba75056fa30f8351ccc42dd46a16a0) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `PreviewPane` takes `overflow="scroll"`: the box keeps its size and scrolls its content vertically instead of clipping it, for previews of text the reader may need to the last line. The default, `clip`, keeps the previous behaviour.
+
+### Patch Changes
+
+- [#7336](https://github.com/stella/stella/pull/7336) [`9c0ea0e`](https://github.com/stella/stella/commit/9c0ea0e95c1e9f9edc9ffaa84cb18e4c43a85d8b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Button can render as unavailable (dimmed, `aria-disabled`, still focusable) while its click and keyboard handlers keep running, so a control can explain why it is unavailable.
+
+- [#6965](https://github.com/stella/stella/pull/6965) [`df53905`](https://github.com/stella/stella/commit/df5390529e1e6bc783d2e442b57bb959ad8acadd) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Apply sidebar surface props to the mobile popup and expose its inner panel.
+
 ## 0.54.1
 
 ### Patch Changes

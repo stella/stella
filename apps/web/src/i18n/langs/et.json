@@ -941,12 +941,16 @@
         "reasoning": "Arutlus"
       },
       "errors": {
+        "analysisDisabled": "Tehisintellekti analüüside loomine on selles serveris välja lülitatud. Lugege kohtulahendi teksti või proovige hiljem uuesti.",
         "answerIncomplete": "{source, select, organization {Sinu organisatsiooni {provider}-võti andis puuduliku vastuse.} other {AI-mudel andis puuduliku vastuse.}}",
+        "decisionNotFound": "Seda kohtulahendit ei leitud. Avage see uuesti otsingust.",
+        "documentUnparseable": "Kohtulahendi tekst ei ole analüüsiks valmis. Lugege algallikat.",
+        "languageUnsupported": "Tehisintellekti analüüs ei toeta veel selle kohtulahendi keelt. Lugege kohtulahendi teksti või algallikat.",
         "providerRefused": "{source, select, organization {{provider} lükkas sinu organisatsiooni võtmega tehtud päringu tagasi. Kontrolli võtit, selle limiiti ja arveldust organisatsiooni seadetes.} other {AI-teenusepakkuja lükkas päringu tagasi.}}",
         "providerUnavailable": "{source, select, organization {{provider} pole sinu organisatsiooni võtmega praegu saadaval.} other {AI-teenusepakkuja pole praegu saadaval.}}",
         "retryAfter": "Uuesti saate proovida alates {time}.",
-        "timedOut": "{source, select, organization {{provider} ei vastanud sinu organisatsiooni võtmega õigel ajal.} other {AI-mudel ei vastanud õigel ajal.}}",
-        "unavailable": "Selle lahendi AI-analüüs pole saadaval."
+        "sourceRestricted": "Allikas ei luba tehisintellekti analüüsi. Lugege kohtulahendi teksti või algallikat.",
+        "timedOut": "{source, select, organization {{provider} ei vastanud sinu organisatsiooni võtmega õigel ajal.} other {AI-mudel ei vastanud õigel ajal.}}"
       },
       "generate": "Koosta AI lühikokkuvõtted",
       "invitation": "Tasuta kontoga koostab AI selle lahendi kohta töömärkmed.",
@@ -1151,7 +1155,7 @@
     "reader": {
       "documentUpdated": "Dokumenti on uuendatud.",
       "expandProvisions": "Laienda sätteid",
-      "headMatter": "Päis",
+      "headMatter": "Kohtuasja andmed",
       "sourceAttribution": "Lähteandmed on vabalt kättesaadavad aadressil <link>{source}</link>."
     },
     "research": {
@@ -1283,7 +1287,8 @@
       "versionAtDecisionDateInferred": "Otsuse kuupäeval kehtinud redaktsioon (tuletatud)",
       "versionBasisInferredCompact": "Lahendi kuupäev · tuletatud",
       "versionBasisInferredExplanation": "Redaktsioon on tuletatud lahendi kuupäevast. Lahendis ei ole märgitud, milline redaktsioon kohaldub."
-    }
+    },
+    "withdrawnByPublisher": "Avaldaja on tagasi võtnud"
   },
   "catalogue": {
     "addCustom": "Lisa kohandatud",
@@ -2079,8 +2084,6 @@
     "clearFilters": "Tühjenda filtrid",
     "clearSearch": "Tühjenda otsing",
     "close": "Sulge",
-    "closeAll": "Sulge kõik",
-    "closeOthers": "Sulge teised",
     "columns": "Veerud",
     "comfortable": "Avar",
     "comingSoon": "Tulemas peagi",
@@ -2395,6 +2398,8 @@
     "returnToAgent": "Jätkamiseks mine tagasi oma agendi juurde.",
     "returnsLocally": "Sind suunatakse selles arvutis tagasi rakendusse {clientName}",
     "returnsTo": "Sind suunatakse tagasi rakendusse {clientName}",
+    "scopeAccountExportRead": "Loe oma isikuandmete ekspordifaile",
+    "scopeAccountExportWrite": "Taotle oma isikuandmete eksporti",
     "scopeAdminRead": "Lugeda oma organisatsiooni auditilogi",
     "scopeAdminWrite": "Hallata organisatsiooni liikmeid ja seadeid",
     "scopeBillingWrite": "Luua, muuta ja kustutada teie ajakirjeid",
@@ -2865,6 +2870,8 @@
       "forbidden": "Teil pole selleks toiminguks õigust.",
       "hostedCheckoutOpen": "Selle organisatsiooni jaoks on makse juba avatud. Viige see lõpule või alustage uut pärast selle aegumist.",
       "hostedSubscriptionLive": "Sellel organisatsioonil on juba tellimus. Muutke seda jaotises „Halda majutatud kasutust”.",
+      "idempotencyInProgress": "Seda päringut veel töödeldakse. Oodake hetk ja proovige uuesti.",
+      "idempotencyKeyReused": "Andmed on eelmise katsega võrreldes muutunud. Lähtestage vorm ja proovige uuesti.",
       "internalServerError": "Midagi läks valesti. Proovige uuesti.",
       "legalSourceEntityLimitReached": "See toimik on jõudnud üksuste piirini, mistõttu dokumenti ei saanud luua.",
       "legalSourceFilePropertyMissing": "Sellel toimikul puudub faili atribuut, mistõttu dokumenti ei saanud luua.",
@@ -3667,6 +3674,9 @@
       "unsupportedVisualContent": "See fail sisaldab pilte või vektorgraafikat, mida ei saa tundliku teksti suhtes kontrollida. Eksport pole saadaval.",
       "workspaceTermsHeading": "Tööruumi terminid ({count})"
     },
+    "closeAllTabs": "Sulge {count, plural, one {# vaheleht} other {kõik # vahelehte}}",
+    "closeOtherTabs": "Sulge {count, plural, one {# teine vaheleht} other {# teist vahelehte}}",
+    "closeTab": "Sulge <bdi>{name}</bdi>",
     "conversionRefusal": {
       "legacyFormat": "See on pärandvormingus {format}-fail. Teisendamiseks salvesta see uuesti vormingus {replacementExtension}.",
       "unsupportedEncoding": "See dokument kasutab toetamata kodeeringut {encoding}, mistõttu ei saa seda teisendada.",
@@ -4885,7 +4895,9 @@
     "viewOnGithub": "Vaata GitHubis"
   },
   "readerAnswers": {
+    "answerLanguage": "Vastuse keel",
     "budgetError": "Vastuste eelarve on ammendatud.",
+    "documentLanguage": "Dokumendi keel ({language})",
     "expand": "Laienda vastust",
     "explain": "Selgita",
     "followUp": "Esita täpsustav küsimus",
@@ -5067,6 +5079,15 @@
       "displayNameSaved": "Kuvatav nimi uuendatud",
       "enterOtp": "Kinnituskood",
       "otpSentSuccess": "Kinnituskood on saadetud teie e-postile.",
+      "personalDataExportDescription": "Taotle oma kontol hoitavate isikuandmete allalaaditavat koopiat. Allalaadimine on saadaval ühe tunni jooksul.",
+      "personalDataExportExpired": "Selle ekspordi kehtivusaeg on lõppenud.",
+      "personalDataExportExpiresAt": "Saadaval kuni {expiresAt}.",
+      "personalDataExportFailed": "Eksporti ei õnnestunud ette valmistada.",
+      "personalDataExportReady": "Sinu eksport on valmis.",
+      "personalDataExportRequest": "Taotle eksporti",
+      "personalDataExportRequestNew": "Taotle uut eksporti",
+      "personalDataExportTitle": "Ekspordi minu andmed",
+      "personalDataExportWorking": "Ekspordi ettevalmistamine…",
       "preferredName": "Eelistatud nimi",
       "preferredNameDescription": "Kasutatakse autorina DOCX-i jälitatud muudatustes ja kommentaarides.",
       "preferredNamePlaceholder": "Teie nimi",

@@ -151,7 +151,9 @@
   "settings": {
     "accountTitle": "Konto",
     "server": "Server",
-    "signOut": "Abmelden"
+    "signOut": "Abmelden",
+    "deleteAccount": "Konto löschen",
+    "deleteAccountHint": "Öffnet Ihr Konto im Web, wo Sie es mit allem, was Ihnen gehört, löschen können."
   },
   "header": {
     "search": "Suchen"
@@ -161,7 +163,6 @@
     "newest": "Neueste Entscheidungen",
     "noResults": "Nichts entspricht den Wörtern, die diese Suche verlangt hat.",
     "noResultsHint": "Versuchen Sie weniger oder andere Wörter: die Begriffe, die eine Entscheidung verwenden würde, nicht den Satz, in dem eine Frage gestellt wird.",
-    "unavailable": "Die Suche ist vorübergehend nicht verfügbar",
     "retry": "Erneut versuchen",
     "headnote": "Leitsatz",
     "textUnavailable": "Für diese Entscheidung liegt kein Text vor",
@@ -177,6 +178,14 @@
   "writes": {
     "consentNeeded": "Damit die App Änderungen vornehmen kann, braucht stella Ihre Erlaubnis. Melden Sie sich erneut an, um sie zu erteilen.",
     "signInAgain": "Erneut anmelden"
+  },
+  "loads": {
+    "offline": "stella konnte Ihren Server nicht erreichen. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+    "outdated": "Ihr Server hat in einem Format geantwortet, das diese App-Version nicht versteht. Aktualisieren Sie die App oder, falls Sie ihn betreiben, den Server.",
+    "consent": "Diese Anmeldung erlaubt der App nicht, dies zu lesen. Melden Sie sich erneut an, um den Zugriff zu erteilen.",
+    "session": "Ihre Anmeldung ist abgelaufen. Melden Sie sich erneut an.",
+    "server": "Auf Ihrem Server ist ein Fehler aufgetreten (Fehler {status}). Versuchen Sie es gleich noch einmal.",
+    "refused": "Ihr Server hat die Anfrage abgelehnt (Fehler {status})."
   },
   "timers": {
     "title": "Timer",
@@ -199,7 +208,8 @@
     "retry": "Erneut versuchen",
     "unavailable": "Die Zeiterfassung ist für Ihre Organisation nicht aktiviert.",
     "startFailed": "Der Timer konnte nicht gestartet werden. Versuchen Sie es erneut.",
-    "changeFailed": "Der Timer konnte nicht geändert werden. Versuchen Sie es erneut."
+    "changeFailed": "Der Timer konnte nicht geändert werden. Versuchen Sie es erneut.",
+    "more": "{count, plural, one {# weiterer Timer} other {# weitere Timer}}"
   },
   "scan": {
     "title": "Dokument scannen",
