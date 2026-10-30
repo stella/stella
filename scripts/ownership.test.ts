@@ -29,7 +29,7 @@ import {
   validateOwnership,
   withSchemaIntrospection,
 } from "./ownership";
-import { loadOwnershipDeclarations } from "./ownership-loader.ts";
+import { loadDeclarationDirectory } from "./ownership-loader.ts";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 
@@ -103,9 +103,10 @@ describe("ownership file loading", () => {
       }
       writeFileSync(path.join(root, "notes.md"), "not a row");
       expect(
-        loadOwnershipDeclarations(pathToFileURL(`${root}/`)).map(
-          ({ id }) => id,
-        ),
+        loadDeclarationDirectory<OwnershipEntry>(
+          pathToFileURL(`${root}/`),
+          "ownership",
+        ).map(({ id }) => id),
       ).toEqual(["a-first", "z-last"]);
     });
   });
@@ -119,7 +120,10 @@ describe("ownership file loading", () => {
         );
       }
       expect(() =>
-        loadOwnershipDeclarations(pathToFileURL(`${root}/`)),
+        loadDeclarationDirectory<OwnershipEntry>(
+          pathToFileURL(`${root}/`),
+          "ownership",
+        ),
       ).toThrow("ownership filename must match id: other.ts (example)");
     });
   });

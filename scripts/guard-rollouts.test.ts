@@ -1,12 +1,26 @@
 import { expect, test } from "bun:test";
-import { readdirSync, readFileSync } from "node:fs";
+import {
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
-import { GUARD_ROLLOUTS } from "./guard-rollout-policy.ts";
+import {
+  GUARD_ROLLOUT_DIRECTORY,
+  GUARD_ROLLOUTS,
+  type GuardRollout,
+  guardRolloutSource,
+} from "./guard-rollout-policy.ts";
 import {
   changedLineNumbers,
   guardEnforcesLine as productionGuardEnforcesLine,
 } from "./guard-rollouts.ts";
+import { loadDeclarationDirectory } from "./ownership-loader.ts";
 
 const guardEnforcesLine = (
   options: Parameters<typeof productionGuardEnforcesLine>[0],
@@ -102,4 +116,57 @@ test("first-week path enforcement ignores legacy lines and expires into full sco
       now: new Date("2026-10-20T00:00:00.000Z"),
     }),
   ).toBe(true);
+});
+
+const loadRollouts = (files: Readonly<Record<string, GuardRollout>>) => {
+  const root = mkdtempSync(path.join(tmpdir(), "guard-rollouts-"));
+  try {
+    for (const [file, rollout] of Object.entries(files)) {
+      writeFileSync(
+        path.join(root, file),
+        `export default ${JSON.stringify(rollout)};`,
+      );
+    }
+    return loadDeclarationDirectory<GuardRollout>(
+      pathToFileURL(`${root}/`),
+      "guard rollout",
+    );
+  } finally {
+    rmSync(root, { force: true, recursive: true });
+  }
+};
+
+const fullRollout = (id: string): GuardRollout => ({
+  id,
+  type: "full",
+  check: ["bun", `scripts/check-${id}.ts`],
+});
+
+test("rollouts load one per file in id order", () => {
+  expect(
+    loadRollouts({
+      "z-guard.ts": fullRollout("z-guard"),
+      "a-guard.ts": fullRollout("a-guard"),
+    }),
+  ).toEqual([fullRollout("a-guard"), fullRollout("z-guard")]);
+  expect(GUARD_ROLLOUTS.map(({ id }) => guardRolloutSource(id))).toEqual(
+    readdirSync(path.join(ROOT, GUARD_ROLLOUT_DIRECTORY))
+      .toSorted()
+      .map((file) => `${GUARD_ROLLOUT_DIRECTORY}/${file}`),
+  );
+});
+
+test("a rollout whose file name differs from its id panics", () => {
+  expect(() => loadRollouts({ "renamed.ts": fullRollout("a-guard") })).toThrow(
+    "guard rollout filename must match id: renamed.ts (a-guard)",
+  );
+});
+
+test("a duplicate rollout id panics through the file name contract", () => {
+  expect(() =>
+    loadRollouts({
+      "a-guard.ts": fullRollout("a-guard"),
+      "b-guard.ts": fullRollout("a-guard"),
+    }),
+  ).toThrow("guard rollout filename must match id: b-guard.ts (a-guard)");
 });
