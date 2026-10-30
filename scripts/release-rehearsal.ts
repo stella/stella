@@ -6,6 +6,7 @@ import {
   assertPreCutGates,
   type CutGateRunner,
   productionCutGateEffects,
+  readLatestFinalVersion,
 } from "./prepare-maintenance-release";
 import {
   type PreCutGate,
@@ -38,7 +39,7 @@ export const runReleaseRehearsal = async ({
   const runGate = injected.runGate ?? production.runGate;
   const resolveHeadSha = injected.resolveHeadSha ?? production.resolveHeadSha;
   const latestFinalVersion =
-    injected.latestFinalVersion ?? production.latestFinalVersion;
+    injected.latestFinalVersion ?? (() => readLatestFinalVersion(rootDir));
   const write = injected.write ?? production.write;
   const selected = gates.filter(
     ({ name }) => scope === "all" || name !== "deploy-env-contract",

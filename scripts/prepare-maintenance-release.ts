@@ -1529,6 +1529,24 @@ export const cutMaintenanceRelease = async (
   );
 };
 
+/** Resolve the last final tag for a checked-out snapshot, including rehearsals. */
+export const readLatestFinalVersion = (rootDir: string): string => {
+  const tags = spawnOutput([
+    "git",
+    "-C",
+    rootDir,
+    "tag",
+    "--list",
+    "v*",
+    "--sort=-creatordate",
+  ]);
+  const latest = newestFinalTag(tags?.split("\n") ?? []);
+  if (!latest) {
+    throw new MaintenanceReleaseError("No final release tag exists");
+  }
+  return latest.slice(1);
+};
+
 export const productionCutGateEffects = (rootDir: string) => ({
   rootDir,
   resolveHeadSha: () => resolveHeadSha(rootDir),
@@ -1541,18 +1559,7 @@ export const productionCutGateEffects = (rootDir: string) => ({
         "Cut releases from the fetched main commit",
       );
     }
-    const tags = spawnOutput([
-      "git",
-      "tag",
-      "--list",
-      "v*",
-      "--sort=-creatordate",
-    ]);
-    const latest = newestFinalTag(tags?.split("\n") ?? []);
-    if (!latest) {
-      throw new MaintenanceReleaseError("No final release tag exists");
-    }
-    return latest.slice(1);
+    return readLatestFinalVersion(rootDir);
   },
   runGate: runCutGate,
   write: (text: string) => {

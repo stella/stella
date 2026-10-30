@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import path from "node:path";
 
 import {
   type PreCutGate,
@@ -77,4 +79,72 @@ describe("release rehearsal", () => {
         .map(({ name }) => name),
     );
   });
+});
+
+test("rehearsals evaluate a tagged snapshot without requiring the latest main", async () => {
+  const rootDir = mkdtempSync(
+    path.join(import.meta.dir, "../.rehearsal-test-"),
+  );
+  const git = (...args: string[]) => {
+    const result = Bun.spawnSync(["git", "-C", rootDir, ...args], {
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
+    return result.stdout.toString().trim();
+  };
+  try {
+    git("init", "--initial-branch=main");
+    git(
+      "-c",
+      "user.name=Test",
+      "-c",
+      "user.email=test@example.test",
+      "-c",
+      "commit.gpgsign=false",
+      "commit",
+      "--allow-empty",
+      "-m",
+      "snapshot",
+    );
+    git("-c", "tag.gpgsign=false", "tag", "v1.2.3");
+    const snapshot = git("rev-parse", "HEAD");
+    git(
+      "-c",
+      "user.name=Test",
+      "-c",
+      "user.email=test@example.test",
+      "-c",
+      "commit.gpgsign=false",
+      "commit",
+      "--allow-empty",
+      "-m",
+      "advance",
+    );
+    git("update-ref", "refs/remotes/origin/main", "HEAD");
+    git("checkout", "--detach", snapshot);
+    expect(git("rev-parse", "HEAD")).not.toBe(git("rev-parse", "origin/main"));
+    const contexts: unknown[] = [];
+    const results = await runReleaseRehearsal({
+      rootDir,
+      resolveHeadSha: () => snapshot,
+      write: () => undefined,
+      runGate: async (_gate, context) => {
+        contexts.push({
+          baseSha: context.baseSha,
+          previousFinalTag: context.previousFinalTag,
+        });
+        return { passed: true };
+      },
+    });
+    expect(results.length).toBeGreaterThan(0);
+    expect(contexts).toEqual(
+      results.map(() => ({
+        baseSha: snapshot,
+        previousFinalTag: "v1.2.3",
+      })),
+    );
+  } finally {
+    rmSync(rootDir, { recursive: true, force: true });
+  }
 });
