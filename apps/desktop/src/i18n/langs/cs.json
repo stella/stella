@@ -6,6 +6,7 @@
     "activityRecording": "Aktivita: Záznam · dnes {hours} h",
     "activityPaused": "Aktivita: Pozastaveno · dnes {hours} h",
     "activityOff": "Aktivita: Vypnuto",
+    "openActivity": "Otevřít aktivitu",
     "activityNow": "Nyní: {name}",
     "activityPause": "Pozastavit záznam",
     "activityResume": "Pokračovat v záznamu",

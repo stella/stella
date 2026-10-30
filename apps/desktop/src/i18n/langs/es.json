@@ -6,6 +6,7 @@
     "activityRecording": "Actividad: Registrando · {hours} h hoy",
     "activityPaused": "Actividad: En pausa · {hours} h hoy",
     "activityOff": "Actividad: Desactivada",
+    "openActivity": "Abrir actividad",
     "activityNow": "Ahora: {name}",
     "activityPause": "Pausar registro",
     "activityResume": "Reanudar registro",
