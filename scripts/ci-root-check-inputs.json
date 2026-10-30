@@ -23,6 +23,7 @@
     "Tauri counterpart autofix tests": ["@stll/desktop", "scripts/**"],
     "Lockfile release-age guard": ["**"],
     "Restore generated sources": ["**"],
+    "Download generated sources": ["**"],
     "API test timeout guard": [
       "apps/api/**/*.test.ts",
       "scripts/api-test-timeout-guard.ts",
@@ -761,6 +762,7 @@
     "Record static check receipts": ["**"],
     "Prepare environment": ["**"],
     "Restore generated sources": ["**"],
+    "Download generated sources": ["**"],
     "Compute affected flag": ["**"],
     "Format": ["**"],
     "Test unsignalled skip detection": ["**"],
@@ -801,6 +803,7 @@
   },
   "code-quality-web-rest": {
     "Restore generated sources": ["**"],
+    "Download generated sources": ["**"],
     "Prepare environment": ["**"],
     "Install the docs MCP server": ["**"],
     "Typecheck coverage": ["**"],

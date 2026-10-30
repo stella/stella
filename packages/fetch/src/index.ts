@@ -52,6 +52,20 @@ const executeFetchWithTimeout = async (
     );
   }
 
+  if (timeout === undefined) {
+    // A numeric deadline covers the whole exchange through the transport's
+    // own signal, and the caller gets the transport's response unchanged.
+    return await activeFetcher(input, {
+      ...init,
+      signal: AbortSignal.any([
+        ...callerSignals,
+        AbortSignal.timeout(duration),
+      ]),
+      timeoutMs: duration,
+    });
+  }
+  const policy = timeout;
+
   const controller = new AbortController();
   const combined = AbortSignal.any([...callerSignals, controller.signal]);
   const expire = () =>
@@ -72,7 +86,7 @@ const executeFetchWithTimeout = async (
         await activeFetcher(input, {
           ...init,
           signal: combined,
-          ...(timeout === undefined ? {} : { timeout }),
+          timeout: policy,
           timeoutMs: duration,
         }),
     )
@@ -81,7 +95,7 @@ const executeFetchWithTimeout = async (
       throw error;
     })
     .finally(() => {
-      if (timeout !== undefined && timeout.type !== "total") {
+      if (policy.type !== "total") {
         clear();
       }
     });
@@ -92,7 +106,7 @@ const executeFetchWithTimeout = async (
     throw combined.reason;
   }
   if (combined.aborted) {
-    if (timeout === undefined || timeout.type === "total") {
+    if (policy.type === "total") {
       // Total deadlines historically delegated this settlement race to the
       // transport. Keep a response that wins a caller abort so resumable
       // consumers can use work completed before they observe the signal.
@@ -102,7 +116,7 @@ const executeFetchWithTimeout = async (
     await Promise.allSettled([response.body?.cancel(combined.reason)]);
     throw combined.reason;
   }
-  if (timeout?.type === "headers" || response.body === null) {
+  if (policy.type === "headers" || response.body === null) {
     clear();
     return response;
   }
@@ -142,13 +156,13 @@ const executeFetchWithTimeout = async (
         await cancellation;
         return;
       }
-      if (timeout?.type === "idle") {
+      if (policy.type === "idle") {
         reset();
       }
       await reader
         .read()
         .finally(() => {
-          if (timeout?.type === "idle") {
+          if (policy.type === "idle") {
             clear();
           }
         })
