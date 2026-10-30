@@ -55,7 +55,7 @@ describe("corpus reader schema at persistence boundaries", () => {
       fallbackText: "Decision text.",
       ast,
       source: "synthetic",
-    });
+    }).unwrap();
     expect(prepared.type).toBe("readable");
     expect(prepared.ast).toBe(ast);
     expect(JSON.stringify(prepared.ast)).toBe(keysBefore);
@@ -64,13 +64,15 @@ describe("corpus reader schema at persistence boundaries", () => {
   test("preserves readable ASTs and explicit absent shapes", () => {
     const ast = decisionAst();
     expect(v.safeParse(persistedDocumentAstSchema, ast).success).toBe(true);
-    expect(prepareCorpusAst({ fallbackText: "Decision text.", ast })).toEqual({
-      type: "readable",
-      ast,
-    });
+    expect(
+      prepareCorpusAst({ fallbackText: "Decision text.", ast }).unwrap(),
+    ).toEqual({ type: "readable", ast });
     for (const absent of [null, EMPTY_AST]) {
       expect(
-        prepareCorpusAst({ fallbackText: "Decision text.", ast: absent }),
+        prepareCorpusAst({
+          fallbackText: "Decision text.",
+          ast: absent,
+        }).unwrap(),
       ).toEqual({
         type: "readable",
         ast: absent,
@@ -92,7 +94,7 @@ describe("corpus reader schema at persistence boundaries", () => {
           fallbackText: "Decision text.",
           source: "sk-courts",
           parserVersion: 20,
-        });
+        }).unwrap();
         expect(prepared.type).toBe("readable");
         if (!isDocumentAst(prepared.ast)) {
           return expect.unreachable("Repaired structure remains a document");
@@ -127,7 +129,7 @@ describe("corpus reader schema at persistence boundaries", () => {
           ast: invalid,
           source: "synthetic",
           parserVersion: 1,
-        }),
+        }).unwrap(),
       ).toEqual({ type: "text-only", ast: EMPTY_AST });
       expect(report).toHaveBeenLastCalledWith(
         "case_law.ingestion.ast_schema_rejected",
@@ -151,7 +153,7 @@ describe("corpus reader schema at persistence boundaries", () => {
           fallbackText: "Decision text.",
           ast: invalid,
           parserVersion: 18,
-        }),
+        }).unwrap(),
       ).toEqual({
         type: "text-only",
         ast: EMPTY_AST,

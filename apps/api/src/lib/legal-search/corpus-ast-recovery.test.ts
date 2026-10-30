@@ -4,7 +4,7 @@ import { expect, test } from "bun:test";
 import { zstdCompress } from "@/api/lib/compression";
 import { StoredCorpusValidationError } from "@/api/lib/errors/tagged-errors";
 import { prepareCorpusAst } from "@/api/lib/legal-search/corpus-ast";
-import { projectionAstOf } from "@/api/lib/legal-search/corpus-index-projection-executor";
+import { projectionAstOfResult } from "@/api/lib/legal-search/corpus-index-projection-executor";
 import {
   parsePersistedCorpusAst,
   readCorpusAst,
@@ -18,9 +18,12 @@ const malformed = { version: 1, blocks: [{ type: "paragraph" }] };
 test.each([null, "", " \n"])(
   "invalid structure without usable text fails preparation: %j",
   (fallbackText) => {
-    expect(() => prepareCorpusAst({ ast: malformed, fallbackText })).toThrow(
-      StoredCorpusValidationError,
-    );
+    const prepared = prepareCorpusAst({ ast: malformed, fallbackText });
+    expect(prepared.isErr()).toBe(true);
+    if (Result.isOk(prepared)) {
+      return expect.unreachable("Invalid structure without text is rejected");
+    }
+    expect(prepared.error).toBeInstanceOf(StoredCorpusValidationError);
   },
 );
 
@@ -59,10 +62,18 @@ test("typed recovery preserves the main validation contract and indexing require
   expect(read.error.code).toBe("stored_corpus_invalid");
   expect(read.error.paths.length).toBeGreaterThan(0);
   expect(JSON.stringify(read.error)).not.toContain("paragraph");
-  expect(() => projectionAstOf(read, " \n")).toThrow(
-    StoredCorpusValidationError,
-  );
-  expect(projectionAstOf(read, "Decision text.")).toBeNull();
+  const withoutText = projectionAstOfResult(read, " \n");
+  expect(withoutText.isErr()).toBe(true);
+  if (Result.isOk(withoutText)) {
+    return expect.unreachable("Invalid AST without text remains an error");
+  }
+  expect(withoutText.error).toBeInstanceOf(StoredCorpusValidationError);
+  const withText = projectionAstOfResult(read, "Decision text.");
+  expect(withText.isOk()).toBe(true);
+  if (Result.isErr(withText)) {
+    return expect.unreachable("Readable text permits AST omission");
+  }
+  expect(withText.value).toBeNull();
 });
 
 test("a stored non-JSON AST has the same path-only classified failure", async () => {

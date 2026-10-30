@@ -1155,7 +1155,7 @@ const replayWouldChangeRow = async ({
   const result = sanitizeResult(input, metadataUrlSchema);
   const payload = caseLawCanonicalPayload(result);
   if (row.corpusMirrorStatus === CASE_LAW_CORPUS_MIRROR_STATUS.PENDING) {
-    return true;
+    return Result.ok(true);
   }
   // Derived from the payload like the text is, so a parser that reads the
   // reference or its kind differently changes the row. Read as the write
@@ -1164,10 +1164,10 @@ const replayWouldChangeRow = async ({
     row.caseNumber !== storedCaseNumberOf(result) ||
     row.caseNumberType !== parsePrimaryReferenceType(result.caseNumberType)
   ) {
-    return true;
+    return Result.ok(true);
   }
   if (describedColumnsChanged({ input, result, row })) {
-    return true;
+    return Result.ok(true);
   }
   const sourceChanged = !shouldSkipRefresh({
     existingMetadata: row.metadata,
@@ -1176,20 +1176,21 @@ const replayWouldChangeRow = async ({
     incomingRawHash: result.rawHash,
   });
   if (sourceChanged) {
-    return true;
+    return Result.ok(true);
   }
   // The stored hash answers what reading the stored payload back would.
   if (row.contentHash !== null) {
-    return parsedOutputRequiresWrite(
-      row.contentHash,
-      corpusContentHash(payload),
+    return Result.ok(
+      parsedOutputRequiresWrite(row.contentHash, corpusContentHash(payload)),
     );
   }
-  return !(await storedPayloadMatches({
-    payload,
-    row,
-    scopedDb,
-  }));
+  return Result.ok(
+    !(await storedPayloadMatches({
+      payload,
+      row,
+      scopedDb,
+    })),
+  );
 };
 
 type ProvedReplayInputOptions = Pick<
@@ -1271,24 +1272,26 @@ const replayRow = async ({
   if (reparsed.type === "supplement") {
     // Written over its own row, a supplement would stay the standalone
     // decision it is not. `supplement-fold.ts` folds it into its judgment.
-    return {
+    return Result.ok({
       ...base,
       outcome: REPLAY_ROW_OUTCOME.REJECTED,
       rejection: STORED_RAW_REPARSE_REJECTION.SUPPLEMENT,
       detail: `a ${reparsed.supplement.kind} supplement; fold it instead`,
-    };
+    });
   }
 
   if (reparsed.type === "rejected") {
-    return await withdrawRejectedRow({
-      row,
-      rejection: reparsed.rejection,
-      detail: reparsed.detail,
-      rejectionPolicy,
-      scopedDb,
-      sourceLease,
-      withdraw,
-    });
+    return Result.ok(
+      await withdrawRejectedRow({
+        row,
+        rejection: reparsed.rejection,
+        detail: reparsed.detail,
+        rejectionPolicy,
+        scopedDb,
+        sourceLease,
+        withdraw,
+      }),
+    );
   }
 
   // A legacy spelling the adapter vouched for stands in for the regenerated
@@ -1306,12 +1309,12 @@ const replayRow = async ({
   });
   const selectedIdentity = decisionReplayIdentity(row.country, row);
   if (!Bun.deepEquals(regeneratedIdentity, selectedIdentity)) {
-    return {
+    return Result.ok({
       ...base,
       outcome: REPLAY_ROW_OUTCOME.REJECTED,
       rejection: STORED_RAW_REPARSE_REJECTION.IDENTITY_MISMATCH,
       detail: `selected ${JSON.stringify(selectedIdentity)}, regenerated ${JSON.stringify(regeneratedIdentity)}`,
-    };
+    });
   }
 
   const changed = await replayWouldChangeRow({
@@ -1340,7 +1343,7 @@ const replayRow = async ({
         result: reparsed.result,
       })))
   ) {
-    return { ...base, outcome: REPLAY_ROW_OUTCOME.UNCHANGED };
+    return Result.ok({ ...base, outcome: REPLAY_ROW_OUTCOME.UNCHANGED });
   }
   const candidate = {
     outcome: REPLAY_ROW_OUTCOME.WOULD_APPLY,
@@ -1351,7 +1354,7 @@ const replayRow = async ({
     decisionId: row.id,
   } as const satisfies ReplayWriteCandidate;
   if (sourceLease === null) {
-    return { ...base, outcome: candidate.outcome };
+    return Result.ok({ ...base, outcome: candidate.outcome });
   }
   const processed = await writeReplayCandidate({
     ...(signal === undefined ? {} : { signal }),
@@ -1363,18 +1366,18 @@ const replayRow = async ({
     resolveSourceContract,
   });
   if (processed.status === PROCESS_DECISION_STATUS.RETRYABLE) {
-    return {
+    return Result.ok({
       ...base,
       outcome: REPLAY_ROW_OUTCOME.RETRYABLE,
       detail: processed.reason,
-    };
+    });
   }
-  return {
+  return Result.ok({
     ...base,
     outcome: changed
       ? REPLAY_ROW_OUTCOME.APPLIED
       : REPLAY_ROW_OUTCOME.UNCHANGED,
-  };
+  });
 };
 
 type ReplayWriteCandidate = {

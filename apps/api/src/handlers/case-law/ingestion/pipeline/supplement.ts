@@ -70,10 +70,8 @@ const leaveFormerHolder = async (
     readStoredRaw,
   });
   if (rebuiltFormer.type === "read-failed") {
-    return supplementJudgmentReadFailed(
-      placement,
-      formerId,
-      rebuiltFormer.error,
+    return Result.ok(
+      supplementJudgmentReadFailed(placement, formerId, rebuiltFormer.error),
     );
   }
   if (rebuiltFormer.type === "unreadable") {
@@ -83,13 +81,13 @@ const leaveFormerHolder = async (
       sourceDocumentId,
       "error.detail": rebuiltFormer.detail,
     });
-    return {
+    return Result.ok({
       status: PROCESS_DECISION_STATUS.COMPLETE,
       disposition: {
         type: "standalone",
         reason: SUPPLEMENT_STANDALONE_REASON.JUDGMENT_UNREADABLE,
       },
-    };
+    });
   }
   const rewritten = await processStoredDecision(
     {
@@ -106,7 +104,7 @@ const leaveFormerHolder = async (
     placement.resolveSourceContract,
   );
   if (rewritten.status === PROCESS_DECISION_STATUS.RETRYABLE) {
-    return rewritten;
+    return Result.ok(rewritten);
   }
   // The rewrite parks a supplement it leaves out; one still naming the
   // former holder is detached here.
@@ -136,10 +134,10 @@ const leaveFormerHolder = async (
   });
   if (!detached) {
     // Moved by a concurrent placement; the next observation settles it.
-    return {
+    return Result.ok({
       status: PROCESS_DECISION_STATUS.RETRYABLE,
       reason: PROCESS_DECISION_RETRY_REASON.CONTENTION,
-    };
+    });
   }
   return await processSupplement(
     {
@@ -231,10 +229,10 @@ export const processSupplement = async (
       }),
   );
   if (placed.type === "erased") {
-    return {
+    return Result.ok({
       status: PROCESS_DECISION_STATUS.COMPLETE,
       disposition: { type: "erased", decisionId: placed.decisionId },
-    };
+    });
   }
   const { row, selection, leavesHolder, judgment } = placed;
 
@@ -271,10 +269,12 @@ export const processSupplement = async (
   }
 
   if (judgment.redacted) {
-    return await absorbSupplementIntoJudgment(placement, judgment.id, {
-      type: "withheld",
-      judgmentId: judgment.id,
-    });
+    return Result.ok(
+      await absorbSupplementIntoJudgment(placement, judgment.id, {
+        type: "withheld",
+        judgmentId: judgment.id,
+      }),
+    );
   }
 
   const merged = async (): Promise<ProcessSupplementResult> =>
@@ -288,7 +288,7 @@ export const processSupplement = async (
     row.decisionId === judgment.id &&
     row.mergedSourceHash === row.sourceHash
   ) {
-    return await merged();
+    return Result.ok(await merged());
   }
 
   const rebuilt = await rebuildStoredJudgment({
@@ -298,7 +298,9 @@ export const processSupplement = async (
     readStoredRaw,
   });
   if (rebuilt.type === "read-failed") {
-    return supplementJudgmentReadFailed(placement, judgment.id, rebuilt.error);
+    return Result.ok(
+      supplementJudgmentReadFailed(placement, judgment.id, rebuilt.error),
+    );
   }
   if (rebuilt.type === "unreadable") {
     logger.warn(SUPPLEMENT_JUDGMENT_UNREADABLE, {
@@ -310,13 +312,13 @@ export const processSupplement = async (
     if (row.decisionId === judgment.id) {
       // The judgment still publishes an earlier version; a standalone row
       // would be a second public copy of the same reasons.
-      return {
+      return Result.ok({
         status: PROCESS_DECISION_STATUS.COMPLETE,
         disposition: {
           type: "standalone",
           reason: SUPPLEMENT_STANDALONE_REASON.JUDGMENT_UNREADABLE,
         },
-      };
+      });
     }
     return await keepSupplementStandalone(
       placement,
@@ -338,7 +340,7 @@ export const processSupplement = async (
     resolveSourceContract,
   );
   if (written.status === PROCESS_DECISION_STATUS.RETRYABLE) {
-    return written;
+    return Result.ok(written);
   }
 
   const after = (
@@ -365,7 +367,7 @@ export const processSupplement = async (
   ) {
     // The judgment's write absorbed the row already, or reported that it
     // could not; asking again settles which.
-    return await merged();
+    return Result.ok(await merged());
   }
   return await keepSupplementStandalone(
     placement,

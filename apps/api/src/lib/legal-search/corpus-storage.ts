@@ -632,17 +632,18 @@ export const corpusPayloadDisposition = ({
 export const writeCorpusDocument = async (
   uncheckedInput: WriteCorpusInput,
   { signal, s3Policy }: CorpusIoOptions = {},
-): Promise<CorpusWriteOutcome> => {
-  const input = {
-    ...uncheckedInput,
-    ast: prepareCorpusAst({
-      ast: uncheckedInput.ast,
-      fallbackText: uncheckedInput.text,
-    }).ast,
-  };
+): Promise<Result<CorpusWriteOutcome, StoredCorpusValidationError>> => {
+  const prepared = prepareCorpusAst({
+    ast: uncheckedInput.ast,
+    fallbackText: uncheckedInput.text,
+  });
+  if (prepared.isErr()) {
+    return prepared;
+  }
+  const input = { ...uncheckedInput, ast: prepared.value.ast };
   const plan = planCorpusDocumentWrite(input);
   if (plan.type !== "put") {
-    return plan;
+    return Result.ok(plan);
   }
   const { written } = plan;
   const frames = await corpusPayloadFrames(input);
@@ -702,7 +703,7 @@ export const writeCorpusDocument = async (
     operations: writes,
   });
 
-  return { type: "written", written };
+  return Result.ok({ type: "written", written });
 };
 
 type BoundedObjectReader = (options: {

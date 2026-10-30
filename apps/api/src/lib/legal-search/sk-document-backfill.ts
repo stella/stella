@@ -485,7 +485,7 @@ export const parsePendingDocument = async (
   });
 
   if (parsed.documentAst.blocks.length === 0 || parsed.fulltext === "") {
-    return undefined;
+    return Result.ok(undefined);
   }
 
   const sanitized = sanitizeResult({
@@ -503,14 +503,14 @@ export const parsePendingDocument = async (
   const fulltext = sanitized.fulltext ?? "";
   // Text remains readable even when the reader rejects its structure.
   if (fulltext === "") {
-    return undefined;
+    return Result.ok(undefined);
   }
 
-  return {
+  return Result.ok({
     fulltext,
     documentAst: sanitized.documentAst,
     sections: segmentDecision(fulltext),
-  };
+  });
 };
 
 /**
@@ -1331,7 +1331,7 @@ const storeBackfilledDocumentOwned = async ({
   // the source moved while this fetch was in flight, and the queue's next
   // pass fetches the current version. Reporting it as stored would count a
   // document that is not there.
-  return stored ? "stored" : "superseded";
+  return Result.ok(stored ? "stored" : "superseded");
 };
 
 type WriteDeferredDocumentStateOptions = {
