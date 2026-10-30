@@ -1128,7 +1128,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          for attempt in {1..119}; do
+          for _ in {1..119}; do
             jobs="$(bash "$GH_RETRY_SCRIPT" api --paginate --slurp "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${GITHUB_RUN_ATTEMPT}/jobs?per_page=100")"
             result="$(jq -r '
               [.[].jobs[] | select(.name == "Mock-model application journeys")] |
