@@ -409,6 +409,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("require-valibot-message.fixture.ts", [
     "require-valibot-message/require-valibot-message",
   ]),
+  fixtureRuleOverride("no-live-test-base.fixture.ts", [
+    "no-live-test-base/no-live-test-base",
+  ]),
   fixtureRuleOverride("no-raw-child-exit-status.fixture.ts", [
     "no-raw-child-exit-status/no-raw-child-exit-status",
   ]),
@@ -1386,6 +1389,7 @@ const config = defineConfig({
     "max-classes-per-file": "off",
     // Trailing comments document table rows and literal values (962 findings).
     "no-inline-comments": "off",
+    "no-live-test-base/no-live-test-base": "error",
     "no-raw-child-exit-status/no-raw-child-exit-status": "error",
     // The upstream rule treats String#slice like Array#slice and can turn
     // substring checks into single-character Set membership under --fix.
@@ -1906,6 +1910,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-direct-error-toast.ts",
     "./.oxlint-plugins/no-rendered-error-translation.ts",
     "./.oxlint-plugins/require-valibot-message.ts",
+    "./.oxlint-plugins/no-live-test-base.ts",
     "./.oxlint-plugins/no-raw-child-exit-status.ts",
     "./.oxlint-plugins/no-raw-router-invalidation.ts",
     "./.oxlint-plugins/no-optional-mutation-command.ts",
@@ -2035,6 +2040,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-raw-e2e-router-push.ts",
     "./.oxlint-plugins/no-workspace-field-value-drift.ts",
     "./.oxlint-plugins/icon-button-requires-tooltip.ts",
+    "./.oxlint-plugins/semantic-controls.ts",
     "./.oxlint-plugins/no-disabled-tooltip-trigger.ts",
     "./.oxlint-plugins/no-dialog-trigger-menu-item.ts",
     "./.oxlint-plugins/no-decorated-search-input.ts",
@@ -3677,6 +3683,18 @@ const config = defineConfig({
       ],
       rules: {
         "icon-button-requires-tooltip/icon-button-requires-tooltip": "error",
+      },
+    },
+    {
+      files: [
+        "apps/web/src/**/*.tsx",
+        "packages/workspace-ui/src/**/*.tsx",
+        ".oxlint-plugins/__fixtures__/semantic-controls.fixture.tsx",
+      ],
+      rules: {
+        "semantic-controls/require-menu-anchor": "error",
+        "semantic-controls/require-context-menu-target": "error",
+        "semantic-controls/require-specific-icon-label": "error",
       },
     },
     {

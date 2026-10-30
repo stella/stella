@@ -37,7 +37,9 @@ import { readBounded } from "@/api/lib/db/read-bounded";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import {
   type CorpusByteSourceSeams,
+  parsePersistedCorpusAst,
   readCorpusAst,
+  readCorpusForRecovery,
   readCorpusText,
 } from "@/api/lib/legal-search/corpus-storage";
 import { corpusTombstoneReaderForTx } from "@/api/lib/legal-search/corpus-tombstones";
@@ -896,7 +898,7 @@ const applyCompletionCandidate = async (
       candidate,
     });
     const guardedLease = createGuardedLease({ lease, ensure, raiseFailure });
-    yield* Result.await(
+    const written = yield* Result.await(
       legacyOperation(
         async () =>
           await guardedLease.beforeRemoteEffect(
@@ -914,6 +916,16 @@ const applyCompletionCandidate = async (
           ),
       ),
     );
+    if (written.isErr()) {
+      return Result.err(
+        new CompletionStageFailure({
+          message: "Completion document could not be stored",
+          code: "storage",
+          scope: "systemic",
+          cause: written.error,
+        }),
+      );
+    }
     yield* Result.await(ensure());
     return await finalizeWrittenCompletion(context);
   });
@@ -962,10 +974,15 @@ const hydrateCompletionStatements = async ({
       );
     }
     yield* Result.await(ensure());
-    const ast = await legacyOperation(async () =>
-      row.astS3Key !== null
-        ? await readCorpusAst(row.astS3Key, readOptions)
-        : row.documentAst,
+    const ast = await legacyOperation(
+      async () =>
+        await readCorpusForRecovery({
+          documentId: row.id,
+          read: async () =>
+            row.astS3Key !== null
+              ? await readCorpusAst(row.astS3Key, readOptions)
+              : parsePersistedCorpusAst(row.documentAst),
+        }),
     );
     if (ast.isErr() && signal.aborted) {
       return Result.err(
@@ -985,15 +1002,37 @@ const hydrateCompletionStatements = async ({
         }),
       );
     }
+    if (ast.value.isErr() && signal.aborted) {
+      return Result.err(
+        new EuCompletionStop({
+          message: "Completion cancelled",
+          reason: "cancelled",
+        }),
+      );
+    }
+    if (
+      ast.value.isErr() &&
+      (text.value === null || text.value.trim().length === 0)
+    ) {
+      return Result.err(
+        new CompletionStageFailure({
+          message: "Stored statements could not be read",
+          code: "storage",
+          scope: "systemic",
+          cause: ast.value.error,
+        }),
+      );
+    }
     yield* Result.await(ensure());
-    if (row.astS3Key !== null && ast.value === null) {
+    const documentAst = ast.value.isOk() ? ast.value.value : null;
+    if (row.astS3Key !== null && documentAst === null) {
       return Result.err(
         new CompletionReviewRequired({
           message: "Stored AST reference has no verifiable statement",
         }),
       );
     }
-    return Result.ok({ ...row, fulltext: text.value, documentAst: ast.value });
+    return Result.ok({ ...row, fulltext: text.value, documentAst });
   });
 
 const executeCompletionRow = async (

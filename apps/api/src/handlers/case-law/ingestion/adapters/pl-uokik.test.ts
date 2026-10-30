@@ -466,7 +466,9 @@ describe("a decision", () => {
                 ? "unrepresentable-identifier"
                 : undefined),
           ).toBe(true);
-          expect(sanitizeResult(decision).caseNumber).toBe(decision.caseNumber);
+          expect(sanitizeResult(decision).unwrap().caseNumber).toBe(
+            decision.caseNumber,
+          );
         }
       }
     }
