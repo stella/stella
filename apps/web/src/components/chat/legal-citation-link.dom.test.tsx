@@ -155,6 +155,7 @@ const decisionPath = createCaseLawDecisionPath(
 );
 const absentText = { type: "absent", reason: "not_published" } as const;
 const fullDecision = {
+  extractionWarnings: [],
   citationCount: 0,
   id: toSafeId<"caseLawDecision">(documentId),
   caseNumber: "26 Cdo 4249/2016",
@@ -199,6 +200,7 @@ const fullDecision = {
     name: "Synthetic source",
   },
   sourceAttributionUrl: null,
+  sourceLanguages: null,
   sourceUrl: "https://publisher.example.test/decision",
   textFields: {
     abstract: absentText,

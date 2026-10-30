@@ -253,10 +253,6 @@ pub fn run() {
                 tray::refresh(&app, &snapshot);
               });
             }
-            feature_gate::DesktopFeature::TimeBilling => {
-              use tauri::Emitter;
-              let _ = app.emit(activity::CHANGED_EVENT, ());
-            }
             feature_gate::DesktopFeature::LocalAgents => {
               harness_commands::apply_feature_gate(app, enabled);
               chatgpt_auth_commands::apply_feature_gate(app, enabled);

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { decodeSourceRawEnvelope } from "@/api/handlers/case-law/ingestion/adapter";
 import { getCaseLawIngestionMetadata } from "@/api/handlers/case-law/metadata";
+import { decodeSourceRawEnvelope } from "@/api/lib/legal-search/ingestion-types";
 import { clearRootDbMocks } from "@/api/tests/helpers/mock-root-db";
 
 const { createAtCourtsAdapter } =
