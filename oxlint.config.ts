@@ -2105,9 +2105,12 @@ const config = defineConfig({
 
   overrides: [
     {
-      files: NO_RENDER_PHASE_UPDATE_GOVERNED_PATHS.map(
-        (directory) => `${directory}/**/*.{ts,tsx}`,
-      ),
+      files: [
+        ".oxlint-plugins/__fixtures__/no-render-phase-update.fixture.tsx",
+        ...NO_RENDER_PHASE_UPDATE_GOVERNED_PATHS.map(
+          (directory) => `${directory}/**/*.{ts,tsx}`,
+        ),
+      ],
       rules: {
         "no-render-phase-update/no-render-phase-update": "error",
       },
