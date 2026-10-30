@@ -6530,6 +6530,14 @@
           "started": "Iniciou uma revisão de"
         },
         "empty": "Ainda não há atividade neste caso.",
+        "fields": {
+          "dueDate": "data de vencimento",
+          "parentFolder": "pasta principal",
+          "priority": "prioridade",
+          "property": "propriedade",
+          "schedule": "programação",
+          "sortOrder": "ordem"
+        },
         "filterLabel": "Filtrar atividade",
         "filters": {
           "all": "Toda a atividade",
@@ -6579,6 +6587,7 @@
           "translation": "tradução"
         },
         "title": "Atividade",
+        "updatedFields": "Atualizado: {fields}",
         "views": {
           "list": "Visualização em lista",
           "timeline": "Visualização da linha do tempo"

@@ -6530,6 +6530,14 @@
           "started": "A lancé une révision de"
         },
         "empty": "Aucune activité dans ce dossier pour le moment.",
+        "fields": {
+          "dueDate": "échéance",
+          "parentFolder": "dossier parent",
+          "priority": "priorité",
+          "property": "propriété",
+          "schedule": "calendrier",
+          "sortOrder": "ordre"
+        },
         "filterLabel": "Filtrer l’activité",
         "filters": {
           "all": "Toute l’activité",
@@ -6579,6 +6587,7 @@
           "translation": "traduction"
         },
         "title": "Activité",
+        "updatedFields": "Mise à jour : {fields}",
         "views": {
           "list": "Vue en liste",
           "timeline": "Vue chronologique"

@@ -25,6 +25,7 @@ import {
   LEGISLATION_GENERATION,
   prepareCoverageRefreshMeasurement,
   seedSitemapReadBudget,
+  sitemapRefreshRetiredChanges,
 } from "./corpus-seed";
 import { QUERY_PERF_OWNER_DEADLINES } from "./owner-deadlines";
 import type { RequestReceiptScenario } from "./request-receipt-seed";
@@ -141,6 +142,7 @@ export const SCHEDULED_JOB_MEASUREMENTS: Readonly<
   "caseLaw.refreshSitemapShards.hourly": {
     task: REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK,
     prepare: seedSitemapReadBudget,
+    executed: sitemapRefreshRetiredChanges,
     scenarios: [
       { size: { type: "case-law", served: CASE_LAW_SCENARIOS.quiet.size } },
     ],

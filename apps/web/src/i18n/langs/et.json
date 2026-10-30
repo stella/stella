@@ -6530,6 +6530,14 @@
           "started": "Alustas ülevaatust dokumendile"
         },
         "empty": "Selles toimikus pole veel tegevust.",
+        "fields": {
+          "dueDate": "tähtaeg",
+          "parentFolder": "ülemkaust",
+          "priority": "prioriteet",
+          "property": "omadus",
+          "schedule": "ajakava",
+          "sortOrder": "järjestus"
+        },
         "filterLabel": "Filtreeri tegevust",
         "filters": {
           "all": "Kogu tegevus",
@@ -6579,6 +6587,7 @@
           "translation": "tõlge"
         },
         "title": "Tegevus",
+        "updatedFields": "Uuendati: {fields}",
         "views": {
           "list": "Loendivaade",
           "timeline": "Ajajoone vaade"
