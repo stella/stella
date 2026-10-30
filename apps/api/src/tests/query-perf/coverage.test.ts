@@ -14,6 +14,7 @@ import { CASE_LAW_COVERAGE_REFRESH_STATEMENT_TIMEOUT_MS } from "@/api/lib/schedu
 import { isRecord } from "@/api/lib/type-guards";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { scanOccurrences } from "@/api/tests/query-plans/plan-walker";
 
 import { coverageIndexBuildSql } from "./coverage-indexes";
 import {
@@ -71,8 +72,9 @@ describe.skipIf(!enabled)("coverage refresh read budget", () => {
             "case_law_sources",
             "case_law_decisions",
             "case_law_browse_facet_counts",
+            "case_law_population_counts",
           ]) {
-            // db-await-in-loop: three fixed fixture tables cloned with their production indexes.
+            // db-await-in-loop: four fixed fixture tables cloned with their production indexes.
             await db.execute(
               sql`CREATE TABLE ${schema}.${sql.identifier(table)} (LIKE public.${sql.identifier(table)} INCLUDING ALL)`,
             );
@@ -108,15 +110,20 @@ describe.skipIf(!enabled)("coverage refresh read budget", () => {
           await db.execute(sql`INSERT INTO case_law_decisions (id, source_id, case_number, court, country, language, decision_date, fulltext)
           SELECT gen_random_uuid(), id, 'fixed/' || n, 'Fixed court', 'CZE', 'cs', DATE '2000-01-01', 'Fixture text'
           FROM case_law_sources CROSS JOIN generate_series(1, 20) n WHERE adapter_key = 'coverage-budget-4'`);
-          await db.execute(sql`INSERT INTO case_law_browse_facet_counts (kind, country, source_id, value, total)
-          SELECT 'court', 'CZE', id, 'Court ' || n, ${rows / 30} FROM case_law_sources CROSS JOIN generate_series(0, 29) n
-          WHERE adapter_key <> 'coverage-budget-4'`);
+          // The correctness suite exercises transactional projection maintenance.
+          // This large read fixture materializes the same buckets in one seed pass.
+          await db.execute(sql`INSERT INTO case_law_population_counts (kind, country, source_id, value, total)
+          SELECT bucket->>'kind', d.country, d.source_id, bucket->>'value', count(*)::integer
+          FROM case_law_decisions d
+          CROSS JOIN LATERAL jsonb_array_elements(public.case_law_population_buckets(ROW(d.*)::public.case_law_decisions)) bucket
+          GROUP BY bucket->>'kind', d.country, d.source_id, bucket->>'value'`);
           for (const table of [
             "case_law_sources",
             "case_law_decisions",
             "case_law_browse_facet_counts",
+            "case_law_population_counts",
           ]) {
-            // db-await-in-loop: VACUUM cannot share statements or transactions; three fixed tables.
+            // db-await-in-loop: VACUUM cannot share statements or transactions; four fixed tables.
             await db.execute(sql`VACUUM (ANALYZE) ${sql.identifier(table)}`);
           }
           captured.length = 0;
@@ -124,7 +131,7 @@ describe.skipIf(!enabled)("coverage refresh read budget", () => {
             asTestRaw<CaseLawPublicReadTransaction>(db),
           );
           const statements = captured.slice();
-          expect(statements).toHaveLength(2);
+          expect(statements).toHaveLength(1);
           expect(sources).toHaveLength(4);
           for (const source of sources) {
             const expected =
@@ -171,6 +178,11 @@ describe.skipIf(!enabled)("coverage refresh read budget", () => {
                 );
               }
               const document = { ...plan, Plan: plan["Plan"] };
+              expect(
+                scanOccurrences(document.Plan).filter(
+                  ({ relation }) => relation === "case_law_decisions",
+                ),
+              ).toEqual([]);
               metrics.push(metricsFromPlan(document));
               if (sample === 5) {
                 console.info(

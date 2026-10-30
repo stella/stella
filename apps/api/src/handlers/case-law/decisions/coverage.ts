@@ -1,5 +1,5 @@
-import { Result, TaggedError } from "better-result";
-import { sql } from "drizzle-orm";
+import { panic, Result, TaggedError } from "better-result";
+import { eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import {
@@ -9,13 +9,11 @@ import {
 import { isPublicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 
 import {
-  caseLawBrowseFacetCounts,
+  caseLawPopulationCounts,
   caseLawSources,
-  publishedCaseLawDecisions,
   SOURCE_TOTAL_ORIGIN,
 } from "@/api/db/schema";
 import type { SourceTotalOrigin } from "@/api/db/schema";
-import { envBase } from "@/api/env-base";
 import {
   type CaseLawSourceArrivals,
   readCaseLawArrivalsQuery,
@@ -35,12 +33,10 @@ import {
   type CaseLawKnownGaps,
   readCaseLawCoverageYearsQuery,
 } from "@/api/handlers/case-law/decisions/coverage-years";
-import { readBrowseFacetsWithin } from "@/api/handlers/case-law/decisions/facets";
 import {
   type CaseLawCourtStatusRow,
   caseLawCourtStatusRows,
-  readCaseLawCourtActivityQuery,
-  readCaseLawCourtCountQuery,
+  readCaseLawCoverageCourtActivityQuery,
 } from "@/api/handlers/case-law/decisions/status-courts";
 import { coverageSnapshotSchema } from "@/api/handlers/case-law/public-response-schemas";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -57,16 +53,12 @@ import {
   unavailableProvisionPendingCounts,
 } from "@/api/lib/case-law/provision-pending";
 import { loadPublicCourtWeightsWithin } from "@/api/lib/case-law/public-case-law-config";
-import { readPendingTextCountsBySource } from "@/api/lib/case-law/public-subject";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { executedRows } from "@/api/lib/db/executed-rows";
-import {
-  decisionDateNotBeforeFilingYearSql,
-  decisionDateWithinBoundsSql,
-} from "@/api/lib/decision-date-bounds-sql";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { CASE_LAW_SOURCE_ROWS_BOUND } from "@/api/lib/legal-search/ingestion-constants";
+import { readPgFtsBrowseFacets } from "@/api/lib/legal-search/pg-fts-browse-facets";
 import {
   createUnrecognizedSourceReporter,
   SOURCE_REPORT_FEATURE,
@@ -284,20 +276,11 @@ type CaseLawCoverageSourceRow = {
 };
 
 const coverageDecisionYearSql = (order: "ASC" | "DESC") => sql<number | null>`(
-  SELECT extract(year FROM coverage_decisions.decision_date)::integer
-  FROM ${publishedCaseLawDecisions} AS coverage_decisions
-  WHERE coverage_decisions.source_id = case_law_sources.id
-    AND coverage_decisions.decision_date IS NOT NULL
-    AND ${decisionDateWithinBoundsSql(
-      sql`coverage_decisions.decision_date`,
-      sql`coverage_decisions.country`,
-    )}
-    AND ${decisionDateNotBeforeFilingYearSql({
-      date: sql`coverage_decisions.decision_date`,
-      country: sql`coverage_decisions.country`,
-      caseNumber: sql`coverage_decisions.case_number`,
-    })}
-  ORDER BY coverage_decisions.decision_date ${sql.raw(order)}, coverage_decisions.id ${sql.raw(order)}
+  SELECT population.value::integer
+  FROM ${caseLawPopulationCounts} AS population
+  WHERE population.source_id = case_law_sources.id
+    AND population.kind = 'coverage-year'
+  ORDER BY population.value ${sql.raw(order)}
   LIMIT 1
 )`;
 
@@ -328,29 +311,10 @@ export const readCaseLawCoverageSourcesQuery = definePublicLawSharedQuery(
         storedTotalAsOf: caseLawSources.storedTotalAsOf,
         courts: sql<CoverageCourt[]>`coalesce((
           WITH population AS (
-            SELECT f.value AS court, f.total AS decisions
-            FROM LATERAL (
-              SELECT source_facets.value, source_facets.total
-              FROM ${caseLawBrowseFacetCounts} AS source_facets
-              WHERE source_facets.source_id = case_law_sources.id
-                AND source_facets.kind = 'court'
-              ORDER BY source_facets.value, source_facets.total
-            ) AS f
-            UNION ALL
-            SELECT d.court, 1 AS decisions
-            FROM ${publishedCaseLawDecisions} AS d
-            WHERE d.source_id = case_law_sources.id
-              AND NOT EXISTS (
-                SELECT 1
-                FROM LATERAL (
-                  SELECT source_facets.value
-                  FROM ${caseLawBrowseFacetCounts} AS source_facets
-                  WHERE source_facets.source_id = case_law_sources.id
-                    AND source_facets.kind = 'court'
-                  ORDER BY source_facets.value
-                  LIMIT 1
-                ) AS source_facets
-              )
+            SELECT counts.value AS court, counts.total AS decisions
+            FROM ${caseLawPopulationCounts} AS counts
+            WHERE counts.source_id = case_law_sources.id
+              AND counts.kind = 'court'
           ), normalized AS (
             SELECT nullif(btrim(court), '') AS court, decisions FROM population
           ), grouped AS (
@@ -371,26 +335,23 @@ export const readCaseLawCoverageSourcesQuery = definePublicLawSharedQuery(
             ORDER BY decisions DESC, court ASC)
           FROM bounded
         ), '[]'::jsonb)`,
+        pendingTextCount: sql<number>`coalesce((
+          SELECT sum(counts.total)::integer
+          FROM ${caseLawPopulationCounts} AS counts
+          WHERE counts.source_id = case_law_sources.id
+            AND counts.kind = 'pending-text'
+        ), 0)`,
         decisionYearFrom: coverageDecisionYearSql("ASC"),
         decisionYearTo: coverageDecisionYearSql("DESC"),
       })
       .from(caseLawSources)
-      .where(redistributableCaseLawSource)
+      .where(
+        sql`${redistributableCaseLawSource} AND (SELECT public.assert_case_law_population_ready())`,
+      )
       .orderBy(caseLawSources.adapterKey)
       .limit(CASE_LAW_SOURCE_ROWS_BOUND);
-    const counts = await readPendingTextCountsBySource(
-      tx,
-      sources.map(({ id }) => id),
-    );
-    const countsBySource = new Map(
-      counts.map(({ sourceId, pendingTextCount }) => [
-        sourceId,
-        pendingTextCount,
-      ]),
-    );
     return sources.map((source) => ({
       ...source,
-      pendingTextCount: countsBySource.get(source.id) ?? 0,
       publishedDecisions: source.courts.reduce(
         (total, row) => total + row.decisions,
         0,
@@ -935,30 +896,47 @@ export const computeCaseLawCoverageAnswer = async (
         return arrivals.value;
       },
       readFacets: async (country) =>
-        await caseLawDb(
-          async (tx) =>
-            await readBrowseFacetsWithin(tx, { country, excludedSourceIds }),
-        ),
+        await Result.tryPromise({
+          try: async () =>
+            await caseLawDb(
+              async (tx) =>
+                await readPgFtsBrowseFacets(tx, {
+                  jurisdiction: country,
+                  excludedSourceIds,
+                  limit: LIMITS.caseLawFacetLimit,
+                }),
+            ),
+          catch: coverageError("reading maintained coverage facets failed"),
+        }),
       readCourts: async ({ buckets, country, total }) => {
         const [courtWeights, activity, courtCount] = await Promise.all([
           caseLawDb(async (tx) => await loadPublicCourtWeightsWithin(tx)),
           caseLawDb(
             async (tx) =>
-              await readCaseLawCourtActivityQuery(tx, {
+              await readCaseLawCoverageCourtActivityQuery(tx, {
                 country,
                 courts: buckets.map(({ value }) => value),
                 excludedSourceIds,
                 now,
               }),
           ),
-          caseLawDb(
-            async (tx) =>
-              await readCaseLawCourtCountQuery(tx, {
-                country,
-                excludedSourceIds,
-                engine: envBase.LEGAL_SEARCH_PROVIDER,
-              }),
-          ),
+          caseLawDb(async (tx) => {
+            const [row] = await tx
+              .select({
+                courts: sql<number>`count(DISTINCT ${caseLawPopulationCounts.value})::integer`,
+              })
+              .from(caseLawPopulationCounts)
+              .innerJoin(
+                caseLawSources,
+                eq(caseLawSources.id, caseLawPopulationCounts.sourceId),
+              ).where(sql`${caseLawPopulationCounts.kind} = 'court'
+                AND ${caseLawPopulationCounts.country} = ${country}
+                AND ${redistributableCaseLawSource}`);
+            return (
+              row?.courts ??
+              panic("Coverage court count returned no aggregate row")
+            );
+          }),
         ]);
         return caseLawCourtStatusRows({
           activity,

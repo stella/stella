@@ -42,7 +42,7 @@ export const READ_BUDGETS = {
       "A governed coverage refresh reads the source policy, computes the bounded coverage snapshot, and writes its summary and audit record. The production-shape corpus fixture measures 89 pages; 150 pages leaves more than 50% headroom for production-height indexes.",
     overBudget: {
       reason:
-        "Source ranking reads every court bucket before the top-N cut; per-source top-N court buckets materialized at facet refresh bring it under.",
+        "Coverage ranks every maintained source/court bucket before its top-N cut. At 6,000 courts the canonical population table remains above 150 pages despite zero decision-corpus reads; a bounded top-N court projection maintained by the population owner is the follow-up.",
     },
   },
   "statement.caseLaw.globalSearchHits": {
@@ -59,9 +59,9 @@ export const READ_BUDGETS = {
   },
   "statement.caseLaw.coverageSources": {
     surface: "statement",
-    pages: 256,
+    pages: 64,
     reason:
-      "Four fixture sources: eight date endpoint seeks at eight pages each (64), ninety precomputed court rows at two pages each (180), and twelve pages for the twenty-row uncached court source and grouped pending-text read: 256 pages total. Rejected filing dates must cost no heap walk.",
+      "Four fixture sources each read maintained court buckets, two coverage-year endpoints and pending-text buckets: sixteen aggregate probes at three pages each, plus sixteen pages for source policy and singleton seed readiness, give 64 pages. Plans must never access case_law_decisions; corpus size does not change the maintained bucket population.",
   },
   "statement.caseLaw.euCompletionPage": {
     surface: "statement",

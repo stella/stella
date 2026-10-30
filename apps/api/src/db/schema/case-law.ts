@@ -2767,6 +2767,117 @@ export const caseLawSitemapShardCounts = p.pgTable(
   ],
 );
 
+/** Provider-independent decision populations, maintained in the decision transaction. */
+export const CASE_LAW_POPULATION_KINDS = [
+  "country",
+  "court",
+  "year",
+  "coverage-year",
+  "pending-text",
+] as const;
+
+export const caseLawPopulationCounts = p.pgTable(
+  "case_law_population_counts",
+  {
+    kind: p.text({ enum: CASE_LAW_POPULATION_KINDS }).notNull(),
+    country: p.varchar({ length: 3 }).notNull(),
+    sourceId: safeUuid<"caseLawSource">("source_id").notNull(),
+    value: p.varchar({ length: 512 }).notNull(),
+    total: p.integer().notNull(),
+  },
+  (t) => [
+    p.primaryKey({
+      name: "case_law_population_counts_pkey",
+      columns: [t.kind, t.country, t.sourceId, t.value],
+    }),
+    p.check("case_law_population_counts_total_positive", sql`${t.total} > 0`),
+    p.check(
+      "case_law_population_counts_kind_valid",
+      sql`${t.kind} IN (${sql.join(
+        CASE_LAW_POPULATION_KINDS.map((kind) => sql`${kind}`),
+        sql`, `,
+      )})`,
+    ),
+    p
+      .index("case_law_population_counts_source_kind_idx")
+      .on(t.sourceId, t.kind, t.value, t.total),
+    p.pgPolicy("case_law_population_count_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_population_counts'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_population_counts'::regclass)`,
+    }),
+    p.pgPolicy("public_law_reader_access", {
+      for: "select",
+      to: stellaPublicLawReader,
+      using: sql`EXISTS (SELECT 1 FROM ${caseLawSources} AS population_source WHERE population_source.id = ${t.sourceId} AND ${redistributableCaseLawSourceFor(sql`population_source.descriptor`)})`,
+    }),
+  ],
+);
+
+const CASE_LAW_POPULATION_PUBLICATIONS = ["published", "unpublished"] as const;
+
+/** Row-local replay checkpoint; a seed and a concurrent write cannot count a decision twice. */
+export const caseLawPopulationProjections = p.pgTable(
+  "case_law_population_projections",
+  {
+    decisionId: safeUuid<"caseLawDecision">("decision_id").primaryKey(),
+    sourceId: safeUuid<"caseLawSource">("source_id").notNull(),
+    country: p.varchar({ length: 3 }).notNull(),
+    buckets: p.jsonb().notNull(),
+    court: p.varchar({ length: 512 }).notNull(),
+    createdAt: timestamptz("created_at").notNull(),
+    updatedAt: timestamptz("updated_at").notNull(),
+    publication: p.text({ enum: CASE_LAW_POPULATION_PUBLICATIONS }).notNull(),
+  },
+  (t) => [
+    p.check(
+      "case_law_population_projection_publication_valid",
+      sql`${t.publication} IN (${sql.join(
+        CASE_LAW_POPULATION_PUBLICATIONS.map(
+          (publication) => sql`${publication}`,
+        ),
+        sql`, `,
+      )})`,
+    ),
+    p
+      .index("case_law_population_projection_activity_idx")
+      .on(t.country, t.court, t.updatedAt.desc(), t.sourceId, t.createdAt)
+      .where(sql`${t.publication} = 'published'`),
+    p.pgPolicy("public_law_reader_access", {
+      for: "select",
+      to: stellaPublicLawReader,
+      using: sql`${t.publication} = 'published' AND EXISTS (SELECT 1 FROM ${caseLawSources} AS population_source WHERE population_source.id = ${t.sourceId} AND ${redistributableCaseLawSourceFor(sql`population_source.descriptor`)})`,
+    }),
+    p.pgPolicy("case_law_population_projection_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_population_projections'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_population_projections'::regclass)`,
+    }),
+  ],
+);
+
+/** Durable strict-lower seed cursor, completed only after the bounded traversal ends. */
+export const caseLawPopulationSeedState = p.pgTable(
+  "case_law_population_seed_state",
+  {
+    slot: p.integer().primaryKey(),
+    cursor: safeUuid<"caseLawDecision">("cursor"),
+    sourceId: safeUuid<"caseLawSource">("source_id"),
+    completed: p.boolean().notNull().default(false),
+  },
+  (t) => [
+    p.check("case_law_population_seed_singleton", sql`${t.slot} = 0`),
+    p.pgPolicy("case_law_population_seed_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_population_seed_state'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_population_seed_state'::regclass)`,
+    }),
+  ],
+);
+
 export const CASE_LAW_BROWSE_FACET_KINDS = [
   "country",
   "court",

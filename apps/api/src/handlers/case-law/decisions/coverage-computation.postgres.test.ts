@@ -6,7 +6,6 @@ import { getViewConfig, PgDialect } from "drizzle-orm/pg-core";
 import { CZ_ECLI_COURT_REGISTRY } from "@stll/api-contract/case-law-courts";
 
 import {
-  caseLawBrowseFacetCounts,
   caseLawCourtWeights,
   caseLawDecisions,
   caseLawSourceArrivals,
@@ -39,6 +38,14 @@ describe.skipIf(!enabled)("coverage computation (postgres)", () => {
       panic("The enabled coverage computation test requires DATABASE_URL");
     await withGatedTestClients(databaseUrl, async ({ openClient }) => {
       const { db } = openClient({ max: 1 });
+      let seeded = false;
+      while (!seeded) {
+        // db-await-in-loop: finish the bounded public seed before the production readiness assertion admits this isolated fixture.
+        const batch = await db.execute(
+          sql`SELECT * FROM public.seed_case_law_population_counts(2048)`,
+        );
+        seeded = batch.at(0)?.["done"] === true;
+      }
       const schemaName = `coverage_computation_${Bun.randomUUIDv7().replaceAll("-", "")}`;
       const schema = sql.identifier(schemaName);
       await db.execute(sql`CREATE SCHEMA ${schema}`);
@@ -53,12 +60,29 @@ describe.skipIf(!enabled)("coverage computation (postgres)", () => {
           "case_law_source_arrivals",
           "case_law_decisions",
           "case_law_search_documents",
-          "case_law_browse_facet_counts",
           "case_law_court_weights",
         ]) {
           // db-await-in-loop: clone the finite migrated corpus fixture.
           await db.execute(sql`CREATE TABLE ${schema}.${sql.identifier(table)}
             (LIKE public.${sql.identifier(table)} INCLUDING ALL)`);
+        }
+        const populationMigration = await Bun.file(
+          new URL(
+            "../../../../drizzle/20261030222000_case_law_population_counts/migration.sql",
+            import.meta.url,
+          ),
+        ).text();
+        const isolatedMigration = populationMigration.replaceAll(
+          /\bpublic\.([a-z_]*case_law_population[a-z_]*|case_law_decisions|case_law_sources)\b/gu,
+          (match) => match.replace("public.", () => `"${schemaName}".`),
+        );
+        for (const statement of isolatedMigration.split(
+          "--> statement-breakpoint",
+        )) {
+          if (statement.trim() !== "") {
+            // db-await-in-loop: install the committed population triggers against only this fixture's cloned decisions.
+            await db.execute(sql.raw(statement));
+          }
         }
         await db.execute(sql`ALTER TABLE ${schema}.case_law_decisions
           DROP CONSTRAINT IF EXISTS ${sql.identifier(CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT)}`);
@@ -226,13 +250,6 @@ describe.skipIf(!enabled)("coverage computation (postgres)", () => {
               fulltext: "Rozhodnutí v občanskoprávní věci.",
             })),
           ]);
-          await tx.insert(caseLawBrowseFacetCounts).values({
-            kind: "court",
-            country: "CZE",
-            sourceId,
-            value: "Nejvyšší soud",
-            total: 1,
-          });
           const result = await computeCaseLawCoverageAnswer(
             async (read) => await read(tx),
             [],
