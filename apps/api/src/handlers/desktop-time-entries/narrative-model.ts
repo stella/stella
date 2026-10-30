@@ -5,6 +5,7 @@ import {
   DESKTOP_TIME_ENTRY_NARRATIVE_MAX_LENGTH,
   type DesktopTimeEntryNarrativeRequest,
 } from "@stll/api-contract/desktop-time-entries";
+import { classifyFailure } from "@stll/errors";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
@@ -14,7 +15,10 @@ import {
 } from "@/api/lib/ai-config";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
-import { classifyAIBoundaryFailure } from "@/api/lib/ai-error";
+import {
+  AI_ERROR_KIND_FAILURE_REASON,
+  classifyAIBoundaryFailure,
+} from "@/api/lib/ai-error";
 import {
   createTanStackAIAnalyticsCallbacks,
   type TanStackAIAnalyticsCallbacks,
@@ -78,11 +82,14 @@ export const capNarrative = (narrative: string): string => {
 // The failure carries only its classified kind: a provider error body can
 // echo the privileged titles, so neither the cause nor its message travels.
 const narrativeFailure = (kind: AIErrorKind) =>
-  new HandlerError({
-    status: 502,
-    code: AI_FAILURE_CODES[kind],
-    message: NARRATIVE_FAILURE_MESSAGE,
-  });
+  classifyFailure(
+    new HandlerError({
+      status: 502,
+      code: AI_FAILURE_CODES[kind],
+      message: NARRATIVE_FAILURE_MESSAGE,
+    }),
+    AI_ERROR_KIND_FAILURE_REASON[kind],
+  );
 
 type GenerateNarrativeOptions = {
   request: DesktopTimeEntryNarrativeRequest;
