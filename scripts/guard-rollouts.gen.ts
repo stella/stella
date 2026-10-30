@@ -7,6 +7,7 @@ import noGlobalTestingLibraryScreen from "./guard-rollouts/no-global-testing-lib
 import noInertAutofocus from "./guard-rollouts/no-inert-autofocus.ts";
 import noParserInlineFlatten from "./guard-rollouts/no-parser-inline-flatten.ts";
 import portablePath from "./guard-rollouts/portable-path.ts";
+import securityDefinerTrustedSearchPath from "./guard-rollouts/security-definer-trusted-search-path.ts";
 import semanticControls from "./guard-rollouts/semantic-controls.ts";
 import trackedSymlinks from "./guard-rollouts/tracked-symlinks.ts";
 import workerDatabaseLoginPosture from "./guard-rollouts/worker-database-login-posture.ts";
@@ -21,6 +22,7 @@ export const GUARD_ROLLOUT_FILES = {
   "no-inert-autofocus": noInertAutofocus,
   "no-parser-inline-flatten": noParserInlineFlatten,
   "portable-path": portablePath,
+  "security-definer-trusted-search-path": securityDefinerTrustedSearchPath,
   "semantic-controls": semanticControls,
   "tracked-symlinks": trackedSymlinks,
   "worker-database-login-posture": workerDatabaseLoginPosture,

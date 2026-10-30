@@ -1,0 +1,3 @@
+{
+  "add-foreign-key": "Composite document ownership keys are added NOT VALID under 1s lock_timeout and 5s statement_timeout; the online owner erases orphan runs before validating each key."
+}

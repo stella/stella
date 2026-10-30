@@ -16,7 +16,7 @@ RETURNS TABLE (
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path = pg_catalog, public, pg_temp
+SET search_path = pg_catalog, pg_temp
 AS $$
   SELECT
     count(*)::integer,
