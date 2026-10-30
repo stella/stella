@@ -810,7 +810,12 @@ const parseParagraphElement = (
   node: cheerio.Cheerio<AnyNode>,
   marker?: string,
 ): boolean => {
-  const inlines = walkInlines($, node, state);
+  const paragraphNode =
+    state.markup === PL_DECISION_MARKUP.PRINTED_LINES ? node.clone() : node;
+  if (state.markup === PL_DECISION_MARKUP.PRINTED_LINES) {
+    paragraphNode.find("br").replaceWith(" ");
+  }
+  const inlines = walkInlines($, paragraphNode, state);
   const plainText = normalizeWhitespace(inlinesToPlainText(inlines));
 
   if (!plainText) {
@@ -1068,6 +1073,11 @@ const parseNode = (
     return;
   }
 
+  if (tag === "p" && state.markup === PL_DECISION_MARKUP.PRINTED_LINES) {
+    parsePrintedLineChildren($, state, $node);
+    return;
+  }
+
   if (tag === "p" || tag === "pre") {
     parseParagraphElement($, state, $node);
     return;
@@ -1141,15 +1151,53 @@ const parsePrintedLineChildren = (
     const wrapper = $("<span></span>").append($(run).clone());
     run = [];
     wrapper.find("br").replaceWith(" ");
-    parseParagraphElement($, state, wrapper);
+    // Reparse to coalesce text nodes inserted for adjacent breaks, then apply
+    // the export's rendered-whitespace rules without consuming `&nbsp;`.
+    const normalizedWrapper = $("<span></span>").html(wrapper.html() ?? "");
+    normalizedWrapper
+      .find("*")
+      .addBack()
+      .contents()
+      .each((_, node) => {
+        if (isText(node)) {
+          node.data = node.data.replace(/[\t\n\f\r ]+/gu, " ");
+        }
+      });
+    parseParagraphElement($, state, normalizedWrapper);
   };
   const contents = root.contents().toArray();
+  const adjacentContent = (
+    index: number,
+    step: -1 | 1,
+  ): AnyNode | undefined => {
+    for (
+      let sibling = index + step;
+      sibling >= 0 && sibling < contents.length;
+      sibling += step
+    ) {
+      const candidate = contents[sibling];
+      if (
+        candidate !== undefined &&
+        isText(candidate) &&
+        /^[\t\n\f\r ]*$/u.test(candidate.data)
+      ) {
+        continue;
+      }
+      return candidate;
+    }
+    return undefined;
+  };
   for (const [index, node] of contents.entries()) {
+    if (commonCourtBlock($, node) !== undefined) {
+      flush();
+      parseNode($, state, node);
+      continue;
+    }
     if (!isTag(node) || node.tagName.toLowerCase() !== "br") {
       run.push(node);
       continue;
     }
-    const next = contents[index + 1];
+    const next = adjacentContent(index, 1);
     if (
       next !== undefined &&
       isTag(next) &&
@@ -1158,7 +1206,7 @@ const parsePrintedLineChildren = (
       flush();
       continue;
     }
-    const previous = contents[index - 1];
+    const previous = adjacentContent(index, -1);
     if (
       previous !== undefined &&
       isTag(previous) &&

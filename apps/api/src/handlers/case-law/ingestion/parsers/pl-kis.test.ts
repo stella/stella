@@ -96,6 +96,52 @@ const textLeaves = (blocks: readonly Block[]): string[] => {
 };
 
 describe("source whitespace", () => {
+  test("preserves structured blocks around printed-line runs", () => {
+    const { documentAst } = parse(
+      "<h2>Heading</h2><p>First paragraph.</p><p>Second paragraph.</p>",
+    );
+
+    expect(
+      documentAst.blocks.map(({ type, plainText }) => [type, plainText]),
+    ).toEqual([
+      ["heading", "Heading"],
+      ["paragraph", "First paragraph."],
+      ["paragraph", "Second paragraph."],
+    ]);
+  });
+
+  test("joins an inline printed-line run without absorbing surrounding blocks", () => {
+    const { documentAst } = parse(
+      "<p>Before.</p>First line<br>second line.<p>After.</p>",
+    );
+
+    expect(documentAst.blocks.map((block) => block.plainText)).toEqual([
+      "Before.",
+      "First line second line.",
+      "After.",
+    ]);
+  });
+
+  test.each(["\n", " "])(
+    "treats two printed-line breaks separated by %j as a paragraph boundary",
+    (separator) => {
+      const { documentAst } = parse(`First<br>${separator}<br>Second`);
+
+      expect(documentAst.blocks.map((block) => block.plainText)).toEqual([
+        "First",
+        "Second",
+      ]);
+    },
+  );
+
+  test("keeps a single printed-line break within one paragraph", () => {
+    const { documentAst } = parse("First<br>Second");
+
+    expect(documentAst.blocks.map((block) => block.plainText)).toEqual([
+      "First Second",
+    ]);
+  });
+
   test.each([
     [
       "czynności, o których mowa w art. 5, są klasyfikowane według Nomenklatury scalonej (CN)",
