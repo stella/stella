@@ -5,9 +5,10 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 
 /** `GET /v1/workspaces/:workspaceId/members`: the matter's members. */
-export const readWorkspaceMembers = createSafeHandler(
+const readWorkspaceMembers = createSafeHandler(
   {
     contract: "patch",
+    access: "read",
     permissions: { workspace: ["read"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "covered", by: "list_matters" },
@@ -26,3 +27,5 @@ export const readWorkspaceMembers = createSafeHandler(
     return Result.ok(response);
   },
 );
+
+export default readWorkspaceMembers;
