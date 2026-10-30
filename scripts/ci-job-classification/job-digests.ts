@@ -114,17 +114,32 @@ export const deriveJobPrivileges = ({
           if (!callee || !calleeNode || calleeNode.type !== "metadata") {
             continue;
           }
+          // A caller without its own permissions passes on what it inherited
+          // from its callers, so a grant reaches every level of nested calls.
+          const callerInherited = inheritedGrants.get(callerKey);
           const grant =
             caller.shape.job["permissions"] ??
             caller.shape.job["workflow-permissions"] ??
-            "read";
+            (callerInherited?.size
+              ? Object.fromEntries(
+                  [...callerInherited.entries()].toSorted(([left], [right]) =>
+                    compareCodeUnit(left, right),
+                  ),
+                )
+              : "read");
           for (const [calleeJobId, calleeJob] of Object.entries(callee.jobs)) {
             if ("permissions" in calleeJob.shape.job) {
               continue;
             }
             const calleeKey = `${calleeNode.repository}:${calleeNode.path}/${calleeJobId}`;
             const grants = inheritedGrants.get(calleeKey) ?? new Map();
-            grants.set(callerKey, grant);
+            // Reusable workflows cannot call themselves, so grants settle.
+            if (
+              JSON.stringify(grants.get(callerKey)) !== JSON.stringify(grant)
+            ) {
+              grants.set(callerKey, grant);
+              privilegeChanged = true;
+            }
             inheritedGrants.set(calleeKey, grants);
             if (!jobPrivileges.get(calleeKey)) {
               jobPrivileges.set(calleeKey, true);

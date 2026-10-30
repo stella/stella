@@ -226,6 +226,35 @@ jobs:
   expect(digest(after, CALLEE)).not.toBe(digest(before, CALLEE));
 });
 
+test("a grant reaches a callee through an intermediate caller", () => {
+  const nested = (grant: string) =>
+    jobsFor({
+      ".github/workflows/caller.yml": `on: push
+permissions: {${grant}}
+jobs:
+  call:
+    uses: ./.github/workflows/middle.yml
+`,
+      ".github/workflows/middle.yml": `on: workflow_call
+jobs:
+  call:
+    uses: ./.github/workflows/shared.yml
+`,
+      ".github/workflows/shared.yml": `on: workflow_call
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo \${{ github.token }}
+`,
+    });
+  const actionsWrite = nested("actions: write");
+  const contentsWrite = nested("contents: write");
+
+  expect(actionsWrite.get(CALLEE)?.privileged).toBe(true);
+  expect(digest(contentsWrite, CALLEE)).not.toBe(digest(actionsWrite, CALLEE));
+});
+
 test("a uses change in an inherited-privileged callee changes its digest", () => {
   const privilegedWorkflow = (action: string) => ({
     ".github/workflows/caller.yml": `on: push
