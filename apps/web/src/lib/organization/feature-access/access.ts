@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactElement } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
@@ -85,7 +85,7 @@ export type FeatureAdmission<Id extends CallerFeature["id"]> = {
 
 type CallerFeatureGateProps<Feature extends CallerFeature> = {
   feature: Feature;
-  children: (admission: FeatureAdmission<Feature["id"]>) => ReactNode;
+  children: (admission: FeatureAdmission<Feature["id"]>) => ReactElement;
 };
 
 /** Admission refreshes with the caller decision; controls must not retain it in state. */
@@ -99,7 +99,7 @@ export const useCallerFeatureAdmission = <Feature extends CallerFeature>(
 export const CallerFeatureGate = <Feature extends CallerFeature>({
   feature,
   children,
-}: CallerFeatureGateProps<Feature>) => {
+}: CallerFeatureGateProps<Feature>): ReactElement | null => {
   const admission = useCallerFeatureAdmission(feature);
   return admission === undefined ? null : children(admission);
 };
