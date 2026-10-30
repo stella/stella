@@ -143,27 +143,27 @@ type OptionsArgs<TRoute extends RouteShape> =
     ? [options?: RequestOptions<TRoute>]
     : [options: RequestOptions<TRoute>];
 
-/** Cache invalidation metadata belongs to mutation options, never the wire. */
-export type RequestBody<TBody> = TBody extends object
-  ? TBody & { readonly queryKey?: never }
-  : TBody;
+// Computed-key payloads expose an index signature, not a known extra field.
+type KnownBodyKeys<TBody> = keyof {
+  [
+    TKey in keyof TBody as string extends TKey
+      ? never
+      : number extends TKey
+        ? never
+        : TKey
+  ]: unknown;
+};
 
 type BodyKeys<TBody> = TBody extends unknown ? keyof TBody : never;
 
 export type ExactRequestBody<
   TBody,
-  TActual extends RequestBody<TBody>,
+  TActual extends TBody,
 > = unknown extends TBody
   ? TActual
-  : TActual &
-      (Exclude<keyof TActual, BodyKeys<RequestBody<TBody>>> extends never
-        ? unknown
-        : Record<Exclude<keyof TActual, BodyKeys<RequestBody<TBody>>>, never>);
+  : TActual & Record<Exclude<KnownBodyKeys<TActual>, BodyKeys<TBody>>, never>;
 
-type BodyArgs<
-  TRoute extends RouteShape,
-  TActual extends RequestBody<TRoute["body"]>,
-> =
+type BodyArgs<TRoute extends RouteShape, TActual extends TRoute["body"]> =
   NoOptions extends RequestOptions<TRoute>
     ? undefined extends TRoute["body"]
       ? [
@@ -184,7 +184,7 @@ type MethodCall<
   TRoute extends RouteShape,
 > = TName extends BodilessMethodName
   ? (...args: OptionsArgs<TRoute>) => Promise<ApiResult<TRoute["response"]>>
-  : <TActual extends RequestBody<TRoute["body"]>>(
+  : <TActual extends TRoute["body"]>(
       ...args: BodyArgs<TRoute, TActual>
     ) => Promise<ApiResult<TRoute["response"]>>;
 

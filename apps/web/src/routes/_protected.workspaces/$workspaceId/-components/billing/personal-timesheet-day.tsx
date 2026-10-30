@@ -409,7 +409,7 @@ export const PersonalTimesheetDay = ({
               pending={pending}
               workspaceId={workspaceId}
               userId={editingEntry?.userId ?? userId}
-              activityCode={editingEntry?.activityCode}
+              activityCode={editingEntry?.activityCode ?? null}
             />
           </DialogPanel>
         </DialogPopup>

@@ -170,10 +170,16 @@ const cachedCreateBody = {
   queryKey: ["time-entries", "matter"],
 };
 const spreadCreateBody = { ...cachedCreateBody };
-true satisfies typeof cachedCreateBody extends CreateTimeEntryBody
+true satisfies typeof cachedCreateBody extends ExactRequestBody<
+  CreateTimeEntryBody,
+  typeof cachedCreateBody
+>
   ? false
   : true;
-true satisfies typeof spreadCreateBody extends CreateTimeEntryBody
+true satisfies typeof spreadCreateBody extends ExactRequestBody<
+  CreateTimeEntryBody,
+  typeof spreadCreateBody
+>
   ? false
   : true;
 const createBodyWithClientMetadata = {
