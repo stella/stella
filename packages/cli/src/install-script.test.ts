@@ -37,7 +37,7 @@ async function withInstaller(
   check: (fixture: {
     readonly home: string;
     readonly installDir: string;
-    readonly run: () => ReturnType<typeof Bun.spawnSync>;
+    readonly run: () => Bun.SyncSubprocess<"pipe", "pipe">;
   }) => Promise<void>,
 ) {
   const root = await mkdtemp(path.join(os.tmpdir(), "stella-install-"));
