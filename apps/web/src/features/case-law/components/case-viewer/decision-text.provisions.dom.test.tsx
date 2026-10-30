@@ -896,10 +896,11 @@ describe("the provision card header", () => {
       expect(classesOf("reference-peek-primary").contains(token)).toBe(true);
     }
     const label =
-      header.querySelector('[data-slot="reference-peek-primary"]') ??
-      panic("No label");
+      header.querySelector<HTMLElement>(
+        '[data-slot="reference-peek-primary"]',
+      ) ?? panic("No label");
     expect(label.textContent).toBe(FIRST_CITATION);
-    expect(label.getAttribute("title")).toBe(FIRST_CITATION);
+    expect(Object.hasOwn(label.dataset, "baseUiTooltipTrigger")).toBe(true);
     expect(header.querySelector('[data-part="act"]')?.textContent).toBe(
       "1/2026 Sb., Test Act",
     );

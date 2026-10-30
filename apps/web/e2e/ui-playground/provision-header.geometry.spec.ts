@@ -13,6 +13,7 @@
 
 import type { Page } from "@playwright/test";
 
+import { PROVISION_HEADER_BENCH_WIDTHS } from "../../src/routes/dev/-components/provision-header-bench";
 import {
   expect,
   test,
@@ -20,7 +21,7 @@ import {
 } from "../helpers/stable-geometry";
 
 const SECTION = '[data-playground-section="provision-header"]';
-const BENCH_WIDTHS = [120, 180, 240, 300, 360, 440, 560, 720];
+const BENCH_WIDTHS = PROVISION_HEADER_BENCH_WIDTHS.toSorted((a, b) => a - b);
 const BENCH_LABEL = "§ 226 odst. 1, § 226 odst. 2, § 226 odst. 3";
 
 /** Sub-pixel rounding is not a part giving way. */
@@ -36,7 +37,7 @@ type HeaderGeometry = {
   /** Whether the date is cut, and how much of it is left. */
   dateTruncated: boolean;
   dateWidth: number;
-  labelTitle: string | null;
+  labelText: string | null;
   labelTruncated: boolean;
   oneRow: boolean;
 };
@@ -92,7 +93,7 @@ const readGeometry = async (page: Page): Promise<HeaderGeometry[]> => {
             actionsBox.right <= card.right + tolerance,
           dateTruncated: date.scrollWidth > date.clientWidth,
           dateWidth: date.getBoundingClientRect().width,
-          labelTitle: label.getAttribute("title"),
+          labelText: label.textContent,
           labelTruncated: label.scrollWidth > label.clientWidth,
           oneRow:
             header.getBoundingClientRect().height <= box.height + tolerance &&
@@ -198,7 +199,7 @@ test("the header keeps one row and its open button, and gives way act first, the
     expect(header.buttonHit, `${at} a click reaches the open button`).toBe(
       true,
     );
-    expect(header.labelTitle, `${at} the label keeps its full text`).toBe(
+    expect(header.labelText, `${at} the label keeps its full text`).toBe(
       BENCH_LABEL,
     );
     if (header.dateTruncated) {
@@ -213,6 +214,15 @@ test("the header keeps one row and its open button, and gives way act first, the
         `${at} the label is cut only once the date is gone`,
       ).toBeLessThanOrEqual(TOLERANCE_PX);
     }
+  }
+
+  for (const section of await page.locator(SECTION).all()) {
+    const label = section.locator('[data-slot="reference-peek-primary"]');
+    await label.hover();
+    await expect(label).toHaveAttribute("data-base-ui-tooltip-trigger", "");
+    await expect(
+      page.locator('[data-slot="tooltip-popup"][data-open]'),
+    ).toHaveText(BENCH_LABEL);
   }
 
   // A vacuous pass is the failure mode to rule out: the bench must reach

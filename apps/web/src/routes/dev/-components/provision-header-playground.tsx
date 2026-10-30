@@ -1,3 +1,4 @@
+import { ProvisionCardHeader } from "@stll/decision-reader/cited-provision";
 /**
  * The cited-provision header at a range of widths, on a bench a test can
  * measure.
@@ -9,12 +10,12 @@
  * unit test. The label names several cited parts, the widest a paragraph's
  * card draws.
  */
-
-import { ProvisionCardHeader } from "@stll/decision-reader/cited-provision";
 import type { CitedProvisionTarget } from "@stll/decision-reader/reader-types";
 import { PEEK_ACTION_PRESENCE } from "@stll/decision-reader/reference-peek";
 
 import { WebReaderProvider } from "@/components/legal-reader/web-reader-provider";
+
+import { PROVISION_HEADER_BENCH_WIDTHS } from "./provision-header-bench";
 
 const BENCH_LABEL = "§ 226 odst. 1, § 226 odst. 2, § 226 odst. 3";
 
@@ -43,12 +44,11 @@ const BENCH_PROVISION = {
 } satisfies CitedProvisionTarget;
 
 /** From a card with room to spare down to one narrower than the label alone. */
-const BENCH_WIDTHS = [720, 560, 440, 360, 300, 240, 180, 120] as const;
 
 export const ProvisionHeaderPlayground = () => (
   <WebReaderProvider>
     <div className="flex flex-col gap-3">
-      {BENCH_WIDTHS.map((width) => (
+      {PROVISION_HEADER_BENCH_WIDTHS.map((width) => (
         <section
           className="bg-muted/30 border-border/50 rounded-lg border px-3 py-2"
           data-header-width={String(width)}
