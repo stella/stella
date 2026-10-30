@@ -18,22 +18,13 @@ import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { CopyButton } from "@stll/ui/copy-button";
-import {
-  Dialog,
-  DialogClose,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogPopup,
-  DialogTitle,
-} from "@stll/ui/dialog";
-import { LockKeyholeIcon } from "@stll/ui/icons";
 import { Label } from "@stll/ui/label";
 import { MatterIcon } from "@stll/ui/matter-icon";
 import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
 import type { ReviewStatusTone } from "@stll/ui/review-status-badge";
 import { Switch } from "@stll/ui/switch";
 import { Textarea } from "@stll/ui/textarea";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 
 import type { DesktopMessages } from "../i18n/index";
 import { calendarDate, timedSegments } from "./activity-logic";
@@ -42,7 +33,7 @@ import { ActivitySourceIcon } from "./ActivitySourceIcon";
 import { ActivityTimeline } from "./ActivityTimeline";
 import type { TimelineSegment } from "./ActivityTimeline";
 import "./day-review.css";
-import { canAssign, matchDay } from "./day-review-logic";
+import { EVIDENCE_DETAIL_LIMIT, matchDay } from "./day-review-logic";
 import type {
   DayReviewGroup,
   MatchConfidence,
@@ -76,31 +67,11 @@ type Submission =
   | { type: "editing" }
   | { type: "submitting"; idempotencyKey: string; items: BatchItem[] }
   | { type: "retry"; idempotencyKey: string; items: BatchItem[] }
-  | { type: "discarding"; idempotencyKey: string; items: BatchItem[] }
   | { type: "saved"; count: number };
 export type ActivityReviewStatus = Submission["type"];
 type Range = { startMs: number; endMs: number };
 
-const PENDING_DISCARD_ACCESS = {
-  available: true,
-  pending: true,
-  unreadable: true,
-  unavailable: false,
-  keyMissing: false,
-  incompatible: false,
-} as const satisfies Record<ActivityDaySnapshot["deletionStatus"], boolean>;
-
-const canDiscardPending = (
-  snapshot: ActivityDaySnapshot,
-  submission: Submission,
-): submission is Extract<Submission, { type: "retry" }> =>
-  PENDING_DISCARD_ACCESS[snapshot.deletionStatus] &&
-  !snapshot.timeBillingEnabled &&
-  !snapshot.unreadable &&
-  submission.type === "retry" &&
-  snapshot.pendingBatch?.idempotencyKey === submission.idempotencyKey;
-
-const useMatterCandidates = (enabled: boolean) => {
+const useMatterCandidates = () => {
   const [candidates, setCandidates] = useState<CandidateState>({
     type: "loading",
   });
@@ -121,13 +92,11 @@ const useMatterCandidates = (enabled: boolean) => {
       });
   }, []);
   useEffect(() => {
-    if (enabled) {
-      refreshCandidates();
-    }
+    refreshCandidates();
     return () => {
       candidateRequest.current += 1;
     };
-  }, [refreshCandidates, enabled]);
+  }, [refreshCandidates]);
   return { candidates, refreshCandidates };
 };
 
@@ -197,9 +166,7 @@ export const ActivityDayReview = ({
 }) => {
   const t = useTranslations("activity");
   const format = useFormatter();
-  const { candidates, refreshCandidates } = useMatterCandidates(
-    snapshot.timeBillingEnabled,
-  );
+  const { candidates, refreshCandidates } = useMatterCandidates();
   const [edits, setEdits] = useState<Record<string, EntryEdit>>({});
   const { submission, updateSubmission } = useReviewSubmission({
     pendingBatch: snapshot.pendingBatch,
@@ -208,9 +175,6 @@ export const ActivityDayReview = ({
   const [localDrafts, setLocalDrafts] = useState(snapshot.draftedEntries);
   const [errorMessage, setError] = useState<string | null>(null);
   const [leaveOut, setLeaveOut] = useState(false);
-  const [discardPrompt, setDiscardPrompt] = useState<"closed" | "confirming">(
-    "closed",
-  );
   const sending = useRef(false);
   const matters = candidates.type === "ready" ? candidates.matters : [];
   const day = matchDay({
@@ -223,7 +187,16 @@ export const ActivityDayReview = ({
   const narrative = (group: DayReviewGroup) =>
     group.evidence.length
       ? t("narrativeEvidence", {
-          evidence: format.list(group.evidence, { type: "conjunction" }),
+          evidence: format.list(
+            [
+              ...new Set(
+                group.evidence.flatMap(({ details }) =>
+                  details.slice(0, EVIDENCE_DETAIL_LIMIT),
+                ),
+              ),
+            ],
+            { type: "conjunction" },
+          ),
         })
       : t("narrativeApps", {
           apps: format.list(
@@ -262,10 +235,6 @@ export const ActivityDayReview = ({
       maximumFractionDigits: 1,
     });
   const timelineSegments = withAwaySegments(day.segments, t("awayNotCounted"));
-  const assignmentEnabled = canAssign({
-    editable,
-    timeBillingEnabled: snapshot.timeBillingEnabled,
-  });
   const assign = (ranges: readonly Range[], matter: DesktopMatter) => {
     setError(null);
     // Only local instants and the chosen matter identity cross this native boundary.
@@ -372,44 +341,11 @@ export const ActivityDayReview = ({
         sending.current = false;
       });
   };
-  const discardPending = () => {
-    if (!canDiscardPending(snapshot, submission) || sending.current) {
-      return;
-    }
-    const pending = submission;
-    sending.current = true;
-    setDiscardPrompt("closed");
-    setError(null);
-    updateSubmission({
-      type: "discarding",
-      idempotencyKey: pending.idempotencyKey,
-      items: pending.items,
-    });
-    invoke("time_entry_discard_pending_batch_confirmed", {
-      date: snapshot.date,
-      idempotencyKey: pending.idempotencyKey,
-    })
-      .then(() => {
-        updateSubmission({ type: "editing" });
-        return undefined;
-      })
-      .catch(() => {
-        updateSubmission({
-          type: "retry",
-          idempotencyKey: pending.idempotencyKey,
-          items: pending.items,
-        });
-        setError(t("errorUpdate"));
-      })
-      .finally(() => {
-        sending.current = false;
-      });
-  };
   return (
     <div className="flex flex-col gap-5">
       <DayReviewMetrics header={header} segments={day.segments} />
       <ActivityTimeline
-        disabled={!assignmentEnabled}
+        disabled={!editable}
         segments={timelineSegments}
         snapshot={snapshot}
         candidates={matters}
@@ -433,25 +369,19 @@ export const ActivityDayReview = ({
         matters={matters}
         snapshot={snapshot}
         editable={editable}
-        assignmentEnabled={assignmentEnabled}
         leaveOut={leaveOut}
         onLeaveOut={() => setLeaveOut(true)}
         assign={assign}
       />
       <ReviewSubmissionFeedback
-        snapshot={snapshot}
         submission={submission}
         errorMessage={errorMessage}
         selectionExceedsLimit={selectionExceedsLimit}
-        discardPrompt={discardPrompt}
-        onDiscardPromptChange={setDiscardPrompt}
-        discardPending={discardPending}
       />
       <ReviewBar
         selected={selected}
         eligibleCount={eligible.length}
         hours={hours(selectedTenths / 10)}
-        snapshot={snapshot}
         submission={submission}
         onCopy={async () =>
           // Resolves once the copy settles; a failed copy is reported by the
@@ -527,23 +457,15 @@ const DayReviewMetrics = ({ header, segments }: DayReviewMetricsProps) => {
 };
 
 type ReviewSubmissionFeedbackProps = {
-  snapshot: ActivityDaySnapshot;
   submission: Submission;
   errorMessage: string | null;
   selectionExceedsLimit: boolean;
-  discardPrompt: "closed" | "confirming";
-  onDiscardPromptChange: (prompt: "closed" | "confirming") => void;
-  discardPending: () => void;
 };
 
 const ReviewSubmissionFeedback = ({
-  snapshot,
   submission,
   errorMessage,
   selectionExceedsLimit,
-  discardPrompt,
-  onDiscardPromptChange,
-  discardPending,
 }: ReviewSubmissionFeedbackProps) => {
   const t = useTranslations("activity");
   return (
@@ -553,51 +475,6 @@ const ReviewSubmissionFeedback = ({
           {errorMessage}
         </p>
       ) : null}
-      {!snapshot.timeBillingEnabled && submission.type === "retry" ? (
-        <p role="status" className="text-muted-foreground text-sm">
-          {t("batchUnavailable")}
-        </p>
-      ) : null}
-      {canDiscardPending(snapshot, submission) ? (
-        <div>
-          <Button
-            variant="outline"
-            onClick={() => onDiscardPromptChange("confirming")}
-          >
-            {t("discardPendingRecovery")}
-          </Button>
-        </div>
-      ) : null}
-      <Dialog
-        open={
-          discardPrompt === "confirming" &&
-          snapshot.deletionStatus !== "incompatible"
-        }
-        onOpenChange={(open) =>
-          onDiscardPromptChange(open ? "confirming" : "closed")
-        }
-      >
-        <DialogPopup>
-          <DialogHeader>
-            <DialogTitle>{t("discardPendingRecovery")}</DialogTitle>
-            <DialogDescription>
-              {t("discardPendingConfirmation")}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <DialogClose render={<Button variant="outline" />}>
-              {t("cancel")}
-            </DialogClose>
-            <Button
-              variant="destructive"
-              disabled={!canDiscardPending(snapshot, submission)}
-              onClick={discardPending}
-            >
-              {t("delete")}
-            </Button>
-          </DialogFooter>
-        </DialogPopup>
-      </Dialog>
       {(submission.type === "editing" || submission.type === "saved") &&
       selectionExceedsLimit ? (
         <p role="alert" className="text-destructive text-sm">
@@ -646,7 +523,6 @@ const ReviewBar = ({
   selected,
   eligibleCount,
   hours,
-  snapshot,
   submission,
   onCopy,
   onSubmit,
@@ -655,7 +531,6 @@ const ReviewBar = ({
   selected: readonly DayReviewGroup[];
   eligibleCount: number;
   hours: string;
-  snapshot: ActivityDaySnapshot;
   submission: Submission;
   onCopy: () => Promise<boolean>;
   onSubmit: () => void;
@@ -663,9 +538,7 @@ const ReviewBar = ({
 }) => {
   const t = useTranslations("activity");
   const disabled =
-    !snapshot.timeBillingEnabled ||
     submission.type === "submitting" ||
-    submission.type === "discarding" ||
     (submission.type !== "retry" && (selected.length === 0 || !valid));
   return (
     <footer className="bg-card sticky bottom-0 z-10 -mx-6 flex flex-wrap items-center gap-3 border-t px-6 py-3">
@@ -676,11 +549,8 @@ const ReviewBar = ({
           hours,
         })}
       </span>
-      <span className="text-muted-foreground ms-auto flex items-center gap-1 text-xs">
-        <LockKeyholeIcon aria-hidden="true" className="size-3" />
-        {t("batchPrivacy")}
-      </span>
       <CopyButton
+        className="ms-auto"
         copiedLabel={t("copied")}
         disabled={selected.length === 0}
         iconClassName="size-4"
@@ -721,7 +591,6 @@ const ReviewEntries = ({
   matters,
   snapshot,
   editable,
-  assignmentEnabled,
   leaveOut,
   onLeaveOut,
   assign,
@@ -732,7 +601,6 @@ const ReviewEntries = ({
   matters: readonly DesktopTimeEntryMatterCandidate[];
   snapshot: ActivityDaySnapshot;
   editable: boolean;
-  assignmentEnabled: boolean;
   leaveOut: boolean;
   onLeaveOut: () => void;
   assign: (ranges: readonly Range[], matter: DesktopMatter) => void;
@@ -779,7 +647,7 @@ const ReviewEntries = ({
                         key={candidate.id}
                         variant="outline"
                         size="sm"
-                        disabled={!assignmentEnabled}
+                        disabled={!editable}
                         onClick={() =>
                           assign(
                             group.ranges.map(({ start, end }) => ({
@@ -802,7 +670,7 @@ const ReviewEntries = ({
                       </Button>
                     ))}
                   <MatterPicker
-                    disabled={!assignmentEnabled}
+                    disabled={!editable}
                     candidates={matters}
                     onChoose={(chosen) =>
                       assign(
@@ -914,18 +782,53 @@ const Evidence = ({
 }: {
   group: DayReviewGroup;
   snapshot: ActivityDaySnapshot;
-}) => (
-  <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-1.5 text-xs">
-    {group.apps.map(({ identifier }) => (
-      <ActivitySourceIcon
-        key={identifier}
-        appIdentifier={identifier}
-        sourceAppVisuals={snapshot.sourceAppVisuals}
-      />
-    ))}
-    <bdi className="min-w-0 wrap-break-word">
-      {group.evidence.join(" · ") ||
-        group.apps.map(({ name }) => name).join(" · ")}
-    </bdi>
-  </div>
-);
+}) => {
+  const format = useFormatter();
+  return (
+    <ul className="text-muted-foreground mt-1.5 flex flex-col gap-1 text-xs">
+      {group.apps.map(({ identifier, name }) => {
+        const details =
+          group.evidence.find((app) => app.identifier === identifier)
+            ?.details ?? [];
+        const hidden = details.length - EVIDENCE_DETAIL_LIMIT;
+        return (
+          <li key={identifier} className="flex min-w-0 items-center gap-2">
+            <ActivitySourceIcon
+              appIdentifier={identifier}
+              sourceAppVisuals={snapshot.sourceAppVisuals}
+            />
+            <bdi className="min-w-0 truncate">
+              {details.length > 0
+                ? details.slice(0, EVIDENCE_DETAIL_LIMIT).join(" · ")
+                : name}
+            </bdi>
+            {hidden > 0 ? (
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      className="text-muted-foreground shrink-0 tabular-nums"
+                      size="xs"
+                      variant="ghost"
+                    />
+                  }
+                >
+                  +{format.number(hidden)}
+                </TooltipTrigger>
+                <TooltipPopup side="bottom" className="max-w-72 p-2">
+                  <ul className="flex flex-col gap-0.5">
+                    {details.slice(EVIDENCE_DETAIL_LIMIT).map((detail) => (
+                      <li key={detail}>
+                        <bdi>{detail}</bdi>
+                      </li>
+                    ))}
+                  </ul>
+                </TooltipPopup>
+              </Tooltip>
+            ) : null}
+          </li>
+        );
+      })}
+    </ul>
+  );
+};

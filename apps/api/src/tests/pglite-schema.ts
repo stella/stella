@@ -499,6 +499,43 @@ export const installPgliteEntityFeatureGateMaintenance = async (
     }
     await db.execute(sql.raw(statement));
   }
+  await installPgliteGeneratedEntityFeatureGates(db);
+};
+
+/**
+ * Replay every gate migration the generator wrote after the first, in order:
+ * the routines, triggers and grants of tables gated later. The pushed schema
+ * already holds their gate policies, so the migration's own policy replaces
+ * the pushed one.
+ */
+const installPgliteGeneratedEntityFeatureGates = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const migrations = readdirSync(DRIZZLE_DIR)
+    .filter((name) => name.endsWith("_entity_feature_gate_registry"))
+    .toSorted();
+  for (const migration of migrations) {
+    for (const statement of readMigrationStatements(
+      nodePath.join(DRIZZLE_DIR, migration, "migration.sql"),
+    )) {
+      const executable = executableSql(statement);
+      if (/^SET\s+(?:lock_timeout|statement_timeout)\b/iu.test(executable)) {
+        continue;
+      }
+      const policy =
+        /^CREATE POLICY (?<name>"[^"]+") ON (?<table>"public"\."[^"]+")/u.exec(
+          executable,
+        )?.groups;
+      if (policy?.["name"] !== undefined && policy["table"] !== undefined) {
+        await db.execute(
+          sql.raw(
+            `DROP POLICY IF EXISTS ${policy["name"]} ON ${policy["table"]}`,
+          ),
+        );
+      }
+      await db.execute(sql.raw(executable));
+    }
+  }
 };
 
 /** Install the self-referencing tree triggers omitted by declarative schema push. */
@@ -1113,7 +1150,21 @@ export const installPgliteCaseLawParsedSourceInvalidation = async (
   if (statements.length !== 2) {
     panic("Expected the parsed-source invalidation function and trigger");
   }
-  for (const statement of statements) {
+  const replacements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261030044733_case_law_extraction_warnings_generation",
+      "migration.sql",
+    ),
+  ).filter((statement) =>
+    executableSql(statement).startsWith(
+      "CREATE OR REPLACE FUNCTION invalidate_case_law_parsed_source",
+    ),
+  );
+  if (replacements.length !== 1) {
+    panic("Expected the latest parsed-source invalidation function");
+  }
+  for (const statement of [...statements, ...replacements]) {
     await db.execute(sql.raw(statement));
   }
 };
