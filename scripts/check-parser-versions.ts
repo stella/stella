@@ -1,5 +1,11 @@
 import path from "node:path";
 
+import {
+  PARSER_ENTRY_DIRECTORY,
+  PARSER_REGISTRY_OUTPUT,
+  renderParserRegistry,
+} from "./parser-registry";
+
 /**
  * Parser versions cover the source modules that can shape persisted parser
  * output. Traversal stops before the reviewed infrastructure boundaries below:
@@ -36,8 +42,6 @@ const PARSER_DIRECTORIES = [
   "apps/api/src/handlers/case-law/ingestion/parsers/",
   "apps/api/src/lib/legal-search/parsers/",
 ];
-const PARSER_VERSION_MODULE =
-  "apps/api/src/lib/legal-search/ingestion-constants.ts";
 const OUTPUT_SHAPING_ROOTS = [
   ADAPTER_DIRECTORY,
   LEGISLATION_ADAPTER_DIRECTORY,
@@ -87,6 +91,19 @@ type SourceOwnersResult = {
   registryErrors: readonly string[];
 };
 
+type MapEntriesOptions = {
+  file: string;
+  name: string;
+  expression: string;
+  seen: Set<string>;
+};
+
+type SpreadEntriesOptions = {
+  file: string;
+  name: string;
+  seen: Set<string>;
+};
+
 // Only source is read: no importing the registry, adapter initialization,
 // dependencies, fixtures, or publisher clients into this check.
 class StaticTree {
@@ -102,8 +119,23 @@ class StaticTree {
     files: SourceTree,
     boundaries: readonly ParserOutputBoundary[] = PARSER_OUTPUT_BOUNDARIES,
   ) {
-    this.files = files;
-    this.outputBoundaries = new Set(boundaries.map(({ path: file }) => file));
+    const materialized = new Map(files);
+    const registry = renderParserRegistry(materialized);
+    if (registry !== undefined) {
+      materialized.set(PARSER_REGISTRY_OUTPUT, registry);
+    }
+    this.files = materialized;
+    this.outputBoundaries = new Set([
+      ...boundaries.map(({ path: file }) => file),
+      ...(registry === undefined
+        ? []
+        : [
+            PARSER_REGISTRY_OUTPUT,
+            ...[...materialized.keys()].filter((file) =>
+              file.startsWith(PARSER_ENTRY_DIRECTORY),
+            ),
+          ]),
+    ]);
   }
 
   code(file: string): string {
@@ -258,6 +290,79 @@ class StaticTree {
     return undefined;
   }
 
+  private mapEntries({
+    file,
+    name,
+    expression,
+    seen,
+  }: MapEntriesOptions): StaticValue | undefined {
+    const end = expression.indexOf("}");
+    if (end === -1) {
+      return undefined;
+    }
+    const entries = new Map<string, string>();
+    for (const property of expression.slice(1, end).split(",")) {
+      const trimmed = property.trim();
+      if (trimmed === "") {
+        continue;
+      }
+      const spread = /^\.\.\.(\w+)$/u.exec(trimmed)?.at(1);
+      if (spread !== undefined) {
+        const spreadEntries = this.spreadEntries({
+          file,
+          name: spread,
+          seen,
+        });
+        if (spreadEntries === undefined) {
+          return undefined;
+        }
+        for (const [key, value] of spreadEntries) {
+          if (entries.has(key)) {
+            return undefined;
+          }
+          entries.set(key, value);
+        }
+        continue;
+      }
+      const entry =
+        /^\s*(?:\[([\w.]+)\]|([\w]+))\s*:\s*("[^"]*"|[\w]+)\s*$/u.exec(
+          property,
+        );
+      const key = entry === null ? undefined : this.mapKey(file, entry);
+      const value = entry?.at(3);
+      if (key === undefined || value === undefined || entries.has(key)) {
+        return undefined;
+      }
+      entries.set(key, value);
+    }
+    return { type: "map", file, name, entries };
+  }
+
+  private spreadEntries({
+    file,
+    name,
+    seen,
+  }: SpreadEntriesOptions): ReadonlyMap<string, string> | undefined {
+    const imported = this.namedImport(file, name);
+    if (imported === undefined) {
+      return undefined;
+    }
+    const value = this.value(imported.module, imported.name, seen);
+    return value?.type === "map" ? value.entries : undefined;
+  }
+
+  private mapKey(file: string, entry: RegExpExecArray): string | undefined {
+    const computedKey = entry.at(1);
+    const propertyKey = entry.at(2);
+    if (propertyKey !== undefined) {
+      return propertyKey;
+    }
+    if (computedKey === undefined) {
+      return undefined;
+    }
+    return JSON.stringify(this.key(file, computedKey) ?? computedKey);
+  }
+
   value(
     file: string,
     name: string,
@@ -280,27 +385,7 @@ class StaticTree {
         return { type: "number", file, name, value: Number(number) };
       }
       if (expression.startsWith("{")) {
-        const end = expression.indexOf("}");
-        if (end === -1) {
-          return undefined;
-        }
-        const entries = new Map<string, string>();
-        for (const property of expression.slice(1, end).split(",")) {
-          if (property.trim() === "") {
-            continue;
-          }
-          const entry =
-            /^\s*(?:\[([\w.]+)\]|([\w]+))\s*:\s*("[^"]*"|[\w]+)\s*$/u.exec(
-              property,
-            );
-          const key = entry?.at(1) ?? entry?.at(2);
-          const value = entry?.at(3);
-          if (key === undefined || value === undefined || entries.has(key)) {
-            return undefined;
-          }
-          entries.set(key, value);
-        }
-        return { type: "map", file, name, entries };
+        return this.mapEntries({ file, name, expression, seen });
       }
       return undefined;
     }
@@ -338,6 +423,9 @@ class StaticTree {
   }
 
   key(file: string, expression: string): string | undefined {
+    if (expression.startsWith('"')) {
+      return JSON.parse(expression);
+    }
     const [constant, member] = expression.split(".");
     if (constant === undefined || member === undefined) {
       return undefined;
@@ -695,7 +783,9 @@ const boundaryErrors = (
       return [`Parser output boundary does not exist in head tree: ${file}`];
     }
     if (
-      file === PARSER_VERSION_MODULE ||
+      file === PARSER_REGISTRY_OUTPUT ||
+      file === "apps/api/src/lib/legal-search/ingestion-constants.ts" ||
+      file.startsWith(PARSER_ENTRY_DIRECTORY) ||
       OUTPUT_SHAPING_ROOTS.some((root) => file.startsWith(root))
     ) {
       return [`Parser output boundary lies in an output-shaping root: ${file}`];

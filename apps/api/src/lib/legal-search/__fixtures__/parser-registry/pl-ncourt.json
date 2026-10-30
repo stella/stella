@@ -1,0 +1,20 @@
+{
+  "ADAPTER_KEYS": {
+    "PL_NCOURT": "pl-ncourt"
+  },
+  "PARSER_VERSIONS": {
+    "pl-ncourt": 19
+  },
+  "SOURCE_FINGERPRINT_VERSIONS": {
+    "pl-ncourt": 0
+  },
+  "PARSER_VERSION_SCOPES": {
+    "pl-ncourt": {
+      "version": 19,
+      "scope": {
+        "type": "all",
+        "reason": "Re-read printed title order and opening, operative and signature roles from stored source; roles and block ordering have no independent feature storage."
+      }
+    }
+  }
+}

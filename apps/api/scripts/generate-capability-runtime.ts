@@ -1,4 +1,5 @@
 // Embed committed shards in Bun bundles; no filesystem reads remain in the API.
+
 import { panic } from "better-result";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 
@@ -8,6 +9,7 @@ import { readCapabilityCatalog } from "../../../packages/cli/src/capability-cata
 import { CAPABILITY_RUNTIME_INPUTS } from "../../../packages/scripts/src/generated-files";
 import { withGeneratedOutputCache } from "../../../packages/scripts/src/generated-output-cache";
 import { hasPreparedGeneratedSources } from "../../../packages/scripts/src/prepared-generated-sources";
+import { generateParserRegistry } from "../../../scripts/generate-parser-registry";
 import { serializeDispatchModule } from "./lib/capability-catalog";
 import { buildCapabilityHandlerIndex } from "./lib/capability-handler-index";
 
@@ -152,6 +154,10 @@ export const generateCapabilityCatalogRuntime = async (
     `${header}export const CAPABILITY_FEATURE_BINDINGS = new Map<string, string>(${features.length === 0 ? "" : `[\n${bindingEntries}]`});\n`,
   );
 };
+
+if (import.meta.main) {
+  generateParserRegistry();
+}
 
 if (
   import.meta.main &&

@@ -23,6 +23,7 @@ export const MCP_APP_DIRECTORY_OUTPUTS = [
 ] as const;
 
 export const CI_GENERATED_OUTPUTS = {
+  parserRegistry: ["apps/api/src/lib/legal-search/parser-registry.gen.ts"],
   capabilityRuntime: [
     "apps/api/src/mcp/generated/capability-dispatch.ts",
     "apps/api/src/mcp/generated/capability-catalog.ts",
@@ -62,6 +63,7 @@ export const INSTALL_OWNED_IGNORED_GENERATED_OUTPUTS = [
 ] as const;
 
 export const CI_GENERATION_COMMANDS = [
+  ["bun", "scripts/generate-parser-registry.ts"],
   ["bun", "apps/api/scripts/generate-capability-runtime.ts"],
   ["bun", "scripts/prepare-mcp-apps.ts"],
   ["bun", "--cwd=packages/cli", "run", "codegen:runtime"],

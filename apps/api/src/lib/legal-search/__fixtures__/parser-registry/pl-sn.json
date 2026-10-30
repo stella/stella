@@ -1,0 +1,20 @@
+{
+  "ADAPTER_KEYS": {
+    "PL_SN": "pl-sn"
+  },
+  "PARSER_VERSIONS": {
+    "pl-sn": 11
+  },
+  "SOURCE_FINGERPRINT_VERSIONS": {
+    "pl-sn": 0
+  },
+  "PARSER_VERSION_SCOPES": {
+    "pl-sn": {
+      "version": 11,
+      "scope": {
+        "type": "all",
+        "reason": "Re-read printed title order and opening, operative and signature roles from stored source; preserve inline bold and italic emphasis in PDFs."
+      }
+    }
+  }
+}

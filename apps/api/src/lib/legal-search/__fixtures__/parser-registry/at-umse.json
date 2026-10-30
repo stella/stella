@@ -1,0 +1,20 @@
+{
+  "ADAPTER_KEYS": {
+    "AT_UMSE": "at-umse"
+  },
+  "PARSER_VERSIONS": {
+    "at-umse": 9
+  },
+  "SOURCE_FINGERPRINT_VERSIONS": {
+    "at-umse": 0
+  },
+  "PARSER_VERSION_SCOPES": {
+    "at-umse": {
+      "version": 9,
+      "scope": {
+        "type": "all",
+        "reason": "Reclassify publisher headings and trailing publisher metadata from stored RIS XML; AST roles have no separate feature storage."
+      }
+    }
+  }
+}

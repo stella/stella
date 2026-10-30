@@ -106,3 +106,6 @@ packages/mcp-apps/src/generated/
 
 # Per-run build directories of the rule catalog test.
 /.oxlint-rule-ids-*/
+
+# Derived parser registry, restored before API generation.
+apps/api/src/lib/legal-search/parser-registry.gen.ts

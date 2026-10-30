@@ -1,0 +1,17 @@
+import type { ParserVersionScopes } from "../parser-reparse-scopes";
+
+export const ADAPTER_KEYS = { EU_ECJ: "eu-ecj" } as const;
+export const PARSER_VERSIONS = { [ADAPTER_KEYS.EU_ECJ]: 18 } as const;
+export const SOURCE_FINGERPRINT_VERSIONS = {
+  [ADAPTER_KEYS.EU_ECJ]: 0,
+} as const;
+export const PARSER_VERSION_SCOPES = {
+  [ADAPTER_KEYS.EU_ECJ]: {
+    version: PARSER_VERSIONS[ADAPTER_KEYS.EU_ECJ],
+    scope: {
+      type: "all",
+      reason:
+        "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage.",
+    },
+  },
+} as const satisfies ParserVersionScopes<typeof PARSER_VERSIONS>;

@@ -1,0 +1,20 @@
+{
+  "ADAPTER_KEYS": {
+    "AT_BVWG": "at-bvwg"
+  },
+  "PARSER_VERSIONS": {
+    "at-bvwg": 9
+  },
+  "SOURCE_FINGERPRINT_VERSIONS": {
+    "at-bvwg": 0
+  },
+  "PARSER_VERSION_SCOPES": {
+    "at-bvwg": {
+      "version": 9,
+      "scope": {
+        "type": "all",
+        "reason": "Reclassify publisher headings and trailing publisher metadata from stored RIS XML; AST roles have no separate feature storage."
+      }
+    }
+  }
+}

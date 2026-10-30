@@ -1,0 +1,20 @@
+{
+  "ADAPTER_KEYS": {
+    "PL_TK": "pl-tk"
+  },
+  "PARSER_VERSIONS": {
+    "pl-tk": 10
+  },
+  "SOURCE_FINGERPRINT_VERSIONS": {
+    "pl-tk": 0
+  },
+  "PARSER_VERSION_SCOPES": {
+    "pl-tk": {
+      "version": 10,
+      "scope": {
+        "type": "all",
+        "reason": "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage."
+      }
+    }
+  }
+}
