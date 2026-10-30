@@ -814,8 +814,10 @@
       "deleteRateTable": "Delete rate table",
       "editRateTable": "Edit rate table",
       "effectiveFrom": "Effective from",
+      "effectiveRateRequired": "No effective rate is set for this matter, person and date. Add a rate or log this time as non-billable.",
       "effectiveTo": "Effective to",
       "hourlyRate": "Hourly rate",
+      "logNonBillable": "Log as non-billable",
       "noRateEntries": "No rate entries yet",
       "noRateFound": "No rate configured",
       "noRateTables": "No rate tables yet",
@@ -1091,7 +1093,9 @@
     },
     "emptyState": "No decisions found. Configure a source and run a sync to import case law.",
     "filters": {
-      "remove": "Remove filter {filter}"
+      "countryMismatch": "Filters removed because they do not belong to {country}: {filters}.",
+      "remove": "Remove filter {filter}",
+      "showInCountry": "Show {filter} in {country}"
     },
     "languages": {
       "count": "{count, plural, one {# language} other {# languages}}",
@@ -1347,6 +1351,7 @@
       "toastTitle": "Full view not yet available"
     },
     "activity": {
+      "newerVersion": "This content is shown in a newer version.",
       "review": "Review update"
     },
     "aiPrompt": "AI message composer",
@@ -2358,6 +2363,7 @@
     "unknownUser": "Unknown user",
     "unpin": "Unpin",
     "unsavedChanges": "Unsaved changes",
+    "unsavedChangesClose": "Unsaved changes. Close again to discard",
     "unsavedChangesEscape": "Unsaved changes. Press Esc again to discard",
     "unsavedLeaveConfirm": "You have unsaved changes. Leave without saving?",
     "unverified": "Unverified",
@@ -2399,6 +2405,8 @@
     "returnToAgent": "Return to your agent to continue.",
     "returnsLocally": "Returns you to {clientName} on this computer",
     "returnsTo": "Returns you to {clientName}",
+    "scopeAccountExportRead": "Read your personal data exports",
+    "scopeAccountExportWrite": "Request your personal data exports",
     "scopeAdminRead": "Read your organization's audit log",
     "scopeAdminWrite": "Manage organization members and settings",
     "scopeBillingWrite": "Create, edit, and delete your time entries",
@@ -5050,6 +5058,8 @@
       "desktopCardConnectedTitle": "stella desktop is linked",
       "desktopCardMissingDetail": "Install it, or connect it if it's already installed on this computer.",
       "desktopCardMissingTitle": "stella desktop isn't linked yet",
+      "desktopCardOpeningDetail": "Linking this computer to <bdi>{identity}</bdi> on {host}. If your browser asks, allow it to open stella desktop.",
+      "desktopCardOpeningTitle": "Opening stella desktop...",
       "desktopCardOutdatedDetail": "Version {version} is linked to <bdi>{identity}</bdi>. Install the latest version to keep documents and activity working.",
       "desktopCardOutdatedTitle": "stella desktop needs an update",
       "desktopClipboardDescription": "Open, search, organize, and reuse copied text from any app.",
@@ -5069,6 +5079,7 @@
       "desktopInstallOpenStep": "Open stella desktop once. Clipboard appears immediately and remains available from the macOS menu bar or Windows system tray.",
       "desktopInstallTitle": "Install and open",
       "desktopInstallWindowsStep": "Run the installer and follow the prompts.",
+      "desktopOpenApp": "Open stella desktop",
       "desktopPrivacyDescription": "Clipboard history is encrypted and stored on this device.",
       "desktopPrivacyTitle": "Private by default",
       "desktopSelfHostDescription": "Trust this stella URL in the signed desktop app so documents from this install can open locally.",
@@ -5078,6 +5089,15 @@
       "displayNameSaved": "Display name updated",
       "enterOtp": "Verification code",
       "otpSentSuccess": "Verification code sent to your email.",
+      "personalDataExportDescription": "Request a downloadable copy of the personal data held in your account. The download is available for one hour.",
+      "personalDataExportExpired": "This export has expired.",
+      "personalDataExportExpiresAt": "Available until {expiresAt}.",
+      "personalDataExportFailed": "Your export could not be prepared.",
+      "personalDataExportReady": "Your export is ready.",
+      "personalDataExportRequest": "Request export",
+      "personalDataExportRequestNew": "Request a new export",
+      "personalDataExportTitle": "Export my data",
+      "personalDataExportWorking": "Preparing your export…",
       "preferredName": "Preferred name",
       "preferredNameDescription": "Used as the author for DOCX tracked changes and comments.",
       "preferredNamePlaceholder": "Your name",
@@ -5415,6 +5435,7 @@
     "showCitedPartOnly": "Show cited part only",
     "showFullProvision": "Show full provision",
     "showInText": "Show in the text",
+    "sortNeedsYear": "Choose a year in Filters to sort by this column.",
     "statedWindow": "Dates stated by the publisher: {range}",
     "status": {
       "current": "In force",
@@ -6512,6 +6533,14 @@
           "started": "Started a review of"
         },
         "empty": "No activity in this matter yet.",
+        "fields": {
+          "dueDate": "due date",
+          "parentFolder": "parent folder",
+          "priority": "priority",
+          "property": "property",
+          "schedule": "schedule",
+          "sortOrder": "order"
+        },
         "filterLabel": "Filter activity",
         "filters": {
           "all": "All activity",
@@ -6561,6 +6590,7 @@
           "translation": "translation"
         },
         "title": "Matter activity",
+        "updatedFields": "Updated {fields}",
         "views": {
           "list": "List view",
           "timeline": "Timeline view"

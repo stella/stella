@@ -218,6 +218,15 @@ const _awaited = async () => expect(await pending).toBe(1);
 // expect-clean: bun-test-hygiene/no-promise-matchers
 const _playwright = playwrightExpect(pending).rejects.toThrow();
 
+// --- no-global-testing-library-screen ---
+
+// the dynamic import a DOM test registers its own window before
+// oxlint-disable-next-line bun-test-hygiene/no-global-testing-library-screen
+const { screen: _screen } = await import("@testing-library/react");
+// queries taken from a render result
+// expect-clean: bun-test-hygiene/no-global-testing-library-screen
+const { render: _render } = await import("@testing-library/react");
+
 // --- require-module-mock-reset ---
 
 // a spy at module scope is detached by the first restore

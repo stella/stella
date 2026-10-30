@@ -4,11 +4,21 @@
  * analyzer, so adding a table cannot silently make a sequential scan legal.
  */
 export const QUERY_PERF_TABLE_SIZES = {
+  // The court registry: patterns per country, read whole into the weight cache.
+  case_law_court_weights: "small",
+  // One row per source, keyed by source_id.
+  case_law_source_arrivals: "small",
   case_law_sources: "small",
+  // One row per country-month or broad invalidation target currently being retired.
+  case_law_sitemap_drain_progress: "small",
+  // The slot=0 primary-key/check contract permits exactly one discovery cursor.
+  case_law_sitemap_refresh_cursor: "small",
   corpus_index_generations: "small",
   corpus_index_jurisdiction_serving: "small",
   corpus_index_projection_intents: "large",
   corpus_index_projection_states: "large",
+  // One checkpoint row per named backfill.
+  database_backfill_states: "small",
   entities: "large",
   entity_versions: "large",
   legislation_documents: "large",
@@ -18,9 +28,19 @@ export const QUERY_PERF_TABLE_SIZES = {
   workspaces: "large",
 } as const satisfies Record<string, "large" | "small">;
 
-const queryPerfTableSizesByName = new Map(
-  Object.entries(QUERY_PERF_TABLE_SIZES),
-);
+/**
+ * System catalogs a measured statement reads, by size class. They are not
+ * schema tables, so they are declared apart from the fixture's tables.
+ */
+const QUERY_PERF_CATALOG_SIZES = {
+  // One row per database in the cluster; the load governor's indicator read.
+  pg_database: "small",
+} as const satisfies Record<string, "large" | "small">;
+
+const queryPerfTableSizesByName = new Map([
+  ...Object.entries(QUERY_PERF_TABLE_SIZES),
+  ...Object.entries(QUERY_PERF_CATALOG_SIZES),
+]);
 
 export const isLargeQueryPerfRelation = (relation: string) =>
   queryPerfTableSizesByName.get(relation) !== "small";

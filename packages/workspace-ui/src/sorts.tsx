@@ -24,7 +24,7 @@ export type SortableProperty = {
 
 export type SortChipsLabels = {
   /** Accessible name of the "add a sort" trigger. */
-  add: string;
+  addSort: string;
   /** Accessible name of a chip's remove button. */
   remove: string;
   /** What a chip calls its direction, per kind: the header menu's wording. */
@@ -156,7 +156,7 @@ const AddSortButton = ({
 }: AddSortButtonProps) => (
   <Menu>
     <MenuTrigger
-      aria-label={labels.add}
+      aria-label={labels.addSort}
       disabled={disabled}
       render={<Button size="icon-xs" variant="ghost" />}
     >
