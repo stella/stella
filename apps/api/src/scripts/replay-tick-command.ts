@@ -40,9 +40,10 @@ import {
   createCaseLawMaintenanceCleanupHandles,
   enterCaseLawMaintenanceLane,
 } from "@/api/lib/case-law/maintenance-lane";
-import type {
-  CaseLawSourceIngestionLease,
-  withCaseLawSourceIngestionLease,
+import {
+  type CaseLawSourceIngestionLease,
+  holdCaseLawSourceIngestionLease,
+  type withCaseLawSourceIngestionLease,
 } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import {
   ADAPTER_KEYS,
@@ -281,33 +282,16 @@ const createReplayLeaseOwner = ({
   return {
     getLease: () => lease,
     acquireLease: async (source: BackgroundReplaySource) => {
-      let markStarted!: (acquired: boolean) => void;
-      const started = new Promise<boolean>((resolve) => {
-        markStarted = resolve;
-      });
-      let finish!: () => void;
-      const finished = new Promise<void>((resolve) => {
-        finish = resolve;
-      });
-      const run = runWithLease(
+      const held = await holdCaseLawSourceIngestionLease(
         { scopedDb, sourceId: source.id, releaseDb: releaseReplayDb },
-        async (acquired) => {
-          lease = acquired;
-          markStarted(true);
-          await finished;
-        },
-      ).then((outcome) => {
-        if (outcome === null) {
-          markStarted(false);
-        }
-        return outcome;
-      });
-      if (!(await started)) {
+        runWithLease,
+      );
+      if (held === null) {
         return null;
       }
+      lease = held.lease;
       return async () => {
-        finish();
-        await run;
+        await held.release();
         lease = null;
       };
     },

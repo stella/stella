@@ -21,6 +21,7 @@ import {
   enterCaseLawMaintenanceLane,
 } from "@/api/lib/case-law/maintenance-lane";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
+import { holdCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import {
   ADAPTER_KEYS,
   PARSER_VERSIONS,
@@ -298,38 +299,24 @@ const createCompletionFence = async ({
       if (lease !== null) {
         return;
       }
-      let markStarted!: (acquired: boolean) => void;
-      const started = new Promise<boolean>((resolve) => {
-        markStarted = resolve;
-      });
-      const finished = new Promise<void>((resolve) => {
-        finishLease = resolve;
-      });
-      leaseRun = runtime
-        .withCaseLawSourceIngestionLease(
-          {
-            scopedDb: handles.ingestionDb,
-            sourceId,
-            releaseDb: cleanup.ingestionDb,
-          },
-          async (acquired) => {
-            lease = acquired;
-            markStarted(true);
-            await finished;
-          },
-        )
-        .then((outcome) => {
-          if (outcome === null) {
-            markStarted(false);
-          }
-          return outcome;
-        });
-      if (!(await started)) {
+      const held = await holdCaseLawSourceIngestionLease(
+        {
+          scopedDb: handles.ingestionDb,
+          sourceId,
+          releaseDb: cleanup.ingestionDb,
+        },
+        runtime.withCaseLawSourceIngestionLease,
+      );
+      if (held === null) {
         throw new EuCompletionStop({
           message: "Completion source lease is held",
           reason: "held",
         });
       }
+      lease = held.lease;
+      finishLease = () => {
+        leaseRun = held.release();
+      };
     },
     releaseDocument: async () => {
       finishLease?.();

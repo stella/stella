@@ -174,3 +174,38 @@ export const withCaseLawSourceIngestionLease = async <T>(
     await lease.release();
   }
 };
+
+export type HeldCaseLawSourceIngestionLease = {
+  lease: CaseLawSourceIngestionLease;
+  release: () => Promise<void>;
+};
+
+/** Acquire a lease whose lifetime is controlled by the returned handle. */
+export const holdCaseLawSourceIngestionLease = async (
+  options: AcquireCaseLawSourceIngestionLeaseOptions,
+  runWithLease: typeof withCaseLawSourceIngestionLease = withCaseLawSourceIngestionLease,
+): Promise<HeldCaseLawSourceIngestionLease | null> => {
+  let markStarted!: (lease: CaseLawSourceIngestionLease) => void;
+  const started = new Promise<CaseLawSourceIngestionLease>((resolve) => {
+    markStarted = resolve;
+  });
+  let finish!: () => void;
+  const finished = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  const run = runWithLease(options, async (lease) => {
+    markStarted(lease);
+    await finished;
+  });
+  const lease = await Promise.race([run.then(() => null), started]);
+  if (lease === null) {
+    return null;
+  }
+  return {
+    lease,
+    release: async () => {
+      finish();
+      await run;
+    },
+  };
+};

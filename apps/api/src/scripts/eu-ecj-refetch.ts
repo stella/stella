@@ -21,39 +21,10 @@ import {
   enterCaseLawMaintenanceLane,
   openCaseLawReadOnlySession,
 } from "@/api/lib/case-law/maintenance-lane";
-import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
-import { withCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
+import { holdCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { refreshCorpusS3, refreshS3 } from "@/api/lib/s3";
 import { runEcjFormexRefresh } from "@/api/scripts/eu-ecj-formex-refresh";
 import { operatorFlags } from "@/api/scripts/operator-flags";
-
-const holdSourceLease = async (
-  options: Parameters<typeof withCaseLawSourceIngestionLease>[0],
-) => {
-  let markStarted!: (lease: CaseLawSourceIngestionLease) => void;
-  const started = new Promise<CaseLawSourceIngestionLease>((resolve) => {
-    markStarted = resolve;
-  });
-  let finish!: () => void;
-  const finished = new Promise<void>((resolve) => {
-    finish = resolve;
-  });
-  const run = withCaseLawSourceIngestionLease(options, async (lease) => {
-    markStarted(lease);
-    await finished;
-  });
-  const sourceLease = await Promise.race([run.then(() => null), started]);
-  if (sourceLease === null) {
-    return null;
-  }
-  return {
-    sourceLease,
-    release: async () => {
-      finish();
-      await run;
-    },
-  };
-};
 
 /**
  * Refresh named EU decisions through the ingestion pipeline. Full refetches
@@ -105,6 +76,47 @@ type FormexOnlyOptions = {
 type StoredFormexRefreshOptions = Omit<FormexOnlyOptions, "flagValue"> & {
   idsFile: string;
 };
+
+type AcquireFormexBatchOptions<TDb, TLease> = {
+  enterLane: () => Promise<{ ingestionDb: TDb; release: () => Promise<void> }>;
+  acquireSourceLease: (
+    ingestionDb: TDb,
+  ) => Promise<{ lease: TLease; release: () => Promise<void> } | null>;
+};
+
+export const acquireFormexBatch = async <TDb, TLease>({
+  enterLane,
+  acquireSourceLease,
+}: AcquireFormexBatchOptions<TDb, TLease>): Promise<{
+  ingestionDb: TDb;
+  sourceLease: TLease;
+  release: () => Promise<void>;
+} | null> => {
+  const lane = await enterLane();
+  let held: Awaited<ReturnType<typeof acquireSourceLease>>;
+  try {
+    held = await acquireSourceLease(lane.ingestionDb);
+  } catch (error) {
+    await lane.release();
+    throw error;
+  }
+  if (held === null) {
+    await lane.release();
+    return null;
+  }
+  return {
+    ingestionDb: lane.ingestionDb,
+    sourceLease: held.lease,
+    release: async () => {
+      try {
+        await held.release();
+      } finally {
+        await lane.release();
+      }
+    },
+  };
+};
+
 const runStoredFormexRefresh = async ({
   idsFile,
   apply,
@@ -145,28 +157,15 @@ const runStoredFormexRefresh = async ({
       apply,
       after,
       limit,
-      acquireBatch: async () => {
-        const lane = await enterCaseLawMaintenanceLane();
-        const held = await holdSourceLease({
-          scopedDb: lane.ingestionDb,
-          sourceId: source.id,
-        });
-        if (held === null) {
-          await lane.release();
-          return null;
-        }
-        return {
-          ingestionDb: lane.ingestionDb,
-          sourceLease: held.sourceLease,
-          release: async () => {
-            try {
-              await held.release();
-            } finally {
-              await lane.release();
-            }
-          },
-        };
-      },
+      acquireBatch: async () =>
+        await acquireFormexBatch({
+          enterLane: enterCaseLawMaintenanceLane,
+          acquireSourceLease: async (batchDb) =>
+            await holdCaseLawSourceIngestionLease({
+              scopedDb: batchDb,
+              sourceId: source.id,
+            }),
+        }),
     });
   } finally {
     process.removeListener("SIGINT", interrupt);
@@ -361,7 +360,7 @@ const runCelexRefresh = async ({
     process.exit(1);
   }
 
-  const held = await holdSourceLease({
+  const held = await holdCaseLawSourceIngestionLease({
     scopedDb: ingestionDb,
     sourceId: source.id,
   });
@@ -371,7 +370,7 @@ const runCelexRefresh = async ({
     );
     process.exit(1);
   }
-  const { sourceLease } = held;
+  const sourceLease = held.lease;
 
   // Object-held so the flag's cross-callback mutation is visible to
   // per-site flow analysis; a plain boolean reads as always-false.
