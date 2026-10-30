@@ -7,8 +7,9 @@
  * strings, interprocedural cwd forwarding and dynamically built argv are outside
  * this syntactic check.
  */
-import { eslintCompatPlugin } from "@oxlint/plugins";
+import { eslintCompatPlugin, type Ranged } from "@oxlint/plugins";
 
+import { guardEnforcesLine } from "../scripts/guard-rollouts.ts";
 import {
   type AstNode,
   filenameForContext,
@@ -129,85 +130,113 @@ const cwdProperty = (value: unknown): AstNode | null => {
   return null;
 };
 
-export default eslintCompatPlugin({
-  meta: { name: "no-live-test-base" },
-  rules: {
-    "no-live-test-base": {
-      meta: {
-        type: "problem",
-        messages: {
-          liveBase:
-            "Resolve the tree's pinned comparison base with treeBaseRevision from @stll/scripts/src/tree-base-revision instead of reading origin/main.",
+export const createTestBasePlugin = (enforcesLine = guardEnforcesLine) =>
+  eslintCompatPlugin({
+    meta: { name: "no-live-test-base" },
+    rules: {
+      "no-live-test-base": {
+        meta: {
+          type: "problem",
+          messages: {
+            liveBase:
+              "Resolve the tree's pinned comparison base with treeBaseRevision from @stll/scripts/src/tree-base-revision instead of reading origin/main.",
+          },
+        },
+        createOnce(context) {
+          const enforces = (node: Ranged) => {
+            const start = context.sourceCode.getLocFromIndex(
+              node.range[0],
+            ).line;
+            const end = context.sourceCode.getLocFromIndex(
+              node.range[1] - 1,
+            ).line;
+            for (let line = start; line <= end; line++) {
+              if (
+                enforcesLine({
+                  guard: "test-base-revision",
+                  file: filenameForContext(context),
+                  line,
+                })
+              ) {
+                return true;
+              }
+            }
+            return false;
+          };
+          let enabled = false;
+          return {
+            before() {
+              const filename = filenameForContext(context);
+              enabled =
+                isTestFile(filename) ||
+                filename.endsWith("no-live-test-base.fixture.ts");
+            },
+            CallExpression(node) {
+              if (!enabled) {
+                return;
+              }
+              const argv = node.arguments.flatMap(parts);
+              if (!argv.some((arg) => /^origin\/main(?:[:.^~]|$)/u.test(arg))) {
+                return;
+              }
+              const callee = unwrapExpression(node.callee);
+              const name =
+                callee?.type === "Identifier"
+                  ? callee.name
+                  : callee?.type === "MemberExpression"
+                    ? getPropertyName(callee.property)
+                    : null;
+              const gitWrapper =
+                typeof name === "string" && /git$/iu.test(name);
+              if (!argv.includes("git") && !gitWrapper) {
+                return;
+              }
+              // A merge-base call is safe but still belongs to the shared owner:
+              // it must honor RATCHET_BASE_REF as well.
+              const cwd = node.arguments
+                .map(cwdProperty)
+                .find((value) => value !== null);
+              if (cwd !== undefined) {
+                if (!checkoutPath({ context, value: cwd })) {
+                  return;
+                }
+              } else {
+                const positional = node.arguments.filter(
+                  (arg) =>
+                    isAstNode(arg) &&
+                    arg.type !== "ArrayExpression" &&
+                    !(
+                      typeof name === "string" &&
+                      SPAWN_CALLS.has(name) &&
+                      arg.type === "ObjectExpression"
+                    ) &&
+                    staticStringValue(arg) !== "git",
+                );
+                if (
+                  positional.length > 0 &&
+                  !positional.some((arg) =>
+                    checkoutPath({ context, value: arg }),
+                  )
+                ) {
+                  return;
+                }
+                if (
+                  gitWrapper &&
+                  !node.arguments.some((arg) =>
+                    checkoutPath({ context, value: arg }),
+                  )
+                ) {
+                  return;
+                }
+              }
+              if (enforces(node)) {
+                context.report({ node, messageId: "liveBase" });
+              }
+            },
+          };
         },
       },
-      createOnce(context) {
-        let enabled = false;
-        return {
-          before() {
-            const filename = filenameForContext(context);
-            enabled =
-              isTestFile(filename) ||
-              filename.endsWith("no-live-test-base.fixture.ts");
-          },
-          CallExpression(node) {
-            if (!enabled) {
-              return;
-            }
-            const argv = node.arguments.flatMap(parts);
-            if (!argv.some((arg) => /^origin\/main(?:[:.^~]|$)/u.test(arg))) {
-              return;
-            }
-            const callee = unwrapExpression(node.callee);
-            const name =
-              callee?.type === "Identifier"
-                ? callee.name
-                : callee?.type === "MemberExpression"
-                  ? getPropertyName(callee.property)
-                  : null;
-            const gitWrapper = typeof name === "string" && /git$/iu.test(name);
-            if (!argv.includes("git") && !gitWrapper) {
-              return;
-            }
-            // A merge-base call is safe but still belongs to the shared owner:
-            // it must honor RATCHET_BASE_REF as well.
-            const cwd = node.arguments
-              .map(cwdProperty)
-              .find((value) => value !== null);
-            if (cwd !== undefined) {
-              if (!checkoutPath({ context, value: cwd })) {
-                return;
-              }
-            } else {
-              const positional = node.arguments.filter(
-                (arg) =>
-                  isAstNode(arg) &&
-                  arg.type !== "ArrayExpression" &&
-                  !(
-                    typeof name === "string" &&
-                    SPAWN_CALLS.has(name) &&
-                    arg.type === "ObjectExpression"
-                  ) &&
-                  staticStringValue(arg) !== "git",
-              );
-              if (
-                positional.length > 0 &&
-                !positional.some((arg) => checkoutPath({ context, value: arg }))
-              ) {
-                return;
-              }
-              if (
-                gitWrapper &&
-                !node.arguments.some((arg) =>
-                  checkoutPath({ context, value: arg }),
-                )
-              ) {
-                return;
-              }
-            }
-            context.report({ node, messageId: "liveBase" });
-          },
-        };
-      },
     },
-  },
-});
+  });
+
+export default createTestBasePlugin();
