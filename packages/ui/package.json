@@ -150,7 +150,10 @@
     "./skeleton": "./src/components/skeleton.tsx",
     "./status-mark": "./src/components/status-mark.tsx",
     "./swap-text": "./src/components/swap-text.tsx",
-    "./stella-mark": "./src/components/stella-mark.tsx",
+    "./stella-mark": {
+      "react-native": "./src/components/stella-mark.native.tsx",
+      "default": "./src/components/stella-mark.tsx"
+    },
     "./stella-wordmark": {
       "react-native": "./src/components/stella-wordmark.native.tsx",
       "default": "./src/components/stella-wordmark.tsx"
