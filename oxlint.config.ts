@@ -448,6 +448,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-section-sign-glyph.fixture.tsx", [
     "no-section-sign-glyph/no-section-sign-glyph",
   ]),
+  fixtureRuleOverride("no-inert-autofocus.fixture.tsx", [
+    "no-inert-autofocus/no-inert-autofocus",
+  ]),
   fixtureRuleOverride("no-ad-hoc-text-mark.fixture.tsx", [
     "no-ad-hoc-text-mark/no-ad-hoc-text-mark",
   ]),
@@ -1592,6 +1595,7 @@ const config = defineConfig({
     ],
     "no-nanoid/no-nanoid": "error",
     "no-section-sign-glyph/no-section-sign-glyph": "error",
+    "no-inert-autofocus/no-inert-autofocus": "error",
     "no-hand-built-date-range-filter/no-hand-built-date-range-filter": "error",
     "confine-server-reads/confine-server-reads": "error",
     "no-direct-matter-glyph/no-direct-matter-glyph": "error",
@@ -1849,6 +1853,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-nanoid.ts",
     "./.oxlint-plugins/no-placeholder-stella-mark.ts",
     "./.oxlint-plugins/no-section-sign-glyph.ts",
+    "./.oxlint-plugins/no-inert-autofocus.ts",
     "./.oxlint-plugins/no-hand-built-date-range-filter.ts",
     "./.oxlint-plugins/no-direct-matter-glyph.ts",
     "./.oxlint-plugins/no-unowned-icon.ts",
@@ -3041,8 +3046,12 @@ const config = defineConfig({
     {
       // Hermes, the mobile app's JavaScript engine, has no `Array#toSorted`,
       // `Array#toReversed` or `Array#toSpliced`; app code sorts or reverses a
-      // fresh array instead (apps/mobile/src/architecture.test.ts).
-      files: ["apps/mobile/src/**/*.{ts,tsx}"],
+      // fresh array instead (apps/mobile/src/architecture.test.ts and
+      // packages/transcript/src/portability.test.ts).
+      files: [
+        "apps/mobile/src/**/*.{ts,tsx}",
+        "packages/transcript/src/**/*.ts",
+      ],
       rules: {
         "unicorn/no-array-sort": "off",
         "unicorn/no-array-reverse": "off",

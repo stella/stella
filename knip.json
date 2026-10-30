@@ -205,6 +205,15 @@
     "packages/template-conditions": {
       "entry": ["src/**/*.test.ts"]
     },
+    "packages/transcript": {
+      "entry": [
+        "src/transcript.ts",
+        "src/timeline.ts",
+        "src/exporters.ts",
+        "src/vocabulary.ts",
+        "src/**/*.test.ts"
+      ]
+    },
     "packages/typescript-config": {
       "entry": ["*.json", "**/*.test.ts"]
     },
