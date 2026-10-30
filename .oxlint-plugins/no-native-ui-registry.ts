@@ -166,6 +166,13 @@ export const NO_NATIVE_UI_REGISTRY = {
     "no-hand-built-date-range-filter/no-hand-built-date-range-filter",
     "hand-built range filters are reported there",
   ),
+  "day-calendar": owned(
+    DATE_INPUT_RULE,
+    "the native date pickers are reported there",
+  ),
+  "day-calendar.logic": notComponent(
+    "day calendar layout and snapping helpers",
+  ),
   "destructive-action-confirmation": owned(
     "eslint/no-alert",
     "the browser's confirm() dialog is reported there",
