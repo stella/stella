@@ -879,15 +879,15 @@ const TRANSITIVE_GENERATOR_INPUTS = {
 const GENERATOR_DECLARATIONS = [
   {
     id: "parser-registry",
-    outputKind: "derived",
-    outputs: CI_GENERATED_OUTPUTS.parserRegistry,
+    outputKind: "committed",
+    outputs: ["apps/api/src/lib/legal-search/parser-registry.gen.ts"],
     inputs: [
       "apps/api/src/lib/legal-search/parser-entries/*.ts",
       "scripts/parser-registry.ts",
       "scripts/generate-parser-registry.ts",
     ],
     write: ["bun", "scripts/generate-parser-registry.ts"],
-    check: ["bun", "test", "scripts/parser-registry.test.ts"],
+    check: ["bun", "scripts/generate-parser-registry.ts", "--check"],
     autofix: true,
     after: [],
   },
@@ -1452,8 +1452,6 @@ const GENERATOR_DECLARATIONS = [
       "scripts/check-mcp-generated-tracking.ts",
       "scripts/generated-files.ts",
       "scripts/prepare-mcp-apps.ts",
-      "scripts/generate-parser-registry.ts",
-      "scripts/parser-registry.ts",
 
       ...TRANSITIVE_GENERATOR_INPUTS["mcp-app-contracts"],
     ],
@@ -1535,8 +1533,6 @@ const GENERATOR_DECLARATIONS = [
       "scripts/check-mcp-generated-tracking.ts",
       "scripts/generated-files.ts",
       "scripts/prepare-mcp-apps.ts",
-      "scripts/generate-parser-registry.ts",
-      "scripts/parser-registry.ts",
 
       ...TRANSITIVE_GENERATOR_INPUTS["mcp-app-bundles"],
     ],

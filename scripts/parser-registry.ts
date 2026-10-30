@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { fail as panic } from "node:assert";
 
 export const PARSER_ENTRY_DIRECTORY =
   "apps/api/src/lib/legal-search/parser-entries/";
@@ -41,24 +41,32 @@ export const renderParserRegistry = (files: ReadonlyMap<string, string>) => {
   }
   const imports: string[] = [];
   const spreads = new Map<string, string[]>();
-  for (const [index, [file, source]] of entries.entries()) {
+  for (const [file, source] of entries) {
+    const relative = file.slice(PARSER_ENTRY_DIRECTORY.length, -3);
+    if (!/^[a-z][a-z\d-]*$/u.test(relative)) {
+      panic(`Invalid parser registry entry path: ${file}`);
+    }
+    const suffix = relative.replaceAll("-", "_");
+    const exports = new Bun.Transpiler({ loader: "ts" }).scan(source).exports;
     const names = PARSER_REGISTRY_NAMES.filter((name) =>
-      new RegExp(`export const ${name}\\s*=`, "u").test(source),
+      exports.includes(name),
     );
     const expected = names.includes("ADAPTER_KEYS")
       ? PARSER_REGISTRY_NAMES.filter((name) => name !== "IMPORT_SOURCE_KEYS")
       : ["IMPORT_SOURCE_KEYS", "SOURCE_FINGERPRINT_VERSIONS"];
-    if (names.join(",") !== expected.join(",")) {
+    if (
+      names.join(",") !== expected.join(",") ||
+      exports.length !== names.length
+    ) {
       panic(`Incomplete parser registry entry: ${file}`);
     }
     const bindings = names.map((name) => {
-      const alias = `${name}_${index}`;
+      const alias = `${name}_${suffix}`;
       const values = spreads.get(name) ?? [];
       values.push(`  ...${alias},`);
       spreads.set(name, values);
       return `${name} as ${alias}`;
     });
-    const relative = file.slice(PARSER_ENTRY_DIRECTORY.length, -3);
     imports.push(
       `import { ${bindings.join(", ")} } from "./parser-entries/${relative}";`,
     );
@@ -68,9 +76,10 @@ export const renderParserRegistry = (files: ReadonlyMap<string, string>) => {
     return `export const ${name} = {\n${(spreads.get(name) ?? []).join("\n")}\n} as const${suffix};`;
   });
   return [
-    "// Generated from parser-entries/*.ts. Do not commit this derived index.",
+    "// Generated from parser-entries/*.ts by scripts/generate-parser-registry.ts.",
     'import type { ParserVersionScopes } from "./parser-reparse-scopes";',
     ...imports,
+    "",
     ...declarations,
     "export type AdapterKey = (typeof ADAPTER_KEYS)[keyof typeof ADAPTER_KEYS];",
     "export type ImportSourceKey = (typeof IMPORT_SOURCE_KEYS)[keyof typeof IMPORT_SOURCE_KEYS];",

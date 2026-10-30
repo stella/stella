@@ -6,10 +6,7 @@ import { readRuntimeMode } from "../packages/runtime-mode/src/index";
 import { withGeneratedOutputCache } from "../packages/scripts/src/generated-output-cache";
 import { hasPreparedGeneratedSources } from "../packages/scripts/src/prepared-generated-sources";
 import { checkMcpGeneratedTracking } from "./check-mcp-generated-tracking";
-import { generateParserRegistry } from "./generate-parser-registry";
 import { GENERATORS } from "./generated-files";
-
-generateParserRegistry();
 
 const root = path.resolve(import.meta.dirname, "..");
 // Source archives and image stages have no Git index to validate.
@@ -35,8 +32,6 @@ if (!hasPreparedGeneratedSources(root)) {
       "bunfig.toml",
       "patches/**",
       "scripts/prepare-mcp-apps.ts",
-      "scripts/generate-parser-registry.ts",
-      "scripts/parser-registry.ts",
       "scripts/check-mcp-generated-tracking.ts",
       "scripts/generated-files.ts",
       "packages/scripts/src/generated-output-cache.ts",

@@ -1,4 +1,3 @@
-import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import {
   mkdirSync,
@@ -10,6 +9,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 import { generateParserRegistry } from "./generate-parser-registry";
 import {
@@ -42,8 +42,22 @@ const loadRegistry = (directory: string) => {
   return loaded;
 };
 
+const renderedRegistry = (files: ReadonlyMap<string, string>) => {
+  const rendered = renderParserRegistry(files);
+  if (rendered === undefined) {
+    throw new TypeError("No parser registry entries");
+  }
+  return rendered;
+};
+
+const record = (value: unknown): Record<string, unknown> => {
+  if (typeof value !== "object" || value === null) {
+    throw new TypeError("Invalid parser registry");
+  }
+  return value;
+};
+
 test("loaded parser registry preserves the base commit's keys and values", () => {
-  generateParserRegistry();
   const expected = {
     ADAPTER_KEYS: {},
     IMPORT_SOURCE_KEYS: {},
@@ -63,7 +77,79 @@ test("loaded parser registry preserves the base commit's keys and values", () =>
       Object.assign(expected[name], Reflect.get(fixture, name));
     }
   }
-  expect(loadRegistry(root)).toEqual(expected);
+  const loaded = loadRegistry(root);
+  expect(loaded).toEqual(expected);
+});
+
+test("generation reads regular TypeScript entry files only", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "parser-registry-files-"));
+  try {
+    const entries = entrySources();
+    for (const [file, source] of entries) {
+      mkdirSync(path.dirname(path.join(directory, file)), { recursive: true });
+      writeFileSync(path.join(directory, file), source);
+    }
+    writeFileSync(path.join(directory, "README.md"), "not a registry entry");
+    writeFileSync(
+      path.join(directory, PARSER_ENTRY_DIRECTORY, "notes.txt"),
+      "not a registry entry",
+    );
+    mkdirSync(path.join(directory, PARSER_ENTRY_DIRECTORY, "nested"), {
+      recursive: true,
+    });
+    writeFileSync(
+      path.join(directory, PARSER_ENTRY_DIRECTORY, "nested", "ignored.ts"),
+      "not a registry entry",
+    );
+    mkdirSync(path.dirname(path.join(directory, PARSER_REGISTRY_OUTPUT)), {
+      recursive: true,
+    });
+
+    generateParserRegistry(pathToFileURL(`${directory}/`));
+
+    expect(
+      readFileSync(path.join(directory, PARSER_REGISTRY_OUTPUT), "utf-8"),
+    ).toBe(renderedRegistry(entries));
+    generateParserRegistry(pathToFileURL(`${directory}/`), "check");
+    writeFileSync(
+      path.join(directory, PARSER_REGISTRY_OUTPUT),
+      "// stale index\n",
+    );
+    expect(() =>
+      generateParserRegistry(pathToFileURL(`${directory}/`), "check"),
+    ).toThrow("Parser registry index is stale");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("an empty entry directory fails with a descriptive invariant", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "parser-registry-empty-"));
+  try {
+    mkdirSync(path.join(directory, PARSER_ENTRY_DIRECTORY), {
+      recursive: true,
+    });
+    expect(() =>
+      generateParserRegistry(pathToFileURL(`${directory}/`)),
+    ).toThrow(new TypeError("No parser registry entries"));
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("renderer ignores fake exports and rejects an incomplete entry", () => {
+  const file = `${PARSER_ENTRY_DIRECTORY}incomplete.ts`;
+  const source = [
+    'export const ADAPTER_KEYS = { A: "a" } as const;',
+    "export const PARSER_VERSIONS = { a: 1 };",
+    "export const PARSER_VERSION_SCOPES = {};",
+    "// export const SOURCE_FINGERPRINT_VERSIONS = {};",
+    'const fake = "export const SOURCE_FINGERPRINT_VERSIONS = {};";',
+  ].join("\n");
+
+  expect(() => renderParserRegistry(new Map([[file, source]]))).toThrow(
+    `Incomplete parser registry entry: ${file}`,
+  );
 });
 
 test("source entries exclusively own registry declarations", () => {
@@ -100,8 +186,8 @@ test("source entries exclusively own registry declarations", () => {
   );
 });
 
-const git = (directory: string, args: string[]) => {
-  const result = Bun.spawnSync(["git", ...args], {
+const gitResult = (directory: string, args: string[]) =>
+  Bun.spawnSync(["git", ...args], {
     cwd: directory,
     env: {
       ...process.env,
@@ -113,6 +199,9 @@ const git = (directory: string, args: string[]) => {
       GIT_CONFIG_GLOBAL: "/dev/null",
     },
   });
+
+const git = (directory: string, args: string[]) => {
+  const result = gitResult(directory, args);
   expect(result.stderr.toString(), args.join(" ")).not.toContain("CONFLICT");
   expect(
     result.exitCode,
@@ -122,7 +211,11 @@ const git = (directory: string, args: string[]) => {
 };
 
 for (const operation of ["add", "bump"] as const) {
-  test(`independent parser ${operation} edits merge and load both entries`, () => {
+  const mergeBehavior =
+    operation === "add"
+      ? "load both additions after regenerating the index"
+      : "merge cleanly with an unchanged index";
+  test(`independent parser ${operation} edits ${mergeBehavior}`, () => {
     const directory = mkdtempSync(
       path.join(tmpdir(), "parser-registry-merge-"),
     );
@@ -134,17 +227,15 @@ for (const operation of ["add", "bump"] as const) {
       for (const [file, source] of sources) {
         writeFileSync(path.join(directory, file), source);
       }
-      writeFileSync(
-        path.join(directory, ".gitignore"),
-        `${PARSER_REGISTRY_OUTPUT}\n`,
-      );
+      const indexPath = path.join(directory, PARSER_REGISTRY_OUTPUT);
+      mkdirSync(path.dirname(indexPath), { recursive: true });
+      const baseIndex = renderedRegistry(sources);
+      writeFileSync(indexPath, baseIndex);
       git(directory, ["init", "--initial-branch=base"]);
       git(directory, ["add", "."]);
       git(directory, ["-c", "commit.gpgsign=false", "commit", "-m", "base"]);
-      const original = loadRegistry(root);
-      if (typeof original !== "object" || original === null) {
-        panic("Invalid original registry");
-      }
+      const original = record(loadRegistry(directory));
+      const originalVersions = record(Reflect.get(original, "PARSER_VERSIONS"));
       const expected = structuredClone(original);
       for (const [branch, existing, added] of [
         ["left", "cz-ns", "test-left"],
@@ -153,7 +244,6 @@ for (const operation of ["add", "bump"] as const) {
         git(directory, ["switch", "-c", branch, "base"]);
         const file = `${PARSER_ENTRY_DIRECTORY}${existing}.ts`;
         const source = sources.get(file);
-        expect(source).toBeDefined();
         if (source === undefined) {
           throw new TypeError("Missing merge fixture entry");
         }
@@ -172,59 +262,80 @@ for (const operation of ["add", "bump"] as const) {
         const target =
           operation === "bump" ? file : `${PARSER_ENTRY_DIRECTORY}${added}.ts`;
         writeFileSync(path.join(directory, target), next);
-        git(directory, ["add", target]);
-        git(directory, ["-c", "commit.gpgsign=false", "commit", "-m", branch]);
-        // Import the edited singleton's runtime values using the production index renderer.
-        const single = new Map([
-          [target, next],
-          ...[...sources].filter(([name]) =>
-            name.endsWith("us-courtlistener.ts"),
-          ),
-        ]);
-        writeFileSync(
-          path.join(directory, PARSER_REGISTRY_OUTPUT),
-          renderParserRegistry(single) ?? panic("Missing edited registry"),
-        );
-        const edited = loadRegistry(directory);
-        if (typeof edited !== "object" || edited === null) {
-          throw new TypeError("Invalid edited registry");
+        if (operation === "add") {
+          const branchEntries = new Map([...sources, [target, next]]);
+          writeFileSync(indexPath, renderedRegistry(branchEntries));
+          git(directory, ["add", target, PARSER_REGISTRY_OUTPUT]);
+        } else {
+          expect(readFileSync(indexPath, "utf-8")).toBe(baseIndex);
+          expect(renderedRegistry(new Map([...sources, [target, next]]))).toBe(
+            baseIndex,
+          );
+          git(directory, ["add", target]);
         }
-        const editedVersions = Reflect.get(edited, "PARSER_VERSIONS");
-        const originalVersions = Reflect.get(expected, "PARSER_VERSIONS");
+        git(directory, ["-c", "commit.gpgsign=false", "commit", "-m", branch]);
+        const edited = record(loadRegistry(directory));
+        const editedVersions = record(Reflect.get(edited, "PARSER_VERSIONS"));
+        const versionKey = operation === "bump" ? existing : added;
         const expectedVersion =
           operation === "bump"
             ? Reflect.get(originalVersions, existing) + 1
             : Reflect.get(originalVersions, existing);
-        expect(
-          Reflect.get(editedVersions, operation === "bump" ? existing : added),
-        ).toBe(expectedVersion);
+        expect(Reflect.get(editedVersions, versionKey)).toBe(expectedVersion);
         for (const name of names) {
-          Object.assign(Reflect.get(expected, name), Reflect.get(edited, name));
+          if (name === "IMPORT_SOURCE_KEYS") {
+            continue;
+          }
+          const adapterName = operation === "add" ? newSymbol : symbol;
+          const key = name === "ADAPTER_KEYS" ? adapterName : versionKey;
+          Reflect.set(
+            record(Reflect.get(expected, name)),
+            key,
+            Reflect.get(record(Reflect.get(edited, name)), key),
+          );
         }
       }
-      const tree = git(directory, [
+
+      const merge = gitResult(directory, [
         "merge-tree",
         "--write-tree",
         "left",
         "right",
       ]);
+      const tree = merge.stdout.toString().split("\n").at(0);
+      if (tree === undefined) {
+        throw new TypeError("Missing merge tree");
+      }
+      if (operation === "bump") {
+        expect(merge.exitCode).toBe(0);
+        expect(merge.stdout.toString()).not.toContain("CONFLICT");
+        expect(
+          git(directory, ["show", `${tree}:${PARSER_REGISTRY_OUTPUT}`]),
+        ).toBe(baseIndex.trim());
+      } else {
+        expect([0, 1]).toContain(merge.exitCode);
+        const conflicts = [
+          ...merge.stdout.toString().matchAll(/CONFLICT .* in (.+)$/gmu),
+        ].map((match) => match[1]);
+        expect(conflicts.every((file) => file === PARSER_REGISTRY_OUTPUT)).toBe(
+          true,
+        );
+      }
       git(directory, ["read-tree", "--reset", "-u", tree]);
-      const merged = new Map(
-        readdirSync(path.join(directory, PARSER_ENTRY_DIRECTORY)).map(
-          (file) => [
-            `${PARSER_ENTRY_DIRECTORY}${file}`,
-            readFileSync(
-              path.join(directory, PARSER_ENTRY_DIRECTORY, file),
-              "utf-8",
-            ),
-          ],
-        ),
-      );
-      writeFileSync(
-        path.join(directory, PARSER_REGISTRY_OUTPUT),
-        renderParserRegistry(merged) ?? panic("Missing merged registry"),
-      );
-      expect(loadRegistry(directory)).toEqual(expected);
+      if (operation === "add") {
+        generateParserRegistry(pathToFileURL(`${directory}/`));
+        git(directory, ["add", PARSER_REGISTRY_OUTPUT]);
+      }
+      git(directory, ["diff", "--check"]);
+      git(directory, ["write-tree"]);
+      expect(record(loadRegistry(directory))).toEqual(expected);
+      if (operation === "add") {
+        const mergedKeys = record(
+          Reflect.get(record(loadRegistry(directory)), "ADAPTER_KEYS"),
+        );
+        expect(Reflect.get(mergedKeys, "TEST_LEFT")).toBe("test-left");
+        expect(Reflect.get(mergedKeys, "TEST_RIGHT")).toBe("test-right");
+      }
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
