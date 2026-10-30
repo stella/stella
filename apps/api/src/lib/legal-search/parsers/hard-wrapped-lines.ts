@@ -575,6 +575,42 @@ const pdfParagraphMargins = ({
  * null entries isolate titles and other display lines. Without geometry the
  * shared text classifier and sentence boundaries must decide the wrap.
  */
+type OpensByIndentOptions = {
+  above: string;
+  line: string;
+  /** A continuation line of the current paragraph has set its margin. */
+  marginSet: boolean;
+  indented: boolean;
+  returnsToFirstLine: boolean;
+  shortFinalLine: boolean;
+};
+
+/**
+ * Whether a line's indentation opens a paragraph. Once a continuation line
+ * has set the paragraph's margin, a line indented right of it does, however
+ * full the line above; a list item's hanging lines sit on that margin and
+ * continue it. Before then indentation alone is ambiguous: the first
+ * continuation can hang right of a marker or return left from an ordinary
+ * paragraph's first-line indent, so it opens one only after a short line.
+ */
+const opensByIndent = ({
+  above,
+  line,
+  marginSet,
+  indented,
+  returnsToFirstLine,
+  shortFinalLine,
+}: OpensByIndentOptions): boolean => {
+  if (marginSet && indented) {
+    return true;
+  }
+  return (
+    shortFinalLine &&
+    !PRENOMINAL_TITLE_END_RE.test(above) &&
+    (indented || returnsToFirstLine || OPENS_SENTENCE_RE.test(line))
+  );
+};
+
 export const readPdfLineJoins = (lines: readonly (PdfPrintedLine | null)[]) => {
   const classification = classifyLineWrap(
     lines.map((line) => line?.text ?? null),
@@ -650,16 +686,17 @@ export const readPdfLineJoins = (lines: readonly (PdfPrintedLine | null)[]) => {
         (page.right - page.left) * PDF_PARAGRAPH.shortLineWidthShare &&
       page.right - previousLayout.x - previousLayout.width >
         height * PDF_PARAGRAPH.shortLineGapHeightShare;
-    // Indentation alone is ambiguous: the first continuation can hang right
-    // of a marker or return left from an ordinary paragraph's first-line indent.
-    const startsAfterShortLine =
-      shortFinalLine &&
-      !PRENOMINAL_TITLE_END_RE.test(above.text) &&
-      (indented || returnsToFirstLine || OPENS_SENTENCE_RE.test(line.text));
     if (
       line.kind === PDF_LINE_KIND.PARAGRAPH_START ||
       paragraphGap ||
-      startsAfterShortLine
+      opensByIndent({
+        above: above.text,
+        line: line.text,
+        marginSet: paragraph.type === "continuation",
+        indented,
+        returnsToFirstLine,
+        shortFinalLine,
+      })
     ) {
       paragraph = {
         type: "first-line",

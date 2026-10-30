@@ -3,7 +3,13 @@ import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
 
-import { reflowPrintedText } from "./hard-wrapped-lines";
+import {
+  LINE_JOINS,
+  PDF_LINE_KIND,
+  type PdfPrintedLine,
+  readPdfLineJoins,
+  reflowPrintedText,
+} from "./hard-wrapped-lines";
 
 const MARGIN = 66;
 const INDENT = "     ";
@@ -306,5 +312,86 @@ describe("printed lines of a typescript", () => {
       "b) vojenskou službu nebo jinou službu stanovenou zákonem na místo povinné vojenské služby,",
       "d) jednání uložené zákonem pro ochranu života, zdraví nebo práv druhých.",
     ]);
+  });
+});
+
+describe("PDF line joins", () => {
+  const LEFT = 72;
+  const RIGHT = 522;
+  const HEIGHT = 12;
+  const PITCH = 14;
+
+  /** One body line on page 0, `row` lines down, starting at `x`. */
+  const pdfLine = (text: string, row: number, x: number): PdfPrintedLine => ({
+    kind: PDF_LINE_KIND.BODY,
+    text,
+    layout: {
+      x,
+      y: 700 - row * PITCH,
+      height: HEIGHT,
+      width: RIGHT - x,
+      pageIndex: 0,
+    },
+  });
+
+  // Once a real continuation line has set the paragraph's margin, a line
+  // indented right of it opens a paragraph even when the line above runs to
+  // the margin.
+  test("an indented line after full-width continuation lines opens a paragraph", () => {
+    expect(
+      readPdfLineJoins([
+        pdfLine(
+          "Krajský súd v Bratislave preskúmal napadnuté rozhodnutie",
+          0,
+          90,
+        ),
+        pdfLine(
+          "v rozsahu podaného odvolania a dospel k záveru, že odvolanie",
+          1,
+          LEFT,
+        ),
+        pdfLine(
+          "žalobcu nie je dôvodné, pretože prvostupňový súd vec správne",
+          2,
+          LEFT,
+        ),
+        pdfLine(
+          "a súčasne poukazuje na to, že žalobca v konaní nepreukázal",
+          3,
+          90,
+        ),
+        pdfLine(
+          "splnenie podmienok, na ktoré zákon viaže vznik nároku.",
+          4,
+          LEFT,
+        ),
+      ]),
+    ).toEqual([
+      LINE_JOINS.BREAK,
+      LINE_JOINS.SPACE,
+      LINE_JOINS.SPACE,
+      LINE_JOINS.BREAK,
+      LINE_JOINS.SPACE,
+    ]);
+  });
+
+  // A list item's lines hang at its text column, right of the marker; they
+  // continue the item.
+  test("lines aligned with a list marker's text column continue the item", () => {
+    expect(
+      readPdfLineJoins([
+        pdfLine(
+          "a) žalobca je povinný zaplatiť žalovanému trovy konania",
+          0,
+          LEFT,
+        ),
+        pdfLine("v sume určenej súdom prvej inštancie v samostatnom", 1, 86),
+        pdfLine(
+          "uznesení, ktoré vydá po právoplatnosti tohto rozsudku,",
+          2,
+          86,
+        ),
+      ]),
+    ).toEqual([LINE_JOINS.BREAK, LINE_JOINS.SPACE, LINE_JOINS.SPACE]);
   });
 });
