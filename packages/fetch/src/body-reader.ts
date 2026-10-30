@@ -1,7 +1,15 @@
+import { TaggedError } from "better-result";
+
 import { raceAbort } from "./race-abort";
+
+export class BodyByteLimitError extends TaggedError("body_byte_limit")<{
+  message: string;
+  limit: number;
+}> {}
 
 type BodyIdleDeadlineOptions = {
   idleMs: number;
+  maxBytes?: number | undefined;
   signal?: AbortSignal | undefined;
 };
 
@@ -23,13 +31,21 @@ const responseReader = (body: ReadableStream<Uint8Array>) => body.getReader();
  */
 export async function* iterateBodyWithIdleDeadline(
   response: Response,
-  { idleMs, signal }: BodyIdleDeadlineOptions,
+  { idleMs, maxBytes, signal }: BodyIdleDeadlineOptions,
 ): AsyncGenerator<Uint8Array, void, void> {
   const invalidDuration = invalidIdleMs(idleMs);
   if (invalidDuration !== undefined) {
     await Promise.reject(invalidDuration);
   }
   signal?.throwIfAborted();
+  if (
+    maxBytes !== undefined &&
+    (!Number.isSafeInteger(maxBytes) || maxBytes < 0)
+  ) {
+    await Promise.reject(
+      new DOMException("Invalid response body byte limit", "NotSupportedError"),
+    );
+  }
   const body = response.body;
   if (body === null) {
     return;
@@ -37,6 +53,7 @@ export async function* iterateBodyWithIdleDeadline(
 
   const reader = responseReader(body);
   let exitReason: unknown;
+  let byteLength = 0;
   try {
     for (;;) {
       const deadline = new AbortController();
@@ -54,18 +71,31 @@ export async function* iterateBodyWithIdleDeadline(
         if (next.done) {
           return;
         }
+        byteLength += next.value.byteLength;
+        if (maxBytes !== undefined && byteLength > maxBytes) {
+          const limitError = new BodyByteLimitError({
+            message: `Response body exceeds the ${maxBytes}-byte limit`,
+            limit: maxBytes,
+          });
+          exitReason = limitError;
+          await Promise.reject(limitError);
+        }
         yield next.value;
       } finally {
-        exitReason = combined.reason;
+        exitReason ??= combined.reason;
         clearTimeout(timer);
       }
     }
   } finally {
-    try {
-      await reader.cancel(exitReason);
-    } finally {
-      reader.releaseLock();
-    }
+    reader
+      .cancel(exitReason)
+      .then(() => reader.releaseLock())
+      .catch((cancellationError: unknown) => {
+        // Cancellation only releases transport resources; the read's failure
+        // remains authoritative even when transport cleanup also fails.
+        cancellationError satisfies unknown;
+        reader.releaseLock();
+      });
   }
 }
 

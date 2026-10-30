@@ -30,7 +30,11 @@ import {
   MODEL_BENCHMARK_SPLIT,
 } from "@stll/ai-catalog/benchmarks";
 import type { ModelBenchmarkRating } from "@stll/ai-catalog/benchmarks";
-import { fetchWithTimeout, readBodyWithIdleDeadline } from "@stll/fetch";
+import {
+  BodyByteLimitError,
+  fetchWithTimeout,
+  readBodyWithIdleDeadline,
+} from "@stll/fetch";
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import { formatInteger } from "./model-catalog-rates-gen";
@@ -211,18 +215,18 @@ const fetchPage = async (
       httpStatus = response.status;
       const bytes = await readBodyWithIdleDeadline(response, {
         idleMs: FETCH_TIMEOUT_MS,
+        maxBytes: PAGE_MAX_BYTES,
       });
       return {
-        payload:
-          bytes.byteLength > PAGE_MAX_BYTES
-            ? null
-            : new TextDecoder().decode(bytes),
+        payload: new TextDecoder().decode(bytes),
         status: response.status,
       };
     },
     catch: (cause) =>
       inconclusive(
-        `Arena page at offset ${offset} failed to load: ${cause instanceof Error ? cause.message : String(cause)}`,
+        cause instanceof BodyByteLimitError
+          ? `Arena page at offset ${offset} exceeds ${PAGE_MAX_BYTES} bytes`
+          : `Arena page at offset ${offset} failed to load: ${cause instanceof Error ? cause.message : String(cause)}`,
       ),
   });
   if (Result.isError(fetched)) {
@@ -232,13 +236,6 @@ const fetchPage = async (
   if (status !== 200) {
     return Result.err(
       inconclusive(`Arena page at offset ${offset} responded ${status}`),
-    );
-  }
-  if (payload === null) {
-    return Result.err(
-      inconclusive(
-        `Arena page at offset ${offset} exceeds ${PAGE_MAX_BYTES} bytes`,
-      ),
     );
   }
   const json = Result.try({

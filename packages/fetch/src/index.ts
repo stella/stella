@@ -1,6 +1,7 @@
 // parser-output-unchanged: transport timeout fields on the fetcher type do not change parsed output.
 export { isConnectionFailure } from "./connection-failure";
 export {
+  BodyByteLimitError,
   iterateBodyWithIdleDeadline,
   readBodyJsonWithIdleDeadline,
   readBodyTextWithIdleDeadline,

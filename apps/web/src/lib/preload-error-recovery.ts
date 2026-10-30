@@ -93,13 +93,11 @@ export const classifyFailedChunkLoad =
         }
         const bodyBytes = await readBodyWithIdleDeadline(response, {
           idleMs: VERSION_MANIFEST_IDLE_TIMEOUT_MS,
+          maxBytes: VERSION_MANIFEST_MAX_BYTES,
         });
-        const bytes =
-          bodyBytes.byteLength > VERSION_MANIFEST_MAX_BYTES ? null : bodyBytes;
-        if (bytes === null) {
-          return { type: "not-skew" };
-        }
-        const manifest: unknown = JSON.parse(new TextDecoder().decode(bytes));
+        const manifest: unknown = JSON.parse(
+          new TextDecoder().decode(bodyBytes),
+        );
         if (!isVersionManifest(manifest)) {
           return { type: "not-skew" };
         }
