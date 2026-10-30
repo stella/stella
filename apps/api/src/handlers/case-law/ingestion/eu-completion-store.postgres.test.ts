@@ -1178,8 +1178,6 @@ if (!databaseUrl || !enabled) {
       expect(await state.store.getReceipt(newer.id)).not.toBeNull();
       expect(await state.store.compact({ limit: 100 })).toBe(0);
     });
-    // Below roughly 100000 rows the planner prefers hashing the receipts and
-    // index jobs over per-candidate index probes, so the scale is the point.
     test("finished 100000-row source bounds dry-run selection before receipt filtering", async () => {
       const sourceId = createSafeId<"caseLawSource">();
       sourceIds.push(sourceId);
@@ -1194,6 +1192,27 @@ if (!databaseUrl || !enabled) {
               adapterKey: `completion-scale-${sourceId}`,
               name: "completion scale fixture",
             });
+            // The rollback restores every dropped index. Keep only indexes that
+            // define constraints or this query's production plan, so unrelated
+            // decision indexes cannot make the scale fixture approach its deadline.
+            await tx.execute(sql`
+              DO $$
+              DECLARE index_name text;
+              BEGIN
+                FOR index_name IN
+                  SELECT indexrelid::regclass::text
+                  FROM pg_index
+                  WHERE indrelid = 'case_law_decisions'::regclass
+                    AND NOT indisprimary
+                    AND indexrelid <> 'case_law_decisions_source_id_page_idx'::regclass
+                    AND NOT EXISTS (
+                      SELECT 1 FROM pg_constraint WHERE conindid = indexrelid
+                    )
+                LOOP
+                  EXECUTE format('DROP INDEX %s', index_name);
+                END LOOP;
+              END $$
+            `);
             await tx.execute(sql`
               INSERT INTO case_law_decisions (id, source_id, case_number, country, court, language, parser_version, source_hash)
               SELECT md5(${sourceId}::text || '-' || n::text)::uuid, ${sourceId}::uuid, 'completion-scale-' || n::text, 'EUR', 'fixture', 'en', 2, 'finished'
