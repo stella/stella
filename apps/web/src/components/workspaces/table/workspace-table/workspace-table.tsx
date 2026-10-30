@@ -68,6 +68,7 @@ import {
   getRequiredHeader,
   getScrollableAncestor,
   getVerticalScrollbarWidth,
+  getWorkspaceGridColumnMetadata,
   getWorkspaceGridTemplateColumns,
   TABLE_COLUMN_DRAG_TYPE,
   toColumnDropEdge,
@@ -414,7 +415,10 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
   const renderColumns = orderedColumns.filter(
     (column) => column.id !== addPropertyColId,
   );
-  const visibleColumnCount = renderColumns.length + (addPropertyColumn ? 1 : 0);
+  const columnMetadata = getWorkspaceGridColumnMetadata({
+    renderColumns,
+    addPropertyColumn,
+  });
   const tableWidth = orderedColumns.reduce(
     (sum, column) => sum + column.getSize(),
     0,
@@ -607,7 +611,7 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
       >
         <div
           aria-busy={showsSkeletonRows || undefined}
-          aria-colcount={visibleColumnCount}
+          aria-colcount={columnMetadata.columnCount}
           aria-rowcount={rowModel.rows.length}
           className={cn(
             "relative flex flex-col text-sm",
@@ -649,7 +653,7 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
                       addPropertyColumn.id,
                     )}
                     headerTrigger={addColumnHeaderTrigger}
-                    index={renderColumns.length}
+                    index={columnMetadata.addPropertyColumnIndex - 1}
                     onToggleSelectAll={handleToggleSelectAll}
                     selectAllState={selectAllState}
                   />

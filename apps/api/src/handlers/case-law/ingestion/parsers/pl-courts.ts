@@ -1,3 +1,4 @@
+// parser-output-unchanged: Retention validation moved to the ingestion pipeline; the bounded plaintext load that enforces a source's DOM budget is kept on byte-identical markup, so blocks and rejections are unchanged.
 // parser-output-unchanged: Optional bounded loading is supplied only by KIO; accepted DOM traversal and legacy plaintext normalization are unchanged.
 // parser-output-unchanged: [pl-sn] PDF text becomes escaped paragraphs, so table-row changes are unreachable; exclusions and direct text reads are equivalent.
 // parser-output-unchanged: HTML validation reuses the unmodified parsed source while legacy plain text retains its synthetic document; diagnostics and stored output remain unchanged.
@@ -47,14 +48,14 @@ import {
   renderHtmlWhiteSpace,
 } from "@/api/lib/legal-search/document-builders/html-whitespace";
 import { inlineStyleValue } from "@/api/lib/legal-search/document-builders/inline-style";
-import {
-  buildValidationHtml,
-  validateAndLog,
-} from "@/api/lib/legal-search/parsers/validate-ast";
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
 import { includes } from "@/api/lib/type-guards";
 
 import { readCommonCourtInlines } from "./pl-common-court-inlines";
+import {
+  isPlHoldingHeading,
+  startsWithPlOperativeVerb,
+} from "./pl-operative-verbs";
 import {
   appendTextInline,
   inlinesToPlainText,
@@ -151,17 +152,27 @@ const REASONS_HEADING_RE = /^uzasadnienie\b/iu;
 // The editor numbers the reasons on from the operative points when they
 // share one outline ("V. UZASADNIENIE" after point IV).
 const NUMBERED_REASONS_HEADING_RE = /^[IVXLC]+\s*[.)]\s*uzasadnienie$/iu;
-const HOLDING_HEADING_RE =
-  /^(?:orzeka|postanawia|uchwala|zarządza)\s*(?::\s*)?$/iu;
-const HOLDING_ITEM_RE = /^(?:[IVXLC]+\s*[.)]|[0-9]+\s*[.)]|[a-z][)])\s*/u;
-const OPERATIVE_VERB_RE =
-  /^(?:oddala|zmienia|uchyla|zasądza|stwierdza|umarza|utrzymuje|nakazuje|odrzuca|ustala|przyznaje|zwraca się|przekazuje|nie obciąża|znosi)\b/iu;
+const DECISION_ITEM_PREFIX_RE = /^(?:[IVXLCDM]+|\d+|[a-z])[.)](?:\s+|$)/iu;
+const AUTHORITY_DECISION_TITLE_RE = /^decyzja\s+nr\b/iu;
+const COMPOSITION_LINE_RE = /\bw składzie\s*:/iu;
+const OPENING_RECITAL_RE =
+  /^(?:po rozpoznaniu|po rozpatrzeniu|na posiedzeniu|na rozprawie|w sprawie)\b/iu;
 const CLOSING_RE =
   /^[A-ZĄĆĘŁŃÓŚŹŻ][\p{L} .-]+,\s+dnia\s+\d{1,2}\s+\p{L}+\s+\d{4}\s*r?\.?$/u;
 const SIGNATURE_RE =
   /^(?:SSA|SSA del\.|SSO|SSR|sędzia|Sędzia|Przewodniczący|Przewodnicząca|Prezes|sprawozdawca)\b/u;
+const PANEL_MEMBER_RE = /^(?:SSN|SSA|SSO|SSR)\b|\(ławnik[^)]*\)$/iu;
+const CLERK_MARK_RE = /^\[(?:\p{L}{2,3}|\p{L}\.(?:\p{L}\.?){1,3})\]$/u;
+const CLERK_INITIALS_RE = /^(?:\p{Lu}\.){1,4}$/u;
+const BLOCK_ANCHOR_PREFIX = {
+  heading: "h",
+  paragraph: "p",
+  table: "t",
+  image: "i",
+} as const satisfies Record<Block["type"], string>;
 
-type ParserSection = "preamble" | "holding" | "reasoning";
+type ParserSection =
+  "preamble" | "composition" | "recital" | "holding" | "reasoning";
 
 type ParserState = {
   blocks: Block[];
@@ -170,6 +181,9 @@ type ParserState = {
   section: ParserSection;
   sawDecisionTitle: boolean;
   decisionTitle: string | undefined;
+  fallbackDecisionTitle: string | undefined;
+  normalizedCaseNumber: string;
+  panelNames: string[];
   superscripts: boolean;
   markup: PlDecisionMarkup | undefined;
   /** A list item's marker, waiting to open the item's first paragraph. */
@@ -201,6 +215,10 @@ const normalizeLegacyPlainText = (text: string): string =>
 const isDecisionTitleText = (text: string): boolean =>
   DECISION_TITLES.has(text.trim().toLocaleUpperCase("pl-PL"));
 
+const isCaseNumberText = (state: ParserState, plainText: string): boolean =>
+  CASE_NUMBER_RE.test(plainText) ||
+  plainText.replace(/\s+/gu, " ").trim() === state.normalizedCaseNumber;
+
 const normalizeDecisionTitle = (
   decisionType: string | undefined,
 ): string | undefined => {
@@ -215,16 +233,31 @@ const normalizeDecisionTitle = (
   return undefined;
 };
 
-const createState = (
-  superscripts: boolean,
-  markup: PlDecisionMarkup | undefined,
-): ParserState => ({
+type CreateStateOptions = {
+  superscripts: boolean;
+  markup: PlDecisionMarkup | undefined;
+  caseNumber: string;
+  fallbackDecisionTitle: string | undefined;
+};
+
+const createState = ({
+  superscripts,
+  markup,
+  caseNumber,
+  fallbackDecisionTitle,
+}: CreateStateOptions): ParserState => ({
   blocks: [],
   blockIndex: 0,
   blockIdCounter: 0,
-  section: "preamble",
+  section:
+    fallbackDecisionTitle === POLISH_DECISION_TITLE_MAP.uzasadnienie
+      ? "reasoning"
+      : "preamble",
   sawDecisionTitle: false,
   decisionTitle: undefined,
+  fallbackDecisionTitle,
+  normalizedCaseNumber: caseNumber.replace(/\s+/gu, " ").trim(),
+  panelNames: [],
   superscripts,
   markup,
   pendingMarker: undefined,
@@ -247,7 +280,7 @@ const pushHeading = (
   state.blockIndex += 1;
   state.blocks.push({
     id: nextBlockId(state),
-    anchorId: `h-${state.blockIndex}`,
+    anchorId: `${BLOCK_ANCHOR_PREFIX.heading}-${state.blockIndex}`,
     type: "heading",
     level,
     role,
@@ -265,7 +298,7 @@ const pushParagraph = (
   state.blockIndex += 1;
   state.blocks.push({
     id: nextBlockId(state),
-    anchorId: `p-${state.blockIndex}`,
+    anchorId: `${BLOCK_ANCHOR_PREFIX.paragraph}-${state.blockIndex}`,
     type: "paragraph",
     ...(role && { role }),
     inlines,
@@ -281,7 +314,7 @@ const pushTable = (
   state.blockIndex += 1;
   state.blocks.push({
     id: nextBlockId(state),
-    anchorId: `t-${state.blockIndex}`,
+    anchorId: `${BLOCK_ANCHOR_PREFIX.table}-${state.blockIndex}`,
     type: "table",
     role: "metadata-table",
     rows,
@@ -593,37 +626,105 @@ const orderedListMarker = (
 const inferParagraphRole = (
   state: ParserState,
   plainText: string,
-  isBold = false,
 ): ParagraphRole | undefined => {
-  if (CASE_NUMBER_RE.test(plainText)) {
+  const normalizedText = plainText.replace(/\s+/gu, " ").trim();
+  if (isCaseNumberText(state, plainText)) {
     return "case-number";
   }
 
-  if (state.section === "reasoning") {
-    if (CLOSING_RE.test(plainText)) {
-      return "closing";
-    }
-
-    if (plainText.length <= 120 && SIGNATURE_RE.test(plainText)) {
-      return "signature";
-    }
-
-    return "argumentation";
+  const numbered = DECISION_ITEM_PREFIX_RE.test(normalizedText);
+  const previous = state.blocks.at(-1);
+  const isStructuredHolding =
+    numbered &&
+    (state.section === "composition" ||
+      state.section === "recital" ||
+      (previous?.type === "heading" && previous.role === "decision-title"));
+  const isUnnumberedOperative =
+    !numbered && startsWithPlOperativeVerb(normalizedText);
+  const signatureText = normalizedText.replace(/\[[\p{L}]{1,3}\]$/u, "").trim();
+  const panelTokens = state.panelNames
+    .flatMap((name) => name.split(/\s+/u))
+    .toSorted();
+  const signatureTokens = signatureText.split(/\s+/u).toSorted();
+  const isIndividualSignature = state.panelNames.some(
+    (name) => signatureText === name,
+  );
+  const isFullPanelSignature =
+    panelTokens.length > 0 &&
+    panelTokens.length === signatureTokens.length &&
+    panelTokens.every((token, index) => token === signatureTokens[index]);
+  const isBenchSignature =
+    (state.section === "holding" || state.section === "reasoning") &&
+    (isIndividualSignature || isFullPanelSignature);
+  if (isBenchSignature) {
+    return "signature";
   }
 
   if (
-    state.section === "holding" ||
-    HOLDING_ITEM_RE.test(plainText) ||
-    OPERATIVE_VERB_RE.test(plainText)
+    (state.section === "preamble" || state.section === "composition") &&
+    PANEL_MEMBER_RE.test(normalizedText.replace(DECISION_ITEM_PREFIX_RE, ""))
   ) {
-    return "holding";
+    return "panel";
   }
 
-  if (isBold && state.sawDecisionTitle) {
-    return "holding";
+  switch (state.section) {
+    case "reasoning":
+      if (CLOSING_RE.test(plainText)) {
+        return "closing";
+      }
+      if (plainText.length <= 120 && SIGNATURE_RE.test(plainText)) {
+        return "signature";
+      }
+      return "argumentation";
+    case "holding":
+      return "holding";
+    case "preamble":
+    case "composition":
+    case "recital":
+      return isStructuredHolding || isUnnumberedOperative ? "holding" : "intro";
+    default:
+      state.section satisfies never;
+      return panic("Unknown Polish decision region");
   }
+};
 
-  return "intro";
+const rememberPanelMember = (
+  state: ParserState,
+  plainText: string,
+  role: ParagraphRole | undefined,
+): void => {
+  if (role !== "panel") {
+    return;
+  }
+  const name = plainText
+    .replace(DECISION_ITEM_PREFIX_RE, "")
+    .replace(/^(?:SSN|SSA|SSO|SSR)\s+/iu, "")
+    .replaceAll(/\([^()]*\)/gu, " ")
+    .replaceAll(/\s+/gu, " ")
+    .trim();
+  if (name.length > 0) {
+    state.panelNames.push(name);
+  }
+};
+
+const classifyParagraph = (
+  state: ParserState,
+  plainText: string,
+): ParagraphRole | undefined => {
+  const role = inferParagraphRole(state, plainText);
+  rememberPanelMember(state, plainText, role);
+  if (role === "holding") {
+    state.section = "holding";
+    return role;
+  }
+  if (state.section === "preamble" || state.section === "composition") {
+    if (OPENING_RECITAL_RE.test(plainText)) {
+      state.section = "recital";
+    } else if (COMPOSITION_LINE_RE.test(plainText)) {
+      state.section = "composition";
+    }
+  }
+  return role;
 };
 
 const handleHeadingText = (
@@ -631,6 +732,28 @@ const handleHeadingText = (
   plainText: string,
   inlines: Inline[],
 ): boolean => {
+  if (
+    !state.sawDecisionTitle &&
+    state.fallbackDecisionTitle === POLISH_DECISION_TITLE_MAP.decyzja &&
+    AUTHORITY_DECISION_TITLE_RE.test(plainText)
+  ) {
+    pushHeading(state, 1, plainText, "decision-title", inlines);
+    state.sawDecisionTitle = true;
+    state.decisionTitle = POLISH_DECISION_TITLE_MAP.decyzja;
+    return true;
+  }
+
+  if (
+    REASONS_HEADING_RE.test(plainText) &&
+    !state.sawDecisionTitle &&
+    state.fallbackDecisionTitle !== undefined &&
+    state.fallbackDecisionTitle !== POLISH_DECISION_TITLE_MAP.uzasadnienie
+  ) {
+    pushHeading(state, 2, plainText, "section-heading", inlines);
+    state.section = "reasoning";
+    return true;
+  }
+
   if (isDecisionTitleText(plainText)) {
     const normalizedPlainText = plainText.trim().toLocaleUpperCase("pl-PL");
     if (
@@ -669,7 +792,7 @@ const handleHeadingText = (
     return true;
   }
 
-  if (HOLDING_HEADING_RE.test(plainText)) {
+  if (state.section !== "reasoning" && isPlHoldingHeading(plainText)) {
     pushHeading(state, 2, plainText, "section-heading", inlines);
     state.section = "holding";
     return true;
@@ -705,28 +828,18 @@ const parseParagraphElement = (
     return true;
   }
 
-  // The role is read from the item's own words; the number its list prints
-  // before it is the list's, not a holding marker the item states.
-  const role = inferParagraphRole(
-    state,
-    plainText,
-    node.is("strong, b") || node.children("strong, b").length > 0,
-  );
-
-  if (role === "holding") {
-    state.section = "holding";
-  }
-
-  if (itemMarker === undefined) {
-    pushParagraph(state, plainText, inlines, role);
-    return true;
-  }
-  const marked = withMarker(itemMarker, inlines);
+  // List counters identify operative points only within the decision's opening.
+  const marked =
+    itemMarker === undefined ? inlines : withMarker(itemMarker, inlines);
+  const markedText =
+    itemMarker === undefined
+      ? plainText
+      : normalizeWhitespace(inlinesToPlainText(marked));
   pushParagraph(
     state,
-    normalizeWhitespace(inlinesToPlainText(marked)),
+    markedText,
     marked,
-    role,
+    classifyParagraph(state, markedText),
   );
   return true;
 };
@@ -740,7 +853,12 @@ const parseTableElement = (
     const inlines = walkInlines($, $(caption), state);
     const plainText = normalizeWhitespace(inlinesToPlainText(inlines));
     if (plainText) {
-      pushParagraph(state, plainText, inlines);
+      pushParagraph(
+        state,
+        plainText,
+        inlines,
+        classifyParagraph(state, plainText),
+      );
     }
   });
   let rows: TableCell[][] = [];
@@ -910,7 +1028,7 @@ const parseListItemContent = ({
         state,
         marker,
         textInline(marker),
-        inferParagraphRole(state, ""),
+        classifyParagraph(state, marker),
       );
       marker = undefined;
     }
@@ -932,7 +1050,7 @@ const parseNode = (
       return;
     }
 
-    pushParagraph(state, text, inlines, inferParagraphRole(state, text));
+    pushParagraph(state, text, inlines, classifyParagraph(state, text));
     return;
   }
 
@@ -1012,7 +1130,7 @@ const flushPendingMarker = (state: ParserState): void => {
     return;
   }
   const plainText = normalizeWhitespace(inlinesToPlainText(marker));
-  pushParagraph(state, plainText, marker, inferParagraphRole(state, plainText));
+  pushParagraph(state, plainText, marker, classifyParagraph(state, plainText));
 };
 
 /** Elements a common court's container sets as blocks of their own. */
@@ -1131,15 +1249,20 @@ const parsePlainText = (state: ParserState, content: string): void => {
       continue;
     }
 
-    const role = inferParagraphRole(state, paragraph);
-    if (role === "holding") {
-      state.section = "holding";
-    }
+    const role = classifyParagraph(state, paragraph);
 
     pushParagraph(state, paragraph, inlines, role);
   }
 };
 
+/**
+ * The markup a bounded loader is charged for plain text: one paragraph
+ * element per paragraph, the same document the shared validator built
+ * before the pipeline took the check over, so the DOM budget a source
+ * enforces through its loader admits and rejects exactly what it did.
+ */
+const plainTextParagraphsHtml = (paragraphs: readonly string[]): string =>
+  `<body>${paragraphs.map((paragraph) => `<p>${paragraph}</p>`).join("")}</body>`;
 /** Elements whose opening SAOS's serializer never marks: blocks. */
 const SERIALIZER_BLOCK_TAGS: ReadonlySet<string> = new Set([
   ...COMMON_COURT_BLOCK_TAGS,
@@ -1215,17 +1338,12 @@ export const parsePlDecisionContent = (
   input: ParsePlDecisionInput,
 ): ParsePlDecisionOutput => {
   const loadHtml = input.loadHtml ?? cheerio.load;
-  const state = createState(input.superscripts === true, input.markup);
-  const title = normalizeDecisionTitle(input.decisionType);
-
-  if (title) {
-    pushHeading(state, 1, title, "decision-title", textInline(title));
-    state.sawDecisionTitle = true;
-    state.decisionTitle = title;
-    if (title === POLISH_DECISION_TITLE_MAP.uzasadnienie) {
-      state.section = "reasoning";
-    }
-  }
+  const state = createState({
+    superscripts: input.superscripts === true,
+    markup: input.markup,
+    caseNumber: input.caseNumber,
+    fallbackDecisionTitle: normalizeDecisionTitle(input.decisionType),
+  });
 
   if (hasHtmlTags(input.content)) {
     const $ = loadHtml(input.content);
@@ -1240,12 +1358,6 @@ export const parsePlDecisionContent = (
       renderHtmlWhiteSpace(parsed);
     }
     parseChildren($, state, root);
-    validateAndLog(
-      { parser: "pl-courts", caseNumber: input.caseNumber },
-      input.content,
-      state.blocks,
-      { document: $ },
-    );
   } else {
     enforcePlainTextExpansionBudget(input.content, input.htmlExpansionBudget);
     const normalizedContent = normalizeLegacyPlainText(
@@ -1257,16 +1369,52 @@ export const parsePlDecisionContent = (
         const normalized = normalizeWhitespace(paragraph);
         return normalized ? [normalized] : [];
       });
-    const validationHtml = buildValidationHtml(paragraphs);
-    // Check expansion before allocating paragraph ASTs for bounded sources.
-    const sourceDocument = input.loadHtml?.(validationHtml);
+    // Check expansion before allocating paragraph ASTs for bounded sources:
+    // their loader charges its DOM budget on the paragraphs' markup and
+    // rejects the document past it, which is that source's stored outcome.
+    input.loadHtml?.(plainTextParagraphsHtml(paragraphs));
     parsePlainText(state, normalizedContent);
-    validateAndLog(
-      { parser: "pl-courts", caseNumber: input.caseNumber },
-      validationHtml,
-      state.blocks,
-      sourceDocument === undefined ? {} : { document: sourceDocument },
-    );
+  }
+
+  if (!state.sawDecisionTitle && state.fallbackDecisionTitle !== undefined) {
+    const title = state.fallbackDecisionTitle;
+    pushHeading(state, 1, title, "decision-title", textInline(title));
+    const fallbackHeading = state.blocks.pop();
+    if (fallbackHeading === undefined) {
+      return panic("Fallback decision title was not added");
+    }
+    state.blocks.unshift(fallbackHeading);
+    state.sawDecisionTitle = true;
+    state.decisionTitle = title;
+    if (title === POLISH_DECISION_TITLE_MAP.uzasadnienie) {
+      state.section = "reasoning";
+    }
+    for (const [index, block] of state.blocks.entries()) {
+      const order = index + 1;
+      block.id = `b${order}`;
+      block.anchorId = `${BLOCK_ANCHOR_PREFIX[block.type]}-${order}`;
+    }
+    state.blockIndex = state.blocks.length;
+    state.blockIdCounter = state.blocks.length;
+  }
+
+  let sawTerminalSignature = false;
+  for (const block of state.blocks.toReversed()) {
+    if (block.type !== "paragraph") {
+      break;
+    }
+    if (block.role === "signature") {
+      sawTerminalSignature = true;
+      continue;
+    }
+    if (
+      CLERK_MARK_RE.test(block.plainText) ||
+      (sawTerminalSignature && CLERK_INITIALS_RE.test(block.plainText))
+    ) {
+      block.role = "apparatus";
+      continue;
+    }
+    break;
   }
 
   const fulltext = state.blocks

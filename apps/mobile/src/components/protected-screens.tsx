@@ -1,9 +1,5 @@
-import { Stack, useRouter, useSegments } from "expo-router";
+import { Stack, ThemeProvider, useRouter, useSegments } from "expo-router";
 import type { Href } from "expo-router";
-import type {
-  NativeStackHeaderItem,
-  NativeStackHeaderItemButton,
-} from "expo-router/native-stack";
 import { useTranslations } from "use-intl";
 
 import { ChangesProvider } from "@/components/changes";
@@ -16,12 +12,12 @@ import { useNewChat } from "@/components/new-chat";
 import { PushRegistration } from "@/components/push-registration";
 import { SelectionProvider, useSelection } from "@/components/selection";
 import { TimerActivitySync } from "@/components/timer-activity-sync";
-import { useGlyphImage } from "@/components/ui/use-glyph-image";
+import { barGlyph } from "@/components/ui/bar-glyph";
 import { useSession } from "@/connection/session-provider";
 import { KeyCommands } from "@/native/key-commands";
 import type { KeyCommand } from "@/native/key-commands";
 import { LayoutMetricsProvider } from "@/native/layout-metrics";
-import { useAppColors } from "@/theme";
+import { useAppColors, useNavigationTheme } from "@/theme";
 
 /** Signed out, only sign-in exists; signed in, only the app does. */
 export const ProtectedScreens = () => {
@@ -54,19 +50,21 @@ export const ProtectedScreens = () => {
  * action is the tab's "+": a new conversation over the chats, a new task over
  * the tasks and a new matter over the matters, which also offer how to group
  * them. Search is the system's field, which the list under it filters by;
- * More has nothing to search.
+ * More has nothing to search. Every button draws a lucide glyph from the
+ * asset catalog (`barGlyph`), which the bar has as it is built.
  */
 const Screens = () => {
   const { state } = useSession();
   const colors = useAppColors();
+  const navigationTheme = useNavigationTheme();
   const tabs = useTranslations("tabs");
   const header = useTranslations("header");
+  const matters = useTranslations("matters");
   const signedIn = state.status === "signed-in";
   const router = useRouter();
   const { searchBar, setQuery, setSearching, tab } = useHeaderSearch();
-  const accountGlyph = useGlyphImage("circle-user-round");
-  const closeGlyph = useGlyphImage("x");
-  const tabItems = useTabHeaderItems(tab);
+  const { groupBy, setGroupBy } = useMattersView();
+  const tabAction = useTabAction(tab);
 
   // A screen opened from a tab has GitHub's bar: the bare back chevron and a
   // small title in the middle, never a large one.
@@ -80,154 +78,192 @@ const Screens = () => {
     headerTitleStyle: { color: colors.text },
   } as const;
 
-  const shortcuts = useShortcuts(tabItems);
+  const shortcuts = useShortcuts(tabAction);
 
   return (
-    <KeyCommands commands={shortcuts.commands} onCommand={shortcuts.run}>
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Protected guard={signedIn}>
-          <Stack.Screen
-            name="(tabs)"
-            options={{
-              headerShadowVisible: false,
-              headerShown: true,
-              headerTintColor: colors.text,
-              headerTransparent: true,
-              // The system's own search button, which opens straight into the
-              // field, as t3code's search does; the bar's trailing edge holds it.
-              ...(tab === "more"
-                ? {}
-                : {
-                    headerSearchBarOptions: {
-                      allowToolbarIntegration: false,
-                      autoCapitalize: "none",
-                      hideWhenScrolling: false,
-                      onClose: () => {
-                        setSearching(false);
-                      },
-                      onChangeText: (event) => {
-                        setQuery(event.nativeEvent.text);
-                      },
-                      onOpen: () => {
-                        setSearching(true);
-                      },
-                      placeholder: header("search"),
-                      placement: "integratedButton",
-                      ref: searchBar,
-                    },
-                  }),
-              title: "",
-              unstable_headerLeftItems: () =>
-                accountGlyph === null
-                  ? []
-                  : [
-                      {
-                        icon: { source: accountGlyph, type: "image" },
-                        label: tabs("settings"),
-                        onPress: () => {
-                          router.push("/settings");
+    <ThemeProvider value={navigationTheme}>
+      <KeyCommands commands={shortcuts.commands} onCommand={shortcuts.run}>
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Protected guard={signedIn}>
+            <Stack.Screen
+              name="(tabs)"
+              options={{
+                headerShadowVisible: false,
+                headerShown: true,
+                headerTintColor: colors.text,
+                headerTransparent: true,
+                // The system's own search button, which opens straight into the
+                // field, as t3code's search does; the bar's trailing edge holds it.
+                ...(tab === "more"
+                  ? {}
+                  : {
+                      headerSearchBarOptions: {
+                        allowToolbarIntegration: false,
+                        autoCapitalize: "none",
+                        hideWhenScrolling: false,
+                        onClose: () => {
+                          setSearching(false);
                         },
-                        type: "button",
-                      },
-                    ],
-              unstable_headerRightItems: () => tabItems,
-            }}
-          />
-          <Stack.Screen
-            name="settings"
-            options={{
-              ...pushedScreen,
-              presentation: "modal",
-              title: tabs("settings"),
-              unstable_headerRightItems: () =>
-                closeGlyph === null
-                  ? []
-                  : [
-                      {
-                        icon: { source: closeGlyph, type: "image" },
-                        label: tabs("close"),
-                        onPress: () => {
-                          router.back();
+                        onChangeText: (event) => {
+                          setQuery(event.nativeEvent.text);
                         },
-                        type: "button",
+                        onOpen: () => {
+                          setSearching(true);
+                        },
+                        placeholder: header("search"),
+                        placement: "integratedButton",
+                        ref: searchBar,
                       },
-                    ],
-            }}
-          />
-          <Stack.Screen name="thread/[threadId]" />
-          <Stack.Screen
-            name="palette"
-            options={{
-              contentStyle: { backgroundColor: colors.background },
-              presentation: "formSheet",
-              sheetAllowedDetents: [0.75, 1],
-              sheetGrabberVisible: true,
-            }}
-          />
-          <Stack.Screen
-            name="matter/new"
-            options={{
-              ...pushedScreen,
-              presentation: "formSheet",
-              sheetAllowedDetents: [0.5, 1],
-              sheetGrabberVisible: true,
-            }}
-          />
-          <Stack.Screen
-            name="scan"
-            options={{
-              ...pushedScreen,
-              presentation: "formSheet",
-              sheetAllowedDetents: [0.75, 1],
-              sheetGrabberVisible: true,
-            }}
-          />
-          <Stack.Screen name="timers/index" options={pushedScreen} />
-          <Stack.Screen
-            name="timers/new"
-            options={{
-              ...pushedScreen,
-              presentation: "formSheet",
-              sheetAllowedDetents: [0.75, 1],
-              sheetGrabberVisible: true,
-            }}
-          />
-          <Stack.Screen
-            name="task/new"
-            options={{
-              ...pushedScreen,
-              presentation: "formSheet",
-              sheetAllowedDetents: [0.75, 1],
-              sheetGrabberVisible: true,
-            }}
-          />
-          <Stack.Screen
-            name="law/index"
-            options={{
-              ...pushedScreen,
-              title: tabs("law"),
-            }}
-          />
-          <Stack.Screen name="law/[decisionId]" />
-          <Stack.Screen
-            name="matter/[workspaceId]/index"
-            options={pushedScreen}
-          />
-          <Stack.Screen
-            name="matter/[workspaceId]/[entityId]"
-            options={{
-              contentStyle: { backgroundColor: colors.card },
-              presentation: "formSheet",
-              sheetAllowedDetents: [0.5, 1],
-              sheetGrabberVisible: true,
-            }}
-          />
-        </Stack.Protected>
-        <Stack.Protected guard={!signedIn}>
-          <Stack.Screen name="sign-in" />
-        </Stack.Protected>
-      </Stack>
-    </KeyCommands>
+                    }),
+                title: "",
+              }}
+            >
+              <Stack.Toolbar placement="left">
+                <Stack.Toolbar.Button
+                  onPress={() => {
+                    router.push("/settings");
+                  }}
+                >
+                  {barGlyph("circle-user-round")}
+                  <Stack.Toolbar.Label>{tabs("settings")}</Stack.Toolbar.Label>
+                </Stack.Toolbar.Button>
+              </Stack.Toolbar>
+              <Stack.Toolbar placement="right">
+                {tabAction === undefined ? null : (
+                  <Stack.Toolbar.Button onPress={tabAction.onPress}>
+                    {barGlyph("plus")}
+                    <Stack.Toolbar.Label>{tabAction.label}</Stack.Toolbar.Label>
+                  </Stack.Toolbar.Button>
+                )}
+                {tab === "matters" ? (
+                  <Stack.Toolbar.Menu title={matters("groupBy")}>
+                    {barGlyph("sliders-horizontal")}
+                    <Stack.Toolbar.MenuAction
+                      isOn={groupBy === "client"}
+                      onPress={() => {
+                        setGroupBy("client");
+                      }}
+                    >
+                      {matters("groupClient")}
+                    </Stack.Toolbar.MenuAction>
+                    <Stack.Toolbar.MenuAction
+                      isOn={groupBy === "none"}
+                      onPress={() => {
+                        setGroupBy("none");
+                      }}
+                    >
+                      {matters("noGrouping")}
+                    </Stack.Toolbar.MenuAction>
+                  </Stack.Toolbar.Menu>
+                ) : null}
+              </Stack.Toolbar>
+            </Stack.Screen>
+            <Stack.Screen
+              name="settings"
+              options={{
+                ...pushedScreen,
+                presentation: "modal",
+                title: tabs("settings"),
+              }}
+            >
+              <Stack.Toolbar placement="right">
+                <Stack.Toolbar.Button
+                  onPress={() => {
+                    router.back();
+                  }}
+                >
+                  {barGlyph("x")}
+                  <Stack.Toolbar.Label>{tabs("close")}</Stack.Toolbar.Label>
+                </Stack.Toolbar.Button>
+              </Stack.Toolbar>
+            </Stack.Screen>
+            <Stack.Screen name="thread/[threadId]" />
+            <Stack.Screen
+              name="palette"
+              options={{
+                contentStyle: { backgroundColor: colors.background },
+                presentation: "formSheet",
+                sheetAllowedDetents: [0.75, 1],
+                sheetGrabberVisible: true,
+              }}
+            />
+            <Stack.Screen
+              name="matter/new"
+              options={{
+                ...pushedScreen,
+                presentation: "formSheet",
+                sheetAllowedDetents: [0.5, 1],
+                sheetGrabberVisible: true,
+              }}
+            />
+            <Stack.Screen
+              name="scan/index"
+              options={{
+                ...pushedScreen,
+                // Full screen, so a stray swipe cannot drop pages not yet saved.
+                presentation: "fullScreenModal",
+              }}
+            />
+            <Stack.Screen
+              name="scan/save"
+              options={{
+                ...pushedScreen,
+                presentation: "formSheet",
+                sheetAllowedDetents: [0.75, 1],
+                sheetGrabberVisible: true,
+              }}
+            />
+            <Stack.Screen name="timers/index" options={pushedScreen} />
+            <Stack.Screen
+              name="timers/new"
+              options={{
+                ...pushedScreen,
+                presentation: "formSheet",
+                sheetAllowedDetents: [0.75, 1],
+                sheetGrabberVisible: true,
+              }}
+            />
+            <Stack.Screen
+              name="task/new"
+              options={{
+                ...pushedScreen,
+                presentation: "formSheet",
+                sheetAllowedDetents: [0.75, 1],
+                sheetGrabberVisible: true,
+              }}
+            />
+            <Stack.Screen
+              name="law/index"
+              options={{
+                ...pushedScreen,
+                title: tabs("law"),
+              }}
+            />
+            <Stack.Screen name="law/[decisionId]" />
+            <Stack.Screen
+              name="matter/[workspaceId]/index"
+              options={pushedScreen}
+            />
+            <Stack.Screen
+              name="document/[workspaceId]/[entityId]"
+              options={pushedScreen}
+            />
+            <Stack.Screen
+              name="matter/[workspaceId]/[entityId]"
+              options={{
+                contentStyle: { backgroundColor: colors.card },
+                presentation: "formSheet",
+                sheetAllowedDetents: [0.5, 1],
+                sheetGrabberVisible: true,
+              }}
+            />
+          </Stack.Protected>
+          <Stack.Protected guard={!signedIn}>
+            <Stack.Screen name="sign-in" />
+          </Stack.Protected>
+        </Stack>
+      </KeyCommands>
+    </ThemeProvider>
   );
 };
 
@@ -245,7 +281,7 @@ const TAB_ROUTES: ReadonlyMap<string, Href> = new Map([
  * the list beside a selection away, ⌘1 to ⌘4 for the tabs, ⌘, for the
  * settings and Escape to close what is open over them.
  */
-function useShortcuts(tabItems: readonly NativeStackHeaderItem[]): {
+function useShortcuts(primary: TabAction | undefined): {
   commands: readonly KeyCommand[];
   run: (id: string) => void;
 } {
@@ -254,9 +290,6 @@ function useShortcuts(tabItems: readonly NativeStackHeaderItem[]): {
   const router = useRouter();
   const { searchBar } = useHeaderSearch();
   const selection = useSelection();
-  const primary = tabItems.find(
-    (item): item is NativeStackHeaderItemButton => item.type === "button",
-  );
 
   const commands: KeyCommand[] = [
     ...(primary === undefined
@@ -321,76 +354,35 @@ function useShortcuts(tabItems: readonly NativeStackHeaderItem[]): {
   return { commands, run };
 }
 
-/** The header's action for a tab, if it has one. */
-const useTabHeaderItems = (tab: string): NativeStackHeaderItem[] => {
+/** A tab's "+": what it starts, and starting it. */
+type TabAction = { label: string; onPress: () => void };
+
+/** The header's "+" for a tab, if it has one; ⌘N presses it too. */
+function useTabAction(tab: string): TabAction | undefined {
   const chat = useTranslations("chat");
   const matters = useTranslations("matters");
   const tasks = useTranslations("tasks");
   const router = useRouter();
   const newChat = useNewChat();
-  const { groupBy, setGroupBy } = useMattersView();
-  const plusGlyph = useGlyphImage("plus");
-  const groupGlyph = useGlyphImage("sliders-horizontal");
 
-  if (tab === "index" && plusGlyph !== null) {
-    return [
-      {
-        icon: { source: plusGlyph, type: "image" },
-        label: chat("newChat"),
-        onPress: newChat,
-        type: "button",
-      },
-    ];
+  if (tab === "index") {
+    return { label: chat("newChat"), onPress: newChat };
   }
-  if (tab === "tasks" && plusGlyph !== null) {
-    return [
-      {
-        icon: { source: plusGlyph, type: "image" },
-        label: tasks("newTask"),
-        onPress: () => {
-          router.push("/task/new");
-        },
-        type: "button",
+  if (tab === "tasks") {
+    return {
+      label: tasks("newTask"),
+      onPress: () => {
+        router.push("/task/new");
       },
-    ];
+    };
   }
-  if (tab === "matters" && plusGlyph !== null && groupGlyph !== null) {
-    return [
-      {
-        icon: { source: plusGlyph, type: "image" },
-        label: matters("newMatter"),
-        onPress: () => {
-          router.push("/matter/new");
-        },
-        type: "button",
+  if (tab === "matters") {
+    return {
+      label: matters("newMatter"),
+      onPress: () => {
+        router.push("/matter/new");
       },
-      {
-        icon: { source: groupGlyph, type: "image" },
-        label: matters("groupBy"),
-        menu: {
-          items: [
-            {
-              label: matters("groupClient"),
-              onPress: () => {
-                setGroupBy("client");
-              },
-              state: groupBy === "client" ? "on" : "off",
-              type: "action",
-            },
-            {
-              label: matters("noGrouping"),
-              onPress: () => {
-                setGroupBy("none");
-              },
-              state: groupBy === "none" ? "on" : "off",
-              type: "action",
-            },
-          ],
-          title: matters("groupBy"),
-        },
-        type: "menu",
-      },
-    ];
+    };
   }
-  return [];
-};
+  return undefined;
+}

@@ -22,7 +22,8 @@
     "toolUsed": "Naudota: {tool}",
     "threadTitle": "Pokalbis",
     "threadLoadFailed": "Nepavyko įkelti šio pokalbio.",
-    "threadEmptyDescription": "Šiame pokalbyje dar nėra žinučių.",
+    "greeting": "Prie ko norėtumėte dirbti?",
+    "greetingSubtitle": "Pradėkite nuo bylos, dokumento arba paprasto klausimo.",
     "sections": {
       "today": "Šiandien",
       "yesterday": "Vakar",
@@ -127,6 +128,22 @@
     "currentVersion": "Dabartinė versija",
     "loadFailed": "Nepavyko įkelti šio įrašo."
   },
+  "document": {
+    "title": "Dokumentas",
+    "failedTitle": "Nepavyko atidaryti šio dokumento",
+    "failure": {
+      "offline": "Esate neprisijungę. Prisijunkite prie interneto ir bandykite dar kartą.",
+      "noFile": "Šis dokumentas dar neturi failo.",
+      "failed": "Atidarant kažkas nepavyko. Po akimirkos bandykite dar kartą.",
+      "unsupported": "Atnaujinkite programėlę, kad galėtumėte atidaryti dokumentus.",
+      "android": "Android programėlėje dokumentų dar negalima atidaryti."
+    },
+    "retry": "Bandyti dar kartą",
+    "preview": "Atidaryti peržiūrą",
+    "previewDescription": "Šis failas atidaromas sistemos peržiūroje.",
+    "unrendered": "Šio dokumento čia parodyti negalima, bet sistemos peržiūra gali jį atidaryti.",
+    "details": "Išsami informacija"
+  },
   "signIn": {
     "beta": "Beta",
     "headline": "Aiškumas kiekvienai bylai.",
@@ -163,7 +180,6 @@
     "newest": "Naujausi sprendimai",
     "noResults": "Niekas neatitiko žodžių, kurių reikalavo ši paieška.",
     "noResultsHint": "Pabandykite mažiau arba kitų žodžių: terminų, kuriuos vartotų teismo sprendimas, o ne sakinio, kuriuo užduodamas klausimas.",
-    "unavailable": "Paieška laikinai nepasiekiama",
     "retry": "Bandyti dar kartą",
     "headnote": "Santrauka",
     "textUnavailable": "Šiam sprendimui teksto nėra",
@@ -179,6 +195,14 @@
   "writes": {
     "consentNeeded": "Kad galėtumėte keisti duomenis programėlėje, stella reikia jūsų leidimo. Prisijunkite iš naujo, kad jį suteiktumėte.",
     "signInAgain": "Prisijungti iš naujo"
+  },
+  "loads": {
+    "offline": "stella nepavyko susisiekti su jūsų serveriu. Patikrinkite ryšį ir bandykite dar kartą.",
+    "outdated": "Serveris atsakė formatu, kurio ši programėlės versija nesupranta. Atnaujinkite programėlę arba serverį, jei jį administruojate.",
+    "consent": "Šis prisijungimas neleidžia programėlei to skaityti. Prisijunkite iš naujo, kad suteiktumėte prieigą.",
+    "session": "Jūsų prisijungimas baigėsi. Prisijunkite iš naujo.",
+    "server": "Serveryje įvyko klaida (klaidos kodas {status}). Netrukus bandykite dar kartą.",
+    "refused": "Serveris atmetė užklausą (klaidos kodas {status})."
   },
   "timers": {
     "title": "Laikmačiai",
@@ -213,7 +237,27 @@
     "matterTitle": "Byla",
     "uploadFailed": "Nepavyko įkelti skenavimo. Bandykite dar kartą.",
     "failedTitle": "Skenuoti nepavyko",
-    "failed": "Kamera negalėjo išsaugoti skenavimo. Bandykite dar kartą."
+    "failed": "Kamera negalėjo išsaugoti skenavimo. Bandykite dar kartą.",
+    "save": "Išsaugoti",
+    "saveTitle": "Išsaugoti byloje",
+    "share": "Bendrinti",
+    "addPages": "Pridėti puslapių",
+    "page": "Puslapis {number}",
+    "rotatePage": "Pasukti puslapį {number}",
+    "removePage": "Pašalinti puslapį {number}",
+    "deletePage": "Ištrinti",
+    "movePage": "Perkelti puslapį {number}",
+    "moveUp": "Perkelti aukštyn",
+    "moveDown": "Perkelti žemyn",
+    "noPages": "Puslapių neliko. Daugiau nuskenuokite mygtuku „Pridėti puslapių“.",
+    "kilobytes": "{size} KB",
+    "megabytes": "{size} MB",
+    "pdfFailed": "Nepavyko sukurti PDF. Bandykite dar kartą.",
+    "shareFailed": "Nepavyko bendrinti PDF. Bandykite dar kartą.",
+    "discardTitle": "Atmesti šį skenavimą?",
+    "discardMessage": "Jo puslapiai neišsaugoti byloje ir bus ištrinti iš šio įrenginio.",
+    "discard": "Atmesti",
+    "keepEditing": "Toliau redaguoti"
   },
   "shortcuts": {
     "search": "Ieškoti",

@@ -26,17 +26,9 @@
 import { panic } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { headMatterPrecedesBody } from "@stll/legal-ast/document-ast";
+
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
-import {
-  decodeSourceRawEnvelope,
-  EMPTY_AST,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  IngestionResult,
-  SourceFieldDisposition,
-  SourceFieldTarget,
-  SourceRawParts,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import {
   getSourceRegistration,
   listSourceRegistrations,
@@ -50,8 +42,16 @@ import { composeDecisionWithSupplements } from "@/api/handlers/case-law/ingestio
 import { storeTextField } from "@/api/lib/case-law/decision-text";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
 import {
+  decodeSourceRawEnvelope,
+  EMPTY_AST,
   PLAIN_TEXT_FIELD_DEBT,
   PLAIN_TEXT_RESULT_FIELDS,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  IngestionResult,
+  SourceFieldDisposition,
+  SourceFieldTarget,
+  SourceRawParts,
 } from "@/api/lib/legal-search/ingestion-types";
 import {
   approveMetadataUrls,
@@ -219,6 +219,12 @@ describe("every adapter accounts for the fields its source states", () => {
       for (const buildFixture of fixtures) {
         const evidence = buildFixture();
         const decision = await evidence.buildDecision();
+        if ("blocks" in decision.documentAst) {
+          expect(
+            headMatterPrecedesBody(decision.documentAst.blocks),
+            `${key}: head matter follows the decision body`,
+          ).toBe(true);
+        }
         const schema = metadataUrlSchemaForAdapter(key);
         // The branded contract covers every registered source with no field debt.
         const normalized = plainTextIngestionResult(decision, schema);

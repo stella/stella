@@ -8,11 +8,9 @@ import {
   CLIENT_INVOICE_BACKFILL,
   CLIENT_INVOICE_TENANT_KEY,
 } from "./client-invoice-backfill";
-import {
-  createUngatedTableGateForTests,
-  INVOICE_TENANT_UNIQUE_INDEX,
-} from "./online-ddl";
+import { createUngatedTableGateForTests } from "./online-ddl";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
+import { INVOICE_TENANT_UNIQUE_INDEX } from "./online-unique-indexes";
 
 // A pre-migration database has neither invoice client values nor the new guard.
 // Install the shipped guard after seeding legacy rows so the repair must obey it.
