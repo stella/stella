@@ -372,6 +372,7 @@ const FACET_COURTS_BASE = 50;
 const FACET_COURTS_STEP = 150;
 const FACET_FIRST_YEAR = 1956;
 const FACET_YEARS = 70;
+const FACET_UNUSED_BUCKETS_PER_SOURCE = 10_000;
 
 const FACET_SOURCES = FACET_SOURCE_KEYS.map((adapterKey, index) => ({
   adapterKey,
@@ -403,6 +404,9 @@ const seedBrowseFacetCounts = async (database: GatedTestDb) => {
       UNION ALL
       SELECT 'year', ${country}, ${sourceId}::uuid, (${FACET_FIRST_YEAR - 1}::integer + n)::text, 1 + n % 41
       FROM generate_series(1, ${FACET_YEARS}) n
+      UNION ALL
+      SELECT 'year', ${country}, ${sourceId}::uuid, 'unused/' || n, 1
+      FROM generate_series(1, ${FACET_UNUSED_BUCKETS_PER_SOURCE}) n
       ON CONFLICT DO NOTHING`);
   }
 };
@@ -679,8 +683,18 @@ const seedCoverageDecisions = async ({
       JOIN (VALUES ${slots}) AS slot (slot_number, source_id, country, courts)
         ON slot.slot_number = i % ${FACET_SOURCES.length}::integer
       ON CONFLICT (id) DO NOTHING`);
+    // db-await-in-loop: projection rows use the same bounded chunks as their decisions.
+    await database.execute(sql`INSERT INTO case_law_search_documents
+      (decision_id, language, regconfig, searchable_text, tsv)
+      SELECT decision.id, 'xx', 'simple', '', to_tsvector('simple', '')
+      FROM case_law_decisions decision
+      WHERE decision.id BETWEEN
+          (${COVERAGE_DECISION_ID_PREFIX} || lpad(to_hex(${first}::integer), 12, '0'))::uuid
+        AND (${COVERAGE_DECISION_ID_PREFIX} || lpad(to_hex(${last}::integer), 12, '0'))::uuid
+      ON CONFLICT (decision_id) DO NOTHING`);
   }
   await database.execute(sql`VACUUM (ANALYZE) case_law_decisions`);
+  await database.execute(sql`VACUUM (ANALYZE) case_law_search_documents`);
 };
 
 /**

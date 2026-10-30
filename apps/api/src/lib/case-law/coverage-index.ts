@@ -9,7 +9,7 @@ import {
 import type { RequiredMigrationIndex } from "@/api/lib/db/migration-history";
 import { decisionDateNotBeforeFilingYearSql } from "@/api/lib/decision-date-bounds-sql";
 
-export const CASE_LAW_COVERAGE_INDEX = {
+const CASE_LAW_COVERAGE_INDEX = {
   createSql: `CREATE INDEX CONCURRENTLY "case_law_decisions_source_decision_date_coverage_idx" ON public."case_law_decisions" USING btree ("source_id", "decision_date", "id") WHERE ${publishedCaseLawDecisionIndexPredicateSql()}`,
   definitionBody: `ON public.case_law_decisions USING btree (source_id, decision_date, id) WHERE ${publishedCaseLawDecisionIndexDefinitionPredicateSql()}`,
   introducedBy: "20261011005000_analysis_provider_diagnostic",
@@ -22,7 +22,7 @@ export const CASE_LAW_COVERAGE_INDEX = {
 };
 
 /** Sources without materialized facets aggregate published courts from this index alone. */
-export const CASE_LAW_COVERAGE_COURT_INDEX = {
+const CASE_LAW_COVERAGE_COURT_INDEX = {
   createSql: `CREATE INDEX CONCURRENTLY "case_law_decisions_source_court_coverage_idx" ON public."case_law_decisions" USING btree ("source_id", "court") WHERE ${publishedCaseLawDecisionIndexPredicateSql()}`,
   definitionBody: `ON public.case_law_decisions USING btree (source_id, court) WHERE ${publishedCaseLawDecisionIndexDefinitionPredicateSql()}`,
   introducedBy: { type: "code", owner: "src/lib/case-law/coverage-index.ts" },
