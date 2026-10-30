@@ -674,6 +674,10 @@ export const processLauncher =
 const logPath = (directory: string, index: number) =>
   path.join(directory, `${String(index).padStart(3, "0")}.log`);
 
+/**
+ * A check's log. A check that never launched, or whose launch failed before
+ * its log was opened, has none; its result's detail is then its only record.
+ */
 export type CheckLog =
   { type: "output"; output: string } | { type: "no-output"; output: "" };
 
@@ -803,6 +807,24 @@ export const checkLogText = (
     .replace(NESTED_GROUP_END, "")
     .replace(NESTED_GROUP_START, "");
   return outcome === "failure" ? flat : flat.replace(ERROR_COMMAND, "| $1");
+};
+
+/** A check's group body: its log, or the error that ended it before it wrote one. */
+const checkGroupText = (
+  log: CheckLog,
+  result: Pick<CheckResult, "outcome" | "detail">,
+): string => {
+  switch (log.type) {
+    case "output": {
+      const text = checkLogText(log.output, result.outcome);
+      return text === "" || text.endsWith("\n") ? text : `${text}\n`;
+    }
+    case "no-output":
+      return result.outcome === "failure" ? `error: ${result.detail}\n` : "";
+    default:
+      log satisfies never;
+      throw new CheckPoolError(`Unhandled check log: ${JSON.stringify(log)}`);
+  }
 };
 const escapeProperty = (value: string) =>
   value
@@ -1374,15 +1396,13 @@ const main = async () => {
           : "FAILED";
       }
       print(`::group::${result.name}: ${label} in ${seconds(result.seconds)}`);
-      const output =
+      const log: CheckLog =
         planned[index]?.status === "selected"
-          ? readCheckLog(directory, index).output
-          : "";
-      if (planned[index]?.status === "selected") {
-        const text = checkLogText(output, result.outcome);
-        writeOut(text === "" || text.endsWith("\n") ? text : `${text}\n`);
-      }
+          ? readCheckLog(directory, index)
+          : { type: "no-output", output: "" };
+      writeOut(checkGroupText(log, result));
       print("::endgroup::");
+      const { output } = log;
       if (result.outcome === "failure") {
         print(failedCheckAnnotation(result, output));
         print(failedCheckRecord(result.name, failedCheckCause(result, output)));
