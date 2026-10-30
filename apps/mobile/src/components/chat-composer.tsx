@@ -9,8 +9,8 @@ import {
   COMPOSER_COMPACT_TEXT_CELL_CLASS,
   COMPOSER_SEND_BUTTON_CLASS,
 } from "@stll/ui/composer-tokens";
+import { Textarea } from "@stll/ui/textarea";
 
-import { TextInput } from "@/components/ui/text";
 import { ArrowUpIcon, PlusIcon, SquareIcon } from "@/icons.gen";
 import { useUiColors } from "@/theme";
 
@@ -68,13 +68,13 @@ export const ChatComposer = ({
             <PlusIcon color={ui.secondaryForeground} size={16} />
           </Pressable>
           <View className={`flex-1 ${COMPOSER_COMPACT_TEXT_CELL_CLASS}`}>
-            <TextInput
+            <Textarea
               accessibilityLabel={t("composerPlaceholder")}
-              multiline
               onChangeText={setDraft}
               placeholder={t("composerPlaceholder")}
+              size="sm"
+              unstyled
               value={draft}
-              variant="composer"
             />
           </View>
           {busy ? (
