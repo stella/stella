@@ -593,6 +593,7 @@ const recordDelivery = async (
   });
 };
 
+// Email leaves between committed database phases; DB-only replay cannot undo it.
 const config = {
   contract: "patch",
   featureAccess: { featureId: "invoice-links", type: "required" },
