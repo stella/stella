@@ -3,8 +3,8 @@ import * as v from "valibot";
 
 import {
   OUTBOUND_ACTION_TTL_MS,
-  outboundActionPreviewSchema,
   type OutboundActionPreview,
+  outboundActionPreviewSchema,
 } from "@stll/api-contract/outbound-action";
 import { classifyFailure } from "@stll/errors";
 
