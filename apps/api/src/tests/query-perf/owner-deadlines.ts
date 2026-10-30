@@ -14,6 +14,8 @@ export const QUERY_PERF_OWNER_DEADLINES = {
     READ_BUDGETS["scheduled.caseLaw.refreshSitemapShards"].statementDeadlineMs,
   "statement.caseLaw.coverageSources":
     CASE_LAW_COVERAGE_REFRESH_STATEMENT_TIMEOUT_MS,
+  "statement.caseLaw.euCompletionPage":
+    READ_BUDGETS["statement.caseLaw.euCompletionPage"].statementDeadlineMs,
   "statement.legislation.candidateRows":
     PUBLIC_READ_STATEMENT_TIMEOUT_MS.search,
   "statement.documents.searchHits": undefined,

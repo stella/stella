@@ -15,13 +15,6 @@
   },
   {
     "file": "apps/api/src/handlers/case-law/decisions/citation-graph.ts",
-    "function": "module/decisionCitationSummaryQuery/candidatesFor",
-    "kind": "constant-limit",
-    "count": 1,
-    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/decisions/citation-graph.ts",
     "function": "module/decisionCitationSummaryQuery",
     "kind": "constant-limit",
     "count": 1,

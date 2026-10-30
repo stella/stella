@@ -25,6 +25,8 @@ import {
 // committed source: no network, secrets, clock, randomness, or untracked
 // machine state. Each entry names what was checked.
 const PURE_AUTOFIX = {
+  // Reads canonical source-entry JSON; Git staging never changes the literal maps.
+  "parser-registry": "scripts/generate-parser-registry.ts",
   "withdrawn-decision-labels":
     "apps/web/scripts/sync-withdrawn-decision-labels.ts",
   // Runs local Oxlint against committed web and Tailwind sources; cache keys and
@@ -33,6 +35,8 @@ const PURE_AUTOFIX = {
   // Toolchain pins are read from committed manifests; temporary git state
   // merely exposes those files to the pinned cloud-setup renderer.
   "cloud-setup": "scripts/generate-cloud-setup.ts",
+  // Lists the committed rollout file names; never imports or runs them.
+  "guard-rollout-manifest": "scripts/generate-guard-rollouts.ts",
   // Parses the install tooling import closure and replaces one Docker block.
   "api-image-install-tooling": "scripts/docker-source-closure.ts",
   // Serializes package.json's packageManager pin.
@@ -69,6 +73,8 @@ const PURE_AUTOFIX = {
   // and copies lucide-static's outlines, pinned by the lockfile, into the
   // app's asset catalog folder; reads only committed and installed files.
   "mobile-icons": "scripts/generate-mobile-icons.ts",
+  // Reads folio's installed fontsource stylesheets, pinned by the lockfile.
+  "mobile-folio-fonts": "scripts/generate-mobile-folio-fonts.ts",
   // The committed release policy renders package names inside fixed markers.
   "published-package-list": "scripts/check-published-package-lists.ts",
   // Reads glossary data, normalizes Unicode and formats fixed Markdown tables.

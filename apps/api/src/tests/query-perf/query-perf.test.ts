@@ -12,6 +12,7 @@ import {
   corpusProjectionUnpublishedIntentProbe,
 } from "@/api/lib/legal-search/corpus-index-projection-convergence";
 import { DECLARED_SCHEDULER_JOBS } from "@/api/lib/scheduler/jobs";
+import { scanOccurrences } from "@/api/tests/query-plans/plan-walker";
 
 import {
   CASE_LAW_SEARCH_FETCH_LIMIT,
@@ -403,6 +404,39 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
           note(budgetProblem(budgetId, result.metrics));
           for (const violation of result.planViolations) {
             note(violation.message);
+          }
+          if (budgetId === "statement.caseLaw.euCompletionPage") {
+            const scans = scanOccurrences(result.plan.Plan).filter(
+              ({ relation }) =>
+                relation === "case_law_decisions" ||
+                relation === "eu_completion_receipts" ||
+                relation === "case_law_index_jobs",
+            );
+            note(
+              scans.length > 0 &&
+                scans.every(({ nodeType }) => nodeType.includes("Index"))
+                ? undefined
+                : `${budgetId}: completion relations must use index scans`,
+            );
+            for (const index of [
+              "case_law_decisions_source_id_page_idx",
+              "case_law_index_jobs_decision_idx",
+            ]) {
+              note(
+                scans.some((scan) => scan.index === index)
+                  ? undefined
+                  : `${budgetId}: missing ${index}`,
+              );
+            }
+            const rows = await db.transaction(
+              async (tx) => await entry.read(tx),
+            );
+            note(
+              rows.length === entry.expectedRows &&
+                rows.every((row) => !row.eligible)
+                ? undefined
+                : `${budgetId}: expected 100 ineligible rows`,
+            );
           }
         }
 
