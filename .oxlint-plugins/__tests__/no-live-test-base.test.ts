@@ -23,9 +23,18 @@ test("rejects moving test baselines in the checkout", async () => {
         'runGit(REPO_ROOT, "rev-parse", "origin/main");',
         'Bun.spawnSync(["git", "show", "origin/main:baseline.json"], { stdout: "pipe" });',
         'execFileSync("git", ["rev-parse", "origin/main^{commit}"]);',
+        'const argvShow = ["git", "show", "origin/main:baseline.json"];',
+        "Bun.spawnSync(argvShow, { cwd: REPO_ROOT });",
+        "const checkoutOptions = { cwd: REPO_ROOT };",
+        // A later spread replaces the explicit cwd at runtime.
+        'Bun.spawnSync(["git", "show", "origin/main:a.json"], { cwd: fixture, ...checkoutOptions });',
+        'Bun.spawnSync(["git", "show", "origin/main:a.json"], { cwd: fixture, ...callerOptions });',
+        'const pipeOptions = { stdout: "pipe" };',
+        'Bun.spawnSync(["git", "show", "origin/main:a.json"], pipeOptions);',
+        'Bun.spawnSync(["git", "show", "origin/main:a.json"], checkoutOptions);',
       ].join("\n"),
     ),
-  ).toEqual([3, 4, 5, 6, 7, 8, 9, 10]);
+  ).toEqual([3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 15, 17, 18]);
 });
 
 test("allows fixture repositories and pinned reads without exemptions", async () => {
@@ -41,6 +50,12 @@ test("allows fixture repositories and pinned reads without exemptions", async ()
         "const base = treeBaseRevision({ repoRoot: REPO_ROOT });",
         `Bun.spawnSync(["git", "show", \`\${base}:baseline.json\`], { cwd: REPO_ROOT });`,
         'expect(workflow).toContain("show origin/main:scripts/check.sh");',
+        'const fixtureArgv = ["git", "show", "origin/main:a.json"];',
+        "Bun.spawnSync(fixtureArgv, { cwd: fixture });",
+        "const fixtureOptions = { cwd: fixture };",
+        'Bun.spawnSync(["git", "show", "origin/main:a.json"], { stdout: "pipe", ...fixtureOptions });',
+        'Bun.spawnSync(["git", "show", "origin/main:a.json"], { ...callerOptions, cwd: fixture });',
+        'Bun.spawnSync(["git", "show", "origin/main:a.json"], fixtureOptions);',
       ].join("\n"),
     ),
   ).toEqual([]);
@@ -118,6 +133,9 @@ test("command assertions and explicit Git stubs do not read a checkout baseline"
         'expect(["git", "rev-parse", "origin/main"]).toEqual(expected);',
         'expect(calls).toContainEqual(["git", "rev-parse", "origin/main^{commit}"]);',
         'Bun.spawnSync(["git", "rev-parse", "--verify", "--quiet", "origin/main^{commit}"], { env: { ...process.env, PATH: stubPath } });',
+        'const expectedArgv = ["git", "show", "origin/main:baseline.json"];',
+        "expect(command).toEqual(expectedArgv);",
+        'expect(command).toEqual(["git", "show", "origin/main:baseline.json"]);',
       ].join("\n"),
     ),
   ).toEqual([]);

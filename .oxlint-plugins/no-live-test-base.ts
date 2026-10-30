@@ -1,13 +1,17 @@
 /**
  * Test baselines use treeBaseRevision, never a moving remote tip. Recognizes
- * argv arrays passed to spawners, run wrappers and git-named wrappers. A
- * missing cwd means the checkout; an explicit cwd is checked only when its
- * initializer derives from import.meta or process.cwd(). Fixture directories
- * (mkdtemp, parameters, and their aliases) need no exemptions. Arbitrary shell
- * strings, explicit PATH overrides, interprocedural cwd forwarding and dynamically built argv are outside
- * this syntactic check.
+ * argv arrays passed to spawners, run wrappers and git-named wrappers, inline
+ * or through stable `const` aliases, as are their options objects. A missing
+ * cwd means the checkout; an explicit cwd is checked only when its
+ * initializer derives from import.meta or process.cwd(), and an options
+ * spread that may replace cwd but cannot be resolved counts as the checkout.
+ * Fixture directories (mkdtemp, parameters, and their aliases) need no
+ * exemptions. Arbitrary shell strings, explicit PATH overrides,
+ * interprocedural cwd forwarding and dynamically built argv are outside this
+ * syntactic check.
  */
 import { eslintCompatPlugin, type Ranged } from "@oxlint/plugins";
+import { panic } from "better-result";
 
 import { guardEnforcesLine } from "../scripts/guard-rollouts.ts";
 import {
@@ -41,8 +45,25 @@ const COMMAND_CALLS = new Set([
   "execSync",
 ]);
 
-const parts = (value: unknown): string[] => {
-  const node = unwrapExpression(value);
+/** The expression a stable `const` alias chain names, or the unresolved node. */
+const resolveStable = (context: ScopeContext, value: unknown) => {
+  const seen = new Set<AstNode>();
+  let node = unwrapExpression(value);
+  while (node !== null && isIdentifierReference(node) && !seen.has(node)) {
+    seen.add(node);
+    const variable = resolveVariable(context, node);
+    const initializer =
+      variable === null ? null : unwrapExpression(stableInitializer(variable));
+    if (initializer === null) {
+      return node;
+    }
+    node = initializer;
+  }
+  return node;
+};
+
+const parts = (context: ScopeContext, value: unknown): string[] => {
+  const node = resolveStable(context, value);
   if (node === null) {
     return [];
   }
@@ -51,7 +72,7 @@ const parts = (value: unknown): string[] => {
     return [text];
   }
   if (node.type === "ArrayExpression" && Array.isArray(node.elements)) {
-    return node.elements.flatMap(parts);
+    return node.elements.flatMap((element) => parts(context, element));
   }
   if (node.type === "TemplateLiteral" && Array.isArray(node.quasis)) {
     return node.quasis.flatMap((quasi) =>
@@ -125,17 +146,60 @@ const checkoutPath = ({
   return false;
 };
 
-const cwdProperty = (value: unknown): AstNode | null => {
-  const node = unwrapExpression(value);
-  if (node?.type !== "ObjectExpression" || !Array.isArray(node.properties)) {
-    return null;
+type CwdSetting =
+  { type: "absent" } | { type: "set"; value: AstNode } | { type: "unresolved" };
+
+const CWD_ABSENT: CwdSetting = { type: "absent" };
+const CWD_UNRESOLVED: CwdSetting = { type: "unresolved" };
+
+type CwdSettingOptions = {
+  context: ScopeContext;
+  value: unknown;
+  seen?: Set<AstNode>;
+};
+
+/**
+ * The cwd an options object passes. Later properties win, so a spread after
+ * `cwd` may replace it: a spread is followed into a stable object, and one
+ * that cannot be followed leaves the cwd unresolved.
+ */
+const cwdSetting = ({
+  context,
+  value,
+  seen = new Set<AstNode>(),
+}: CwdSettingOptions): CwdSetting => {
+  const node = resolveStable(context, value);
+  if (
+    node?.type !== "ObjectExpression" ||
+    !Array.isArray(node.properties) ||
+    seen.has(node)
+  ) {
+    return CWD_ABSENT;
   }
+  seen.add(node);
+  let setting = CWD_ABSENT;
   for (const property of node.properties) {
-    if (isAstNode(property) && getPropertyName(property.key) === "cwd") {
-      return unwrapExpression(property.value);
+    if (!isAstNode(property)) {
+      continue;
     }
+    if (property.type === "SpreadElement") {
+      const spread = resolveStable(context, property.argument);
+      const inner =
+        spread?.type === "ObjectExpression"
+          ? cwdSetting({ context, value: spread, seen })
+          : CWD_UNRESOLVED;
+      if (inner.type !== "absent") {
+        setting = inner;
+      }
+      continue;
+    }
+    if (getPropertyName(property.key) !== "cwd") {
+      continue;
+    }
+    const cwd = unwrapExpression(property.value);
+    setting = cwd === null ? CWD_UNRESOLVED : { type: "set", value: cwd };
   }
-  return null;
+  return setting;
 };
 
 // An explicit executable search path may select a fixture's Git stub.
@@ -204,10 +268,14 @@ export const createTestBasePlugin = (enforcesLine = guardEnforcesLine) =>
               if (!enabled) {
                 return;
               }
-              if (node.arguments.some(overridesGitPath)) {
+              if (
+                node.arguments.some((arg) =>
+                  overridesGitPath(resolveStable(context, arg)),
+                )
+              ) {
                 return;
               }
-              const argv = node.arguments.flatMap(parts);
+              const argv = node.arguments.flatMap((arg) => parts(context, arg));
               if (!argv.some((arg) => /^origin\/main(?:[:.^~]|$)/u.test(arg))) {
                 return;
               }
@@ -231,40 +299,54 @@ export const createTestBasePlugin = (enforcesLine = guardEnforcesLine) =>
               }
               // A merge-base call is safe but still belongs to the shared owner:
               // it must honor RATCHET_BASE_REF as well.
-              const cwd = node.arguments
-                .map(cwdProperty)
-                .find((value) => value !== null);
-              if (cwd !== undefined) {
-                if (!checkoutPath({ context, value: cwd })) {
-                  return;
+              const cwd =
+                node.arguments
+                  .map((arg) => cwdSetting({ context, value: arg }))
+                  .find((setting) => setting.type !== "absent") ?? CWD_ABSENT;
+              switch (cwd.type) {
+                case "set": {
+                  if (!checkoutPath({ context, value: cwd.value })) {
+                    return;
+                  }
+                  break;
                 }
-              } else {
-                const positional = node.arguments.filter(
-                  (arg) =>
-                    isAstNode(arg) &&
-                    arg.type !== "ArrayExpression" &&
-                    !(
-                      typeof name === "string" &&
-                      SPAWN_CALLS.has(name) &&
-                      arg.type === "ObjectExpression"
-                    ) &&
-                    staticStringValue(arg) !== "git",
-                );
-                if (
-                  positional.length > 0 &&
-                  !positional.some((arg) =>
-                    checkoutPath({ context, value: arg }),
-                  )
-                ) {
-                  return;
+                case "unresolved": {
+                  break;
                 }
-                if (
-                  gitWrapper &&
-                  !node.arguments.some((arg) =>
-                    checkoutPath({ context, value: arg }),
-                  )
-                ) {
-                  return;
+                case "absent": {
+                  const positional = node.arguments.filter((arg) => {
+                    const resolved = resolveStable(context, arg);
+                    return (
+                      isAstNode(arg) &&
+                      resolved?.type !== "ArrayExpression" &&
+                      !(
+                        SPAWN_CALLS.has(name) &&
+                        resolved?.type === "ObjectExpression"
+                      ) &&
+                      staticStringValue(resolved) !== "git"
+                    );
+                  });
+                  if (
+                    positional.length > 0 &&
+                    !positional.some((arg) =>
+                      checkoutPath({ context, value: arg }),
+                    )
+                  ) {
+                    return;
+                  }
+                  if (
+                    gitWrapper &&
+                    !node.arguments.some((arg) =>
+                      checkoutPath({ context, value: arg }),
+                    )
+                  ) {
+                    return;
+                  }
+                  break;
+                }
+                default: {
+                  cwd satisfies never;
+                  return panic("Unhandled cwd setting");
                 }
               }
               if (enforces(node)) {
